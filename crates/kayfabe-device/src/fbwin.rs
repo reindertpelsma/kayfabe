@@ -482,6 +482,85 @@ pub const ESTABLISH_FAILED: &str = "the establishment copy into the joined backi
      installed: a live join whose pre-existing bytes never arrived would present the engine \
      a blank pool for a leaf the guest has already written";
 
+/// ★★★★★ **Where one framebuffer page STANDS — and the join is an arm of it, not a footnote.**
+///
+/// # ⊘⊘ Why this type exists: `is_resident` is JOIN-BLIND, and that blindness was MEASURED
+///
+/// [`SparseFb::install_join`] **removes the local pages and their `origin` rows** for a joined
+/// range — deliberately, so that one leaf is one memory. ⇒ For every address inside a join:
+///
+/// | asked | answers | true? |
+/// |---|---|---|
+/// | [`FbStore::read`] / [`FbStore::write`] | the joined backing's **live bytes** | ★ yes |
+/// | [`FbStore::is_resident`] | `Some(false)` | ⊘ **reads as "never written"** |
+/// | [`FbStore::page_origin`] | `None` | ⊘ **reads as "no first writer"** |
+///
+/// Both lower rows are *correct about this store's own pages* and **wrong as statements about
+/// the guest**, which is the only reading anyone has ever wanted them for.
+///
+/// `[measured 2026-08-12, boot `w278b_guest`]` — the whole cost, in one line of one artefact:
+///
+/// ```text
+/// fbRING[p0]@0x41000=0000022001400000… nz4/4096 resN-NEVER-WRITTEN by?
+/// ```
+///
+/// **`nz4` and `resN-NEVER-WRITTEN` are in the same line and contradict each other.** The
+/// four non-zero bytes are the guest client's own GPFIFO entry (`0x0000400120020000` =
+/// `pb @ 0x1_20020000, 16 dwords`), CPU-stored through `NV_ESC_RM_MAP_MEMORY` and served back
+/// correctly by the join — while the residency token beside them announced that nothing had
+/// ever written the page. On that same boot
+/// [`kayfabe_fwd::FwdFault::RingFbNeverWritten`](../../kayfabe_fwd/enum.FwdFault.html) refused
+/// the doorbell for the same reason, and the refusal was read as the wall.
+///
+/// ⇒ **Every caller asking about a page it did not itself allocate must ask THIS**, and
+/// `RegPlane::fb_is_resident` was removed so that the join-blind question is no longer
+/// reachable from the plane at all. ★ [`FbStore::is_resident`] keeps its meaning — *"does
+/// this store hold a page"* — because that is a real question about the store, and
+/// `tests/fb_join.rs` asserts its `Some(false)` on a joined address on purpose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbPageStanding {
+    /// ★★★★★ Inside a joined range: **one memory, held elsewhere.** The bytes are live and
+    /// correct; residency and first-writer are questions this store cannot answer, and a
+    /// caller must treat them as **unmeasured** — never as *no*. (The `dlen=0` lesson.)
+    JoinedOneMemory,
+    /// The store holds its own page here; a write landed.
+    Resident,
+    /// ★ The store holds no page and no join — nothing ever wrote this address. **This is
+    /// the only arm that is a positive claim about the guest.**
+    NeverWritten,
+    /// The store cannot say.
+    Unknown,
+}
+
+impl FbPageStanding {
+    /// The token these appear as in every framebuffer dump row.
+    #[must_use]
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::JoinedOneMemory => "JOINED-one-memory",
+            Self::Resident => "resY",
+            Self::NeverWritten => "resN-NEVER-WRITTEN",
+            Self::Unknown => "res?",
+        }
+    }
+
+    /// ★★★ **The forwarding plane's reading** — `Some(false)` **only** for
+    /// [`Self::NeverWritten`].
+    ///
+    /// ⊘ [`Self::JoinedOneMemory`] answers [`None`] = *unmeasured*, which is what stops
+    /// `kayfabe_fwd::fetch_ring_bytes` refusing a ring whose bytes are live. It is a real
+    /// loss of a guard — a joined page nobody wrote reads as zeros and this can no longer
+    /// say so — and it is the honest one: the store genuinely does not know.
+    #[must_use]
+    pub fn written(self) -> Option<bool> {
+        match self {
+            Self::Resident => Some(true),
+            Self::NeverWritten => Some(false),
+            Self::JoinedOneMemory | Self::Unknown => None,
+        }
+    }
+}
+
 /// ★★★★ **What a framebuffer store holds, as a census rather than a total.**
 ///
 /// `[measured 2026-08-09, boot `bar1_03a679f`]` the teardown report said `resident 368640

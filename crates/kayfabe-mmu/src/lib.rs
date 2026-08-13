@@ -758,6 +758,27 @@ pub type BindingRun = (u64, u64, Option<(Binding, u64)>);
 /// A resolution failure. Every variant is LOUD: callers propagate, they never guess.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressFault {
+    /// ★★★★★ **THE TABLE ASKED IS NOT THE TABLE HELD** — a lookup or a bind arrived
+    /// carrying a PDB that is not this table's own (owner ruling, 2026-08-12).
+    ///
+    /// ⊘ **This is a BUG IN US, never guest-reachable state.** A guest cannot name a table;
+    /// it names a channel, and the channel's VAS is resolved to a `Pdb` by us. So this
+    /// firing means a caller was handed the wrong `Vas` — the one shape that could make the
+    /// owner's *"not denied, simply not found"* untrue, and the one thing per-VAS-keying by
+    /// convention could not catch. See [`AddressTable::owner`].
+    ///
+    /// ⚠ It is deliberately **not** the answer a foreign VA gets. A VA legitimately bound
+    /// only in another address space, asked of this one, is [`AddressFault::Miss`] — *not
+    /// found* — because that is what real hardware answers and what the owner's guarantee
+    /// says. This variant is about the *table*, not the *address*.
+    TableIdentity {
+        /// The PDB the caller asked about.
+        asked: Pdb,
+        /// The PDB this table actually belongs to.
+        table: Pdb,
+        /// The VA that was being looked up or bound.
+        va: GpuVa,
+    },
     /// No binding covers the VA — the guest's own TLB would have faulted too.
     Miss {
         /// The PDB whose table missed.
@@ -837,13 +858,73 @@ pub enum AddressFault {
 #[derive(Debug, Default)]
 pub struct AddressTable {
     map: IntervalMap<Binding>,
+    /// ★★★★★ **WHOSE TABLE THIS IS — the owner's *"not denied, simply not found"* made
+    /// CHECKED rather than structural-by-convention** (owner ruling, 2026-08-12).
+    ///
+    /// > *"the VAs the unprivileged guest userspace has access to cannot reference other
+    /// > VAS — that address is **not denied, it's simply not found**. That should remain."*
+    ///
+    /// # ⊘⊘ THE GAP THIS CLOSES, and it is a real one
+    ///
+    /// `[measured 2026-08-13, a full read of every `.table` access outside this crate]`
+    /// per-VAS-ness held **everywhere** — every consumer reaches its table through
+    /// `proc.vases.get(&(gpu, pdb))` with its own caller's `pdb`, there is no global map,
+    /// no any-VAS scan and no `owner_of(addr)`. But it held **by which instance the caller
+    /// happened to hold**, not by anything checked: [`AddressTable::resolve`] took a `pdb`
+    /// argument and used it **only to label the fault**. A future edit that handed one
+    /// caller another VAS's table would answer confidently and wrongly, and no gate in the
+    /// tree would say so.
+    ///
+    /// ⇒ The table now knows whose it is, and [`AddressTable::resolve`]/[`AddressTable::bind`]
+    /// refuse a mismatch **by name** ([`AddressFault::TableIdentity`]). This is exactly the
+    /// pattern [`reach::ReachShadow::audit_root`] already uses one field over, for the same
+    /// reason and with the same shape.
+    ///
+    /// ⊘ **`None` means never claimed**, which is only reachable through [`Self::new`] /
+    /// `Default` — the bare constructors tests use. Production tables come from `Vas::new`,
+    /// which claims. ⚠ That is asserted by a test rather than by this type: a `None` that
+    /// silently skips the check is the *"silent no-op sibling"* shape, and the thing that
+    /// stops it being one is that the boot's tables are all claimed and a test says so.
+    owner: Option<Pdb>,
 }
 
 impl AddressTable {
-    /// Empty table.
+    /// Empty table, **unclaimed** — see [`AddressTable::owner`]. ⊘ Prefer
+    /// [`AddressTable::owned_by`] anywhere a PDB is in scope.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// ★★★ Empty table that **knows whose it is**. The one constructor production uses.
+    #[must_use]
+    pub fn owned_by(pdb: Pdb) -> Self {
+        Self {
+            map: IntervalMap::default(),
+            owner: Some(pdb),
+        }
+    }
+
+    /// Which VAS this table belongs to, or `None` if it was never claimed.
+    #[must_use]
+    pub const fn owner(&self) -> Option<Pdb> {
+        self.owner
+    }
+
+    /// ★★★★★ **Is `pdb` the VAS this table belongs to?** — the owner's guarantee, as a
+    /// total function, consulted by both entrances.
+    ///
+    /// ⊘ An unclaimed table answers `Ok(())` for every `pdb`: see [`AddressTable::owner`]
+    /// for why that arm exists and what stops it being a silent no-op.
+    fn owns(&self, pdb: Pdb, va: GpuVa) -> Result<(), AddressFault> {
+        match self.owner {
+            Some(o) if o != pdb => Err(AddressFault::TableIdentity {
+                asked: pdb,
+                table: o,
+                va,
+            }),
+            _ => Ok(()),
+        }
     }
 
     /// Forward-populate `[va, va+len)` → `binding` (bind-time RPC or CE-PT-write
@@ -857,6 +938,10 @@ impl AddressTable {
         len: u64,
         binding: Binding,
     ) -> Result<(), AddressFault> {
+        // ★★★★★ THE OWNER'S PER-VAS GUARANTEE, at the table's only entrance and BEFORE
+        // anything is inserted: a bind carrying someone else's PDB never enters this table,
+        // so it can never later be resolved out of it.
+        self.owns(pdb, va)?;
         // ★★★ #102 — ADDRESS IDENTITY, at the table's only entrance. Checked before the
         // range is inserted, so a binding that claims a host publication somewhere other
         // than its own VA is not merely reportable — it is never in the table for a
@@ -904,7 +989,14 @@ impl AddressTable {
 
     /// Resolve `va` to its binding + offset within it. **MISS = FAULT** — there is no
     /// fallback and never will be (see crate docs).
+    ///
+    /// ★★★★★ **AND `pdb` IS CHECKED, NOT MERELY REPORTED** (owner, 2026-08-12). It used to
+    /// be threaded through solely to label [`AddressFault::Miss`]; a caller holding the
+    /// wrong VAS's table got a confident, wrong answer. See [`AddressTable::owner`].
+    /// ⊘ Note which fault a foreign VA gets: [`AddressFault::Miss`] — *not found*, never
+    /// *denied*, which is `mode2_address_table.md` §6 and is the whole of the guarantee.
     pub fn resolve(&self, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), AddressFault> {
+        self.owns(pdb, va)?;
         match self.map.lookup(va.0) {
             Some((start, _len, b)) => Ok((*b, va.0 - start)),
             None => Err(AddressFault::Miss { pdb, va }),

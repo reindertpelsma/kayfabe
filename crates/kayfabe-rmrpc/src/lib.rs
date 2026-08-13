@@ -1379,8 +1379,21 @@ fn translate_alloc(
                 // (`kayfabe_abi::notifier::ChannelUserdWire`). ⊘ Read by no decision; it
                 // exists so a boot can state the object the guest named, and its
                 // `userdOffset`, beside what we resolved. See `DeclaredUserd`.
+                // ★★★★★ **AND ITS RESOLVED PHYSICAL ADDRESS, off the SAME buffer.** The
+                // comment above used to end *"⊘ Read by no decision"*; it is now leg B's
+                // supply side. See `DeclaredUserd::resolved` for the three documents that
+                // concluded this number was unobtainable, and why they were looking for a
+                // VA that never existed.
+                //
+                // ⊘ The two decodes are independent and both may be `None` — a channel can
+                // declare `hUserdMemory[0] = 0` and still carry a filled `userdMem`, so
+                // gating one on the other would drop a real fact.
                 userd: abi.decode_channel_userd(params)?.map(|(handle, offset)| {
-                    kayfabe_core::rmgraph::DeclaredUserd { handle, offset }
+                    kayfabe_core::rmgraph::DeclaredUserd {
+                        handle,
+                        offset,
+                        resolved: abi.decode_channel_userd_mem(params).ok().flatten(),
+                    }
                 }),
                 // ★★★ §8.2.2's measurement, and it is carried for exactly one reason:
                 // so a boot can STATE the address the guest named for its GPFIFO ring.

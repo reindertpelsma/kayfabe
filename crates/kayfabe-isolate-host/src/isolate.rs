@@ -559,6 +559,7 @@ impl RmBackend for ProxyRmBackend {
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         let reply = self.call(Request::AllocChannel {
             vas: vas.raw(),
@@ -566,6 +567,17 @@ impl RmBackend for ProxyRmBackend {
             // ★★★ §16.106 — carried to the CHILD, which is where the adapter that reads it
             // runs. See `Request::AllocChannel::hosting`.
             hosting: hosting.map(|h| (h.class.0, h.params.to_vec())),
+            // ★★★★★ LEG A2 — same crossing, same reason. See `Request::AllocChannel::adopt`.
+            adopt: adopt.map(|a| {
+                (
+                    a.memory.raw(),
+                    a.ring_va,
+                    a.gp_fifo_va,
+                    a.gp_fifo_entries,
+                    // ★★★★★ LEG B, carried inside leg A2's own tuple.
+                    a.userd.map(|u| (u.memory.raw(), u.offset)),
+                )
+            }),
         })?;
         match self.lift(reply)? {
             Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),
@@ -654,6 +666,12 @@ impl RmBackend for ProxyRmBackend {
             CeSource::Address(a) => (a, 0u8),
             CeSource::Constant(c) => (u64::from(c), 1u8),
         };
+        // ★★★★★ w283 — the guest's declared release crosses as THREE fields, never as a
+        // sentinel address: `0` is a legal GPU VA, so presence and value are two facts.
+        let (rel_present, rel_va, rel_payload) = match sub.guest_release {
+            Some(r) => (1u8, r.va, r.payload),
+            None => (0u8, 0, 0),
+        };
         self.unit(Request::CeCopy {
             vas: vas.raw(),
             dst: sub.dst,
@@ -664,6 +682,9 @@ impl RmBackend for ProxyRmBackend {
                 CeExecutor::HostCe => 0,
                 CeExecutor::Ours => 1,
             },
+            rel_present,
+            rel_va,
+            rel_payload,
         })
     }
 

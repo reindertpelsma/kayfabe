@@ -279,8 +279,32 @@ impl RmBackend for LoopbackRm {
         &mut self,
         vas: HostHandle,
         _engine: EngineKind,
-        _hosting: Option<HostedObject<'_>>,
+        hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ **A SILENT DISCARD, MADE LOUD.** This arm took `_adopt` and dropped it. A boot
+        // whose plane selector picked the loopback therefore produced a channel born over
+        // nothing at all, on a log **indistinguishable** from a real isolate that adopted
+        // nothing — exactly the pair `w261` could not separate, one layer lower.
+        //
+        // ⊘ It is still a discard, and deliberately so: this backend has no RM and no joined
+        // framebuffer leaf, so there is nothing here that *could* honour a ring. What changes
+        // is that the discard is now on disk. ⇒ *"no `GR-BIRTH` line at all"* stops being
+        // reachable through the plane selector, which is what makes a zero in the armed
+        // census a **measured** zero (`a_census_zero_needs_a_known_positive`).
+        let offer = crate::rm::BirthOffer::read(hosting.is_some(), adopt.is_some());
+        let userd_offer = crate::rm::BirthOffer::read(
+            hosting.is_some(),
+            adopt.is_some_and(|a| a.userd.is_some()),
+        );
+        eprintln!(
+            "kayfabe-isolate: GR-BIRTH vas={:#x} adopt={} userd={} ⊘ LOOPBACK BACKEND — \
+             DISCARDED. This plane has no RM and no joined leaf. ⚠ This boot's channels are \
+             NOT host channels, so nothing in it measures leg A or leg B",
+            vas.raw(),
+            offer.as_str(crate::rm::BirthLimb::Ring),
+            userd_offer.as_str(crate::rm::BirthLimb::Userd),
+        );
         self.known(vas)?;
         let h = self.verb(false)?;
         Ok((self.stamp(h), h | 0x1_0000_0000))

@@ -544,3 +544,106 @@ fn a_chip_row_with_no_declared_root_has_no_address_model() {
         "and not miscounted as a translation refusal"
     );
 }
+
+/// ★★★★★ **ITEM 2 / `w262` — THE C's GP_PUT WITNESS, PINNED AGAINST THE ABI FROM THIS SIDE.**
+///
+/// `qemu/hw/misc/nvkvm/nvkvm.c` cannot `use kayfabe_abi::submit::USERD_GP_PUT` — it is C, and
+/// the archive it links is a static library with no header for that constant. So its
+/// `NVKVM_USERD_GP_PUT` is a **literal `0x8c`**, and a literal that drifts from the ABI is
+/// silent: the witness would simply never fire, and *"the guest never advanced a cursor"* and
+/// *"we were watching the wrong offset"* are the same empty log.
+///
+/// ⊘ `a_census_zero_needs_a_known_positive`. This is that known-positive, held on the side
+/// that owns the number.
+#[test]
+fn the_c_gp_put_witness_watches_the_offset_the_abi_names() {
+    // The C's literal, transcribed here so a change to either side breaks this line.
+    const NVKVM_USERD_GP_PUT: u64 = 0x8c;
+    assert_eq!(
+        NVKVM_USERD_GP_PUT,
+        kayfabe_abi::submit::USERD_GP_PUT,
+        "`nvkvm.c`'s NVKVM_USERD_GP_PUT has drifted from `kayfabe_abi::submit::USERD_GP_PUT`. \
+         ⊘ The symptom of that drift is an EMPTY witness, which reads exactly like a guest \
+         that never advanced a cursor."
+    );
+
+    // ★ And the predicate the C applies — `(addr & 0xfff) == USERD_GP_PUT` — must actually
+    // select the four stores every boot since `s17_e8fde62` has recorded, and must not select
+    // the GPFIFO-entry stores that sit beside them. ⚠ Measured offsets, not invented ones.
+    let gp_put_stores = [0xa008c_u64, 0xc008c, 0xe008c, 0x10008c];
+    let entry_stores = [
+        0x90000_u64,
+        0x90004,
+        0xb0000,
+        0xb0004,
+        0xd0000,
+        0xd0004,
+        0xf0000,
+        0xf0004,
+        0x90008,
+        0x9000c,
+        0x90010,
+    ];
+    for a in gp_put_stores {
+        assert_eq!(
+            a & 0xfff,
+            kayfabe_abi::submit::USERD_GP_PUT,
+            "{a:#x} is a measured GP_PUT store and the C's page-offset predicate misses it"
+        );
+    }
+    for a in entry_stores {
+        assert_ne!(
+            a & 0xfff,
+            kayfabe_abi::submit::USERD_GP_PUT,
+            "{a:#x} is a measured GPFIFO-ENTRY store and the C's predicate claims it as a \
+             cursor advance — which would make the ordering measurement report the entry \
+             store's instant instead of the cursor's"
+        );
+    }
+
+    // ★★★★★ ⊘⊘ **THE FALSE-POSITIVE CLASS, MEASURED — and the eleven rows above do NOT rule
+    // it out.** `[measured 2026-08-12, boot `w262b_ring`, GA106 / 580.159.04]` the per-page
+    // census recorded a "cursor advance" on page `+0x90000` with **`first_val = 0xd801`**.
+    // `0x90000` is a RING page (`BAR1[0] off=0x90000 val=0x20000000`), and `0xd801` has the
+    // shape of a GPFIFO entry's HIGH dword — compare the measured `0x2801` and `0x6801`. ⇒ a
+    // ring whose 18th entry pair lands at `+0x88 / +0x8c` collides with the predicate.
+    //
+    // ⚠ The eleven `entry_stores` above are the entries the guest happened to write in the
+    // FIRST 16 recorded accesses; they stop at `0x90010`. A gate built only from them reads as
+    // *"the predicate is clean"* and is not — `a_correct_citation_narrowed_by_the_reading`.
+    // This row is the counterexample, so the claim can never be made again from that evidence.
+    let measured_false_positive: u64 = 0x9008c;
+    assert_eq!(
+        measured_false_positive & 0xfff,
+        kayfabe_abi::submit::USERD_GP_PUT,
+        "the measured false positive must still be one, or this record has gone stale"
+    );
+    // ⊘ The only signal that separated it was the VALUE's shape, and a value shape is evidence
+    // and not a discriminator. A page offset alone cannot say USERD from ring, and this
+    // assertion exists so that a future rung claiming otherwise has to delete it first.
+    assert_eq!(
+        (
+            0xd801_u64 & 0xffff,
+            0x2801_u64 & 0xffff,
+            0x6801_u64 & 0xffff
+        ),
+        (0xd801, 0x2801, 0x6801),
+        "the three measured GPFIFO-entry high dwords"
+    );
+
+    // ⊘⊘ AND THE LIMIT, asserted rather than only written down. The four measured stores are
+    // `0x20000` apart; the walling GR channels' declared USERDs (`userd=h0x5c000014/off0x2000,
+    // 0x5000, 0x8000, …`, `w261`) are `0x3000` apart in ONE memory object. Nothing joins a
+    // BAR1 offset to a channel, so this cannot be closed — but the two strides are a fact, and
+    // a rung that later claims "we measured the GR channel's own cursor" has to get past it.
+    let bar1_stride = gp_put_stores[1] - gp_put_stores[0];
+    let gr_userd_stride = 0x5000_u64 - 0x2000;
+    assert_ne!(
+        bar1_stride, gr_userd_stride,
+        "the recorded BAR1 cursor stride now equals the GR channels' declared USERD stride. \
+         ⊘ That would be evidence worth having and it must not arrive silently: it is the \
+         one thing that could turn this witness from 'the guest's first cursor advance' into \
+         'the GR channel's cursor advance'."
+    );
+    assert_eq!((bar1_stride, gr_userd_stride), (0x20000, 0x3000));
+}

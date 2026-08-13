@@ -62,7 +62,7 @@ fn plane() -> RegPlane {
 /// ⊘ **Before this rung this test FAILED**, and that is the whole finding: the read returned
 /// cleanly, `check_acquire` saw nothing because the plane lock had no rank, and
 /// `assert_lock_free` would have passed too. A gate that cannot see the lock in question
-/// returns the same answer for a safe design and an unsafe one.
+/// returns the same answer for a sound design and an unsound one.
 #[test]
 fn taking_the_plane_lock_under_a_core_lock_panics() {
     let plane = plane();

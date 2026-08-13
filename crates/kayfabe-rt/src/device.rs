@@ -399,6 +399,9 @@ pub struct SharedDevice {
     /// ⚠ **Read outside the ranked locks only** (§16.87): the production source takes the
     /// plane's rank-0 mutex, which may not be acquired beneath ranks 1-2.
     fb: std::sync::OnceLock<Arc<dyn kayfabe_fwd::FbSource>>,
+    /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
+    /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
+    pb_vidmem: std::sync::atomic::AtomicBool,
 }
 
 /// ★ **Pool-saturation counters for ONE GPU target** (`l1_concurrency.md` §7.2, §12.29).
@@ -718,6 +721,7 @@ impl SharedDevice {
         let spawner = spine.isolate_factory();
         SharedDevice {
             fb: std::sync::OnceLock::new(),
+            pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
             spawner,
@@ -968,6 +972,33 @@ impl SharedDevice {
         ForwardAdmission::Latched {
             pending: pending + 1,
         }
+    }
+
+    /// ★★★★★ **WHICH CHANNELS ARE ABOUT TO HAVE A HOST CHANNEL BORN FOR THEM** — the latch,
+    /// READ and not taken.
+    ///
+    /// # ⊘ Why a peek exists at all, when a drain is right there
+    ///
+    /// `commit_engine_object` is where a `GrCompute` channel's **host** channel is
+    /// materialized, and `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory
+    /// handle — so any object over the guest's ring must be minted **before** the drain, not
+    /// during it and not after. This is the only instant at which *"a host channel is about
+    /// to be born for guest channel X"* is knowable and X is still un-born.
+    ///
+    /// ⊘ **It takes nothing and mutates nothing.** A caller that drained here to inspect the
+    /// entries would have run the forwards it meant to prepare for.
+    ///
+    /// ⚠ Returns `(client, parent, class)` and **not** the params: nothing upstream of the
+    /// forward has any business reading the guest's alloc blob, and a peek that handed it
+    /// out would be an inspection surface wearing a routing name.
+    #[must_use]
+    pub fn peek_pending_engine_forwards(&self) -> Vec<(HClient, HObject, ClassId)> {
+        self.state
+            .read()
+            .pending_engine_forwards
+            .iter()
+            .map(|p| (p.client, p.parent, p.class))
+            .collect()
     }
 
     /// ★★★ **§16.96 — drain and run whatever [`Self::forward_engine_object_deferring`]
@@ -1941,113 +1972,190 @@ impl SharedDevice {
                 Ok((r.proc, r))
             },
             |spine, proc, route| {
-                let chan = proc
-                    .channels
-                    .get(&route.chan)
-                    .ok_or(FwdFault::UnknownVchid {
-                        gpu: route.gpu,
-                        vchid: route.vchid,
-                    })?;
-                let node = spine
-                    .rmgraph
-                    .node_of_resource(chan.key)
-                    .ok_or(FwdFault::NoVas(route.chan))?;
-                // ★★★ **THE RESOLVED VA SPACE**, off the same `Channel::vas_origin` that
-                // produced `vas_pdb` — see [`CeChannelFacts::vaspace`] for the boot in which
-                // this line's predecessor (`node.facts.h_vaspace`) reported
-                // `vas=NONE-DECLARED` for a channel whose `vas_pdb` was `Some`, and cost
-                // every UVM doorbell its only ring-reading path.
-                //
-                // ⊘ A `vas_origin` that no longer resolves in the graph yields `None` here
-                // rather than a stale handle: the resource died between the projection and
-                // this read, and naming a dead VA space would send `ce_session` looking for
-                // a publication that belongs to whatever inherits the handle value.
-                let vas_node = chan
-                    .vas_origin
-                    .and_then(|k| spine.rmgraph.node_of_resource(k));
-                Ok(CeChannelFacts {
-                    proc: route.proc,
-                    chan: route.chan,
-                    vchid: route.vchid,
-                    // ★★★★★ Off the SAME resolved `Channel` as `vas_pdb` and `engine`
-                    // below — the declared kind, never `route.proc == SYSTEM_PROC`
-                    // recomputed here. See [`CeChannelFacts::kind`].
-                    kind: chan.kind,
-                    // ★★★★ §16.25 — carried off the channel, where the projection put it.
-                    // ⊘ NOT re-derived here: this whole struct exists because a second
-                    // derivation of the VA space disagreed with the first one and lost the
-                    // channel `cuInit` walls on (see [`CeChannelFacts::vaspace`]).
-                    vas_route: chan.vas_route,
-                    // The namespace the VA SPACE lives in — which is the namespace its
-                    // publication was issued in. ⊘ Falls back to the channel's own only
-                    // when nothing resolved, so a refusal still names a client.
-                    // ★★★★ §16.28 — route 4's answer lives in the channel's OWN namespace
-                    // by construction: RM mints the device-default name with
-                    // `serverutilGenResourceHandle(hClient, …)` on the client that owns
-                    // the Device (`ogkm-580: gpu_vaspace.c:4101`). So the existing
-                    // fallback — the channel's own client — is already the right one, and
-                    // there is deliberately no third arm here.
-                    client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
-                    // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
-                    // zero: a GSP-managed channel that named no VA space and one that named
-                    // handle zero are the same wire byte but different facts, and only the
-                    // first is what `Channel::vas_pdb == None` means.
-                    // ★★★★ **§16.28 — THE FOURTH ROUTE REACHES THE DISPATCH HERE**, and
-                    // it is an `or_else` rather than a second opinion: a channel that
-                    // resolved a live VASpace resource keeps that answer untouched, and
-                    // only a channel for which every declared route missed *and* whose
-                    // parent Device named a default address space gets this one. The two
-                    // can never disagree because they are never both `Some`
-                    // (`project::resolve_channel_vas` returns at most one of them — route
-                    // 4 runs only after routes 1-3 have all produced no node).
-                    //
-                    // ⊘ Nothing is invented: the value is the handle the guest's own RM
-                    // minted, published its page-directory root under, and freed, and it
-                    // is used as the key it is — `ce_session` looks the guest's own
-                    // publication up under `(hClient, hVASpace)`.
-                    vaspace: vas_node
-                        .map(|v| v.key.handle.0)
-                        .or(chan.vas_device_default.map(|h| h.0)),
-                    // ★ Reported SEPARATELY as well as folded above, so a reader can tell
-                    // which of the two produced `vaspace` without inferring it from
-                    // `vas_route` — the §16.16 rule that two projections of one fact are
-                    // printed side by side rather than reconciled in silence.
-                    vaspace_device_default: chan.vas_device_default.map(|h| h.0),
-                    // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
-                    // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
-                    // NOT reconciled with `vaspace` above: the whole point is that it is
-                    // the other projection, and a value passed through the same resolver
-                    // would be the same projection twice. See
-                    // `CeChannelFacts::vaspace_declared`.
-                    vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
-                    // ★ Off the SAME `node` the ring below is read from — see
-                    // [`CeChannelFacts::chan_key`]. ⊘ NOT `chan.key`: the point is to name
-                    // the object this struct's facts actually came out of, and a key read
-                    // off the channel record rather than off the resolved node would be a
-                    // different statement wearing the same name.
-                    chan_key: (node.key.client.0, node.key.handle.0),
-                    ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
-                    ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
-                    // ★ Off the SAME node the ring came from, so the two declarations can
-                    // never be attributed to different channels.
-                    userd: node.facts.userd,
-                    vas_pdb: chan.vas_pdb,
-                    // ★ Off the SAME proc the channel was routed in, so a bind recorded for
-                    // another proc's slot of the same index can never be read as this
-                    // channel's — the join is `(proc, chan)`, exactly as `ExecPlane` keys
-                    // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
-                    // stated reason: two projections of one fact can disagree.
-                    bound_engine: proc.exec.bound.get(&route.chan).copied(),
-                    // ★★★★ §16.65 — off the SAME resolved `Channel` as `vas_pdb` two lines
-                    // up, so the engine and the address space can never be attributed to
-                    // different channels. ⊘ Deliberately NOT derived from `bound_engine`
-                    // above: see this field's doc for the measurement that rules that out.
-                    engine: chan.engine,
-                })
+                channel_facts_from(spine, proc, route.proc, route.chan, route.gpu, route.vchid)
             },
         )?
     }
 
+    /// ★★★★★ **THE SAME DECLARED FACTS, ROUTED BY THE ENGINE-OBJECT'S PARENT INSTEAD OF BY
+    /// A DOORBELL TOKEN** — because the channel's ring has to be reachable **before** the
+    /// first doorbell, and a token does not exist yet at that moment.
+    ///
+    /// # ⊘ Why a second entry point and not a second derivation
+    ///
+    /// The body is [`Self::ce_channel_facts`]' body, called — not copied. The two differ in
+    /// exactly one thing, the **route**, and they are deliberately the two routes the tree
+    /// already owns: `route_doorbell` (by `(GpuId, VChid)` off a work-submit token) and
+    /// `route_engine_object_by_parent` (by the parent handle the guest's own alloc named).
+    /// Everything downstream — the resolved VA space, the declared ring, the pdb — is read
+    /// off the one graph node that declared it, exactly once, in `channel_facts_from`.
+    ///
+    /// ★★★ **This is the hop the ordering fact demands.** `GuestRing::memory` is a
+    /// `HostHandle` and `alloc_channel_in`'s guest arm `narrow()`s it, so the host object
+    /// over the guest's ring must EXIST before the host channel is born — and the host
+    /// channel is born on the engine-object path (`commit_engine_object`), upstream in time
+    /// of every doorbell. ⊘ Binding may be late (R31 arm C: an unmapped `gpFifoOffset` was
+    /// **accepted**); minting may not.
+    ///
+    /// # Errors
+    /// Whatever `route_engine_object_by_parent` refuses with — including
+    /// [`FwdFault::NotAnEngine`] for a class that was never an engine object — then
+    /// [`FwdFault::UnknownVchid`] / [`FwdFault::NoVas`] exactly as
+    /// [`Self::ce_channel_facts`].
+    pub fn engine_object_channel_facts(
+        &self,
+        client: HClient,
+        parent: HObject,
+        class: ClassId,
+    ) -> Result<CeChannelFacts, FwdFault> {
+        self.route_act(
+            |spine| {
+                let r = kayfabe_fwd::route_engine_object_by_parent(spine, client, parent, class)?;
+                Ok((r.proc, r))
+            },
+            |spine, proc, route| {
+                channel_facts_from(spine, proc, route.proc, route.chan, route.gpu, route.vchid)
+            },
+        )?
+    }
+}
+
+/// The declared facts of one already-routed channel, read off the **one** graph node that
+/// declared them. Shared by [`SharedDevice::ce_channel_facts`] and
+/// [`SharedDevice::engine_object_channel_facts`] so the two routes can never come to
+/// disagree about what a channel declared (`two_projections_of_one_fact_disagreeing`).
+fn channel_facts_from(
+    spine: &Spine,
+    proc: &Proc,
+    pid: ProcId,
+    cid: ChanId,
+    gpu: GpuId,
+    vchid: VChid,
+) -> Result<CeChannelFacts, FwdFault> {
+    /// The four routing facts both entry points arrive with, named so the body below reads
+    /// identically whichever route produced them.
+    struct Routed {
+        proc: ProcId,
+        chan: ChanId,
+        gpu: GpuId,
+        vchid: VChid,
+    }
+    let route = Routed {
+        proc: pid,
+        chan: cid,
+        gpu,
+        vchid,
+    };
+    {
+        {
+            let chan = proc
+                .channels
+                .get(&route.chan)
+                .ok_or(FwdFault::UnknownVchid {
+                    gpu: route.gpu,
+                    vchid: route.vchid,
+                })?;
+            let node = spine
+                .rmgraph
+                .node_of_resource(chan.key)
+                .ok_or(FwdFault::NoVas(route.chan))?;
+            // ★★★ **THE RESOLVED VA SPACE**, off the same `Channel::vas_origin` that
+            // produced `vas_pdb` — see [`CeChannelFacts::vaspace`] for the boot in which
+            // this line's predecessor (`node.facts.h_vaspace`) reported
+            // `vas=NONE-DECLARED` for a channel whose `vas_pdb` was `Some`, and cost
+            // every UVM doorbell its only ring-reading path.
+            //
+            // ⊘ A `vas_origin` that no longer resolves in the graph yields `None` here
+            // rather than a stale handle: the resource died between the projection and
+            // this read, and naming a dead VA space would send `ce_session` looking for
+            // a publication that belongs to whatever inherits the handle value.
+            let vas_node = chan
+                .vas_origin
+                .and_then(|k| spine.rmgraph.node_of_resource(k));
+            Ok(CeChannelFacts {
+                proc: route.proc,
+                chan: route.chan,
+                vchid: route.vchid,
+                // ★★★★★ Off the SAME resolved `Channel` as `vas_pdb` and `engine`
+                // below — the declared kind, never `route.proc == SYSTEM_PROC`
+                // recomputed here. See [`CeChannelFacts::kind`].
+                kind: chan.kind,
+                // ★★★★ §16.25 — carried off the channel, where the projection put it.
+                // ⊘ NOT re-derived here: this whole struct exists because a second
+                // derivation of the VA space disagreed with the first one and lost the
+                // channel `cuInit` walls on (see [`CeChannelFacts::vaspace`]).
+                vas_route: chan.vas_route,
+                // The namespace the VA SPACE lives in — which is the namespace its
+                // publication was issued in. ⊘ Falls back to the channel's own only
+                // when nothing resolved, so a refusal still names a client.
+                // ★★★★ §16.28 — route 4's answer lives in the channel's OWN namespace
+                // by construction: RM mints the device-default name with
+                // `serverutilGenResourceHandle(hClient, …)` on the client that owns
+                // the Device (`ogkm-580: gpu_vaspace.c:4101`). So the existing
+                // fallback — the channel's own client — is already the right one, and
+                // there is deliberately no third arm here.
+                client: vas_node.map_or(node.key.client.0, |v| v.key.client.0),
+                // ⊘ `None` (an `hVASpace` of 0) is carried as `None` and never folded to
+                // zero: a GSP-managed channel that named no VA space and one that named
+                // handle zero are the same wire byte but different facts, and only the
+                // first is what `Channel::vas_pdb == None` means.
+                // ★★★★ **§16.28 — THE FOURTH ROUTE REACHES THE DISPATCH HERE**, and
+                // it is an `or_else` rather than a second opinion: a channel that
+                // resolved a live VASpace resource keeps that answer untouched, and
+                // only a channel for which every declared route missed *and* whose
+                // parent Device named a default address space gets this one. The two
+                // can never disagree because they are never both `Some`
+                // (`project::resolve_channel_vas` returns at most one of them — route
+                // 4 runs only after routes 1-3 have all produced no node).
+                //
+                // ⊘ Nothing is invented: the value is the handle the guest's own RM
+                // minted, published its page-directory root under, and freed, and it
+                // is used as the key it is — `ce_session` looks the guest's own
+                // publication up under `(hClient, hVASpace)`.
+                vaspace: vas_node
+                    .map(|v| v.key.handle.0)
+                    .or(chan.vas_device_default.map(|h| h.0)),
+                // ★ Reported SEPARATELY as well as folded above, so a reader can tell
+                // which of the two produced `vaspace` without inferring it from
+                // `vas_route` — the §16.16 rule that two projections of one fact are
+                // printed side by side rather than reconciled in silence.
+                vaspace_device_default: chan.vas_device_default.map(|h| h.0),
+                // ★★★★ §16.16 — the DECLARED handle, read straight off this channel's
+                // own alloc facts. ⊘ Deliberately NOT resolved through the graph and
+                // NOT reconciled with `vaspace` above: the whole point is that it is
+                // the other projection, and a value passed through the same resolver
+                // would be the same projection twice. See
+                // `CeChannelFacts::vaspace_declared`.
+                vaspace_declared: node.facts.h_vaspace.map(|h| h.0),
+                // ★ Off the SAME `node` the ring below is read from — see
+                // [`CeChannelFacts::chan_key`]. ⊘ NOT `chan.key`: the point is to name
+                // the object this struct's facts actually came out of, and a key read
+                // off the channel record rather than off the resolved node would be a
+                // different statement wearing the same name.
+                chan_key: (node.key.client.0, node.key.handle.0),
+                ring_va: node.facts.gp_fifo_ring.map(|r| r.va),
+                ring_entries: node.facts.gp_fifo_ring.map_or(0, |r| r.entries),
+                // ★ Off the SAME node the ring came from, so the two declarations can
+                // never be attributed to different channels.
+                userd: node.facts.userd,
+                vas_pdb: chan.vas_pdb,
+                // ★ Off the SAME proc the channel was routed in, so a bind recorded for
+                // another proc's slot of the same index can never be read as this
+                // channel's — the join is `(proc, chan)`, exactly as `ExecPlane` keys
+                // it. ⊘ Read here rather than joined later for `ce_channel_facts`' own
+                // stated reason: two projections of one fact can disagree.
+                bound_engine: proc.exec.bound.get(&route.chan).copied(),
+                // ★★★★ §16.65 — off the SAME resolved `Channel` as `vas_pdb` two lines
+                // up, so the engine and the address space can never be attributed to
+                // different channels. ⊘ Deliberately NOT derived from `bound_engine`
+                // above: see this field's doc for the measurement that rules that out.
+                engine: chan.engine,
+            })
+        }
+    }
+}
+
+impl SharedDevice {
     /// ★ THE one gated ring path (inherited law 7), route/act split per R4 and
     /// plan/execute/commit per R1.
     ///
@@ -2088,6 +2196,30 @@ impl SharedDevice {
         self.fb.set(src)
     }
 
+    /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**
+    ///
+    /// `w279`'s result ruled this explicitly: *"widen it — as its **own** flag, never folded
+    /// into route B"*. Route B is [`SharedDevice::set_fb_source`], a **supply**: it says
+    /// whose bytes we may serve. This is a **route**: it says which read may consume them.
+    /// Folding them together would make a boot unable to say whether a byte reached the
+    /// decoder through the ring's widening or the pushbuffer's — the attribution `w279`
+    /// paid a whole rung to keep.
+    ///
+    /// ⊘ **It is NECESSARY-NOT-SUFFICIENT on its own.** With no [`kayfabe_fwd::FbSource`]
+    /// registered there is nothing to read, so a vidmem run still raises
+    /// [`FwdFault::PushbufferAperture`] — the same shape as *"route B is unreachable with
+    /// the witness disarmed"*. Both must be on; each is asserted separately in a boot's log.
+    pub fn set_pushbuffer_vidmem(&self, on: bool) {
+        self.pb_vidmem.store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether the pushbuffer's vidmem route is armed. ⊘ Read per parse rather than cached,
+    /// so a log line and the act cannot disagree about what this boot ran with.
+    #[must_use]
+    pub fn pushbuffer_vidmem(&self) -> bool {
+        self.pb_vidmem.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// attached port whenever it has one.
     pub fn doorbell(
         &self,
@@ -2111,7 +2243,25 @@ impl SharedDevice {
             },
             kayfabe_fwd::commit_doorbell,
         )?;
-        if let Some(vmm) = vmm {
+        // ★★★★★ **THE CONTENT FORWARD IS ASKED FOR BY ENGINE** — see
+        // [`ring_content_is_forwardable`], which carries the ruling and its reason.
+        //
+        // ⊘ Two conditions, and they are different questions. `vmm` is *"does this caller
+        // hold a guest-memory port at all"*; the predicate is *"is parsing this ring with
+        // the copy-engine codec the right verb for this engine"*. A GR doorbell answers
+        // **no** to the second, so `forward_ring`'s `?` can never turn a rung host doorbell
+        // into a `Refused` report — which is the property
+        // `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` pins and the GR
+        // route depends on.
+        //
+        // ⊘ It is checked HERE and not inside `forward_ring`, deliberately: that function's
+        // own doctrine is that *every* arm which forwards nothing must be NAMED, and it
+        // already has eight paths to `Ok(())`. A ninth, whose meaning is *"this was never
+        // this function's kind of work"*, belongs at the call site where the alternative is
+        // visible, not inside the thing being skipped.
+        if let Some(vmm) = vmm
+            && ring_content_is_forwardable(out.engine)
+        {
             self.forward_ring(vmm, out.proc, out.chan)?;
         }
         Ok(out)
@@ -2409,11 +2559,25 @@ impl SharedDevice {
     /// whether the lock above it is rank 0 or rank 1. The refusal surfaces as
     /// [`FwdFault::NonRamGpa`].
     ///
-    /// ⊘ **Not split into plan/execute/commit**, deliberately: R1 forces that shape for
-    /// *blocking* calls, and `gpa_read` is a bounded copy out of a mapped window. The
-    /// split would mean resolving addresses, dropping the lock, then fetching method bytes
-    /// through a translation the guest was free to invalidate in the gap — a TOCTOU built
-    /// on purpose. See `kayfabe_fwd::read_pushbuffer`.
+    /// # ⊘⊘⊘ CORRECTED `[w281, 2026-08-12]` — IT **IS** SPLIT NOW, AND A LOCK RANK FORCED IT
+    ///
+    /// The paragraph below said the split would be *"a TOCTOU built on purpose"* and
+    /// declined it. That reasoning stood while this path read **guest RAM only**. Reading a
+    /// **vidmem** pushbuffer needs `kayfabe_fwd::FbBytes`, whose production implementation
+    /// takes the plane's mutex — `LockRank::Plane`, **rank 0** — and this closure holds
+    /// ranks 1 and 2. `check_acquire` refuses that `core → plane` acquisition **by name**,
+    /// so the unsplit shape does not merely risk a deadlock: it **cannot run**.
+    ///
+    /// ⇒ Three phases, `forward_ring`'s exactly: `plan_pushbuffer` under the locks →
+    /// `fetch_pushbuffer` with **every ranked guard dropped** → `decode_pushbuffer` +
+    /// `apply_pushbuffer` under them again. ⚠ The TOCTOU is **accepted, not dissolved**:
+    /// between plan and fetch the guest may invalidate a translation, so the bytes may come
+    /// from a page it named and has since unmapped. Bounded, because the runs come from
+    /// that channel's own table under the lock and are never recomputed outside it — a
+    /// stale read of the guest's own memory, never a read of memory it never owned. The
+    /// ring has carried this exposure since `w235`.
+    ///
+    /// ⊘ The superseded reasoning, kept because its *scope* is what changed:
     ///
     /// It is wired here rather than left to callers precisely because it was *not*
     /// reachable through the shell before: `read_pushbuffer`'s docs claimed *"in L1 this
@@ -2427,17 +2591,48 @@ impl SharedDevice {
         cid: ChanId,
         ring: &[u8],
     ) -> Result<kayfabe_fwd::PushbufferOutcome, FwdFault> {
-        let out = self.route_act(
+        // ★★★ `[w281]` The route's arm, read ONCE per parse and printed with the plan, so a
+        // grader reads the flag this act ran under rather than the one the process booted
+        // with. ⊘ `pb_vidmem` alone is not enough: with no `FbSource` registered there is
+        // nothing to read and a vidmem run still refuses. Both are asserted below.
+        let pb_vidmem = self.pushbuffer_vidmem();
+        // ---- PLAN. Ranks 0+1 held; no byte of guest memory or framebuffer is touched.
+        let plan = self.route_act(
             // ROUTE phase — rank 0 held, no proc, no guest memory: the arch's GPFIFO
             // entry format and nothing else.
             move |spine| Ok((pid, kayfabe_fwd::pushbuffer_ranges(spine, ring))),
-            // ACT phase — rank 0 + this proc's rank 1. Translate through the channel's
-            // own address table, read, decode, apply. The read and the apply are one
-            // phase because they must see the same table.
-            move |spine, proc, ranges| {
-                let methods = kayfabe_fwd::read_pushbuffer(spine, proc, cid, vmm, &ranges)?;
-                kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods)
-            },
+            // PLAN phase — rank 0 + this proc's rank 1. Translate through the channel's
+            // own address table. The refusals (MISS, wrong aperture, over-fragmented) are
+            // all raised HERE, under the lock, before anything is read.
+            move |_spine, proc, ranges| kayfabe_fwd::plan_pushbuffer(proc, cid, &ranges, pb_vidmem),
+        )??;
+        // ---- FETCH. ⊘ NO ranked lock is held here — the whole reason for the split.
+        let bytes = {
+            let src = self.fb.get().cloned();
+            let mut borrowed = src.as_deref().map(kayfabe_fwd::FbSourceRef);
+            let dynref: Option<&mut dyn kayfabe_fwd::FbBytes> = match borrowed.as_mut() {
+                Some(b) => Some(b),
+                None => None,
+            };
+            // ★★ Printed on the arm that READS OUR OWN FRAMEBUFFER, and only there: a route
+            // that is armed and never taken must not read as a route that was taken.
+            if plan.touches_fb() {
+                eprintln!(
+                    "kayfabe: FWD-PUSHBUF proc={} chan={} ranges={} → VIDMEM RUNS PLANNED \
+                     (pb_vidmem={pb_vidmem} fb_source={}) — the pushbuffer is read out of \
+                     OUR OWN framebuffer, not guest RAM",
+                    pid.0,
+                    cid.0,
+                    plan.len(),
+                    dynref.is_some(),
+                );
+            }
+            kayfabe_fwd::fetch_pushbuffer(&plan, vmm, dynref)?
+        };
+        // ---- ACT. Back under the locks. Decode is pure; apply needs the proc.
+        let out = self.route_act(
+            move |spine| Ok((pid, kayfabe_fwd::decode_pushbuffer(spine, &bytes))),
+            move |spine, proc, methods| kayfabe_fwd::apply_pushbuffer(spine, proc, cid, methods),
         )??;
         // ★★★ #102/#13 — LATCH phase, and it needs its own pass for a structural reason.
         //
@@ -2657,6 +2852,270 @@ impl SharedDevice {
         // source, which this body does not own; the caller that chose the source sets it.
         out.transport = results.1;
         Some(out)
+    }
+
+    /// ★★★★★ **THE WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem` (`C: nvkvm_gpu_emul.c:583-591`)
+    /// on this port's three-phase shape.
+    ///
+    /// Identical in structure to [`SharedDevice::decode_pt_writes_from`] — plan under rank 1,
+    /// execute under no lock, commit under rank 1, publish under rank 0 — and different in
+    /// exactly two places, both of which are the rung:
+    ///
+    /// 1. the plan seeds **one root task per stale address space**
+    ///    (`kayfabe_fwd::plan_pt_sweep`) instead of draining a dirty set;
+    /// 2. the commit admits every page the descent reached
+    ///    (`kayfabe_mmu::reach::ReachShadow::witness_swept`), because a root descent reaches
+    ///    pages nobody was seen to write and the witness gate would otherwise publish **zero**
+    ///    — `[measured, w275]`.
+    ///
+    /// ⊘ **It is not a second address plane and it resolves nothing.** Same walker, same
+    /// aperture-checked byte source, same one authoritative table, same refusal vocabulary; a
+    /// miss is still a fault and the table is still never reverse-resolved.
+    ///
+    /// ⚠ **Read `witness_swept` before calling this.** It relaxes a deliberate correctness gate
+    /// and carries an accepted residual (owner ruling, 2026-08-12), whose bound is the
+    /// dirty-driven re-sweep — half of which lives in `kayfabe_fwd::plan_pt_decode`. A caller
+    /// that runs this sweep without also running the decode pass has the relaxation and not its
+    /// mitigation.
+    ///
+    /// Returns `None` if `pid` is not live.
+    ///
+    /// # Panics
+    /// If a ranked lock is held across the execute phase and the source asserts it.
+    pub fn sweep_pt_tables_from(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+    ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
+        // PLAN — rank 1.
+        let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
+        if plan.tasks.is_empty() {
+            // ⊘ Returned rather than skipped, and with the plan attached: "every address space
+            // was current" is a result, and it is the one a reader would otherwise confuse with
+            // "the sweep did not run".
+            return Some((plan, kayfabe_fwd::PtDecodeOutcome::default()));
+        }
+        // EXECUTE — no lock. ★ The budget is charged PER TASK; see `PT_SWEEP_BUDGET` for why
+        // reusing the decode pass's run-wide budget would divide the C's number by a
+        // guest-chosen quantity.
+        let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
+        // COMMIT — rank 1, re-resolving every target (R5).
+        let mut out =
+            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
+        // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
+        // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
+        // write into any of them classify as a page-table write.
+        if !out.learned_pages.is_empty() {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let mut by_vas: std::collections::BTreeMap<(GpuId, Pdb), Vec<u64>> =
+                std::collections::BTreeMap::new();
+            for &(gpu, pdb, page) in &out.learned_pages {
+                by_vas.entry((gpu, pdb)).or_default().push(page);
+            }
+            for ((gpu, pdb), pages) in by_vas {
+                let (published, refused) = st.spine.publish_pt_pages(pid, gpu, pdb, pages);
+                out.pages_published += published;
+                out.pages_publish_refused += refused;
+            }
+        }
+        Some((plan, out))
+    }
+
+    /// ★★ **How many page-table pages this proc holds that ONLY a sweep admitted**, summed
+    /// over its address spaces.
+    ///
+    /// ⊘ The number that separates two readings of `swept_binds=0`, which look identical:
+    /// *"the witness transport already covered every root-reachable page"* (`0` here — a
+    /// statement about our transport) from *"those pages held no bindable leaves"* (`>0` here
+    /// — a statement about the guest). `[measured, w276_on]` a boot printed `swept_binds=0`
+    /// and could say neither.
+    #[must_use]
+    pub fn vas_swept_only(&self, pid: ProcId) -> usize {
+        self.with_proc_mut(pid, |p| {
+            p.vases.values().map(|v| v.reach.swept_only_len()).sum()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★ **ARM 2.1's raw material** — every address space's coalesced reachable VA ranges,
+    /// one string per `Vas`.
+    ///
+    /// This is what makes *"is the faulting VA described by the guest?"* answerable **offline,
+    /// from the boot log**, without knowing the address in advance. The wall's VA is ASLR'd and
+    /// arrives from host `dmesg` after the fact, so a probe that had to be told the address up
+    /// front could never be armed in time.
+    ///
+    /// ⚠ `cap` truncates the range list and the caller must print that it did. A truncated list
+    /// read as complete turns *"not in the list"* — the answer arm 2.1 rests on — into a lie.
+    #[must_use]
+    pub fn vas_reachable_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let r = vas.reach.reachable_ranges();
+                    let shown: Vec<String> = r
+                        .iter()
+                        .take(cap)
+                        .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} sweeps={} trunc={} runs={} {}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        vas.sweep.sweeps,
+                        u8::from(vas.sweep.truncated),
+                        r.len(),
+                        shown.join(","),
+                        if r.len() > cap {
+                            format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", r.len())
+                        } else {
+                            String::new()
+                        }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★★★ **WHAT OUR OWN ADDRESS TABLE HOLDS**, coalesced, one string per `Vas` — the
+    /// counterpart to [`SharedDevice::vas_reachable_ranges`], and the instrument that makes
+    /// the **third outcome** answerable offline.
+    ///
+    /// # ⊘⊘ The gap it closes, stated as the measurement that exposed it
+    ///
+    /// `[measured, w276b_on]` hardware faulted at a VA that the guest's own tables **describe**
+    /// (`GUEST-DESCRIBES` names a run based exactly there) and that appears in **no**
+    /// `refused_vas` list. From those two facts alone there are still three live readings and
+    /// the log could not choose between them:
+    ///
+    /// 1. **it is bound** — the table already holds it, the mirror is right, and the fault is
+    ///    about something other than this VA's mapping (reachability, aperture, the host
+    ///    channel's own VAS);
+    /// 2. **it was refused** — but off the end of a capped refusal list;
+    /// 3. **it was dropped** — decoded and then lost, which is
+    ///    [`kayfabe_mmu::reach::Settlement::shape_collisions`].
+    ///
+    /// A refusal list can never answer (1). Only the table itself can, and *"is this VA in the
+    /// table"* is exactly what a coalesced dump of the table makes joinable against an address
+    /// that is **ASLR'd and only arrives after the hang**. Same design as
+    /// [`SharedDevice::vas_reachable_ranges`]: print unconditionally, join offline, never let
+    /// the device learn the address.
+    ///
+    /// ⚠ `cap` truncates and the caller **must** print that it did — an absent range read as
+    /// *"not bound"* is the `dlen=0` mistake, and this row is the one a story turns on.
+    ///
+    /// ⊘ Coalescing merges only **VA-contiguous** bindings, exactly as the reachable dump does,
+    /// so the two lists are comparable run for run. It deliberately does **not** require the
+    /// physical addresses to be contiguous: the question a reader brings here is *"is there a
+    /// hole"*, and a run that is contiguous in VA and scattered in FB is still not a hole.
+    #[must_use]
+    pub fn vas_table_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let mut runs: Vec<(u64, u64)> = Vec::new();
+                    for (va, len, _b) in vas.table.iter() {
+                        match runs.last_mut() {
+                            Some((s, l)) if *s + *l == va => *l += len,
+                            _ => runs.push((va, len)),
+                        }
+                    }
+                    let shown: Vec<String> = runs
+                        .iter()
+                        .take(cap)
+                        .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} rows={} runs={} {}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        vas.table.iter().count(),
+                        runs.len(),
+                        shown.join(","),
+                        if runs.len() > cap {
+                            format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", runs.len())
+                        } else {
+                            String::new()
+                        }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★ **ARM 2.1 — WHAT THE GUEST ITSELF SAYS ABOUT A VIRTUAL ADDRESS**, asked of the
+    /// swept picture of every one of `pid`'s address spaces.
+    ///
+    /// # ⊘ The question this exists to make answerable, and why it can kill a story
+    ///
+    /// The wall's host-side `Xid 31` names a faulting VA. Two readings are consistent with it
+    /// and they demand opposite work:
+    ///
+    /// - **the guest describes that VA and our mirror missed it** ⇒ the sweep is the fix;
+    /// - **the guest never described it** ⇒ mirroring cannot bind what does not exist, and the
+    ///   sweep story is dead.
+    ///
+    /// A bind census cannot separate them: it reports OUR table, and both readings produce the
+    /// same absence in it. This reports the **guest's own tables**, as walked from the guest's
+    /// own installed page-directory root — so an absence here is a statement about the guest.
+    ///
+    /// ⚠ It is only as complete as the sweep that fed the shadow. A `truncated` sweep produced
+    /// **no** leaves, so "absent" from a truncated picture is not evidence of anything; the
+    /// caller must print the sweep's own state beside this. ⊘ And it reads the shadow rather
+    /// than re-walking, deliberately: a second walk is a second reader that can disagree with
+    /// the one the port acted on.
+    #[must_use]
+    pub fn guest_leaf_census(&self, pid: ProcId, va: kayfabe_arch::ids::GpuVa) -> String {
+        let Some(rows) = self.with_proc_mut(pid, |p| {
+            let mut rows: Vec<String> = Vec::new();
+            for (&(gpu, pdb), vas) in &p.vases {
+                let hit = vas.reach.leaf_covering(va);
+                rows.push(format!(
+                    "gpu={} pdb=0x{:x} sweeps={} trunc={} dirty={} pages={} swept_only={} → {}",
+                    gpu.0,
+                    pdb.0,
+                    vas.sweep.sweeps,
+                    u8::from(vas.sweep.truncated),
+                    u8::from(vas.sweep.dirty),
+                    vas.reach.len(),
+                    vas.reach.swept_only_len(),
+                    match hit {
+                        Some(l) => format!(
+                            "LEAF-PRESENT va=0x{:x} size={:?} phys=0x{:x} ap={:?} ro={}",
+                            l.va.0, l.size, l.phys, l.aperture, l.read_only
+                        ),
+                        None => "LEAF-ABSENT (this address space's own tables, as swept, \
+                                 describe no mapping covering it)"
+                            .to_string(),
+                    }
+                ));
+            }
+            rows
+        }) else {
+            return format!("GUEST-LEAF va=0x{:x} → NO SUCH PROC", va.0);
+        };
+        if rows.is_empty() {
+            return format!(
+                "GUEST-LEAF va=0x{:x} proc={} → NO ADDRESS SPACES. ⊘ That is not LEAF-ABSENT: \
+                 nothing was asked.",
+                va.0, pid.0
+            );
+        }
+        format!(
+            "GUEST-LEAF va=0x{:x} proc={} over {} address space(s): {}",
+            va.0,
+            pid.0,
+            rows.len(),
+            rows.join(" | ")
+        )
     }
 
     /// ★★★★★ **§16.82 — WHY one VA is not bound, asked of the VAS that would have to bind
@@ -3214,8 +3673,11 @@ impl SharedDevice {
                         let r = kayfabe_fwd::route_engine_object(spine, target_gpu, vchid, class)?;
                         Ok((r.proc, r))
                     },
-                    |_spine, proc, route| {
-                        let planned = kayfabe_fwd::plan_engine_object(proc, &route, class, params)?;
+                    |spine, proc, route| {
+                        // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
+                        // declared `gpFifoOffset`. See `plan_engine_object`.
+                        let planned =
+                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -3250,8 +3712,11 @@ impl SharedDevice {
                         )?;
                         Ok((r.proc, r))
                     },
-                    |_spine, proc, route| {
-                        let planned = kayfabe_fwd::plan_engine_object(proc, &route, class, params)?;
+                    |spine, proc, route| {
+                        // ★★★★★ LEG A2 — the spine is now READ here, for the channel's own
+                        // declared `gpFifoOffset`. See `plan_engine_object`.
+                        let planned =
+                            kayfabe_fwd::plan_engine_object(spine, proc, &route, class, params)?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
                 )?
@@ -4045,6 +4510,91 @@ pub fn route_of_engine(engine: EngineKind) -> DoorbellRoute {
         EngineKind::GrCompute | EngineKind::GrGraphics => DoorbellRoute::HostGr,
         EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => DoorbellRoute::Unserved,
     }
+}
+
+/// ★★★★★ **What the SHELL'S doorbell port does with a doorbell of a given route** — the
+/// pure half of the decision `kayfabe-qemu-raw`'s `SharedDoorbell::try_ce_submission`
+/// makes, split out here for [`route_of_engine`]'s stated reason: *"the half that can be
+/// quantified over should be."*
+///
+/// ⊘ **Three answers and not two.** Before the GR passthrough route existed the shim's
+/// decision was a `bool` spelled `route != DoorbellRoute::CpuCe`, which forced `HostGr` and
+/// `Unserved` into one bucket. They are not one bucket: `Unserved` is *"nobody has designed
+/// a path for this engine"*, and `HostGr` is *"the core's ring path serves this"* — the same
+/// distinction [`DoorbellRoute`] itself exists to preserve, and collapsing it one layer down
+/// was what made the route unopenable without touching the refusal's own name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShellDisposition {
+    /// The shell's own CPU copy-engine executor (`kayfabe_rt::ceutils`) may serve it —
+    /// subject to the *other* gates the shim applies after this one. ⊘ Not *"it will be
+    /// served here"*: this answer only says the routing fact does not exclude it.
+    MayServeLocally,
+    /// ★★★ **PASSTHROUGH.** Hand the doorbell to the core — [`SharedDevice::doorbell`],
+    /// which routes the guest token, materializes/schedules the host channel and rings the
+    /// **host** token. ⊘ The shell runs no executor for it and interprets none of its
+    /// bytes.
+    HandToCore,
+    /// Refuse by name. Nothing in this process is an executor for this engine and the core
+    /// has no ring path for it either.
+    RefuseByRoute,
+}
+
+/// ★★★★★ **THE SHELL'S DISPOSITION**, over a [`DoorbellRoute`] and one arming flag.
+///
+/// # ⚠ `gr_passthrough` re-opens a path that was CLOSED ON EVIDENCE
+///
+/// §16.65 replaced a `HostGr` fall-through to the core with a named refusal, because
+/// `execution_plane_increments.md` §15.5 had measured what the fall-through achieved:
+/// *"we rang a doorbell on a host channel into which the guest's methods were never
+/// copied"*, and *"a true refusal outranks a forwarded no-op."* That measurement has not
+/// been overturned — see `docs/design/gr_doorbell_passthrough.md` §0.3, which states at the
+/// code why a routed GR doorbell **still** cannot make the host engine fetch the guest's
+/// ring (the host channel's ring and its `GP_PUT` are both ours).
+///
+/// ⇒ The flag exists so that re-opening it is a **deliberate, armed, printed, controlled**
+/// choice with a default that is byte-identical to today, rather than a silent flip. What
+/// the armed arm buys is the **transport**: the first `ring_doorbell` ever issued for a GR
+/// host token, which is the standing debt `RESUME_HERE_2026_08_11.md` §3 records.
+///
+/// ⊘ The `match` is exhaustive with no `_` arm, for [`route_of_engine`]'s reason: a new
+/// [`DoorbellRoute`] variant fails this build until somebody says what the shell does with
+/// it.
+#[must_use]
+pub fn shell_disposition(route: DoorbellRoute, gr_passthrough: bool) -> ShellDisposition {
+    match route {
+        DoorbellRoute::CpuCe => ShellDisposition::MayServeLocally,
+        DoorbellRoute::HostGr if gr_passthrough => ShellDisposition::HandToCore,
+        DoorbellRoute::HostGr | DoorbellRoute::Unserved => ShellDisposition::RefuseByRoute,
+    }
+}
+
+/// ★★★★ **Whether the guest's ring CONTENT may be forwarded for this engine** — i.e.
+/// whether [`SharedDevice::forward_ring`], which parses the ring with the **copy-engine**
+/// codec and plans `ce_copy`s, is the right verb for a doorbell on it.
+///
+/// # ⊘ Why this is derived from [`route_of_engine`] and is not a second table
+///
+/// It is the same question that decides the executor, asked one layer up, and this project
+/// has measured twice what two tables for one question cost (§16.64's probe contradicting
+/// the serving path beside it). ⇒ One authority, two callers.
+///
+/// # ⚠ Why a GR doorbell must not run it — this is a RULING, not an optimisation
+///
+/// The copy-engine codec is class-gated, so every span of a GR pushbuffer decodes `Opaque`
+/// and the forward moves nothing. But `forward_ring` can return `Err`, and
+/// [`SharedDevice::doorbell`] propagates it — so a GR doorbell that rang the host channel
+/// **successfully** would be reported `Refused`, and *whether the doorbell was forwarded*
+/// would depend on *whether its ring parsed*. That is exactly the property
+/// `tests/tests/doorbell_is_forwarded_without_reading_the_ring.rs` exists to forbid, and
+/// the rung brief states it as a requirement: *"ring resolution / pushbuffer reads / method
+/// decode … must never gate whether the doorbell is forwarded."*
+///
+/// ⊘ **Not solved by passing `vmm: None` from the shim.** That parameter's own doc names
+/// that move: *"a caller that holds a port and passes `None` silently forwards nothing."*
+/// The decision belongs to the engine, by name, here.
+#[must_use]
+pub fn ring_content_is_forwardable(engine: EngineKind) -> bool {
+    matches!(route_of_engine(engine), DoorbellRoute::CpuCe)
 }
 
 impl CeChannelFacts {

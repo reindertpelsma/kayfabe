@@ -616,6 +616,125 @@ pub struct HostedObject<'a> {
     pub params: &'a [u8],
 }
 
+/// ★★★★★ **LEG A2 — THE GUEST'S OWN RING, as the birth path names it.**
+///
+/// Handed to [`RmBackend::alloc_channel`] so a host channel can be born over the GPFIFO the
+/// guest is already pushing into, instead of over a queue of ours that stays empty forever.
+///
+/// # ⊘ Every field is HANDED IN, and the memory is NOT ours
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | the **joining party's** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the isolate's own mapping of the guest's framebuffer leaf, already placed FIXED at the leaf's own guest VA (`RmBackend::join_fb_leaf`) |
+/// | [`Self::ring_va`] | where that object is placed — the leaf's base |
+/// | [`Self::gp_fifo_va`] | the **guest's** `gpFifoOffset`, an absolute VA, verbatim off its own channel alloc |
+/// | [`Self::gp_fifo_entries`] | the **guest's** `gpFifoEntries` — the modulus of the ring's wrap arithmetic, never ours |
+///
+/// # ★★★ THE OWNER INVARIANT, AND WHERE IT IS ENFORCED
+///
+/// *No fake framebuffer may ever be mapped to a real GPU VA of an isolate except the
+/// scratchpad.* The guest's ring lives in the **emulated** framebuffer, so this type is
+/// directly in that invariant's path, and it is honoured in exactly one way: the only
+/// object that may appear in [`Self::memory`] is a **joined** window — one memory, the
+/// bytes the guest writes and the bytes the engine reads being the same bytes — never
+/// `FbLeafBacking::Vidmem`'s blank twin.
+///
+/// ⊘ **And it is enforced on the FAR side of the wire, not only at the constructor.** The
+/// core builds this from an address-table binding whose backing declares
+/// `BackingBytes::JoinsGuestWindow`; the adapter then **re-checks that the handle is one it
+/// minted through `join_fb_leaf`** and refuses by name otherwise. A private constructor
+/// alone would be defeated by the IPC crossing — the child rebuilds the struct from four
+/// integers and cannot see the address table — which is `same_flag_opposite_polarity`
+/// waiting to happen.
+///
+/// ⊘ **It does not make the channel runnable.** `GP_PUT` still lives in the USERD *we* hand
+/// RM, and nothing in leg A writes the guest's cursor into that word. Adopting the ring and
+/// adopting the cursor are two legs, and this is the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestRing {
+    /// The joined host object carrying the guest's GPFIFO. Neither allocated nor freed by
+    /// the channel.
+    pub memory: HostHandle,
+    /// Where that object is placed in the channel's address space.
+    pub ring_va: u64,
+    /// The guest's `gpFifoOffset` — an **absolute VA**, not an offset into anything.
+    ///
+    /// ⚠ `0` is a value and not a blank: the driver deliberately declares
+    /// `gpFifoOffset = 0` for its golden-context channel. A caller with no ring to name
+    /// must not synthesise one — it passes `None` and has no `AdoptedGuestRing` at all.
+    pub gp_fifo_va: u64,
+    /// The guest's `gpFifoEntries`.
+    pub gp_fifo_entries: u32,
+    /// ★★★★★ **LEG B — the guest's own USERD, when it lives inside THIS ring's joined leaf.**
+    ///
+    /// # ⊘⊘ Why this is NESTED and not a sixth argument to `alloc_channel`
+    ///
+    /// Not economy. **A channel whose USERD is the guest's and whose ring is ours is a state
+    /// that must not be representable.** RM would then fetch GPFIFO entries out of a queue
+    /// nothing writes, indexed by a cursor the guest advances — `GP_PUT` racing ahead of a
+    /// ring that stays empty, no error anywhere. Making leg B a sibling argument would put
+    /// that state one caller mistake away; making it a field of the adoption makes it
+    /// unspellable.
+    ///
+    /// ★ It is also what *"the arming is inherited"* means concretely: this is `Some` only
+    /// when the address table already held a `JoinsGuestWindow` binding **and** the guest's
+    /// resolved USERD address fell inside it. A disarmed build cannot reach the outer
+    /// `Some`, so it cannot reach this one either — no second selector to drift.
+    ///
+    /// `None` = the ring was adopted and the USERD was not. That is a **normal** outcome
+    /// (the params may not carry the descriptor, the USERD may be in guest RAM, or it may be
+    /// in a leaf nothing joined) and it is exactly the pre-leg-B channel.
+    pub userd: Option<AdoptedGuestUserd>,
+}
+
+/// ★★★★★ **LEG B — the guest's own USERD, named as an OFFSET INTO AN OBJECT WE HOLD.**
+///
+/// # The shape, and why it is not an address
+///
+/// The guest's own CPU-RM resolved this channel's USERD to a **framebuffer physical
+/// address** and put it on the wire (`kayfabe_abi::notifier::ChannelUserdMemWire`). That
+/// address is an offset in an **emulated** framebuffer and is meaningless to host RM. What
+/// makes it usable is that it lands inside a leaf we already joined — so the pair below is
+/// *the joined object* plus *the guest's address expressed relative to it*, and no
+/// guest-controlled number ever reaches hardware as an address.
+///
+/// | field | whose number it is |
+/// |---|---|
+/// | [`Self::memory`] | **ours** — the same `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` [`AdoptedGuestRing::memory`] names, minted by `RmBackend::join_fb_leaf` |
+/// | [`Self::offset`] | **derived**: the guest's `userdMem.base` minus the joined leaf's own framebuffer base |
+///
+/// # ⚠ AT CREATION, NEVER AT THE FIRST DOORBELL
+///
+/// `[measured 2026-08-11, R32/w233, real GA106 / 580.159.04]` **RM zeroes all 512 bytes of a
+/// caller-supplied USERD.** Adopting after the guest has advanced its cursor therefore
+/// **wipes the write that caused the doorbell**, returns `NV_OK`, and produces silence rather
+/// than an error. This type only ever reaches `alloc_channel`.
+///
+/// # ⊘ What it costs, and it is not free
+///
+/// `[measured, R31 arm B]` a guest-backed `OS_DESCRIPTOR` **cannot be CPU-mapped**
+/// (`NV_ERR_NOT_SUPPORTED`; the driver's own *"memMap_IMPL: CPU mapping not supported for
+/// addressSpace: 0x1"*). So on a channel carrying this, the isolate has **no CPU view of
+/// USERD at all**: it cannot write `GP_PUT` — which is the point, the guest writes it — and
+/// it cannot read `GP_GET`, which is not. Both accesses are refused **by name**
+/// (`USERD_NOT_OURS`) rather than skipped, because a skipped write and a write to the wrong
+/// place look identical in a log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdoptedGuestUserd {
+    /// The joined host object containing the guest's USERD bytes. ⊘ Always the same object
+    /// as [`AdoptedGuestRing::memory`] on the production path — one leaf, one join — and the
+    /// adapter re-checks it was minted by `join_fb_leaf` exactly as it does for the ring.
+    pub memory: HostHandle,
+    /// Byte offset of this channel's 512-byte USERD slot **within that object**.
+    ///
+    /// ⚠ This lands in `hUserdMemory[0]`'s companion `userdOffset[0]`, whose being **zero**
+    /// has until now been a measured requirement (`C:` M5.47, and an RTX 3090 bite on
+    /// 2026-07-30). ★ Read what that measured: the offset was moved while the *store* stayed
+    /// at +0, so RM read a slot nobody wrote. Here the reader and the writer move together —
+    /// the writer being the guest, through its own BAR1 mapping.
+    pub offset: u64,
+}
+
 /// # The unprivileged host-RM verb surface
 ///
 /// The complete vocabulary of host operations the forwarding plane may request.
@@ -710,11 +829,19 @@ pub trait RmBackend: Send + Sync {
     /// decides *which kind of engine*; `hosting` only ever refines an instance the kind
     /// cannot express. An adapter that ignored it entirely would be exactly as correct as
     /// this trait was before — which is the property that keeps this additive.
+    ///
+    /// # ★★★★★ LEG A2 — `adopt`, and an adapter that ignored it would still be correct
+    ///
+    /// `Some(ring)` asks for the channel to be born over the **guest's** GPFIFO
+    /// ([`AdoptedGuestRing`]); `None` is every prior boot's behaviour, byte for byte. ⊘ Like
+    /// `hosting` above, it only ever *refines* — it names memory and geometry the abstract
+    /// verb could not express, and never changes which engine or which address space.
     fn alloc_channel(
         &mut self,
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError>;
 
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
@@ -1675,6 +1802,13 @@ pub enum VerbPlan {
         class: ClassId,
         /// The ABI-lowered alloc blob.
         params: Vec<u8>,
+        /// ★★★★★ **LEG A2** — the guest's own ring, when the core found one joined at this
+        /// channel's declared `gpFifoOffset`. `None` is every prior boot.
+        ///
+        /// ⊘ Read **only** on the `channel == None` arm: a channel that already exists was
+        /// born over whatever it was born over, and re-declaring its ring here would be a
+        /// second, silent opinion about a fact RM already holds.
+        adopt: Option<AdoptedGuestRing>,
     },
     /// One Case-1 control, payload carried by value in and out.
     Control {
@@ -1770,6 +1904,57 @@ pub struct CeSubCopy {
     pub len: u64,
     /// ★ Which engine performs it — chosen by the PLAN, obeyed by the backend.
     pub by: CeExecutor,
+    /// ★★★★★ **w283 — THE GUEST'S OWN DECLARED RELEASE, carried so HARDWARE writes it.**
+    ///
+    /// `Some((va, payload))` exactly when this sub-copy is the **last** one of a guest
+    /// `LAUNCH_DMA` that declared a completion, and that launch's spans went to
+    /// [`CeExecutor::HostCe`]. The backend appends a second `SET_SEMAPHORE_A/B/PAYLOAD` +
+    /// `LAUNCH_DMA` to the very same pushbuffer, so the **real copy engine** writes the
+    /// guest's declared payload at the guest's declared address, **after** it has moved the
+    /// bytes.
+    ///
+    /// # ⊘⊘ WHY THIS AND NOT A CPU WRITE — the standing refusal's own wording
+    ///
+    /// `kayfabe_rt::completion_watch` refuses to write a completion, and the sentence is
+    /// **conditional**: *"the payload is a literal immediate in the guest's own bytes, so
+    /// writing it here **without running the work** is precisely the credit-shortcut the C
+    /// artifact named and refused."* ⇒ the refusal is about **signalling work that did not
+    /// happen**, and this field cannot express that: the release is a method in the same
+    /// pushbuffer as the copy, behind the copy's own `LAUNCH_DMA`, executed by the same
+    /// engine in submission order. There is **no code path** on which the payload lands and
+    /// the bytes did not. ⊘ Nothing here is a CPU store, and nothing here is ours to forge.
+    ///
+    /// # ⚠ WHAT IT STILL DOES NOT REACH
+    ///
+    /// The guest's **`GP_GET`**. That cursor lives in the guest's own USERD, on the guest's
+    /// own channel, and only that channel's PBDMA advances it — see
+    /// [`AdoptedGuestUserd`] and `traces/boots/w283/RESULT.md` for why our forwarding
+    /// channel structurally cannot.
+    ///
+    /// ⊘ `None` for every sub-copy that is not the last of its launch, for every launch
+    /// that declared no completion, and for every span running on [`CeExecutor::Ours`]
+    /// (whose completions are `kayfabe_rt::cpu_ce::write_completion`'s, unchanged).
+    pub guest_release: Option<CeGuestRelease>,
+}
+
+/// ★★★ One guest-declared copy-engine completion, as [`CeSubCopy::guest_release`] carries it.
+///
+/// A struct rather than a `(u64, u32)` for [`CeSubCopy`]'s own reason: an address and a
+/// payload next to each other are exactly the pair that gets swapped, and this one crosses
+/// an IPC boundary where a swap would be a store of an address into the guest's semaphore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CeGuestRelease {
+    /// The GPU VA the guest's own `SET_REPORT_SEMAPHORE`/`SET_SEMAPHORE_A/B` named.
+    ///
+    /// ⚠ **It must be reachable in the EXECUTOR VAS**, not merely in the guest-facing one —
+    /// `w282b`'s whole finding. Since that fix every join goes through `map_dma_both`, so a
+    /// release target inside a joined leaf is reachable; one that is not simply faults, which
+    /// is the honest outcome and is visible as an `Xid` at that address.
+    pub va: u64,
+    /// The payload the guest declared. ⊘ **The guest's literal**, carried unchanged — we
+    /// never choose it, and a value of our own here would be the forgery this design exists
+    /// to avoid.
+    pub payload: u32,
 }
 
 /// ★★ The #14 ring-gate's view of **one channel's `Vas`** — the address-plane
@@ -2630,7 +2815,11 @@ impl Worker {
                         };
                         // ⊘ `None`: a doorbell materialization hosts no object, so
                         // there is no declaration to refine the engine with (§16.106).
-                        match rm.alloc_channel(vas, *engine, None) {
+                        // ⊘ `None` on BOTH refinements. The doorbell path materializes a
+                        // channel with no engine object to read and no ring the core looked
+                        // up — see `plan_doorbell`. A ring adopted here would be adopted
+                        // without the leaf having been joined.
+                        match rm.alloc_channel(vas, *engine, None, None) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), e));
@@ -2649,7 +2838,24 @@ impl Worker {
                 if *schedule && let Err(e) = rm.schedule(chan.0) {
                     return Err(unwind(rm, unwind_set(), e));
                 }
+                // ★★★★★ THE CALL-SITE WITNESS (owner directive, 2026-08-12). `DOORBELL-XLATE`
+                // says what was translated; `DOORBELL-STORE` says the write executed. This
+                // line is the JOIN between them — it is the only place that holds the host
+                // token beside the `EngineKind`, and it is what makes a `GrCompute` store
+                // distinguishable from a `Ce` one in the log.
+                // ⊘ Both arms print. A `ring_doorbell` that returns `Err` unwinds and leaves
+                // no trace otherwise, which is the shape that reads as "it rang".
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                     scheduled={schedule} → calling ring_doorbell",
+                    chan.1,
+                );
                 if let Err(e) = rm.ring_doorbell(chan.1) {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-VERB engine={engine:?} host_token={:#x} \
+                         ⊘⊘ ring_doorbell REFUSED: {e:?} — nothing was rung and the verb unwinds",
+                        chan.1,
+                    );
                     return Err(unwind(rm, unwind_set(), e));
                 }
                 Ok(VerbReply::Doorbell {
@@ -2664,6 +2870,7 @@ impl Worker {
                 engine,
                 class,
                 params,
+                adopt,
             } => {
                 let (chan, fresh_vas, fresh_chan) = match *channel {
                     Some(c) => (c, None, None),
@@ -2684,6 +2891,10 @@ impl Worker {
                                 class: *class,
                                 params,
                             }),
+                            // ★★★★★ LEG A2 — THE PRODUCTION CALLER. `Some` here is the
+                            // whole rung: it is the only path on which a host channel is
+                            // born over memory this port did not allocate.
+                            *adopt,
                         ) {
                             Ok(c) => (c, fresh_vas, Some(c)),
                             Err(e) => {

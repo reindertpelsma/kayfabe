@@ -75,6 +75,14 @@ pub use device::{DoorbellRoute, ENGINE_KIND_COUNT, engine_kind_names};
 /// must be able to NAME both what was admitted and what the drain then did — including the
 /// bound's refusal, which is a fact about **us** and would otherwise be unprintable.
 pub use device::{EngineForwardRun, ForwardAdmission, MAX_PENDING_ENGINE_FORWARDS};
+/// ★★★★★ The GR passthrough route's decision half — what the shell's port DOES with a
+/// routing verdict, re-exported for [`DoorbellRoute`]'s own reason one step further along.
+///
+/// ⊘ [`device::shell_disposition`] rather than the shim re-deriving it: §16.65's whole
+/// finding was that a routing rule written twice comes to disagree, and the shim's copy was
+/// a `!=` against one variant — which is why `HostGr` and `Unserved` shared a bucket they do
+/// not belong in.
+pub use device::{ShellDisposition, shell_disposition};
 /// ★★★★★ §16.80 — the class id and the two Case-1 engine-object types, re-exported for
 /// the same reason and under the same rule: `SharedDevice::forward_engine_object_by_parent`
 /// takes and returns them, and the QEMU shim implements `ObjectModel` over it. A
@@ -97,6 +105,13 @@ pub use kayfabe_arch::ids::GpuId;
 /// without taking an edge to `kayfabe-arch`, which its own manifest forbids. ⊘ A newtype
 /// over an integer; it carries no architecture.
 pub use kayfabe_arch::ids::GpuVa;
+/// ★★★★★ **LEG A** — the page-directory-base identity, re-exported for the same single
+/// reason [`HClient`]/[`HObject`] are: the QEMU shim must be able to *name* the address
+/// space a framebuffer leaf is joined into, and its own manifest forbids an edge to
+/// `kayfabe-arch` (*"the shim names no architecture"*). ⊘ A newtype over an integer; it
+/// carries no architecture, and re-exporting it keeps that manifest rule true rather than
+/// negotiating it.
+pub use kayfabe_arch::ids::Pdb;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};

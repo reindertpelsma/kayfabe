@@ -231,6 +231,9 @@ pub struct Vas {
     /// ⊘ Keyed by VA within this `Vas`, exactly like [`Self::blocks`], because a `Vas` is
     /// `(GpuId, Pdb)` and a pin is only meaningful in the address space it was placed in.
     pub guest_ram_pins: BTreeMap<u64, GuestRamPin>,
+    /// ★★★★★ **Whole-VAS sweep bookkeeping** — see [`PtSweepState`]. Default is *"never
+    /// swept"*, which is a trigger, not a steady state.
+    pub sweep: PtSweepState,
     /// VAs currently bound into `table` by the **RPC map source** (`MapMemoryDma`),
     /// so the sync can idempotently add/remove them without disturbing bindings from
     /// other populate sources (`publish_backing`, CE-PT-write capture).
@@ -348,7 +351,12 @@ impl Vas {
             gpu,
             pdb,
             origin,
-            table: AddressTable::new(),
+            // ★★★★★ CLAIMED, never bare. `AddressTable::owned_by` is what makes the owner's
+            // per-VAS guarantee CHECKED rather than structural-by-convention: a caller handed
+            // the wrong `Vas` is refused by name at both entrances instead of answering
+            // confidently and wrongly. ⊘ `AddressTable::new()` here would be the silent
+            // no-op, and `tests/tests/operand_join_is_per_vas.rs` asserts this call site.
+            table: AddressTable::owned_by(pdb),
             host_vas: None,
             pt_pages: BTreeSet::new(),
             pt_meta: BTreeMap::new(),
@@ -361,8 +369,38 @@ impl Vas {
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
             promote_halves: BTreeMap::new(),
+            sweep: PtSweepState::default(),
         }
     }
+}
+
+/// ★★★★★ **The C's `m2_gr_vas_dirty` / `m2_gr_pt_trunc`, as state rather than as globals**
+/// (`C: nvkvm_gpu_emul.c:583-591`).
+///
+/// The whole-VAS sweep is HALF of the C's design; this is what makes the other half — the
+/// dirty-driven **re**-sweep — expressible. Without it a sweep is one-shot, and a one-shot
+/// sweep does not carry the safety argument that lets the sweep exist at all (see
+/// [`kayfabe_mmu::reach::ReachShadow::witness_swept`]): the torn-read window is bounded only
+/// because a page that was mid-update was, by definition, being written, and therefore comes
+/// back as dirty and is re-swept.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PtSweepState {
+    /// How many whole-VAS sweeps have completed for this address space. `0` is itself a
+    /// trigger — a `Vas` that has never been swept is the C's *"`chan_vas_n` grew"* case.
+    pub sweeps: u64,
+    /// ★★★ The last sweep hit its budget, so its picture of this address space is **partial**.
+    ///
+    /// The C carries the same bit (`m2_gr_pt_trunc`) for the same reason: truncation must
+    /// force another sweep, or a mapping that fell off the end of the walk is missing until
+    /// something unrelated happens to dirty a page.
+    pub truncated: bool,
+    /// A guest write landed on a page this address space's sweep is **tracking**, so the
+    /// picture is stale and the next doorbell must re-sweep. Set at the plan, cleared when the
+    /// sweep it armed has committed.
+    pub dirty: bool,
+    /// Pages the last sweep visited — the size of the walk, for the budget to be re-derived
+    /// from a measurement instead of from the C's constant.
+    pub last_pages: usize,
 }
 
 /// One guest channel — THE exec boundary (vChid, experiment E0).

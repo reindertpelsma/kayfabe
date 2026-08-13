@@ -609,6 +609,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             vas,
             engine,
             hosting,
+            adopt,
         } => match engine_from_code(engine) {
             // An engine code we do not recognise is a refusal, never a default — the GR-1
             // wrong-runlist class.
@@ -622,6 +623,24 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 hosting.as_ref().map(|(class, params)| HostedObject {
                     class: ClassId(*class),
                     params,
+                }),
+                // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
+                // lowers it runs. ⊘ The handle is re-validated by the adapter as one
+                // `join_fb_leaf` minted; nothing here trusts the four integers.
+                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
+                    kayfabe_isolate::AdoptedGuestRing {
+                        memory: raw(memory),
+                        ring_va,
+                        gp_fifo_va,
+                        gp_fifo_entries,
+                        // ★★★★★ LEG B — rebuilt here for leg A2's reason, and re-validated
+                        // by the adapter as an object `join_fb_leaf` minted. ⊘ Nothing on
+                        // this side trusts the two integers either.
+                        userd: userd.map(|(memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
+                            memory: raw(memory),
+                            offset,
+                        }),
+                    }
                 }),
             ) {
                 Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
@@ -720,6 +739,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             len,
             src_is_const,
             by_ours,
+            rel_present,
+            rel_va,
+            rel_payload,
         } => unit(rm.ce_copy(
             raw(vas),
             CeSubCopy {
@@ -739,6 +761,14 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 } else {
                     CeExecutor::Ours
                 },
+                // ★★★★★ w283 — rebuilt from the two fields only when the PRESENCE field
+                // says so. ⊘ Never inferred from `rel_va != 0`: `0` is a legal GPU VA, and
+                // this project has already paid once for reading a legal value as a blank
+                // (`gpFifoOffset = 0`, `AdoptedGuestRing::gp_fifo_va`).
+                guest_release: (rel_present != 0).then_some(kayfabe_isolate::CeGuestRelease {
+                    va: rel_va,
+                    payload: rel_payload,
+                }),
             },
         )),
         // ★★★★★ The guest-RAM door. The child does not decide WHICH guest bytes it maps —

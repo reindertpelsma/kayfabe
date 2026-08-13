@@ -54,6 +54,25 @@ struct Join {
 #[derive(Debug, Default)]
 pub struct FbJoinTable {
     joins: Mutex<Vec<Join>>,
+    /// ★★★★★ **LEG A2 — the raw handles of the `OS_DESCRIPTOR`s this isolate minted BY
+    /// JOINING**, and therefore the complete set of objects a channel may be born over.
+    ///
+    /// # ⊘ Why the set lives HERE and not on the worker
+    ///
+    /// An isolate is a **pool**: the worker that joins a leaf need not be the worker later
+    /// asked to birth a channel over it. A per-worker set is a bug no single-worker test can
+    /// observe — the same reason [`FbJoinTable`] itself is shared, and one this campaign has
+    /// already paid for once.
+    ///
+    /// # ★★★ What it enforces, and why a private constructor could not
+    ///
+    /// The owner's invariant is *no fake framebuffer at a real GPU VA of an isolate except
+    /// the scratchpad*. `kayfabe_isolate::AdoptedGuestRing` is built in the core from an
+    /// address-table binding declaring `BackingBytes::JoinsGuestWindow` — but it crosses an
+    /// **IPC boundary** as four integers and is rebuilt in the child, which cannot see the
+    /// address table. ⇒ Membership of this set is the far-side re-check, and it is the only
+    /// one that is not defeated by the crossing.
+    joined_objects: Mutex<std::collections::BTreeSet<u32>>,
 }
 
 impl FbJoinTable {
@@ -77,6 +96,32 @@ impl FbJoinTable {
             at,
             region,
         });
+    }
+
+    /// ★★★★★ **LEG A2 — record that `obj` is an object this isolate minted by JOINING** a
+    /// framebuffer leaf, i.e. one memory with the guest's own window.
+    ///
+    /// ⊘ Called on the same success path as [`Self::install`] and for the same reason: an
+    /// object whose fixed map refused is not a joined window, and remembering it would let a
+    /// channel be born over memory the guest cannot reach.
+    pub fn remember_object(&self, obj: u32) {
+        self.joined_objects
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(obj);
+    }
+
+    /// ★★★★★ **Is `obj` a joined window?** — the far-side half of the owner invariant.
+    ///
+    /// ⊘ A `false` is a REFUSAL, never a downgrade: the caller must refuse the birth by
+    /// name, not fall back to allocating a ring of its own. Falling back would make an armed
+    /// evidence run and its own control produce the same channel.
+    #[must_use]
+    pub fn is_joined_object(&self, obj: u32) -> bool {
+        self.joined_objects
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(&obj)
     }
 
     /// How many leaves are joined. Diagnostics only.

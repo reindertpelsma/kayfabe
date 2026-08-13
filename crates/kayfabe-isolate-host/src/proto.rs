@@ -96,6 +96,26 @@ pub enum Request {
         /// sentinel: `class = 0` with empty params is a legal thing for a guest to send
         /// and must not read as "no object".
         hosting: Option<(u32, Vec<u8>)>,
+        /// ★★★★★ **LEG A2 — [`kayfabe_isolate::AdoptedGuestRing`], across the wire.**
+        ///
+        /// `(memory, ring_va, gp_fifo_va, gp_fifo_entries)`, or `None` for the ordinary
+        /// birth. ⊘ **It has to cross** for `hosting`'s reason, and one sharper: the adapter
+        /// that lowers it to `alloc_channel_over_guest_ring` — and the check that the handle
+        /// is one `join_fb_leaf` minted — both live in the CHILD. A version that widened
+        /// only the trait would compile, pass every in-process test, and be dead on the one
+        /// path a boot exercises.
+        ///
+        /// ⚠ Presence is an explicit byte, never an in-band sentinel: `gp_fifo_va = 0` is a
+        /// **value** the driver really declares (its golden-context channel) and must not
+        /// read as "no ring".
+        /// ★★★★★ **LEG B rides INSIDE it** — `(memory, offset)` of the guest's own USERD,
+        /// or `None` when the ring was adopted and the USERD was not.
+        ///
+        /// ⊘ Nested rather than a sibling field for the type's own reason
+        /// ([`kayfabe_isolate::AdoptedGuestRing::userd`]): *"the guest's USERD on a ring of
+        /// ours"* is a state that must not be representable, and a sibling `Option` on the
+        /// wire would make it one decode away.
+        adopt: Option<(u64, u64, u64, u32, Option<(u64, u64)>)>,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
@@ -168,6 +188,18 @@ pub enum Request {
         /// `0` = [`kayfabe_isolate::CeExecutor::HostCe`], `1` =
         /// [`kayfabe_isolate::CeExecutor::Ours`].
         by_ours: u8,
+        /// ★★★★★ **w283** — `1` when this sub-copy carries the guest's own declared
+        /// release ([`kayfabe_isolate::CeSubCopy::guest_release`]), `0` when it does not.
+        ///
+        /// ⊘ A separate flag rather than a sentinel address: `0` is a legal GPU VA (the
+        /// driver declares `gpFifoOffset = 0` for its golden-context channel, and this
+        /// project has already paid once for reading a value as a blank), so *"is there a
+        /// release"* and *"what is its address"* are two facts and cross as two fields.
+        rel_present: u8,
+        /// The guest's declared release address. ⊘ Meaningless unless `rel_present == 1`.
+        rel_va: u64,
+        /// The guest's declared payload. ⊘ Meaningless unless `rel_present == 1`.
+        rel_payload: u32,
     },
     /// [`kayfabe_isolate::RmBackend::fb_read`] — read the fabricated aperture (`#102`
     /// stage C3). The reply carries the bytes **and** whether the aperture covered the
@@ -636,6 +668,7 @@ impl Envelope {
                 vas,
                 engine,
                 hosting,
+                adopt,
             } => {
                 out.push(4);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -646,6 +679,27 @@ impl Envelope {
                         out.push(1);
                         out.extend_from_slice(&class.to_le_bytes());
                         put_blob(&mut out, params);
+                    }
+                }
+                match adopt {
+                    None => out.push(0),
+                    Some((memory, ring_va, gp_fifo_va, entries, userd)) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
+                        out.extend_from_slice(&ring_va.to_le_bytes());
+                        out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                        out.extend_from_slice(&entries.to_le_bytes());
+                        // ★★★★★ LEG B, with its OWN presence byte inside the ring's. ⊘ Not
+                        // an in-band sentinel: `offset = 0` is a legal USERD placement (the
+                        // slot at the joined leaf's own base) and must not read as absent.
+                        match userd {
+                            None => out.push(0),
+                            Some((umem, uoff)) => {
+                                out.push(1);
+                                out.extend_from_slice(&umem.to_le_bytes());
+                                out.extend_from_slice(&uoff.to_le_bytes());
+                            }
+                        }
                     }
                 }
             }
@@ -705,6 +759,9 @@ impl Envelope {
                 len,
                 src_is_const,
                 by_ours,
+                rel_present,
+                rel_va,
+                rel_payload,
             } => {
                 out.push(13);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -713,6 +770,9 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*src_is_const);
                 out.push(*by_ours);
+                out.push(*rel_present);
+                out.extend_from_slice(&rel_va.to_le_bytes());
+                out.extend_from_slice(&rel_payload.to_le_bytes());
             }
             Request::FbRead { phys, len } => {
                 out.push(14);
@@ -816,6 +876,32 @@ impl Envelope {
                         });
                     }
                 },
+                adopt: match c.u8("channel adopt presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u64("adopt memory")?,
+                        c.u64("adopt ring_va")?,
+                        c.u64("adopt gp_fifo_va")?,
+                        c.u32("adopt gp_fifo_entries")?,
+                        match c.u8("channel adopt userd presence")? {
+                            0 => None,
+                            1 => Some((c.u64("adopt userd memory")?, c.u64("adopt userd offset")?)),
+                            tag => {
+                                return Err(ProtoError::UnknownTag {
+                                    what: "channel adopt userd presence",
+                                    tag,
+                                });
+                            }
+                        },
+                    )),
+                    // ⊘ Refused by name for the presence byte above's reason.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "channel adopt presence",
+                            tag,
+                        });
+                    }
+                },
             },
             5 => Request::AllocEngineObject {
                 chan: c.u64("engine chan")?,
@@ -856,6 +942,9 @@ impl Envelope {
                 len: c.u64("ce len")?,
                 src_is_const: c.u8("ce src kind")?,
                 by_ours: c.u8("ce engine")?,
+                rel_present: c.u8("ce release present")?,
+                rel_va: c.u64("ce release va")?,
+                rel_payload: c.u32("ce release payload")?,
             },
             14 => Request::FbRead {
                 phys: c.u64("fb phys")?,
@@ -1158,6 +1247,7 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 hosting: None,
+                adopt: None,
             },
             // ★ §16.106 — BOTH arms of `hosting` are sampled, because the presence byte is
             // the part a one-arm round trip would never exercise.
@@ -1165,6 +1255,27 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: None,
+            },
+            // ★★★★★ LEG A2 — and BOTH arms of `adopt` for the same reason, with the
+            // presence byte exercised beside a `hosting` that is also present, because the
+            // two options are encoded back to back and a length mistake in the first is
+            // only visible when something follows it.
+            //
+            // ⚠ `gp_fifo_va` is **0** here deliberately: it is a VALUE the driver really
+            // declares (its golden-context channel) and a round trip that only ever sampled
+            // non-zero would not catch an encoder that treated zero as absence.
+            Request::AllocChannel {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
+                adopt: Some((
+                    0x5c00_0019,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    Some((0x5c00_0019, 0x2000)),
+                )),
             },
             Request::AllocEngineObject {
                 chan: 9,
@@ -1199,6 +1310,9 @@ mod tests {
                 len: 0x1000,
                 src_is_const: 0,
                 by_ours: 0,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
             },
             Request::CeCopy {
                 vas: 7,
@@ -1207,6 +1321,9 @@ mod tests {
                 len: 4,
                 src_is_const: 1,
                 by_ours: 1,
+                rel_present: 0,
+                rel_va: 0,
+                rel_payload: 0,
             },
             Request::FbRead {
                 phys: 0x1000_4000,

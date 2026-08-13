@@ -6027,36 +6027,59 @@ fn a_guest_steering_dma_descriptors_at_device_windows_is_refused_by_name_under_l
              in: its verb was CANCELLED by the retire (§7.6 T2), not left to run to \
              completion against a proc that no longer exists"
         );
-        // ★★ THE PREMISE, asserted rather than assumed: the guest-memory reads really
-        // did run with our ranked locks held. If they did not, every refusal above is a
-        // fact about a lock-free path and the hazard was never exercised at all — the §1
-        // "green instrument" failure, one level up.
+        // ⊘⊘⊘ **INVERTED BY w281 (2026-08-12), AND THE INVERSION IS THE POINT — READ THIS
+        // BEFORE THE SUPERSEDED TEXT BELOW.**
         //
-        // ★★★ **MEASURED 2 SINCE §8.2.3, and it used to be 1 — this instrument is what
-        // noticed the phase move.** A GPFIFO entry names a GPU **virtual** address, so
-        // `read_pushbuffer` must translate through the issuing channel's address table,
-        // which needs the proc. The guest-memory read therefore moved out of
-        // `route_act`'s ROUTE phase (device read, rank 0) into its ACT phase (device read
-        // + that proc's mutex, rank 1) — depth 2. **No new lock is taken**: `route_act`
-        // acquires both for one operation either way, and the read moved from between the
-        // two acquisitions to after the second. The number is updated by ATTRIBUTING the
-        // change, not by loosening the bound: it is still an exact equality, and a read
-        // that drifted back to rank 0 (i.e. stopped translating) would fail here.
+        // This assertion used to demand `max == 2` (Sharded) / `1` (Degenerate): *"the
+        // guest-memory reads really did run with our ranked locks held, so the in-lock
+        // hazard was actually constructed."* It now measures **`(0, 0)`**, and the change
+        // is deliberate, not drift.
         //
-        // ⊘ **And it is 2 only in Sharded**, which is a fact about the modes rather than
-        // a hedge: Degenerate reaches the proc through the single device WRITE guard
-        // (`route_act`'s `get_mut`), so there is no second ranked lock to hold. Asserting
-        // one number for both would have had to be the weaker one.
-        let want_max = if name == "Sharded" { 2 } else { 1 };
+        // `w281` split `parse_pushbuffer` into plan / fetch / act because reading a
+        // **vidmem** pushbuffer needs `FbBytes`, whose production impl takes the plane
+        // mutex — `LockRank::Plane`, RANK 0 — while `route_act` holds ranks 1 and 2;
+        // `check_acquire` refuses that `core → plane` acquisition BY NAME. So the guest
+        // memory read moved out of the act phase entirely, into a phase with **every
+        // ranked guard dropped**. The ring's read moved the same way in `w235`, for the
+        // same reason, one level up.
+        //
+        // ⚠⚠ **THE OLD FALSIFIER IS GONE, AND SAYING SO IS THE HONEST HALF.** Its premise
+        // — *"the in-lock hazard was actually constructed"* — is now UNCONSTRUCTIBLE on
+        // this path, so keeping the old number would have been asserting a hazard that no
+        // longer exists, and flipping it to 0 without saying this would be
+        // `a_falsifier_the_fix_silences`: a green test holding nothing in place.
+        //
+        // ★★★ **What it asserts INSTEAD is stronger, and it is a real claim.** `max == 0`
+        // says every guest-memory access on this path is **lock-free**, which makes
+        // `l1_os_shell.md` §6.3's ABBA *structurally impossible* here rather than merely
+        // argued-away: there is no ranked lock above the VMM's for a backend to invert
+        // against. It is still an EXACT equality and it still fails loudly — a read that
+        // drifted back under a lock, i.e. a future rung folding the fetch back into the
+        // act phase, breaks this line. That is precisely the regression worth catching.
+        //
+        // ⊘ And it is now the SAME number in both modes, because the reason it differed
+        // (Degenerate's single write guard vs Sharded's two acquisitions) was a fact about
+        // *which* locks were held during the read — and no lock is.
+        //
+        // ⊘ THE SUPERSEDED TEXT, kept because its scope is what changed:
+        //   "★★ THE PREMISE, asserted rather than assumed: the guest-memory reads really
+        //    did run with our ranked locks held. If they did not, every refusal above is a
+        //    fact about a lock-free path and the hazard was never exercised at all — the §1
+        //    'green instrument' failure, one level up.
+        //    ★★★ MEASURED 2 SINCE §8.2.3, and it used to be 1 — this instrument is what
+        //    noticed the phase move. […] The number is updated by ATTRIBUTING the change,
+        //    not by loosening the bound."
+        // ★ That last sentence is the rule this edit is obeying, for the third time.
+        let want_max = 0;
         assert_eq!(
             r.lock_depth_span,
             (0, want_max),
-            "({name}) guest memory was accessed at ranked-lock depths {:?}. BOTH ends \
-             are the claim: the max is the pushbuffer reads really running under our \
-             ranked locks — rank 0 plus the owning proc's rank 1 in Sharded, the single \
-             device write guard in Degenerate — so the in-lock hazard was actually \
-             constructed; min 0 = the scripting writes really ran lock-free, so the \
-             witness varies with its caller instead of reporting a constant",
+            "({name}) guest memory was accessed at ranked-lock depths {:?}. ★ w281: the \
+             max must be 0 — the pushbuffer fetch runs with EVERY ranked guard dropped, \
+             because reading a vidmem pushbuffer takes the rank-0 plane mutex that may \
+             not be acquired beneath the core's ranks. A NON-ZERO max here means the \
+             fetch drifted back into the act phase, which `check_acquire` would refuse by \
+             name on the vidmem arm and which reintroduces §6.3's ABBA on the sysmem one",
             r.lock_depth_span
         );
     }
@@ -7734,22 +7757,26 @@ fn a_real_memory_plane_survives_multiproc_churn_teardown_and_host_refusal_under_
              A `min` of u32::MAX would mean no syscall ran at all — which is why the PAIR \
              is asserted, not the max"
         );
-        // ★★★ 2 since §8.2.3, and see the twin note in `dma_workload`'s caller: the
-        // pushbuffer read moved from `route_act`'s route phase (rank 0) to its act phase
-        // (rank 0 + the owning proc's rank 1), because translating a GPFIFO entry's
-        // VIRTUAL address needs the channel's address table and therefore the proc. The
-        // lock SET of the operation is unchanged; only where in it the read sits moved.
+        // ⊘⊘⊘ **INVERTED BY w281 — the twin of `dma_workload`'s caller; read its long note.**
         //
-        // ⊘ 2 in Sharded, 1 in Degenerate — the latter reaches the proc through the
-        // single device write guard, so there is no second ranked lock.
-        let want_max = if name == "Sharded" { 2 } else { 1 };
+        // Was `max == 2` (Sharded) / `1` (Degenerate): *"the in-lock-legal accessors really
+        // were entered WITH ranked locks (the act phase of parse_pushbuffer)"*. `w281` moved
+        // the pushbuffer's guest-memory read into a FETCH phase with every ranked guard
+        // dropped, because a vidmem pushbuffer needs the rank-0 plane mutex that
+        // `check_acquire` refuses beneath the core's ranks. ⇒ **`(0, 0)`**.
+        //
+        // ⚠ The old premise is now unconstructible, so this line no longer witnesses "the
+        // hazard was exercised". It witnesses the opposite and stronger fact — **no guest
+        // memory is touched under any ranked lock at all** — and it is still an exact
+        // equality that a drift back into the act phase would break.
+        let want_max = 0;
         assert_eq!(
             a.accessor_ranked_depth,
             (0, want_max),
-            "({name}) ★ and the in-lock-legal accessors really were entered WITH ranked \
-             locks (the act phase of parse_pushbuffer) AND lock-free (min 0, the \
-             scripting writes). Without both ends this whole run could be green about a \
-             lock-free path"
+            "({name}) ★ w281: the in-lock-legal accessors must now be entered LOCK-FREE \
+             (max 0, the pushbuffer fetch phase) as well as at min 0. A non-zero max means \
+             the fetch drifted back under the core's ranks — the acquisition the plane's \
+             rank refuses by name"
         );
         assert_eq!(
             a.copy_leaf_depth_max, 0,

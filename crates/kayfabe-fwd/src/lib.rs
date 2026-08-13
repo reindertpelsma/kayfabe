@@ -96,8 +96,10 @@ mod trace;
 
 #[doc(inline)]
 pub use ptdecode::{
-    IsolateFb, MAX_PT_META, PT_DECODE_BUDGET, PtDecodeOutcome, PtDecodePlan, PtDecodeResult,
-    PtDecodeTask, commit_pt_decode, plan_pt_decode, pt_meta_of, run_pt_decode,
+    Admit, IsolateFb, MAX_PT_META, PT_DECODE_BUDGET, PT_SWEEP_BUDGET, PtDecodeOutcome,
+    PtDecodePlan, PtDecodeResult, PtDecodeTask, PtSweepPlan, SweepReason, commit_pt_decode,
+    commit_pt_decode_as, commit_pt_sweep, plan_pt_decode, plan_pt_sweep, pt_meta_of, run_pt_decode,
+    run_pt_sweep,
 };
 
 /// The MSI-X vector completions are raised on. Abstract placeholder until the
@@ -300,6 +302,73 @@ pub enum FwdFault {
         /// The host GPU VA the existing publication occupies.
         host_va: u64,
     },
+    /// ★★★★★ **A guest-RAM pin was asked for at a base that IS pinned — for FEWER BYTES.**
+    ///
+    /// ⊘⊘ **This refusal exists because its absence was a GREEN VERDICT ON A PARTIAL
+    /// MAPPING.** Until `w271` the idempotence key was the VA alone, so a 64 KiB request at
+    /// a base already described for 32 KiB was answered `already = true` with the 32 KiB
+    /// descriptor's own handle, and the second 32 KiB was **never described to RM**. The
+    /// caller logged `ALREADY PINNED (idempotent replay) … placed_as_asked=true` and read it
+    /// as success. `[measured 2026-08-12, boot `w270_pin`]` the host GPU then faulted at
+    /// exactly the first byte past the described extent — `+0x8000`, to the byte — and that
+    /// fault is the only reason the truncation was ever visible.
+    ///
+    /// ⇒ **The pin's identity is the `(base, extent)` PAIR.** A request that asks for more
+    /// than is described is not a replay of anything; it is a *new* obligation, and it is
+    /// refused **by name, carrying both numbers**, so the caller can describe the remainder.
+    ///
+    /// ★ Why a refusal rather than a silent widening: this crate may not derive a grant.
+    /// `described` and `requested` are the two numbers the **VMM** needs to mint the
+    /// remainder's grant from its own layout, and handing them back is the whole content of
+    /// this variant. See [`GuestRamGrant::originated_by_the_vmm`]'s name.
+    ///
+    /// # ★★★★ AND WHY THE RECORD IS NOT REPLACED — the choice, stated where it was made
+    ///
+    /// [`kayfabe_core::gpu::GuestRamPin`] holds **one** `(host_va, memory, len)`, so a
+    /// growing request forces a choice, and it is a correctness question rather than a style
+    /// one. The two options were:
+    ///
+    /// - **(a) replace the record with a larger run.** ⊘ **Refused, and not on taste.** An
+    ///   `OS_DESCRIPTOR` is built over a page list fixed at creation — RM has no verb to
+    ///   lengthen one — so "replace" means *allocate a second descriptor over a superset of
+    ///   the same guest pages*. Between the new map and the old free, RM holds **two
+    ///   overlapping descriptors over the same pages**, and the fixed map of the larger one
+    ///   lands on a host VA the smaller one still occupies (`0x51 NV_ERR_NO_MEMORY`,
+    ///   collision-or-exhaustion, indistinguishable). Unmapping first opens a window in
+    ///   which a live engine's operand is unmapped. And dropping the map entry is the only
+    ///   record of the pair it named — [a Free can free a NAME, not the object].
+    /// - **(b) keep per-run records and describe only the REMAINDER.** ★ Taken. Two
+    ///   descriptors, over **disjoint** page sets, at **abutting** VAs. No overlap ever
+    ///   exists, nothing is freed, no handle is orphaned, and the guest's addresses resolve
+    ///   throughout because neither existing mapping is disturbed.
+    ///
+    /// ⊘ (b) is also not a new mechanism: a **fragmented** range already becomes several
+    /// pins at several bases, and every caller already loops over runs. Growth reaches that
+    /// same shape from the other direction.
+    ///
+    /// [`GuestRamGrant::originated_by_the_vmm`]: kayfabe_isolate::GuestRamGrant::originated_by_the_vmm
+    GuestRamPinTooShort {
+        /// The base VA, which **is** pinned — for too few bytes.
+        va: GpuVa,
+        /// How many bytes the live pin at `va` actually describes to RM.
+        described: u64,
+        /// How many bytes this request named.
+        requested: u64,
+    },
+    /// ★★★★ **A guest-RAM pin's extent COLLIDES with a pin at a different base.**
+    ///
+    /// The same identity defect as [`FwdFault::GuestRamPinTooShort`], arrived at from the
+    /// other side: nothing is pinned at `va` itself, but `[va, va+requested)` contains — or
+    /// is reached by — a pin that starts elsewhere. Proceeding would build a second
+    /// `OS_DESCRIPTOR` over pages RM has already been given and then ask for a **fixed** GPU
+    /// map at a host VA that is occupied, which RM answers `0x51 NV_ERR_NO_MEMORY` — a
+    /// status that cannot be told apart from genuine exhaustion.
+    ///
+    /// ★ [`GuestRamPinOverlap::free_prefix`] is what makes this actionable rather than
+    /// merely loud: when the collision starts *after* `va` there is a clear prefix the
+    /// caller may describe now, and the rest is reached by continuing past the pin that is
+    /// already there. A `free_prefix` of `0` means no progress is possible at this base.
+    GuestRamPinOverlaps(GuestRamPinOverlap),
     /// ★★★ **The address table and the page-table WALK disagree about this leaf.**
     ///
     /// The second crossing has two sources for one fact: the guest's own page tables,
@@ -1417,6 +1486,26 @@ pub fn publish_backing(
     })
 }
 
+/// ★★★★ What [`FwdFault::GuestRamPinOverlaps`] carries. A struct rather than four inline
+/// fields because the caller acts on the *combination* — `free_prefix` is only meaningful
+/// beside the base it is a prefix of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPinOverlap {
+    /// The base VA that was asked for.
+    pub va: GpuVa,
+    /// How many bytes the request named.
+    pub requested: u64,
+    /// The base of the pin that is in the way.
+    pub existing_base: u64,
+    /// How many bytes that pin describes.
+    pub existing_len: u64,
+    /// ★ How much of `[va, va+requested)` is clear of it — `existing_base - va` when the
+    /// collision starts inside the request, and **`0`** when the pin in the way starts
+    /// below `va` and reaches into it. ⊘ Zero means *no progress is possible at this base*,
+    /// and a caller that loops on this fault must treat it as terminal or it will spin.
+    pub free_prefix: u64,
+}
+
 /// ★★★★★ **What one guest-RAM pin produced** — [`pin_guest_ram`]'s answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRamPinned {
@@ -1432,7 +1521,21 @@ pub struct GuestRamPinned {
     /// most: the pin is idempotent and a doorbell repeats, so a caller that could not tell
     /// "pinned now" from "was already pinned" would log a first-time event on every ring
     /// and a reader would conclude the descriptor was being re-created.
+    ///
+    /// ⚠ **`already` is now only ever true for a FULLY COVERED replay.** A request that asks
+    /// for more bytes than the live pin describes is [`FwdFault::GuestRamPinTooShort`], not
+    /// an `already`. Before `w271` it was the latter, and that was a green verdict on a
+    /// partial mapping.
     pub already: bool,
+    /// ★★★★★ **How many bytes are described to RM at [`GuestRamPinned::host_va`] after this
+    /// call** — the extent, reported beside the address so a caller can print *requested*
+    /// and *described* side by side.
+    ///
+    /// ⊘ For a fresh pin this equals the grant's length by construction. For a replay it is
+    /// the **live pin's** length, which is `>=` what was asked (a shorter live pin refuses).
+    /// It is carried explicitly because *"a mismatch should be read, not inferred"* is the
+    /// whole lesson of the boot that produced this field.
+    pub described: u64,
 }
 
 /// The ID-shaped hints [`commit_pin_guest_ram`] re-validates against. Identities only.
@@ -1482,16 +1585,76 @@ pub fn pin_guest_ram(
     })
 }
 
+/// ★★★★ **Is any live guest-RAM pin in the way of `[va, va+len)`?** — the extent key's
+/// second half, asked of a base that is NOT itself pinned.
+///
+/// ⊘ Callers must have already handled the exact-base case; this deliberately ignores a pin
+/// at `va` itself so that the two questions cannot answer each other. Returns the **nearest**
+/// obstruction, so a caller that loops makes progress in the direction it is walking.
+fn overlapping_pin(
+    vas: &kayfabe_core::gpu::Vas,
+    va: GpuVa,
+    len: u64,
+) -> Option<GuestRamPinOverlap> {
+    // ⊘ A zero-length request cannot collide with anything, and treating it as if it could
+    // would refuse an empty grant for a reason that is not true of it.
+    if len == 0 {
+        return None;
+    }
+    let end = va.0.saturating_add(len);
+    // 1. A pin that starts BELOW `va` and reaches into the request. `free_prefix = 0`: there
+    //    is no clear byte at `va` at all, so no caller can make progress here.
+    if let Some((&base, pin)) = vas.guest_ram_pins.range(..va.0).next_back()
+        && base.saturating_add(pin.len) > va.0
+    {
+        return Some(GuestRamPinOverlap {
+            va,
+            requested: len,
+            existing_base: base,
+            existing_len: pin.len,
+            free_prefix: 0,
+        });
+    }
+    // 2. A pin that starts INSIDE the request. Everything below it is clear, and that
+    //    prefix is what the caller may describe now.
+    let (&base, pin) = vas.guest_ram_pins.range(va.0..end).next()?;
+    Some(GuestRamPinOverlap {
+        va,
+        requested: len,
+        existing_base: base,
+        existing_len: pin.len,
+        free_prefix: base - va.0,
+    })
+}
+
 /// PLAN (R1): decide the pin's host work from core state. A pure `&Proc` read.
 ///
 /// ## What it checks, and the one thing it deliberately does NOT
 ///
+/// ★★★★★ **AMENDED 2026-08-12 (`w271`), above the sentence it qualifies.** The paragraph
+/// below said the length is checked against *nothing*, and that was read — including by this
+/// function's own author — as forbidding the comparison `w270`'s wall turned out to need.
+/// ⊘ **It does not, and the distinction is the whole of `w271`.** There are two different
+/// questions and only one of them is an echo:
+///
+/// - *"is this length CORRECT?"* — unanswerable here, exactly as written below. The layout
+///   that produced it is the hypervisor's; the only thing the core could check it against is
+///   the request itself. That reasoning stands, unweakened.
+/// - *"does this request name MORE than the extent WE ALREADY DESCRIBED to RM?"* — an
+///   ordinary question about **our own record of work we performed**. `GuestRamPin::len` is
+///   not guest input and not hypervisor input; it is what a previous call on this path put
+///   there. Comparing against it is no more an echo than comparing against `host_vas` is.
+///
+/// ⇒ The comparison is made, and only that one. `[measured 2026-08-12, boot `w270_pin`]`
+/// its absence let a 64 KiB request replay a 32 KiB descriptor and report success, and the
+/// host GPU faulted at the first undescribed byte.
+///
 /// It checks facts about **this address space**: that the VA resolves at all, that its
 /// binding is sysmem, that nothing is already host-published there, and whether a pin is
-/// already live. ⊘ It does **not** check the grant's offset or length against anything.
-/// There is nothing in the core to check them against — the layout that produced them is
-/// the hypervisor's — and a check invented here would be a check of a request against
-/// itself, which is [an echo is unverifiable by its reply].
+/// already live **and long enough**. ⊘ It does **not** check the grant's offset or length
+/// *for correctness* against anything. There is nothing in the core to check them against —
+/// the layout that produced them is the hypervisor's — and a check invented here would be a
+/// check of a request against itself, which is [an echo is unverifiable by its reply].
 ///
 /// # Errors
 /// [`FwdFault::RetiredProc`], [`FwdFault::SystemDataPlane`], [`FwdFault::UnknownPdb`],
@@ -1522,10 +1685,29 @@ pub fn plan_pin_guest_ram(
     if !proc.isolates.contains_key(&gpu) {
         return Err(missing_isolate(proc, gpu));
     }
-    // ★★★ THE IDEMPOTENCE ARM, and it is FIRST among the address checks on purpose: a
-    // live pin makes every check below true-by-construction, so asking them first would
-    // refuse a replay for a condition the replay itself created.
+    // ★★★★★ THE IDEMPOTENCE ARM, and its key is the `(base, extent)` PAIR.
+    //
+    // It is FIRST among the address checks on purpose: a live pin makes every check below
+    // true-by-construction, so asking them first would refuse a replay for a condition the
+    // replay itself created.
+    //
+    // ⊘⊘ **The extent half of the key is `w271`, and its absence was measurable.** Until
+    // then this arm asked only `get(&va.0)`, so a 64 KiB request at a base described for
+    // 32 KiB replayed the 32 KiB descriptor and the caller printed `ALREADY PINNED …
+    // placed_as_asked=true`. `[measured 2026-08-12, boot `w270_pin`]` the host GPU faulted
+    // at the first byte past the described extent. A green supply row held the wall in
+    // place, and only an `Xid` from an independent authority made it visible.
     if let Some(existing) = vas.guest_ram_pins.get(&va.0).copied() {
+        // ⊘ `<`, not `!=`: a request for FEWER bytes than are described is genuinely
+        // covered. Refusing it would turn every re-derivation that happens to name a
+        // shorter run into a fault, and there is nothing wrong with a shorter ask.
+        if existing.len < grant.len() {
+            return Err(FwdFault::GuestRamPinTooShort {
+                va,
+                described: existing.len,
+                requested: grant.len(),
+            });
+        }
         return Ok(Planned {
             plan: PinGuestRamPlan {
                 proc: pid,
@@ -1540,6 +1722,14 @@ pub fn plan_pin_guest_ram(
             // isolate pool — the same shape an idempotent engine-object re-send takes.
             verbs: None,
         });
+    }
+    // ★★★★ …and the same identity question from the OTHER side: nothing is pinned at `va`,
+    // but something may be pinned INSIDE `[va, va+len)`, or may start below `va` and reach
+    // into it. Both are collisions, and both would otherwise reach RM as a *fixed* map at an
+    // occupied host VA — answered `0x51 NV_ERR_NO_MEMORY`, indistinguishable from real
+    // exhaustion. ⇒ Refused here, where the cause is still legible.
+    if let Some(overlap) = overlapping_pin(vas, va, grant.len()) {
+        return Err(FwdFault::GuestRamPinOverlaps(overlap));
     }
     // ★★★ The guest's own page tables are the authority on what lives at `va`, and this
     // is where their answer is consulted. MISS = FAULT: an unbound VA is refused rather
@@ -1593,6 +1783,11 @@ pub fn commit_pin_guest_ram(
             host_va: existing.host_va,
             memory: existing.memory,
             already: true,
+            // ★ The LIVE pin's extent, not the request's. `plan_pin_guest_ram` has already
+            // refused the case where this would be smaller than what was asked, so a caller
+            // printing `requested` beside this can only ever see `described >= requested`
+            // on a replay — and if it ever sees otherwise, the plan arm has regressed.
+            described: existing.len,
         });
     }
     let Some(VerbReply::GuestRamPinned {
@@ -1660,6 +1855,11 @@ pub fn commit_pin_guest_ram(
     // ★ And the same for the pin itself: a sibling may have pinned this VA in the gap.
     // Refuse rather than overwrite — the map entry is the only record of the objects, so
     // replacing one silently would leak the pair it named.
+    //
+    // ⊘ `retry: true` here, and it is `w271`'s change: the sibling's pin may be SHORTER than
+    // ours, in which case a retry re-plans, meets `GuestRamPinTooShort`, and the caller
+    // describes the remainder. Refusing terminally would leave the same truncation the
+    // extent key exists to close, arrived at through a race instead of through a replay.
     if let Some(theirs) = vas.guest_ram_pins.get(&plan.va.0).copied() {
         return Err(Refusal {
             fault: FwdFault::GuestRamAddressTaken {
@@ -1667,7 +1867,17 @@ pub fn commit_pin_guest_ram(
                 host_va: theirs.host_va,
             },
             orphans: orphans(vas_used, fresh_vas),
-            retry: false,
+            retry: true,
+        });
+    }
+    // ★★ R5's half of the extent key: a sibling may have pinned a range that OVERLAPS ours
+    // in the gap. The plan checked this against state that has since moved, and adopting our
+    // descriptor now would leave two live maps over one set of guest pages.
+    if let Some(overlap) = overlapping_pin(vas, plan.va, plan.grant.len()) {
+        return Err(Refusal {
+            fault: FwdFault::GuestRamPinOverlaps(overlap),
+            orphans: orphans(vas_used, fresh_vas),
+            retry: true,
         });
     }
     if let Some(h) = fresh_vas {
@@ -1686,6 +1896,10 @@ pub fn commit_pin_guest_ram(
         host_va,
         memory,
         already: false,
+        // ⊘ The GRANT's length, which is what was described to RM — not a length this crate
+        // computed. `GuestRamPin::len` above is filled from the same number for the same
+        // reason, and the two must never be allowed to drift apart.
+        described: plan.grant.len(),
     })
 }
 
@@ -2750,6 +2964,23 @@ pub struct DoorbellOutcome {
     pub host_token: u64,
     /// True if this dispatch had to schedule the channel first (first submission).
     pub scheduled_now: bool,
+    /// ★★★★ **The channel's engine**, off the same `Channel` every other field here came
+    /// from.
+    ///
+    /// # ⊘ Why the outcome carries it rather than the caller re-resolving it
+    ///
+    /// `kayfabe_rt::device::SharedDevice::doorbell` has to decide, *after* the ring has
+    /// been rung, whether the **copy-engine content forward** applies to this doorbell
+    /// (`kayfabe_rt::device::ring_content_is_forwardable`). Re-resolving the channel to ask
+    /// would be a second lock acquisition and — worse — a **second projection of one fact**,
+    /// which this project has measured disagreeing three times. It is read here, inside the
+    /// commit, off the same `chan` that yielded [`Self::host_token`], so the engine and the
+    /// token can never be attributed to different channels.
+    ///
+    /// ⊘ It is not a routing input. Nothing upstream of the commit branches on it; the
+    /// engine that decided which host runlist this channel lives on rode the *plan*
+    /// (`VerbPlan::Doorbell::engine`) and was consumed by `alloc_channel` long before here.
+    pub engine: EngineKind,
 }
 
 /// Check every VA in `working_set` is **ring-admissible** in `table` — the #14 gate
@@ -3113,6 +3344,32 @@ pub fn plan_doorbell(
                 }
             })?;
 
+    // ★★★★★ THE TRANSLATION WITNESS (owner directive, 2026-08-12). The store witness in
+    // `RmConnection::doorbell` proves the write instruction executes; it cannot say WHAT was
+    // translated into WHICH host token, nor on which engine, because by then only a bare
+    // `u32` remains. This is the only site that holds both halves at once.
+    //
+    // ⚠ It settles a standing claim by measurement rather than by reading: task #243 records
+    // *"user-proc `GrCompute` doorbells never reach it at all"*, which has been UNTESTED since
+    // legs A2/B landed at `w261`/`w262`. `engine=GrCompute` beside `proc=2` on this line
+    // refutes it; its absence across a whole boot confirms it.
+    //
+    // ⊘ `host_token=NONE-YET` is not a failure: it is the lazy-materialization path, where
+    // the channel (and therefore its token) is allocated by the verbs this function is about
+    // to return. The pairing then appears in `DOORBELL-VERB`.
+    eprintln!(
+        "kayfabe: DOORBELL-XLATE proc={} chan={} vchid={} engine={:?} guest_token={:#010x} \
+         host_token={} schedule={schedule}",
+        pid.0,
+        cid.0,
+        route.vchid,
+        chan.engine,
+        route.token,
+        chan.host_token.map_or_else(
+            || "NONE-YET(materializes in these verbs)".to_string(),
+            |t| format!("{t:#x}")
+        ),
+    );
     Ok(Planned {
         plan: DoorbellPlan {
             proc: pid,
@@ -3226,11 +3483,15 @@ pub fn commit_doorbell(
     }
     poll.last_token = Some(plan.token);
     let host_token = chan.host_token.expect("materialized above");
+    // ★ Off the SAME `chan` binding as `host_token` one line up — see the field's doc for
+    // why the outcome carries this rather than the caller resolving it again.
+    let engine = chan.engine;
     Ok(DoorbellOutcome {
         proc: plan.proc,
         chan: plan.chan,
         host_token,
         scheduled_now: scheduled,
+        engine,
     })
 }
 
@@ -3509,7 +3770,7 @@ pub fn exec_engine_object(
     class: ClassId,
     params: &[u8],
 ) -> Result<EngineObjectForwarded, FwdFault> {
-    let planned = plan_engine_object(proc, route, class, params)?;
+    let planned = plan_engine_object(spine, proc, route, class, params)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_engine_object(spine, proc, &planned.plan, reply)
@@ -3548,6 +3809,7 @@ pub struct EngineObjectPlan {
 /// on this channel resolves here, from core state, and emits **no verbs at all** —
 /// the host never sees a duplicate, and the replay never touches the worker pool.
 pub fn plan_engine_object(
+    spine: &Spine,
     proc: &Proc,
     route: &EngineObjectRoute,
     class: ClassId,
@@ -3604,9 +3866,162 @@ pub fn plan_engine_object(
             engine: chan.engine,
             class,
             params: params.to_vec(),
+            // ★★★★★ **LEG A2** — asked for ONLY when this call is the one that will birth
+            // the host channel. ⊘ A channel that already exists was born over whatever it
+            // was born over; re-stating its ring here would be a second opinion about a fact
+            // RM already holds and cannot be told.
+            adopt: if channel.is_none() {
+                adopted_guest_ring(spine, proc, chan, cgpu)
+            } else {
+                None
+            },
         })
     };
     Ok(Planned { plan, verbs })
+}
+
+/// ★★★★★ **LEG A2 — the guest's own ring, IF the supply side already put it where a host
+/// engine can reach it.** `None` on every other day, and `None` is every prior boot.
+///
+/// # ★★★ THE ARMING IS INHERITED, and that is deliberate rather than a shortcut
+///
+/// There is no flag here and there must not be one. This returns `Some` **exactly when** the
+/// address table already holds a binding at the channel's declared `gpFifoOffset` whose host
+/// backing declares [`kayfabe_mmu::BackingBytes::JoinsGuestWindow`] — one memory, the bytes
+/// the guest writes and the bytes the engine reads being the same bytes. That binding is
+/// written by one path only (`adopt_joined_fb_leaf`, after a join that succeeded), and that
+/// path runs only when the shell armed `KAYFABE_GUEST_RING=ring`.
+///
+/// ⇒ With the supply side disarmed this function is `None` **by construction**, so the
+/// default build's behaviour is byte-identical without a second selector that could drift
+/// out of step with the first (`a_second_source_of_truth_beside_a_complete_value`).
+///
+/// # ⊘ THE OWNER INVARIANT — the forbidden state is not reachable from here
+///
+/// [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] — `w228`'s **blank** host vidmem twin at
+/// the guest's own VA, *"two memories"* — is refused by the `match` below rather than by a
+/// comment. A channel born over that object fetches GPFIFO entries out of a page nothing ever
+/// wrote, decodes zeros, never advances `GP_GET`, and reports **no error at all**.
+fn adopted_guest_ring(
+    spine: &Spine,
+    proc: &Proc,
+    chan: &kayfabe_core::gpu::Channel,
+    cgpu: GpuId,
+) -> Option<kayfabe_isolate::AdoptedGuestRing> {
+    // ⊘ Off the channel's OWN graph node — the same node `CeChannelFacts::ring_va` reads, so
+    // the two projections of "what ring did this channel declare" cannot disagree.
+    // ⚠ `gpFifoOffset = 0` is a VALUE (the driver's golden-context channel declares it) and
+    // it survives this path intact: what is `Option` here is whether a ring was declared at
+    // all, never whether the number is zero.
+    // ⊘ ONE read of the node, and both facts come out of it. Two `node_of_resource` calls
+    // would be two lookups of one object that a future refactor could point at different
+    // revisions — and the ring and the USERD have to be the SAME channel's or the
+    // containment test below is being run against the wrong leaf.
+    let facts = spine.rmgraph.node_of_resource(chan.key)?.facts;
+    let ring = facts.gp_fifo_ring?;
+    let userd = facts.userd;
+    let pdb = chan.vas_pdb?;
+    let (start, len, binding) = proc
+        .vases
+        .get(&(cgpu, pdb))?
+        .table
+        .binding_at(kayfabe_arch::ids::GpuVa(ring.va))?;
+    let host = binding.host()?;
+    // ★★★ THE ONE ARM. ⊘ Not `binding.host().is_some()` — that asks *"does a host object
+    // exist here"*, and the question that decides correctness is *"does the guest reach these
+    // bytes some other way"*. `[measured 2026-08-11]` `representability_of` made exactly that
+    // mistake and it is why `BackingBytes` exists at all.
+    if host.bytes() != kayfabe_mmu::BackingBytes::JoinsGuestWindow {
+        return None;
+    }
+    Some(kayfabe_isolate::AdoptedGuestRing {
+        memory: host.memory(),
+        // Where the joined object is placed — the leaf's own base, which is what
+        // `adopt_joined_fb_leaf` bound.
+        ring_va: start,
+        // ★★ The GUEST's two numbers, passed through untouched. Neither is derived from
+        // `ring_va` and neither is one of the adapter's constants — see `RingLayout::entries`
+        // for why a wrong modulus is not cosmetic.
+        gp_fifo_va: ring.va,
+        gp_fifo_entries: ring.entries,
+        // ★★★★★ **LEG B**, offered from inside leg A2's own answer so that *"the guest's
+        // USERD on a ring of ours"* is unspellable. See `AdoptedGuestRing::userd`.
+        userd: adopted_guest_userd(&binding, len, host.memory(), userd),
+    })
+}
+
+/// Size of one channel's USERD slot on every part this port targets.
+///
+/// `1 << NV_RAMUSERD_BASE_SHIFT` with shift 9 (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:1545-1556`, `dev_ram.h`
+/// (gm107) `:49`), selected by `_GM107` for every non-Tegra chip. ⊘ Named here rather than
+/// taken from the guest's own `userdMem.size` because it is what the **containment** check
+/// must be run against: a guest that declared a short size would otherwise buy itself a
+/// binding whose last bytes are outside the joined leaf.
+const USERD_SLOT_BYTES: u64 = 512;
+
+/// ★★★★★ **LEG B — the guest's own USERD, IF it lies inside the leaf its ring was joined
+/// through.** `None` on every other day, and `None` is every prior boot.
+///
+/// # ★★★ THIS IS A CONTAINMENT TEST, NOT A RESOLUTION — and that is the licence
+///
+/// `kayfabe_mmu`'s `gpga.rs` forbids `fn owner_of(addr)` *"and there never will be"*, and
+/// `docs/design/leg_b_userd_adoption_blocker.md` §2.2 refused the BAR1 route on exactly that
+/// ground. ⊘ **Nothing here asks who owns an address.** The chain is forward the whole way:
+/// the channel names its ring VA, the ring VA names a binding, the binding is a joined object
+/// with a known framebuffer base and length. The only question asked of the guest's number is
+/// *"is it inside the object I am already holding"*. Had the ring's leaf not been joined,
+/// this declines — it does not go looking.
+///
+/// # Where the guest's number comes from, and why three documents said it did not exist
+///
+/// `kayfabe_core::rmgraph::DeclaredUserd::resolved` — the guest's **own kernel** resolves
+/// `hUserdMemory[0]`/`userdOffset[0]` before it RPCs the GSP, because a fake GSP has no
+/// client handle namespace to look a handle up in. See
+/// `kayfabe_abi::notifier::ChannelUserdMemWire` and `docs/design/userd_mem_is_on_the_wire.md`.
+///
+/// # ⊘ The four ways this says no, all of them normal
+///
+/// - the params did not carry the descriptor (`resolved: None`) — *"we could not read it"*;
+/// - the guest put its USERD in **guest RAM** (`UserdMem::Sysmem`) — legal, served by the
+///   guest-RAM pin and by no framebuffer join, and refused here **by name** in the sense that
+///   the `match` has an arm for it rather than a wildcard;
+/// - the descriptor was zero (`UserdMem::Undeclared`) — the guest let RM allocate its USERD;
+/// - the address is outside this leaf. ⚠ `[NOT MEASURED]` how often that last one happens; on
+///   `w262b` the sixteen walling channels' rings and USERDs share one 2 MB leaf, but that is
+///   one workload.
+fn adopted_guest_userd(
+    binding: &kayfabe_mmu::Binding,
+    len: u64,
+    memory: kayfabe_isolate::HostHandle,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> Option<kayfabe_isolate::AdoptedGuestUserd> {
+    let base = match userd?.resolved? {
+        kayfabe_arch::UserdMem::Framebuffer { base, .. } => base,
+        // ⊘ Arms, not a wildcard. `Sysmem` is a REAL and legal USERD location this rung has
+        // no crossing for, and `Undeclared` is the guest saying it allocated none; folding
+        // either into the `None` above would make two different findings look like a decode
+        // that failed.
+        kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. } => {
+            return None;
+        }
+    };
+    // ⊘ The aperture of the BINDING, checked even though `JoinsGuestWindow` implies it. The
+    // guest's address is a *framebuffer* offset; a binding over anything else would make the
+    // subtraction below arithmetic between two different address spaces — the exact defect
+    // `kayfabe_arch::Aperture`'s own docs name ("vidmem offset X and sysmem offset X are
+    // different bytes on different devices").
+    if binding.aperture() != kayfabe_arch::Aperture::Vidmem {
+        return None;
+    }
+    let offset = base.checked_sub(binding.phys())?;
+    // ★ `checked_add` and `>`, not `>=`: the slot's LAST byte must be inside the leaf. A
+    // USERD whose first 8 bytes are in the joined window and whose `GP_GET` is not would be
+    // accepted by a start-only check and would fetch forever from a page RM zeroed.
+    if offset.checked_add(USERD_SLOT_BYTES)? > len {
+        return None;
+    }
+    Some(kayfabe_isolate::AdoptedGuestUserd { memory, offset })
 }
 
 /// COMMIT (R5) for the Case-1 forward: same route/channel re-resolution as the
@@ -4267,11 +4682,30 @@ pub const MAX_PUSH_SPANS: usize = 4096;
 ///    RAM ([`FwdFault::NonRamGpa`]) — a backend that served a device-aimed GPA would take
 ///    the VMM's global lock *beneath one of ours*, which is `l1_os_shell.md` §6.3's ABBA
 ///    whether the lock above it is rank 0 or rank 1.
-/// 3. ⊘ **It is deliberately NOT split into plan/execute/commit.** R1 forces that shape
-///    for *blocking* calls; `gpa_read` is a bounded copy out of a mapped window, not a
-///    round trip. Splitting would mean resolving addresses under the lock, dropping it,
-///    reading, and re-taking — i.e. fetching method bytes through a translation the guest
-///    was free to invalidate in the gap. That is a TOCTOU we would be building on purpose.
+/// 3. ⊘⊘⊘ **CORRECTED `[w281, 2026-08-12]` — POINT 3 BELOW IS NO LONGER TRUE OF THE
+///    PRODUCTION PATH, AND THE REASON IS A LOCK RANK, NOT A CHANGE OF MIND.** This
+///    function is now the **no-framebuffer** wrapper over
+///    [`plan_pushbuffer`] → [`fetch_pushbuffer`] → [`decode_pushbuffer`], and
+///    `kayfabe_rt::device::SharedDevice::parse_pushbuffer` calls those three directly.
+///    ⇒ Read point 3 as a statement about *this wrapper*, which really does hold one lock
+///    set across the read because it never touches the framebuffer.
+///
+///    **Why the split became forced.** Reading a **vidmem** pushbuffer needs
+///    [`FbBytes`], whose only production implementation takes the plane's mutex —
+///    `LockRank::Plane`, **rank 0** — and `route_act` holds ranks 1 and 2. Taking the
+///    plane beneath them is `core → plane`, which `check_acquire` refuses **by name**.
+///    This is the identical hazard that forced [`plan_gpfifo_ring`] /
+///    [`fetch_ring_bytes`] apart in `w235`, one level down, and it is a **deadlock**,
+///    which strictly dominates the TOCTOU point 3 weighs.
+///
+///    ⚠ **The TOCTOU point 3 names is REAL and is now ACCEPTED, with its blast radius
+///    stated.** Between plan and fetch the guest may invalidate a translation, so the
+///    bytes may come from a page that *was* named by a table the guest owned at plan
+///    time and has since been unmapped. That is a **stale read of memory the guest
+///    itself named**, never a read of memory it never owned: the runs are computed from
+///    that channel's own table under the lock and are never recomputed outside it. The
+///    ring has run under exactly this exposure since `w235`. ⊘ It is a widening, it is
+///    stated here rather than discovered later, and it is the price of the rank order.
 ///
 /// # The refusals, and why each is its own name
 ///
@@ -4302,6 +4736,37 @@ pub fn read_pushbuffer(
     vmm: &mut dyn Vmm,
     ranges: &[PushRange],
 ) -> Result<Vec<(u32, Vec<u32>)>, FwdFault> {
+    // ⊘ `false`, and it is not a policy choice here: this wrapper is handed no [`FbBytes`],
+    // so `OwnFramebuffer` would plan runs nothing could read. The vidmem decision lives at
+    // the three-phase call site, which is the only place that HAS a store.
+    let plan = plan_pushbuffer(proc, cid, ranges, false)?;
+    let bytes = fetch_pushbuffer(&plan, vmm, None)?;
+    Ok(decode_pushbuffer(spine, &bytes))
+}
+
+/// ★★★★★ **The PLAN half of the pushbuffer read — everything that needs the core's locks,
+/// and NOTHING that touches a byte.** The [`fetch_ring_bytes`] shape, one level down.
+///
+/// `vidmem` is the switch [`read_pushbuffer`]'s corrected point 3 describes: `false`
+/// reproduces the pre-`w281` behaviour exactly (a vidmem range is
+/// [`FwdFault::PushbufferAperture`], raised **here**, under the lock, before any byte is
+/// planned); `true` plans those runs out of our own framebuffer instead, and
+/// [`fetch_pushbuffer`] must then be handed a store or it raises the same refusal.
+///
+/// ⊘ **The caller decides, and the caller must say so on its own flag.** `w279`'s result
+/// ruled that this widening is *"its own flag, never folded into route B"*: route B is the
+/// registration of an [`FbSource`], which is a *supply*; this is a *route*, and a boot that
+/// cannot tell which of the two produced a byte cannot attribute it.
+///
+/// # Errors
+/// [`FwdFault::RetiredProc`], [`FwdFault::NoVas`], [`FwdFault::UnknownPdb`], and every
+/// translation refusal [`read_pushbuffer`] documents.
+pub fn plan_pushbuffer(
+    proc: &Proc,
+    cid: ChanId,
+    ranges: &[PushRange],
+    vidmem: bool,
+) -> Result<PushPlan, FwdFault> {
     if proc.is_retired() {
         return Err(FwdFault::RetiredProc(proc.id));
     }
@@ -4315,8 +4780,13 @@ pub fn read_pushbuffer(
         .get(&(cgpu, pdb))
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
         .table;
+    let route = if vidmem {
+        VidmemRoute::OwnFramebuffer
+    } else {
+        VidmemRoute::Refuse
+    };
 
-    let mut methods = Vec::new();
+    let mut out: Vec<(usize, Vec<(PushSrc, usize, usize)>)> = Vec::new();
     let mut total = 0usize;
     for r in ranges {
         if total >= MAX_PUSH_TOTAL_BYTES {
@@ -4327,28 +4797,135 @@ pub fn read_pushbuffer(
         let len = (r.len as usize)
             .min(MAX_PUSH_RANGE_BYTES)
             .min(MAX_PUSH_TOTAL_BYTES - total);
-        let mut buf = vec![0u8; len];
-        // TRANSLATE, then read. The clamped length is what gets translated, so the cap
-        // above is still the thing that bounds the work — a hostile length cannot make
-        // this walk the whole table.
-        // ⊘ `Refuse`, explicitly: this rung wires the RING out of the framebuffer, not
-        // the pushbuffer the ring points AT. Widening both at once would make a boot
-        // unable to say which of the two reads produced the bytes.
-        for (src, at, take) in push_range_gpas(table, pdb, r, len, VidmemRoute::Refuse)? {
+        // TRANSLATE. The clamped length is what gets translated, so the cap above is still
+        // the thing that bounds the work — a hostile length cannot make this walk the
+        // whole table.
+        out.push((len, push_range_gpas(table, pdb, r, len, route)?));
+        total += len;
+    }
+    Ok(PushPlan { ranges: out })
+}
+
+/// One pushbuffer read's translated runs, computed under the core's locks and read outside
+/// them — [`RingPlan`]'s sibling.
+///
+/// ⊘ Opaque for [`RingPlan`]'s reason: a run names a framebuffer offset **or** a GPA
+/// depending on the aperture, and exposing them as numbers is exactly the confusion
+/// [`PushSrc`] exists to prevent.
+///
+/// ★ Kept **per range**, not flattened: [`decode_methods`] runs per range and a method
+/// stream that ran across a range boundary would decode a header out of one range's tail
+/// and its operands out of the next one's head.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushPlan {
+    ranges: Vec<(usize, Vec<(PushSrc, usize, usize)>)>,
+}
+
+impl PushPlan {
+    /// How many ranges survived the total-work budget. ⊘ For logging and tests only —
+    /// nothing decides on it.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.ranges.len()
+    }
+
+    /// Whether the budget left nothing to read.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.ranges.is_empty()
+    }
+
+    /// ★★★ Whether any planned run reads our own framebuffer rather than guest RAM — the
+    /// one fact a grader needs to tell *"the vidmem route was on"* from *"it was on and
+    /// nothing needed it"*.
+    #[must_use]
+    pub fn touches_fb(&self) -> bool {
+        self.ranges
+            .iter()
+            .any(|(_, runs)| runs.iter().any(|(s, _, _)| matches!(s, PushSrc::Fb { .. })))
+    }
+}
+
+/// One pushbuffer read's bytes, per range, in plan order. ⊘ Raw bytes and nothing else:
+/// decoding needs the arch, which lives behind a lock this phase does not hold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushBytes {
+    ranges: Vec<Vec<u8>>,
+}
+
+/// ★★★ **The FETCH half — the bytes, with EVERY ranked guard dropped.**
+///
+/// [`fetch_ring_bytes`]'s obligations apply verbatim, including the one nothing in this
+/// signature can assert: the core's locks must be **down**, because the plane mutex this
+/// may take is rank 0 and `route_act` holds ranks 1 and 2. A [`PushPlan`] is the only way
+/// to reach this function and producing one is the phase that holds the locks.
+///
+/// ⊘ **`fb = None` is not "no framebuffer pages here"** — it is *"this caller declines to
+/// serve them"*, and a planned [`PushSrc::Fb`] run then raises
+/// [`FwdFault::PushbufferAperture`] naming the guest's own VA, exactly as the unwidened
+/// path did.
+///
+/// ⚠ **No `RingFbNeverWritten` equivalent is raised here.** The ring needs that guard
+/// because an unwritten ring page is byte-identical to a quiet one and decodes to
+/// `NoLiveEntries` — self-concealing. The pushbuffer's blank case is **not** self-concealing,
+/// but ⊘⊘ **NOT for the reason first written here, which was FALSE and a test caught it.**
+///
+/// `[w281, measured]` The claim was *"an unwritten page decodes to zero methods, visible as
+/// a count of 0"*. It does **not**. A 64-byte zero page decodes to **16 `(0, [])` pairs**, a
+/// non-zero count. On GA10x a zero header is `sec_op = GRP0_USE_TERT`, `tert_op =
+/// TERT_OP_METHOD` ⇒ `MethodForm::Legacy` with `arg_words = 0`
+/// (`kayfabe_abi::submit::method_header_decode`), and `Ga10xPushbuffer::decode_method`
+/// answers [`kayfabe_arch::PushMethod::Opaque`] because the form is not `Incrementing`.
+///
+/// ⇒ The real property, and the one
+/// `tests/tests/pushbuffer_out_of_our_own_framebuffer.rs` asserts, is stronger and is about
+/// **facts, not counts**: every method a blank page decodes to is `Opaque`, so a blank
+/// pushbuffer yields **no `SetObject`, no CE span and no semaphore release** — it cannot
+/// imitate work. That is forbidden #2's actual requirement. ⚠ A method *count* would have
+/// been a useless discriminator here, which is exactly what the false claim asserted it was.
+///
+/// # Errors
+/// [`FwdFault::PushbufferAperture`] for a vidmem run with no store, or a store that does
+/// not back the range; and the `Vmm` read's own refusals.
+pub fn fetch_pushbuffer(
+    plan: &PushPlan,
+    vmm: &mut dyn Vmm,
+    mut fb: Option<&mut dyn FbBytes>,
+) -> Result<PushBytes, FwdFault> {
+    let mut out = Vec::with_capacity(plan.ranges.len());
+    for (len, runs) in &plan.ranges {
+        let mut buf = vec![0u8; *len];
+        for &(src, at, take) in runs {
             match src {
                 PushSrc::Gpa(gpa) => guest_read(vmm, gpa, &mut buf[at..at + take])?,
-                PushSrc::Fb { va, .. } => {
-                    return Err(FwdFault::PushbufferAperture {
+                PushSrc::Fb { phys, va } => {
+                    let fb = fb.as_deref_mut().ok_or(FwdFault::PushbufferAperture {
                         va,
                         aperture: Aperture::Vidmem,
-                    });
+                    })?;
+                    if !fb.read(phys, &mut buf[at..at + take]) {
+                        return Err(FwdFault::PushbufferAperture {
+                            va,
+                            aperture: Aperture::Vidmem,
+                        });
+                    }
                 }
             }
         }
-        methods.extend(decode_methods(spine.arch(), &buf));
-        total += len;
+        out.push(buf);
     }
-    Ok(methods)
+    Ok(PushBytes { ranges: out })
+}
+
+/// The DECODE half — pure, and back under whichever locks the caller wants, because it
+/// touches neither guest memory nor the framebuffer.
+#[must_use]
+pub fn decode_pushbuffer(spine: &Spine, bytes: &PushBytes) -> Vec<(u32, Vec<u32>)> {
+    let mut methods = Vec::new();
+    for buf in &bytes.ranges {
+        methods.extend(decode_methods(spine.arch(), buf));
+    }
+    methods
 }
 
 /// How many **leading** entries of `ring` the guest has actually written, decoded by
@@ -5555,6 +6132,12 @@ pub fn partition_ce(
                     kayfabe_arch::CeWork::Scrub => CeSource::Constant(0),
                     kayfabe_arch::CeWork::Fill { pattern } => CeSource::Constant(pattern),
                 },
+                // ⊘ **`None` here, ALWAYS, and never at this layer.** `partition_ce` splits
+                // ONE launch into sub-copies and cannot know which of them is last — the
+                // caller does, and attaching the release to any but the last would let the
+                // guest's payload land before the guest's bytes. See the `completion` arm in
+                // `parse_pushbuffer_inner`, which is the only writer of this field.
+                guest_release: None,
                 len: take,
                 by,
             },
@@ -5940,6 +6523,12 @@ pub fn apply_pushbuffer(
                 if out.ce_spans.len() + spans.len() > MAX_CE_SPANS_PER_PARSE {
                     return Err(FwdFault::CeTooFragmented { dst, len });
                 }
+                // ★★★★★ w283 — where THIS launch's spans begin, latched before the extend so
+                // its own declared release can be attached to its OWN last span and to no
+                // other launch's. ⊘ `ce_spans.last_mut()` alone would attach a release to
+                // whatever the previous launch left there when this one partitioned to zero
+                // spans — which is exactly the `PhysOperand` / release-only case.
+                let spans_from = out.ce_spans.len();
                 out.ce_spans.extend(spans);
                 // ★★★ DECISION 2 of 2 — CAPTURE. Reads the RESOLVED PHYSICAL destination
                 // and nothing else. Independent of the above by construction: it is not
@@ -5985,6 +6574,52 @@ pub fn apply_pushbuffer(
                 if let Some(c) = completion {
                     proc.completion.observe(OsEventRef(c.addr.0 ^ c.payload))?;
                     out.sem_releases.push((c.addr, c.payload));
+                    // ★★★★★ **w283 — HAND THE GUEST'S OWN RELEASE TO THE ENGINE.**
+                    //
+                    // Attached to the LAST span of THIS launch, so the engine writes the
+                    // guest's payload after it has moved the guest's bytes — submission
+                    // order in one pushbuffer, not an ordering we impose afterwards.
+                    //
+                    // ⊘ **`HostCe` only, and that is not a policy choice.** A span running
+                    // on `CeExecutor::Ours` is served by the shell's CPU executor, and this
+                    // field is the HOST engine's instruction — attaching it to a CPU-executed
+                    // span would name a writer that is not the one running the work.
+                    //
+                    // ⚠⚠ **AND THE `Ours` ARM HAS NO WRITER AT ALL TODAY — measured, not
+                    // assumed.** `[measured 2026-08-13, `git grep write_completion` over the
+                    // whole workspace]` `kayfabe_rt::cpu_ce::write_completion` — the documented
+                    // `sem_releases` consumer — has **zero call sites**: every hit is its own
+                    // definition or a doc reference. So `out.sem_releases` is populated on this
+                    // path and **dropped**, which is exactly what the control arms measure
+                    // (`semaphore 0x00000000`, every boot). ⊘ An earlier draft of this comment
+                    // said the `Ours` completions were *"`write_completion`'s and are
+                    // unchanged"* — true of the design and **false of the tree**, and left
+                    // standing it would have read as *"the other arm is already handled"*.
+                    // ⇒ There is therefore exactly ONE writer for a guest completion in this
+                    // tree, it is the engine, and it is this field. A second one would be
+                    // `a_second_source_of_truth_beside_a_complete_value`; today there is not
+                    // even a first one on the CPU arm.
+                    //
+                    // ⊘ And nothing is attached when this launch produced no span of its
+                    // own (`spans_from == len()`): a release with no bytes behind it is a
+                    // `CeRelease`, handled by its own arm, and inventing a carrier for it
+                    // here would put the guest's payload on a copy it never asked for.
+                    //
+                    // ⚠ **`u32::try_from`, and a payload that does not fit is NOT attached.**
+                    // `LAUNCH_SEMAPHORE_RELEASE_ONE_WORD` releases ONE 32-bit word, so a
+                    // wider payload is a four-word release this encoding cannot express.
+                    // ⊘ Truncating would write a DIFFERENT value at the address the guest
+                    // polls — a wrong completion, which is worse than none — so it is
+                    // declined, and the guest then waits visibly instead of being lied to.
+                    if let Some(last) = out.ce_spans.get_mut(spans_from..).and_then(<[_]>::last_mut)
+                        && last.sub.by == CeExecutor::HostCe
+                        && let Ok(payload) = u32::try_from(c.payload)
+                    {
+                        last.sub.guest_release = Some(kayfabe_isolate::CeGuestRelease {
+                            va: c.addr.0,
+                            payload,
+                        });
+                    }
                 }
             }
             // ★★★ **A launch that moves no bytes and exists only to release** — see

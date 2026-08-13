@@ -254,6 +254,248 @@ fn a_second_pin_at_the_same_va_is_an_idempotent_replay_and_issues_no_verbs() {
 }
 
 // ---------------------------------------------------------------------------------
+// 1b — ★★★★★ THE EXTENT KEY (`w271`)
+// ---------------------------------------------------------------------------------
+
+/// Bind `len` bytes at `va` as guest-declared sysmem — the multi-page fixture the extent
+/// tests need. ⊘ Separate from [`guest_binds`] rather than a parameter on it, so the four
+/// existing callers keep the exact fixture they were written against.
+fn guest_binds_range(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa, len: u64) {
+    device
+        .with_proc_mut(pid, |p| {
+            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            vas.table
+                .bind(
+                    PDB,
+                    va,
+                    len,
+                    Binding::declared_by_guest(
+                        RING_GPA + (va.0 - RING_VA.0),
+                        Aperture::SysmemCoherent,
+                    )
+                    .expect("the fixture declares a kind the guest can declare"),
+                )
+                .expect("the fixture's own bind is well-formed");
+        })
+        .expect("the proc is live");
+}
+
+fn grant_of(offset: u64, len: u64) -> GuestRamGrant {
+    GuestRamGrant::originated_by_the_vmm(offset, len, Prot::ReadWrite)
+}
+
+/// ★★★★★ **THE RUNG.** A request for MORE bytes at a base already pinned for FEWER is
+/// **not** a replay — it is [`kayfabe_fwd::FwdFault::GuestRamPinTooShort`], carrying both
+/// numbers.
+///
+/// ⊘⊘ **This test fails against `416088c`, and the way it fails is the whole finding**: the
+/// old code returns `Ok(already = true)` with the 32 KiB descriptor's handle, and the extra
+/// bytes are never described to RM. `[measured 2026-08-12, boot `w270_pin`]` the host GPU
+/// then faulted at exactly the first byte past the described extent. ⇒ A green supply row
+/// held a wall in place for an entire rung, and the only reason it was ever visible is that
+/// an independent authority — the GPU's own MMU — disagreed.
+#[test]
+fn a_longer_run_at_a_pinned_base_is_refused_by_name_and_carries_both_numbers() {
+    let _wd = watchdog(
+        "guest_ram_pin::too_short",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
+    guest_binds_range(&device, pid, RING_VA, 2 * PIN_LEN);
+
+    device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, PIN_LEN))
+        .expect("the short pin lands");
+    let before = verbs(&rec).len();
+
+    let e = device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, 2 * PIN_LEN))
+        .expect_err("★ a GROWING request is not a replay of a shorter one");
+    assert_eq!(
+        e,
+        kayfabe_fwd::FwdFault::GuestRamPinTooShort {
+            va: RING_VA,
+            described: PIN_LEN,
+            requested: 2 * PIN_LEN,
+        },
+        "⊘ the refusal must carry BOTH numbers — they are what the VMM mints the \
+         remainder's grant from, and this crate may not mint one itself"
+    );
+    assert_eq!(
+        verbs(&rec).len(),
+        before,
+        "refused in the PLAN phase — nothing was built and nothing needs unwinding"
+    );
+}
+
+/// ★★★ …and a request for the SAME or FEWER bytes is still an ordinary replay.
+///
+/// ⊘ The `<` in the plan arm is deliberate and this is what it buys: a source that
+/// re-derives a *shorter* run at a pinned base is not wrong, and refusing it would turn
+/// every such re-derivation into a fault. Only *growth* is the new obligation.
+#[test]
+fn an_equal_or_shorter_run_at_a_pinned_base_is_still_a_covered_replay() {
+    let _wd = watchdog("guest_ram_pin::covered", std::time::Duration::from_secs(60));
+    let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
+    guest_binds_range(&device, pid, RING_VA, 2 * PIN_LEN);
+
+    let first = device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, 2 * PIN_LEN))
+        .expect("the long pin lands");
+    assert_eq!(
+        first.described,
+        2 * PIN_LEN,
+        "a fresh pin describes its grant"
+    );
+    let before = verbs(&rec).len();
+
+    for ask in [2 * PIN_LEN, PIN_LEN, 8] {
+        let p = device
+            .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, ask))
+            .unwrap_or_else(|e| panic!("a {ask}-byte ask inside a {} pin: {e:?}", 2 * PIN_LEN));
+        assert!(p.already, "covered ⇒ replay");
+        assert_eq!(
+            p.described,
+            2 * PIN_LEN,
+            "★ a replay reports the LIVE extent, not the asked one — so a caller printing \
+             `requested` beside `described` can SEE that it is covered rather than infer it"
+        );
+    }
+    assert_eq!(
+        verbs(&rec).len(),
+        before,
+        "⊘ not one host verb on any replay"
+    );
+}
+
+/// ★★★★ **The remainder, described at the base past the short pin, is an ordinary fresh
+/// pin** — which is what makes the VMM-side loop terminate rather than merely retry.
+#[test]
+fn the_remainder_past_a_short_pin_is_a_fresh_pin_and_the_pair_covers_the_whole_run() {
+    let _wd = watchdog(
+        "guest_ram_pin::remainder",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, _rec) = device(Some(GUEST_RAM_BYTES));
+    guest_binds_range(&device, pid, RING_VA, 2 * PIN_LEN);
+
+    device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, PIN_LEN))
+        .expect("the short pin lands");
+    let rest = GpuVa(RING_VA.0 + PIN_LEN);
+    let p = device
+        .pin_guest_ram(
+            GPU,
+            PDB,
+            rest,
+            grant_of(RING_FILE_OFFSET + PIN_LEN, PIN_LEN),
+        )
+        .expect("★ the remainder is describable — nothing occupies it");
+
+    assert!(
+        !p.already,
+        "the remainder is FRESH; it was never described before"
+    );
+    assert_eq!((p.host_va, p.described), (rest.0, PIN_LEN));
+    // ★★ And the growing ask now succeeds through the covered arm at each base in turn —
+    // which is exactly the walk `SharedDoorbell::pin_guest_run` performs.
+    assert_eq!(
+        device
+            .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, 2 * PIN_LEN))
+            .expect_err("still short AT THIS BASE"),
+        kayfabe_fwd::FwdFault::GuestRamPinTooShort {
+            va: RING_VA,
+            described: PIN_LEN,
+            requested: 2 * PIN_LEN,
+        },
+        "⊘ the base's own descriptor did not grow — TWO descriptors cover the run, and the \
+         refusal is how a caller walks from one to the next. A `described` that had silently \
+         become 8192 would mean this crate had invented an extent"
+    );
+}
+
+/// ★★★★ **The identity defect from the OTHER side**: a fresh base whose extent reaches over
+/// a pin that starts inside it. ⊘ Today's code would build a second `OS_DESCRIPTOR` and ask
+/// RM for a fixed map at an occupied host VA — `0x51 NV_ERR_NO_MEMORY`, the status that
+/// cannot be told from real exhaustion.
+#[test]
+fn a_run_reaching_over_a_pin_at_a_higher_base_is_refused_with_its_clear_prefix() {
+    let _wd = watchdog("guest_ram_pin::overlap", std::time::Duration::from_secs(60));
+    let (device, pid, rec) = device(Some(GUEST_RAM_BYTES));
+    guest_binds_range(&device, pid, RING_VA, 3 * PIN_LEN);
+
+    let mid = GpuVa(RING_VA.0 + PIN_LEN);
+    device
+        .pin_guest_ram(GPU, PDB, mid, grant_of(RING_FILE_OFFSET + PIN_LEN, PIN_LEN))
+        .expect("the middle page is pinned first — the shape a re-ordered submission gives");
+    let before = verbs(&rec).len();
+
+    let e = device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, 3 * PIN_LEN))
+        .expect_err("a run that reaches over a live pin is refused");
+    assert_eq!(
+        e,
+        kayfabe_fwd::FwdFault::GuestRamPinOverlaps(kayfabe_fwd::GuestRamPinOverlap {
+            va: RING_VA,
+            requested: 3 * PIN_LEN,
+            existing_base: mid.0,
+            existing_len: PIN_LEN,
+            free_prefix: PIN_LEN,
+        }),
+        "★ `free_prefix` is what makes this actionable: PIN_LEN bytes at the base are clear \
+         and may be described now"
+    );
+    assert_eq!(verbs(&rec).len(), before, "refused in the PLAN phase");
+
+    // ★ And the prefix it names really is describable — the property the VMM loop relies on.
+    device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, PIN_LEN))
+        .expect("the clear prefix describes");
+}
+
+/// ★★★ **A pin that starts BELOW the request and reaches into it yields `free_prefix = 0`**
+/// — and that zero is the loop's terminator.
+///
+/// ⚠ A caller that retried on this fault without reading `free_prefix` would spin **inside a
+/// doorbell**, holding the guest's vCPU. The zero is asserted here rather than described so
+/// that a future edit which "helpfully" reports a nonzero prefix breaks a test instead of a
+/// boot.
+#[test]
+fn a_pin_reaching_up_from_below_yields_a_zero_prefix_and_that_is_terminal() {
+    let _wd = watchdog(
+        "guest_ram_pin::overlap_below",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, _rec) = device(Some(GUEST_RAM_BYTES));
+    guest_binds_range(&device, pid, RING_VA, 3 * PIN_LEN);
+
+    device
+        .pin_guest_ram(GPU, PDB, RING_VA, grant_of(RING_FILE_OFFSET, 2 * PIN_LEN))
+        .expect("a two-page pin at the base");
+
+    let inside = GpuVa(RING_VA.0 + PIN_LEN);
+    let e = device
+        .pin_guest_ram(
+            GPU,
+            PDB,
+            inside,
+            grant_of(RING_FILE_OFFSET + PIN_LEN, PIN_LEN),
+        )
+        .expect_err("the base's own pin already covers this address");
+    assert_eq!(
+        e,
+        kayfabe_fwd::FwdFault::GuestRamPinOverlaps(kayfabe_fwd::GuestRamPinOverlap {
+            va: inside,
+            requested: PIN_LEN,
+            existing_base: RING_VA.0,
+            existing_len: 2 * PIN_LEN,
+            free_prefix: 0,
+        }),
+        "⊘ ZERO — no byte at this base is clear, so no caller can make progress here"
+    );
+}
+
+// ---------------------------------------------------------------------------------
 // 2 — ★★★★ THE REFUSALS, each by NAME
 // ---------------------------------------------------------------------------------
 
@@ -417,8 +659,9 @@ impl kayfabe_isolate::RmBackend for Relocating {
         vas: HostHandle,
         engine: kayfabe_arch::ids::EngineKind,
         hosting: Option<kayfabe_isolate::HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<kayfabe_isolate::ChannelHandles, RmError> {
-        self.0.alloc_channel(vas, engine, hosting)
+        self.0.alloc_channel(vas, engine, hosting, adopt)
     }
     fn alloc_engine_object(
         &mut self,

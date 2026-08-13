@@ -2387,3 +2387,693 @@ fn the_gate_hands_over_exactly_the_kinds_a_shadow_host_channel_may_back() {
         );
     }
 }
+
+// =====================================================================================
+// ★★★★★ THE GR ROUTE selector — the PURE half, and the DISPOSITION it feeds
+// =====================================================================================
+//
+// ⊘ Same scope caveat as the two selector blocks above: these drive `gr_route_from` and
+// `kayfabe_rt::shell_disposition` and never read the process-global. The plumbing from the
+// variable to the routing decision is pinned end to end, through a real guest MMIO write,
+// by `tests/gr_route_passthrough.rs` — which has to be its own binary to write the global
+// safely, and says so.
+//
+// Why the selector exists at all: the arm it opens was CLOSED ON EVIDENCE at §16.65, and
+// the evidence still stands — `docs/design/gr_doorbell_passthrough.md` §0.2-§0.3.
+
+use kayfabe_qemu_raw::shim::{GrRouteArm, gr_route_from};
+use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
+
+/// ⊘ **The default must leave every prior boot comparable.** `KAYFABE_GR_ROUTE` unset is
+/// `Refuse`, and `Refuse` disposes a `HostGr` doorbell exactly as the `!=  CpuCe` bool did.
+#[test]
+fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
+    assert_eq!(gr_route_from(None), Ok(GrRouteArm::Refuse));
+    assert!(
+        !GrRouteArm::Refuse.gr_passthrough(),
+        "★ the default arm opened the route"
+    );
+    assert_eq!(
+        shell_disposition(DoorbellRoute::HostGr, GrRouteArm::Refuse.gr_passthrough()),
+        ShellDisposition::RefuseByRoute,
+        "★ on the default arm a GR doorbell must still be refused by name, or every \
+         committed `ctl` boot in `traces/guest_boots/` stops being comparable to the next"
+    );
+}
+
+/// ★★★★★ **The arming is the ONLY thing that opens the route**, and it opens it for
+/// `HostGr` and for nothing else.
+///
+/// ⊘ The `Unserved` row is the one that matters: before this rung the shim's decision was
+/// `route != CpuCe`, which could not have opened one of the two without opening both.
+#[test]
+fn the_arming_opens_hostgr_and_only_hostgr() {
+    assert!(GrRouteArm::Passthrough.gr_passthrough());
+    assert_eq!(
+        shell_disposition(
+            DoorbellRoute::HostGr,
+            GrRouteArm::Passthrough.gr_passthrough()
+        ),
+        ShellDisposition::HandToCore,
+        "★★★★★ THE RUNG: armed, a GR doorbell is handed to the core"
+    );
+    for armed in [false, true] {
+        assert_eq!(
+            shell_disposition(DoorbellRoute::Unserved, armed),
+            ShellDisposition::RefuseByRoute,
+            "⊘ NVENC/NVDEC must be refused on BOTH arms — the GR arming is not a general \
+             `stop refusing` switch, and folding them into one bucket is exactly the defect \
+             `DoorbellRoute` exists to prevent (armed={armed})"
+        );
+        assert_eq!(
+            shell_disposition(DoorbellRoute::CpuCe, armed),
+            ShellDisposition::MayServeLocally,
+            "⊘ the copy-engine route is untouched by this rung on BOTH arms (armed={armed})"
+        );
+    }
+}
+
+/// ★★★ **The content forward follows the SAME authority as the route** — one rule, not two.
+///
+/// ⊘ This is the property that keeps `forward_ring`'s `Err` from turning a rung host
+/// doorbell into a `Refused` report. Quantified over every `EngineKind` so a new engine
+/// cannot slip in on the wrong side of it.
+#[test]
+fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route() {
+    for engine in kayfabe_arch::ids::EngineKind::ALL {
+        assert_eq!(
+            kayfabe_rt::device::ring_content_is_forwardable(engine),
+            kayfabe_rt::device::route_of_engine(engine) == DoorbellRoute::CpuCe,
+            "★ {engine:?} disagrees between the content-forward predicate and the route \
+             classifier. Two tables for one question is §16.64's defect, and this one is \
+             load-bearing: a GR doorbell whose ring is parsed by the copy-engine codec can \
+             be reported `Refused` after its host channel was rung."
+        );
+    }
+    // Non-vacuity: the predicate is not constant in either direction.
+    assert!(kayfabe_rt::device::ring_content_is_forwardable(
+        kayfabe_arch::ids::EngineKind::Ce
+    ));
+    assert!(!kayfabe_rt::device::ring_content_is_forwardable(
+        kayfabe_arch::ids::EngineKind::GrCompute
+    ));
+}
+
+/// Every arm round-trips through its own spelling, with the same non-vacuity check the
+/// executor block uses.
+#[test]
+fn every_gr_route_arm_round_trips_through_its_own_spelling() {
+    for arm in GrRouteArm::ALL {
+        assert_eq!(
+            gr_route_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GrRouteArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), GrRouteArm::ALL.len(), "two arms share a name");
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly.
+///
+/// ★ The stakes here are higher than for the executor selector, and that is why `on` and
+/// `1` are in the list: the two arms of this experiment differ in **one routing decision**,
+/// so a disarmed evidence run and its control produce identical logs — no new lines, and a
+/// full census of `Route::NotACopyEngineChannel` — which is also exactly what a *correct*
+/// control produces.
+#[test]
+fn a_value_that_is_not_a_gr_route_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Refuse",
+        "REFUSE",
+        "refuse ",
+        " refuse",
+        "pass",
+        "passthru",
+        "hostgr",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = gr_route_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a GR route arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GrRouteArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG A — `KAYFABE_GUEST_RING`, the arm that gives the framebuffer join a SECOND
+// SOURCE: the channel's own GPFIFO ring, walked and joined at the engine-object latch.
+//
+// ⊘ Why it is a SECOND selector and not a third arm of `KAYFABE_GR_ROUTE`: they arm
+// different legs of the same stool and a boot must be able to run either without the other.
+// `w260` measured the supply side moving while the execution side did not — folding the two
+// into one word would make that measurement unexpressible.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestRingArm, guest_ring_from};
+
+/// ⊘ **The default must leave every prior boot comparable**, and here that is sharper than
+/// for the route: the ring source runs on the REGISTER-WRITE path, which every boot takes
+/// millions of times. A default that armed would change the shape of every log ever taken.
+#[test]
+fn the_default_guest_ring_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_ring_from(None), Ok(GuestRingArm::Off));
+    assert!(
+        !GuestRingArm::Off.adopts_ring(),
+        "★ the default arm presented the channel's ring to the join"
+    );
+}
+
+/// ★★★★★ THE RUNG: `ring` is the only arm that adopts, and it says so through one predicate
+/// that both the shim and this test read — never through `== Ring` spelled at a call site.
+#[test]
+fn only_the_ring_arm_adopts_and_the_predicate_is_the_join() {
+    assert!(GuestRingArm::Ring.adopts_ring());
+    let adopting: Vec<GuestRingArm> = GuestRingArm::ALL
+        .into_iter()
+        .filter(|a| a.adopts_ring())
+        .collect();
+    assert_eq!(
+        adopting,
+        vec![GuestRingArm::Ring],
+        "★ exactly one arm may adopt the guest's ring; a second one is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_ring_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestRingArm::ALL {
+        assert_eq!(
+            guest_ring_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestRingArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestRingArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly.
+///
+/// ★ The stakes are the same as the route's and the failure is quieter: a disarmed evidence
+/// run prints **no `GR-RING-JOIN` line at all**, which is exactly what a correct control
+/// prints. Absence cannot distinguish them, so the spelling must.
+#[test]
+fn a_value_that_is_not_a_guest_ring_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Ring",
+        "rings",
+        "adopt",
+        "guest",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_ring_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-ring arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestRingArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **THE TWO LEGS ARE INDEPENDENT, and that is asserted rather than assumed.**
+///
+/// ⊘ Nothing in the shim may make one arm imply the other. A boot must be able to run
+/// `KAYFABE_GUEST_RING=ring` with `KAYFABE_GR_ROUTE=refuse` (the supply side alone, which is
+/// exactly the `w260` shape) and `passthrough` with `off` (the transport alone, which is
+/// `b734995`'s shape). All four cells are reachable, and the product below is the statement.
+#[test]
+fn the_ring_arm_and_the_route_arm_are_four_independent_cells() {
+    let mut cells = Vec::new();
+    for ring in GuestRingArm::ALL {
+        for route in GrRouteArm::ALL {
+            cells.push((ring.adopts_ring(), route.gr_passthrough()));
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        4,
+        "★ the two selectors do not span four cells — one of them constrains the other, and \
+         the supply side and the transport would stop being separately measurable"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG 4 — `KAYFABE_GUEST_PUSHBUF`, the arm that gives the guest-RAM PIN a second
+// source: the pushbuffer VAs this channel's own GPFIFO entries name.
+//
+// ⊘⊘ Why the PIN and not the JOIN, since the rung brief said the join: the eight
+// `Xid`-faulting pushbuffer VAs of `w263` resolve `pb=S:…` — **guest RAM** — on both arms,
+// and `resolve_leaf_of` hands a sysmem resolution back as `(Site::GuestRam, None)` by
+// construction. `docs/design/w264_pushbuffer_pin_prereg.md` §0.
+//
+// ⊘ Why a THIRD selector and not a rider on `KAYFABE_GUEST_RING`: `w263`'s own RESULT §3.1
+// records the cost of the alternative — its harness exported `KAYFABE_FB_JOIN=shared` on
+// both arms, so its control was not its predecessor's and six rows compared across boots.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestPushbufArm, guest_pushbuf_from};
+
+/// ⊘ **The default must leave every prior boot comparable.** The pin pass runs on the
+/// doorbell fall-through and reads up to 4096 GPFIFO entries; a default that armed would
+/// change the shape — and the cost — of every log ever taken.
+#[test]
+fn the_default_guest_pushbuf_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_pushbuf_from(None), Ok(GuestPushbufArm::Off));
+    assert!(
+        !GuestPushbufArm::Off.pins(),
+        "★ the default arm presented the pushbuffer VAs to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestPushbufArm::Pin.pins());
+    let pinning: Vec<GuestPushbufArm> = GuestPushbufArm::ALL
+        .into_iter()
+        .filter(|a| a.pins())
+        .collect();
+    assert_eq!(
+        pinning,
+        vec![GuestPushbufArm::Pin],
+        "★ exactly one arm may present the pushbuffer VAs; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_pushbuf_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestPushbufArm::ALL {
+        assert_eq!(
+            guest_pushbuf_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestPushbufArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestPushbufArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly — and the stakes are the
+/// route's, quieter: a disarmed evidence run prints **no `PB-PIN` line at all**, which is
+/// exactly what a correct control prints. Absence cannot distinguish them, so the spelling
+/// must.
+#[test]
+fn a_value_that_is_not_a_guest_pushbuf_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "pushbuf",
+        "pushbuffer",
+        "ring",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_pushbuf_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-pushbuf arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestPushbufArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **THE THREE LEGS ARE INDEPENDENT, and that is asserted rather than assumed.**
+///
+/// ⊘ Nothing in the shim may make one arm imply another. `w264` runs three boots whose arms
+/// differ in **one** variable each — `off/off`, `ring/off`, `ring/pin` — and that experiment
+/// is only expressible if all eight cells of the product are reachable. ⚠ `w263`'s arms did
+/// not have this property and its own RESULT §3.1 says so; this test is what stops the next
+/// selector from quietly re-creating it.
+#[test]
+fn the_pushbuf_arm_is_independent_of_the_ring_arm_and_the_route_arm() {
+    let mut cells = Vec::new();
+    for pb in GuestPushbufArm::ALL {
+        for ring in GuestRingArm::ALL {
+            for route in GrRouteArm::ALL {
+                cells.push((pb.pins(), ring.adopts_ring(), route.gr_passthrough()));
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        8,
+        "★ the three selectors do not span eight cells — one constrains another, and the \
+         supply side, the pushbuffer plane and the transport stop being separately measurable"
+    );
+}
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ LEG 5 — `KAYFABE_GUEST_SEMA`, the arm that gives the guest-RAM PIN a THIRD source:
+// the completion semaphore pages the guest's own `SET_REPORT_SEMAPHORE` declared.
+//
+// `[measured, w265, real GA106]` arming leg 4 moved the host GPU's eight `Xid 31` to
+// `ENGINE CE3 HUBCLIENT_CE1 @ 0x2_0440f000 ACCESS_TYPE_VIRT_WRITE` — one address, and that
+// address is the page holding all eight `COMPLETION-DECLARE` targets (`0x20440ff80 …
+// 0x20440fff0`, all `site=GuestRam`). The engine is executing the guest's methods and cannot
+// write the completion. ⊘ Same mechanism as leg 4, one page, a reader that did not exist.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestSemaArm, guest_sema_from};
+
+/// ⊘ **The default must leave every prior boot comparable.** The pass runs on the doorbell
+/// fall-through and issues host ioctls; a default that armed would change the shape — and the
+/// cost — of every log ever taken, including `w265`'s own control.
+#[test]
+fn the_default_guest_sema_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_sema_from(None), Ok(GuestSemaArm::Off));
+    assert!(
+        !GuestSemaArm::Off.pins(),
+        "★ the default arm presented the completion pages to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_sema_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestSemaArm::Pin.pins());
+    let pinning: Vec<GuestSemaArm> = GuestSemaArm::ALL.into_iter().filter(|a| a.pins()).collect();
+    assert_eq!(
+        pinning,
+        vec![GuestSemaArm::Pin],
+        "★ exactly one arm may present the completion pages; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_sema_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestSemaArm::ALL {
+        assert_eq!(
+            guest_sema_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestSemaArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestSemaArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly: a disarmed evidence run
+/// prints **no `SEMA-PIN` line at all**, which is exactly what a correct control prints.
+/// Absence cannot distinguish them, so the spelling must.
+#[test]
+fn a_value_that_is_not_a_guest_sema_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "sema",
+        "semaphore",
+        "ring",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_sema_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-sema arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestSemaArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **FOUR SELECTORS, SIXTEEN CELLS.** ⊘ Nothing in the shim may make one arm imply
+/// another: `w266` runs two boots that differ in **one** variable, and that is only
+/// expressible if leg 5 is orthogonal to the three legs already armed. ⚠ `w263`'s arms did
+/// not have this property and its own RESULT §3.1 says what it cost.
+#[test]
+fn the_sema_arm_is_independent_of_the_pushbuf_ring_and_route_arms() {
+    let mut cells = Vec::new();
+    for sema in GuestSemaArm::ALL {
+        for pb in GuestPushbufArm::ALL {
+            for ring in GuestRingArm::ALL {
+                for route in GrRouteArm::ALL {
+                    cells.push((
+                        sema.pins(),
+                        pb.pins(),
+                        ring.adopts_ring(),
+                        route.gr_passthrough(),
+                    ));
+                }
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        16,
+        "★ the four selectors do not span sixteen cells — one constrains another, and the \
+         completion plane stops being separately measurable from the pushbuffer plane"
+    );
+}
+
+/// ★★ **AND THE TWO PIN SOURCES MUST NOT SHARE A FLAG.** ⊘ Leg 4 and leg 5 present different
+/// addresses to the same primitive; folding them into one arm would make `w265`'s measured
+/// result (`PB-PIN … PINNED` ×8, `Xid` moved to the semaphore page) unreproducible as a
+/// control, because the control would have to disarm both.
+#[test]
+fn leg_four_and_leg_five_are_separately_armable() {
+    assert!(GuestPushbufArm::Pin.pins() && !GuestSemaArm::Off.pins());
+    assert!(!GuestPushbufArm::Off.pins() && GuestSemaArm::Pin.pins());
+}
+
+// ★★★★★ w270 — `KAYFABE_GUEST_OPERAND`, the arm that gives the guest-RAM PIN a FOURTH
+// source: the pages this channel's own `LAUNCH_DMA` OPERANDS name.
+//
+// `[measured, w268_pass / w269_pass / w269b_pass — three consecutive armed boots, real GA106]`
+// the guest's first substantive copy-engine work takes `Xid 31 ENGINE CE2 HUBCLIENT_CE0
+// FAULT_PTE ACCESS_TYPE_VIRT_WRITE @ 0x2_04420000`, at a page `w268` §3.2 measured appearing
+// **nowhere else in the boot** — and the same submission declares the release target
+// `0x2_0440ff70` that `w269` measured `cuCtxCreate` polling for the value `2`.
+// ⊘ Same primitive as legs 4 and 5; the plane none of the three existing sources can see.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_qemu_raw::shim::{GuestOperandArm, guest_operand_from};
+
+/// ⊘ **The default must leave every prior boot comparable** — `w269b_pass` in particular,
+/// which is this rung's own control and must be reproducible from an unset variable.
+#[test]
+fn the_default_guest_operand_arm_leaves_the_shipped_path_byte_identical() {
+    assert_eq!(guest_operand_from(None), Ok(GuestOperandArm::Off));
+    assert!(
+        !GuestOperandArm::Off.pins(),
+        "★ the default arm presented the operand pages to the pin"
+    );
+}
+
+/// ★★★★★ THE RUNG: `pin` is the only arm that pins, through one predicate the shim and this
+/// test both read — never through `== Pin` spelled at a call site.
+#[test]
+fn only_the_operand_pin_arm_pins_and_the_predicate_is_the_gate() {
+    assert!(GuestOperandArm::Pin.pins());
+    let pinning: Vec<GuestOperandArm> = GuestOperandArm::ALL
+        .into_iter()
+        .filter(|a| a.pins())
+        .collect();
+    assert_eq!(
+        pinning,
+        vec![GuestOperandArm::Pin],
+        "★ exactly one arm may present the operand pages; a second is a second experiment \
+         wearing one flag's name"
+    );
+}
+
+/// Every arm round-trips through its own spelling, and no two arms share a name.
+#[test]
+fn every_guest_operand_arm_round_trips_through_its_own_spelling() {
+    for arm in GuestOperandArm::ALL {
+        assert_eq!(
+            guest_operand_from(Some(arm.as_str())),
+            Ok(arm),
+            "★ {arm:?} does not parse from the name it prints"
+        );
+    }
+    let mut names: Vec<&str> = GuestOperandArm::ALL.iter().map(|a| a.as_str()).collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(
+        names.len(),
+        GuestOperandArm::ALL.len(),
+        "two arms share a name"
+    );
+}
+
+/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly: a disarmed evidence run
+/// prints **no `OPERAND-PIN` line at all**, which is exactly what a correct control prints.
+#[test]
+fn a_value_that_is_not_a_guest_operand_arm_refuses_rather_than_defaulting() {
+    for bad in [
+        "",
+        "on",
+        "1",
+        "true",
+        "yes",
+        "Off",
+        "OFF",
+        "off ",
+        " off",
+        "Pin",
+        "pins",
+        "operand",
+        "operands",
+        "dst",
+        "sema",
+        "\u{fffd}invalid",
+    ] {
+        let (status, why) = guest_operand_from(Some(bad))
+            .expect_err(&format!("★ {bad:?} was ACCEPTED as a guest-operand arm"));
+        assert_eq!(
+            status.code(),
+            kayfabe_qemu_raw::shim::Status::Unsupported.code()
+        );
+        for arm in GuestOperandArm::ALL {
+            assert!(
+                why.contains(arm.as_str()),
+                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
+                arm.as_str()
+            );
+        }
+    }
+}
+
+/// ★★★ **FIVE SELECTORS, THIRTY-TWO CELLS.** ⊘ `w270` runs two boots differing in **one**
+/// variable while every leg `w268` measured stays armed on both, and that is only expressible
+/// if this arm is orthogonal to the four already there. ⚠ `w263`'s arms were not, and its own
+/// RESULT §3.1 says what it cost.
+#[test]
+fn the_operand_arm_is_independent_of_the_sema_pushbuf_ring_and_route_arms() {
+    let mut cells = Vec::new();
+    for op in GuestOperandArm::ALL {
+        for sema in GuestSemaArm::ALL {
+            for pb in GuestPushbufArm::ALL {
+                for ring in GuestRingArm::ALL {
+                    for route in GrRouteArm::ALL {
+                        cells.push((
+                            op.pins(),
+                            sema.pins(),
+                            pb.pins(),
+                            ring.adopts_ring(),
+                            route.gr_passthrough(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    cells.sort_unstable();
+    cells.dedup();
+    assert_eq!(
+        cells.len(),
+        32,
+        "★ the five selectors do not span thirty-two cells — one constrains another, and the \
+         operand plane stops being separately measurable from the completion plane"
+    );
+}
+
+/// ★★ **ALL THREE PIN SOURCES MUST BE SEPARATELY ARMABLE.** ⊘ They present different
+/// addresses to one primitive; folding any two into one flag would make the earlier rung's
+/// measured control unreproducible, because the control would have to disarm both.
+#[test]
+fn the_three_pin_sources_are_separately_armable() {
+    assert!(
+        GuestPushbufArm::Pin.pins() && !GuestSemaArm::Off.pins() && !GuestOperandArm::Off.pins()
+    );
+    assert!(
+        !GuestPushbufArm::Off.pins() && GuestSemaArm::Pin.pins() && !GuestOperandArm::Off.pins()
+    );
+    assert!(
+        !GuestPushbufArm::Off.pins() && !GuestSemaArm::Off.pins() && GuestOperandArm::Pin.pins()
+    );
+}

@@ -165,10 +165,19 @@ fn the_channel_alloc_tells_rm_the_channels_own_numbers() {
 
 /// ⊘ And the diagnostic must not be the thing that keeps the capability alive.
 ///
-/// ★ `alloc_channel_over_guest_ring` currently has exactly one caller, the R31 probe, and
-/// that is honest — the rung builds the alloc side and nothing consumes it. What must not
-/// happen quietly is the *prover* growing its own construction of the numbers it is
-/// supposed to be handing through.
+/// ⊘⊘ **CORRECTED 2026-08-12, and the correction is the load-bearing half.** This doc used
+/// to read *"`alloc_channel_over_guest_ring` currently has exactly **one caller**, the R31
+/// probe, and that is honest — the rung builds the alloc side and nothing consumes it."*
+/// **That stopped being true at `361fca8`** (leg A2), which gave the verb its first
+/// production caller at `rm.rs`'s `alloc_channel`. The test stayed green through that rung
+/// because its assertion counted **`fn` DEFINITIONS**, not callers — and
+/// `guest_ring_and_userd_adoption_prereg.md` §4 had explicitly promised to update it
+/// (*"⊘ Not a bumped number"*) and did not.
+///
+/// ★ ⇒ The tripwire that existed *"so that the day a production caller appears, somebody has
+/// to say so out loud"* let that day pass in silence. **A gate's prose is not its
+/// assertion**, and here the prose was the only thing that was ever right. Both halves are
+/// now asserted, and the caller half is the one that was missing.
 #[test]
 fn the_probe_does_not_mint_the_rings_geometry_twice() {
     let body = body_of("src/rm.rs");
@@ -179,17 +188,246 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
          points are two places where the guest's numbers are turned into RM's, and only one \
          of them will be the one a boot exercises."
     );
+    // ★★★ THE HALF THAT WAS MISSING. `.alloc_channel_over_guest_ring(` is the CALL form; the
+    // definition asserted above is `fn alloc_channel_over_guest_ring(`, with no leading dot,
+    // so it is not counted here. ⚠ The dot is matched separately from the receiver because
+    // `cargo fmt` puts `self` and `.method(` on different lines when the argument list is
+    // long — one of the two live call sites is already wrapped that way, and a pattern that
+    // spelled `self.` would have counted it as absent.
+    let callers = body.matches(".alloc_channel_over_guest_ring(").count()
+        + body_of("src/bin/rmladder.rs")
+            .matches(".alloc_channel_over_guest_ring(")
+            .count();
+    assert_eq!(
+        callers, 4,
+        "`alloc_channel_over_guest_ring` has {callers} call sites, not 4. ⊘ Four is the ruling \
+         and the split is what matters, not the tally: **ONE production caller** — \
+         `alloc_channel`'s adoption arm, reachable only through an `AdoptedGuestRing` the \
+         shell had to arm and only past the `RING_NOT_A_JOINED_WINDOW` membership check — plus \
+         TWO in `prove_guest_ring_channel` (the R31 probe) and ONE in the `rmladder` driver. A \
+         fifth means a host channel can be born over guest memory from a path that did not \
+         state it, and the whole point of this verb is that such a birth is never accidental."
+    );
+    // ⊘ And the production caller must stay behind the gate. A caller that reached the verb
+    // without the membership check would be `w228`'s blank twin waiting to happen — a channel
+    // fetching GPFIFO entries out of a page nothing ever wrote, reporting no error at all.
+    assert!(
+        body.contains("RmError::Other(RING_NOT_A_JOINED_WINDOW)"),
+        "`alloc_channel`'s adoption arm no longer refuses a non-joined object by name."
+    );
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        3,
-        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ Three is the ruling \
-         and each one is a different job: the construction in \
-         `alloc_channel_over_guest_ring`, and TWO arms in `alloc_channel_in` — one deciding \
-         provenance (allocate a ring, or do not) and one deciding the layout (our offsets, \
-         or the caller's). ★ They are deliberately not one arm: the first runs before USERD \
-         exists and the second after the mapping, and folding them would put the ring alloc \
-         and the layout decision on the same side of a failure that must unwind between \
-         them. A fourth site means the guest arm is reachable from a path that did not state \
-         it."
+        5,
+        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ FIVE is the ruling \
+         (it was three before leg B) and each one is a different job: the construction in \
+         `alloc_channel_over_guest_ring`, TWO arms in `alloc_channel_in` deciding the RING — \
+         one provenance (allocate, or do not), one layout (our offsets, or the caller's) — \
+         and TWO more deciding the USERD, in the same shape and for the same reason. ★ They \
+         are deliberately not one arm each: the ring arms straddle a failure that must \
+         unwind between them, and the USERD arms are a second axis entirely — a channel can \
+         adopt the guest's ring and keep a USERD of ours, which is what every leg-A boot \
+         before this one did. A sixth site means one of the two guest arms is reachable from \
+         a path that did not state it."
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ THE BIRTH WITNESS — and the TWO-CRATE INVARIANT its middle state rests on
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// A sibling crate's source, comments stripped. ⊘ Reached by path rather than by `include!`
+/// or a re-export: the fact under test is *what the other crate's source says*, and anything
+/// that compiled it would be testing what it means instead.
+fn sibling_body(crate_name: &str, rel: &str) -> String {
+    let p = crate_root()
+        .parent()
+        .expect("crates/")
+        .join(crate_name)
+        .join(rel);
+    let src = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()));
+    strip_comments(&src)
+}
+
+/// ★★★★★ **`DECLINED` and `NOT-ASKED` mean opposite things and both arrive as `adopt: None`.**
+///
+/// `w261` could not tell *"leg A2 fired"* from *"leg A2 was never asked"*, and its own
+/// `RESULT.md` leads with that hole. [`kayfabe_isolate_host::rm::BirthOffer`] closes it by
+/// reading the third state off `hosting`, which already crosses the wire — **no new field, no
+/// second source of truth**.
+///
+/// ⚠ ⇒ **The reading is only true while the two production birth sites keep their shapes**,
+/// and those sites live in a *different crate*. A doc comment cannot hold a cross-crate
+/// invariant; this can.
+///
+/// - `VerbPlan::EngineObject` births pass `Some(HostedObject { .. })` **and** consult
+///   `kayfabe_fwd::adopted_guest_ring` unconditionally on the `channel.is_none()` branch ⇒
+///   `hosting = Some, adopt = None` really does mean *asked, and it produced nothing*.
+/// - `VerbPlan::Doorbell` births pass a literal `None, None` ⇒ *nothing was asked*.
+///
+/// ⊘ If either changes, this fails and the witness's `because()` text stops being a claim
+/// nobody checked. `refuse_by_name_means_the_name_is_true`.
+#[test]
+fn the_birth_witness_can_tell_declined_from_never_asked() {
+    let isolate = sibling_body("kayfabe-isolate", "src/lib.rs");
+    assert_eq!(
+        isolate
+            .matches("rm.alloc_channel(vas, *engine, None, None)")
+            .count(),
+        1,
+        "The doorbell materialization no longer births its channel with a LITERAL `None, \
+         None`. That literal is the entire evidence for the witness's `NOT-ASKED` state: it \
+         is what makes `hosting = None` mean *this birth path offers no ring at all* rather \
+         than *this birth happened to have none*. If the doorbell path grew a `hosting` or an \
+         `adopt`, `BirthOffer::read` is now mislabelling births and its `because()` text is \
+         false on a real boot."
+    );
+    // ⊘ And the OTHER site must keep passing `hosting`, or `Some/None` stops discriminating.
+    assert!(
+        isolate.contains("Some(HostedObject {"),
+        "`VerbPlan::EngineObject`'s birth no longer hands `hosting` to `alloc_channel`. \
+         `hosting` is the witness's only discriminator between `DECLINED` and `NOT-ASKED`."
+    );
+
+    // ★★★ The half in `kayfabe-fwd`: the consult is UNCONDITIONAL on the birth branch. If it
+    // ever grew a second selector, `adopt: None` would stop meaning "asked and declined" and
+    // the arming would have two sources of truth — the defect
+    // `a_second_source_of_truth_beside_a_complete_value` names.
+    let fwd = sibling_body("kayfabe-fwd", "src/lib.rs");
+    assert_eq!(
+        fwd.matches("adopted_guest_ring(spine, proc, chan, cgpu)")
+            .count(),
+        1,
+        "`adopted_guest_ring` is called from somewhere other than the single birth site in \
+         `plan_engine_object`, or from nowhere. Exactly one call is what makes the isolate's \
+         `adopt: None` readable as *the armed path ran and produced nothing*."
+    );
+    assert!(
+        fwd.contains("adopt: if channel.is_none() {"),
+        "The consult is no longer gated on `channel.is_none()` alone. ⊘ A second condition \
+         here — a flag, a feature, an env read — would make `DECLINED` ambiguous again, which \
+         is the exact state this rung exists to leave."
+    );
+}
+
+/// ⊘ And the witness must stay a witness: it prints, it decides nothing.
+///
+/// ★ `a_flag_is_not_progress`, and one sharper — an instrument that acquired a branch would
+/// make the armed and disarmed arms differ *because they were measured*, which voids the
+/// comparison the whole boot is for.
+#[test]
+fn the_birth_witness_is_read_by_no_decision() {
+    let whole = body_of("src/rm.rs");
+    // ⚠ SHIPPED CODE ONLY. The unit tests below `#[cfg(test)]` call `BirthOffer::read` four
+    // times on purpose — that is the reading's own truth table — and counting them here would
+    // make this gate fire on the thing that proves the reading correct.
+    let body = whole
+        .split("#[cfg(test)]")
+        .next()
+        .expect("split always yields one")
+        .to_string();
+    assert!(
+        body.len() < whole.len(),
+        "`rm.rs` has no `#[cfg(test)]` module any more, so this gate is silently scanning the \
+         whole file — including tests — and its counts mean something different from what \
+         they say."
+    );
+    // The value is constructed once, tallied once, and rendered. Nothing matches on it.
+    // ★★★ TWO, and the reason is the whole design of the leg-B witness: ONE function applied
+    // to TWO limbs. ⊘ Not two predicates — that is the shape this would be catching. If a
+    // third appears, or if either call stops being `BirthOffer::read`, the two legs can come
+    // to disagree about what `DECLINED` means and the boot log stops being comparable
+    // limb-to-limb.
+    assert_eq!(
+        body.matches("BirthOffer::read(").count(),
+        2,
+        "`BirthOffer::read` is called {} times in shipped `rm.rs`, not twice — once for the \
+         ring limb and once for the USERD limb. ONE reading, TWO limbs; a third call is a \
+         third limb nobody declared, and a first is a limb that lost its witness.",
+        body.matches("BirthOffer::read(").count()
+    );
+    // ⊘ And the second call must be DERIVED FROM THE FIRST'S INPUT, not from a new selector.
+    // `adopt.is_some_and(|a| a.userd.is_some())` is the whole of leg B's arming: it is `Some`
+    // only inside an adoption leg A2 already made, so a disarmed build is `None` on both
+    // limbs by construction. A literal env read or feature flag here would be
+    // `a_second_source_of_truth_beside_a_complete_value`.
+    assert!(
+        body.contains("adopt.is_some_and(|a| a.userd.is_some())"),
+        "leg B's arming is no longer inherited from leg A2's own answer. ⊘ That inheritance \
+         is what makes `userd=DECLINED` on a disarmed build a fact about the code rather \
+         than about a flag — and what makes `(ring = DECLINED, userd = GUEST-USERD)` \
+         unspellable."
+    );
+    // ⊘⊘ **THE PROSE AND THE ASSERTION USED TO DISAGREE, and that is the defect this rung
+    // was warned about by name.** It read *"The value is matched EXACTLY ONCE, and that one
+    // match is inside `birth_census::tally`"* while asserting `matches("match offer") == 1` —
+    // and the ONE occurrence it was counting was `match offer` inside `tally`'s parameter
+    // named `offer`, which leg B renamed to `ring`. The sentence was true; the pattern was
+    // measuring the parameter's *name*.
+    //
+    // ⇒ Assert what the sentence says: nothing outside the counter selection branches on a
+    // witness value. The counter selection itself is matched by name below.
+    for forbidden in ["match offer", "match userd_offer"] {
+        assert!(
+            !body.contains(forbidden),
+            "`{forbidden}` appears in shipped `rm.rs`. ⊘ The witness prints and decides \
+             nothing; a match on it is a branch on an instrument, which would make the armed \
+             and disarmed boots differ BECAUSE they were measured and void the arm comparison."
+        );
+    }
+    assert_eq!(
+        body.matches("let counter = match ring {").count(),
+        1,
+        "`birth_census::tally`'s counter selection is not where it was. That `match` is the \
+         ONLY read of a witness value in the shipped file, and this gate exists so `the \
+         witness decides nothing` is a checked claim rather than a sentence."
+    );
+    for forbidden in [
+        "if offer ==",
+        "if offer !=",
+        "offer.is_",
+        "if let BirthOffer",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "`rm.rs` branches on the birth witness (`{forbidden}`). ⊘ It prints and it decides \
+             nothing — see `alloc_channel`."
+        );
+    }
+    // ★ And the tally must not be able to *fail* the birth: it returns numbers, never a
+    // `Result`, so no instrument can refuse a channel the uninstrumented port would allow.
+    assert!(
+        body.contains(") -> (u64, u64, u64, u64, u64, u64) {")
+            && body.contains("pub(super) fn tally("),
+        "`birth_census::tally` no longer returns plain counters (six of them since leg B \
+         added `guest_userd`). An instrument that can return an error is an instrument that \
+         can change the outcome it is measuring."
+    );
+    // ★★★ And leg B's own far-side refusal must exist and be a REFUSAL, never a downgrade.
+    // ⚠ A channel silently given a USERD of ours after being told it would carry the guest's
+    // is `GP_PUT == GP_GET` forever with no error — and it would make an armed run and its
+    // control produce the same channel, which is the failure shape this campaign keeps paying
+    // for.
+    assert!(
+        body.contains("t.is_joined_object(raw_userd)")
+            && body.contains("RmError::Other(USERD_NOT_A_JOINED_WINDOW)"),
+        "leg B's adoption arm no longer re-checks the USERD handle against `FbJoinTable` \
+         membership, or no longer refuses by name. The core's check cannot reach here: the \
+         offer crosses the isolate IPC boundary as two integers."
+    );
+    // ⊘ And the two USERD accessors must refuse BY NAME rather than answering zero. `(0, 0)`
+    // is what a channel that has never run also looks like — the exact ambiguity this rung is
+    // trying to leave, on the one plane it is trying to measure.
+    assert_eq!(
+        body.matches("RmError::Other(USERD_NOT_OURS)").count(),
+        2,
+        "the guest-USERD arm's two refusals (`userd_cursors`' GP_GET read and \
+         `userd_store_u32`'s GP_PUT write) are no longer both by name. A skipped write and a \
+         write to the wrong place look identical in a log."
+    );
+    // ⊘ The refusal must not be reachable from the witness: it is `fb_joins` membership.
+    assert!(
+        body.contains("t.is_joined_object(raw_memory)"),
+        "the adoption arm's membership check moved; the refusal is now gated on something \
+         other than `FbJoinTable` membership."
     );
 }

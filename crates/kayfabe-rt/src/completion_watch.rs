@@ -696,6 +696,32 @@ impl WatchList {
         );
     }
 
+    /// ★★★★★ **LEG 5's SOURCE — a read-only SNAPSHOT of every completion this guest has
+    /// declared, so a consumer other than the observer can be given the addresses.**
+    ///
+    /// `[measured, w265, real GA106]` the host GPU faults `ENGINE CE3 HUBCLIENT_CE1 @
+    /// 0x2_0440f000 ACCESS_TYPE_VIRT_WRITE`, eight times, and that page is **exactly** the page
+    /// these declarations name: eight `SET_REPORT_SEMAPHORE` targets `0x20440ff80 …
+    /// 0x20440fff0`, all `Site::GuestRam`. The addresses were already in this list; nothing
+    /// could read them out of it.
+    ///
+    /// ⊘ **This adds a READER and no capability.** [`WatchList`] still cannot write, resolve or
+    /// call the device — the whole point of [`GuestReader`] — and a snapshot of `(key, site)`
+    /// pairs cannot change what any of those do. What the consumer does with an address is the
+    /// consumer's to justify; see `SharedDoorbell::pin_completion_guest_ram`.
+    ///
+    /// ⊘ **Includes REPORTED watches.** A completion the observer has already ruled on is still
+    /// a page the engine may write, and filtering on `reported` would make the source silently
+    /// depend on the observer's deadline — an instrument gating a fix on its own verdict.
+    #[must_use]
+    pub fn declared_sites(&self) -> Vec<(WatchKey, Site)> {
+        self.lock()
+            .watches
+            .iter()
+            .map(|(k, w)| (*k, w.site.clone()))
+            .collect()
+    }
+
     /// ★★★ **One observation pass.** For every live watch whose site resolved to guest RAM,
     /// `read` is asked for the payload word; the verdict is emitted the first time the value
     /// matches, or once the deadline has passed.
@@ -1222,6 +1248,89 @@ mod tests {
         assert!(
             matches!(v.as_slice(), [Verdict::NotObserved { .. }]),
             "got {v:?}"
+        );
+    }
+
+    /// ★★★★★ **LEG 5's SOURCE** — the eight `SET_REPORT_SEMAPHORE` targets `w265` measured
+    /// are ONE page, and `declared_sites` is what lets a consumer see that.
+    ///
+    /// The addresses are the boot's own: `0x2_0440ff80 … 0x2_0440fff0` at a 16-byte stride,
+    /// every one `site=GuestRam`, and the host GPU faulted `ACCESS_TYPE_VIRT_WRITE` at
+    /// `0x2_0440f000` — the page they all fall in.
+    #[test]
+    fn the_eight_declared_semaphores_of_w265_are_one_page() {
+        let list = WatchList::new();
+        let t0 = Instant::now();
+        // ⊘ The real addresses, in the order and at the stride the boot printed them.
+        for (chan, va) in (0u32..8).map(|i| (i, 0x2_0440f_ff0u64 - u64::from(i) * 0x10)) {
+            let decl = DeclaredCompletion {
+                va: crate::GpuVa(va),
+                payload: 1,
+                awaken: false,
+                four_words: true,
+                operation: 0,
+                subch: 1,
+                class_id: AMPERE_COMPUTE_B,
+            };
+            list.declare(
+                WatchKey {
+                    proc: ProcId(2),
+                    chan: ChanId(chan),
+                    va,
+                },
+                decl,
+                Site::GuestRam {
+                    gpa: 0x59a_0ff0 - u64::from(chan) * 0x10,
+                },
+                t0,
+            );
+        }
+        let sites = list.declared_sites();
+        assert_eq!(sites.len(), 8, "★ the snapshot lost a declaration");
+        let pages: std::collections::BTreeSet<u64> =
+            sites.iter().map(|(k, _)| k.va & !0xfffu64).collect();
+        assert_eq!(
+            pages.iter().copied().collect::<Vec<_>>(),
+            vec![0x2_0440f_000],
+            "★★★ the eight declarations are not one page — leg 5 would be eight pins, and the \
+             address hardware named would not be among them"
+        );
+        assert!(
+            sites
+                .iter()
+                .all(|(_, s)| matches!(s, Site::GuestRam { .. })),
+            "⊘ a non-guest-RAM site here would be refused by the pin, correctly"
+        );
+    }
+
+    /// ⊘ **A REPORTED watch is still a page the engine may write.** Filtering the snapshot on
+    /// `reported` would make leg 5's source depend on the OBSERVER's deadline — an instrument
+    /// gating a fix on its own verdict, which is the `a_diagnostic_gated_on_the_failure` shape.
+    #[test]
+    fn declared_sites_still_names_a_completion_the_observer_has_ruled_on() {
+        let list = WatchList::new();
+        let decl = decode_report_semaphore(&ctx_init_stream()).expect("decodes");
+        let key = WatchKey {
+            proc: ProcId(1),
+            chan: ChanId(7),
+            va: decl.va.0,
+        };
+        let t0 = Instant::now();
+        list.declare(key, decl, Site::GuestRam { gpa: 0x1000 }, t0);
+        let mut read = |_g: u64, b: &mut [u8; 4]| {
+            *b = 0u32.to_le_bytes();
+            Ok(())
+        };
+        let v = list.sweep(t0 + OBSERVE_DEADLINE, &mut read);
+        assert!(
+            matches!(v.as_slice(), [Verdict::NotObserved { .. }]),
+            "got {v:?}"
+        );
+        assert_eq!(list.live(), 0, "the watch has been reported");
+        assert_eq!(
+            list.declared_sites().len(),
+            1,
+            "★ the reported watch vanished from the source; the page it names did not"
         );
     }
 }

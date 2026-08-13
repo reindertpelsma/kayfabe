@@ -2454,6 +2454,520 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
     verdict
 }
 
+/// ★★★★★ **R33 — THE RAW CE CLIENT: a copy engine driven end to end with NO `libcuda`,
+/// and the exact ioctl count it costs.**
+///
+/// The owner's design, 2026-08-12: *"create with manual ioctl calls a CE channel … a small
+/// program that copies, maps, reads completions, and tests the entire
+/// ring/pushbuffer/USERD/semaphore/ioctl surface using a raw client without libcuda. One
+/// black-box layer removed. … Far fewer ioctls, so far less to break. And it can run on the
+/// real host and later be part of a test."*
+///
+/// ## ⊘⊘ IT IS AN EXTRACTION, AND SAYING SO IS THE POINT
+///
+/// Nothing in the data path below is new. `alloc_vaspace` → `prove_ce_copy` is the ladder's
+/// own R7/R17 pair, `probe_va` is R30's arms A/B, `probe_guest_reachability` is R30's arm C.
+/// What is new is (a) the **census** — how many times this enters the driver, which nothing
+/// measured before — and (b) that it is **one flag with no isolate, no sandbox, no second
+/// channel and no concurrency rung**, so it is small enough to push into a guest and run
+/// against an emulated GPU. A full ladder run cannot do that: it spawns a sandboxed child.
+///
+/// ## ★★★ WHICH ADDRESS SPACE EVERY MEASUREMENT IS IN — the caveat that decides what this means
+///
+/// *"Is this GPU VA mapped?"* is only a question **relative to a VAS**, and a probe channel
+/// of our own asks it about **our** VAS. This rung therefore prints both handles RM assigned
+/// (`guest range` / `control range` — `w229`'s executor split) and says, in the output, that
+/// every verdict below is scoped to them. ⊘ **It cannot answer a question about a VA in
+/// somebody else's page-table tree**, and in particular it says nothing about the PDB the GR
+/// engine faults on in `cup2`: that channel is the guest driver's, with its own PDB, and a
+/// probe in the wrong address space is this campaign's exact recorded failure shape.
+///
+/// ## The three arms, and the second is what makes the first mean anything
+///
+/// ```text
+///   1  THE COPY      device memory moves, read back through an INDEPENDENT mapping,
+///                    semaphore carries the declared payload, GP_GET reaches GP_PUT
+///   2  VA-OCCUPIED   probe_va at the ring's own address, in the space it IS in -> OCCUPIED
+///   3  VA-FREE       the SAME call at an address nothing was ever mapped at   -> FREE
+/// ```
+///
+/// Arm 3 alone is green for free if the probe can never refuse; arm 2 is the identical call
+/// **watched to fail**, which is what makes arm 3 a measurement rather than a constant.
+///
+/// `want_fault` adds a fourth arm that asks **hardware** the same question — a copy engine
+/// pointed at an address nothing is mapped at, which must NOT retire. ⚠ It provokes a real
+/// `Xid 31 FAULT_PDE` and kills its own channel, so it is opt-in and belongs under
+/// `scripts/bench/host_xid_watch.sh`. Its own positive control runs first, so *"the probe
+/// never retired"* and *"this channel never worked"* stay distinguishable.
+///
+/// ## ⊘ What a green run does NOT establish
+///
+/// - **Not that `libcuda`'s path works.** It removes `libcuda`; it does not simulate it.
+/// - **Not anything about the guest's VAS**, per the caveat above.
+/// - **Not throughput.** One 4 KiB copy, polled.
+/// - The ioctl count is **this program's**, not a lower bound on what a copy costs: it
+///   includes bring-up (`R0`–`R6`), the probes and the teardown, and the census says which.
+fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
+    use kayfabe_isolate_host::rm::{GuestReach, VaProbe};
+    use kayfabe_linux_raw::census;
+
+    /// Neither zero nor the sentinel the destination is pre-filled with.
+    const PATTERN: u32 = 0xC0FF_EE33;
+    /// ★ An address nothing in this program ever maps, chosen far above every fixed
+    /// placement the ladder uses (`0x2_0020_0000`, `0x4_1100_0000`) so *"free"* cannot be an
+    /// accident of adjacency. 64 KiB — RM's big-page granularity for device-local memory, so
+    /// the allocator cannot be asked a finer question than this (measured, `probe_va` docs).
+    ///
+    /// ⊘⊘ **THE FIRST CHOICE WAS `0x7_0000_0000` AND IT WAS THE PROBE'S OWN RING.**
+    /// `[measured 2026-08-12, vh, run `r33_ce_client_fault`]` arm 4 asked whether that address
+    /// was mapped, the engine **retired the read and moved `0x20018000`**, and the arm printed
+    /// `RESOLVED`. Nothing had mapped it — except `probe_guest_reachability`, which places its
+    /// own channel ring there **by design**, in the space it builds. The instrument read
+    /// itself and the answer was indistinguishable from a real one.
+    /// ⇒ The window is published now, and the assert below makes the collision
+    /// **unrepresentable rather than merely avoided** — a comment saying "keep these apart" is
+    /// exactly what was already there, one layer down, and it did not hold.
+    const UNMAPPED_VA: u64 = 0x9_0000_0000;
+    const UNMAPPED_LEN: u64 = 0x1_0000;
+    const _: () = assert!(
+        UNMAPPED_VA + UNMAPPED_LEN <= kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0
+            || UNMAPPED_VA >= kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1,
+        "the address arm 3/arm 4 probe must lie OUTSIDE the window probe_guest_reachability \
+         dictates for its own ring and operands, or both arms measure the instrument"
+    );
+
+    println!(
+        "info  R33 raw CE client   = GPU {gpu}, euid {} — a copy engine allocated, mapped, \
+         submitted and completed through RAW RM IOCTLS ONLY. No libcuda is loaded by this \
+         process",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R33 the bar is FOUR facts: the bytes moved (read back through a mapping that \
+         is not the one written), the semaphore carries the DECLARED payload at the DECLARED \
+         address, GP_GET reached GP_PUT, and the VA probe REFUSES where something is mapped. \
+         ⊘ `Ok(())` from any call under test is not one of them"
+    );
+
+    census::phase("R7 vaspace");
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R33 vaspace         = the rung needs its own address space");
+        return false;
+    };
+
+    // --- arm 1: THE COPY ----------------------------------------------------------------
+    census::phase("R33 arm1 ce-copy");
+    // ⊘⊘ `met_the_whole_bar()`, NOT `copied()`. See [`CeEvidence::met_the_whole_bar`]: the
+    // ★ arm used to be gated on `copied()`, which checks the bytes and the semaphore and
+    // NEVER compares the cursors — so `w283c` printed a ★ line reading `GP_GET 0 caught
+    // GP_PUT 1` and returned `R33_RC=0`. The banner three lines up says the bar is FOUR
+    // facts; the verdict implemented three.
+    let copied = match rm.prove_ce_copy(vas, PATTERN) {
+        Ok(e) if e.met_the_whole_bar() => {
+            println!(
+                "★     R33 arm 1 COPY      = {} bytes moved: dst[0] {:#010x} -> {:#010x}, \
+                 dst[last] {:#010x} (want {:#010x}), engine semaphore {:#010x} (declared \
+                 {:#010x}), GP_GET {} caught GP_PUT {} — read back through an INDEPENDENT \
+                 mapping (its own device node, its own mmap, a kernel-chosen address)",
+                e.bytes,
+                e.before,
+                e.after,
+                e.after_last,
+                e.expect_after_last,
+                e.submit.semaphore,
+                e.payload,
+                e.submit.gp_get,
+                e.submit.gp_put
+            );
+            true
+        }
+        Ok(e) => {
+            println!(
+                "FAIL  R33 arm 1 COPY      = dst[0] {:#010x} -> {:#010x} (want {:#010x}), \
+                 dst[last] {:#010x} (want {:#010x}), semaphore {:#010x} (want {:#010x}), \
+                 GP_GET {} GP_PUT {} — {}",
+                e.before,
+                e.after,
+                e.expect_after,
+                e.after_last,
+                e.expect_after_last,
+                e.submit.semaphore,
+                e.payload,
+                e.submit.gp_get,
+                e.submit.gp_put,
+                // ★★★★★ **NAME WHICH OF THE FOUR FAILED.** ⊘ The old text branched on the
+                // cursors ALONE and so described a whole-submission failure even when the
+                // bytes had moved and the semaphore had landed — which is precisely the
+                // state `w283c` reached. A diagnosis that is true of one fact and printed
+                // as if it were true of all four is how a partial pass reads as a total
+                // failure, and it is the mirror of the ★ line's own defect.
+                match (e.copied(), e.cursor_caught_up()) {
+                    (true, false) =>
+                        "★★★ THREE OF FOUR: the bytes MOVED and the semaphore carries the \
+                         DECLARED payload at the DECLARED address — only GP_GET did not \
+                         reach GP_PUT. ⊘ That cursor is THIS channel's own USERD; a \
+                         forwarding path that executes the work on a DIFFERENT host channel \
+                         cannot advance it, and this line is what says so",
+                    (false, true) =>
+                        "the entry WAS fetched and the methods did nothing: SET_OBJECT \
+                         class, subchannel, or an operand that does not resolve",
+                    (false, false) =>
+                        "the entry was NEVER fetched: USERD, the doorbell token, or the \
+                         schedule",
+                    // Unreachable — `met_the_whole_bar()` is exactly this conjunction, so
+                    // the ★ arm took it. Named rather than `unreachable!()`: a client that
+                    // panics on a guest-reachable state is a DoS we hand the guest.
+                    (true, true) =>
+                        "⊘ ALL FOUR HELD AND THIS ARM STILL RAN — the verdict predicate and \
+                         this diagnosis disagree, which is an instrument bug, not a result",
+                }
+            );
+            false
+        }
+        Err(e) => {
+            println!("FAIL  R33 arm 1 COPY      = {e:?}");
+            false
+        }
+    };
+
+    // --- the address spaces, NAMED, before any probe is read ----------------------------
+    census::phase("R33 arm2/3 va-probe");
+    let placement = rm.ce_control_placement(vas);
+    let (arm2, arm3) = match placement {
+        None => {
+            println!(
+                "FAIL  R33 placement       = no CE channel is recorded over this `Vas`, so \
+                 there is no address to probe and arms 2/3 are NOT MEASURED"
+            );
+            (false, false)
+        }
+        Some(p) => {
+            println!(
+                "ok    R33 ADDRESS SPACES  = operands in range {:#010x}; the channel's ring, \
+                 USERD and semaphore in range {:#010x}{}; ring {:#018x}, semaphore {:#018x}. \
+                 ⊘⊘ EVERY VERDICT BELOW IS SCOPED TO THESE TWO HANDLES and to no other page \
+                 table — a guest channel's PDB is not asked anything by this rung",
+                p.guest_space,
+                p.control_space,
+                if p.guest_space == p.control_space {
+                    " (THE SAME SPACE)"
+                } else {
+                    " (two different spaces — the w229 executor split)"
+                },
+                p.ring_va,
+                p.sem_va
+            );
+            // Arm 2 — the calibration. Watched to REFUSE.
+            let a2 = match rm.probe_va(p.control_space, p.ring_va, p.ring_bytes) {
+                Ok(VaProbe::Occupied(e)) => {
+                    println!(
+                        "★     R33 arm 2 OCCUPIED  = a fresh object asked for {:#018x} in range \
+                         {:#010x} and RM REFUSED it ({e:?}) — the ring really is there, so the \
+                         probe can detect occupancy and arm 3's answer is a measurement",
+                        p.ring_va, p.control_space
+                    );
+                    true
+                }
+                Ok(VaProbe::Relocated(got)) => {
+                    println!(
+                        "★     R33 arm 2 OCCUPIED  = the fixed ask at {:#018x} in range {:#010x} \
+                         was RELOCATED to {got:#018x} — occupancy detected, by the other of the \
+                         two legal shapes",
+                        p.ring_va, p.control_space
+                    );
+                    true
+                }
+                Ok(VaProbe::Free) => {
+                    println!(
+                        "FAIL  R33 arm 2 CONTROL   = {:#018x} reads FREE in range {:#010x} — the \
+                         space our own ring is mapped in. ⊘ This does NOT say the address is \
+                         free; it says THE INSTRUMENT IS BROKEN, and arm 3 is worth nothing \
+                         this run",
+                        p.ring_va, p.control_space
+                    );
+                    false
+                }
+                Err(e) => {
+                    println!("FAIL  R33 arm 2 OCCUPIED  = the probe could not allocate: {e:?}");
+                    false
+                }
+            };
+            // Arm 3 — the question the owner wants answerable: is a GPU VA mapped?
+            let a3 = match rm.probe_va(p.control_space, UNMAPPED_VA, UNMAPPED_LEN) {
+                Ok(VaProbe::Free) => {
+                    println!(
+                        "★     R33 arm 3 FREE      = {UNMAPPED_VA:#018x} is UNCLAIMED in range \
+                         {:#010x} — a fresh object took the address and RM reported it back. \
+                         ⇒ THIS IS THE `is this GPU VA mapped?` PRIMITIVE, with both polarities \
+                         calibrated on one run and NO DEBUGGER involved",
+                        p.control_space
+                    );
+                    true
+                }
+                Ok(VaProbe::Occupied(e)) => {
+                    println!(
+                        "??    R33 arm 3 OCCUPIED  = {UNMAPPED_VA:#018x} is already mapped in \
+                         range {:#010x} ({e:?}) — nothing in this rung put it there, so the \
+                         chosen address collides with something RM reserves. Pick another; the \
+                         run is not indicted",
+                        p.control_space
+                    );
+                    false
+                }
+                Ok(VaProbe::Relocated(got)) => {
+                    println!(
+                        "??    R33 arm 3 RELOCATED = asked {UNMAPPED_VA:#018x}, RM placed \
+                         {got:#018x} — occupied AND the fixed ask was a hint. Two findings"
+                    );
+                    false
+                }
+                Err(e) => {
+                    println!("FAIL  R33 arm 3 FREE      = the probe could not allocate: {e:?}");
+                    false
+                }
+            };
+            (a2, a3)
+        }
+    };
+
+    // --- arm 4 (opt-in): ask HARDWARE, not RM's allocator --------------------------------
+    let arm4 = if !want_fault {
+        println!(
+            "info  R33 arm 4           = NOT RUN (pass `--ce-client-fault`). It points a real \
+             copy engine at an unmapped VA, which provokes `Xid 31 FAULT_PDE` and kills its \
+             own channel — opt-in, and it belongs under scripts/bench/host_xid_watch.sh"
+        );
+        true
+    } else {
+        census::phase("R33 arm4 hw-fault");
+        // ★ Its OWN address space, allocated after arms 1–3 have already been read: a
+        // faulted channel must not be able to retract a verdict already printed.
+        match rm.alloc_vaspace() {
+            Err(e) => {
+                println!("FAIL  R33 arm 4 vaspace   = {e:?}");
+                false
+            }
+            Ok(fvas) => {
+                // ⊘⊘ NAMED BEFORE THE VERDICT, because the verdict is meaningless without it:
+                // this arm is in a THIRD address space — not arm 1's operand space and not
+                // arms 2/3's control space. It is NOT a cross-check of arm 3, and an earlier
+                // draft of this rung printed one as if it were.
+                println!(
+                    "info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space \
+                     (range {:#010x}) — NOT arm 1's operand space and NOT arms 2/3's control \
+                     space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in \
+                     DIFFERENT address spaces, so they can disagree without either being \
+                     wrong, and neither corroborates the other",
+                    fvas.raw()
+                );
+                let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA) {
+                    Ok(r) => match r.reach {
+                        GuestReach::ControlFailed => {
+                            println!(
+                                "??    R33 arm 4 control   = the POSITIVE CONTROL did not land \
+                                 (sem {:#010x}, GP_GET {} GP_PUT {}, moved {:#010x} want \
+                                 {:#010x}) — the fault probe was never issued, so this run says \
+                                 NOTHING about whether the address resolves",
+                                r.control.semaphore,
+                                r.control.gp_get,
+                                r.control.gp_put,
+                                r.control_read,
+                                r.control_want
+                            );
+                            false
+                        }
+                        GuestReach::NotResolved(o) => {
+                            println!(
+                                "★     R33 arm 4 FAULTED   = a copy engine pointed at \
+                                 {UNMAPPED_VA:#018x} did NOT retire (sem {:#010x}, GP_GET {} \
+                                 GP_PUT {}) while its positive control on the SAME channel did \
+                                 — hardware agrees the VA is unmapped. ⚠ Expect one `Xid 31 \
+                                 FAULT_PDE`; that is the control FIRING, not a bug",
+                                o.semaphore, o.gp_get, o.gp_put
+                            );
+                            true
+                        }
+                        GuestReach::Read { word, outcome } => {
+                            println!(
+                                "FAIL  R33 arm 4 RESOLVED  = the engine READ {UNMAPPED_VA:#018x} \
+                                 in range {:#010x} and moved {word:#010x} (GP_GET {} GP_PUT \
+                                 {}). Something IS mapped there IN THAT SPACE. ⊘ This does NOT \
+                                 contradict arm 3, which asked about a different address \
+                                 space — the first suspect is THE PROBE'S OWN dictated window \
+                                 {:#018x}..{:#018x} (`rm::REACH_PROBE_WINDOW`), and if the VA \
+                                 is outside it, something else in this space claimed it",
+                                fvas.raw(),
+                                outcome.gp_get,
+                                outcome.gp_put,
+                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0,
+                                kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.1
+                            );
+                            false
+                        }
+                        GuestReach::Ambiguous { word, outcome } => {
+                            println!(
+                                "??    R33 arm 4 ambiguous = the destination changed to \
+                                 {word:#010x} and the engine did not release (sem {:#010x}, \
+                                 GP_GET {} GP_PUT {}). Neither arm is claimed",
+                                outcome.semaphore, outcome.gp_get, outcome.gp_put
+                            );
+                            false
+                        }
+                    },
+                    Err(e) => {
+                        println!(
+                            "FAIL  R33 arm 4           = the probe could not be built: {e:?} (an \
+                             error here is never a fault — nothing had been submitted)"
+                        );
+                        false
+                    }
+                };
+                let _ = rm.free(fvas);
+                out
+            }
+        }
+    };
+
+    census::phase("R33 teardown");
+    let _ = rm.free(vas);
+    census::phase("");
+
+    let verdict = copied && arm2 && arm3 && arm4;
+    if verdict {
+        println!(
+            "★     R33 raw CE client   = a copy engine was allocated, mapped, submitted and \
+             COMPLETED with no libcuda in the process, and a GPU VA was probed in both \
+             polarities"
+        );
+    } else {
+        println!("FAIL  R33 raw CE client   = at least one arm above did not meet its bar");
+    }
+    verdict
+}
+
+/// Print the ioctl census: the total, the per-phase split, the per-`NV_ESC` histogram and
+/// the full ordered sequence.
+///
+/// ★★★ **The number is the KERNEL'S, not ours.** It is taken at `CharDevice::ioctl`, the one
+/// funnel every RM ioctl in the workspace passes through, so a call site that forgot to
+/// register still counts — which is why the phase subtotals are printed **against** the
+/// grand total rather than instead of it. A shortfall is ioctls issued outside any phase.
+fn print_ioctl_census(what: &str) {
+    let c = kayfabe_linux_raw::census::snapshot();
+    println!("=== IOCTL CENSUS ({what}) ===");
+    println!(
+        "  total={} failed={} logged={} dropped={}{}",
+        c.total,
+        c.failed,
+        c.log.len(),
+        c.dropped,
+        if c.dropped == 0 {
+            ""
+        } else {
+            "  ⚠⚠ THE LOG IS A PREFIX, NOT THE SEQUENCE"
+        }
+    );
+    let phased: u64 = c.by_phase().iter().map(|p| p.1).sum();
+    println!(
+        "  --- by phase (⊘ the shortfall against `total` is ioctls issued outside any phase):"
+    );
+    for (p, n) in c.by_phase() {
+        println!("      {:>24}  {n}", if p.is_empty() { "(none)" } else { p });
+    }
+    println!("      {:>24}  {phased} of {} accounted", "SUM", c.total);
+    println!("  --- by request, `_IOC_TYPE`/`_IOC_NR` (the driver's own NV_ESC number):");
+    for ((magic, nr), n, failed) in c.by_request() {
+        println!(
+            "      magic {:#04x} nr {nr:>3} ({nr:#04x}) {:<26} x{n}{}",
+            magic,
+            nv_esc_name(magic, nr),
+            if failed == 0 {
+                String::new()
+            } else {
+                format!("   ({failed} refused)")
+            }
+        );
+    }
+    println!("  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno):");
+    for r in &c.log {
+        println!(
+            "      {:>4}: nr {:>3} {:<26} size {:>5}  {:<22} {}",
+            r.seq,
+            r.nr,
+            nv_esc_name(r.magic, r.nr),
+            r.size,
+            r.phase,
+            if r.errno == 0 {
+                "ok".to_string()
+            } else {
+                format!("errno {}", r.errno)
+            }
+        );
+    }
+    println!("=== END IOCTL CENSUS ===");
+}
+
+/// The NVIDIA frontend escape names, by `_IOC_NR`.
+///
+/// ⊘ Deliberately here and not in `kayfabe-linux-raw`: that crate holds no business logic
+/// (`l1_os_shell.md` §4.7), and *"`nr` 42 means `NV_ESC_RM_CONTROL`"* is business logic about
+/// one driver. An unknown number prints as itself rather than as a guess.
+fn nv_esc_name(magic: u8, nr: u8) -> &'static str {
+    if magic != b'F' {
+        return "(not the NVIDIA frontend)";
+    }
+    // ⚠ TRANSCRIBED FROM THE DRIVER'S OWN HEADERS, not from memory — an earlier draft of
+    // this table was wrong on eleven rows because the numbers *looked* plausible, and a
+    // wrong name on a right count is worse than no name at all.
+    //   `ogkm-580.159.04: kernel-open/common/inc/nv-ioctl-numbers.h:29-42`
+    //     (NV_IOCTL_MAGIC = 'F', NV_IOCTL_BASE = 200)
+    //   `ogkm-580.159.04: src/nvidia/arch/nvalloc/unix/include/nv_escape.h` (the 0x27..0x5F set)
+    match nr {
+        0x27 => "RM_ALLOC_MEMORY",
+        0x28 => "RM_ALLOC_OBJECT",
+        0x29 => "RM_FREE",
+        0x2A => "RM_CONTROL",
+        0x2B => "RM_ALLOC",
+        0x32 => "RM_CONFIG_GET",
+        0x33 => "RM_CONFIG_SET",
+        0x34 => "RM_DUP_OBJECT",
+        0x35 => "RM_SHARE",
+        0x37 => "RM_CONFIG_GET_EX",
+        0x38 => "RM_CONFIG_SET_EX",
+        0x39 => "RM_I2C_ACCESS",
+        0x41 => "RM_IDLE_CHANNELS",
+        0x4A => "RM_VID_HEAP_CONTROL",
+        0x4D => "RM_ACCESS_REGISTRY",
+        0x4E => "RM_MAP_MEMORY",
+        0x4F => "RM_UNMAP_MEMORY",
+        0x52 => "RM_GET_EVENT_DATA",
+        0x54 => "RM_ALLOC_CONTEXT_DMA2",
+        0x56 => "RM_ADD_VBLANK_CALLBACK",
+        0x57 => "RM_MAP_MEMORY_DMA",
+        0x58 => "RM_UNMAP_MEMORY_DMA",
+        0x59 => "RM_BIND_CONTEXT_DMA",
+        0x5C => "RM_EXPORT_OBJECT_TO_FD",
+        0x5D => "RM_IMPORT_OBJECT_FROM_FD",
+        0x5E => "RM_UPDATE_DEVICE_MAPPING_INFO",
+        0x5F => "RM_LOCKLESS_DIAGNOSTIC",
+        200 => "CARD_INFO",
+        201 => "REGISTER_FD",
+        206 => "ALLOC_OS_EVENT",
+        207 => "FREE_OS_EVENT",
+        209 => "STATUS_CODE",
+        210 => "CHECK_VERSION_STR",
+        211 => "IOCTL_XFER_CMD",
+        212 => "ATTACH_GPUS_TO_FD",
+        213 => "QUERY_DEVICE_INTR",
+        214 => "SYS_PARAMS",
+        215 => "NUMA_INFO",
+        216 => "SET_NUMA_STATUS",
+        217 => "EXPORT_TO_DMABUF_FD",
+        218 => "WAIT_OPEN_COMPLETE",
+        _ => "(unnamed NV_ESC)",
+    }
+}
+
 /// ★★★★★ R31 — **will host RM build a channel whose command queue is memory we did NOT
 /// allocate, at the guest's own address and the guest's own entry count?**
 ///
@@ -2512,6 +3026,7 @@ fn guest_ring_channel_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             ring_va: 0,
             gp_fifo_va: 0,
             gp_fifo_entries: 0,
+            userd: None,
         },
     );
     let arm_d = match zero {
@@ -2974,6 +3489,8 @@ fn main() -> std::process::ExitCode {
     let mut want_executor_vas = false;
     let mut want_executor_alias = false;
     let mut want_fb_view: Option<FbViewJoin> = None;
+    let mut want_ce_client = false;
+    let mut want_ce_client_fault = false;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -3016,6 +3533,15 @@ fn main() -> std::process::ExitCode {
                 want_executor_vas = true;
                 want_executor_alias = true;
             }
+            // ★★★ R33 — the raw CE client. Its own flag, and it RETURNS: the whole point is
+            // a program small enough to push into a guest, so it must not drag the isolate,
+            // the sandbox rung or a second channel along.
+            "--ce-client" => want_ce_client = true,
+            // ⊘ Arm 4, opt-in: it provokes a real `Xid 31 FAULT_PDE` and kills its channel.
+            "--ce-client-fault" => {
+                want_ce_client = true;
+                want_ce_client_fault = true;
+            }
             "--fb-view-probe" => want_fb_view = Some(FbViewJoin::Shared),
             // ⊘ The negative control. Same chain, private guest-side pages, inverted verdict.
             "--fb-view-negative" => want_fb_view = Some(FbViewJoin::Private),
@@ -3050,6 +3576,16 @@ fn main() -> std::process::ExitCode {
                 return std::process::ExitCode::from(64);
             }
         }
+    }
+
+    // ★★★ R33 — the census is armed BEFORE the connection is opened, because `R0`–`R6`
+    // (`CARD_INFO`, `REGISTER_FD`, `CHECK_VERSION_STR`, the root/device/subdevice allocs)
+    // are part of what a raw client costs. Arming it after `open` would report a number
+    // that is smaller, still looks like an answer, and is not one.
+    if want_ce_client {
+        kayfabe_linux_raw::census::reset();
+        kayfabe_linux_raw::census::record_sequence(true);
+        kayfabe_linux_raw::census::phase("R0-R6 bring-up");
     }
 
     let dev = match DevDir::open(c"/dev") {
@@ -3087,6 +3623,36 @@ fn main() -> std::process::ExitCode {
         Arc::clone(&conn),
         Arc::new(kayfabe_isolate_host::ChildExports::new()),
     );
+
+    // ★★★ R33 runs here and RETURNS. It is the OWNER'S RAW CE CLIENT, and everything below
+    // it — the second channel, the isolate, the sandbox rung — would put ioctls in the
+    // census that the client does not need, and a sandboxed child in a guest that may not
+    // have one.
+    if want_ce_client {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = ce_client(&mut rm, gpu, want_ce_client_fault);
+        print_ioctl_census(if want_ce_client_fault {
+            "R33 raw CE client, arms 1-4"
+        } else {
+            "R33 raw CE client, arms 1-3"
+        });
+        println!(
+            "done — raw CE client only ({})",
+            if ok {
+                "ALL ARMS MET"
+            } else {
+                "WITH FAILED EVIDENCE"
+            }
+        );
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
 
     // ★ R18 runs here and RETURNS, before R7 — a control probe must not be paid for with
     // a channel, a doorbell and a copy engine. It reads; it allocates nothing; and leaving
@@ -3412,7 +3978,7 @@ fn main() -> std::process::ExitCode {
                 break;
             }
         };
-        match rm.alloc_channel(vas, engine, None) {
+        match rm.alloc_channel(vas, engine, None, None) {
             Ok((chan, token)) => {
                 println!(
                     "ok    R13.{n} channel      = {:#010x}, engine {engine:?}, \
@@ -3449,6 +4015,7 @@ fn main() -> std::process::ExitCode {
     match rm.alloc_channel(
         channels.first().map_or(vas, |c| c.1),
         EngineKind::Other,
+        None,
         None,
     ) {
         Err(RmError::Other(s)) if s == kayfabe_isolate_host::rm::NOT_ON_THIS_RUNG => {

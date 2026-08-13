@@ -19,6 +19,18 @@ use kayfabe_device::{
     SparseFb,
 };
 
+/// ★ A register plane over the shipped chip row — §5's arms are about the PLANE's reading of
+/// a joined address, which is where the w278b defect lived; §1–§4 need only the store.
+fn plane() -> kayfabe_device::RegPlane {
+    kayfabe_device::RegPlane::new(
+        kayfabe_device::default_chip(),
+        kayfabe_device::abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER)
+            .expect("the bench driver has a table"),
+        Box::new(kayfabe_device::SteppingClock::new(1)),
+    )
+    .expect("the shipped row is servable")
+}
+
 /// The advertised framebuffer. Small; nothing here depends on the size.
 const FB: u64 = 0x100_0000;
 
@@ -318,4 +330,115 @@ fn device_reset_forgets_joined_ranges_and_not_only_local_pages() {
     let mut got = vec![0u8; 0x40];
     fb.read(AT, &mut got).expect("reads");
     assert_eq!(got, vec![0u8; 0x40]);
+}
+
+// =====================================================================================
+// 5 — ★★★★★ w279: THE JOIN IS AN ARM OF RESIDENCY, and asking without it refused a doorbell
+// =====================================================================================
+
+/// ★★★★★ **A joined page must NEVER answer *"never written"*, at the plane.**
+///
+/// # The measurement this exists for
+///
+/// `[measured 2026-08-12, boot `w278b_guest`, `traces/boots/w278/run_w278b_guest_qemu.log.gz`]`
+/// The raw CE client's GPFIFO ring sat inside a joined leaf —
+/// `GR-RING-JOIN … leaf va=0x120020000 len=0x10000 fb_phys=0x40000 → JOINED (shared)` — and
+/// its CPU stores through `NV_ESC_RM_MAP_MEMORY` landed correctly. The dump row said so and
+/// denied it in the same breath:
+///
+/// ```text
+/// fbRING[p0]@0x41000=0000022001400000… nz4/4096 resN-NEVER-WRITTEN by?
+/// ```
+///
+/// and `kayfabe_fwd::fetch_ring_bytes` refused the doorbell `FwdFault::RingFbNeverWritten`
+/// over the same `Some(false)`. ⇒ The cause was never the guest: `install_join` deletes the
+/// local page **and its `origin` row** by design, so every residency question answered from
+/// `pages` is answered about memory deliberately given away.
+///
+/// ⊘ This asserts the plane, not the store: `FbStore::is_resident` keeps answering
+/// `Some(false)` here — see `a_joined_range_carries_bytes_in_both_directions…` above, which
+/// asserts exactly that — because *"does THIS store hold a page"* is a real question with
+/// that answer. The plane's is *"what is true of this address"*, and they differ.
+#[test]
+fn the_plane_reports_a_joined_page_as_one_memory_and_never_as_unwritten() {
+    use kayfabe_device::FbPageStanding;
+
+    let plane = plane();
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("installs");
+    plane.set_fb(Box::new(fb));
+
+    // The guest's store, arriving AFTER the join — which is the real ordering: the leaf is
+    // joined at the engine-object latch, and the client writes its ring afterwards.
+    let entry = 0x0000_4001_2002_0000u64.to_le_bytes();
+    plane
+        .fb_poke(AT + 0x1000, &entry)
+        .expect("a joined range takes the write");
+
+    let mut back = [0u8; 8];
+    plane.fb_peek(AT + 0x1000, &mut back).expect("and serves it");
+    assert_eq!(
+        back, entry,
+        "★ the bytes are LIVE — without this the arms below could be satisfied by a store \
+         that lost the write, which is a different (and worse) defect wearing this one's \
+         clothes"
+    );
+
+    assert_eq!(
+        plane.fb_page_standing(AT + 0x1000),
+        FbPageStanding::JoinedOneMemory,
+        "★★★★★ the join must be checked FIRST. `Some(false)` here is what refused the \
+         w278b doorbell over a ring whose bytes were correct and readable"
+    );
+    assert_eq!(
+        plane.fb_page_standing(AT + 0x1000).written(),
+        None,
+        "★★★ and the forwarding plane must read it as UNMEASURED. `fetch_ring_bytes` \
+         refuses only on `Some(false)`; answering `Some(false)` to keep a guard alive is \
+         inventing a fact about the guest (the `dlen=0` lesson)"
+    );
+    assert_eq!(
+        plane.fb_page_standing(AT + 0x1000).tag(),
+        "JOINED-one-memory",
+        "and every dump row must say so, so no artefact can contradict itself again"
+    );
+}
+
+/// ★★★★★ **THE KNOWN-POSITIVE — the guard is NOT disarmed off the joined range.**
+///
+/// ⊘ Without this, the test above is satisfied by a plane that answers `JoinedOneMemory` for
+/// every address, which would delete forbidden #2's only detector tree-wide. Three addresses,
+/// three different answers, one plane.
+#[test]
+fn the_plane_still_names_a_never_written_page_outside_every_join() {
+    use kayfabe_device::FbPageStanding;
+
+    let plane = plane();
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("installs");
+    plane.set_fb(Box::new(fb));
+    plane
+        .fb_poke(AT + LEN, &image(0xbeef_0000, 0x40))
+        .expect("outside the join, into the store's own pages");
+
+    assert_eq!(
+        plane.fb_page_standing(AT + LEN),
+        FbPageStanding::Resident,
+        "a page this store wrote is resident"
+    );
+    assert_eq!(plane.fb_page_standing(AT + LEN).written(), Some(true));
+
+    assert_eq!(
+        plane.fb_page_standing(AT + 2 * LEN),
+        FbPageStanding::NeverWritten,
+        "★★★★★ and a page NOTHING ever wrote is still named — this is the only arm that is \
+         a positive claim about the guest, and w279 must not have removed it"
+    );
+    assert_eq!(
+        plane.fb_page_standing(AT + 2 * LEN).written(),
+        Some(false),
+        "★★★ so `fetch_ring_bytes` still refuses forbidden #2 by name off a joined range"
+    );
 }

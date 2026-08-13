@@ -42,14 +42,19 @@
 //!
 //! # ⊘ What a green here does NOT mean
 //!
-//! - ⊘ **It does not open the GR route.** `kayfabe_rt::DoorbellRoute::HostGr` still has no
-//!   consumer, and `crates/kayfabe-qemu-raw/src/shim.rs`'s
-//!   `Route::NotACopyEngineChannel` still refuses every `GrCompute` doorbell **before**
-//!   this path is reached (pinned from the other side by
-//!   `crates/kayfabe-qemu-raw/tests/e2_doorbell.rs`'s
-//!   `a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it`). This file
-//!   drives `SharedDevice::doorbell` directly — the function a `HostGr` route would fall
-//!   through **to** — so the property is pinned before the route exists rather than after.
+//! - ⊘ **It does not open the GR route** — ★ **and the route has SINCE been opened, behind
+//!   an arming flag, 2026-08-11.** This bullet used to read *"`DoorbellRoute::HostGr` still
+//!   has no consumer, and `Route::NotACopyEngineChannel` still refuses every `GrCompute`
+//!   doorbell before this path is reached"*. That is now true only of the **default**
+//!   `KAYFABE_GR_ROUTE=refuse` arm; on `passthrough` the shim answers `None` and this
+//!   function is exactly what the doorbell reaches (`docs/design/gr_doorbell_passthrough.md`;
+//!   the route is pinned end to end by
+//!   `crates/kayfabe-qemu-raw/tests/gr_route_passthrough.rs`, and the default arm is still
+//!   pinned by `crates/kayfabe-qemu-raw/tests/e2_doorbell.rs`'s
+//!   `a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it`).
+//!   ⇒ ★ This file's property did not weaken — it became **load-bearing in production**
+//!   rather than ahead of it. It was written before the route existed, which is why the
+//!   route could be opened without designing the opacity guarantee at the same time.
 //! - ⊘ **It says nothing about the host engine FETCHING anything.** The cursor bridge (G8)
 //!   is unbuilt: nothing writes the guest's `GP_PUT` into the host channel's USERD
 //!   (`guest_ring_adoption.md` §4). A rung doorbell on a channel whose `GP_PUT` is zero

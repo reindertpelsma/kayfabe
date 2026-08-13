@@ -442,6 +442,47 @@ until someone rules on it, which is when the obligation gets asked for.
 spelling and missed the fully-qualified `std::sync::Mutex<…>`. The scanner was fixed by a
 bite-check, and the row above exists because the fixed scanner demanded it.
 
+#### 3.3.2 ⊘ OPEN DEFECT — the R1 witness FIRING is fatal, because the frame cannot unwind
+
+**STATUS: OPEN, 2026-08-12 (w275). Not fixed, filed. Reproduced on 2 boots (w274_pin, w274b).**
+
+§3.3.1 is about the witness being **blind**. This is the opposite failure and it is also
+measured: the witness **sees correctly, fires correctly, and kills the VM.**
+
+`[measured 2026-08-12, boot w274_pin]` — on `cup2`'s teardown, from a guest MMIO write:
+
+```
+panicked at crates/kayfabe-util/src/lockwitness.rs:152:5:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): munmap (dropping a host
+mapping) while holding rank(s) [0]
+  19: kayfabe_shim_regs_write
+thread caused non-unwinding panic. aborting.
+```
+
+Three facts, and the third is the one that costs measurements:
+
+1. **The witness is right.** A `munmap` under rank 0 (device) on the vCPU's own MMIO trap is
+   exactly what R1 forbids. Nothing here argues for relaxing the rule.
+2. **The panic lands in an `extern "C"` frame** (`kayfabe_shim_regs_write`), which is
+   **non-unwinding**, so the process **aborts**. There is no path from "rule violated" to
+   "operation refused" — the only outcome is a dead VM.
+3. ★★★ **It makes anything scheduled after a hung CUDA process is torn down UNREACHABLE BY
+   CONSTRUCTION.** It cost `w274_pin` its whole phase 2 and its teardown census (the
+   doorbells-served / completions lines were **absent**, which is not the same as zero), and it
+   made the first nvdiff attempt unreachable.
+
+⊘ **The `w275` workaround is ORDERING, NOT A FIX, and must not be read as one.** `nvdiff_hook.sh`
+copies the trace out **while the workload is still hung** and never waits for the process to
+exit, so `w275_pin` completed cleanly **with** its census present and **zero** lockwitness lines
+in its QEMU log. That is the hook avoiding the defect, not the defect being gone. Any future hook
+that needs a **post-teardown** observation will hit it again.
+
+⇒ The real fix is to give the violation a non-fatal outcome on this path — drop the host mapping
+outside rank 0 (defer it to the executor, the same shape §5.4 and F6 already use for teardown
+work), rather than performing it inline in an MMIO trap. ⚠ Whatever is done, it must not become
+"downgrade the witness to a log": the rule is correct and the diagnostic is the only reason this
+is known at all.
+
 ### 3.4 The honest cost: a core-shape change, requested by design discussion
 
 > **Status (decision #35, owner-confirmed refactor-NOW): LANDED, behavior-preserving,

@@ -1,0 +1,28 @@
+START 2026-08-12T06:18:55+00:00 pid=2184886 tag=w262_ring arm=ring
+REV=9d689ec tree:[]
+BINARY_STAMP=[kayfabe-rev:9d689ecf30930551e69981f1616021c4469acc57]
+KAYFABE_GUEST_RING=[ring]
+[boot_capture:w262_ring] host dmesg watermark: 921 lines
+[boot_capture:w262_ring] booting (extra args: none)
+[boot_capture:w262_ring] guest is up after 34s
+[boot_capture:w262_ring] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w262_ring] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w262_ring] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w262_ring_dmesg.log
+[boot_capture:w262_ring] --- the verdict lines ---
+[boot_capture:w262_ring] running POST_CAPTURE_HOOK: /workspace/kayfabe_w262/scripts/bench/cup2_hook_w232.sh
+[boot_capture:w262_ring] hook finished: rc=0
+[boot_capture:w262_ring] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_w262_ring_hostdmesg.log
+[boot_capture:w262_ring] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w262_ring] census present:
+    2026-08-12T06:23:01.136261Z qemu-system-x86_64: info: nvkvm: doorbells: 191 arrived, 191 served, 0 REFUSED by name; last token 0x00010001 (16 logged)
+[boot_capture:w262_ring] evidence carried into the repo: /workspace/kayfabe_w262/traces/guest_boots/run_w262_ring_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:w262_ring] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w262_ring]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w262_ring] done. serial=/workspace/bench/run_w262_ring_serial.log qemu=/workspace/bench/run_w262_ring_qemu.log dmesg=/workspace/bench/run_w262_ring_dmesg.log probe=/workspace/bench/run_w262_ring_probe.log hostdmesg=/workspace/bench/run_w262_ring_hostdmesg.log
+CAPTURE_RC=0
+--- liveness after: pgrep -x qemu-system-x86 = [] ss2223=[0]
+ENOSPC_LLVM=0
+EXIT_STATUS=0
+BOOTDONE

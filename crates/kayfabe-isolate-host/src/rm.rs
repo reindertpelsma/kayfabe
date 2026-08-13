@@ -147,6 +147,7 @@ use kayfabe_util::leafwitness;
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeMap;
 use std::ffi::CString;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -322,6 +323,17 @@ mod own_client {
 }
 
 use own_client::OwnClient;
+
+/// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
+/// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
+/// this workload nothing is suppressed — the cap exists so that a *spinning* workload can
+/// never turn this witness into the million-line read trap the owner's brief rules out.
+/// ⊘ Refusals are never counted against it.
+const DOORBELL_WITNESS_MAX: usize = 512;
+
+/// The store counter behind [`DOORBELL_WITNESS_MAX`]. ⊘ Process-wide, not per-connection:
+/// the bound being defended is the LOG's size, which is process-wide too.
+static DOORBELL_WITNESS_N: AtomicUsize = AtomicUsize::new(0);
 
 /// The shared RM connection: **one per isolate, shared by its whole worker pool**.
 ///
@@ -515,15 +527,28 @@ struct ChannelRings {
     _ring_node: Option<CharDevice>,
     /// The pushbuffer / GPFIFO / semaphore object — `None` when the ring is the guest's.
     ring: Option<VolatileRegion>,
-    /// The node USERD's mmap context was registered against.
-    _userd_node: CharDevice,
+    /// The node USERD's mmap context was registered against. `None` on a channel over a
+    /// guest USERD, together with [`ChannelRings::userd`].
+    _userd_node: Option<CharDevice>,
     /// USERD — where `GP_GET` (hardware writes) and `GP_PUT` (we write) live.
     ///
-    /// ⊘ Always present, on both kinds of channel, and the asymmetry with the ring is the
-    /// design rather than an oversight: USERD is **ours** on every channel we allocate (we
-    /// hand RM `hUserdMemory[0]`), and `GP_PUT` is the one 32-bit cursor a shadow channel
-    /// exists to advance.
-    userd: VolatileRegion,
+    /// ⊘⊘ **CORRECTION, 2026-08-12 — this used to read *"Always present, on both kinds of
+    /// channel, and the asymmetry with the ring is the design rather than an oversight:
+    /// USERD is **ours** on every channel we allocate"*. That sentence described the state
+    /// of the tree and was written in the grammar of a ruling** — `userd_is_not_the_ring.md`
+    /// §0.3 caught it and asked for the correction to be made here, above the claim, rather
+    /// than in a file of its own. Nothing had ever adjudicated that USERD must be ours; the
+    /// ring rung needed *a* USERD and ours was the only one available.
+    ///
+    /// ★★★ `None` for a channel over a guest USERD, and it is the same shape as
+    /// [`ChannelRings::ring`]'s: not an omission we get away with, a mapping that **cannot
+    /// be made**. `[measured, R31 arm B]` `NV_ESC_RM_MAP_MEMORY` against an
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` answers `NV_ERR_NOT_SUPPORTED`, with the driver's
+    /// own `memMap_IMPL: CPU mapping not supported for addressSpace: 0x1`.
+    ///
+    /// ⇒ Both accesses are then refused **by name** ([`USERD_NOT_OURS`]) — the `GP_PUT`
+    /// write because the guest makes it, and the `GP_GET` read because we no longer can.
+    userd: Option<VolatileRegion>,
 }
 
 /// Who allocated the object a channel's GPFIFO lives in, and therefore who must free it.
@@ -551,6 +576,25 @@ struct ChannelRings {
 ///   in"* — three sites, all inside this file.
 /// - `HostChannelKind`'s write set is *"does this channel carry one guest process's
 ///   work"* — decided in the core, one hop from the guest's own `NV01_ROOT` declaration.
+///
+/// ⊘⊘⊘ **CORRECTED 2026-08-13 (w284) — THE PARAGRAPH BELOW IS STALE, AND IT COST A RUNG.**
+/// It was true at `361fca8` and is false at HEAD. `alloc_channel_over_guest_ring` now has
+/// **four** call sites, and one of them is [`HostRmBackend::alloc_channel`] itself
+/// (`:4018`) — i.e. **the core-reachable verb DOES lower to [`RingOwner::HandedIn`]**, for
+/// any engine, whenever the ring's leaf is joined. `[measured, `traces/boots/w283`,
+/// `w263`–`w269`]` **88 `engine=Ce` births** read
+/// `adopt=GUEST-RING → alloc_channel_over_guest_ring` on real GA106, and on the guest
+/// driver's own channels leg B fires with them (`userd=GUEST-USERD`,
+/// `userd_offset=0x1a000`).
+/// ⇒ The `w284` brief reasoned from the sentence below that *"the gap is one core-reachable
+/// verb that lowers to `HandedIn` for CE"*. **There is no such gap.** See
+/// `docs/design/ce_passthrough_is_already_built.md` for what the real blocker is (the raw
+/// CE client's USERD lands one byte past the end of its own ring's leaf).
+/// ⚠ The claim below about *"the two disagree today, on every channel that exists"* is
+/// therefore also false: on an adopted channel `RingOwner::HandedIn` and
+/// `HostChannelKind::Shadow` now agree. The enum still earns its keep for the reason the
+/// last paragraph gives — it answers the free-and-unmap question — but **not** for the
+/// census reason stated here.
 ///
 /// `[measured 2026-08-11, `git grep` from every consuming crate]` **the two disagree
 /// today, on every channel that exists.** [`RmBackend::alloc_channel`] — the only channel
@@ -613,8 +657,10 @@ struct ChannelParts {
     ring: u32,
     /// Whether [`ChannelParts::ring`] is this connection's to unmap and free.
     owner: RingOwner,
-    /// The device-local object holding USERD.
+    /// The object holding USERD — ours, or the joined window the guest writes.
     userd: u32,
+    /// Whether [`ChannelParts::userd`] is this connection's to free. See [`UserdOwner`].
+    userd_owner: UserdOwner,
     /// The `NV01_MEMORY_VIRTUAL` range [`ChannelParts::ring`] is mapped through — the
     /// handle `NV_ESC_RM_UNMAP_MEMORY_DMA` needs, which is NOT the address space.
     range: u32,
@@ -650,9 +696,32 @@ const GPFIFO_ENTRIES: u32 = 64;
 const PUSHBUFFER_OFFSET: u64 = 0;
 
 /// One pushbuffer slot per GPFIFO entry, so a submission never overwrites methods a
-/// previous one may still be being fetched. 64 slots × 64 bytes fits in the page before
-/// [`GPFIFO_OFFSET`].
-const PUSHBUFFER_SLOT_BYTES: u64 = 64;
+/// previous one may still be being fetched.
+///
+/// ⊘⊘ **WAS 64, AND 64 IS EXACTLY WHAT OUR OWN PUSH FILLS** — 16 words, to the byte.
+/// `[measured 2026-08-13, boot `w283_client`, real GA106]` adding the guest's own release
+/// (six more words, 88 bytes total) made every forwarded copy refuse
+/// `RmError::Other(BAD_ENCODE)` **before submission**, which regressed `w282b`'s
+/// hardware-retired copy to nothing. ⚠ And note how it presented: the length check answers
+/// with a constant named `BAD_ENCODE`, so a boot log said *"the encoding is wrong"* when the
+/// encoding was right and the **slot** was too small. A refusal whose name is true of a
+/// different cause is the shape this campaign has paid for repeatedly.
+///
+/// ★ 128 bytes leaves room for the copy's own five method runs **and** a guest-declared
+/// release, with 44 bytes spare. [`PUSHBUFFER_SLOTS`] is derived from it rather than
+/// assumed, so the region bound holds whatever this number becomes.
+const PUSHBUFFER_SLOT_BYTES: u64 = 128;
+
+/// ★★★ How many pushbuffer slots actually FIT before [`GPFIFO_OFFSET`] — **derived**, never
+/// a second spelling of a slot count.
+///
+/// ⊘ [`HostRmBackend::next_slot`] used to take the slot index modulo the ring's **entry
+/// count** alone, which is only safe while `entries × PUSHBUFFER_SLOT_BYTES` happens to fit
+/// — true at 64 × 64 and false at 64 × 128. The modulus is now clamped by this, so a slot
+/// can never be written over the GPFIFO that indexes it. ★ That was a latent bug at the old
+/// numbers too: nothing tied [`GPFIFO_ENTRIES`] to the region size, so a larger ring would
+/// have scribbled on its own queue with no check anywhere.
+const PUSHBUFFER_SLOTS: u64 = (GPFIFO_OFFSET - PUSHBUFFER_OFFSET) / PUSHBUFFER_SLOT_BYTES;
 
 /// Offset of the semaphore word **hardware writes** within the ring object.
 ///
@@ -712,6 +781,28 @@ pub struct GuestRing {
     pub gp_fifo_va: u64,
     /// The guest's `gpFifoEntries`.
     pub gp_fifo_entries: u32,
+    /// ★★★★★ **LEG B — the guest's own USERD, or `None` for a channel that adopts only the
+    /// ring.** See [`kayfabe_isolate::AdoptedGuestRing::userd`] for why it is nested here
+    /// rather than being a second argument: *"the guest's cursor on a ring of ours"* is a
+    /// state that must not be representable.
+    pub userd: Option<kayfabe_isolate::AdoptedGuestUserd>,
+}
+
+/// Whose object a channel's USERD is, and therefore who must free it and who may read it.
+///
+/// ⊘ Deliberately a twin of [`RingOwner`] rather than a `bool` or a reuse of it, for
+/// [`RingOwner`]'s own stated reason: the two arms differ in **three** places that are
+/// nowhere near each other — the alloc, the CPU map, and the teardown. And they are not the
+/// same predicate: a channel can adopt the guest's ring and keep a USERD of ours (every leg-A
+/// boot before this one did exactly that), so a single flag would be false of the majority of
+/// channels the moment one leg fires without the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UserdOwner {
+    /// The isolate's own device-local object, CPU-mapped, whose `GP_PUT` we advance.
+    Ours,
+    /// A joined framebuffer window handed in — the guest's own USERD bytes. ⚠ Not ours to
+    /// free, not ours to unmap, and **not CPU-mappable at all** (`[measured, R31 arm B]`).
+    HandedIn,
 }
 
 /// Where a channel's GPFIFO comes from — the one degree of freedom
@@ -812,6 +903,34 @@ pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 /// src/qemu/nvkvm_gpu_emul.c:9622`).
 pub const CE_COPY_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// ★★★★★ **The GPU-VA window `[start, end)` that [`HostRmBackend::probe_guest_reachability`]
+/// DICTATES for its own ring, its control source and its destination.**
+///
+/// ⊘⊘ **It is public because a caller asking that probe about an address inside it is asking
+/// the probe about ITSELF, and the answer looks exactly like a real one.** Measured
+/// 2026-08-12 on `vh`: `--ce-client-fault` asked whether `0x7_0000_0000` was mapped, the
+/// engine retired the read and moved `0x20018000`, and the rung printed `RESOLVED`. Nothing
+/// was mapped there by anyone — except the probe's own channel ring, which the probe places
+/// at exactly that address, by design, for the reason its own doc comment gives.
+///
+/// ⇒ Callers that choose a "surely unmapped" VA must assert it is **outside this window**,
+/// and they can do it at compile time:
+///
+/// ```
+/// use kayfabe_isolate_host::rm::REACH_PROBE_WINDOW;
+/// const UNMAPPED_VA: u64 = 0x9_0000_0000;
+/// const _: () = assert!(
+///     UNMAPPED_VA < REACH_PROBE_WINDOW.0 || UNMAPPED_VA >= REACH_PROBE_WINDOW.1,
+/// );
+/// ```
+///
+/// ★ This is the same class as the 2026-08-10 failure recorded inside the probe — *"a probe
+/// that allocates from the same allocator, in the same space, at the same moment, is not an
+/// independent observer"* — one layer up: there, the probe's own **allocator** produced the
+/// collision; here its own **published constant** did, and the constant was private so no
+/// caller could see it.
+pub const REACH_PROBE_WINDOW: (u64, u64) = (0x0000_0007_0000_0000, 0x0000_0007_0030_0000);
+
 /// The opaque status a copy that **never released its semaphore** reports.
 ///
 /// ★★ The single most important refusal in this file. The copy engine writes this word
@@ -868,6 +987,239 @@ pub const RING_NOT_OURS: u32 = 0x4B4C;
 /// `kayfabe_core::rmgraph::GpFifoRing`'s own docs record the driver declaring
 /// `gpFifoOffset = 0` for its golden-context channel. `0x4B4D` is `"KM"`.
 pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
+
+/// ★★★★★ **LEG B — the status a USERD access on a channel whose USERD is the GUEST'S
+/// reports.** The twin of [`RING_NOT_OURS`], one object over.
+///
+/// ⊘ It is the *positive* form of *"we do not CPU-map the guest's USERD"*, and it covers
+/// **both** directions, which are not the same fact:
+///
+/// - the `GP_PUT` **write** is *supposed* to be gone — the guest makes it, and that is the
+///   whole of leg B. A silent skip here would be indistinguishable in a log from a write
+///   that landed somewhere wrong.
+/// - the `GP_GET` **read** is a capability we LOSE. `[measured, R31 arm B]` an
+///   `OS_DESCRIPTOR` over another process's pages answers `NV_ERR_NOT_SUPPORTED` to
+///   `NV_ESC_RM_MAP_MEMORY`. ⚠ Returning `0` instead would be a lie shaped exactly like the
+///   truth about a channel that has not run, on the one plane this campaign is trying to
+///   measure. Its replacement is R32's J2 (GPU-write → CPU-read through a described memfd,
+///   `[measured 2026-08-11, f58473f]` HOLDS) and it is **not wired**.
+///
+/// `0x4B55` is `"KU"`.
+pub const USERD_NOT_OURS: u32 = 0x4B55;
+
+/// ★★★★★ **LEG B — the adopted USERD named an object this isolate did NOT mint by joining a
+/// framebuffer leaf.** The twin of [`RING_NOT_A_JOINED_WINDOW`], and it exists for the
+/// identical reason: the core builds the offer from an address-table binding it can check,
+/// then the offer crosses the isolate IPC boundary as **two integers** and is rebuilt in a
+/// child that cannot see the address table.
+///
+/// ⚠ The state it forbids is worse than the ring's. A USERD handed to RM over an object we
+/// allocated but the guest does not write is a channel that RM **zeroes at creation** and
+/// nobody ever advances: `GP_PUT == GP_GET` forever, scheduled, doorbelled, and reporting no
+/// error at all — the silent stall this whole campaign is trying to leave.
+/// `0x4B56` is `"KV"`.
+pub const USERD_NOT_A_JOINED_WINDOW: u32 = 0x4B56;
+
+/// ★★★★★ **LEG A2 — the adoption named an object this isolate did NOT mint by joining a
+/// framebuffer leaf.**
+///
+/// # ⊘ Why this refusal exists at all, when the core already checked
+///
+/// `kayfabe_isolate::AdoptedGuestRing` is built in the core from an address-table binding
+/// declaring `BackingBytes::JoinsGuestWindow` — *one memory*. But it crosses the isolate IPC
+/// boundary as **four integers** and is rebuilt in the child, which cannot see the address
+/// table. A private constructor in the core is therefore not an enforcement of anything on
+/// the one path a boot exercises.
+///
+/// ⇒ The adapter re-checks membership of `FbJoinTable::joined_objects` and refuses here.
+/// ⊘ **It is a refusal and not a downgrade**: falling back to allocating a ring of our own
+/// would make an armed evidence run and its own control produce the same channel, which is
+/// the failure shape this whole campaign keeps paying for.
+///
+/// ⚠ The state it forbids is the owner's forbidden #2 — a **blank** host vidmem twin
+/// (`FbLeafBacking::Vidmem`, `w228`) named as though it were the guest's ring. A channel born
+/// over that fetches GPFIFO entries out of a page nothing ever wrote, decodes zeros, never
+/// advances `GP_GET`, and **reports no error at all**.
+pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
+
+/// ★★★★★ **WHAT THIS BIRTH WAS OFFERED — three states, and the third is the one that costs.**
+///
+/// # Why this type exists
+///
+/// `w261` booted leg A on a real GA106 and its own `RESULT.md` leads with the hole: *nothing
+/// prints that a channel was born with `RingSource::Guest`*. Zero [`RING_NOT_A_JOINED_WINDOW`]
+/// refusals is consistent with **both** `adopt: Some` succeeding **and** `adopt: None` never
+/// being asked, and the boot log cannot tell them apart. ⇒ Whether leg A2 fired at all was
+/// unknown at `00c3e28`.
+///
+/// ⊘ **Two states would not have closed it.** *"Asked and declined"* and *"never asked"* both
+/// arrive at `alloc_channel` as `adopt: None`, and they mean opposite things: the first says
+/// the address table held no joined binding at the channel's ring VA, the second says nothing
+/// on this path ever looked. `no_counter_fired_is_not_no_record_exists`.
+///
+/// # ★★★ THE DISCRIMINATOR IS ALREADY ON THE WIRE — no new field, no second source of truth
+///
+/// `hosting` distinguishes them, and has since §16.106. [`crate::proto::Request::AllocChannel`]
+/// says so in as many words: *"`(class, params)` of the engine object this channel is being
+/// materialized to host, or `None` for a **doorbell materialization**"*. The two production
+/// birth sites in `kayfabe_isolate::VerbPlan` are exactly:
+///
+/// - `VerbPlan::EngineObject` — `hosting: Some(..)`, and `adopt` is `kayfabe_fwd`'s
+///   `adopted_guest_ring(..)`, consulted **unconditionally** on the `channel.is_none()` branch.
+///   ⇒ `None` here means *the armed path ran and produced nothing*.
+/// - `VerbPlan::Doorbell` — a literal `alloc_channel(vas, engine, None, None)`, whose own
+///   comment says a ring adopted there would be adopted *without the leaf having been joined*.
+///   ⇒ `None` here means *nothing was ever asked*.
+///
+/// ⚠ **That is a two-crate invariant and a comment cannot hold it.** It is pinned by a source
+/// census — `the_birth_witness_can_tell_declined_from_never_asked` in
+/// `tests/guest_ring_census.rs` — which fails if either site stops matching this table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthOffer {
+    /// The plan produced the guest's own object. **This variant is a leg firing.**
+    Adopted,
+    /// An engine-object birth: the armed path was consulted and produced nothing.
+    Declined,
+    /// A doorbell materialization: by construction it offers nothing at all.
+    NotAsked,
+}
+
+/// ★★★★★ **WHICH LEG a [`BirthOffer`] is about.**
+///
+/// ⊘ A parameter rather than two enums, and that is the load-bearing choice: the *reading* is
+/// one function ([`BirthOffer::read`]) applied twice, so the two limbs can never come to
+/// disagree about what "declined" means. Only the **word on the line** differs, because a
+/// boot log is grepped and two limbs sharing a token is `w261`'s hole restated one leg over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthLimb {
+    /// Leg A2 — the GPFIFO the engine fetches from.
+    Ring,
+    /// Leg B — the 512-byte page the cursor lives in.
+    Userd,
+}
+
+impl BirthOffer {
+    /// Read the three states off the two facts the birth already carries.
+    ///
+    /// ⊘ Deliberately total and deliberately free of `self`: it is the whole reading, it is
+    /// unit-testable without an RM connection, and there is exactly one of it.
+    #[must_use]
+    pub fn read(hosting_present: bool, adopted: bool) -> Self {
+        match (hosting_present, adopted) {
+            // ★ Adoption dominates. An object that was actually adopted is `Adopted`
+            // whatever else is true; `hosting` only ever splits the `None` case.
+            (_, true) => Self::Adopted,
+            (true, false) => Self::Declined,
+            (false, false) => Self::NotAsked,
+        }
+    }
+
+    /// The word that goes on the witness line. ⊘ Three distinct words **per limb**: a boot
+    /// log is grepped for them, and two states sharing a word is `w261`'s hole restated.
+    ///
+    /// ★ `DECLINED`/`NOT-ASKED` are deliberately **shared** between the limbs while the
+    /// adoption word is not. A grep for `adopt=DECLINED` and one for `userd=DECLINED` are
+    /// already disambiguated by the key; a grep for the thing that FIRED must name which leg
+    /// fired, because `guest_ring=16 guest_userd=0` and `guest_ring=16 guest_userd=16` are
+    /// the difference between a ring RM was told about and a channel that can run.
+    #[must_use]
+    pub fn as_str(self, limb: BirthLimb) -> &'static str {
+        match (self, limb) {
+            (Self::Adopted, BirthLimb::Ring) => "GUEST-RING",
+            (Self::Adopted, BirthLimb::Userd) => "GUEST-USERD",
+            (Self::Declined, _) => "DECLINED",
+            (Self::NotAsked, _) => "NOT-ASKED",
+        }
+    }
+
+    /// Why this birth is in this state, in the port's own words — printed beside the word so a
+    /// reader never has to already know the table above.
+    #[must_use]
+    pub fn because(self, limb: BirthLimb) -> &'static str {
+        match (self, limb) {
+            (Self::Adopted, BirthLimb::Ring) => {
+                "the address table held a JoinsGuestWindow binding at this channel's declared \
+                 gpFifoOffset"
+            }
+            (Self::Adopted, BirthLimb::Userd) => {
+                "the guest's OWN KERNEL resolved this channel's USERD to a framebuffer address \
+                 (NV_CHANNEL_ALLOC_PARAMS.userdMem) that falls inside that same joined leaf"
+            }
+            (Self::Declined, BirthLimb::Ring) => {
+                "an engine-object birth, so the armed path WAS consulted — and the address \
+                 table held no joined binding at this channel's ring VA"
+            }
+            (Self::Declined, BirthLimb::Userd) => {
+                "the ring's leaf was consulted — and the guest's resolved USERD was UNREADABLE, \
+                 in guest RAM, undeclared, or outside that leaf"
+            }
+            (Self::NotAsked, BirthLimb::Ring) => {
+                "a doorbell materialization: this birth path offers no ring at all, so nothing \
+                 was consulted"
+            }
+            (Self::NotAsked, BirthLimb::Userd) => {
+                "a doorbell materialization: this birth path offers no USERD at all, so nothing \
+                 was consulted"
+            }
+        }
+    }
+}
+
+/// The per-process birth census.
+///
+/// ⊘ **Process-wide statics rather than [`HostRmBackend`] fields, and that is the correct
+/// granularity rather than a shortcut**: an isolate is a **pool**, one backend per worker, so a
+/// per-backend counter would report a fraction of the isolate's births and a reader would have
+/// to sum lines to get a total. One child process is one isolate; these are that isolate's
+/// numbers.
+mod birth_census {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+    static SEEN: AtomicU64 = AtomicU64::new(0);
+    static GUEST_RING: AtomicU64 = AtomicU64::new(0);
+    static GUEST_USERD: AtomicU64 = AtomicU64::new(0);
+    static DECLINED: AtomicU64 = AtomicU64::new(0);
+    static NOT_ASKED: AtomicU64 = AtomicU64::new(0);
+    static REFUSED: AtomicU64 = AtomicU64::new(0);
+
+    /// The running totals, taken from the same call that produced `nth`, so a line's index
+    /// and its census can never come from two different instants.
+    ///
+    /// ★★★ `guest_userd` is counted **separately and not as a sub-case of `guest_ring`**,
+    /// even though it can only happen inside one. `guest_ring=16 guest_userd=0` and
+    /// `guest_ring=16 guest_userd=16` are the difference between *"RM was told about a ring"*
+    /// and *"a channel that can actually run"*, and a single number cannot say which.
+    pub(super) fn tally(
+        ring: super::BirthOffer,
+        userd: super::BirthOffer,
+    ) -> (u64, u64, u64, u64, u64, u64) {
+        let nth = SEEN.fetch_add(1, Relaxed) + 1;
+        let counter = match ring {
+            super::BirthOffer::Adopted => &GUEST_RING,
+            super::BirthOffer::Declined => &DECLINED,
+            super::BirthOffer::NotAsked => &NOT_ASKED,
+        };
+        counter.fetch_add(1, Relaxed);
+        if matches!(userd, super::BirthOffer::Adopted) {
+            GUEST_USERD.fetch_add(1, Relaxed);
+        }
+        (
+            nth,
+            GUEST_RING.load(Relaxed),
+            GUEST_USERD.load(Relaxed),
+            DECLINED.load(Relaxed),
+            NOT_ASKED.load(Relaxed),
+            REFUSED.load(Relaxed),
+        )
+    }
+
+    /// Count a birth that named the guest's ring and was **refused** by the adapter's own
+    /// membership check. ⊘ Counted apart from `GUEST_RING`, because *"RM was told"* and *"we
+    /// refused to tell RM"* are the two facts a reader most needs kept separate.
+    pub(super) fn refuse() -> u64 {
+        REFUSED.fetch_add(1, Relaxed) + 1
+    }
+}
 
 /// Classify a failure from a mapped region: a bounds refusal, or a syscall.
 ///
@@ -1094,13 +1446,83 @@ impl RmConnection {
     /// There is no completion to check and no status to read: the store either happened or
     /// the process took a fault. Everything that can be *known* about a submission is
     /// downstream of it — the semaphore and `GP_GET`.
+    /// ## ★★★★★ THE WITNESS (owner directive, 2026-08-12) — *"do you have proof this piece
+    /// of write instruction is hit for unprivileged guest passthrough channel"*
+    ///
+    /// ⊘ **We did not.** Every *"the doorbell forwarded"* statement in this campaign rested
+    /// on **reading call order in source**, never on an observation, while every doorbell
+    /// line in `w268` reads `DOORBELL-REFUSED` and no positive line exists anywhere in the
+    /// run. `w268` §1.3 then showed that refusal is **post-hoc** — but that too was a code
+    /// reading. This makes the store itself say so.
+    ///
+    /// ⚠ **The `Err` arm is the load-bearing half.** `self.usermode.as_ref()` can return
+    /// early and the store never happens; a silent early return is exactly the shape that
+    /// reads as success. *"We did not reach the store"* is a printed line here, never an
+    /// absence.
+    ///
+    /// ⚠ **Volume, bounded by construction.** `cup2` produces a few hundred doorbells (448 at
+    /// `w202`, 8–16 of them `GrCompute`), so per-doorbell printing is not a spam risk at this
+    /// workload — but this function must never become one if a *spinning* workload reaches
+    /// it. So: the first [`DOORBELL_WITNESS_MAX`] stores print in full; after that only a
+    /// periodic tally prints, and the tally **says how many it suppressed**. ⊘ Refusals are
+    /// **never** suppressed: they are rare by hypothesis, and suppressing the rare event to
+    /// save room for the common one inverts the purpose.
     fn doorbell(&self, token: u32) -> Result<(), RmError> {
-        let window = self.usermode.as_ref().map_err(|e| *e)?;
+        let nth = DOORBELL_WITNESS_N.fetch_add(1, Ordering::Relaxed) + 1;
+        let loud = nth <= DOORBELL_WITNESS_MAX;
+        let window = match self.usermode.as_ref() {
+            Ok(w) => w,
+            Err(e) => {
+                // ⊘ ALWAYS printed, whatever the tally: this is the outcome that would
+                // otherwise be indistinguishable from a successful store.
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                     runlist={} chid={} ⊘⊘ NOT REACHED — the usermode window is Err({e:?}), \
+                     so NO STORE HAPPENED and nothing was rung",
+                    token >> 16,
+                    token & 0xffff,
+                );
+                return Err(*e);
+            }
+        };
         release_fence();
-        window
+        if loud {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} runlist={} \
+                 chid={} → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING={:#x} in the \
+                 mapped usermode window",
+                token >> 16,
+                token & 0xffff,
+                USERMODE_NOTIFY_CHANNEL_PENDING,
+            );
+        } else if nth % DOORBELL_WITNESS_MAX == 0 {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE tally: {nth} stores attempted; the last {} \
+                 were NOT printed individually (cap {DOORBELL_WITNESS_MAX}) — ⊘ this is a \
+                 statement about the log, not about the stores",
+                nth - DOORBELL_WITNESS_MAX,
+            );
+        }
+        let out = window
             .region
             .store_u32(HostOffset::new(USERMODE_NOTIFY_CHANNEL_PENDING), token)
-            .map_err(|e| region_error(&e))
+            .map_err(|e| region_error(&e));
+        match &out {
+            Ok(()) => {
+                if loud {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                         ★★★ WROTE — the store instruction executed",
+                    );
+                }
+            }
+            // ⊘ Never suppressed, same argument as the window refusal above.
+            Err(e) => eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} ⊘⊘ THE STORE \
+                 ITSELF WAS REFUSED: {e:?} — the token was never written",
+            ),
+        }
+        out
     }
 
     /// ★★★ `#128` T3 — the host GPU's PTIMER, read through the **usermode window this
@@ -1934,6 +2356,27 @@ struct CePush {
     sem_va: u64,
     /// The payload it releases.
     payload: u32,
+    /// ★★★★★ **w283 — the GUEST's own declared release, appended BEHIND ours.**
+    ///
+    /// `Some((va, payload))` ⇒ three extra methods after our own `LAUNCH_DMA`: a second
+    /// `SET_SEMAPHORE_A/B/PAYLOAD` naming the guest's address and the guest's literal, and a
+    /// second `LAUNCH_DMA` with [`ce::LAUNCH_TRANSFER_NONE`] — a **release-only** launch,
+    /// which is the same shape the guest's own driver uses for a bare completion
+    /// (`kayfabe_arch::PushMethod::CeRelease`, UVM's `channel_init` push).
+    ///
+    /// # ★★★ THE ORDER IS THE WHOLE SAFETY ARGUMENT
+    ///
+    /// It goes **after** the copy's own `LAUNCH_DMA` and **before** ours is waited on. A
+    /// copy engine executes a pushbuffer in submission order, so the guest's payload cannot
+    /// land before the guest's bytes have. And because our own release is emitted **last**,
+    /// `await_semaphore` returning means both have retired — so the caller's `RETIRED`
+    /// verdict covers the guest's release too, rather than racing it.
+    ///
+    /// ⊘ **Nothing here is a CPU store.** The payload is the guest's literal, written by the
+    /// engine, at the address the guest named, after the work. `ce_executor_tree.md`'s rule
+    /// 1 forbids *"signalling completion for work that did not happen"*; there is no ordering
+    /// of these methods in which that is expressible.
+    guest_release: Option<(u64, u32)>,
 }
 
 /// ★★ Build the pushbuffer for one copy-engine copy — **pure**, so it is testable with no
@@ -1964,6 +2407,15 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
     if !p.sem_va.is_multiple_of(4) {
         return Err(bad());
     }
+    // ★★★★★ w283 — the guest's release gets the SAME two checks as ours, and they are
+    // applied to the GUEST's number. ⊘ Refused, never clamped and never dropped: a guest
+    // release we silently skipped would leave the guest polling forever with every one of
+    // our own rows green, which is the exact shape of a wall nobody can attribute.
+    if let Some((va, _)) = p.guest_release {
+        if va >> 49 != 0 || !va.is_multiple_of(4) {
+            return Err(bad());
+        }
+    }
     let flags = ce::LAUNCH_TRANSFER_NON_PIPELINED
         | ce::LAUNCH_FLUSH_ENABLE
         | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
@@ -1972,8 +2424,13 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
         | ce::LAUNCH_MULTI_LINE_DISABLE
         | ce::LAUNCH_SRC_VIRTUAL
         | ce::LAUNCH_DST_VIRTUAL;
+    // ★ A release-only launch: same semaphore/flush semantics, `TRANSFER_TYPE_NONE`, and
+    // no pitch/line flags because there is no transfer for them to describe.
+    let release_only_flags = ce::LAUNCH_TRANSFER_NONE
+        | ce::LAUNCH_FLUSH_ENABLE
+        | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
     let sub = CE_SUBCHANNEL;
-    Ok(vec![
+    let mut out = vec![
         method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
         p.class_id.ce_object_id().0,
         method_header_inc(sub, ce::OFFSET_IN_UPPER, 4).ok_or_else(bad)?,
@@ -1990,7 +2447,23 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
         p.payload,
         method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
         flags,
-    ])
+    ];
+    // ★★★★★ w283 — THE GUEST'S OWN RELEASE, appended behind ours. See `CePush::guest_release`
+    // for why the order is the safety argument and why this is not a CPU store.
+    if let Some((va, payload)) = p.guest_release {
+        out.extend_from_slice(&[
+            method_header_inc(sub, ce::SET_SEMAPHORE_A, 3).ok_or_else(bad)?,
+            (va >> 32) as u32,
+            (va & 0xFFFF_FFFF) as u32,
+            payload,
+            method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
+            // ⊘ `LAUNCH_TRANSFER_NONE`, so this launch moves NO bytes and only releases.
+            // Re-using the copy's flags would re-run the copy — idempotent here and a
+            // silent doubling of every transfer, which is not a property to rely on.
+            release_only_flags,
+        ]);
+    }
+    Ok(out)
 }
 
 /// The runlist an [`EngineKind`] channel belongs on, as an `NV2080_ENGINE_TYPE_*`.
@@ -2923,6 +3396,42 @@ impl CeEvidence {
             && self.after_last == self.expect_after_last
             && self.submit.semaphore == self.payload
     }
+
+    /// ★★★★★ **THE WHOLE BAR THE CLIENT'S OWN BANNER STATES — all FOUR facts, including the
+    /// one [`CeEvidence::copied`] does not check.**
+    ///
+    /// # ⊘⊘ THE DEFECT THIS EXISTS TO FIX, measured on my own instrument
+    ///
+    /// `[measured 2026-08-13, boot `w283c_client`, real GA106]` the client printed its **★
+    /// success** line — *"4096 bytes moved … engine semaphore 0x00000001 (declared
+    /// 0x00000001), **GP_GET 0 caught GP_PUT 1**"* — and returned **`R33_RC=0`**. Read the
+    /// numbers: `0` did not catch `1`. The word *"caught"* is **template text**, printed
+    /// unconditionally, and [`CeEvidence::copied`] — the predicate the ★ arm is gated on —
+    /// checks the bytes and the semaphore and **never compares the cursors**.
+    ///
+    /// ⇒ The client's banner says *"the bar is FOUR facts … **GP_GET reached GP_PUT** …"* and
+    /// its verdict implemented **three**. On the native arm the two cursors agree, so the
+    /// gap is invisible exactly where it does not matter and decisive exactly where it does:
+    /// in the guest, whose channel our forwarding path never runs.
+    ///
+    /// ★ This is `a_falsifier_that_flags_its_own_good_news` in its purest form — a success
+    /// line that CONTAINS the words of the criterion it is not testing. It is the same class
+    /// as `GCC_CUP2_RC=0` matching an unanchored `CUP2_RC` grep, one plane over.
+    ///
+    /// ⊘ [`CeEvidence::copied`] is deliberately left alone: it answers *"did the bytes move
+    /// and did the engine retire"*, which is a real and separately useful question. The
+    /// conjunction belongs at the verdict, not inside a narrower predicate.
+    #[must_use]
+    pub fn met_the_whole_bar(&self) -> bool {
+        self.copied() && self.submit.landed(self.payload)
+    }
+
+    /// Whether the guest's own `GP_GET` reached its own `GP_PUT` — the fourth fact, named
+    /// on its own so a report can say **which** of the four failed.
+    #[must_use]
+    pub fn cursor_caught_up(&self) -> bool {
+        self.submit.gp_get == self.submit.gp_put
+    }
 }
 
 impl SubmitOutcome {
@@ -3387,14 +3896,155 @@ impl RmBackend for HostRmBackend {
         vas: HostHandle,
         engine: EngineKind,
         hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
     ) -> Result<(HostHandle, u64), RmError> {
         // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
         // no engine type is not a channel with a default one, it is a channel on runlist 0.
+        // ★★★★★ **THE BIRTH WITNESS — read BEFORE `hosting` is consumed.** See [`BirthOffer`]
+        // for why two states would not have closed `w261`'s hole, and why the discriminator is
+        // `hosting` rather than a new field.
+        let offer = BirthOffer::read(hosting.is_some(), adopt.is_some());
+        // ★★★★★ **LEG B's WITNESS — the SAME reading, applied to the other limb.** ⊘ Not a
+        // second predicate: `BirthOffer::read` is one function and this is its second call,
+        // so "declined" cannot come to mean different things on the two legs.
+        let userd_offer =
+            BirthOffer::read(hosting.is_some(), adopt.is_some_and(|a| a.userd.is_some()));
+        // ⊘ Captured, not re-read at each print: an isolate is a POOL and the census below is
+        // PER PROCESS, so two children interleave their own `#1, #2, …` into one log.
+        // `[measured 2026-08-12, w262_ring]` the log carries `#1..#8` and `#1..#16` from two
+        // children and NOTHING on the line said which was which.
+        let iso = self.id;
         let engine_type = declared_channel_engine_type(engine, hosting)
             .or_else(|| engine_type_for(engine))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
-        self.alloc_channel_on(vas, engine_type)
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_capture.sh` redirects to `run_<tag>_qemu.log`. Same reasoning as
+        // `ce_copy`'s `CE-SUBMIT` line: the evidence is a file the boot itself wrote, not a
+        // session transcript nobody can re-read.
+        //
+        // ⊘⊘ **IT PRINTS AND IT DECIDES NOTHING.** No branch below reads `offer`, no refusal is
+        // gated on it, no ring byte is read and no method is decoded. Deleting every line of
+        // this witness would leave the channel RM is asked for byte-identical.
+        let (nth, guest_ring, guest_userd, declined, not_asked, refused) =
+            birth_census::tally(offer, userd_offer);
+        let census = format!(
+            "[births={nth} guest_ring={guest_ring} guest_userd={guest_userd} \
+             declined={declined} not_asked={not_asked} refused={refused}]"
+        );
+        // ⊘ Printed on EVERY arm below, including the refusals — a witness that only speaks
+        // when the thing succeeded is silent on exactly the outcome it is run to see.
+        let userd_says = format!(
+            "userd={} ⊘ {}",
+            userd_offer.as_str(BirthLimb::Userd),
+            userd_offer.because(BirthLimb::Userd),
+        );
+        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until
+        // `361fca8` `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and
+        // it was the R31 diagnostic probe; every host channel a guest ever caused was
+        // `RingSource::Ours(None)`.
+        let Some(ring) = adopt else {
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} \
+                 {userd_says} → RingSource::Ours(None) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+                offer.because(BirthLimb::Ring),
+            );
+            return self.alloc_channel_on(vas, engine_type);
+        };
+        // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
+        // for why the core's own type-level check cannot reach here.
+        let raw_memory = self.narrow(ring.memory)?;
+        let joined = self
+            .fb_joins
+            .as_ref()
+            .is_some_and(|t| t.is_joined_object(raw_memory));
+        // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
+        // reason, one plane over: a witness that only speaks when the thing succeeded is silent
+        // on exactly the outcome it is run to see.
+        let named = format!(
+            "memory={:#x} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
+             userd_offset={}",
+            ring.memory.raw(),
+            ring.ring_va,
+            ring.gp_fifo_va,
+            ring.gp_fifo_entries,
+            // ⊘ The guest's TWO leg-B numbers printed on both the success and the refusal
+            // side, and printed as `NONE` rather than as `0x0` when absent: offset zero is a
+            // legal USERD placement (the slot at the joined leaf's own base).
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.memory.raw())),
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.offset)),
+        );
+        if !joined {
+            let n = birth_census::refuse();
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+                 {userd_says} joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not \
+                 mint that object by joining a framebuffer leaf; refused={n}) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+            );
+            return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
+        }
+        // ★★★★★ **LEG B's far-side check, and it is NOT implied by the ring's.** The two
+        // handles arrive as separate integers over the wire and a child cannot see the
+        // address table that related them. ⊘ Refusal, never a downgrade to a USERD of ours:
+        // a channel silently given our USERD after being told it would carry the guest's is
+        // the exact `GP_PUT == GP_GET` silence this leg exists to end, and it would make an
+        // armed run and its control produce the same channel.
+        let adopted_userd = match ring.userd {
+            None => None,
+            Some(u) => {
+                let raw_userd = self.narrow(u.memory)?;
+                if !self
+                    .fb_joins
+                    .as_ref()
+                    .is_some_and(|t| t.is_joined_object(raw_userd))
+                {
+                    let n = birth_census::refuse();
+                    eprintln!(
+                        "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} \
+                         adopt={} {named} {userd_says} → REFUSED USERD_NOT_A_JOINED_WINDOW \
+                         (this isolate did not mint that object by joining a framebuffer leaf; \
+                         refused={n}) {census}",
+                        iso,
+                        vas.raw(),
+                        offer.as_str(BirthLimb::Ring),
+                    );
+                    return Err(RmError::Other(USERD_NOT_A_JOINED_WINDOW));
+                }
+                Some(u)
+            }
+        };
+        // ★★★★★ **THE LINE THAT PROVES LEG A2 FIRED.** Absent on a disarmed run by
+        // construction — `adopted_guest_ring` is `None` when nothing joined the leaf — and
+        // present exactly when a host channel is about to be born over memory this port did not
+        // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
+        // it replaces.
+        eprintln!(
+            "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+             {userd_says} joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
+            iso,
+            vas.raw(),
+            offer.as_str(BirthLimb::Ring),
+            offer.because(BirthLimb::Ring),
+        );
+        self.alloc_channel_over_guest_ring(
+            vas,
+            engine_type,
+            GuestRing {
+                memory: ring.memory,
+                ring_va: ring.ring_va,
+                gp_fifo_va: ring.gp_fifo_va,
+                gp_fifo_entries: ring.gp_fifo_entries,
+                userd: adopted_userd,
+            },
+        )
     }
 
     /// The generic alloc with `parent = chan`, exactly as the port's docs say — the host
@@ -3515,7 +4165,14 @@ impl RmBackend for HostRmBackend {
                     keep(self.free_one(parts.tsg));
                 }
             }
-            keep(self.free_one(parts.userd));
+            // ⊘ Same rule as the ring, one object over: a joined framebuffer window is the
+            // JOIN's object and the guest is still writing its cursor into it. Freeing it
+            // here would un-publish memory a live guest channel is using, and the symptom
+            // would appear anywhere but at this call.
+            match parts.userd_owner {
+                UserdOwner::Ours => keep(self.free_one(parts.userd)),
+                UserdOwner::HandedIn => {}
+            }
             return first;
         }
         self.free_one(raw)
@@ -3665,7 +4322,7 @@ impl RmBackend for HostRmBackend {
         // it fetched nothing at all, and one of those numbers alone cannot say either.
         eprintln!(
             "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} gp_get={} gp_put={} \
-             sem={:#010x} want={:#010x} → {}",
+             sem={:#010x} want={:#010x} → {}{}",
             sub.dst,
             sub.len,
             sub.by,
@@ -3677,6 +4334,26 @@ impl RmBackend for HostRmBackend {
                 "RETIRED"
             } else {
                 "NEVER-RETIRED"
+            },
+            // ★★★★★ w283 — WHETHER THE GUEST'S OWN RELEASE WAS CARRIED, printed BY ADDRESS
+            // on the same line as the verdict it depends on.
+            //
+            // ⊘⊘ It is a statement about what we PUT IN THE PUSHBUFFER, and nothing more.
+            // The engine wrote the guest's semaphore **iff** the address was reachable in
+            // the executor VAS; this line cannot see that, and a reader who takes
+            // `guest_rel=…` for *"the guest's semaphore now holds the payload"* is reading
+            // the intent for the outcome — `forwarded_counts_intent_not_work`, one plane
+            // over. Only the guest's own read says the other thing.
+            match sub.guest_release {
+                Some(r) => format!(
+                    " guest_rel=CARRIED@{:#x} payload={:#010x} (⊘ CARRIED means EMITTED, \
+                     not OBSERVED — hardware wrote it iff that VA resolves in the executor \
+                     VAS; only the guest's own read is the witness)",
+                    r.va, r.payload
+                ),
+                None => " guest_rel=NONE (this launch declared no completion, or its last \
+                         span is not HostCe, or the payload exceeds one word)"
+                    .to_string(),
             },
         );
         if outcome.semaphore == payload {
@@ -3847,7 +4524,33 @@ impl RmBackend for HostRmBackend {
         let desc = self
             .conn
             .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
-        let host_va = match self.conn.raw_map_dma(range, desc, len, Some(at.0)) {
+        // ★★★★★ **`map_dma_both`, NOT `raw_map_dma` — w282, and this line is the whole of
+        // it.** `[measured 2026-08-13, boot `w282_client`, real GA106]` leg 7 joined both CE
+        // operand leaves, `placed_as_asked=true`, `host_va == leaf.va`, the establishment
+        // copy brought 4092 and 3072 non-zero bytes across, `#255` went QUIET and the address
+        // table read `HostBacked` at the guest's own VAs — **and the host copy engine still
+        // took `Xid 31 CE0 HUBCLIENT_CE1 FAULT_PTE ACCESS_TYPE_VIRT @ 0x1_20010000`, the
+        // same VA, unmoved.**
+        //
+        // ⊘⊘ Because this line placed the object in **one** address space and the engine
+        // runs in **another**. `ce_copy_outcome`'s own comment states it exactly (`:5333`):
+        //
+        // > *"W229 — the CE channel is built in the isolate's OWN address space, never in
+        // > `vas`. `vas` still names the space the OPERANDS live in, and **`map_dma_both`
+        // > has placed them at the same addresses in both**, which is why `src`/`dst` below
+        // > need no translation."*
+        //
+        // That premise was **true of every other publisher and false of this one.**
+        // `publish_backing` and the guest-RAM pin both go through [`Self::map_dma_both`];
+        // the join went through `raw_map_dma` and mapped the guest-facing range only. The
+        // ring's leaf never exposed it — *we* decode the ring in the VMM and hand `ce_copy`
+        // explicit `src`/`dst`, so nothing the engine dereferences came out of it. An
+        // **operand** is the first joined object a real engine walks for itself.
+        //
+        // ⇒ It is `w229`'s finding one plane over, and the fix is `w229`'s fix: place it
+        // twice, at one address, all-or-nothing. ⚠ `map_dma_both` unwinds the guest-side
+        // mapping itself if the shadow refuses, so the arm below no longer has to.
+        let host_va = match self.map_dma_both(range, desc, len, Some(at.0)) {
             Ok(va) => va,
             Err(e) => {
                 let _ = self.free(self.stamp(desc));
@@ -3858,6 +4561,11 @@ impl RmBackend for HostRmBackend {
         // redundant: this is the only side that can still unwind the descriptor cheaply, and
         // a mapping adopted at the wrong VA is a host engine pointed at whatever else lives
         // there — `PinGuestRam`'s own argument, one plane over.
+        //
+        // ⊘ Kept even though `map_dma_both` already refuses a shadow that landed elsewhere:
+        // that check compares the two spaces to EACH OTHER, and this one compares the pair to
+        // **what the caller asked for**. Two different questions, and `w270` measured the cost
+        // of answering the second with the first.
         if host_va != at.0 {
             let _ = self.conn.raw_unmap_dma(range, host_va);
             let _ = self.free(self.stamp(desc));
@@ -3869,6 +4577,9 @@ impl RmBackend for HostRmBackend {
         // ⊘ Installed LAST, after the chain has succeeded: a table entry for a leaf whose
         // fixed map refused would answer the instrument about memory no engine can reach.
         table.install(phys, len, at.0, region);
+        // ★★★★★ LEG A2 — and on the SAME success path as the install, never earlier: this
+        // set is what a channel birth checks before it may name the object.
+        table.remember_object(desc);
         Ok(FbLeafJoined {
             backing,
             memory: self.stamp(desc),
@@ -4171,12 +4882,32 @@ impl HostRmBackend {
             RingOwner::HandedIn => &[],
         };
 
-        let userd = match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
-            Ok(h) => h,
-            Err(e) => {
-                unwind(self, ours);
-                return Err(e);
+        // ★★★★★ **LEG B — WHERE USERD COMES FROM, and it is now a question rather than a
+        // line.** `Ours` allocates as before. `Guest` allocates **nothing**: the object is
+        // the joined framebuffer window the guest is already advancing its own cursor in,
+        // and this connection neither made it nor may unmake it.
+        //
+        // ⚠ The `userd_offset` on the guest arm is the thing this file has spent a boot
+        // refusing to allow (`userd_offset_0`'s comment below). It is correct *here* and
+        // only here, because on this arm the party that writes the cursor is the same party
+        // the offset came from.
+        let (userd, userd_owner, userd_offset) = match ring {
+            RingSource::Ours(_) | RingSource::Guest(GuestRing { userd: None, .. }) => {
+                match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
+                    Ok(h) => (h, UserdOwner::Ours, 0),
+                    Err(e) => {
+                        unwind(self, ours);
+                        return Err(e);
+                    }
+                }
             }
+            RingSource::Guest(GuestRing { userd: Some(u), .. }) => match self.narrow(u.memory) {
+                Ok(h) => (h, UserdOwner::HandedIn, u.offset),
+                Err(e) => {
+                    unwind(self, ours);
+                    return Err(e);
+                }
+            },
         };
 
         // The ring must be resolvable by hardware before a channel may name it.
@@ -4302,8 +5033,8 @@ impl HostRmBackend {
             h_context_share: 0,
             h_va_space: 0,
             h_userd_memory_0: userd,
-            // ★★★ ZERO, and it is now a MEASURED requirement rather than a plausible
-            // default. Hardware reads USERD at `hUserdMemory[0] + userdOffset[0]`, so a
+            // ★★★ ZERO ON THE `Ours` ARM, and it is a MEASURED requirement rather than a
+            // plausible default. Hardware reads USERD at `hUserdMemory[0] + userdOffset[0]`, so a
             // non-zero offset makes it look for `GP_PUT` somewhere our store never lands:
             // it sees `GP_PUT == GP_GET` forever, fetches nothing, and **reports no error
             // at all** — the C's M5.47 root cause
@@ -4311,7 +5042,20 @@ impl HostRmBackend {
             // on 2026-07-30 by setting it to `0x2000`: every ioctl still returned 0, the
             // channel scheduled, the doorbell rang, and R15 reported `sem 0x00000000
             // GP_GET 0 GP_PUT 1` with R17's destination byte-for-byte unchanged.
-            userd_offset_0: 0,
+            //
+            // ⊘⊘ **AND NON-ZERO IS CORRECT ON THE `Guest` ARM — read what the bite above
+            // actually measured.** The 2026-07-30 boot moved `userdOffset[0]` to `0x2000`
+            // while `submit_entry`'s store stayed at `+0`, so RM read a slot **nobody
+            // wrote**. That is a consistency failure between two of OUR sites, not evidence
+            // that RM mishandles the field — and RM honours it explicitly
+            // (`ogkm-580: kernel_channel_gv100.c:204-206, :234-237`:
+            // `memdescGetPhysAddr(..., userdOffset)` and a sub-memdesc at that offset).
+            // Here the reader and the writer move together: the writer is the **guest**,
+            // through its own BAR1 mapping of the very bytes this offset names.
+            //
+            // ⚠ It remains the single most likely place for this rung to produce a silent
+            // `GP_PUT == GP_GET`, because that is what the failure looks like either way.
+            userd_offset_0: userd_offset,
             engine_type,
         }
         .encode_into(&mut chan_params);
@@ -4391,29 +5135,51 @@ impl HostRmBackend {
             )),
             RingOwner::HandedIn => None,
         };
-        let rings = match (
-            ring_view,
-            self.conn
-                .map_cpu(userd, RING_OBJECT_BYTES, CachePolicy::WriteCombining),
-        ) {
-            (Some(Ok((ring_node, ring_map))), Ok((userd_node, userd_map))) => ChannelRings {
+        // ★★★★★ **LEG B's G4 — THE CPU MAP OF USERD IS CONDITIONAL, ON THE SAME
+        // PROVENANCE.** `[measured, R31 arm B]` an `OS_DESCRIPTOR` over another process's
+        // pages cannot be CPU-mapped at all, so on the `HandedIn` arm this is a call that
+        // *would fail*, not one we are choosing to skip. Every access it would have served
+        // is refused by name instead (`USERD_NOT_OURS`).
+        let userd_view = match userd_owner {
+            UserdOwner::Ours => Some(self.conn.map_cpu(
+                userd,
+                RING_OBJECT_BYTES,
+                CachePolicy::WriteCombining,
+            )),
+            UserdOwner::HandedIn => None,
+        };
+        let rings = match (ring_view, userd_view) {
+            (Some(Ok((ring_node, ring_map))), Some(Ok((userd_node, userd_map)))) => ChannelRings {
                 _ring_node: Some(ring_node),
                 ring: Some(ring_map),
-                _userd_node: userd_node,
-                userd: userd_map,
+                _userd_node: Some(userd_node),
+                userd: Some(userd_map),
             },
-            (None, Ok((userd_node, userd_map))) => ChannelRings {
+            (None, Some(Ok((userd_node, userd_map)))) => ChannelRings {
                 _ring_node: None,
                 ring: None,
-                _userd_node: userd_node,
-                userd: userd_map,
+                _userd_node: Some(userd_node),
+                userd: Some(userd_map),
+            },
+            (Some(Ok((ring_node, ring_map))), None) => ChannelRings {
+                _ring_node: Some(ring_node),
+                ring: Some(ring_map),
+                _userd_node: None,
+                userd: None,
+            },
+            (None, None) => ChannelRings {
+                _ring_node: None,
+                ring: None,
+                _userd_node: None,
+                userd: None,
             },
             (a, b) => {
                 let a = a.and_then(Result::err);
+                let b = b.and_then(Result::err);
                 // Either half failing means the channel cannot be submitted to, so it is
                 // torn down here rather than handed back as a channel that silently is not
                 // one. The first error is the one reported.
-                let e = a.or(b.err()).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
+                let e = a.or(b).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
                 unwind(self, &[ours, &[userd, tsg, chan]].concat());
                 return Err(e);
             }
@@ -4427,6 +5193,7 @@ impl HostRmBackend {
                 ring: ring_obj,
                 owner,
                 userd,
+                userd_owner,
                 range,
                 ring_va,
                 layout,
@@ -4449,12 +5216,16 @@ impl HostRmBackend {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
-                let get = r
-                    .userd
+                // ★★★★★ **LEG B's COST, and it is stated rather than absorbed.** On a
+                // channel over the guest's USERD there is no CPU view of these words, so
+                // this cannot answer. ⊘ It refuses by NAME rather than returning `(0, 0)`,
+                // which is what a channel that has never run also looks like — the exact
+                // ambiguity `USERD_NOT_OURS` exists to remove.
+                let userd = r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?;
+                let get = userd
                     .load_u32(HostOffset::new(USERD_GP_GET))
                     .map_err(|e| region_error(&e))?;
-                let put = r
-                    .userd
+                let put = userd
                     .load_u32(HostOffset::new(USERD_GP_PUT))
                     .map_err(|e| region_error(&e))?;
                 Ok((get, put))
@@ -4765,8 +5536,22 @@ impl HostRmBackend {
             len,
             sem_va,
             payload,
+            // ★★★★★ w283 — THE GUEST'S OWN RELEASE, carried into the SAME pushbuffer,
+            // behind our own LAUNCH_DMA. ⊘ Ours stays last, so `await_semaphore` below
+            // returning means the guest's release has retired too rather than racing it.
+            guest_release: sub.guest_release.map(|r| (r.va, r.payload)),
         })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
             return Err(RmError::Other(BAD_ENCODE));
         }
         self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
@@ -4861,17 +5646,29 @@ impl HostRmBackend {
             return Err(RmError::Other(RING_ENTRIES_REFUSED));
         }
         let n = self.slots.entry(chan).or_insert(0);
-        let slot = *n % u64::from(entries);
+        // ★★★ CLAMPED BY THE REGION, not by the entry count alone — see [`PUSHBUFFER_SLOTS`].
+        // A slot index that fits the ring's queue but not the ring's pushbuffer area writes
+        // methods over the GPFIFO that points at them, and the symptom is a submission that
+        // fetches garbage rather than an error anyone can attribute.
+        let slot = *n % u64::from(entries).min(PUSHBUFFER_SLOTS).max(1);
         *n += 1;
         Ok(slot)
     }
 
     /// Store one 32-bit word into the channel's USERD.
+    ///
+    /// ★★★★★ **LEG B — on a channel over the guest's USERD this is
+    /// [`RmError::Other`]`(`[`USERD_NOT_OURS`]`)`, always, and that refusal IS the leg.**
+    /// The cursor those bytes hold is the guest's, advanced by the guest's own store through
+    /// its own BAR1 mapping; a second writer would be two parties disagreeing about one
+    /// index, and the loser is whichever wrote first.
     fn userd_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
         self.conn
             .with_rings(raw, |r| {
                 r.userd
+                    .as_ref()
+                    .ok_or(RmError::Other(USERD_NOT_OURS))?
                     .store_u32(HostOffset::new(offset), value)
                     .map_err(|e| region_error(&e))
             })
@@ -5037,9 +5834,21 @@ impl HostRmBackend {
         /// moment, is not an independent observer. R26 established that a channel ring can
         /// be placed where its caller says, so there is no reason to let RM choose here.
         /// 64 KiB-aligned and three objects apart, well clear of RM's own base.
-        const PROBE_RING_AT: u64 = 0x0000_0007_0000_0000;
-        const CTRL_SRC_AT: GpuVa = GpuVa(0x0000_0007_0010_0000);
-        const DST_AT: GpuVa = GpuVa(0x0000_0007_0020_0000);
+        ///
+        /// ⊘⊘ **CORRECTION 2026-08-12, and it is why [`REACH_PROBE_WINDOW`] now exists.**
+        /// These three addresses were private to this function, so a *caller* asking this
+        /// probe *"is `0x7_0000_0000` mapped?"* was asking about the probe's **own ring**.
+        /// It measured exactly that: the engine retired the read, moved `0x20018000`, and
+        /// the verdict came back `Read` — the instrument reading its own memory, one layer
+        /// up from the 2026-08-10 failure the paragraph above records. The window is public
+        /// now and callers assert against it **at compile time**.
+        const PROBE_RING_AT: u64 = REACH_PROBE_WINDOW.0;
+        const CTRL_SRC_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x10_0000);
+        const DST_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x20_0000);
+        const _: () = assert!(
+            DST_AT.0 + BYTES <= REACH_PROBE_WINDOW.1,
+            "every address this probe dictates must lie inside the window it publishes"
+        );
 
         let range = self.narrow(vas)?;
         let ctrl_src = self.conn.alloc_device_local(BYTES)?;
@@ -5207,8 +6016,21 @@ impl HostRmBackend {
             len: 4,
             sem_va,
             payload,
+            // ⊘ `None` — this is the self-contained hardware probe, which has no guest and
+            // therefore no guest-declared release to carry.
+            guest_release: None,
         })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
         if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
             return Err(RmError::Other(BAD_ENCODE));
         }
         self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
@@ -5348,6 +6170,8 @@ impl HostRmBackend {
                     src: CeSource::Address(src_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -5674,6 +6498,10 @@ impl HostRmBackend {
                 ring_va: ring_got_va,
                 gp_fifo_va,
                 gp_fifo_entries: GUEST_ENTRIES,
+                // ⊘ R31 measures the RING crossing and says nothing about leg B; a probe
+                // that quietly also exercised the USERD arm would report one rung's result
+                // under another's name.
+                userd: None,
             },
         );
         let cpu_after = self.cpu_map_calls();
@@ -5718,6 +6546,7 @@ impl HostRmBackend {
                     ring_va: UNBOUND_AT,
                     gp_fifo_va: UNBOUND_AT,
                     gp_fifo_entries: GUEST_ENTRIES,
+                    userd: None,
                 },
             )
             .map(|(chan, token)| {
@@ -5851,6 +6680,8 @@ impl HostRmBackend {
                     src: CeSource::Address(got_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6095,6 +6926,8 @@ impl HostRmBackend {
                     src: CeSource::Address(got_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6144,6 +6977,8 @@ impl HostRmBackend {
                     src: CeSource::Address(dst_va),
                     len: BYTES,
                     by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
                 },
             )?;
 
@@ -6498,6 +7333,169 @@ impl HostRmBackend {
 mod tests {
     use super::*;
 
+    /// ★★★★★ **w283 — THE PUSH MUST FIT THE SLOT, AND THIS IS THE TEST THAT WOULD HAVE
+    /// CAUGHT THE REGRESSION BEFORE A BOOT DID.**
+    ///
+    /// `[measured 2026-08-13, boot `w283_client`]` adding the guest's own release took the
+    /// push from 16 words (64 bytes — **exactly** the old slot) to 22, and every forwarded
+    /// copy refused `BAD_ENCODE` **before submission**, regressing `w282b`'s
+    /// hardware-retired copy to nothing. The length check is a runtime `if` in
+    /// `ce_copy_outcome`; nothing quantified over the encoder's own output.
+    ///
+    /// ⊘ It asserts the relation, not the number: a future method added to either arm fails
+    /// here rather than on a bench, and raising [`PUSHBUFFER_SLOT_BYTES`] is a fix this test
+    /// accepts while a hard-coded `22` would not be.
+    #[test]
+    fn every_push_this_encoder_can_emit_fits_one_pushbuffer_slot() {
+        let base = CePush {
+            class_id: probe_ce_class(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: 0x2000,
+            payload: 1,
+            guest_release: None,
+        };
+        for (what, p) in [
+            ("no guest release", base),
+            (
+                "WITH the guest's own release",
+                CePush {
+                    guest_release: Some((0x1_2002_2000, 1)),
+                    ..base
+                },
+            ),
+        ] {
+            let words = ce_pushbuffer(p).expect("encodes");
+            let bytes = 4 * words.len() as u64;
+            assert!(
+                bytes <= PUSHBUFFER_SLOT_BYTES,
+                "{what}: the push is {bytes} bytes and a slot is {PUSHBUFFER_SLOT_BYTES}.                  ⊘ This is the w283 regression: `ce_copy_outcome` answers BAD_ENCODE — a                  name that is true of a DIFFERENT cause — and every forwarded copy is                  refused before submission"
+            );
+        }
+    }
+
+    /// ★★★ **The guest's release is the GUEST's numbers, and it RELEASES rather than
+    /// COPIES** — graded on identity, never on length.
+    ///
+    /// ⊘ A test that only counted words would pass on a second `LAUNCH_DMA` that re-ran the
+    /// copy, which is a silent doubling of every transfer, and on one naming *our* semaphore
+    /// twice, which would leave the guest polling forever with every row green.
+    #[test]
+    fn the_guest_release_names_the_guests_address_and_moves_no_bytes() {
+        let ours = 0x2000u64;
+        let theirs = 0x1_2002_2000u64;
+        let p = CePush {
+            class_id: probe_ce_class(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: ours,
+            payload: 7,
+            guest_release: Some((theirs, 1)),
+        };
+        let w = ce_pushbuffer(p).expect("encodes");
+        let without = ce_pushbuffer(CePush {
+            guest_release: None,
+            ..p
+        })
+        .expect("encodes");
+        // ★ APPENDED, never interleaved: everything the copy needed is byte-identical, so
+        // the release cannot have changed how the bytes move.
+        assert_eq!(w[..without.len()], without[..], "the copy must be untouched");
+        let tail = &w[without.len()..];
+        // The guest's address, split exactly as `SET_SEMAPHORE_A/B` splits it.
+        assert_eq!(tail[1], (theirs >> 32) as u32, "A = bits 48:32");
+        assert_eq!(tail[2], (theirs & 0xFFFF_FFFF) as u32, "B = bits 31:0");
+        assert_eq!(tail[3], 1, "the GUEST's literal payload, not ours");
+        // ⊘ And the launch that carries it moves NO bytes.
+        let flags = *tail.last().expect("a launch");
+        assert_eq!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_TRANSFER_MASK,
+            kayfabe_abi::submit::ce::LAUNCH_TRANSFER_NONE,
+            "a release-only launch must be TRANSFER_NONE — anything else re-runs the copy"
+        );
+        assert_ne!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD,
+            0,
+            "it must actually release"
+        );
+        // ⊘ Ours is still there and is still LAST-but-one, so `await_semaphore` covers both.
+        assert!(
+            without.contains(&((ours & 0xFFFF_FFFF) as u32)),
+            "our own semaphore must survive"
+        );
+    }
+
+    /// ★★★★★ **THE WITNESS'S WHOLE READING, as a table.**
+    ///
+    /// ⊘ Four rows for three states, and the fourth is the one that matters: `(false, true)`
+    /// — *"no hosting, but a ring was adopted"* — is a shape no production caller produces,
+    /// and it must read as `GuestRing` rather than as anything cleverer. **A ring that was
+    /// actually adopted is `GuestRing` whatever else is true**; the `hosting` discriminator
+    /// only ever splits the `None` case. Getting that backwards would report a real adoption
+    /// as *"never asked"*, which is precisely the mislabelling this rung exists to remove.
+    #[test]
+    fn the_birth_offer_reads_three_states_and_adoption_dominates() {
+        assert_eq!(BirthOffer::read(true, true), BirthOffer::Adopted);
+        assert_eq!(BirthOffer::read(false, true), BirthOffer::Adopted);
+        assert_eq!(BirthOffer::read(true, false), BirthOffer::Declined);
+        assert_eq!(BirthOffer::read(false, false), BirthOffer::NotAsked);
+        // ⊘ The words are distinct and non-empty WITHIN a limb: a boot log is grepped for
+        // them, and two states sharing a word is `w261`'s hole restated.
+        for limb in [BirthLimb::Ring, BirthLimb::Userd] {
+            let words = [
+                BirthOffer::Adopted.as_str(limb),
+                BirthOffer::Declined.as_str(limb),
+                BirthOffer::NotAsked.as_str(limb),
+            ];
+            for (i, a) in words.iter().enumerate() {
+                for b in &words[i + 1..] {
+                    assert_ne!(a, b, "two birth states print the same word");
+                }
+                assert!(!a.is_empty(), "a birth state prints nothing at all");
+            }
+        }
+        // ★★★★★ **AND THE TWO LIMBS' ADOPTION WORDS MUST DIFFER.** `guest_ring=16
+        // guest_userd=0` and `guest_ring=16 guest_userd=16` are the difference between a ring
+        // RM was told about and a channel that can run; a grep that cannot separate them
+        // reports the first as the second. ⊘ `DECLINED`/`NOT-ASKED` are deliberately SHARED —
+        // the `adopt=`/`userd=` key already disambiguates them, and duplicating the words
+        // would be two spellings of one reading.
+        assert_ne!(
+            BirthOffer::Adopted.as_str(BirthLimb::Ring),
+            BirthOffer::Adopted.as_str(BirthLimb::Userd),
+            "the two legs' firing words must be greppable apart"
+        );
+        // ★ And each carries its own reason, so a reader never has to already know the table.
+        for limb in [BirthLimb::Ring, BirthLimb::Userd] {
+            assert!(
+                BirthOffer::Declined.because(limb).contains("consulted")
+                    || BirthOffer::Declined
+                        .because(limb)
+                        .contains("was UNREADABLE"),
+                "`DECLINED` must state that the armed path RAN — that is the entire difference \
+                 between it and `NOT-ASKED`, and it is the sentence a boot is graded on"
+            );
+            assert!(
+                BirthOffer::NotAsked
+                    .because(limb)
+                    .contains("nothing was consulted"),
+                "`NOT-ASKED` must state that nothing was consulted"
+            );
+        }
+        // ★★★★★ **LEG B CANNOT FIRE WITHOUT LEG A2**, and it is the TYPE that says so, not a
+        // comment: `AdoptedGuestUserd` is reachable only through `AdoptedGuestRing::userd`,
+        // so `userd_offer` is read off `adopt.is_some_and(|a| a.userd.is_some())` and
+        // `(ring = Declined, userd = Adopted)` is unconstructible. A channel with the guest's
+        // cursor over a ring of ours would fetch from an empty queue forever.
+        assert_eq!(
+            BirthOffer::read(true, false),
+            BirthOffer::Declined,
+            "no adoption at all reads DECLINED on BOTH limbs"
+        );
+    }
+
     /// ★★★ R2's gate, over the arm that used to be silent.
     ///
     /// The path this replaces was `read_version(&ctl).unwrap_or_default()` — a frontend
@@ -6685,6 +7683,7 @@ mod tests {
             len: 4096,
             sem_va: 0x7_0000_2000,
             payload: 7,
+            guest_release: None,
         })
         .expect("encodable");
 
@@ -6736,6 +7735,7 @@ mod tests {
             len: 4,
             sem_va: 0,
             payload: 1,
+            guest_release: None,
         };
         for bad in [
             CePush {
