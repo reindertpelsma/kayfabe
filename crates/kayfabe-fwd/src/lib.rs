@@ -1515,6 +1515,16 @@ pub struct GuestRamPinned {
     pub host_va: u64,
     /// The `OS_DESCRIPTOR` object RM built over the guest pages.
     pub memory: HostHandle,
+    /// ★★★★★ **w291 (2a) — whether THIS CALL also upgraded the address-table row to carry
+    /// the pin in `Binding::host`**, making the two records one field.
+    ///
+    /// ⊘ `false` has **three** distinct causes and a caller must not read it as a failure:
+    /// the pin's grant does not exactly match one table row (legs 4-6's multi-row run pins,
+    /// which deliberately bind nothing — one host object may back one row, because reclaim
+    /// walks rows); the row already carried a backing; or this was an idempotent replay that
+    /// did no table work at all. ⚠ It is a statement about **this call**, never about the
+    /// row's state.
+    pub bound_into_table: bool,
     /// ★★★ Whether this call did the work, or found it already done.
     ///
     /// ⊘ Reported rather than hidden, and it is the field a caller on a **doorbell** needs
@@ -1788,6 +1798,10 @@ pub fn commit_pin_guest_ram(
             // printing `requested` beside this can only ever see `described >= requested`
             // on a replay — and if it ever sees otherwise, the plan arm has regressed.
             described: existing.len,
+            // ⊘ A replay did no table work. `false` here is "this call bound nothing", NOT
+            // "the row is unbound" — the row may well carry a backing from the call that did
+            // the work. The caller must never read this as the row's state.
+            bound_into_table: false,
         });
     }
     let Some(VerbReply::GuestRamPinned {
@@ -1892,7 +1906,61 @@ pub fn commit_pin_guest_ram(
             len: plan.grant.len(),
         },
     );
+    // ★★★★★ **w291 (2a) — THE MERGE. ONE FIELD, ONE TRUTH.**
+    //
+    // The pin above is a real host mapping of the guest's own pages, at the guest's own VA.
+    // Until now it was recorded ONLY in `guest_ram_pins`, so `Binding::host` — the field every
+    // consumer and every instrument reads — could not see it. `[measured w290]` that made
+    // `host_rows=4 of 16425` read as *"the host VAS is empty"* while 57 rows were pinned.
+    //
+    // ⊘⊘ **BOUNDED TO AN EXACT-EXTENT ROW, AND THAT BOUND IS THE WHOLE DESIGN.** One host
+    // object may back exactly one row, because reclaim walks ROWS: `Spine::stage_dropped_vases`
+    // stages `unmap`-then-`free` for every binding whose `host()` is `Some`, so one handle
+    // written into N rows would be freed N times — a DOUBLE FREE of a host object, strictly
+    // worse than the leak this closes. A pin whose grant spans several rows (legs 4-6's run
+    // pins) therefore binds NOTHING here and behaves exactly as before.
+    // ⇒ This is option (2a) of `guest_ram_publication_merge.md`, and the reason it needs no
+    // owner ruling: `[measured w291, boot w290ppinrate]` a per-row guest-RAM pin costs
+    // **240 us mean and FLAT**, `refused=0` over ~20 000 pins — not the ~3 ms/row a
+    // FRAMEBUFFER join costs. ⚠ An extrapolation cannot see a change of mechanism.
+    //
+    // ⊘ Failure is NEVER half-applied: the old row is put back byte-identically and the pin
+    // stands on its own, which is exactly today's behaviour. A refusal here must not cost the
+    // caller a mapping that succeeded.
+    let bound_into_table = match vas.table.binding_at(plan.va) {
+        Some((start, tlen, old))
+            if start == plan.va.0 && tlen == plan.grant.len() && old.host().is_none() =>
+        {
+            let backing = kayfabe_mmu::HostBacking::whole(
+                memory,
+                host_va,
+                // ★ `SoleBacking` and never `ShadowsGuestMemory`: these ARE the guest's pages.
+                // There is no second memory for a writer to diverge into. That variant's own
+                // doc names this producer.
+                kayfabe_mmu::BackingBytes::SoleBacking,
+            );
+            match kayfabe_mmu::Binding::pinned_guest_ram(old.phys(), old.aperture(), backing) {
+                Ok(upgraded) => {
+                    vas.table.unbind(plan.va);
+                    match vas.table.bind(plan.pdb, plan.va, tlen, upgraded) {
+                        Ok(()) => true,
+                        Err(_) => {
+                            // ⊘ Restore, byte-identically. `unbind` returned the row we are
+                            // putting back, and `old` is a `Copy` of it taken before.
+                            let _ = vas.table.bind(plan.pdb, plan.va, tlen, old);
+                            false
+                        }
+                    }
+                }
+                // Not guest RAM, or a Peer aperture. Refused by name inside the constructor;
+                // the pin stands and the row keeps `host: None`.
+                Err(_) => false,
+            }
+        }
+        _ => false,
+    };
     Ok(GuestRamPinned {
+        bound_into_table,
         host_va,
         memory,
         already: false,

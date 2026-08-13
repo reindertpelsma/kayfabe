@@ -535,6 +535,19 @@ impl RegionKind {
 /// [`AddressFault`] owns those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionKindFault {
+    /// ★★★ **w291 — a guest-RAM pin was offered for a row that is not guest RAM**, or with
+    /// a backing that does not declare [`BackingBytes::SoleBacking`].
+    ///
+    /// ⊘ Refused rather than coerced. The two ways in are opposite mistakes and both are
+    /// real: a `Vidmem` row belongs to the framebuffer-join chain, which mints memory and
+    /// re-points the guest's window; and a backing declaring
+    /// [`BackingBytes::ShadowsGuestMemory`] is the two-memories state ruling 3 forbids under
+    /// **every** aperture. `Binding::pinned_guest_ram` exists to record a mapping of the
+    /// guest's **own** pages, and neither of those is one.
+    NotGuestRam {
+        /// The aperture the row declared.
+        aperture: Aperture,
+    },
     /// ★★★ **Owner ruling, 2026-08-11: fake framebuffer at a real GPU VA of an isolate.**
     ///
     /// ⊘⊘ **CORRECTED 2026-08-11 — the aperture arm below is now QUALIFIED, and only that
@@ -676,6 +689,62 @@ impl Binding {
         }
         Ok(Binding {
             kind: RegionKind::RealGpuMemory,
+            phys,
+            aperture,
+            host: Some(host),
+        })
+    }
+
+    /// ★★★★★ **w291 (2a) — A GUEST-RAM ROW THAT IS PINNED INTO THE HOST VAS.**
+    ///
+    /// # ⊘ The gap this closes, and why it needed its own constructor
+    ///
+    /// `commit_pin_guest_ram` mapped the guest's own pages into the host VAS at the guest's
+    /// own VA and recorded the result in `Vas::guest_ram_pins` — **a second, disjoint record
+    /// of host-side mapping state that `Binding::host` could not see.** `[measured w290]` that
+    /// made `host_rows=4 of 16425` read as *"the host VAS is empty"* while **57** rows were
+    /// pinned. One field, one truth: this is the constructor that lets the pin land in the
+    /// field.
+    ///
+    /// ⊘ **NOT [`Binding::real_gpu_memory`], and the difference is load-bearing.** That
+    /// constructor hard-codes [`RegionKind::RealGpuMemory`], which would flip
+    /// [`Binding::is_guest_ram`] to `false` for every pinned row — and that predicate gates
+    /// the CE partitioner, so reusing it would silently re-route the data plane as a side
+    /// effect of a bookkeeping fix. This one **preserves the kind the aperture derives**, and
+    /// refuses anything that is not guest RAM by name rather than coercing it.
+    ///
+    /// ★ [`RegionKind::GuestPhysDma::may_be_host_mapped`] already returns `true`, and
+    /// [`BackingBytes::SoleBacking`]'s own doc already names this producer — *"the guest's own
+    /// pages mapped through — the shape `PinGuestRam` would declare if its result ever became
+    /// a `Binding`"*. The vocabulary was designed for this; only the wiring was missing.
+    ///
+    /// # Errors
+    /// [`RegionKindFault::PeerHasNoKind`] — `aperture` is [`Aperture::Peer`].
+    ///
+    /// [`RegionKindFault::NotGuestRam`] — the aperture derives a kind that is not
+    /// [`RegionKind::GuestPhysDma`], or `host` declares bytes other than
+    /// [`BackingBytes::SoleBacking`]. ⊘ Both are refusals rather than coercions: a `Vidmem`
+    /// row is the framebuffer join's population and has its own chain, and a backing that
+    /// declares a **shadow** is the two-memories state ruling 3 forbids under every aperture.
+    pub const fn pinned_guest_ram(
+        phys: u64,
+        aperture: Aperture,
+        host: HostBacking,
+    ) -> Result<Self, RegionKindFault> {
+        // ⊘ ONE derivation of the aperture's kind, exactly as `real_gpu_memory` does it — a
+        // private `match aperture` here would be a second reading that can drift from the
+        // first.
+        let declared = match Binding::declared_by_guest(phys, aperture) {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        };
+        if !matches!(declared.kind, RegionKind::GuestPhysDma)
+            || !matches!(host.bytes(), BackingBytes::SoleBacking)
+        {
+            return Err(RegionKindFault::NotGuestRam { aperture });
+        }
+        Ok(Binding {
+            kind: declared.kind,
             phys,
             aperture,
             host: Some(host),
