@@ -2594,6 +2594,9 @@ fn ce_client(
          ⊘ `Ok(())` from any call under test is not one of them"
     );
 
+    // ★★★★★ THE READER'S KNOWN-POSITIVE, BEFORE ANY ROW IT WILL BE USED TO JUDGE.
+    in_band_known_positive(rm, kayfabe_isolate::HostHandle::NULL);
+
     census::phase("R7 vaspace");
     let Ok(vas) = rm.alloc_vaspace() else {
         println!("FAIL  R33 vaspace         = the rung needs its own address space");
@@ -3210,10 +3213,25 @@ fn print_ioctl_census(what: &str) {
             }
         );
     }
-    println!("  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno):");
+    // ★★★★★ **THE IN-BAND VERDICT, COUNTED SEPARATELY FROM `failed`.**
+    let mut in_band_refused = 0usize;
+    let mut unreadable = 0usize;
+    println!(
+        "  --- THE SEQUENCE, in order (seq: nr name  size  phase  errno  RM-STATUS):\n      \
+         ⊘⊘ `errno` is the SYSCALL's answer; `RM-STATUS` is what RM wrote INTO THE PARAMETER \
+         STRUCT. They disagree by design, and `errno ok` beside a non-zero RM-STATUS is a \
+         SILENTLY REFUSED ioctl — the exact shape `failed=0` cannot see"
+    );
     for r in &c.log {
+        let st = rm_status_of(r);
+        if matches!(st, RmStatus::Refused(_)) {
+            in_band_refused += 1;
+        }
+        if matches!(st, RmStatus::Truncated) {
+            unreadable += 1;
+        }
         println!(
-            "      {:>4}: nr {:>3} {:<26} size {:>5}  {:<22} {}",
+            "      {:>4}: nr {:>3} {:<26} size {:>5}  {:<22} {:<10} {}",
             r.seq,
             r.nr,
             nv_esc_name(r.magic, r.nr),
@@ -3223,10 +3241,123 @@ fn print_ioctl_census(what: &str) {
                 "ok".to_string()
             } else {
                 format!("errno {}", r.errno)
-            }
+            },
+            st.describe()
         );
     }
+    println!(
+        "  --- ★★★ IN-BAND VERDICT: {in_band_refused} ioctl(s) REFUSED BY RM WITH `errno == 0`, \
+         {unreadable} unreadable. ⊘ Compare against `failed={}` above: a difference is the \
+         census's own blind spot being measured",
+        c.failed
+    );
     println!("=== END IOCTL CENSUS ===");
+}
+
+/// What RM wrote into the parameter struct — the answer `errno` cannot carry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RmStatus {
+    /// `status == NV_OK`.
+    Ok,
+    /// `status != NV_OK` — **refused, with `ioctl(2)` returning 0**.
+    Refused(u32),
+    /// This escape carries no status field (`CHECK_VERSION_STR`, `REGISTER_FD`).
+    NoStatusField,
+    /// The retained snapshot is shorter than the field's offset. ⊘ Reported as its own state,
+    /// never as `Ok`: decoding past a truncated buffer would read a zero and print "served".
+    Truncated,
+}
+
+impl RmStatus {
+    fn describe(self) -> String {
+        match self {
+            RmStatus::Ok => "RM ok".to_string(),
+            RmStatus::Refused(s) => format!("★ RM REFUSED status={s:#x}"),
+            RmStatus::NoStatusField => "(no status)".to_string(),
+            RmStatus::Truncated => "⊘ UNREADABLE".to_string(),
+        }
+    }
+}
+
+/// Decode one record's in-band status.
+///
+/// ★★★ **The offsets are the ABI crate's own, every one `ct_assert`ed there** — this function
+/// selects between them by escape number and reads nothing it has not been told the shape of.
+/// ⊘ An escape this table does not know answers [`RmStatus::NoStatusField`] rather than a
+/// guess at offset 0, because offset 0 of every one of these structs is `hClient`/`hRoot` —
+/// a handle, which is almost never zero and would print as a refusal on every single row.
+fn rm_status_of(r: &kayfabe_linux_raw::census::IoctlRecord) -> RmStatus {
+    if r.magic != b'F' {
+        return RmStatus::NoStatusField;
+    }
+    // ⊘ Each arm cites the `ct_assert` that pins it.
+    let at = match r.nr {
+        0x29 => 12, // NV_ESC_RM_FREE            NVOS00, generated/nvos.rs:232
+        0x2b => 28, // NV_ESC_RM_ALLOC           NVOS21, generated/nvos.rs:476
+        0x2a => 28, // NV_ESC_RM_CONTROL         NVOS54, generated/nvos.rs:1318
+        0x27 => 40, // NV_ESC_RM_ALLOC_MEMORY    NVOS02, bringup.rs (status @ +40)
+        0x4e => 40, // NV_ESC_RM_MAP_MEMORY      NVOS33, submit.rs:3022
+        0x58 => 40, // NV_ESC_RM_UNMAP_MEMORY_DMA NVOS47, generated/nvos.rs:1077
+        0x57 => 56, // NV_ESC_RM_MAP_MEMORY_DMA  NVOS46, generated/nvos.rs:811
+        _ => return RmStatus::NoStatusField,
+    };
+    let len = usize::from(r.reply_len);
+    if at + 4 > len {
+        return RmStatus::Truncated;
+    }
+    let s = u32::from_le_bytes([
+        r.reply[at],
+        r.reply[at + 1],
+        r.reply[at + 2],
+        r.reply[at + 3],
+    ]);
+    if s == 0 { RmStatus::Ok } else { RmStatus::Refused(s) }
+}
+
+/// ★★★★★ **THE MANDATORY KNOWN-POSITIVE for [`rm_status_of`]** — issue a call that MUST be
+/// refused in-band, and confirm the reader sees it.
+///
+/// ⊘⊘ Without this, *"no ioctl was silently refused"* is exactly what a **blind** reader
+/// prints. That is not hypothetical: one week, twice — `GET_PTE_INFO` answered
+/// `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` for every address including a known-mapped one, and only
+/// a calibration caught it.
+///
+/// The probe is an `NV_ESC_RM_CONTROL` carrying a **command that does not exist**, on a handle
+/// that does: the frontend copies it in, RM refuses it, and `ioctl(2)` returns **0**. ⇒ it
+/// produces precisely the shape under test — `errno ok`, non-zero RM status.
+fn in_band_known_positive(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::HostHandle) {
+    use kayfabe_linux_raw::census;
+    // A command in a valid class range that RM implements for nothing. Not 0: zero is
+    // "no command" and is refused by the frontend before RM sees it, which is a different
+    // layer and would calibrate the wrong thing.
+    const NO_SUCH_CMD: u32 = 0x2080_0FFE;
+    census::phase("R33 in-band known-positive");
+    let before = census::snapshot();
+    let mut buf = [0u8; 8];
+    let got = rm.raw_control_for_probe(subdevice, NO_SUCH_CMD, &mut buf);
+    let after = census::snapshot();
+    let new: Vec<_> = after.log.iter().filter(|r| r.seq > before.total).collect();
+    let seen = new.iter().map(|r| rm_status_of(r)).collect::<Vec<_>>();
+    let refused_in_band = seen
+        .iter()
+        .any(|s| matches!(s, RmStatus::Refused(_)));
+    let syscall_ok = new.iter().all(|r| r.errno == 0);
+    if refused_in_band && syscall_ok {
+        println!(
+            "★     R33 IN-BAND CAL     = KNOWN-POSITIVE FIRED — cmd {NO_SUCH_CMD:#x} returned \
+             `errno == 0` from the syscall AND a non-zero RM status in the parameter struct \
+             ({seen:?}). ⇒ the in-band reader below CAN see a refusal, so a run reporting zero \
+             refusals is a measurement rather than a blind spot. (caller saw {got:?})"
+        );
+    } else {
+        println!(
+            "FAIL  R33 IN-BAND CAL     = the known-positive did NOT produce the shape under \
+             test (refused_in_band={refused_in_band}, syscall_ok={syscall_ok}, {seen:?}). ⊘⊘ \
+             EVERY `IN-BAND VERDICT: 0 refused` BELOW IS VACUOUS THIS RUN — an unproven reader \
+             reporting no refusals is indistinguishable from a reader that cannot see them"
+        );
+    }
+    census::phase("");
 }
 
 /// The NVIDIA frontend escape names, by `_IOC_NR`.

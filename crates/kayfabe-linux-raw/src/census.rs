@@ -54,8 +54,39 @@ pub struct IoctlRecord {
     /// The caller-declared phase in force when it was issued; `""` if none was set.
     pub phase: &'static str,
     /// `0` when the syscall returned `>= 0`, otherwise the `errno`.
+    ///
+    /// ⚠ **This is the SYSCALL's answer and it is not RM's.** For the NVIDIA frontend an
+    /// ioctl that RM refused still returns `0` here, with the refusal written **into the
+    /// parameter struct**. See [`Self::reply`] — and never report `errno == 0` as *"served"*.
     pub errno: i32,
+    /// ★★★★★ **THE REPLY BUFFER, so a consumer can read the IN-BAND status.**
+    ///
+    /// ⊘⊘ **The whole reason this field exists.** `failed` counts `errno != 0`, and RM
+    /// reports its status *inside* the parameter struct while `ioctl(2)` returns 0. Measured
+    /// twice in one week in this campaign: the identical defect was **invisible** to the
+    /// census under one flag (`Other(31)`, `failed=0`) and **counted** under another
+    /// (`errno 22`, `failed=1`), purely by which layer refused. ⇒ a census that reads only
+    /// `errno` cannot tell a served ioctl from a silently refused one.
+    ///
+    /// ⊘ Raw bytes, not a decoded status: this crate does not know NVIDIA's struct layouts
+    /// and must not learn them. The consumer that owns the ABI decodes it — the same split
+    /// that keeps `nr`/`magic`/`size` here and the escape *names* in the reporter.
+    ///
+    /// ★ Captured **after** the indirect-pointer scrub, so a host pointer this process
+    /// passed in can never be retained in the log.
+    pub reply: [u8; REPLY_SNAPSHOT],
+    /// How many bytes of [`Self::reply`] are meaningful — `min(declared size, capacity)`.
+    /// ⊘ A record whose declared size exceeds the snapshot is TRUNCATED and says so here;
+    /// a consumer must refuse to decode a field that lies past it rather than read a zero.
+    pub reply_len: u8,
 }
+
+/// How many bytes of each reply the log retains.
+///
+/// ★ 72 = the largest parameter struct this workspace issues (`CHECK_VERSION_STR`). Every
+/// `NVOS*` status field this campaign reads lives well inside it: `NVOS00` @ 12, `NVOS21` @
+/// 28, `NVOS54` @ 28, `NVOS02` @ 40, `NVOS33` @ 40, `NVOS47` @ 40, `NVOS46` @ 56.
+pub const REPLY_SNAPSHOT: usize = 72;
 
 /// A snapshot of the census, taken by [`snapshot`].
 #[derive(Clone, Debug)]
@@ -160,7 +191,7 @@ pub fn snapshot() -> Census {
 /// Record one ioctl. Called from [`CharDevice::ioctl`] and nowhere else.
 ///
 /// [`CharDevice::ioctl`]: crate::CharDevice::ioctl
-pub(crate) fn note(request: u64, errno: i32) {
+pub(crate) fn note(request: u64, errno: i32, reply: &[u8]) {
     let seq = TOTAL.fetch_add(1, Ordering::Relaxed) + 1;
     if errno != 0 {
         FAILED.fetch_add(1, Ordering::Relaxed);
@@ -177,6 +208,9 @@ pub(crate) fn note(request: u64, errno: i32) {
         DROPPED.fetch_add(1, Ordering::Relaxed);
         return;
     }
+    let mut snap = [0u8; REPLY_SNAPSHOT];
+    let n = reply.len().min(REPLY_SNAPSHOT);
+    snap[..n].copy_from_slice(&reply[..n]);
     log.push(IoctlRecord {
         seq,
         nr: crate::ioctl::nr_of(request),
@@ -184,6 +218,8 @@ pub(crate) fn note(request: u64, errno: i32) {
         size: u16::try_from(crate::ioctl::declared_size(request)).unwrap_or(u16::MAX),
         phase,
         errno,
+        reply: snap,
+        reply_len: u8::try_from(n).unwrap_or(u8::MAX),
     });
 }
 

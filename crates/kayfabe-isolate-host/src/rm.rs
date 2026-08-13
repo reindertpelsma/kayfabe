@@ -5746,6 +5746,28 @@ impl HostRmBackend {
         Ok((out.page_table(), out.pdb_addr))
     }
 
+    /// ★★ **Issue one raw `NV_ESC_RM_CONTROL` on the DEVICE — for the in-band census's
+    /// known-positive, and for nothing else.**
+    ///
+    /// ⊘ Exposed deliberately narrowly: it exists so a caller can provoke a refusal that RM
+    /// reports **inside the parameter struct** while `ioctl(2)` returns `0`, which is the one
+    /// shape `Census::failed` cannot see. See `rmladder`'s `in_band_known_positive`.
+    ///
+    /// ⚠ Not a general control verb. Every real control in this file goes through a typed
+    /// method that knows its parameter struct; this one takes bytes because its whole purpose
+    /// is to send something RM will refuse.
+    ///
+    /// # Errors
+    /// Whatever RM refused — which for the calibration is the point.
+    pub fn raw_control_for_probe(
+        &mut self,
+        _on: HostHandle,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<(), RmError> {
+        self.conn.raw_control(self.conn.device, cmd, payload)
+    }
+
     /// Zero the notifier page before a channel is told about it.
     ///
     /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly

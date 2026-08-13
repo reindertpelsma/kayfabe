@@ -578,7 +578,6 @@ impl CharDevice {
             Err(_) => -1,
             Ok(_) => 0,
         };
-        crate::census::note(request, errno);
 
         // ★ The scrub (module docs). Unconditional, and after BOTH arms: a failed ioctl
         // leaves the caller holding the same buffer, and an address that survives an error
@@ -586,6 +585,13 @@ impl CharDevice {
         for p in indirect.iter() {
             arg[p.at..p.at + POINTER_FIELD_WIDTH].fill(0);
         }
+
+        // ⊘⊘ **AFTER THE SCRUB, DELIBERATELY.** The census now retains a prefix of the reply
+        // so a consumer can read RM's IN-BAND status (`IoctlRecord::reply`), and running it
+        // before the scrub would retain a host pointer this process passed in — turning a
+        // diagnostic into a place where an address outlives the call that used it.
+        // ⚠ Moving this call earlier re-introduces that. It is ordered, not incidental.
+        crate::census::note(request, errno, arg);
         outcome
     }
 }
