@@ -226,3 +226,63 @@ fn an_unknown_vas_answers_an_empty_census() {
     assert_eq!((c.total, c.candidates_total()), (0, 0), "{c:?}");
     assert!(c.buckets_sum(), "{c:?}");
 }
+
+// =================================================================================
+// w291 (2a) — THE MERGE'S CONSTRUCTOR: one field, one truth, and it refuses by name
+// =================================================================================
+
+/// ★★★★★ A guest-RAM pin lands in `Binding::host` **without flipping the kind** — which is
+/// the whole reason it is not `Binding::real_gpu_memory`.
+#[test]
+fn a_pinned_guest_ram_row_carries_its_host_backing_and_stays_guest_ram() {
+    use kayfabe_mmu::{BackingBytes, Binding, HostBacking};
+    let backing = HostBacking::whole(
+        kayfabe_isolate::HostHandle::NULL,
+        0x7f00_0000,
+        BackingBytes::SoleBacking,
+    );
+    let b = Binding::pinned_guest_ram(0x4000_0000, Aperture::SysmemCoherent, backing)
+        .expect("the guest's own pages, mapped through");
+    assert!(
+        b.host().is_some(),
+        "★ THE MERGE: the pin is in the FIELD, not only in `Vas::guest_ram_pins`"
+    );
+    assert!(
+        b.is_guest_ram(),
+        "⊘⊘ AND THE KIND SURVIVES. `real_gpu_memory` would have flipped this false for every \
+         pinned row, and `is_guest_ram()` gates the CE partitioner — the merge must not \
+         re-route the data plane as a side effect of a bookkeeping fix"
+    );
+}
+
+/// ⊘ Refused by name, both ways in — and they are opposite mistakes.
+#[test]
+fn the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow() {
+    use kayfabe_mmu::{BackingBytes, Binding, HostBacking, RegionKindFault};
+    let sole = HostBacking::whole(
+        kayfabe_isolate::HostHandle::NULL,
+        0x7f00_0000,
+        BackingBytes::SoleBacking,
+    );
+    // A Vidmem row is the framebuffer JOIN's population — a different chain that mints
+    // memory and re-points the guest's window.
+    assert_eq!(
+        Binding::pinned_guest_ram(0x1000, Aperture::Vidmem, sole),
+        Err(RegionKindFault::NotGuestRam {
+            aperture: Aperture::Vidmem
+        }),
+    );
+    // A backing that declares a SHADOW is the two-memories state ruling 3 forbids under
+    // every aperture — and these are supposed to BE the guest's pages.
+    let shadow = HostBacking::whole(
+        kayfabe_isolate::HostHandle::NULL,
+        0x7f00_0000,
+        BackingBytes::ShadowsGuestMemory,
+    );
+    assert_eq!(
+        Binding::pinned_guest_ram(0x4000_0000, Aperture::SysmemCoherent, shadow),
+        Err(RegionKindFault::NotGuestRam {
+            aperture: Aperture::SysmemCoherent
+        }),
+    );
+}
