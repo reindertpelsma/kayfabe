@@ -964,3 +964,121 @@ it got to"* is answerable without a second boot. ⚠ `^CUP2_RC=` anchored **with
 contrast printed beside it, and `GCC_CUP2_RC` counted separately — unanchored has printed
 `[CUP2_RC=0 CUP2_RC=1]` on two consecutive rungs and would report the headline success value on
 a failing arm.
+
+---
+
+# ★★★★★ THE TWO FINDINGS THAT OUTLAST THE GREEN
+
+> These matter more than any `RC`. Both were found on the way to something else.
+
+## 43. **APERTURE IS A CLAIM. BACKING IS A FACT.** — and we were refusing reachable memory over the claim
+
+`crates/kayfabe-mmu/src/lib.rs:741-746`:
+
+```rust
+pub fn is_guest_ram(&self) -> bool {
+    matches!(self.aperture, Aperture::SysmemCoherent | Aperture::SysmemNonCoherent)
+}
+```
+
+`aperture` is **what the guest wrote in its own page-table entry**. It is a *declaration by the
+thing under test*. Whether a host object exists behind the page is a *fact about our own
+bookkeeping*, and **nothing in this predicate asks it.**
+
+⇒ The operand pin refused `0x1_20000000` because the guest had labelled it `Vidmem` — **while a
+real, shared, host-mapped object either existed or was one already-shipped call away.** The
+refusal was correct code enforcing the wrong question.
+
+### ⇒ **THE PROMOTION RULING IS UNNECESSARY. DO NOT BUILD ONE.**
+
+The owner was asked to rule on *"should we copy guest device memory into a real backing and swap
+it"*. **That question does not need answering:**
+
+- the operands' raw backing **is** fabricated (`Vidmem@…/**FakeFramebuffer**`, measured), **but**
+- `w282`'s **join** already establishes a real shared host object **at the identical VA**
+  (`host_va == leaf.va`, `placed_as_asked=true`, content carried), and
+- with it armed, the host CE **executed the copy and released the semaphore** (§38).
+
+⇒ There is nothing to promote. ★ **Recorded here explicitly so nobody builds a copy-and-swap path
+later on the strength of a ruling that was never needed.**
+
+### ⚠ THE SAME CONFUSION COST US THREE TIMES IN ONE DAY
+
+1. `n_wrong_aperture` / `NOT-IN-GUEST-RAM` was read as *"we have no backing"* when it classifies
+   **the guest's declaration**.
+2. I armed `KAYFABE_GUEST_OPERAND=pin` — the **guest-RAM** population — for operands the same
+   docs call a **disjoint** population, then read the refusal as a missing mechanism.
+3. The promotion recommendation itself, which followed from (1).
+
+★ **RECOMMENDED (not done — this is hardening):** make the two unconfusable at the call site.
+`is_guest_ram()` reads like a fact and is a claim; a name such as `guest_declared_sysmem()` — or
+a `Claimed`/`Backed` distinction carried in the type — would have made all three misreadings
+fail to compile. ⊘ Left as a recommendation because renaming a predicate used across the data
+plane is not a diagnostic change.
+
+## 44. **A GUEST-REACHABLE VMM ABORT**, found by accident
+
+```
+lockwitness.rs:152 — R1 no-blocking-under-lock violation (l1_concurrency.md §3.3):
+  munmap (dropping a host mapping) while holding rank(s) [0]
+→ panic in a function that cannot unwind → the whole process aborts
+   … kvm_cpu_exec → address_space_write → our MMIO write handler
+```
+
+**Reachability, stated plainly:** the guest chooses its CE operands ⇒ the guest chooses which
+leaves a join is attempted on ⇒ the guest chooses whether `install_join` **refuses** ⇒ and every
+refusal path dropped the caller's host mapping **under the plane lock**. ⇒ **a guest MMIO store
+could abort the VMM.** That is a **hostile-guest availability bug**, not a tuning issue, and it
+was found only because a diagnostic arm happened to provoke a refused join.
+
+**Fixed** (`18f9f02`): `install_join` returns the region on refusal; `join_fb` releases the lock
+**before** dropping it. ★ **The tests assert the property, not the shape** — every refusal path
+hands the region back *whole* (`e.1.len()`), including the can't-join default. ⊘ **Without the
+fix those assertions do not compile**, because the old signature had nothing to hand back — so
+the regression cannot silently return.
+
+⚠ It is armed only under `KAYFABE_OPERAND_JOIN`, which is off by default — so it is **not** a
+live exposure today. It becomes one the moment the join is armed by policy, which is exactly
+hardening item (b) below. **Fix landed before the arm it protects.**
+
+---
+
+# 45. THE HARDENING LIST — named, with what each requires. **NOT STARTED.**
+
+⊘ **Neither begins until the owner has the cup2 number**, because that number decides whether
+this is hardening or whether a further wall exists.
+
+### (a) Close the bootstrap gap, so `KAYFABE_PT_SWEEP` is unnecessary
+
+**What is wrong:** `pt_page_owner` is seeded only from *declared roots* plus *whatever a prior
+decode published* (`kayfabe-rt/src/device.rs:3386-3393`). A BAR2-written page whose **parent was
+never decoded** can never be attributed, so it recirculates through `requeue_pt_witness`
+(`shim.rs:9031`) forever and never binds. Attribution requires a decoded parent; the parent is
+decoded only if it was itself attributable.
+
+**What it requires:** attribute a witnessed page **from the VAS's installed root**, which is what
+`sweep_cpu_pt_tables` (`shim.rs:9094`) already does — i.e. make the root-seeded path the
+*ordinary* one for an unattributable witness rather than an opt-in whole-VAS sweep.
+⚠ **Cost to respect:** the sweep is O(VAS) and w276 measured it binding zero on a different
+workload; the fix must be witness-triggered, not periodic.
+★ **Known-positive already exists:** `rows=1 → rows=3`, operand `MISS 2+2 → 0+0` (§19).
+
+### (b) Apply the operand join **by policy, to every CE channel**
+
+**What is wrong:** the join fires per doorbell for the channel that rang it. `w289j`/`w289cup2`
+joined arm 1's operands (token `0x3`) and **not arm 4's** (a different token, third VAS) — which
+is exactly why `0x7_00100000` still faults and why `CRIT1 STATE` is still `CONTROL-NEVER-LANDED`.
+
+**What it requires:** (i) drive it from channel/operand lifetime rather than one env var;
+(ii) decide the **aperture-vs-backing** question of §43 at the refusal site, so a reachable-but-
+`Vidmem`-declared operand is served rather than refused by name; (iii) **the abort fix of §44 is
+a prerequisite**, since arming this by policy makes that path guest-reachable in production.
+⚠ And an over-broad join is a **hostile-guest surface** — joining every leaf a guest names is
+strictly more host memory exposed than joining the ones an engine will actually read.
+
+### ⊘ Still owed, and unchanged
+
+**Criterion 1's address half.** `CRIT1 STATE = CONTROL-NEVER-LANDED` on every guest arm; the
+deliberate fault is never issued because arm 4's control cannot land; arm 4's control cannot land
+because its operands are the un-joined ones. ⇒ **hardening item (b) is the unblock**, and the
+owner's first ask is one step behind it.
