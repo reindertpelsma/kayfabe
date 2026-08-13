@@ -1,0 +1,8 @@
+kayfabe: OPERAND-JOIN arm=join fb_join=shared host_isolates=true ⇒ a CE operand page that lands in OUR EMULATED FRAMEBUFFER is WALKED to its framebuffer leaf and that leaf is JOINED — the same four steps the ring source and the GR operand census already use — so the guest's window and a real h
+OPERAND-JOIN token=0x00000003 arm=join CE-OPERAND(chan=0 fb_phys=0x10000) leaf va=0x120000000 len=0x10000 fb_phys=0x10000 → JOINED (shared) memory=0xcafe000c host_va=0x120000000 placed_as_asked=true established=4096 bytes over 1 page(s), of which 4092 NON-ZERO — ★ ONE memory. ⚠ The leaf is h
+OPERAND-JOIN token=0x00000003 arm=join CE-OPERAND(chan=0 fb_phys=0x20000) leaf va=0x120010000 len=0x10000 fb_phys=0x20000 → JOINED (shared) memory=0xcafe000d host_va=0x120010000 placed_as_asked=true established=4096 bytes over 1 page(s), of which 3072 NON-ZERO — ★ ONE memory. ⚠ The leaf is h
+kayfabe: OPERAND-JOIN token=0x00000003 arm=join proc=2 chan=0 pdb=0x6000
+    OPERAND-JOIN-TABLE: 2 page(s) asked, 0 MISS, 0 in guest RAM (leg 6's population, untouched here), 0 ALREADY JOINED, 2 CANDIDATE(S) in the emulated framebuffer [va=0x120000000:Vidmem@0x10000/FakeFramebuffer va=0x120010000:Vidmem@0x20000/FakeFramebuffer]
+thread '<unnamed>' (2597486) panicked at crates/kayfabe-util/src/lockwitness.rs:152:5:
+R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): munmap (dropping a host mapping) while holding rank(s) [0] — a blocking call may only be made with ZERO ranked locks held; drop every guard, round-trip on the checked-out worker, then re-acquire and RE-VALIDATE (R5).
+thread '<unnamed>' (2597486) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/panicking.rs:225:5:

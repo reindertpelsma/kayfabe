@@ -739,3 +739,80 @@ this lesson — a necessary step that changed no Xid. Pre-registered below.
 
 ⚠ I am not predicting a pass. ⊘ And the `assert` arm exists precisely so the classification can
 be read **without** joining anything — if `join` is ambiguous, `assert` is the control.
+
+---
+
+# ADDENDUM 7 — THE JOIN ARM: **IT JOINS, THEN QEMU ABORTS ON OUR OWN LOCK ASSERT. ARM IS VOID.**
+
+Boot `w289j` @ `b66aa11`, `KAYFABE_OPERAND_JOIN=join`, one variable.
+
+## 31. ★★★ THE ARM RAN AND THE JOIN WORKED
+
+```
+3 × OPERAND-JOIN token=0x00000003 arm=join            ← the arm reports its own execution
+OPERAND-JOIN-TABLE: 2 asked, 0 MISS, 0 in guest RAM, 0 ALREADY JOINED,
+                    2 CANDIDATE(S) in the emulated framebuffer
+                    [va=0x120000000:Vidmem@0x10000/FakeFramebuffer
+                     va=0x120010000:Vidmem@0x20000/FakeFramebuffer]
+CE-OPERAND(fb_phys=0x10000) leaf va=0x120000000 → JOINED (shared) memory=0xcafe000c
+    host_va=0x120000000 placed_as_asked=true established=4096 bytes, 4092 NON-ZERO
+CE-OPERAND(fb_phys=0x20000) leaf va=0x120010000 → JOINED (shared) memory=0xcafe000d
+    host_va=0x120010000 placed_as_asked=true established=4096 bytes, 3072 NON-ZERO
+```
+
+★ **Both faulting operands were joined, at IDENTICAL host VAs (`placed_as_asked=true`), with
+their content present.** The mechanism does exactly what Q1 predicted.
+
+⊘ **And it settles Q1's backing question precisely:** the operands are
+`Vidmem@…/**FakeFramebuffer**` — the raw backing **is** fabricated. But the remedy is **not** a
+promotion/copy-and-swap: the existing join establishes a **real shared host object at the same
+VA**. ⇒ *"Is promotion needed?"* — **no**: the thing promotion would build already exists as
+`join`, is shipped, and fires.
+
+## 32. ⊘⊘⊘ AND THEN QEMU ABORTED — THE ARM IS VOID FOR THE FAULT QUESTION
+
+```
+thread '<unnamed>' panicked at crates/kayfabe-util/src/lockwitness.rs:152:5:
+  R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): munmap (dropping a host
+  mapping) while holding rank(s) [0]
+panic in a function that cannot unwind → thread caused non-unwinding panic. aborting.
+  … kvm_cpu_exec → address_space_write → flatview_write → (our MMIO write handler)
+```
+
+⇒ **Our own R1 witness caught the join path calling `munmap` under a rank-0 lock.** The panic is
+in an `extern "C"` callback, so it cannot unwind and **aborts the process**.
+
+⚠ **This is guest-reachable**: the trigger is the guest's own MMIO store. A guest-driven abort of
+the VMM is a hostile-guest concern in its own right, independent of this rung.
+
+## 33. ⊘ EVERY DOWNSTREAM NUMBER ON THIS BOOT IS VACUOUS — stated, not glossed
+
+The guest went unreachable (`ssh: … No route to host`), `boot_capture.sh:286` recorded
+`Aborted (core dumped)`, **the R33 client never ran**, and:
+
+```
+run_w289j_hostdmesg.log = 0 bytes      HOST_DMESG_XID=0
+```
+
+⊘⊘ **`HOST_DMESG_XID=0` IS NOT "THE FAULT IS GONE."** It is *"the guest died before the client
+could provoke anything."* Zero bytes is a state that needs its own check — and it is the exact
+trap this campaign has banked twice. ⚠ Note also `hook finished: rc=0`: **the hook reported
+success while producing nothing**, the same silent-no-op class as the `finish 0` fixed earlier
+in this rung.
+
+⇒ **Pre-registered outcome: none of the three.** The arm neither passed, nor left the Xid
+unchanged, nor refused by name — **it crashed before the question could be asked.** Recorded as
+VOID.
+
+## 34. WHERE THIS LEAVES IT
+
+- **Q1 is answered and does not need a boot:** no promotion path. The refusal is keyed on a
+  declared aperture (`is_guest_ram`, `kayfabe-mmu/src/lib.rs:741-746`); the join that makes an FB
+  operand real already exists (`KAYFABE_OPERAND_JOIN`, `shim.rs:13479`), and it demonstrably
+  joins these two operands at identical VAs.
+- **The next blocker is ours and it is small and specific:** the join path must not `munmap`
+  under a ranked lock. `l1_concurrency.md` §3.3 already prescribes the fix — *"drop every guard,
+  round-trip on the checked-out worker, then re-acquire and RE-VALIDATE (R5)"*. ⊘ Not attempted
+  here: it is a concurrency change in the data plane's locking, and this rung stops at reporting.
+- **Q2 (does the client spin on the semaphore in the guest?) is NOT done** — it needs the named
+  waited-vs-never-waited exits, and the boot that would have measured it aborted.
