@@ -48,7 +48,17 @@ cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder
 CRC=$?
 echo "=== CLIENT BUILD RC=$CRC ==="
 [ $CRC -eq 0 ] || finish 95
-CLIENT=$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+# ⊘⊘ **CARGO_TARGET_DIR REDIRECTS THE OUTPUT, AND THE INHERITED PATH DID NOT KNOW IT.**
+# `[measured 2026-08-13, w287 boot 1]` this line read `$REPO/target/...` (carried from
+# `w278_run.sh`, which ran without a redirect). With `CARGO_TARGET_DIR` exported 20 lines
+# above, the binary is built to `$CARGO_TARGET_DIR/...` and `$REPO/target` does not exist.
+# ⇒ The build reported `CLIENT BUILD RC=0`, the native arm reported `NATIVE ARM RC=127`, the
+# md5 line printed EMPTY, the boot ran to completion and the grade block printed `R33_RC=[]`.
+# ★ Every one of those reads as a result. **A missing binary must be fatal HERE**, not a
+# blank in a verdict eight steps later — the whole `zero-bytes-is-not-not-yet` class.
+CLIENT=${CARGO_TARGET_DIR:-$REPO/target}/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
+[ -x "$CLIENT" ] || { echo "=== ★★★ NO CLIENT BINARY AT $CLIENT — every arm below would be VOID ==="; finish 97; }
+[ -s "$CLIENT" ] || { echo "=== ★★★ CLIENT BINARY IS ZERO BYTES ==="; finish 97; }
 file "$CLIENT"
 echo "=== CLIENT md5=$(md5sum < "$CLIENT" | cut -d' ' -f1) ==="
 
@@ -58,7 +68,14 @@ echo "=== CLIENT md5=$(md5sum < "$CLIENT" | cut -d' ' -f1) ==="
 #     produced by one script, from one file, within minutes of each other.
 echo "=== ★★★★★ NATIVE ARM (bare metal, same binary) $(date -Is) ==="
 timeout 240 ./scripts/bench/host_xid_watch.sh ${PFX}_native -- "$CLIENT" --ce-client
-echo "=== NATIVE ARM RC=$? ==="
+NRC=$?
+echo "=== NATIVE ARM RC=$NRC ==="
+# ★★★★★ **THE NATIVE ARM IS THIS RUNG'S KNOWN-POSITIVE, so a red one VOIDS the guest arm
+# rather than merely accompanying it.** It is the only thing that says real RM accepts
+# `hUserdMemory` = the ring object at `userdOffset=0x3000`. If it fails, a red guest arm
+# cannot be attributed to the guest path — and `[measured, w287 boot 1]` an RC of 127 from a
+# missing binary sat in this log looking exactly like a measurement.
+[ $NRC -eq 0 ] || { echo "=== ★★★ NATIVE ARM FAILED (rc=$NRC) — the guest arm would be UNINTERPRETABLE ==="; finish 98; }
 
 echo "=== BUILD the QOM shim $(date -Is) ==="
 scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build
