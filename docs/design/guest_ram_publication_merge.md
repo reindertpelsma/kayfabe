@@ -1,5 +1,29 @@
 # Publishing the guest-RAM half — ⊘ STOP AND REPORT: two coupled design choices
 
+> # ★★★★★ SUPERSEDED IN PART 2026-08-14 (w292) — **THE MERGE IS BUILT, AND THE RATE IS NOW A DRAIN**
+> **STATUS: LIVE for choice 1 (still open, still unbuilt); ANSWERED for choice 2; and the
+> "not built" line below is now FALSE of (2a).**
+>
+> - **(2a) IS BUILT** — `commit_pin_guest_ram` (`kayfabe-fwd/src/lib.rs:1909-1961`) upgrades the
+>   row to `Binding::pinned_guest_ram` iff the table holds **exactly that extent**, restores it
+>   byte-identically on failure, and refuses by name (`NotGuestRam`). `[measured, boot
+>   w290pboth @ 40f42eb]` `host_rows = 16 900 of 18 269 (92.5 %)`, `refused=0`.
+> - **The amortisation this doc asked for is now an ARM, not a wish.** `KAYFABE_VAS_PUBLISH=drain`
+>   (w292) drains **the VAS this doorbell is about** to empty before the ring is rung — the C's
+>   own invariant — while every *other* address space keeps the bounded 256-row sample.
+>   ⊘ The budget is **not** raised across the board and `SYSTEM_PROC` keeps its §12.26 refusal.
+>
+> ⊘⊘ **AND ONE CORRECTION TO w291's OWN WRITE-UP, measured from boot `w290pboth`'s log:** the
+> commit message for `62a2964` says the pin pass *"was still draining the LOW region
+> (`0x2004…`) when the boot ended"*. **It was not.** The 67 pin emissions are chronologically
+> ordered and the **last five start at `0x73b183000000`, `…3100000`, `…3400000`, `…3500000`,
+> `…3600000`** — the pass was in the **high** region and **one 1 MiB block short** of the
+> faulting leaf `0x73b1_83700000` when the boot ended. The *conclusion* (`grep -c 73b1837` = 0
+> ⇒ never reached ⇒ throughput) is **unchanged and still right**; the *distance* was one
+> doorbell, not a region away. ⚠ That reading came from the tail of a **coalesced and capped**
+> `HOST-PUBLISHED` run list, which is not ordered by address — the capped-row trap pointing at
+> a conclusion instead of at an absence.
+
 > # ★★★★★ ANSWERED 2026-08-13, SAME DAY, BY MEASUREMENT — **CHOICE 2 IS DISSOLVED, NOT RULED.**
 > **(2a) — one host object per row — WINS on every axis, and needs no owner ruling.**
 > Boot `w290ppinrate` @ `6d157c92`, real GA106, arm `KAYFABE_VAS_PUBLISH=pinrate`:

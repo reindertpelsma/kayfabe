@@ -53,6 +53,9 @@ done
 echo "=== push + build in the guest ==="
 $G 'cat > /tmp/cup2.c'           < "$CUP2_SRC"  || die "could not push cup2.c"
 $G 'cat > /tmp/guest_spinprobe.c' < "$PROBE_SRC" || die "could not push guest_spinprobe.c"
+# ★★★ DELETE THE CLIENT FIRST: no build ⇒ no file ⇒ no run. `[ -x ]` alone cannot tell a
+#     fresh binary from a stale one, and a stale client once exited 95 while looking healthy.
+$G 'rm -f /tmp/cup2'
 $G 'gcc -O0 -o /tmp/cup2 /tmp/cup2.c -lcuda 2>&1; echo GCC_CUP2_RC=$?'
 $G 'gcc -O1 -o /tmp/guest_spinprobe /tmp/guest_spinprobe.c 2>&1; echo GCC_PROBE_RC=$?'
 $G 'test -x /tmp/cup2' || die "cup2 did not build in the guest"

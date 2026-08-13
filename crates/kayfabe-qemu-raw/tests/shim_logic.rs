@@ -3112,6 +3112,8 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
     assert_eq!(vas_publish_from(Some("publish")), Ok(VasPublishArm::Publish));
     assert_eq!(vas_publish_from(Some("pinrate")), Ok(VasPublishArm::PinRate));
+    assert_eq!(vas_publish_from(Some("both")), Ok(VasPublishArm::Both));
+    assert_eq!(vas_publish_from(Some("drain")), Ok(VasPublishArm::Drain));
     for bad in ["on", "1", "true", "yes", "", "Publish"] {
         assert!(
             vas_publish_from(Some(bad)).is_err(),
@@ -3129,4 +3131,26 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     assert!(VasPublishArm::PinRate.observes() && !VasPublishArm::PinRate.publishes());
     assert!(VasPublishArm::PinRate.measures_pin_rate());
     assert!(!VasPublishArm::Publish.measures_pin_rate() && !VasPublishArm::Off.measures_pin_rate());
+    // ★★★ w291 `both` is BOTH halves; ★★★★★ w292 `drain` is `both` plus ONE scoped change.
+    assert!(VasPublishArm::Both.publishes() && VasPublishArm::Both.measures_pin_rate());
+    assert!(VasPublishArm::Drain.publishes() && VasPublishArm::Drain.measures_pin_rate());
+    // ★★★★★ **THE PREDICATE THAT KEEPS THE BUDGET SCOPED, ASSERTED RATHER THAN COMMENTED.**
+    // If `drains_doorbelled_vas()` were ever true of `both`, this rung's control would be
+    // running the rung's own change and the two boots could not be compared. And it must be
+    // FALSE of every other arm, or the brief's *"⊘⊘ DO NOT RAISE THE BUDGET BLINDLY ACROSS
+    // THE BOARD"* would hold only by convention.
+    assert!(VasPublishArm::Drain.drains_doorbelled_vas());
+    for other in [
+        VasPublishArm::Off,
+        VasPublishArm::Assert,
+        VasPublishArm::Publish,
+        VasPublishArm::PinRate,
+        VasPublishArm::Both,
+    ] {
+        assert!(
+            !other.drains_doorbelled_vas(),
+            "⊘ `{}` must NOT drain: only `drain` may, or the control runs the change",
+            other.as_str()
+        );
+    }
 }
