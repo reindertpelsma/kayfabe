@@ -1082,3 +1082,77 @@ strictly more host memory exposed than joining the ones an engine will actually 
 deliberate fault is never issued because arm 4's control cannot land; arm 4's control cannot land
 because its operands are the un-joined ones. ⇒ **hardening item (b) is the unblock**, and the
 owner's first ask is one step behind it.
+
+---
+
+# ADDENDUM 11 — ★★★ **`CUP2_RC=1`, UNCHANGED. THE CE FIX DOES NOT REACH CUP2.**
+
+Boot `w289cup2` @ `3929ec3`, **the same two relaxations**, `OPERAND-JOIN arm=join`,
+`PT-SWEEP ran=2`, arming confirmed in force from the boot's own log.
+
+```
+★★★★★ CUP2_RC (anchored)   = [CUP2_RC=1]        ← baseline 1. UNCHANGED.
+       unanchored, contrast = [CUP2_RC=0 CUP2_RC=1 ]
+       GCC_CUP2_RC lines    = [1]
+```
+
+⇒ **The third pre-registered outcome, and the one I flagged as most changing what to do next:**
+*"`CUP2_RC=1` unchanged ⇒ the CE fix does not reach cup2's path ⇒ **a further wall exists beyond
+the CE plane, and the hardening list is premature.**"*
+
+## 46. WHERE IT DIES — by identity, not by count
+
+```
+ok   cuInit(0) … cuDeviceGet … cuDeviceGetName … cuDeviceTotalMem   totalMem=11959 MiB
+FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+
+Xid 31, name=memfd:kayfabe-i, channel 0x9:
+  MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x7ff6_a6e00000
+  Fault is of type FAULT_PDE  ACCESS_TYPE_VIRT_WRITE      (Xid count = 1)
+```
+
+★ **This is the GR fault, unmoved, and it is a DIFFERENT fault from the CE one this rung fixed:**
+
+| | the CE fault (fixed) | the GR fault (unmoved) |
+|---|---|---|
+| engine | `CE0 / HUBCLIENT_CE1` | **`GRAPHICS / HUBCLIENT_FE`** |
+| type | `FAULT_PTE` (leaf missing) | **`FAULT_PDE`** (a *directory* level missing) |
+| access | `VIRT_READ` | **`VIRT_WRITE`** |
+| address | `0x1_20000000` (our dictated operand) | **`0x7ff6_a6e00000`** (libcuda's own VA) |
+
+⊘ **Different engine, different level of the descent, different access direction, different
+address space.** The operand join and the table sweep are **CE-operand mechanisms**; nothing
+about them was ever going to touch a GR context-buffer descent. ⇒ **`CUP2_RC=1` is the correct
+and expected result, and it is the useful one.**
+
+⚠ **And the address shape is NOT provenance** — banked and paid for: under UVM unified addressing
+the GPU VA *is* the process VA, so `0x7ff6_…` differing from w273's `0x75b2_…` and w277's
+`0x7f58_…` is **predicted**, not suspicious. The three are the same fault under ASLR.
+
+## 47. ⇒ THE HONEST SCOPE OF THIS RUNG, RESTATED
+
+- **The CE data plane crosses** — on a relaxed arm, both relaxations named. §38-41.
+- **cup2 does not move.** The wall it dies on is the **GR / `FAULT_PDE` / `HUBCLIENT_FE`** one,
+  which this rung never addressed and never claimed to.
+- ⇒ **The hardening list (§45) is premature as a next step.** Doing (a) and (b) would make the CE
+  path shippable and would **not** move the goal metric. The next rung is the GR descent.
+- ★ What this rung *does* hand the GR problem: `TABLE-HOLDS`, the in-band ioctl reader,
+  `Crit1State`, the sweep/join arms, and — most usefully — the knowledge that **`FAULT_PDE` on
+  the GR plane is a directory-level miss**, a different question from the leaf-level `FAULT_PTE`
+  that the CE plane turned out to be.
+
+## 48. ⊘⊘ AND I COMMITTED THE EXACT DEFECT I FIXED THIS RUNG
+
+My `w289_cup2.sh` appended its grading block **after** the inherited `finish 0` (line 121 of
+140), so **the whole `CUP2_RC` section was dead code and printed nothing.** The number above was
+recovered by grepping the probe log directly.
+
+⚠ **That is the same `finish 0` defect I found and fixed in `w288n_notifier_run.sh` earlier in
+this same rung** — I removed it from one script and reintroduced it in another within hours, by
+appending to a file whose exit was in the middle. ⇒ **Knowing a trap by name does not prevent
+committing it; only a check does.** Moved to the end; `bash -n` clean.
+
+★★★ **AND THE ANCHOR TRAP FIRED LIVE, A THIRD CONSECUTIVE RUNG.** Unanchored reads
+`[CUP2_RC=0 CUP2_RC=1]` — it would have reported **0**, the campaign's headline success value,
+on an arm that returned **1**. The anchored/unanchored contrast is the only reason this report
+carries the right number.

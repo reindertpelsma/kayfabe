@@ -118,7 +118,6 @@ grep -E "R33 ADDRESS SPACES" "$P" 2>/dev/null | sed "s/^/    /"
 echo ""
 echo "=== the guest drivers own word ==="
 grep -iE "nvrm|xid" /workspace/bench/run_${TAG}_dmesg.log 2>/dev/null | tail -12 | sed "s/^/    /"
-finish 0
 
 # =========================================================================================
 # ★★★★★ THE GOAL METRIC — ANCHORED, WITH THE UNANCHORED CONTRAST PRINTED BESIDE IT.
@@ -138,3 +137,5 @@ grep -oE 'PT-SWEEP tasks=[0-9]+ skipped=[0-9]+ ran=[0-9]+' "$Q" 2>/dev/null | ta
 echo "=== ★ THE FAULT, BY IDENTITY ==="
 grep -E 'Xid' "$D" 2>/dev/null | grep -oE 'faulted @ 0x[0-9a-f_]+.*' | cut -c1-90 | sed 's/^/      /'
 echo "      Xid count = [$(grep -c Xid "$D" 2>/dev/null)]"
+
+finish 0
