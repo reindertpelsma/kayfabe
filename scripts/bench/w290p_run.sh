@@ -60,8 +60,10 @@ export KAYFABE_ISOLATES=real
 export KAYFABE_CE_EXECUTOR=host
 export NVKVM_RAM_BACKEND=memfd
 export KAYFABE_GUEST_RAM=memfd
-export GQ_TIMEOUT=420
-export BOOT_TIMEOUT=180
+# ⊘ Overridable, DEFAULTED to the value every w290p arm used, so an existing caller keeps
+#   behaving byte-identically. ⚠ The nvdiff hook needs >= 600.
+export GQ_TIMEOUT=${GQ_TIMEOUT:-420}
+export BOOT_TIMEOUT=${BOOT_TIMEOUT:-180}
 export KAYFABE_FB_JOIN=shared
 export KAYFABE_GUEST_RING=ring
 export KAYFABE_GUEST_PUSHBUF=pin
@@ -74,8 +76,12 @@ export KAYFABE_OPERAND_JOIN=join    # ⊘ RELAXATION 2 (carried)
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
 unset KAYFABE_RING_VIDMEM
 
-export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh
-echo "=== BOOT $TAG START $(date -Is)  HOOK=[cup2_hook_gdbspin] ==="
+# ★★★ w292 — OVERRIDABLE so the SAME arm can be re-run under a DIFFERENT INSTRUMENT.
+# ⊘ Defaulted to the cup2 hook every w290p arm used. ⚠ A hook that does not run cup2 will
+#   print "⊘ NO LINE BEGINS WITH CUP2_RC=" below, and that is CORRECT: the measurement did
+#   not happen, and it must never read as 0.
+export POST_CAPTURE_HOOK=${POST_CAPTURE_HOOK:-$REPO/scripts/bench/cup2_hook_gdbspin.sh}
+echo "=== BOOT $TAG START $(date -Is)  HOOK=[$(basename "$POST_CAPTURE_HOOK")] ==="
 timeout 1800 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
 echo "=== BOOT $TAG RC=$? $(date -Is) ==="
 Q=/workspace/bench/run_${TAG}_qemu.log
