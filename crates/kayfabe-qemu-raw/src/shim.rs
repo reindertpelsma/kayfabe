@@ -8927,9 +8927,19 @@ impl SharedDoorbell {
         // ★★★★★ w291 — THE BOUNDED PIN-RATE MEASUREMENT. Runs INSTEAD of the publication
         // pass, never beside it: they touch disjoint populations through different chains,
         // and one line reporting both would be the count that cannot see a substitution.
-        if self.vas_publish.measures_pin_rate() {
-            return Some(self.measure_guest_ram_pin_rate(&head));
-        }
+        // ★★★ On `pinrate` this REPLACES the publication pass; on `both` it PRECEDES it, so
+        // one boot carries both halves and the line carries both sentences. ⊘ The two are
+        // printed as separate clauses and never summed into one counter — they are different
+        // chains over disjoint populations, and one number could not see the substitution.
+        let pin_clause = if self.vas_publish.measures_pin_rate() {
+            let line = self.measure_guest_ram_pin_rate(&head);
+            if !self.vas_publish.publishes() {
+                return Some(line);
+            }
+            Some(line)
+        } else {
+            None
+        };
         let started = std::time::Instant::now();
         let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
         let mut rows: Vec<String> = Vec::new();
@@ -9022,7 +9032,8 @@ impl SharedDoorbell {
             }
         }
         Some(format!(
-            "{head} → published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
+            "{}{head} → published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
+            pin_clause.map(|l| format!("{l}\nkayfabe: ")).unwrap_or_default(),
             started.elapsed().as_millis(),
             if budget_hit {
                 format!(
@@ -11324,6 +11335,11 @@ impl Regs {
                      FRAMEBUFFER rate. ⊘ It writes NOTHING into Binding::host, adds no \
                      representation and touches no refcount — it is the measurement, NOT the \
                      merge",
+                VasPublishArm::Both =>
+                    "PUBLISHED, AND the guest-RAM half is pinned in the SAME boot — ★ w291 \
+                     step 1, which has never been run: leg 8 was off on the (2a) arm and (2a) \
+                     was off on leg 8's. ⚠ They cover DISJOINT populations and may simply \
+                     SUM; that is a legitimate pre-registered outcome, not a disappointment",
             },
         );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
@@ -14105,6 +14121,15 @@ pub enum VasPublishArm {
     /// verb has always put them. If the rate is cheap, (2a) needs no ruling at all and
     /// (2b)/(2c) are moot; if it is dear, the owner rules on a number instead of a guess.
     PinRate,
+    /// ★★★★★ **w291 step 1 — BOTH HALVES IN ONE BOOT, and they never have been.**
+    ///
+    /// Leg 8 (framebuffer publication) was OFF on the (2a) arm and (2a)'s pinning was OFF on
+    /// leg 8's, so the two have only ever been measured apart. They cover **disjoint
+    /// populations** — `Vidmem` rows through `join_one_fb_leaf`, guest-RAM rows through
+    /// `pin_guest_ram` — so this arm may simply **sum**, and that is pre-registered as a
+    /// legitimate outcome rather than a disappointment. What it settles is whether the
+    /// residual `total - host_rows` is one population or two.
+    Both,
 }
 
 impl VasPublishArm {
@@ -14116,6 +14141,7 @@ impl VasPublishArm {
             VasPublishArm::Assert => "assert",
             VasPublishArm::Publish => "publish",
             VasPublishArm::PinRate => "pinrate",
+            VasPublishArm::Both => "both",
         }
     }
 
@@ -14132,13 +14158,13 @@ impl VasPublishArm {
     /// two mechanisms. Same reason `joined` is counted apart from `bound` one plane over.
     #[must_use]
     pub fn publishes(self) -> bool {
-        self == VasPublishArm::Publish
+        matches!(self, VasPublishArm::Publish | VasPublishArm::Both)
     }
 
     /// Whether the bounded guest-RAM pin-rate measurement runs.
     #[must_use]
     pub fn measures_pin_rate(self) -> bool {
-        self == VasPublishArm::PinRate
+        matches!(self, VasPublishArm::PinRate | VasPublishArm::Both)
     }
 }
 
@@ -14153,6 +14179,7 @@ pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &
         Some("assert") => Ok(VasPublishArm::Assert),
         Some("publish") => Ok(VasPublishArm::Publish),
         Some("pinrate") => Ok(VasPublishArm::PinRate),
+        Some("both") => Ok(VasPublishArm::Both),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_VAS_PUBLISH does not name an arm: the only values are `off` (silent, \

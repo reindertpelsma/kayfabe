@@ -286,3 +286,23 @@ fn the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow() {
         }),
     );
 }
+
+/// ★★★★★ **THE MERGE'S EQUALITY, ASSERTED — not merely printed beside itself.**
+///
+/// `MERGE-AGREES` compares the two records against each other. It is the check for the class
+/// that made `host_rows=4 of 16425` wrong: a number that read as complete because nothing
+/// stood beside it. ⊘ A world with no pins is the trivially-agreeing case and must still say
+/// so, or the flag would only ever be read on the boots that already look healthy.
+#[test]
+fn the_merge_equality_is_reported_and_holds_with_no_pins() {
+    let gpu = world();
+    let a_pid = pid_of(&gpu, A_PDB);
+    let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
+    promote(&dev, vec![range(0x8000_0000, GRANULE, Aperture::Vidmem)]);
+    let published = dev.vas_published_ranges(a_pid, 16);
+    assert!(
+        published.iter().all(|r| r.contains("MERGE-AGREES=true")),
+        "0 host rows >= 0 pins — the trivial case still REPORTS, it is not omitted: \
+         {published:?}"
+    );
+}

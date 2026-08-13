@@ -3273,9 +3273,24 @@ impl SharedDevice {
                         .take(cap)
                         .map(|(va, p)| format!("0x{va:x}+0x{:x}", p.len))
                         .collect();
+                    // ★★★★★ **THE MERGE'S OWN FALSIFIER, CHECKED RATHER THAN PRINTED.**
+                    //
+                    // Two records that must agree, compared against each other — not reported
+                    // side by side for a reader to compare. This is the fix for the class that
+                    // made `host_rows=4` wrong: a number that looked complete because nothing
+                    // was standing beside it. Every guest-RAM pin whose grant matches exactly
+                    // one row upgrades that row, so **each such pin contributes exactly one
+                    // `host_rows`**.
+                    //
+                    // ⊘ `>=` and not `==`, and the asymmetry is the honest one: `host_rows`
+                    // legitimately EXCEEDS `pins` by the framebuffer joins (leg 7/8), which
+                    // carry a backing and no pin. What must never happen is a pin with no row
+                    // — that is a mapping the field cannot see, which is exactly the defect.
+                    // ⇒ `MERGE-AGREES=false` means a pin exists that no row records.
+                    let agrees = rows >= vas.guest_ram_pins.len();
                     format!(
                         "[proc={} gpu={} pdb=0x{:x} host_rows={} of {} runs={} {}{} \
-                         pins={}=[{}{}]]",
+                         pins={}=[{}{}] MERGE-AGREES={agrees}]",
                         pid.0,
                         gpu.0,
                         pdb.0,
