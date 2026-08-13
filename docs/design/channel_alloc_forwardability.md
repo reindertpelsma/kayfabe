@@ -3,7 +3,17 @@
 **STATUS: LIVE (2026-08-13).** §0–§5 are the read-only source study. **§7 (2026-08-13, w286) is
 the CENSUS that closes §6 items 1–3 against committed captures** — read §7's lead before acting on
 §3.5 or §6, because it retires the "no handle to translate" case as unobserved and **inverts §6's
-item-2 premise**. Read-only source study, no boot, no build. Ground truth is
+item-2 premise**.
+> ★★★ **§8 (2026-08-13, w287) is the USERD FORM TABLE and the ERROR-DELIVERY MECHANISM.** Read
+> **§8.0** before acting on §2's `hObjectError` row, §3.5, or anything about VAs. It establishes:
+> **no GPU VA for USERD or for the error notifier ever reaches us** (the guest's CPU-RM resolves
+> both to physical first) — while the `ADDR_VIRTUAL` branch the owner suspected **does exist, on
+> the error notifier, and 31 of our own 68 channels take it**; that **`hObjectError` is off the
+> forward path entirely** because with Confidential Compute off the **GSP** writes the notifier
+> and we are the GSP; that `errorNotifierMem` arrives **complete on 63/63**, in **SYSMEM**; and
+> that there is a **fourth delivery plane** (`0x83de030c`, `ROUTE_TO_PHYSICAL` ⇒ to us) which is
+> the one a real GA106 was measured using to kill a CUDA process.
+Read-only source study, no boot, no build. Ground truth is
 `research_clones/ogkm-580.159.04/` (the bench driver version) in the `nvidia-gpu-passthrough`
 tree; kayfabe citations are marked with the revision they were read at, because
 `origin/master` (`e758778`) is materially behind the in-flight lane branch
@@ -233,6 +243,17 @@ must **supply the other representation**, because the host RM will otherwise all
 `ogkm-580` line numbers unless noted. **V** = forward verbatim, **T** = translate,
 **⊘** = never forward / strip, **D** = RM derives it, do not fight.
 
+> ⊘⊘ **CORRECTED 2026-08-13 (w287) — the `hObjectError` row's `T` is right about the mechanism and
+> wrong about the need.** The host CPU-RM *would* resolve it, but on our target it is **never asked
+> to**: with Confidential Compute off, `krcErrorWriteNotifier` resolves unconditionally to `_CPU`
+> (`generated/g_kernel_rc_nvoc.h:213`) and CPU-RM calls it **only when CC is enabled**
+> (`kernel_gsp.c:657-668`); otherwise the **GSP** writes the notifier. **We are the GSP.** ⇒
+> translating `hObjectError` onto the forward buys nothing, and §7.3 already measured that we
+> cannot translate it anyway (0/63 resolvable). The field that carries the answer is
+> `internalFlags[3:2]` + `errorNotifierMem`, which arrive **complete on 63/63**. See **§8.4/§8.5**.
+> ⚠ Same for `hObjectEccError`: `eccErrorNotifierMem` is empty on 68/68 with type `NONE` — an
+> unexercised field, not a missing one.
+
 | field | offset (580) | on our RECEIVE | on our FORWARD | why |
 |---|---|---|---|---|
 | `hObjectError` | +0 | **dead** — GSP uses `errorNotifierMem` + `internalFlags[3:2]` (`:522-533`, `:589-596`) | **T** | host CPU-RM resolves it in the caller namespace (`:522-527`, `kchannelGetNotifierInfo` `:1988+`) |
@@ -384,6 +405,15 @@ of those six is **harmless** — the host RM destroys them before use and again 
 
 ### 3.5 ★ Which representation does RM honour — the sharpest sub-question
 
+> ★★ **EXTENDED 2026-08-13 (w287) — there are FOUR forms, not two, and §8.1 tables them with
+> their state cost.** The two below are right; missing are **(a)** the `hUserdMemory[0] == 0`
+> arm's real cost — the host RM then allocates USERD out of its own pre-allocated array and
+> `kchannelMap_IMPL` refuses a CPU mapping to any *client-allocated*-USERD channel
+> (`kernel_channel.c:1291`), so form 2 forces a **per-submission cursor mirror**; and **(b)** that
+> USERD can be **re-pointed after creation** via `NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO`
+> (`kernel_fifo_ctrl.c:521-599`). ⇒ **`classId(Memory)` accepts an `OS_DESCRIPTOR`** and RM says
+> so in source (`kernel_channel_gv100.c:251-254`), which is what makes form 1 affordable.
+
 **It depends on the path, and the dependence is an explicit `if`, not a preference.**
 
 - **Receive side (we are the GSP): the DESCRIPTOR.** `_kchannelDescribeMemDescsFromParams`
@@ -533,6 +563,11 @@ discriminator as well as the more precise one.**
    becomes live.
 6. **The isolate's own re-keying on the guest's `hClient`.** Not audited — out of scope of Q1/Q2
    and it needs its own pass over `kayfabe-isolate` / `kayfabe-isolate-host`.
+
+⇒ **Items 4, 5 and 6 still stand unmeasured after w287.** §8's own open list is **§8.6**, and it is
+a different list — its item 1 (is `errorNotifierMem.base` a GPA under a vIOMMU?) and item 4 (the
+reply shape of `0x83de030c`, already captured in full in
+`nvidia-gpu-passthrough traces/fault_known_positive_ga106/`) are the two cheapest.
 
 ---
 
@@ -777,3 +812,375 @@ the work of minting the host side.
   states which. ⚠ `rm.rs` line numbers differ by ~700 between them.
 - Read-only throughout: no build, no boot, no working tree touched (this branch was authored in
   a detached `git worktree`).
+
+---
+
+# §8 THE USERD FORM, AND MAKING A FAULT REACH THE GUEST (w287, 2026-08-13)
+
+**No boot, no build, no bench.** Source study over `ogkm-580.159.04` + a census over the same
+five committed `.rec` captures §7 used, re-run and reproduced (68 requests / 68 replies,
+`KERNEL 36 · USER 32`, `hUserdMemory[0]==0` 0/68 — identical to §7). kayfabe citations state
+their revision: **`71fbd59`** = this branch's base (`w286-channel-privilege-census`), **`b0d6de7`**
+= the lane `w284-ce-passthrough-for-real`. ⚠ The two disagree on exactly this code.
+
+## ★★★ 8.0 LEAD — six things that contradict the brief that commissioned this rung
+
+**⊘⊘ 8.0.1 — The owner's "allocated as VA pages" hypothesis is REFUTED for USERD and CONFIRMED
+for the ERROR NOTIFIER. They are two fields of the same struct and they differ by an explicit
+`if`.**
+- USERD: `kchannelCreateUserdMemDesc_GV100` resolves the handle and takes
+  `memdescGetPhysAddr(pUserdMemDescForSubDev, **AT_GPU**, userdOffset)`
+  (`kernel_channel_gv100.c:204-206`). There is **no `ADDR_VIRTUAL` branch anywhere in that
+  function**, and the address is then width-checked against the *runlist entry's* physical
+  pointer fields (`kernel_channel_ga100.c:38-47`, `NV_RAMRL_ENTRY_CHAN_USERD_PTR_LO/HI`).
+- The error notifier: `kchannelGetNotifierInfo` opens with
+  `if (memdescGetAddressSpace(pMemory->pMemDesc) == ADDR_VIRTUAL)` (`kernel_channel.c:2019`),
+  resolves the **GPU VA** through `CliGetDmaMappingInfo` (`:2028-2039`), bounds-checks
+  `offset + sizeof(NOTIFICATION)` against the mapping (`:2049-2054`), and returns
+  `ERROR_NOTIFIER_TYPE_CTXDMA` with a non-zero `*pOffset` (`:2072-2075`).
+
+★ **And it is not hypothetical — 31 of our own 68 channels take that branch.** UVM allocates its
+notifier with `nvGpuOpsGpuMalloc(vaSpace, …, sizeof(NvNotification) *
+NV_CHANNELGPFIFO_NOTIFICATION_TYPE__SIZE_1, &channel->errorNotifierOffset, flags{bGetKernelVA})`
+— **48 bytes** — then `CliGetDmaMappingInfo`s it and passes the handle as
+`hObjectError` (`nv_gpu_ops.c:5886-5941`). Our census finds **exactly 31 rows with
+`errorNotifierMem.size == 48` and `errorNotifierType == CTXDMA(2)`, all 31 `PRIVILEGE=KERNEL`**,
+five of them at page offset `0x420` — the `errorContextOffset` folded in.
+
+⇒ **But the conclusion the owner drew from it does not follow, and this is the load-bearing
+half:** in *both* cases the guest's own CPU-RM **resolves the VA to a physical address before the
+RPC leaves it**. `errorNotifierMem.base = memdescGetPhysAddr(pErrContextMemDesc, AT_GPU, 0) +
+errorContextOffset` (`kernel_channel.c:557-560`). **No GPU VA for USERD or for the error notifier
+ever reaches us on `NV_CHANNEL_ALLOC_PARAMS`.** *"Forward the VA addresses verbatim"* is not a
+thing this wire ever asks for — there is no VA on it to forward.
+
+**⊘⊘ 8.0.2 — Q1's option 1 is ALREADY BUILT. Twenty-ninth consecutive lane.** `UserdOwner::{Ours,
+HandedIn}` + `AdoptedGuestUserd` exist on the lane `b0d6de7` (`rm.rs:800-806`, `:4894-4910`,
+`:5035`, `:5058`; `kayfabe-isolate/src/lib.rs:690-737`), and the shape is **exactly** the answer
+this rung was asked to design: *an offset into a host RM `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` that
+`join_fb_leaf` already minted over the guest's framebuffer leaf*. ⊘ It does **not** exist at
+`71fbd59`: `grep -rn UserdOwner crates/` → empty, while the same grep shape finds `RingOwner`
+16× in the same file. At `71fbd59` USERD is unconditionally ours at offset 0
+(`rm.rs:4174` `alloc_device_local(RING_OBJECT_BYTES)`, `rm.rs:4314` `userd_offset_0: 0`).
+
+**⊘⊘ 8.0.3 — Q2's option space is already built too, and it is a DIFFERENT option space than the
+brief describes.** The brief asks *"what CAN we hand the host so RM writes errors into memory the
+guest is already polling"*. **On our target we hand the host nothing: we write the bytes
+ourselves, because we are the GSP and the GSP is the writer.** `krcErrorWriteNotifier` resolves
+**unconditionally** to `_CPU` (`g_kernel_rc_nvoc.h:213`) and CPU-RM only calls it when
+Confidential Compute is on (`kernel_gsp.c:657-668`, *"With CC enabled, CPU-RM needs to write error
+notifiers"*); with CC off it calls `krcErrorSendEventNotifications_HAL` instead, whose own
+docstring says *"GSP writes to notifiers … This function actually sends those notifications"*
+(`kernel_rc_notification.c:344-372`). ⇒ `hObjectError` on the **forward** is not on the path at
+all. And the writer already exists in our tree at `71fbd59`: `crates/kayfabe-abi/src/notifier.rs`
+(the 16-byte record, `NOTIFIER_STATUS_RC = 0xffff` at `:81`, `PUBLISH_SPLIT`, and
+`ChannelErrorNotifierWire::decode` at `:244-266`) and `crates/kayfabe-rmrpc/src/fault.rs`
+(`FaultEmission::deliver` at `:119-131`, `rc_triggered_for` at `:152-199`), designed in
+`docs/design/simulated_gpu_fault.md` §5.3.
+
+**⊘ 8.0.4 — `errorNotifierMem` DOES arrive complete, and its 5 empty rows are the OPPOSITE of the
+`dlen=0` class.** 63/68 carry `base != 0`; the 5 that do not carry `errorNotifierType ==
+ERROR_NOTIFIER_TYPE_NONE(1)` **and** `hObjectError == 0` — two independent fields agreeing that
+there is nothing to describe. **An empty descriptor here is a measurement, not a hole.** Full
+census in §8.4. ⚠ But note the aperture: **`NV_ADDR_SYSMEM` on 63/63**, where `userdMem` is
+`NV_ADDR_FBMEM` on 68/68. That single difference is what makes the whole of Q2 cheap and the
+whole of Q1 expensive.
+
+**★★★ 8.0.5 — There is a FOURTH error-delivery plane the brief does not have, it is the one this
+repo already MEASURED on real GA106, and it routes to US.**
+`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES` (`0x83de030c`) carries
+`flags = 0x50048` (`g_kernel_sm_debugger_session_nvoc.c:452-464`) =
+`RMCTRL_FLAGS_NON_PRIVILEGED(0x8) | ROUTE_TO_PHYSICAL(0x40) | GSP_PLUGIN_FOR_VGPU_GSP(0x10000) |
+PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST(0x40000)` (`inc/kernel/rmapi/control.h:208,233,290,308`), and
+its kernel-side implementation **returns `NV_ERR_NOT_SUPPORTED` outright when `!IS_VIRTUAL`**
+(`kernel_sm_debugger_session_ctrl.c:742,773`). ⇒ on a GSP client it is **routed to the physical
+RMAPI, i.e. RPC'd to the GSP, i.e. to us** — it even has its own RPC function number,
+`CTRL_DBG_READ_ALL_SM_ERROR_STATES = 109` (`inc/kernel/vgpu/rpc_global_enums.h:119`).
+⇒ And `w277` (`nvidia-gpu-passthrough` `a42a6d9`, real GA106, no VM, `580.159.04`) measured that
+**this is the single ioctl a faulting `cuCtxSynchronize` issues, that its own NV status is
+`NV_OK`, and that exactly 5 bytes change in the reply — `mmuFault.valid 0→1`,
+`mmuFault.faultInfo 0→0x81010000`** — after which every later CUDA call returns `700
+CUDA_ERROR_ILLEGAL_ADDRESS` **issuing zero further ioctls**.
+⇒ **For a CUDA client, wiring `hObjectError` alone would not produce the crash the owner asked
+for, and answering fn 109 would.** They are different planes with different consumers (§8.5).
+
+**⊘ 8.0.6 — a correction to a caveat this rung generated itself.** The `hUserdMemory[0]==0`
+fallback is *not* unavailable on GA106. `bDisablePreAllocatedUserD = bUsePerRunlistChram`
+(`kernel_fifo_init.c:225-230`), and `bUsePerRunlistChram` is set only under
+`IS_VIRTUAL_WITH_SRIOV` (from vGPU static info) or `gpuIsSriovEnabled(pGpu)`
+(`kernel_fifo_init.c:200-222`). Our bench is neither. ⇒ pre-allocated USERD is live on our chip.
+
+---
+
+## 8.1 Q1 — every form the host CPU-RM accepts for USERD, with its state cost
+
+The precision the brief asked for first: **`hUserdMemory[]` is a handle array and `userdOffset[]`
+is a byte offset *within that object*. Neither is an address of any kind.** `userdOffset` is
+namespace-free and therefore the one field in this group that *is* verbatim-safe
+(`kernel_channel_gv100.c:204-206` passes it raw into `memdescGetPhysAddr`).
+
+| # | form | does the host RM accept it? | what must exist | per-submission state |
+|---|---|---|---|---|
+| **1** | **handle + offset** over an object we mint | **YES — and it is the only form with a reader on the forward path** (`kernel_channel.c:2299-2312` → `kchannelCreateUserdMemDescBc_HAL`) | one host RM `Memory`-derived object covering the bytes | **none required** — see §8.2 |
+| **2** | `hUserdMemory[0] == 0` (RM picks) | **YES**, and it is the default (`kernel_channel_gv100.c:80`; `bClientAllocatedUserD` stays `NV_FALSE`) | nothing | none — but see the trap below |
+| **3** | descriptor-only (`userdMem`) | **NO.** ⊘ Zero readers of any `NV_MEMORY_DESC_PARAMS` on the CPU-RM arm; `_kchannelDescribeMemDescsFromParams` *asserts* it is on the GSP/VF arm (`kernel_channel.c:2388-2390`). §1 established this; nothing found here changes it. | — | — |
+| **4** | ★ **re-point after creation** | **YES, and the brief does not have it.** `subdeviceCtrlCmdFifoUpdateChannelInfo_IMPL` (`kernel_fifo_ctrl.c:521-599`) takes `hUserdMemory` + `userdOffset`, requires `bClientAllocatedUserD` (`:559-562`) and `IS_GSP_CLIENT` (`:564`), forwards to the physical RMAPI and rebuilds the submemdesc (`:566-583`) | a host object, later | none |
+
+**What class the object may be — the question that decides whether form 1 is affordable.**
+`serverutilGetResourceRefWithType(hClient, hUserdMemory, **classId(Memory)**, &ref)`
+(`kernel_channel_gv100.c:184-192`). Not a specific external class — **any NVOC `Memory`
+subclass**. And RM explicitly anticipates the one we care about:
+```c
+if (dynamicCast(pUserdMemoryRef->pResource, OsDescMemory) != NULL)
+    refAddDependant(pUserdMemoryRef, RES_GET_REF(pKernelChannel));   /* :251-254 */
+```
+⇒ **`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` (0x71) is a legal USERD backing, named in the source.**
+`OsDescMemory` derives from `Memory` (`generated/g_os_desc_mem_nvoc.h:69,78`), so the type check
+passes, and RM adds a lifetime dependency so the channel is torn down before the pages are.
+
+**And we already have the primitive**, at `71fbd59`, three of them:
+
+| primitive | `rm.rs` | class |
+|---|---|---|
+| `RmConnection::alloc_device_local` | `:1756-1771` | `NV01_MEMORY_LOCAL_USER` (0x40), `ATTR_CONTIGUOUS_VIDMEM` — **what HEAD's channel USERD is today** (`:4174`) |
+| `HostRmBackend::alloc_sysmem` | `:3269-3315` | `NV01_MEMORY_SYSTEM` (0x3e) |
+| **`RmConnection::alloc_os_descriptor`** | **`:1815-1863`** | **`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` (0x71)** over a `MappedRegion` this process already holds — already used by `describe_guest_ram` (`:3937-3950`) and the FB-leaf join (`:3847-3849`) |
+
+**What RM does NOT check, and what it does.** Refusals present: VPR → `NV_ERR_INVALID_FLAGS`
+(`kernel_channel_gv100.c:198-202`); physical address too wide for the runlist entry →
+`NV_ERR_INVALID_ADDRESS` (`:212-221`); `pMemDesc->Alignment < 512 && != 0` →
+`NV_ERR_INVALID_ADDRESS` (`:256-262`). ⊘ **No FBMEM-vs-SYSMEM refusal exists** — `bUserdInSystemMemory`
+is set only for RM's *own* pre-allocated array (`kernel_fifo_gm107.c:1186-1189`) and is consumed
+only as a cap bit (`kernel_fifo.c:2850-2851`). ⇒ **a SYSMEM `OS_DESCRIPTOR` USERD is acceptable to
+a host RM whose own USERD aperture is VIDMEM.** ⊘ And `userdOffset` alignment is still unchecked
+(§3.3) — that stands.
+
+⊘ **THE WITHDRAWN `>>9` CLAIM, SETTLED.** It was the brief's own to withdraw and the withdrawal
+was right in substance and wrong in target. The shift is real and it is **on the resolved physical
+address, not on `userdOffset`**: `userdAddrLo = NvU64_LO32(userdAddr) >> userdShift`
+(`kernel_channel_gv100.c:208`, `userdShift = NV_RAMUSERD_BASE_SHIFT = 9`,
+`kernel_fifo_gm107.c:1544-1556`). Since `userdAddr = physbase + userdOffset` and nothing rounds
+either, **a misaligned `userdOffset` is silently truncated into the runlist entry** — no error, a
+wrong hardware address. ⇒ **Alignment validation is now KNOWN, not unknown: RM does not do it, and
+we must.** All 68 rows are `userdOffset % 512 == 0` today, so nothing is exercising it.
+
+**⚠ The trap in form 2, and it is why form 2 is not the free lunch it looks like.** If we forward
+`hUserdMemory[0] = 0`, the *host* RM allocates USERD out of its own pre-allocated array and the
+only way to reach it is a CPU mapping of the **channel object** — `kchannelMap_IMPL` opens with
+`NV_ASSERT_OR_RETURN(!pKernelChannel->bClientAllocatedUserD, NV_ERR_INVALID_REQUEST)`
+(`kernel_channel.c:1291`), and the mirror refusal `kchannelMapUserD_IMPL:4242-4246` returns `NV_OK`
+doing nothing when USERD *is* client-allocated. The two are exclusive by construction. That
+mapping is ours, in the isolate — **it is not, and cannot be made, the memory the guest is
+poking.** ⇒ form 2 costs a **cursor mirror**: every guest `GP_PUT` store must be observed and
+replayed into the host's USERD, and every host `GP_GET` advance copied back. That is per-submission
+state by definition, and it is exactly what the owner's requirement excludes.
+
+## 8.2 Is "verbatim, untracked" achievable? — YES, with one named exception, and the exception is OURS
+
+**Achievable, via form 1, and the shape is already on the lane.** `userdOffset[]` forwards
+**verbatim**; `hUserdMemory[0]` is **re-expressed, once, at channel creation**, as
+`(the OS_DESCRIPTOR `join_fb_leaf` already minted over the FB leaf, guest_base − leaf_base)` —
+`b0d6de7` `rm.rs:4894-4910`, `:5035`, `:5058`. The census supplies the arithmetic that makes it
+sound: all 68 `userdMem` descriptors are complete, all 68 name `NV_ADDR_FBMEM`, and
+`userdMem.base == object_base + userdOffset[0]` on every row — **13 distinct backing objects
+across five captures**, 16 libcuda channels sharing one at a 12 KiB stride (§7.3).
+
+**State cost of form 1: one host object per FB leaf, allocated at join, never read, never written,
+freed with the leaf.** That is not "no state" but it is **no per-submission state**, and that is
+the distinction that matters — it is the one the owner's *"not tracked for passthrough"* is
+actually about. The object is inert to us by construction: nothing in the alloc path reads USERD
+contents, and RM will not let us map it (`kernel_channel.c:1291`).
+
+⚠ **THE EXCEPTION, AND IT IS ENTIRELY OURS — a handed-in USERD is NOT inert at `71fbd59`.** We
+poke it:
+- **write**: `submit_entry` → `self.userd_store_u32(chan, USERD_GP_PUT, put)` — `rm.rs:4678`
+- **read**: `userd_cursors` → `load_u32(USERD_GP_GET)` / `load_u32(USERD_GP_PUT)` — `rm.rs:4448-4462`
+- offsets `USERD_GP_GET = 0x88`, `USERD_GP_PUT = 0x8C` (`kayfabe-abi/src/submit.rs:1241-1249`,
+  matching `clc36f.h:47-64`)
+
+That is exactly the per-submission tracking the owner forbids, and it is **correct** for
+`RingOwner::Ours` (HEAD refuses `submit_entry` on a handed-in ring by name — `RING_NOT_OURS`,
+`rm.rs:4654`). ⇒ **The named exception the deliverable asks for is: on a passthrough channel we
+must refuse to touch USERD, by name, in both directions** — because the guest is the only party
+entitled to advance that cursor, and a second writer is a race with no error path. The lane's
+`AdoptedGuestUserd` docs assert that refusal exists (`b0d6de7` `lib.rs:715-737`); ⊘ **I did not
+verify the guard at every access site on the lane, and it is load-bearing** (§8.6).
+
+⊘ **One thing "verbatim + untracked" does NOT buy, and it is measured:** RM **zeroes 512 bytes of
+a handed-in USERD inside the alloc** — `kfifoSetupUserD_GM107` → `memmgrMemSet(..., 0,
+NV_RAMUSERD_CHAN_SIZE, ...)` (`kernel_fifo_gm107.c:797-808`), gated on `IS_VIRTUAL || IS_GSP_CLIENT`
+(`kernel_channel.c:2341-2356`) — and **our host RM is `IS_GSP_CLIENT`**. Adopt at channel creation
+or the wipe destroys a cursor the guest already advanced. (Banked as
+`rm_takes_a_guest_userd_and_zeroes_it`; this is its line.)
+
+## 8.3 Who touches USERD, on each side — the trace the brief asked for
+
+| party | what | where |
+|---|---|---|
+| guest **userspace** (libcuda / `nvidia-push`) | **writes `GP_PUT` directly into a CPU mapping**, then stores the token to the doorbell. No ioctl on the submit path. | `nvidia-push.c:469` (`pUserd->GPPut = newGpPut`), `DoorbellKickoff` `:480-520`; Volta+ HAL sets `clientAllocatesUserD = TRUE` for `AMPERE_CHANNEL_GPFIFO_A` at `:1105-1121` |
+| how it got that mapping | one `NV_ESC_RM_MAP_MEMORY` (`NVOS33`) at setup, on **its own memory handle** when it allocated USERD, or on the **channel handle** when it did not | `nvidia-push-init.c:427-439`, `:466-486`; kernel side `escape.c:507-530`, `mapping_cpu.c:513-556` |
+| guest **UVM** | same shape, plus a *second* GPU-VA mapping of its own USERD so the GPU can advance `GP_PUT` from a pushbuffer | `nv_gpu_ops.c:5976-5990`, `:6127-6138` (`gpPutGpuVa`); consumed `uvm_channel.c:1230`, `:1674` |
+| guest **RM** | **address and geometry only.** The single content access in the whole open tree is the 512-byte zero-fill. No `GP_GET` read for channel state — that comes from GSP via `NV208F_CTRL_CMD_FIFO_GET_CHANNEL_STATE` (`kernel_channel.c:4200-4221`) | `kernel_fifo_gm107.c:797-808` |
+| **us**, at `71fbd59` | GP_PUT write + GP_GET/GP_PUT read, per submission | `rm.rs:4678`, `:4448-4462` |
+
+★ **Known-positive on the "RM barely touches USERD" negative:** `grep -rn FIFO_CTX_USERD` → 0 hits
+while the same pattern finds `FIFO_CTX_INST_BLOCK` and `FIFO_CTX_RAMFC`; `grep -rn NV_RAMUSERD`
+over `.c` → 3 hits while `dev_ram.h:49-50` defines the constants. The sparseness is real.
+
+## 8.4 Q2.2 — the `errorNotifierMem` completeness census
+
+Same corpus, same decoder (`scripts/rpc_channel_census.py`), **REQUEST rows only** (§7.0.4: the 68
+replies are our own scrubbed silence and are all-zero on every field here too).
+
+| measure | REQUEST (n=68) |
+|---|---|
+| `errorNotifierMem` complete (`base != 0`) | **63 / 68** |
+| …empty (`base=0 size=0 aperture=UNKNOWN`) | **5** — and all 5 also carry `errorNotifierType == NONE(1)` **and** `hObjectError == 0` |
+| `errorNotifierMem.addressSpace` | **`NV_ADDR_SYSMEM` × 63** ⚠ (vs `userdMem`: `NV_ADDR_FBMEM` × 68) |
+| `errorNotifierMem.size` | `48` × 31 · `4096` × 32 |
+| `internalFlags[3:2]` `ERROR_NOTIFIER_TYPE` | `NONE(1)` × 5 · `CTXDMA(2)` × 31 · `MEMORY(3)` × 32 |
+| cross-tab | `CTXDMA/48` ⇔ **all 31 `PRIVILEGE=KERNEL`**; `MEMORY/4096` ⇔ **all 32 `PRIVILEGE=USER`**; `NONE` ⇔ the 5 (one per capture, all KERNEL) |
+| distinct notifier base addresses | **63 / 63** — every channel has its own |
+| `base % 4096` | `0` × 58 · `0x420` × 5 — the `errorContextOffset` of a VA-resolved notifier |
+| `eccErrorNotifierMem` | **empty × 68**, `ECC_ERROR_NOTIFIER_TYPE == NONE(1)` × 68 — consistent, unexercised |
+| `hObjectError` values | `0x3` ×10 · `0x3141590d` ×5 · `0xcaf000xx` ×16 · `0x5c0000xx` ×32 · `0` ×5 |
+
+★★ **This passes the known-positive test the brief demanded, and it passes it the strong way.**
+An unmeasured field would be zero *uniformly*; this one is zero on exactly the 5 rows where a
+second, independently-produced field (`internalFlags[3:2]`) and a third (`hObjectError`) both say
+*"there is no notifier"*, and the emptiness of those 5 is **required by RM's own contract**:
+`ERROR_NOTIFIER_TYPE_NONE`'s doc says *"The corresponding hErrorContext or hEccErrorContext must be
+`NV01_NULL_OBJECT`"* (`g_kernel_channel_nvoc.h:109-114`), and the fill is skipped precisely when
+`hErrorContext == NV01_NULL_OBJECT` (`kernel_channel.c:551`). ⇒ **`errorNotifierMem` is complete on
+63/63 of the rows that have anything to be complete about.** Contrast §7's `dlen=0` rows, where
+nothing corroborated the zero — that is what makes these two different in kind.
+
+⊘ **`hObjectError == 0` does not mean "no error notifier".** `kernel_channel.c:509-518` falls back
+to the **channel group's** `hErrorContext` first. The 5 empties are channels whose *TSG* had none
+either. ⇒ any future rule keyed on `hObjectError != 0` is keyed on the wrong field; the field that
+carries the answer is `internalFlags[3:2]`, which is already decoded and already discarded
+(`notifier.rs:249-250` keeps only `[3:2]` — ★ correcting §0.2, which says only `[3:2]` is kept and
+`[1:0]`/`[7]` discarded: `[3:2]` *is* the notifier type and it *is* used).
+
+⇒ **Answer to Q2.3, and it retires the question:** we hand the host **nothing**. The notifier is
+in **guest sysmem**, which we back and can write with the CPU — `ErrorNotifier::Sysmem { gpa }` is
+what `ChannelErrorNotifierWire::decode` already returns, and it refuses anything that is not
+`ADDR_SYSMEM` or is shorter than one record as `ErrorNotifier::Unreachable`
+(`notifier.rs:258-265`). The 63 complete rows are all `NV_ADDR_SYSMEM` and all ≥ 48 bytes, so
+**every channel in the corpus decodes to a writable `Sysmem` notifier.** ⚠ One unverified step:
+`base` is `memdescGetPhysAddr(…, AT_GPU, 0)`, i.e. the address *the GPU* uses for that sysmem
+page. With no vIOMMU in the guest that is the GPA; **with a vIOMMU it is an IOVA and the decode is
+wrong** (§8.6).
+
+## 8.5 Q2.4 — how the guest learns, end to end: FOUR planes, and they have different consumers
+
+| # | plane | who writes | who reads | reaches a *raw* client? | reaches CUDA? |
+|---|---|---|---|---|---|
+| **A** | the **notifier memory** (`NvNotification`/`NOTIFICATION`, 16 B, `status` last) | the **GSP** (= us) with CC off; CPU-RM only with CC on (`kernel_gsp.c:657-668`) | **polling, by the client** | ✅ if it polls | ✅ (indirectly) |
+| **B** | **ctxdma event wakeup** — `notifyEvents(..., NV_OS_WRITE_THEN_AWAKEN)` | CPU-RM, `krcErrorSendEventNotificationsCtxDma_FWCLIENT` (`kernel_rc_notification.c:364-435`, call `:457`) | an `NV0005` event on the **ContextDma** | ⚠ **only if the notifier is a ContextDma** | ⊘ no — libcuda's are `MEMORY` |
+| **C** | **subdevice event** `NV2080_NOTIFIERS_RC_ERROR` (37) | `gpuNotifySubDeviceEvent(...)` (`kernel_rc_notification.c:461-466`) → `osEventNotificationWithInfo` (`os.c:1481-1546`) → `nv_post_event` + `wake_up_interruptible` (`nv.c:3982-4030`) | any client holding an OS-event fd (`NV_ESC_ALLOC_OS_EVENT`, `poll()`, `NV_ESC_RM_GET_EVENT_DATA`) | ✅ | ✅ |
+| **D** | ★ **SM error state** — `0x83de030c`, `mmuFault.valid/faultInfo` | **the GSP** (= us), on demand | libcuda, via a per-context `GT200_DEBUGGER` (`0x83de`) | ⊘ **no — a raw client has no `0x83de` object** | ✅ **and w277 measured it is THE one** |
+
+**Plane A is the one that unsticks a waiter.** `uvm_channel_get_status` tests
+`error_notifier->status == 0` **and nothing else** (`uvm_channel.c:2058-2081`), then
+`uvm_channel_check_errors` escalates via `uvm_global_set_fatal_error` (`:2091-2125`), which is
+sticky and short-circuits every later UVM operation; it surfaces to userspace as `EIO`
+(`uvm_common.c:209-211`). The in-tree userspace analogue does the same on the same bytes:
+`nvPushCheckChannelError` — `if (status == 0xFFFF) nvPushImportChannelErrorOccurred(pChannel,
+pNotifier->info32)` (`nvidia-push.c:77-97`). ⇒ **`info32` carries the `ROBUST_CHANNEL_*` code and
+`status` is a bare non-zero flag** — `krcErrorSetNotifier_IMPL` passes the literal `0xffff`
+(`kernel_rc_notification.c:331-336`), `info32 ← exceptType` and `info16 ←
+gpuGetNv2080EngineType(...)` (`method_notification.c:181-185`). All of this is already encoded in
+`notifier.rs` with the same citations.
+
+⊘ **Plane B does NOT fire for libcuda.** The ctxdma event walk only fires when `hErrorContext`
+resolves to a **ContextDma with an event list**; a plain-`Memory` notifier gets no event
+(`kernel_rc_notification.c:364-435`). Our census: **all 32 USER channels are
+`ERROR_NOTIFIER_TYPE_MEMORY`.** ⇒ for guest userspace, plane A is poll-only and plane C is the
+only push.
+
+★★★ **⇒ The answer to the owner's actual requirement, and it splits.**
+- *"the raw client that deliberately faults crashes in guest"* — a raw client (the `w278`/R33
+  shape: its own channel, no libcuda) is served by **A + C**, and A alone is enough to unstick a
+  poller. **That is one field-set, and the producer already exists** (`FaultEmission::deliver`).
+  The work is not the notifier; it is **getting a host-side fault report to it**.
+- *a CUDA client* additionally needs **D**, because w277 measured CUDA reads its verdict there and
+  then answers `700` from its own cache without asking RM again. Wiring only `hObjectError` would
+  leave `cuCtxSynchronize` returning success.
+
+⊘ **And nothing in open RM makes a later ioctl fail.** `bIsRcPending` is **only ever cleared**
+(`kernel_channel.c:3028`) and read to forward to physical RM (`:3056-3057`) — no open-tree writer
+sets it; `kchannelCheckIsRc` does not exist; `NV_ERR_RC_ERROR` appears only in UVM
+(`uvm_channel.c:2081`, `uvm_common.c:140,209`). Known-positive for that negative: the identical
+grep shape over `bUvmOwned` finds both its setter (`kernel_channel.c:303`) and its consumers. ⇒
+**"the error surfaces on the next ioctl" is FALSE as a kernel mechanism.** Stickiness lives in the
+client (libcuda's cache; `uvm_global_set_fatal_error`; `pChannel->channelErrorOccurred`).
+
+**Cost, named, not built:** plane A is one write we already have code for; plane C is
+`RC_TRIGGERED` → `gpuNotifySubDeviceEvent`, which `rc_triggered_for` already builds
+(`fault.rs:152-199`). **Plane D is new**: answer fn 109 / `0x83de030c` with `mmuFault.valid = 1`
+and a `faultInfo` word, per `GT200_DEBUGGER` object, cleared by `0x83de030d`
+(`CLEAR_ALL_SM_ERROR_STATES`). The **missing input to all three is the same**: a fault the host
+GPU took on a forwarded channel, attributed back to a guest channel. That is not on this rung and
+it is not in this doc.
+
+## 8.6 What this rung could NOT determine
+
+1. **Whether `errorNotifierMem.base` is a GPA under every guest configuration.** It is
+   `memdescGetPhysAddr(…, AT_GPU, 0)` — the GPU-side address of a sysmem page. With no vIOMMU that
+   is the GPA and `ErrorNotifier::Sysmem { gpa: base }` is right; **with a vIOMMU it is an IOVA and
+   the write lands in the wrong page, silently.** ⇒ **Determined by:** one boot with
+   `intel_iommu=on` in the guest and a re-run of this census, or a source read of the guest's
+   `dma_map` path. Not run.
+2. **Whether the lane's `UserdOwner::HandedIn` actually refuses `userd_store_u32` /
+   `userd_cursors` at every site.** The type's doc asserts it (`b0d6de7` `lib.rs:715-737`); I read
+   the alloc-side selection (`rm.rs:4894-4910`) and **not** every guard. ⚠ This is the exception
+   §8.2 rests on, and *a doc comment is not the code* is this doc's own paid-for trap. ⇒
+   **Determined by:** a 20-line read of `rm.rs` around `:4448` and `:4670` on the lane.
+3. **What GSP firmware does with `userdMem.base` and with the notifier.** The runlist entry is
+   never *constructed* in open RM (`NV_RAMRL_ENTRY_CHAN_USERD_PTR_*` appears only inside the three
+   `kchannelIsUserdAddrSizeValid_*` width checks), and `krcErrorWriteNotifier` has **no GSP
+   variant** (`g_kernel_rc_nvoc.h:213` maps the HAL unconditionally to `_CPU`). Known-positive for
+   that second negative: the same grep over `krcErrorSendEventNotifications` *does* return two HAL
+   variants. ⇒ the GSP writer is genuinely out of tree; that the layout matches is **inferred**
+   from CPU-RM handing GSP `errorNotifierMem` + `ERROR_NOTIFIER_TYPE`, not read.
+4. **The exact reply shape of fn 109 / `0x83de030c`.** I established the routing, the flags, the
+   RPC number, and (from w277) the five bytes that change. I did **not** decode
+   `NV83DE_CTRL_DEBUG_READ_ALL_SM_ERROR_STATES_PARAMS`'s 4824 bytes or the
+   `serialize/deserialize_…_v21_06` chunking at 80 SMs per RPC
+   (`rpc.c:7338-7380`, `rpc_headers.h:248`). ⇒ **Determined by:** a read of `ctrl83dedebug.h` plus
+   `traces/fault_known_positive_ga106/`, which already holds the captured reply **in full**
+   (`trunc=None`). No boot needed. **This is the highest-value cheap follow-up this rung found.**
+5. **Whether libcuda ever takes the `hUserdMemory[0] == 0` path on another workload.** 0/68 here
+   and 0/144 in our boot logs (§7), but that is `cup2`/`cup8`. Form 2's cursor-mirror cost is
+   therefore priced but not needed today.
+6. **Whether a *hostile* guest can steer the USERD aperture.** `pUserdInfo->userdAperture` defaults
+   `ADDR_FBMEM` and is overridden only by the guest's own registry
+   (`NV_REG_STR_RM_INST_LOC_USERD`, bits 17:16, `kernel_fifo_gm107.c:81-87`,
+   `nvrm_registry.h:209-213`). Likewise `MapMemoryDma` of a channel is off unless
+   `RMSupportUserdMapDma` is set (`kernel_fifo_init.c:154-159`, `nvrm_registry.h:982`). Both are
+   **guest-local** knobs we neither supply nor see. ⇒ a guest *can* put its USERD in sysmem and we
+   would only learn from `userdMem.addressSpace`. Nothing in our forward depends on it today; a
+   rule that assumes FBMEM would be a rule a guest can falsify.
+7. **Multi-subdevice.** `hUserdMemory[1..7]` / `userdOffset[1..7]` are zero on 68/68 (§7.4);
+   `kchannelCreateUserdMemDescBc_GV100:84-107` has a documented per-subdevice fallback we have never
+   exercised.
+
+## 8.7 Provenance (w287)
+
+- ogkm: `research_clones/ogkm-580.159.04/`, **580.159.04**. ⚠ Version-specific here: the
+  `RMCTRL_FLAGS` bit values (`inc/kernel/rmapi/control.h:208-308`), the `0x50048` flag word on
+  `0x83de030c` (`generated/g_kernel_sm_debugger_session_nvoc.c:452-464`), the RPC function number
+  `109`, and the 580-era `sysSetRecoveryRebootRequired` WAR at `kernel_rc_notification.c:257-262`.
+  The **structural** claims — the CPU-RM/GSP `if`, `classId(Memory)`, `AT_GPU` for USERD vs the
+  `ADDR_VIRTUAL` branch for the notifier, status-last publication — were not observed to differ.
+- kayfabe: base `71fbd59` (`w286-channel-privilege-census`); lane `b0d6de7`
+  (`w284-ce-passthrough-for-real`). **Every `rm.rs` citation states which**, and they disagree by
+  ~1000 lines in that file.
+- Census: `scripts/rpc_channel_census.py` **unchanged** — it already decoded `errorNotifierMem`,
+  `eccErrorNotifierMem` and `internalFlags[3:2]`; §8.4 is a cross-tab of its `--json` output, and
+  its §7 numbers reproduced exactly (68/68, `KERNEL 36 · USER 32`, `hUserdMemory[0]==0` 0/68).
+  ★ Instrument known-positive re-run: 356/336/1122 RPC signatures in cap1/cap2b/cap3.
+- Hardware corroboration for §8.0.5 is **cited, not re-run**: `nvidia-gpu-passthrough` `a42a6d9`
+  (w277), real GA106, no VM, `580.159.04`, `traces/fault_known_positive_ga106/`.
+- Read-only throughout: no build, no boot, no bench; authored in a detached `git worktree`.
