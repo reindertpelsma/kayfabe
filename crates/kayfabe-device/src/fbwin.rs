@@ -380,13 +380,15 @@ pub trait FbStore: Send + core::fmt::Debug {
         &mut self,
         phys: u64,
         region: Box<dyn FbJoined>,
-    ) -> Result<FbJoinInstalled, FbRefused> {
-        let _ = region;
-        Err(FbRefused {
-            phys,
-            len: 0,
-            why: NO_JOIN_SUPPORT,
-        })
+    ) -> Result<FbJoinInstalled, (FbRefused, Box<dyn FbJoined>)> {
+        Err((
+            FbRefused {
+                phys,
+                len: 0,
+                why: NO_JOIN_SUPPORT,
+            },
+            region,
+        ))
     }
 
     /// Every joined range, ascending by address — `(phys, len)`.
@@ -1027,18 +1029,18 @@ impl FbStore for SparseFb {
         &mut self,
         phys: u64,
         region: Box<dyn FbJoined>,
-    ) -> Result<FbJoinInstalled, FbRefused> {
+    ) -> Result<FbJoinInstalled, (FbRefused, Box<dyn FbJoined>)> {
         let len = region.len();
         let refuse = |why| FbRefused {
             phys,
             len: usize::try_from(len).unwrap_or(usize::MAX),
             why,
         };
-        if !self.covers(
-            phys,
-            usize::try_from(len).map_err(|_| refuse(OUTSIDE_FRAMEBUFFER))?,
-        ) {
-            return Err(refuse(OUTSIDE_FRAMEBUFFER));
+        let Ok(len_usize) = usize::try_from(len) else {
+            return Err((refuse(OUTSIDE_FRAMEBUFFER), region));
+        };
+        if !self.covers(phys, len_usize) {
+            return Err((refuse(OUTSIDE_FRAMEBUFFER), region));
         }
         // ⊘ Any overlap at all, not just an exact repeat: two joins sharing one byte is two
         // memories for that byte, which is what this whole mechanism removes.
@@ -1048,7 +1050,7 @@ impl FbStore for SparseFb {
             .iter()
             .any(|(b, r)| phys < b.saturating_add(r.len()) && *b < end)
         {
-            return Err(refuse(ALREADY_JOINED));
+            return Err((refuse(ALREADY_JOINED), region));
         }
         // ★★★ THE ESTABLISHMENT COPY. Read from this store's OWN pages — never through
         // `FbStore::read`, which would answer from the join the moment it is installed — and
@@ -1069,7 +1071,7 @@ impl FbStore for SparseFb {
             let src = &page[off..off + take];
             let at = frame * FB_PAGE + off as u64 - phys;
             if region.write(at, src).is_err() {
-                return Err(refuse(ESTABLISH_FAILED));
+                return Err((refuse(ESTABLISH_FAILED), region));
             }
             pages += 1;
             copied += take as u64;

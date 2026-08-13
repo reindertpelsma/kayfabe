@@ -175,7 +175,10 @@ fn a_failed_establishment_copy_installs_no_join_at_all() {
     let e = fb
         .install_join(AT, Box::new(hostile))
         .expect_err("the install must refuse");
-    assert_eq!(e.why, ESTABLISH_FAILED, "refused by name");
+    assert_eq!(e.0.why, ESTABLISH_FAILED, "refused by name");
+    // ★ R1: the refusal must hand the region BACK so the caller can `munmap` it OUTSIDE the
+    //   plane lock. `w289j` aborted the whole VMM because it did not.
+    assert_eq!(e.1.len(), LEN, "the refused region is returned to the caller, whole");
 
     assert!(fb.joined_ranges().is_empty(), "no range went live");
     let mut got = vec![0u8; 0x1000];
@@ -271,7 +274,8 @@ fn a_second_join_overlapping_the_first_is_refused_by_name() {
         let e = fb
             .install_join(at, Box::new(Elsewhere::new(len)))
             .expect_err("overlap refused");
-        assert_eq!(e.why, ALREADY_JOINED, "at 0x{at:x}");
+        assert_eq!(e.0.why, ALREADY_JOINED, "at 0x{at:x}");
+        assert!(e.1.len() > 0, "the refused region is handed back, not dropped under the lock");
     }
     assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "exactly one join");
 }
@@ -284,7 +288,7 @@ fn a_join_outside_the_advertised_framebuffer_is_refused() {
     let e = fb
         .install_join(FB - 0x1000, Box::new(Elsewhere::new(LEN)))
         .expect_err("refused");
-    assert_eq!(e.why, kayfabe_device::fbwin::OUTSIDE_FRAMEBUFFER);
+    assert_eq!(e.0.why, kayfabe_device::fbwin::OUTSIDE_FRAMEBUFFER);
 }
 
 /// ★★ A store with no pages of its own has nothing to establish FROM and refuses by name,
@@ -295,7 +299,10 @@ fn a_store_that_cannot_join_refuses_by_name() {
     let e = none
         .install_join(AT, Box::new(Elsewhere::new(LEN)))
         .expect_err("refused");
-    assert_eq!(e.why, NO_JOIN_SUPPORT);
+    assert_eq!(e.0.why, NO_JOIN_SUPPORT);
+    // ★ Even the can't-join default must hand the region back rather than drop it — the
+    //   caller may be holding the plane lock, and dropping a host mapping there aborts.
+    assert_eq!(e.1.len(), LEN);
     assert!(none.joined_ranges().is_empty());
 }
 

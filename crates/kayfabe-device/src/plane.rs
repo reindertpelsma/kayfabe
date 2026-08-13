@@ -1589,8 +1589,33 @@ impl RegPlane {
         phys: u64,
         region: Box<dyn crate::fbwin::FbJoined>,
     ) -> Result<crate::fbwin::FbJoinInstalled, FbRefused> {
-        let mut s = self.state.lock();
-        s.fb.install_join(phys, region)
+        // ★★★★★ **THE REFUSED REGION IS DROPPED OUTSIDE THE LOCK, AND THAT ORDERING IS THE
+        // WHOLE POINT OF THIS FUNCTION'S SHAPE.**
+        //
+        // ⊘⊘ `[measured 2026-08-13, vh, boot w289j]` it used to be one line —
+        // `s.fb.install_join(phys, region)` — and a refusal therefore dropped the caller's
+        // `Box<dyn FbJoined>` **while the plane lock was held**. Dropping it `munmap`s, which
+        // is a blocking call, so `lockwitness`' R1 assert fired inside an `extern "C"` QEMU
+        // callback: *"munmap (dropping a host mapping) while holding rank(s) [0]"* → a
+        // NON-UNWINDING panic → **the whole VMM aborted**, on the guest's own MMIO write path.
+        // ⚠ Guest-reachable: the guest chooses the operands, so the guest chooses whether a
+        // join is refused.
+        //
+        // ★ The fix is `l1_concurrency.md` §3.3's own prescription — *"drop every guard"*
+        // before the blocking call. `install_join` now hands the region **back** on refusal so
+        // this function can release the lock first and drop it lock-free.
+        let (out, displaced) = {
+            let mut s = self.state.lock();
+            match s.fb.install_join(phys, region) {
+                Ok(est) => (Ok(est), None),
+                Err((why, back)) => (Err(why), Some(back)),
+            }
+        };
+        // ⊘ Explicit, not incidental: this is where the `munmap` happens, and it must stay
+        // after the block above. A `let _ =` or an inlined match would put it back under the
+        // guard and re-arm the abort.
+        drop(displaced);
+        out
     }
 
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
