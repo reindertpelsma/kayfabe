@@ -125,3 +125,90 @@ fn the_control_node_is_reached_only_through_the_notifier_derivation() {
          is system memory, and it needs the driver citation that claim rests on."
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// ★★★★★ CRITERION 1's VACUITY GUARD — as NAMED EXITS, not a boolean.
+// ---------------------------------------------------------------------------------------
+
+use kayfabe_isolate_host::rm::Crit1State;
+
+/// ★★★ **The predicate the whole enum exists for**: exactly ONE state may license reading a
+/// VA-identity count as a measurement.
+///
+/// ⊘⊘ `w289g` is the case. Its guard asked *"was the probe built?"* — it WAS — and the
+/// VA-identity zeros were vacuous anyway, because the run exited through
+/// [`Crit1State::ControlNeverLanded`], which that guard did not enumerate. A guard covering one
+/// route to vacuity reads as covering all of them.
+#[test]
+fn only_a_provoked_fault_with_an_address_licenses_a_va_identity_claim() {
+    let all = [
+        Crit1State::ArmNotSelected,
+        Crit1State::ProbeNotBuilt,
+        Crit1State::ControlNeverLanded,
+        Crit1State::FaultProvokedAddressSilent,
+        Crit1State::FaultProvokedAddressRead,
+    ];
+    let measured: Vec<_> = all
+        .iter()
+        .filter(|s| s.va_identity_is_measured())
+        .collect();
+    assert_eq!(
+        measured,
+        vec![&Crit1State::FaultProvokedAddressRead],
+        "exactly one exit may license a VA-identity claim. ⚠ If a second one starts returning \
+         true, a run that never provoked a fault will report `VA-IDENTITY BROKEN = 0` as a PASS \
+         — which is precisely the reading `w289g` was saved from by printing the state instead \
+         of the count."
+    );
+}
+
+/// ⊘ Every exit must be distinguishable in the log. Two states sharing a token would collapse
+/// exactly the distinction the enum was introduced to make.
+#[test]
+fn every_exit_has_its_own_token_and_its_own_reason() {
+    let all = [
+        Crit1State::ArmNotSelected,
+        Crit1State::ProbeNotBuilt,
+        Crit1State::ControlNeverLanded,
+        Crit1State::FaultProvokedAddressSilent,
+        Crit1State::FaultProvokedAddressRead,
+    ];
+    let mut tokens: Vec<&str> = all.iter().map(|s| s.as_str()).collect();
+    let n = tokens.len();
+    tokens.sort_unstable();
+    tokens.dedup();
+    assert_eq!(tokens.len(), n, "two exits share a token");
+
+    let mut whys: Vec<&str> = all.iter().map(|s| s.why()).collect();
+    whys.sort_unstable();
+    whys.dedup();
+    assert_eq!(whys.len(), n, "two exits share a reason");
+
+    for s in all {
+        assert!(!s.as_str().is_empty() && !s.why().is_empty());
+        assert!(
+            !s.as_str().contains(' '),
+            "`{}` must be greppable as one anchored token",
+            s.as_str()
+        );
+    }
+}
+
+/// ★★ The client must print the state on **every** path — including the two that never build a
+/// probe, which are the paths a reader is likeliest to mistake for a pass.
+#[test]
+fn the_client_reports_its_state_on_every_path() {
+    let body = src("src/bin/rmladder.rs");
+    for token in [
+        "Crit1State::ArmNotSelected",
+        "Crit1State::ProbeNotBuilt",
+        "crit1(r.crit1_state())",
+    ] {
+        assert!(
+            body.contains(token),
+            "`{token}` must appear in the client: a run that exits without printing a CRIT1 \
+             STATE leaves its VA-identity numbers unlabelled, which is the state this whole \
+             enum replaces"
+        );
+    }
+}

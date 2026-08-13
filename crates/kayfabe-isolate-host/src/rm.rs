@@ -3117,6 +3117,24 @@ pub struct GuestReachProbe {
     pub notifier_aperture: NotifierAperture,
 }
 
+impl GuestReachProbe {
+    /// Which of [`Crit1State`]'s exits this probe took.
+    ///
+    /// ⊘ Derived from the probe's own fields, never from a caller's expectation: the whole
+    /// point is that the run reports which experiment it performed.
+    #[must_use]
+    pub fn crit1_state(&self) -> Crit1State {
+        if matches!(self.reach, GuestReach::ControlFailed) {
+            return Crit1State::ControlNeverLanded;
+        }
+        if self.fault_info.is_some() {
+            Crit1State::FaultProvokedAddressRead
+        } else {
+            Crit1State::FaultProvokedAddressSilent
+        }
+    }
+}
+
 /// ★★★★★ **w288 TIER 2 — WHICH STORE THE ERROR NOTIFIER LIVES IN, as a named choice.**
 ///
 /// # ⊘⊘ Why this is a parameter and not a constant, and it is measured on BOTH sides
@@ -3164,6 +3182,93 @@ impl NotifierAperture {
         match self {
             NotifierAperture::Sysmem => "SYSMEM (NV01_MEMORY_SYSTEM)",
             NotifierAperture::Vidmem => "VIDMEM (NV01_MEMORY_LOCAL_USER)",
+        }
+    }
+}
+
+/// ★★★★★ **WHY CRITERION 1 DID OR DID NOT GET MEASURED — as NAMED STATES, never a boolean.**
+///
+/// The bar is *"the guest observes THE SAME FAULT, BY IDENTITY — code, engine, type, access
+/// AND address"*. A run can fail to measure that for **four structurally different reasons**,
+/// and `w289g` proved they are not interchangeable.
+///
+/// # ⊘⊘⊘ THE DEFECT THIS TYPE EXISTS TO KILL
+///
+/// `w289g`'s runner printed a vacuity guard — *"if `PROBE-COULD-NOT-BE-BUILT` is not 0, every
+/// zero below is vacuous"* — and **the guard passed while the zeros were vacuous anyway**,
+/// because the run had taken a *different* route to vacuity (the control never landed, so the
+/// deliberate fault was never issued). ⇒ **A guard covering one route to vacuity reads as
+/// covering all of them.**
+///
+/// ⚠ **That is the same scoping failure, in the same rung, as the two-arm flag sweep** whose
+/// *"the sysmem arm may not survive natively"* verdict this file has already withdrawn: an
+/// instrument that enumerates a subset of the exits can only rename the others, never see
+/// them. One shape, twice. Hence: **enumerate the exits, give each its own name, and print
+/// exactly one of them on every run.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Crit1State {
+    /// The deliberate-fault arm was never requested (no `--ce-client-fault`). Nothing about
+    /// criterion 1 was attempted. ⊘ The most benign-looking state and the one a harness is
+    /// likeliest to mistake for a pass, because the run is otherwise green.
+    ArmNotSelected,
+    /// The arm ran and the probe **could not be constructed** — an allocation, mapping,
+    /// channel or schedule refused. ⊘ Nothing was ever submitted, so no fault exists to
+    /// observe. This is `w288nc1`'s state.
+    ProbeNotBuilt,
+    /// The probe was built and its **positive control did not land**, so the deliberate fault
+    /// was deliberately not issued (a fault on a channel never shown to work measures
+    /// nothing). ⊘ A notifier that fires here belongs to the CONTROL's failure, not to the
+    /// deliberate fault. This is `w289g`'s state — and the one the old guard could not see.
+    ControlNeverLanded,
+    /// The deliberate fault WAS provoked, and the **address plane stayed silent**:
+    /// `GET_MMU_FAULT_INFO` refused or did not decode. ⇒ the run carries the fault's **code**
+    /// and not its **address**, so the VA-identity comparison is UNMEASURED.
+    FaultProvokedAddressSilent,
+    /// The deliberate fault was provoked **and** the address plane answered. ★ **Only in this
+    /// state is a `VA-IDENTITY HOLDS` / `BROKEN` count a measurement**; in every other state
+    /// both counts are zero for reasons that have nothing to do with VA identity.
+    FaultProvokedAddressRead,
+}
+
+impl Crit1State {
+    /// The token a harness greps. ⊘ Stable, anchored, one per run.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Crit1State::ArmNotSelected => "ARM-NOT-SELECTED",
+            Crit1State::ProbeNotBuilt => "PROBE-NOT-BUILT",
+            Crit1State::ControlNeverLanded => "CONTROL-NEVER-LANDED",
+            Crit1State::FaultProvokedAddressSilent => "FAULT-PROVOKED-ADDRESS-SILENT",
+            Crit1State::FaultProvokedAddressRead => "FAULT-PROVOKED-ADDRESS-READ",
+        }
+    }
+
+    /// Whether a `VA-IDENTITY` count from this run means anything at all.
+    ///
+    /// ★ **The single predicate the whole type exists for.** `false` ⇒ every VA-identity
+    /// number on the run is vacuous, whichever route produced it.
+    #[must_use]
+    pub const fn va_identity_is_measured(self) -> bool {
+        matches!(self, Crit1State::FaultProvokedAddressRead)
+    }
+
+    /// Why, in one sentence, for the line that prints beside the token.
+    #[must_use]
+    pub const fn why(self) -> &'static str {
+        match self {
+            Crit1State::ArmNotSelected =>
+                "the deliberate-fault arm was not requested, so criterion 1 was never attempted",
+            Crit1State::ProbeNotBuilt =>
+                "the probe could not be constructed; nothing was submitted, so no fault exists",
+            Crit1State::ControlNeverLanded =>
+                "the positive control did not land, so the deliberate fault was never issued \
+                 and any notifier that fired belongs to the CONTROL",
+            Crit1State::FaultProvokedAddressSilent =>
+                "the fault WAS provoked but GET_MMU_FAULT_INFO gave no address, so this run \
+                 carries the fault's CODE and not its ADDRESS",
+            Crit1State::FaultProvokedAddressRead =>
+                "the fault was provoked AND the address plane answered — the VA-identity \
+                 comparison on this run is a measurement",
         }
     }
 }

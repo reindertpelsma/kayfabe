@@ -2526,6 +2526,27 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
 /// `ErrorNotifier::Unreachable` on the guest path, so **no host notifier is attached** and
 /// the arm runs, faults, and reports a quiet notifier that means nothing. It is printed on
 /// every run, including the quiet ones, because that silence is the hazard.
+/// ★★★★★ **THE ONE LINE A HARNESS GREPS FOR CRITERION 1 — exactly one per run.**
+///
+/// See [`kayfabe_isolate_host::rm::Crit1State`] for why this is an enumeration and not the
+/// boolean guard it replaces: `w289g`'s guard PASSED while its VA-identity zeros were vacuous,
+/// because the run had reached vacuity by a route the guard did not enumerate.
+///
+/// ⊘ It prints `VA-IDENTITY MEASURED = yes|no` **beside** the state, so a reader never has to
+/// know which states are which to know whether the numbers mean anything.
+fn crit1(state: kayfabe_isolate_host::rm::Crit1State) {
+    println!(
+        "★     R33 CRIT1 STATE     = {} | VA-IDENTITY MEASURED = {} — {}",
+        state.as_str(),
+        if state.va_identity_is_measured() {
+            "yes"
+        } else {
+            "no ⊘ every VA-IDENTITY count on this run is VACUOUS"
+        },
+        state.why()
+    );
+}
+
 fn ce_client(
     rm: &mut HostRmBackend,
     gpu: u32,
@@ -2884,6 +2905,7 @@ fn ce_client(
              copy engine at an unmapped VA, which provokes `Xid 31 FAULT_PDE` and kills its \
              own channel — opt-in, and it belongs under scripts/bench/host_xid_watch.sh"
         );
+        crit1(kayfabe_isolate_host::rm::Crit1State::ArmNotSelected);
         true
     } else {
         census::phase("R33 arm4 hw-fault");
@@ -2909,6 +2931,8 @@ fn ce_client(
                 );
                 let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA, notifier_aperture) {
                     Ok(r) => {
+                        // ★★★★★ PRINTED FIRST, because it says how to read everything below it.
+                        crit1(r.crit1_state());
                         // ★★★★★ **THE MANDATE'S SECOND CLIENT — HOW THE PROGRAM ITSELF
                         // LEARNS, printed BEFORE the verdict it qualifies.**
                         //
@@ -3116,6 +3140,7 @@ fn ce_client(
                             "FAIL  R33 arm 4           = the probe could not be built: {e:?} (an \
                              error here is never a fault — nothing had been submitted)"
                         );
+                        crit1(kayfabe_isolate_host::rm::Crit1State::ProbeNotBuilt);
                         false
                     }
                 };
