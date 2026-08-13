@@ -2213,7 +2213,8 @@ fn channel_facts_from(
 /// answer, taken before any host verb exists.
 ///
 /// ★ Every row of the table lands in **exactly one** bucket, and
-/// `already_host + guest_ram + not_vidmem + not_granular + candidates_total == total`. That
+/// `already_host + already_pinned + guest_ram + not_vidmem + not_granular + candidates_total
+/// == total`. That
 /// identity is asserted by `tests/tests/publish_census.rs`, and it is what makes a short
 /// `candidates` list readable as *"most rows are refused, and here is which gate"* rather
 /// than as *"the walk stopped early"*. A census whose buckets did not sum could report a
@@ -2228,6 +2229,16 @@ pub struct PublishCensus {
     pub total: usize,
     /// Rows already carrying a [`kayfabe_mmu::HostBacking`] — the idempotent steady state.
     pub already_host: usize,
+    /// ★★★★★ Rows **covered by a live guest-RAM pin** — mapped in the host VAS at the
+    /// guest's own VA by a real `OS_DESCRIPTOR`, and recorded in
+    /// [`kayfabe_core::gpu::Vas::guest_ram_pins`] rather than in `Binding::host`.
+    ///
+    /// ⊘ Counted apart from [`Self::already_host`] and from [`Self::guest_ram`] because it is
+    /// a **third** state and the two it sits between mean opposite things: `already_host` is
+    /// "mapped and in the field", `guest_ram` is "not mapped, and the FB verb is the wrong
+    /// one for it". Merging this into either would report a mapped range as unmapped or hide
+    /// which of the two disjoint records holds it.
+    pub already_pinned: usize,
     /// ⊘ Rows over the guest's own pages. **Excluded, not refused**: they are the guest-RAM
     /// pin's population, a different verb with a different lifetime, and a second
     /// establishment over them is the `0x51` collision that cannot be told from exhaustion.
@@ -2268,7 +2279,11 @@ impl PublishCensus {
     /// counted twice or not at all, and the caller must print that instead of the census.
     #[must_use]
     pub fn buckets_sum(&self) -> bool {
-        self.already_host + self.guest_ram + self.not_vidmem + self.not_granular
+        self.already_host
+            + self.already_pinned
+            + self.guest_ram
+            + self.not_vidmem
+            + self.not_granular
             + self.candidates_total()
             == self.total
     }
@@ -3206,6 +3221,28 @@ impl SharedDevice {
     ///
     /// ⚠ Same cap discipline, and the caller must print that it truncated: an absent run read as
     /// *"not published"* would be the `dlen=0` mistake pointing the other way.
+    ///
+    /// # ⊘⊘ CORRECTED 2026-08-13 (w290) — **THIS ROW ALONE UNDER-REPORTS, AND MY OWN FINDING
+    /// # WAS TOO STRONG BECAUSE OF IT**
+    ///
+    /// `w290` reported `host_rows=4 of 16425` and read it as *"the host VAS the GPU walks is
+    /// empty"*. **That reading counts only ONE of the two records this port keeps of host-side
+    /// mapping state.** `commit_pin_guest_ram` (`kayfabe-fwd/src/lib.rs:1886-1893`) inserts
+    /// into [`kayfabe_core::gpu::Vas::guest_ram_pins`] and **never calls `table.bind` and
+    /// never sets `Binding::host`** — so a guest-RAM range that IS mapped in the host VAS, at
+    /// the guest's own VA, by a real `OS_DESCRIPTOR`, is **invisible to `Binding::host`**.
+    ///
+    /// ⇒ ★★★★★ The host mapping state lives in **two disjoint places**, and an instrument
+    /// reading one of them answers a confident wrong zero. That is
+    /// `a_second_source_of_truth_beside_a_complete_value` in the one row a story turns on —
+    /// and it is exactly the gap the owner names from the C, which carried **one** offset in
+    /// its object structure for this.
+    ///
+    /// ⇒ This row therefore prints **both**: `host_rows`/runs from `Binding::host`, **and**
+    /// `pins=` from `guest_ram_pins`. ⚠ A reader must join them; neither alone is the host
+    /// VAS. ⊘ They are NOT merged into one number here, because they have different
+    /// lifetimes (`stage_dropped_vases` reclaims the first; the pin map is reclaimed
+    /// separately) and a sum would hide which record a range lives in.
     #[must_use]
     pub fn vas_published_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
         self.with_proc_mut(pid, |p| {
@@ -3229,8 +3266,16 @@ impl SharedDevice {
                         .take(cap)
                         .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
                         .collect();
+                    // ★★★★★ THE SECOND RECORD — see this function's 2026-08-13 correction.
+                    let pins: Vec<String> = vas
+                        .guest_ram_pins
+                        .iter()
+                        .take(cap)
+                        .map(|(va, p)| format!("0x{va:x}+0x{:x}", p.len))
+                        .collect();
                     format!(
-                        "[proc={} gpu={} pdb=0x{:x} host_rows={} of {} runs={} {}{}]",
+                        "[proc={} gpu={} pdb=0x{:x} host_rows={} of {} runs={} {}{} \
+                         pins={}=[{}{}]]",
                         pid.0,
                         gpu.0,
                         pdb.0,
@@ -3242,7 +3287,14 @@ impl SharedDevice {
                             format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", runs.len())
                         } else {
                             String::new()
-                        }
+                        },
+                        vas.guest_ram_pins.len(),
+                        pins.join(","),
+                        if vas.guest_ram_pins.len() > cap {
+                            " ⚠⚠CAPPED"
+                        } else {
+                            ""
+                        },
                     )
                 })
                 .collect()
@@ -3305,6 +3357,17 @@ impl SharedDevice {
                 c.total += 1;
                 if b.host().is_some() {
                     c.already_host += 1;
+                } else if vas
+                    .guest_ram_pins
+                    .iter()
+                    .any(|(pva, p)| *pva <= va && va + len <= pva + p.len)
+                {
+                    // ★★★★★ THE SECOND RECORD, counted separately — see
+                    // `vas_published_ranges`' 2026-08-13 correction. A row covered by a live
+                    // guest-RAM pin IS mapped in the host VAS at the guest's own VA; it just
+                    // is not recorded in `Binding::host`. Folding it into `guest_ram` would
+                    // report a mapped range as unmapped, which is the whole defect.
+                    c.already_pinned += 1;
                 } else if b.is_guest_ram() {
                     c.guest_ram += 1;
                 } else if b.aperture() != kayfabe_arch::Aperture::Vidmem {

@@ -148,7 +148,7 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
         "the non-Vidmem row is GUEST RAM; `not_vidmem` is unreachable from guest-declared \
          rows and must not be mistaken for the gate that is refusing us: {c:?}"
     );
-    assert_eq!(c.already_host, 0, "{c:?}");
+    assert_eq!((c.already_host, c.already_pinned), (0, 0), "{c:?}");
 }
 
 /// ★★★ **THE FINDING, AS A TEST.** A promote bind never carries a `HostBacking`, so a
@@ -176,6 +176,19 @@ fn a_promote_bind_is_never_host_backed() {
             .iter()
             .any(|r| r.contains("host_rows=0 of 1") && r.contains("runs=0")),
         "★ HOST-PUBLISHED reports the row as ABSENT while TABLE-DESCRIBES holds it: {published:?}"
+    );
+    // ★★★★★ **AND THE SECOND RECORD IS PRINTED BESIDE IT**, or `host_rows=0` reads as "no
+    // host mapping" when it only ever meant "none in THIS field". See
+    // `vas_published_ranges`' 2026-08-13 correction: `commit_pin_guest_ram` maps guest RAM
+    // into the host VAS and records it in `guest_ram_pins`, touching `Binding::host` never.
+    assert!(
+        published.iter().all(|r| r.contains("pins=")),
+        "⊘ every row must carry the pin count too — one field is not the host VAS: {published:?}"
+    );
+    assert_eq!(
+        dev.vas_publish_census(a_pid, GpuId::ZERO, A_PDB, 16).already_pinned,
+        0,
+        "no pin exists in this world, and the bucket says so rather than being absent"
     );
 }
 

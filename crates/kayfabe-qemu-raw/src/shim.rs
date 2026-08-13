@@ -8990,9 +8990,9 @@ impl SharedDoorbell {
                 // census whose buckets did not sum could report a comfortable zero for a class
                 // it never reached, so `sum_ok` is a value and not a comment.
                 rows.push(format!(
-                    "[proc={} pdb=0x{:x}{} total={} already_host={} guest_ram={} \
-                     not_vidmem={} not_granular={}({} bytes) candidates={}({} bytes, \
-                     capped={}) published={done} refused={failed} sum_ok={}]",
+                    "[proc={} pdb=0x{:x}{} total={} already_host={} already_pinned={} \
+                     guest_ram={} not_vidmem={} not_granular={}({} bytes) candidates={}({} \
+                     bytes, capped={}) published={done} refused={failed} sum_ok={}]",
                     pid.0,
                     pdb.0,
                     if system {
@@ -9003,6 +9003,7 @@ impl SharedDoorbell {
                     },
                     c.total,
                     c.already_host,
+                    c.already_pinned,
                     c.guest_ram,
                     c.not_vidmem,
                     c.not_granular,
