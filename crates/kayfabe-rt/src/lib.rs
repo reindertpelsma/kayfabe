@@ -100,6 +100,12 @@ pub use kayfabe_arch::fault::ErrorNotifier;
 /// refusal the composition root can only report as "an error" is the shape
 /// `a_wall_that_can_carry_no_name` records.
 pub use kayfabe_arch::ids::ClassId;
+/// ★★★★★ **w288 TIER 2** — the control-command newtype
+/// [`device::SharedDevice::relay_channel_control`] takes, re-exported for [`Pdb`]'s single
+/// reason: the QEMU shim implements the port over it and its own manifest forbids an edge to
+/// `kayfabe-arch` (*"the shim names no architecture"*). ⊘ A newtype over an integer; naming
+/// a command id is not naming an architecture.
+pub use kayfabe_arch::ids::ControlCmd;
 /// ★ The id this shell's own entry points **require** a caller to name, re-exported.
 ///
 /// `SharedDevice::doorbell` takes a [`GpuId`], so a composition root cannot call it without
@@ -124,7 +130,14 @@ pub use kayfabe_arch::ids::Pdb;
 /// ★ #177 — the two handle types `SharedDevice::schedule_channel` takes, re-exported so
 /// the QEMU shim (which does not depend on `kayfabe-arch`) can name them.
 pub use kayfabe_arch::ids::{HClient, HObject};
-pub use kayfabe_fwd::{EngineObjectForwarded, FbLeafBacking, FbLeafRange, FwdFault};
+/// ★★★★★ **w288 TIER 2** — the outcome types of
+/// [`device::SharedDevice::relay_channel_control`], re-exported for [`Pdb`]'s reason: the
+/// policy layer and the QEMU shim both have to NAME them, and neither may take an edge
+/// this one already owns.
+pub use kayfabe_fwd::{
+    ChannelControlRelay, ChannelControlRelayFault, EngineObjectForwarded, FbLeafBacking,
+    FbLeafRange, FwdFault,
+};
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
 // public types. `BlockingSection` is deliberately ABSENT: it is `!Send` by

@@ -4068,6 +4068,98 @@ impl SharedDevice {
         Ok(ControlRoute::Forwarded)
     }
 
+    /// ★★★★★ **w288 TIER 2 — RELAY ONE CHANNEL CONTROL TO THE SAME CHANNEL ON THE HOST**,
+    /// one guest ask to exactly one host issue, and the reply back verbatim.
+    ///
+    /// The guest names its own channel by `(hClient, hObject)`; this resolves that to the
+    /// **host** channel handle the doorbell path already materialized and issues the SAME
+    /// `cmd` with the SAME `payload` against it, writing the host's answer back in place.
+    ///
+    /// # ⊘⊘ ONE ASK, ONE ISSUE — and for `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` that is a
+    /// # correctness requirement, not an efficiency one
+    ///
+    /// That control's record is **cleared by reading it**
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h`). ⇒ Nothing may call this
+    /// speculatively, on a timer, or "to warm a cache": a read nobody asked for consumes the
+    /// record, and the party that did ask then gets a well-formed all-zero answer that reads
+    /// exactly like *"no fault"*. This method is therefore driven by the guest's own RPC and
+    /// by nothing else.
+    ///
+    /// # ⚠ RELAY, NEVER SYNTHESISE
+    ///
+    /// Every failure is a **named** variant of [`kayfabe_fwd::ChannelControlRelayFault`] and the caller's
+    /// `payload` is left untouched on every one of them. There is deliberately no arm that
+    /// zero-fills, no arm that invents an address, and no arm that answers `NV_OK` with a
+    /// body we composed — a fabricated fault record is worse than no answer, because it is
+    /// shaped exactly like a pass.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::ChannelControlRelayFault`], by variant.
+    pub fn relay_channel_control(
+        &self,
+        client: HClient,
+        object: HObject,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<kayfabe_fwd::ChannelControlRelay, kayfabe_fwd::ChannelControlRelayFault> {
+        // ---- 1. ROUTE, rank 0. The SAME route the guest's own bind takes, so a control and
+        //         a bind can never be attributed to different channels.
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::gpu::route_bind_channel(spine, client, object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }
+            .map_err(kayfabe_fwd::ChannelControlRelayFault::NotRoutable)?
+        };
+        // ---- 2. THE HOST TWIN, read off the channel the route resolved. ⊘ `None` is a
+        //         refusal BY NAME and never a fabricated answer: a guest channel with no host
+        //         channel has nothing whose fault record could be read, and saying so is a
+        //         finding — it means the birth path never ran for this channel.
+        let found = self
+            .with_proc(route.proc, |proc| {
+                proc.channels
+                    .get(&route.chan)
+                    .map(|c| (c.gpu, c.host_channel))
+            })
+            .flatten();
+        let Some((cgpu, host_channel)) = found else {
+            return Err(kayfabe_fwd::ChannelControlRelayFault::ChannelGone {
+                proc: route.proc,
+                chan: route.chan,
+            });
+        };
+        let Some(host_chan) = host_channel else {
+            return Err(kayfabe_fwd::ChannelControlRelayFault::NoHostChannel {
+                proc: route.proc,
+                chan: route.chan,
+            });
+        };
+        // ---- 3. ISSUE IT, once, on that channel's own isolate.
+        //
+        // ⊘ `AckOnly` is REFUSED here rather than reported as success. The classifier's
+        // ack-only arm leaves the payload untouched, so relaying it would hand the guest
+        // whatever it sent us — for a fault-info read, a buffer of zeros wearing an `NV_OK`.
+        // That is the fabrication this whole verb exists to make unrepresentable.
+        match self.route_control(cgpu, route.proc, host_chan, cmd, payload) {
+            Ok(ControlRoute::Forwarded) => Ok(kayfabe_fwd::ChannelControlRelay {
+                proc: route.proc,
+                chan: route.chan,
+                gpu: cgpu,
+                host_chan,
+            }),
+            Ok(ControlRoute::AckOnly) => {
+                Err(kayfabe_fwd::ChannelControlRelayFault::ClassifiedAckOnly {
+                    proc: route.proc,
+                    chan: route.chan,
+                })
+            }
+            Err(f) => Err(kayfabe_fwd::ChannelControlRelayFault::HostRefused(f)),
+        }
+    }
+
     /// ★ Retire proc `pid` out of band — the §7.3 worker-death consequence, and the
     /// staleness canaries' lever. **Spine op** (write guard). `true` if it was live.
     /// ★ **And it cancels** (§15 amendment 4): every verb this proc still has in flight

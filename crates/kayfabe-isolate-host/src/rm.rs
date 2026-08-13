@@ -3044,6 +3044,79 @@ pub struct GuestReachProbe {
     /// by the control submission. This field excludes both, and it does so without a second
     /// run, a second channel or a second revision to compare against.
     pub notifier_before: Option<ErrorNotifierRead>,
+    /// ★★★★★ **w288 TIER 2 — THE FAULT'S ADDRESS, which the notifier cannot carry.**
+    ///
+    /// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, issued **once**, on this channel, after the
+    /// fault. `None` means the control refused or could not be decoded — a *finding*, and
+    /// deliberately not folded into a zeroed `MmuFaultInfoParams`, because a zeroed record
+    /// decodes to a well-formed *"faulted at address 0"*.
+    ///
+    /// ⊘⊘ **Read exactly once.** The header says the record is cleared by reading it, so a
+    /// second read here would answer all-zero and the run would report a fault at address
+    /// zero with no way to tell that from the truth.
+    pub fault_info: Option<kayfabe_abi::submit::MmuFaultInfoParams>,
+    /// ★★★★★ **w288 TIER 2 — the address this probe DELIBERATELY pointed the engine at**,
+    /// carried so the caller can compare it with [`Self::fault_info`]'s address without
+    /// re-deriving it from anything.
+    ///
+    /// ⊘ It is the probe's own input echoed back, and that is the point: the VA-identity
+    /// oracle is *"the address the fault reports EQUALS the address we asked for"*, and a
+    /// caller that recomputed the expected value from the same variable it printed would be
+    /// checking a number against itself.
+    pub fault_va: u64,
+    /// ★★★★★ **w288 TIER 2 — WHICH APERTURE the notifier was allocated in**, carried rather
+    /// than assumed.
+    ///
+    /// ⊘ It decides how the run must be read: on the **guest** arm a vidmem notifier decodes
+    /// to `kayfabe_arch::fault::ErrorNotifier::Unreachable`, so nothing is attached on the
+    /// host side and the probe measures **nothing** while looking like it ran. Printing the
+    /// aperture is what stops that silence from reading as a result.
+    pub notifier_aperture: NotifierAperture,
+}
+
+/// ★★★★★ **w288 TIER 2 — WHICH STORE THE ERROR NOTIFIER LIVES IN, as a named choice.**
+///
+/// # ⊘⊘ Why this is a parameter and not a constant, and it is measured on BOTH sides
+///
+/// The two arms are not "the same thing, allocated differently" — they are **usable in
+/// different places**, and each is unusable in the other:
+///
+/// - [`Self::Sysmem`] (`NV01_MEMORY_SYSTEM`, [`HostRmBackend::alloc_notifier_mem`]) is the
+///   faithful shape — `[w287 census, 63/63]` every real `errorNotifierMem` a driver declares
+///   carries aperture SYSMEM — and it is the **only** shape this port can serve for a guest:
+///   `kayfabe_arch::fault::ErrorNotifier` has exactly `Sysmem { gpa }` and `Unreachable`, so
+///   a VIDMEM notifier decodes to `Unreachable` and **no host notifier is attached at all**.
+///   A guest-side run on the vidmem arm therefore tests nothing, silently.
+/// - [`Self::Vidmem`] (`NV01_MEMORY_LOCAL_USER`, [`RmConnection::alloc_device_local`]) is the
+///   arm the w287 known-positive was measured on, natively, on a real GA106.
+///   ⚠ `[measured 2026-08-13, vh2, rev f7a74bc]`, recorded on `alloc_notifier_mem` itself:
+///   **on the host**, a `NV01_MEMORY_SYSTEM` notifier was refused in both flag settings that
+///   were tried — `NV_ERR_INVALID_ARGUMENT` at the CPU map with `NVOS02_FLAGS_MAPPING_NO_MAP`,
+///   and `EINVAL` at the allocation without it. So the sysmem arm may not survive natively.
+///
+/// ⇒ **Two arms, both named, neither a fallback.** There is deliberately no "try sysmem, fall
+/// back to vidmem": a run whose notifier aperture depended on what RM happened to accept
+/// would be a run that cannot say which experiment it performed
+/// (`a_fallback_keyed_on_our_own_ignorance`). The caller states it and the report prints it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifierAperture {
+    /// `NV01_MEMORY_SYSTEM` — the faithful shape, and the only one a GUEST-side run can have
+    /// served, because it is the only one this port's `ErrorNotifier` vocabulary can name.
+    Sysmem,
+    /// `NV01_MEMORY_LOCAL_USER` — the arm w287's native known-positive was measured on.
+    Vidmem,
+}
+
+impl NotifierAperture {
+    /// The arm's name, for a report. ⊘ Printed on every run, including the ones that measure
+    /// nothing: the whole hazard is a run that is silent because of this choice.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NotifierAperture::Sysmem => "SYSMEM (NV01_MEMORY_SYSTEM)",
+            NotifierAperture::Vidmem => "VIDMEM (NV01_MEMORY_LOCAL_USER)",
+        }
+    }
 }
 
 /// What one submission produced — the whole evidence bar for rung 3, as data.
@@ -5161,10 +5234,18 @@ impl HostRmBackend {
         })
     }
 
-    /// ⊘⊘⊘ **NOT USED — KEPT AS THE RECORD OF TWO MEASUREMENTS THAT COST A RUN EACH.**
+    /// ⊘⊘ **CORRECTED 2026-08-13 (w288 TIER 2) — THIS IS NOW LIVE, and it is the DEFAULT.**
+    /// The header below used to read *"NOT USED — kept as the record of two measurements
+    /// that cost a run each"*. It is now [`NotifierAperture::Sysmem`], which is the arm a
+    /// GUEST-side run must take: `kayfabe_arch::fault::ErrorNotifier` has only
+    /// `Sysmem { gpa }` and `Unreachable`, so a VIDMEM notifier decodes to `Unreachable`,
+    /// **no host notifier is attached**, and the probe measures nothing while looking like it
+    /// ran. ⚠ The two measurements below are still true of the **host** and are the reason
+    /// the aperture is a named parameter rather than a constant — read them before running
+    /// this natively.
     ///
-    /// The notifier this rung actually uses is [`RmConnection::alloc_device_local`]
-    /// (`NV01_MEMORY_LOCAL_USER`), which `kchannelGetNotifierInfo` accepts as
+    /// The notifier this rung used to use unconditionally is
+    /// [`RmConnection::alloc_device_local`] (`NV01_MEMORY_LOCAL_USER`), which `kchannelGetNotifierInfo` accepts as
     /// `ERROR_NOTIFIER_TYPE_MEMORY` exactly as it accepts `NV01_MEMORY_SYSTEM`
     /// (`ogkm-580: kernel_channel.c:2016`, `:2080` — the handle is resolved by
     /// `memGetByHandle`, which is class-agnostic), and which this tree already CPU-maps
@@ -5211,7 +5292,6 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// Whatever RM refused.
-    #[allow(dead_code)]
     fn alloc_notifier_mem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         if len == 0 {
             return Err(RmError::NoMemory);
@@ -5248,6 +5328,43 @@ impl HostRmBackend {
         status_check(out.status)?;
         self.conn.remember(out.h_object_new, self.conn.device);
         Ok(self.stamp(out.h_object_new))
+    }
+
+    /// ★★★★★ **w288 TIER 2 — ASK THIS CHANNEL WHERE IT FAULTED.**
+    ///
+    /// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`), issued on the **channel object**.
+    /// It is the only control that carries a fault's **address**, **type** and the driver's
+    /// own **fault string**; the error notifier has `status`/`info32`/`info16` and no address
+    /// at all.
+    ///
+    /// # ⊘⊘ THE READ IS DESTRUCTIVE — call this AT MOST ONCE per fault
+    ///
+    /// *"The MMU fault information will be cleared once this command is executed"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h`). A second call answers
+    /// all-zero, which decodes to a well-formed *"faulted at address 0"* — so a retry loop
+    /// here would not merely waste a call, it would **manufacture a wrong answer** and there
+    /// would be nothing in the reply to say so.
+    ///
+    /// ⊘ On a GSP client this is `ROUTE_TO_PHYSICAL` and therefore RPC'd to the GSP. In the
+    /// guest that GSP is **us**, and the arm that answers it is `kayfabe_rmrpc`'s
+    /// `respond_get_mmu_fault_info`, which relays it to the corresponding HOST channel.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, whatever RM refused,
+    /// or [`RmError::Other`] carrying [`BAD_ENCODE`] if the reply did not decode.
+    pub fn get_mmu_fault_info(
+        &mut self,
+        chan: HostHandle,
+    ) -> Result<kayfabe_abi::submit::MmuFaultInfoParams, RmError> {
+        use kayfabe_abi::submit::{MmuFaultInfoParams, NV906F_CTRL_CMD_GET_MMU_FAULT_INFO};
+        let raw = self.narrow(chan)?;
+        // ⊘ Sent zeroed and read back in place: every field is `[OUT]`, so seeding anything
+        // would be this side proposing a value RM is then free to leave alone — the shape
+        // that lets our own number read as the driver's answer.
+        let mut params = [0u8; MmuFaultInfoParams::SIZE];
+        self.conn
+            .raw_control(raw, NV906F_CTRL_CMD_GET_MMU_FAULT_INFO, &mut params)?;
+        MmuFaultInfoParams::decode(&params).map_err(|_| RmError::Other(BAD_ENCODE))
     }
 
     /// Zero the notifier page before a channel is told about it.
@@ -6391,10 +6508,18 @@ impl HostRmBackend {
     /// # Errors
     /// Whatever the allocations, mappings, channel or schedule refused — each before any
     /// submission, so an error here is never a fault.
+    ///
+    /// ## ★★★★★ w288 TIER 2 — `notifier_aperture`, and it decides whether this run measures
+    ///
+    /// See [`NotifierAperture`]. On a GUEST-side run the vidmem arm attaches **no** host
+    /// notifier at all (the aperture decodes to `ErrorNotifier::Unreachable`), so the probe
+    /// runs, faults, and reports a quiet notifier that means nothing. ⊘ Stated by the caller
+    /// and echoed in [`GuestReachProbe::notifier_aperture`]; never guessed here.
     pub fn probe_guest_reachability(
         &mut self,
         vas: HostHandle,
         sem_va: u64,
+        notifier_aperture: NotifierAperture,
     ) -> Result<GuestReachProbe, RmError> {
         const BYTES: u64 = 0x1_0000;
         /// Neither zero nor a plausible semaphore payload: the control's word must not be
@@ -6452,11 +6577,19 @@ impl HostRmBackend {
         // whatever the allocator handed us. `NV01_MEMORY_SYSTEM` is not documented to arrive
         // zeroed, and *"it was already `0xffff`"* is exactly the false positive that would
         // make this whole client report success without a driver ever writing anything.
-        let notifier_h = match self
-            .conn
-            .alloc_device_local(NOTIFIER_BYTES)
-            .map(|h| self.stamp(h))
-        {
+        // ⊘⊘ **THE APERTURE IS THE CALLER'S, AND IT IS NOT A FALLBACK.** Neither arm retries
+        // as the other: a run whose notifier store depended on what RM happened to accept
+        // could not say which experiment it performed. See [`NotifierAperture`] for the two
+        // measurements — the census that makes SYSMEM faithful, and the pair of native
+        // refusals that makes VIDMEM the arm w287's known-positive was taken on.
+        let notifier_alloc = match notifier_aperture {
+            NotifierAperture::Sysmem => self.alloc_notifier_mem(NOTIFIER_BYTES),
+            NotifierAperture::Vidmem => self
+                .conn
+                .alloc_device_local(NOTIFIER_BYTES)
+                .map(|h| self.stamp(h)),
+        };
+        let notifier_h = match notifier_alloc {
             Ok(h) => h,
             Err(e) => {
                 let _ = self.free(self.stamp(dst));
@@ -6572,6 +6705,13 @@ impl HostRmBackend {
                     // ⊘ The control did not land, so there is no "alive and working" instant
                     // for a negative control to be taken at.
                     notifier_before: None,
+                    // ⊘⊘ **NOT READ on this path, and that is the destructive-read rule
+                    // holding.** No fault was provoked, so there is no record — and asking
+                    // anyway would consume whatever a PREVIOUS fault left, then report it as
+                    // this run's. `None` is *"unmeasured"*, which is what it is.
+                    fault_info: None,
+                    fault_va: sem_va,
+                    notifier_aperture,
                 });
             }
 
@@ -6607,6 +6747,17 @@ impl HostRmBackend {
             // window to react that the semaphore poll gave the engine. ⊘ A notifier read
             // before the wait would measure our own impatience.
             let notifier = self.read_error_notifier(notifier_h).ok();
+            // ★★★★★ **w288 TIER 2 — PLANE D: WHERE.** The notifier says *this channel died,
+            // Xid 31, GRAPHICS*; it has no address field. This is the only control that
+            // carries one, and it is asked here — **once**, after the wait has expired, on
+            // this channel, and never again in this run. See
+            // [`Self::get_mmu_fault_info`] for why a second ask would manufacture a wrong
+            // answer rather than repeat a right one.
+            //
+            // ⊘ `.ok()`: a refusal is `None`, which is *unmeasured*, and is deliberately NOT
+            // folded into a zeroed record — a zeroed record decodes to a well-formed
+            // *"faulted at address 0"* and would read as a measurement.
+            let fault_info = self.get_mmu_fault_info(c).ok();
             // Plane C, asked explicitly rather than inferred from the teardown's incidentals.
             let mut tok = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
             let post_fault_ioctl = self.conn.raw_control(
@@ -6622,6 +6773,13 @@ impl HostRmBackend {
                 notifier,
                 post_fault_ioctl,
                 notifier_before,
+                fault_info,
+                // ⊘ The probe's own input, echoed. See [`GuestReachProbe::fault_va`]: the
+                // VA-identity oracle compares the REPORTED address against the address we
+                // asked for, and a caller that recomputed the expectation from the same
+                // variable it printed would be checking a number against itself.
+                fault_va: sem_va,
+                notifier_aperture,
             })
         };
         let out = go();

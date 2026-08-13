@@ -3082,6 +3082,22 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.bind_channel(client, object, rm_engine_type)
     }
 
+    /// ★★★★★ **w288 TIER 2 — the shell's seat for the one-to-one channel-control relay.**
+    ///
+    /// ⊘ A pure delegation, and it must stay one: every decision — the route, the host twin,
+    /// the ack-only refusal — belongs to `SharedDevice::relay_channel_control`, which is the
+    /// only party holding the locks that make them consistent. A shell that added a check
+    /// here would be a second authority on a fact the device already decided.
+    fn relay_channel_control(
+        &mut self,
+        client: kayfabe_rt::HClient,
+        object: kayfabe_rt::HObject,
+        cmd: kayfabe_rt::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<kayfabe_rt::ChannelControlRelay, kayfabe_rt::ChannelControlRelayFault> {
+        self.0.relay_channel_control(client, object, cmd, payload)
+    }
+
     /// ★★★★★ §16.80 — the shell's seat for the Case-1 engine-object forward, and **the
     /// place its outcome is named**.
     ///

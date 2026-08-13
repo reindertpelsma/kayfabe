@@ -542,6 +542,12 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0x20802a02", // InitTablePolicy
         "0x20803601", // InitTablePolicy
         "0x20803801", // InitTablePolicy
+        // ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, `ObjectPolicy`.**
+        // ADDED, and adding is the direction this list welcomes: it is the ONLY control that
+        // carries a fault's ADDRESS, so *"the guest observed THE SAME FAULT, by identity"* is
+        // unanswerable without it. ⊘ It is served by RELAY to the corresponding host channel
+        // and never by synthesis — see `ObjectPolicy::respond_get_mmu_fault_info`.
+        "0x906f0106",
         "0x90f10106", // the gvaspace PDE publication — InitTablePolicy
         "0xa06c0101", // ★★★★ NVA06C_CTRL_CMD_GPFIFO_SCHEDULE — ObjectPolicy, §16.56
         "0xa06f0103", // NVA06F_CTRL_CMD_GPFIFO_SCHEDULE — ObjectPolicy, #177

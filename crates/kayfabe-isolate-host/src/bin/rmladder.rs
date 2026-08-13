@@ -2376,7 +2376,15 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
         );
         true
     } else {
-        match rm.probe_guest_reachability(vas, p.sem_va) {
+        // ⊘ `Vidmem`, NAMED: this is R30's NATIVE arm, and the vidmem notifier is the one
+        // w287's known-positive was measured on (`[measured 2026-08-13, vh2]` a sysmem
+        // notifier was refused natively in both flag settings tried). ⊘ Not a default —
+        // see `NotifierAperture`, which refuses to make either arm a fallback.
+        match rm.probe_guest_reachability(
+            vas,
+            p.sem_va,
+            kayfabe_isolate_host::rm::NotifierAperture::Vidmem,
+        ) {
             Ok(r) => match r.reach {
                 GuestReach::ControlFailed => {
                     println!(
@@ -2507,7 +2515,17 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
 /// - **Not throughput.** One 4 KiB copy, polled.
 /// - The ioctl count is **this program's**, not a lower bound on what a copy costs: it
 ///   includes bring-up (`R0`–`R6`), the probes and the teardown, and the census says which.
-fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
+/// ⊘⊘ **`notifier_aperture` is the caller's and it decides whether arm 4 measures at
+/// all.** See `kayfabe_isolate_host::rm::NotifierAperture`: a VIDMEM notifier decodes to
+/// `ErrorNotifier::Unreachable` on the guest path, so **no host notifier is attached** and
+/// the arm runs, faults, and reports a quiet notifier that means nothing. It is printed on
+/// every run, including the quiet ones, because that silence is the hazard.
+fn ce_client(
+    rm: &mut HostRmBackend,
+    gpu: u32,
+    want_fault: bool,
+    notifier_aperture: kayfabe_isolate_host::rm::NotifierAperture,
+) -> bool {
     use kayfabe_isolate_host::rm::{GuestReach, VaProbe};
     use kayfabe_linux_raw::census;
 
@@ -2760,7 +2778,7 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                      wrong, and neither corroborates the other",
                     fvas.raw()
                 );
-                let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA) {
+                let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA, notifier_aperture) {
                     Ok(r) => {
                         // ★★★★★ **THE MANDATE'S SECOND CLIENT — HOW THE PROGRAM ITSELF
                         // LEARNS, printed BEFORE the verdict it qualifies.**
@@ -2825,6 +2843,68 @@ fn ce_client(rm: &mut HostRmBackend, gpu: u32, want_fault: bool) -> bool {
                                 "FAIL  R33 arm 5 NOTIFIER  = the notifier could not be read \
                                  at all — plane A is UNMEASURED this run, which is a \
                                  different thing from measuring it quiet"
+                            ),
+                        }
+                        // ★★★★★ **w288 TIER 2 — PLANE D: *WHERE*, and this is the ONLY
+                        // plane that can answer it.**
+                        //
+                        // The notifier gives `status` / `info32` (the Xid code) / `info16`
+                        // (the engine). It has **no address field**. So *"the guest observed
+                        // THE SAME FAULT, BY IDENTITY"* cannot be claimed from planes A-C:
+                        // they can say a channel died and which engine, never where.
+                        //
+                        // ⊘ Printed as one joinable line so a runner can match it against the
+                        // host's own `Xid 31 … @ 0x… FAULT_PDE` in the SAME run.
+                        match &r.fault_info {
+                            Some(info) => {
+                                let got = info.address();
+                                // ★★★★★ **THE FREE ORACLE — VA IDENTITY.** Guest ranges are
+                                // mapped at IDENTICAL host VAs, so the address a fault reports
+                                // MUST equal the address the engine was pointed at. ⊘ BOTH
+                                // numbers are printed on both arms: a check that prints only
+                                // the one it likes cannot be re-read by anyone who doubts it.
+                                if got == r.fault_va {
+                                    println!(
+                                        "★     R33 arm 5 WHERE     = PLANE D SPEAKS — \
+                                         GET_MMU_FAULT_INFO addr={got:#018x} \
+                                         (hi={:#010x} lo={:#010x}) faultType={:#x} \
+                                         faultString={:?} | VA-IDENTITY HOLDS: asked \
+                                         {:#018x}, reported {got:#018x}",
+                                        info.addr_hi,
+                                        info.addr_lo,
+                                        info.fault_type,
+                                        info.fault_string_lossy(),
+                                        r.fault_va,
+                                    );
+                                } else {
+                                    println!(
+                                        "FAIL  R33 arm 5 WHERE     = ⊘⊘ VA-IDENTITY BROKEN — \
+                                         the engine was pointed at {:#018x} and the fault is \
+                                         reported at {got:#018x} (hi={:#010x} lo={:#010x}, \
+                                         faultType={:#x}, faultString={:?}). ⚠ Guest ranges \
+                                         are mapped at IDENTICAL host VAs, so these MUST be \
+                                         equal; a difference means the identity this whole \
+                                         port rests on does not hold, or the record belongs \
+                                         to a different fault",
+                                        r.fault_va,
+                                        info.addr_hi,
+                                        info.addr_lo,
+                                        info.fault_type,
+                                        info.fault_string_lossy(),
+                                    );
+                                }
+                            }
+                            // ⊘ UNMEASURED, and named as such. The control refused or did not
+                            // decode; it is NOT "the fault had no address". ⚠ And it may not
+                            // be retried: the record is cleared by the read, so a second ask
+                            // would answer all-zero and report a fault at address 0.
+                            None => println!(
+                                "FAIL  R33 arm 5 WHERE     = PLANE D UNMEASURED — \
+                                 `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` refused or did not \
+                                 decode, so this run carries the fault's CODE and not its \
+                                 ADDRESS. ⊘ Not retried: the record is cleared by reading it, \
+                                 so a second ask would answer all-zero and that decodes as a \
+                                 fault at address 0"
                             ),
                         }
                         match &r.post_fault_ioctl {
@@ -3572,6 +3652,9 @@ fn main() -> std::process::ExitCode {
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_ce_client = false;
     let mut want_ce_client_fault = false;
+    // ★★★★★ w288 TIER 2 — SYSMEM by default; see `--notifier-vidmem` for the measured
+    // reason the other arm exists and why neither is a fallback for the other.
+    let mut notifier_aperture = kayfabe_isolate_host::rm::NotifierAperture::Sysmem;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         match flag.as_str() {
@@ -3622,6 +3705,23 @@ fn main() -> std::process::ExitCode {
             "--ce-client-fault" => {
                 want_ce_client = true;
                 want_ce_client_fault = true;
+            }
+            // ★★★★★ **w288 TIER 2 — the notifier's APERTURE, as an explicit arm.**
+            //
+            // Default is SYSMEM, because that is the faithful shape (`[w287 census, 63/63]`)
+            // and the ONLY one a GUEST-side run can have served: this port's
+            // `ErrorNotifier` vocabulary is `Sysmem { gpa }` or `Unreachable`, so a vidmem
+            // notifier attaches nothing at all and the run measures nothing, silently.
+            //
+            // ⊘⊘ This flag exists because the other arm is MEASURED, not hypothetical:
+            // `[measured 2026-08-13, vh2, rev f7a74bc]` a `NV01_MEMORY_SYSTEM` notifier was
+            // refused **natively** in both flag settings tried (`NV_ERR_INVALID_ARGUMENT` at
+            // the CPU map with `_MAPPING_NO_MAP`; `EINVAL` at the allocation without it), so
+            // a native run may need the vidmem arm. ⚠ It is a named CHOICE and never a
+            // fallback: nothing tries one and retries the other, because a run whose
+            // aperture depended on what RM accepted could not say which experiment it ran.
+            "--notifier-vidmem" => {
+                notifier_aperture = kayfabe_isolate_host::rm::NotifierAperture::Vidmem;
             }
             "--fb-view-probe" => want_fb_view = Some(FbViewJoin::Shared),
             // ⊘ The negative control. Same chain, private guest-side pages, inverted verdict.
@@ -3714,7 +3814,15 @@ fn main() -> std::process::ExitCode {
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
         );
-        let ok = ce_client(&mut rm, gpu, want_ce_client_fault);
+        // ⊘ Printed BEFORE the arms, on every run: a run whose notifier aperture is not on
+        // the log is a run whose quiet notifier cannot be graded.
+        println!(
+            "info  R33 NOTIFIER APERTURE = {} ⊘ on the GUEST path a VIDMEM notifier decodes \
+             to ErrorNotifier::Unreachable, so NO host notifier is attached and arm 4 \
+             measures NOTHING while looking like it ran",
+            notifier_aperture.as_str(),
+        );
+        let ok = ce_client(&mut rm, gpu, want_ce_client_fault, notifier_aperture);
         print_ioctl_census(if want_ce_client_fault {
             "R33 raw CE client, arms 1-4"
         } else {

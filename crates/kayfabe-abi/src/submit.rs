@@ -1050,6 +1050,169 @@ pub fn encode_bind(req: &BindParams) -> Vec<u8> {
     out
 }
 
+// =====================================================================================
+// ★★★★★ w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, the ONLY place a fault's
+// ADDRESS is readable by a client
+// =====================================================================================
+
+/// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` = `0x906f0106`, issued **on the channel object** —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h:213-219`.
+///
+/// # ★★★★★ Why this control and not the error notifier
+///
+/// The notifier carries `status`, `info32` (the `ROBUST_CHANNEL_*` code) and `info16` (the
+/// engine) and **no address at all**. *"Channel X was RC-killed with Xid 31 on GRAPHICS"* is
+/// the whole of what a notifier can say. The **address**, the **fault type** and the
+/// driver's own **fault string** exist only here. ⇒ A rung whose bar is *"the guest observes
+/// THE SAME FAULT, BY IDENTITY"* cannot be met by the notifier alone, and a claim of fault
+/// identity built on the notifier is a claim about three fields out of six.
+///
+/// # ⊘⊘ THE READ IS DESTRUCTIVE — this may never be polled, prefetched or speculated
+///
+/// The header says it in as many words: *"The MMU fault information will be cleared once
+/// this command is executed."* ⇒ **One guest ask ⇒ exactly one host read, on one known
+/// channel.** Anything that reads it "just in case" consumes the record before the party
+/// that wanted it asks, and the loss is silent — the second reader sees a well-formed
+/// all-zero answer, which is indistinguishable from *"no fault"*.
+///
+/// # ★★ It is `ROUTE_TO_PHYSICAL`, which is why WE have to answer it
+///
+/// On a GSP client the guest's kernel RPCs it to the GSP. We are the GSP. There is no arm in
+/// which the guest resolves this itself, so an unanswered id is a guest that can never learn
+/// where its own engine faulted.
+pub const NV906F_CTRL_CMD_GET_MMU_FAULT_INFO: u32 = 0x906f_0106;
+
+/// `NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h:213-219`:
+///
+/// ```text
+/// NvU32 addrHi;                                  // +0
+/// NvU32 addrLo;                                  // +4
+/// NvU32 faultType;                               // +8
+/// char  faultString[NV906F_CTRL_CMD_MMU_FAULT_STRING_LEN];   // +12, 32 bytes
+/// NV_DECLARE_ALIGNED(NvU64 shaderProgramVA[NV906F_CTRL_MMU_FAULT_SHADER_PROGRAM_VA_COUNT], 8);
+/// ```
+///
+/// ⚠ **`shaderProgramVA` is 8-ALIGNED, so there are four bytes of padding at +44.** The
+/// struct is 104 bytes, not 100. Getting that wrong shifts every `shaderProgramVA` entry and
+/// — worse — makes a byte-for-byte relay silently mis-sized, which RM reports as an
+/// `INVALID_ARGUMENT` several layers from the cause. See [`Self::SIZE`].
+///
+/// ⊘ **This type exists to be RELAYED and REPORTED, never to be constructed.** There is
+/// deliberately no constructor with defaults: a zero-filled instance is a well-formed *"the
+/// engine faulted at address zero"*, which is the exact false answer this whole rung is
+/// built to avoid producing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MmuFaultInfoParams {
+    /// `NvU32 addrHi` @ +0 — the high half of the faulting address.
+    pub addr_hi: u32,
+    /// `NvU32 addrLo` @ +4 — the low half.
+    pub addr_lo: u32,
+    /// `NvU32 faultType` @ +8 — an `NV_PFAULT_FAULT_TYPE_*` code.
+    pub fault_type: u32,
+    /// `char faultString[32]` @ +12 — the driver's own name for the fault. ⊘ Carried as
+    /// raw bytes, never as a `String`: it is a fixed-width C buffer that need not be
+    /// NUL-terminated and need not be UTF-8, and lossily converting it here would put a
+    /// decision in a decoder.
+    pub fault_string: [u8; MmuFaultInfoParams::FAULT_STRING_LEN],
+    /// `NvU64 shaderProgramVA[7]` @ +48, 8-aligned.
+    pub shader_program_va: [u64; MmuFaultInfoParams::SHADER_PROGRAM_VA_COUNT],
+}
+
+impl MmuFaultInfoParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV906F_CTRL_GET_MMU_FAULT_INFO_PARAMS";
+    /// `NV906F_CTRL_CMD_MMU_FAULT_STRING_LEN`.
+    pub const FAULT_STRING_LEN: usize = 32;
+    /// `NV906F_CTRL_MMU_FAULT_SHADER_PROGRAM_VA_COUNT`.
+    pub const SHADER_PROGRAM_VA_COUNT: usize = 7;
+    /// Offset of the 8-aligned `shaderProgramVA[]`. ⚠ 48, not 44 — see the type docs.
+    pub const SHADER_PROGRAM_VA_AT: usize = 48;
+    /// `sizeof` — 104 bytes, padding included.
+    pub const SIZE: usize = Self::SHADER_PROGRAM_VA_AT + 8 * Self::SHADER_PROGRAM_VA_COUNT;
+
+    /// The faulting address, composed from its two halves.
+    ///
+    /// ⊘ `(hi << 32) | lo`, which is the composition the driver's own printer uses. It is a
+    /// method rather than a stored field so the two halves stay the wire's and the composed
+    /// value stays derived — a stored address would be a second source of truth beside a
+    /// complete value.
+    #[must_use]
+    pub fn address(&self) -> u64 {
+        (u64::from(self.addr_hi) << 32) | u64::from(self.addr_lo)
+    }
+
+    /// The fault string as far as its first NUL, lossily — **for a log line only**.
+    ///
+    /// ⊘ Never used to decide anything. See [`Self::fault_string`] for why the raw bytes are
+    /// what the struct carries.
+    #[must_use]
+    pub fn fault_string_lossy(&self) -> String {
+        let end = self
+            .fault_string
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(Self::FAULT_STRING_LEN);
+        String::from_utf8_lossy(&self.fault_string[..end]).into_owned()
+    }
+
+    /// Decode from a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`] — refused, never zero-extended. A short buffer decoded to
+    /// zeros is a well-formed *"faulted at address 0"*.
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        let u32_at = |off: usize| {
+            u32::from_le_bytes([bytes[off], bytes[off + 1], bytes[off + 2], bytes[off + 3]])
+        };
+        let mut fault_string = [0u8; Self::FAULT_STRING_LEN];
+        fault_string.copy_from_slice(&bytes[12..12 + Self::FAULT_STRING_LEN]);
+        let mut shader_program_va = [0u64; Self::SHADER_PROGRAM_VA_COUNT];
+        for (i, slot) in shader_program_va.iter_mut().enumerate() {
+            let off = Self::SHADER_PROGRAM_VA_AT + i * 8;
+            let mut w = [0u8; 8];
+            w.copy_from_slice(&bytes[off..off + 8]);
+            *slot = u64::from_le_bytes(w);
+        }
+        Ok(Self {
+            addr_hi: u32_at(0),
+            addr_lo: u32_at(4),
+            fault_type: u32_at(8),
+            fault_string,
+            shader_program_va,
+        })
+    }
+}
+
+/// The status this port answers when it **cannot relay** a
+/// [`NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`] — `NV_ERR_INVALID_STATE` (`0x40`,
+/// `ogkm-580: kernel-open/common/inc/nvstatuscodes.h:93`).
+///
+/// ⚠ **Never `NV_ERR_NOT_SUPPORTED` (`0x56`)**, for [`BIND_DOCUMENTED_STATUSES`]' reason:
+/// `0x56` is `kayfabe_gsp::GspFsm::answer`'s signature for *"nobody claimed this command"*,
+/// and the guest prints the raw hex. Reusing it would erase the difference between *"we
+/// decided we cannot answer"* and *"this id is unimplemented"* — which for this control is
+/// the difference between *"the fault record is unreachable"* and *"faults are not
+/// reported"*.
+///
+/// ⊘ And it is a REFUSAL with an empty body, never `NV_OK` with zeros: a zero-filled params
+/// struct decodes to a well-formed *"the engine faulted at address 0, fault type 0"*.
+pub const MMU_FAULT_INFO_REFUSED_STATUS: u32 = 0x40;
+
+/// The status this port answers when the guest's own params are the wrong shape —
+/// `NV_ERR_INVALID_ARGUMENT` (`0x1F`, `ogkm-580: nvstatuscodes.h:60`).
+///
+/// ⊘ Kept apart from [`MMU_FAULT_INFO_REFUSED_STATUS`]: *"you asked wrongly"* and *"we could
+/// not reach the answer"* are different findings and only the second is about us.
+pub const MMU_FAULT_INFO_BAD_PARAMS_STATUS: u32 = 0x1f;
+
 /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrlc36f.h:79`.
 ///

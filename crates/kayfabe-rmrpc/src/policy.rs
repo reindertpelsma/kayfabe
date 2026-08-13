@@ -748,6 +748,32 @@ pub trait ObjectModel: Send {
         rm_engine_type: u32,
     ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault>;
 
+    /// ★★★★★ **w288 TIER 2 — RELAY ONE CHANNEL CONTROL TO THE SAME CHANNEL ON THE HOST.**
+    ///
+    /// The guest names its own channel by `(client, object)`; the model resolves that to the
+    /// **host** channel it materialized and issues the SAME `cmd` with the SAME `payload`
+    /// there, writing the host's answer back in place.
+    ///
+    /// ⊘⊘ **One guest ask ⇒ exactly one host issue.** This is a correctness requirement and
+    /// not an efficiency one for the id it exists to serve:
+    /// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`'s record is **cleared by reading it**, so an
+    /// implementation that read speculatively would consume the record before the party that
+    /// asked for it — and the loss is silent, because the second reader sees a well-formed
+    /// all-zero answer.
+    ///
+    /// ⚠ **Relay, never synthesise.** `payload` must be left **untouched** on every failure
+    /// arm. A zero-filled `NV_OK` is a well-formed *"the engine faulted at address 0"*.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::ChannelControlRelayFault`], by variant.
+    fn relay_channel_control(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        cmd: kayfabe_arch::ids::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<kayfabe_fwd::ChannelControlRelay, kayfabe_fwd::ChannelControlRelayFault>;
+
     /// ★★★★ §16.40 — **the live VA-space census, in the model's own locking discipline.**
     ///
     /// ⊘⊘ This is a trait method rather than a call through [`Self::as_gpu`], and the
@@ -831,6 +857,55 @@ impl ObjectModel for Gpu {
         rm_engine_type: u32,
     ) -> Result<kayfabe_core::gpu::BindAck, kayfabe_core::gpu::BindFault> {
         Gpu::bind_channel(self, client, object, rm_engine_type)
+    }
+
+    /// ★★★★★ **w288 TIER 2 on a BARE `Gpu`** — the same three steps the shell takes, with
+    /// none of the locks: route by `(client, object)`, read the channel's host twin, issue
+    /// the control on it through [`kayfabe_fwd::forward_control`].
+    ///
+    /// ⊘ **Not a stub.** A bare `Gpu` is the single-threaded reference form of the model, and
+    /// an arm that refused here would make the differential's reference behaviour *"this is
+    /// unimplemented"* — which is exactly the shape that lets a shell-only defect pass every
+    /// test that composes a bare `Gpu`.
+    fn relay_channel_control(
+        &mut self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+        cmd: kayfabe_arch::ids::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<kayfabe_fwd::ChannelControlRelay, kayfabe_fwd::ChannelControlRelayFault> {
+        use kayfabe_fwd::ChannelControlRelayFault as Refusal;
+        let route = kayfabe_core::gpu::route_bind_channel(&self.spine, client, object)
+            .map_err(Refusal::NotRoutable)?;
+        let proc = self
+            .procs
+            .get_mut(&route.proc)
+            .ok_or(Refusal::ChannelGone {
+                proc: route.proc,
+                chan: route.chan,
+            })?;
+        let (cgpu, host_channel) = proc
+            .channels
+            .get(&route.chan)
+            .map(|c| (c.gpu, c.host_channel))
+            .ok_or(Refusal::ChannelGone {
+                proc: route.proc,
+                chan: route.chan,
+            })?;
+        // ⊘ A guest channel whose host twin was never born has nothing whose fault record
+        // could be read. Refused BY NAME; nothing is invented in its place.
+        let host_chan = host_channel.ok_or(Refusal::NoHostChannel {
+            proc: route.proc,
+            chan: route.chan,
+        })?;
+        kayfabe_fwd::forward_control(proc, cgpu, host_chan, cmd, payload)
+            .map_err(Refusal::HostRefused)?;
+        Ok(kayfabe_fwd::ChannelControlRelay {
+            proc: route.proc,
+            chan: route.chan,
+            gpu: cgpu,
+            host_chan,
+        })
     }
 
     fn forward_engine_object(
@@ -1669,6 +1744,18 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // ★★★ E9/§13.6 — the channel-side bind. Same claim discipline: by id, never by the
     // whole `RmControl` function.
     kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+    // ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, `0x906f0106`: the ONLY
+    // control that carries a fault's ADDRESS.**
+    //
+    // The error notifier this rung also builds carries `status` / `info32` (the Xid code) /
+    // `info16` (the engine) and **no address at all**. ⇒ *"the guest observed THE SAME FAULT,
+    // by identity"* is unanswerable without this id, and a claim of fault identity resting on
+    // the notifier alone is a claim about half the fields.
+    //
+    // ⊘⊘ It is served by RELAY — one guest ask, one host issue on the corresponding host
+    // channel, reply verbatim — and NEVER by synthesis. The record is destroyed by reading
+    // it, so nothing may read it speculatively; see `Self::respond_get_mmu_fault_info`.
+    kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO,
     // ★★★ **§14.25 — the address-plane control, RE-CLAIMED.** It was claimed in §14.21,
     // measured to kill the adapter, and reverted; §14.21's own re-enable condition was
     // *"when the `0x90f10106` publication reaches `Vas::pdb`, promote-ctx SUCCEEDS rather
@@ -1940,6 +2027,9 @@ impl ObjectPolicy {
             }
             kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS => {
                 self.respond_mc_service_interrupts(cmd, &req)
+            }
+            kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO => {
+                self.respond_get_mmu_fault_info(cmd, &req)
             }
             _ => None,
         }
@@ -2502,6 +2592,135 @@ impl ObjectPolicy {
         let mut body = cmd.payload.clone();
         body[req.params_at..req.params_at + want]
             .copy_from_slice(&kayfabe_abi::submit::encode_bind(&params));
+        Some(Reply {
+            rpc_result: 0, // NV_OK
+            body,
+        })
+    }
+
+    /// ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`), RELAYED
+    /// ONE-TO-ONE TO THE CORRESPONDING HOST CHANNEL.**
+    ///
+    /// # What this is for, and what the notifier could never have given
+    ///
+    /// The error notifier carries `status` / `info32` (the `ROBUST_CHANNEL_*` code) /
+    /// `info16` (the engine). It has **no address field**. The faulting **address**, the
+    /// **fault type** and the driver's own **fault string** exist only in this control's
+    /// reply (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h:213-219`). ⇒ *"the guest
+    /// observed THE SAME FAULT, BY IDENTITY, as the host reported"* is a claim only this arm
+    /// can support.
+    ///
+    /// # ⊘⊘ ONE ASK, ONE ISSUE — the read is DESTRUCTIVE
+    ///
+    /// *"The MMU fault information will be cleared once this command is executed."* ⇒ this
+    /// arm runs **only** when the guest asks, issues **exactly one** host control, and never
+    /// prefetches, polls or retries. A speculative read consumes the record and the party
+    /// that wanted it then gets a well-formed all-zero answer — indistinguishable from *"no
+    /// fault"*.
+    ///
+    /// # ⚠ RELAY, NEVER SYNTHESISE
+    ///
+    /// Every failure is a refusal with an **empty body** and a status that is not `0x56`
+    /// ([`kayfabe_abi::submit::MMU_FAULT_INFO_REFUSED_STATUS`] /
+    /// [`kayfabe_abi::submit::MMU_FAULT_INFO_BAD_PARAMS_STATUS`]). There is no arm that
+    /// zero-fills the params, no arm that invents an address, and no arm that answers
+    /// `NV_OK` with a body we composed. ⊘ A fabricated fault record is worse than no answer,
+    /// because it is shaped exactly like a pass.
+    fn respond_get_mmu_fault_info(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        use kayfabe_abi::submit::{
+            MMU_FAULT_INFO_BAD_PARAMS_STATUS, MMU_FAULT_INFO_REFUSED_STATUS, MmuFaultInfoParams,
+            NV906F_CTRL_CMD_GET_MMU_FAULT_INFO,
+        };
+        let refuse = |status: u32| {
+            Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            })
+        };
+        // The guest's own two assertions about its params, both checked — the same pair the
+        // bind and schedule arms check, for the same reason. ⚠ `MmuFaultInfoParams::SIZE` is
+        // **104**, not 100: `shaderProgramVA[]` is 8-aligned, so there are four bytes of
+        // padding at +44. A size check against 100 would refuse every real caller.
+        let want = MmuFaultInfoParams::SIZE;
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != want
+            || cmd.payload.len() < req.params_at + want
+        {
+            eprintln!(
+                "kayfabe: MMU-FAULT-INFO client={:#x} object={:#x} → ⊘ REFUSED BadParams                  (serialized={} params_size={} want={want} payload={} params_at={})",
+                req.client,
+                req.object,
+                kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags),
+                req.params_size,
+                cmd.payload.len(),
+                req.params_at,
+            );
+            return refuse(MMU_FAULT_INFO_BAD_PARAMS_STATUS);
+        }
+        // ★★★ THE BUFFER THAT CROSSES. The guest's own params bytes go to the host
+        // unmodified and the host's answer comes back **in place**. ⊘ Nothing between here
+        // and the reply reads a field to decide anything: the only decoding below is for the
+        // log line, and it happens after the bytes are already committed.
+        let mut payload = cmd.payload[req.params_at..req.params_at + want].to_vec();
+        let relay = self.gpu.relay_channel_control(
+            kayfabe_arch::ids::HClient(req.client),
+            kayfabe_arch::ids::HObject(req.object),
+            kayfabe_arch::ids::ControlCmd(NV906F_CTRL_CMD_GET_MMU_FAULT_INFO),
+            &mut payload,
+        );
+        let relay = match relay {
+            Ok(r) => r,
+            Err(f) => {
+                // ⊘ The refusal is printed with the VARIANT, not a word: "the guest named no
+                // channel we know", "its host twin was never born" and "the host driver said
+                // no" are three different next moves.
+                eprintln!(
+                    "kayfabe: MMU-FAULT-INFO client={:#x} object={:#x} → ⊘ ERROR-NOTIFIER-PEER                      REFUSED {f:?} — NOTHING was relayed and NOTHING was synthesised; the                      guest gets status {MMU_FAULT_INFO_REFUSED_STATUS:#x} with an empty body",
+                    req.client, req.object,
+                );
+                return refuse(MMU_FAULT_INFO_REFUSED_STATUS);
+            }
+        };
+        // ★★★ THE CENSUS LINE — this is how a boot proves a fault reached the guest BY
+        // IDENTITY rather than merely as an error. ⊘ Decoded only to print: the bytes handed
+        // back are the host's, whatever this decode makes of them.
+        match MmuFaultInfoParams::decode(&payload) {
+            Ok(info) => eprintln!(
+                "kayfabe: MMU-FAULT-INFO proc={} chan={} gpu={} host_chan={:#x} → RELAYED \
+                 VERBATIM addr=0x{:x} (hi=0x{:08x} lo=0x{:08x}) faultType=0x{:x} \
+                 faultString={:?} | VA-IDENTITY: the guest is handed the HOST'S bytes \
+                 unmodified, so guest_addr == host_addr == 0x{:x} by construction — if these \
+                 ever differ, a rewrite crept into the relay",
+                relay.proc.0,
+                relay.chan.0,
+                relay.gpu.0,
+                relay.host_chan.raw(),
+                info.address(),
+                info.addr_hi,
+                info.addr_lo,
+                info.fault_type,
+                info.fault_string_lossy(),
+                info.address(),
+            ),
+            // ⚠ The relay SUCCEEDED and the bytes still go back to the guest. Only the log
+            // line is lost, and saying so is the point: a decoder failing here would
+            // otherwise read as the relay failing.
+            Err(e) => eprintln!(
+                "kayfabe: MMU-FAULT-INFO proc={} chan={} host_chan={:#x} → RELAYED VERBATIM, \
+                 and THIS PORT COULD NOT DECODE IT FOR THE LOG ({e:?}). ⊘ The guest still \
+                 receives the host's bytes unmodified — the loss is the census line, not the \
+                 answer",
+                relay.proc.0,
+                relay.chan.0,
+                relay.host_chan.raw(),
+            ),
+        }
+        let mut body = cmd.payload.clone();
+        body[req.params_at..req.params_at + want].copy_from_slice(&payload);
         Some(Reply {
             rpc_result: 0, // NV_OK
             body,

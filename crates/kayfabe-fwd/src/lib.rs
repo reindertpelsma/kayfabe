@@ -4307,6 +4307,74 @@ pub fn forward_control(
     })
 }
 
+/// ★★★★★ **w288 TIER 2 — what `kayfabe_rt`'s `SharedDevice::relay_channel_control` relayed, and to
+/// whom.**
+///
+/// ⊘ It carries **no reply bytes**. The host's answer went straight back into the caller's
+/// own `payload` buffer, in place, and a second copy here would be a second source of truth
+/// beside a complete value. What it carries is the JOIN — which guest channel, which host
+/// channel, which GPU — so a log line can say the relay went where it claims.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelControlRelay {
+    /// The proc that owns the guest channel.
+    pub proc: ProcId,
+    /// The guest channel the control named.
+    pub chan: ChanId,
+    /// The channel's own target GPU — the isolate the host handle lives in.
+    pub gpu: GpuId,
+    /// The **host** channel the control was actually issued against.
+    pub host_chan: HostHandle,
+}
+
+/// ★★★★★ **w288 TIER 2 — why a channel control was NOT relayed, by name.**
+///
+/// ⊘ Five variants and not one `bool`, because they are five different findings and they
+/// send a reader to five different places: a control that named no channel we know
+/// (**guest** bug or a stale handle), a channel that died in the gap (**a race**), a channel
+/// whose host twin was never born (**our birth path never ran**), a command our own
+/// classifier called ack-only (**our table is wrong for this id**), and the host driver
+/// refusing (**the thing we were asking about**).
+///
+/// ⚠ **On every one of them the caller's payload is untouched.** A relay that cannot relay
+/// must not answer: for a fault-info read, a zero-filled `NV_OK` is a well-formed *"the
+/// engine faulted at address 0"*, which is a fabricated fact shaped exactly like a pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChannelControlRelayFault {
+    /// `(hClient, hObject)` named no live, materialized channel. Carries the core's own
+    /// routing refusal so the three sub-cases (unknown handle / not a channel / not
+    /// materialized) stay apart.
+    NotRoutable(kayfabe_core::gpu::BindFault),
+    /// The route resolved and the channel was gone from the proc by the time its host twin
+    /// was read — the ordinary R5 staleness window, named rather than retried.
+    ChannelGone {
+        /// The proc the route resolved to.
+        proc: ProcId,
+        /// The channel slot the route resolved to.
+        chan: ChanId,
+    },
+    /// ★★★ The guest channel is live and has **no host channel**. ⊘ A finding, not an
+    /// error: it says the birth path never ran for this channel, so there is no host object
+    /// whose fault record could be read — and nothing may be invented in its place.
+    NoHostChannel {
+        /// The proc that owns it.
+        proc: ProcId,
+        /// The channel slot.
+        chan: ChanId,
+    },
+    /// Our own `Arch::is_case2_control` called this command ack-only, which leaves the
+    /// payload untouched. ⊘ Refused rather than reported as success: relaying an untouched
+    /// buffer as `NV_OK` hands the guest its own request back wearing an answer's clothes.
+    ClassifiedAckOnly {
+        /// The proc that owns the channel.
+        proc: ProcId,
+        /// The channel slot.
+        chan: ChanId,
+    },
+    /// The host refused. ⊘ Carried whole: this is the one arm that is *about the thing we
+    /// asked*, and collapsing it to a word would lose which host verb said no.
+    HostRefused(FwdFault),
+}
+
 /// The ID-shaped hints [`commit_control`] re-validates against (R5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ControlPlan {

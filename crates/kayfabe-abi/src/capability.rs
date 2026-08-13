@@ -769,6 +769,15 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x503c0105, name: "NV503C_CTRL_CMD_UNREGISTER_VIDMEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
+    // ★★★★★ **w288 TIER 2 — the ONLY control that carries a fault's ADDRESS.** The error
+    // notifier has `status`/`info32`/`info16` and no address at all, so *"the guest observed
+    // THE SAME FAULT, by identity"* is unanswerable without this id. ⊘ `Mode2Rpc`, not
+    // `Nvproxy`: it reaches us only because Mode 2's transport is GSP RPC — it is
+    // `ROUTE_TO_PHYSICAL`, so on a GSP client the guest RPCs it to the GSP, which is us.
+    // ⚠ Admitting it here is NOT serving it (`admitted_and_served_are_different_gates`);
+    // the arm that serves it is `kayfabe_rmrpc`'s `OBJECT_CONTROLS` entry, and the two are
+    // held in lockstep by `tests/tests/admitted_is_served.rs`.
+    ControlEntry { cmd: crate::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO, name: "NV906F_CTRL_CMD_GET_MMU_FAULT_INFO", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x90960101, name: "NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x90960106, name: "NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x90960107, name: "NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY", origin: Origin::Nvproxy },
@@ -1989,6 +1998,12 @@ mod tests {
     fn each_boundarys_resolved_delta_is_materialised() {
         // (version, resolved control count, resolved class count, own control names)
         //
+        // ★★ **+1 CONTROL at EVERY boundary on 2026-08-13:
+        // `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`).** It joined `CONTROLS_SHARED`,
+        // which is in every boundary's resolved set by construction — so the numbers move
+        // **together**, and that is the evidence rather than the bookkeeping. A change that
+        // moved only SOME of them would mean a shared row had stopped being shared.
+        //
         // ★ Every class count went up by ONE on 2026-08-01: `NV01_EVENT_KERNEL_CALLBACK_EX`
         // (`0x7e`) joined `CLASSES_SHARED`, and `CLASSES_SHARED` is in every boundary's
         // resolved set by construction. A change that moved only SOME of these numbers
@@ -1998,14 +2013,14 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                155,
+                156,
                 77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                156,
+                157,
                 77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2015,14 +2030,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                155,
+                156,
                 77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                156,
+                157,
                 85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2032,7 +2047,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                158,
+                159,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2044,7 +2059,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                159,
+                160,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2057,7 +2072,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                159,
+                160,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2070,7 +2085,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                159,
+                160,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2509,7 +2524,12 @@ mod tests {
     /// this port's wall to be a completion, not a control-plane refusal.
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
-        assert_eq!(bench().all_controls().count(), 159, "controls");
+        // ★ **+1 on 2026-08-13: `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`).**
+        // SHARED, so this number and every boundary's below move **together** — which is the
+        // evidence the row went into the shared base rather than into one boundary by
+        // accident. ⊘ It is version-invariant: `ctrl906f.h`'s params struct is identical
+        // across the tags this table spans.
+        assert_eq!(bench().all_controls().count(), 160, "controls");
         assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
@@ -2524,7 +2544,11 @@ mod tests {
     #[test]
     fn each_origin_is_represented() {
         let n = |o: Origin| bench().all_controls().filter(|e| e.origin == o).count();
-        assert_eq!(n(Origin::Mode2Rpc), 6);
+        // ★ 6 → 7 on 2026-08-13: `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`. `Mode2Rpc` is the
+        // right provenance and not a convenience: the control is `ROUTE_TO_PHYSICAL`, so on a
+        // GSP client it is RPC'd to the GSP — us — and as an ioctl it never crossed the
+        // boundary nvproxy gates.
+        assert_eq!(n(Origin::Mode2Rpc), 7);
         assert_eq!(n(Origin::Empirical), 5);
         assert_eq!(n(Origin::Nvproxy), 148);
         assert_eq!(
