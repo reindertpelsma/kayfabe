@@ -11316,6 +11316,14 @@ impl Regs {
                     "LEFT UNPUBLISHED and COUNTED — ★ THE CONTROL. Every Vas is censused and                      every row classified by the gate that would refuse it; NO row is                      published and NO host verb is issued. Expected reading: a non-zero                      `candidates=` beside `published=0`, which is a POSITIVE observation                      rather than an absence",
                 VasPublishArm::Publish =>
                     "PUBLISHED — through the identical four-step join leg 7 uses, so the                      guest's window and a real host object are ONE memory at the guest's own                      VA. ⊘ Supply side only: `the row is host-backed` and `the engine                      completed` are different facts. ⚠ A published row is FROZEN against the                      guest's own page-table edits until VAS teardown — watch                      RepointsPublished/UnbindsPublished in the sweep's by_kind",
+                VasPublishArm::PinRate =>
+                    "LEFT ALONE — ★ this arm publishes NO framebuffer row at all. It is w291's \
+                     BOUNDED GUEST-RAM PIN-RATE MEASUREMENT: it pins up to 256 guest-RAM rows \
+                     through the EXISTING pin_guest_ram verb and reports the true per-row \
+                     cost, replacing the ~49 s/VAS figure that was an EXTRAPOLATION of leg 8's \
+                     FRAMEBUFFER rate. ⊘ It writes NOTHING into Binding::host, adds no \
+                     representation and touches no refcount — it is the measurement, NOT the \
+                     merge",
             },
         );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
