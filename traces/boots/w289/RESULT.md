@@ -665,3 +665,77 @@ same as our having done the work. That is the next unmeasured layer, and it is *
 here.
 
 **Vidmem publication remains STOPPED pending the owner's ruling.**
+
+---
+
+# ADDENDUM 6 — **Q1: NOTHING NEEDS PROMOTING. THE JOIN ALREADY EXISTS AND MY BOOTS HAD IT OFF.**
+
+## 27. THE REFUSAL IS KEYED ON THE **DECLARATION**, NOT THE BACKING — cited
+
+`crates/kayfabe-mmu/src/lib.rs:741-746`:
+
+```rust
+pub fn is_guest_ram(&self) -> bool {
+    matches!(self.aperture, Aperture::SysmemCoherent | Aperture::SysmemNonCoherent)
+}
+```
+
+⇒ It asks **what the guest declared the aperture to be**. It never asks whether a host object
+exists behind the page. The refusal at `shim.rs` (`Ok((b, _)) if !b.is_guest_ram()` → the
+`NOT-IN-GUEST-RAM` arm) therefore fires on **every** Vidmem operand, real-backed or not.
+
+★ **This is a policy keyed on a declaration, exactly as the owner suspected.**
+
+## 28. ★★★★★ AND THE MECHANISM IS ALREADY BUILT — `w282`'s ARM, WHICH I NEVER ARMED
+
+`shim.rs:3345-3352` — the **sixth** selector:
+
+> *"**w282's arm** — whether a CE operand page that lands in the emulated framebuffer has its
+> leaf **JOINED**, so the executor stays `HostCe`. See [`OPERAND_JOIN_ENV`] and
+> [`SharedDoorbell::join_operand_fb_leaves`]. … the pin and the join serve **disjoint operand
+> populations (guest RAM vs framebuffer)** and a boot must be able to arm either alone."*
+
+- `OPERAND_JOIN_ENV` = **`KAYFABE_OPERAND_JOIN`** (`shim.rs:13479`), arms `off` / `assert` / `join`
+  (`:13496-13507`), **default `off`**.
+- `join_operand_fb_leaves` (`shim.rs:8485`) joins every framebuffer leaf a CE operand names.
+- **w282 measured it working:** *"THE HOST COPY ENGINE MOVED THE GUEST'S BYTES, AND THE GUEST
+  READ THEM BACK."*
+
+⊘⊘ **EVERY BOOT ON THIS RUNG RAN WITH IT `off`.** My runner arms
+`FB_JOIN / GUEST_RING / GUEST_PUSHBUF / GUEST_SEMA / GUEST_OPERAND / GR_ROUTE / PT_WITNESS` and
+**never sets `KAYFABE_OPERAND_JOIN` at all** — it is not in the carried-arm list I inherited, and
+I checked the six carried arms rather than the seven that exist.
+
+⇒ ★★★ **`KAYFABE_GUEST_OPERAND=pin` is the guest-RAM arm and it is the WRONG ONE for these
+operands.** The doc says so in as many words — *disjoint populations* — and I armed the pin,
+saw `NOT-IN-GUEST-RAM`, and read it as a missing mechanism. **The mechanism was one env var away.**
+⚠ Thirty-two consecutive lanes have found their premise already built. This is thirty-three.
+
+## 29. ⇒ THE ANSWER TO THE OWNER'S QUESTION
+
+> *"do you think the promotion path is still needed then?"*
+
+**No — and it is not a close call.**
+
+- The operands' backing does not need to be *made* real; the FB **leaf-join** path already
+  exists to make a framebuffer operand reachable by the host CE, and it is proven.
+- The refusal blocking them is keyed on a **declared aperture**, not on a fact about backing.
+- ⇒ The owner's decision is **not** *"should we copy guest device memory"*. It is *"should the
+  armed-by-default set include the operand join"* — and it may not need a ruling at all, since
+  the arm is already shipped, already tested, and already had a green rung.
+
+⊘ **Still not claimed:** that arming it makes the fault go away. The sweep arm taught exactly
+this lesson — a necessary step that changed no Xid. Pre-registered below.
+
+## 30. PRE-REGISTERED — one variable, zero code change
+
+`KAYFABE_OPERAND_JOIN=join`, everything else carried from the sweep arm.
+
+| outcome | reading |
+|---|---|
+| `OPERAND-JOIN` lines appear, operands stop being refused, arm 1's copy completes | **the fix is an arming/default change** — no promotion, no publication design |
+| the join runs and the Xid is unchanged | the join is **necessary-not-sufficient too**, and the wall is past the operand plane |
+| the join refuses these leaves by name | **the refusal's own name is the next finding**, and it will be a fact about the backing rather than the declaration |
+
+⚠ I am not predicting a pass. ⊘ And the `assert` arm exists precisely so the classification can
+be read **without** joining anything — if `join` is ambiguous, `assert` is the control.
