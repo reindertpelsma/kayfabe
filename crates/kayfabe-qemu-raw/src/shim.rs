@@ -3352,6 +3352,15 @@ struct SharedDoorbell {
     /// must be able to arm either alone.
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     operand_join: OperandJoinArm,
+    /// ★★★★★ w290 — which arm of the whole-VAS publication this boot runs. See
+    /// [`VAS_PUBLISH_ENV`] and [`SharedDoorbell::publish_vas_rows`].
+    ///
+    /// ★ Its own **seventh** selector, read ONCE at the composition root and carried, for
+    /// `operand_join`'s reason exactly: leg 7 serves the CE operands a pushbuffer names and
+    /// this serves every row the guest's page tables declare, so a boot must be able to arm
+    /// either alone and a log must say which it had.
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    vas_publish: VasPublishArm,
 }
 
 /// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
@@ -4820,6 +4829,21 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::operand_join`.
         if let Some(line) = self.join_operand_fb_leaves(token, seen.as_ref()) {
+            eprintln!("kayfabe: {line}");
+        }
+        // ★★★★★ **LEG 8 — w290's publication**, and its position is the C's own invariant:
+        // *"a mapping is always backed before the engine that uses it runs."* It is ordered
+        // after the decode pass and the sweep (which populate the rows it publishes) and
+        // after leg 7 (whose leaves it would otherwise re-ask for and find already backed),
+        // and **before** `SharedDevice::doorbell` below — a mapping published after the ring
+        // has been rung is a mapping published after the engine has already faulted for it.
+        //
+        // ⊘ Returns a `String` and gates nothing: no `?`, no early return, no branch between
+        // it and the forward. Same shape and same opacity property as legs 4-7.
+        //
+        // ⊘ Silent — not merely quiet — on the disarmed arm, so the control's log stays
+        // byte-comparable.
+        if let Some(line) = self.publish_vas_rows(token) {
             eprintln!("kayfabe: {line}");
         }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
@@ -8796,6 +8820,211 @@ impl SharedDoorbell {
         ))
     }
 
+    /// ★★★★★ **LEG 8 — PUBLISH THE GUEST'S DECLARED ROWS INTO THE HOST VAS** (w290).
+    ///
+    /// # The measurement that commissioned it
+    ///
+    /// `[measured, boot w290cup2]` the faulting VA was owned by `GUEST-DESCRIBES` **and** by
+    /// `TABLE-DESCRIBES` and by **neither** host page table: `HOST-PUBLISHED host_rows=4 of
+    /// 16425`. Our shadow is right and hardware walks something else. ⇒ the wall is
+    /// **publication, not population**, and `FAULT_PDE` rather than `FAULT_PTE` is that fact
+    /// in the Xid's own vocabulary — with nothing published within a terabyte there is no
+    /// page *directory* to miss a leaf in.
+    ///
+    /// # ⊘⊘ WHAT THIS PASS CANNOT DO, AND IT IS RM'S LIMIT RATHER THAN A CHOICE
+    ///
+    /// The brief that commissioned this said *"coalesce by RUN, not by row — publish
+    /// extents"*. **The proven verb cannot be handed a run.** `plan_back_fb_leaf` refuses on
+    /// three grounds before any host verb exists (`kayfabe-fwd/src/lib.rs:2328-2371`), and
+    /// they pull in opposite directions:
+    ///
+    /// - `FbLeafGranularity` — *"RM places a fixed mapping in 64 KiB granules"* (`:2244-2247`).
+    ///   A run **passes** this; the 4 KiB rows it is made of **cannot**.
+    /// - `FbLeafExtent` — the request must be **exactly one table row**, start and length.
+    ///   A run **fails** this whenever it spans more than one row.
+    ///
+    /// ⇒ Coalescing is what the first gate wants and what the third forbids. This pass
+    /// therefore publishes **per row**, and [`kayfabe_rt::device::PublishCensus`] reports
+    /// `not_granular` so *"how much of the table would run-coalescing have rescued"* is a
+    /// **measured number rather than an estimate**. ⚠ Widening `FbLeafExtent` to accept a
+    /// multi-row extent is a real change to the fwd plane's commit — one host object would
+    /// have to write `host` into many rows, and the reclaim below frees per row — so it is
+    /// deliberately **not** smuggled into an instrument rung.
+    ///
+    /// # ★★★ RECLAIM — ALREADY EXISTS, ON EVERY TEARDOWN ROUTE, AND HERE IS THE CITATION
+    ///
+    /// The owner's standing rule is that every pin needs an unpin. It is satisfied **by
+    /// construction** rather than by new code, because this pass mints nothing new: a leaf
+    /// bound by `adopt_joined_fb_leaf` is an ordinary `Binding` carrying a
+    /// [`kayfabe_mmu::HostBacking`], and `Spine::stage_dropped_vases`
+    /// (`kayfabe-core/src/gpu.rs:3229-3273`) walks `vas.table.iter()` and stages
+    /// `unmap`-then-`free` for **every** binding whose `host()` is `Some`. It is reached from
+    /// `Spine::vacate` (`gpu.rs:3645-3664`), *"THE ONE REMOVAL POINT"* (`gpu.rs:3622`), on
+    /// all three routes: a VAS leaving the live set while the proc lives
+    /// (`sync_proc_to_boundary`, `gpu.rs:3117`), clean proc death (`RmEvent::Free` of the
+    /// client root ⇒ the component vanishes, `gpu.rs:3903`), and violent death
+    /// (`retire_proc`, `gpu.rs:4181-4225`).
+    ///
+    /// ⊘⊘ **AND THE TRIGGER IS NOT WHAT THE BRIEF NAMED.** There is no UVM plane in this
+    /// port to key an unpublish on: we emulate a **GPU**, so the guest's `nvidia-uvm` talks to
+    /// the guest's `nvidia.ko` and `uvm_release` / `uvm_va_space_destroy` /
+    /// `uvm_va_space_mm_shutdown` are **not observable events here at all** — they reach us
+    /// only after the guest driver turns them into `RpcFunction::Free` (fn 10,
+    /// `kayfabe-gsp/src/rpc.rs:261`) ⇒ `RmEvent::Free` ⇒ `Spine::refresh`. A `SIGKILL`ed guest
+    /// process still gets there, because the guest's own `nvidia.ko` `close()` frees the
+    /// client root. The genuinely kernel-guaranteed backstop is the **isolate process
+    /// boundary** (§7.0), which is what `retire_proc`'s undrained queue relies on
+    /// (`gpu.rs:1812-1817`).
+    ///
+    /// ⚠ **The residual gap, named rather than left to be found:** there is no per-leaf
+    /// release short of VAS death. It is **pre-existing and shared with leg 7** — that leg's
+    /// own doc already says *"the missing half is the trigger, not the mechanism … ⊘ Not
+    /// wired this rung"* — and this pass widens the population it applies to. Its cost is
+    /// **measured on the same line**: `RepointsPublished` / `UnbindsPublished`
+    /// (`kayfabe-mmu/src/walker.rs:917-930`, `:956-972`) already print in the sweep's
+    /// `by_kind`, so a boot says how often the guest tried to edit a row we had frozen.
+    ///
+    /// # Ordering
+    ///
+    /// Runs after the decode pass and the sweep have populated the table and after leg 7, and
+    /// **before** `SharedDevice::doorbell` — the C's invariant, *"a mapping is always backed
+    /// before the engine that uses it runs"*. ⊘ There is nothing to be lazy against: we
+    /// emulate no fault buffer, so there is no fault to publish on demand from.
+    #[cfg(feature = "host-isolates")]
+    fn publish_vas_rows(&self, token: u64) -> Option<String> {
+        if !self.vas_publish.observes() {
+            return None;
+        }
+        let head = format!(
+            "VAS-PUBLISH token={token:#010x} arm={}",
+            self.vas_publish.as_str()
+        );
+        // ⚠ Same necessary-not-sufficient gate leg 7 states out loud, and refused rather than
+        // downgraded: with `KAYFABE_FB_JOIN` off this pass could only map PRIVATE ANONYMOUS
+        // pages — two memories under a name that says one.
+        // ⊘ Enforced only on the arm that would publish; the census must still run on
+        // `assert`, or the control loses the very number it exists to produce.
+        if self.vas_publish.publishes() && !self.fb_join.armed() {
+            return Some(format!(
+                "{head} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. ⊘ Nothing was asked of the \
+                 host",
+                self.fb_join.as_str()
+            ));
+        }
+        let Some(plane) = self.plane.upgrade() else {
+            return Some(format!("{head} → ⊘ NO PLANE. ⊘ Nothing was asked of the host"));
+        };
+        let exports = match (self.exports.as_ref(), self.vas_publish.publishes()) {
+            (Some(e), _) => Some(e),
+            (None, false) => None,
+            (None, true) => {
+                return Some(format!(
+                    "{head} → ⊘ NOT ARMABLE: exports_directory=false — no route from a backing \
+                     token to a descriptor. ⊘ Nothing was asked of the host"
+                ));
+            }
+        };
+        let started = std::time::Instant::now();
+        let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
+        let mut rows: Vec<String> = Vec::new();
+        for pid in self.device.live_pids() {
+            for (gpu, pdb) in self.device.vas_keys(pid) {
+                // ⊘ The isolate is keyed `(proc, gpu)`, so a `Vas` on another GPU has no
+                // isolate to mint into here. Skipped and SAID, never silently dropped.
+                if gpu != DOORBELL_TARGET_GPU {
+                    rows.push(format!(
+                        "[proc={} pdb=0x{:x} ⊘ SKIPPED gpu={} != doorbell target]",
+                        pid.0, pdb.0, gpu.0
+                    ));
+                    continue;
+                }
+                let c = self
+                    .device
+                    .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
+                let mut done = 0usize;
+                let mut failed = 0usize;
+                if self.vas_publish.publishes() {
+                    if let Some(exports) = exports {
+                        let isolate = kayfabe_isolate::IsolateId::new(pid.0, gpu);
+                        for &(va, len, phys) in &c.candidates {
+                            if started.elapsed() > VAS_PUBLISH_WALL_BUDGET {
+                                budget_hit = true;
+                                break;
+                            }
+                            let what = format!("VAS-PUBLISH(proc={} pdb=0x{:x})", pid.0, pdb.0);
+                            match join_one_fb_leaf(
+                                &head,
+                                &what,
+                                &self.device,
+                                &plane,
+                                exports,
+                                self.fb_join,
+                                isolate,
+                                pdb,
+                                kayfabe_rt::completion_watch::FbLeaf { va, len, phys },
+                            ) {
+                                Some(_) => done += 1,
+                                None => failed += 1,
+                            }
+                        }
+                    }
+                }
+                published += done;
+                refused += failed;
+                // ★★ EVERY row of the census, per VAS, with the bucket identity printed. ⊘ A
+                // census whose buckets did not sum could report a comfortable zero for a class
+                // it never reached, so `sum_ok` is a value and not a comment.
+                rows.push(format!(
+                    "[proc={} pdb=0x{:x} total={} already_host={} guest_ram={} not_vidmem={} \
+                     not_granular={}({} bytes) candidates={}({} bytes, capped={}) \
+                     published={done} refused={failed} sum_ok={}]",
+                    pid.0,
+                    pdb.0,
+                    c.total,
+                    c.already_host,
+                    c.guest_ram,
+                    c.not_vidmem,
+                    c.not_granular,
+                    c.not_granular_bytes,
+                    c.candidates_total(),
+                    c.candidate_bytes,
+                    c.capped,
+                    c.buckets_sum(),
+                ));
+            }
+        }
+        Some(format!(
+            "{head} → published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
+            started.elapsed().as_millis(),
+            if budget_hit {
+                format!(
+                    " ⚠⚠ WALL BUDGET {} ms EXHAUSTED — the remaining candidates were NOT \
+                     attempted this doorbell; an unpublished row below is NOT thereby a refusal",
+                    VAS_PUBLISH_WALL_BUDGET.as_millis()
+                )
+            } else {
+                String::new()
+            },
+            rows.len(),
+            rows.join(" "),
+        ))
+    }
+
+    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `join_operand_fb_leaves`' twin's
+    /// reason: an archive built without the feature prints nothing, exits 0, and every other
+    /// signal says the boot happened.
+    #[cfg(not(feature = "host-isolates"))]
+    fn publish_vas_rows(&self, token: u64) -> Option<String> {
+        if !self.vas_publish.observes() {
+            return None;
+        }
+        Some(format!(
+            "VAS-PUBLISH token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT PUBLISH A \
+             ROW AT ALL. The arm was requested and this build has no isolate plane — ⚠ do NOT \
+             grade a boot from this binary as `armed and nothing moved`"
+        ))
+    }
+
     /// ★★★★★ **#255 — THE OWNER'S ASSERTION: fake framebuffer must never be what a guest
     /// USERSPACE channel's engine is pointed at.**
     ///
@@ -10625,6 +10854,11 @@ impl Regs {
         // emulated framebuffer), so a boot must be able to arm either alone. See
         // [`OPERAND_JOIN_ENV`].
         let operand_join = selected_operand_join()?;
+        // ★★★★★ w290 — leg 8's own selector. Parsed here and never re-read, so a boot cannot
+        // change arms halfway; echoed below on BOTH arms, because a configuration that only
+        // announces itself when enabled makes the control's log indistinguishable from an
+        // older binary's.
+        let vas_publish = selected_vas_publish()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -10890,6 +11124,24 @@ impl Regs {
                      submission retired` are different facts",
             },
         );
+        // ★★★★★ w290 — leg 8's arming, echoed on BOTH arms beside leg 7's for the same
+        // reason: the two legs serve DIFFERENT populations (a pushbuffer's named CE operands
+        // vs every row the guest's page tables declare), so a reader must be able to tell
+        // which of them a boot had without opening the shell that exported the variables.
+        eprintln!(
+            "kayfabe: VAS-PUBLISH arm={} fb_join={} host_isolates={} ⇒ a guest-declared              Vidmem row that is 64 KiB-granular is {}",
+            vas_publish.as_str(),
+            fb_join.as_str(),
+            cfg!(feature = "host-isolates"),
+            match vas_publish {
+                VasPublishArm::Off =>
+                    "LEFT UNPUBLISHED, SILENTLY — the default, byte-identical to every boot                      before w290. ⊘ Not one VAS-PUBLISH line",
+                VasPublishArm::Assert =>
+                    "LEFT UNPUBLISHED and COUNTED — ★ THE CONTROL. Every Vas is censused and                      every row classified by the gate that would refuse it; NO row is                      published and NO host verb is issued. Expected reading: a non-zero                      `candidates=` beside `published=0`, which is a POSITIVE observation                      rather than an absence",
+                VasPublishArm::Publish =>
+                    "PUBLISHED — through the identical four-step join leg 7 uses, so the                      guest's window and a real host object are ONE memory at the guest's own                      VA. ⊘ Supply side only: `the row is host-backed` and `the engine                      completed` are different facts. ⚠ A published row is FROZEN against the                      guest's own page-table edits until VAS teardown — watch                      RepointsPublished/UnbindsPublished in the sweep's by_kind",
+            },
+        );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
         // exactly this reason: two ports need the same registry, and a second
         // `export_directory()` call would be a SECOND selection of "which registry".
@@ -10920,6 +11172,7 @@ impl Regs {
             guest_sema,
             guest_operand,
             operand_join,
+            vas_publish,
         }));
         Ok(Regs {
             plane,
@@ -13506,6 +13759,27 @@ fn selected_guest_operand() -> Result<GuestOperandArm, (Status, &'static str)> {
 /// asserted rather than assumed; see [`SharedDoorbell::join_operand_fb_leaves`].
 pub const OPERAND_JOIN_ENV: &str = "KAYFABE_OPERAND_JOIN";
 
+/// ★★★★★ **w290 — THE WHOLE-VAS PUBLICATION.** See [`VasPublishArm`].
+///
+/// `[measured, boot w290cup2]` `HOST-PUBLISHED host_rows=4 of 16425` in cup2's own address
+/// space, `0 of 533` and `0 of 6254` in the other two. We populate a shadow and never
+/// materialize it, so hardware walks an empty host VAS and misses **above the leaf**
+/// (`FAULT_PDE`). This arm presents **every qualifying row of every live `Vas`** to the same
+/// `join_one_fb_leaf` chain leg 7 already uses — no new primitive, no new verb, no new
+/// authority, exactly as [`OPERAND_JOIN_ENV`]'s own doc argues for its leg.
+///
+/// # ⚠ TWO CONSEQUENCES, PRE-REGISTERED BECAUSE THEY ARE NOT HYPOTHETICAL
+///
+/// - **A published row becomes immutable to the guest's own page-table edits.** The decoder
+///   refuses rather than acting: `PopulateRefusal::RepointsPublished`
+///   (`kayfabe-mmu/src/walker.rs:917-930`) and `UnbindsPublished` (`:956-972` — *"Unpublishing
+///   needs a worker and an unmap verb … So the refusal is the answer, and the binding
+///   stays"*). ⇒ publishing widely converts guest re-mappings into refusals, and **both
+///   counters already print on the doorbell line**, so this boot measures its own cost.
+/// - **Reclaim is by VAS/proc teardown only.** That is sufficient and it already exists —
+///   see the pass's own doc — but there is no per-leaf release short of it.
+pub const VAS_PUBLISH_ENV: &str = "KAYFABE_VAS_PUBLISH";
+
 /// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
 ///
 /// # ⊘⊘ WHY THERE ARE THREE ARMS AND NOT TWO — a defect this rung's OWN control found
@@ -13604,6 +13878,93 @@ fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
     match std::env::var_os(OPERAND_JOIN_ENV) {
         None => Ok(OperandJoinArm::Off),
         Some(v) => operand_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
+/// ★★★★★ **w290 — WHICH ARM OF THE WHOLE-VAS PUBLICATION a boot is running.**
+///
+/// `w290` measured `HOST-PUBLISHED host_rows=4 of 16425` in cup2's own address space, and
+/// `0 of 533` / `0 of 6254` in the other two: **we populate our shadow and never materialize
+/// it host-side**, which is why hardware faults `FAULT_PDE` — no page *directory* exists
+/// within a terabyte of the fault. This arm publishes the guest's declared rows through the
+/// same proven chain the CE-operand join uses.
+///
+/// ⊘ Three arms, not a boolean, for [`OperandJoinArm`]'s reason exactly: the census is the
+/// measurement and it must be readable **without** any host verb having run, or a boot that
+/// publishes nothing and a boot that was never armed are the same log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VasPublishArm {
+    /// Silent. Byte-identical to every boot before `w290`.
+    Off,
+    /// ★★★ **THE CONTROL.** Census every `Vas` and print the classification by name — how
+    /// many rows are already host-backed, guest RAM, non-`Vidmem`, refused by RM's 64 KiB
+    /// granularity, and how many qualify — but issue **no host verb**. Its expected reading
+    /// is a non-zero `candidates=` beside `published=0`, which is a positive observation and
+    /// not an absence.
+    Assert,
+    /// ★★★★★ Everything `assert` does, plus every qualifying row goes through
+    /// `join_one_fb_leaf` — the identical four-step chain that moved 4096 correct bytes on
+    /// the `w289` CE arm.
+    Publish,
+}
+
+impl VasPublishArm {
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            VasPublishArm::Off => "off",
+            VasPublishArm::Assert => "assert",
+            VasPublishArm::Publish => "publish",
+        }
+    }
+
+    /// Whether the census runs at all.
+    #[must_use]
+    pub fn observes(self) -> bool {
+        self != VasPublishArm::Off
+    }
+
+    /// Whether a qualifying row is actually published.
+    #[must_use]
+    pub fn publishes(self) -> bool {
+        self == VasPublishArm::Publish
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_vas_publish`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`VasPublishArm::Off`].
+pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(VasPublishArm::Off),
+        Some("assert") => Ok(VasPublishArm::Assert),
+        Some("publish") => Ok(VasPublishArm::Publish),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_VAS_PUBLISH does not name an arm: the only values are `off` (silent, \
+             byte-identical to every boot before w290), `assert` (THE CONTROL — census every \
+             Vas and classify every row by the gate that would refuse it, publish NOTHING, \
+             issue no host verb) and `publish` (everything `assert` does, plus every \
+             qualifying row goes through the same four-step join the CE operand arm uses). It \
+             is not defaulted, because a typo that silently disarmed the publication would \
+             make an evidence run and its own control indistinguishable. ⊘ `on`/`1` are not \
+             accepted: this is a three-arm experiment, not a boolean.",
+        )),
+    }
+}
+
+/// Which arm [`VAS_PUBLISH_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_vas_publish() -> Result<VasPublishArm, (Status, &'static str)> {
+    match std::env::var_os(VAS_PUBLISH_ENV) {
+        None => Ok(VasPublishArm::Off),
+        Some(v) => vas_publish_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 
@@ -13744,6 +14105,26 @@ pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 /// How many coalesced VA runs one address space may print. See
 /// [`kayfabe_rt::device::SharedDevice::vas_reachable_ranges`] — exceeding it is announced, never
 /// silent.
+/// ★★ **How many qualifying rows one doorbell will attempt per `Vas`.** A cap, and it is
+/// stated in the line it bounds: `capped=` says how many were left out, so a short
+/// `candidates` list can never read as a complete one.
+///
+/// ⊘ Sized above the whole measured population rather than tuned: `w290` counted 16425 rows
+/// across cup2's entire address space, so a per-VAS budget of 4096 *qualifying* rows cannot
+/// bind on any picture this campaign has measured. It exists so a guest that grows its tables
+/// without bound cannot turn one doorbell into an unbounded host round trip.
+const VAS_PUBLISH_LEAF_BUDGET: usize = 4096;
+
+/// ★★★ **The wall-clock budget for one doorbell's publication**, and it is the honest half of
+/// the cap above: a count bounds how many leaves are *tried*, only a clock bounds how long
+/// they take. Each leaf is a round trip to another process, so a pathological reply time
+/// would otherwise stall the doorbell the publication exists to precede.
+///
+/// ⚠ When it fires the line says so loudly and says what it means: **an unpublished row is
+/// not thereby a refused one.** That distinction is the whole reason this is a named budget
+/// rather than a silent `break`.
+const VAS_PUBLISH_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(2000);
+
 const PT_SWEEP_RANGE_CAP: usize = 48;
 
 /// How many DISTINCT refused virtual addresses one sweep line may list. See the refusal block

@@ -2244,7 +2244,14 @@ pub struct BackFbLeafPlan {
 /// ★ RM places a fixed mapping in 64 KiB granules; a leaf that is not a whole number of
 /// them cannot be covered exactly. See [`FwdFault::FbLeafGranularity`] for why this port
 /// refuses rather than rounds.
-const FB_LEAF_GRANULE: u64 = 0x1_0000;
+///
+/// ⊘ **`pub` since w290, and the reason is the trap and not convenience.** The publication
+/// census (`SharedDevice::vas_publish_census`) must classify a row as *"this verb would
+/// refuse it on granularity"* BEFORE issuing any host verb, and a census carrying its own
+/// copy of `0x1_0000` would be a **second source of truth for one constant** — the exact
+/// shape `two_projections_of_one_fact_disagreeing` is banked for. The census reads THIS
+/// value or it is not measuring this gate.
+pub const FB_LEAF_GRANULE: u64 = 0x1_0000;
 
 /// ★★★★★ **THE SECOND CROSSING — back ONE framebuffer leaf with real host vidmem.**
 ///

@@ -71,8 +71,8 @@ use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind}
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{
-    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FwdFault, Orphans, Planned, Published,
-    Refusal,
+    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FB_LEAF_GRANULE, FwdFault, Orphans,
+    Planned, Published, Refusal,
 };
 use kayfabe_isolate::{
     HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError, VerbPlan, VerbReply, Worker,
@@ -2209,6 +2209,63 @@ fn channel_facts_from(
     }
 }
 
+/// ★★★★★ **The publication census of ONE `Vas`** — [`SharedDevice::vas_publish_census`]'s
+/// answer, taken before any host verb exists.
+///
+/// ★ Every row of the table lands in **exactly one** bucket, and
+/// `already_host + guest_ram + not_vidmem + not_granular + candidates_total == total`. That
+/// identity is asserted by `tests/tests/publish_census.rs`, and it is what makes a short
+/// `candidates` list readable as *"most rows are refused, and here is which gate"* rather
+/// than as *"the walk stopped early"*. A census whose buckets did not sum could report a
+/// comfortable zero for a class it simply never reached.
+///
+/// ⊘ **The counts are TOTAL; [`Self::candidates`] is CAPPED.** [`Self::candidate_bytes`] and
+/// [`Self::capped`] together describe the qualifying set in full, so a reader must never
+/// infer it from the list's length — that is the `dlen=0` mistake in list form.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PublishCensus {
+    /// Every row in the table.
+    pub total: usize,
+    /// Rows already carrying a [`kayfabe_mmu::HostBacking`] — the idempotent steady state.
+    pub already_host: usize,
+    /// ⊘ Rows over the guest's own pages. **Excluded, not refused**: they are the guest-RAM
+    /// pin's population, a different verb with a different lifetime, and a second
+    /// establishment over them is the `0x51` collision that cannot be told from exhaustion.
+    pub guest_ram: usize,
+    /// Rows whose aperture is not `Vidmem` — no framebuffer to join (`FbLeafDisagrees`).
+    pub not_vidmem: usize,
+    /// ★★★ Rows RM's 64 KiB fixed-placement granularity cannot cover exactly
+    /// (`FbLeafGranularity`). **This is the number that decides the rung**: it is how much
+    /// of the table the proven verb structurally cannot take.
+    pub not_granular: usize,
+    /// The bytes behind [`Self::not_granular`] — the same fact weighted by size, because a
+    /// count of 4 KiB rows and a count of 2 MiB rows are not comparable quantities.
+    pub not_granular_bytes: u64,
+    /// `(va, len, phys)` of rows that pass every gate — **capped**, see [`Self::capped`].
+    pub candidates: Vec<(u64, u64, u64)>,
+    /// Bytes behind ALL qualifying rows, including those past the cap.
+    pub candidate_bytes: u64,
+    /// How many qualifying rows were dropped from [`Self::candidates`] by the cap.
+    pub capped: usize,
+}
+
+impl PublishCensus {
+    /// Qualifying rows, cap included — `candidates.len() + capped`.
+    #[must_use]
+    pub fn candidates_total(&self) -> usize {
+        self.candidates.len() + self.capped
+    }
+
+    /// ★ The bucket identity, as a value rather than as a comment. `false` means a row was
+    /// counted twice or not at all, and the caller must print that instead of the census.
+    #[must_use]
+    pub fn buckets_sum(&self) -> bool {
+        self.already_host + self.guest_ram + self.not_vidmem + self.not_granular
+            + self.candidates_total()
+            == self.total
+    }
+}
+
 impl SharedDevice {
     /// ★ THE one gated ring path (inherited law 7), route/act split per R4 and
     /// plan/execute/commit per R1.
@@ -3181,6 +3238,85 @@ impl SharedDevice {
                     )
                 })
                 .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// Every `(gpu, pdb)` this proc holds a `Vas` for — the keys
+    /// [`SharedDevice::vas_publish_census`] and the publication pass iterate.
+    ///
+    /// ⊘ A list rather than a callback because the publication that follows takes the
+    /// device's locks again per leaf: holding the proc across the whole pass would put a
+    /// round trip to another process under a rank-0 lock.
+    #[must_use]
+    pub fn vas_keys(&self, pid: ProcId) -> Vec<(GpuId, Pdb)> {
+        self.with_proc_mut(pid, |p| p.vases.keys().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// ★★★★★ **WHICH ROWS COULD BE PUBLISHED, AND BY NAME WHY THE REST COULD NOT** — w290's
+    /// publication census, taken over one `Vas` before any host verb is issued.
+    ///
+    /// # ⊘ The gate that is NOT ours, and it is the one that decides the shape of this rung
+    ///
+    /// `plan_back_fb_leaf` — the proven publication verb — refuses a leaf on **three**
+    /// grounds before it asks the host anything, and two of them are RM's, not ours:
+    ///
+    /// | refusal | source | why it cannot be relaxed here |
+    /// |---|---|---|
+    /// | `FbLeafGranularity` | `kayfabe-fwd/src/lib.rs:2244-2247` — *"RM places a fixed mapping in 64 KiB granules"* | it is RM's placement granularity; a 4 KiB row **cannot** be covered exactly |
+    /// | `FbLeafDisagrees` | `:2360-2366` | a row whose aperture is not `Vidmem` has no framebuffer to join |
+    /// | `FbLeafExtent` | `:2352-2358` | the leaf must be **exactly one table row**, start and length |
+    ///
+    /// ⇒ ★★★ **THE BRIEF'S "publish extents, coalesce by RUN" IS BLOCKED BY THE THIRD ROW,
+    /// AND IS REQUIRED BY THE FIRST.** A 4 MiB run is a whole number of 64 KiB granules and
+    /// would sail through the granularity gate; the 4 KiB rows it is made of cannot. But
+    /// `FbLeafExtent` refuses any request that is not exactly one row, so the proven verb
+    /// **cannot be handed a run**. This census reports both facts as counts rather than
+    /// guessing which dominates: `not_granular` is how many rows the run-coalescing would
+    /// have rescued, and it is measured, not estimated.
+    ///
+    /// ⊘ `guest_ram` rows are counted and **excluded, not refused**: they are leg 6's
+    /// population and are served by the guest-RAM pin, which is a different verb with a
+    /// different lifetime. Publishing them here would be a second establishment over pages
+    /// that already have one — the `0x51` collision that cannot be told from exhaustion.
+    #[must_use]
+    pub fn vas_publish_census(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        pdb: Pdb,
+        cap: usize,
+    ) -> PublishCensus {
+        self.with_proc_mut(pid, |p| {
+            let mut c = PublishCensus::default();
+            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+                return c;
+            };
+            for (va, len, b) in vas.table.iter() {
+                c.total += 1;
+                if b.host().is_some() {
+                    c.already_host += 1;
+                } else if b.is_guest_ram() {
+                    c.guest_ram += 1;
+                } else if b.aperture() != kayfabe_arch::Aperture::Vidmem {
+                    c.not_vidmem += 1;
+                } else if len < FB_LEAF_GRANULE
+                    || len % FB_LEAF_GRANULE != 0
+                    || va % FB_LEAF_GRANULE != 0
+                {
+                    c.not_granular += 1;
+                    c.not_granular_bytes += len;
+                } else {
+                    c.candidate_bytes += len;
+                    if c.candidates.len() < cap {
+                        c.candidates.push((va, len, b.phys()));
+                    } else {
+                        c.capped += 1;
+                    }
+                }
+            }
+            c
         })
         .unwrap_or_default()
     }
