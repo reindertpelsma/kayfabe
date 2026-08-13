@@ -8249,13 +8249,44 @@ impl SharedDoorbell {
         // shape in the same log, and a grader's regex cannot tell three identical labels
         // apart. `w266`'s lesson: adding a producer silently re-scopes every consumer that
         // was implicitly scoped by being the only one.
+        // ★★★★★ **A `MISS` MUST SAY WHY — and the only thing that can say it is WHAT THE
+        // TABLE ACTUALLY HOLDS.**
+        //
+        // ⊘⊘ `AddressFault::Miss` is a statement about **our interval map**, not about the
+        // guest's page tables: `AddressTable::resolve` looks up `self.map` and reports "no
+        // binding covers this VA". So a bare `MISS` cannot distinguish *"the guest never
+        // established it"* from *"the guest established it and we never filed a row"* — and
+        // those are opposite findings. `w289g` sat on that ambiguity for three boots.
+        //
+        // ★★ Printing the VAS's own coalesced runs resolves it **with a known-positive built
+        // in**: on the `w289g` repro the RING at `0x120020000` RESOLVES while the two operands
+        // at `0x120000000`/`0x120010000` MISS, and all three are 64 KiB apart inside ONE 2 MiB
+        // page table that our own walk attributes to a BAR2 write (`byBAR2#85`, `lf3` = three
+        // leaves decoded). If the ring's run appears here and the operands' do not, the table
+        // is incomplete in a way the guest's own tables are not.
+        //
+        // ⊘⊘ **UNGATED, and that is the point.** `vas_table_ranges` already existed and was
+        // called ONLY inside `if out.sweeps_run > 0` — so on any boot without
+        // `KAYFABE_PT_SWEEP` it printed nothing, which is every boot of this repro. `w277`
+        // named that mis-gating in as many words (*"the table dump has nothing to do with the
+        // sweep and should not be gated on it"*) and it was never acted on. A dump gated on an
+        // unrelated feature is a dump that is absent exactly when someone needs it.
+        let holds = self.device.vas_table_ranges(f.proc, PUSHBUF_REPORT);
         let table = format!(
             "{source}\n    OPERAND-TABLE: {} page(s) asked, {} resolved in guest RAM, {n_miss} \
-             MISS{}, {n_wrong_aperture} NOT-IN-GUEST-RAM{}",
+             MISS{}, {n_wrong_aperture} NOT-IN-GUEST-RAM{}\n    TABLE-HOLDS (ungated; what OUR \
+             table has for this proc, coalesced — ⊘ a MISS beside a run that covers a NEIGHBOUR \
+             64 KiB away is us not filing a row, NOT the guest failing to map): {}",
             pages.len(),
             resolved_pages.len(),
             pushbuffer_sample(&misses, n_miss),
             pushbuffer_sample(&wrong_aperture, n_wrong_aperture),
+            if holds.is_empty() {
+                "⊘ NO VAS RECORDED FOR THIS PROC AT ALL (not `no rows` — no address space)"
+                    .to_string()
+            } else {
+                holds.join(" ")
+            },
         );
         if resolved_pages.is_empty() {
             return Some(format!(
