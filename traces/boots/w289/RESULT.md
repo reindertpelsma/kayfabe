@@ -434,3 +434,82 @@ land in the guest — and it is the same wall as §12.
 
 ⚠ Third consecutive boot, same two addresses, same `FAULT_PTE / VIRT_READ`: `0x1_20000000` and
 `0x7_00100000`. Deterministic.
+
+---
+
+# ADDENDUM 3 — **WE FILE THE RING AND NOTHING ELSE**, and rank-1 is refuted into something sharper
+
+## 15. THE MEASUREMENT (boot `w289g` @ `4e59899`, `TABLE-HOLDS` ungated)
+
+```
+OPERAND-TABLE: 2 asked, 0 resolved, 2 MISS [va=0x120000000 … va=0x120010000]
+TABLE-HOLDS:   [proc=2 gpu=0 pdb=0x6000 rows=1 runs=1  0x120020000+0x10000]
+
+OPERAND-TABLE: 2 asked, 0 resolved, 2 MISS [va=0x700100000 … va=0x700200000]
+TABLE-HOLDS:   [proc=2 gpu=0 pdb=0x4000 rows=1 runs=1  0x700000000+0x10000]
+                                                                    ^ PROBE_RING_AT
+```
+
+★★★★★ **Both VA spaces hold EXACTLY ONE ROW, and in both it is the channel's RING.** Every
+operand is absent — including both write destinations.
+
+⊘ **`rows=1` is the built-in known-positive.** The table is not broken and `resolve` is not
+broken: the ring's row is there and resolves. So `MISS` on the operands is **an unfiled row**,
+not a failed lookup — which is the distinction a bare `MISS` could never make, and the reason
+this instrument had to exist before the finding could.
+
+★ Joined with §12/§14: the three VAs `0x120000000` / `0x120010000` / `0x120020000` are 64 KiB
+apart **inside one 2 MiB page table** which our own descent decoded as **`lf3` — three leaves —
+attributed to `byBAR2#85`** (`ceresolve.rs:742`, `lf{}` = `d.leaves.len()`). ⇒ the guest wrote
+three leaves through BAR2; we filed one row, and it is the one that does **not** come from the
+page-table decode.
+
+## 16. ⊘ RANK-1 AS BRIEFED IS REFUTED — BAR2 writes DO bind
+
+*"Do we watch BAR2 as a READ path only?"* — **No.** There is a complete, default-armed path:
+
+```
+plane.rs:3092  BAR2 store lands in FbStore, tagged /byBAR2
+plane.rs:3119  the 4 KiB frame(s) enter `pt_witness`   ← marks a PAGE, never decodes a value
+shim.rs:8956   decode_cpu_pt_writes → drain_pt_witness  ← NOT gated; runs every doorbell
+device.rs:3452 pt_page_owner(gpu,page) → vas.pt_pages.insert(page)
+ptdecode.rs:601 decode_subtree re-reads the page from the SAME FbStore and decodes the PTEs
+ptdecode.rs:781 apply_settlement → walker.rs:1071/1101 → AddressTable::bind
+```
+
+⇒ The binding is **deferred and address-keyed**, not payload-keyed. Rank-1's premise is wrong.
+
+## 17. ★★★★★ BUT THE RESIDUE IS THE ANSWER — A BOOTSTRAP GAP, AND IT IS UNSWEPT BY DEFAULT
+
+`pt_page_owner` is bootstrapped **only from declared roots plus whatever a prior decode already
+published** (`device.rs:3386-3393`). ⇒ **A BAR2-written page whose parent has never been decoded
+is never attributable**, so it recirculates through `requeue_pt_witness` (`shim.rs:9031`)
+**forever and never binds**. Attribution requires a decoded parent; the parent is only decoded
+if it was itself attributable.
+
+★★ The mechanism that closes it is the **sweep**, which starts from the VAS's *installed root*
+rather than from the witness set — `sweep_cpu_pt_tables` (`shim.rs:9094`) — and it is
+**gated OFF by default** (`selected_pt_sweep()`, `shim.rs:13884`, false when `KAYFABE_PT_SWEEP`
+is unset). ⊘ **Every boot of this repro ran with it unset** — `w289_guest.sh` says
+`unset KAYFABE_PT_SWEEP` explicitly.
+
+⇒ **That is consistent with every number above**: the only row we hold is the ring, and the ring
+is bound by the channel path, not by the PT decode. **The PT-decode path has bound ZERO rows for
+both VA spaces.**
+
+## 18. PRE-REGISTERED — the one-boot, ZERO-CODE-CHANGE test
+
+Run the identical arm with **`KAYFABE_PT_SWEEP=on`**, one variable, everything else carried.
+
+| outcome | reading |
+|---|---|
+| the operands bind (`rows>1`, runs covering `0x120000000`) | **bootstrap gap CONFIRMED.** The fix is to attribute from the root, not only from the witness set — and the sweep must not be opt-in. |
+| the sweep runs and still binds zero for these VAs | **w276 generalises to the CE plane.** *"The sweep is aimed right and binds ZERO"* stops being a `cup2` fact and becomes reproducible in 82 ioctls — a much cheaper harness for it. |
+
+⚠ **w276 is real counter-evidence and is registered as such before the boot**: it measured the
+whole-VAS sweep publishing **zero**. I am not predicting a pass. ⊘ Either result is a full
+result, and the second is arguably the more useful one because of the harness it hands over.
+
+⊘ **And note what this does NOT explain:** the native arm passes with no sweep at all, because
+natively there is no emulated address table in the path — the host RM owns the VAS directly. The
+native control brackets the guest path; it does not share this mechanism.
