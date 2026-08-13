@@ -11523,6 +11523,17 @@ impl Regs {
                      step 1, which has never been run: leg 8 was off on the (2a) arm and (2a) \
                      was off on leg 8's. ⚠ They cover DISJOINT populations and may simply \
                      SUM; that is a legitimate pre-registered outcome, not a disappointment",
+                VasPublishArm::Drain =>
+                    "PUBLISHED, AND the VAS THIS DOORBELL IS ABOUT is DRAINED of guest-RAM \
+                     rows before the ring is rung — ★★★★★ w292, the C's own invariant (\"a \
+                     mapping is always backed before the engine that uses it runs\"). \
+                     `[measured w291, boot w290pboth]` the faulting leaf 0x73b1_83700000 was \
+                     never published, never refused and NEVER REACHED at 256 rows/doorbell. \
+                     ⊘ SCOPED: every OTHER address space keeps the 256-row sample and \
+                     SYSTEM_PROC keeps its §12.26 refusal, so the budget is NOT raised across \
+                     the board. ⚠ Bounded twice (65536 rows / 3000 ms) and BOTH bounds print \
+                     `complete=false` when they fire — a row left unpinned is UNREACHED, not \
+                     refused",
             },
         );
         // ⊘ CLONED, not re-taken. `ExportDirectory` is `Arc`-backed and cloneable for
@@ -14275,6 +14286,11 @@ fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
 /// ⊘ Three arms, not a boolean, for [`OperandJoinArm`]'s reason exactly: the census is the
 /// measurement and it must be readable **without** any host verb having run, or a boot that
 /// publishes nothing and a boot that was never armed are the same log.
+///
+/// ⊘ It is **six** arms now, not three, and each new one was added because it needed its own
+/// control rather than because it was a bigger version of the last: `pinrate` measures a
+/// second chain over a disjoint population, `both` runs the two together, and `drain`
+/// ([`VasPublishArm::Drain`], w292) changes exactly one variable against `both`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VasPublishArm {
     /// Silent. Byte-identical to every boot before `w290`.
