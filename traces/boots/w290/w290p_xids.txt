@@ -1,0 +1,5 @@
+Warning: Permanently added '[184.144.255.144]:42525' (ED25519) to the list of known hosts.
+=== w290passert ===
+[447329.988636] NVRM: Xid (PCI:0000:00:07): 31, pid=2620185, name=memfd:kayfabe-i, channel 0x00000009, intr 00000000. MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x72ba_e0e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+=== w290ppublish ===
+[447801.010798] NVRM: Xid (PCI:0000:00:07): 31, pid=2622683, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x7bb3_0a500000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
