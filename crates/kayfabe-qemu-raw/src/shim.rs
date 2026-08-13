@@ -9163,6 +9163,21 @@ impl SharedDoorbell {
         let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
         let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
         let (mut duplicates, mut table_ranges) = (0usize, Vec::<String>::new());
+        // ★★★★★ w290 — the two rows that make `w289cup2`'s fault readable at all. Both are
+        // filled on the SAME pass and printed on the SAME line as `TABLE-DESCRIBES`, so the
+        // offline join against an ASLR'd `Xid` address is one string comparison over three
+        // pictures of one VAS (guest / our table / the host VAS) plus the promote parks.
+        let (mut pub_ranges, mut parked_halves) = (Vec::<String>::new(), Vec::<String>::new());
+        // ⊘ Deliberately OUTSIDE the sweep loop and NOT gated on `out.sweeps_run > 0`. Neither
+        // row is a product of the sweep: a published binding is the fwd plane's work and a
+        // parked half is the promote control's, and both exist in address spaces the sweep
+        // skipped. Gating them the way `GUEST-DESCRIBES` is gated would make *"this VAS has no
+        // parked halves"* and *"this VAS was not swept this doorbell"* the same empty bracket —
+        // the absence-reads-as-favourable trap, in the one row the story turns on.
+        for pid in &pids {
+            pub_ranges.extend(self.device.vas_published_ranges(*pid, PT_SWEEP_RANGE_CAP));
+            parked_halves.extend(self.device.vas_promote_halves(*pid));
+        }
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
@@ -9257,7 +9272,8 @@ impl SharedDoorbell {
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
              refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} first={} \
-             |{}|{} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {}",
+             |{}|{} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {} | HOST-PUBLISHED {} \
+             | PROMOTE-PARKED {}",
             refusal_vas
                 .iter()
                 .take(PT_SWEEP_REFUSAL_CAP)
@@ -9289,6 +9305,18 @@ impl SharedDoorbell {
                 "(no completed sweep this doorbell — ⊘ NOT 'the table holds nothing')".to_string()
             } else {
                 table_ranges.join(" ")
+            },
+            // ⊘ NOT gated on the sweep — see the fill loop. An empty string here means
+            // `live_pids()` was empty, which is a different fact and says so.
+            if pub_ranges.is_empty() {
+                "(no live proc — ⊘ NOT 'nothing is published')".to_string()
+            } else {
+                pub_ranges.join(" ")
+            },
+            if parked_halves.is_empty() {
+                "(no live proc — ⊘ NOT 'nothing is parked')".to_string()
+            } else {
+                parked_halves.join(" ")
             }
         )
     }

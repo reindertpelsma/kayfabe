@@ -3118,6 +3118,142 @@ impl SharedDevice {
         .unwrap_or_default()
     }
 
+    /// ★★★★★ **WHAT IS ACTUALLY IN THE HOST VAS** — the subset of [`Self::vas_table_ranges`]
+    /// whose bindings carry a [`kayfabe_mmu::HostBacking`], coalesced the same way.
+    ///
+    /// # ⊘ The gap it closes, and it is the one `w289cup2` ended in
+    ///
+    /// `[measured, boot w289cup2]` hardware faulted `ENGINE GRAPHICS ... FAULT_PDE` at a VA that
+    /// **both** `GUEST-DESCRIBES` and `TABLE-DESCRIBES` name as a run based exactly there
+    /// (`0x7ff6a6e00000+0x200000`, proc=2 pdb=0x201000). From those two rows the fault has no
+    /// reading at all: our mirror is right and hardware still missed above the leaf.
+    ///
+    /// ★ The missing distinction is that **`TABLE-DESCRIBES` is a claim about OUR shadow, not
+    /// about the host page tables the GPU actually walks.** A row with `host: None` was declared
+    /// by the guest and never materialized — no host object, no `map_dma`, therefore no host
+    /// PDE. A `FAULT_PDE` over a VA our table holds is exactly what a fully-unpublished run
+    /// produces, and no instrument in the tree could say so, because *"bound"* and
+    /// *"published"* were printed as one number.
+    ///
+    /// ⇒ Read beside `TABLE-DESCRIBES`: **same run in both ⇒ the mapping is live host-side**;
+    /// **present in `TABLE-DESCRIBES` and absent here ⇒ declared only, and the GPU cannot see
+    /// it.** That is the third outcome `vas_table_ranges`'s own doc could not reach.
+    ///
+    /// ⚠ Same cap discipline, and the caller must print that it truncated: an absent run read as
+    /// *"not published"* would be the `dlen=0` mistake pointing the other way.
+    #[must_use]
+    pub fn vas_published_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let mut runs: Vec<(u64, u64)> = Vec::new();
+                    let mut rows = 0usize;
+                    for (va, len, b) in vas.table.iter() {
+                        if b.host().is_none() {
+                            continue;
+                        }
+                        rows += 1;
+                        match runs.last_mut() {
+                            Some((s, l)) if *s + *l == va => *l += len,
+                            _ => runs.push((va, len)),
+                        }
+                    }
+                    let shown: Vec<String> = runs
+                        .iter()
+                        .take(cap)
+                        .map(|(va, len)| format!("0x{va:x}+0x{len:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} host_rows={} of {} runs={} {}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        rows,
+                        vas.table.iter().count(),
+                        runs.len(),
+                        shown.join(","),
+                        if runs.len() > cap {
+                            format!(" ⚠⚠ CAPPED at {cap} of {} runs — INCOMPLETE", runs.len())
+                        } else {
+                            String::new()
+                        }
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★★★ **THE PARKED PROMOTE HALVES, BY IDENTITY** — every entry of
+    /// [`kayfabe_core::gpu::Vas::promote_halves`] rendered with its `buffer_id`, which half
+    /// arrived, and the address it carries.
+    ///
+    /// # ⊘ A TALLY CANNOT ANSWER THE QUESTION THE PARK IS READ FOR
+    ///
+    /// The shipped instruments print `parked=N` and `orphans(awaiting_va=A,awaiting_phys=B)`
+    /// — three counts. `[measured, boot w289cup2]` cup2's own VAS ended at
+    /// `orphans(awaiting_va=0,awaiting_phys=9)`: **nine context buffers declared at a VA with
+    /// nothing bound behind them**, and hardware faulted at a VA the log could not test against
+    /// any of them, because not one of the nine addresses was printed. ⇒ *"does a parked half
+    /// cover the faulting VA"* — the only question a park is ever read to answer — was
+    /// unanswerable from a complete, healthy-looking log. Same class as
+    /// `a_count_cannot_see_a_substitution`.
+    ///
+    /// ★ The **known-positive rides the same instrument**: a `buffer_id` that JOINED is absent
+    /// from this list and present in `bound=[…]`, which is [`kayfabe_core::gpu::Vas::promote_bound`].
+    /// Both are printed, so *"everything is parked"* is distinguishable from *"the enumerator
+    /// only knows how to print parks"* — the failure that killed `GET_PTE_INFO` this week.
+    /// `[measured, boot w289cup2]` that boot reached `CUMULATIVE … joined=4 joined_global=1`, so
+    /// a non-empty `bound=[…]` is a **reading this boot can produce**, not a hypothetical.
+    ///
+    /// ⚠ Uncapped by construction: the key is `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`, a
+    /// fixed RM enum with thirteen members, so the row count is bounded by the ABI and not by
+    /// guest behaviour. Nothing here can truncate and read as complete.
+    #[must_use]
+    pub fn vas_promote_halves(&self, pid: ProcId) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let halves: Vec<String> = vas
+                        .promote_halves
+                        .iter()
+                        .map(|(bid, h)| match h {
+                            kayfabe_core::promote::ParkedHalf::AwaitingPhysical { va } => {
+                                format!("{{bid={bid:#x} AwaitingPhysical va=0x{:x}}}", va.0)
+                            }
+                            kayfabe_core::promote::ParkedHalf::AwaitingVa {
+                                phys,
+                                len,
+                                aperture,
+                            } => format!(
+                                "{{bid={bid:#x} AwaitingVa phys=0x{phys:x} len=0x{len:x} \
+                                 ap={aperture:?}}}"
+                            ),
+                        })
+                        .collect();
+                    let bound: Vec<String> = vas
+                        .promote_bound
+                        .iter()
+                        .map(|va| format!("0x{va:x}"))
+                        .collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} parked={} {} bound={}=[{}]]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        halves.len(),
+                        halves.join(" "),
+                        bound.len(),
+                        bound.join(","),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
     /// ★★★ **ARM 2.1 — WHAT THE GUEST ITSELF SAYS ABOUT A VIRTUAL ADDRESS**, asked of the
     /// swept picture of every one of `pid`'s address spaces.
     ///

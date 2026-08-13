@@ -2338,3 +2338,100 @@ fn an_identical_gpu_scoped_republication_is_neither_conflict_nor_growth() {
         "★ `globals_added` distinguishes `the map is filling` from `it was already full`",
     );
 }
+
+// =================================================================================
+// 5. w290 — THE PARK, BY IDENTITY, AND ITS OWN KNOWN-POSITIVE
+//
+// `[measured, boot w289cup2]` cup2's own address space ended at
+// `orphans(awaiting_va=0,awaiting_phys=9)` while hardware faulted
+// `ENGINE GRAPHICS ... FAULT_PDE ACCESS_TYPE_VIRT_WRITE @ 0x7ff6_a6e00000`. The only
+// question a park is ever read to answer — *does one of those nine cover the faulting
+// VA?* — was **unanswerable from a complete, healthy-looking log**, because the shipped
+// instruments print three counts and not one address.
+//
+// ⊘ And a fix that only prints parks is the failure that killed `GET_PTE_INFO` this
+// week: an enumerator reporting EVERYTHING parked is indistinguishable from one that
+// only knows how to print parks. So the enumerator prints `bound=[…]` beside
+// `parked=…` from the same `Vas`, and these two tests are the known-positive and its
+// negative control on the SAME instrument.
+// =================================================================================
+
+/// ★★★★★ The parked half is named BY IDENTITY — `buffer_id`, which half arrived, and the
+/// address it carries — and the id that JOINED is absent from the park and present in
+/// `bound`.
+#[test]
+fn the_parked_half_census_names_the_id_the_half_and_the_address() {
+    let gpu = world();
+    let a_pid = pid_of(&gpu, A_PDB);
+    let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
+
+    // Two ids, one address space. `1` gets both phases; `3` gets only the VA — the
+    // shape RM itself guarantees for BUFFER_BUNDLE_CB, whose phase-1 arm is
+    // `// No initialization from kernel RM; return NV_OK`
+    // (`ogkm-580: kernel_graphics_context.c:1748-1758`).
+    dev.promote_ctx(&half_promotion(
+        A_CLIENT,
+        H_GR_CHANNEL,
+        vec![phys_half(1, 0xdead_0000), va_half(3, GpuVa(0x7ff6_a6e0_0000))],
+    ))
+    .expect("a half-only promotion is accepted");
+    let j = dev
+        .promote_ctx(&half_promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![va_half(1, GR_VA)],
+        ))
+        .expect("the completing phase is accepted");
+    assert_eq!(
+        (j.joined, j.orphans),
+        (1, (0, 1)),
+        "★ THE KNOWN-POSITIVE'S PRECONDITION: one id joined, exactly one stayed parked",
+    );
+
+    let rows = dev.vas_promote_halves(a_pid);
+    let row = rows
+        .iter()
+        .find(|r| r.contains(&format!("pdb=0x{:x}", A_PDB.0)))
+        .unwrap_or_else(|| panic!("A's VAS is enumerated; got {rows:?}"));
+
+    // The park, by identity — id, which half, and the ADDRESS. All three, or the row
+    // cannot be joined against an `Xid`.
+    assert!(
+        row.contains("parked=1"),
+        "exactly one park is reported: {row}"
+    );
+    assert!(
+        row.contains("{bid=0x3 AwaitingPhysical va=0x7ff6a6e00000}"),
+        "★ the parked half carries its buffer_id, its phase AND its VA: {row}"
+    );
+
+    // ★★★★★ THE KNOWN-POSITIVE. The id that joined is NOT in the park and IS in
+    // `bound` — so "everything is parked" is a reading this instrument can fail to
+    // produce, which is the only thing that makes it a measurement.
+    assert!(
+        !row.contains("bid=0x1"),
+        "⊘ a JOINED id must not appear as parked: {row}"
+    );
+    assert!(
+        row.contains(&format!("bound=1=[0x{:x}]", GR_VA.0)),
+        "★ the joined range is named, by address, on the same row: {row}"
+    );
+}
+
+/// ⊘ The negative control for the row above: **before** any promotion the same VAS
+/// reports `parked=0 bound=0=[]`, not an absent row.
+///
+/// An enumerator that emitted nothing for an untouched address space would make *"this
+/// VAS has no parked halves"* and *"this VAS was never enumerated"* the same empty
+/// output — the absence-reads-as-favourable trap this whole rung exists to close.
+#[test]
+fn an_untouched_vas_is_enumerated_as_empty_rather_than_omitted() {
+    let gpu = world();
+    let a_pid = pid_of(&gpu, A_PDB);
+    let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
+    let rows = dev.vas_promote_halves(a_pid);
+    assert!(
+        rows.iter().any(|r| r.contains("parked=0") && r.contains("bound=0=[]")),
+        "an untouched VAS is PRESENT and EMPTY, never absent: {rows:?}"
+    );
+}
