@@ -82,6 +82,12 @@ impl Faulted for FwdFault {
                 kayfabe_mmu::RegionKindFault::PeerHasNoKind => {
                     FaultTag("RegionKindFault::PeerHasNoKind")
                 }
+                // ★ w291 — its own tag, never folded into the two above. "a guest-RAM pin
+                // was offered a row that is not guest RAM" is a different finding from
+                // either, and a census that merged them could not say which chain refused.
+                kayfabe_mmu::RegionKindFault::NotGuestRam { .. } => {
+                    FaultTag("RegionKindFault::NotGuestRam")
+                }
             },
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
             FwdFault::SubmissionDecodedNoWork { .. } => {
