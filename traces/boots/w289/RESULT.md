@@ -333,3 +333,104 @@ without a boot — but the answer now matters less than it did: the population *
 been settled from the C's source directly, which is stronger evidence than a trace and is not
 subject to cap3's stated non-hermeticity (`pci_dma_map` is uninstrumented). ⚠ What cap3 could
 still add is **which VAs** the promote path actually carried on the green run. Named, not done.
+
+---
+
+# ADDENDUM 2 — BOTH CANDIDATES REFUTED FOR THIS REPRO, AND CRITERION 1'S GUARD REBUILT
+
+## 11. ⊘⊘⊘ LEAD: **THE PROMOTE PATH IS NOT ON THIS REPRO'S PATH AT ALL**
+
+Rank-1 (parked promote halves) and rank-2 (the 64 KiB rounding) are **both** properties of the
+`GPU_PROMOTE_CTX` source. Measured on boot `w289g`, the same boot that produced the faults:
+
+```
+promote lines naming the client (proc=2) ....... 0
+0xc7c0 (AMPERE_COMPUTE_B) anywhere on the boot .. 0
+```
+
+⇒ **The raw CE client never allocates a compute class, so it has no GR context, so it never
+issues `GPU_PROMOTE_CTX`.** Its operands are its own `alloc_device_local` + `map_dma_both`, i.e.
+guest `NV_ESC_RM_MAP_MEMORY_DMA` bindings — **a different source entirely**.
+
+⇒ **Neither candidate can explain `0x1_20000000` or `0x7_00100000`.** ⚠ And the coordinator's
+own separation test is what settles it, so the answer is *"neither"*, not *"unclear"*.
+
+## 12. THE COORDINATOR'S SEPARATION TEST, ANSWERED: **NO BINDING AT ALL**
+
+> *"no binding at all ⇒ parked half. A binding that ends before the fault offset ⇒ extent policy."*
+
+**Neither — there is no binding, and the promote source is absent, so it is a third thing.**
+From the device's own log, `run_w289g_qemu.log:90` and `:131`:
+
+```
+OPERAND-TABLE: 2 page(s) asked, 0 resolved in guest RAM, 2 MISS
+   [va=0x120000000 : Miss { pdb: Pdb(0x6000), va: 0x120000000 }
+    va=0x120010000 : Miss { pdb: Pdb(0x6000), va: 0x120010000 }]
+OPERAND-TABLE: 2 page(s) asked, 0 resolved in guest RAM, 2 MISS
+   [va=0x700100000 : Miss { pdb: Pdb(0x4000), va: 0x700100000 }
+    va=0x700200000 : Miss { pdb: Pdb(0x4000), va: 0x700200000 }]
+```
+
+★★★ **FOUR of four operand pages MISS — including both WRITE destinations, not only the READ
+sources the `Xid`s name.** And the faulting offset is **`0x0`** in both cases: the fault is on
+the operand's **own first page**, not past its end.
+
+⇒ **THE 64 KiB ROUNDING IS REFUTED TWICE OVER.** Rounding extends a mapping's *end*; it cannot
+turn a `Miss` at offset 0 into a hit, and there is no binding to extend. ⊘ The native control
+seals it: the **same binary, same lengths, same addresses, passes** — so the declared length is
+demonstrably sufficient.
+
+⇒ The live question is not *"how long did we bind"* but **"why is there no row at all for a VA
+the guest's own `MAP_MEMORY_DMA` established?"** — the RM-capture fork, on the
+`MAP_MEMORY_DMA` source rather than the promote source.
+
+## 13. ★★★ BUT THE RANK-1 LEAD IS CORROBORATED — **FOR THE OTHER FAULT**
+
+The same boot's promote tally, by identity:
+
+```
+promote-ctx ACCEPTED: bound=4  joined=0  joined_global=0  already=0  parked=5  half_already=0
+promote-ctx TALLY:  {bid=0x0 phys=0 va=0 complete=2} {bid=0x2 phys=0 va=0 complete=2}
+                    {bid=0x3 phys=0 va=2 complete=0} ...
+bridge refusal PromoteFault::UnknownContextObject x2
+```
+
+★ **`joined=0`, `parked=5`** — and `bid=0x3` carries **two virtual halves, zero physical,
+`complete=0`**: a half that arrives and publishes nothing, by identity, exactly the shape the
+coordinator described and exactly w276's *"aimed right, binds ZERO."*
+
+⇒ **Two faults, two mechanisms, and they must not be merged:**
+| fault | source | state |
+|---|---|---|
+| the 82-ioctl CE repro (`0x1_20000000`) | guest `MAP_MEMORY_DMA` | no row at all — **open** |
+| the GR / `cuCtxCreate` fault | `GPU_PROMOTE_CTX` | `joined=0 parked=5` — **rank-1 lead corroborated** |
+
+⚠ The coordinator's candidates are not wrong; they are **aimed at the other fault**. Refuting
+them here must not be read as refuting them there.
+⊘ And I did **not** verify that any parked half covers the GR fault's VA — that is the check
+still owed, and `bid=0x3` is where to start.
+
+## 14. ★★★★★ CRITERION 1'S GUARD IS REBUILT — AND THE GUEST RUN NOW SAYS WHY
+
+`rm::Crit1State`: five named exits, exactly one printed per run, on **every** path, beside
+`VA-IDENTITY MEASURED = yes|no`. A test asserts exactly one state may license a VA-identity
+claim.
+
+Verified on all three polarities at rev `f589f12`:
+
+```
+native --ce-client        ★ R33 CRIT1 STATE = ARM-NOT-SELECTED             MEASURED = no
+native --ce-client-fault  ★ R33 CRIT1 STATE = FAULT-PROVOKED-ADDRESS-READ  MEASURED = yes
+GUEST  --ce-client-fault  ★ R33 CRIT1 STATE = CONTROL-NEVER-LANDED         MEASURED = no
+```
+
+★★★ **`CONTROL-NEVER-LANDED` is precisely the state the old boolean guard could not see** — the
+one `w289g` was in while its guard reported "not vacuous". The run now labels its own numbers.
+
+⊘ **Criterion 1's address half is still UNMET, and it is now unmet *legibly*:** one anchored
+token says the deliberate fault was never issued, so the two VA-identity zeros are vacuous **by
+name** rather than by a reader's inference. The blocker is unchanged — the CE control cannot
+land in the guest — and it is the same wall as §12.
+
+⚠ Third consecutive boot, same two addresses, same `FAULT_PTE / VIRT_READ`: `0x1_20000000` and
+`0x7_00100000`. Deterministic.
