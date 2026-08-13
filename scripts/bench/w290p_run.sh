@@ -26,8 +26,8 @@
 set -uo pipefail
 ARM="${1:-}"
 case "$ARM" in
-  assert|publish) ;;
-  *) echo "usage: $0 assert|publish" >&2; exit 64 ;;
+  assert|publish|pinrate) ;;
+  *) echo "usage: $0 assert|publish|pinrate" >&2; exit 64 ;;
 esac
 TAG=w290p${ARM}
 OUT=/workspace/${TAG}.log
@@ -95,6 +95,13 @@ echo "--- the FIRST emission (the picture BEFORE anything was published):"
 grep -o 'VAS-PUBLISH token=.*' "$Q" 2>/dev/null | head -1 | fold -w 200 | sed 's/^/      /'
 echo "--- published / refused / wall, every distinct value seen:"
 grep -oE 'published=[0-9]+ refused=[0-9]+ in [0-9]+ ms' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -12 | sed 's/^/      /'
+echo "--- ★★★★★ w291 PINRATE (only on arm=pinrate; ⊘ MEASUREMENT, NOT THE MERGE):"
+grep -o 'PINRATE(w291.*' "$Q" 2>/dev/null | tail -1 | fold -w 200 | sed 's/^/      /'
+echo "    ⊘ PINRATE emissions = [$(grep -c 'PINRATE(w291' "$Q" 2>/dev/null)] — 0 on this arm means UNMEASURED, not 0 ms"
+echo "    per-row + degrade, every distinct reading:"
+grep -oE 'pinned=[0-9]+ refused=[0-9]+ in [0-9]+ ms, per_row=[^,]*, degrade\[[^]]*\]' "$Q" 2>/dev/null | sort -u | head -8 | sed 's/^/      /'
+echo "    ⊘ rows the VMM would not resolve = [$(grep -o 'UNRESOLVED-BY-VMM' "$Q" 2>/dev/null | wc -l)]  (never reached the verb — NOT pin failures)"
+echo "    ⊘ REFUSED pins, by name          = [$(grep -o '⊘REFUSED `[^`]*`' "$Q" 2>/dev/null | sort | uniq -c | tr '\n' ' ')]"
 echo "--- ⚠ wall-budget exhaustions = [$(grep -c 'WALL BUDGET' "$Q" 2>/dev/null)]  (an unpublished row is NOT thereby refused)"
 echo "--- ⊘ bucket-identity violations (sum_ok=false) = [$(grep -o 'sum_ok=false' "$Q" 2>/dev/null | wc -l)]  (MUST be 0)"
 echo "--- every REFUSED leaf, by name (this is where 'exhausts something' would appear):"
