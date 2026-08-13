@@ -52,7 +52,7 @@ unset KAYFABE_RING_VIDMEM
 
 export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh
 TAG=w289cup2
-echo "=== BOOT $TAG START $(date -Is)  ARGS=[$KAYFABE_R33_ARGS] ==="
+echo "=== BOOT $TAG START $(date -Is)  HOOK=[cup2_hook_gdbspin] ==="
 timeout 1500 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
 echo "=== BOOT $TAG RC=$? $(date -Is) ==="
 Q=/workspace/bench/run_${TAG}_qemu.log
