@@ -9725,6 +9725,28 @@ pub struct Regs {
     /// [`SharedDoorbell::exports`].
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     exports: FbExportDir,
+    /// ★★ **w310** — the last guest-RAM pin-reclaim total this shim printed, so the
+    /// `PIN-RELEASE` line fires on **change** rather than on every register write.
+    ///
+    /// ⊘ An `AtomicUsize` and not a `Cell<PinReclaim>`: [`Regs::write`] takes `&self` and
+    /// this device is driven from every vCPU, so the counter must be `Sync`. It holds the
+    /// **sum** of all three tallies, which is what makes one atomic enough — any of the
+    /// three moving moves the sum, and the line then prints all three.
+    last_pin_reclaim: std::sync::atomic::AtomicUsize,
+    /// ★★★ **w314 — THE CLAUSE-(b) INSTRUMENT.** The longest single `reap_retired()` this
+    /// boot has spent inside [`Regs::write`], in microseconds.
+    ///
+    /// `docs/design/guest_ram_pin_release.md` §5 names a **pre-existing** clause-(b)
+    /// exposure: w303's armed reap puts an *unbounded* disposal on the BQL path, and the
+    /// arithmetic (`host_rows = 12 818` × ~240 µs ⇒ ~3 s) sits under `scrubberDestruct`'s
+    /// 4 000 ms with every vCPU halted. That is **arithmetic, not a measurement**, and this
+    /// field is the measurement.
+    ///
+    /// ⊘ Printed only when a **new maximum** is reached (`fetch_max` returns the previous),
+    /// so it is one line per record rather than one per guest MMIO write — the density trap
+    /// the `PIN-RELEASE` line above already documents. ⚠ A boot with no line has **not**
+    /// measured zero; it has never reaped, and that is `UNMEASURED` for this instrument.
+    max_reap_us: std::sync::atomic::AtomicU64,
 }
 
 impl core::fmt::Debug for Regs {
@@ -10175,6 +10197,8 @@ impl Regs {
             guest_ring,
             fb_join,
             exports: exports_for_regs,
+            last_pin_reclaim: std::sync::atomic::AtomicUsize::new(0),
+            max_reap_us: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -10947,7 +10971,48 @@ impl Regs {
         // ⊘ Cost: one device write-lock acquisition per register write, which is the cost
         // class `materialize_pending` above already pays on this same frame; when
         // `self.retired` is empty the body is a `mem::take` of an empty `Vec`.
+        // ★★★★★ **w310 — AND THE PIN RELEASE IS WITNESSED ON THE SAME EDGE.**
+        //
+        // No new call: the guest-RAM pin release is staged inside `Spine::stage_dropped_vases`,
+        // which the refresh already runs, and the staged `Orphans` ride out on the proc's own
+        // next worker checkout (`checkout_and_drain`) or on `Proc::drop` at the reap below.
+        // ⇒ **the release costs this frame ZERO extra blocking work**; what is added here is
+        // the *number*, because `docs/audits/w301_cancellation_error_leaks.md` §3.2 records
+        // exactly the shape where a release path exists and nobody can tell whether it ran.
+        //
+        // ⚠ Printed only on CHANGE, not every register write: this edge is every guest MMIO
+        // write, and a per-write line would be the `a_recorder_that_prints_at_teardown` trap
+        // pointing the other way — a log so dense the fact is unfindable.
+        let pins = self.device.pin_reclaim_gone();
+        let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
+        if total
+            != self
+                .last_pin_reclaim
+                .swap(total, std::sync::atomic::Ordering::Relaxed)
+        {
+            eprintln!(
+                "kayfabe: PIN-RELEASE released={} refused_no_host_vas={} rows_deduped={} \
+                 ⇒ that many guest-RAM `OS_DESCRIPTOR`s freed, GPU VAs unmapped and isolate \
+                 `mmap` windows `munmap`ed at VAS death, instead of held until QEMU exits",
+                pins.released, pins.refused_no_host_vas, pins.rows_deduped,
+            );
+        }
+        // ★★★ **w314 — TIME THE DISPOSAL.** See [`Regs::max_reap_us`]. This wraps the call
+        // and changes nothing about it: two `Instant`s and a `fetch_max`.
+        let reap_t0 = std::time::Instant::now();
         let reaped = self.device.reap_retired();
+        let reap_us = u64::try_from(reap_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        if reap_us
+            > self
+                .max_reap_us
+                .fetch_max(reap_us, std::sync::atomic::Ordering::Relaxed)
+        {
+            eprintln!(
+                "kayfabe: REAP-TIMING max_reap_us={reap_us} reaped={reaped} \
+                 ⇒ the longest BLOCKING disposal yet inside Regs::write, with the BQL held \
+                 and every vCPU halted. Budget: scrubberDestruct = 4000000 us."
+            );
+        }
         if reaped > 0 {
             // ★ Visible in the boot log, because "the reap ran" is a claim this tree has
             // twice mistaken for "the reap exists". A zero prints nothing; a non-zero says

@@ -855,6 +855,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
     let orphans = Orphans {
         unmap: vec![(vas, host_va)],
         free: vec![memory],
+        guest_ram: Vec::new(),
     };
     assert!(
         kayfabe_fwd::dispose_on(&mut w, orphans).is_empty(),
@@ -879,13 +880,15 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
         Orphans {
             unmap: vec![],
             free: vec![vas],
+            guest_ram: Vec::new(),
         },
     );
     assert_eq!(
         residue,
         Orphans {
             unmap: vec![],
-            free: vec![vas]
+            free: vec![vas],
+            guest_ram: Vec::new(),
         },
         "a release that could not dispose of an object must hand it back"
     );
@@ -895,6 +898,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
         .execute(&VerbPlan::Release {
             unmap: vec![],
             free: vec![vas],
+            guest_ram: Vec::new(),
         })
         .expect_err("the free fails");
     assert_eq!(failure.err, RmError::Other(7));

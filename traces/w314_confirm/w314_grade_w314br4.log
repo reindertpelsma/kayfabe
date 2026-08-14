@@ -1,0 +1,85 @@
+================================================================================
+=== ★★★★★ w314 — CONFIRMING w310's PIN RELEASE. Criteria A–G, as w310 wrote them.
+===     tag=w314br4   2026-08-14T15:38:24+00:00
+================================================================================
+    inputs, with sizes — ⊘ a truncated artefact reads as PRESENT and looks healthier
+    than an empty one, so the size is part of the evidence:
+      qemu     = /workspace/bench/run_w314br4_qemu.log  [3462448 bytes]
+      probe    = /workspace/bench/run_w314br4_probe.log  [13261 bytes]
+      hostdmsg = /workspace/bench/run_w314br4_hostdmesg.log  [0 bytes]   (a per-boot DELTA: 0 bytes is the normal green)
+      guestdmg = /workspace/bench/run_w314br4_dmesg.log  [5379 bytes]
+      serial   = /workspace/bench/run_w314br4_serial.log  [71270 bytes]
+
+=== (A) ^CUP3_VAL=43 — first compute must survive the release
+    ^ANCHORED CUP3_VAL = [CUP3_VAL=43]
+    ^ANCHORED CUP3_RC  = [CUP3_RC=0]
+    UNANCHORED, for contrast = [CUP3_VAL=43 ]
+    (A) ✔ PASS — 43 is un-forgeable; the host GR engine ran the guest's shader.
+
+=== (B) scripts/bench/regression_check_e.sh — Xid=0, drain ran and pinned (a FLOOR),
+===     MUST-be-0 invariants. ⊘ host_rows printed, NEVER graded.
+=== (E) ADDRESS-PLANE REGRESSION CHECK  [w304 rewrite]
+    (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+    (E2) drain ran: ★DRAINED rows=229  Σpinned=18228  max_single=13312   ✔ PASS
+    (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+    --- host_rows: ⊘ REPORTED, NEVER GRADED. w298/ptsweep returned ^CUP3_VAL=43 with
+        ZERO HOST-PUBLISHED lines, so any host_rows assertion fails on a correct result.
+        HOST-PUBLISHED lines = 230   (0 means the line never printed — unmeasured, not zero)
+        host_rows=18263 of 18269
+        host_rows=18263 of 18276
+        host_rows=18270 of 18277
+        host_rows=18271 of 18277
+        host_rows=18271 of 18309
+        host_rows=18295 of 18309
+=== (E) VERDICT = 0 (0 pass · 1 REGRESSION · 2 unmeasured)
+    (B) exit=0 ✔ PASS
+
+=== (C) ★ kayfabe: PIN-RELEASE released=N with N > 0 — THE NON-VACUITY.
+===     ⊘ ABSENT ≠ ZERO. w310's own text: the line prints only on CHANGE, from
+===     Spine::pin_reclaim_gone, so a boot whose CUDA proc never exits legitimately
+===     never prints it — UNMEASURED for this rung, not a pass and not a zero.
+    PIN-RELEASE lines = [1]
+      kayfabe: PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228 ⇒ that many guest-RAM `OS_DESCRIPTOR`s freed, GPU VAs unmapped and isolate `mmap` windows `munmap`ed at VAS dea
+      th, instead of held until QEMU exits
+    (C) ✔ PASS — max released=18228  (graded as a FLOOR, never as a number)
+
+=== (D) guest dmesg: non-empty, contains NVRM, and carries NO soft lockup / NO RCU stall.
+===     ★ This is the clause-(b) INSTRUMENT for w303's unbounded BQL disposal (§5).
+    guest dmesg bytes = 5379   NVRM lines = 31   stall-signature lines = 0
+    (D) ✔ PASS — no soft lockup, no RCU stall, driver output present.
+        ⚠ SCOPED: 'bounded IN PRACTICE on this workload', NOT 'bounded'.
+
+=== (E) refused_no_host_vas=0 on the same line — a non-zero contradicts
+===     commit_pin_guest_ram's own invariant and is a finding in its own right.
+    every distinct reading = [refused_no_host_vas=0 ]
+    (E) ✔ PASS — max refused_no_host_vas=0
+
+=== (F) NO NEW Xid CLASSES vs the previous green boot. ⊘ CLASSES, not counts —
+===     a_count_cannot_see_a_substitution: a count cannot see a substitution.
+===     Baseline: traces/w297_cup3/run_w297cup3_dmesg.log carries ZERO Xid, and w313's
+===     green boots the same. The baseline class set is therefore EMPTY.
+      run_w314br4_hostdmesg.log: Xid lines = 0
+      run_w314br4_dmesg.log: Xid lines = 0
+    (F) ✔ PASS — the observed class set is EMPTY, i.e. equal to the baseline's.
+
+=== (G) REAP and PIN-RELEASE both present, or both absent — they are driven from the
+===     same edge and the same teardown. One without the other = half-wired.
+    REAP lines = [2]   PIN-RELEASE lines = [1]
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+      kayfabe: REAP reaped=1 still_retired=0 ⇒ each reaped proc's staged host `Release` verbs went out and its isolate child was reaped
+    (G) ✔ PASS — both present.
+
+=== ★★★ THE DISPOSAL TIMING — w303's armed reap put an UNBOUNDED disposal inside
+===     Regs::write, under the QEMU BQL. §5 of the design derives ~3 s by ARITHMETIC
+===     (host_rows 12818 × ~240 us) against scrubberDestruct's 4 000 000 us. This is
+===     the MEASUREMENT. ⊘ It is NOT graded — it is the number the next rung needs.
+    REAP-TIMING lines = [4]
+      kayfabe: REAP-TIMING max_reap_us=36 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=44 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=180 reaped=0
+      kayfabe: REAP-TIMING max_reap_us=3250535 reaped=1
+    ★ LONGEST BLOCKING DISPOSAL = 3250535 us
+      = 3250.535 ms = 81.3% of the 4 000 ms scrubberDestruct budget
+
+=== ★★★★★ w314 VERDICT = 0   (0 ALL PASS · 1 FAILED · 2 UNMEASURED)
+    ⊘ 2 IS NOT A PASS.
