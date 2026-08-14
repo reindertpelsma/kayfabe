@@ -339,9 +339,43 @@ green run is not evidence. Margins are reported as a **multiple of budget at ≥
 
 ---
 
-## 5. Results
+## 5. Results, and how to re-derive every number here
 
-<!-- W328-RESULTS-5 -->
+`traces/w328_scope/` — the two launchers (with their pre-registrations in their own headers),
+one arm log per arm, one **census** per boot, and the small per-boot artefacts.
+
+| tool | what it answers | selftest |
+|---|---|---|
+| `scripts/bench/w328_census.sh <tag>` | distils one boot's publication plane to ~45 lines: arm words, the drain, the cumulative breadth, the per-pass distribution, and **the cost-vs-`candidates` correlation with `max_total` beside it** | — |
+| `scripts/bench/w328_fit.py <qemu.log>…` | the worst-trap attribution table, margins, residuals; **refuses a fit below 3 unclamped points** and refits without the largest residual | `--selftest` ⇒ 10/10 |
+| `scripts/bench/w319_attribute.sh <tag>` | is a red **yours** or the pre-existing truncation | `--selftest` ⇒ 6 fixtures + 1 matcher, run before every sweep |
+
+⊘ **The `run_<tag>_qemu.log` files are not committed** — ~3.6 MB × 24 boots. Each census names
+its source log **and its byte count**, so the omission is auditable rather than silent.
+
+### 5.1 ⊘ THE INSTRUMENT WAS FROZEN AT SWEEP START, DELIBERATELY
+
+`w328_arm.sh` in the repo carries three lines (`gate=`, `DIRTY-GATE`, `CUM over N passes`) that
+were added **after** the first sweep began and were **not** synced to the bench. All eight arms
+therefore ran the identical script, and those three lines are recovered per boot by
+`w328_census.sh` from the same log. ⚠ The change only *added* output — which is exactly why it
+would have looked harmless to sync, and why it was not.
+
+### 5.2 Test state at this branch's HEAD
+
+- `cargo test -p kayfabe-qemu-raw --features host-isolates --all-targets --no-fail-fast` ⇒
+  **141 passed, 0 failed.** ★ This is the configuration in which **every line this rung
+  changed is compiled**; the whole diff sits behind `#[cfg(feature = "host-isolates")]`.
+- `cargo test --workspace --all-targets --no-fail-fast` ⇒ **2920 passed, 6 failed.**
+  ⊘ **In that configuration none of this rung's code is compiled** — its own four tests do not
+  even appear in the run — so the 6 cannot be attributable to it. They are
+  `a_device_with_no_fb_source_refuses_the_vidmem_ring`,
+  `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote`,
+  `the_logic_crates_carry_no_unnamed_guest_os_assumption`, and three
+  `doorbell_reaches_the_completion_observer` cases.
+  ⚠ **w323's stated stable red set is 7 and this is 6.** I did **not** re-derive w323's exact
+  invocation, so the difference is **unattributed** and is **not** evidence about this branch
+  in either direction. Recorded rather than rounded to "matches".
 
 ---
 
