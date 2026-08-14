@@ -240,3 +240,63 @@ where the rung can still be surprised:
 ## 6. RESULTS
 
 *(nothing above this line was written with a result in hand)*
+
+### 6.1 ★★★★★ THE ONE-LINE ANSWER — pre-registered outcome **(A)**
+
+**The operands are HOST SYSMEM — `memfd` pages inside the unprivileged isolate, reached by the
+host GR engine over PCIe gen3 ×16 — and the aperture accounts for the DOMINANT factor in the
+22–81×, but not all of it.** The measured endpoints on this GA106, same kernel, same binary:
+
+| | read bandwidth (n=3, 256 MiB, single pass) | scatter |
+|---|---|---|
+| **host VRAM** (`cuMemAlloc`, native) | **313.5 GB/s** | ±0.04 % |
+| **host sysmem, 2 MiB pages** (`hostreg` / `managed_cpu`, native) | **12.33 GB/s** | ±0.2 % |
+| PCIe gen3 ×16, this link (`pcie.link.gen.current=3`, `width=16`) | ~12.6 GB/s theoretical | — |
+
+⇒ the sysmem arms **saturate the link**, and the aperture ratio is **25.4×**.
+
+### 6.2 ⊘⊘⊘ w320's CONTROL WAS PESSIMAL *AND* UNSTABLE — and the anomaly that framed this brief DISSOLVES
+
+The brief's central gap was *"our guest is FASTER than native-with-host-memory at N ≥ 1024, so
+our buffers are not plain pinned sysmem."* It is not our buffers that were unusual. **It was the
+control.**
+
+`cuMemHostAlloc(DEVICEMAP)` — w320's only non-VRAM placement — measured, on the same GPU, same
+kernel, same binary, 256 MiB, single pass, **five times**:
+
+```
+3.697   9.456   11.886   10.887   9.613  GB/s      range 3.70 – 11.89  =  3.2x
+```
+
+against, in the same runs:
+
+```
+vram         313.567  313.599  313.376  313.475  313.645   (0.04 %)
+hostreg       12.318   12.325   12.350   12.321   12.315   (0.2 %)
+managed_cpu   12.353   12.308   12.320   12.312   12.319   (0.2 %)
+```
+
+★★★ **Three placements reproduce to 0.2 % and one swings 3.2 ×.** `cuMemHostAlloc` is the odd
+one out, it sits **10–70 % below the link it is running on**, and it **degrades with buffer
+size** (12.07 → 9.46 GB/s from 4 to 256 MiB) while the 2 MiB-page arms stay flat. That is the
+signature of GPU TLB pressure over small pages, and it is a property of *that allocator*, not
+of sysmem.
+
+**Re-run of w320 §5.5 against an honest control** — `mm`, native, same hour, `bad=0 maxerr=0`
+in every row:
+
+| N | native VRAM | native **`hostreg`** | native `hostalloc` (w320's) | our guest (w320) | guest ÷ hostreg |
+|---|---|---|---|---|---|
+| 128 | 0.012 | **0.130** | 0.133 | 0.971 | **7.5× slower** |
+| 512 | 0.359 | **6.214** | 6.070 | 22.734 | **3.7× slower** |
+| 1024 | 2.844 | **43.617** | 116.340 | 59.786 | **1.37× slower** |
+| 2048 | 22.873 | **338.524** | 1527.352 | 908.966 | **2.69× slower** |
+
+⊘ **The overshoot is gone.** w320 read *"guest is 2.2× FASTER at N=1024 and 1.6× FASTER at
+N=2048"*; against a control that saturates PCIe the guest is **slower at every size**. Its
+`hostalloc` column is the one that moved — 116.3 → 43.6 and 1527.4 → 338.5, i.e. **2.7× and
+4.5×** — and w320's inference rested entirely on that column.
+
+★★ **Nothing in w320 is refuted except the inference the brief already flagged as its own.**
+The submit/sync split, the 936× duration scaling, `nvcsw = 0`, and the guest ÷ native-VRAM
+ratios are untouched: this rung did not re-measure them and does not disagree with them.
