@@ -8118,11 +8118,17 @@ impl SharedDoorbell {
                 }
                 published += done;
                 refused += failed;
-                // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.** ⊘ The census
-                // walk is inside the bracket as well as the joins: on the last passes of a
-                // `cup3` boot the joins are all `already_joined` and the WALK is the whole
-                // cost, so a bracket around the joins alone would report a breadth that
-                // costs nothing while the boot spends 2 529 ms in it.
+                // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.**
+                //
+                // ⊘ The census WALK is inside the bracket as well as the joins, so the two
+                // can be separated afterwards by correlating cost against `candidates` —
+                // which is what settled the mechanism. `[measured w328, boot w328a1]` with
+                // `candidates=0` and a table of **18 277 rows** a pass costs **632 µs**
+                // (35 ns/row); with `candidates>0` and the same table it costs **52 094 µs**.
+                // ⇒ **the walk is not the cost; ~6.4 ms per `join_one_fb_leaf` attempt is**,
+                // and 328 of the boot's ~400 attempts are the same 8 already-joined ranges
+                // re-offered 41 times. A bracket around the joins alone could not have shown
+                // that, because it could not have priced the walk it excluded.
                 let vas_us = vas_t0.elapsed().as_micros();
                 if is_target {
                     pub_target_us += vas_us;
