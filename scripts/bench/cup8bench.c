@@ -68,6 +68,7 @@
 #include <math.h>
 #include <time.h>
 #include <sys/resource.h>
+#include <sys/mman.h>   /* w322: madvise(MADV_HUGEPAGE) for the page-size arm */
 
 /* ---- CUDA Driver API, declared locally (see header note) ------------------------------ */
 typedef unsigned long long CUdeviceptr;
@@ -100,6 +101,25 @@ extern int cuLaunchKernel(CUfunction, unsigned, unsigned, unsigned,
                           unsigned, CUstream, void **, void **);
 extern int cuCtxSynchronize(void);
 extern int cuGetErrorString(int, const char **);
+extern int cuModuleUnload(CUmodule);
+/* ★★★ w322 — THE EXTRA ALLOCATION MODES, and they are WEAK ON PURPOSE.
+ *
+ * w320's mechanism control used exactly one non-VRAM placement, `cuMemHostAlloc(DEVICEMAP)`,
+ * and its result OVERSHOT our guest at N>=1024 — the native host-memory arm was SLOWER than
+ * the guest it was supposed to bound. Two readings of that: either our buffers are not plain
+ * pinned sysmem, or **the control was pessimal**. The second is far cheaper to test and, if
+ * true, softens the entire comparison — so these modes exist to spread the "sysmem" family out
+ * and see how wide it is before anything is concluded from a single point in it.
+ *
+ * ⊘ WEAK, so a libcuda without one of them degrades to a NAMED REFUSAL at run time instead of
+ *   a link failure. The same source is compiled INSIDE THE GUEST by the hook with a fixed
+ *   `gcc -lcuda -lm` line; a hard extern that failed to resolve there would take out every
+ *   arm of this program, including the ones that do not use these symbols. An absent symbol
+ *   must cost only the mode that needs it. */
+extern int cuMemHostRegister_v2(void *, size_t, unsigned int) __attribute__((weak));
+extern int cuMemHostUnregister(void *)                        __attribute__((weak));
+extern int cuMemAllocManaged(CUdeviceptr *, size_t, unsigned int) __attribute__((weak));
+extern int cuMemAdvise(CUdeviceptr, size_t, int, CUdevice)    __attribute__((weak));
 
 #define CK(x) do{ int r=(x); const char*s=0; if(r!=CUDA_SUCCESS){ \
     cuGetErrorString(r,&s); printf("FAIL %s -> %s (%d)\n",#x,s?s:"?",r); \
@@ -136,6 +156,93 @@ static const char *PTX =
 "$L_ret:\n"
 "  ret;\n}\n";
 
+/* ============================================================================================
+ * ★★★★★ w322 — THE APERTURE SPECTROMETER. A SECOND KERNEL, and it exists because `mm` CANNOT
+ * ★★★★★ ANSWER THE BANDWIDTH QUESTION.
+ *
+ * w320 left one question: where are the guest's operands, and at what bandwidth does the host
+ * GR engine reach them? `mm` is the wrong instrument for the second half, and the reason is
+ * arithmetic rather than taste:
+ *
+ *   native VRAM at N=2048 does 2*N^3 = 17.2 GFLOP in 22.3 ms = 770 GFLOP/s. If every one of
+ *   its 2*N^3 operand loads went to DRAM that would be 68.7 GB in 22.3 ms = **3.08 TB/s**,
+ *   which is 8.5x a GA106's ~360 GB/s DRAM bandwidth. ⇒ `mm` is served overwhelmingly out of
+ *   L1/L2 and its runtime is a CACHE-HIERARCHY number, not an aperture number. Dividing its
+ *   FLOPs by its time and calling the result "bandwidth" would be an invented quantity.
+ *
+ * `bw` is a single coalesced streaming pass with NO reuse: each thread walks a grid-strided
+ * subset of one array and accumulates. Over a buffer far larger than L2 the hit rate goes to
+ * zero by construction, so bytes/second IS the aperture's bandwidth. Ran over a SWEEP of
+ * buffer sizes it is a spectrometer rather than a single number:
+ *
+ *   - small buffer (fits L2)  -> L2 bandwidth (~TB/s), the SAME whatever the backing store is
+ *   - large buffer (>> L2)    -> the backing store: VRAM ~360 GB/s, PCIe gen3 x16 ~12.6 GB/s
+ *
+ * ★★★ Those two are ~28x apart, so the large-buffer plateau DISCRIMINATES THE APERTURE
+ *     DIRECTLY. ⊘ And note what that buys over the ratio argument: the brief points out that
+ *     28x brackets the measured 21.7-81x spread, and explicitly says a magnitude that fits is
+ *     a reason to MEASURE the aperture, never to believe it. This is the measurement. The
+ *     plateau is read against the SAME kernel's own native VRAM and native sysmem plateaus on
+ *     the SAME GPU, so the verdict is an interpolation between two measured endpoints and not
+ *     a comparison against a datasheet.
+ *
+ * ⚠ The small-buffer end is the instrument's own control: if the guest's small-buffer figure
+ *   does NOT rise towards the native small-buffer figure, then something other than the
+ *   backing store dominates at every size and the plateau reading is not safe to take.
+ *
+ * ## The verification, and why the arithmetic is exact
+ *
+ * The buffer is filled with 1.0f and the element count NF is rounded DOWN to a multiple of the
+ * thread count NT, so every thread sums exactly NF/NT ones per repeat and out[idx] = R*NF/NT
+ * for EVERY idx — one constant, checked over all NT outputs. In fp32 that is exact while
+ * R*NF/NT < 2^24, which the harness asserts rather than assumes. `out` is POISONED before
+ * every launch, so under BENCH_NOLAUNCH the readback is poison and `bad` MUST equal NT: the
+ * same inverted known-positive the rest of this program uses.
+ * ========================================================================================= */
+static const char *BW_PTX =
+".version 7.8\n.target sm_86\n.address_size 64\n"
+".visible .entry bw(.param .u64 pOut,.param .u64 pIn,.param .u32 pN,.param .u32 pR){\n"
+"  .reg .pred %p<4>; .reg .f32 %f<4>; .reg .b32 %r<20>; .reg .b64 %rd<12>;\n"
+"  ld.param.u64 %rd1,[pOut]; ld.param.u64 %rd2,[pIn];\n"
+"  ld.param.u32 %r1,[pN]; ld.param.u32 %r14,[pR];\n"
+"  cvta.to.global.u64 %rd1,%rd1; cvta.to.global.u64 %rd2,%rd2;\n"
+"  mov.u32 %r2,%ntid.x; mov.u32 %r3,%ctaid.x; mov.u32 %r4,%tid.x;\n"
+"  mad.lo.s32 %r5,%r3,%r2,%r4;\n"
+"  mov.u32 %r6,%nctaid.x; mul.lo.s32 %r7,%r6,%r2;\n"
+"  mov.f32 %f1,0f00000000; mov.u32 %r15,0;\n"
+"$L_bwrep:\n"
+"  setp.ge.u32 %p3,%r15,%r14; @%p3 bra $L_bwrdone;\n"
+"  mov.u32 %r8,%r5;\n"
+"$L_bwloop:\n"
+"  setp.ge.u32 %p1,%r8,%r1; @%p1 bra $L_bwdone;\n"
+"  mul.wide.u32 %rd4,%r8,4; add.s64 %rd5,%rd2,%rd4; ld.global.f32 %f2,[%rd5];\n"
+"  add.f32 %f1,%f1,%f2;\n"
+"  add.s32 %r8,%r8,%r7; bra $L_bwloop;\n"
+"$L_bwdone:\n"
+"  add.s32 %r15,%r15,1; bra $L_bwrep;\n"
+"$L_bwrdone:\n"
+"  mul.wide.u32 %rd6,%r5,4; add.s64 %rd7,%rd1,%rd6; st.global.f32 [%rd7],%f1;\n"
+"  ret;\n}\n";
+
+/* ---- w322: allocation modes -------------------------------------------------------------
+ * ⊘ `vram` is the DEFAULT and is byte-for-byte what every previous rung ran, so an arm that
+ *   does not set BENCH_ALLOC is w320's arm unchanged. BENCH_HOSTMEM=1 remains an alias for
+ *   `hostalloc` so w320's native log is reproducible from this source. */
+#define AM_VRAM        0
+#define AM_HOSTALLOC   1   /* cuMemHostAlloc(DEVICEMAP)              — w320's control        */
+#define AM_HOSTALLOC_WC 2  /* + WRITECOMBINED: expected WORSE for reads; a directional check */
+#define AM_HOSTREG     3   /* transparent-hugepage anon + cuMemHostRegister — the PAGE-SIZE arm */
+#define AM_MANAGED     4   /* cuMemAllocManaged, no advice: UVM is free to migrate to VRAM   */
+#define AM_MANAGED_CPU 5   /* managed + PREFERRED_LOCATION=CPU + ACCESSED_BY=gpu: pinned in
+                            * sysmem but mapped BY UVM, i.e. sysmem with UVM's page size and
+                            * PTE attributes rather than cuMemHostAlloc's. ★ This is the arm
+                            * that can show w320's control was pessimal. */
+static const char *AM_NAMES[6] =
+  {"vram","hostalloc","hostalloc_wc","hostreg","managed","managed_cpu"};
+static int amode_of(const char *s){
+    for(int i=0;i<6;i++) if(!strcmp(s,AM_NAMES[i])) return i;
+    return -1;
+}
 /* 0xDEADBEEF as fp32 is about -6.26e18 — never a legitimate C value, and DISTINCT from the
  * zero an unbacked/zeroed leaf would read back as. The two diagnoses stay separable. */
 #define POISON 0xDEADBEEFu
@@ -205,6 +312,95 @@ static double pct(const double *s,int n,double p){
     int i=(int)(p*(n-1)+0.5); if(i<0)i=0; if(i>=n)i=n-1; return s[i];
 }
 
+/* ---- w322: one buffer, allocated by mode -------------------------------------------------
+ * Returns 0 on success. On a mode whose entry point libcuda did not export, or whose call
+ * failed, it returns non-zero AFTER printing a NAMED reason — the caller then records the row
+ * as UNMEASURED rather than substituting another mode's number for it. */
+typedef struct { int mode; void *host; CUdeviceptr dev; size_t sz; } dbuf;
+
+#define CU_MEMHOSTALLOC_DEVICEMAP     0x02u
+#define CU_MEMHOSTALLOC_WRITECOMBINED 0x04u
+#define CU_MEMHOSTREGISTER_DEVICEMAP  0x02u
+#define CU_MEM_ATTACH_GLOBAL          0x01u
+#define CU_MEM_ADVISE_SET_PREFERRED_LOCATION 3
+#define CU_MEM_ADVISE_SET_ACCESSED_BY        5
+#define CU_DEVICE_CPU  ((CUdevice)-1)
+
+static int dbuf_alloc(dbuf *b,size_t sz,int mode,CUdevice dev,const char *tag){
+    int r; b->mode=mode; b->host=NULL; b->dev=0; b->sz=sz;
+    switch(mode){
+    case AM_VRAM:
+        r=cuMemAlloc_v2(&b->dev,sz);
+        if(r) printf("BW_ALLOC_FAIL %s mode=vram rc=%d\n",tag,r);
+        return r;
+    case AM_HOSTALLOC:
+    case AM_HOSTALLOC_WC: {
+        unsigned f = CU_MEMHOSTALLOC_DEVICEMAP
+                   | (mode==AM_HOSTALLOC_WC ? CU_MEMHOSTALLOC_WRITECOMBINED : 0u);
+        r=cuMemHostAlloc(&b->host,sz,f);
+        if(r){ printf("BW_ALLOC_FAIL %s mode=%s rc=%d\n",tag,AM_NAMES[mode],r); return r; }
+        r=cuMemHostGetDevicePointer_v2(&b->dev,b->host,0);
+        if(r){ printf("BW_ALLOC_FAIL %s mode=%s getdevptr rc=%d\n",tag,AM_NAMES[mode],r);
+               cuMemFreeHost(b->host); b->host=NULL; return r; }
+        return 0; }
+    case AM_HOSTREG: {
+        /* ★★★ THE PAGE-SIZE ARM. `cuMemHostAlloc` gives pages CUDA chose; this gives pages
+         * *we* chose — 2 MiB-aligned anonymous memory with MADV_HUGEPAGE, faulted in before
+         * registration so THP has actually collapsed them. If our guest's advantage over
+         * w320's control is a bigger GPU page / fewer GPU TLB misses, this arm moves and the
+         * control was pessimal. ⊘ THP is best-effort: `AnonHugePages` is not asserted here,
+         * so a null result from this arm is WEAK EVIDENCE, not a refutation. */
+        if(!cuMemHostRegister_v2){
+            printf("BW_ALLOC_FAIL %s mode=hostreg REFUSED: libcuda exports no "
+                   "cuMemHostRegister_v2 — UNMEASURED, not slow\n",tag); return -101; }
+        void *p=NULL;
+        if(posix_memalign(&p,2u<<20,sz)!=0 || !p){
+            printf("BW_ALLOC_FAIL %s mode=hostreg posix_memalign failed\n",tag); return -102; }
+        (void)madvise(p,sz,MADV_HUGEPAGE);
+        memset(p,0,sz);                       /* fault in BEFORE registering */
+        r=cuMemHostRegister_v2(p,sz,CU_MEMHOSTREGISTER_DEVICEMAP);
+        if(r){ printf("BW_ALLOC_FAIL %s mode=hostreg register rc=%d\n",tag,r); free(p); return r; }
+        r=cuMemHostGetDevicePointer_v2(&b->dev,p,0);
+        if(r){ printf("BW_ALLOC_FAIL %s mode=hostreg getdevptr rc=%d\n",tag,r);
+               if(cuMemHostUnregister) cuMemHostUnregister(p);
+               free(p); return r; }
+        b->host=p; return 0; }
+    case AM_MANAGED:
+    case AM_MANAGED_CPU: {
+        if(!cuMemAllocManaged){
+            printf("BW_ALLOC_FAIL %s mode=%s REFUSED: libcuda exports no cuMemAllocManaged — "
+                   "UNMEASURED, not slow\n",tag,AM_NAMES[mode]); return -103; }
+        r=cuMemAllocManaged(&b->dev,sz,CU_MEM_ATTACH_GLOBAL);
+        if(r){ printf("BW_ALLOC_FAIL %s mode=%s rc=%d\n",tag,AM_NAMES[mode],r); return r; }
+        if(mode==AM_MANAGED_CPU){
+            if(!cuMemAdvise){
+                printf("BW_ALLOC_FAIL %s mode=managed_cpu REFUSED: libcuda exports no "
+                       "cuMemAdvise — the buffer would MIGRATE TO VRAM and this arm would "
+                       "silently become `managed`. UNMEASURED.\n",tag);
+                cuMemFree_v2(b->dev); b->dev=0; return -104; }
+            int r1=cuMemAdvise(b->dev,sz,CU_MEM_ADVISE_SET_PREFERRED_LOCATION,CU_DEVICE_CPU);
+            int r2=cuMemAdvise(b->dev,sz,CU_MEM_ADVISE_SET_ACCESSED_BY,dev);
+            printf("BW_ADVISE %s preferred_cpu_rc=%d accessed_by_gpu_rc=%d\n",tag,r1,r2);
+            if(r1||r2){ printf("BW_ALLOC_FAIL %s mode=managed_cpu ADVICE REJECTED — the "
+                               "placement is NOT what this arm's name claims. UNMEASURED.\n",tag);
+                        cuMemFree_v2(b->dev); b->dev=0; return -105; }
+        }
+        return 0; }
+    default:
+        printf("BW_ALLOC_FAIL %s mode=%d UNKNOWN\n",tag,mode); return -100;
+    }
+}
+static void dbuf_free(dbuf *b){
+    if(!b) return;
+    switch(b->mode){
+    case AM_HOSTALLOC: case AM_HOSTALLOC_WC: if(b->host) cuMemFreeHost(b->host); break;
+    case AM_HOSTREG:   if(b->host){ if(cuMemHostUnregister) cuMemHostUnregister(b->host);
+                                    free(b->host); } break;
+    default:           if(b->dev) cuMemFree_v2(b->dev); break;
+    }
+    b->host=NULL; b->dev=0;
+}
+
 int main(void){
     const char *e;
     const char *sizes_s = (e=getenv("BENCH_SIZES")) ? e : "1024,2048";
@@ -235,6 +431,32 @@ int main(void){
     /* ★★★ w320 — operands in PINNED HOST MEMORY rather than VRAM. See the block at the
      * allocation site for what this controls for and what it cannot prove. ⊘ Default OFF. */
     int HOSTMEM = (e=getenv("BENCH_HOSTMEM")) ? atoi(e) : 0;
+    /* ★★★ w322 — BENCH_ALLOC names the placement. BENCH_HOSTMEM=1 remains an alias for
+     * `hostalloc` so w320's native arm is reproducible from this source; an explicit
+     * BENCH_ALLOC wins over it, and a MISSPELLED one is a REFUSAL rather than a silent fall
+     * back to `vram` — a run that quietly measured the default while its log said otherwise
+     * is the worst outcome available here. */
+    int AMODE = HOSTMEM ? AM_HOSTALLOC : AM_VRAM;
+    if((e=getenv("BENCH_ALLOC")) && e[0]){
+        AMODE=amode_of(e);
+        if(AMODE<0){
+            printf("BENCH_ALLOC=[%s] is not a mode I know. Known: ",e);
+            for(int i=0;i<6;i++) printf("%s%s",AM_NAMES[i],i<5?",":"\n");
+            printf("BENCH_VERDICT: FAIL-BAD-ARMING\n"); fflush(stdout); return 64;
+        }
+    }
+    /* ★★★★★ w322 — THE APERTURE SWEEP. A comma list of buffer sizes in MiB. Empty = the bw
+     * phase does not run at all, so an arm that does not set it is byte-for-byte w320's. */
+    const char *bw_s = (e=getenv("BENCH_BW")) ? e : "";
+    int BW_ITERS  = (e=getenv("BENCH_BW_ITERS"))  ? atoi(e) : 7;
+    /* Bytes read per launch are held ~CONSTANT across the sweep by repeating the pass, so a
+     * 1 MiB buffer and a 256 MiB buffer put comparable work behind one sync and neither end
+     * of the sweep is dominated by the per-launch floor. ⊘ The repeat also means the small
+     * sizes are measured HOT — which is the point: that end is the L2 plateau. */
+    int BW_TARGET = (e=getenv("BENCH_BW_TARGET_MIB")) ? atoi(e) : 256;
+    int BW_ONLY   = (e=getenv("BENCH_BW_ONLY")) ? atoi(e) : 0;
+    if(BW_ITERS<3) BW_ITERS=3;
+    if(BW_TARGET<1) BW_TARGET=1;
     if(ITERS<2)  ITERS=2;
     if(BATCH<1)  BATCH=1;
     if(VERIFY<1) VERIFY=1;
@@ -244,6 +466,8 @@ int main(void){
            sizes_s,ITERS,BATCH,VERIFY,NOLAUNCH); fflush(stdout);
     printf("BENCH_W320 batch_sweep=[%s] batch_reps=%d ctx_flags=0x%x hostmem=%d\n",
            sweep_s,SWEEP_REPS,CTXFLAGS,HOSTMEM); fflush(stdout);
+    printf("BENCH_W322 alloc=[%s] bw=[%s] bw_iters=%d bw_target_mib=%d bw_only=%d\n",
+           AM_NAMES[AMODE],bw_s,BW_ITERS,BW_TARGET,BW_ONLY); fflush(stdout);
     { /* ⊘ An instrument that silently degrades is worse than one that is absent: if this
        * kernel has no per-thread CPU clock, the whole §3.1 breakdown is meaningless and must
        * say so HERE rather than print zeros that read as "the thread never ran". */
@@ -280,6 +504,140 @@ int main(void){
     long total_bad = 0;
     int  n_sizes = 0;
 
+    /* =========================================================================================
+     * ★★★★★ w322 — THE BW PHASE. See the BW_PTX header for why `mm` cannot answer this.
+     *
+     * ⚠ THE ONE THING THIS PHASE MUST NOT DO is report a number when it did not measure one.
+     * Every failure below prints a NAMED refusal and a row that says UNMEASURED; none of them
+     * substitutes a neighbouring size, a neighbouring mode, or a zero.
+     * ======================================================================================= */
+    int bw_rows = 0, bw_rows_unmeasured = 0;
+    if(bw_s[0]){
+        CUmodule bwmod=NULL; CUfunction bwfn=NULL;
+        int brc = cuModuleLoadData(&bwmod,BW_PTX);
+        printf("\nBENCH_BW_MODULE_RC=%d\n",brc);
+        if(brc==CUDA_SUCCESS){ brc=cuModuleGetFunction(&bwfn,bwmod,"bw");
+                               printf("BENCH_BW_FUNC_RC=%d\n",brc); }
+        if(brc!=CUDA_SUCCESS){
+            printf("BENCH_BW_VERDICT: UNMEASURED — the bw kernel did not load (rc=%d). ⊘ Every "
+                   "bandwidth row below is ABSENT, which is NOT a bandwidth of zero.\n",brc);
+        } else {
+            const unsigned BLK=256u, GRD=1024u, NT=BLK*GRD;   /* 262 144 threads */
+            /* `out` is ALWAYS plain device memory, whatever the input's mode is, so the
+             * measurement is a READ-side aperture number and the write side is not a second
+             * variable. It is NT floats = 1 MiB, i.e. <0.4 % of a 256 MiB read. */
+            dbuf out; int orc=dbuf_alloc(&out,(size_t)NT*4,AM_VRAM,d,"out");
+            if(orc){ printf("BENCH_BW_VERDICT: UNMEASURED — the output buffer did not allocate\n"); }
+            else {
+              float *hout=malloc((size_t)NT*4);
+              double *bl=malloc(sizeof(double)*(size_t)BW_ITERS);
+              double *bs=malloc(sizeof(double)*(size_t)BW_ITERS);
+              double *bt=malloc(sizeof(double)*(size_t)BW_ITERS);
+              double *srt=malloc(sizeof(double)*(size_t)BW_ITERS);
+              if(!hout||!bl||!bs||!bt||!srt){ printf("OOM bw\n"); return 1; }
+              char *bl_s=strdup(bw_s), *bsave=NULL;
+              for(char *bt_s=strtok_r(bl_s,",",&bsave); bt_s; bt_s=strtok_r(NULL,",",&bsave)){
+                long mib=atol(bt_s); if(mib<1) mib=1;
+                size_t sz=(size_t)mib<<20;
+                /* NF rounded DOWN to a multiple of NT: every thread then sums exactly NF/NT
+                 * elements per repeat and the expected output is ONE constant. */
+                size_t NF=(sz/4u/NT)*NT; if(NF==0) NF=NT;
+                unsigned R=(unsigned)(((size_t)BW_TARGET<<20)/(NF*4)); if(R<1) R=1;
+                double expect=(double)R*(double)(NF/NT);
+                bw_rows++;
+                if(expect>=16777216.0){   /* 2^24: past this fp32 addition stops being exact */
+                    printf("BWROW mib=%ld UNMEASURED reason=verify_would_be_inexact expect=%.0f\n",
+                           mib,expect); bw_rows_unmeasured++; fflush(stdout); continue; }
+                dbuf in; int irc=dbuf_alloc(&in,(size_t)NF*4,AMODE,d,"in");
+                if(irc){ printf("BWROW mib=%ld UNMEASURED reason=alloc_failed rc=%d alloc=%s\n",
+                                mib,irc,AM_NAMES[AMODE]); bw_rows_unmeasured++; fflush(stdout);
+                         continue; }
+                printf("BW_BEGIN mib=%ld nf=%zu reps=%u bytes_per_launch=%llu alloc=%s "
+                       "in_ptr=0x%llx out_ptr=0x%llx grid=%ux%u\n",
+                       mib,NF,R,(unsigned long long)((size_t)NF*4*R),AM_NAMES[AMODE],
+                       (unsigned long long)in.dev,(unsigned long long)out.dev,GRD,BLK);
+                fflush(stdout);
+                int frc=cuMemsetD32_v2(in.dev,0x3f800000u,NF);   /* every element = 1.0f */
+                int frc2=cuCtxSynchronize();
+                if(frc||frc2){ printf("BWROW mib=%ld UNMEASURED reason=fill_failed rc=%d/%d\n",
+                                      mib,frc,frc2); bw_rows_unmeasured++; dbuf_free(&in);
+                               fflush(stdout); continue; }
+                unsigned NFu=(unsigned)NF;
+                void *bargs[]={ &out.dev,&in.dev,&NFu,&R };
+                long row_bad=0; int n_ok=0; float first_got=0.f; int have_got=0;
+                for(int it=0; it<BW_ITERS; it++){
+                    CQ(cuMemsetD32_v2(out.dev,POISON,(size_t)NT));
+                    CQ(cuCtxSynchronize());
+                    double t0=now_ms();
+                    if(!NOLAUNCH) CQ(cuLaunchKernel(bwfn,GRD,1,1,BLK,1,1,0,0,bargs,0));
+                    double tsub=now_ms();
+                    CQ(cuCtxSynchronize());
+                    double t1=now_ms();
+                    bl[it]=tsub-t0; bs[it]=t1-tsub; bt[it]=t1-t0; n_ok++;
+                    CQ(cuMemcpyDtoH_v2(hout,out.dev,(size_t)NT*4));
+                    long bad=0;
+                    for(unsigned q=0;q<NT;q++){
+                        if(!have_got){ first_got=hout[q]; have_got=1; }
+                        if(fabsf(hout[q]-(float)expect)>1e-3f) bad++;
+                    }
+                    row_bad+=bad;
+                    printf("BWITER mib=%ld i=%d submit_ms=%.3f sync_ms=%.3f total_ms=%.3f bad=%ld\n",
+                           mib,it,bl[it],bs[it],bt[it],bad);
+                    fflush(stdout);
+                }
+                memcpy(srt,bs,sizeof(double)*(size_t)n_ok); qsort(srt,n_ok,sizeof(double),cmp_d);
+                double syn_med=pct(srt,n_ok,0.5), syn_min=srt[0], syn_max=srt[n_ok-1];
+                memcpy(srt,bl,sizeof(double)*(size_t)n_ok); qsort(srt,n_ok,sizeof(double),cmp_d);
+                double sub_med=pct(srt,n_ok,0.5);
+                memcpy(srt,bt,sizeof(double)*(size_t)n_ok); qsort(srt,n_ok,sizeof(double),cmp_d);
+                double tot_med=pct(srt,n_ok,0.5);
+                double bytes=(double)NF*4.0*(double)R;
+                /* ★ Bandwidth is computed from SYNC, not from the whole launch, and w320 is why:
+                 * it measured submit FLAT at ~4 ms across a 4096x range of work while sync moved
+                 * 936x, and concluded `cuCtxSynchronize` IS the kernel running. Dividing bytes
+                 * by total_ms would fold our ~4 ms submit floor into the aperture and understate
+                 * the fast end badly. ⊘ BOTH are printed so a reader can check that choice. */
+                double gbs_sync = bytes/(syn_med*1e6);
+                double gbs_tot  = bytes/(tot_med*1e6);
+                printf("BWROW mib=%ld alloc=%s nf=%zu reps=%u bytes=%.0f iters=%d "
+                       "submit_med_ms=%.3f sync_med_ms=%.3f sync_min_ms=%.3f sync_max_ms=%.3f "
+                       "total_med_ms=%.3f read_GBps=%.3f read_GBps_incl_submit=%.3f "
+                       "expect=%.0f got0=%g bad=%ld\n",
+                       mib,AM_NAMES[AMODE],NF,R,bytes,n_ok,
+                       sub_med,syn_med,syn_min,syn_max,tot_med,gbs_sync,gbs_tot,
+                       expect,first_got,row_bad);
+                fflush(stdout);
+                total_bad += row_bad;
+                dbuf_free(&in);
+              }
+              free(bl_s); free(hout); free(bl); free(bs); free(bt); free(srt);
+              dbuf_free(&out);
+            }
+            if(bwmod) cuModuleUnload(bwmod);
+        }
+        printf("BENCH_BW_ROWS=%d\nBENCH_BW_ROWS_UNMEASURED=%d\n",bw_rows,bw_rows_unmeasured);
+        fflush(stdout);
+        if(BW_ONLY){
+            /* ⊘ The matmul phase is SKIPPED, and the skip is announced. A reader who greps for
+             * BSUM and finds nothing must be able to tell "the arm did not run it" from "the
+             * arm ran it and it produced nothing". */
+            printf("BENCH_MATMUL_SKIPPED=1 (BENCH_BW_ONLY)\n");
+            printf("BENCH_CLOCK_END mono_ms=%.3f real_ms=%.3f\n", now_ms(), now_real_ms());
+            printf("\nBENCH_SIZES_DONE=0\n");
+            printf("BENCH_TOTAL_BAD=%ld\n",total_bad);
+            if(NOLAUNCH){
+                printf("BENCH_NOLAUNCH_TOTAL_BAD=%ld\n",total_bad);
+                printf("BENCH_VERDICT: %s\n", total_bad>0
+                       ? "PASS-NEGATIVE-CONTROL (the bw verifier FIRED with launches skipped)"
+                       : "FAIL-NEGATIVE-CONTROL (the bw verifier reported 0 with NO LAUNCHES)");
+                printf("DONE\n"); fflush(stdout); return total_bad>0?0:3;
+            }
+            printf("BENCH_VERDICT: %s\n", total_bad==0 ? "PASS (every bw row verified)"
+                                                       : "FAIL (a bw row produced wrong data)");
+            printf("DONE\n"); fflush(stdout); return total_bad==0?0:2;
+        }
+    }
+
     char *sl = strdup(sizes_s), *save=NULL;
     for(char *tok=strtok_r(sl,",",&save); tok; tok=strtok_r(NULL,",",&save)){
         unsigned N=(unsigned)atoi(tok);
@@ -296,9 +654,27 @@ int main(void){
         for(unsigned k=0;k<N;k++) for(unsigned j=0;j<N;j++) hB[(size_t)k*N+j]=(float)((j&3u)+1u);
 
         CUdeviceptr dA,dB,dC;
+        dbuf bA,bB,bC;
         void *pA=NULL,*pB=NULL,*pC=NULL;
         t=now_ms();
-        if(HOSTMEM){
+        /* ★ w322 — the matmul phase allocates through the SAME mode selector as the bw phase,
+         * so a `guest ÷ native` comparison can be taken at a matched placement instead of
+         * across two different ones. ⊘ AM_VRAM/AM_HOSTALLOC take the ORIGINAL code paths
+         * verbatim (below) so w320's two arms remain byte-for-byte reproducible; only the new
+         * modes go through dbuf_alloc. */
+        if(AMODE!=AM_VRAM && AMODE!=AM_HOSTALLOC){
+            int r1=dbuf_alloc(&bA,sz,AMODE,d,"A");
+            int r2=r1?0:dbuf_alloc(&bB,sz,AMODE,d,"B");
+            int r3=(r1||r2)?0:dbuf_alloc(&bC,sz,AMODE,d,"C");
+            if(r1||r2||r3){
+                printf("B%u_ALLOC_UNMEASURED mode=%s rc=%d/%d/%d — ⊘ this size measured "
+                       "NOTHING; it is not a slow row.\n",N,AM_NAMES[AMODE],r1,r2,r3);
+                if(!r1) dbuf_free(&bA);
+                if(!r1&&!r2) dbuf_free(&bB);
+                free(hA); free(hB); free(hC); continue;
+            }
+            dA=bA.dev; dB=bB.dev; dC=bC.dev;
+        } else if(HOSTMEM || AMODE==AM_HOSTALLOC){
             /* ★★★★★ w320 — THE MECHANISM CONTROL, AND IT RUNS NATIVELY WITH NO GUEST.
              *
              * w320 measured the guest's kernel running 22-81x slower than the IDENTICAL kernel
@@ -640,7 +1016,8 @@ int main(void){
         free(ssub); free(ssyn); free(sub); free(syn); free(abs0);
         free(scpu); free(soff); free(scsw); free(sbcp);
         free(sub_cpu); free(syn_cpu); free(syn_off); free(syn_csw);
-        if(HOSTMEM){ cuMemFreeHost(pA); cuMemFreeHost(pB); cuMemFreeHost(pC); }
+        if(AMODE!=AM_VRAM && AMODE!=AM_HOSTALLOC){ dbuf_free(&bA); dbuf_free(&bB); dbuf_free(&bC); }
+        else if(HOSTMEM || AMODE==AM_HOSTALLOC){ cuMemFreeHost(pA); cuMemFreeHost(pB); cuMemFreeHost(pC); }
         else       { cuMemFree_v2(dA); cuMemFree_v2(dB); cuMemFree_v2(dC); }
         free(hA); free(hB); free(hC);
     }
