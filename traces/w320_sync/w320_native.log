@@ -1,0 +1,454 @@
+=== W311 NATIVE START 2026-08-14T18:05:17+00:00 pid=1631697 ===
+SIZES=128,512,1024,2048 ITERS=12 BATCH=1
+=== GPU STATE BEFORE ===
+name, driver_version, memory.used [MiB], utilization.gpu [%]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB, 3 %
+pid, process_name, used_gpu_memory [MiB]
+    ⊘ any process listed above shares this GPU and the numbers below are CONTENDED.
+=== BUILD ===
+source md5 = 562ad895b04c4b917f266520fc0b81a0
+NATIVE_GCC_RC=0
+binary md5 = 555a4d615c7701486cd841bbd6220870
+
+=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ===
+BENCH_MODE=NOLAUNCH — ★ NEGATIVE CONTROL. Launches are SKIPPED; the verifier MUST report bad = N*N. A 0 here means the verifier is dead.
+ITER N=256 i=0 launch_ms=0.005 submit_ms=0.000 sync_ms=0.005 t0_mono_ms=362958322.779 sub_cpu_ms=0.007 syn_cpu_ms=0.005 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.005 verified=yes bad=65536
+ITER N=256 i=1 launch_ms=0.005 submit_ms=0.000 sync_ms=0.005 t0_mono_ms=362958323.205 sub_cpu_ms=0.005 syn_cpu_ms=0.005 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.005 syn_stime_ms=0.000 verified=yes bad=65536
+ITER N=256 i=2 launch_ms=0.005 submit_ms=0.000 sync_ms=0.005 t0_mono_ms=362958323.591 sub_cpu_ms=0.004 syn_cpu_ms=0.005 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.005 syn_stime_ms=0.000 verified=yes bad=65536
+BSWEEP N=256 K=1 rep=0 total_ms=0.001 submit_ms=0.000 sync_ms=0.001 cpu_ms=0.006 offcpu_ms=-0.004 nvcsw=0 bad=65536
+BSWEEP N=256 K=1 rep=1 total_ms=0.001 submit_ms=0.000 sync_ms=0.001 cpu_ms=0.005 offcpu_ms=-0.004 nvcsw=0 bad=65536
+BSWEEP N=256 K=4 rep=0 total_ms=0.001 submit_ms=0.000 sync_ms=0.001 cpu_ms=0.005 offcpu_ms=-0.004 nvcsw=0 bad=65536
+BSWEEP N=256 K=4 rep=1 total_ms=0.001 submit_ms=0.000 sync_ms=0.001 cpu_ms=0.006 offcpu_ms=-0.005 nvcsw=0 bad=65536
+B256_BAD=524288
+BENCH_NOLAUNCH_TOTAL_BAD=524288
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the verifier FIRED with launches skipped)
+NATIVE_NEGCTRL_RC=0   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)
+
+=== ★★★★★ THE NATIVE MEASUREMENT ===
+BENCH_BUILD sizes=[128,512,1024,2048] iters=12 batch=1 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[1,2,4,8,16,32,64,128] batch_reps=5 ctx_flags=0x0
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=3.026081 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=362958647.134 real_ms=1786730724334.390
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=1691.20
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 3060]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=100.40
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.11
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_SIZE_BEGIN N=128 per_matrix_MiB=0 device_MiB=0
+B128_ALLOC_MS=0.12
+B128_PTRS=A:0x7c7272200000,B:0x7c7272210000,C:0x7c7272220000
+B128_H2D_MS=0.06  (2 x 0 MiB)
+B128_GRID=(8,8)x(16,16)
+ITER N=128 i=0 launch_ms=1.157 submit_ms=1.144 sync_ms=0.013 t0_mono_ms=362960439.213 sub_cpu_ms=0.121 syn_cpu_ms=0.012 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=1 launch_ms=0.019 submit_ms=0.007 sync_ms=0.012 t0_mono_ms=362960440.687 sub_cpu_ms=0.013 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=2 launch_ms=0.015 submit_ms=0.003 sync_ms=0.012 t0_mono_ms=362960440.856 sub_cpu_ms=0.005 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=3 launch_ms=0.014 submit_ms=0.002 sync_ms=0.012 t0_mono_ms=362960440.935 sub_cpu_ms=0.004 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=4 launch_ms=0.014 submit_ms=0.003 sync_ms=0.011 t0_mono_ms=362960441.026 sub_cpu_ms=0.019 syn_cpu_ms=0.011 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.011 verified=yes bad=0
+ITER N=128 i=5 launch_ms=0.014 submit_ms=0.002 sync_ms=0.011 t0_mono_ms=362960441.107 sub_cpu_ms=0.004 syn_cpu_ms=0.011 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.011 verified=yes bad=0
+ITER N=128 i=6 launch_ms=0.014 submit_ms=0.002 sync_ms=0.012 t0_mono_ms=362960441.192 sub_cpu_ms=0.004 syn_cpu_ms=0.012 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.011 verified=yes bad=0
+ITER N=128 i=7 launch_ms=0.014 submit_ms=0.002 sync_ms=0.012 t0_mono_ms=362960441.269 sub_cpu_ms=0.004 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=8 launch_ms=0.013 submit_ms=0.002 sync_ms=0.012 t0_mono_ms=362960441.344 sub_cpu_ms=0.004 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.011 verified=yes bad=0
+ITER N=128 i=9 launch_ms=0.014 submit_ms=0.002 sync_ms=0.011 t0_mono_ms=362960441.419 sub_cpu_ms=0.004 syn_cpu_ms=0.011 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+ITER N=128 i=10 launch_ms=0.014 submit_ms=0.002 sync_ms=0.011 t0_mono_ms=362960441.504 sub_cpu_ms=0.004 syn_cpu_ms=0.011 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.011 verified=yes bad=0
+ITER N=128 i=11 launch_ms=0.014 submit_ms=0.002 sync_ms=0.012 t0_mono_ms=362960441.578 sub_cpu_ms=0.004 syn_cpu_ms=0.012 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.012 verified=yes bad=0
+
+BSWEEP_BEGIN N=128 reps=5 list=[1,2,4,8,16,32,64,128]
+BSWEEP N=128 K=1 rep=0 total_ms=0.014 submit_ms=0.002 sync_ms=0.011 cpu_ms=0.015 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=1 rep=1 total_ms=0.014 submit_ms=0.002 sync_ms=0.012 cpu_ms=0.016 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=1 rep=2 total_ms=0.013 submit_ms=0.002 sync_ms=0.012 cpu_ms=0.015 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=1 rep=3 total_ms=0.014 submit_ms=0.002 sync_ms=0.012 cpu_ms=0.015 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=1 rep=4 total_ms=0.013 submit_ms=0.002 sync_ms=0.012 cpu_ms=0.015 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=1 reps=5 med_total_ms=0.014 per_launch_ms=0.014 min_ms=0.013 max_ms=0.014 med_cpu_ms=0.015 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=2 rep=0 total_ms=0.024 submit_ms=0.004 sync_ms=0.019 cpu_ms=0.026 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=2 rep=1 total_ms=0.023 submit_ms=0.004 sync_ms=0.019 cpu_ms=0.025 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=2 rep=2 total_ms=0.024 submit_ms=0.004 sync_ms=0.019 cpu_ms=0.025 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=2 rep=3 total_ms=0.024 submit_ms=0.004 sync_ms=0.020 cpu_ms=0.025 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=2 rep=4 total_ms=0.023 submit_ms=0.004 sync_ms=0.019 cpu_ms=0.025 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=2 reps=5 med_total_ms=0.024 per_launch_ms=0.012 min_ms=0.023 max_ms=0.024 med_cpu_ms=0.025 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=4 rep=0 total_ms=0.044 submit_ms=0.009 sync_ms=0.035 cpu_ms=0.046 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=4 rep=1 total_ms=0.043 submit_ms=0.008 sync_ms=0.035 cpu_ms=0.045 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=4 rep=2 total_ms=0.044 submit_ms=0.008 sync_ms=0.036 cpu_ms=0.046 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=4 rep=3 total_ms=0.044 submit_ms=0.008 sync_ms=0.036 cpu_ms=0.046 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=4 rep=4 total_ms=0.044 submit_ms=0.008 sync_ms=0.036 cpu_ms=0.046 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=4 reps=5 med_total_ms=0.044 per_launch_ms=0.011 min_ms=0.043 max_ms=0.044 med_cpu_ms=0.046 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=8 rep=0 total_ms=0.090 submit_ms=0.015 sync_ms=0.075 cpu_ms=0.092 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=8 rep=1 total_ms=0.083 submit_ms=0.017 sync_ms=0.067 cpu_ms=0.085 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=8 rep=2 total_ms=0.083 submit_ms=0.015 sync_ms=0.067 cpu_ms=0.084 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=8 rep=3 total_ms=0.083 submit_ms=0.015 sync_ms=0.067 cpu_ms=0.084 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=8 rep=4 total_ms=0.083 submit_ms=0.016 sync_ms=0.067 cpu_ms=0.084 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=8 reps=5 med_total_ms=0.083 per_launch_ms=0.010 min_ms=0.083 max_ms=0.090 med_cpu_ms=0.084 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=16 rep=0 total_ms=0.162 submit_ms=0.031 sync_ms=0.132 cpu_ms=0.164 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=16 rep=1 total_ms=0.162 submit_ms=0.030 sync_ms=0.132 cpu_ms=0.163 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=16 rep=2 total_ms=0.163 submit_ms=0.032 sync_ms=0.131 cpu_ms=0.164 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=16 rep=3 total_ms=0.161 submit_ms=0.030 sync_ms=0.131 cpu_ms=0.163 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=16 rep=4 total_ms=0.162 submit_ms=0.031 sync_ms=0.131 cpu_ms=0.164 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=16 reps=5 med_total_ms=0.162 per_launch_ms=0.010 min_ms=0.161 max_ms=0.163 med_cpu_ms=0.164 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=32 rep=0 total_ms=0.319 submit_ms=0.059 sync_ms=0.260 cpu_ms=0.321 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=32 rep=1 total_ms=0.319 submit_ms=0.060 sync_ms=0.259 cpu_ms=0.321 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=32 rep=2 total_ms=0.319 submit_ms=0.063 sync_ms=0.256 cpu_ms=0.321 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=32 rep=3 total_ms=0.319 submit_ms=0.060 sync_ms=0.259 cpu_ms=0.321 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=32 rep=4 total_ms=0.318 submit_ms=0.058 sync_ms=0.260 cpu_ms=0.319 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=32 reps=5 med_total_ms=0.319 per_launch_ms=0.010 min_ms=0.318 max_ms=0.319 med_cpu_ms=0.321 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=64 rep=0 total_ms=0.633 submit_ms=0.120 sync_ms=0.513 cpu_ms=0.635 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=64 rep=1 total_ms=0.633 submit_ms=0.117 sync_ms=0.515 cpu_ms=0.634 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=64 rep=2 total_ms=0.634 submit_ms=0.130 sync_ms=0.504 cpu_ms=0.636 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=64 rep=3 total_ms=0.632 submit_ms=0.122 sync_ms=0.510 cpu_ms=0.634 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=64 rep=4 total_ms=0.635 submit_ms=0.132 sync_ms=0.502 cpu_ms=0.636 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=64 reps=5 med_total_ms=0.633 per_launch_ms=0.010 min_ms=0.632 max_ms=0.635 med_cpu_ms=0.635 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=128 K=128 rep=0 total_ms=1.261 submit_ms=0.243 sync_ms=1.018 cpu_ms=1.263 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=128 rep=1 total_ms=1.261 submit_ms=0.267 sync_ms=0.994 cpu_ms=1.263 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=128 rep=2 total_ms=1.261 submit_ms=0.237 sync_ms=1.025 cpu_ms=1.263 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=128 rep=3 total_ms=1.261 submit_ms=0.247 sync_ms=1.014 cpu_ms=1.262 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=128 K=128 rep=4 total_ms=1.262 submit_ms=0.238 sync_ms=1.023 cpu_ms=1.263 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=128 K=128 reps=5 med_total_ms=1.261 per_launch_ms=0.010 min_ms=1.261 max_ms=1.262 med_cpu_ms=1.263 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP_END N=128
+
+B128_N=128
+B128_ITERS=12
+B128_FIRST_MS=1.157
+B128_MEDIAN_MS=0.014
+B128_P90_MS=0.015
+B128_MIN_MS=0.013
+B128_MAX_MS=0.019
+B128_MEAN_MS=0.014
+B128_GFLOPS=302.379
+B128_BATCH=1
+B128_BATCH_TOTAL_MS=0.014
+B128_BATCH_PER_LAUNCH_MS=0.014
+B128_BATCH_GFLOPS=307.838
+B128_BATCH_BAD=0
+B128_H2D_MS=0.065
+B128_D2H_MED_MS=0.021
+B128_ALLOC_MS2=0.119
+B128_SUBMIT_MED_MS=0.002
+B128_SYNC_MED_MS=0.012
+B128_SYNC_CPU_MED_MS=0.012
+B128_SYNC_OFFCPU_MED_MS=0.000
+B128_SYNC_NVCSW_MED=0.0
+B128_SUBMIT_CPU_MED_MS=0.004
+B128_SUBMIT_MAX_MS=0.007
+B128_SYNC_MAX_MS=0.012
+B128_WINDOW_MONO_MS=362960439.213..362960441.592
+B128_BAD=0
+B128_MAXERR=0
+BSUM N=128 iters=12 first_ms=1.157 med_ms=0.014 p90_ms=0.015 min_ms=0.013 max_ms=0.019 gflops=302.379 batch_per_launch_ms=0.014 batch_gflops=307.838 h2d_ms=0.065 d2h_med_ms=0.021 submit_med_ms=0.002 sync_med_ms=0.012 sync_cpu_med_ms=0.012 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.004 bad=0 maxerr=0
+BENCH_SIZE_END N=128
+
+BENCH_SIZE_BEGIN N=512 per_matrix_MiB=1 device_MiB=3
+B512_ALLOC_MS=0.14
+B512_PTRS=A:0x7c7272200000,B:0x7c7272300000,C:0x7c7272400000
+B512_H2D_MS=0.56  (2 x 1 MiB)
+B512_GRID=(32,32)x(16,16)
+ITER N=512 i=0 launch_ms=0.362 submit_ms=0.005 sync_ms=0.358 t0_mono_ms=362960458.878 sub_cpu_ms=0.008 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=1 launch_ms=0.361 submit_ms=0.004 sync_ms=0.357 t0_mono_ms=362960460.624 sub_cpu_ms=0.007 syn_cpu_ms=0.357 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.261 syn_stime_ms=0.096 verified=yes bad=0
+ITER N=512 i=2 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960461.714 sub_cpu_ms=0.006 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=3 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960462.796 sub_cpu_ms=0.006 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=4 launch_ms=0.360 submit_ms=0.003 sync_ms=0.357 t0_mono_ms=362960463.846 sub_cpu_ms=0.005 syn_cpu_ms=0.357 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.357 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=5 launch_ms=0.360 submit_ms=0.003 sync_ms=0.357 t0_mono_ms=362960464.896 sub_cpu_ms=0.005 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=6 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960465.936 sub_cpu_ms=0.005 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.359 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=7 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960466.969 sub_cpu_ms=0.006 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.358 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=8 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960468.008 sub_cpu_ms=0.015 syn_cpu_ms=0.358 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.357 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=9 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960469.050 sub_cpu_ms=0.005 syn_cpu_ms=0.358 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.359 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=10 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960470.098 sub_cpu_ms=0.005 syn_cpu_ms=0.358 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.359 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=512 i=11 launch_ms=0.361 submit_ms=0.003 sync_ms=0.358 t0_mono_ms=362960471.144 sub_cpu_ms=0.005 syn_cpu_ms=0.359 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.359 syn_stime_ms=0.000 verified=yes bad=0
+
+BSWEEP_BEGIN N=512 reps=5 list=[1,2,4,8,16,32,64,128]
+BSWEEP N=512 K=1 rep=0 total_ms=0.360 submit_ms=0.003 sync_ms=0.358 cpu_ms=0.363 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=512 K=1 rep=1 total_ms=0.361 submit_ms=0.003 sync_ms=0.358 cpu_ms=0.363 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=1 rep=2 total_ms=0.360 submit_ms=0.003 sync_ms=0.357 cpu_ms=0.362 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=1 rep=3 total_ms=0.361 submit_ms=0.003 sync_ms=0.358 cpu_ms=0.363 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=1 rep=4 total_ms=0.361 submit_ms=0.003 sync_ms=0.358 cpu_ms=0.363 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=1 reps=5 med_total_ms=0.361 per_launch_ms=0.361 min_ms=0.360 max_ms=0.361 med_cpu_ms=0.363 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=2 rep=0 total_ms=0.717 submit_ms=0.005 sync_ms=0.711 cpu_ms=0.719 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=2 rep=1 total_ms=0.717 submit_ms=0.005 sync_ms=0.712 cpu_ms=0.719 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=2 rep=2 total_ms=0.718 submit_ms=0.005 sync_ms=0.713 cpu_ms=0.720 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=2 rep=3 total_ms=0.718 submit_ms=0.011 sync_ms=0.706 cpu_ms=0.720 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=2 rep=4 total_ms=0.715 submit_ms=0.005 sync_ms=0.710 cpu_ms=0.717 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=2 reps=5 med_total_ms=0.717 per_launch_ms=0.359 min_ms=0.715 max_ms=0.718 med_cpu_ms=0.719 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=4 rep=0 total_ms=1.428 submit_ms=0.009 sync_ms=1.419 cpu_ms=1.430 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=4 rep=1 total_ms=1.429 submit_ms=0.010 sync_ms=1.419 cpu_ms=1.432 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=4 rep=2 total_ms=1.429 submit_ms=0.009 sync_ms=1.421 cpu_ms=1.431 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=4 rep=3 total_ms=1.429 submit_ms=0.009 sync_ms=1.420 cpu_ms=1.431 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=4 rep=4 total_ms=1.431 submit_ms=0.008 sync_ms=1.423 cpu_ms=1.433 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=4 reps=5 med_total_ms=1.429 per_launch_ms=0.357 min_ms=1.428 max_ms=1.431 med_cpu_ms=1.431 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=8 rep=0 total_ms=2.856 submit_ms=0.018 sync_ms=2.838 cpu_ms=2.845 offcpu_ms=0.011 nvcsw=0 bad=0
+BSWEEP N=512 K=8 rep=1 total_ms=2.852 submit_ms=0.018 sync_ms=2.834 cpu_ms=2.855 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=8 rep=2 total_ms=2.853 submit_ms=0.018 sync_ms=2.835 cpu_ms=2.855 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=8 rep=3 total_ms=2.852 submit_ms=0.018 sync_ms=2.834 cpu_ms=2.854 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=8 rep=4 total_ms=2.851 submit_ms=0.017 sync_ms=2.834 cpu_ms=2.854 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=8 reps=5 med_total_ms=2.852 per_launch_ms=0.357 min_ms=2.851 max_ms=2.856 med_cpu_ms=2.854 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=16 rep=0 total_ms=5.705 submit_ms=0.031 sync_ms=5.674 cpu_ms=5.707 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=16 rep=1 total_ms=5.704 submit_ms=0.032 sync_ms=5.671 cpu_ms=5.706 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=16 rep=2 total_ms=5.701 submit_ms=0.031 sync_ms=5.670 cpu_ms=5.703 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=16 rep=3 total_ms=5.702 submit_ms=0.032 sync_ms=5.670 cpu_ms=5.704 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=16 rep=4 total_ms=5.702 submit_ms=0.031 sync_ms=5.671 cpu_ms=5.705 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=16 reps=5 med_total_ms=5.702 per_launch_ms=0.356 min_ms=5.701 max_ms=5.705 med_cpu_ms=5.705 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=32 rep=0 total_ms=11.399 submit_ms=0.065 sync_ms=11.334 cpu_ms=11.401 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=32 rep=1 total_ms=11.397 submit_ms=0.062 sync_ms=11.335 cpu_ms=11.399 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=32 rep=2 total_ms=11.404 submit_ms=0.064 sync_ms=11.340 cpu_ms=11.406 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=32 rep=3 total_ms=10.981 submit_ms=0.071 sync_ms=10.910 cpu_ms=10.984 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=32 rep=4 total_ms=10.882 submit_ms=0.064 sync_ms=10.818 cpu_ms=10.885 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=32 reps=5 med_total_ms=11.397 per_launch_ms=0.356 min_ms=10.882 max_ms=11.404 med_cpu_ms=11.399 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=64 rep=0 total_ms=21.757 submit_ms=0.131 sync_ms=21.626 cpu_ms=21.760 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=512 K=64 rep=1 total_ms=21.826 submit_ms=0.124 sync_ms=21.703 cpu_ms=21.829 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=64 rep=2 total_ms=21.929 submit_ms=0.123 sync_ms=21.806 cpu_ms=21.932 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=64 rep=3 total_ms=21.934 submit_ms=0.124 sync_ms=21.810 cpu_ms=21.930 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEP N=512 K=64 rep=4 total_ms=21.929 submit_ms=0.120 sync_ms=21.808 cpu_ms=21.931 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=64 reps=5 med_total_ms=21.929 per_launch_ms=0.343 min_ms=21.757 max_ms=21.934 med_cpu_ms=21.930 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=512 K=128 rep=0 total_ms=43.858 submit_ms=0.249 sync_ms=43.609 cpu_ms=43.860 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=128 rep=1 total_ms=43.866 submit_ms=0.238 sync_ms=43.628 cpu_ms=43.869 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=128 rep=2 total_ms=43.855 submit_ms=0.265 sync_ms=43.590 cpu_ms=43.857 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=128 rep=3 total_ms=43.864 submit_ms=0.249 sync_ms=43.615 cpu_ms=43.866 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=512 K=128 rep=4 total_ms=43.848 submit_ms=0.258 sync_ms=43.590 cpu_ms=43.850 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=512 K=128 reps=5 med_total_ms=43.858 per_launch_ms=0.343 min_ms=43.848 max_ms=43.866 med_cpu_ms=43.860 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP_END N=512
+
+B512_N=512
+B512_ITERS=12
+B512_FIRST_MS=0.362
+B512_MEDIAN_MS=0.361
+B512_P90_MS=0.361
+B512_MIN_MS=0.360
+B512_MAX_MS=0.361
+B512_MEAN_MS=0.361
+B512_GFLOPS=743.453
+B512_BATCH=1
+B512_BATCH_TOTAL_MS=0.361
+B512_BATCH_PER_LAUNCH_MS=0.361
+B512_BATCH_GFLOPS=742.782
+B512_BATCH_BAD=0
+B512_H2D_MS=0.562
+B512_D2H_MED_MS=0.236
+B512_ALLOC_MS2=0.144
+B512_SUBMIT_MED_MS=0.003
+B512_SYNC_MED_MS=0.358
+B512_SYNC_CPU_MED_MS=0.358
+B512_SYNC_OFFCPU_MED_MS=-0.000
+B512_SYNC_NVCSW_MED=0.0
+B512_SUBMIT_CPU_MED_MS=0.005
+B512_SUBMIT_MAX_MS=0.004
+B512_SYNC_MAX_MS=0.358
+B512_WINDOW_MONO_MS=362960458.878..362960471.505
+B512_BAD=0
+B512_MAXERR=0
+BSUM N=512 iters=12 first_ms=0.362 med_ms=0.361 p90_ms=0.361 min_ms=0.360 max_ms=0.361 gflops=743.453 batch_per_launch_ms=0.361 batch_gflops=742.782 h2d_ms=0.562 d2h_med_ms=0.236 submit_med_ms=0.003 sync_med_ms=0.358 sync_cpu_med_ms=0.358 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.005 bad=0 maxerr=0
+BENCH_SIZE_END N=512
+
+BENCH_SIZE_BEGIN N=1024 per_matrix_MiB=4 device_MiB=12
+B1024_ALLOC_MS=0.27
+B1024_PTRS=A:0x7c7272200000,B:0x7c7272600000,C:0x7c7272a00000
+B1024_H2D_MS=1.36  (2 x 4 MiB)
+B1024_GRID=(64,64)x(16,16)
+ITER N=1024 i=0 launch_ms=2.758 submit_ms=0.006 sync_ms=2.752 t0_mono_ms=362960942.482 sub_cpu_ms=0.010 syn_cpu_ms=2.752 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.751 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=1 launch_ms=2.758 submit_ms=0.007 sync_ms=2.751 t0_mono_ms=362960950.307 sub_cpu_ms=0.010 syn_cpu_ms=2.751 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.751 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=2 launch_ms=2.761 submit_ms=0.005 sync_ms=2.756 t0_mono_ms=362960955.448 sub_cpu_ms=0.008 syn_cpu_ms=2.756 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.756 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=3 launch_ms=2.760 submit_ms=0.005 sync_ms=2.754 t0_mono_ms=362960960.654 sub_cpu_ms=0.009 syn_cpu_ms=2.754 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.754 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=4 launch_ms=2.760 submit_ms=0.004 sync_ms=2.756 t0_mono_ms=362960965.792 sub_cpu_ms=0.007 syn_cpu_ms=2.756 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.756 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=5 launch_ms=2.757 submit_ms=0.005 sync_ms=2.752 t0_mono_ms=362960970.917 sub_cpu_ms=0.008 syn_cpu_ms=2.752 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.752 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=6 launch_ms=2.755 submit_ms=0.005 sync_ms=2.751 t0_mono_ms=362960976.081 sub_cpu_ms=0.008 syn_cpu_ms=2.751 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.750 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=7 launch_ms=2.754 submit_ms=0.004 sync_ms=2.750 t0_mono_ms=362960981.209 sub_cpu_ms=0.007 syn_cpu_ms=2.750 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.736 syn_stime_ms=0.014 verified=yes bad=0
+ITER N=1024 i=8 launch_ms=2.758 submit_ms=0.005 sync_ms=2.754 t0_mono_ms=362960986.325 sub_cpu_ms=0.007 syn_cpu_ms=2.754 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.754 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=9 launch_ms=2.758 submit_ms=0.004 sync_ms=2.754 t0_mono_ms=362960991.446 sub_cpu_ms=0.007 syn_cpu_ms=2.754 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.754 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=10 launch_ms=2.753 submit_ms=0.004 sync_ms=2.749 t0_mono_ms=362960996.570 sub_cpu_ms=0.007 syn_cpu_ms=2.749 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.749 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=1024 i=11 launch_ms=2.753 submit_ms=0.004 sync_ms=2.749 t0_mono_ms=362961001.703 sub_cpu_ms=0.007 syn_cpu_ms=2.749 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=2.748 syn_stime_ms=0.000 verified=yes bad=0
+
+BSWEEP_BEGIN N=1024 reps=5 list=[1,2,4,8,16,32,64,128]
+BSWEEP N=1024 K=1 rep=0 total_ms=2.755 submit_ms=0.005 sync_ms=2.750 cpu_ms=2.758 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=1 rep=1 total_ms=2.756 submit_ms=0.005 sync_ms=2.751 cpu_ms=2.759 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=1 rep=2 total_ms=2.758 submit_ms=0.005 sync_ms=2.754 cpu_ms=2.762 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=1 rep=3 total_ms=2.759 submit_ms=0.004 sync_ms=2.755 cpu_ms=2.762 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=1 rep=4 total_ms=2.761 submit_ms=0.005 sync_ms=2.756 cpu_ms=2.764 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=1 reps=5 med_total_ms=2.758 per_launch_ms=2.758 min_ms=2.755 max_ms=2.761 med_cpu_ms=2.762 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=2 rep=0 total_ms=5.497 submit_ms=0.006 sync_ms=5.491 cpu_ms=5.500 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=2 rep=1 total_ms=5.502 submit_ms=0.007 sync_ms=5.496 cpu_ms=5.506 offcpu_ms=-0.004 nvcsw=0 bad=0
+BSWEEP N=1024 K=2 rep=2 total_ms=5.504 submit_ms=0.008 sync_ms=5.496 cpu_ms=5.507 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=2 rep=3 total_ms=5.506 submit_ms=0.008 sync_ms=5.498 cpu_ms=5.509 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=2 rep=4 total_ms=5.514 submit_ms=0.007 sync_ms=5.507 cpu_ms=5.516 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=2 reps=5 med_total_ms=5.504 per_launch_ms=2.752 min_ms=5.497 max_ms=5.514 med_cpu_ms=5.507 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=4 rep=0 total_ms=10.999 submit_ms=0.011 sync_ms=10.989 cpu_ms=11.002 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=4 rep=1 total_ms=11.000 submit_ms=0.011 sync_ms=10.989 cpu_ms=11.003 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=4 rep=2 total_ms=11.007 submit_ms=0.013 sync_ms=10.994 cpu_ms=11.009 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=4 rep=3 total_ms=11.002 submit_ms=0.011 sync_ms=10.990 cpu_ms=11.004 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=4 rep=4 total_ms=11.000 submit_ms=0.011 sync_ms=10.989 cpu_ms=11.003 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=4 reps=5 med_total_ms=11.000 per_launch_ms=2.750 min_ms=10.999 max_ms=11.007 med_cpu_ms=11.003 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=8 rep=0 total_ms=22.002 submit_ms=0.019 sync_ms=21.983 cpu_ms=22.005 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=8 rep=1 total_ms=21.989 submit_ms=0.019 sync_ms=21.970 cpu_ms=21.992 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=8 rep=2 total_ms=21.989 submit_ms=0.019 sync_ms=21.970 cpu_ms=21.992 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=8 rep=3 total_ms=22.003 submit_ms=0.021 sync_ms=21.982 cpu_ms=22.006 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=8 rep=4 total_ms=22.003 submit_ms=0.020 sync_ms=21.984 cpu_ms=22.006 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=8 reps=5 med_total_ms=22.002 per_launch_ms=2.750 min_ms=21.989 max_ms=22.003 med_cpu_ms=22.005 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=16 rep=0 total_ms=44.058 submit_ms=0.035 sync_ms=44.023 cpu_ms=44.061 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=16 rep=1 total_ms=44.239 submit_ms=0.035 sync_ms=44.205 cpu_ms=44.242 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=16 rep=2 total_ms=44.244 submit_ms=0.035 sync_ms=44.209 cpu_ms=44.238 offcpu_ms=0.006 nvcsw=0 bad=0
+BSWEEP N=1024 K=16 rep=3 total_ms=44.257 submit_ms=0.039 sync_ms=44.219 cpu_ms=44.261 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=16 rep=4 total_ms=44.335 submit_ms=0.035 sync_ms=44.300 cpu_ms=44.338 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=16 reps=5 med_total_ms=44.244 per_launch_ms=2.765 min_ms=44.058 max_ms=44.335 med_cpu_ms=44.242 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=32 rep=0 total_ms=88.754 submit_ms=0.064 sync_ms=88.689 cpu_ms=88.756 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=32 rep=1 total_ms=88.727 submit_ms=0.068 sync_ms=88.659 cpu_ms=88.729 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=1024 K=32 rep=2 total_ms=88.820 submit_ms=0.074 sync_ms=88.745 cpu_ms=88.822 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=1024 K=32 rep=3 total_ms=88.945 submit_ms=0.065 sync_ms=88.880 cpu_ms=88.941 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEP N=1024 K=32 rep=4 total_ms=88.911 submit_ms=0.072 sync_ms=88.839 cpu_ms=88.914 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=32 reps=5 med_total_ms=88.820 per_launch_ms=2.776 min_ms=88.727 max_ms=88.945 med_cpu_ms=88.822 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=64 rep=0 total_ms=178.951 submit_ms=0.130 sync_ms=178.822 cpu_ms=178.945 offcpu_ms=0.006 nvcsw=0 bad=0
+BSWEEP N=1024 K=64 rep=1 total_ms=178.176 submit_ms=0.134 sync_ms=178.042 cpu_ms=178.169 offcpu_ms=0.006 nvcsw=0 bad=0
+BSWEEP N=1024 K=64 rep=2 total_ms=177.836 submit_ms=0.127 sync_ms=177.709 cpu_ms=177.828 offcpu_ms=0.008 nvcsw=0 bad=0
+BSWEEP N=1024 K=64 rep=3 total_ms=177.435 submit_ms=0.128 sync_ms=177.307 cpu_ms=177.438 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=1024 K=64 rep=4 total_ms=177.520 submit_ms=0.128 sync_ms=177.391 cpu_ms=177.523 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=64 reps=5 med_total_ms=177.836 per_launch_ms=2.779 min_ms=177.435 max_ms=178.951 med_cpu_ms=177.828 med_offcpu_ms=0.006 med_nvcsw=0.0 bad=0
+BSWEEP N=1024 K=128 rep=0 total_ms=356.722 submit_ms=0.259 sync_ms=356.463 cpu_ms=356.724 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=1024 K=128 rep=1 total_ms=356.207 submit_ms=0.253 sync_ms=355.954 cpu_ms=356.202 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEP N=1024 K=128 rep=2 total_ms=356.161 submit_ms=0.244 sync_ms=355.918 cpu_ms=356.157 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEP N=1024 K=128 rep=3 total_ms=356.613 submit_ms=0.280 sync_ms=356.333 cpu_ms=356.599 offcpu_ms=0.014 nvcsw=0 bad=0
+BSWEEP N=1024 K=128 rep=4 total_ms=356.034 submit_ms=0.256 sync_ms=355.778 cpu_ms=356.029 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEPSUM N=1024 K=128 reps=5 med_total_ms=356.207 per_launch_ms=2.783 min_ms=356.034 max_ms=356.722 med_cpu_ms=356.202 med_offcpu_ms=0.005 med_nvcsw=0.0 bad=0
+BSWEEP_END N=1024
+
+B1024_N=1024
+B1024_ITERS=12
+B1024_FIRST_MS=2.758
+B1024_MEDIAN_MS=2.758
+B1024_P90_MS=2.760
+B1024_MIN_MS=2.753
+B1024_MAX_MS=2.761
+B1024_MEAN_MS=2.757
+B1024_GFLOPS=778.705
+B1024_BATCH=1
+B1024_BATCH_TOTAL_MS=2.760
+B1024_BATCH_PER_LAUNCH_MS=2.760
+B1024_BATCH_GFLOPS=778.134
+B1024_BATCH_BAD=0
+B1024_H2D_MS=1.365
+B1024_D2H_MED_MS=0.647
+B1024_ALLOC_MS2=0.275
+B1024_SUBMIT_MED_MS=0.005
+B1024_SYNC_MED_MS=2.752
+B1024_SYNC_CPU_MED_MS=2.752
+B1024_SYNC_OFFCPU_MED_MS=-0.000
+B1024_SYNC_NVCSW_MED=0.0
+B1024_SUBMIT_CPU_MED_MS=0.007
+B1024_SUBMIT_MAX_MS=0.007
+B1024_SYNC_MAX_MS=2.756
+B1024_WINDOW_MONO_MS=362960942.482..362961004.456
+B1024_BAD=0
+B1024_MAXERR=0
+BSUM N=1024 iters=12 first_ms=2.758 med_ms=2.758 p90_ms=2.760 min_ms=2.753 max_ms=2.761 gflops=778.705 batch_per_launch_ms=2.760 batch_gflops=778.134 h2d_ms=1.365 d2h_med_ms=0.647 submit_med_ms=0.005 sync_med_ms=2.752 sync_cpu_med_ms=2.752 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.007 bad=0 maxerr=0
+BENCH_SIZE_END N=1024
+
+BENCH_SIZE_BEGIN N=2048 per_matrix_MiB=16 device_MiB=48
+B2048_ALLOC_MS=0.34
+B2048_PTRS=A:0x7c7272200000,B:0x7c7275000000,C:0x7c7268000000
+B2048_H2D_MS=4.71  (2 x 16 MiB)
+B2048_GRID=(128,128)x(16,16)
+ITER N=2048 i=0 launch_ms=22.328 submit_ms=0.008 sync_ms=22.320 t0_mono_ms=362964658.228 sub_cpu_ms=0.012 syn_cpu_ms=22.313 syn_offcpu_ms=0.007 syn_nvcsw=0 syn_nivcsw=1 syn_utime_ms=22.223 syn_stime_ms=0.090 verified=yes bad=0
+ITER N=2048 i=1 launch_ms=22.331 submit_ms=0.015 sync_ms=22.316 t0_mono_ms=362964700.423 sub_cpu_ms=0.019 syn_cpu_ms=22.316 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.225 syn_stime_ms=0.091 verified=yes bad=0
+ITER N=2048 i=2 launch_ms=22.327 submit_ms=0.007 sync_ms=22.320 t0_mono_ms=362964731.928 sub_cpu_ms=0.010 syn_cpu_ms=22.320 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.320 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=3 launch_ms=22.328 submit_ms=0.006 sync_ms=22.322 t0_mono_ms=362964763.411 sub_cpu_ms=0.009 syn_cpu_ms=22.322 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.322 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=4 launch_ms=22.320 submit_ms=0.006 sync_ms=22.314 t0_mono_ms=362964794.845 sub_cpu_ms=0.008 syn_cpu_ms=22.314 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.315 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=5 launch_ms=22.327 submit_ms=0.005 sync_ms=22.321 t0_mono_ms=362964826.246 sub_cpu_ms=0.008 syn_cpu_ms=22.321 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.321 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=6 launch_ms=22.323 submit_ms=0.005 sync_ms=22.319 t0_mono_ms=362964857.650 sub_cpu_ms=0.007 syn_cpu_ms=22.319 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.318 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=7 launch_ms=22.326 submit_ms=0.006 sync_ms=22.319 t0_mono_ms=362964889.013 sub_cpu_ms=0.009 syn_cpu_ms=22.319 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.319 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=8 launch_ms=22.502 submit_ms=0.005 sync_ms=22.497 t0_mono_ms=362964920.357 sub_cpu_ms=0.008 syn_cpu_ms=22.497 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.497 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=9 launch_ms=22.325 submit_ms=0.005 sync_ms=22.320 t0_mono_ms=362964951.996 sub_cpu_ms=0.008 syn_cpu_ms=22.320 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.320 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=10 launch_ms=22.330 submit_ms=0.005 sync_ms=22.325 t0_mono_ms=362964983.388 sub_cpu_ms=0.008 syn_cpu_ms=22.325 syn_offcpu_ms=-0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.325 syn_stime_ms=0.000 verified=yes bad=0
+ITER N=2048 i=11 launch_ms=22.334 submit_ms=0.006 sync_ms=22.328 t0_mono_ms=362965014.804 sub_cpu_ms=0.009 syn_cpu_ms=22.328 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=22.328 syn_stime_ms=0.000 verified=yes bad=0
+
+BSWEEP_BEGIN N=2048 reps=5 list=[1,2,4,8,16,32,64,128]
+BSWEEP N=2048 K=1 rep=0 total_ms=22.323 submit_ms=0.006 sync_ms=22.317 cpu_ms=22.327 offcpu_ms=-0.004 nvcsw=0 bad=0
+BSWEEP N=2048 K=1 rep=1 total_ms=22.324 submit_ms=0.007 sync_ms=22.317 cpu_ms=22.327 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=1 rep=2 total_ms=22.322 submit_ms=0.005 sync_ms=22.317 cpu_ms=22.325 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=1 rep=3 total_ms=22.325 submit_ms=0.006 sync_ms=22.320 cpu_ms=22.329 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=1 rep=4 total_ms=22.323 submit_ms=0.006 sync_ms=22.317 cpu_ms=22.326 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=1 reps=5 med_total_ms=22.323 per_launch_ms=22.323 min_ms=22.322 max_ms=22.325 med_cpu_ms=22.327 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=2 rep=0 total_ms=44.743 submit_ms=0.009 sync_ms=44.735 cpu_ms=44.746 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=2 rep=1 total_ms=44.690 submit_ms=0.008 sync_ms=44.682 cpu_ms=44.693 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=2 rep=2 total_ms=44.861 submit_ms=0.009 sync_ms=44.852 cpu_ms=44.855 offcpu_ms=0.006 nvcsw=0 bad=0
+BSWEEP N=2048 K=2 rep=3 total_ms=44.853 submit_ms=0.009 sync_ms=44.844 cpu_ms=44.856 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=2 rep=4 total_ms=44.821 submit_ms=0.010 sync_ms=44.811 cpu_ms=44.824 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=2 reps=5 med_total_ms=44.821 per_launch_ms=22.410 min_ms=44.690 max_ms=44.861 med_cpu_ms=44.824 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=4 rep=0 total_ms=89.858 submit_ms=0.013 sync_ms=89.845 cpu_ms=89.861 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=4 rep=1 total_ms=89.876 submit_ms=0.014 sync_ms=89.862 cpu_ms=89.879 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=4 rep=2 total_ms=89.829 submit_ms=0.013 sync_ms=89.815 cpu_ms=89.832 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=4 rep=3 total_ms=89.751 submit_ms=0.014 sync_ms=89.737 cpu_ms=89.754 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEP N=2048 K=4 rep=4 total_ms=90.142 submit_ms=0.014 sync_ms=90.128 cpu_ms=90.145 offcpu_ms=-0.003 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=4 reps=5 med_total_ms=89.858 per_launch_ms=22.465 min_ms=89.751 max_ms=90.142 med_cpu_ms=89.861 med_offcpu_ms=-0.003 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=8 rep=0 total_ms=180.048 submit_ms=0.021 sync_ms=180.027 cpu_ms=180.050 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=2048 K=8 rep=1 total_ms=179.834 submit_ms=0.020 sync_ms=179.813 cpu_ms=179.836 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=2048 K=8 rep=2 total_ms=180.220 submit_ms=0.021 sync_ms=180.198 cpu_ms=180.214 offcpu_ms=0.005 nvcsw=0 bad=0
+BSWEEP N=2048 K=8 rep=3 total_ms=180.690 submit_ms=0.021 sync_ms=180.669 cpu_ms=180.692 offcpu_ms=-0.002 nvcsw=0 bad=0
+BSWEEP N=2048 K=8 rep=4 total_ms=180.930 submit_ms=0.022 sync_ms=180.907 cpu_ms=180.934 offcpu_ms=-0.004 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=8 reps=5 med_total_ms=180.220 per_launch_ms=22.527 min_ms=179.834 max_ms=180.930 med_cpu_ms=180.214 med_offcpu_ms=-0.002 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=16 rep=0 total_ms=361.348 submit_ms=0.038 sync_ms=361.310 cpu_ms=361.351 offcpu_ms=-0.004 nvcsw=0 bad=0
+BSWEEP N=2048 K=16 rep=1 total_ms=361.812 submit_ms=0.040 sync_ms=361.772 cpu_ms=361.801 offcpu_ms=0.011 nvcsw=0 bad=0
+BSWEEP N=2048 K=16 rep=2 total_ms=362.074 submit_ms=0.037 sync_ms=362.037 cpu_ms=362.069 offcpu_ms=0.006 nvcsw=0 bad=0
+BSWEEP N=2048 K=16 rep=3 total_ms=361.732 submit_ms=0.050 sync_ms=361.682 cpu_ms=361.727 offcpu_ms=0.004 nvcsw=0 bad=0
+BSWEEP N=2048 K=16 rep=4 total_ms=362.169 submit_ms=0.036 sync_ms=362.133 cpu_ms=362.165 offcpu_ms=0.004 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=16 reps=5 med_total_ms=361.812 per_launch_ms=22.613 min_ms=361.348 max_ms=362.169 med_cpu_ms=361.801 med_offcpu_ms=0.004 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=32 rep=0 total_ms=726.366 submit_ms=0.065 sync_ms=726.301 cpu_ms=726.357 offcpu_ms=0.009 nvcsw=0 bad=0
+BSWEEP N=2048 K=32 rep=1 total_ms=727.163 submit_ms=0.066 sync_ms=727.098 cpu_ms=727.164 offcpu_ms=-0.001 nvcsw=0 bad=0
+BSWEEP N=2048 K=32 rep=2 total_ms=726.587 submit_ms=0.068 sync_ms=726.518 cpu_ms=726.580 offcpu_ms=0.007 nvcsw=0 bad=0
+BSWEEP N=2048 K=32 rep=3 total_ms=726.933 submit_ms=0.066 sync_ms=726.867 cpu_ms=726.919 offcpu_ms=0.013 nvcsw=0 bad=0
+BSWEEP N=2048 K=32 rep=4 total_ms=727.205 submit_ms=0.067 sync_ms=727.139 cpu_ms=727.186 offcpu_ms=0.019 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=32 reps=5 med_total_ms=726.933 per_launch_ms=22.717 min_ms=726.366 max_ms=727.205 med_cpu_ms=726.919 med_offcpu_ms=0.009 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=64 rep=0 total_ms=1455.752 submit_ms=0.123 sync_ms=1455.628 cpu_ms=1455.680 offcpu_ms=0.072 nvcsw=0 bad=0
+BSWEEP N=2048 K=64 rep=1 total_ms=1457.324 submit_ms=0.136 sync_ms=1457.188 cpu_ms=1457.301 offcpu_ms=0.023 nvcsw=0 bad=0
+BSWEEP N=2048 K=64 rep=2 total_ms=1457.263 submit_ms=0.139 sync_ms=1457.124 cpu_ms=1457.243 offcpu_ms=0.020 nvcsw=0 bad=0
+BSWEEP N=2048 K=64 rep=3 total_ms=1457.441 submit_ms=0.129 sync_ms=1457.312 cpu_ms=1457.423 offcpu_ms=0.018 nvcsw=0 bad=0
+BSWEEP N=2048 K=64 rep=4 total_ms=1458.100 submit_ms=0.126 sync_ms=1457.975 cpu_ms=1458.036 offcpu_ms=0.064 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=64 reps=5 med_total_ms=1457.324 per_launch_ms=22.771 min_ms=1455.752 max_ms=1458.100 med_cpu_ms=1457.301 med_offcpu_ms=0.023 med_nvcsw=0.0 bad=0
+BSWEEP N=2048 K=128 rep=0 total_ms=2919.051 submit_ms=0.263 sync_ms=2918.788 cpu_ms=2918.965 offcpu_ms=0.086 nvcsw=0 bad=0
+BSWEEP N=2048 K=128 rep=1 total_ms=2919.423 submit_ms=0.239 sync_ms=2919.184 cpu_ms=2919.335 offcpu_ms=0.088 nvcsw=0 bad=0
+BSWEEP N=2048 K=128 rep=2 total_ms=2920.236 submit_ms=0.248 sync_ms=2919.988 cpu_ms=2920.180 offcpu_ms=0.056 nvcsw=0 bad=0
+BSWEEP N=2048 K=128 rep=3 total_ms=2922.523 submit_ms=0.244 sync_ms=2922.279 cpu_ms=2922.451 offcpu_ms=0.072 nvcsw=0 bad=0
+BSWEEP N=2048 K=128 rep=4 total_ms=2930.125 submit_ms=0.258 sync_ms=2929.867 cpu_ms=2930.050 offcpu_ms=0.075 nvcsw=0 bad=0
+BSWEEPSUM N=2048 K=128 reps=5 med_total_ms=2920.236 per_launch_ms=22.814 min_ms=2919.051 max_ms=2930.125 med_cpu_ms=2920.180 med_offcpu_ms=0.075 med_nvcsw=0.0 bad=0
+BSWEEP_END N=2048
+
+B2048_N=2048
+B2048_ITERS=12
+B2048_FIRST_MS=22.328
+B2048_MEDIAN_MS=22.327
+B2048_P90_MS=22.334
+B2048_MIN_MS=22.320
+B2048_MAX_MS=22.502
+B2048_MEAN_MS=22.343
+B2048_GFLOPS=769.470
+B2048_BATCH=1
+B2048_BATCH_TOTAL_MS=22.324
+B2048_BATCH_PER_LAUNCH_MS=22.324
+B2048_BATCH_GFLOPS=769.567
+B2048_BATCH_BAD=0
+B2048_H2D_MS=4.712
+B2048_D2H_MED_MS=2.259
+B2048_ALLOC_MS2=0.341
+B2048_SUBMIT_MED_MS=0.006
+B2048_SYNC_MED_MS=22.320
+B2048_SYNC_CPU_MED_MS=22.320
+B2048_SYNC_OFFCPU_MED_MS=0.000
+B2048_SYNC_NVCSW_MED=0.0
+B2048_SUBMIT_CPU_MED_MS=0.008
+B2048_SUBMIT_MAX_MS=0.015
+B2048_SYNC_MAX_MS=22.497
+B2048_WINDOW_MONO_MS=362964658.228..362965037.138
+B2048_BAD=0
+B2048_MAXERR=0
+BSUM N=2048 iters=12 first_ms=22.328 med_ms=22.327 p90_ms=22.334 min_ms=22.320 max_ms=22.502 gflops=769.470 batch_per_launch_ms=22.324 batch_gflops=769.567 h2d_ms=4.712 d2h_med_ms=2.259 submit_med_ms=0.006 sync_med_ms=22.320 sync_cpu_med_ms=22.320 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.008 bad=0 maxerr=0
+BENCH_SIZE_END N=2048
+BENCH_CLOCK_END mono_ms=362994391.176 real_ms=1786730760078.432
+
+BENCH_SIZES_DONE=4
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+DONE
+NATIVE_RC=0
+NATIVE_WALL_S=36
+
+=== GPU STATE AFTER ===
+0 MiB, 3 %
+=== W311 NATIVE EXIT rc=0 at 2026-08-14T18:06:02+00:00 ===

@@ -85,6 +85,12 @@ extern int cuCtxCreate_v2(CUcontext *, unsigned int, CUdevice);
 extern int cuModuleLoadData(CUmodule *, const void *);
 extern int cuModuleGetFunction(CUfunction *, CUmodule, const char *);
 extern int cuMemAlloc_v2(CUdeviceptr *, size_t);
+/* w320 BENCH_HOSTMEM: pinned HOST memory, mapped into the device's address space. The kernel
+ * then reaches its operands over PCIe instead of out of VRAM — which is the arrangement our
+ * guest's buffers are alleged to be in. */
+extern int cuMemHostAlloc(void **, size_t, unsigned int);
+extern int cuMemHostGetDevicePointer_v2(CUdeviceptr *, void *, unsigned int);
+extern int cuMemFreeHost(void *);
 extern int cuMemFree_v2(CUdeviceptr);
 extern int cuMemcpyHtoD_v2(CUdeviceptr, const void *, size_t);
 extern int cuMemcpyDtoH_v2(void *, CUdeviceptr, size_t);
@@ -226,6 +232,9 @@ int main(void){
      * if it is below CUDA's scheduling choice, all three read the same. ⊘ A separate arm, not
      * a default: it changes the workload. */
     unsigned CTXFLAGS = (e=getenv("BENCH_CTX_FLAGS")) ? (unsigned)strtoul(e,NULL,0) : 0u;
+    /* ★★★ w320 — operands in PINNED HOST MEMORY rather than VRAM. See the block at the
+     * allocation site for what this controls for and what it cannot prove. ⊘ Default OFF. */
+    int HOSTMEM = (e=getenv("BENCH_HOSTMEM")) ? atoi(e) : 0;
     if(ITERS<2)  ITERS=2;
     if(BATCH<1)  BATCH=1;
     if(VERIFY<1) VERIFY=1;
@@ -233,8 +242,8 @@ int main(void){
 
     printf("BENCH_BUILD sizes=[%s] iters=%d batch=%d verify_every=%d nolaunch=%d\n",
            sizes_s,ITERS,BATCH,VERIFY,NOLAUNCH); fflush(stdout);
-    printf("BENCH_W320 batch_sweep=[%s] batch_reps=%d ctx_flags=0x%x\n",
-           sweep_s,SWEEP_REPS,CTXFLAGS); fflush(stdout);
+    printf("BENCH_W320 batch_sweep=[%s] batch_reps=%d ctx_flags=0x%x hostmem=%d\n",
+           sweep_s,SWEEP_REPS,CTXFLAGS,HOSTMEM); fflush(stdout);
     { /* ⊘ An instrument that silently degrades is worse than one that is absent: if this
        * kernel has no per-thread CPU clock, the whole §3.1 breakdown is meaningless and must
        * say so HERE rather than print zeros that read as "the thread never ran". */
@@ -287,8 +296,35 @@ int main(void){
         for(unsigned k=0;k<N;k++) for(unsigned j=0;j<N;j++) hB[(size_t)k*N+j]=(float)((j&3u)+1u);
 
         CUdeviceptr dA,dB,dC;
+        void *pA=NULL,*pB=NULL,*pC=NULL;
         t=now_ms();
-        CQ(cuMemAlloc_v2(&dA,sz)); CQ(cuMemAlloc_v2(&dB,sz)); CQ(cuMemAlloc_v2(&dC,sz));
+        if(HOSTMEM){
+            /* ★★★★★ w320 — THE MECHANISM CONTROL, AND IT RUNS NATIVELY WITH NO GUEST.
+             *
+             * w320 measured the guest's kernel running 22-81x slower than the IDENTICAL kernel
+             * native on the same GA106, with the submit path already down to ~4 ms. The leading
+             * candidate is placement: this tree records that 99.4 % of our address table is
+             * GUEST RAM, so the operands may be reached over PCIe rather than out of VRAM, and
+             * `mm` is a naive triple loop that is entirely global-load-bound.
+             *
+             * ⊘ A MAGNITUDE THAT MATCHES IS NOT A MECHANISM — this campaign has paid for that
+             *   three times. So the hypothesis is not argued from the ratio; it is REPRODUCED
+             *   BY CONSTRUCTION: same GPU, same kernel, same program, no hypervisor anywhere,
+             *   with the ONLY variable being that the operands live in pinned host memory.
+             *   If that alone reproduces the slowdown, placement is sufficient to explain it.
+             *   If it does not, the hypothesis is refuted and the cost is somewhere else.
+             * ⚠ Sufficiency is not identity: reproducing the magnitude here would NOT prove our
+             *   guest's buffers are placed this way, only that this placement costs this much.
+             *   Where our buffers actually are is a separate measurement.
+             *   CU_MEMHOSTALLOC_DEVICEMAP = 0x02. */
+            CQ(cuMemHostAlloc(&pA,sz,0x02)); CQ(cuMemHostAlloc(&pB,sz,0x02));
+            CQ(cuMemHostAlloc(&pC,sz,0x02));
+            CQ(cuMemHostGetDevicePointer_v2(&dA,pA,0));
+            CQ(cuMemHostGetDevicePointer_v2(&dB,pB,0));
+            CQ(cuMemHostGetDevicePointer_v2(&dC,pC,0));
+        } else {
+            CQ(cuMemAlloc_v2(&dA,sz)); CQ(cuMemAlloc_v2(&dB,sz)); CQ(cuMemAlloc_v2(&dC,sz));
+        }
         double alloc_ms = now_ms()-t;
         printf("B%u_ALLOC_MS=%.2f\n",N,alloc_ms);
         printf("B%u_PTRS=A:0x%llx,B:0x%llx,C:0x%llx\n",N,
@@ -604,7 +640,8 @@ int main(void){
         free(ssub); free(ssyn); free(sub); free(syn); free(abs0);
         free(scpu); free(soff); free(scsw); free(sbcp);
         free(sub_cpu); free(syn_cpu); free(syn_off); free(syn_csw);
-        cuMemFree_v2(dA); cuMemFree_v2(dB); cuMemFree_v2(dC);
+        if(HOSTMEM){ cuMemFreeHost(pA); cuMemFreeHost(pB); cuMemFreeHost(pC); }
+        else       { cuMemFree_v2(dA); cuMemFree_v2(dB); cuMemFree_v2(dC); }
         free(hA); free(hB); free(hC);
     }
     free(sl);

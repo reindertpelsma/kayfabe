@@ -35,6 +35,7 @@ BATCH=${BENCH_BATCH:-20}
 #   experiment as the guest arm. ⊘ Default empty/0, so a caller that does not set them gets
 #   w311's arm unchanged and the two rungs' native logs stay comparable.
 SWEEP=${BENCH_BATCH_SWEEP:-}
+HOSTMEM=${BENCH_HOSTMEM:-0}
 REPS=${BENCH_BATCH_REPS:-5}
 CTXF=${BENCH_CTX_FLAGS:-0}
 
@@ -86,7 +87,7 @@ echo ""
 echo "=== ★★★★★ THE NATIVE MEASUREMENT ==="
 START=$(date +%s)
 ( cd "$WORK" && BENCH_SIZES="$SIZES" BENCH_ITERS="$ITERS" BENCH_BATCH="$BATCH" \
-  BENCH_BATCH_SWEEP="$SWEEP" BENCH_BATCH_REPS="$REPS" BENCH_CTX_FLAGS="$CTXF" ./cup8bench )
+  BENCH_BATCH_SWEEP="$SWEEP" BENCH_BATCH_REPS="$REPS" BENCH_CTX_FLAGS="$CTXF" BENCH_HOSTMEM="$HOSTMEM" ./cup8bench )
 RC=$?
 END=$(date +%s)
 echo "NATIVE_RC=$RC"
