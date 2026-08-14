@@ -580,6 +580,13 @@ impl DeclaredUserd {
         }
     }
 
+    /// This USERD's resolved physical placement, as one log-shaped token.
+    ///
+    /// ⊘ **`UNREADABLE` and `UNDECLARED` are different answers and both are printed by
+    /// name.** `None` is *"nothing resolved this"*; `Undeclared` is *"it resolved, and the
+    /// channel declared no address space"* — collapsing either onto `0` would make a
+    /// missing measurement look like a measured zero, which is the `dlen=0` class in a log
+    /// line.
     #[must_use]
     pub fn resolved_tag(&self) -> String {
         match self.resolved {
