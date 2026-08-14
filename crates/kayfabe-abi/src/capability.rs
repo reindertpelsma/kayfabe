@@ -251,6 +251,16 @@ pub enum DeniedBecause {
     /// ★★★ **SM-level debugger / profiler trapping, which this port does not model — and
     /// `NV83DE` resume is NOT MMU fault replay.**
     ///
+    /// ⊘⊘⊘ **SCOPE CORRECTED 2026-08-14 (w296), OWNER RULING — this variant NO LONGER DENIES
+    /// A CLASS.** `GT200_DEBUGGER` (`0x83de`) was on [`DENIED_CLASSES`] citing this reason
+    /// and is now on the class ALLOWLIST: nvproxy gates it on ORDINARY COMPUTE capability,
+    /// and a denial the guest routes around is not a boundary. ⇒ Everything below is still
+    /// true as a description of what this port does not MODEL, and it now justifies only the
+    /// five `0x83de03xx` rows on [`DENIED_CONTROLS`] — the CONTROLS, never the alloc.
+    /// ⚠ The paragraph about the surface being *"reachable by an unprivileged guest
+    /// application"* is the ARGUMENT THE OWNER USED TO ADMIT IT, read the other way round:
+    /// unprivileged reachability is why gVisor treats it as baseline compute.
+    ///
     /// The two share no code. MMU replay is `MEM_OP_C.TLB_INVALIDATE_REPLAY` on a
     /// pushbuffer (`ogkm-580: kernel-open/nvidia-uvm/uvm_volta_host.c:234-264`);
     /// `NV83DE_CTRL_CMD_DEBUG_RESUME_CONTEXT` resumes a *warp* from an SM exception. This
@@ -2605,6 +2615,11 @@ mod tests {
     /// (see [`DENIED_CONTROLS`]'s doc). 90 classes at 580 = the C's 89 plus
     /// `NVCEB7`/`NVD1B7`, which nvproxy adds at 580.65.06 and the C's 575-era list
     /// therefore could not have, **minus `GT200_DEBUGGER`**, moved for the same reason.
+    /// ⊘ **STALE AS OF 2026-08-14 (w296): the `minus GT200_DEBUGGER` term is GONE** — the
+    /// class was re-admitted by owner ruling, which is the `+1` the current numbers carry.
+    /// The derivation is kept as written because it explains how the figure was ORIGINALLY
+    /// arrived at, and rewriting history in a ratchet's doc is how a ratchet stops being
+    /// auditable.
     ///
     /// ★ The four class counts move together because `GT200_DEBUGGER` was in the SHARED
     /// base: a class this port never modelled was permitted at *every* boundary, which is
