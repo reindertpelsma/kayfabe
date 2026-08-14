@@ -50,6 +50,18 @@ Each clause has a known way of being violated in this tree:
 
 - **4000 ms** — `scrubberDestruct` waiting on `pCeUtils->lastCompletedPayload == lastSubmittedPayload`
   (`ce_utils.c:349`; the guest's own `NVRM: scrubberDestruct: Timed out …` line is the symptom).
+- ★★★ **4 000 000 µs (4 s) / 30 000 000 µs (30 s)** — `[w326, 2026-08-14]` `gpuCheckTimeout` on
+  the **TLB-invalidate** plane, i.e. how long the guest will spin in
+  `kgmmuCheckPendingInvalidates` before it gives up on a `TRIGGER` we never cleared. Recovered
+  rather than guessed: `kgmmuInvalidateTlb_GM107:64` arms `GPU_TIMEOUT_DEFAULT`, which is `0`
+  ⇒ `pTD->defaultus`, which `osGetTimeoutParams` sets to **4 s in GRAPHICS mode** and **30 s in
+  COMPUTE mode** (`os.c:1961-2003`). ⚠ It is **dynamic**: `gpuChangeComputeModeRefCount` re-arms
+  it when the compute refcount crosses 0↔1 (`gpu.c:303-343`), so a `cup3` guest is on 4 s until
+  it allocates its first compute object. ⇒ **design against 4 s.**
+  ⊘ This bound behaves differently from the others in the list: overrunning it is a guest
+  **hang** (spin → timeout → Xid/reset), not a slow operation, because the guest is *already
+  blocked* on our answer. `kayfabe_device::mmuinval::INVALIDATE_HOLD_BUDGET_US` takes this
+  tree's 1 %-of-4 s convention — the same **40 ms** `w317` uses — as its diagnostic ceiling.
 - The guest kernel's **soft-lockup detector** and **RCU stall detector** sit above that. ★ A guest
   `dmesg` carrying a soft-lockup **is** the BQL-stall signature, and is far better evidence than an
   unattributed timeout.
@@ -259,6 +271,19 @@ predicate has to be checkable rather than remembered.**
 > ⚠ And w323's own §3 tier table now belongs beside §2's: **tier 1 is unavailable on the
 > Mode-2 compute path** because the guest emits **zero** TLB invalidates there (measured), so
 > tier 2 — *trap the write, latch O(1), commit later* — is the real ceiling for MAP.
+> ⊘⊘⊘ **THAT LAST SENTENCE IS REFUTED, 2026-08-14 (w326).** The guest emits **377** TLB
+> invalidates on a `cup3` boot, as **BAR0 MMIO writes to `0x00B8_30B0`** — a transport neither
+> of the two the "zero" was measured over. `[measured, boot `w326m1`, `CUP3_VAL=43`]`
+> `triggers=377 all_pdb=0 hubtlb_only=232 gpu_vas=145 polls=754 doorbells=480`.
+> ⇒ **TIER 1 IS AVAILABLE ON THE MAP SIDE**, and it comes with the completion the model's §0
+> asks for **already specified by the hardware protocol**: RM spin-polls the same register
+> until `TRIGGER` clears, so the guest is *already blocked* at the boundary.
+> ⊘ **But read the frequency before spending it**: `triggers_per_doorbell = 0.785`
+> (GPU-VAS-only `0.302`) ⇒ ~**1.6×** fewer publication passes than the doorbell trigger, not
+> the ≪ 1 the cost argument needed. Tier 1 wins on **soundness** (it closes the
+> no-doorbell-between-GPFIFO-commands hole) and on **scope** (it names the PDB; the doorbell
+> does not), not on cost. Full working + decoder: `crate::mmuinval`,
+> `publication_off_the_bql.md` §6.
 
 - ⊘ **[ANSWERED — see the block directly above. Kept for the reasoning, not the status.]**
   **Clauses (a) and (b) have no mechanism at all.** (c) is getting one via `w300`. (a) and (b) are

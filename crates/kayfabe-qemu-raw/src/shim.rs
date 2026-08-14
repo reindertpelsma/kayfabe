@@ -3817,7 +3817,17 @@ fn observer_loop(
             // ⊘ Same ORDER as `Regs::write`'s, and it is mandatory: the reap holds a proc
             // back while its staged queue is non-empty, so a reap before the drain would
             // defer every proc by one tick forever.
-            let pins = device.pin_reclaim_gone();
+            //
+            // ⊘⊘ **`pin_reclaim_gone()` IS NOT CALLED HERE, and the first spelling of this
+            // tick called it.** It is a **read-only cumulative tally** (`state.read()`;
+            // *"one live proc's CUMULATIVE guest-RAM pin reclaim tally"*), not an action —
+            // so it disposes nothing, and adding its `released` to this tick's count sums a
+            // running total once per tick. `[measured, boot `w326r1`]` that produced
+            // `worker_disposed=2064292` over 113 working ticks — 18 268 per tick, i.e. the
+            // whole boot's cumulative pin count, re-counted every 250 ms.
+            // ★ It was caught because the number was IMPLAUSIBLE, not because anything went
+            // red: an instrument that over-reports by 1000× still prints a healthy-looking
+            // line. `suspect_the_instrument_first`.
             let t0 = std::time::Instant::now();
             let drain = device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
                 // ★ A budget here too — not for the BQL (we hold none) but so one tick
@@ -3826,9 +3836,11 @@ fn observer_loop(
                     >= RETIRED_DRAIN_BUDGET_US
             });
             let (reaped, _deferred) = device.reap_retired_held();
-            let disposed = u64::try_from(drain.disposed).unwrap_or(u64::MAX)
-                + u64::try_from(pins.released).unwrap_or(0);
-            (disposed, u64::try_from(reaped).unwrap_or(u64::MAX))
+            // ⊘ `drain.disposed` ONLY — a per-call count. See the note above.
+            (
+                u64::try_from(drain.disposed).unwrap_or(u64::MAX),
+                u64::try_from(reaped).unwrap_or(u64::MAX),
+            )
         });
         // ⊘ ONE wait per iteration, so the sweep below runs between every pair of waits.
         // `run_with` returns `Ok(())` when the budget is spent OR when shutdown was

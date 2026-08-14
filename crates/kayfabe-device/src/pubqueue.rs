@@ -78,9 +78,17 @@
 //! # 4. ⊘ AND THE OTHER INVALIDATE — the one that is OURS, and which is already discharged
 //!
 //! Two unrelated things wear the word:
-//! 1. **the GUEST's** TLB invalidate, which we might observe as a publish trigger. ⊘ On our
-//!    Mode-2 compute path the guest issues **zero** — measured, `mode2_address_table.md` §5
-//!    audit S3 — so it cannot be a commit boundary and nothing here waits for one;
+//! 1. **the GUEST's** TLB invalidate, which we might observe as a publish trigger.
+//!    ⊘⊘⊘ **CORRECTED 2026-08-14 (w326) — IT DOES EXIST AND IT IS MEASURED.** This text
+//!    said the guest issues **zero** on our compute path, citing `mode2_address_table.md` §5
+//!    audit S3. Those numbers are right and the inference from them was not: RM's transport
+//!    on GA106 is **BAR0 `0x00B8_30B0`**, neither of the two transports that census
+//!    enumerated. `[measured, boot `w326m1`]` **377 triggers on one `cup3` boot**, 145 of them
+//!    naming a GPU VA space, `all_pdb=0` on every one. See `crate::mmuinval`.
+//!    ⇒ ★ a commit boundary **does** exist. ⊘ But it is **1.6× rarer than the doorbell**, not
+//!    orders of magnitude — so it is the right trigger for *soundness* and for *scope* (it
+//!    names its PDB), and **not** a cost argument. Nothing in this module waits for one;
+//!    that remains true;
 //! 2. **the invalidate WE owe the HOST GPU** after a host PTE changes.
 //!
 //! ★ (2) is **discharged by the host RM, by construction, on every path we own**: we never

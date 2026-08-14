@@ -262,6 +262,38 @@ lane is the MAP lane and `Revocation` is refused by it at compile time (§4.1). 
 tick on the same thread, or the existing `kayfabe-completion-observer` thread (250 ms tick,
 `shim.rs:10932`), which is off-trap by construction and currently read-only.
 
+> ### ★★★★★ BUILT, 2026-08-14 (w326) — `crates/kayfabe-qemu-raw/src/reclaimtick.rs`
+> The second driver exists and it is the second option above: **the existing
+> `kayfabe-completion-observer` thread**, 250 ms tick, `OffTrap::claim` (the honest mint that
+> **panics** if it is ever on a trap, not the counted `at_a_host_verb` exception). ⊘ The
+> read-only-closure guarantee is untouched — this adds a *disposal* driver beside the reader,
+> never a writer into guest memory — and `Revocation` still has **no route into `pubqueue`**.
+>
+> ★★★ **AND THE HAZARD THE FIX CREATES, WHICH IS WORSE THAN THE LEAK IF MISSED.**
+> `drain_retired_budgeted` plans under the rank-0 write guard and then **issues its host verbs
+> with no lock held** — that is exactly what makes it interruptible. Two drivers running it
+> concurrently would therefore both plan and both free the same retired object: a **double
+> disposal of a host RM object.** ⇒ one gate, taken **asymmetrically**, and the asymmetry is
+> the design:
+> - the **worker** takes it `lock()`ing — it is off-trap, blocking there costs nothing;
+> - the **vCPU** takes it `try_lock()`ing and **never blocks**. A blocking acquire inside
+>   `Regs::write` would stop every vCPU and QEMU's main loop until a *different thread*
+>   finished host I/O — `INLINE-SAFE` clause (a) violated by construction. There is no
+>   blocking method on the type a trap can reach, so this is enforced by the API rather than
+>   by a comment.
+>
+> ⊘ A vCPU that misses the gate skips its drain **for that trap only**, which is safe: whoever
+> holds it is spending the same queue right now. `RECLAIM-TICK vcpu_skipped=N` counts it.
+> ⚠ **Not a full fix, and the residue is named**: this makes the drain's *completion*
+> independent of the guest. It does **not** move the drain's cost off the BQL for the traps
+> that do win the gate — that is still tier 2, still budgeted at 40 ms, and still correct.
+> ⚠ `[measured w326]` `max_drain_us = 53 193` and `max_reap_us = 54 917` on a `cup3` boot, so
+> the retired drain was **never** the worst trap: the worst trap is the **whole-VAS
+> publication drain**, `DRAIN_MS = 2792` against a 3000 ms budget, which is `worst_trap_us =
+> 2 879 349`. ⇒ **the brief's pre-registered "~86 700 µs → <1 000 µs" was aimed at the wrong
+> site.** The 86.7 ms is w315's per-doorbell figure; the boot's *worst* trap is 33× larger and
+> is the one-shot publication drain.
+
 ### 4.4 Failure, per direction — they differ and must not share a word
 
 - **A failed MAP ⇒ a GPU fault.** That is correct and it is `miss = fault` / *"not found, not
@@ -335,17 +367,68 @@ on.
 
 They are unrelated and the vocabulary invites conflating them.
 
-**(1) The GUEST's TLB invalidate, as a publish trigger — DOES NOT EXIST HERE.**
-`[measured, mode2_address_table.md §5 ★ CORRECTION, audit S3]` on the Mode-2 GSP-emulated
-compute path: `INVALIDATE_TLB` RPC fn=200 = **0**; `MEM_OP`/`MMU_TLB_INVALIDATE` pushbuffer
-method = **0**; `DMA_FILL_PTE_MEM` = **0**. This tree carries it as a standing directive:
-*read-at-invalidate is FALSE on the compute path.*
-⇒ **You cannot hook the guest's invalidate as a commit boundary — it never arrives.** You do
-not need to: the C's release semaphore is *"the commit point that replaces the absent
-invalidate"*, and §3's doorbell-driven worker is the same conclusion by a different mechanism.
-⚠ This also bounds tier 1 in the owner's ordering: *"exact GPU boundary (TLB invalidate)"* is
-**unavailable on our compute path**, which is why tier 2 (trap the write, latch O(1)) is the
-real ceiling and why `w318`'s latch already matters.
+> ### ⊘⊘⊘ REFUTED AND MEASURED, 2026-08-14 (w326) — **THE GUEST'S TLB INVALIDATE DOES EXIST,**
+> ### **IT IS A BAR0 REGISTER WE HAVE RECEIVED SINCE M5, AND IT FIRED 377 TIMES ON A cup3 BOOT.**
+> `[measured, boot `w326m1`, GA106, stock guest, `CUP3_VAL=43`]`:
+> ```
+> MMUINVAL armed=false writes=377 triggers=377 all_pdb=0 all_pdb_frac=0.0000 all_va=377
+>          hubtlb_only=232 gpu_vas=145 polls=754 pdb_writes=754 distinct_pdbs=8
+>          doorbells=480 triggers_per_doorbell=0.7854 triggers_at_first_doorbell=66
+> ```
+> RM's transport on GA106 is **BAR0 `0x00B8_30B0`** (`GPU_VREG_WR32(…
+> NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE …)`, `ogkm-580: kern_gmmu_tu102.c:117`) — **not** an
+> RPC and **not** a pushbuffer method, with **no GSP branch anywhere in it**. Before this rung
+> those writes fell through to the unclaimed arm and appeared in every boot log as three rows
+> of `UNCLAIMED-CENSUS` (`0xb830b0`, `0xb830a0`, `0xb830a4`) — the guest's exact publish
+> boundary, answered with a defaulted zero. Decoder: `kayfabe_device::mmuinval`.
+>
+> ★★★ **The zero below was not wrong; it was NARROW, and that is the transferable lesson.**
+> `INVALIDATE_TLB` fn=200 really is 0 (the RPC is `_STUB` on GA106 and *cannot* fire) and
+> `MEM_OP` really is 0 *on the compute channel* (UVM's rides UVM's own internal channel). Both
+> numbers are correct. What was wrong is the inference from *"the two transports we
+> instrumented are zero"* to *"there is no transport"*. ⇒ **a census over transports is only
+> as complete as its list of transports**, and a zero from an incomplete list is
+> indistinguishable from a zero from a complete one — `a_census_zero_needs_a_known_positive`,
+> at the level of the enumeration rather than the count.
+>
+> ⊘⊘ **BUT THE COST ARGUMENT COLLAPSES, EXACTLY AS `gmmu_publication_discipline.md` §8
+> PRE-REGISTERED IT MIGHT.** That doc's falsifier was *"count `0xB830B0` writes per
+> `cuLaunchKernel`; if that ratio is not ≪ 1, the argument collapses"*. Measured:
+> **`triggers_per_doorbell = 0.785`**, and restricted to GPU VA spaces (dropping the
+> `HUBTLB_ONLY` BAR-space invalidates, 232 of 377) **145/480 = 0.302**. Against the **229**
+> publication passes the doorbell trigger actually fired on this boot, an invalidate trigger
+> would fire ~145 — a **1.6× reduction, not an order of magnitude.**
+> ⇒ **Tier 1 is the right trigger for SOUNDNESS and for SCOPE, and NOT for FREQUENCY.**
+> - **Soundness**: it closes the owner's hole in the doorbell trigger — a PTE can change
+>   between two GPFIFO commands with no doorbell, and we would never publish it.
+> - **Scope**: the invalidate names its **PDB** (`all_pdb=0` on all 377, `distinct_pdbs=8`),
+>   where a doorbell names a token; today's pass sweeps **every live pid × every VAS key**
+>   regardless. That is a far larger win than the trigger frequency and it is available
+>   **only** with tier 1.
+> - **Frequency**: ~1.6×. Not the argument.
+>
+> ★ **And the completion is specified by the protocol, not invented by us**:
+> `kgmmuCheckPendingInvalidates` spin-polls the same register until `TRIGGER` reads false
+> (`kern_gmmu_tu102.c:69-71`), which the boot confirms — `polls = 754 = 2 × 377`, exactly the
+> floor of one pre-check and one post-check per invalidate. ⇒ the guest is **already blocked**
+> at this boundary, so publication done here cannot race the engine. ⚠ And it is an
+> **obligation**: hold `TRIGGER` set without clearing it and the guest spins to
+> `gpuCheckTimeout` — **4 s** before its first compute object, **30 s** after
+> (`osGetTimeoutParams`, `os.c:1961-2003`; re-armed at `gpuChangeComputeModeRefCount`,
+> `gpu.c:303-343`). That is a guest **hang**, not a fault.
+
+- ⊘ **[REFUTED — see the block directly above. Kept for the reasoning, not the status.]**
+  **(1) The GUEST's TLB invalidate, as a publish trigger — DOES NOT EXIST HERE.**
+  `[measured, mode2_address_table.md §5 ★ CORRECTION, audit S3]` on the Mode-2 GSP-emulated
+  compute path: `INVALIDATE_TLB` RPC fn=200 = **0**; `MEM_OP`/`MMU_TLB_INVALIDATE` pushbuffer
+  method = **0**; `DMA_FILL_PTE_MEM` = **0**. This tree carries it as a standing directive:
+  *read-at-invalidate is FALSE on the compute path.*
+  ⇒ **You cannot hook the guest's invalidate as a commit boundary — it never arrives.** You do
+  not need to: the C's release semaphore is *"the commit point that replaces the absent
+  invalidate"*, and §3's doorbell-driven worker is the same conclusion by a different mechanism.
+  ⚠ This also bounds tier 1 in the owner's ordering: *"exact GPU boundary (TLB invalidate)"* is
+  **unavailable on our compute path**, which is why tier 2 (trap the write, latch O(1)) is the
+  real ceiling and why `w318`'s latch already matters.
 
 **(2) The invalidate WE owe the HOST GPU after a host PTE changes — ★ ALREADY DISCHARGED, by
 construction, and this was checked rather than assumed.**
