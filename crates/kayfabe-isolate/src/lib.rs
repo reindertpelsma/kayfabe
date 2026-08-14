@@ -2680,20 +2680,11 @@ impl Worker {
     ///
     /// # Panics
     /// If this thread holds any ranked lock (R1).
-    // ★★ **w310 — `result_large_err`, ALLOWED, and the reason is the type's whole purpose.**
-    //
-    // [`Orphans`] gained its third kind (`guest_ram`) this rung, which took [`VerbFailure`]
-    // from ~104 to 128 bytes and tripped `clippy::result_large_err`. ⊘ **The lint is about the
-    // OK path paying for the error path's size**, and this function's OK path is *a host RM
-    // ioctl round trip* — a 128-byte return is not measurable beside it.
-    //
-    // The suggested fix is `Box<VerbFailure>`, and it is the wrong trade here: `orphans` is
-    // the tree's teardown vocabulary — *"an `Orphans` that is neither released nor recorded is
-    // a silent host-object leak"* — and boxing it adds an allocation on **every** failure and
-    // an indirection to the exact value a caller must hold by value to discharge. ⚠ Named here
-    // rather than silently widened: if `VerbFailure` grows a fourth field, revisit this rather
-    // than raising the allow's scope.
-    #[allow(clippy::result_large_err)]
+    // ⊘ **w310 — `clippy::result_large_err` fires here and is answered in `clippy.toml`, not
+    // by an attribute.** [`Orphans`] gained a third disposal kind this rung, which took
+    // [`VerbFailure`] to 128 bytes and `kayfabe_fwd::Refusal` with it — **19 further sites in
+    // one crate**. Twenty scoped `#[allow]`s state the same policy twenty times; one stated
+    // threshold states it once, where a reviewer can see it. See that file for the argument.
     pub fn execute(&mut self, plan: &VerbPlan) -> Result<VerbReply, VerbFailure> {
         kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
         if let Some(&handle) = plan.handles().iter().find(|h| !h.belongs_to(self.isolate)) {
