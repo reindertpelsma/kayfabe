@@ -7955,7 +7955,9 @@ impl SharedDoorbell {
                 // ★★★★★ **w292 — THE ONE SCOPED BUDGET CHANGE, AND IT IS THIS PREDICATE.**
                 let doorbelled = drain_target == Some((pid, pdb));
                 let cap = if doorbelled {
-                    VAS_DRAIN_ROW_CAP
+                    // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
+                    // instrument env var is set, so master's behaviour is unchanged.
+                    vas_drain_row_limit()
                 } else {
                     VAS_PINRATE_ROWS
                 };
@@ -7981,7 +7983,7 @@ impl SharedDoorbell {
                     // ⚠ THE WALL BOUND, and it is checked only on the drained VAS: the sampled
                     // ones are bounded by their row count already, and adding a clock to them
                     // would change the control.
-                    if doorbelled && vas_started.elapsed() > VAS_DRAIN_WALL_BUDGET {
+                    if doorbelled && vas_started.elapsed() > vas_drain_wall_budget() {
                         budget_hit = true;
                         drain_budget_hit = true;
                         break;
@@ -8079,15 +8081,16 @@ impl SharedDoorbell {
                         format!(
                             " ⚠⚠ DRAIN WALL BUDGET {} ms EXHAUSTED — THE DRAIN IS INCOMPLETE; \
                              the rows after this point were NOT attempted and are NOT refused",
-                            VAS_DRAIN_WALL_BUDGET.as_millis()
+                            vas_drain_wall_budget().as_millis()
                         )
                     } else {
                         String::new()
                     },
-                    if doorbelled && candidates.len() >= VAS_DRAIN_ROW_CAP {
+                    if doorbelled && candidates.len() >= vas_drain_row_limit() {
                         format!(
-                            " ⚠⚠ DRAIN ROW CAP {VAS_DRAIN_ROW_CAP} HIT — THE DRAIN IS \
-                             INCOMPLETE by construction"
+                            " ⚠⚠ DRAIN ROW CAP {} HIT — THE DRAIN IS \
+                             INCOMPLETE by construction",
+                            vas_drain_row_limit()
                         )
                     } else {
                         String::new()
@@ -8119,7 +8122,15 @@ impl SharedDoorbell {
         } else {
             format!(
                 "visited=true asked={drain_asked} pinned={drain_pinned} \
-                 refused={drain_refused} DRAIN_MS={drain_ms} complete={} {}{}",
+                 refused={drain_refused} DRAIN_MS={drain_ms} \
+                 W319KNOB[budget_ms={} row_limit={}] complete={} {}{}",
+                // ★★★ w319 — THE ARM ANNOUNCES ITSELF, in the same line as the number it
+                // moves. ⊘ A knob whose setting is only in the launcher's environment is a
+                // number nobody can attribute a log to six weeks from now, and this tree has
+                // paid for exactly that ("anchor every metric"). Printed on EVERY boot,
+                // including the default one, so `absent` means an OLD BINARY and never `3000`.
+                vas_drain_wall_budget().as_millis(),
+                vas_drain_row_limit(),
                 // ★ COMPLETE means: every row the table offered was attempted, and neither
                 // bound cut it short. It is the invariant this rung exists to establish —
                 // "a mapping is always backed before the engine that uses it runs".
@@ -13401,6 +13412,58 @@ const VAS_DRAIN_ROW_CAP: usize = 65536;
 // `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
 #[cfg(feature = "host-isolates")]
 const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(3000);
+
+/// ★★★★★ **w319 — THE MODULATION KNOB, and it is an INSTRUMENT, not a fix.**
+///
+/// `KAYFABE_VAS_DRAIN_BUDGET_MS` overrides [`VAS_DRAIN_WALL_BUDGET`] for the doorbelled VAS's
+/// drain. **Absent ⇒ byte-identical behaviour to master** (3000 ms), so every existing caller
+/// and every committed trace stays comparable.
+///
+/// # Why it exists
+///
+/// `[measured w319, from w314's OWN COMMITTED LOGS, zero boots spent]` the two RED cup3 boots
+/// of `traces/w314_confirm/` both carry `⚠⚠ DRAIN WALL BUDGET 3000 ms EXHAUSTED`
+/// (`pinned=11883/13313` stopping at `last_pinned_va=0x20326a000`, and `pinned=11810/13313`
+/// stopping at `0x203221000`); the green boots carry `pinned=13313/13313 DRAIN_MS=2672` and
+/// `2898`, reaching `0x2047ff000`. **The faulting page `0x2_0440f000` lies between the two.**
+/// ⇒ the drain's own cost (13 313 rows × 199–280 µs = **2.65–3.73 s**) STRADDLES its 3 s
+/// budget, so which side of it a boot lands on decides whether the completion-semaphore page
+/// is published before the engine writes it.
+///
+/// ⇒ An intermittent whose rate can be driven **both ways** by one number is an intermittent
+/// that has been attributed. This knob is that number, exposed.
+#[cfg(feature = "host-isolates")]
+fn vas_drain_wall_budget() -> std::time::Duration {
+    static V: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("KAYFABE_VAS_DRAIN_BUDGET_MS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map_or(VAS_DRAIN_WALL_BUDGET, std::time::Duration::from_millis)
+    })
+}
+
+/// ★★★★★ **w319 — THE DETERMINISTIC HALF OF THE SAME KNOB.**
+///
+/// `KAYFABE_VAS_DRAIN_ROW_LIMIT` caps how many rows of the doorbelled VAS the drain may take,
+/// **below** [`VAS_DRAIN_ROW_CAP`]. Absent ⇒ 65 536, i.e. master unchanged.
+///
+/// ⊘ The wall budget above reproduces the defect the way the defect actually happens, and is
+/// therefore the *faithful* knob — but it is a CLOCK, so it truncates at a different row on
+/// every boot and cannot give an on-demand repro with a stable fingerprint. This one
+/// truncates at a **row count**, which is deterministic. ⇒ Use the row limit to REPRODUCE and
+/// the millisecond budget to MODULATE; neither is a fix and neither is on by default.
+#[cfg(feature = "host-isolates")]
+fn vas_drain_row_limit() -> usize {
+    static V: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("KAYFABE_VAS_DRAIN_ROW_LIMIT")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|n| *n > 0)
+            .map_or(VAS_DRAIN_ROW_CAP, |n| n.min(VAS_DRAIN_ROW_CAP))
+    })
+}
 
 /// ★★★ **The wall-clock budget for one doorbell's publication**, and it is the honest half of
 /// the cap above: a count bounds how many leaves are *tried*, only a clock bounds how long
