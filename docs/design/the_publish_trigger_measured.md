@@ -251,22 +251,63 @@ guest's freedom with rank-0 pressure on the very pass it is running beside.
 yield the rank-0 guard between chunks, or run it only when the publication drain is idle).
 ★ The defect it fixes is real and the fix is real; what is not yet true is that it is free.
 
-### 5.2 ★ THE WORST TRAP IS THE PUBLICATION DRAIN — a three-point attribution, residuals printed
+### 5.1.1 ★★★★★ THE CONTROL REFUTED MY OWN PRE-REGISTRATION — **`vcpu_skipped = 2` WITH THE TICK OFF**
 
-| boot | `worst_trap_us` | `DRAIN_MS` | residual | drain's share |
-|---|---|---|---|---|
-| `w326m1` | 2 879 349 | 2 792 000 | **87 349 µs** | 97.0 % |
-| `w326r1` | 3 106 218 | 3 000 000 | **106 218 µs** | 96.6 % |
-| `w326r2` | 3 130 278 | 3 000 000 | **130 278 µs** | 95.8 % |
+Pre-registered for arm O (same binary, tick disarmed): *"`RECLAIM-TICK armed=false
+working_ticks=0 vcpu_skipped=0`"*. Measured:
+
+```
+RECLAIM-TICK armed=false working_ticks=0 idle_ticks=0 worker_disposed=0 worker_reaped=0
+             vcpu_skipped=2 worst_tick_us=0
+```
+
+Everything is 0 **except `vcpu_skipped`**. And `ReclaimTick::spend` returns **before** touching
+the gate when disarmed (`a_disarmed_spend_never_runs_and_never_takes_the_gate` pins exactly
+that), so **no worker took it**. ⇒ **something else was already inside the drain block, twice,
+on a boot with no worker thread at all.**
+
+★★★ **The double-disposal hazard this gate was built for ALREADY EXISTS ON MASTER**, and the
+disarmed control is its known-positive. Two candidates, and this rung does **not** distinguish
+them — both are real and both are refused correctly:
+
+1. **two vCPUs concurrently in `Regs::write`** — which would mean MMIO dispatch is not always
+   serialised by the BQL the way this tree assumes it is; or
+2. **re-entrancy on one thread** — the drain path re-entering `Regs::write` beneath itself.
+
+⊘ **Whichever it is, `try_lock` is the only safe acquire.** Under (2) a `lock()` would
+**deadlock a vCPU against itself** on the first occurrence; under (1) it would stall every
+vCPU. The API having no blocking method a trap can reach is therefore not merely hygiene — it
+is what keeps this measurement from being a hang.
+
+⚠ **Attributing it is the next lane's, and it is cheap**: print the thread id and a
+re-entrancy depth beside `vcpu_skipped`. Until then this is *"two concurrent or re-entrant
+entries into the retired drain, on master, measured"* and no more.
+
+★ Note what produced it: a **pre-registered prediction of a control arm's numbers**. The
+finding is in the one field that disagreed, on the arm whose whole purpose was to be boring.
+
+### 5.2 ★ THE WORST TRAP IS THE PUBLICATION DRAIN — a four-point attribution, residuals printed
+
+| boot | tick | `worst_trap_us` | `DRAIN_MS` | residual | drain's share | clamped? |
+|---|---|---|---|---|---|---|
+| `w326o1` | off | 2 820 454 | 2 732 000 | **88 454 µs** | 96.9 % | no |
+| `w326m1` | absent | 2 879 349 | 2 792 000 | **87 349 µs** | 97.0 % | no |
+| `w326r3` | on | 3 033 088 | 2 921 000 | **112 088 µs** | 96.3 % | no |
+| `w326r1` | on | 3 106 218 | 3 000 000 | **106 218 µs** | 96.6 % | ⚠ yes |
+| `w326r2` | on | 3 130 278 | 3 000 000 | **130 278 µs** | 95.8 % | ⚠ yes |
 
 ⇒ the whole-VAS publication drain accounts for **95.8–97.0 %** of the worst MMIO trap on every
-boot, with a small and stable residual. ⊘ **The retired drain is not it** (`max_drain_us` =
-53 193 / 56 280) and neither is the per-doorbell publication pass (w315's 86.7 ms). Three
-different things wear the word *"drain"* in this tree's logs.
+boot, with a residual of **87–130 µs·10³** that is small, stable and slightly larger on the
+armed arm. ⊘ **The retired drain is not it** (`max_drain_us` = 40 554 / 53 193 / 56 280) and
+neither is the per-doorbell publication pass (w315's 86.7 ms). **Three different things wear
+the word *"drain"* in this tree's logs**, and the brief's target was aimed at a fourth.
+
 ⚠ Per this campaign's own trap — *a candidate whose magnitude matches your measurement belongs
-to the instrument until proven otherwise* — note that `DRAIN_MS` is **budget-clamped at 3000**
-on two of the three points, so those two are not independent evidence of the fit; the fit rests
-on `w326m1`, where the drain ran to completion at 2792 and the residual is the same 87–130 ms.
+to the instrument until proven otherwise; ≥3 points, print every residual, refit without the
+largest* — `DRAIN_MS` is **budget-clamped at 3000 on two of the five points**, so those two
+carry no independent information about the fit. **Refit on the three unclamped points alone**
+(`w326o1`, `w326m1`, `w326r3`): residuals 88 454 / 87 349 / 112 088 µs, share 96.3–97.0 %.
+★ The fit survives dropping both clamped points **and** the largest residual.
 
 ---
 
