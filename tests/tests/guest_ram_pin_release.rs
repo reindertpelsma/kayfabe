@@ -233,6 +233,14 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
         0,
         "nothing has been released yet — the fixture is not the subject"
     );
+    assert_eq!(
+        device.pin_reclaim_of(pid).released,
+        0,
+        "★ …and the LIVE proc's own tally agrees it has released nothing yet. This reads the \
+         other half of the counter — `pin_reclaim_gone` can only see procs that have already \
+         vacated, so a boot with one long-lived process would read zero from it forever while \
+         VAS deaths released pins the whole time"
+    );
 
     // ---- phase 2: the guest tears its own process down. Nothing here names a pin.
     device
