@@ -105,9 +105,28 @@ grep -a 'kayfabe: PREEMPT client=' "$Q" 2>/dev/null | fold -w 200 | sed 's/^/   
 echo "      ⊘ if nothing printed above, the id never reached respond_preempt on this boot."
 echo ""
 echo "=== ★★★★★ (c) THE REGRESSION CHECK — DID THE GUEST ACCEPT OUR ANSWER?"
-CTXD=$(grep -oE '^CUP3D_CTXDESTROY_RC=-?[0-9]+' "$P" 2>/dev/null | tail -1)
-echo "    ^CUP3D_CTXDESTROY_RC = [${CTXD:-⊘ ABSENT — cuCtxDestroy never returned a line. UNMEASURED, NOT 0}]"
-echo "    ^CUP3D_CTXDESTROY_STR= [$(grep -oE '^CUP3D_CTXDESTROY_STR=.*' "$P" 2>/dev/null | tail -1)]"
+# ⊘⊘⊘ **w305 DEFECT, FOUND BY THIS RUNG'S OWN FIRST RUN, AND IT IS THE ANCHOR TRAP INVERTED.**
+#
+#   The first version of this clause read `grep -oE '^CUP3D_CTXDESTROY_RC=…'`. `cup3_hook.sh`
+#   prints the workload's output through `sed 's/^/    /'`, so EVERY line of it is indented
+#   four spaces and `^` can never match. ⇒ on the `w305apreempt` boot this field printed
+#   **"⊘ ABSENT — cuCtxDestroy never returned a line. UNMEASURED, NOT 0"** while the verbatim
+#   teardown block SIX LINES ABOVE printed `CUP3D_CTXDESTROY_RC=0`. The same log said both.
+#
+#   ★★★ This tree's standing rule is *"anchor, because the unanchored read has printed the
+#   headline success value on a failing arm"*. Here the anchor produced the MIRROR failure: a
+#   FALSE "UNMEASURED" on a field that WAS measured — and "unmeasured" is the reading this
+#   repo treats as safe, so it would have been believed. ⇒ **An anchor is only correct against
+#   the layout the PRODUCER actually emits.** cup3's own `^CUP3_VAL=` lines are emitted by the
+#   HOOK at column 0; the WORKLOAD's lines come through the indenting `sed`. Two different
+#   producers in one file, and one anchor cannot be right for both.
+#
+#   ★ Anchored to the line START ALLOWING LEADING WHITESPACE, which is what the producer emits,
+#     and the raw unanchored read is printed BESIDE it so a reader can see what it would say.
+CTXD=$(grep -oE '^[[:space:]]*CUP3D_CTXDESTROY_RC=-?[0-9]+' "$P" 2>/dev/null | tr -d '[:space:]' | tail -1)
+echo "    CUP3D_CTXDESTROY_RC (start-of-line, leading space allowed) = [${CTXD:-⊘ ABSENT — cuCtxDestroy never returned a line. UNMEASURED, NOT 0}]"
+echo "    CUP3D_CTXDESTROY_STR = [$(grep -oE 'CUP3D_CTXDESTROY_STR=.*' "$P" 2>/dev/null | tail -1)]"
+echo "    ⊘ STRICT ^ read, for contrast (empty is EXPECTED — the hook indents the workload): [$(grep -oE '^CUP3D_CTXDESTROY_RC=-?[0-9]+' "$P" 2>/dev/null | tail -1)]"
 case "$CTXD" in
   CUP3D_CTXDESTROY_RC=0) echo "    ★ ACCEPTED — cuCtxDestroy returned CUDA_SUCCESS. No regression on this path." ;;
   "")                    echo "    ⊘ UNMEASURED — no line. Read the stage ladder; this is NOT an acceptance." ;;

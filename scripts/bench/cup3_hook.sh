@@ -54,8 +54,25 @@ echo "=== source (md5 — a run cannot silently be a different copy) ==="
 [ -f "$CUP3_SRC" ] || die "no such source: $CUP3_SRC"
 printf '    %-56s %5s lines  md5 %s\n' "$CUP3_SRC" "$(wc -l < "$CUP3_SRC")" \
        "$(md5sum < "$CUP3_SRC" | cut -d' ' -f1)"
-echo "    ⊘ byte-identical to the C artifact's tests/mode2/cup3.c at vendoring time"
-echo "      (md5 3c90b0f5f9b7deedc9d9bea471ee551a) — so the two stacks run THE SAME program."
+# ⊘⊘ **w305 DEFECT FIX — THIS PROVENANCE LINE WAS UNCONDITIONAL AND THEREFORE FALSE THE
+#    MOMENT `KAYFABE_CUP3_SRC` POINTED ANYWHERE ELSE.** It printed *"byte-identical to the C
+#    artifact's tests/mode2/cup3.c (md5 3c90b0f5…)"* directly underneath a source line
+#    reporting a DIFFERENT md5 — measured on w305's `cup3d.c` run (`md5 67f93d72…`), where the
+#    two lines contradicted each other three lines apart and the false one was the one that
+#    read as a check. ⇒ Same class as the citation traps this tree keeps paying for: a
+#    provenance claim that is TEMPLATE TEXT rather than a comparison asserts nothing, and it
+#    is worse than silence because it looks verified.
+#    ★ Now an actual COMPARISON, printed either way.
+CUP3_VENDORED_MD5=3c90b0f5f9b7deedc9d9bea471ee551a
+CUP3_THIS_MD5=$(md5sum < "$CUP3_SRC" | cut -d' ' -f1)
+if [ "$CUP3_THIS_MD5" = "$CUP3_VENDORED_MD5" ]; then
+  echo "    ★ byte-identical to the C artifact's tests/mode2/cup3.c at vendoring time"
+  echo "      (md5 $CUP3_VENDORED_MD5) — so the two stacks run THE SAME program."
+else
+  echo "    ⊘ NOT the vendored cup3.c: this source is md5 $CUP3_THIS_MD5, the C artifact's"
+  echo "      tests/mode2/cup3.c is md5 $CUP3_VENDORED_MD5. ⇒ this run is a VARIANT and the"
+  echo "      two stacks are NOT running the same program. Read every comparison accordingly."
+fi
 
 # ---------------------------------------------------------------------------------------
 # ★★★ PRECONDITION, BY NAME. A missing JIT compiler fails at cuModuleLoadData and is
