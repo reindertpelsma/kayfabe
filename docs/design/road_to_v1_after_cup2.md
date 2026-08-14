@@ -133,8 +133,85 @@ refused**. A rule never seen to fire is not a rule.
   resident GR context; `hTargetChannel` never validated). Serving `0309` **neither implies nor
   requires** it. Measured, not assumed.
 
+> ### ⊘⊘⊘ CORRECTED SAME DAY, 2026-08-14 (w305) — **THE PRESCRIBED FIX BELOW IS A NO-OP, AND
+> ### THE DIAGNOSIS IT RESTS ON IS REFUTED BY A NATIVE KNOWN-POSITIVE.**
+>
+> The block below rules: *"The fix is one line in the probe: allocate its control operands in
+> the VAS of the channel it rings."* **They were never anywhere else.**
+>
+> **(1) STRUCTURAL — there is no line to change, and it is provable from our own source.**
+> `probe_guest_reachability(vas, …)` takes `range = self.narrow(vas)`
+> (`kayfabe-isolate-host/src/rm.rs:6976`), maps **every** operand into that range
+> (`:7036` `ctrl_src`, `:7044` `dst`), and creates the channel it rings on **the same `vas`**
+> (`:7080`, `alloc_channel_at_with_error_notifier(vas, …)`). ⊘ And `narrow` is not a
+> re-derivation — it is `u32::try_from(h.raw())` (`rm.rs:4233`), a pure handle-width cast. ⇒
+> **the operands and the ringing channel have always shared one VAS handle.**
+>
+> **(2) EMPIRICAL — the arrangement the block blames WORKS ON REAL HARDWARE.**
+> `[measured 2026-08-14, w305, vh2, real GA106 580.159.04, NO QEMU]` the same binary, the same
+> `--ce-client-fault`, the same THIRD freshly-allocated VAS, run natively:
+> ```
+> info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space (range 0xcafe0011)
+> ★     R33 CRIT1 STATE     = FAULT-PROVOKED-ADDRESS-READ | VA-IDENTITY MEASURED = yes
+> ★     R33 arm 5 WHERE     = GET_MMU_FAULT_INFO addr=0x0000000900000000 faultType=0x0
+>                             faultString="FAULT_PDE" | VA-IDENTITY HOLDS
+> host dmesg: Xid 31 … channel 0x00000005 … MMU Fault: ENGINE CE0 HUBCLIENT_CE1
+>             faulted @ 0x9_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+> ```
+> ⇒ **A third, freshly-allocated VAS is not a blocker for anything.** The control lands, the
+> fault is provoked, the address plane answers, and two independent observers — the client's
+> own in-process `GET_MMU_FAULT_INFO` and the host kernel log — name the same address.
+>
+> ★★★ **So the probe is a KNOWN-POSITIVE, and the thing under test is what fails.**
+> `[measured 2026-08-14, w305, `run_w305bfresh`, rev `c7c058a3`]` the guest arm reproduces
+> `CRIT1 STATE = CONTROL-NEVER-LANDED` exactly, with **zero `Xid` on the host and zero in the
+> guest**, and the control's own failure line reads:
+> ```
+> ?? R33 arm 4 control = the POSITIVE CONTROL did not land
+>    (sem 0x00000000, GP_GET 1 GP_PUT 1, moved 0xdead0000 want 0x5ea1c071)
+> ```
+> ⇒ the cursors **caught up** and the sentinel **survived**: the ring was consumed and no
+> bytes moved. That is our CE plane, not a VA the probe chose badly.
+>
+> ### ★★★★★ AND THE SAME RUN CARRIES THE DISCRIMINATOR THE ORIGINAL RULING WAS REACHING FOR
+>
+> In **one process, one program, one boot**, on our emulated GPU:
+>
+> | arm | VAS | result |
+> |---|---|---|
+> | **1** | `vas` — allocated first, **already carried work** | ★ **4096 bytes moved**, semaphore `0x1` = declared, `GP_GET 1` caught `GP_PUT 1` — the whole four-fact bar |
+> | **4** | `fvas` — **freshly allocated**, same engine `COPY0` | ⊘ control never landed, nothing moved |
+>
+> ⇒ **The VAS is still a live variable in the GUEST** — but the ruling below could not have
+> established it, because the mechanism it named (*operands in the wrong VAS*) is not the
+> difference. The difference is between a VAS that has already carried retired work and one
+> that has not. ⊘ Natively **both** work, so this is ours.
+> ⚠ Not yet isolated: arm 4 also differs from arm 1 by being the **second** channel in the
+> process, by dictating its ring at `0x7_0000_0000`, and by carrying an error notifier.
+>
+> ⊘ **THE ARM BUILT TO ISOLATE IT DID NOT RUN, AND THAT IS REPORTED RATHER THAN SMOOTHED.**
+> `--ce-client-fault-shared-vas` (w305, `rmladder.rs`) runs arm 4 in arm 1's own VAS.
+> `[measured, `run_w305bshared`]` it returns `CRIT1 STATE = PROBE-NOT-BUILT`:
+> `FAIL R33 arm 4 = the probe could not be built: BadHandle(HostHandle(iso0/gpu0:0xcafe0005))`.
+> Cause is **our own bookkeeping, not RM**: `alloc_channel_in` resolves
+> `self.conn.space_of(range)` (`rm.rs:5831-5833`) and arm 1's `vas` handle is the **space**
+> (`0xcafe0005`), whose paired **range** is a different handle (`0xcafe0009`, the number arms
+> 2/3 print). ⇒ **the shared arm says NOTHING about the VAS hypothesis**; it is a construction
+> failure, and the fix is to pass the range rather than the space.
+>
+> ★★ **The instrument lesson, and it is the same one this file records two bullets up:** the
+> ruling was derived by reading `OPERAND-PIN`'s `pdb=` in a cup2 trace and then reasoning about
+> what arm 4 *must* be doing. **Nobody opened `probe_guest_reachability` and looked.** A
+> diagnosis about a probe that is never checked against the probe's own source can name a fix
+> that does not exist — and this one did, in the most-read planning doc in the tree, for the
+> criterion that has slipped six rungs. ⚠ Note what survived: the **intuition** (the VAS
+> matters) was right and the **mechanism** was wrong, so a reader who acted on the prescription
+> would have changed nothing and reported it as tested.
+
 ★★★★★ **ANSWERED 2026-08-14, from the committed green trace — NO. Build the probe, not the
-mechanism.** Measured in `traces/w294_cudalimit/run_w294cup2_qemu.log` (the `^CUP2_RC=0` boot):
+mechanism.** ⊘ **SEE THE CORRECTION DIRECTLY ABOVE — the conclusion this block draws about arm
+4 is refuted; the cup2 measurement it rests on is not.** Measured in
+`traces/w294_cudalimit/run_w294cup2_qemu.log` (the `^CUP2_RC=0` boot):
 
 | | reading |
 |---|---|
