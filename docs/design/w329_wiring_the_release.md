@@ -368,13 +368,39 @@ only measurement anyone has of how big the unbuilt re-point population is.
 All from `traces/w329_release/w329_arm_*.log`, `vh2`, 2026-08-14/15. ⊘ Every arm here ran with
 `KAYFABE_JOIN_RELEASE` at its **default (`on`, leg 1)** unless the row says otherwise.
 
-| workload | n | result | live? |
+⊘ **Every row was re-measured on the `supersede` arm**, because that is the arm the rung's
+result rests on and *a green measured on a different arm is not a green for this one*. The
+`on`-arm run of the same four is in `w329_arm_w329{g,e,s,x}.log` and agrees.
+
+| workload | n | result on `supersede` | live? |
 |---|---|---|---|
-| `^CUP3_VAL=43` | **3** | `CUP3_VAL=43 CUP3_RC=0` ×3, `Xid=0`, `unserviced_distinct=40`, `host_rows=18297` | ★ LIVE — `revoked=2 released=2` on every boot, so the release fired on the graded workload rather than beside it |
-| `^CUP8_BAD=0 ^CUP8_MAXERR=0` | 2 | *(filled below)* | |
-| `R33 arm 1` | 2 | *(filled below)* | |
-| cup8 at N=3072 (36 MiB) | 1 | *(filled below)* | |
+| `^CUP3_VAL=43` | **3** | `CUP3_VAL=43 CUP3_RC=0` ×3, `Xid=0`, 40 unserviced ids | ★ LIVE — 29 takeovers over 8 distinct frames per boot |
+| `^CUP8_BAD=0 ^CUP8_MAXERR=0` | **2** | `CUP8_BAD=0 CUP8_MAXERR=0` ×2, `Xid=0`, `host_rows=18313 of 18326` | ★ LIVE — 29 takeovers per boot |
+| `R33 arm 1` | **2** | the full COPY line ×2, **byte-identical**: `4096 bytes moved, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x1 (declared 0x1), GP_GET 1 caught GP_PUT 1` | ★★ LIVE **and it is the one workload where LEG 1 fires**: `revoked=2 released=2` |
+| cup8 at N=3072 (36 MiB) | 1 | `B3072_BAD=0 B3072_MAXERR=0` over **12** verified iterations, `BENCH_VERDICT: PASS`, `Xid=0` | ★ LIVE — 15 takeovers, `already joined=0` |
 | ★ known-positive `BENCH_NOLAUNCH` | 1 | **`BENCH_MODE=NOLAUNCH` PRESENT and `BENCH_NOLAUNCH_TOTAL_BAD=3670016`** | ★★★ FIRED ⇒ every `bad=0` here is asserted, not inherited |
+
+★ `SUPERSEDE ABORTED` (table says join, store says none) is **0 across every boot of every
+arm** — the two records never disagreed once.
+
+### 6.1 ⚠ AND THE PING-PONG IS REAL — the cap is load-bearing, not decorative
+
+| workload | `SUPERSEDED` | distinct frames | `SUPERSEDE CAPPED` | `already joined` before → after |
+|---|---|---|---|---|
+| `28,31` (`w329sup1`) | 22 | – | **0** | 32 → **0** |
+| `4,64` (`w329sup64`) | 18 | – | **0** | 16 → **0** |
+| cup3 (`w329sg1`) | 29 | **8** | **266** | 290 → 266 |
+| cup8 (`w329se1`) | 29 | – | **588** | – → 588 |
+| cup8 N=3072 (`w329ss1`) | 15 | – | **0** | – → **0** |
+
+⇒ **On the bandwidth workload the takeover is total and terminates** (`CAPPED=0`, refusals to
+zero). **On cup3 and cup8 it saturates the per-frame cap**: eight frames are handed back and
+forth, four takeovers each, and the remaining 266/588 collisions keep today's refusal. Those
+two workloads are **green either way** — they do not need the join at those frames — but the
+number says plainly that `supersede` is a bound on a churn it does not eliminate.
+★★★ **That is §7's item 1 arriving from a third direction**: one frame, one join, is the
+constraint. A join mappable at every VA the guest names would make all 854 of those collisions
+not exist.
 
 **Offline suite** (`cargo test --workspace --features host-isolates --no-fail-fast`, `vh2`):
 **7 failed across 4 targets** — and that is **master's**, not this rung's: §5 item 4 records
@@ -383,19 +409,35 @@ the check that established it. This rung adds **7 new passing tests** (4 in
 
 ---
 
-## 7. WHAT SHIPS, AND WHAT THE DEFAULT MUST BE
+## 7. WHAT SHIPS, AND WHAT THE DEFAULT IS
 
-⊘ **`KAYFABE_JOIN_RELEASE` must default to `off` until the `4,64` control (§2.2) answers**, and
-`on` must not be the default while a workload that passed at `w327` fails with it armed. The
-mechanism is built, tested offline, and measured on hardware; what is not established is that
-it is a net improvement on any workload this campaign runs.
+`KAYFABE_JOIN_RELEASE` has three arms and the branch ships **`on` as the default**:
+
+| arm | what it does | measured |
+|---|---|---|
+| `off` | w327's state: a join is never released | the negative control; `28,31` fails 3/3 |
+| **`on`** (default) | leg 1 — release on a genuine unmap, **re-maps excluded** | **`revoked=0` on every workload measured**: correct, and inert here |
+| `supersede` | leg 1 **+** take over a join whose frame the guest re-pointed | **`28,31` passes 3/3; `4,64` passes; `already joined` 32 → 0** |
+
+⊘ **`supersede` is NOT the default, and that is deliberate.** It makes a choice §4.1 cannot
+justify from first principles — which of two VAs the guest describes for one frame wins — and
+a default must not do that. It is armable, it is measured, and the decision to make it default
+belongs to the owner with §4.1 in front of them.
+
+★ **`on` is safe as a default precisely because it is inert**: with the re-map guard it revokes
+nothing on any workload here, so master's behaviour is preserved byte for byte
+(`w329a2` == `w329c`), and the moment a workload *does* genuinely unmap a joined leaf, the leak
+`w327` measured stops.
 
 ★ **The three things this rung leaves standing, in priority order:**
 
 1. ★★★ **A frame's join must be mappable at every VA the guest names it at.** One host object,
-   N host VA mappings. That removes the choice §4.1 has to make and dissolves both the
-   collision and the ping-pong. It is a `back_fb_leaf` change, not a policy change.
-2. ★★ **A RE-POINT path for published rows.** `remaps_refused` now counts the population; today
-   a re-mapped published row is frozen at its old frame forever.
+   N host VA mappings. That removes the choice §4.1 has to make, dissolves the collision, makes
+   the ping-pong cap unnecessary, and would let `supersede` become unconditional. It is a
+   `back_fb_leaf` change, not a policy change. **This is the real fix and this rung is its
+   evidence.**
+2. ★★ **A RE-POINT path for published rows.** `remaps_refused` counts the population — 8 per
+   `28,31` boot, 4 per `4,64` boot — and today every one of them leaves a published row frozen
+   at a frame the guest has already moved on from.
 3. ★ **Corroborate a revoke with an RPC `FREE`.** Row 2a of the reclamation-gap census: those
    RPCs demonstrably arrive (`FreeUnknown x8`); nothing joins them to a VA.
