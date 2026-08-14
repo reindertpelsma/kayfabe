@@ -85,16 +85,30 @@ def fit_block(pts, label):
 
 
 def main(paths):
+    # ⊘⊘ DEDUPE, AND IT IS NOT COSMETIC. The hook prints the workload's output TWICE: once
+    # verbatim and INDENTED, once re-emitted at column 0 with a GUEST_ prefix. An unanchored
+    # regex matches both, so the first version of this script reported `n=16` for an 8-point
+    # sweep and drew a fit through every point twice. ⚠ OLS is invariant to exact duplication,
+    # so the FIT looked fine and only `n` was wrong — which is worse than a visible error: the
+    # residual count, and therefore any confidence anyone reads into it, was doubled for free.
+    # ★ Same family as w307's inverted indent trap, arriving from the other side.
+    seen_sw, seen_it = set(), set()
     sweeps, iters, bsums = [], [], []
     for p in paths:
         for ln in open(p, errors="replace"):
             m = SWEEP_RE.search(ln)
             if m:
-                sweeps.append(tuple(m.groups()))
+                key = (p,) + m.groups()
+                if key not in seen_sw:
+                    seen_sw.add(key)
+                    sweeps.append(tuple(m.groups()))
                 continue
             m = ITER_RE.search(ln)
             if m:
-                iters.append(tuple(m.groups()))
+                key = (p,) + m.groups()
+                if key not in seen_it:
+                    seen_it.add(key)
+                    iters.append(tuple(m.groups()))
                 continue
             m = BSUM_RE.search(ln)
             if m:
@@ -129,6 +143,27 @@ def main(paths):
             tb = sum(b for *_, b in rows)
             print(f"    Σbad over the sweep = {tb}  "
                   f"{'✔ every batched rep verified' if tb == 0 else '✘✘ A BATCHED REP FAILED'}")
+            print()
+            # ★★★★★ READ THIS COLUMN BEFORE THE FIT. `per_launch = total/K` is the NORMALISED
+            # form, and it answers the rung's question without a model at all:
+            #   FLAT across K            => the cost is PER-LAUNCH; the per-sync term is ~0;
+            #                               batching CANNOT help, whatever a fit's intercept says.
+            #   FALLING as 1/K           => a fixed PER-SYNC term dominates; batching amortises it.
+            #   FALLING, but not as 1/K  => something else gets cheaper with K. NAME IT; do not
+            #                               bank it as the intercept of a line it does not fit.
+            # ⊘ A two-term fit will ALWAYS return an intercept, including for data that has no
+            #   fixed term at all. The intercept is only meaningful if the residuals are small,
+            #   which is why they are printed and why this column is printed first.
+            pl = [(K, med / K) for (K, med, *_) in rows]
+            lo = min(v for _, v in pl)
+            hi = max(v for _, v in pl)
+            print("    ★ PER-LAUNCH (total/K) — the model-free reading:")
+            for K, v in pl:
+                print(f"      K={K:<5d} {v:8.3f} ms/launch")
+            print(f"      spread {lo:.3f}..{hi:.3f} ms  ({hi/lo if lo else float('nan'):.2f}x)")
+            ideal = pl[0][1] / (pl[-1][0] / pl[0][0])
+            print(f"      ⊘ if the cost were PURELY per-sync, K={pl[-1][0]} would read "
+                  f"{ideal:.3f} ms/launch (1/K of K={pl[0][0]}'s). It reads {pl[-1][1]:.3f}.")
             print()
             r = fit_block([(K, med) for (K, med, *_) in rows], "ALL K")
             if r and len(rows) > 3:

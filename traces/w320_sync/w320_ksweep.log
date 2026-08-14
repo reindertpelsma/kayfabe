@@ -1,0 +1,58 @@
+=== ★★★★★ W320 arm=ksweep tag=w320ksweep 2026-08-14T17:59:53+00:00
+    sizes=[128] iters=[12]
+    sweep=[1,2,4,8,16,32,64,128] reps=[5]
+    ctx_flags=[0] gate=[on/on]
+    repo=[/workspace/kayfabe_w320] HEAD=[e8be2da5]
+
+================================================================================
+=== ★★★★★ W320 arm=ksweep inner_rc=0  2026-08-14T18:01:49+00:00
+================================================================================
+
+=== ★★★ PRECONDITION — the thread-state clock. Without it the split is meaningless.
+    GUEST_TSTATE_AVAILABLE=yes
+    GUEST_BENCH_W320=batch_sweep=[1,2,4,8,16,32,64,128] batch_reps=5 ctx_flags=0x0
+
+=== ★★★★★ THE SYNC BREAKDOWN — one thread, two of its own clocks, and it CLOSES
+    offcpu = wall - cpu, EXACTLY. There is no third term and no residue to distribute.
+    GUEST_BSUM N=128 iters=12 first_ms=8.035 med_ms=8.423 p90_ms=8.840 min_ms=8.241 max_ms=8.879 gflops=0.498 batch_per_launch_ms=8.469 batch_gflops=0.495 h2d_ms=43.591 d2h_med_ms=7.394 submit_med_ms=7.548 sync_med_ms=0.961 sync_cpu_med_ms=0.959 sync_offcpu_med_ms=0.001 sync_nvcsw_med=0.0 submit_cpu_med_ms=7.554 bad=0 maxerr=0
+
+=== ★★★★★ THE BATCH SWEEP — the per-LAUNCH term vs the per-SYNC term
+    GUEST_BSWEEPSUM N=128 K=1 reps=5 med_total_ms=6.252 per_launch_ms=6.252 min_ms=5.289 max_ms=8.635 med_cpu_ms=6.258 med_offcpu_ms=-0.006 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=2 reps=5 med_total_ms=15.661 per_launch_ms=7.830 min_ms=12.598 max_ms=16.358 med_cpu_ms=15.667 med_offcpu_ms=-0.006 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=4 reps=5 med_total_ms=30.326 per_launch_ms=7.582 min_ms=27.466 max_ms=31.750 med_cpu_ms=30.326 med_offcpu_ms=0.000 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=8 reps=5 med_total_ms=64.423 per_launch_ms=8.053 min_ms=61.988 max_ms=65.625 med_cpu_ms=64.407 med_offcpu_ms=0.016 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=16 reps=5 med_total_ms=123.616 per_launch_ms=7.726 min_ms=99.557 max_ms=127.885 med_cpu_ms=123.597 med_offcpu_ms=0.008 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=32 reps=5 med_total_ms=246.743 per_launch_ms=7.711 min_ms=235.018 max_ms=253.864 med_cpu_ms=246.616 med_offcpu_ms=0.032 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=64 reps=5 med_total_ms=321.127 per_launch_ms=5.018 min_ms=250.645 max_ms=343.922 med_cpu_ms=321.092 med_offcpu_ms=0.023 med_nvcsw=0.0 bad=0
+    GUEST_BSWEEPSUM N=128 K=128 reps=5 med_total_ms=499.983 per_launch_ms=3.906 min_ms=483.377 max_ms=523.327 med_cpu_ms=499.889 med_offcpu_ms=0.095 med_nvcsw=0.0 bad=0
+
+=== ★ THE PER-ITERATION LINES (the paired values; the identity holds HERE, per line)
+        ITER N=128 i=0 launch_ms=8.035 submit_ms=7.080 sync_ms=0.956 t0_mono_ms=42776.342 sub_cpu_ms=7.086 syn_cpu_ms=0.955 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.955 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=1 launch_ms=8.241 submit_ms=7.501 sync_ms=0.740 t0_mono_ms=42799.825 sub_cpu_ms=7.507 syn_cpu_ms=0.739 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.739 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=2 launch_ms=8.304 submit_ms=7.607 sync_ms=0.697 t0_mono_ms=42823.378 sub_cpu_ms=7.646 syn_cpu_ms=0.696 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.696 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=3 launch_ms=8.879 submit_ms=7.985 sync_ms=0.894 t0_mono_ms=42847.625 sub_cpu_ms=7.991 syn_cpu_ms=0.893 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.893 verified=yes bad=0
+        ITER N=128 i=4 launch_ms=8.289 submit_ms=7.612 sync_ms=0.677 t0_mono_ms=42872.162 sub_cpu_ms=7.619 syn_cpu_ms=0.676 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.676 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=5 launch_ms=8.509 submit_ms=7.548 sync_ms=0.961 t0_mono_ms=42895.895 sub_cpu_ms=7.554 syn_cpu_ms=0.959 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.959 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=6 launch_ms=8.840 submit_ms=7.859 sync_ms=0.980 t0_mono_ms=42919.967 sub_cpu_ms=7.865 syn_cpu_ms=0.965 syn_offcpu_ms=0.015 syn_nvcsw=0 syn_nivcsw=1 syn_utime_ms=0.966 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=7 launch_ms=8.352 submit_ms=7.348 sync_ms=1.004 t0_mono_ms=42944.411 sub_cpu_ms=7.354 syn_cpu_ms=1.003 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=1.003 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=8 launch_ms=8.423 submit_ms=7.461 sync_ms=0.962 t0_mono_ms=42968.188 sub_cpu_ms=7.469 syn_cpu_ms=0.961 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.961 verified=yes bad=0
+        ITER N=128 i=9 launch_ms=8.506 submit_ms=7.793 sync_ms=0.713 t0_mono_ms=42991.875 sub_cpu_ms=7.799 syn_cpu_ms=0.712 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.711 verified=yes bad=0
+        ITER N=128 i=10 launch_ms=8.405 submit_ms=7.420 sync_ms=0.984 t0_mono_ms=43015.641 sub_cpu_ms=7.427 syn_cpu_ms=0.983 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.983 syn_stime_ms=0.000 verified=yes bad=0
+        ITER N=128 i=11 launch_ms=8.444 submit_ms=7.461 sync_ms=0.983 t0_mono_ms=43039.339 sub_cpu_ms=7.467 syn_cpu_ms=0.982 syn_offcpu_ms=0.001 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.000 syn_stime_ms=0.982 verified=yes bad=0
+        ✘ ITER N=512
+
+=== ★★ CORRECTNESS — never optional, and inverted in the negctrl arm
+    GUEST_BENCH_TOTAL_BAD=0
+    GUEST_BENCH_VERDICT=PASS (every timed iteration verified)
+    GUEST_SIZES_DONE=1
+    GUEST_XID_COUNT=0
+    GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM
+    ⊘ GUEST_NEGCTRL_SWEEP_ROWS ABSENT — UNMEASURED, not 0
+    ⊘ GUEST_NEGCTRL_SWEEP_ROWS_WITH_BAD_0 ABSENT — UNMEASURED, not 0
+
+=== ★ THE HOST SIDE, correlational ONLY (no containment licence during a sync)
+    host_rows      = [host_rows=18295]
+    Xid lines      = [0]
+    await_sem hits = [0]
+    ⊘ These are printed because they are cheap, NOT because anything above rests on them.
+=== W320 arm=ksweep DONE rc=0 ===
