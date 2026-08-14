@@ -7973,6 +7973,33 @@ impl SharedDoorbell {
         let gate = selected_dirty_gate(DIRTY_GATE_PUBLISH_ENV);
         let joined_now = plane.joined_fb_ranges().len();
         let (mut gate_fired, mut gate_skipped) = (0usize, 0usize);
+        // ★★★★★ **w328 — THE DOORBELLED VAS, NAMED HERE TOO.**
+        //
+        // The drain half already derives it (`measure_guest_ram_pin_rate`'s `drain_target`);
+        // this half never did, and that asymmetry is the whole of the breadth question. ⊘ It
+        // is derived from the SAME `seen` facts through the SAME two fields, so the two
+        // passes cannot come to disagree about which VAS a doorbell is about.
+        let scope_target = seen.and_then(|f| f.vas_pdb.map(|p| (f.proc, p)));
+        let scope_arm = publish_scope_arm();
+        // ⚠⚠ **THE FALLBACK IS THE SAFETY PROPERTY, AND IT IS NOT AN OPTIMISATION.** Scoping
+        // with NO target would publish NOTHING at all — strictly worse than master, and it
+        // would present as a GPU fault, which is indistinguishable by symptom from the
+        // pre-existing drain-truncation intermittent. ⇒ no target ⇒ full breadth, said out
+        // loud in the line below rather than inferred from a count.
+        // ⊘ AND THE SECOND REFUSAL: a target of `SYSTEM_PROC` is a target that is NEVER
+        // ATTEMPTED (§12.26, `shim.rs`'s own `system` guard below). Scoping to it would leave
+        // every publishable VAS unvisited while the line still read `scoped=true target=proc0`
+        // — the favourable-looking absence this tree has paid for repeatedly.
+        let scoped = publish_scope_scoped(scope_arm, scope_target);
+        // ★★★★★ **w328 — THE BREADTH'S OWN COST, SPLIT AT THE SOURCE.** Not a fit and not a
+        // residual: each VAS's own wall time is attributed to the bucket it belongs to as it
+        // is spent. ⊘ `other_*` counts what the breadth DELIVERS beside what it COSTS,
+        // because "2 529 ms of BQL" and "and it publishes nothing" are two different claims
+        // and only the pair decides whether the breadth is vestigial.
+        let (mut pub_target_us, mut pub_other_us) = (0u128, 0u128);
+        let (mut pub_other_vases, mut pub_other_published, mut pub_other_refused) =
+            (0usize, 0usize, 0usize);
+        let (mut pub_target_published, mut pub_scoped_out) = (0usize, 0usize);
         for pid in self.device.live_pids() {
             for (gpu, pdb) in self.device.vas_keys(pid) {
                 // ⊘ The isolate is keyed `(proc, gpu)`, so a `Vas` on another GPU has no
@@ -8019,7 +8046,30 @@ impl SharedDoorbell {
                         continue;
                     }
                 }
+                // ★★★★★ **w328 — THE SCOPE SKIP.** Above the census, because the census walk
+                // itself is the cost: `vas_publish_census` is O(rows of this Vas) and proc 0
+                // alone holds 6787 of them. ⊘ Placed BELOW the w318 dirty gate deliberately —
+                // the two are independent reasons not to walk a VAS, and collapsing them
+                // would make one arm's tally speak for the other's.
+                //
+                // ⚠ NO STAMP IS TAKEN for a scoped-out VAS. A stamp says *"this census ran to
+                // completion and here is what it found"*; taking one here would tell the next
+                // doorbell that a VAS we never looked at is clean, which is the
+                // publication-silently-never-performed shape this pass's own docs forbid.
+                let is_target = scope_target == Some((pid, pdb));
+                if scoped && !is_target {
+                    pub_scoped_out += 1;
+                    rows.push(format!(
+                        "[proc={} pdb=0x{:x} ⊘SCOPED-OUT(w328 KAYFABE_PUBLISH_SCOPE=doorbelled: \
+                         this is NOT the doorbelled VAS) ⊘ ITS CENSUS WAS NOT TAKEN — the rows \
+                         below are UNMEASURED for this doorbell, ⊘ not zero, and NO STAMP WAS \
+                         TAKEN]",
+                        pid.0, pdb.0
+                    ));
+                    continue;
+                }
                 gate_fired += 1;
+                let vas_t0 = std::time::Instant::now();
                 let c = self
                     .device
                     .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
@@ -8068,6 +8118,27 @@ impl SharedDoorbell {
                 }
                 published += done;
                 refused += failed;
+                // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.**
+                //
+                // ⊘ The census WALK is inside the bracket as well as the joins, so the two
+                // can be separated afterwards by correlating cost against `candidates` —
+                // which is what settled the mechanism. `[measured w328, boot w328a1]` with
+                // `candidates=0` and a table of **18 277 rows** a pass costs **632 µs**
+                // (35 ns/row); with `candidates>0` and the same table it costs **52 094 µs**.
+                // ⇒ **the walk is not the cost; ~6.4 ms per `join_one_fb_leaf` attempt is**,
+                // and 328 of the boot's ~400 attempts are the same 8 already-joined ranges
+                // re-offered 41 times. A bracket around the joins alone could not have shown
+                // that, because it could not have priced the walk it excluded.
+                let vas_us = vas_t0.elapsed().as_micros();
+                if is_target {
+                    pub_target_us += vas_us;
+                    pub_target_published += done;
+                } else {
+                    pub_other_us += vas_us;
+                    pub_other_vases += 1;
+                    pub_other_published += done;
+                    pub_other_refused += failed;
+                }
                 // ★★★★★ **w318 — THE STAMP, and the two conditions on taking it.**
                 //
                 // 1. **`!budget_hit`.** A pass that ran out of wall budget left candidates
@@ -8152,8 +8223,31 @@ impl SharedDoorbell {
         for _ in 0..gate_skipped {
             self.dirty.tally(DirtyGate::PUBLISH, false);
         }
+        // ★★★★★ **w328 — THE BREADTH LINE. Both halves, always, on every arm.**
+        //
+        // ⊘ `arm=` is printed even when unset, so `absent` means an OLD BINARY and never
+        // `all` — this tree has paid for a knob whose setting lived only in the launcher's
+        // environment. ⊘ `target=` prints `⊘NONE` rather than a plausible pair when this
+        // doorbell resolved no channel facts, because `scoped` is FALSE in that case and a
+        // reader must be able to see why.
+        let w328 = format!(
+            "arm={scope_arm} scoped={scoped} target={} scoped_out={pub_scoped_out} \
+             target_us={pub_target_us} target_published={pub_target_published} \
+             other_vases={pub_other_vases} other_us={pub_other_us} \
+             other_published={pub_other_published} other_refused={pub_other_refused} \
+             breadth_share={}",
+            scope_target.map_or("⊘NONE (no channel facts ⇒ FULL BREADTH, by design)".to_string(), |(p, d)| format!(
+                "proc={} pdb=0x{:x}",
+                p.0, d.0
+            )),
+            (pub_other_us * 100).checked_div(pub_target_us + pub_other_us).map_or_else(
+                || "⊘UNMEASURED (this pass spent no time in any VAS)".to_string(),
+                |p| format!("{p}%"),
+            ),
+        );
         Some(format!(
-            "{}{head} gate={} this_doorbell[fired={gate_fired} skipped={gate_skipped}] → \
+            "{}{head} W328SCOPE[{w328}] gate={} this_doorbell[fired={gate_fired} \
+             skipped={gate_skipped}] → \
              published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
             pin_clause
                 .map(|l| format!("{l}\nkayfabe: "))
@@ -8391,6 +8485,17 @@ impl SharedDoorbell {
         let mut drain_census = String::from("⊘ NO DRAIN — the contiguity census is UNMEASURED");
         let mut drain_ipc = String::from("⊘ NO DRAIN — the IPC bracket is UNMEASURED");
         let mut drain_batch = String::from("⊘ NO DRAIN — the batch accounting is UNMEASURED");
+        // ★★★★★ **w328 — THE SAME BREADTH QUESTION ON THIS PASS.** The doorbelled VAS is
+        // DRAINED here and every other one is SAMPLED at 256 rows; the question is what the
+        // sample costs and what it delivers. ⊘ Same fallback rule as the publication half: no
+        // target ⇒ full breadth, because scoping to a VAS we cannot name is scoping to none.
+        let scope_arm = publish_scope_arm();
+        // ⊘ Same two refusals as the publication half, and the SYSTEM_PROC one is load-bearing
+        // here too: this loop `continue`s past proc 0 unconditionally, so scoping to it would
+        // skip every VAS and pin nothing at all.
+        let scoped = publish_scope_scoped(scope_arm, drain_target);
+        let (mut pin_other_us, mut pin_other_vases, mut pin_other_pinned) = (0u128, 0usize, 0usize);
+        let mut pin_scoped_out = 0usize;
         for pid in self.device.live_pids() {
             // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
             // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
@@ -8407,6 +8512,14 @@ impl SharedDoorbell {
                 }
                 // ★★★★★ **w292 — THE ONE SCOPED BUDGET CHANGE, AND IT IS THIS PREDICATE.**
                 let doorbelled = drain_target == Some((pid, pdb));
+                // ★★★★★ **w328 — THE SCOPE SKIP, above `vas_guest_ram_rows`.** That call is
+                // what materialises the candidate list, so skipping below it would save the
+                // pins and keep the walk. ⊘ The drained VAS is never scoped out: `scoped`
+                // implies `drain_target.is_some()`, so exactly one VAS survives the filter.
+                if scoped && !doorbelled {
+                    pin_scoped_out += 1;
+                    continue;
+                }
                 let cap = if doorbelled {
                     // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
                     // instrument env var is set, so master's behaviour is unchanged.
@@ -8586,6 +8699,10 @@ impl SharedDoorbell {
                         }
                     }
                 }
+                // ⊘ w328 — read in µs as well as ms. A sampled VAS costs single-digit ms, so a
+                // ms-granular sum over ~4 of them rounds toward zero and would report the
+                // breadth as free.
+                let vas_us = vas_started.elapsed().as_micros();
                 let vas_ms = vas_started.elapsed().as_millis();
                 // ★★ FLAT OR DEGRADING — the property that decides whether 256 rows may
                 // speak for 16 328. ⊘ w292: computed per VAS and printed IN the VAS's own row,
@@ -8651,8 +8768,14 @@ impl SharedDoorbell {
                             if own == 0 { 0 } else { u128::from(us) * 100 / own },
                         )
                     };
-                } else if degrade == "n/a" {
-                    degrade = vas_degrade.clone();
+                } else {
+                    // ★★★★★ **w328 — WHAT THE SAMPLED (non-doorbelled) VASes COST AND DELIVER.**
+                    pin_other_us += vas_us;
+                    pin_other_vases += 1;
+                    pin_other_pinned += each_us.len();
+                    if degrade == "n/a" {
+                        degrade = vas_degrade.clone();
+                    }
                 }
                 rows.push(format!(
                     "[proc={} pdb=0x{:x} {} asked={} pinned={} refused={} in {vas_ms} ms \
@@ -8745,6 +8868,9 @@ impl SharedDoorbell {
              per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
              DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
              W321CENSUS[{drain_census}] W321IPC[{drain_ipc}] W321BATCH[{drain_batch}] \
+             W328PIN[arm={scope_arm} scoped={scoped} scoped_out={pin_scoped_out} \
+             other_vases={pin_other_vases} other_us={pin_other_us} \
+             other_pinned={pin_other_pinned} drain_ms={drain_ms}] \
              over {} VAS row(s) {}",
             total_us / 1000,
             rows.len(),
@@ -14427,6 +14553,59 @@ impl DrainChunk {
 #[cfg(feature = "host-isolates")]
 const DRAIN_CHUNK_MAX: u64 = 2 << 20;
 
+/// ★★★★★ **w328 — THE BREADTH ARM.**
+///
+/// `KAYFABE_PUBLISH_SCOPE=doorbelled` restricts **both** doorbell-time passes — the
+/// publication census (`publish_vas_rows`) and the guest-RAM pin pass
+/// (`measure_guest_ram_pin_rate`) — to the VAS the doorbell is about. **Absent or anything
+/// else ⇒ `all` ⇒ byte-identical to master**, so one binary carries both arms.
+///
+/// # ⚠⚠ THE HAZARD RUNS THE OTHER WAY HERE, AND IT IS NAMED BEFORE THE KNOB IS
+///
+/// Every other budget in this file risks doing **too little work too slowly**. This one risks
+/// **not doing work at all**: a mapping we decline to publish is a mapping the host MMU has no
+/// directory for, i.e. a GPU fault — and it is indistinguishable by symptom from
+/// `the_drain_budget_truncation.md`'s pre-existing intermittent. ⇒ two refusals are built in:
+///
+/// 1. **No target ⇒ no scoping.** `scoped` requires the doorbell to have named a VAS. Scoping
+///    to a VAS we cannot name is scoping to none, and would publish nothing at all.
+/// 2. **No stamp for a VAS we skipped.** The w318 dirty gate's stamp asserts *"this census
+///    ran to completion"*. Stamping a scoped-out VAS would tell the next doorbell that a VAS
+///    nobody looked at is clean — a publication silently never performed.
+///
+/// ⊘ **It is an instrument first.** `W328SCOPE`/`W328PIN` print the breadth's cost and its
+/// yield on **every** arm including the default one, so what the breadth is worth is a
+/// measurement before it is a switch.
+#[cfg(feature = "host-isolates")]
+fn publish_scope_arm() -> &'static str {
+    static V: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    match V
+        .get_or_init(|| std::env::var("KAYFABE_PUBLISH_SCOPE").unwrap_or_default())
+        .as_str()
+    {
+        "doorbelled" => "doorbelled",
+        _ => "all",
+    }
+}
+
+/// ★★★★★ **w328 — THE SCOPING PREDICATE, AS A PURE FUNCTION.**
+///
+/// Both passes ask the same question and **must** answer it identically: the publication
+/// census and the guest-RAM pin pass scoping to different VASes on one doorbell would publish
+/// one address space and pin another. ⊘ Extracted so the two refusals are testable **offline,
+/// without a GPU and without an env var** — a knob whose safety property is only ever
+/// exercised on a bench is a wish. Its known-positive/negative pairs are
+/// `tests/scope_predicate.rs`.
+///
+/// `arm` is [`publish_scope_arm`]'s word; `target` is the `(proc, pdb)` this doorbell named.
+#[cfg(feature = "host-isolates")]
+fn publish_scope_scoped(
+    arm: &str,
+    target: Option<(kayfabe_core::ProcId, kayfabe_rt::Pdb)>,
+) -> bool {
+    arm == "doorbelled" && target.is_some_and(|(p, _)| p != kayfabe_core::gpu::Gpu::SYSTEM_PROC)
+}
+
 /// ★★★★★ **w321 — THE FIX'S ARM.** `KAYFABE_DRAIN_BATCH=coalesce` merges the drain's rows
 /// into contiguous chains. **Absent or anything else ⇒ `off` ⇒ byte-identical to master**, so
 /// the SAME BINARY carries both arms and the only variable between them is this word.
@@ -15356,6 +15535,75 @@ mod ring_scan_sentence_tests {
             engine_fwd_report_action(frozen_other_class, 4096),
             EngineFwdReport::TotalsOnly,
             "seen advanced, so the census speaks regardless of which class is saturated"
+        );
+    }
+}
+
+/// ★★★★★ **w328 — THE SCOPING PREDICATE'S KNOWN-POSITIVE AND KNOWN-NEGATIVE PAIRS.**
+///
+/// This tree's own banked lesson: *a census zero needs a known-positive*. The dangerous
+/// failure of [`publish_scope_scoped`] is not that it scopes when it should not — that is a
+/// slow boot. It is that it scopes to **nothing**, publishing no VAS at all, which presents
+/// as a GPU fault indistinguishable from `the_drain_budget_truncation.md`'s pre-existing
+/// intermittent. Both of its refusals are therefore asserted here, offline, with no GPU and
+/// no environment variable in the path.
+#[cfg(all(test, feature = "host-isolates"))]
+mod w328_scope_predicate_tests {
+    use super::publish_scope_scoped;
+
+    fn pdb(v: u64) -> kayfabe_rt::Pdb {
+        kayfabe_rt::Pdb(v)
+    }
+
+    /// The KNOWN-NEGATIVE: the default arm never scopes, whatever the target is.
+    #[test]
+    fn the_default_arm_is_master_and_never_scopes() {
+        assert!(!publish_scope_scoped("all", None));
+        assert!(!publish_scope_scoped(
+            "all",
+            Some((kayfabe_core::ProcId(2), pdb(0x6000)))
+        ));
+        // ⊘ Anything that is not the exact word is `all`. A typo'd launcher must fall back to
+        // master's breadth, never to a half-armed state.
+        assert!(!publish_scope_scoped(
+            "doorbelled ",
+            Some((kayfabe_core::ProcId(2), pdb(0x6000)))
+        ));
+    }
+
+    /// The KNOWN-POSITIVE: an armed arm with a real, non-system target does scope.
+    #[test]
+    fn an_armed_arm_with_a_real_target_scopes() {
+        assert!(publish_scope_scoped(
+            "doorbelled",
+            Some((kayfabe_core::ProcId(2), pdb(0x6000)))
+        ));
+    }
+
+    /// ⚠⚠ **REFUSAL 1 — NO TARGET ⇒ NO SCOPING.** A doorbell that resolved no channel facts
+    /// names no VAS; scoping to a VAS we cannot name is scoping to none, and would publish
+    /// nothing at all — strictly worse than master and presenting as a GPU fault.
+    #[test]
+    fn no_target_falls_back_to_full_breadth() {
+        assert!(
+            !publish_scope_scoped("doorbelled", None),
+            "★★★★★ scoping with no target publishes NOTHING; the fallback to full breadth is \
+             the safety property of this rung and not an optimisation"
+        );
+    }
+
+    /// ⚠⚠ **REFUSAL 2 — A `SYSTEM_PROC` TARGET ⇒ NO SCOPING.** §12.26: proc 0 is never
+    /// attempted by either pass. Scoping to it would leave every publishable VAS unvisited
+    /// while the log line still read `scoped=true`, which is the favourable-looking absence
+    /// this tree has paid for repeatedly.
+    #[test]
+    fn a_system_proc_target_falls_back_to_full_breadth() {
+        assert!(
+            !publish_scope_scoped(
+                "doorbelled",
+                Some((kayfabe_core::gpu::Gpu::SYSTEM_PROC, pdb(0x200000)))
+            ),
+            "★★★★★ proc 0 is NEVER ATTEMPTED by either pass; scoping to it scopes to nothing"
         );
     }
 }
