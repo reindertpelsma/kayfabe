@@ -1,4 +1,4 @@
-# w318 — THE LAUNCH FLOOR WAS REPETITION, AND GATING IT IS 16.9× ON THE TRAP AND 19.6× ON THE GUEST'S SUBMIT
+# w318 — THE LAUNCH FLOOR WAS REPETITION, AND GATING IT IS 20.9× ON THE TRAP AND 21.3× ON THE GUEST'S SUBMIT
 
 **STATUS: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04).**
 ★ **TWO INDEPENDENT BOOT PAIRS**, at `c6301a57` (pair A) and at the final `44317766`
@@ -123,7 +123,7 @@ page-table + publn   71.012     91.8%              2.451      53.5%       29×
 
 ⇒ **`page-table + publication` is 91.8 % of the control trap in BOTH pairs, to the decimal.**
 
-- ★★ **`UNMARKED` is 0.008 ms of 4.583 (0.2 %)** on the gated arm. The breakdown still closes;
+- ★★ **`UNMARKED` is 0.008 ms of 4.078 (0.2 %)** on the gated arm. The breakdown still closes;
   the saving is not hiding in an unattributed remainder.
 - ★ **Pair B's control reproduces w315 to 1.7 %** (85.248 against 86.733 ms/launch; shares
   53.8 % / 27.5 % against 55.7 % / 25.7 %), and the guest agrees (`launch_med_ms` 107.846
@@ -198,12 +198,14 @@ PERMANENT refusal.** A dirty gate removes it; publishing at bind removes it; so 
    it is an unconditional census w304 made unconditional on purpose, so a boot can tell *"the
    census ran and found nothing"* from *"the sweep was disarmed"*. Gating it needs that
    property preserved, which is a different design from either gate here.
-2. **Outside the trap**, the launch is now **85.4 % completion** (`sync_med_ms` 23.382 of
-   27.960) where it was 21.9 %. ⇒ **the next binding constraint on the launch is the
+2. **Outside the trap**, the launch is now **85.5 % completion** (`sync_med_ms` 23.552 of
+   27.552) where it was 21.4 %. ⇒ **the next binding constraint on the launch is the
    completion plane, not the submit plane**, and that is a different lane's subject.
 
 ⊘ Against the product metric: 60 tok/s needs ~64 µs per launch (w311). This rung takes
-101.8 ms → 28.0 ms. **That is 3.6× of a required ~1600×** — real, and not the answer.
+107.8 ms → 27.6 ms. **That is 3.9× of a required ~1700×** — real, and not the answer. ★ What it
+does change is *where the remaining 1700× has to come from*: it is now **85 % on the completion
+plane**, which this rung did not touch and w315 explicitly declined to attribute.
 
 ---
 
@@ -245,23 +247,39 @@ number of passes.** The only class that disappeared is the 87 doorbells that pub
 and re-refused the *same eight already-joined leaves* at ~40 ms each (≈ 3.5 s of a 2-minute
 boot).
 
-The page-table decode says the same thing:
+★★★ **This table is byte-identical in pair A and pair B** — four boots, two revisions, one
+distribution. ⊘ `87 → 0` in both.
 
-| `→ bound=N …` | control | gated |
+The page-table decode says the same thing — **but only when you sum it, and the histogram is
+where I nearly got this wrong:**
+
+| | control | gated |
 |---|---|---|
-| `bound=1` | 3 | **3** |
-| `bound=512` | 2 | **2** |
-| `bound=2050` | 1 | **1** |
-| `bound=0` | 264 | 263 |
+| **Σ `bound=` over the whole boot** | **25 091** | **25 091** |
+| decode lines emitted | 275 | 275 |
+| Σ `swept_binds=` | 0 | 0 |
+| final `host_rows` | **18 295** | **18 295** |
 
-⇒ **Every bind the control performed, the gated arm performed.** `drained=162 latched=52`
-became `drained=109 latched=0 rounds=0` on 249 of 275 doorbells — the decode's own
-`latched == 0 ⇒ procs.is_empty() ⇒ break` exit, which already existed and which this rung did
-not have to invent. ⊘ The 109 pages still drained are the perpetually-**unattributable** ones
-the witness carries by design; they are re-offered every doorbell and cost ~31 µs.
+⇒ **The gate does not change how many mappings get bound. It changes how they are
+DISTRIBUTED across doorbells** — fewer passes, each carrying more.
+
+⊘⊘ **And that is why the histogram alone would have been misleading in BOTH directions.** In
+pair A the per-line `bound=` histogram happened to match row for row and I wrote it up as the
+finding; in pair B it does **not** — the control shows `bound=2050` and `bound=19618` where
+the gated arm shows `bound=7` and `bound=32` in the same slots. Read as a histogram that looks
+like a regression. **Summed, the two are equal to the digit**, in both pairs and at both
+revisions. ⚠ A shape comparison between two runs whose *batching* differs is not a comparison
+of what they achieved, and the number that survives batching is the total.
+
+`drained=162 latched=52` became `drained=109 latched=0 rounds=0` on 249 of 275 doorbells — the
+decode's own `latched == 0 ⇒ procs.is_empty() ⇒ break` exit, which already existed and which
+this rung did not have to invent. ⊘ The 109 pages still drained are the
+perpetually-**unattributable** ones the witness carries by design; they are re-offered every
+doorbell and cost ~28 µs.
 
 ★ **This is the correctness argument in its strongest available form**, and it is measured
-rather than reasoned: the gate is behaviour-preserving *on this workload* and only
+rather than reasoned: **same publications, same total binds, same final `host_rows`, across
+four boots and two revisions.** The gate is behaviour-preserving *on this workload* and only
 repetition-removing. ⚠ It is not a proof for workloads not run — see §6.
 
 ---
