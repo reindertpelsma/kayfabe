@@ -215,16 +215,31 @@ trap.**
 `[measured, boots `w326r1`/`w326r2`, tick armed, vs `w326m1`/`w326o1` disarmed]` — and this is
 the finding that decides how the arm ships:
 
-| boot | tick | whole-VAS drain | `worst_trap_us` |
-|---|---|---|---|
-| `w326m1` | **off** | `pinned=13313/13313 DRAIN_MS=2792` **`complete=true`** | 2 879 349 |
-| `w326r1` | **on** | `pinned=13268/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 106 218 |
-| `w326r2` | **on** | `pinned=12728/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 130 278 |
+| boot | tick | whole-VAS drain | `worst_trap_us` | `CUP3_VAL` |
+|---|---|---|---|---|
+| `w326m1` | **off** | `pinned=13313/13313 DRAIN_MS=2792` **`complete=true`** | 2 879 349 | 43 |
+| `w326r1` | **on** | `pinned=13268/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 106 218 | 43 |
+| `w326r2` | **on** | `pinned=12728/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 130 278 | 43 |
+| `w326r3` | **on** | `pinned=13313/13313 DRAIN_MS=2921` **`complete=true`** | 3 033 088 | 43 |
 
-⇒ **the tick reproducibly pushes the whole-VAS publication drain past its 3000 ms budget and
-truncates it** — `w319`'s failure mode 1. The workload is unaffected (`CUP3_VAL=43` on all
-three, `Xid=0`, the same 40 unserviced ids, `w319_attribute.sh ⇒ VERDICT=0 GREEN`), but a
-truncated publication is a publication miss waiting for a different workload.
+⊘⊘ **AND `n = 3` CHANGED THE READING — at `n = 2` this table said "reproducibly truncates".**
+It is **2 of 3**, not 3 of 3, and the third boot completed at `2921 ms`. ★ The correct
+statement is therefore not *"the tick truncates the drain"* but:
+
+> **The whole-VAS publication drain was ALREADY at 93 % of its budget on master (2792 / 3000),
+> and the tick's ~130–210 ms of rank-0 contention crosses the line about two thirds of the
+> time.** The tick is the straw, not the load.
+
+⇒ two consequences, and the second is the more useful one:
+1. the tick must get cheaper before it is armed (below), **and**
+2. ★★ **the 3000 ms budget has ~7 % of headroom on a workload that already fits.** Any future
+   change costing >208 ms of rank-0 time will truncate this drain, and the failure is silent
+   in the workload — all four boots returned `CUP3_VAL=43`, `Xid=0`, the same 40 unserviced
+   ids, and `w319_attribute.sh ⇒ VERDICT=0 GREEN`. **A truncated publication is a publication
+   miss waiting for a different workload**, and nothing in the pass/fail vocabulary sees it.
+
+⚠ This is precisely the campaign's own banked trap, arriving on schedule: *a single-boot
+result has a ~20 % false-negative rate*. At `n = 2` I would have shipped "reproducible".
 
 **The mechanism, and it is not mysterious.** `drain_retired_budgeted` takes the **rank-0 write
 guard** in its plan phase; so does the publication drain. `[measured]` `worst_tick_us =
