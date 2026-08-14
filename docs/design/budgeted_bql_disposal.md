@@ -211,6 +211,29 @@ a bounded drain turned into a permanent leak. Both sides use the one predicate.
 - **It changes nothing for any caller that is not `Regs::write`.** `reap_retired()` keeps its
   exact semantics, which is why no existing test needed editing.
 
+### ⊘⊘ AND ONE DEFECT FOUND WHILE READING THIS PATH, NAMED AND NOT FIXED HERE
+
+`Proc::stage_release` (`kayfabe-core/src/gpu.rs`) takes an `Orphans` **by value** and stages
+only two of its three kinds:
+
+```rust
+q.unmap.extend(orphans.unmap);
+q.free.extend(orphans.free);          // ← and `orphans.guest_ram` is DROPPED, silently
+```
+
+⇒ **any `guest_ram` window in a failed verb's residue is lost.** Its three callers are
+`SharedDevice::stage_orphans` (§7.5's abandoned chain — the fallback that exists *precisely* so
+outstanding host objects stay nameable), the retired-proc twin beside it, and
+`kayfabe_fwd`'s residue path. This is the **exact class** `Orphans::len`'s own doc was written
+against — *"exists so a caller counting cannot silently omit a kind"* — surviving one function
+over, where the omission is not a miscount but a **leak**.
+
+⚠ The fix is one line. It is **deliberately not made here**: staging `guest_ram` makes
+`munmap`s happen that do not happen today, on the live verb path, and folding an unmeasured
+behaviour change into the rung whose whole output is a **timing measurement** would make that
+measurement unattributable. It needs its own rung, its own known-positive (a `VerbFailure`
+carrying `guest_ram` residue, watched surviving the round trip) and its own boot.
+
 ---
 
 ## 7. ★★★ Pre-registered outcomes and the bench criteria
