@@ -89,10 +89,31 @@ refused**. A rule never seen to fire is not a rule.
   resident GR context; `hTargetChannel` never validated). Serving `0309` **neither implies nor
   requires** it. Measured, not assumed.
 
-★★ **Answer this by evidence before building anything:** *does cup2 — or any real client — ever put
-a CE operand in a VAS that never doorbells?* ⇒ **If not, criterion 1 needs a different PROBE, not a
-bigger mechanism**, and widening publication to every declared VAS would scale cost and blast radius
-with **guest behaviour** rather than with work.
+★★★★★ **ANSWERED 2026-08-14, from the committed green trace — NO. Build the probe, not the
+mechanism.** Measured in `traces/w294_cudalimit/run_w294cup2_qemu.log` (the `^CUP2_RC=0` boot):
+
+| | reading |
+|---|---|
+| `OPERAND-PIN` lines | **319** |
+| distinct `pdb=` across all 319 | **1** — `0x201000`, every one |
+| channels they cover | **all 16** (`chan=0`…`chan=15`) |
+| `SEMA-PIN` / `PB-PIN` / `RING-PROJ` pdbs | `0x201000` — **the same VAS** |
+| VASes cup2 *declares* | **4** (`0x0`, `0x200000`, `0x201000`, `0x2efa9c000`) |
+
+⇒ **cup2 declares four address spaces and puts every operand, semaphore, pushbuffer and ring in the
+one that doorbells.** The VAS that carries work is `0x201000` (18 309 rows, `published=18305`).
+
+★★★ **Therefore: criterion 1 needs a different PROBE, and widening publication is RETIRED.** Arm 4's
+operands live in a third VAS **because arm 4 put them there** — that is a property of our own raw
+probe, not of how CUDA lays out memory. ⇒ **The fix is one line in the probe: allocate its control
+operands in the VAS of the channel it rings.** ⊘ Widening publication to every declared VAS would
+have scaled cost and blast radius with *guest behaviour* to serve a shape no real client produces.
+
+⚠ **Scoped honestly:** this is **cup2's** behaviour on **one** green boot, not a proof about every
+client. It is enough to retire *this* mechanism for *this* criterion, and not enough to assert
+"no client ever does". A client that genuinely used a non-doorbelling VAS would reopen it — and
+`OPERAND-PIN`'s `pdb=` field is exactly the instrument that would show it, so the check is cheap to
+repeat on any future workload. ★ Re-run it on cup3.
 
 ---
 
