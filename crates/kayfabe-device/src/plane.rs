@@ -1693,6 +1693,19 @@ impl RegPlane {
         had
     }
 
+    /// ★★ **w329 — is a join installed at EXACTLY `phys`?** The cheap half of
+    /// [`RegPlane::release_fb_join`], for a caller that must decide whether a collision is even
+    /// possible before doing anything expensive.
+    ///
+    /// ⊘ EXACT base, for [`crate::fbwin::FbStore::release_join`]'s reason: a join covers a
+    /// whole leaf, so an interior address names no join and answering `true` for one would send
+    /// the caller to release a range it did not name.
+    #[must_use]
+    pub fn fb_join_installed_at(&self, phys: u64) -> bool {
+        let s = self.state.lock();
+        s.fb.joined_ranges().iter().any(|(b, _)| *b == phys)
+    }
+
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
     #[must_use]
     pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {

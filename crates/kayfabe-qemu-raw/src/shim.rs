@@ -10429,7 +10429,10 @@ fn join_one_fb_leaf(
     // ⊘ This can only fire for a candidate row, which by construction has NO host
     // object of its own - so a join already installed at this frame is necessarily owned by a
     // DIFFERENT VA. See `SharedDevice::supersede_joined_fb_leaf` for what is and is not proven.
-    if release.supersedes() {
+    // ★ The store is asked FIRST, and it is the cheap question: `joined_ranges` is
+    // tens of entries while the address-table scan below is tens of thousands of rows, and on
+    // the overwhelming majority of leaves there is no collision at all.
+    if release.supersedes() && plane.fb_join_installed_at(leaf.phys) {
         let over = {
             let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
             l.get(&leaf.phys).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
