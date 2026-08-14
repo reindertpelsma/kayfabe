@@ -38,11 +38,21 @@ SWEEP=${BENCH_BATCH_SWEEP:-}
 HOSTMEM=${BENCH_HOSTMEM:-0}
 REPS=${BENCH_BATCH_REPS:-5}
 CTXF=${BENCH_CTX_FLAGS:-0}
+# ★★★ w322 — the placement + aperture knobs, forwarded so the NATIVE arm runs the SAME
+#   experiment as the guest arm. ⊘ All default to the previous behaviour: with BENCH_ALLOC
+#   unset and BENCH_BW empty this script is byte-for-byte w320's.
+ALLOC=${BENCH_ALLOC:-}
+BW=${BENCH_BW:-}
+BWIT=${BENCH_BW_ITERS:-7}
+BWTGT=${BENCH_BW_TARGET_MIB:-256}
+BWONLY=${BENCH_BW_ONLY:-0}
+BWREPS=${BENCH_BW_REPS:-0}
 
 mkdir -p "$WORK"
 exec >"$OUT" 2>&1
 echo "=== W311 NATIVE START $(date -Is) pid=$$ ==="
 echo "SIZES=$SIZES ITERS=$ITERS BATCH=$BATCH"
+echo "W322 ALLOC=[$ALLOC] BW=[$BW] BW_ITERS=$BWIT BW_TARGET_MIB=$BWTGT BW_ONLY=$BWONLY BW_REPS=$BWREPS"
 
 # ---- phase 0: nothing else may own the GPU ------------------------------------------
 # ★★ `pgrep -x qemu-system-x86_64` CAN NEVER MATCH (/proc/PID/comm truncates at 15 chars) so
@@ -87,7 +97,9 @@ echo ""
 echo "=== ★★★★★ THE NATIVE MEASUREMENT ==="
 START=$(date +%s)
 ( cd "$WORK" && BENCH_SIZES="$SIZES" BENCH_ITERS="$ITERS" BENCH_BATCH="$BATCH" \
-  BENCH_BATCH_SWEEP="$SWEEP" BENCH_BATCH_REPS="$REPS" BENCH_CTX_FLAGS="$CTXF" BENCH_HOSTMEM="$HOSTMEM" ./cup8bench )
+  BENCH_BATCH_SWEEP="$SWEEP" BENCH_BATCH_REPS="$REPS" BENCH_CTX_FLAGS="$CTXF" BENCH_HOSTMEM="$HOSTMEM" \
+  BENCH_ALLOC="$ALLOC" BENCH_BW="$BW" BENCH_BW_ITERS="$BWIT" BENCH_BW_TARGET_MIB="$BWTGT" \
+  BENCH_BW_ONLY="$BWONLY" BENCH_BW_REPS="$BWREPS" ./cup8bench )
 RC=$?
 END=$(date +%s)
 echo "NATIVE_RC=$RC"

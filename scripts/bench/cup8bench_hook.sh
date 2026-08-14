@@ -73,6 +73,25 @@ B_ONLY=${KAYFABE_BENCH_ONLY:-both}
 B_SWEEP=${KAYFABE_BENCH_BATCH_SWEEP:-}
 B_REPS=${KAYFABE_BENCH_BATCH_REPS:-5}
 B_CTXF=${KAYFABE_BENCH_CTX_FLAGS:-0}
+# ★★★ w322 — the placement + aperture knobs. ⊘ BENCH_HOSTMEM was NEVER forwarded to the guest
+#   before this rung (w320 could only run it natively), so a guest hostmem arm was impossible
+#   to ask for; it is forwarded here so the guest can be measured at the SAME placement the
+#   native control uses. All default to the previous behaviour.
+B_HOSTMEM=${KAYFABE_BENCH_HOSTMEM:-0}
+B_ALLOC=${KAYFABE_BENCH_ALLOC:-}
+B_BW=${KAYFABE_BENCH_BW:-}
+B_BWIT=${KAYFABE_BENCH_BW_ITERS:-7}
+B_BWTGT=${KAYFABE_BENCH_BW_TARGET_MIB:-256}
+B_BWONLY=${KAYFABE_BENCH_BW_ONLY:-0}
+B_BWREPS=${KAYFABE_BENCH_BW_REPS:-0}
+# ⊘⊘ KAYFABE_BENCH_NOLAUNCH WAS NEVER FORWARDED, AND THE OMISSION PRODUCED A GREEN.
+#   w322's `bwneg` arm exported it, the hook dropped it, the workload ran in MEASURE mode and
+#   reported `BENCH_VERDICT: PASS (every bw row verified) bad=0` — which is indistinguishable
+#   from a passing measurement arm and is EXACTLY the shape of a vacuous known-positive. The
+#   only tell was `BENCH_MODE=MEASURE` in a log whose arm is named `neg`. ⇒ forwarded here,
+#   and ASSERTED by the caller: see w322_operands.sh, which VOIDs the arm if the workload did
+#   not print `BENCH_MODE=NOLAUNCH`.
+B_NOLAUNCH=${KAYFABE_BENCH_NOLAUNCH:-0}
 
 die() { echo "★ cup8bench hook FAILED: $*"; exit 2; }
 
@@ -92,6 +111,7 @@ echo "BENCH_SRC_MD5=$(md5sum < "$SRC" | cut -d' ' -f1)"
 echo "    ★ THE SAME FILE the native arm builds — w311_native.sh copies THIS path. The md5 is"
 echo "      printed by both arms so 'same source' is a comparison, not a template sentence."
 echo "BENCH_PARAMS sizes=$B_SIZES iters=$B_ITERS batch=$B_BATCH verify=$B_VERIFY"
+echo "BENCH_W322_PARAMS hostmem=$B_HOSTMEM alloc=[$B_ALLOC] bw=[$B_BW] bw_iters=$B_BWIT bw_target_mib=$B_BWTGT bw_only=$B_BWONLY bw_reps=$B_BWREPS nolaunch=$B_NOLAUNCH"
 
 # ---------------------------------------------------------------------------------------
 # ★★★ PRECONDITIONS, BY NAME. Each fails in a way INDISTINGUISHABLE from our wall unless it
@@ -195,7 +215,10 @@ if [ "$B_ONLY" = negctrl ]; then
 else
 run_detached measure "$BENCH_TIMEOUT" \
   "BENCH_SIZES=$B_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH BENCH_VERIFY=$B_VERIFY \
-BENCH_BATCH_SWEEP=$B_SWEEP BENCH_BATCH_REPS=$B_REPS BENCH_CTX_FLAGS=$B_CTXF"
+BENCH_BATCH_SWEEP=$B_SWEEP BENCH_BATCH_REPS=$B_REPS BENCH_CTX_FLAGS=$B_CTXF \
+BENCH_HOSTMEM=$B_HOSTMEM BENCH_ALLOC=$B_ALLOC BENCH_BW=$B_BW BENCH_BW_ITERS=$B_BWIT \
+BENCH_BW_TARGET_MIB=$B_BWTGT BENCH_BW_ONLY=$B_BWONLY BENCH_BW_REPS=$B_BWREPS \
+BENCH_NOLAUNCH=$B_NOLAUNCH"
 
 echo ""
 echo "=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ==="

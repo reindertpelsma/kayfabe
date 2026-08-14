@@ -1,0 +1,216 @@
+=== ★ BATCH arm=bwneg (2026-08-14T19:15:18+00:00) ===
+=== ★★★★★ W322 arm=bwneg tag=w322bwneg 2026-08-14T19:15:18+00:00
+    bw=[4,16] reps=[1] alloc=[<default:vram>]
+    repo=[/workspace/kayfabe_w322] HEAD=[bd52c0dbb]
+    fb sampler pid=1691592 -> /workspace/bench/run_w322bwneg_fb.log
+
+================================================================================
+=== ★★★★★ W322 arm=bwneg inner_rc=0  2026-08-14T19:17:01+00:00
+================================================================================
+
+=== ★★★ ARMING — a run that did not receive the knobs measured the DEFAULT and said so
+    BENCH_W322_PARAMS hostmem=0 alloc=[] bw=[4,16] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+    BENCH_W322 alloc=[vram] bw=[4,16] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+
+=== ★★★★★ THE APERTURE ROWS — read_GBps by buffer size
+    ⊘ A row reading UNMEASURED is a row that measured NOTHING. It is not slow, and it
+      is not zero. Do not average over it.
+    BWROW mib=4 alloc=vram nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=4.401 sync_med_ms=1.689 sync_min_ms=1.592 sync_max_ms=1.950 total_med_ms=6.025 read_GBps=2.483 read_GBps_incl_submit=0.696 expect=4 got0=4 bad=0
+    BWROW mib=16 alloc=vram nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=3.740 sync_med_ms=6.763 sync_min_ms=5.672 sync_max_ms=6.922 total_med_ms=10.450 read_GBps=2.481 read_GBps_incl_submit=1.606 expect=16 got0=16 bad=0
+    module_rc/func_rc:
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BENCH_BW_ROWS=2
+    BENCH_BW_ROWS_UNMEASURED=0
+    allocation refusals (each is a NAMED reason, never a silent fallback):
+    (none)
+
+=== ★★★★★ THE HOST FRAMEBUFFER COUNTER — the aperture measured OUTSIDE our bookkeeping
+    samples        = 58
+    fb_used_min    = 0 MiB
+    fb_used_max    = 36 MiB
+    fb_used_delta  = 36 MiB
+    ★ the sweep's largest buffer is 256 MiB. A delta of
+      that order says the operands are IN THE FRAMEBUFFER; a delta near zero says
+      they are not — provided the sampler saw the window at all (samples > 0).
+    distinct fb_used values seen:
+           13 0
+           26 1
+           13 5
+            2 35
+            4 36
+    qemu RSS min/max (KiB): 65984 / 1313360
+
+=== ★★ CORRECTNESS — never optional, and INVERTED in the bwneg arm
+    GUEST_BENCH_TOTAL_BAD=0
+    GUEST_BENCH_VERDICT=PASS (every bw row verified)
+    GUEST_SIZES_DONE=0
+    GUEST_XID_COUNT=0
+
+=== ★ THE HOST SIDE, correlational ONLY
+    host_rows      = [host_rows=18297]
+    publish census = [total=18311 already_host=18295 already_pinned=0 guest_ram=0 not_vidmem=0]
+    Xid lines      = [0]
+=== W322 arm=bwneg DONE rc=0 ===
+=== ★ BATCH arm=bwneg rc=0 (2026-08-14T19:17:02+00:00) ===
+=== ★ BATCH arm=bw2 (2026-08-14T19:17:02+00:00) ===
+=== ★★★★★ W322 arm=bw tag=w322bw2 2026-08-14T19:17:02+00:00
+    bw=[4,16,32,64,128] reps=[1] alloc=[<default:vram>]
+    repo=[/workspace/kayfabe_w322] HEAD=[bd52c0dbb]
+    fb sampler pid=1694969 -> /workspace/bench/run_w322bw2_fb.log
+
+================================================================================
+=== ★★★★★ W322 arm=bw inner_rc=0  2026-08-14T19:18:40+00:00
+================================================================================
+
+=== ★★★ ARMING — a run that did not receive the knobs measured the DEFAULT and said so
+    BENCH_W322_PARAMS hostmem=0 alloc=[] bw=[4,16,32,64,128] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+    BENCH_W322 alloc=[vram] bw=[4,16,32,64,128] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+
+=== ★★★★★ THE APERTURE ROWS — read_GBps by buffer size
+    ⊘ A row reading UNMEASURED is a row that measured NOTHING. It is not slow, and it
+      is not zero. Do not average over it.
+    BWROW mib=4 alloc=vram nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=3.686 sync_med_ms=1.855 sync_min_ms=1.837 sync_max_ms=2.934 total_med_ms=5.567 read_GBps=2.261 read_GBps_incl_submit=0.753 expect=4 got0=4 bad=0
+    BWROW mib=16 alloc=vram nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=3.766 sync_med_ms=6.696 sync_min_ms=5.653 sync_max_ms=6.920 total_med_ms=10.487 read_GBps=2.506 read_GBps_incl_submit=1.600 expect=16 got0=16 bad=0
+    BWROW mib=32 UNMEASURED reason=fill_failed rc=0/719
+    BWROW mib=64 UNMEASURED reason=alloc_failed rc=719 alloc=vram
+    BWROW mib=128 UNMEASURED reason=alloc_failed rc=719 alloc=vram
+    module_rc/func_rc:
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    BENCH_BW_ROWS=5
+    BENCH_BW_ROWS_UNMEASURED=3
+    allocation refusals (each is a NAMED reason, never a silent fallback):
+    BW_ALLOC_FAIL in mode=vram rc=719
+    BW_ALLOC_FAIL in mode=vram rc=719
+
+=== ★★★★★ THE HOST FRAMEBUFFER COUNTER — the aperture measured OUTSIDE our bookkeeping
+    samples        = 56
+    fb_used_min    = 0 MiB
+    fb_used_max    = 36 MiB
+    fb_used_delta  = 36 MiB
+    ★ the sweep's largest buffer is 256 MiB. A delta of
+      that order says the operands are IN THE FRAMEBUFFER; a delta near zero says
+      they are not — provided the sampler saw the window at all (samples > 0).
+    distinct fb_used values seen:
+           12 0
+           23 1
+           14 5
+            2 35
+            5 36
+    qemu RSS min/max (KiB): 243148 / 1341756
+
+=== ★★ CORRECTNESS — never optional, and INVERTED in the bwneg arm
+    GUEST_BENCH_TOTAL_BAD=0
+    GUEST_BENCH_VERDICT=PASS (every bw row verified)
+    GUEST_SIZES_DONE=0
+    GUEST_XID_COUNT=0
+
+=== ★ THE HOST SIDE, correlational ONLY
+    host_rows      = [host_rows=18311]
+    publish census = [total=18327 already_host=18297 already_pinned=0 guest_ram=0 not_vidmem=0]
+    Xid lines      = [0]
+=== W322 arm=bw DONE rc=0 ===
+=== ★ BATCH arm=bw2 rc=0 (2026-08-14T19:18:40+00:00) ===
+=== ★ BATCH arm=bwhost (2026-08-14T19:18:40+00:00) ===
+=== ★★★★★ W322 arm=bwhost tag=w322bwhost 2026-08-14T19:18:40+00:00
+    bw=[4,16,32,64,128] reps=[1] alloc=[hostalloc]
+    repo=[/workspace/kayfabe_w322] HEAD=[bd52c0dbb]
+    fb sampler pid=1698326 -> /workspace/bench/run_w322bwhost_fb.log
+
+================================================================================
+=== ★★★★★ W322 arm=bwhost inner_rc=0  2026-08-14T19:45:54+00:00
+================================================================================
+
+=== ★★★ ARMING — a run that did not receive the knobs measured the DEFAULT and said so
+    BENCH_W322_PARAMS hostmem=0 alloc=[hostalloc] bw=[4,16,32,64,128] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+    BENCH_W322 alloc=[hostalloc] bw=[4,16,32,64,128] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+
+=== ★★★★★ THE APERTURE ROWS — read_GBps by buffer size
+    ⊘ A row reading UNMEASURED is a row that measured NOTHING. It is not slow, and it
+      is not zero. Do not average over it.
+    [+16s] BWROW mib=64 alloc=hostalloc nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=6.128 sync_med_ms=21.626 sync_min_ms=21.352 sync_max_ms=21.725 total_med_ms=27.559 read_GBps=3.103 read_GBps_incl_submit=2.435 expect=64 got0=64 bad=0
+    BWROW mib=4 alloc=hostalloc nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=3.719 sync_med_ms=1.864 sync_min_ms=1.562 sync_max_ms=3.065 total_med_ms=6.659 read_GBps=2.251 read_GBps_incl_submit=0.630 expect=4 got0=4 bad=0
+    BWROW mib=16 alloc=hostalloc nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=7.232 sync_med_ms=5.643 sync_min_ms=5.381 sync_max_ms=5.688 total_med_ms=12.880 read_GBps=2.973 read_GBps_incl_submit=1.303 expect=16 got0=16 bad=0
+    BWROW mib=32 alloc=hostalloc nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=4.557 sync_med_ms=10.904 sync_min_ms=10.689 sync_max_ms=10.978 total_med_ms=15.484 read_GBps=3.077 read_GBps_incl_submit=2.167 expect=32 got0=32 bad=0
+    BWROW mib=64 alloc=hostalloc nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=6.128 sync_med_ms=21.626 sync_min_ms=21.352 sync_max_ms=21.725 total_med_ms=27.559 read_GBps=3.103 read_GBps_incl_submit=2.435 expect=64 got0=64 bad=0
+    module_rc/func_rc:
+    BENCH_BW_MODULE_RC=0
+    BENCH_BW_FUNC_RC=0
+    allocation refusals (each is a NAMED reason, never a silent fallback):
+    (none)
+
+=== ★★★★★ THE HOST FRAMEBUFFER COUNTER — the aperture measured OUTSIDE our bookkeeping
+    samples        = 1381
+    fb_used_min    = 0 MiB
+    fb_used_max    = 36 MiB
+    fb_used_delta  = 36 MiB
+    ★ the sweep's largest buffer is 256 MiB. A delta of
+      that order says the operands are IN THE FRAMEBUFFER; a delta near zero says
+      they are not — provided the sampler saw the window at all (samples > 0).
+    distinct fb_used values seen:
+           12 0
+           14 5
+            2 35
+         1353 36
+    qemu RSS min/max (KiB): 164048 / 1333516
+
+=== ★★ CORRECTNESS — never optional, and INVERTED in the bwneg arm
+    GUEST_BENCH_TOTAL_BAD=NO_LINE
+    GUEST_BENCH_VERDICT=
+    GUEST_SIZES_DONE=
+    GUEST_XID_COUNT=0
+
+=== ★ THE HOST SIDE, correlational ONLY
+    host_rows      = [host_rows=35703]
+    publish census = [total=35717 already_host=35703 already_pinned=0 guest_ram=0 not_vidmem=0]
+    Xid lines      = [0]
+=== W322 arm=bwhost DONE rc=0 ===
+=== ★ BATCH arm=bwhost rc=0 (2026-08-14T19:45:54+00:00) ===
+=== ★ BATCH arm=sizes (2026-08-14T19:45:54+00:00) ===
+=== ★★★★★ W322 arm=sizes tag=w322sizes 2026-08-14T19:45:54+00:00
+    bw=[<none>] reps=[target-based] alloc=[<default:vram>]
+    repo=[/workspace/kayfabe_w322] HEAD=[bd52c0dbb]
+    fb sampler pid=1754436 -> /workspace/bench/run_w322sizes_fb.log
+
+================================================================================
+=== ★★★★★ W322 arm=sizes inner_rc=92  2026-08-14T19:45:59+00:00
+================================================================================
+
+=== ★★★ ARMING — a run that did not receive the knobs measured the DEFAULT and said so
+    ⊘ NO W322 ARMING LINE — this boot ran w320's workload. UNMEASURED.
+    ⊘ the workload never printed BENCH_W322 — it is not this rung's binary.
+
+=== ★★★★★ THE APERTURE ROWS — read_GBps by buffer size
+    ⊘ A row reading UNMEASURED is a row that measured NOTHING. It is not slow, and it
+      is not zero. Do not average over it.
+    ⊘ NO BWROW LINES — UNMEASURED.
+    module_rc/func_rc:
+    allocation refusals (each is a NAMED reason, never a silent fallback):
+    (none)
+
+=== ★★★★★ THE HOST FRAMEBUFFER COUNTER — the aperture measured OUTSIDE our bookkeeping
+    samples        = 1
+    fb_used_min    = 0 MiB
+    fb_used_max    = 0 MiB
+    fb_used_delta  = 0 MiB
+    ★ the sweep's largest buffer is 256 MiB. A delta of
+      that order says the operands are IN THE FRAMEBUFFER; a delta near zero says
+      they are not — provided the sampler saw the window at all (samples > 0).
+    distinct fb_used values seen:
+            1 0
+    qemu RSS min/max (KiB):  / 
+
+=== ★★ CORRECTNESS — never optional, and INVERTED in the bwneg arm
+    ⊘ GUEST_BENCH_TOTAL_BAD ABSENT — UNMEASURED, not 0
+    ⊘ GUEST_BENCH_VERDICT ABSENT — UNMEASURED, not 0
+    ⊘ GUEST_SIZES_DONE ABSENT — UNMEASURED, not 0
+    ⊘ GUEST_XID_COUNT ABSENT — UNMEASURED, not 0
+
+=== ★ THE HOST SIDE, correlational ONLY
+    host_rows      = []
+    publish census = []
+    Xid lines      = []
+=== W322 arm=sizes DONE rc=92 ===
+=== ★ BATCH arm=sizes rc=92 (2026-08-14T19:45:59+00:00) ===
+W322_BATCH_TERMINATOR rc=0 2026-08-14T19:45:59+00:00
