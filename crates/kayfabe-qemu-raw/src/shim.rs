@@ -3525,6 +3525,18 @@ struct CeShellState {
     /// facts: the reader **clones it and drops the guard** before touching the plane or
     /// printing, so nothing blocks beneath it — `gr_dumps`' shape, and the one
     /// `unranked_locks.rs` classifies as safe.
+    ///
+    /// ⊘⊘ **CORRECTED `[w300, 2026-08-13]`: that last clause was FALSE WHEN WRITTEN.**
+    /// `unranked_locks.rs` classified no such row — its scanner could not see a lock spelled
+    /// `Arc<Mutex<…>>` (the field test wanted a `:` before the type and found the `<` of the
+    /// `Arc`), so this field, and eight others, were never put to anyone for a ruling while
+    /// the gate reported **zero unclassified**. The row exists now, and the scanner is pinned
+    /// by known-positive fixtures. ★ The lesson is not that the ruling was wrong — it is
+    /// right, and `[src]` re-read off the three call sites its row now cites (`:3766` clones
+    /// and drops, `:5252` pushes, `:5263` drops before printing) — but that
+    /// **a doc citing a gate is not the gate having run**:
+    /// this comment asserted a classification into a list that had no such entry, and nothing
+    /// checked the assertion because the gate was blind to the very field making it.
     gr_cursors: std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
     /// ★★★★★ The observer's reactor thread, once started. See [`Regs::attach_ram`].
     #[cfg(feature = "host-isolates")]

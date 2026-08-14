@@ -2527,8 +2527,24 @@ impl SharedDevice {
                         .map(|n| (n.key.client.0, n.key.handle.0)),
                     pdb: proc.channels.get(&cid).and_then(|c| c.vas_pdb).map(|p| p.0),
                 };
-                // ⊘⊘ **`None` — route B is NOT wired here, and the reason is a lock-order
-                // inversion, not an oversight.** `[w235, 2026-08-11]` The 8 `proc 2`
+                // ⊘⊘ **CORRECTED `[w300, 2026-08-13]`, above the text it corrects: THIS
+                // CLOSURE NO LONGER READS THE FRAMEBUFFER, AND ROUTE B IS WIRED.** The
+                // paragraph below (`[w235, 2026-08-11]`) said route B was *not* wired here
+                // because reading it would invert the lock order. That was true when
+                // written and was fixed four commits later: `Mutex<PlaneState>` is now
+                // `RankedMutex`/`LockRank::Plane` (w236 `56269390`) and `forward_ring` was
+                // split into **PLAN / FETCH / ACT** (w237 `7107bba5`) — this closure only
+                // PLANS; the bytes are fetched below with every ranked guard dropped.
+                // ⇒ ★ The reasoning below is still exactly **why the three phases exist**,
+                // so it is kept; only its status word ("NOT wired") was false.
+                // ⚠ And it is no longer true that "no existing gate would have caught it":
+                // `check_acquire` refuses `core → plane` by name, always-on. What is STILL
+                // true is the *scope* of that enforcement — it covers **ranked** locks only.
+                // See `tests/tests/unranked_locks.rs` for which clause of
+                // `blocking_and_completion_model.md` §1's INLINE-SAFE predicate is enforced
+                // here and which is merely enumerated.
+                //
+                // ⊘ [SUPERSEDED STATUS, LIVE REASONING] The 8 `proc 2`
                 // doorbells have their ring in the **emulated framebuffer**, so this call
                 // answers `PushbufferAperture` for them. The bytes exist and the descent
                 // prints them; the only seam that serves them
@@ -2539,15 +2555,8 @@ impl SharedDevice {
                 // already shipping (the policy chain takes core locks under `state.lock()`
                 // on another vCPU's MMIO trap) — so a guest that rings a doorbell on one
                 // vCPU while touching a register on another **builds the deadlock itself**.
-                // ★★★ And `Mutex<PlaneState>` is **unranked**, so `assert_lock_free` passes
-                // vacuously and **no existing gate would have caught it**
-                // (`unranked_locks.rs`: *"NOTHING may block beneath it … and the R1 witness
-                // will not say so"*).
                 // ⇒ `kayfabe_fwd::plan_gpfifo_ring` / `fetch_ring_bytes` are the R1-correct
-                // shape this needs (plan under the locks, bytes with every guard dropped),
-                // and wiring them is a `forward_ring` restructure plus an `FbRead` threaded
-                // from the shim through `DoorbellPort::ring` — a separate increment, and
-                // one the owner's open scope question should be answered before, not after.
+                // shape this needs (plan under the locks, bytes with every guard dropped).
                 match kayfabe_fwd::plan_gpfifo_ring(spine, proc, cid, fb_on)? {
                     kayfabe_fwd::RingPlanLook::Planned(plan) => {
                         Ok((RingPlanned::Plan(Box::new(plan)), who))
