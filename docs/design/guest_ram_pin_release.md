@@ -2,11 +2,57 @@
 
 > **STATUS: LIVE — 2026-08-14 (w310).** Code landed on `w310-pin-release`, rebased onto master
 > `0ff3e1e2` (w309); built and tested on a rented CPU box, **known-positive watched failing**.
-> ⊘ **BENCH CONFIRMATION PENDING — §7 lists the criteria and this must not merge without
-> them.** Supersedes nothing. Corrects one sentence in `crates/kayfabe-rt/src/device.rs`
-> (`vas_published_ranges`) and one comment block in `crates/kayfabe-fwd/src/lib.rs`
-> (`commit_pin_guest_ram`), both folded in place.
+> ★★★★★ **CONFIRMED ON HARDWARE 2026-08-14 (w314) — see the block directly below; §7's
+> "PENDING" is DISCHARGED.** Supersedes nothing. Corrects one sentence in
+> `crates/kayfabe-rt/src/device.rs` (`vas_published_ranges`) and one comment block in
+> `crates/kayfabe-fwd/src/lib.rs` (`commit_pin_guest_ram`), both folded in place.
 > Parent finding: `docs/audits/w301_cancellation_error_leaks.md` §3.2, §3.3.
+
+> ### ★★★★★ CONFIRMED — w314, 2026-08-14, bench `vh`, real GA106, `580.159.04`
+> `[measured 2026-08-14, vh, branch `w314-pin-release-confirm` rev `28882ec2` = this rung
+> rebased onto master `eb3d99ad`; full artefacts in `traces/w314_confirm/`]`
+>
+> **Criteria A–G all PASS, on 4 of 4 green boots**, plus the second workload the confirmation
+> brief added: `^CUP3_VAL=43` ×4 · `Xid=0` · **`PIN-RELEASE released=18228
+> refused_no_host_vas=0 rows_deduped=18228`** on every boot · `REAP` present · no soft lockup,
+> no RCU stall · and **`R33 arm 1` (the raw CE client, no libcuda) FIRED** with the release
+> active. ⇒ mergeable.
+>
+> ### ⊘⊘⊘ AND TWO THINGS THIS DOCUMENT GOT WRONG, BOTH IN §5, BOTH LOAD-BEARING
+>
+> **1. The clause-(b) exposure is not "a thing to name". It is at 92.6 % of the budget, on the
+> standard workload, on a green boot.** §5 derives *"~3 s"* by arithmetic; w314 measured it with
+> the SAME instrument on both trees, so the attribution is a measurement:
+>
+> | arm | `max_reap_us`, 4 boots | worst vs `scrubberDestruct`'s **4 000 ms** |
+> |---|---|---|
+> | clean master `eb3d99ad` + the instrument alone | 2 648 366 · 2 918 210 · 2 666 893 · 2 772 771 | **73.0 %** |
+> | this rung, `28882ec2` | 3 336 519 · **3 702 806** · 3 263 826 · 3 250 535 | **92.6 %** |
+>
+> The ranges **do not overlap**. ⇒ master already halts every vCPU for **2.65–2.92 s** — the
+> violation is w303's and is real — and **this rung adds ~637 ms (+23 %)**, leaving **297 ms**
+> of headroom on the worst boot. ⊘ **And §5's estimate of that addition is low by ~20×**: it
+> says *"one `munmap` per pin — a local syscall (~1–2 µs)"*; measured, 637 ms / 18 228 pins =
+> **~35 µs per pin**. A `munmap` of a `MAP_SHARED` memfd window RM has `pin_user_pages`-pinned
+> is not a cheap local syscall. ⇒ **the budgeted drain §5 defers is now urgent with a number**,
+> and it must budget the whole disposal, not only this rung's share.
+>
+> **2. Criterion D CANNOT witness this, and §5 says it is the reason D exists.** D passed on
+> every boot **including the 3.70 s one** — it had to: Linux's soft-lockup watchdog fires at
+> `2 × watchdog_thresh` ≈ **20 s**, five times the budget that matters. ⇒ D is a witness for a
+> catastrophe, not for this. **The `REAP-TIMING` number is the instrument**; a green D is not
+> evidence of boundedness, in practice or otherwise.
+>
+> ### ★★★★★ AND ONE FINDING THAT IS LARGER THAN THIS RUNG — **cup3 IS FLAKY ON `vh`**
+> `[measured 2026-08-14, vh, 10 boots, 5 per arm]` **`^CUP3_VAL=43` came back 4/5 on THIS
+> BRANCH and 4/5 on CLEAN MASTER**, and the two red boots carry the **same** failure field for
+> field: `cuCtxCreate → 719`, `CUP3_VAL=NO_KERNEL_LINE`, and `Xid 31, channel 0x02000015,
+> ENGINE CE3 HUBCLIENT_CE1, faulted @ 0x2_0440f000, FAULT_PDE ACCESS_TYPE_VIRT_WRITE`.
+> ⇒ **a single-boot `^CUP3_VAL=43` grade has a ~20 % false-negative rate on this box.** This
+> confirmation's FIRST boot was one of them; without the same-hour master control it would have
+> been reported as *"the release is not safe as built"* on a release that is green 4/4.
+> ⚠ Unattributed — a rate, not a mechanism. **Every rung graded on n=1 carries it**, including
+> §7's criterion A as written, w297, w298's thirteen arms and w304's five.
 
 ---
 
@@ -249,6 +295,22 @@ per pin is:
 - for a **run** pin (population ~0 on today's default arm): one `unmap` + one `free` + one
   `munmap` that were not happening at all.
 
+> ### ⊘⊘⊘ CORRECTED 2026-08-14 (w314) — **BOTH SENTENCES BELOW ARE WRONG, AND THE SECOND
+> ### ONE'S OWN WITNESS CANNOT SEE THE THING IT WAS CHOSEN TO SEE.**
+> `[measured 2026-08-14, vh, real GA106, `max_reap_us` on both trees, n=4 each]`
+> - *"one `munmap` … (~1–2 µs)"* ⇒ measured **~35 µs per pin** (637 ms over 18 228 pins).
+>   **Low by ~20×.** A `munmap` of a `MAP_SHARED` memfd window RM has `pin_user_pages`-pinned
+>   is not a cheap local syscall, and this rung's total addition is **+23 %** on the disposal.
+> - *"Clause (b), and it is covered"* ⇒ ⊘ **it is not covered; it was never in budget.** Clean
+>   master already blocks **2.65–2.92 s** and this rung takes the worst boot to **3.70 s**,
+>   **92.6 %** of `scrubberDestruct`'s 4 000 ms, on a GREEN boot of the standard workload.
+> - And the ★ below — *"it is the reason bench criterion (D) watches for a guest soft lockup"*
+>   — **picks an instrument that fires at ~20 s**, five times the budget. D passed on the
+>   3.70 s boot because it had to. ⇒ **the number is the witness; the stall detector is not.**
+> ⇒ The **budgeted drain** named at the end of this section is no longer a tidy follow-up. It
+> is the next rung, it has a number, and it must budget the WHOLE disposal — master's 2.75 s
+> included — not only this rung's 637 ms share. Full text: `traces/w314_confirm/README.md` §3.
+
 ⇒ **Clause (b), and it is covered**: the incremental cost is one `munmap` per pin.
 
 ### ⚠ A PRE-EXISTING clause-(b) exposure this rung did not create and does not fix
@@ -284,6 +346,42 @@ soft lockup rather than assuming there is none.
 ---
 
 ## 7. ★★★ Pre-registered bench criteria — a sibling must confirm before merge
+
+> ### ★★★★★ DISCHARGED 2026-08-14 (w314) — ALL SEVEN PASS, 4/4 BOOTS
+> `[measured 2026-08-14, vh, real GA106 `580.159.04`, rev `28882ec2` on master `eb3d99ad`,
+> tags `w314br1..4`; graded by `scripts/bench/w314_grade.sh`, known-positives in
+> `w314_grade_selftest.sh` (9 fixtures, offline); artefacts `traces/w314_confirm/`]`
+>
+> | # | verdict | the number |
+> |---|---|---|
+> | A | ✔ **PASS ×4** | `CUP3_VAL=43  CUP3_RC=0` |
+> | B | ✔ PASS | E1 `Xid=0` · E2 drain ran and pinned · E3 all-zero |
+> | C | ✔ PASS | **`released=18228`** (a floor), identical on all four boots |
+> | D | ✔ PASS | 0 stall lines, 31 `NVRM` — ⚠ **and see §5's correction: D cannot fire below ~20 s** |
+> | E | ✔ PASS | `refused_no_host_vas=0` |
+> | F | ✔ PASS | observed `Xid` class set **empty** = the baseline's |
+> | G | ✔ PASS | `REAP` ×2 and `PIN-RELEASE` ×1, both present |
+>
+> ★ Plus the **second workload** the confirmation brief added and this list does not have:
+> **`R33 arm 1` FIRED** — 4096 bytes moved, `GP_GET 1` caught `GP_PUT 1`, read back through an
+> independent mapping — i.e. the **raw-CE plane is green with the release active**.
+> ★ `rows_deduped = released = 18 228`: **every** released pin was also an exact-extent row, so
+> §4's double-free door is not hypothetical — without the dedupe all 18 228 host objects would
+> have been freed twice.
+>
+> ### ⊘ THREE MIS-SCOPINGS THIS LIST HAS, FOUND ONLY BY RUNNING IT
+> 1. **Criterion A on ONE boot is unsound on this box** — see the flake block at the head of
+>    this file. The confirmation's own first boot was a false red.
+> 2. **A, B and F are cup3-only** and must not be run over the R33 arm: `w309_crit1.sh`'s
+>    `fresh` arm **provokes a fault on purpose**, so its boot legitimately carries
+>    `Xid 31 CE0 … @ 0x7_00100000` and grades `(B) REGRESSION` / `(F) FAIL` falsely.
+> 3. **C's line reads the narrower of two tallies.** `Regs::write` calls
+>    `SharedDevice::pin_reclaim_gone()` = `Spine::pin_reclaim_gone` **alone**; `Gpu::pin_reclaim()`
+>    (`gpu.rs:5295`) sums that plus `system` plus every live proc and is **not exposed on
+>    `SharedDevice`**. ⇒ the shape this rung was built for — *a `Vas` that dies while its proc
+>    lives* — increments a counter the boot line **cannot see**. It did not bite here (the proc
+>    exits and the whole tally lands at once), but it is C's own ABSENT-vs-ZERO hole sitting in
+>    the **emitter** rather than in the reader.
 
 ⊘ **This rung has NO bench run.** `vh` and `vh2` were held by sibling lanes; the code was built
 and tested on a rented CPU box with no GPU. `only_live_boots_are_proof` applies in full.

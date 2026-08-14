@@ -1,0 +1,12 @@
+=== W314 CONTROL2 START 2026-08-14T15:22:21+00:00 pid=3023696
+=== HEAD=eb3d99ad73f42b655631155c8050d33cabcd5a56  (MUST be eb3d99ad = clean master)
+=== no stale qemu
+=== CONTROL RC=0 2026-08-14T15:24:41+00:00
+=== ★ THE METRIC, from the control boot:
+CUP3_VAL=43
+CUP3_RC=0
+=== ★ cup3 FINAL OUTPUT, verbatim:
+=== ★ host Xid on the control boot:
+(none)
+=== W314 CONTROL2 EXIT status=0 2026-08-14T15:24:41+00:00
+=== W314 CONTROL2 TERMINATOR rc=0 2026-08-14T15:24:41+00:00
