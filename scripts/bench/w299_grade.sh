@@ -133,8 +133,20 @@ grep -hE 'CUP3[AB]_WRAPPER=|CUP3[AB]_OUT_BYTES=|LIVE_CUP3_PIDS=' "$P" 2>/dev/nul
 
 echo ""
 echo "=== ★★ GUEST dmesg — soft-lockup / RCU stall / hung task (STRONG evidence of a BQL stall)"
-grep -iE 'soft lockup|softlockup|rcu.*stall|hung task|blocked for more than|watchdog:' "$P" 2>/dev/null | head -20 | sed 's/^/    /'
-echo "    matches = [$(grep -icE 'soft lockup|softlockup|rcu.*stall|hung task|blocked for more than' "$P" 2>/dev/null)]"
+# ⊘⊘ THIS CLAUSE MATCHED ITS OWN PROSE AND REPORTED `matches = [2]` ON A RUN WITH ZERO OF THEM.
+#   The hook prints a HEADING containing the words "soft-lockup / RCU stall" and an explanatory
+#   line containing "a soft-lockup or RCU stall here is STRONG evidence" — and an unanchored
+#   grep over the probe log counted BOTH as hits. ⇒ the instrument was reading its own label as
+#   a measurement, which on THIS rung would have manufactured the exact evidence the BQL
+#   hypothesis predicts. Same class as the `^CUP3_VAL=` anchoring trap: a pattern that matches
+#   the harness's own output is not a reading of the guest.
+# ★ FIX: require the DMESG LINE SHAPE — `[    97.939879] ` — so only kernel output can match.
+DMESG_RE='^[[:space:]]*\[[[:space:]]*[0-9]+\.[0-9]+\].*(soft lockup|softlockup|rcu[^ ]* .*stall|hung task|blocked for more than)'
+grep -inE "$DMESG_RE" "$P" 2>/dev/null | head -20 | sed 's/^/    /'
+echo "    REAL matches (dmesg-shaped lines only) = [$(grep -icE "$DMESG_RE" "$P" 2>/dev/null)]"
+echo "    ⊘ for contrast, the UNANCHORED count that matched this harness own headings = [$(grep -icE 'soft lockup|softlockup|rcu.*stall|hung task|blocked for more than' "$P" 2>/dev/null)]"
+echo "    ★ NVRM teardown assertions (present single-process too — 8 STOP_CHANNEL / 8 EVICT_CTX):"
+echo "      STOP_CHANNEL  = [$(grep -c 'STOP_CHANNEL' "$P" 2>/dev/null)]   GPU_EVICT_CTX = [$(grep -c 'GPU_EVICT_CTX' "$P" 2>/dev/null)]   nvAssert total = [$(grep -c 'nvAssert' "$P" 2>/dev/null)]"
 
 echo ""
 echo "=== (E) REGRESSION CHECK — the single-process control is Xid=0, host_rows 18295/18309"
