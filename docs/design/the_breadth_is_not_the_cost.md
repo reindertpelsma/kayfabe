@@ -388,19 +388,51 @@ DIRTY-GATE publish[fired=11 skipped=217  95.2% skipped]  witness[fired=229 skipp
 ⇒ **95.2 % skipped. The epoch does NOT move every doorbell.** `the_publish_trigger_measured.md`
 attributed `fired=4 skipped=0` to the workload; it was the **arm word**.
 
-And what it costs, cumulatively:
+⊘⊘ **AND THE SKIP COUNT IS DETERMINISTIC TO THE DIGIT, WHERE THE WALL CLOCK IS NOT.** Across
+n=3 per workload:
 
-| | arm A (gate off) | arm G (gate on) |
-|---|---|---|
-| publication passes | 229 | 229 |
-| **`target_us` cumulative** | **2 666 358 µs** | **1 207 402 µs** |
-| passes contributing **zero** | 0 | **218 of 229** |
-| `target_published` | 66 | 63 |
+```
+cup3, gate on  (w328g1/2/3):    DIRTY-GATE publish[fired=11 skipped=217  95.2% skipped]   ×3
+cup8, gate on  (w328ge1/2/3):   DIRTY-GATE publish[fired=12 skipped=262  95.6% skipped]   ×3
+cup3, gate off (w328c1/2/3):    DIRTY-GATE publish[fired=228 skipped=0    0.0% skipped]   ×3
+```
 
-⇒ **2.21× off the cumulative publication BQL**, with 218 passes reduced to nothing at all. ⚠
-`target_published` **63 vs 66** — three publications did not happen on this boot. ⊘ Arm A's own
-three boots span **66 / 63 / 66**, so this is inside the control's variation and is **not**
-evidence that the gate dropped a publication. It is flagged rather than dismissed, because
+**Byte-identical on all three boots of each arm.** ⇒ *what the gate skips* is a property of the
+workload and is reproducible; ★ this is the strong form of the result, and it does not depend
+on any timing.
+
+### ⊘⊘⊘ AND MY OWN FIRST READING OF THE COST WAS A SINGLE-BOOT ERROR — CORRECTED HERE
+
+I first wrote *"2.21× off the cumulative publication BQL"* from `w328g1` alone. At n=3 that
+does not survive:
+
+| arm | gate | cumulative `target_us`, three boots | mean | spread |
+|---|---|---|---|---|
+| `w328a` (cup3) | off | 2 666 358 / 2 489 089 / 2 544 533 | 2 566 660 | **1.11×** |
+| `w328s` (cup3) | off | 2 491 346 / 2 401 922 / 2 609 015 | 2 500 761 | 1.09× |
+| `w328c` (cup3) | off | 2 591 947 / **7 128 882** / 5 149 318 | 4 956 716 | **2.75×** |
+| `w328g` (cup3) | **on** | 1 207 402 / 3 131 822 / **496 271** | 1 611 832 | **6.31×** |
+| `w328e` (cup8) | off | 3 834 095 / 4 136 243 / 5 982 723 | 4 651 020 | 1.56× |
+| `w328ge` (cup8) | **on** | 2 736 944 / 448 512 / 412 527 | 1 199 328 | **6.63×** |
+
+⇒ **The cumulative wall time is 6× boot-variable on the armed arms and 2.75× even on an
+unarmed one.** The honest statements are:
+
+- **cup8**: mean **4 651 020 → 1 199 328 µs, 3.88×**, and the two cheapest gated boots
+  (448 512 / 412 527) are ~10× below the cheapest ungated one. **The clearest signal.**
+- **cup3**: median over all nine gate-off boots **2 591 947** vs median over the three gated
+  **1 207 402** — **2.15×**, but with a 6.3× spread on three points, **this is suggestive and
+  not established.**
+- ⊘ Arm `c`'s cumulative is *higher* than arm `a`'s, which no mechanism in this rung predicts.
+  It is boot noise in a metric this rung did not design its arms to resolve. **Said, not
+  explained away.**
+
+⚠ **The lesson is the brief's own, and I walked into it**: *a single-boot result has a ~20 %
+false-negative rate*, and I quoted a 2.21× from one boot in a rung whose whole thesis is that
+n=1 misattributes.
+
+⚠ `target_published` = **63 / 66 / 66** on the gated arm against **66 / 63 / 66** on the
+control — same set, so no publication was dropped. Flagged rather than dismissed, because
 *"the gate dropped a publication"* is precisely the failure this gate could have.
 
 ### 3.5.1 ⊘⊘ AND THE APPARENT REGRESSION IN ARM G IS **NOT THE GATE** — IT IS `chains`

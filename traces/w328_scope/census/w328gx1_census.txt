@@ -1,0 +1,38 @@
+Warning: Permanently added '[184.144.255.144]:42525' (ED25519) to the list of known hosts.
+=== W328 CENSUS tag=w328gx1 log=/workspace/bench/run_w328gx1_qemu.log 2026-08-14T22:47:12+00:00
+=== log bytes = 93105
+
+--- ★ THE ARM WORDS, from the boot's own lines (⊘ never from the launcher's env)
+arm=drain W328SCOPE[arm=doorbelled scoped=true
+W328PIN[arm=doorbelled scoped=true
+⊘ NO W321BATCH LINE — UNMEASURED
+gate=on this_doorbell[fired=1 skipped=0]
+DIRTY-GATE publish[fired=1 skipped=0 0.0% skipped] witness[fired=2 skipped=0 0.0% skipped] 
+
+--- ★★★★★ THE DRAIN (the DOORBELLED VAS's guest-RAM pin drain — drain #2 of four)
+⊘ NO NON-ZERO DRAIN_MS — UNMEASURED, ⊘ not 'the drain was free'
+⊘ NO ★DRAINED ROW WITH asked>0 — last_pinned_va UNMEASURED
+TRAPWITNESS off_trap_claims=0 inline_exceptions=12 worst_trap=35589us (target: inline_exceptions=0)
+
+--- ★★★★★ THE BREADTH, CUMULATIVE over every publication pass
+passes=2 scoped_out=5 target_us=2070 target_published=0 other_vases=0 other_us=0 other_published=0 breadth_share=0.0000%
+pin passes=2 scoped_out=3 other_vases(last)=0 other_us=0 other_pinned=0 max_drain_ms=0
+
+--- ★★★ THE PER-PASS DISTRIBUTION of the DOORBELLED VAS's own census+join cost
+---     ⊘ The MEAN is a lie here: this is BIMODAL. Quantiles, then the tail.
+n=2 min=1 p25=1 median=2069 p75=2069 p95=2069 max=2069
+expensive(>10ms): n=0 sum=0us    cheap(<=10ms): n=2 sum=2070us
+
+--- ★★★★★ WHAT THE EXPENSIVE PASSES WERE DOING — the candidate/published/refused census
+---     of the DOORBELLED VAS, one row per distinct shape, with its multiplicity.
+---     doorbelled pdb = 0x4000
+      1 candidates=2 published=0 refused=2
+
+--- ★★★★★ THE MECHANISM, IN ONE CORRELATION: cost vs WHAT THE PASS WAS ASKED TO DO
+---     ⊘ The two rows must be compared on max_total as well as on cost. If the
+---     candidates=0 row walked a SMALLER table, the difference would be the WALK and
+---     not the joins — which is the reading this correlation exists to exclude.
+candidates=0 : ⊘ NONE — the cheap mode is UNMEASURED on this boot
+candidates>0 : n=1 mean_us=2069 max_total=3 rows
+
+=== W328 CENSUS TERMINATOR tag=w328gx1 rc=0 2026-08-14T22:47:13+00:00
