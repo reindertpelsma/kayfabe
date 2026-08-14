@@ -416,27 +416,34 @@ drain"*:
 | `w328c2` | C | 177 | **511** | 459 984 | 16.95× | true |
 | `w328e3` | C-family | 186 | **594** | 279 180 | 16.13× | true |
 | `w328c3` | C | 215 | **690** | 314 033 | 13.95× | true |
+| `w328ge2` | **G**(cup8) | 94 | **188** | 230 481 | **31.91×** | true |
+| `w328ge3` | **G**(cup8) | 106 | **213** | 210 114 | **28.30×** | true |
 | `w328g3` | **G** | 256 | **938** | 395 380 | **11.72×** | true |
 | `w328g1` | **G** | 524 | **1 751** | 730 814 | **5.73×** | true |
+| `w328ge1` | **G**(cup8) | 627 | **2 698** | 957 020 | **4.78×** | true |
 | `w328g2` | **G** | 1 281 | **5 155** | 1 588 258 | **2.34×** | true |
 
 ★★★★★ **The rows sort by `chains`, and the arm word does not enter.** Feeding each boot's
 `chains` into **w321's cost model, unmodified and not refitted** —
 `drain_us ≈ chains × 232 µs + rows × 3.35 µs`, with `rows = 13 313` on every boot:
 
-| boot | chains | predicted | measured | error |
-|---|---|---|---|---|
-| `w328e2` | 75 | 61 999 | 63 000 | **+1.6 %** |
-| `w328e1` | 136 | 76 151 | 77 000 | **+1.1 %** |
-| `w328c1` | 242 | 100 743 | 98 000 | **−2.7 %** |
-| `w328c2` | 511 | 163 151 | 177 000 | +8.5 % |
-| `w328e3` | 594 | 182 407 | 186 000 | **+2.0 %** |
-| `w328c3` | 690 | 204 679 | 215 000 | +5.0 % |
-| `w328g1` | 1 751 | 450 831 | 524 000 | +16.2 % |
-| `w328g2` | 5 155 | 1 240 559 | 1 281 000 | **+3.3 %** |
+| boot | gate | chains | predicted | measured | error |
+|---|---|---|---|---|---|
+| `w328e2` | off | 75 | 61 999 | 63 000 | **+1.6 %** |
+| `w328e1` | off | 136 | 76 151 | 77 000 | **+1.1 %** |
+| `w328ge2` | **on** | 188 | 88 215 | 94 000 | +6.6 % |
+| `w328ge3` | **on** | 213 | 94 015 | 106 000 | +12.7 % |
+| `w328c1` | off | 242 | 100 743 | 98 000 | **−2.7 %** |
+| `w328c2` | off | 511 | 163 151 | 177 000 | +8.5 % |
+| `w328e3` | off | 594 | 182 407 | 186 000 | **+2.0 %** |
+| `w328c3` | off | 690 | 204 679 | 215 000 | +5.0 % |
+| `w328g3` | **on** | 938 | 262 215 | 256 000 | **−2.4 %** |
+| `w328g1` | **on** | 1 751 | 450 831 | 524 000 | +16.2 % |
+| `w328ge1` | **on** | 2 698 | 670 535 | 627 000 | −6.5 % |
+| `w328g2` | **on** | 5 155 | 1 240 559 | 1 281 000 | **+3.3 %** |
 
-**8/8 within 17 %, 6/8 within 8.5 %, across a 69× range in `chains` and a 20× range in
-`DRAIN_MS`.** ⇒ w321's model, fitted on w321's boots, **predicts w328's boots on a different
+**12/12 within 16.2 %, median absolute error 5.0 %, across a 69× range in `chains`, a 20×
+range in `DRAIN_MS`, two workloads and both gate arms.** ⇒ w321's model, fitted on w321's boots, **predicts w328's boots on a different
 day without a single parameter moved.** That is a stronger corroboration of the model than
 w321 could give itself.
 
@@ -458,6 +465,21 @@ Arm G's `chains` (938 / 1 751 / 5 155) are systematically higher than arm C's (2
 ⊘ Evidence against (2) alone: `w328g3` ran *after* `w328g1`/`g2` and has the **lowest** chain
 count of the three (938 < 1 751 < 5 155), so the drift is not monotone. Evidence against (1)
 alone: the whole session's chain counts trend upward, and the arms were never interleaved.
+
+★★★ **AND ARM `GE` LARGELY SETTLES IT — with the gate ON, two boots produced `chains = 188`
+and `213`, the second- and third-LOWEST counts in the entire rung.** So *"the gate causes
+fragmentation"* cannot be a mechanism that operates on every boot. Over all twelve coalesced
+boots:
+
+```
+gate ON  chains: 188  213  938  1751  2698  5155      median 1344.5
+gate OFF chains:  75  136  242   511   594   690      median  376.5
+Mann-Whitney U (n1=n2=6): min U = 8, and p<0.05 needs min U <= 5  ⇒ NOT SIGNIFICANT
+```
+
+⇒ **Suggestive on the median, not significant at n=6 vs 6, and still confounded with arm
+order.** Recorded exactly that way. ⊘ A rung that wanted to settle it would **interleave the
+arms**, which costs nothing and is the standing recommendation from §3.5.2.
 
 ★ **The design flaw is mine and it is worth stating plainly: a SEQUENTIAL arm sweep on a box
 whose free lists drift CONFOUNDS ARM WITH SESSION TIME.** Every arm in this rung — and in
