@@ -9509,6 +9509,14 @@ pub struct Regs {
     /// [`SharedDoorbell::exports`].
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     exports: FbExportDir,
+    /// ★★ **w310** — the last guest-RAM pin-reclaim total this shim printed, so the
+    /// `PIN-RELEASE` line fires on **change** rather than on every register write.
+    ///
+    /// ⊘ An `AtomicUsize` and not a `Cell<PinReclaim>`: [`Regs::write`] takes `&self` and
+    /// this device is driven from every vCPU, so the counter must be `Sync`. It holds the
+    /// **sum** of all three tallies, which is what makes one atomic enough — any of the
+    /// three moving moves the sum, and the line then prints all three.
+    last_pin_reclaim: std::sync::atomic::AtomicUsize,
 }
 
 impl core::fmt::Debug for Regs {
@@ -9930,6 +9938,7 @@ impl Regs {
             guest_ring,
             fb_join,
             exports: exports_for_regs,
+            last_pin_reclaim: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -10702,6 +10711,32 @@ impl Regs {
         // ⊘ Cost: one device write-lock acquisition per register write, which is the cost
         // class `materialize_pending` above already pays on this same frame; when
         // `self.retired` is empty the body is a `mem::take` of an empty `Vec`.
+        // ★★★★★ **w310 — AND THE PIN RELEASE IS WITNESSED ON THE SAME EDGE.**
+        //
+        // No new call: the guest-RAM pin release is staged inside `Spine::stage_dropped_vases`,
+        // which the refresh already runs, and the staged `Orphans` ride out on the proc's own
+        // next worker checkout (`checkout_and_drain`) or on `Proc::drop` at the reap below.
+        // ⇒ **the release costs this frame ZERO extra blocking work**; what is added here is
+        // the *number*, because `docs/audits/w301_cancellation_error_leaks.md` §3.2 records
+        // exactly the shape where a release path exists and nobody can tell whether it ran.
+        //
+        // ⚠ Printed only on CHANGE, not every register write: this edge is every guest MMIO
+        // write, and a per-write line would be the `a_recorder_that_prints_at_teardown` trap
+        // pointing the other way — a log so dense the fact is unfindable.
+        let pins = self.device.pin_reclaim_gone();
+        let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
+        if total
+            != self
+                .last_pin_reclaim
+                .swap(total, std::sync::atomic::Ordering::Relaxed)
+        {
+            eprintln!(
+                "kayfabe: PIN-RELEASE released={} refused_no_host_vas={} rows_deduped={} \
+                 ⇒ that many guest-RAM `OS_DESCRIPTOR`s freed, GPU VAs unmapped and isolate \
+                 `mmap` windows `munmap`ed at VAS death, instead of held until QEMU exits",
+                pins.released, pins.refused_no_host_vas, pins.rows_deduped,
+            );
+        }
         let reaped = self.device.reap_retired();
         if reaped > 0 {
             // ★ Visible in the boot log, because "the reap ran" is a claim this tree has
@@ -13219,7 +13254,6 @@ fn fb_userd_cursors(
 #[cfg(all(test, feature = "host-isolates"))]
 mod pushbuffer_pin_tests {
     use super::pushbuffer_sample;
-
 
     /// ★★★★★ **A TRUNCATED SAMPLE MUST NEVER RENDER AS A COMPLETE LIST** — the defect in my
     /// own first draft, caught before any output was read.

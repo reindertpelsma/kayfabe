@@ -1890,6 +1890,9 @@ pub enum VerbPlan {
         unmap: Vec<(HostHandle, u64)>,
         /// Objects to free, in the given order.
         free: Vec<HostHandle>,
+        /// ★ **w310** — the isolate's own guest-RAM `mmap` windows to `munmap`, **last**.
+        /// See [`Orphans::guest_ram`] for why it is a third kind and why it runs last.
+        guest_ram: Vec<GuestRamMapped>,
     },
 }
 
@@ -2124,10 +2127,22 @@ impl VerbPlan {
                 .collect(),
             VerbPlan::Control { obj, .. } => vec![*obj],
             VerbPlan::CeSplit { vas, .. } => vec![*vas],
-            VerbPlan::Release { unmap, free } => unmap
+            // ★★ **w310 — `guest_ram` IS chained in, and this line is exactly what this
+            // method's own doc warns about**: *"adding a variant that carries a handle and
+            // not listing it here is the mistake"*. A `GuestRamMapped` carries a
+            // [`HostHandle`] (`GuestRamMapped::region`), and a foreign one reaching
+            // `unmap_guest_ram` would `munmap` a **bystander isolate's** window.
+            // `Worker::unmap_guest_ram` checks it too; this is the central gate, and both
+            // is correct — the second is not a duplicate, it is the direct-call entrance.
+            VerbPlan::Release {
+                unmap,
+                free,
+                guest_ram,
+            } => unmap
                 .iter()
                 .map(|&(vas, _)| vas)
                 .chain(free.iter().copied())
+                .chain(guest_ram.iter().map(|m| m.region))
                 .collect(),
         }
     }
@@ -2251,13 +2266,44 @@ pub struct Orphans {
     pub unmap: Vec<(HostHandle, u64)>,
     /// Objects to free.
     pub free: Vec<HostHandle>,
+    /// ★★★★★ **w310 — THE THIRD HALF, and it is a third KIND, not more of the same.**
+    ///
+    /// The isolate's own `mmap` windows onto guest RAM
+    /// ([`kayfabe_core::gpu::GuestRamPin::mapped`]), to `munmap`.
+    ///
+    /// ⊘ It cannot be folded into [`Self::free`] or [`Self::unmap`]: a [`GuestRamMapped`]
+    /// is neither an RM object nor a GPU mapping, and
+    /// [`kayfabe_core::gpu::GuestRamPin`]'s own doc states the asymmetry that makes the
+    /// distinction load-bearing — *"`memory` is the RM object that pins the pages … `mapped`
+    /// is the isolate's own window onto them and is undone by `munmap`. **Releasing either
+    /// alone leaves the other.**"*
+    ///
+    /// ## ★★ Why it is ON this value rather than beside it
+    ///
+    /// `docs/audits/w301_cancellation_error_leaks.md` §3.2 recorded `GuestRamPin::mapped` as
+    /// having **one write and zero reads in the whole tree**, and `commit_pin_guest_ram`
+    /// states the reason where the gap is (`kayfabe-fwd/src/lib.rs:1816-1820`): *"`mapped` is
+    /// NOT in this list, and cannot be: `Orphans` frees RM objects and unmaps GPU VAs."* ⇒
+    /// the field had no reader because **the vocabulary of teardown could not name it**.
+    /// Carrying it in a parallel channel beside `Orphans` would be
+    /// `a_second_source_of_truth_beside_a_complete_value` — the exact class that made
+    /// `host_rows=4` a confident wrong zero over 15 845 live pins. **Put the kind ON the
+    /// value.**
+    ///
+    /// ⚠ **Ordering: LAST.** RM's descriptor pins the pages independently of our mapping
+    /// (`chardev_unsafe.rs`: *"the pin is not undone by unmapping"*), so `munmap`ping before
+    /// the `OS_DESCRIPTOR` is freed would drop **our** window while the **GPU's** translation
+    /// is still live. Nothing breaks either way, but "the GPU's access outlives our view of
+    /// the pages" is a state no reader should have to reason about, and running last means it
+    /// never exists.
+    pub guest_ram: Vec<GuestRamMapped>,
 }
 
 impl Orphans {
     /// True if there is nothing to dispose of.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.unmap.is_empty() && self.free.is_empty()
+        self.unmap.is_empty() && self.free.is_empty() && self.guest_ram.is_empty()
     }
 
     /// The verb chain that disposes of these orphans.
@@ -2266,7 +2312,17 @@ impl Orphans {
         VerbPlan::Release {
             unmap: self.unmap.clone(),
             free: self.free.clone(),
+            guest_ram: self.guest_ram.clone(),
         }
+    }
+
+    /// How many disposals this names, across all three kinds.
+    ///
+    /// ★ Exists so a caller counting *"how much did this drain dispose of"* cannot silently
+    /// omit a kind — the shape that made [`Self::guest_ram`] invisible in the first place.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.unmap.len() + self.free.len() + self.guest_ram.len()
     }
 }
 
@@ -3100,7 +3156,11 @@ impl Worker {
                 }
                 Ok(VerbReply::CeSplit { host_ce, ours })
             }
-            VerbPlan::Release { unmap, free } => {
+            VerbPlan::Release {
+                unmap,
+                free,
+                guest_ram,
+            } => {
                 // ★ G4 (§12.16): still best-effort — this IS the failure path and a
                 // refusal must not abort the rest of the disposal — but no longer
                 // SILENT. Every unmap/free that fails is carried out in the returned
@@ -3127,6 +3187,7 @@ impl Worker {
                         Err(RmError::Wedged) => {
                             residue.unmap.extend_from_slice(&unmap[i..]);
                             residue.free.extend_from_slice(free);
+                            residue.guest_ram.extend_from_slice(guest_ram);
                             return Err(VerbFailure {
                                 err: RmError::Wedged,
                                 orphans: residue,
@@ -3144,6 +3205,7 @@ impl Worker {
                         Ok(()) => {}
                         Err(RmError::Wedged) => {
                             residue.free.extend_from_slice(&free[i..]);
+                            residue.guest_ram.extend_from_slice(guest_ram);
                             return Err(VerbFailure {
                                 err: RmError::Wedged,
                                 orphans: residue,
@@ -3153,6 +3215,33 @@ impl Worker {
                         Err(e) => {
                             first.get_or_insert(e);
                             residue.free.push(obj);
+                        }
+                    }
+                }
+                // ★★★★★ **w310 — THE `munmap` HALF, AND IT RUNS LAST ON PURPOSE.**
+                //
+                // `GuestRamPin::mapped` had **one write and zero reads in the whole tree**
+                // (`docs/audits/w301_cancellation_error_leaks.md` §3.2). This loop is the
+                // read. Last, because RM's `OS_DESCRIPTOR` pins the pages independently of
+                // our mapping — see [`Orphans::guest_ram`] for the full argument.
+                //
+                // ⊘ Same best-effort/`Wedged` discipline as the two loops above, and for the
+                // same reason: this IS the disposal path, so one refusal must not abandon the
+                // rest, and a wedged worker will answer every remaining call identically.
+                for (i, &mapped) in guest_ram.iter().enumerate() {
+                    match rm.unmap_guest_ram(mapped) {
+                        Ok(()) => {}
+                        Err(RmError::Wedged) => {
+                            residue.guest_ram.extend_from_slice(&guest_ram[i..]);
+                            return Err(VerbFailure {
+                                err: RmError::Wedged,
+                                orphans: residue,
+                                on: None,
+                            });
+                        }
+                        Err(e) => {
+                            first.get_or_insert(e);
+                            residue.guest_ram.push(mapped);
                         }
                     }
                 }
@@ -3310,6 +3399,11 @@ fn unwind_on(
             orphans: Orphans {
                 unmap: Vec::new(),
                 free: orphans,
+                // ⊘ An unwind's residue never names a guest-RAM mapping: `PinGuestRam`'s
+                // own arms release `mapped` in line before the error leaves (see this
+                // file's `describe_guest_ram` helper), because after that frame the name
+                // is gone. Nothing to carry.
+                guest_ram: Vec::new(),
             },
             on,
         };

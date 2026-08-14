@@ -322,6 +322,134 @@ impl Vas {
         }
         (awaiting_va, awaiting_phys)
     }
+
+    /// ★★★★★ **w310 — THE REMOVAL. `guest_ram_pins` had none, and that was the leak.**
+    ///
+    /// `docs/audits/w301_cancellation_error_leaks.md` §3.2, verified still true at master
+    /// `74200b2b`: [`Vas::guest_ram_pins`] was a `BTreeMap` with `insert`/`get`/`range`/`len`
+    /// and **no `remove`, `retain`, `clear` or `drain` anywhere in the tree**. Dropping the
+    /// `Vas` dropped the map and **lost the handles**, so the objects became unnameable and
+    /// no reclaim could ever be written for them.
+    ///
+    /// ⊘ **`take`, not `remove`, and the shape is the point.** A per-VA removal would invite
+    /// a partial reclaim — and a pin released while its `Vas` is live is exactly the unproven
+    /// act [`PinReleaseVerdict::RefusedVasLive`] refuses. The only caller is
+    /// [`Spine::stage_dropped_vases`], which owns the whole dying `Vas`; taking the map
+    /// **empties the record in the same statement that stages its disposal**, so "recorded
+    /// but not staged" and "staged but still recorded" are both unrepresentable.
+    pub fn take_guest_ram_pins(&mut self) -> BTreeMap<u64, GuestRamPin> {
+        core::mem::take(&mut self.guest_ram_pins)
+    }
+}
+
+/// ★★★★★ **w310 — MAY THIS GUEST-RAM PIN BE RELEASED? The predicate, as a value.**
+///
+/// # ⊘ The hazard on both sides, because only naming one of them produces a wrong answer
+///
+/// **Not releasing** keeps a live, RM-pinned host-GPU translation into guest pages the guest
+/// has freed and its kernel has handed to a *different* guest process. The host GPU can still
+/// write there, and — measured by w307 — **no fault, no `Xid`, no notifier**: the guest's
+/// unmap arrives as page-table writes, and the translation we keep is precisely the one the
+/// engine would otherwise have faulted on. A silent cross-process write inside the guest.
+///
+/// **Releasing too early** causes exactly the fault we are preventing, except ours: the
+/// engine walks a translation we removed under it.
+///
+/// # ⊘ What CANNOT be leaned on
+///
+/// [`kayfabe_isolate::Isolate::is_quiesced`] is `in_flight() == 0` — *no worker checked out*
+/// — and its own doc is titled *"★ This is NOT 'the device is quiescent' — do not conflate
+/// them"*. **There is no GPU quiescence fence anywhere in this tree** (w301 §3.3, with the
+/// known-positive that found `await_semaphore` and used it nowhere on a teardown path). So
+/// the safe release cannot be *"prove the engine is idle"*; nothing here can.
+///
+/// # ★★★ The predicate that IS provable — the `PREEMPT` shape, one level over
+///
+/// w303 made `NVA06C_CTRL_CMD_PREEMPT` honest not by fencing anything but by proving the
+/// group *"has no host twin, so nothing ever reached the GPU, so it is idle by
+/// construction."* The analogue here is not about the engine at all:
+///
+/// > **A guest-RAM pin's only GPU-visible mapping lives in exactly one host VAS — the
+/// > [`Vas::host_vas`] of the `Vas` that records it** ([`kayfabe_isolate::VerbPlan::PinGuestRam`]
+/// > maps into `host_vas` and nowhere else; its refusal arms unmap from that one VAS).
+/// > **When that `Vas` dies, `stage_dropped_vases` already stages `free(host_vas)` — and
+/// > freeing a VAS destroys every mapping in it.** ⇒ Releasing the pin in the same batch
+/// > cannot expose the engine to anything the batch already exposes it to. It does not make
+/// > the mapping die sooner in any observable way; it makes the **descriptor and the page
+/// > pin** die with it instead of outliving it.
+///
+/// ⚠ Stated as strictly as it deserves: this is **not** a proof that the engine is idle. It
+/// is a proof that the release **adds no exposure**, over a teardown that is happening
+/// regardless. The residual — a VAS freed under a running engine — is pre-existing, is the
+/// same class `stage_dropped_vases` has always had for `Binding::host` rows, and is named in
+/// this rung's report rather than silently inherited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinReleaseVerdict {
+    /// ★ **Provably safe** — the `Vas` is dying and this is the host VAS the same batch
+    /// frees. Unmap from it, free the descriptor, `munmap` the isolate's window.
+    Release(HostHandle),
+    /// ⊘ **Refused: the pin records no host VAS.** A pin implies one
+    /// (`commit_pin_guest_ram` adopts `fresh_vas` into `Vas::host_vas` at the moment it
+    /// inserts), but the type does not enforce it, and if it is ever false the mapping
+    /// cannot be *named*. Freeing the descriptor anyway would let RM auto-unmap it from a
+    /// VAS we cannot see — an unmap whose safety is exactly what this enum exists to decide.
+    /// ⇒ Refused by name, counted, and the pin is left to the isolate's death.
+    RefusedNoHostVas,
+    /// ⊘⊘ **Refused: the `Vas` is LIVE.** This is the release we deliberately do **not**
+    /// build. Reclaiming a pin whose `Vas` survives — a housekeeping GC over ranges the
+    /// guest has unmapped — needs the one thing the tree does not have: a GPU fence.
+    /// Nothing in the batch would be freeing the host VAS, so the argument above evaporates
+    /// and the unmap stands alone, under a possibly-running engine.
+    ///
+    /// ★ **An unpin you cannot justify is worse than the leak**: the leak is silent about
+    /// memory the guest is done with; a premature unpin corrupts live work. This variant is
+    /// the refusal being a *shippable answer*, and it is exercised by
+    /// `tests/tests/guest_ram_pin_release.rs` so the absence is a value rather than prose.
+    RefusedVasLive,
+}
+
+/// Decide [`PinReleaseVerdict`] for one pin. See that type for the whole argument.
+///
+/// ⊘ Deliberately total and free of state: the decision is a function of *"is this `Vas`
+/// being torn down in this batch"* and *"can its host VAS be named"*, and nothing else. A
+/// predicate that consulted live state could be right at the moment it was asked and wrong
+/// by the time the verb ran.
+#[must_use]
+pub fn classify_pin_release(vas_is_dying: bool, host_vas: Option<HostHandle>) -> PinReleaseVerdict {
+    match (vas_is_dying, host_vas) {
+        (false, _) => PinReleaseVerdict::RefusedVasLive,
+        (true, None) => PinReleaseVerdict::RefusedNoHostVas,
+        (true, Some(h)) => PinReleaseVerdict::Release(h),
+    }
+}
+
+/// ★★ **w310 — what one [`Spine::stage_dropped_vases`] did with the pins it found.**
+///
+/// Exists because *"the release path is wired"* and *"the release path ran"* are different
+/// claims, and only the second is about a shipped archive (`a_census_zero_needs_a_known_positive`).
+/// `released` is the number a boot log prints and a bench criterion grades as a **floor**.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PinReclaim {
+    /// Pins staged for release — one `unmap`, one `free`, one `munmap` each.
+    pub released: usize,
+    /// Pins refused as [`PinReleaseVerdict::RefusedNoHostVas`].
+    pub refused_no_host_vas: usize,
+    /// ★★★ Address-table rows **skipped** because their host object was already staged by
+    /// its pin. **This is the double-free answer**, and it is counted rather than asserted:
+    /// w291's merge writes the pin's `memory` into an exact-extent row *as well*, so a row
+    /// walk that did not skip would `free` the same handle a second time — *"a DOUBLE FREE
+    /// of a host object, strictly worse than the leak this closes"*
+    /// (`kayfabe-fwd/src/lib.rs`, the merge's own doc).
+    pub rows_deduped: usize,
+}
+
+impl PinReclaim {
+    /// Fold another tally in.
+    fn absorb(&mut self, o: PinReclaim) {
+        self.released += o.released;
+        self.refused_no_host_vas += o.refused_no_host_vas;
+        self.rows_deduped += o.rows_deduped;
+    }
 }
 
 /// ★★★ One live pin of **guest** pages into a host VAS — the record
@@ -1536,6 +1664,13 @@ pub struct Proc {
     /// `#[must_use]`, so a queue that leaves this struct cannot be dropped on the floor
     /// without the compiler saying so.
     pending_release: BTreeMap<GpuId, Orphans>,
+    /// ★★ **w310 — how many guest-RAM pins this proc's VAS deaths actually reclaimed.**
+    ///
+    /// Cumulative over the proc's whole life, never reset. Public because it is the number
+    /// a boot log prints and a bench criterion grades as a **floor** — *"the release path
+    /// ran"* is a different claim from *"the release path is wired"*, and only a counter
+    /// that a live boot moves can carry the first.
+    pub pin_reclaim: PinReclaim,
     retired: bool,
     next_chan: u32,
 }
@@ -1567,6 +1702,7 @@ impl Proc {
             targets: BTreeSet::new(),
             poll: PollState::default(),
             pending_release: BTreeMap::new(),
+            pin_reclaim: PinReclaim::default(),
             retired: false,
             next_chan: 0,
         }
@@ -1661,14 +1797,16 @@ impl Proc {
         self.pending_release.iter().map(|(&g, o)| (g, o))
     }
 
-    /// How many host objects + mappings are queued for release across every target —
-    /// diagnostics, and the executable statement that a drain actually drained.
+    /// How many host objects + mappings + guest-RAM windows are queued for release across
+    /// every target — diagnostics, and the executable statement that a drain actually
+    /// drained.
+    ///
+    /// ★ **w310** — delegates to [`Orphans::len`] rather than summing two named fields, so a
+    /// kind added to `Orphans` cannot go uncounted here. The previous hand-rolled sum would
+    /// have silently omitted `guest_ram`.
     #[must_use]
     pub fn pending_release_len(&self) -> usize {
-        self.pending_release
-            .values()
-            .map(|o| o.free.len() + o.unmap.len())
-            .sum()
+        self.pending_release.values().map(Orphans::len).sum()
     }
 
     /// This proc's isolate for GPU `gpu`, if materialized. Address/exec ops route
@@ -2290,6 +2428,14 @@ pub struct Spine {
     /// Private, with [`Spine::take_pending_spawns`] as the only way out, for the same
     /// reason `pending_cancels` is: [`PendingSpawns`] is `#[must_use]`.
     pending_spawns: PendingSpawns,
+    /// ★★ **w310** — guest-RAM pin reclaim accumulated from procs that have since left the
+    /// live set. Summed with the live procs' own tallies by [`Spine::pin_reclaim`].
+    ///
+    /// ⊘ It exists because the whole-proc teardown arm stages the pins **into a `Proc` that
+    /// is then handed to the reap and dropped** — a counter that lived only there would be
+    /// destroyed by the very event it counts, and the boot log would read `released=0` on
+    /// exactly the runs where the most was released.
+    pin_reclaim_gone: PinReclaim,
     /// ★ The isolate factory, behind an `Arc` because a spawn must be reachable with
     /// **zero** ranked locks held (`kayfabe_isolate::IsolateFactory`'s own docs). The L1
     /// shell keeps a clone of this same handle; there is one factory, not two.
@@ -3281,7 +3427,8 @@ impl Spine {
     /// [`GpaArena::free`] ([`crate::gpa::ForeignBlock`], keyed on [`crate::gpa::ArenaId`]'s
     /// generation) and stays out of circulation, which is the safe direction: a stale
     /// range re-entering a live free list is the #14 collision class.
-    fn stage_dropped_vases(p: &mut Proc, live: &BTreeSet<(GpuId, Pdb)>) {
+    fn stage_dropped_vases(p: &mut Proc, live: &BTreeSet<(GpuId, Pdb)>) -> PinReclaim {
+        let mut tally = PinReclaim::default();
         let doomed: Vec<(GpuId, Pdb)> = p
             .vases
             .keys()
@@ -3293,10 +3440,71 @@ impl Spine {
             let mut vas = p.vases.remove(&key).expect("just enumerated");
             let host_vas = vas.host_vas;
             let q = p.pending_release.entry(gpu).or_default();
+            // ★★★★★ **w310 — THE GUEST-RAM PINS, AND THEY GO FIRST.**
+            //
+            // `docs/audits/w301_cancellation_error_leaks.md` §3.2: this function *"walks
+            // `vas.table` and `vas.blocks` only — it never consults `guest_ram_pins`"*, and
+            // dropping the `Vas` *"loses the handles entirely, so the objects become
+            // unnameable."* That is the leak, and this block is the removal it needed.
+            //
+            // # ★★★ THE PIN IS THE UNIT OF RECLAIM, and that is the whole design
+            //
+            // Not the row. `commit_pin_guest_ram`'s merge writes `Binding::host` **only for
+            // an exact-extent row**, and says why: *"one handle written into N rows would be
+            // freed N times — a DOUBLE FREE … strictly worse than the leak this closes. A
+            // pin whose grant spans several rows therefore binds NOTHING here and behaves
+            // exactly as before."* ⇒ a row-driven reclaim structurally **cannot** see a
+            // multi-row run pin, and *"exactly as before"* is the leak. Walking
+            // `guest_ram_pins` sees every pin, of both shapes, exactly once.
+            //
+            // # ⚠ HOW MANY TIMES IS THE HOST OBJECT FREED? **Exactly one.** Two facts:
+            //
+            // 1. `guest_ram_pins` is **injective on `memory`** — one entry per successful
+            //    `PinGuestRam`, each of which minted its own `OS_DESCRIPTOR`, and
+            //    `overlapping_pin` refuses a second entry over the same range.
+            // 2. `pinned_objects` below carries the staged handles into the row walk, which
+            //    **skips** any row whose object a pin already staged. That is the exact-extent
+            //    overlap w291 created, and it is closed here rather than by weakening the
+            //    merge — removing the merge's bound would reintroduce the double free it
+            //    exists to prevent, which is the worse direction.
+            //
+            // ⊘ Ordering: pins are pushed **before** `q.free.extend(host_vas)` below, so the
+            // VAS is still freed last. `Orphans` runs all `unmap`s, then all `free`s, then
+            // all `guest_ram` `munmap`s — see [`kayfabe_isolate::Orphans::guest_ram`].
+            let mut pinned_objects: BTreeSet<HostHandle> = BTreeSet::new();
+            for (_va, pin) in vas.take_guest_ram_pins() {
+                match classify_pin_release(true, host_vas) {
+                    PinReleaseVerdict::Release(hv) => {
+                        q.unmap.push((hv, pin.host_va));
+                        q.free.push(pin.memory);
+                        q.guest_ram.push(pin.mapped);
+                        pinned_objects.insert(pin.memory);
+                        tally.released += 1;
+                    }
+                    // ⊘ Refused by name. The pin's disposition falls back to what it always
+                    // was — the isolate's death frees the whole client namespace (§7.0) —
+                    // which is a *different disposition*, not a failure, and is counted so it
+                    // can never be a silent zero.
+                    PinReleaseVerdict::RefusedNoHostVas => tally.refused_no_host_vas += 1,
+                    // Unreachable here by construction: this function only ever runs over a
+                    // `Vas` it has already removed. Left as an arm rather than an `expect`
+                    // so the enum stays total and the refusal keeps its one meaning.
+                    PinReleaseVerdict::RefusedVasLive => tally.refused_no_host_vas += 1,
+                }
+            }
             for (_va, _len, binding) in vas.table.iter() {
                 // `Binding::host == None` is an RPC-declared binding: nothing host-side
                 // exists, so nothing host-side needs reclaiming.
                 let Some(h) = binding.host() else { continue };
+                // ★★★ **w310 — THE DEDUPE, and it is the double-free door.** w291's merge
+                // upgrades an exact-extent row to carry the PIN's own `memory` handle, so
+                // this row and the pin above name one object. The pin already staged it
+                // (unmap + free + `munmap`); staging it again here would `free` a live host
+                // object twice. See this function's pin block for the full argument.
+                if pinned_objects.contains(&h.memory()) {
+                    tally.rows_deduped += 1;
+                    continue;
+                }
                 // The unmap is conditional on the VAS and the free is not, deliberately:
                 // a published binding implies its `Vas` materialized a host VAS, but if
                 // that ever stopped holding, the memory object must still be freed rather
@@ -3325,6 +3533,8 @@ impl Spine {
                 }
             }
         }
+        p.pin_reclaim.absorb(tally);
+        tally
     }
 
     /// ★★ **T0/G2, the exec plane** — the [`Channel`] half of [`Self::stage_dropped_vases`].
@@ -3703,6 +3913,10 @@ impl Spine {
             .expect("a vanishing proc is in the live set");
         Self::stage_dropped_vases(&mut p, &BTreeSet::new());
         Self::stage_dropped_channels(&mut p, &BTreeSet::new());
+        // ★★ **w310** — absorb before the proc leaves, or the tally dies with it. This is
+        // the whole-proc arm; the live-proc VAS-death arm accumulates the same numbers into
+        // the surviving `Proc` and is read through [`Spine::pin_reclaim`].
+        self.pin_reclaim_gone.absorb(p.pin_reclaim);
         p.vases.clear();
         p.channels.clear();
         p.chan_ids.clear();
@@ -4488,6 +4702,13 @@ impl Spine {
         self.retired.len()
     }
 
+    /// ★★ **w310** — guest-RAM pin reclaim from procs that have already left the live set.
+    /// [`Gpu::pin_reclaim`] adds the live procs' own tallies to this.
+    #[must_use]
+    pub fn pin_reclaim_gone(&self) -> PinReclaim {
+        self.pin_reclaim_gone
+    }
+
     /// ★ The retired-but-unreaped procs themselves — a **read-only** window, for the
     /// teardown post-condition audit (`l1_concurrency.md` §12.35).
     ///
@@ -4681,6 +4902,7 @@ impl Gpu {
             sources: SourceRegistry::new(),
             pending_cancels: Cancels::new(),
             pending_spawns: PendingSpawns::new(),
+            pin_reclaim_gone: PinReclaim::default(),
             // ★ The caller still HANDS the factory over — ownership is unchanged and the
             // constructor's contract does not leak R1's mechanism. Behind the seam it is
             // shared, because the L1 shell must reach it with no lock held
@@ -5057,6 +5279,26 @@ impl Gpu {
     #[must_use]
     pub fn retired_len(&self) -> usize {
         self.spine.retired_len()
+    }
+
+    /// ★★★ **w310 — THE DEVICE-WIDE PIN RECLAIM TALLY.**
+    ///
+    /// Live procs' cumulative tallies, plus what vacated procs contributed before they were
+    /// handed to the reap ([`Spine::pin_reclaim_gone`]). The system proc is included: it
+    /// owns the kernel/CeUtils traffic and can hold pins like any other.
+    ///
+    /// ⊘ **Monotone, never a gauge.** `released` is *"how many pins this device has ever
+    /// staged for release"*, not *"how many are outstanding"* — a bench criterion must grade
+    /// it as a **floor** (`> 0`), never as an exact value, for the reason w304's criterion
+    /// (E) was rewritten: an exact grade fails on correct results.
+    #[must_use]
+    pub fn pin_reclaim(&self) -> PinReclaim {
+        let mut t = self.spine.pin_reclaim_gone();
+        t.absorb(self.system.pin_reclaim);
+        for p in self.procs.values() {
+            t.absorb(p.pin_reclaim);
+        }
+        t
     }
 
     /// Compose+post one completion batch (see [`Spine::pump_completions`]).

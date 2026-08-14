@@ -1813,14 +1813,26 @@ pub fn commit_pin_guest_ram(
     else {
         return wrong_reply("pin_guest_ram");
     };
-    // ⚠ `mapped` is NOT in this list, and cannot be: `Orphans` frees RM objects and
-    // unmaps GPU VAs. The isolate's own window onto the guest pages is released when the
-    // isolate dies, which `GuestRamPlane`'s ownership makes a destructor rather than a
-    // step — see that type. So a refused commit leaks a mapping until proc teardown and
-    // **nothing else**, which is stated here rather than left for a reader to derive.
+    // ⊘⊘⊘ **CORRECTED 2026-08-14 (w310) — `mapped` IS in this list now, and the paragraph
+    // this replaces was the REASON it could not be.**
+    //
+    // It used to read: *"`mapped` is NOT in this list, and cannot be: `Orphans` frees RM
+    // objects and unmaps GPU VAs … a refused commit leaks a mapping until proc teardown and
+    // **nothing else**."* Both halves were true, and together they are how
+    // `GuestRamPin::mapped` came to have **one write and zero reads in the whole tree**
+    // (`docs/audits/w301_cancellation_error_leaks.md` §3.2): the field had no reader because
+    // the **teardown vocabulary could not name it**, and every reader who checked found a
+    // comment explaining why that was fine.
+    //
+    // ⇒ `Orphans` now carries the third kind ([`kayfabe_isolate::Orphans::guest_ram`]), so
+    // the honest disposal is expressible and is taken. ⚠ *"and **nothing else**"* was also
+    // an understatement: one never-`munmap`ed VMA per refused pin, against an isolate
+    // `vm.max_map_count` of 65530, with `[measured, traces/boots/w291]` **15 845 live pins in
+    // one VAS on one boot**.
     let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
         unmap: vec![(vas_used, host_va)],
         free: with_vas.into_iter().chain([memory]).collect(),
+        guest_ram: vec![mapped],
     };
     let vas_used = fresh_vas
         .or(plan.host_vas)
@@ -2088,6 +2100,7 @@ pub fn commit_publish(
     let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
         unmap: vec![(vas_used, host_va)],
         free: with_vas.into_iter().chain([memory]).collect(),
+        guest_ram: Vec::new(),
     };
     let vas_used = fresh_vas
         .or(plan.host_vas)
@@ -2122,6 +2135,7 @@ pub fn commit_publish(
             orphans: Orphans {
                 unmap: vec![(vas_used, host_va)],
                 free: fresh_vas.into_iter().collect(),
+                guest_ram: Vec::new(),
             },
             retry: false,
         });
@@ -2537,6 +2551,7 @@ pub fn commit_back_fb_leaf(
     let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
         unmap: vec![(vas_used, host_va)],
         free: with_vas.into_iter().chain([memory]).collect(),
+        guest_ram: Vec::new(),
     };
     let vas_used = fresh_vas
         .or(plan.host_vas)
@@ -2558,6 +2573,7 @@ pub fn commit_back_fb_leaf(
             orphans: Orphans {
                 unmap: vec![(vas_used, host_va)],
                 free: fresh_vas.into_iter().collect(),
+                guest_ram: Vec::new(),
             },
             retry: false,
         });
@@ -2693,6 +2709,7 @@ pub fn adopt_joined_fb_leaf(
     let orphans = |vas_used: HostHandle| Orphans {
         unmap: vec![(vas_used, host_va)],
         free: vec![memory],
+        guest_ram: Vec::new(),
     };
     // ⊘ R5 again, at this instant rather than the commit's: the install is a round trip
     // through another process and a `mmap`, so the proc can have retired inside it.
@@ -2752,6 +2769,7 @@ fn bind_backed_fb_leaf(
     let orphans = || Orphans {
         unmap: vec![(vas_used, host_va)],
         free: vec![memory],
+        guest_ram: Vec::new(),
     };
     // ★★★ R5 ON THE LEAF ITSELF. The plan read the table; a sibling thread may have bound,
     // re-bound or backed this range in the gap. Every disagreement is refused with the
@@ -3565,6 +3583,7 @@ pub fn commit_doorbell(
             .into_iter()
             .chain(fresh_vas)
             .collect(),
+        guest_ram: Vec::new(),
     };
     // Converging staleness (someone else materialized what we were materializing)
     // re-plans; divergent staleness (the target is gone) is a loud refusal.
@@ -4236,6 +4255,7 @@ pub fn commit_engine_object(
             .chain(fresh_chan.map(|(h, _)| h))
             .chain(fresh_vas)
             .collect(),
+        guest_ram: Vec::new(),
     };
     // Converging staleness (someone else materialized what we were materializing)
     // re-plans; divergent staleness (the target is gone) is a loud refusal.
