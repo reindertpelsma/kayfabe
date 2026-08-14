@@ -33,7 +33,8 @@ set -uo pipefail
 WORK=${W322_DIR:-/workspace/w322}
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODES=${W322_MODES:-vram hostalloc hostalloc_wc hostreg managed_cpu}
-BW=${W322_BW:-1,4,16,64,256}
+BW=${W322_BW:-4,16,32,64,128,256}
+BWREPS=${W322_BW_REPS:-1}   # ★ R=1: see the block in cup8bench.c. R>1 measures L2, not the aperture.
 BWTGT=${W322_BW_TARGET_MIB:-256}
 BWIT=${W322_BW_ITERS:-7}
 SUM="$WORK/native_summary.log"
@@ -42,7 +43,7 @@ mkdir -p "$WORK"
 : >"$SUM"
 {
 echo "=== ★★★★★ W322 NATIVE START $(date -Is) pid=$$ ==="
-echo "modes=[$MODES] bw=[$BW] target_mib=$BWTGT iters=$BWIT"
+echo "modes=[$MODES] bw=[$BW] target_mib=$BWTGT iters=$BWIT reps=$BWREPS"
 echo "src md5 = $(md5sum < "$SRC_DIR/cup8bench.c" | cut -d' ' -f1)"
 
 # ★★ The QEMU guard is inside w311_native.sh (it uses `pgrep -x qemu-system-x86`, the 15-char
@@ -65,7 +66,7 @@ for M in $MODES; do
   #   here and at `managed_cpu` / N=2048 it would cost minutes for a number w320 already has.
   W311_NATIVE_LOG="$L" W311_NATIVE_DIR="$WORK/build" \
   BENCH_ALLOC="$M" BENCH_BW="$BW" BENCH_BW_TARGET_MIB="$BWTGT" BENCH_BW_ITERS="$BWIT" \
-  BENCH_BW_ONLY=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 \
+  BENCH_BW_REPS="$BWREPS" BENCH_BW_ONLY=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 \
     "$SRC_DIR/w311_native.sh"
   R=$?
   [ "$R" -eq 0 ] || RC_ALL=$R

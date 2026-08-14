@@ -83,6 +83,7 @@ B_BW=${KAYFABE_BENCH_BW:-}
 B_BWIT=${KAYFABE_BENCH_BW_ITERS:-7}
 B_BWTGT=${KAYFABE_BENCH_BW_TARGET_MIB:-256}
 B_BWONLY=${KAYFABE_BENCH_BW_ONLY:-0}
+B_BWREPS=${KAYFABE_BENCH_BW_REPS:-0}
 
 die() { echo "★ cup8bench hook FAILED: $*"; exit 2; }
 
@@ -102,7 +103,7 @@ echo "BENCH_SRC_MD5=$(md5sum < "$SRC" | cut -d' ' -f1)"
 echo "    ★ THE SAME FILE the native arm builds — w311_native.sh copies THIS path. The md5 is"
 echo "      printed by both arms so 'same source' is a comparison, not a template sentence."
 echo "BENCH_PARAMS sizes=$B_SIZES iters=$B_ITERS batch=$B_BATCH verify=$B_VERIFY"
-echo "BENCH_W322_PARAMS hostmem=$B_HOSTMEM alloc=[$B_ALLOC] bw=[$B_BW] bw_iters=$B_BWIT bw_target_mib=$B_BWTGT bw_only=$B_BWONLY"
+echo "BENCH_W322_PARAMS hostmem=$B_HOSTMEM alloc=[$B_ALLOC] bw=[$B_BW] bw_iters=$B_BWIT bw_target_mib=$B_BWTGT bw_only=$B_BWONLY bw_reps=$B_BWREPS"
 
 # ---------------------------------------------------------------------------------------
 # ★★★ PRECONDITIONS, BY NAME. Each fails in a way INDISTINGUISHABLE from our wall unless it
@@ -208,7 +209,7 @@ run_detached measure "$BENCH_TIMEOUT" \
   "BENCH_SIZES=$B_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH BENCH_VERIFY=$B_VERIFY \
 BENCH_BATCH_SWEEP=$B_SWEEP BENCH_BATCH_REPS=$B_REPS BENCH_CTX_FLAGS=$B_CTXF \
 BENCH_HOSTMEM=$B_HOSTMEM BENCH_ALLOC=$B_ALLOC BENCH_BW=$B_BW BENCH_BW_ITERS=$B_BWIT \
-BENCH_BW_TARGET_MIB=$B_BWTGT BENCH_BW_ONLY=$B_BWONLY"
+BENCH_BW_TARGET_MIB=$B_BWTGT BENCH_BW_ONLY=$B_BWONLY BENCH_BW_REPS=$B_BWREPS"
 
 echo ""
 echo "=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ==="

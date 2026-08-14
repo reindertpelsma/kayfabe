@@ -455,6 +455,25 @@ int main(void){
      * sizes are measured HOT — which is the point: that end is the L2 plateau. */
     int BW_TARGET = (e=getenv("BENCH_BW_TARGET_MIB")) ? atoi(e) : 256;
     int BW_ONLY   = (e=getenv("BENCH_BW_ONLY")) ? atoi(e) : 0;
+    /* ★★★★★ w322 — BENCH_BW_REPS PINS R, AND THE FIRST RUN IS WHY IT EXISTS.
+     *
+     * The repeat loop is INSIDE the thread: a thread reads its own `NF/NT` elements, then
+     * re-reads exactly those, R times. So the reuse working set is not the buffer — it is
+     * `resident_threads * (NF/NT) * 4`, and on a GA106 only ~46 080 of the 262 144 threads are
+     * resident at once. At 16 MiB that is ~2.95 MiB, which FITS IN L2, and the first native
+     * sweep measured the consequence loudly: `vram` read **1930 GB/s at 16 MiB** and
+     * **325 GB/s at 64 MiB**, i.e. the small rows were reporting L2, not the aperture, at
+     * EVERY placement. `hostalloc` read 107 GB/s at 16 MiB — **8.5x PCIe gen3 x16's
+     * theoretical ceiling**, which is impossible for a real sysmem read and is the tell.
+     *
+     * ⇒ **Only R=1 rows are aperture measurements.** With R=1 every byte is fetched from the
+     *   backing store exactly once, no reuse is available at any size, and bytes/time IS the
+     *   aperture — at 16 MiB as much as at 256. Setting BENCH_BW_REPS=1 makes every row of a
+     *   sweep trustworthy instead of only the one where `mib == target`.
+     * ⊘ 0 = keep the target-based R (the original behaviour), so the first sweep's rows remain
+     *   reproducible from this source. */
+    int BW_REPS   = (e=getenv("BENCH_BW_REPS")) ? atoi(e) : 0;
+    if(BW_REPS<0) BW_REPS=0;
     if(BW_ITERS<3) BW_ITERS=3;
     if(BW_TARGET<1) BW_TARGET=1;
     if(ITERS<2)  ITERS=2;
@@ -466,8 +485,8 @@ int main(void){
            sizes_s,ITERS,BATCH,VERIFY,NOLAUNCH); fflush(stdout);
     printf("BENCH_W320 batch_sweep=[%s] batch_reps=%d ctx_flags=0x%x hostmem=%d\n",
            sweep_s,SWEEP_REPS,CTXFLAGS,HOSTMEM); fflush(stdout);
-    printf("BENCH_W322 alloc=[%s] bw=[%s] bw_iters=%d bw_target_mib=%d bw_only=%d\n",
-           AM_NAMES[AMODE],bw_s,BW_ITERS,BW_TARGET,BW_ONLY); fflush(stdout);
+    printf("BENCH_W322 alloc=[%s] bw=[%s] bw_iters=%d bw_target_mib=%d bw_only=%d bw_reps=%d\n",
+           AM_NAMES[AMODE],bw_s,BW_ITERS,BW_TARGET,BW_ONLY,BW_REPS); fflush(stdout);
     { /* ⊘ An instrument that silently degrades is worse than one that is absent: if this
        * kernel has no per-thread CPU clock, the whole §3.1 breakdown is meaningless and must
        * say so HERE rather than print zeros that read as "the thread never ran". */
@@ -542,7 +561,9 @@ int main(void){
                 /* NF rounded DOWN to a multiple of NT: every thread then sums exactly NF/NT
                  * elements per repeat and the expected output is ONE constant. */
                 size_t NF=(sz/4u/NT)*NT; if(NF==0) NF=NT;
-                unsigned R=(unsigned)(((size_t)BW_TARGET<<20)/(NF*4)); if(R<1) R=1;
+                unsigned R = BW_REPS>0 ? (unsigned)BW_REPS
+                                       : (unsigned)(((size_t)BW_TARGET<<20)/(NF*4));
+                if(R<1) R=1;
                 double expect=(double)R*(double)(NF/NT);
                 bw_rows++;
                 if(expect>=16777216.0){   /* 2^24: past this fp32 addition stops being exact */
@@ -557,8 +578,24 @@ int main(void){
                        mib,NF,R,(unsigned long long)((size_t)NF*4*R),AM_NAMES[AMODE],
                        (unsigned long long)in.dev,(unsigned long long)out.dev,GRD,BLK);
                 fflush(stdout);
-                int frc=cuMemsetD32_v2(in.dev,0x3f800000u,NF);   /* every element = 1.0f */
-                int frc2=cuCtxSynchronize();
+                /* ★★ CHUNKED FILL. The first run failed here at 64 MiB with rc=719
+                 * (CUDA_ERROR_LAUNCH_FAILED) on a single whole-buffer `cuMemsetD32`, taking
+                 * the context down and turning the 256 MiB row into an `alloc_failed` too —
+                 * one refusal, two lost rows. Filling in <=8 MiB pieces keeps each operation
+                 * the size of ones that are known to work, and a failure now names the OFFSET
+                 * it failed at instead of the whole buffer.
+                 * ⊘ This is a workaround for the MEASUREMENT, not a fix for whatever refused:
+                 *   if the fill still fails the row is UNMEASURED and says where. */
+                const size_t FILL_CHUNK = 2u*1024u*1024u;   /* elements: 8 MiB of fp32 */
+                int frc=0, frc2=0; size_t fill_at=0;
+                for(fill_at=0; fill_at<NF && !frc && !frc2; fill_at+=FILL_CHUNK){
+                    size_t n = (NF-fill_at < FILL_CHUNK) ? (NF-fill_at) : FILL_CHUNK;
+                    frc  = cuMemsetD32_v2(in.dev + (CUdeviceptr)(fill_at*4), 0x3f800000u, n);
+                    frc2 = cuCtxSynchronize();
+                    if(frc||frc2) printf("BW_FILL_FAIL mib=%ld at_element=%zu of %zu "
+                                         "(byte offset 0x%zx) rc=%d/%d\n",
+                                         mib,fill_at,NF,fill_at*4,frc,frc2);
+                }
                 if(frc||frc2){ printf("BWROW mib=%ld UNMEASURED reason=fill_failed rc=%d/%d\n",
                                       mib,frc,frc2); bw_rows_unmeasured++; dbuf_free(&in);
                                fflush(stdout); continue; }
@@ -599,13 +636,19 @@ int main(void){
                  * the fast end badly. ⊘ BOTH are printed so a reader can check that choice. */
                 double gbs_sync = bytes/(syn_med*1e6);
                 double gbs_tot  = bytes/(tot_med*1e6);
+                /* ⚠ A row whose sync is shorter than ~1 ms is dominated by whatever fixed
+                 * cost the launch has (our guest's is ~4 ms of SUBMIT, measured separately,
+                 * plus an unknown GPU-side turnaround) and its GB/s is a LOWER BOUND on the
+                 * aperture, not a measurement of it. Marked in the row rather than left for a
+                 * reader to notice. */
+                const char *floorflag = (syn_med < 1.0) ? " ⚠SHORT_SYNC_LOWER_BOUND" : "";
                 printf("BWROW mib=%ld alloc=%s nf=%zu reps=%u bytes=%.0f iters=%d "
                        "submit_med_ms=%.3f sync_med_ms=%.3f sync_min_ms=%.3f sync_max_ms=%.3f "
                        "total_med_ms=%.3f read_GBps=%.3f read_GBps_incl_submit=%.3f "
-                       "expect=%.0f got0=%g bad=%ld\n",
+                       "expect=%.0f got0=%g bad=%ld%s\n",
                        mib,AM_NAMES[AMODE],NF,R,bytes,n_ok,
                        sub_med,syn_med,syn_min,syn_max,tot_med,gbs_sync,gbs_tot,
-                       expect,first_got,row_bad);
+                       expect,first_got,row_bad,floorflag);
                 fflush(stdout);
                 total_bad += row_bad;
                 dbuf_free(&in);

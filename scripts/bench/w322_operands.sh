@@ -63,17 +63,30 @@ export KAYFABE_BENCH_CTX_FLAGS=0
 export KAYFABE_BENCH_BW_TARGET_MIB=${KAYFABE_BENCH_BW_TARGET_MIB:-256}
 export KAYFABE_BENCH_BW_ITERS=${KAYFABE_BENCH_BW_ITERS:-7}
 
+# ★★★★★ BENCH_BW_REPS=1 IN EVERY BW ARM, AND THE FIRST RUN IS WHY.
+#
+# The repeat loop lives INSIDE the thread, so its reuse working set is
+# `resident_threads * (NF/NT) * 4` — not the buffer. On a GA106 only ~46 080 of the 262 144
+# threads are resident, so at 16 MiB that is ~2.95 MiB and it FITS IN L2. The first native
+# sweep measured the consequence unmistakably: `vram` read 1930 GB/s at 16 MiB against
+# 325 GB/s at 64 MiB, and `hostalloc` read 107 GB/s at 16 MiB — **8.5x PCIe gen3 x16's
+# theoretical ceiling**, which no real sysmem read can do.
+# ⇒ every row with R>1 was reporting L2, not the aperture. With R=1 each byte is fetched from
+#   the backing store EXACTLY ONCE, so bytes/time is the aperture at any size, and the whole
+#   sweep becomes readable instead of only the one row where `mib == target`.
 case "$ARM" in
-  # ⊘ SMALL FIRST, for the same reason w320's size arm is ordered small first: the program
-  #   prints each row when THAT row ends, so a deadline hit or an allocation refusal at
-  #   256 MiB still leaves every smaller row fully measured. 64 MiB is already ~28x this
-  #   GA106's L2, so the plateau is reached even if the largest row never runs.
-  bw)      export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-1,4,16,64,256}
+  # ⊘ SMALL FIRST: the program prints each row when THAT row ends, so a refusal at the largest
+  #   size still leaves every smaller row fully measured. ⚠ The first run's 64 MiB row died in
+  #   the FILL (rc=719) and took the context with it, losing 256 MiB too; the fill is chunked
+  #   now, and 32 MiB is included so there is a size between the two.
+  bw)      export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-4,16,32,64,128}
+           export KAYFABE_BENCH_BW_REPS=1
            export KAYFABE_BENCH_BW_ONLY=1
            export KAYFABE_BENCH_SIZES=256
            export KAYFABE_BENCH_ITERS=3
            export KAYFABE_BENCH_TIMEOUT=${KAYFABE_BENCH_TIMEOUT:-1400} ;;
-  bwhost)  export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-1,4,16,64,256}
+  bwhost)  export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-4,16,32,64,128}
+           export KAYFABE_BENCH_BW_REPS=1
            export KAYFABE_BENCH_BW_ONLY=1
            export KAYFABE_BENCH_ALLOC=hostalloc
            export KAYFABE_BENCH_SIZES=256
@@ -81,7 +94,8 @@ case "$ARM" in
            export KAYFABE_BENCH_TIMEOUT=${KAYFABE_BENCH_TIMEOUT:-1400} ;;
   bwneg)   export KAYFABE_BENCH_ONLY=measure
            export KAYFABE_BENCH_NOLAUNCH=1
-           export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-1,4}
+           export KAYFABE_BENCH_BW=${KAYFABE_BENCH_BW:-4,16}
+           export KAYFABE_BENCH_BW_REPS=1
            export KAYFABE_BENCH_BW_ONLY=1
            export KAYFABE_BENCH_SIZES=256
            export KAYFABE_BENCH_ITERS=3
@@ -96,14 +110,19 @@ FBLOG=/workspace/bench/run_${KAYFABE_TAG}_fb.log
 RSSLOG=/workspace/bench/run_${KAYFABE_TAG}_rss.log
 
 echo "=== ★★★★★ W322 arm=$ARM tag=$KAYFABE_TAG $(date -Is)"
-echo "    bw=[${KAYFABE_BENCH_BW:-<none>}] target_mib=$KAYFABE_BENCH_BW_TARGET_MIB alloc=[${KAYFABE_BENCH_ALLOC:-<default:vram>}]"
+echo "    bw=[${KAYFABE_BENCH_BW:-<none>}] reps=[${KAYFABE_BENCH_BW_REPS:-target-based}] alloc=[${KAYFABE_BENCH_ALLOC:-<default:vram>}]"
 echo "    repo=[$REPO] HEAD=[$(cd "$REPO" && git rev-parse --short HEAD 2>/dev/null)]"
 
 # ---- ★★★ THE HOST-SIDE COUNTERS. Started BEFORE the boot so the baseline is a MEASUREMENT.
 {
   echo "# epoch_s  fb_used_MiB  gpu_util  qemu_rss_KiB  compute_apps"
   while true; do
-    FB=$(nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr -d ' ')
+    # ⚠ THE FIRST RUN'S BUG, FIXED HERE: `--format=csv,noheader,nounits` returns "1234, 7"
+    #   and `tr -d " "` glued both numbers into ONE field, so the analyser's $2 was the RSS
+    #   column and every sample parsed as UNMEASURED — 63 samples, zero read. ★ The data was
+    #   never missing; the READER was wrong, and an empty summary looked exactly like a
+    #   sampler that never ran. Split on the comma so each number is its own field.
+    FB=$(nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr -d " " | tr "," " ")
     APPS=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | tr '\n' ';' | tr -d ' ')
     # ⚠ `pgrep -x qemu-system-x86` and NOT the full name: /proc/PID/comm truncates at 15
     #   chars, so the long form can never match and this line would silently always be empty.
