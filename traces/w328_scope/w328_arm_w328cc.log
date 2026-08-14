@@ -1,0 +1,8 @@
+=== W328 ARM START tree=/workspace/kayfabe_w328 prefix=w328cc n=2 2026-08-14T22:46:58+00:00
+=== REV=[e4bf27321bed30519cdd4c6231d7107754275bcf w328-scope-the-publication 2026-08-14T23:30:35+02:00]
+=== ARM ENV (intent — the boot's own lines are the record of EXECUTION):
+===   KAYFABE_PUBLISH_SCOPE=doorbelled
+===   KAYFABE_DRAIN_BATCH=coalesce
+===   KAYFABE_PUBLISH_SCOPE=[doorbelled]
+===   KAYFABE_DRAIN_BATCH=[coalesce]
+--- boot 1/2 tag=w328cc1 2026-08-14T22:47:02+00:00
