@@ -8310,6 +8310,9 @@ impl SharedDoorbell {
         let (mut drain_visited, mut drain_asked, mut drain_pinned) = (false, 0usize, 0usize);
         let (mut drain_refused, mut drain_ms) = (0usize, 0u128);
         let (mut drain_cap_hit, mut drain_budget_hit) = (false, false);
+        // ★★★★★ w321 — the two decomposition rows, both `⊘UNMEASURED` until a drain runs.
+        let mut drain_census = String::from("⊘ NO DRAIN — the contiguity census is UNMEASURED");
+        let mut drain_ipc = String::from("⊘ NO DRAIN — the IPC bracket is UNMEASURED");
         for pid in self.device.live_pids() {
             // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
             // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
@@ -8344,8 +8347,18 @@ impl SharedDoorbell {
                     drain_visited = true;
                     drain_asked = candidates.len();
                     drain_cap_hit = candidates.len() >= cap;
+                    // ★★★★★ **w321 — THE CONTIGUITY CENSUS, TAKEN BEFORE A SINGLE PIN.**
+                    // O(n) over the rows we are about to walk, and it is the number that
+                    // BOUNDS a coalescing fix before one is built. See `drain_contiguity`.
+                    drain_census = drain_contiguity(&candidates);
                 }
                 let vas_started = std::time::Instant::now();
+                // ★★★★★ **w321 — THE PARENT-SIDE HALF OF THE DECOMPOSITION.**
+                // Read here and again after the loop; the difference is `(calls, µs)` this
+                // drain spent blocked in the isolate IPC. Subtract it from `DRAIN_MS` and
+                // what is left is OUR OWN cost (route locks, `resolve_guest_ram`, commit).
+                // ⊘ Thread-local and monotonic — see `ipc_totals`'s own doc.
+                let ipc_before = kayfabe_isolate_host::isolate::ipc_totals();
                 let mut vas_refused = 0usize;
                 let mut budget_hit = false;
                 let mut last_va: Option<u64> = None;
@@ -8432,6 +8445,29 @@ impl SharedDoorbell {
                     drain_refused = vas_refused;
                     drain_ms = vas_ms;
                     degrade = vas_degrade.clone();
+                    // ★★★★★ **w321 — CLOSE THE PARENT-SIDE BRACKET AND SUBTRACT.**
+                    let ipc_after = kayfabe_isolate_host::isolate::ipc_totals();
+                    let calls = ipc_after.0.saturating_sub(ipc_before.0);
+                    let us = ipc_after.1.saturating_sub(ipc_before.1);
+                    let attempted = each_us.len() + vas_refused;
+                    drain_ipc = if attempted == 0 {
+                        format!(
+                            "⊘ NOTHING WAS ATTEMPTED — ipc_calls={calls} ipc_us={us}, and the \
+                             per-row split is UNMEASURED, ⊘ not 0"
+                        )
+                    } else {
+                        let a = attempted as u128;
+                        let own = u128::from(vas_ms) * 1000;
+                        format!(
+                            "ipc_calls={calls} ({} /row) ipc_us={us} ({} us/row) \
+                             drain_us={own} ours_us={} ({} us/row) ipc_share={}%",
+                            calls as u128 / a,
+                            u128::from(us) / a,
+                            own.saturating_sub(u128::from(us)),
+                            own.saturating_sub(u128::from(us)) / a,
+                            if own == 0 { 0 } else { u128::from(us) * 100 / own },
+                        )
+                    };
                 } else if degrade == "n/a" {
                     degrade = vas_degrade.clone();
                 }
@@ -8525,6 +8561,7 @@ impl SharedDoorbell {
              measurement-only) → pinned={total_pins} refused={refused} in {} ms, \
              per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
              DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
+             W321CENSUS[{drain_census}] W321IPC[{drain_ipc}] \
              over {} VAS row(s) {}",
             total_us / 1000,
             rows.len(),
@@ -13889,6 +13926,117 @@ const VAS_DRAIN_ROW_CAP: usize = 65536;
 // `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
 #[cfg(feature = "host-isolates")]
 const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(3000);
+
+/// ★★★★★ **w321 — THE CONTIGUITY CENSUS: what a COALESCING fix could possibly buy, measured
+/// before one is built.**
+///
+/// # Why this is the first thing w321 does
+///
+/// The drain costs `rows × ~225 µs`, and `~225 µs` is **three synchronous cross-process
+/// round trips** — `VerbPlan::PinGuestRam` is `map_guest_ram` → `describe_guest_ram` →
+/// `map_gpu_va`, and each one is its own `Request` over the isolate socket
+/// (`kayfabe_isolate_host::isolate::ProxyRmBackend::call`). Two different fixes follow from
+/// two different mechanisms and **they need different things to be true**:
+///
+/// - if the cost is TRANSPORT, one request carrying many rows removes it, and **physical
+///   contiguity is irrelevant**;
+/// - if the cost is the RM `ioctl`, only **fewer, larger mappings** help — and that is
+///   bounded by exactly this census.
+///
+/// ⊘ `w238` measured *"the GR ring is NOT physically contiguous, so 'one descriptor per run'
+/// is one per PAGE"* on **one buffer**. This asks the same question of the **whole drained
+/// table**, which is a different population, and answers it with a distribution rather than
+/// with a yes/no.
+///
+/// # What a "run" means here, and why there are two kinds
+///
+/// A coalesced pin needs BOTH halves contiguous: the guest VAs must abut (or the fixed map
+/// would cover addresses the guest did not bind) **and** the guest-physical addresses must
+/// abut (or one `OS_DESCRIPTOR` over one `mmap` slice cannot describe them). So:
+///
+/// - `va_runs` — maximal spans where only `va` abuts. The ceiling if physicality were free.
+/// - `pair_runs` — maximal spans where **`va` AND `gpa`** abut. ★ **THIS is the achievable
+///   row count of a coalescing fix**, and `rows / pair_runs` is its speedup ceiling.
+/// - `va_breaks` / `gpa_breaks` — which half does the breaking. ⚠ Load-bearing: a table
+///   broken by VA is SPARSE (nothing to coalesce, and nothing a batched verb fixes either);
+///   a table broken by GPA is SCATTERED (a batched verb helps, a coalescer does not).
+///
+/// ⊘ No square brackets in the returned string: its consumers are `grep -o '…\[[^]]*\]'`
+/// matchers, and `w319`'s own attributor was broken for a day by a nested `]`.
+#[cfg(feature = "host-isolates")]
+fn drain_contiguity(rows: &[(u64, u64, u64)]) -> String {
+    if rows.is_empty() {
+        return "⊘ NO ROWS — the distribution is UNMEASURED, ⊘ not `contiguous`".to_string();
+    }
+    let n = rows.len();
+    let mut bytes: u64 = 0;
+    // len buckets: 4 KiB, <64 KiB, <2 MiB, >= 2 MiB
+    let mut len_hist = [0usize; 4];
+    let (mut va_runs, mut pair_runs) = (1usize, 1usize);
+    let (mut va_breaks, mut gpa_breaks, mut both_breaks) = (0usize, 0usize, 0usize);
+    let mut cur_run: u64 = rows[0].2;
+    let mut max_run: u64 = rows[0].2;
+    // pair-run size buckets: 4 KiB, <64 KiB, <2 MiB, >= 2 MiB
+    let mut run_hist = [0usize; 4];
+    let bucket = |v: u64| -> usize {
+        if v <= 0x1000 {
+            0
+        } else if v < 0x1_0000 {
+            1
+        } else if v < 0x20_0000 {
+            2
+        } else {
+            3
+        }
+    };
+    for (i, &(va, gpa, len)) in rows.iter().enumerate() {
+        bytes = bytes.saturating_add(len);
+        len_hist[bucket(len)] += 1;
+        if i == 0 {
+            continue;
+        }
+        let (pva, pgpa, plen) = rows[i - 1];
+        let va_ok = pva.checked_add(plen) == Some(va);
+        let gpa_ok = pgpa.checked_add(plen) == Some(gpa);
+        if !va_ok {
+            va_runs += 1;
+        }
+        if !(va_ok && gpa_ok) {
+            pair_runs += 1;
+            run_hist[bucket(cur_run)] += 1;
+            max_run = max_run.max(cur_run);
+            cur_run = len;
+            match (va_ok, gpa_ok) {
+                (false, false) => both_breaks += 1,
+                (true, false) => gpa_breaks += 1,
+                (false, true) => va_breaks += 1,
+                (true, true) => unreachable!("a pair break with both halves contiguous"),
+            }
+        } else {
+            cur_run = cur_run.saturating_add(len);
+        }
+    }
+    run_hist[bucket(cur_run)] += 1;
+    max_run = max_run.max(cur_run);
+    format!(
+        "rows={n} bytes=0x{bytes:x} len_4k={} len_lt64k={} len_lt2m={} len_ge2m={} \
+         va_runs={va_runs} pair_runs={pair_runs} coalesce_ceiling={}.{:02}x \
+         break_va_only={va_breaks} break_gpa_only={gpa_breaks} break_both={both_breaks} \
+         runsz_4k={} runsz_lt64k={} runsz_lt2m={} runsz_ge2m={} max_run=0x{max_run:x} \
+         ⇒ a coalescing fix can reduce {n} host chains to {pair_runs}; a BATCHED-TRANSPORT \
+         fix is bounded by neither of these numbers",
+        len_hist[0],
+        len_hist[1],
+        len_hist[2],
+        len_hist[3],
+        n / pair_runs,
+        (n * 100 / pair_runs) % 100,
+        run_hist[0],
+        run_hist[1],
+        run_hist[2],
+        run_hist[3],
+    )
+}
 
 /// ★★★★★ **w319 — THE MODULATION KNOB, and it is an INSTRUMENT, not a fix.**
 ///
