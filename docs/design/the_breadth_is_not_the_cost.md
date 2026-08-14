@@ -308,6 +308,44 @@ coalesced, the publication CENSUS pass becomes a co-equal term of the worst trap
 the site §2.2 priced at ~6.4 ms per join attempt and §2.3 found running with its gate
 disarmed. That is what sweep 2's arm `G` tests, and it is why the ladder is ordered this way.
 
+### 3.3 THE OTHER TWO WORKLOADS — one is live, one is vacuous, and the brief predicted which
+
+**`w328e` — cup8 (2048² fp32 matmul), scope + coalesce, n=3.** The oracle that fails
+*quietly-wrong* rather than loudly-absent:
+
+| boot | `CUP8_BAD` / `CUP8_MAXERR` | `worst_trap_us` | `DRAIN_MS` | **margin** | `complete` | `pinned/asked` |
+|---|---|---|---|---|---|---|
+| `w328e1` | **0 / 0** | 166 436 | **77** | **38.96×** | true | 13 313/13 313 |
+| `w328e2` | **0 / 0** | 180 177 | **63** | **47.62×** | true | 13 313/13 313 |
+| `w328e3` | **0 / 0** | 279 180 | **186** | **16.13×** | true | 13 313/13 313 |
+
+⇒ **bit-exact at 3/3 with the coalescer armed**, and margins **16.13×–47.62×** — a second
+workload, n=3, three more points, none clamped.
+
+⊘ **`w319_attribute.sh` returns `VERDICT=2 UNMEASURED` on all three, and that is STRUCTURAL,
+not a failure**: it grades `CUP3_VAL`, and a cup8 boot emits none. Saying so is the point —
+`2` is *"not a pass"*, and a lane that read it as one would be reading an inapplicable
+instrument as a green. The grading here is `complete=` / `pinned == asked` / `Xid=0` /
+`CUP8_BAD=0`.
+
+**`w328x` — R33 arm 1 (a raw CE client), scope + coalesce.** ⚠⚠ **VACUOUS FOR THE DRAIN FIX,
+AND THE BRIEF PRE-REGISTERED EXACTLY THIS.** The workload runs correctly — the arm-1 line is
+present and byte-correct (`4096 bytes moved … GP_GET 1 caught GP_PUT 1`) — but:
+
+```
+DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 … complete=true]
+W328PIN[arm=doorbelled scoped=true scoped_out=1 other_vases=0 other_us=0 other_pinned=0 drain_ms=0]
+```
+
+- **`asked=0`** ⇒ there is nothing for the coalescer to coalesce. **The coalescer arm is
+  VACUOUS here**, on the same `asked=0` grounds it was vacuous for w321.
+- **`scoped_out=1` but `other_vases=0 other_us=0`** ⇒ the scope *executed* and removed
+  **nothing measurable**. Call it *minimally live* and no more.
+
+⇒ **R33 is evidence that neither change BREAKS a raw CE client, and NO evidence about either
+fix.** ★ **Coverage for this rung's claims therefore rests on cup3 and cup8**, at n=3 each,
+and that is stated here rather than rounded up to "three workloads".
+
 ---
 
 ## 4. ⚠ THE CORRECTNESS HAZARD RUNS THE OTHER WAY, AND IT IS NAMED IN THE CODE
