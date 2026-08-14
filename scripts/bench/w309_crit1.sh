@@ -122,7 +122,10 @@ D=/workspace/bench/run_${KAYFABE_TAG}_hostdmesg.log
 {
 echo ""
 echo "================================================================================"
-echo "=== ★★★★★ W309 GRADING — ONE CONFOUND PER ARM, CRITERION 1 BY IDENTITY  arm=$ARM inner_rc=$BRC  $(date -Is)"
+# ★ ONE literal, shared by the emitter and the self-check at the foot of this file, so a
+#   rename can never leave the check hunting a string nothing prints (w309 boot 1).
+BANNER="W309 GRADING"
+echo "=== ★★★★★ $BANNER — ONE CONFOUND PER ARM, CRITERION 1 BY IDENTITY  arm=$ARM inner_rc=$BRC  $(date -Is)"
 echo "================================================================================"
 echo ""
 echo "=== ⊘ PRECONDITION — the artefacts exist (zero bytes is not 'not yet')"
@@ -274,7 +277,15 @@ echo "=== ★ THE CLIENT'S FAIL LINES, verbatim"
 grep -a '^FAIL ' "$P" 2>/dev/null | fold -w 200 | sed 's/^/      /'
 echo ""
 echo "=== ★★ HARNESS SELF-CHECK"
-echo "    w309 grading lines = [$(grep -c 'W305 ITEM B GRADING' "$OUT" 2>/dev/null)]  (MUST be >= 1)"
+# ⊘⊘ **THIS SELF-CHECK WAS BROKEN THE MOMENT THE BANNER WAS RENAMED, AND IT REPORTED `0`
+#    WHILE THE BANNER IT LOOKS FOR WAS PRINTED SIX SCREENS ABOVE — w309 boot 1.**
+#    It grepped the OLD literal (`W305 ITEM B GRADING`) after the header had been renamed to
+#    `W309 GRADING`. ★ Same class as w305's own anchor trap, and the mirror of it: an
+#    instrument that checks for a STRING THE PRODUCER NO LONGER EMITS reports a false FAILURE,
+#    which is the reading this tree treats as safe — so it gets believed. ⇒ The literal is a
+#    variable now, shared with the `echo` that emits it, so the two cannot drift apart.
+echo "    w309 grading lines = [$(grep -c "$BANNER" "$OUT" 2>/dev/null)]  (MUST be >= 1)"
+echo "    ⊘ this counts the banner THIS SCRIPT emits; if it reads 0 the check is broken, not the run"
 echo "=== W309 EXIT rc=$BRC arm=$ARM at $(date -Is) ==="
 } >>"$OUT" 2>&1
 

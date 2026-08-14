@@ -1,0 +1,11 @@
+W309_BISECT_STARTED 2026-08-14T14:10:51+00:00 pid=1348610
+=== ARM1 BISECT rev=8d258daa tag=bis8d25 2026-08-14T14:10:51+00:00 ===
+ARM1[8d258daa] = PASS
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (
+=== ARM1 BISECT rev=d2c58075 tag=bisd2c5 2026-08-14T14:12:31+00:00 ===
+ARM1[d2c58075] = FAIL
+FAIL  R33 arm 1 COPY      = dst[0] 0x3f0011cc -> 0x3f0011cc (want 0xc0ffee33), dst[last] 0x3f0011cc (want 0xc0fff232), semaphore 0x00000000 (want 0x00
+=== ARM1 BISECT rev=c7c058a3 tag=bisc7c0rpt 2026-08-14T14:14:23+00:00 ===
+ARM1[c7c058a3] = PASS
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (
+W309_BISECT_EXIT_STATUS=0  2026-08-14T14:16:08+00:00
