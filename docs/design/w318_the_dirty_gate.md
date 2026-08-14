@@ -315,64 +315,37 @@ see a CE-only break.
 `^CUP3_VAL=43` grade on these boxes, with the reds identical field for field
 (`Xid 31, chan 0x02000015, CE3, HUBCLIENT_CE1, @ 0x2_0440f000, FAULT_PDE, VIRT_WRITE`).
 
-Four runs, eight boots, **one binary at `c6301a57`** differing only in two environment strings:
+### 5.a THE LOUDLY-ABSENT PAIR — `cup3` + `R33 arm 1`
 
-| run | gate | plane | known-positive | RC | `Xid` | `host_rows` | gate ratio |
+**At the final revision `44317766`** — n=3 gated, plus a same-hour same-binary control:
+
+| run | gate | cup3 | R33 arm 1 | `Xid` | `host_rows` (cup3 / R33) | probe size (R33) | gate ratio (cup3) |
 |---|---|---|---|---|---|---|---|
-| `g1` | **on** | cup3 (GR) | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
-| `g1` | **on** | R33 arm 1 (raw CE) | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
-| `g2` | **on** | cup3 | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
-| `g2` | **on** | R33 arm 1 | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
-| `g3` | **on** | cup3 | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
-| `g3` | **on** | R33 arm 1 | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
-| `c1` | **off** | cup3 | `CUP3_VAL=43` | 0 | 0 | 18295 | 0 % / 0 % |
-| `c1` | **off** | R33 arm 1 | `★ R33 arm 1 COPY` | 1 | 0 | 3 | 0 % / 0 % |
+| `h1` | **on** | **`CUP3_VAL=43`** `RC=0` | **fired** `RC=1` | **0** | **18295 / 3** | 24 334 | 95.7 % / 94.8 % |
+| `h2` | **on** | **`CUP3_VAL=43`** `RC=0` | **fired** `RC=1` | **0** | **18295 / 3** | 24 334 | 95.7 % / 94.8 % |
+| `h3` | **on** | **`CUP3_VAL=43`** `RC=0` | **fired** `RC=1` | **0** | **18295 / 3** | 24 334 | 95.7 % / 94.8 % |
+| `d2` | **off** | `CUP3_VAL=43` `RC=0` | fired `RC=1` | 0 | 18295 / 3 | 24 334 | 0 % / 0 % |
 
-**`W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES` on all four runs.**
+**`INERT-ON-BOTH-PLANES` on all four.** ⊘ `d1`, the first attempt at that control, is §5.0.
 
-- **`host_rows` is byte-identical to the control and to w297/w314's green**: 18 295 on cup3,
-  3 on R33. The gate did not cost the host VAS a single row.
-- **Zero Xid on all eight boots.** ⊘ The known intermittent
+**At `c6301a57`** — the same four cells, run an hour earlier on the pre-lock-fix binary:
+
+| run | gate | cup3 | R33 arm 1 | `Xid` | `host_rows` | gate ratio (cup3) |
+|---|---|---|---|---|---|---|
+| `g1` `g2` `g3` | **on** | **`CUP3_VAL=43`** ×3 | **fired** ×3 | **0** | **18295 / 3** | 95.7 % / 94.8 % |
+| `c1` | **off** | `CUP3_VAL=43` | fired | 0 | 18295 / 3 | 0 % / 0 % |
+
+⇒ **n = 6 gated and n = 2 control across two revisions, every cell green, `host_rows`
+byte-identical to w297/w314's own green in all of them.**
+
+- **Zero Xid on every boot.** ⊘ The known intermittent
   (`Xid 31, chan 0x02000015, CE3, HUBCLIENT_CE1, @ 0x2_0440f000, FAULT_PDE, VIRT_WRITE`) did
-  **not** appear on any arm. ⚠ At n=3 gated / n=1 control that is **not** evidence its ~20 %
-  rate changed in either direction — 3 clean gated boots is what a 20 % rate produces 51 % of
-  the time. It is reported as *not observed*, which is what it is.
+  **not** appear on any arm. ⚠ At n=6 gated that is **still not** evidence its ~20 % rate
+  changed: six clean boots is what a 20 % rate produces **26 %** of the time. It is reported as
+  *not observed*, which is what it is — ★ and *not observed on the control either*, so nothing
+  here even establishes the intermittent was live on this box today.
 
-### 5.0 ⊘⊘ A CONTROL RUN DIED OF **GUEST KERNEL DRIFT** MID-SESSION, AND THE GATE CAUGHT IT BY SIZE
-
-The first control run at the final revision (`d1`) graded **UNMEASURED**, not pass and not
-fail. Its cup3 arm fired `CUP3_VAL=43`; its **R33 probe log was 1 016 bytes against the usual
-24 334**, with no `^R33_RC=` terminator. The cause is in the log's own head:
-
-```
-modprobe: FATAL: Module nvidia not found in directory /lib/modules/6.8.0-137-generic
-```
-
-⇒ **The guest's unattended-upgrades installed `6.8.0-137` and grub booted it**, while the
-hand-built `nvidia.ko` exists only under `/lib/modules/6.8.0-136-generic/kernel/drivers/video/`.
-`h1`–`h3`, minutes earlier, all ran on **`6.8.0-136`**. ⚠ **The drift landed between two runs of
-one batch**, on the arm with the gate **disarmed** — so it cannot be a result about the gate,
-and reading it as one would have been a false red on the control.
-
-★★★ **What made it legible was a SIZE check, not an emptiness check.** The file was present,
-freshly timestamped, correctly named and contained plausible text — every signal said the
-evidence was there. Only *"1 016 bytes where 24 334 was expected"* separated *truncated* from
-*complete*. ⊘ This is the brief's own trap arriving unprompted: **a truncated artefact reads as
-PRESENT and looks healthier than an empty one.**
-
-**Repaired**, and the repair is the durable part: `GRUB_DEFAULT` pinned to the
-`6.8.0-136-generic` menu entry by id, `unattended-upgrades` disabled, guest rebooted, `modprobe
-nvidia` verified `OK`. ⚠ **Any lane on `vh2` before this repair may have boots on `-137`; check
-`uname -r` in the probe log before trusting a red.**
-
-⊘⊘ **AND THEN I BROKE THE NEXT BATCH MYSELF, in the way this repo has a note about.** The
-verification boot I used to confirm the pin was left **running**, holding `nvktap0` — so the
-re-run's first two boots refused and graded `UNMEASURED` with `NOLOG` in **39 seconds**, far too
-fast for two boots. ★ The tell was the *duration*, not the verdict: `UNMEASURED` looks the same
-whether a boot ran and produced nothing or never started, and only *"39 s for something that
-takes 5 minutes"* separated them. ⇒ **a repair is not finished until the thing it started is
-stopped**, and `pgrep -x qemu-system-x86` (never `..._x86_64`, comm truncates at 15) is the
-check that says so.
+<!-- CUP8 -->
 
 ### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
 
@@ -381,7 +354,7 @@ run, gated and control alike. The raw CE client is short-lived and rings **three
 there is never a second doorbell over an unchanged epoch and **the gate never skips anything on
 that plane.**
 
-⇒ What those four boots establish is that **arming the gate does not break the raw-CE plane** —
+⇒ What those eight runs establish is that **arming the gate does not break the raw-CE plane** —
 the binary, the extra fields and the counter are all inert there. They do **not** establish that
 a *skip* is safe on it, because no skip occurred. ★ Said out loud because the identical
 `INERT-ON-BOTH-PLANES` banner reads as though both planes were exercised equally, and one of
