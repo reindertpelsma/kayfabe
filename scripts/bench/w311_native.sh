@@ -31,6 +31,13 @@ WORK=${W311_NATIVE_DIR:-/workspace/w311}
 SIZES=${BENCH_SIZES:-512,1024,2048}
 ITERS=${BENCH_ITERS:-30}
 BATCH=${BENCH_BATCH:-20}
+# ★ w320 — the sweep + ctx-flag knobs, forwarded so the NATIVE arm can run the SAME
+#   experiment as the guest arm. ⊘ Default empty/0, so a caller that does not set them gets
+#   w311's arm unchanged and the two rungs' native logs stay comparable.
+SWEEP=${BENCH_BATCH_SWEEP:-}
+HOSTMEM=${BENCH_HOSTMEM:-0}
+REPS=${BENCH_BATCH_REPS:-5}
+CTXF=${BENCH_CTX_FLAGS:-0}
 
 mkdir -p "$WORK"
 exec >"$OUT" 2>&1
@@ -69,8 +76,9 @@ echo "binary md5 = $(md5sum < "$WORK/cup8bench" | cut -d' ' -f1)"
 # verified iteration.
 echo ""
 echo "=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ==="
-( cd "$WORK" && BENCH_NOLAUNCH=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 ./cup8bench ) \
-  | grep -E '^BENCH_MODE|^ITER |^B256_BAD=|^BENCH_NOLAUNCH_TOTAL_BAD=|^BENCH_VERDICT'
+( cd "$WORK" && BENCH_NOLAUNCH=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 \
+  BENCH_BATCH_SWEEP=1,4 BENCH_BATCH_REPS=2 ./cup8bench ) \
+  | grep -E '^BENCH_MODE|^ITER |^B256_BAD=|^BENCH_NOLAUNCH_TOTAL_BAD=|^BENCH_VERDICT|^BSWEEP '
 NCRC=${PIPESTATUS[0]}
 echo "NATIVE_NEGCTRL_RC=$NCRC   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)"
 
@@ -78,7 +86,8 @@ echo "NATIVE_NEGCTRL_RC=$NCRC   (0 = the verifier fired; ⊘ 3 = it is DEAD and 
 echo ""
 echo "=== ★★★★★ THE NATIVE MEASUREMENT ==="
 START=$(date +%s)
-( cd "$WORK" && BENCH_SIZES="$SIZES" BENCH_ITERS="$ITERS" BENCH_BATCH="$BATCH" ./cup8bench )
+( cd "$WORK" && BENCH_SIZES="$SIZES" BENCH_ITERS="$ITERS" BENCH_BATCH="$BATCH" \
+  BENCH_BATCH_SWEEP="$SWEEP" BENCH_BATCH_REPS="$REPS" BENCH_CTX_FLAGS="$CTXF" BENCH_HOSTMEM="$HOSTMEM" ./cup8bench )
 RC=$?
 END=$(date +%s)
 echo "NATIVE_RC=$RC"

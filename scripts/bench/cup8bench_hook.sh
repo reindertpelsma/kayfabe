@@ -68,6 +68,11 @@ B_VERIFY=${KAYFABE_BENCH_VERIFY:-1}
 #   reordering: running it first in the SAME boot would have made the MEASUREMENT the second
 #   context, moving the hang onto the thing we actually came to measure.
 B_ONLY=${KAYFABE_BENCH_ONLY:-both}
+# ★★★ w320 — the sync-floor knobs. DEFAULT EMPTY / DEFAULT 0, so a boot that does not set
+#   them runs the byte-identical workload w315 and w318 were read against.
+B_SWEEP=${KAYFABE_BENCH_BATCH_SWEEP:-}
+B_REPS=${KAYFABE_BENCH_BATCH_REPS:-5}
+B_CTXF=${KAYFABE_BENCH_CTX_FLAGS:-0}
 
 die() { echo "★ cup8bench hook FAILED: $*"; exit 2; }
 
@@ -189,7 +194,8 @@ if [ "$B_ONLY" = negctrl ]; then
   echo "GUEST_SIZES_DONE=SKIPPED_BY_ARM"
 else
 run_detached measure "$BENCH_TIMEOUT" \
-  "BENCH_SIZES=$B_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH BENCH_VERIFY=$B_VERIFY"
+  "BENCH_SIZES=$B_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH BENCH_VERIFY=$B_VERIFY \
+BENCH_BATCH_SWEEP=$B_SWEEP BENCH_BATCH_REPS=$B_REPS BENCH_CTX_FLAGS=$B_CTXF"
 
 echo ""
 echo "=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ==="
@@ -210,6 +216,16 @@ for L in $($G 'grep -hE "^B[0-9]+_" /tmp/measure.out 2>/dev/null' 2>/dev/null | 
   echo "GUEST_$(printf '%s' "$L" | tr '~' ' ')"
 done
 $G 'grep -h "^BSUM " /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r' | sed 's/^/GUEST_/'
+# ★★★ w320 — the sweep rows, at column 0 with a GUEST_ prefix, exactly as BSUM is. ⊘ Emitted
+#   UNCONDITIONALLY: with the sweep disarmed there are no rows and the count line says 0, which
+#   is a measured absence rather than a line the reader has to notice is missing.
+$G 'grep -h "^BSWEEPSUM " /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r' | sed 's/^/GUEST_/'
+$G 'grep -h "^BSWEEP "    /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r' | sed 's/^/GUEST_/'
+echo "GUEST_BSWEEPSUM_ROWS=$($G 'grep -c "^BSWEEPSUM " /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r\n ')"
+echo "GUEST_BENCH_W320=$($G 'sed -n "s/^BENCH_W320 //p" /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r')"
+# ⊘ If the guest kernel has no per-thread CPU clock the whole thread-state breakdown is
+#   meaningless. It must be read as a PRECONDITION, not discovered as a column of zeros.
+echo "GUEST_TSTATE_AVAILABLE=$($G 'sed -n "s/^BENCH_TSTATE_AVAILABLE=\([a-zA-Z]*\).*/\1/p" /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r\n ' | sed 's/^$/NO_LINE/')"
 echo "GUEST_BENCH_DEVICE=$($G 'sed -n "s/^BENCH_DEVICE=//p" /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r')"
 echo "GUEST_BENCH_INIT_MS=$($G 'sed -n "s/^BENCH_INIT_MS=//p" /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r')"
 echo "GUEST_BENCH_CTX_MS=$($G 'sed -n "s/^BENCH_CTX_MS=//p" /tmp/measure.out 2>/dev/null' 2>/dev/null | tr -d '\r')"
@@ -242,12 +258,26 @@ if [ "$B_ONLY" = measure ]; then
   echo "    is UNGUARDED by construction. Say so; do not report it as guarded."
   echo "GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM"
 else
+# ★★★ w320 — THE NEGATIVE CONTROL NOW EXERCISES THE SWEEP TOO.
+#   The batch sweep is a NEW way for a launch to go missing, so it needs its own known-positive:
+#   a batched loop that silently skips work is the easiest possible false green, and a control
+#   that only covers the per-iteration phase would grade the sweep vacuously. With NOLAUNCH the
+#   inner K-loop is skipped and EVERY BSWEEP row must carry bad>0.
 run_detached negctrl "$NEG_TIMEOUT" \
-  "BENCH_NOLAUNCH=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 BENCH_VERIFY=1"
+  "BENCH_NOLAUNCH=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 BENCH_VERIFY=1 \
+BENCH_BATCH_SWEEP=1,4 BENCH_BATCH_REPS=2"
 echo ""
 echo "=== ★ [negctrl] OUTPUT (the lines that matter), verbatim and INDENTED ==="
-$G 'grep -hE "^BENCH_MODE|^ITER |^B256_BAD=|^B256_MAXERR=|^BENCH_NOLAUNCH_TOTAL_BAD=|^BENCH_VERDICT" /tmp/negctrl.out 2>/dev/null' \
+$G 'grep -hE "^BENCH_MODE|^ITER |^B256_BAD=|^B256_MAXERR=|^BENCH_NOLAUNCH_TOTAL_BAD=|^BENCH_VERDICT|^BSWEEP" /tmp/negctrl.out 2>/dev/null' \
   | tr -d '\r' | sed 's/^/    /'
+# ★★ THE SWEEP'S OWN INVERTED GRADE, separate from the program total: a sweep row with bad=0
+#    under NOLAUNCH means THAT ROW's verification is vacuous, even if other rows fired.
+SWZ=$($G 'grep -h "^BSWEEP " /tmp/negctrl.out 2>/dev/null | grep -c "bad=0$"' 2>/dev/null | tr -d '\r\n ')
+SWT=$($G 'grep -c "^BSWEEP " /tmp/negctrl.out 2>/dev/null' 2>/dev/null | tr -d '\r\n ')
+echo "GUEST_NEGCTRL_SWEEP_ROWS=${SWT:-NO_LINE}"
+echo "GUEST_NEGCTRL_SWEEP_ROWS_WITH_BAD_0=${SWZ:-NO_LINE}"
+echo "    ⊘ INVERTED: rows_with_bad_0 must be 0 and rows must be >0. rows=0 is UNMEASURED"
+echo "      (the sweep never ran), NOT a pass — an absent row grades nothing."
 NCB=$($G 'sed -n "s/^BENCH_NOLAUNCH_TOTAL_BAD=//p" /tmp/negctrl.out 2>/dev/null' 2>/dev/null | tr -d '\r\n ')
 echo "GUEST_NEGCTRL_TOTAL_BAD=${NCB:-NO_LINE}"
 echo "=== ★★★★★ WHAT THE NEGATIVE CONTROL MEANS — the grading here is INVERTED ==="
