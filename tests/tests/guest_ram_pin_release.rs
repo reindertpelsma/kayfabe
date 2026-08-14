@@ -306,7 +306,8 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
 /// rows would free nothing at all.
 ///
 /// ★ **This is the test whose discriminator IS the descriptor free.** On the exact-extent
-/// shape a sever still frees the handle via its row (measured), so
+/// shape a sever still frees the handle via its row `[measured 2026-08-14, `cargo test -p
+/// kayfabe-tests --test guest_ram_pin_release` with the pin block deleted]`, so
 /// [`a_dead_procs_guest_ram_pins_are_released_from_the_production_path`]'s first assertion
 /// stays green under a sever and only its `munmap` goes red. Here the sever takes the free to
 /// **zero**. ⇒ the two shapes are separate tests because they fail in separate places, and a
