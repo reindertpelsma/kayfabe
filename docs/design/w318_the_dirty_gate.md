@@ -1,21 +1,29 @@
 # w318 — THE LAUNCH FLOOR WAS REPETITION, AND GATING IT IS 16.9× ON THE TRAP AND 19.6× ON THE GUEST'S SUBMIT
 
-**STATUS: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04),
-source revision `c6301a57`, stamp gate passed on every boot.** Artifacts:
-`traces/w318_gate/`.
+**STATUS: LIVE — measured 2026-08-14 on bench `vh2` (RTX 3060 GA106, driver 580.159.04).**
+★ **TWO INDEPENDENT BOOT PAIRS**, at `c6301a57` (pair A) and at the final `44317766`
+(pair B, after the lock-inversion fix §7.2); stamp gate passed on every boot; rebased onto
+`ef05f9b3` (w317) without conflict. Artifacts: `traces/w318_gate/`.
 ⊘ `vh2` is itself a KVM guest — our guest is at **L2**. w315 §4 measured that tax at
 **≤ 2.2 ms per launch** and it is not what this rung moved.
 
 > ★★★★★ **PRE-REGISTERED OUTCOME: (A) — the gate fires, the trap drops, both workloads green
 > at n ≥ 3.**
 >
-> | | control (gates off) | gated | |
+> | (pair B, final revision) | control (gates off) | gated | |
 > |---|---|---|---|
-> | host doorbell trap, per launch | **77.367 ms** | **4.583 ms** | **16.9×** |
-> | guest `submit_med_ms` (`cuLaunchKernel`) | **78.127 ms** | **3.990 ms** | **19.6×** |
-> | guest `launch_med_ms` (submit + sync) | 101.767 ms | 27.960 ms | 3.64× |
-> | `batch_gflops` | 4.133 | 22.221 | 5.38× |
+> | host doorbell trap, per launch | **85.248 ms** | **4.078 ms** | **20.9×** |
+> | page-table + publication family | **78.229 ms** | **2.316 ms** | **33.8×** |
+> | guest `submit_med_ms` (`cuLaunchKernel`) | **85.935 ms** | **4.040 ms** | **21.3×** |
+> | guest `launch_med_ms` (submit + sync) | 107.846 ms | 27.552 ms | 3.91× |
 > | `bad` / `maxerr` | 0 / 0 | 0 / 0 | — |
+>
+> ★★ **Pair A, an hour earlier at a different revision: 77.367 → 4.583 (16.9×), submit
+> 78.127 → 3.990 (19.6×).** ⊘ Pair B's control reproduces w315's own `full` boot to **1.7 %**
+> (85.248 against 86.733), which pair A's did not; both gated arms land at **4.1–4.6 ms**.
+> ★★★ **And the gate's own counters are BIT-IDENTICAL across the two pairs** —
+> `publish[fired=39 skipped=1057]  witness[fired=12 skipped=263]` in both — which is a
+> determinism statement no single boot could make.
 >
 > ★★★ **And the strongest half is not the speed.** The two arms' `bound=` and `published=`
 > histograms are **identical row for row on every non-zero row**. The gate removed **87
@@ -83,34 +91,49 @@ Measured with **w315's own scripts, unmodified** (`w315_floor.sh full` → `w315
 the numbers are comparable to w315's table by construction rather than by claim. Twelve
 matched launch doorbells per arm.
 
+**PAIR B — the final revision `44317766`, and the pair whose control reproduces w315 to 1.7 %:**
+
 ```
                         CONTROL (gates off)              GATED
 segment            ms/launch    share            ms/launch    share      ratio
+vas_publish          45.849     53.8%              0.201       4.9%      228×
+pt_decode            23.477     27.5%              0.028       0.7%      838×
+pt_sweep              6.840      8.0%              0.012       0.3%      570×
+ringproj              3.588      4.2%              0.961      23.6%      3.7×
+core     (host RM)    2.947      3.5%              0.384       9.4%      7.7×
+pt_vascensus          2.006      2.4%              2.070      50.7%      1.0×  ⊘ UNGATED
+UNMARKED              0.009      0.0%              0.008       0.2%       —
+
+page-table + publn   78.229     91.8%              2.316      56.8%     33.8×
+Σ trap               85.248                        4.078                 20.9×
+```
+
+**PAIR A — `c6301a57`, an hour earlier, same shape:**
+
+```
 vas_publish          41.163     53.2%              0.207       4.5%      199×
 pt_decode            21.166     27.4%              0.031       0.7%      683×
 pt_sweep              6.525      8.4%              0.013       0.3%      502×
 ringproj              3.137      4.1%              1.321      28.8%      2.4×
 core     (host RM)    2.720      3.5%              0.422       9.2%      6.4×
 pt_vascensus          2.105      2.7%              2.196      47.9%      1.0×  ⊘ UNGATED
-UNMARKED              0.009      0.0%              0.008       0.2%       —
-
 page-table + publn   71.012     91.8%              2.451      53.5%       29×
 Σ trap               77.367                        4.583                 16.9×
 ```
 
+⇒ **`page-table + publication` is 91.8 % of the control trap in BOTH pairs, to the decimal.**
+
 - ★★ **`UNMARKED` is 0.008 ms of 4.583 (0.2 %)** on the gated arm. The breakdown still closes;
   the saving is not hiding in an unattributed remainder.
-- ⊘ **The control reproduces w315's SHARES and runs ~11 % faster in absolute terms — and the
-  second half of that sentence is not swept under the first.** w315's two boots read
-  `vas_publish` **55.7 % / 55.8 %** and `pt_decode` **25.7 % / 23.8 %**; this control reads
-  **53.2 %** and **27.4 %**. But the trap is **77.367 ms/launch against w315's 86.733 and
-  93.491**, and the guest's `launch_med_ms` is **101.767 against 113.562 and 116.909** — i.e.
-  **below** w315's own two-boot range, not inside it. ⚠ At n=1 per arm I cannot say whether
-  that is a third sample of ordinary scatter or something about this revision, and I am not
-  going to call it *"inside the scatter"* when it is not.
-  ★ **What this does NOT threaten is the comparison this rung makes**, because that comparison
-  is between two boots taken **an hour apart on one box from one binary** — the control is
-  77.367 and the gated arm is 4.583, and both were measured here.
+- ★ **Pair B's control reproduces w315 to 1.7 %** (85.248 against 86.733 ms/launch; shares
+  53.8 % / 27.5 % against 55.7 % / 25.7 %), and the guest agrees (`launch_med_ms` 107.846
+  against 113.562 / 116.909).
+  ⊘ **Pair A's control did NOT, and that is stated rather than averaged away**: 77.367 ms
+  and `launch_med_ms` 101.767, i.e. **below** w315's own two-boot range rather than inside it.
+  Two of three controls sit in w315's band and one sits under it — ordinary scatter is the
+  obvious reading and n=3 cannot exclude a revision effect.
+  ★ **Neither reading threatens the comparison**, because each ratio is between two boots
+  taken minutes apart on one box from one binary: 85.248 → 4.078 and 77.367 → 4.583.
 - ★ **The guest's `sync_med_ms` did not move** — 22.761 → 23.382. The gate is on the submit
   side and the completion half is untouched, which is what a correct localisation looks like.
 
@@ -372,6 +395,87 @@ actionable than either framing: **we re-issue eight host join round trips per do
 framebuffer ranges that are already joined, and release them again — 87 times in one boot.**
 That is a missing memo of a permanent refusal. It is not a scan, and it is not a
 publication-timing error.
+
+## 7.2 ★★★★★ THE LOCK CENSUS CAUGHT A REAL INVERSION OF MINE — the fourth time, and the first time it was a HAZARD rather than a NAME
+
+`tests/tests/unranked_locks.rs` failed on this branch with three unclassified locks. Two were
+genuinely benign. **The third was a live ordering hazard**, and it was invisible in the obvious
+spelling:
+
+```rust
+self.dirty.published.lock()...insert((pid, gpu, pdb), PublishStamp {
+    joined: plane.joined_fb_ranges().len(),      // ← rank `Plane`, evaluated UNDER the mutex
+    line:   format!(...),                        // ← allocates UNDER the mutex
+});
+```
+
+A method call locks its **receiver first** and evaluates its **arguments underneath**. So a
+rank-`Plane` lock was being taken beneath an **unranked** mutex on the vCPU thread inside the
+doorbell trap. ⊘ `lockwitness::assert_lock_free` masks only **ranked** locks — it cannot see an
+unranked one — so **that inversion would have passed every assertion in the tree.**
+
+Fixed by building the whole `PublishStamp` before the lock, and by scoping the `exec_writes`
+guard to a block yielding a `bool` so the second unranked mutex (`counts`) and the refusal
+line's allocation both happen after it drops. All three are now classified with an explicit
+blocking ruling.
+
+★★★ **This file has now caught a *shape* rather than a *name* four times** (2026-08-06,
+08-09, w300 08-13, and this one). ⚠ The new thing here is what it caught: the first three were
+locks that existed and were unlisted; this was a lock whose **listing would have been a lie** —
+the honest classification was *"a ranked lock and an allocation run beneath it"*. ⇒ **a
+classification gate is only as good as the author's willingness to write the true note**, and
+the value of failing loudly is that it forces you to look at the code you were about to
+describe.
+
+## 7.3 ⊘ THE SECOND REDIRECT — *"make the check INCREMENTAL, O(ranges changed)"*
+
+A refinement arrived proposing that the doorbell check be kept but made **O(ranges changed
+since the last doorbell)** rather than O(VAS), with per-range dirty marks at two boundary
+events: (a) mapping-creation RPCs and (b) BAR2 PTE stores.
+
+★★★ **The correctness principles are right and this rung already meets them.** *Correctness >
+performance*; *default-dirty on anything not provably tracked*; *the doorbell stays a
+backstop*; *reads must not trap*. ⊘ **No read trap is introduced anywhere in this diff.**
+
+⊘ **But its cost premise is the one §2.2 refutes, and the consequence is direct: an incremental
+scan would save 0 ms, because the scan already costs 0 ms.** Walking 25 100 rows is free; the
+40 ms is eight host round trips.
+
+★★★★★ **And the proposed mechanism is LESS conservative than the one built here, which is the
+argument that matters most given the owner's ruling.** A per-range dirty set assembled at
+**boundary events** is only as complete as the enumeration of write paths — miss one and the
+doorbell reads *"nothing changed"* for a mapping that did. The arming edges here are at the
+**sink**, not at the events:
+
+- `AddressTable::generation` is bumped **inside `bind` and `unbind`** — the table's *only* two
+  write sites. **Any** path that changes a row moves it, including paths nobody enumerated,
+  because there is nowhere else to change a row. A path that does not touch the table has
+  nothing to publish.
+- `FbStore::writes_by` is bumped **inside `write_tagged`** — the store's own write entry.
+
+⇒ **This gate cannot have a dirty-set miss of the class the refinement warns about**, and it
+achieves that without a list of hooked paths to keep current.
+
+⊘ **On (b) specifically: BAR2 PTE stores are NOT gated by this rung at all.** `RegPlane::fb_write`
+inserts the written page into `pt_witness` **at the store, on the landed arm, unconditionally**
+(`plane.rs:3137-3148`). The witness gate added here sits only on
+`witness_executor_fb_pages`, which re-queues *executor*-created pages. ⇒ the *"already trapped
+writes, only a per-range dirty mark needed"* work item is **already done and always has been**;
+what this rung gated is the pass that re-offered the **same 53 pages** every doorbell on top of
+it.
+
+⊘ **The "cliff" is measured, and it is ~6 ms rather than 86.7.** The refinement's objection to
+the C's single boolean — *"the first doorbell after any PTE write still pays the full cost"* —
+applies in principle to this per-VAS gate too, and is **real**: 39 publication fires and 12
+witness fires occurred. But the gated boot's **worst** launch is `max_ms = 32.693` against the
+control's `124.094`, with a median of 27.960 — so the worst fire cost ≈ **6 ms above the gated
+median**, not 86.7. ⚠ That is *this* workload; a guest that dirties a VAS before every single
+launch would see the cliff on every launch, and nothing here measures one.
+
+⇒ **Recommendation: land this, then make the gate per-range rather than per-VAS** — which
+removes the cliff *and* keeps the sink-side arming edge — rather than moving to an
+event-sourced dirty set, which removes a cost that §2.2 shows is already zero and buys a
+completeness obligation this design does not have.
 
 ## 8. Reproducing
 
