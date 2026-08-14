@@ -884,14 +884,14 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
         },
     );
     assert_eq!(
-            residue,
-            Orphans {
-                unmap: vec![],
-                free: vec![vas]
-                        guest_ram: Vec::new(),
-    },
-            "a release that could not dispose of an object must hand it back"
-        );
+        residue,
+        Orphans {
+            unmap: vec![],
+            free: vec![vas],
+            guest_ram: Vec::new(),
+        },
+        "a release that could not dispose of an object must hand it back"
+    );
 
     // And the raw port surface says the same thing with the cause attached.
     let failure = w
