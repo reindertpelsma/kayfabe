@@ -2390,6 +2390,10 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
             vas,
             p.sem_va,
             kayfabe_isolate_host::rm::NotifierAperture::Vidmem,
+            // ⊘ w309 — R30 is NOT one of the criterion-1 arms. `default()` is the committed
+            // shape (dictated addresses, notifier present), so this call is byte-identical to
+            // every run before w309 and the flags below cannot reach it.
+            kayfabe_isolate_host::rm::ReachProbeArms::default(),
         ) {
             Ok(r) => match r.reach {
                 GuestReach::ControlFailed => {
@@ -2555,6 +2559,9 @@ fn ce_client(
     // ★ w305 — arm 4 runs in arm 1's ALREADY-WORKING VAS rather than a fresh one. See
     // `--ce-client-fault-shared-vas`; `false` is the byte-identical committed default.
     want_fault_shared_vas: bool,
+    // ★★★★★ w309 — the other two settable confounds. See `rm::ReachProbeArms`: every field's
+    // committed default is `true`, so `--ce-client-fault` alone is byte-identical to w305.
+    fault_arms: kayfabe_isolate_host::rm::ReachProbeArms,
     notifier_aperture: kayfabe_isolate_host::rm::NotifierAperture,
 ) -> bool {
     use kayfabe_isolate_host::rm::{GuestReach, VaProbe};
@@ -2992,7 +2999,34 @@ fn ce_client(
                         fvas.raw()
                     );
                 }
-                let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA, notifier_aperture) {
+                // ★★★★★ **w309 — THE ARM MATRIX, PRINTED FROM THE VALUES ACTUALLY PASSED,
+                // on ONE greppable line, BEFORE the probe runs.**
+                //
+                // ⚠ *An arm you set is not an arm in force.* w305's runner tried to recover
+                // the arm by grepping the probe log for `ce-client-fault` and printed `[]` on
+                // both boots, because the hook never echoes its args. This line is built from
+                // `fault_arms` and `shared` themselves — the same values the probe is about to
+                // use — so it cannot disagree with what ran.
+                //
+                // ⊘ **CHANNEL ORDINAL IS HELD AT `2` ON EVERY ARM AND IS NOT SETTABLE.** Arms
+                // 2/3/6 read `ce_control_placement`, which does not exist until arm 1 has
+                // built a channel, so making arm 4 the process's FIRST channel is a different
+                // program rather than a flag. Named here so a reader does not mistake the
+                // matrix for complete: three of the four confounds move, one does not.
+                println!(
+                    "info  R33 arm 4 CONFIG    = vas={} {} chan-ordinal=2 (HELD, not settable) \
+                     engine=COPY0 fault-va={UNMAPPED_VA:#018x}. ⇒ THIS is what ran; it is \
+                     built from the values passed to the probe, not from the flags a harness \
+                     believes it set",
+                    if shared { "SHARED (arm 1's, already carried retired work)" } else { "FRESH (a third, never used)" },
+                    fault_arms.as_str(),
+                );
+                let out = match rm.probe_guest_reachability(
+                    fvas,
+                    UNMAPPED_VA,
+                    notifier_aperture,
+                    fault_arms,
+                ) {
                     Ok(r) => {
                         // ★★★★★ PRINTED FIRST, because it says how to read everything below it.
                         crit1(r.crit1_state());
@@ -3984,6 +4018,18 @@ fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
 }
 
 fn main() -> std::process::ExitCode {
+    // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
+    //
+    // ⊘ w305's runner tried to recover which arm had been requested by grepping the probe log
+    // for `ce-client-fault` and printed `[]` on BOTH boots, because nothing in the chain ever
+    // echoed the client's arguments. It reported the field as unrecoverable and fell back to
+    // inferring the arm from a downstream line. ⇒ One line, unconditional, before any flag is
+    // parsed: what this process was ASKED to do. `R33 arm 4 CONFIG` then reports what it
+    // actually DID, and a harness can compare the two rather than trust either.
+    println!(
+        "info  RMLADDER ARGV     = [{}]",
+        std::env::args().skip(1).collect::<Vec<_>>().join(" ")
+    );
     let mut gpu = 0u32;
     let mut want_concurrency = false;
     let mut want_engines = false;
@@ -4008,6 +4054,10 @@ fn main() -> std::process::ExitCode {
     let mut want_ce_client_fault = false;
     // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
     let mut want_ce_client_fault_shared_vas = false;
+    // ★ w309 — see `--ce-client-fault-rm-placed` / `--ce-client-fault-no-notifier`. Both
+    // `false` ⇒ `ReachProbeArms::default()` ⇒ byte-identical to every committed arm.
+    let mut want_ce_client_fault_rm_placed = false;
+    let mut want_ce_client_fault_no_notifier = false;
     // ★★★★★ w288 TIER 2 — SYSMEM by default; see `--notifier-vidmem` for the measured
     // reason the other arm exists and why neither is a fallback for the other.
     let mut notifier_aperture = kayfabe_isolate_host::rm::NotifierAperture::Sysmem;
@@ -4072,6 +4122,31 @@ fn main() -> std::process::ExitCode {
                 want_ce_client = true;
                 want_ce_client_fault = true;
                 want_ce_client_fault_shared_vas = true;
+            }
+            // ★★★★★ **w309 — THE OTHER TWO CONFOUNDS, one flag each, both opt-in.**
+            //
+            // ⊘ Deliberately NOT composed into a single `--ce-client-fault-arm=<name>`: the
+            // whole design of this rung is *move ONE at a time*, and a single enum invites an
+            // arm that moves two and reads as one row.
+            //
+            // `--ce-client-fault-rm-placed` — RM chooses the probe's ring and both operands,
+            // as it does for arm 1, instead of the probe dictating them inside
+            // `REACH_PROBE_WINDOW`. ⚠ This re-opens the 2026-08-10 self-alias that INVERTED a
+            // verdict, so the probe refuses by name (`PROBE_SELF_ALIASED`) if the fault VA
+            // lands inside anything RM placed for it.
+            "--ce-client-fault-rm-placed" => {
+                want_ce_client = true;
+                want_ce_client_fault = true;
+                want_ce_client_fault_rm_placed = true;
+            }
+            // `--ce-client-fault-no-notifier` — no error-notifier object is allocated and
+            // `hObjectError` is unset, exactly as every caller before w287 built it. ⊘ Plane A
+            // is UNMEASURED on this arm by construction; it can only ever answer *"is the
+            // notifier's presence what stops the control landing?"*, never criterion 1.
+            "--ce-client-fault-no-notifier" => {
+                want_ce_client = true;
+                want_ce_client_fault = true;
+                want_ce_client_fault_no_notifier = true;
             }
             // ★★★★★ **w288 TIER 2 — the notifier's APERTURE, as an explicit arm.**
             //
@@ -4194,6 +4269,10 @@ fn main() -> std::process::ExitCode {
             gpu,
             want_ce_client_fault,
             want_ce_client_fault_shared_vas,
+            kayfabe_isolate_host::rm::ReachProbeArms {
+                dictate_addresses: !want_ce_client_fault_rm_placed,
+                error_notifier: !want_ce_client_fault_no_notifier,
+            },
             notifier_aperture,
         );
         print_ioctl_census(if want_ce_client_fault {

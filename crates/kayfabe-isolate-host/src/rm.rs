@@ -3186,6 +3186,86 @@ impl NotifierAperture {
     }
 }
 
+/// ★★★★★ **w309 — THE FOUR CONFOUNDS ON `CONTROL-NEVER-LANDED`, AS AN EXPLICIT ARM.**
+///
+/// `[measured 2026-08-14, w305, vh2]` in ONE process, ONE program, ONE boot, on our emulated
+/// GPU: arm 1 (a `Vas` that had already carried retired work) moved 4096 bytes with the whole
+/// four-fact bar, while arm 4 (a fresh `Vas`) never landed its positive control. Natively
+/// **both** work, so the asymmetry is ours.
+///
+/// ⊘ **That contrast is not an isolation, and w305 said so.** Arm 4 differs from arm 1 in
+/// **four** ways at once, and this type makes three of them settable so a rung can move one
+/// at a time:
+///
+/// | confound | arm 1 | arm 4, default | the field that varies it |
+/// |---|---|---|---|
+/// | address space | `vas`, already worked | a fresh third `Vas` | the `vas` argument (`--…-shared-vas`) |
+/// | ring + operand VAs | RM-chosen | **dictated** in [`REACH_PROBE_WINDOW`] | [`Self::dictate_addresses`] |
+/// | error notifier | none | present | [`Self::error_notifier`] |
+/// | channel ordinal | first | second | ⊘ **NOT settable here** — see below |
+///
+/// ⚠ **The ordinal is deliberately absent**, because it cannot be varied without changing the
+/// rung's own known-positive: arms 2/3/6 read [`CeControlPlacement`], which does not exist
+/// until arm 1 has built a channel. ⇒ It is held CONSTANT at *second* on every arm this type
+/// selects, which is what makes the other three clean. A run in which the probe is the
+/// process's first channel is a different program, not a flag.
+///
+/// ★ Every field's `true` is the **committed default**, so `ReachProbeArms::default()` is
+/// byte-identical to every run before w309.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReachProbeArms {
+    /// `true` (default) — the ring and both operands are demanded at fixed addresses inside
+    /// [`REACH_PROBE_WINDOW`] and the probe **refuses** with [`RmError::PlacementRefused`] if
+    /// RM places them anywhere else.
+    ///
+    /// `false` — RM chooses all three, exactly as `prove_ce_copy` (arm 1) lets it.
+    ///
+    /// ⊘⊘ **`false` WEAKENS THE INSTRUMENT AND THE WEAKNESS HAS A MEASURED PRECEDENT.**
+    /// `[measured 2026-08-10, vh, and it INVERTED the verdict]` letting RM choose put the
+    /// probe's own ring where `sem_va + 0x2000` landed **inside it**, so the probe read its
+    /// own memory and the rung recorded *"the address still resolves"*. On this arm the probe
+    /// therefore **checks, after RM has answered**, that the fault VA lies outside every
+    /// object RM placed, and refuses with [`PROBE_SELF_ALIASED`] rather than measure itself.
+    pub dictate_addresses: bool,
+    /// `true` (default) — a channel error notifier is allocated, zeroed and attached, and
+    /// planes A and its negative control are measured.
+    ///
+    /// `false` — **no notifier object is allocated at all** and the channel is created by
+    /// [`HostRmBackend::alloc_channel_at`]. ⊘ Plane A is then structurally `None`; this arm
+    /// exists ONLY to ask whether the notifier's presence is what stops the positive control
+    /// from landing, and it can never contribute a criterion-1 measurement.
+    pub error_notifier: bool,
+}
+
+impl Default for ReachProbeArms {
+    fn default() -> Self {
+        Self {
+            dictate_addresses: true,
+            error_notifier: true,
+        }
+    }
+}
+
+impl ReachProbeArms {
+    /// One greppable line naming what was **actually** in force — built from the same values
+    /// the probe used, never from the flags a harness believes it passed. ⚠ *An arm you set
+    /// is not an arm in force.*
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match (self.dictate_addresses, self.error_notifier) {
+            (true, true) => "addr=DICTATED notifier=PRESENT (the committed default)",
+            (false, true) => "addr=RM-PLACED notifier=PRESENT",
+            (true, false) => "addr=DICTATED notifier=ABSENT",
+            (false, false) => "addr=RM-PLACED notifier=ABSENT",
+        }
+    }
+}
+
+/// The fault VA this probe was asked about lies inside an object RM placed for the probe
+/// itself, so a `Read` verdict would be the instrument reading its own memory. Refused rather
+/// than measured. Reachable only on [`ReachProbeArms::dictate_addresses`] `== false`.
+pub const PROBE_SELF_ALIASED: u32 = 0x5A11;
+
 /// ★★★★★ **WHY CRITERION 1 DID OR DID NOT GET MEASURED — as NAMED STATES, never a boolean.**
 ///
 /// The bar is *"the guest observes THE SAME FAULT, BY IDENTITY — code, engine, type, access
@@ -5720,13 +5800,41 @@ impl HostRmBackend {
         // ⇒ **One `Vas` is TWO host objects.** `alloc_vaspace` returns the RANGE (what the map
         // verb needs) and keeps the `FERMI_VASPACE_A` as its companion. This control wants the
         // **space**, so the range is exactly as wrong here as the space was there.
-        // ⚠ `companion_of` returning `None` is refused by name rather than falling back to the
+        // ⚠ A `None` companion is refused by name rather than falling back to the
         // range: a fallback would ask a well-formed question about the wrong object and get a
         // well-formed answer.
+        //
+        // ⊘⊘⊘ **CORRECTED 2026-08-14 (w309) — THIS READ WAS DESTRUCTIVE, AND IT COST TWO
+        // RUNGS.** It called [`RmConnection::companion_of`], which **REMOVES** the entry —
+        // the accessor whose one legitimate caller is `free`. [`RmConnection::space_of`] is
+        // the peeking twin, and its own doc-comment already names this exact hazard:
+        // *"Reading it with the removing accessor would make allocating a channel silently
+        // un-free the address space."* That is precisely what happened, and it was visible
+        // in every committed R33 log as two symptoms nobody joined:
+        //
+        //   1. **arm 6's calibration always failed.** The FIRST `pde_info` on a `Vas`
+        //      answered (`CAL+ ring … PDE PRESENT`); every later one on the same `Vas`
+        //      returned `Other(19270)` = `NOT_ON_THIS_RUNG` (`0x4B46`) and printed
+        //      *"⊘ NOT ASKED — the control refused or the reply did not decode"*. The
+        //      control never refused: **this function had eaten its own handle.**
+        //   2. **w305's `--ce-client-fault-shared-vas` could not be BUILT.** Arm 4 in arm 1's
+        //      `Vas` died at `alloc_channel_in`'s `space_of(range) → None` with
+        //      `BadHandle(0xcafe0005)`, because arm 6 ran first and consumed the pairing.
+        //      ⊘ w305 read that as *"arm 1's `vas` handle is the SPACE, pass the RANGE"* and
+        //      called the fix one line. **It is not**: `alloc_vaspace` returns the range
+        //      (`:4082`), `guest_space = narrow(vas)` prints that same range, and the
+        //      `0xcafe0009` w305 named as *"its paired range"* is the **executor VAS**
+        //      `map_dma_both` lazily minted (`:4149`). Same handle either way; the pairing
+        //      was simply gone.
+        //
+        // ⇒ **A destructive read inside a DIAGNOSTIC**, in the same class as
+        // `get_mmu_fault_info` — except that one is destructive in RM and says so, while this
+        // one was destructive in **our own bookkeeping** and reported the damage as the
+        // hardware refusing.
         let range = self.narrow(vas)?;
         let space = self
             .conn
-            .companion_of(range)
+            .space_of(range)
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         let mut buf = [0u8; DmaGetPdeInfoParams::SIZE];
         DmaGetPdeInfoParams {
@@ -6931,11 +7039,18 @@ impl HostRmBackend {
     /// notifier at all (the aperture decodes to `ErrorNotifier::Unreachable`), so the probe
     /// runs, faults, and reports a quiet notifier that means nothing. ⊘ Stated by the caller
     /// and echoed in [`GuestReachProbe::notifier_aperture`]; never guessed here.
+    ///
+    /// ## ★★★★★ w309 — `arms`, and why it is a parameter rather than four call sites
+    ///
+    /// See [`ReachProbeArms`]. [`ReachProbeArms::default()`] is byte-identical to every run
+    /// committed before w309; the other settings exist so the four confounds on
+    /// `CONTROL-NEVER-LANDED` can be moved **one at a time**.
     pub fn probe_guest_reachability(
         &mut self,
         vas: HostHandle,
         sem_va: u64,
         notifier_aperture: NotifierAperture,
+        arms: ReachProbeArms,
     ) -> Result<GuestReachProbe, RmError> {
         const BYTES: u64 = 0x1_0000;
         /// Neither zero nor a plausible semaphore payload: the control's word must not be
@@ -6998,27 +7113,39 @@ impl HostRmBackend {
         // could not say which experiment it performed. See [`NotifierAperture`] for the two
         // measurements — the census that makes SYSMEM faithful, and the pair of native
         // refusals that makes VIDMEM the arm w287's known-positive was taken on.
-        let notifier_alloc = match notifier_aperture {
-            NotifierAperture::Sysmem => self.alloc_notifier_mem(NOTIFIER_BYTES),
-            NotifierAperture::Vidmem => self
-                .conn
-                .alloc_device_local(NOTIFIER_BYTES)
-                .map(|h| self.stamp(h)),
-        };
-        let notifier_h = match notifier_alloc {
-            Ok(h) => h,
-            Err(e) => {
+        //
+        // ⊘⊘ **w309 — on [`ReachProbeArms::error_notifier`] `== false` NO NOTIFIER OBJECT IS
+        // ALLOCATED AT ALL.** Not allocated-and-unattached: the arm's question is whether the
+        // notifier's *presence* is what stops the positive control from landing, and an
+        // object that exists but is not named to RM would answer a third question neither arm
+        // asked. `None` propagates all the way to `alloc_channel_at`, and plane A is then
+        // structurally unmeasured rather than quiet.
+        let notifier_h: Option<HostHandle> = if arms.error_notifier {
+            let notifier_alloc = match notifier_aperture {
+                NotifierAperture::Sysmem => self.alloc_notifier_mem(NOTIFIER_BYTES),
+                NotifierAperture::Vidmem => self
+                    .conn
+                    .alloc_device_local(NOTIFIER_BYTES)
+                    .map(|h| self.stamp(h)),
+            };
+            let h = match notifier_alloc {
+                Ok(h) => h,
+                Err(e) => {
+                    let _ = self.free(self.stamp(dst));
+                    let _ = self.free(self.stamp(ctrl_src));
+                    return Err(e);
+                }
+            };
+            if let Err(e) = self.zero_notifier(h, notifier_aperture) {
+                let _ = self.free(h);
                 let _ = self.free(self.stamp(dst));
                 let _ = self.free(self.stamp(ctrl_src));
                 return Err(e);
             }
+            Some(h)
+        } else {
+            None
         };
-        if let Err(e) = self.zero_notifier(notifier_h, notifier_aperture) {
-            let _ = self.free(notifier_h);
-            let _ = self.free(self.stamp(dst));
-            let _ = self.free(self.stamp(ctrl_src));
-            return Err(e);
-        }
 
         let mut mapped: Vec<u64> = Vec::new();
         let mut chan: Option<HostHandle> = None;
@@ -7031,23 +7158,30 @@ impl HostRmBackend {
             // ★ FIXED, and refused rather than adopted if RM disagrees — see
             // `PROBE_RING_AT`. An operand RM placed next to `sem_va` is an operand the
             // probe would then read instead of the thing it is asking about.
-            let ctrl_src_va = self
-                .conn
-                .raw_map_dma(range, ctrl_src, BYTES, Some(CTRL_SRC_AT.0))?;
+            //
+            // ★ w309 — `arms.dictate_addresses == false` hands RM the placement instead, so
+            // *"the probe dictates its addresses"* can be varied on its own. `None` and the
+            // absent equality check move together on purpose: a fixed ask RM silently
+            // relocated is the failure `PlacementRefused` exists for, and an arm that asks
+            // for nothing has nothing to compare.
+            let want_ctrl_src = arms.dictate_addresses.then_some(CTRL_SRC_AT.0);
+            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
             mapped.push(ctrl_src_va);
-            if ctrl_src_va != CTRL_SRC_AT.0 {
-                return Err(RmError::PlacementRefused {
-                    want: CTRL_SRC_AT.0,
-                    got: ctrl_src_va,
-                });
+            if let Some(want) = want_ctrl_src {
+                if ctrl_src_va != want {
+                    return Err(RmError::PlacementRefused {
+                        want,
+                        got: ctrl_src_va,
+                    });
+                }
             }
-            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, Some(DST_AT.0))?;
+            let want_dst = arms.dictate_addresses.then_some(DST_AT.0);
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, want_dst)?;
             mapped.push(dst_va);
-            if dst_va != DST_AT.0 {
-                return Err(RmError::PlacementRefused {
-                    want: DST_AT.0,
-                    got: dst_va,
-                });
+            if let Some(want) = want_dst {
+                if dst_va != want {
+                    return Err(RmError::PlacementRefused { want, got: dst_va });
+                }
             }
 
             // Seed both buffers through CPU mappings that are dropped before any engine
@@ -7077,13 +7211,38 @@ impl HostRmBackend {
             // ★★★★★ **w287 — WITH AN ERROR NOTIFIER, which is the whole of the second
             // client.** The channel is otherwise the same one w278..w283 measured; the only
             // new thing RM is told is where to write when it kills this channel.
-            let (c, token) = self.alloc_channel_at_with_error_notifier(
-                vas,
-                ENGINE_TYPE_COPY0,
-                Some(GpuVa(PROBE_RING_AT)),
-                notifier_h,
-            )?;
+            let ring_at = arms.dictate_addresses.then_some(GpuVa(PROBE_RING_AT));
+            let (c, token) = match notifier_h {
+                Some(n) => self
+                    .alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?,
+                // ⊘ w309 — the SAME channel with `hObjectError` unset, which is exactly what
+                // every caller before w287 built. Plane A is unmeasured on this arm by
+                // construction, and [`GuestReachProbe::notifier`] reports `None`.
+                None => self.alloc_channel_at(vas, ENGINE_TYPE_COPY0, ring_at)?,
+            };
             chan = Some(c);
+            // ★★★★★ **w309 — THE SELF-ALIAS REFUSAL, checked AFTER RM has answered.**
+            //
+            // Reachable only on the RM-placed arm, and it is the 2026-08-10 inversion this
+            // function's own `PROBE_RING_AT` comment records: when RM chose, the probe's ring
+            // landed where the address under test resolved, the copy retired, and the rung
+            // read *"the guest VA still resolves"* — the instrument reading its own memory.
+            // Dictated addresses make that impossible at compile time; RM-placed ones make it
+            // possible again, so it is refused HERE, by name, before anything is submitted.
+            if !arms.dictate_addresses {
+                let ring_va = self
+                    .conn
+                    .channel_parts(self.narrow(c)?)
+                    .map(|p| p.ring_va)
+                    .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+                let aliases = |base: u64, len: u64| sem_va >= base && sem_va < base + len;
+                if aliases(ring_va, RING_OBJECT_BYTES)
+                    || aliases(ctrl_src_va, BYTES)
+                    || aliases(dst_va, BYTES)
+                {
+                    return Err(RmError::Other(PROBE_SELF_ALIASED));
+                }
+            }
             let mut params = [0u8; CeAllocParams::SIZE];
             CeAllocParams {
                 version: CeAllocParams::VERSION_1,
@@ -7114,7 +7273,8 @@ impl HostRmBackend {
                     // ⊘ Read even here. A notifier that fired while the CONTROL was still
                     // failing means the channel died before the probe was ever issued, and
                     // that is a different story than the one this rung set out to tell.
-                    notifier: self.read_error_notifier(notifier_h, notifier_aperture).ok(),
+                    notifier: notifier_h
+                        .and_then(|n| self.read_error_notifier(n, notifier_aperture).ok()),
                     // ⊘ NOT MEASURED on this path — no fault was provoked, so there is no
                     // "after" for an ioctl to be after. `NOT_ON_THIS_RUNG`, by name.
                     post_fault_ioctl: Err(RmError::Other(NOT_ON_THIS_RUNG)),
@@ -7133,7 +7293,8 @@ impl HostRmBackend {
 
             // ★★★ THE NEGATIVE CONTROL — read here, between a submission that WORKED and one
             // that will fault. Nothing between this read and the next one but the fault.
-            let notifier_before = self.read_error_notifier(notifier_h, notifier_aperture).ok();
+            let notifier_before =
+                notifier_h.and_then(|n| self.read_error_notifier(n, notifier_aperture).ok());
 
             let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
             let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
@@ -7162,7 +7323,8 @@ impl HostRmBackend {
             // ★★★ READ AFTER the probe's wait has already expired, so RM has had the same
             // window to react that the semaphore poll gave the engine. ⊘ A notifier read
             // before the wait would measure our own impatience.
-            let notifier = self.read_error_notifier(notifier_h, notifier_aperture).ok();
+            let notifier =
+                notifier_h.and_then(|n| self.read_error_notifier(n, notifier_aperture).ok());
             // ★★★★★ **w288 TIER 2 — PLANE D: WHERE.** The notifier says *this channel died,
             // Xid 31, GRAPHICS*; it has no address field. This is the only control that
             // carries one, and it is asked here — **once**, after the wait has expired, on
@@ -7209,7 +7371,9 @@ impl HostRmBackend {
         let _ = self.free(self.stamp(ctrl_src));
         // ⊘ Freed AFTER `out` has already been built — the record was decoded above, so a
         // caller reads bytes this function owned, never a mapping it has to keep alive.
-        let _ = self.free(notifier_h);
+        if let Some(n) = notifier_h {
+            let _ = self.free(n);
+        }
         out
     }
 
