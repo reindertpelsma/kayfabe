@@ -1807,8 +1807,11 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // `GT200_DEBUGGER` (`0x83de`), is in `capability::DENIED_CLASSES` and this port
     // **refuses the guest's `RM_ALLOC` of it**, so serving a control on it was answering
     // for an object we do not hold. `CapabilityTable::control` now refuses every control
-    // scoped to a denied class, which means the bridge would refuse this id one layer
-    // above the seat and a row here could never run. ⊘ A claim that cannot fire is worse
+    // scoped to a denied class. ⊘ `[measured, boot w295cup2]` that refusal does NOT
+    // become the wire's answer — the id lands in the `UnservicedLedger` (`unserviced fn 76
+    // cmd 0x83de0309`) and no `ControlNotPermitted` row appears at all, because the
+    // capability gate sits on the bridge plane and this seat sits on the reply plane.
+    // Removing the row is therefore what actually moves the id. ⊘ A claim that cannot fire is worse
     // than no claim: `served_chain_seats` proves each member CHANGES the chain's answer,
     // so a dead member is a false statement this list would keep making.
     0xa06c_0103,

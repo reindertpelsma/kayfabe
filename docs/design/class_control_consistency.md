@@ -238,6 +238,7 @@ kayfabe-tests  ring_out_of_our_own_framebuffer
 
 ⚠ **`cargo test --workspace` fail-fasts and reported only ONE of these five.** `--no-fail-fast`
 is what makes the set visible; a "one pre-existing red" reading is an artefact of the flag.
+★ A **sixth** target, `kayfabe-linux-raw --lib` (`spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all`), failed once in a full `--no-fail-fast` sweep and passed **3/3 in isolation** — the known flake, load-dependent, not a red.
 ⊘ Also inherited and **not touched**: `cargo fmt --all --check` (21 files) and
 `cargo clippy --workspace --all-targets -- -D warnings` (5 errors) are red at `origin/master`.
 

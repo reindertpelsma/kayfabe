@@ -275,13 +275,20 @@ static GRADUATED: &[u32] = &[
     // answered it while `capability::DENIED_CLASSES` **refused the guest's `RM_ALLOC` of
     // its class**, so what was being answered was a control on an object we do not hold.
     //
-    // ★ It has NOT gone back to the ledger, and that distinction is the point. It is now
-    // refused **by name** as `ControlNotPermitted::Refused`, carrying `GT200_DEBUGGER`'s
-    // own reason — a refusal that ANSWERS the command and never reaches the unserviced
-    // list at all. ⇒ Strictly more informative than either previous state: before w292 it
-    // was an unclassified silence, during w292 it was a false `NV_OK`, and now it is a
-    // named `0x56` whose reason points at the class row that produced it. Its `LEDGER` row
-    // records that position.
+    // ⊘⊘ **AND THE FIRST DRAFT OF THIS COMMENT WAS WRONG, REFUTED BY THE BOOT THAT
+    // VERIFIED THE CHANGE.** It said the id *"has NOT gone back to the ledger"* and is now
+    // *"refused by name as `ControlNotPermitted::Refused`"*. `[measured, boot w295cup2, rev
+    // 940c0648]` it goes **straight back to the ledger** — `unserviced fn 76 cmd
+    // 0x83de0309`, distinct unserviced ids 40 → 41 — and `grep -c ControlNotPermitted` over
+    // that boot's QEMU log is **0**.
+    //
+    // ★ Why: the capability table is consulted by `translate_control` on the **bridge**
+    // plane; the **reply** plane is the seat chain, and a control no seat claims falls to
+    // the `UnservicedLedger` without the capability answer ever becoming the wire's answer.
+    // ⇒ This file's own lesson — *"ADMITTED and SERVED are different gates"* — in the
+    // **refusal** direction. Retracting the `OBJECT_CONTROLS` row is what moved the id; the
+    // class gate is what makes the TABLE consistent. Two acts, one visible in a boot.
+    // Its `LEDGER` row records the position it actually has.
     0xa06c_0103,
     0xa06c_0105,
     // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ENTERED AND LEFT THIS LIST IN THE
@@ -401,10 +408,13 @@ static LEDGER: &[u32] = &[
     // OWNER ruling on security surface; the evidence, and the boundary admitting the class
     // would widen, are set out in `docs/design/class_control_consistency.md`.
     //
-    // ⚠ It will **stop appearing in future boots' unserviced ledgers** — a named refusal
-    // answers the command and never reaches that list. ⊘ That is not this row going stale:
-    // this list is quantified over the *committed* boots, which recorded it 16 times, and
-    // those files do not change.
+    // ⊘⊘ **A PREDICTION MADE HERE WAS WRONG WITHIN THE HOUR, AND IS LEFT AS THE
+    // CORRECTION IT EARNED.** The first draft said *"it will stop appearing in future
+    // boots' unserviced ledgers — a named refusal answers the command and never reaches
+    // that list."* `[measured, boot w295cup2]` it appears there **on the very next boot**:
+    // `unserviced fn 76 cmd 0x83de0309`, and the boot's distinct-unserviced count went
+    // 40 → 41 with that id as the +1. The capability answer never reaches the reply plane.
+    // ⇒ ★ A table edit is not a wire fact, and the difference is one boot wide.
     0x83de_0309,
     0xa06f_0112,
 ];

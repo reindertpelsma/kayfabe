@@ -579,8 +579,10 @@ fn the_control_claim_is_exactly_these_ids() {
             //
             // Why it went: its class `GT200_DEBUGGER` (`0x83de`) is in
             // `capability::DENIED_CLASSES` and this port refuses the guest's `RM_ALLOC` of
-            // it, so the bridge refuses the control one layer above this seat and a claim
-            // here could never fire.
+            // it, so a claim here would be a claim to serve a control on an object we do not
+            // hold. ⊘ `[measured, boot w295cup2]` the wire effect of removing it is that the
+            // id falls to the `UnservicedLedger`, NOT that it gains a named refusal — the
+            // capability gate is on the bridge plane, this seat is on the reply plane.
             0x2081_0108,
             0xa06c_0103,
             0xa06c_0105,
