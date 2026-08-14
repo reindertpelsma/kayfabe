@@ -133,6 +133,28 @@ absent.**
 (`0x0` instead of `0x800000`), because releasing 8 joins changed which of the new buffer's
 leaves collides first. **Leg 1 alone does not help this workload at all.**
 
+### 2.2 ⊘⊘⊘ AND IT REGRESSED A CASE THAT WORKED — `4,64`
+
+| boot | list | release | result |
+|---|---|---|---|
+| `w327u4`, `w327u4b` | `4,64` | (did not exist) | **PASS**, 64 MiB at 22.13 ms |
+| **`w329b1`** | `4,64` | leg 1, default ON | ⊘ **FAIL** — `last_ok=4 first_fail=64`, `rc=0/719` at byte `0x0` |
+
+with `revoked=4 released=4 stranded=0 drained=9 still_desired=1 falls=2` and
+`already_joined=17` (baseline 16). ⇒ **leg 1 revoked four joins and one of them was a frame
+this settlement still wanted bound**, and the 64 MiB row that used to work no longer does.
+
+★★★ **This is the hazard the guard existed for, in its milder form.** No double free is
+expressible (§1) and none occurred — `stranded=0`, `table_store_disagree=0` on every boot. What
+occurred is a **revoke of a translation that was still live**, which is the map/revoke
+asymmetry landing on the dangerous side. ⇒ the pre-registered letter for leg 1 is **(B)**, not
+(C): *"the release is unsafe as the guard suspected — name the aliasing case."* §3 names it.
+
+⚠ **The control this needs, and it is pre-registered rather than assumed:** `4,64` with
+`KAYFABE_JOIN_RELEASE=off` on the **same binary**. Master moved from `df3043be` (w327's base)
+to `d859beb1`, so *"the release broke it"* and *"master drifted"* are both live readings until
+that one boot separates them. `scripts/bench/w329_followup.sh` asks it **first**.
+
 ---
 
 ## 3. ⊘⊘⊘ THE REFUTATION — the nominated trigger is not the event that occurs
@@ -231,11 +253,17 @@ of the map/revoke asymmetry.
    and leaves 21 colliding. The nominated event is the wrong event (§3).
 2. ⊘ **"Either half alone is dead code."** True of the two halves *the brief named*, and the
    pair is still not sufficient. "Both halves land" was necessary and is not the target.
-3. ★ **"my claim that the guard is safe to relax at all, which is unproven"** — the brief
-   asked for this to be graded. **Measured: the relaxation is safe as scoped.** `stranded=0`
-   and `table_store_disagree=0` on 3/3 boots; no double free is expressible (§1); the
-   population it moves is `joined_ranges` and nothing else. ⊘ What is *not* proven is leg 2's
-   choice of winner (§4.1), which is a different claim.
+3. ⊘⊘⊘ **"my claim that the guard is safe to relax at all, which is unproven"** — the brief
+   asked for this to be graded, and **the brief was right to doubt it.** Split into two
+   claims, because they got different answers:
+   - **No double free is expressible, and none occurred.** `stranded=0`,
+     `table_store_disagree=0` on every boot of every arm; the ownership argument (§1) holds;
+     the population moved is `joined_ranges` and nothing else. ★ This half survived.
+   - ⊘ **But the relaxation REVOKED A LIVE TRANSLATION and regressed `4,64`** (§2.2). *"Safe"*
+     in the sense the guard was written for — no dangling host object — is not *"safe"* in the
+     sense that matters to a workload. **I over-claimed this in the first draft of this
+     document and the next arm refuted it within the hour.** ⚠ Same class as the brief's own
+     warning: *a self-correction is a claim like any other* — and so is a self-clearance.
 4. ⊘ **The offline baseline in the brief is stale.** It says *"Stable red set is 6 tests on 3
    targets"*. **Measured at master `d859beb1` on `vh2`: 7 tests on 4 targets.** The seventh is
    `every_unserviced_id_a_boot_recorded_is_classified`, failing with *"these ids are listed but
