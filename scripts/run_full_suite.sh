@@ -93,7 +93,7 @@ REPO="$PWD"
 # below is static shell, so it cannot be truncated by a parser — but a bad `--only` filter,
 # an early `return`, or a future refactor into a generated list all reproduce it through a
 # different door. Bump this literal in the same commit that adds or removes a phase.
-PHASE_FLOOR=17
+PHASE_FLOOR=18
 # The number of cargo test targets `cargo metadata` must yield before the census is willing
 # to believe it. Same argument: an empty universe trivially satisfies "everything ran".
 TARGET_UNIVERSE_FLOOR=80
@@ -320,6 +320,33 @@ phase rm-ladder "gpu" \
 phase rm-ladder-concurrency "gpu" \
   "R12 — the isolate-pool concurrency measurement against the real driver (overlap, not wall clock)" \
   'cargo run --quiet --release --bin kayfabe-rm-ladder -- --gpu ${KAYFABE_GPU:-0} --concurrency | tee "$LOGDIR/rm-ladder-conc.out"; exit "${PIPESTATUS[0]}"'
+
+# ★★★★★ THE OWNER'S RAW CE CLIENT (R33), 2026-08-14: *"i would definitely add the raw client
+# we have now in a test suite."* `[census, w295]` `--ce-client` was reached by NO phase, NO
+# test and NO CI job — only by a human typing it, or by `scripts/bench/r33_hook_ce_client.sh`
+# pushing a musl build into a guest. The two phases above run `--engines` and `--concurrency`.
+#
+# ⊘⊘ **THE EXIT CODE IS NOT THE VERDICT, AND THAT IS WHY THE GREP IS HERE.** The two phases
+# above assert nothing about their output; they propagate `PIPESTATUS[0]` and stop. That is
+# the shape `w283c` walked through: the client returned `R33_RC=0` while printing *"GP_GET 0
+# caught GP_PUT 1"*, because the verdict predicate implemented three of the four facts. The
+# predicate is fixed and unit-tested now (`rm.rs::three_of_the_four_facts_is_not_the_whole_bar`)
+# — this grep is the second, independent reading, over the client's own words, so a future
+# re-collapse has to defeat both. ★ ANCHORED (`^★`), for the reason the CUP2_RC anchor exists.
+phase rm-ladder-ce-client "gpu" \
+  "★★★ R33 — the owner's RAW CE client: a copy engine driven end to end through raw RM ioctls, no libcuda" \
+  'set -o pipefail
+   cargo run --quiet --bin kayfabe-rm-ladder -- --gpu ${KAYFABE_GPU:-0} --ce-client | tee "$LOGDIR/rm-ladder-ce-client.out"
+   rc=$?
+   out="$LOGDIR/rm-ladder-ce-client.out"
+   [ -s "$out" ] || { echo "★ the client produced NO OUTPUT — that is not a pass, it is an unmeasured run"; exit 1; }
+   grep -q "^REV_UNDER_TEST=" "$out" || { echo "★ no REV_UNDER_TEST= line: this run cannot be attributed to a revision"; exit 1; }
+   if ! grep -q "^★     R33 raw CE client   = a copy engine was allocated" "$out"; then
+     echo "★★★ the R33 verdict line is ABSENT or NEGATIVE. ⊘ Absent is NOT pass. The four facts:"
+     grep -E "^(★|FAIL|\?\?)  *R33 arm" "$out" || echo "    (no arm lines at all — the client did not reach its arms)"
+     exit 1
+   fi
+   exit "$rc"'
 
 phase sandbox-probe "" \
   "the isolate sandbox probe binary — what the child can still reach, measured rather than declared" \

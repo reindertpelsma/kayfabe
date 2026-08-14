@@ -485,15 +485,52 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
         src_va: PROBE_SRC_VA.0,
         dst_va: PROBE_DST_VA.0,
     };
+    // ⊘⊘ **`met_the_whole_bar()`, NOT `copied()` — corrected 2026-08-14 (w295 census).**
+    //
+    // This line read `evidence.copied()` and its gate line said so out loud. `copied()` is
+    // THREE of the four facts: it never compares `GP_GET` with `GP_PUT`. That is precisely the
+    // `w283c` defect (`CeEvidence::met_the_whole_bar`'s own doc records it) — fixed in
+    // `rmladder.rs` on 2026-08-13 and **left standing here**, in the ONLY test in this tree
+    // that touches a real GPU. ⚠ A fix applied to the instrument that found the bug and not to
+    // the instrument beside it is how a retired defect keeps a live host.
+    //
+    // ★ The four facts are also asserted SEPARATELY below, before the conjunction, so a red run
+    // names WHICH one failed rather than printing a struct and leaving the reader to diff it.
+    assert_ne!(
+        evidence.before, evidence.expect_after,
+        "★ FACT 1 (non-vacuity): the destination already held the answer before the copy, so \
+         nothing below can be evidence that the engine moved anything. {evidence:?}"
+    );
+    assert_eq!(
+        (evidence.after, evidence.after_last),
+        (evidence.expect_after, evidence.expect_after_last),
+        "★ FACT 2 (the bytes): read back through an INDEPENDENT mapping, the destination does \
+         not carry the source's first and last words — `after` right with `after_last` wrong is \
+         a TRUNCATED copy, not a failed one. {evidence:?}"
+    );
+    assert_eq!(
+        evidence.submit.semaphore, evidence.payload,
+        "★ FACT 3 (the release): the engine semaphore does not carry the DECLARED payload, so \
+         whatever moved those bytes is not the submission this arm made. {evidence:?}"
+    );
     assert!(
-        evidence.copied(),
-        "★★★ E6 ACCEPTANCE FAILED. {evidence:?} — a `before` equal to `expect_after` \
-         means the fixture was vacuous; `after` unchanged with the semaphore landed means \
-         the engine ran a copy that moved nothing; `after` right and `after_last` wrong \
-         means it was truncated; the semaphore not matching means it never retired."
+        evidence.cursor_caught_up(),
+        "★ FACT 4 (the cursor): `GP_GET {}` did not reach `GP_PUT {}`. ⊘ This is the fact \
+         `copied()` does not check and the one `w283c` passed on — the cursor is THIS channel's \
+         own USERD, and a path that executes the work on a DIFFERENT host channel cannot advance \
+         it. {evidence:?}",
+        evidence.submit.gp_get,
+        evidence.submit.gp_put,
+    );
+    assert!(
+        evidence.met_the_whole_bar(),
+        "★★★ E6 ACCEPTANCE FAILED on the CONJUNCTION while all four rows above passed — the \
+         verdict predicate and these assertions disagree, which is an instrument bug, not a \
+         result. {evidence:?}"
     );
     gate_line(&format!(
-        "GPU-GATE: E6 ACCEPTANCE CeEvidence::copied() == true — {evidence:?}"
+        "GPU-GATE: E6 ACCEPTANCE CeEvidence::met_the_whole_bar() == true (all FOUR facts, \
+         asserted separately) — {evidence:?}"
     ));
 }
 

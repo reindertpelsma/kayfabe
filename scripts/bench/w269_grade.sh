@@ -28,7 +28,7 @@ for arm in refuse pass; do
   row ARM "GR-ROUTE arm=$want" "$(grep -c "GR-ROUTE arm=$want" "$Q" 2>/dev/null)"
 
   # --- P1: CUP2_RC and its SIZE ----------------------------------------------------------
-  rc=$(grep -o 'CUP2_RC=[A-Z0-9_]*' "$P" | tail -1)
+  rc=$(grep -oE '^CUP2_RC=[A-Z0-9_]*' "$P" | tail -1)
   by=$(grep -o 'CUP2_OUT_BYTES=[0-9]*' "$P" | tail -1)
   last=$(grep -E '^(ok   |devices=|name=|compute=|totalMem=|CTX OK|MEMALLOC|CE rv=|DONE|FAIL)' "$P" | tail -1)
   row P1 "CUP2_RC (predicted 124, p=.93)" "${rc:-ABSENT}  ${by:-NO_BYTE_COUNT}"

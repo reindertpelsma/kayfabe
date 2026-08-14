@@ -89,7 +89,11 @@ want_all=0
 # `Arch::vchid_from_userd_flags` against NVIDIA's own USERD_INDEX writer, reader,
 # recombination and eheap granularity). Same shape as the four above — it READS the test
 # log, so the extractor defers it and only the `--all` literal moves.
-GATE_STEPS_ALL_MIN=23
+# ★ 23 -> 24: the GPU-GATE reached-count step (w295). `[census, w295]` `GPU-GATE` was the
+# ONLY gate family with no floor at all — the family that drives real hardware was the one
+# CI could not see. Same shape as the five above: it READS the test log, so the extractor
+# defers it and only the `--all` literal moves.
+GATE_STEPS_ALL_MIN=24
 GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
