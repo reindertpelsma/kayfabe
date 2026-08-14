@@ -539,6 +539,9 @@ fn the_control_claim_is_exactly_these_ids() {
             // replaced and why that assertion was green and false.
             NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
             kayfabe_abi::submit::NVA06F_CTRL_CMD_BIND,
+            // ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`**, the only control
+            // that carries a fault's ADDRESS. Served by RELAY, never by synthesis.
+            kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO,
             // ★★★ §14.25 — the address-plane control, RE-claimed. It was claimed in §14.21,
             // measured to kill the adapter with a "better" refusal status, and reverted;
             // §14.24 measured the fact it was waiting on (`Vas::pdb`) landing. ⚠ Its refusal
@@ -559,6 +562,22 @@ fn the_control_claim_is_exactly_these_ids() {
             // servicing never ran. `tests/tests/mc_service_interrupts.rs` carries the
             // argument, including why the dmesg train collapsing is NOT the falsifier.
             kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
+            // ★★★★★ **w292 — the four input-only controls**, owner-ruled 2026-08-14. Their
+            // identities, sizes and per-row authorities live in ONE place,
+            // `kayfabe_abi::submit::INPUT_ONLY_CONTROLS`; this list only says they are
+            // CLAIMED. `[measured]` a real GA106 leaves all four parameter blocks
+            // byte-identical across the call, so there is no `[OUT]` field an echo can miss.
+            0x2081_0108,
+            0x83de_0309,
+            0xa06c_0103,
+            0xa06c_0105,
+            // ★★★★★ **w294 — the CUDA perf limit pair, and they are the ids NO IOCTL ORACLE
+            // SHOWS.** The id a reader will look for is `0x00801909`, and it is deliberately
+            // absent: `flags=0x118`, no `ROUTE_TO_PHYSICAL` (`ogkm-580:
+            // g_device_nvoc.c:920`), so the guest's own kernel answers it and it cannot
+            // reach us. Serving these two is what took `^CUP2_RC=` from 1 to 0.
+            0x0080_2004,
+            0x0080_2009,
         ]
     );
     assert!(
