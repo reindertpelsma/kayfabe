@@ -13220,7 +13220,6 @@ fn fb_userd_cursors(
 mod pushbuffer_pin_tests {
     use super::pushbuffer_sample;
 
-
     /// ★★★★★ **A TRUNCATED SAMPLE MUST NEVER RENDER AS A COMPLETE LIST** — the defect in my
     /// own first draft, caught before any output was read.
     ///

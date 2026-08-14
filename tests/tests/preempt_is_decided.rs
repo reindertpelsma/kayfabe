@@ -59,7 +59,9 @@ fn one_group_gpu() -> (kayfabe_core::gpu::Gpu, HObject) {
     use kayfabe_abi::generated::classes as nv;
     let mut gpu = kayfabe_core::gpu::Gpu::new(
         Box::new(kayfabe_chips::Ga10xArch::new()),
-        Box::new(kayfabe_isolate::StillbornIsolates::new("preempt_is_decided")),
+        Box::new(kayfabe_isolate::StillbornIsolates::new(
+            "preempt_is_decided",
+        )),
         kayfabe_core::gpa::GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
     .expect("the port's object model realizes");

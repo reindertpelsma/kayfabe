@@ -7165,7 +7165,9 @@ impl HostRmBackend {
             // relocated is the failure `PlacementRefused` exists for, and an arm that asks
             // for nothing has nothing to compare.
             let want_ctrl_src = arms.dictate_addresses.then_some(CTRL_SRC_AT.0);
-            let ctrl_src_va = self.conn.raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
+            let ctrl_src_va = self
+                .conn
+                .raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
             mapped.push(ctrl_src_va);
             if let Some(want) = want_ctrl_src {
                 if ctrl_src_va != want {
@@ -7213,8 +7215,9 @@ impl HostRmBackend {
             // new thing RM is told is where to write when it kills this channel.
             let ring_at = arms.dictate_addresses.then_some(GpuVa(PROBE_RING_AT));
             let (c, token) = match notifier_h {
-                Some(n) => self
-                    .alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?,
+                Some(n) => {
+                    self.alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?
+                }
                 // ⊘ w309 — the SAME channel with `hObjectError` unset, which is exactly what
                 // every caller before w287 built. Plane A is unmeasured on this arm by
                 // construction, and [`GuestReachProbe::notifier`] reports `None`.

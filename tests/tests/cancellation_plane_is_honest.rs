@@ -210,10 +210,26 @@ fn the_table_covers_every_verb_measured_arriving() {
     for (cmd, ledgers, name) in [
         (0xa06f_0112u32, "115/195", "NVA06F_CTRL_CMD_STOP_CHANNEL"),
         (0x2080_012c, "115/195", "NV2080_CTRL_CMD_GPU_EVICT_CTX"),
-        (0x906f_0102, "1/195 (w299 multiproc)", "NV906F_CTRL_CMD_RESET_CHANNEL"),
-        (0xa06f_0103, "both crossing boots", "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE"),
-        (0xa06c_0101, "both crossing boots", "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE"),
-        (0xa06c_0105, "native GA106, 1/run", "NVA06C_CTRL_CMD_PREEMPT"),
+        (
+            0x906f_0102,
+            "1/195 (w299 multiproc)",
+            "NV906F_CTRL_CMD_RESET_CHANNEL",
+        ),
+        (
+            0xa06f_0103,
+            "both crossing boots",
+            "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE",
+        ),
+        (
+            0xa06c_0101,
+            "both crossing boots",
+            "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
+        ),
+        (
+            0xa06c_0105,
+            "native GA106, 1/run",
+            "NVA06C_CTRL_CMD_PREEMPT",
+        ),
     ] {
         assert!(
             cancellation_verb(cmd).is_some(),

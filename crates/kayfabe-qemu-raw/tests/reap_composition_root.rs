@@ -75,10 +75,7 @@ fn regs() -> Regs {
 /// subject is lifetime, not routing, so the channel never has to be rung.
 fn declare_one_proc(
     dev: &kayfabe_rt::device::SharedDevice,
-) -> (
-    kayfabe_arch::ids::HClient,
-    kayfabe_arch::ids::HObject,
-) {
+) -> (kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject) {
     use kayfabe_abi::generated::classes as nv;
     use kayfabe_arch::ClientKind;
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
@@ -167,7 +164,11 @@ fn a_guest_register_write_reaps_a_retired_proc() {
     let dev = r.object_model();
 
     // ---- phase 1: nothing retired, and a register write is a no-op for the reap.
-    assert_eq!(dev.retired_len(), 0, "nothing is retired before the guest acts");
+    assert_eq!(
+        dev.retired_len(),
+        0,
+        "nothing is retired before the guest acts"
+    );
     let _ = r.write(BAR_REGS, NOBODYS_OFFSET, 4, 0);
     assert_eq!(
         dev.retired_len(),
@@ -268,7 +269,8 @@ fn process_churn_does_not_accumulate_toward_the_retired_cap() {
                 },
             },
         ] {
-            dev.apply(ev).expect("a fresh guest process declares itself");
+            dev.apply(ev)
+                .expect("a fresh guest process declares itself");
         }
         dev.apply(RmEvent::Free {
             client,

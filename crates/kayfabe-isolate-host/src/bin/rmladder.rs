@@ -3018,7 +3018,11 @@ fn ce_client(
                      engine=COPY0 fault-va={UNMAPPED_VA:#018x}. ⇒ THIS is what ran; it is \
                      built from the values passed to the probe, not from the flags a harness \
                      believes it set",
-                    if shared { "SHARED (arm 1's, already carried retired work)" } else { "FRESH (a third, never used)" },
+                    if shared {
+                        "SHARED (arm 1's, already carried retired work)"
+                    } else {
+                        "FRESH (a third, never used)"
+                    },
                     fault_arms.as_str(),
                 );
                 let out = match rm.probe_guest_reachability(
