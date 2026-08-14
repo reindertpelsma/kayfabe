@@ -349,7 +349,10 @@ listed as *"the first thing to run next"*; it is now shown alive inside the gues
 
 ## 7. ⊘ WHAT THIS RUNG DID NOT DO, AND WHY
 
-**No fix was attempted.** The brief pre-registered *"an emergent budget exhaustion wants
+**No fix of the DEFECT was attempted** — what this rung changed is three instruments (the
+`PUBCONFLICT_VAS` list, the fill-chunk knob, the hoisted dirt gate), one `LEDGER` row, and a
+stale `Cargo.lock`; `git diff df3043be -- crates/` is **39 lines and all of them are inside one
+`format!`**. The brief pre-registered *"an emergent budget exhaustion wants
 resumability or fewer chains; a hard constant wants finding and fixing the constant"* — and the
 measurement says it is **neither**. There is no budget to resume and no constant to fix: the
 defect is that the table has a `publish` and no `revoke`, which is a plane, not a number.
