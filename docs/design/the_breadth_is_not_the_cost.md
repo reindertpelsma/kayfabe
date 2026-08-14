@@ -231,6 +231,25 @@ not an inference from the launcher's environment.
 ⇒ **+0.7 % and +0.8 %. Indistinguishable.** Scoping the breadth does not move the worst trap,
 which is exactly what §2.1's 0.0084 % predicts and is the pre-registered outcome for this arm.
 
+### 3.0 ★★ THE SCOPE DEMONSTRABLY EXECUTED — and it is SMALLER THAN THE NOISE IT WOULD REMOVE
+
+The scoped boots' own censuses (`traces/w328_scope/census/w328s*_census.txt`) show the
+mechanism firing, so *"it changed nothing"* is a measurement and not a silent no-op:
+
+| | arm A (`w328a1`) | arm S (`w328s1`) |
+|---|---|---|
+| `W328SCOPE scoped_out` (cum) | **0** | **687** = 229 passes × 3 VASes |
+| `W328PIN scoped_out` (cum) | **0** | **229** |
+| `other_vases` / `other_us` | 3 / **24 349 µs** | 0 / **0 µs** |
+| `DIRTY-GATE publish[fired=…]` | **912** | **228** — 4× fewer consultations |
+| `target_us` (cum, the term the saving comes off) | **2 666 358** | **2 491 346** |
+
+★★★ **And there is the whole argument in the last row.** The breadth the scope removes is
+**24 349 µs**; the boot-to-boot spread in the *same* boot's `target_us` — the quantity it would
+be subtracted from — is **175 012 µs, 7.2× larger**. ⇒ **the saving is not merely small, it is
+below the noise floor of its own denominator**, and no number of boots makes it visible in the
+outcome.
+
 ### 3.1 ⚠ ONE ARM-S BOOT TRUNCATED — reported, and NOT attributed to scoping
 
 `w328s1` came back **`complete=false`, `pinned=12433/13313`** with `CUP3_VAL=43` and **zero

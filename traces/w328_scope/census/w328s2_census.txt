@@ -1,0 +1,45 @@
+Warning: Permanently added '[184.144.255.144]:42525' (ED25519) to the list of known hosts.
+=== W328 CENSUS tag=w328s2 log=/workspace/bench/run_w328s2_qemu.log 2026-08-14T22:10:57+00:00
+=== log bytes = 3689155
+
+--- ★ THE ARM WORDS, from the boot's own lines (⊘ never from the launcher's env)
+arm=drain W328SCOPE[arm=doorbelled scoped=true
+W328PIN[arm=doorbelled scoped=true
+⊘ NO W321BATCH LINE — UNMEASURED
+gate=off this_doorbell[fired=1 skipped=0]
+DIRTY-GATE publish[fired=228 skipped=0 0.0% skipped] witness[fired=229 skipped=0 0.0% skipped] 
+
+--- ★★★★★ THE DRAIN (the DOORBELLED VAS's guest-RAM pin drain — drain #2 of four)
+DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=2775 W319KNOB[budget_ms=3000 row_limit=65536] complete=true 
+DRAIN[visited=true asked=1536 pinned=1536 refused=0 DRAIN_MS=427 W319KNOB[budget_ms=3000 row_limit=65536] complete=true 
+DRAIN[visited=true asked=1024 pinned=1024 refused=0 DRAIN_MS=283 W319KNOB[budget_ms=3000 row_limit=65536] complete=true 
+DRAIN_MS=2775
+★DRAINED(this doorbell's VAS) asked=1024 pinned=1024 refused=0 in 283 ms last_pinned_va=0x71f2d69ff000
+★DRAINED(this doorbell's VAS) asked=1331 pinned=1331 refused=0 in 318 ms last_pinned_va=0x71f2d7b32000
+★DRAINED(this doorbell's VAS) asked=13313 pinned=13313 refused=0 in 2775 ms last_pinned_va=0x2047ff000
+★DRAINED(this doorbell's VAS) asked=1536 pinned=1536 refused=0 in 427 ms last_pinned_va=0x71f2d67ff000
+★DRAINED(this doorbell's VAS) asked=512 pinned=512 refused=0 in 140 ms last_pinned_va=0x71f2d71ff000
+★DRAINED(this doorbell's VAS) asked=512 pinned=512 refused=0 in 143 ms last_pinned_va=0x71f2d75ff000
+TRAPWITNESS off_trap_claims=0 inline_exceptions=19213 worst_trap=2860308us (target: inline_exceptions=0)
+
+--- ★★★★★ THE BREADTH, CUMULATIVE over every publication pass
+passes=229 scoped_out=687 target_us=2401922 target_published=66 other_vases=0 other_us=0 other_published=0 breadth_share=0.0000%
+pin passes=229 scoped_out=229 other_vases(last)=0 other_us=0 other_pinned=0 max_drain_ms=2775
+
+--- ★★★ THE PER-PASS DISTRIBUTION of the DOORBELLED VAS's own census+join cost
+---     ⊘ The MEAN is a lie here: this is BIMODAL. Quantiles, then the tail.
+n=229 min=440 p25=569 median=605 p75=788 p95=52238 max=121500
+expensive(>10ms): n=44 sum=2263596us    cheap(<=10ms): n=185 sum=138326us
+
+--- ★★★★★ WHAT THE EXPENSIVE PASSES WERE DOING — the candidate/published/refused census
+---     of the DOORBELLED VAS, one row per distinct shape, with its multiplicity.
+---     doorbelled pdb = 0x201000
+    180 candidates=0 published=0 refused=0
+     41 candidates=8 published=0 refused=8
+      3 candidates=1 published=1 refused=0
+      2 candidates=2 published=2 refused=0
+      1 candidates=7 published=7 refused=0
+      1 candidates=32 published=24 refused=8
+      1 candidates=28 published=28 refused=0
+
+=== W328 CENSUS TERMINATOR tag=w328s2 rc=0 2026-08-14T22:10:58+00:00
