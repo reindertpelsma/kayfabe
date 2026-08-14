@@ -135,6 +135,18 @@ fn is_served(cmd: u32) -> bool {
 // `[measured 2026-08-10, boots s01…s44 — traces/guest_boots/*_qemu.log]`
 // =====================================================================================
 
+/// ★ **w294 — the suffixes that WITNESS a boot**, as opposed to a standalone probe artefact
+/// that happens to live in the same directory.
+///
+/// `[measured 2026-08-14]` the directory's suffix census is `qemu`×129, `dmesg`×128,
+/// `probe`×127, `serial`×9, `isolate`×8, `hostdmesg`×6, and then **twenty-odd singletons**
+/// (`mtree`, `isolatefd`, `stack`, `census`, `w209ctl`, …) that are one-off captures, not
+/// boots. Only the first group means *a guest was booted under this tag*.
+///
+/// ⊘ `qemu` is deliberately **absent** from this list: a gate whose universe is "tags that
+/// have a QEMU log" cannot ever find one missing.
+const BOOT_WITNESS_SUFFIXES: &[&str] = &["probe", "dmesg", "serial", "hostdmesg", "harness"];
+
 /// The committed boot logs this gate reads. ⊘ **The whole directory, every suffix** —
 /// enumerating one file is how `s43`'s alloc failures were missed (they were in the dmesg
 /// log while the probe log, a `dmesg | tail -40`, had scrolled past them:
@@ -570,6 +582,13 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
     // sourced one" the schedule doc records about three status codes.
     let expected = [
         "0x00801813", // NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY — SetPageDirPolicy, §16.30
+        // ★★★★★ **w294 — the CUDA perf limit pair.** ADDED, and the ratchet made the
+        // addition argued rather than silent: this assertion went red the moment the rows
+        // landed, which is what it is for. ⊘ The id a reader will look for — `0x00801909` —
+        // is deliberately NOT here and never can be: it is not `ROUTE_TO_PHYSICAL`, so the
+        // guest's own kernel answers it. See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
+        "0x00802004", // NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE — respond_input_only
+        "0x00802009", // NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL — respond_input_only
         "0x20800102", // InitTablePolicy
         "0x2080012b", // NV2080_CTRL_CMD_GPU_PROMOTE_CTX — ObjectPolicy, §14.25
         "0x20800301", // NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION — InitTablePolicy
@@ -797,15 +816,16 @@ fn the_w292_input_only_controls_are_claimed_and_decided() {
 /// substitute for it: `[measured]` `0x00802009` appears in **zero** ioctl captures and
 /// **can** appear in none, being `RMCTRL_FLAGS_INTERNAL`.
 ///
-/// ★ **Known-positive:** this test fails on the parent commit of the one that introduced
-/// it, naming `w290pdrain`. It was not written against a green tree.
+/// ★ **Known-positive, and it fired on first run rather than being hoped for:** against the
+/// tree as it stood before this commit it named `w290pdrain`. `[measured]` it also named two
+/// tags this gate should NOT have claimed — see [`BOOT_WITNESS_SUFFIXES`].
 #[test]
 fn every_committed_boot_tag_has_its_qemu_log() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("the workspace root is the tests crate's parent")
         .join(BOOT_LOGS);
-    // Every tag that produced any committed log, and the suffixes it produced.
+    // Every `run_<tag>_<suffix>.log` in the directory, grouped by tag.
     let mut tags: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for e in std::fs::read_dir(&dir).expect("the committed boot logs are in the tree") {
         let p = e.expect("a readable dir entry").path();
@@ -823,11 +843,24 @@ fn every_committed_boot_tag_has_its_qemu_log() {
             .or_default()
             .insert(suffix.to_string());
     }
+    // ⊘ **A TAG IS ONLY A BOOT IF SOMETHING WITNESSES A BOOT.** `[measured]` the first draft
+    // quantified over every `run_*_*.log` and named `w224d (has: isolatefd)` and
+    // `w224m (has: mtree)` — standalone probe artefacts that were never boots and have no
+    // QEMU log to be missing. ⚠ This narrowing is the one move that has to be justified
+    // rather than made: it is principled because the property under test is *"a boot's
+    // GSP-RPC record is in the tree"*, and a tag with no boot-witness log did not boot. It
+    // is **not** the gate being tuned until it is green — the known-positive `w290pdrain`
+    // carries four of these suffixes and is still named when its QEMU log is absent.
+    let booted: BTreeMap<&String, &BTreeSet<String>> = tags
+        .iter()
+        .filter(|(_, sfx)| sfx.iter().any(|s| BOOT_WITNESS_SUFFIXES.contains(&s.as_str())))
+        .collect();
     assert!(
-        tags.len() >= 40,
+        booted.len() >= 40,
         "only {} boot tags found under {BOOT_LOGS} — this gate lost its universe",
-        tags.len(),
+        booted.len(),
     );
+    let tags = booted;
     let blind: Vec<String> = tags
         .iter()
         .filter(|(_, sfx)| !sfx.contains("qemu"))
