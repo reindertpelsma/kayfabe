@@ -179,6 +179,26 @@ Clippy: clean on both feature arms except **one pre-existing `collapsible_if`** 
 `vas_publish.publishes()` (untouched by this branch; present at master) and two in
 `kayfabe-isolate-host`.
 
+### ⊘ THE TEST SUITE — SAME SIX REDS ON BOTH REVS, NAMED
+
+`cargo test --workspace --no-fail-fast` run **on both revs in one script, same box, same target
+dir** (`w313_test_suite_both_revs.log`, 253 test binaries per rev):
+
+| failing test | `w313-restore-two` | `0ff3e1e2` |
+|---|---|---|
+| `a_guest_doorbell_reaches_the_host_completion_observer` | ✘ | ✘ |
+| `a_second_doorbell_over_an_unchanged_ring_forwards_nothing` | ✘ | ✘ |
+| `the_observers_negative_verdict_refuses_the_guest_doorbell` | ✘ | ✘ |
+| `the_logic_crates_carry_no_unnamed_guest_os_assumption` | ✘ | ✘ |
+| `a_device_with_no_fb_source_refuses_the_vidmem_ring` | ✘ | ✘ |
+| `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` | ✘ | ✘ |
+
+**Six on each, the same six, and no others.** ⇒ the restore introduces **zero** new red tests.
+⚠ It also fixes none: these are the standing reds (three are w296's severance set — *"5 reds are
+ONE fact"* — and `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` is precisely the
+witness-gate assertion the sweep relaxes, red **at master too**, i.e. not caused by this
+restore). ⊘ Compared as a **set**, not as a count: a count cannot see a substitution.
+
 ---
 
 ## 5. ★★★ THE GATE THAT MISSED IT — now a CHECK, not a paragraph
