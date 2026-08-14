@@ -102,19 +102,46 @@ bad estimate cost was the granularity, and even there the constant's own docs pr
 *"even if the per-disposal cost is wrong by the same 20× factor, one chunk is ~90 ms — still
 2 % of the 4 s bound"*, which is what happened, to the millisecond.
 
-### ⊘ What is NOT known, and why the chunk was NOT retuned here
+### ★★★★★ AND IT WAS SETTLED — the `chunk = 1` discriminator, and the chunk is now 4
 
-Whether the 92 ms turn is **64 uniformly-slow disposals** or **one very slow disposal among 63
-fast ones** is unmeasured, and the two have opposite fixes: the first is cured by a smaller
-chunk (16 would give ~23 ms), the second is not curable by any chunk — one disposal is
-indivisible. `disposed=64` counts disposals, not their individual costs.
+`disposed=64 turns=1` fits **two models with opposite fixes**, and neither the count nor the
+total can separate them:
 
-⇒ **Retuning on this data would be fitting to a number whose shape is unknown.** The next
-instrument is a **per-disposal cost histogram** inside `Worker::execute`'s `Release` arm (or
-simply the max single-disposal time), which distinguishes them in one boot. Named, not guessed.
+| model | what the 92 ms is | the fix |
+|---|---|---|
+| **M1** | 64 uniformly-slow disposals at ~1.4 ms | a smaller chunk cures it **proportionally** |
+| **M2** | one ~80 ms disposal among 63 fast ones | **no chunk cures it** — one disposal is indivisible |
 
-⚠ Even so: **92 ms is 2.3 % of the 4 000 ms bound.** The exposure this rung was written against
-is closed either way; this is a refinement, not a residual failure.
+⊘ **Retuning on data that fits both would be fitting, not measuring.** So the discriminator was
+built instead, and **pre-registered before it ran** (`w317_chunk1_diag.log`): a throwaway build
+with `RETIRED_DRAIN_CHUNK = 1`, so one turn is one disposal and the deadline is re-read after
+every one. `M1 ⇒ max_drain_us ≈ 41 000 with many turns; M2 ⇒ max_drain_us ≈ the slow disposal.`
+
+`[measured 2026-08-14, vh, tag `w317c1diag`, throwaway rev on `8339f739`]`
+
+```
+DRAIN-TIMING max_drain_us=40068 disposed=231 residue=0 turns=231 budget_hit=true
+DRAIN-TIMING max_drain_us=40111 disposed=316 residue=0 turns=316 budget_hit=true
+DRAIN-TIMING max_drain_us=40117 disposed=361 residue=0 turns=361 budget_hit=true
+DRAIN-TIMING max_drain_us=40794 disposed=353 residue=0 turns=353 budget_hit=true
+DRAIN-TIMING max_drain_us=43260 disposed=13  residue=0 turns=13  budget_hit=true
+max_reap_us = 25897 · CUP3_VAL=43 CUP3_RC=0 · DRAIN-DEFER 1 → 0
+```
+
+⇒ **M1. The worst trap is 43 260 µs — the 40 ms budget plus ~3.3 ms.** There is no monstrous
+indivisible disposal; the expensive phase is *uniformly* expensive (the 13-disposal trap is
+~3.3 ms each, the 361-disposal trap ~111 µs each). ★ **A smaller chunk therefore cures the
+overshoot proportionally**, which is exactly what was not known when 64 was picked.
+
+⇒ **`RETIRED_DRAIN_CHUNK` was changed 64 → 4** under a rule stated so it can be re-derived:
+*`chunk × worst_single_disposal` may contribute at most a third of the budget*.
+`4 × 3.3 ms ≈ 13 ms` = 33 % of 40 ms ⇒ **delivered bound ≤ 53 ms**. §7 is the re-grade at that
+value; the n=4/n=3 grades above are the `chunk = 64` arm and stand as measured.
+
+⊘ **Not 1**, though 1 measured fine: each turn costs a device write lock, a `return_worker`
+round and a `Worker::execute` call, and a backend where `execute` is one IPC per *plan* would
+pay all of it per disposal. ⚠ That overhead is **bounded, not measured**: chunk=1's per-disposal
+cost (111–173 µs) merely sits in the same range as chunk=64's (121–145 µs).
 
 ---
 
