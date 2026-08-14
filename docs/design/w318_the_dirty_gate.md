@@ -7,15 +7,42 @@
 ⊘ `vh2` is itself a KVM guest — our guest is at **L2**. w315 §4 measured that tax at
 **≤ 2.2 ms per launch** and it is not what this rung moved.
 
+> ### ⊘⊘ SCOPE THE `launch_med_ms` ROW BEFORE QUOTING IT — 2026-08-14, folded in by the
+> ### coordinator because **I quoted the 3.91× onward as a result and it does not carry.**
+> **The `3.91×` is N=512 ONLY. End-to-end at 2048² does NOT reliably improve:** `med_ms`
+> **578 / 427 / 529 gated vs 450 control.** At that size the launch is **~95 % `cuCtxSynchronize`,
+> whose scatter (±100 ms) is LARGER than the 84 ms the gate removes.**
+> ⇒ **The SUBMIT half is settled** (84 ms effect against 0.07 ms scatter, and 20.7× at 2048²
+> independently). **The LAUNCH half is NOT**, at large sizes.
+> ★ The lane led with this rather than burying it; the defect was mine, in repeating the
+> favourable row without its condition. ⚠ **A ratio measured at one size is a claim about that
+> size** — the sibling of this repo's *"a metric's meaning on the failing path is not its meaning
+> on the passing path."*
+>
+> ★★★ **AND THE ROW THAT SHOULD BE QUOTED INSTEAD, because it is size-INDEPENDENT and it
+> retires a standing model:** `submit_med_ms` is **4.040 ms at N=512 and 4.28/4.26/4.40 ms at
+> 2048²** — **fixed across a workload 16× larger per dimension.**
+> ⇒ **That is w311's fitted `C` term, measured directly rather than fitted, and it has gone
+> from ~115–132 ms to ~4 ms — a ~30× reduction in the FIXED cost per launch.** w311's arithmetic
+> (*"60 tok/s needs ~64 µs/launch ⇒ ~1500× on the fixed cost alone"*) should be re-derived
+> against 4 ms, not against 115–132 ms.
+>
+> ⚠ **REVISION CAVEAT, and this repo has been bitten by exactly it:** the timing pairs were taken
+> at **`44317766`**, *not* at the rebased head `3f148d22`. The rebase onto w317 applied without
+> conflict and the confirmation boots show the same 95–97 % skip rate, but **the per-segment table
+> has not been re-run at the rebased head.** *Any bench claim must carry the source revision it
+> was measured at* — the bench once served a binary from `862c7c2` for weeks.
+>
 > ★★★★★ **PRE-REGISTERED OUTCOME: (A) — the gate fires, the trap drops, both workloads green
 > at n ≥ 3.**
 >
-> | (pair B, final revision) | control (gates off) | gated | |
+> | (pair B, revision `44317766`) | control (gates off) | gated | |
 > |---|---|---|---|
 > | host doorbell trap, per launch | **85.248 ms** | **4.078 ms** | **20.9×** |
 > | page-table + publication family | **78.229 ms** | **2.316 ms** | **33.8×** |
 > | guest `submit_med_ms` (`cuLaunchKernel`) | **85.935 ms** | **4.040 ms** | **21.3×** |
-> | guest `launch_med_ms` (submit + sync) | 107.846 ms | 27.552 ms | 3.91× |
+> | guest `submit_med_ms` **@ 2048²** | **88.770 ms** | **4.28–4.40 ms** | **20.7×** |
+> | guest `launch_med_ms` (submit + sync) ⊘ **N=512 ONLY — see above** | 107.846 ms | 27.552 ms | 3.91× |
 > | `bad` / `maxerr` | 0 / 0 | 0 / 0 | — |
 >
 > ★★ **Pair A, an hour earlier at a different revision: 77.367 → 4.583 (16.9×), submit
