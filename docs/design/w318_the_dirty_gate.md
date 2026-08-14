@@ -284,7 +284,26 @@ repetition-removing. ⚠ It is not a proof for workloads not run — see §6.
 
 ---
 
-## 5. CORRECTNESS — both workloads, n ≥ 3, and a same-binary control
+## 5. CORRECTNESS — THREE workloads, n ≥ 3, and a same-binary control
+
+★★★ **Three arms, because a dirty-set bug has two symptoms and no single workload sees both.**
+This was sharpened by the owner mid-rung and it is right:
+
+| arm | what it is | which symptom it catches |
+|---|---|---|
+| `^CUP3_VAL=43` | libcuda → UVM → `UVM_MAP_EXTERNAL_ALLOCATION` / `GPU_PROMOTE_CTX` | **loudly-absent**: a fault on an unpublished VA — on the **bind-hook-rich** path |
+| `★ R33 arm 1 COPY` | raw CE client, no libcuda, own `FERMI_VASPACE_A`, maps by direct RM ioctl | **loudly-absent on the path with NO bind hooks** ⇒ ★ this is the **falsifier**, not a regression check |
+| `^CUP8_BAD=0 ^CUP8_MAXERR=0` | 2048² matmul, 16 384 blocks, 4.19 M threads, bit-exact | ⊘ **quietly-wrong**: a stale or partial mapping the engine reads *successfully* — no fault, no Xid, exit 0 |
+
+⊘ **The third arm exists because the first two cannot see the second symptom.** cup3's `43` is
+one scalar; the raw client checks a 4 096-byte copy. Only cup8 has every thread read a whole
+row of A and a whole column of B, so a backing hole anywhere in 32 MiB surfaces as a wrong
+value. ⚠ And it must be **guarded**: `BENCH_NOLAUNCH=1` has to return its known-positive, or a
+launch that did nothing passes vacuously.
+
+⊘ **Precedent for why one workload is not enough**: w304 graded on `^CUP3_VAL=43` alone,
+deleted two relaxations as inert, and **each was sufficient alone to break `R33 arm 1`** — cup3
+has no GR-free CE path, so it could not see it.
 
 ⊘ **`bad=0` in §2 is UNGUARDED**, exactly as w315's was: those boots ran
 `KAYFABE_BENCH_ONLY=measure` with no `BENCH_NOLAUNCH` negative control. Correctness is graded
@@ -318,6 +337,33 @@ Four runs, eight boots, **one binary at `c6301a57`** differing only in two envir
   **not** appear on any arm. ⚠ At n=3 gated / n=1 control that is **not** evidence its ~20 %
   rate changed in either direction — 3 clean gated boots is what a 20 % rate produces 51 % of
   the time. It is reported as *not observed*, which is what it is.
+
+### 5.0 ⊘⊘ A CONTROL RUN DIED OF **GUEST KERNEL DRIFT** MID-SESSION, AND THE GATE CAUGHT IT BY SIZE
+
+The first control run at the final revision (`d1`) graded **UNMEASURED**, not pass and not
+fail. Its cup3 arm fired `CUP3_VAL=43`; its **R33 probe log was 1 016 bytes against the usual
+24 334**, with no `^R33_RC=` terminator. The cause is in the log's own head:
+
+```
+modprobe: FATAL: Module nvidia not found in directory /lib/modules/6.8.0-137-generic
+```
+
+⇒ **The guest's unattended-upgrades installed `6.8.0-137` and grub booted it**, while the
+hand-built `nvidia.ko` exists only under `/lib/modules/6.8.0-136-generic/kernel/drivers/video/`.
+`h1`–`h3`, minutes earlier, all ran on **`6.8.0-136`**. ⚠ **The drift landed between two runs of
+one batch**, on the arm with the gate **disarmed** — so it cannot be a result about the gate,
+and reading it as one would have been a false red on the control.
+
+★★★ **What made it legible was a SIZE check, not an emptiness check.** The file was present,
+freshly timestamped, correctly named and contained plausible text — every signal said the
+evidence was there. Only *"1 016 bytes where 24 334 was expected"* separated *truncated* from
+*complete*. ⊘ This is the brief's own trap arriving unprompted: **a truncated artefact reads as
+PRESENT and looks healthier than an empty one.**
+
+**Repaired**, and the repair is the durable part: `GRUB_DEFAULT` pinned to the
+`6.8.0-136-generic` menu entry by id, `unattended-upgrades` disabled, guest rebooted, `modprobe
+nvidia` verified `OK`. ⚠ **Any lane on `vh2` before this repair may have boots on `-137`; check
+`uname -r` in the probe log before trusting a red.**
 
 ### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
 
