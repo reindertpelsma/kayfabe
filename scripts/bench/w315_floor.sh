@@ -202,19 +202,31 @@ if [ -s "$EXITLOG" ]; then
 import sys
 rows=[l.split() for l in open(sys.argv[1]) if l[:1].isdigit()]
 rows=[r for r in rows if len(r)>=7 and r[1]!="NA"]
-if not rows:
+if len(rows)<2:
     print("    ⊘ NO USABLE SAMPLER ROWS — UNMEASURED, not zero"); raise SystemExit(0)
-t0,t1=int(rows[0][0]),int(rows[-1][0]); w=(t1-t0)/1000.0
-d=lambda k:int(rows[-1][k])-int(rows[0][k])
-print(f"    whole-boot delta: wall={w:.1f}s exits={d(1)} mmio_exits={d(2)} io_exits={d(3)} "
-      f"irq_exits={d(4)} halt_exits={d(5)}")
-if w>0:
-    print(f"    rates: {d(1)/w:.0f} exits/s  {d(2)/w:.0f} mmio_exits/s")
-# ★ The BUSIEST one-second window, which is the closest a 1 Hz sampler gets to "during the
-# launches". ⊘ It is an upper bound on the launch-phase rate, not the launch-phase rate.
-best=max(((int(b[2])-int(a[2]), int(a[0])) for a,b in zip(rows,rows[1:])), default=(0,0))
-print(f"    busiest 1 s window: {best[0]} mmio_exits  ⊘ an UPPER BOUND on the launch-phase")
-print(f"      rate, not the rate: a 1 Hz sampler cannot see inside a 126 ms launch.")
+# ⊘⊘ **LAST MINUS FIRST IS WRONG HERE, AND IT READ AS `exits=0`.** `/sys/kernel/debug/kvm/*`
+# is per-LIVE-VM: the counters are 0 before QEMU starts and 0 again after it exits, so the
+# obvious delta is exactly zero on a completed boot — a number that looks like a measurement
+# and is an artefact of the VM being gone. ⇒ sum the POSITIVE per-row deltas instead, which
+# also drops the single negative row where the VM disappeared.
+tot={k:0 for k in range(1,6)}
+peak=0; peak_t=0; span=0.0
+for a,b in zip(rows,rows[1:]):
+    dt=(int(b[0])-int(a[0]))/1000.0
+    d={k:int(b[k])-int(a[k]) for k in range(1,6)}
+    if d[1]<0:            # the VM went away between these two samples
+        continue
+    if any(v!=0 for v in d.values()):
+        span+=dt
+    for k in range(1,6): tot[k]+=d[k]
+    if dt>0 and d[2]/dt>peak: peak,peak_t=d[2]/dt,(int(a[0])-int(rows[0][0]))/1000.0
+print(f"    whole-VM totals (Σ positive per-row deltas; ⊘ NOT last-minus-first — the counters")
+print(f"    reset to 0 when the VM exits, so that difference is 0 and means nothing):")
+print(f"      exits={tot[1]} mmio_exits={tot[2]} io_exits={tot[3]} irq_exits={tot[4]} halt_exits={tot[5]}")
+print(f"      active wall={span:.1f}s  ⇒ {tot[1]/span if span else 0:.0f} exits/s, {tot[2]/span if span else 0:.0f} mmio_exits/s")
+print(f"    ★ PEAK mmio_exits/s = {peak:.0f} at t=+{peak_t:.0f}s from sampler start")
+print(f"      ⊘ A 1 Hz sampler cannot see inside a 112 ms launch: the peak is an average over")
+print(f"        a second that also contains the memset, the readback and the verify.")
 PYEXIT
 else
   echo "    ⊘ THE SAMPLER LOG IS EMPTY OR ABSENT — UNMEASURED. An empty artefact reads as"
