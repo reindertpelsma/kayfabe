@@ -61,7 +61,31 @@ There is **no** `#[ignore]` attribute anywhere in the tree. A run reports exactl
 `ignored`: a ```` ```ignore ```` fenced block in `tests/src/teardown.rs`'s module docs, which
 rustdoc counts as an ignored doc-test. `gate-census` pins that allowance at 1.
 
-**No test anywhere gates on a real GPU.** `/dev/nvidia*` appears in production code and in
+> ### ⊘⊘ CORRECTED 2026-08-14 (w295) — **THE PARAGRAPH BELOW WAS TRUE ON 2026-07-30 AND HAS
+> ### BEEN FALSE SINCE `e6_hw_join.rs` LANDED.** Kept, struck, rather than deleted: a reader
+> ### who remembers the old rule needs to meet the correction, and a doc that silently changes
+> ### its mind teaches nobody.
+>
+> There **is** a real-GPU gate family, and as of w295 it is the **hardware tier**:
+>
+> | | |
+> |---|---|
+> | family | **`GPU-GATE`** |
+> | members | `tests/tests/e6_hw_join.rs` (the E6 guest-ring acceptance) and `crates/kayfabe-isolate-host/tests/raw_ce_client.rs` (**the owner's raw CE client**, w295) — **3** `#[test]`s |
+> | how it decides | an actual `RmConnection::open` against `/dev`, **not** a `stat` of a device node. A box can carry `/dev/nvidia0` and no usable driver, and a probe that cannot tell those apart reports the wrong kind of zero |
+> | selection mechanism | **one**: the gate itself. No cargo feature, no env var, no separate binary — `cargo test --workspace` runs them, on a GPU box they execute, elsewhere they announce a skip |
+> | skip is loud | `GPU-GATE: SKIPPED <test> — <reason>` to the raw stderr descriptor, both arms printed |
+> | counted by | `gate-census` (derives the family from the markers — a `SKIPPED` on a `gpu-box` profile is a **red run**) **and**, since w295, a CI reached-count floor of **3** over `RAN + SKIPPED` |
+>
+> ⊘ Before w295 the family had `gate-census` and **no CI floor at all**: `grep -rn 'GPU-GATE'
+> .github/ scripts/` returned nothing. The one set of tests that drives real hardware was the
+> one set no reached-count protected — which is the exact hole the five oracle floors in §2.1
+> were invented for.
+>
+> ★ **The VM-boot tier is still not automated, and that is now a deliberate, stated position
+> rather than an omission** — see §7 and `docs/design/hardware_test_tier.md`.
+
+~~**No test anywhere gates on a real GPU.**~~ `/dev/nvidia*` appears in production code and in
 one hand-run diagnostic binary; the isolate suite drives `RmMode::Loopback`, and
 `crates/kayfabe-isolate-host/tests/real_isolate.rs` says so in its own header — the real-hardware
 concurrency measurement is *deliberately* a program rather than a test, "because it needs a
