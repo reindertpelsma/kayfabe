@@ -365,6 +365,15 @@ PRESENT and looks healthier than an empty one.**
 nvidia` verified `OK`. ⚠ **Any lane on `vh2` before this repair may have boots on `-137`; check
 `uname -r` in the probe log before trusting a red.**
 
+⊘⊘ **AND THEN I BROKE THE NEXT BATCH MYSELF, in the way this repo has a note about.** The
+verification boot I used to confirm the pin was left **running**, holding `nvktap0` — so the
+re-run's first two boots refused and graded `UNMEASURED` with `NOLOG` in **39 seconds**, far too
+fast for two boots. ★ The tell was the *duration*, not the verdict: `UNMEASURED` looks the same
+whether a boot ran and produced nothing or never started, and only *"39 s for something that
+takes 5 minutes"* separated them. ⇒ **a repair is not finished until the thing it started is
+stopped**, and `pgrep -x qemu-system-x86` (never `..._x86_64`, comm truncates at 15) is the
+check that says so.
+
 ### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
 
 Read the R33 rows again: **`publish[fired=3 skipped=0] witness[fired=2 skipped=0]`** — on every
