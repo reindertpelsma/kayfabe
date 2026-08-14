@@ -2521,6 +2521,7 @@ fn executor_vas_probe(rm: &mut HostRmBackend, gpu: u32, want_alias_arm: bool) ->
 /// - **Not throughput.** One 4 KiB copy, polled.
 /// - The ioctl count is **this program's**, not a lower bound on what a copy costs: it
 ///   includes bring-up (`R0`–`R6`), the probes and the teardown, and the census says which.
+///
 /// ⊘⊘ **`notifier_aperture` is the caller's and it decides whether arm 4 measures at
 /// all.** See `kayfabe_isolate_host::rm::NotifierAperture`: a VIDMEM notifier decodes to
 /// `ErrorNotifier::Unreachable` on the guest path, so **no host notifier is attached** and

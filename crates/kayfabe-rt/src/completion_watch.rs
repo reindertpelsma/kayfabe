@@ -1262,7 +1262,7 @@ mod tests {
         let list = WatchList::new();
         let t0 = Instant::now();
         // ⊘ The real addresses, in the order and at the stride the boot printed them.
-        for (chan, va) in (0u32..8).map(|i| (i, 0x2_0440f_ff0u64 - u64::from(i) * 0x10)) {
+        for (chan, va) in (0u32..8).map(|i| (i, 0x2_0440_fff0u64 - u64::from(i) * 0x10)) {
             let decl = DeclaredCompletion {
                 va: crate::GpuVa(va),
                 payload: 1,
@@ -1291,7 +1291,7 @@ mod tests {
             sites.iter().map(|(k, _)| k.va & !0xfffu64).collect();
         assert_eq!(
             pages.iter().copied().collect::<Vec<_>>(),
-            vec![0x2_0440f_000],
+            vec![0x2_0440_f000],
             "★★★ the eight declarations are not one page — leg 5 would be eight pins, and the \
              address hardware named would not be among them"
         );

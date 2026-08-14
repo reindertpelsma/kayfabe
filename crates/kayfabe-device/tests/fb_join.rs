@@ -275,7 +275,10 @@ fn a_second_join_overlapping_the_first_is_refused_by_name() {
             .install_join(at, Box::new(Elsewhere::new(len)))
             .expect_err("overlap refused");
         assert_eq!(e.0.why, ALREADY_JOINED, "at 0x{at:x}");
-        assert!(e.1.len() > 0, "the refused region is handed back, not dropped under the lock");
+        assert!(
+            !e.1.is_empty(),
+            "the refused region is handed back, not dropped under the lock"
+        );
     }
     assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "exactly one join");
 }

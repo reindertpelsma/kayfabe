@@ -1589,7 +1589,7 @@ impl RmConnection {
                 token & 0xffff,
                 USERMODE_NOTIFY_CHANNEL_PENDING,
             );
-        } else if nth % DOORBELL_WITNESS_MAX == 0 {
+        } else if nth.is_multiple_of(DOORBELL_WITNESS_MAX) {
             eprintln!(
                 "kayfabe-isolate: DOORBELL-STORE tally: {nth} stores attempted; the last {} \
                  were NOT printed individually (cap {DOORBELL_WITNESS_MAX}) — ⊘ this is a \
@@ -2570,10 +2570,10 @@ fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
     // applied to the GUEST's number. ⊘ Refused, never clamped and never dropped: a guest
     // release we silently skipped would leave the guest polling forever with every one of
     // our own rows green, which is the exact shape of a wall nobody can attribute.
-    if let Some((va, _)) = p.guest_release {
-        if va >> 49 != 0 || !va.is_multiple_of(4) {
-            return Err(bad());
-        }
+    if let Some((va, _)) = p.guest_release
+        && (va >> 49 != 0 || !va.is_multiple_of(4))
+    {
+        return Err(bad());
     }
     let flags = ce::LAUNCH_TRANSFER_NON_PIPELINED
         | ce::LAUNCH_FLUSH_ENABLE
@@ -6750,7 +6750,10 @@ impl HostRmBackend {
         // A slot index that fits the ring's queue but not the ring's pushbuffer area writes
         // methods over the GPFIFO that points at them, and the symptom is a submission that
         // fetches garbage rather than an error anyone can attribute.
-        let slot = *n % u64::from(entries).min(PUSHBUFFER_SLOTS).max(1);
+        // ⊘ `clamp(1, …)` and not `.min(…).max(1)`: identical here because
+        // `PUSHBUFFER_SLOTS` is a non-zero const, and `clamp` would PANIC if that ever
+        // stopped being true — which is the right failure for a divisor.
+        let slot = *n % u64::from(entries).clamp(1, PUSHBUFFER_SLOTS);
         *n += 1;
         Ok(slot)
     }
@@ -8880,29 +8883,39 @@ mod tests {
     #[test]
     fn userd_fits_inside_the_ring_object_without_touching_the_other_three_regions() {
         // The 512-byte slot RM's `>> 9` addresses, and the alignment RM does NOT validate.
-        assert!(
-            USERD_OFFSET_IN_RING.is_multiple_of(USERD_ALIGNMENT),
-            "RM truncates a misaligned userdOffset silently (kernel_channel_gv100.c:208)"
-        );
-        assert!(USERD_OFFSET_IN_RING + USERD_ALIGNMENT <= RING_OBJECT_BYTES);
-        // ⊘ Above the semaphore, not merely different from it.
-        assert!(
-            USERD_OFFSET_IN_RING >= SEMAPHORE_OFFSET + 8,
-            "USERD must not overlap the semaphore the copy releases into"
-        );
-        // And clear of the pushbuffer slots and the GPFIFO that indexes them.
-        assert!(PUSHBUFFER_OFFSET + PUSHBUFFER_SLOTS * PUSHBUFFER_SLOT_BYTES <= GPFIFO_OFFSET);
-        assert!(
-            GPFIFO_OFFSET + u64::from(GPFIFO_ENTRIES) * 8 <= USERD_OFFSET_IN_RING,
-            "the GPFIFO must end before USERD begins"
-        );
+        // ★★ `const { assert!(…) }`, not `assert!(…)`. Every operand here is a `const`,
+        // so clippy's `assertions_on_constants` is right that a runtime assert is the wrong
+        // instrument — and the fix STRENGTHENS the gate rather than silencing it: a layout
+        // that overlaps now fails to COMPILE, in every build, instead of failing in a test
+        // somebody has to remember to run. ⊘ The messages are kept; a const assert prints
+        // them at the compile error.
+        const {
+            assert!(
+                USERD_OFFSET_IN_RING.is_multiple_of(USERD_ALIGNMENT),
+                "RM truncates a misaligned userdOffset silently (kernel_channel_gv100.c:208)"
+            );
+            assert!(USERD_OFFSET_IN_RING + USERD_ALIGNMENT <= RING_OBJECT_BYTES);
+            // ⊘ Above the semaphore, not merely different from it.
+            assert!(
+                USERD_OFFSET_IN_RING >= SEMAPHORE_OFFSET + 8,
+                "USERD must not overlap the semaphore the copy releases into"
+            );
+            // And clear of the pushbuffer slots and the GPFIFO that indexes them.
+            assert!(PUSHBUFFER_OFFSET + PUSHBUFFER_SLOTS * PUSHBUFFER_SLOT_BYTES <= GPFIFO_OFFSET);
+            assert!(
+                GPFIFO_OFFSET + GPFIFO_ENTRIES as u64 * 8 <= USERD_OFFSET_IN_RING,
+                "the GPFIFO must end before USERD begins"
+            );
+        }
         // ★ The containment test on the consuming side — `kayfabe-fwd`'s
         // `adopted_guest_userd`, `offset + 512 > len` — must ACCEPT this layout. This is the
         // whole point of the rung, asserted as arithmetic rather than hoped for in a boot.
-        assert!(
-            USERD_OFFSET_IN_RING + 512 <= RING_OBJECT_BYTES,
-            "a USERD our own client declares must pass adopted_guest_userd's containment test"
-        );
+        const {
+            assert!(
+                USERD_OFFSET_IN_RING + 512 <= RING_OBJECT_BYTES,
+                "a USERD our own client declares must pass adopted_guest_userd's containment test"
+            );
+        }
     }
 
     /// ★★★ A class id that is **deliberately not a real one** (`#156`).

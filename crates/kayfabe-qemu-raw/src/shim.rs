@@ -3559,6 +3559,12 @@ struct CeShellState {
 #[derive(Debug, Clone, Copy)]
 struct GrCursorWatch {
     /// The guest token this channel's doorbell carries — the join key to every other line.
+    ///
+    /// ⊘ `allow(dead_code)` rather than deletion: the ONE reader is the `GR-CURSOR` line in
+    /// the `host-isolates` arm, which a default-feature clippy run does not compile. Removing
+    /// the field to satisfy that run would delete the join key from the log the arm exists to
+    /// print.
+    #[allow(dead_code)]
     token: u64,
     proc: u32,
     chan: u32,
@@ -9422,6 +9428,7 @@ impl SharedDoorbell {
     /// `Vidmem@0x10000` and `Vidmem@0x20000` with no host object — so on the **`off`** arm this
     /// must print `FIRED`, naming both VAs. ⊘ A zero on that arm means the instrument did not
     /// run, not that the condition is absent: `a census ZERO needs a KNOWN-POSITIVE`.
+    #[cfg(feature = "host-isolates")]
     fn fake_fb_in_userspace_vas(
         f: &kayfabe_rt::device::CeChannelFacts,
         now_host_backed: &[String],
@@ -14608,6 +14615,14 @@ pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 /// across cup2's entire address space, so a per-VAS budget of 4096 *qualifying* rows cannot
 /// bind on any picture this campaign has measured. It exists so a guest that grows its tables
 /// without bound cannot turn one doorbell into an unbounded host round trip.
+// ⊘ **`#[cfg(feature = "host-isolates")]`, added 2026-08-14 (w296).** Every reader of
+// this item lives in the `host-isolates` arm, so a default-feature build compiled the
+// no-op sibling and left this dead — `cargo clippy --workspace --all-targets` (which CI
+// runs WITHOUT `--all-features`) then reported it under `-D warnings`. ⚠ The gate that
+// matters is the one this reveals: **the `host-isolates` arm is never clippy-checked at
+// all**, so it carries whatever lints it likes. That is
+// `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
+#[cfg(feature = "host-isolates")]
 const VAS_PUBLISH_LEAF_BUDGET: usize = 4096;
 
 /// ★★★ **How many guest-RAM rows the `pinrate` MEASUREMENT pins.** Bounded on purpose: this
@@ -14617,6 +14632,14 @@ const VAS_PUBLISH_LEAF_BUDGET: usize = 4096;
 ///
 /// ⊘ The number is reported beside the rate, so a reader never has to know it to read the
 /// line — and `degrade` below is what makes a *bounded* sample able to speak about 16 328.
+// ⊘ **`#[cfg(feature = "host-isolates")]`, added 2026-08-14 (w296).** Every reader of
+// this item lives in the `host-isolates` arm, so a default-feature build compiled the
+// no-op sibling and left this dead — `cargo clippy --workspace --all-targets` (which CI
+// runs WITHOUT `--all-features`) then reported it under `-D warnings`. ⚠ The gate that
+// matters is the one this reveals: **the `host-isolates` arm is never clippy-checked at
+// all**, so it carries whatever lints it likes. That is
+// `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
+#[cfg(feature = "host-isolates")]
 const VAS_PINRATE_ROWS: usize = 256;
 
 /// ★★★★★ **w292 — how many guest-RAM rows the DRAIN of the doorbelled VAS may take in one
@@ -14628,6 +14651,14 @@ const VAS_PINRATE_ROWS: usize = 256;
 /// **18 269 rows**, of which **1075** were the un-pinned residual. 65 536 therefore cannot
 /// bind on any picture this campaign has measured — and if it ever does, the line says
 /// `⚠⚠ DRAIN ROW CAP` and a reader knows the drain was **incomplete rather than complete**.
+// ⊘ **`#[cfg(feature = "host-isolates")]`, added 2026-08-14 (w296).** Every reader of
+// this item lives in the `host-isolates` arm, so a default-feature build compiled the
+// no-op sibling and left this dead — `cargo clippy --workspace --all-targets` (which CI
+// runs WITHOUT `--all-features`) then reported it under `-D warnings`. ⚠ The gate that
+// matters is the one this reveals: **the `host-isolates` arm is never clippy-checked at
+// all**, so it carries whatever lints it likes. That is
+// `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
+#[cfg(feature = "host-isolates")]
 const VAS_DRAIN_ROW_CAP: usize = 65536;
 
 /// ★★★★★ **w292 — the wall-clock bound on that drain**, and it is the honest half of the row
@@ -14645,6 +14676,14 @@ const VAS_DRAIN_ROW_CAP: usize = 65536;
 /// not thereby a refused one**, and the drain was INCOMPLETE — which is the difference
 /// between *"the leaf was published and hardware still faulted"* and *"we never got to it"*,
 /// i.e. between a result and last rung's non-result.
+// ⊘ **`#[cfg(feature = "host-isolates")]`, added 2026-08-14 (w296).** Every reader of
+// this item lives in the `host-isolates` arm, so a default-feature build compiled the
+// no-op sibling and left this dead — `cargo clippy --workspace --all-targets` (which CI
+// runs WITHOUT `--all-features`) then reported it under `-D warnings`. ⚠ The gate that
+// matters is the one this reveals: **the `host-isolates` arm is never clippy-checked at
+// all**, so it carries whatever lints it likes. That is
+// `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
+#[cfg(feature = "host-isolates")]
 const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(3000);
 
 /// ★★★ **The wall-clock budget for one doorbell's publication**, and it is the honest half of
@@ -14655,6 +14694,14 @@ const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_mil
 /// ⚠ When it fires the line says so loudly and says what it means: **an unpublished row is
 /// not thereby a refused one.** That distinction is the whole reason this is a named budget
 /// rather than a silent `break`.
+// ⊘ **`#[cfg(feature = "host-isolates")]`, added 2026-08-14 (w296).** Every reader of
+// this item lives in the `host-isolates` arm, so a default-feature build compiled the
+// no-op sibling and left this dead — `cargo clippy --workspace --all-targets` (which CI
+// runs WITHOUT `--all-features`) then reported it under `-D warnings`. ⚠ The gate that
+// matters is the one this reveals: **the `host-isolates` arm is never clippy-checked at
+// all**, so it carries whatever lints it likes. That is
+// `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
+#[cfg(feature = "host-isolates")]
 const VAS_PUBLISH_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(2000);
 
 const PT_SWEEP_RANGE_CAP: usize = 48;

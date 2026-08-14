@@ -40,6 +40,18 @@
 use kayfabe_isolate::RmError;
 use std::io::{self, Read, Write};
 
+/// ★★★★★ **The guest's adopted GPFIFO ring, ON THE WIRE**:
+/// `(memory, offset, gp_fifo_va, gp_fifo_entries, userd)`, where `userd` is leg B's
+/// `(memory, offset)` of the guest's own USERD or `None` when the ring was adopted and the
+/// USERD was not.
+///
+/// ⊘ A named alias, not a `struct`: this is the **wire** shape and it is encoded and decoded
+/// by hand field-by-field, so giving it a struct would invite a `derive` that silently
+/// disagrees with the hand-written codec. ⊘ And not left as a bare five-tuple either — four
+/// consecutive integers with no names is exactly where an encoder and a decoder swap two of
+/// them and every in-process test still passes.
+pub type AdoptedRingWire = (u64, u64, u64, u32, Option<(u64, u64)>);
+
 /// The largest frame either side will send or accept.
 ///
 /// Sized against the C's own `MAX_IOCTL_PAYLOAD` of 64 KiB
@@ -115,7 +127,7 @@ pub enum Request {
         /// ([`kayfabe_isolate::AdoptedGuestRing::userd`]): *"the guest's USERD on a ring of
         /// ours"* is a state that must not be representable, and a sibling `Option` on the
         /// wire would make it one decode away.
-        adopt: Option<(u64, u64, u64, u32, Option<(u64, u64)>)>,
+        adopt: Option<AdoptedRingWire>,
         /// ★★★★★ **w288 — the channel's ERROR NOTIFIER, across the wire**: the raw host
         /// handle of the memory object `hObjectError` must name, or `None` for a channel
         /// born with no notifier at all.
