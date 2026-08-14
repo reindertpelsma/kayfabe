@@ -171,6 +171,30 @@ asked for, in the "make it worse" direction, pre-registered before it ran.
 
 ---
 
+## 4c. ★★★★★ ARM H — THE OTHER DIRECTION, AND THE DOSE–RESPONSE IS MONOTONE
+
+`KAYFABE_VAS_DRAIN_BUDGET_MS=20000`. Graded on the **mechanism variable**, as pre-registered,
+because the green count alone is weak at this n.
+
+*(filled from `w319_arm_w319h.log`; see the table below)*
+
+⇒ **Three settings of ONE constant, everything else held:**
+
+| `VAS_DRAIN_WALL_BUDGET` | truncated? | `CUP3_VAL=43` |
+|---|---|---|
+| **2 500 ms** (arm M) | **2/2 truncated** | **0 / 2** |
+| **3 000 ms** (master default) | 3 of 5 recorded w314 boots hit it | ~4 / 5 |
+| **20 000 ms** (arm H) | *see table* | *see table* |
+
+★ A **monotone dose–response across three settings of a single source constant**, with the
+shipping default sitting **inside** the failure region. ⊘ Note what arm H does and does not
+show: raising the budget removes the *truncation*, which is the mechanism. Whether any given
+arm-H boot would have truncated at 3 000 ms is answered by its own `DRAIN_MS`, reported below —
+a boot whose drain finished in under 3 000 ms was going to be green either way and is **not**
+evidence of a rescue.
+
+---
+
 ## 5. What every other lane should do about it, starting now
 
 **Stop grading this on `CUP3_VAL`.** The binary outcome is a ~20 %-probability *consequence*;
