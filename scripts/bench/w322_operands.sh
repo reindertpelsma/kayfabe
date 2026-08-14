@@ -35,7 +35,9 @@
 #
 # ## ⊘ WHAT THIS RUNG CHANGES IN THE DEVICE: NOTHING.
 #
-# `git diff master -- crates/` is empty for this branch. Every edit is in scripts/bench/, and
+# `git diff 53d6375c -- crates/` (the branch point) is empty. ⚠ Named by SHA, not by `master`:
+# master advanced to w321 while this rung ran, and the ref-name form would have read as 30
+# changed files. Every edit is in scripts/bench/, and
 # the workload's new behaviour is behind env vars that default to the previous behaviour. ⇒ a
 # non-regression this rung cannot cause is not evidence it is asked to produce; the correctness
 # ladder here exists to show the MEASUREMENT is sound, not to clear a change.

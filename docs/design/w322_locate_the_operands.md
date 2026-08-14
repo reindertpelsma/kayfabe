@@ -16,11 +16,17 @@ Artifacts: `traces/w322_operands/`.
 > (14.80 × 2.76 = 40.85, the measured same-hour ratio at N=2048), and **neither is the submit
 > path**.
 
-> ⊘ **`git diff master -- crates/` is EMPTY on this branch.** Every edit is under
-> `scripts/bench/`, and every new behaviour in the workload is behind an environment variable
-> that defaults to the previous behaviour. ⇒ **this is a measurement-only rung**, and the
-> correctness ladder below exists to show the *measurement* is sound, not to clear a change it
-> cannot cause.
+> ⊘ **`git diff 53d6375c -- crates/` is 0 LINES.** Every edit is under `scripts/bench/`, and
+> every new behaviour in the workload is behind an environment variable that defaults to the
+> previous behaviour. ⇒ **this is a measurement-only rung**, and the correctness ladder below
+> exists to show the *measurement* is sound, not to clear a change it cannot cause.
+>
+> ⚠ **THE SHA IS PART OF THAT CLAIM, AND SAYING "master" WOULD HAVE MADE IT FALSE WITHIN THE
+> HOUR.** This rung branched at `53d6375c`; `master` advanced to `9c6c3f57` (w321) while it ran,
+> and `git diff master -- crates/` then reported **30 changed files / 2 087 deletions** — none
+> of them mine. ⊘ *"Byte-identical to master"* is a claim about a **moving ref**; the checkable
+> form names the base sha, or the merge base. Same family as this tree's *"a ruling's DATE is
+> part of the citation"*, arriving through git rather than through a doc.
 
 ---
 
@@ -651,7 +657,8 @@ the same instrument, and the difference is entirely how many points survived.
 
 ### 6.11 CORRECTNESS
 
-⊘ **This rung is measurement-only: `git diff master -- crates/` is 0 lines.** Every edit is in
+⊘ **This rung is measurement-only: `git diff 53d6375c -- crates/` is 0 lines** (the branch
+point; see the STATUS block on why the sha and not the ref name). Every edit is in
 `scripts/bench/`; the workload's new behaviour is behind env vars defaulting to the previous
 behaviour, and the one change that touches every guest run — the hook's env line — was proved
 inert by the `sizes` arm reproducing w320 to within 5 % at four sizes. ⇒ per the brief, a
