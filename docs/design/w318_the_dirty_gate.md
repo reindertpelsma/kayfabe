@@ -350,11 +350,15 @@ known-positive at all, and the honest word for that is **UNMEASURED**.
 - **`guest_ram_pins.len()` is an epoch only because pins are insert-only.** If a single-pin
   removal is ever added, that term must become a generation. The type is a tuple so the next
   reader finds the seam.
-- **One size (N=512), one guest, one physical GPU.** The timing is **one boot per arm**; what
-  makes it readable at n=1 is that the arms are the same binary at the same revision differing
-  in two environment strings, and that §4's histograms are exact rather than statistical.
+- **One size (N=512), one guest, one physical GPU.** The timing is **one boot per arm per
+  pair**; what makes it readable is that each arm is the same binary at the same revision
+  differing in two environment strings, that there are **two independent pairs at two
+  revisions**, and that §4's totals are exact rather than statistical.
 - **Display, NVENC and multi-process are UNMEASURED, not inert.**
-- ⊘ **`pt_vascensus` was not gated and `ringproj` was not gated.** §2.2.
+- ⊘ **`pt_vascensus` was not gated and `ringproj` was not gated.** §2.3.
+- ⊘ **Nothing here measures a guest that dirties its VAS before every launch.** Such a guest
+  would fire the gate on every doorbell and see the ungated cost — which is pre-registered
+  outcome (B) arriving for a *workload* rather than for the *arming edge*. §7.3.
 
 ---
 
@@ -374,7 +378,13 @@ known-positive at all, and the honest word for that is **UNMEASURED**.
 - ⊘ **The gate is on the PRODUCER, not the consumer.** Gating `decode_cpu_pt_writes` would have
   been gating the pass whose cost was measured; the thing keeping it non-empty was
   `witness_executor_fb_pages` re-queueing 53 pages unconditionally one line above it.
-- ⚠ **I cannot account for `core` getting 6.4× faster** (§2.1) and did not distribute it.
+- ⚠ **I cannot account for `core` getting 6.4×/7.7× faster** (§2.1) and did not distribute it.
+- ⊘⊘ **I reported the per-line `bound=` histogram as the correctness evidence, and pair B shows
+  it is not.** The gate re-BATCHES binds across doorbells, so a per-line shape comparison
+  between the arms is not a comparison of what they achieved. The number that survives batching
+  is the **total**, and it is equal to the digit on all four arms. §4.
+- ⊘ **The lock census caught a real ordering inversion of mine that no assertion in the tree
+  could have seen.** §7.2. I would have classified it as safe if it had only demanded a note.
 
 ---
 
@@ -386,8 +396,8 @@ the VM*, and that **publication belongs at bind** — the dirty gate being *"the
 that skips the work instead of removing it.
 
 ★★★ **The architectural framing is right, and this rung is evidence FOR it, not against it.**
-After the gate the trap is **4.583 ms**, of which the **actual host forward is 0.422 ms** and
-the entire remainder is two *diagnostics* — `pt_vascensus` (2.196) and `ringproj` (1.321) —
+After the gate the trap is **4.078 ms**, of which the **actual host forward is 0.384 ms** and
+the entire remainder is two *diagnostics* — `pt_vascensus` (2.070) and `ringproj` (0.961) —
 neither of which is publication. ⇒ **the doorbell is already within ~4 ms of translate-and-ring,
 and what is left in it is instrumentation, not the address plane.**
 
