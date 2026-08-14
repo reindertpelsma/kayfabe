@@ -251,6 +251,16 @@ pub enum DeniedBecause {
     /// ★★★ **SM-level debugger / profiler trapping, which this port does not model — and
     /// `NV83DE` resume is NOT MMU fault replay.**
     ///
+    /// ⊘⊘⊘ **SCOPE CORRECTED 2026-08-14 (w296), OWNER RULING — this variant NO LONGER DENIES
+    /// A CLASS.** `GT200_DEBUGGER` (`0x83de`) was on [`DENIED_CLASSES`] citing this reason
+    /// and is now on the class ALLOWLIST: nvproxy gates it on ORDINARY COMPUTE capability,
+    /// and a denial the guest routes around is not a boundary. ⇒ Everything below is still
+    /// true as a description of what this port does not MODEL, and it now justifies only the
+    /// five `0x83de03xx` rows on [`DENIED_CONTROLS`] — the CONTROLS, never the alloc.
+    /// ⚠ The paragraph about the surface being *"reachable by an unprivileged guest
+    /// application"* is the ARGUMENT THE OWNER USED TO ADMIT IT, read the other way round:
+    /// unprivileged reachability is why gVisor treats it as baseline compute.
+    ///
     /// The two share no code. MMU replay is `MEM_OP_C.TLB_INVALIDATE_REPLAY` on a
     /// pushbuffer (`ogkm-580: kernel-open/nvidia-uvm/uvm_volta_host.c:234-264`);
     /// `NV83DE_CTRL_CMD_DEBUG_RESUME_CONTEXT` resumes a *warp* from an SM exception. This
@@ -821,6 +831,30 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     // wrong, because **this control programs no hardware at all** — see
     // `DeniedBecause::SmDebuggerTrapping`'s w292 correction for the ogkm citations.
     ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
+    // ★★★★★ **w296 — ADMITTED BY OWNER RULING 2026-08-14: FOLLOW NVPROXY EXACTLY.**
+    // *"they really thought about it for sandboxed containers meant for adversarial code."*
+    // `gvisor nvproxy: version.go:334-336` carries **exactly three** `0x83de03xx` controls,
+    // all `ctrlHandler(rmControlSimple, compUtil)` — i.e. under the DEFAULT compute
+    // capability, the same set every container gets — beside the class itself at `:427`.
+    // `gvisor pkg/abi/nvgpu/ctrl.go:792-794` defines those three and **no other** `83de`
+    // control, so the rest of the class is denied by OMISSION, not by a judgement of ours.
+    //
+    // ⊘ `rmControlSimple` is a byte-blob passthrough: nvproxy inspects no field of either
+    // params struct. ⇒ *"nvproxy permits it"* is the whole specification; there is no
+    // validation to inherit, and this row must not be read as one.
+    //
+    // ★★★ **`0x83de0317`/`0318` (SUSPEND/RESUME_CONTEXT) STAY DENIED, AND THAT IS WHAT MAKES
+    // ADMITTING `030c` COHERENT.** Reading every SM's error state is a read of whatever GR
+    // context happens to be resident — a race. WITH suspend it stops being a race and becomes
+    // a deterministic cross-context read. ⊘ Do not add them for symmetry: the pair is the
+    // hazard, not either half.
+    //
+    // ⚠ **`0310` CLEAR_ALL is the sharper half on an INTEGRITY axis** — suppressing another
+    // context's fault state only has to *precede* that context's read, never win a race to
+    // observe it. nvproxy carries it anyway, and the ruling is to match nvproxy rather than
+    // to re-adjudicate it here. Named so the next reader knows it was seen, not missed.
+    ControlEntry { cmd: 0x83de030c, name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x83de0310, name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
     // ★★★★★ **w288 TIER 2 — the ONLY control that carries a fault's ADDRESS.** The error
@@ -1002,6 +1036,44 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
     ClassEntry {
         class: 0x000050a0,
         name: "NV50_MEMORY_VIRTUAL",
+        origin: Origin::Nvproxy,
+    },
+    // ★★★★★ **RE-ADMITTED 2026-08-14 (w296) BY OWNER RULING — *"why deny a debugger if it's
+    // unprivileged. did nvproxy deny it?"*. It does not.**
+    //
+    // `[measured, vendored gvisor tree]` nvproxy gates the two PROFILER classes beside this
+    // one on the opt-in `nvconf.CapProfiling` and gates **this** one on `compUtil`
+    // (`= CapCompute | CapUtility`, `nvproxy/seccomp_filters.go:31`), which is
+    // `DefaultDriverCaps` — i.e. **ordinary compute capability, available to every container**
+    // (`version.go:425-427`). A sandbox built to confine untrusted workloads treats the SM
+    // debugger session as baseline compute, deliberately: it has its own named handler.
+    //
+    // ⊘⊘ **AND THE HANDLER DOES NOT VALIDATE — measured, because "it has a dedicated handler"
+    // is not evidence that it checks anything.** `rmAllocSMDebuggerSession`
+    // (`nvproxy/frontend.go:1273-1282`) is `rmAllocSimpleParams` with ONE extra act: it
+    // passes `allocParams.HClass3DObject` to `objAdd` as a **dependency edge for sentry-side
+    // lifetime tracking**. No field of `NV83DE_ALLOC_PARAMETERS` is inspected, masked,
+    // clamped or rejected; all three of its members are `Handle`s and all three reach the
+    // real driver verbatim. The only generic check in the path is that `ParamsSize` is `0`
+    // or exactly the struct's 12 bytes (`frontend.go:1180-1184`).
+    // ⇒ ★ So *"nvproxy permits it"* is the whole specification — there is no free validation
+    // to inherit, and anyone citing the dedicated handler as a safety argument is citing
+    // bookkeeping.
+    //
+    // ★★★ **WHY THE PRIOR DENIAL WAS WITHDRAWN, and the reasoning was inverted.** The denial
+    // argued *"there is no SM state behind the class, so allowing the alloc and refusing every
+    // control lets a debugger attach and then fail at first use"*. But the guest routes around
+    // the refusal, so the denial bought **no** boundary — only an inconsistency (refuse alloc
+    // / serve `0x83de0309` / refuse free) with a permanent review cost. A denial the guest can
+    // route around is not a boundary.
+    //
+    // ⊘ **THE FIVE `0x83de03xx` CONTROLS ON `DENIED_CONTROLS` ARE UNAFFECTED AND STAY DENIED.**
+    // `Caps::control` never consults `denied_classes` — it checks `denied_controls` FIRST, then
+    // the two rule-based passthroughs, then the allowlists. Pinned by
+    // `admitting_gt200_debugger_does_not_reach_a_single_denied_control`.
+    ClassEntry {
+        class: 0x000083de,
+        name: "GT200_DEBUGGER",
         origin: Origin::Nvproxy,
     },
     ClassEntry {
@@ -1455,9 +1527,10 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
         name: "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
         why: DeniedBecause::FabricManagement,
     },
-    // ★★ The `NV83DE` block. The first three MOVED here from the allowlist; the last
-    // three were already absent and are named so a census can tell a debugger attaching
-    // from an unmodelled command. `0x83de0307` is the load-bearing one — see
+    // ★★ The `NV83DE` block, **as of w296: THREE denied, THREE served.** What remains here
+    // is exactly what `gvisor nvproxy` omits — `0307` (SET_MODE_MMU_DEBUG) and the
+    // `0317`/`0318` SUSPEND/RESUME pair — and it remains by matching nvproxy's table, not by
+    // a judgement of ours. `0x83de0307` is the load-bearing one — see
     // `DeniedBecause::SmDebuggerTrapping`'s second half.
     DeniedEntry {
         id: 0x83de_0307,
@@ -1469,16 +1542,11 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
     // because *"a ruling's DATE and its ARCHITECTURE are both part of the citation"*: the
     // denial was correct on what was known then, and the thing that changed is that we
     // read the driver instead of the name.
-    DeniedEntry {
-        id: 0x83de_030c,
-        name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
-    DeniedEntry {
-        id: 0x83de_0310,
-        name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
+    // ⊘⊘ `0x83de_030c` and `0x83de_0310` WERE HERE AND ARE NOT ANY MORE — w296, owner-ruled
+    // 2026-08-14 (*"follow nvproxy exactly"*). Both are on the allowlist above; see that
+    // block for `gvisor nvproxy: version.go:334-336` and for why `0317`/`0318` did NOT move
+    // with them. ⚠ Kept as a comment rather than deleted, for the reason the `0309` note
+    // beside it gives: a ruling's DATE and its ARCHITECTURE are both part of the citation.
     DeniedEntry {
         id: 0x83de_0317,
         name: "NV83DE_CTRL_CMD_DEBUG_SUSPEND_CONTEXT",
@@ -1527,11 +1595,17 @@ pub(crate) static DENIED_CLASSES: &[DeniedEntry] = &[
         name: "NV40_I2C",
         why: DeniedBecause::NoPhysicalBoardBus,
     },
-    DeniedEntry {
-        id: 0x0000_83de,
-        name: "GT200_DEBUGGER",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
+    // ⊘⊘⊘ **`0x0000_83de` `GT200_DEBUGGER` WAS HERE AND IS NOT ANY MORE — 2026-08-14 (w296),
+    // OWNER RULING** (*"why deny a debugger if it's unprivileged. did nvproxy deny it?"* — it
+    // does not; it gates the class on ORDINARY COMPUTE capability). The row, the nvproxy
+    // measurement behind it, and the argument that had kept it here all live at the class's
+    // new home on [`CLASSES_SHARED`]. ⚠ Read that block before re-adding it: the case for
+    // the denial was *"allowing the alloc and refusing every control lets a debugger attach
+    // and then fail at first use"*, and the owner's answer is that a denial the guest routes
+    // around is not a boundary — it is an inconsistency (refuse alloc / serve `0x83de0309` /
+    // refuse free) with zero security benefit and a permanent review cost.
+    // ⊘ [`DeniedBecause::SmDebuggerTrapping`] is deliberately KEPT as a variant: the five
+    // `0x83de03xx` rows on [`DENIED_CONTROLS`] still cite it, and they did not move.
 ];
 
 // ═══ The per-boundary control blocks ═════════════════════════════════════════════════
@@ -2076,15 +2150,15 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                159,
-                77,
+                161,
+                78,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                160,
-                77,
+                162,
+                78,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2093,15 +2167,15 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                159,
-                77,
+                161,
+                78,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                160,
-                85,
+                162,
+                86,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -2110,8 +2184,8 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                162,
-                91,
+                164,
+                92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
@@ -2122,8 +2196,8 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                163,
-                91,
+                165,
+                92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2135,8 +2209,8 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                163,
-                93,
+                165,
+                94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2148,8 +2222,8 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                163,
-                93,
+                165,
+                94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
@@ -2561,6 +2635,11 @@ mod tests {
     /// (see [`DENIED_CONTROLS`]'s doc). 90 classes at 580 = the C's 89 plus
     /// `NVCEB7`/`NVD1B7`, which nvproxy adds at 580.65.06 and the C's 575-era list
     /// therefore could not have, **minus `GT200_DEBUGGER`**, moved for the same reason.
+    /// ⊘ **STALE AS OF 2026-08-14 (w296): the `minus GT200_DEBUGGER` term is GONE** — the
+    /// class was re-admitted by owner ruling, which is the `+1` the current numbers carry.
+    /// The derivation is kept as written because it explains how the figure was ORIGINALLY
+    /// arrived at, and rewriting history in a ratchet's doc is how a ratchet stops being
+    /// auditable.
     ///
     /// ★ The four class counts move together because `GT200_DEBUGGER` was in the SHARED
     /// base: a class this port never modelled was permitted at *every* boundary, which is
@@ -2585,8 +2664,129 @@ mod tests {
     /// therefore **not** expected to move the progress fraction, and a report that credits it
     /// with movement is reading a coincidence — `mode2_cuctxcreate_resume.md` §0.6-0.7 rules
     /// this port's wall to be a completion, not a control-plane refusal.
+    /// ★★★★★ **THE BOUNDARY THE OWNER BOUGHT, MEASURED — admitting `GT200_DEBUGGER` reaches
+    /// NOT ONE denied control.**
+    ///
+    /// This is the check the 2026-08-14 ruling was conditioned on. It is asserted rather
+    /// than argued because the two tables are *structurally* independent on this base —
+    /// [`Caps::control`] never consults `denied_classes` at all — and "structurally
+    /// independent" is exactly the kind of claim that stops being true in a diff nobody
+    /// reads.
+    ///
+    /// ⊘ **Both directions, because one of them is the whole risk.** The class must be
+    /// ADMITTED (or the ruling did not land, and the row would read as applied while the
+    /// guest still gets `NotOnAllowlist`), *and* every `0x83de` control that was denied
+    /// before must still be denied.
+    ///
+    /// ⚠ **`0x83de0309` is NOT in this set and must not be added to it.** It was restored to
+    /// the allowlist by the w292 ruling, and asserting it denied here would re-litigate that
+    /// ruling from a test — `a_rulings_date_is_part_of_the_citation`.
+    #[test]
+    fn admitting_gt200_debugger_does_not_reach_a_single_denied_control() {
+        // The alloc actually moved — otherwise every assertion below is about a class the
+        // guest still cannot create, and passes for the wrong reason.
+        assert!(
+            matches!(
+                bench().alloc_class(ClassId(0x0000_83de)),
+                AllocPermit::Listed {
+                    name: "GT200_DEBUGGER",
+                    ..
+                }
+            ),
+            "★ non-vacuity: the ruling must actually have admitted the class. \
+             `Denied(NotOnAllowlist)` here means the deny row was removed and no allowlist \
+             row replaced it — still denied, and LESS legibly than before"
+        );
+        // ⊘ And the class is admitted at EVERY boundary, because it went into the shared
+        // base. A row that landed in one boundary's block would pass the line above and be
+        // wrong everywhere else.
+        for t in ALL_BOUNDARIES {
+            assert!(
+                matches!(
+                    t.alloc_class(ClassId(0x0000_83de)),
+                    AllocPermit::Listed { .. }
+                ),
+                "GT200_DEBUGGER is not admitted at every boundary — the row did not go into \
+                 the SHARED base"
+            );
+        }
+        // ★★★ THE BOUNDARY ITSELF. Every `0x83de` control this port denied before the class
+        // was admitted is still denied, and still denied BY NAME rather than by falling off
+        // the allowlist.
+        // ⊘⊘ **THREE, NOT FIVE — CORRECTED 2026-08-14 (w296) BY A SECOND OWNER RULING.**
+        // The first version of this test asserted all five `0x83de03xx` rows stayed denied.
+        // The ruling is *"follow nvproxy exactly"*, and nvproxy serves `030c` and `0310`
+        // (`gvisor nvproxy: version.go:334-336`), so those two MOVED to the allowlist and are
+        // asserted SERVED below. What is left here is exactly what nvproxy omits.
+        // ★ This test having to change is the point: the split is now a decision someone
+        // made against a citation, not a set that drifted.
+        for cmd in [0x83de_0307u32, 0x83de_0317, 0x83de_0318] {
+            assert!(
+                matches!(
+                    bench().control(ControlCmd(cmd)),
+                    ControlPermit::Denied(Denial::Refused { .. })
+                ),
+                "★★★ ADMITTING THE CLASS REACHED A DENIED CONTROL: {cmd:#010x} is no longer \
+                 refused by name. This is the one outcome the ruling was conditioned on"
+            );
+            // ⊘ And the reason bit 15 cannot smuggle these past: none of them has it set.
+            // The GSS-legacy rule passes ANY command with `RM_GSS_LEGACY_MASK`, ahead of
+            // every allowlist — but it sits BELOW `denied_controls`, so a denied row wins.
+            assert_eq!(
+                cmd & RM_GSS_LEGACY_MASK,
+                0,
+                "bad fixture: {cmd:#010x} would be decided by the GSS-legacy rule, so this \
+                 row would prove nothing about the deny table"
+            );
+        }
+        // ★★★ THE SERVED SIDE — nvproxy's exact three, asserted by id so a future edit cannot
+        // quietly widen or narrow the set without this line moving.
+        for cmd in [0x83de_0309u32, 0x83de_030c, 0x83de_0310] {
+            assert!(
+                matches!(
+                    bench().control(ControlCmd(cmd)),
+                    ControlPermit::Listed { .. }
+                ),
+                "★ {cmd:#010x} is one of nvproxy's three served `0x83de03xx` controls \
+                 (`version.go:334-336`) and this port must serve it too"
+            );
+        }
+        // ⊘ And the two halves are DISJOINT and EXHAUSTIVE over the six ids this port names —
+        // a census that let an id be in neither set would report a clean split while a
+        // control fell off the table entirely.
+        let named: std::collections::BTreeSet<u32> = bench()
+            .all_denied_controls()
+            .map(|e| e.id)
+            .chain(bench().all_controls().map(|e| e.cmd))
+            .filter(|c| c >> 16 == 0x83de)
+            .collect();
+        assert_eq!(
+            named,
+            std::collections::BTreeSet::from([
+                0x83de_0307,
+                0x83de_0309,
+                0x83de_030c,
+                0x83de_0310,
+                0x83de_0317,
+                0x83de_0318
+            ]),
+            "the six `0x83de` ids this port names must each be in exactly one table"
+        );
+    }
+
     #[test]
     fn the_ported_surface_is_the_reviewed_size() {
+        // ★★★★★ **+1 CLASS at every boundary on 2026-08-14 (w296): `GT200_DEBUGGER`
+        // (`0x83de`), RESTORED from `DENIED_CLASSES` by OWNER RULING.** SHARED, so the four
+        // class numbers and all eight boundary rows move **together** — that they move
+        // together is the evidence the row went into the shared base rather than into one
+        // boundary by accident. ⊘ And `all_denied_classes()` drops 4 → 3 in the same commit
+        // for the same one row: the two counters move in OPPOSITE directions, which is what
+        // says the class MOVED rather than that a row was added somewhere.
+        // ⚠ ⊘ **IT WAS NOT ONE LINE, and the brief said it would be.** Deleting the deny row
+        // alone leaves `alloc_class(0x83de)` answering `Denied(NotOnAllowlist)` — still
+        // denied, and less legibly than before, because `GT200_DEBUGGER` had been taken OFF
+        // the allowlist in the same commit that denied it. Admitting a class is two edits.
         // ★ **+1 on 2026-08-13: `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`).**
         // SHARED, so this number and every boundary's below move **together** — which is the
         // evidence the row went into the shared base rather than into one boundary by
@@ -2610,13 +2810,13 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        assert_eq!(bench().all_controls().count(), 163, "controls");
-        assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 93, "classes at 580");
-        assert_eq!(bench().all_denied_controls().count(), 12, "denied controls");
-        assert_eq!(bench().all_denied_classes().count(), 4, "denied classes");
+        assert_eq!(bench().all_controls().count(), 165, "controls");
+        assert_eq!(at(550, 54, 4).all_classes().count(), 78, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 86, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 92, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 94, "classes at 580");
+        assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
+        assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
 
     /// The origins are all populated — a `Mode2Rpc` count of zero would mean the
@@ -2643,7 +2843,12 @@ mod tests {
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because
         // it forwards to a real GPU — and w292 measured that our own refusal, not the
         // hardware's, is what ended `cuCtxCreate`.
-        assert_eq!(n(Origin::Nvproxy), 149);
+        // ★★★★★ 149 → 151 on 2026-08-14 (w296): `0x83de030c` and `0x83de0310`, admitted by
+        // the owner's *"follow nvproxy exactly"* ruling. `Nvproxy` is not merely defensible
+        // provenance here, it IS the ruling — both rows exist because
+        // `gvisor nvproxy: version.go:334-336` carries them under the default compute
+        // capability, and for no other reason.
+        assert_eq!(n(Origin::Nvproxy), 151);
         assert_eq!(
             bench()
                 .all_classes()

@@ -2372,7 +2372,10 @@ fn the_parked_half_census_names_the_id_the_half_and_the_address() {
     dev.promote_ctx(&half_promotion(
         A_CLIENT,
         H_GR_CHANNEL,
-        vec![phys_half(1, 0xdead_0000), va_half(3, GpuVa(0x7ff6_a6e0_0000))],
+        vec![
+            phys_half(1, 0xdead_0000),
+            va_half(3, GpuVa(0x7ff6_a6e0_0000)),
+        ],
     ))
     .expect("a half-only promotion is accepted");
     let j = dev
@@ -2431,7 +2434,8 @@ fn an_untouched_vas_is_enumerated_as_empty_rather_than_omitted() {
     let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
     let rows = dev.vas_promote_halves(a_pid);
     assert!(
-        rows.iter().any(|r| r.contains("parked=0") && r.contains("bound=0=[]")),
+        rows.iter()
+            .any(|r| r.contains("parked=0") && r.contains("bound=0=[]")),
         "an untouched VAS is PRESENT and EMPTY, never absent: {rows:?}"
     );
 }

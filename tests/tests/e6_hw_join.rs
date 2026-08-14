@@ -485,15 +485,61 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
         src_va: PROBE_SRC_VA.0,
         dst_va: PROBE_DST_VA.0,
     };
+    // ★★★★★ **THE FOUR FACTS, EACH ASSERTED ON ITS OWN — w296, and the gap it closes was
+    // measured on a real GA106 one plane over.**
+    //
+    // ⊘⊘ This arm accepted on [`CeEvidence::copied`] alone until 2026-08-14. That predicate
+    // is **three** of the four facts the bar states — bytes moved ∧ destination correct ∧
+    // semaphore == declared — and it **never compares the cursors**. `[measured 2026-08-13,
+    // boot `w283c_client`, real GA106]` the rm-ladder client printed *"engine semaphore
+    // 0x00000001 … **GP_GET 0 caught GP_PUT 1**"* and returned `R33_RC=0`: `0` did not catch
+    // `1`, the word *"caught"* was template text, and `copied()` was the predicate behind it.
+    // `rmladder.rs` was corrected to [`CeEvidence::met_the_whole_bar`] (`:2608, :2615`) and
+    // **this file, the only real-GPU test in the suite, was not** — the correction reached
+    // the diagnostic and stopped one file short of the gate.
+    //
+    // ★ Asserted SEPARATELY and before the conjunction, so a failure names WHICH fact went:
+    // a truncated copy, a copy that never retired and an entry that was never fetched are
+    // three different investigations, and one `false` from a four-way `&&` starts none of
+    // them. ⊘ The conjunction is still asserted afterwards — `met_the_whole_bar()` is the
+    // production predicate, and a test that only checked the parts could drift from it.
+    assert_ne!(
+        evidence.before, evidence.expect_after,
+        "★ FACT 1 — NON-VACUITY: the destination already held the answer, so nothing below \
+         can distinguish a copy from a no-op. {evidence:?}"
+    );
+    assert_eq!(
+        (evidence.after, evidence.after_last),
+        (evidence.expect_after, evidence.expect_after_last),
+        "★ FACT 2 — THE BYTES: first word and last, through an INDEPENDENT mapping. `after` \
+         unchanged means the engine moved nothing; `after` right with `after_last` wrong \
+         means the copy was TRUNCATED. {evidence:?}"
+    );
+    assert_eq!(
+        evidence.submit.semaphore, evidence.payload,
+        "★ FACT 3 — THE RELEASE: the engine's own report semaphore does not carry the \
+         declared payload, so the methods never retired — whatever the bytes say. \
+         {evidence:?}"
+    );
     assert!(
-        evidence.copied(),
-        "★★★ E6 ACCEPTANCE FAILED. {evidence:?} — a `before` equal to `expect_after` \
-         means the fixture was vacuous; `after` unchanged with the semaphore landed means \
-         the engine ran a copy that moved nothing; `after` right and `after_last` wrong \
-         means it was truncated; the semaphore not matching means it never retired."
+        evidence.cursor_caught_up(),
+        "★★★ FACT 4 — THE CURSOR, and it is the one this assertion existed for. \
+         `GP_GET {} != GP_PUT {}`: the GPU's host unit did not consume the entry we \
+         published. ⊘ On a native arm the two agree, which is exactly why an acceptance \
+         built on `copied()` looked green for a year and was blind precisely where it \
+         mattered. {evidence:?}",
+        evidence.submit.gp_get,
+        evidence.submit.gp_put,
+    );
+    assert!(
+        evidence.met_the_whole_bar(),
+        "★★★ E6 ACCEPTANCE FAILED on the CONJUNCTION while every part passed — which means \
+         `met_the_whole_bar` and the four assertions above have drifted apart and one of \
+         them is no longer the bar. {evidence:?}"
     );
     gate_line(&format!(
-        "GPU-GATE: E6 ACCEPTANCE CeEvidence::copied() == true — {evidence:?}"
+        "GPU-GATE: E6 ACCEPTANCE CeEvidence::met_the_whole_bar() == true (all FOUR facts, \
+         cursors included) — {evidence:?}"
     ));
 }
 

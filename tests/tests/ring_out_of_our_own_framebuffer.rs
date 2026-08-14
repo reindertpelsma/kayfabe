@@ -520,6 +520,22 @@ fn a_wired_device_with_a_written_page_reads_the_ring() {
         &[],
         None,
     );
+    // ⊘⊘⊘ **THIS ASSERTION IS VACUOUS AS OF `8cca3502` (w287) — 2026-08-14 (w296), MEASURED.**
+    //
+    // It is a NEGATIVE (`!matches!(… Err(…) | Err(…))`) and the doorbell now answers
+    // `Ok(DoorbellOutcome { kind: Passthrough, … })` **without reading the framebuffer at
+    // all**: `ring_content_is_forwardable` requires `GuestChannelKind::Emulated`, and this
+    // fixture's channel is guest-userspace, so route B is never entered. ⇒ The assertion's
+    // own sentence — *"the wired device must REACH the framebuffer's bytes"* — is no longer
+    // what passing it means, and its two siblings in this file went RED on exactly that
+    // change (they assert `Err(…)` and now get `Ok(…)`).
+    //
+    // ⚠ It is left as it stands **deliberately**, and that is a scope decision rather than a
+    // judgement: making it assert positively would turn a vacuous green into a sixth red
+    // under a blocker that is ALREADY named by five, and the repair is a product decision
+    // about where ring-content forwarding belongs — not a maintenance edit. See this file's
+    // two failing tests and `doorbell_reaches_the_completion_observer.rs` for the full
+    // statement of the blocker. **Do not read this green as coverage of route B.**
     assert!(
         !matches!(
             got,

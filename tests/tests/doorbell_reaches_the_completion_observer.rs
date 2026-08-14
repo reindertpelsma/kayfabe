@@ -55,6 +55,53 @@
 //!   is not touched here.
 //!
 //! Invariant/contract tests (decision #15), mock-driven, **GPU-free**.
+//!
+//! # ⊘⊘⊘ STATUS 2026-08-14 (w296) — **RED, AND THE RED IS THIS FILE DOING ITS JOB**
+//!
+//! Three of the six tests here fail at `origin/master` `c42e6678`, and so do two in
+//! `ring_out_of_our_own_framebuffer.rs`. **They are not stale and they must not be edited to
+//! pass.** All five have one cause and it is a product decision, not a test defect.
+//!
+//! `8cca3502` (w287) scoped ring-content forwarding OFF passthrough channels —
+//! `ring_content_is_forwardable(engine, kind)` is now
+//! `route == CpuCe && kind == GuestChannelKind::Emulated` (`kayfabe-rt/src/device.rs:5202`).
+//! That change is **right on its own terms**: `[measured, w283d]` a single CE doorbell rang
+//! the ADOPTED channel and then decoded that same guest ring and ran `ce_copy` on a
+//! different host channel — *"`ce_copy` DRIVES a channel; adoption means the GUEST drives
+//! it; both cannot hold."* w287's own message states it landed **NOT BUILT OR RUN**, and
+//! these five went red with it and were never adjudicated.
+//!
+//! ⊘ **The obvious repair — "give the fixture an `Emulated` channel" — is BLOCKED, and the
+//! block is measured, not reasoned:**
+//!
+//! 1. `Emulated` ⟺ the channel's boundary anchor is `SYSTEM_ANCHOR`
+//!    (`kayfabe-core/src/project.rs:312`) ⟺ it routes to `Gpu::SYSTEM_PROC`.
+//! 2. `[green test]` `rmgraph_order_independence::the_system_proc_has_clients_and_a_vas_and_\
+//!    still_no_data_plane` asserts `publish_backing(&mut gpu.system, …)` is
+//!    `Err(FwdFault::SystemDataPlane)`. The same §12.26 refusal guards the other two
+//!    host-backing verbs: `plan_pin_guest_ram` (`kayfabe-fwd/src/lib.rs:1687`) and
+//!    `plan_back_fb_leaf` (`:2397`). Those are the **only three** sites that ever set
+//!    `Binding::host` (`:1942`, `:2208`, `:2868`).
+//! 3. ⇒ On an `Emulated` channel that declares a VAS, **no operand can carry a
+//!    `HostBacking`**, so `Representability::HostBacked` is unreachable, so
+//!    `Representability::executor()` never answers `CeExecutor::HostCe` (`:5852`) — and
+//!    `HostCe` is the only executor `RmBackend::ce_copy` → `ce_copy_outcome` →
+//!    `await_semaphore` sits behind.
+//!
+//! ⇒ ★★★ **On the kind whose ring we read, no operand may be host-backed; on the kind whose
+//! operands may be host-backed, we do not read the ring.** A guest CE doorbell therefore
+//! cannot reach the host-completion observer on either kind — which is precisely the
+//! severance `execution_plane_increments.md` §15.5 named and this file was written to
+//! detect. `[measured 2026-08-14, this bench]` all three arms below observe `copies() == []`
+//! and `Ok(DoorbellOutcome { kind: Passthrough, … })`.
+//!
+//! ⊘ One corner is NOT covered by the argument above and is stated so it is not mistaken for
+//! a way out: a channel with **no VAS at all** resolves `TableOperands::Untracked`, which
+//! *does* route to `HostCe` (`:5852`). That path points a real engine at guest VAs nothing
+//! translated, and is not a design anyone chose.
+//!
+//! ⚠ Resolving this needs an owner ruling on where ring-content forwarding belongs, and its
+//! own arm and its own boot. It is out of scope for a maintenance rung.
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 

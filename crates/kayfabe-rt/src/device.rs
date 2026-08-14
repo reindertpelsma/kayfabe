@@ -3282,6 +3282,23 @@ impl SharedDevice {
                     // one row upgrades that row, so **each such pin contributes exactly one
                     // `host_rows`**.
                     //
+                    // ⊘⊘⊘ **CORRECTED 2026-08-14 (w296) — READ THIS BEFORE THE PARAGRAPH
+                    // BELOW, WHICH IS TRUE OF THE MECHANISM AND WRONG ABOUT THE VERDICT.**
+                    // `[measured, tests/tests/publish_census.rs::
+                    // the_merge_equality_can_be_false_and_says_which_pin_no_row_records]`
+                    // `MERGE-AGREES=false` is **ALSO THE DESIGNED OUTCOME OF A LEGITIMATE
+                    // PIN**, not only of a defect. `commit_pin_guest_ram`'s merge is bounded
+                    // to a row whose extent matches the grant EXACTLY
+                    // (`kayfabe-fwd/src/lib.rs:1930-1932`), and that bound is deliberate:
+                    // one host handle written into N rows would be freed N times by
+                    // `Spine::stage_dropped_vases`, a DOUBLE FREE strictly worse than the
+                    // leak the merge closes. ⇒ Every **run pin** (legs 4-6) reports `false`
+                    // by construction, and a reader who takes `false` as "a bug" on a boot
+                    // full of run pins will chase nothing.
+                    // ⇒ ★ Read it as *"how many pins are NOT reflected as rows"*, and join it
+                    // with `bound_into_table` on the pin's own reply — which is the field
+                    // that says whether THIS pin was one of them.
+                    //
                     // ⊘ `>=` and not `==`, and the asymmetry is the honest one: `host_rows`
                     // legitimately EXCEEDS `pins` by the framebuffer joins (leg 7/8), which
                     // carry a backing and no pin. What must never happen is a pin with no row

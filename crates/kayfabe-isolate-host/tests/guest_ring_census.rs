@@ -66,10 +66,17 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "GPFIFO_ENTRIES",
-        4,
-        "★ The definition, the ONE use (the `RingSource::Ours` arm of `alloc_channel_in`, \
-         which is the only place our own 64-entry ring is described), and two in the unit \
-         test that checks it is a power of two and fits. ⊘ A fifth is a submission path \
+        5,
+        "★★ **4 → 5 at `8cca3502` (w287), ADMITTED 2026-08-14 (w296).** The fifth is the \
+         THIRD unit-test assert, `GPFIFO_OFFSET + GPFIFO_ENTRIES*8 <= USERD_OFFSET_IN_RING` \
+         (`src/rm.rs:8896`) — w287 moved USERD into the ring object, making it a fourth \
+         tenant of a layout that had three, so the layout test gained the no-overlap check. \
+         ⊘ It is a LAYOUT INVARIANT, not a submission path: the row's own falsifier below \
+         is still armed, because a sixth would be one. \
+         ★ The definition, the ONE use (the `RingSource::Ours` arm of `alloc_channel_in`, \
+         which is the only place our own 64-entry ring is described), and THREE in the unit \
+         test that checks it is a power of two, fits, and does not overlap USERD. ⊘ A sixth \
+         is a submission path \
          that went back to assuming every ring is ours — invisible on our own channels, \
          64-against-4096 wrong on the guest's.",
     ),
@@ -85,8 +92,16 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "GPFIFO_OFFSET",
-        4,
-        "The definition, the `Ours` layout, `submit_entry`'s slot address, and the unit \
+        7,
+        "★★ **4 → 7 at `8cca3502` (w287), ADMITTED 2026-08-14 (w296).** The three new ones \
+         are all about OUR object's internal layout, which is what this row already \
+         quantifies over: `PUSHBUFFER_SLOTS`'s DERIVATION (`:760` — how many push slots fit \
+         BEFORE the GPFIFO, derived rather than restated, which is the shape this file \
+         wants), and two more layout asserts in the unit test (`:8894`, `:8896`) that came \
+         with USERD becoming a fourth tenant of the ring object. ⊘ None is a read of a \
+         GUEST ring's geometry, which is the only thing this row exists to forbid. \
+         The definition, `PUSHBUFFER_SLOTS`'s derivation, the `Ours` layout, \
+         `submit_entry`'s slot address, and three in the unit \
          test. ⊘ Every one of them is about OUR ring object's internal layout. The guest's \
          ring has its own, which is why `submit_entry` refuses a handed-in ring by name \
          before it computes an offset at all.",
@@ -449,11 +464,22 @@ fn the_birth_witness_is_read_by_no_decision() {
     // ⊘ And the two USERD accessors must refuse BY NAME rather than answering zero. `(0, 0)`
     // is what a channel that has never run also looks like — the exact ambiguity this rung is
     // trying to leave, on the one plane it is trying to measure.
+    // ★★ **2 → 4 at `8cca3502` (w287), ADMITTED 2026-08-14 (w296), and the PROPERTY never
+    // moved.** w287 made USERD able to live inside the ring object, so each accessor now
+    // resolves `(region, base)` through a two-armed `match r.userd_in_ring` — and BOTH arms
+    // refuse by name. ⇒ Two accessors × two layouts = four, and the sentence below
+    // ("both refusals are by name") is *more* true than when the count was 2, not less.
+    // ⊘ This is why the number is asserted with the accessors named beside it: a count on
+    // its own cannot tell "a refusal was deleted" from "a layout was added". The floor that
+    // actually guards the property is that NEITHER accessor may reach a `(0, 0)` return,
+    // which is what the two `.ok_or(` spellings encode — a dropped refusal shows up here as
+    // 3, not as a silent zero.
     assert_eq!(
         body.matches("RmError::Other(USERD_NOT_OURS)").count(),
-        2,
-        "the guest-USERD arm's two refusals (`userd_cursors`' GP_GET read and \
-         `userd_store_u32`'s GP_PUT write) are no longer both by name. A skipped write and a \
+        4,
+        "the guest-USERD arm's refusals (`userd_cursors`' GP_GET read and \
+         `userd_store_u32`'s GP_PUT write, each across the in-ring and standalone USERD \
+         layouts) are no longer all by name. A skipped write and a \
          write to the wrong place look identical in a log."
     );
     // ⊘ The refusal must not be reachable from the witness: it is `fb_joins` membership.

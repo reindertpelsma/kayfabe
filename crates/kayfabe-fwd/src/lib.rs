@@ -5033,7 +5033,7 @@ pub fn plan_pushbuffer(
         VidmemRoute::Refuse
     };
 
-    let mut out: Vec<(usize, Vec<(PushSrc, usize, usize)>)> = Vec::new();
+    let mut out: Vec<PushPlanRange> = Vec::new();
     let mut total = 0usize;
     for r in ranges {
         if total >= MAX_PUSH_TOTAL_BYTES {
@@ -5065,8 +5065,16 @@ pub fn plan_pushbuffer(
 /// and its operands out of the next one's head.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PushPlan {
-    ranges: Vec<(usize, Vec<(PushSrc, usize, usize)>)>,
+    ranges: Vec<PushPlanRange>,
 }
+
+/// One range of a [`PushPlan`]: the CLAMPED length that was translated, and the runs it
+/// translated to as `(source, offset, len)`.
+///
+/// ⊘ A named alias rather than the tuple spelled twice. It is not cosmetic: the builder and
+/// the field had to agree on a four-deep nested type by eye, and the two spellings were the
+/// only thing keeping `usize`-the-clamped-length and `usize`-the-run-offset apart.
+type PushPlanRange = (usize, Vec<(PushSrc, usize, usize)>);
 
 impl PushPlan {
     /// How many ranges survived the total-work budget. ⊘ For logging and tests only —

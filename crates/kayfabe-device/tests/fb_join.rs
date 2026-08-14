@@ -178,7 +178,11 @@ fn a_failed_establishment_copy_installs_no_join_at_all() {
     assert_eq!(e.0.why, ESTABLISH_FAILED, "refused by name");
     // ★ R1: the refusal must hand the region BACK so the caller can `munmap` it OUTSIDE the
     //   plane lock. `w289j` aborted the whole VMM because it did not.
-    assert_eq!(e.1.len(), LEN, "the refused region is returned to the caller, whole");
+    assert_eq!(
+        e.1.len(),
+        LEN,
+        "the refused region is returned to the caller, whole"
+    );
 
     assert!(fb.joined_ranges().is_empty(), "no range went live");
     let mut got = vec![0u8; 0x1000];
@@ -275,7 +279,10 @@ fn a_second_join_overlapping_the_first_is_refused_by_name() {
             .install_join(at, Box::new(Elsewhere::new(len)))
             .expect_err("overlap refused");
         assert_eq!(e.0.why, ALREADY_JOINED, "at 0x{at:x}");
-        assert!(e.1.len() > 0, "the refused region is handed back, not dropped under the lock");
+        assert!(
+            !e.1.is_empty(),
+            "the refused region is handed back, not dropped under the lock"
+        );
     }
     assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "exactly one join");
 }

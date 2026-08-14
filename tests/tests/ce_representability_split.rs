@@ -1508,20 +1508,44 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
     // it could not tell a DECLARATION from a MENTION. That is §16.85.3's class (a census
     // whose instrument cannot return the other answer) caught in the act, by the census
     // I wrote to demonstrate it. It failed loudly, which is the only reason it was cheap.
+    // ⊘⊘ **CORRECTED 2026-08-14 (w296) — THIS COUNTED LINES, NOT OCCURRENCES, AND A PLANT
+    // WALKED THROUGH IT.** `[measured, w296 plant run]` a second production
+    // `BackingBytes::SoleBacking` placed on a line that ALREADY held one was counted as
+    // **one**, and the gate stayed green with the defect in the tree. `.filter(…).count()`
+    // over lines answers *"how many lines mention it"*, which is not the question — the row
+    // is about how many CHAINS declare it, and two chains fit on one line.
+    // ⇒ Sum `matches()` **within** each surviving line. The non-comment filter is still per
+    // line (that is the scar the paragraph above records, and it was right); only the
+    // tallying changed. ⚠ A trailing `// …` comment on a code line is still counted, which
+    // is deliberate: the alternative is a comment parser, and this file's own history says
+    // the cleverer stripper is more code to be wrong in.
     let src = include_str!("../../crates/kayfabe-fwd/src/lib.rs");
     let code = |needle: &str| {
         src.lines()
-            .filter(|l| {
-                let t = l.trim_start();
-                !t.starts_with("//") && t.contains(needle)
-            })
-            .count()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .map(|l| l.matches(needle).count())
+            .sum::<usize>()
     };
     let sole = code("BackingBytes::SoleBacking");
     let shadow = code("BackingBytes::ShadowsGuestMemory");
+    // ★★★ **1 → 2 at the w291 (2a) MERGE, ADMITTED 2026-08-14 (w296).** The second
+    // declaration is `commit_pin_guest_ram`'s (`kayfabe-fwd/src/lib.rs:1940`), and
+    // `SoleBacking` is the only label it *could* carry: a guest-RAM pin maps THE GUEST'S OWN
+    // PAGES into the host VAS at the guest's own VA, so there is no second memory for a
+    // writer to diverge into — the code says exactly that at the site. ⊘ It is the opposite
+    // of the w228 hazard rather than a repeat of it: w228 minted a NEW host object and put
+    // it at a guest address; this one mints nothing and maps the guest's.
+    //
+    // ⚠ And the relabelling escape this row guards is still shut, from the other side:
+    // `Binding::pinned_guest_ram` REFUSES `Aperture::Vidmem` and refuses a
+    // `ShadowsGuestMemory` backing outright (`RegionKindFault::NotGuestRam`), which is
+    // `publish_census::the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow`.
+    // ⇒ A third `SoleBacking` is still a finding; this second one is a decision.
     assert_eq!(
-        sole, 1,
-        "exactly one production chain (`Publish`) may claim to be the range's only memory"
+        sole, 2,
+        "exactly two production chains may claim to be the range's only memory: `Publish` \
+         (a GPA carved from our own arena) and the guest-RAM pin (the guest's own pages, \
+         where the claim is trivially true). A third is a new chain nobody adjudicated"
     );
     // ★★★ **THE COUNT IS UNCHANGED AND ITS MEANING IS NOT — read the note before trusting
     // it.** `[watched RED 2026-08-11]` an earlier draft of this rung asserted `shadow == 0`,
