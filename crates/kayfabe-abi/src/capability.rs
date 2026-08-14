@@ -2093,7 +2093,7 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                157,
+                159,
                 77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
