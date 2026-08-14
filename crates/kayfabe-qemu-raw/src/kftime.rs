@@ -162,6 +162,18 @@ impl Arm {
 
 static ARM: OnceLock<Arm> = OnceLock::new();
 
+/// The process-wide time origin every `t_ms=` on a `KFTIME` line is measured from.
+///
+/// ★★★ It exists so the host's lines can be ALIGNED to the guest's `t0_mono_ms` by
+/// CORRELATION — matching the two sequences' shapes — rather than by an offset nobody
+/// measured. ⊘ It is NOT a shared clock and no arithmetic here converts between the two.
+static ORIGIN: OnceLock<Instant> = OnceLock::new();
+
+/// Milliseconds since [`ORIGIN`], which is set on first use.
+fn t_ms() -> f64 {
+    ORIGIN.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+}
+
 /// The arming, read from the environment exactly once.
 #[must_use]
 pub fn arm() -> Arm {
@@ -308,7 +320,10 @@ impl Segs {
     pub fn line(&self, head: &str) -> String {
         let total = self.total_us();
         let marked = self.marked_us();
-        let mut s = format!("kayfabe: KFTIME {head} total_us={total} marked_us={marked}");
+        let mut s = format!(
+            "kayfabe: KFTIME {head} t_ms={:.3} total_us={total} marked_us={marked}",
+            t_ms()
+        );
         // ⊘ Saturating: the bracket is closed AFTER the last mark, so `total >= marked`
         // always holds in practice, but an arithmetic assumption in an instrument is exactly
         // the thing that has bitten this campaign, so it is expressed and not assumed.
@@ -403,8 +418,9 @@ impl Census {
         let mean = self.total_us / self.events;
         let unmarked = self.total_us.saturating_sub(self.marked_us);
         let mut s = format!(
-            "kayfabe: KFTIME-CENSUS kind={kind} why={why} events={} total_ms={:.3} \
+            "kayfabe: KFTIME-CENSUS kind={kind} why={why} t_ms={:.3} events={} total_ms={:.3} \
              mean_us={mean} max_us={} marked_ms={:.3} UNMARKED_ms={:.3} ({:.1}%)",
+            t_ms(),
             self.events,
             self.total_us as f64 / 1000.0,
             self.max_us,
@@ -420,12 +436,12 @@ impl Census {
         // printed with the mean beside it, because a segment that is slow once and a segment
         // that is slow always are different fix targets.
         let mut rows: Vec<_> = self.segs.clone();
-        rows.sort_by(|a, b| b.2.cmp(&a.2));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.2));
         for (name, n, tot, mx) in rows {
             s.push_str(&format!(
                 "\n    KFTIME-SEG {name:<16} n={n:<7} total_ms={:<10.3} mean_us={:<9} max_us={mx:<9} share={:.1}%",
                 tot as f64 / 1000.0,
-                if n == 0 { 0 } else { tot / n },
+                tot.checked_div(n).unwrap_or(0),
                 if self.total_us == 0 {
                     0.0
                 } else {
@@ -437,7 +453,7 @@ impl Census {
             s.push_str(&format!(
                 "\n    KFTIME-NESTED {name:<16} calls={calls:<7} total_ms={:<10.3} mean_us={:<9}                  ⊘ INSIDE a segment above — do NOT add this row to the segment column",
                 *tot as f64 / 1000.0,
-                if *calls == 0 { 0 } else { tot / calls },
+                tot.checked_div(*calls).unwrap_or(0),
             ));
         }
         s.push_str("\n    KFTIME-HIST us:");
