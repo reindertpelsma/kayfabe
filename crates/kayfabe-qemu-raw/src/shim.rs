@@ -8186,6 +8186,118 @@ impl SharedDoorbell {
                 pid.0, pdb.0
             ),
         };
+        // ★★★★★ **w319 — THE CANDIDATE FIX, AND IT RUNS BEFORE THE BUDGETED DRAIN.**
+        //
+        // `[measured w319]` the drain below walks the doorbelled VAS in **ascending VA order**
+        // (`IntervalMap` is a `BTreeMap<u64, _>`; `iter()` is documented "ascending start
+        // order") and is cut off by a clock. ⇒ **whatever it drops, it drops from the TOP of
+        // the address space** — and the guest's completion-semaphore page `0x2_0440f000` sits
+        // near the top of the `0x2_004…–0x2_047ff000` span the drain covers. That is the whole
+        // defect: a boot on the slow side of a 3 s budget stops below it, the engine is rung
+        // anyway, and the host MMU reports `FAULT_PDE` on a page no directory was built for.
+        //
+        // ⊘ **Raising the budget is the WRONG fix even though it works.** The drain is held
+        // under the QEMU BQL with every vCPU halted, and `[measured w314]` the surrounding
+        // disposal already consumes 2.65–2.92 s of a 4 s `scrubberDestruct` budget. Buying
+        // completeness with more BQL is spending headroom that is 73 % gone.
+        //
+        // ★ This instead makes the **few pages the engine is certain to touch** independent of
+        // any budget: the completions the guest has itself DECLARED, de-duplicated to pages.
+        // Measured population is **eight declarations at a 16-byte stride ⇒ ONE page**, so the
+        // cost is one pin, not 13 313. It is the content of `pin_completion_guest_ram` —
+        // deleted at w304 (`f20ab952`) on a "strict superset" argument that is true of the
+        // candidate SET and false of the DELIVERY — restored as an ordering guarantee rather
+        // than as a second mechanism, and `shim.rs:3851` records that pinning this page took
+        // these exact Xids to ZERO at w266.
+        //
+        // ⊘ **DEFAULT OFF.** `KAYFABE_COMPLETION_PIN=on` arms it. Off ⇒ not one byte differs
+        // from master, so the SAME BINARY carries both arms of the fix test and the only
+        // variable between them is this flag.
+        let mut sema_clause = String::from("⊘ off (KAYFABE_COMPLETION_PIN unset)");
+        if completion_pin_armed() {
+            let mut pinned_pages = 0usize;
+            let mut refused_pages = 0usize;
+            let mut skipped = 0usize;
+            let mut named: Vec<String> = Vec::new();
+            match drain_target {
+                None => sema_clause = "⊘ ARMED BUT NO TARGET — this doorbell named no VAS, so \
+                                       there is no address space to pin into. ⊘ UNREACHED, \
+                                       not `nothing to do`"
+                    .to_string(),
+                Some((pid, _pdb)) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
+                    sema_clause = "⊘ ARMED BUT TARGET IS SYSTEM_PROC — refused by name, \
+                                   §12.26, exactly as the drain refuses it"
+                        .to_string();
+                }
+                Some((pid, pdb)) => {
+                    // ⊘ De-duplicate to PAGES first. Eight declarations at a 16-byte stride
+                    // are ONE page, and pinning eight times would read as eight pins in every
+                    // tally downstream.
+                    let mut pages: std::collections::BTreeSet<(u64, u64)> =
+                        std::collections::BTreeSet::new();
+                    for (key, site) in &self.ce.watch.declared_sites() {
+                        // ★ A pin lands in ONE proc's VA space. A completion another guest
+                        // process declared is not this channel's to place. Counted, never
+                        // dropped silently.
+                        if key.proc != pid {
+                            skipped += 1;
+                            continue;
+                        }
+                        let kayfabe_rt::completion_watch::Site::GuestRam { gpa } = site else {
+                            skipped += 1;
+                            continue;
+                        };
+                        let mask = Self::RING_PIN_BYTES - 1;
+                        pages.insert((key.va & !mask, gpa & !mask));
+                    }
+                    for (va, gpa) in &pages {
+                        let len = Self::RING_PIN_BYTES;
+                        let resolved = {
+                            let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                            held.as_ref().map(|vmm| vmm.resolve_guest_ram(backing, *gpa, len))
+                        };
+                        let Some(Ok(run)) = resolved else {
+                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                            continue;
+                        };
+                        let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                            run.file_offset,
+                            len,
+                            kayfabe_vmm::Prot::ReadWrite,
+                        );
+                        match self.device.pin_guest_ram(
+                            DOORBELL_TARGET_GPU,
+                            pdb,
+                            kayfabe_rt::GpuVa(*va),
+                            grant,
+                        ) {
+                            Ok(p) => {
+                                pinned_pages += 1;
+                                named.push(format!(
+                                    "[va=0x{va:x} gpa=0x{gpa:x} host_va=0x{:x} \
+                                     placed_as_asked={} {}]",
+                                    p.host_va,
+                                    p.host_va == *va,
+                                    if p.already { "replay" } else { "fresh" },
+                                ));
+                            }
+                            Err(e) => {
+                                refused_pages += 1;
+                                named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}`]"));
+                            }
+                        }
+                    }
+                    sema_clause = format!(
+                        "★ ARMED proc={} pdb=0x{:x} declared_pages={} pinned={pinned_pages} \
+                         refused={refused_pages} skipped={skipped} {}",
+                        pid.0,
+                        pdb.0,
+                        pages.len(),
+                        named.join(" ")
+                    );
+                }
+            }
+        }
         let mut rows: Vec<String> = Vec::new();
         let (mut total_pins, mut total_us) = (0usize, 0u128);
         let mut refused = 0usize;
@@ -8215,7 +8327,9 @@ impl SharedDoorbell {
                 // ★★★★★ **w292 — THE ONE SCOPED BUDGET CHANGE, AND IT IS THIS PREDICATE.**
                 let doorbelled = drain_target == Some((pid, pdb));
                 let cap = if doorbelled {
-                    VAS_DRAIN_ROW_CAP
+                    // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
+                    // instrument env var is set, so master's behaviour is unchanged.
+                    vas_drain_row_limit()
                 } else {
                     VAS_PINRATE_ROWS
                 };
@@ -8241,7 +8355,7 @@ impl SharedDoorbell {
                     // ⚠ THE WALL BOUND, and it is checked only on the drained VAS: the sampled
                     // ones are bounded by their row count already, and adding a clock to them
                     // would change the control.
-                    if doorbelled && vas_started.elapsed() > VAS_DRAIN_WALL_BUDGET {
+                    if doorbelled && vas_started.elapsed() > vas_drain_wall_budget() {
                         budget_hit = true;
                         drain_budget_hit = true;
                         break;
@@ -8339,15 +8453,16 @@ impl SharedDoorbell {
                         format!(
                             " ⚠⚠ DRAIN WALL BUDGET {} ms EXHAUSTED — THE DRAIN IS INCOMPLETE; \
                              the rows after this point were NOT attempted and are NOT refused",
-                            VAS_DRAIN_WALL_BUDGET.as_millis()
+                            vas_drain_wall_budget().as_millis()
                         )
                     } else {
                         String::new()
                     },
-                    if doorbelled && candidates.len() >= VAS_DRAIN_ROW_CAP {
+                    if doorbelled && candidates.len() >= vas_drain_row_limit() {
                         format!(
-                            " ⚠⚠ DRAIN ROW CAP {VAS_DRAIN_ROW_CAP} HIT — THE DRAIN IS \
-                             INCOMPLETE by construction"
+                            " ⚠⚠ DRAIN ROW CAP {} HIT — THE DRAIN IS \
+                             INCOMPLETE by construction",
+                            vas_drain_row_limit()
                         )
                     } else {
                         String::new()
@@ -8379,7 +8494,15 @@ impl SharedDoorbell {
         } else {
             format!(
                 "visited=true asked={drain_asked} pinned={drain_pinned} \
-                 refused={drain_refused} DRAIN_MS={drain_ms} complete={} {}{}",
+                 refused={drain_refused} DRAIN_MS={drain_ms} \
+                 W319KNOB[budget_ms={} row_limit={}] complete={} {}{}",
+                // ★★★ w319 — THE ARM ANNOUNCES ITSELF, in the same line as the number it
+                // moves. ⊘ A knob whose setting is only in the launcher's environment is a
+                // number nobody can attribute a log to six weeks from now, and this tree has
+                // paid for exactly that ("anchor every metric"). Printed on EVERY boot,
+                // including the default one, so `absent` means an OLD BINARY and never `3000`.
+                vas_drain_wall_budget().as_millis(),
+                vas_drain_row_limit(),
                 // ★ COMPLETE means: every row the table offered was attempted, and neither
                 // bound cut it short. It is the invariant this rung exists to establish —
                 // "a mapping is always backed before the engine that uses it runs".
@@ -8400,7 +8523,8 @@ impl SharedDoorbell {
             "{head} PINRATE(w291 rate; ★w292 DRAIN — on arm `drain` the doorbelled VAS's rows \
              ARE merged into Binding::host by `commit_pin_guest_ram`, so this is no longer \
              measurement-only) → pinned={total_pins} refused={refused} in {} ms, \
-             per_row={per_row}, degrade[{degrade}] DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
+             per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
+             DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
              over {} VAS row(s) {}",
             total_us / 1000,
             rows.len(),
@@ -13765,6 +13889,74 @@ const VAS_DRAIN_ROW_CAP: usize = 65536;
 // `a_feature_gate_with_a_silent_noop_sibling`, one plane over.
 #[cfg(feature = "host-isolates")]
 const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(3000);
+
+/// ★★★★★ **w319 — THE MODULATION KNOB, and it is an INSTRUMENT, not a fix.**
+///
+/// `KAYFABE_VAS_DRAIN_BUDGET_MS` overrides [`VAS_DRAIN_WALL_BUDGET`] for the doorbelled VAS's
+/// drain. **Absent ⇒ byte-identical behaviour to master** (3000 ms), so every existing caller
+/// and every committed trace stays comparable.
+///
+/// # Why it exists
+///
+/// `[measured w319, from w314's OWN COMMITTED LOGS, zero boots spent]` the two RED cup3 boots
+/// of `traces/w314_confirm/` both carry `⚠⚠ DRAIN WALL BUDGET 3000 ms EXHAUSTED`
+/// (`pinned=11883/13313` stopping at `last_pinned_va=0x20326a000`, and `pinned=11810/13313`
+/// stopping at `0x203221000`); the green boots carry `pinned=13313/13313 DRAIN_MS=2672` and
+/// `2898`, reaching `0x2047ff000`. **The faulting page `0x2_0440f000` lies between the two.**
+/// ⇒ the drain's own cost (13 313 rows × 199–280 µs = **2.65–3.73 s**) STRADDLES its 3 s
+/// budget, so which side of it a boot lands on decides whether the completion-semaphore page
+/// is published before the engine writes it.
+///
+/// ⇒ An intermittent whose rate can be driven **both ways** by one number is an intermittent
+/// that has been attributed. This knob is that number, exposed.
+#[cfg(feature = "host-isolates")]
+fn vas_drain_wall_budget() -> std::time::Duration {
+    static V: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("KAYFABE_VAS_DRAIN_BUDGET_MS")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map_or(VAS_DRAIN_WALL_BUDGET, std::time::Duration::from_millis)
+    })
+}
+
+/// ★★★★★ **w319 — THE DETERMINISTIC HALF OF THE SAME KNOB.**
+///
+/// `KAYFABE_VAS_DRAIN_ROW_LIMIT` caps how many rows of the doorbelled VAS the drain may take,
+/// **below** [`VAS_DRAIN_ROW_CAP`]. Absent ⇒ 65 536, i.e. master unchanged.
+///
+/// ⊘ The wall budget above reproduces the defect the way the defect actually happens, and is
+/// therefore the *faithful* knob — but it is a CLOCK, so it truncates at a different row on
+/// every boot and cannot give an on-demand repro with a stable fingerprint. This one
+/// truncates at a **row count**, which is deterministic. ⇒ Use the row limit to REPRODUCE and
+/// the millisecond budget to MODULATE; neither is a fix and neither is on by default.
+#[cfg(feature = "host-isolates")]
+fn vas_drain_row_limit() -> usize {
+    static V: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("KAYFABE_VAS_DRAIN_ROW_LIMIT")
+            .ok()
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .filter(|n| *n > 0)
+            .map_or(VAS_DRAIN_ROW_CAP, |n| n.min(VAS_DRAIN_ROW_CAP))
+    })
+}
+
+/// ★★★★★ **w319 — arms the completion-page pin that runs AHEAD of the budgeted drain.**
+///
+/// `KAYFABE_COMPLETION_PIN=on`. Absent or anything else ⇒ **off**, and off is byte-identical
+/// to master. ⊘ Deliberately a separate variable from the two drain knobs, so ONE binary can
+/// carry the provocation (`KAYFABE_VAS_DRAIN_ROW_LIMIT`) and the fix independently and the
+/// only difference between the two arms of the fix test is this flag.
+#[cfg(feature = "host-isolates")]
+fn completion_pin_armed() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::var("KAYFABE_COMPLETION_PIN")
+            .map(|s| s.trim().eq_ignore_ascii_case("on"))
+            .unwrap_or(false)
+    })
+}
 
 /// ★★★ **The wall-clock budget for one doorbell's publication**, and it is the honest half of
 /// the cap above: a count bounds how many leaves are *tried*, only a clock bounds how long
