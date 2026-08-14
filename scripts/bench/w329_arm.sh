@@ -68,7 +68,12 @@ for i in $(seq 1 "$N"); do
   # ---- the pre-existing anchors, unchanged from w326_arm.sh
   ALJ=$(grep -ac 'already joined' "$Q" 2>/dev/null)
   DR=$(grep -ao 'DRAIN\[visited=true asked=[0-9]* pinned=[0-9]* refused=[0-9]* DRAIN_MS=[0-9]* W319KNOB\[[^]]*\] complete=[a-z]*[^]]*' "$Q" 2>/dev/null | head -1)
-  HR=$(grep -ao 'host_rows[= ][0-9]*/[0-9]*' "$Q" 2>/dev/null | tail -1)
+  # ⊘ THE PATTERN MOVED AND THE OLD ONE READ AS UNMEASURED. `w326_arm.sh` greps
+  #   `host_rows[= ][0-9]*/[0-9]*`; the line has said `host_rows=N of M` for some time, so
+  #   that grep matches nothing and prints `⊘host_rows UNMEASURED` on a perfectly healthy
+  #   boot. ⚠ An instrument whose absence reads as "unmeasured" is the benign end of the
+  #   `dlen=0` class — but it still hid the address-plane anchor on every arm that used it.
+  HR=$(grep -ao 'host_rows=[0-9]* of [0-9]*' "$Q" 2>/dev/null | sort -t= -k2 -n | tail -1)
   X=$(grep -ac Xid "$D" 2>/dev/null)
   XF=$(grep -aoE 'Xid \(PCI:[^)]*\): *[0-9]+|ENGINE [A-Z0-9_]+|HUBCLIENT_[A-Z0-9_]+|faulted @ 0x[0-9a-f_]+|FAULT_[A-Z]+[0-9]*|ACCESS_TYPE_[A-Z_]+' "$D" 2>/dev/null | tr '\n' ' ')
   UN=$(grep -ho 'unserviced fn 76 cmd 0x[0-9a-f]*' "$Q" 2>/dev/null | sort -u | wc -l)
