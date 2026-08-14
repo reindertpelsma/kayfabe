@@ -3347,6 +3347,151 @@ struct SharedDoorbell {
     /// either alone and a log must say which it had.
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     vas_publish: VasPublishArm,
+    /// ★★★★★ **w318 — THE DIRTY GATE'S STATE.** See [`DirtyGate`] for the whole argument.
+    dirty: DirtyGate,
+}
+
+/// ★★★★★ **w318 — THE DIRTY GATE: what the last doorbell already did, so this one need not
+/// do it again.**
+///
+/// # ★ THE MEASUREMENT THIS EXISTS FOR
+///
+/// `[measured 2026-08-14, w315, real GA106, two boots, shares reproducing to ~1.6 points]`
+/// the guest's `cuLaunchKernel` does not return until this crate's MMIO doorbell handler
+/// does, and the handler is **86.7 ms of a 90.9 ms submit**. Of that trap:
+///
+/// | segment | ms/launch | share |
+/// |---|---|---|
+/// | `vas_publish` | 48.3 | **55.7 %** |
+/// | `pt_decode` | 22.3 | **25.7 %** |
+/// | `pt_sweep` + `pt_vascensus` | 8.7 | 10.1 % |
+/// | the real host RM forward | 3.5 | 4.1 % |
+///
+/// ⇒ **91.5 % is page-table + publication work, and it publishes nothing**: the two
+/// consecutive launch doorbells in that trace print *byte-identical* `PT-DECODE` lines
+/// (`drained=162 latched=52 rounds=1 → bound=0 … published=0/0 refusals=1592 straddles=255`)
+/// and *byte-identical* publication censuses (`published=0 refused=8 in 43 ms`, the eight
+/// refusals all `that framebuffer range is already joined`). The handler re-derives the same
+/// answer ~12 times a launch loop and acts on it zero times.
+///
+/// # ★★★ THE C ARTIFACT GATES EXACTLY THIS, and its shape is the precedent
+///
+/// `C: src/qemu/nvkvm_gpu_emul.c:580-583` — *"`m2_gr_vas_dirty` → the next doorbell sweeps
+/// and rebuilds the set; **otherwise it skips**"*; `:1399-1400` — *"Once dirty, skip until
+/// the next sweep consumes it."*; `:284` — a second gate on the walk itself.
+///
+/// ⊘ **Taken as a precedent that the gate is SOUND, not as a design to transcribe.** The C's
+/// gate is armed by *a tracked page-table page having been written*. Ours is armed by
+/// **the thing the skipped pass actually reads**, which is stricter and is what makes the
+/// skip provable rather than plausible:
+///
+/// - `vas_publish` reads a `Vas`'s rows and its guest-RAM pins ⇒ armed by
+///   [`kayfabe_core::gpu::Vas::publish_epoch`], plus a host term (`joined`) for the state the
+///   *verb's outcome* depends on that our record cannot see.
+/// - the executor page-table witness re-queues every executor-created framebuffer page ⇒
+///   armed by the store's **executor write count** ([`kayfabe_device::FbStore::writes_by`]),
+///   because re-decoding pages whose bytes did not change cannot produce a different bind.
+///
+/// # ⚠⚠ CORRECTNESS DOMINATES, and here is exactly what is being relied on
+///
+/// `VAS_PUBLISH` ablated **red**: it is one of the relaxations that is not inert, and a
+/// publication skipped that the engine then needs is **a GPU fault**, not a slow path. The
+/// skip is sound only because the skipped work is a **pure function of state this gate
+/// observes**. Three consequences are enforced rather than argued:
+///
+/// 1. **`None` is UNMEASURED, never clean.** Every source that cannot answer (no plane, a
+///    store that does not count, a `Vas` that is not there) **arms**. There is no default-skip
+///    anywhere in this type.
+/// 2. **An INCOMPLETE pass never marks clean.** A publication that hit its wall budget left
+///    candidates unattempted; recording that state as clean would strand them forever. The
+///    stamp is taken only on a pass that ran to the end.
+/// 3. **Both gates are separately armable and both are ON only when their env says so**, so
+///    a boot can ablate either alone and the log always says which arm it ran — the same
+///    discipline `KAYFABE_PT_SWEEP` and `KAYFABE_VAS_PUBLISH` already carry.
+///
+/// ⊘ And the gate **counts its own fires and skips**. A gate that fires on every doorbell
+/// and a gate that is working produce the same `trap_ms` if nothing else changed, and only
+/// the ratio distinguishes them (w318 pre-registered outcome (B)).
+#[derive(Debug, Default)]
+struct DirtyGate {
+    /// Per-`(proc, gpu, pdb)`: what the last **completed** publication pass saw. Absent = this
+    /// key has never been published, which arms.
+    ///
+    /// ⊘ Only the `host-isolates` build has a publication pass to gate; the *witness* gate
+    /// beside it is compiled in every build, which is why the two live in one type and only
+    /// this field carries the attribute.
+    #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
+    published: std::sync::Mutex<
+        std::collections::HashMap<
+            (kayfabe_core::ProcId, kayfabe_rt::GpuId, kayfabe_rt::Pdb),
+            PublishStamp,
+        >,
+    >,
+    /// The store's executor write count at the last executor-witness pass. `None` = never
+    /// taken, which arms.
+    exec_writes: std::sync::Mutex<Option<u64>>,
+    /// `(fired, skipped)` for the publication gate and the witness gate, in that order.
+    /// ⊘ Printed on every doorbell: see the type docs for why the ratio is the diagnostic.
+    counts: std::sync::Mutex<[(u64, u64); 2]>,
+}
+
+/// What a **completed** publication pass over one VAS observed. See [`DirtyGate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PublishStamp {
+    /// [`kayfabe_core::gpu::Vas::publish_epoch`] — our own record of the VAS.
+    epoch: (u64, usize),
+    /// ★★ **THE HOST TERM.** How many framebuffer ranges the store had joined. The eight
+    /// refusals this gate skips are all *"that framebuffer range is already joined"* — an
+    /// outcome that depends on host state, not on the table — so a change here must re-arm
+    /// even when our own rows are untouched. ⊘ A count, not a set: it moves on every install
+    /// and on every release, which is all the gate needs, and building the set per doorbell
+    /// would put back a slice of the cost being removed.
+    joined: usize,
+    /// The census line that pass produced, replayed verbatim on a skip so a boot's log stays
+    /// readable and diffable against an ungated one. ⊘ Marked as a replay where it is
+    /// printed — a cached line presented as fresh is a second source of truth beside a
+    /// complete value.
+    line: String,
+}
+
+impl DirtyGate {
+    /// Index into [`DirtyGate::counts`] for the publication gate.
+    const PUBLISH: usize = 0;
+    /// Index into [`DirtyGate::counts`] for the executor-witness gate.
+    const WITNESS: usize = 1;
+
+    fn tally(&self, which: usize, fired: bool) {
+        let mut c = self.counts.lock().unwrap_or_else(|e| e.into_inner());
+        if fired {
+            c[which].0 = c[which].0.saturating_add(1);
+        } else {
+            c[which].1 = c[which].1.saturating_add(1);
+        }
+    }
+
+    /// ★★★ The fire/skip ratio, both gates, as one line. **This is w318's own diagnostic**:
+    /// outcome (B) — *"the gate fires and the trap does not drop"* — is only distinguishable
+    /// from a gate that is working by these four numbers.
+    fn census(&self) -> String {
+        let c = *self.counts.lock().unwrap_or_else(|e| e.into_inner());
+        let pct = |f: u64, s: u64| {
+            let t = f + s;
+            if t == 0 {
+                "n/a — UNMEASURED, this gate was never consulted".to_string()
+            } else {
+                format!("{:.1}% skipped", 100.0 * s as f64 / t as f64)
+            }
+        };
+        format!(
+            "DIRTY-GATE publish[fired={} skipped={} {}] witness[fired={} skipped={} {}]",
+            c[Self::PUBLISH].0,
+            c[Self::PUBLISH].1,
+            pct(c[Self::PUBLISH].0, c[Self::PUBLISH].1),
+            c[Self::WITNESS].0,
+            c[Self::WITNESS].1,
+            pct(c[Self::WITNESS].0, c[Self::WITNESS].1),
+        )
+    }
 }
 
 /// ★★★★★ **§5.12 — a joined framebuffer range, as the device crate's port sees it.**
@@ -4730,7 +4875,15 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         kft.mark("pt_sweep");
         let pt_vascensus = self.vas_census();
         kft.mark("pt_vascensus");
-        eprintln!("kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus}");
+        // ★★★ w318 — the gate's own fire/skip ratio rides HERE, on a line every build emits
+        // and every doorbell prints. Pre-registered outcome (B) — *"it fires and the trap does
+        // not drop"* — is indistinguishable from a working gate by `trap_ms` alone; only this
+        // ratio separates them. ⊘ It is the WHOLE-BOOT running total; the per-doorbell counts
+        // are on the `VAS-PUBLISH` line, and the two are different questions.
+        eprintln!(
+            "kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus} | {}",
+            self.dirty.census()
+        );
         kft.mark("log_ptdecode");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
         // to bind it, on the same doorbell and joined by `proc`/`pdb`/`va`.**
@@ -7729,6 +7882,20 @@ impl SharedDoorbell {
         let started = std::time::Instant::now();
         let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
         let mut rows: Vec<String> = Vec::new();
+        // ★★★★★ **w318 — THE DIRTY GATE'S HOST TERM, read ONCE for the whole pass.**
+        //
+        // `[measured 2026-08-14, w315 boot `full`]` every one of this pass's eight refusals is
+        // *"that framebuffer range is already joined"* — an outcome of **host** state, which
+        // `Vas::publish_epoch` cannot see. Without this term the gate would be an epoch of our
+        // record gating a verb whose answer is not a function of our record alone, which is
+        // the `a_second_source_of_truth_beside_a_complete_value` shape one plane over.
+        //
+        // ⊘ A count of ranges, not the ranges: it moves on every install and every release,
+        // which is all a re-arm needs, and materialising the set per doorbell would put back a
+        // slice of the very cost this removes.
+        let gate = selected_dirty_gate(DIRTY_GATE_PUBLISH_ENV);
+        let joined_now = plane.joined_fb_ranges().len();
+        let (mut gate_fired, mut gate_skipped) = (0usize, 0usize);
         for pid in self.device.live_pids() {
             for (gpu, pdb) in self.device.vas_keys(pid) {
                 // ⊘ The isolate is keyed `(proc, gpu)`, so a `Vas` on another GPU has no
@@ -7740,6 +7907,42 @@ impl SharedDoorbell {
                     ));
                     continue;
                 }
+                // ★★★★★ **w318 — THE SKIP.** Everything below this point — the census walk
+                // over every row of this `Vas`, and the join attempt over every candidate it
+                // buckets — is a **pure function of** `(Vas::publish_epoch, joined_now)`. If
+                // neither has moved since the last pass **that ran to completion**, re-running
+                // it produces the identical census and the identical set of join outcomes.
+                //
+                // ⚠ Three refusals to skip, and each of them is a case that would otherwise
+                // strand real work:
+                // - the epoch is **unreadable** (`None`, the `Vas` is gone) ⇒ arm. UNMEASURED
+                //   is not clean.
+                // - this key has **no stamp** ⇒ arm. A key that appeared this doorbell has
+                //   never been published.
+                // - the last pass was **incomplete** (wall budget) ⇒ it left candidates
+                //   unattempted, so no stamp was taken for it and it arms again below.
+                let epoch_now = self.device.vas_publish_epoch(pid, gpu, pdb);
+                if gate && let Some(epoch_now) = epoch_now {
+                    let cached = self
+                        .dirty
+                        .published
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&(pid, gpu, pdb))
+                        .filter(|s| s.epoch == epoch_now && s.joined == joined_now)
+                        .cloned();
+                    if let Some(s) = cached {
+                        gate_skipped += 1;
+                        rows.push(format!(
+                            "[proc={} pdb=0x{:x} ⊘SKIPPED(w318 dirty gate: epoch={:?} joined={} \
+                             unchanged since the last COMPLETED pass) REPLAY-OF-LAST-CENSUS \
+                             {}]",
+                            pid.0, pdb.0, epoch_now, joined_now, s.line
+                        ));
+                        continue;
+                    }
+                }
+                gate_fired += 1;
                 let c = self
                     .device
                     .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
@@ -7788,6 +7991,44 @@ impl SharedDoorbell {
                 }
                 published += done;
                 refused += failed;
+                // ★★★★★ **w318 — THE STAMP, and the two conditions on taking it.**
+                //
+                // 1. **`!budget_hit`.** A pass that ran out of wall budget left candidates
+                //    unattempted; stamping it clean would strand them until something else
+                //    happened to move the epoch, which is a publication silently never
+                //    performed — the exact failure mode the gate's own docs forbid.
+                // 2. **The epoch is RE-READ here, after the joins.** A successful join binds
+                //    into the table and therefore moves the epoch *during* this pass; stamping
+                //    the pre-pass value would make the very next doorbell see a mismatch and
+                //    re-run — a gate that can never go clean on a VAS that ever published.
+                //    ⊘ Re-reading is also what keeps it CORRECT in the other direction: if
+                //    anything else moved the epoch mid-pass, the value stamped is the one this
+                //    census actually describes.
+                if !budget_hit && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb) {
+                    self.dirty
+                        .published
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(
+                            (pid, gpu, pdb),
+                            PublishStamp {
+                                epoch: after,
+                                joined: plane.joined_fb_ranges().len(),
+                                line: format!(
+                                    "total={} already_host={} already_pinned={} guest_ram={} \
+                                     not_vidmem={} not_granular={} candidates={} published={done} \
+                                     refused={failed}",
+                                    c.total,
+                                    c.already_host,
+                                    c.already_pinned,
+                                    c.guest_ram,
+                                    c.not_vidmem,
+                                    c.not_granular,
+                                    c.candidates_total(),
+                                ),
+                            },
+                        );
+                }
                 // ★★ EVERY row of the census, per VAS, with the bucket identity printed. ⊘ A
                 // census whose buckets did not sum could report a comfortable zero for a class
                 // it never reached, so `sum_ok` is a value and not a comment.
@@ -7817,11 +8058,21 @@ impl SharedDoorbell {
                 ));
             }
         }
+        // ⊘ Tallied ONCE per doorbell, per VAS visited, and only after the loop: a gate that
+        // is consulted N times on one doorbell must not report N doorbells.
+        for _ in 0..gate_fired {
+            self.dirty.tally(DirtyGate::PUBLISH, true);
+        }
+        for _ in 0..gate_skipped {
+            self.dirty.tally(DirtyGate::PUBLISH, false);
+        }
         Some(format!(
-            "{}{head} → published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
+            "{}{head} gate={} this_doorbell[fired={gate_fired} skipped={gate_skipped}] → \
+             published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
             pin_clause
                 .map(|l| format!("{l}\nkayfabe: "))
                 .unwrap_or_default(),
+            if gate { "on" } else { "off" },
             started.elapsed().as_millis(),
             if budget_hit {
                 format!(
@@ -8334,6 +8585,44 @@ impl SharedDoorbell {
                  executor's pages are NOT witnessed, which is `b6c5442`'s behaviour exactly"
             );
         }
+        // ★★★★★ **w318 — THE DIRTY GATE, and it sits HERE rather than at the decode.**
+        //
+        // This pass hands `requeue_pt_witness` **every** executor-created framebuffer page,
+        // unconditionally, on every doorbell. `[measured 2026-08-14, w315 boot `full`]` that
+        // is `resident=171 by-executor=53` and it is what keeps `decode_cpu_pt_writes`
+        // perpetually non-empty: two consecutive launch doorbells print byte-identical
+        // `drained=162 latched=52 rounds=1 → bound=0 … refusals=1592` at **22.3 ms each**.
+        // Gating the *decode* would be gating the consumer; the producer is here, and with it
+        // quiet the decode's own `latched == 0 ⇒ procs.is_empty() ⇒ break` does the rest —
+        // an exit that already exists and that this rung does not have to invent.
+        //
+        // ⚠ **The arming edge is the store's EXECUTOR WRITE COUNT, not the page set.** The
+        // page set is stable by construction (origin is FIRST-writer, so a page joins this
+        // population once and never leaves it); what a re-queue can newly teach a decode is
+        // that a page's BYTES changed. `FbStore::writes_by` is the only thing that says so.
+        //
+        // ⊘ `None` — a store that does not count — **arms**. UNMEASURED is not clean, and a
+        // gate that read a missing counter as "nothing happened" would silently stop
+        // witnessing on any store but `SparseFb`.
+        let gate = selected_dirty_gate(DIRTY_GATE_WITNESS_ENV);
+        let now = plane.fb_writes_by(kayfabe_device::fbwin::FbWriter::Executor);
+        if gate && let Some(now) = now {
+            let mut last = self
+                .dirty
+                .exec_writes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if *last == Some(now) {
+                self.dirty.tally(DirtyGate::WITNESS, false);
+                return format!(
+                    " | EXEC-WITNESS ⊘SKIPPED(w318 dirty gate: the executor has written this \
+                     store {now} times, unchanged since the last pass, so re-queueing its pages \
+                     could only re-derive the same decode)"
+                );
+            }
+            *last = Some(now);
+        }
+        self.dirty.tally(DirtyGate::WITNESS, true);
         let Some(frames) = plane.fb_resident_frames() else {
             return " | EXEC-WITNESS ARMED but the store cannot enumerate frames".to_string();
         };
@@ -8352,7 +8641,10 @@ impl SharedDoorbell {
         // path that could be right about a page the first is wrong about.
         let refused = plane.requeue_pt_witness(pages);
         format!(
-            " | EXEC-WITNESS ARMED resident={total} by-executor={exec} refused-at-cap={refused}"
+            " | EXEC-WITNESS ARMED resident={total} by-executor={exec} refused-at-cap={refused} \
+             exec_writes={} gate={}",
+            now.map_or("⊘UNMEASURED".to_string(), |n| n.to_string()),
+            if gate { "on" } else { "off" },
         )
     }
 
@@ -10345,6 +10637,9 @@ impl Regs {
             gr_route,
             operand_join,
             vas_publish,
+            // ★ w318 — empty. The gate's first consultation on any key always ARMS, so a
+            // fresh port cannot skip work it has never done.
+            dirty: DirtyGate::default(),
         }));
         Ok(Regs {
             plane,
@@ -13319,6 +13614,55 @@ fn selected_pt_witness_exec() -> bool {
 /// it bound before the sweep existed, so the disarmed boot **is** the negative control — and a
 /// typo must not be able to produce one silently.
 pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
+
+/// ★★★★★ **w318 — arm the DIRTY GATE on the publication pass.** See [`DirtyGate`] for the
+/// measurement, the C's precedent and the correctness argument.
+///
+/// ⊘ **Off by default**, for the same reason `KAYFABE_PT_SWEEP` is: the ungated boot is this
+/// rung's negative control and must remain byte-comparable, and a typo must not be able to
+/// make a *correctness-relevant* pass stop running. ⚠ This one is the more dangerous
+/// direction of the two — arming it makes work **not happen** — which is exactly why it is
+/// opt-in and why an unparseable value reads as `off`.
+pub const DIRTY_GATE_PUBLISH_ENV: &str = "KAYFABE_DIRTY_GATE_PUBLISH";
+
+/// ★★★★★ **w318 — arm the DIRTY GATE on the executor page-table witness.** Same defaults and
+/// same argument as [`DIRTY_GATE_PUBLISH_ENV`]; separate variable so a boot can ablate one
+/// gate at a time and the log always says which arm it ran.
+pub const DIRTY_GATE_WITNESS_ENV: &str = "KAYFABE_DIRTY_GATE_WITNESS";
+
+/// Whether `value` arms a w318 dirty gate — the pure half of [`selected_dirty_gate`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `false`.
+pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "a KAYFABE_DIRTY_GATE_* variable does not name a state: the only values are `off` \
+             (the default) and `on`. It is not defaulted, because the ungated arm IS w318's \
+             negative control AND because the armed arm makes a correctness-relevant pass STOP \
+             RUNNING on a clean doorbell — a typo that silently armed it would skip a \
+             publication nobody decided to skip.",
+        )),
+    }
+}
+
+/// Whether `var` arms its dirty gate.
+///
+/// ⊘ A value naming neither state reads as **disarmed**. For a flag that *adds* an
+/// observation the safe direction is off because an instrument must not fire unasked; for
+/// this flag it is off because the armed direction **removes** work, and the safe default
+/// for that is always to do the work.
+#[must_use]
+fn selected_dirty_gate(var: &str) -> bool {
+    match std::env::var_os(var) {
+        None => false,
+        Some(v) => dirty_gate_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
+    }
+}
 
 /// How many coalesced VA runs one address space may print. See
 /// [`kayfabe_rt::device::SharedDevice::vas_reachable_ranges`] — exceeding it is announced, never

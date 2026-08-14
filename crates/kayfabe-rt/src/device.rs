@@ -3573,6 +3573,21 @@ impl SharedDevice {
             .unwrap_or_default()
     }
 
+    /// ★★★★★ **w318 — THE ARMING EDGE FOR THE PUBLICATION PASS**, read without walking a
+    /// single row. See [`kayfabe_core::gpu::Vas::publish_epoch`] for what the two terms are
+    /// and what they deliberately do not cover.
+    ///
+    /// ⊘ `None` means **there is no such `Vas`**, which is a different fact from *"it has
+    /// not changed"* and must not be cached as one: a key that appears later has no prior
+    /// epoch to compare against, so its first pass runs.
+    #[must_use]
+    pub fn vas_publish_epoch(&self, pid: ProcId, gpu: GpuId, pdb: Pdb) -> Option<(u64, usize)> {
+        self.with_proc_mut(pid, |p| {
+            p.vases.get(&(gpu, pdb)).map(kayfabe_core::gpu::Vas::publish_epoch)
+        })
+        .flatten()
+    }
+
     /// ★★★★★ **WHICH ROWS COULD BE PUBLISHED, AND BY NAME WHY THE REST COULD NOT** — w290's
     /// publication census, taken over one `Vas` before any host verb is issued.
     ///

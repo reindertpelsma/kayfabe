@@ -2742,3 +2742,27 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
         );
     }
 }
+
+/// ★★★★★ **w318 — THE DIRTY GATE IS OFF BY DEFAULT AND A TYPO CANNOT ARM IT.**
+///
+/// Every other arm in this shim is off-by-default because arming it would make an instrument
+/// fire unasked. This one is the more dangerous direction: arming it makes a
+/// **correctness-relevant pass stop running** on a clean doorbell, and `VAS_PUBLISH` ablated
+/// **red** — a publication skipped that the engine then needs is a GPU fault, not a slow path.
+///
+/// ⇒ ⊘ **Absent is `off`, an unknown value is an ERROR, and the runtime selector reads any
+/// error as `off`.** The safe direction for a flag that removes work is always to do the work.
+#[test]
+fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
+    use kayfabe_qemu_raw::shim::dirty_gate_from;
+    assert_eq!(dirty_gate_from(None), Ok(false), "absent is OFF");
+    assert_eq!(dirty_gate_from(Some("off")), Ok(false));
+    assert_eq!(dirty_gate_from(Some("on")), Ok(true));
+    for bad in ["1", "true", "yes", "", "On", "ON", "enabled"] {
+        assert!(
+            dirty_gate_from(Some(bad)).is_err(),
+            "⊘ `{bad}` must be REFUSED — a mistyped value that armed this gate would skip a \
+             publication nobody decided to skip"
+        );
+    }
+}

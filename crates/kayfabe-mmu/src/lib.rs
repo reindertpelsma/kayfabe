@@ -955,6 +955,29 @@ pub struct AddressTable {
     /// silently skips the check is the *"silent no-op sibling"* shape, and the thing that
     /// stops it being one is that the boot's tables are all claimed and a test says so.
     owner: Option<Pdb>,
+    /// ★★★★★ **w318 — THE ARMING EDGE: how many times THIS TABLE'S CONTENT HAS CHANGED.**
+    ///
+    /// Bumped by [`AddressTable::bind`] on success and by [`AddressTable::unbind`] when it
+    /// removes a row, and **nowhere else** — which is total, because `self.map` is written
+    /// at exactly those two sites (`self.map.insert` / `self.map.remove_at`; every other
+    /// `self.map.*` in this impl is a read).
+    ///
+    /// # ⊘ What it is FOR, and the property that makes the gate above it sound
+    ///
+    /// `[measured 2026-08-14, w315 boot `full`]` the doorbell handler re-derives a
+    /// publication census over **~25 100 rows** on *every* launch, and both consecutive
+    /// launch doorbells print byte-identical censuses ending `published=0 refused=8`. The
+    /// census is a **pure function of this table's rows** (plus the VAS's guest-RAM pins),
+    /// so if this counter has not moved, re-running it cannot produce a different answer.
+    ///
+    /// ⚠ **A generation is a claim about THIS table only.** It says nothing about the host
+    /// side — an `install_join` that succeeded, an isolate that died, a framebuffer range
+    /// that was released. A consumer that gates a host verb on it owes a second term for
+    /// whatever host state its answer also depends on; see the shim's `PublishStamp`.
+    ///
+    /// ⊘ Deliberately `u64` and never reset: a wrapping counter would make two different
+    /// states compare equal, which is the one failure a dirty gate may not have.
+    generation: u64,
 }
 
 impl AddressTable {
@@ -971,7 +994,15 @@ impl AddressTable {
         Self {
             map: IntervalMap::default(),
             owner: Some(pdb),
+            generation: 0,
         }
+    }
+
+    /// ★★★★★ **w318 — how many content changes this table has seen.** See
+    /// [`AddressTable::generation`] for what a consumer may and may not conclude from it.
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Which VAS this table belongs to, or `None` if it was never claimed.
@@ -1043,7 +1074,11 @@ impl AddressTable {
             kayfabe_util::IntervalError::Empty | kayfabe_util::IntervalError::Wraps => {
                 AddressFault::Malformed { pdb, va }
             }
-        })
+        })?;
+        // ⊘ AFTER the insert and only on the success path: a refused bind changed nothing,
+        // and bumping on it would arm every consumer on the guest's malformed input.
+        self.generation = self.generation.saturating_add(1);
+        Ok(())
     }
 
     /// Eagerly drop the binding starting at `va`. Returns the dropped binding so the
@@ -1053,7 +1088,14 @@ impl AddressTable {
     /// backing" an executable sentence rather than an aspiration — it names both the
     /// mapping to undo and the object to free.
     pub fn unbind(&mut self, va: GpuVa) -> Option<(u64, Binding)> {
-        self.map.remove_at(va.0)
+        let out = self.map.remove_at(va.0);
+        // ⊘ Only when a row actually left. An `unbind` of a VA nothing was bound at is a
+        // no-op, and arming a dirty gate on a no-op is how a gate ends up firing every
+        // doorbell while reporting itself as working (w318 outcome (B)).
+        if out.is_some() {
+            self.generation = self.generation.saturating_add(1);
+        }
+        out
     }
 
     /// Resolve `va` to its binding + offset within it. **MISS = FAULT** — there is no
@@ -1226,6 +1268,46 @@ mod tests {
     use super::*;
 
     const PDB: Pdb = Pdb(0x340_1000);
+
+    /// ★★★★★ **w318 — the generation moves on a CHANGE and on nothing else.**
+    ///
+    /// This is the falsifier for the dirty gate built over it, and it is written as one test
+    /// with both directions because the two failures are opposite and a test for either alone
+    /// passes vacuously for the other:
+    ///
+    /// - **it does not move when it should** ⇒ a doorbell skips a publication the guest's new
+    ///   mapping needed. That is a GPU fault, not a slow path.
+    /// - **it moves when it should not** ⇒ the gate fires on every doorbell, the trap does not
+    ///   drop, and the rung reads as *"the arming edge is wrong"* (w318 outcome (B)) with no
+    ///   way to tell that from a genuinely-always-dirty guest.
+    #[test]
+    fn taddr_generation_moves_exactly_on_a_content_change() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        assert_eq!(t.generation(), 0, "a fresh table has seen no change");
+
+        t.bind(PDB, GpuVa(0x2_0020_0000), 0x10000, b).unwrap();
+        let after_bind = t.generation();
+        assert_eq!(after_bind, 1, "a successful bind is one change");
+
+        // ⊘ A REFUSED bind changed nothing. Overlap is guest-reachable, so a generation that
+        // bumped here would let the guest arm the gate at will — and would do it on exactly
+        // the input that produces no new mapping to publish.
+        assert!(t.bind(PDB, GpuVa(0x2_0020_0000), 0x10000, b).is_err());
+        assert_eq!(t.generation(), after_bind, "a refused bind is not a change");
+
+        // ⊘ Same for a foreign PDB: refused at the identity gate, above the map.
+        assert!(t.bind(Pdb(0xdead_000), GpuVa(0x3_0000_0000), 0x1000, b).is_err());
+        assert_eq!(t.generation(), after_bind, "a refused identity is not a change");
+
+        // ⊘ And an unbind of a VA nothing was bound at is a no-op, not a change.
+        assert!(t.unbind(GpuVa(0x9_0000_0000)).is_none());
+        assert_eq!(t.generation(), after_bind, "an empty unbind is not a change");
+
+        assert!(t.unbind(GpuVa(0x2_0020_0000)).is_some());
+        assert_eq!(t.generation(), after_bind + 1, "a removal IS a change");
+    }
 
     /// testing strategy §2.4 `taddr_miss_is_fault`: a lookup miss is a loud fault,
     /// never an opportunistic walk.
