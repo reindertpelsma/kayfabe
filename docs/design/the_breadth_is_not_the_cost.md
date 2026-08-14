@@ -247,3 +247,56 @@ green run is not evidence. Margins are reported as a **multiple of budget at ≥
 ## 5. Results
 
 <!-- W328-RESULTS-5 -->
+
+---
+
+## 6. ⚠ WHAT THE BRIEF GOT WRONG, AND WHAT I GOT WRONG — named, because it was asked for
+
+### 6.1 The brief
+
+1. ★★★ **"The publication drain is 2.88 s of held BQL, 97 % of the worst trap, and its last
+   pass publishes NOTHING"** conflates **two passes with two denominators**. §0. The 97 % is
+   `measure_guest_ram_pin_rate`'s `DRAIN_MS` on **one** trap; the "last pass publishes nothing"
+   and the 2 529 ms are `publish_vas_rows` **cumulative over 229 traps**. Both statements are
+   true; they are not about the same thing, and (A) is only entailed if they are.
+2. ★★★ **"The pass sweeps every live pid × every VAS key ⇒ that is why it is expensive."**
+   The sweep is real and it is **0.90 % of the pass and 0.0084 % of the worst trap**. §2.1.
+3. ★★ **"229 passes, 2 529 ms of BQL — and w318's dirty gate skipped none on this workload"**
+   (inherited from `the_publish_trigger_measured.md:201`). The gate was **`gate=off`**. §2.3.
+4. ★ **"`m2hostsem`-style flag reading"** is not in this brief, but the same class is: the
+   brief's own taxonomy lists the guest-RAM pin drain (#3, *"w321 coalesced it"*) and the
+   whole-VAS publication drain (#1) as **different** drains. They are the **same site** —
+   `DRAIN_MS` is what w321 coalesced and what w326 measured at 95.8–97.0 %.
+
+### 6.2 Mine
+
+- ⊘ **My pre-registered prediction in `w328_all.sh` was itself unmeasured when I wrote it.**
+  It was a source reading, and I said so in the header before the boots ran. It held — but
+  *"a self-correction is a claim like any other and needs its own evidence"* cuts both ways,
+  and a prediction that happens to be right is not thereby evidence.
+- ⊘ **A comment I wrote in `shim.rs` asserted "the WALK is the whole cost"** — refuted three
+  hours later by §2.2's own instrument (632 µs for 18 277 rows). Corrected in place.
+- ⊘ **`W328PIN`'s bracket has a hole I did not see until the data arrived**: master
+  `continue`s past a sampled VAS with an empty candidate list *above* the bracket, so that
+  VAS's walk is unattributed. Bounded in §2.5; not fixed, because fixing it would have changed
+  the control mid-sweep.
+
+---
+
+## 7. THE RULING THIS RUNG ASKS FOR
+
+**Do not scope.** The breadth is *free and idle*: it publishes nothing and costs 0.90 % of the
+pass. Turning it off buys ~24 ms per boot and takes on the one risk that presents as a GPU
+fault. ⇒ `KAYFABE_PUBLISH_SCOPE` ships as an **instrument**, default `all`, and this rung
+explicitly **does not** propose flipping it.
+
+★★★ **The two levers that matter are already built, already measured, and both default-off.**
+That, not the breadth, is this rung's finding:
+
+| cost | site | the fix that exists | its state |
+|---|---|---|---|
+| the **worst trap** — 1.01× of budget on 2/3 control boots | `measure_guest_ram_pin_rate` | **w321's coalescer** `KAYFABE_DRAIN_BATCH=coalesce` | merged, **disarmed** |
+| the **cumulative BQL** — 2.52 s of refused joins | `publish_vas_rows` | **w318's dirty gate** `KAYFABE_DIRTY_GATE_PUBLISH=on` (228× on `vas_publish`) | merged, **disarmed** |
+
+⚠ **And the standing hazard neither of them addresses**, because it is not a speed problem:
+a `join_one_fb_leaf` attempt costs **6.4 ms**, refused or not. §2.4.
