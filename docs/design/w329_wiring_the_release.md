@@ -9,27 +9,37 @@ nominated trigger it **refutes**.
 
 ---
 
-## 0. THE ANSWER IN SIX LINES
+## 0. THE ANSWER IN EIGHT LINES
 
-1. ★★ **Both halves are built, both fire, and neither is unsafe.** `revoked=8 released=8
-   stranded=0 drained=17 table_store_disagree=0`, **byte-identical on 3/3 boots** of the
-   `28,31` repro (`w329a1..a3`).
-2. ★★★★★ **`joined_ranges` FALLS — the pre-registered known-positive fired.** `falls=2` on
-   every fix boot; `falls=0` on every control boot, from the **same binary**.
-3. ⊘⊘⊘ **AND `28,31` STILL FAILS, 3/3.** The trigger `join_operand_fb_leaves`' own cleanup
-   table nominates — *"the guest's own free/unmap of the range, seen as the page-table leaf
-   ceasing to bind"* — fires **eight times in a whole run**, and 21 of the new allocation's
-   leaves still collide.
-4. ★★★★★ **THE REASON, from the boot's own census: CUDA'S SUBALLOCATOR DOES NOT UNMAP ON
+1. ★★★★★ **`KAYFABE_BENCH_BW=28,31` PASSES 3/3** (`w329sup1..3`, `last_ok=31
+   first_fail=NONE`) and **`4,64` still passes** (`w329sup64`). `already joined` install
+   refusals go **32 → 0**. ⇒ **outcome (A)**, and by a trigger the brief did not name.
+2. ⊘⊘⊘ **The trigger the brief and the source both name fires ZERO times.** Once RE-MAPS are
+   excluded — and they must be, §2.3 — `PublishedUnbind::RevokeWholeJoins` revokes **nothing**
+   on any workload measured here (`revoked=0` on `28,31`, `4,64`, cup3, cup8, R33).
+   *"The guest's own free/unmap of the range"* is **not an event this workload produces.**
+3. ★★★★★ **THE REASON, from the boot's own census: CUDA'S SUBALLOCATOR DOES NOT UNMAP ON
    `cuMemFree`.** `GUEST-DESCRIBES` for the guest VAS ends as **one 140 MiB run**,
    `0x7af90e000000+0x8c00000`, which contains the freed buffer **and** the new one. The guest
    re-points the **physical frame** into a new VA and leaves the old VA's PTE naming it.
-5. ⇒ **The event that occurs is not an unmap. It is an ALIAS**: a new leaf naming a
-   framebuffer frame we already joined for a **different VA in the same address space**.
-   Leg 2 (`KAYFABE_JOIN_RELEASE=supersede`) is that trigger.
-6. ★ **The pre-registered letter is (C) for leg 1** — *"it fixes a symptom; say which and what
-   still leaks"* — sharpened: leg 1 fixes **the case the brief described** and that case is
-   **8 leaves out of 29**. The rest is §3's alias.
+4. ⇒ **What occurs is an ALIAS**: a new leaf naming a framebuffer frame we already joined for a
+   **different VA in the same address space**. Leg 2 (`=supersede`) takes the join over, 22
+   times per `28,31` boot, `CAPPED=0 ABORTED=0 table_store_disagree=0`.
+5. ⊘⊘ **AND THE NAIVE FORM OF LEG 1 REGRESSED A CASE THAT WORKED.** Unguarded it revoked
+   `va=0x7d05d0200000` — the bandwidth workload's **live output buffer** — and `4,64` went from
+   PASS to `rc=719`. The **same-binary control** (`w329bc`, `=off`, 2/2 PASS) proves the
+   regression was ours and not master's drift.
+6. ★★★ **The fix is one predicate: a RE-MAP IS NOT A REMOVAL.** `settle` emits a re-map as
+   unbind+bind of the same VA in one settlement; excluding those restores `4,64` (`w329b2`,
+   2/2, `remaps_refused=4`) and turns leg 1 inert (`w329a2`, `remaps_refused=8 revoked=0`,
+   byte-identical to the OFF control).
+7. ⊘⊘ **THE BRIEF'S PRE-REGISTERED KNOWN-POSITIVE DOES NOT FIRE ON THE ARM THAT WORKS.**
+   *"`joined=` must FALL"* reads `falls=0` on every `supersede` boot, because a takeover
+   releases and re-installs at the **same key** inside one call. A rung graded on that number
+   alone would have called the fix a mask. The instrument that works is
+   **`already_joined` 32 → 0** and `SUPERSEDED=22`.
+8. ⚠ **What is still not proven** is leg 2's *choice of winner* when the guest describes one
+   frame at two VAs (§4.1). It is defensible, measured, and not settled.
 
 ---
 
@@ -191,7 +201,12 @@ document exists to keep honest.
 
 `join_operand_fb_leaves`' cleanup table names the ending event as *"the guest's own free/unmap
 of the range, seen as the page-table leaf ceasing to bind"*, and the brief repeats it. **On
-this workload that event happens eight times in a whole run.**
+this workload that event happens ZERO times.**
+
+⊘⊘ It looked like eight, and the eight were the bug. `w329a1`'s `revoked=8` were all
+**re-maps** — `w329a2` re-runs the identical list with the §2.3 guard in and reports
+`revoked=0 remaps_refused=8`. ⇒ *"the trigger fires rarely"* was itself an artefact of
+mis-classifying the only thing it ever caught.
 
 **The evidence is the boot's own `GUEST-DESCRIBES` census** (`w329a1`, last pass):
 
@@ -274,6 +289,28 @@ of the map/revoke asymmetry.
 3. **Not preferable: keying reclaim off an invalidate.** `w325` §1.5 already settled that
    coherence is not liveness, in both directions.
 
+### 4.2 ★★★★★ LEG 2, MEASURED — the target, 3/3
+
+| arm | list | `KAYFABE_JOIN_RELEASE` | last_ok | first_fail | `already joined` | `SUPERSEDED` | `revoked` | `remaps_refused` |
+|---|---|---|---|---|---|---|---|---|
+| `w329c1..3` | `28,31` | **off** (w327's state) | 28 | **31** ×3 | 32 | – | 0 | – |
+| `w329a1..3` | `28,31` | on, **no re-map guard** | 28 | **31** ×3 | 21 | – | **8** | – |
+| `w329a2 1..2` | `28,31` | on, guard | 28 | **31** ×2 | 32 | 0 | **0** | **8** |
+| ★ `w329sup1..3` | `28,31` | **supersede** | **31** | **NONE ×3** | **0** | **22** | 0 | – |
+| `w329bc1..2` | `4,64` | off | 64 | NONE ×2 | 16 | – | 0 | – |
+| ⊘ `w329b1` | `4,64` | on, **no guard** | **4** | **64** | 17 | – | **4** | – |
+| `w329b2 1..2` | `4,64` | on, guard | 64 | NONE ×2 | 16 | 0 | 0 | **4** |
+| ★ `w329sup64` | `4,64` | **supersede** | **64** | NONE | **0** | 18 | 0 | – |
+
+★★★ **`already joined` is the instrument that works**: `32 → 21 → 32 → 0` tracks exactly what
+each arm does, while `JOINTRAJ falls` reads `2 / 2 / 0 / 0` and is **highest on the arm that
+fixes nothing**. ⊘ `CAPPED=0` and `ABORTED=0` on every `supersede` boot: the ping-pong bound
+was never approached and the store and the table never disagreed.
+
+⚠ **`revoked=0` on the winning arm.** Leg 1 contributes nothing to the fix. It is kept because
+it is *correct* — a genuine removal must release its join — and because `remaps_refused` is the
+only measurement anyone has of how big the unbuilt re-point population is.
+
 ---
 
 ## 5. ⊘ WHAT WAS WRONG IN THE BRIEF, AND IN THIS TREE
@@ -300,11 +337,29 @@ of the map/revoke asymmetry.
    no committed boot log ever recorded them: `0x83de030c`"* — `w327` added the `LEDGER` row and
    committed excerpts rather than the boot log that carries the id. **Verified by checking out
    `d859beb1` and running that target alone**, so it is master's, not this rung's.
-5. ⚠ **A bash parser quirk that cost a bisect**: an apostrophe inside `${VAR:-default}`
+5. ⊘⊘⊘ **The brief's pre-registered known-positive is the WRONG INSTRUMENT for the mechanism
+   that works.** *"`joined=` FALLS across a cycle"* and *"a green `28,31` with `joined=` still
+   climbing means you masked it"* — measured, `falls` reads **2 on the arm that fixes nothing**
+   and **0 on the arm that fixes it 3/3**, because a takeover releases and re-installs at the
+   **same key inside one call**, so no sampling point ever sees the dip. ⇒ A rung graded on it
+   alone would have accepted arm A and rejected `supersede`. ★ The instrument that separates
+   every arm is `already joined` install refusals: **32 / 21 / 32 / 0**.
+   ⚠ Same class as `a_count_cannot_see_a_substitution` and as w327's own *"a vocabulary diff
+   cannot see a quantity"* — here a **rate-of-change** instrument is blind to a
+   release-and-reacquire, which is exactly the shape a takeover has.
+6. ⚠ **A bash parser quirk that cost a bisect**: an apostrophe inside `${VAR:-default}`
    **inside double quotes** opens a quote bash never closes. `w329's fix` as a default value
    made a 90-line script fail `bash -n` at its **last** line, so every bisect pointed away from
    the site. ⇒ same class as *"read the definition site, not the name"*: the error's **location**
    was as misleading as its text.
+7. ⚠⚠ **A counter that PRINTS and cannot be GREPPED.** `remaps_refused=` was emitted with
+   **seventeen spaces** before its value on every one of 280 lines, so
+   `grep -o 'remaps_refused=[0-9]*'` captured nothing and the arm reported `⊘UNMEASURED` on a
+   boot where the counter fired. ★★★ **The cause was the EDITOR, not the code**: a Python
+   heredoc rewriting Rust consumed the Rust line-continuation backslash as its own line
+   continuation, producing a **valid** Rust string with the spaces baked in — no compile error,
+   no clippy warning, nothing to fail. ⊘ The number was measured, printed, and read as
+   unmeasured, which is the `dlen=0` class arriving from the opposite direction.
 
 ---
 
