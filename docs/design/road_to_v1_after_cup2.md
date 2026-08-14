@@ -211,6 +211,22 @@ refused**. A rule never seen to fire is not a rule.
 > for every address (a mapped VA and one 30 GB away), so **arm 6 is not an oracle for any
 > address**. Not fixed here; do not cite it.
 >
+> ### ★★★★★ RESOLVED 2026-08-14 (w313) — **ARM 1 IS FIXED. THE BLOCK BELOW IS HISTORY, NOT
+> ### STATE.** `PT_SWEEP` and `OPERAND_JOIN` are **restored** (branch `w313-restore-two`,
+> `4f20c3c1`) and `R33 arm 1` PASSES again with `^CUP3_VAL=43` still holding — both measured on
+> the same tree, vh2, stamp gate green (`traces/w313_restore/RESULT.md`).
+> ⊘ The bisect below was **reproduced, not inherited**: master `0ff3e1e2` → arm 1 FAIL,
+> `8d258daa` → arm 1 PASS, one boot each, before any restore was written.
+> ★ **And `OPERAND_JOIN`'s inertness reason is now explained rather than merely refuted:** the
+> raw CE client's operands land in the **emulated framebuffer** and its `OPERAND-JOIN-TABLE`
+> reads **`2 CANDIDATE(S)`**, while cup3's 96 lines all read `0 CANDIDATE(S)` because its
+> operands resolve in guest RAM. w304's *"there was never anything to join"* is exactly true of
+> cup3's boot and false of the mechanism.
+> ⇒ **The last sentence of the block below — "any future inertness claim needs a second
+> workload" — is now a CHECK**, not a paragraph: `scripts/bench/relaxation_inert_gate.sh` has no
+> single-workload mode, treats a missing/truncated log as `UNMEASURED` rather than a pass, and
+> its offline self-test grades **w304's own five arms** and returns `UNMEASURED`.
+>
 > **(2) ⊘⊘ THE ARM-1-vs-ARM-4 CONTRAST BELOW CANNOT BE READ AT HEAD — ARM 1 IS BROKEN.**
 > `[measured 2026-08-14, w309, vh2, 7 boots, one variable]` R33 arm 1 — the in-boot
 > known-positive the whole contrast depends on — **PASSES at `c7c058a3` (2/2) and at `8d258daa`,

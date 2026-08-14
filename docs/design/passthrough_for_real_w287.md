@@ -289,7 +289,15 @@ zero"** — the `dlen=0` class, refused.
    channel. Race-free by construction: the vCPU is blocked, the channel does not yet exist.
    ⚠ Composes with *"RM zeroes 512 bytes of a handed-in USERD inside the alloc"* — same instant.
    ⊘ Needs §3's route-1 question settled first.
-2. ⊘⊘ **`KAYFABE_OPERAND_JOIN=join` — MEASURED THIS RUNG, AND IT IS REFUTED.** Boot
+2. ⊘ **SCOPED 2026-08-14 (w313) — "REFUTED" HERE MEANS *"NOT SUFFICIENT AT w287's HEAD"*, NOT
+   *"INERT"*.** w304 deleted the `join` arm as inert on `^CUP3_VAL=43` and w313 restored it:
+   ablated alone at `8d258daa`, `KAYFABE_OPERAND_JOIN=assert` **kills `R33 arm 1`**, and the raw
+   CE client's `OPERAND-JOIN-TABLE` reads **`2 CANDIDATE(S) in the emulated framebuffer`** where
+   cup3's 96 lines all read `0`. ⇒ Both statements hold: the join did not rescue *this* rung's
+   wall, and it is load-bearing for the raw-CE plane. ⚠ Do not cite the line below as evidence
+   that the arm does nothing. See `traces/w313_restore/RESULT.md` §3.
+
+   ⊘⊘ **`KAYFABE_OPERAND_JOIN=join` — MEASURED THIS RUNG, AND IT IS REFUTED.** Boot
    `w287j_guest`, same HEAD, the arm asserted out of the device's own line
    (`OPERAND-JOIN arm=join`), is **byte-for-byte the same result**: `GP_GET 1 GP_PUT 1`, methods
    did nothing, `R33_RC=1`, and the table still reads
