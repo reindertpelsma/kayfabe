@@ -2083,7 +2083,7 @@ mod tests {
             (
                 "550.90.07",
                 (550, 90, 7),
-                158,
+                160,
                 77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
