@@ -4704,9 +4704,13 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         //   mapping published after the ring has been rung is a mapping published after the
         //   engine has already faulted for it.
         eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{}{}{}",
+            "kayfabe: PT-DECODE token={token:#010x}{}{}{}{}",
             self.witness_executor_fb_pages(),
             self.decode_cpu_pt_writes(),
+            // ★ w313 — the sweep is a SEPARATE clause from the census, and it is silent when
+            //   disarmed. The census below is unconditional (w304's fix, kept), so a reader can
+            //   tell "the census ran and found nothing" from "the sweep was not armed".
+            self.sweep_cpu_pt_tables(),
             self.vas_census()
         );
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
@@ -7256,20 +7260,37 @@ impl SharedDoorbell {
         // join's own arm (`KAYFABE_FB_JOIN`) selects `Shared` vs `Private` vs `Off`, and with
         // it `Off` this pass would map PRIVATE ANONYMOUS pages — two memories under a name
         // that says one. ⊘ Refused rather than downgraded.
-        // ⊘⊘ **w304 — THE REFUSAL ABOVE IS GONE WITH THE ARM IT GUARDED.** It fired only on
-        // `joins()`, and there is no longer an arm that joins: `KAYFABE_OPERAND_JOIN=join` was
-        // measured INERT twice (w298 `w298opjoin`, w304 `w304opjoin`, both `^CUP3_VAL=43` with
-        // the arm on `assert`), and its own table said why — `0 CANDIDATE(S) in the emulated
-        // framebuffer` on every one of the 96 census lines of a green boot. A join with nothing
-        // to join is not a capability.
+        // ⊘ Enforced only on the arm that would actually join. On `assert` nothing is mapped,
+        // so the mapping arm is irrelevant and aborting here would cost the control the very
+        // `#255` verdict it exists to produce.
+        if self.operand_join.joins() && !self.fb_join.armed() {
+            return Some(format!(
+                "{who} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. The join's mapping arm is what \
+                 makes the guest's window and the host object ONE memory; with it disarmed this \
+                 pass could only map PRIVATE ANONYMOUS pages, which is the two-memories state \
+                 under a name that says the opposite. ⊘ Nothing was asked of the host",
+                self.fb_join.as_str()
+            ));
+        }
         let Some(plane) = self.plane.upgrade() else {
             return Some(format!(
                 "{who} → ⊘ NO PLANE (the register plane is gone). ⊘ Nothing was asked of the \
                  host and no leaf was touched"
             ));
         };
-        // ⊘ w304 — the export directory was the route from a backing token to a descriptor and
-        // was needed ONLY to join. With no joining arm it is not consulted at all.
+        // ⊘ Same scoping: the export directory is the route from a backing token to a
+        // descriptor and is needed ONLY to join. `assert` runs without one.
+        let exports = match (self.exports.as_ref(), self.operand_join.joins()) {
+            (Some(e), _) => Some(e),
+            (None, false) => None,
+            (None, true) => {
+                return Some(format!(
+                    "{who} → ⊘ NOT ARMABLE: exports_directory=false — this build has no route \
+                     from a backing token to a descriptor. ⊘ Nothing was asked of the host and \
+                     no leaf was touched"
+                ));
+            }
+        };
         let Some(vaspace) = f.vaspace else {
             return Some(format!(
                 "{who} → NO VASPACE (there is no address space handle to root the walk at)"
@@ -7425,14 +7446,35 @@ impl SharedDoorbell {
         // ★★★ THE ONLY STATEMENT THE `assert` ARM SKIPS. Everything above and everything
         // below runs identically on both arms, so the two logs are line-comparable and the
         // difference between them is this loop and nothing else.
-        let (joined, refused) = (0usize, 0usize);
-        eprintln!(
-            "{head} ⊘ IDENTIFY-ONLY (w304: the `join` arm is DELETED) — {} leaf/leaves were \
-             IDENTIFIED and NOT JOINED. No host verb was issued, nothing was mapped and nothing \
-             was bound. ★ The `#255` verdict below is this pass's KNOWN-POSITIVE and must read \
-             FIRED",
-            leaves.len()
-        );
+        let isolate = kayfabe_isolate::IsolateId::new(f.proc.0, DOORBELL_TARGET_GPU);
+        let mut joined = 0usize;
+        let mut refused = 0usize;
+        if let Some(exports) = exports.filter(|_| self.operand_join.joins()) {
+            for (phys, leaf) in &leaves {
+                let what = format!("CE-OPERAND(chan={} fb_phys=0x{phys:x})", f.chan.0);
+                match join_one_fb_leaf(
+                    &head,
+                    &what,
+                    &self.device,
+                    &plane,
+                    exports,
+                    self.fb_join,
+                    isolate,
+                    pdb,
+                    *leaf,
+                ) {
+                    Some(_) => joined += 1,
+                    None => refused += 1,
+                }
+            }
+        } else {
+            eprintln!(
+                "{head} ⊘ ARM IS `assert` — {} leaf/leaves were IDENTIFIED and NOT JOINED. No \
+                 host verb was issued, nothing was mapped and nothing was bound. ★ The `#255` \
+                 verdict below is therefore this rung's KNOWN-POSITIVE and must read FIRED",
+                leaves.len()
+            );
+        }
         // ---- PHASE 4: THE RE-STATEMENT, and it is the FALSIFIER ------------------------------
         //
         // ★★★★★ Same pages, same table, same `Pdb` — re-read AFTER the joins, so the column
@@ -8374,12 +8416,186 @@ impl SharedDoorbell {
         )
     }
 
+    /// ★★★★★ **THE WHOLE-VAS SWEEP AT THE DOORBELL** — the C's `enum_gr_sysmem`, driven.
+    ///
+    /// # ★★★★★ RESTORED 2026-08-14 (w313) — **IT WAS NEVER INERT; IT WAS INERT FOR `cup3`.**
+    ///
+    /// w304 deleted this pass after measuring it inert on `^CUP3_VAL=43` (`w298ptsweep`,
+    /// `w304ptsweep`). ⊘ **`43` is cup3: libcuda, a GR launch.** `R33 arm 1` — the raw CE
+    /// client, no libcuda, its own `FERMI_VASPACE_A`, its own operands — **FAILS with this
+    /// pass deleted and PASSES with it armed**, measured one-variable-per-boot at `8d258daa`
+    /// (`KAYFABE_PT_SWEEP=off` ⇒ FAIL, everything else at its committed default) and bisected
+    /// to the deletion merge `d2c58075`. ⇒ *inert for one workload* was read as *inert*, and
+    /// the two workloads do not exercise the same publication paths: a raw CE client has no
+    /// libcuda to establish its mappings by another route.
+    ///
+    /// ⚠ **The correctness residual is unchanged and still stands** — see
+    /// [`kayfabe_mmu::reach::ReachShadow::witness_swept`] and the owner ruling of 2026-08-12.
+    /// This is a relaxation, it is armed by [`PT_SWEEP_ENV`], and a boot's log must state
+    /// which arm it ran.
+    ///
+    /// # Why this exists beside [`Self::decode_cpu_pt_writes`] rather than replacing it
+    ///
+    /// They are the C's **two** halves and neither is the other's improvement:
+    ///
+    /// - the decode pass drains what the guest was *seen* to write, and is the source of the
+    ///   dirty signal this sweep re-arms on;
+    /// - this sweep walks the address space from its **own installed root**, so it finds
+    ///   mappings whose writes no transport of ours witnessed — `[measured, w265]` the witness
+    ///   covers 3.2 % of the writers.
+    ///
+    /// ⇒ Running the sweep without the decode pass would have the relaxation and not its
+    /// mitigation. The order — decode first, sweep second — is what makes a write that landed
+    /// *this* window arm the sweep in the *same* doorbell rather than the next one.
+    ///
+    /// # ⊘ What a green line here is NOT
+    ///
+    /// `bound=N` says the address table accepted N mappings. It does **not** say the engine
+    /// can reach them, that the ring advanced, or that a completion landed.
+    ///
+    /// # ⊘⊘ THE FOUR CENSUS ROWS ARE **NOT** EMITTED HERE, AND THAT IS w304'S FIX KEPT
+    ///
+    /// `GUEST-DESCRIBES` / `TABLE-DESCRIBES` / `HOST-PUBLISHED` / `PROMOTE-PARKED` used to be
+    /// printed from *inside this function's* format string, so a boot with the sweep off
+    /// printed no census at all and w297's criterion (E) read that absence as a regressed
+    /// address plane. They now live in [`Self::vas_census`], which is **unconditional**. This
+    /// restore brings back the sweep's *behaviour* and leaves that separation alone: the two
+    /// are printed side by side on the same `PT-DECODE` line, and a reader can tell "the
+    /// census ran and found nothing" from "the sweep was disarmed".
+    ///
+    /// ⊘ Silent when disarmed, so the control's log stays byte-comparable.
+    fn sweep_cpu_pt_tables(&self) -> String {
+        if !selected_pt_sweep() {
+            return String::new();
+        }
+        let Some(plane) = self.plane.upgrade() else {
+            return " | PT-SWEEP ⊘ NO PLANE (nothing to read page-table bytes out of)".to_string();
+        };
+        let fmt = kayfabe_chips::Ga10xGmmu::new();
+        let pids = self.device.live_pids();
+        let (mut tasks, mut skipped, mut ran, mut trunc, mut pages) = (0usize, 0usize, 0, 0, 0);
+        let (mut bound, mut swept_binds, mut unbound, mut unwitnessed) = (0usize, 0, 0, 0);
+        let (mut published, mut faults, mut reach_faults, mut refusals) = (0usize, 0, 0, 0);
+        // ★★★★★ **`unchanged` AND `dropped`, AND THEY ARE THE READING, NOT DECORATION.**
+        //
+        // `[measured, w276_on]` the first armed boot read `bound=0 swept_binds=0 pages=79
+        // refusals=255` — and **that set of numbers has two opposite readings**:
+        //   (a) the sweep found leaves and the table would not take them;
+        //   (b) the sweep found leaves that were **already bound**, so there was nothing to add.
+        // Only `unchanged` separates them, and it was not printed.
+        let (mut unchanged, mut dropped, mut repointed) = (0usize, 0, 0);
+        // ★★ And the shadow's own answer to *"was the relaxation even reachable"*: how many
+        // pages are admitted ONLY by the sweep. `swept_binds=0` with `swept_only=0` means the
+        // witness transport already covered every root-reachable page — a statement about the
+        // TRANSPORT. `swept_binds=0` with `swept_only>0` would mean those pages held no
+        // bindable leaves — a statement about the GUEST. Two different findings.
+        let mut swept_only = 0usize;
+        let mut reasons: std::collections::BTreeMap<kayfabe_fwd::SweepReason, usize> =
+            std::collections::BTreeMap::new();
+        let mut first_fault: Option<String> = None;
+        let mut refusal_kinds: std::collections::BTreeMap<&'static str, usize> =
+            std::collections::BTreeMap::new();
+        let mut refusal_vas: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
+        let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
+        let mut duplicates = 0usize;
+        for pid in pids {
+            // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
+            // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
+            // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
+            // reading the isolate's aperture instead would walk a tree nobody wrote.
+            let mut fb = plane.pt_bytes();
+            let Some((plan, out)) = self.device.sweep_pt_tables_from(pid, &fmt, &mut fb) else {
+                continue;
+            };
+            tasks += plan.tasks.len();
+            skipped += plan.skipped;
+            for r in &plan.reasons {
+                *reasons.entry(*r).or_default() += 1;
+            }
+            ran += out.sweeps_run;
+            trunc += out.sweeps_truncated;
+            pages += out.pages_swept;
+            bound += out.bound;
+            swept_binds += out.swept_binds;
+            unbound += out.unbound;
+            unwitnessed += out.unwitnessed;
+            unchanged += out.unchanged;
+            repointed += out.repointed;
+            dropped += out.dropped.len();
+            swept_only += self.device.vas_swept_only(pid);
+            published += out.pages_published;
+            faults += out.faults.len();
+            reach_faults += out.reach_faults.len();
+            refusals += out.refusals.len();
+            if first_fault.is_none() {
+                if let Some(f) = out.faults.first() {
+                    first_fault = Some(format!("{f:?}"));
+                } else if let Some(r) = out.reach_faults.first() {
+                    first_fault = Some(format!("{r:?}"));
+                } else if let Some(r) = out.refusals.first() {
+                    first_fault = Some(format!("{r:?}"));
+                }
+            }
+            // ★★★★★ **WHICH ADDRESSES THE TABLE REFUSED — by KIND and by VA, not just the
+            // first one.** A `first=` that names a different address than the fault reads as
+            // *"unrelated"* and is the exact shape of `a_count_cannot_see_a_substitution`.
+            // ⊘ Deduped and capped, and the cap SAYS SO.
+            for r in &out.refusals {
+                let (kind, va) = refusal_kind_va(r);
+                *refusal_kinds.entry(kind).or_default() += 1;
+                if let Some(v) = va {
+                    refusal_vas.insert(v);
+                }
+            }
+            straddles.extend(out.refusals.iter().copied());
+            collisions.extend(out.shape_collisions.iter().copied());
+            duplicates += out.duplicate_leaves;
+        }
+        format!(
+            " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
+             pages={pages} reasons={reasons:?} → bound={bound} unchanged={unchanged} \
+             repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
+             dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
+             published={published} faults={faults} reach_faults={reach_faults} \
+             refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} first={} \
+             |{}|{}",
+            refusal_vas
+                .iter()
+                .take(PT_SWEEP_REFUSAL_CAP)
+                .map(|v| format!("0x{v:x}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            if refusal_vas.len() > PT_SWEEP_REFUSAL_CAP {
+                format!(
+                    " ⚠⚠ CAPPED at {PT_SWEEP_REFUSAL_CAP} of {} distinct — an address ABSENT \
+                     from this list is NOT thereby un-refused",
+                    refusal_vas.len()
+                )
+            } else {
+                String::new()
+            },
+            first_fault.as_deref().unwrap_or("NONE"),
+            straddle_census(&straddles),
+            collision_census(&collisions, duplicates),
+        )
+    }
+
     /// ★★★★★ **THE PER-VAS ADDRESS-PLANE CENSUS — four pictures of one address space, on one
     /// line, joinable by `proc`/`pdb`/`va` against an `Xid`.**
     ///
     /// `GUEST-DESCRIBES` (what the guest's own tables reach) · `TABLE-DESCRIBES` (what OUR
     /// address table holds) · `HOST-PUBLISHED` (what is actually backed in the host VAS) ·
     /// `PROMOTE-PARKED` (halves the promote control is holding).
+    ///
+    /// # ⊘⊘⊘ CORRECTED 2026-08-14 (w313) — **THE SWEEP IS BACK. THE CENSUS SPLIT IS NOT.**
+    ///
+    /// The block below says `sweep_cpu_pt_tables` "is gone". It is not: it was **restored at
+    /// w313** because it is *not* inert — `R33 arm 1`, a raw CE client with no libcuda, fails
+    /// without it (bisected to the deletion merge `d2c58075`, ablated one-variable-per-boot at
+    /// `8d258daa`). ⇒ Read the block below as *"the census stopped being emitted from inside
+    /// the sweep's format string"*, which is the half that was right and is kept: this
+    /// function is **unconditional** and the sweep prints its own separate `PT-SWEEP` clause.
     ///
     /// # ⊘⊘ w304 — THIS REPLACES `sweep_cpu_pt_tables`, AND THE SWEEP WAS THE ONLY THING
     /// # DELETED. THE CENSUS IS NOT ONLY KEPT, IT IS **UNGATED FOR THE FIRST TIME.**
@@ -9724,20 +9940,43 @@ impl Regs {
             pushbuf_vidmem,
             pushbuf_vidmem && ring_vidmem,
         );
-        // ★★★★★ **w304 — THE `PT-SWEEP` BANNER IS REPLACED, NOT DROPPED.** The arm it
-        // announced is gone; the census that shared its line is now unconditional, and a
-        // grader must still be able to tell "the census ran and found nothing" from "the
-        // census never ran". This line is what says which.
+        // ★★★★★ **THE SWEEP'S ARM, PRINTED ON BOTH ARMS** — for §5.12's reason below, plus
+        // one this arm has and the others do not: it is the only flag in this file that
+        // relaxes a **correctness gate** rather than adding a supply or an observation. A boot
+        // whose on-disk evidence does not state whether that gate was relaxed cannot be
+        // graded, and its control cannot be told apart from an older binary's.
+        //
+        // ⊘ Read here for the print and re-read per doorbell for the act. `selected_pt_sweep`
+        // is a pure function of one environment variable that nothing in this process ever
+        // sets, so the two readings cannot disagree — and the printed line is what a grader
+        // asserts on.
+        //
+        // ★★★★★ **w313 — RESTORED. w304 deleted this arm as inert and it is not**: `R33 arm 1`
+        // (a raw CE client, no libcuda) FAILS with the sweep off, measured one variable per
+        // boot at `8d258daa`, and the regression bisects to the deletion merge `d2c58075`.
+        eprintln!(
+            "kayfabe: PT-SWEEP arm={} ⇒ the whole-VAS sweep is {} (⊘ when `on`, a leaf may \
+             bind because a descent from the address space's OWN INSTALLED ROOT reached it, \
+             rather than because the guest was seen to write its page — owner ruling \
+             2026-08-12, residual recorded in mode2_address_table.md §6)",
+            if selected_pt_sweep() { "on" } else { "off" },
+            if selected_pt_sweep() {
+                "ARMED"
+            } else {
+                "DISARMED (⊘ and R33 arm 1 does NOT pass on this arm — w313)"
+            },
+        );
+        // ★★★★★ **w304's CENSUS BANNER, KEPT BESIDE THE SWEEP'S — they are two facts.** The
+        // census that used to share the sweep's line is unconditional now, and a grader must
+        // be able to tell "the census ran and found nothing" from "the census never ran".
         eprintln!(
             "kayfabe: VAS-CENSUS arm=always ⇒ the per-VAS address-plane census \
              (GUEST-DESCRIBES / TABLE-DESCRIBES / HOST-PUBLISHED / PROMOTE-PARKED) is \
-             UNCONDITIONAL. ⊘ KAYFABE_PT_SWEEP was DELETED at w304: it armed a whole-VAS walk \
-             that admitted leaves under `Admit::Swept` — a correctness relaxation — and was \
-             measured INERT on two independent boots (w298ptsweep, w304ptsweep). ⚠ The census \
-             above USED TO BE EMITTED FROM INSIDE THAT FLAG'S LINE, so a boot with the sweep \
-             off printed no HOST-PUBLISHED row at all and w297's criterion (E) read that \
-             absence as a regressed address plane. The publication never stopped; its only \
-             reporter did"
+             UNCONDITIONAL. ⚠ It USED TO BE EMITTED FROM INSIDE THE PT-SWEEP LINE, so a boot \
+             with the sweep off printed no HOST-PUBLISHED row at all and w297's criterion (E) \
+             read that absence as a regressed address plane. The publication never stopped; \
+             its only reporter did. ⊘ w313: the sweep itself is BACK (it was not inert), but \
+             this row stays ungated — the two are separate clauses on the PT-DECODE line"
         );
         // ★★★★★ §5.12 — THE ARMING, PRINTED, on every arm including `off`.
         //
@@ -9844,6 +10083,12 @@ impl Regs {
                      observation rather than an absence (exactly w281b_clientsweep's state, \
                      where both operands resolved to Vidmem with no host object, the \
                      partitioner answered CeExecutor::Ours and ce_copy refused by name)",
+                OperandJoinArm::Join =>
+                    "WALKED to its framebuffer leaf and that leaf is JOINED — the same four \
+                     steps the ring source and the GR operand census already use — so the \
+                     guest's window and a real host object are ONE memory and the executor \
+                     stays HostCe. ⊘ Supply side only: `the operand is host-backed` and `the \
+                     submission retired` are different facts",
             },
         );
         // ★★★★★ w290 — leg 8's arming, echoed on BOTH arms beside leg 7's for the same
@@ -12288,11 +12533,18 @@ pub enum OperandJoinArm {
     /// and no host verb is issued. ⊘ Behaviourally this is `Off` plus printing, so it
     /// reproduces `w281b_clientsweep` while making the instrument's known-positive visible.
     Assert,
+    /// ★ Everything `Assert` does, **and** every framebuffer leaf a CE operand names is
+    /// joined.
+    Join,
 }
 
 impl OperandJoinArm {
     /// Every arm, so a test can quantify rather than restate.
-    pub const ALL: [OperandJoinArm; 2] = [OperandJoinArm::Off, OperandJoinArm::Assert];
+    pub const ALL: [OperandJoinArm; 3] = [
+        OperandJoinArm::Off,
+        OperandJoinArm::Assert,
+        OperandJoinArm::Join,
+    ];
 
     /// One word, for the boot's own log.
     #[must_use]
@@ -12300,20 +12552,22 @@ impl OperandJoinArm {
         match self {
             OperandJoinArm::Off => "off",
             OperandJoinArm::Assert => "assert",
+            OperandJoinArm::Join => "join",
         }
     }
 
     /// Whether the pass runs at all — i.e. whether operands are decoded, classified and
-    /// put to `#255`.
-    ///
-    /// ⊘ **w304 — `joins()` is DELETED along with the `Join` arm.** The join was measured
-    /// INERT on two independent boots (`w298opjoin`, `w304opjoin`: `^CUP3_VAL=43` with the arm
-    /// on `assert`), and the pass's own census said why — **`0 CANDIDATE(S) in the emulated
-    /// framebuffer`** on all 96 `OPERAND-JOIN-TABLE` lines of a green boot, every operand page
-    /// resolving in **guest RAM**. There was never anything for it to join on this workload.
+    /// put to `#255`. ⊘ True on `Assert` as well as `Join`: that is the whole point of the
+    /// third arm.
     #[must_use]
     pub fn observes(self) -> bool {
         self != OperandJoinArm::Off
+    }
+
+    /// Whether a framebuffer-resident CE operand leaf is actually joined on this arm.
+    #[must_use]
+    pub fn joins(self) -> bool {
+        self == OperandJoinArm::Join
     }
 }
 
@@ -12326,25 +12580,20 @@ pub fn operand_join_from(value: Option<&str>) -> Result<OperandJoinArm, (Status,
     match value {
         None | Some("off") => Ok(OperandJoinArm::Off),
         Some("assert") => Ok(OperandJoinArm::Assert),
-        // ⊘⊘ **`join` IS REFUSED BY NAME, NOT SILENTLY ACCEPTED — w304.** The arm was deleted
-        // after two independent boots measured it inert. Mapping the old spelling onto
-        // `assert` would be a behaviour change under a name that says the opposite, which is
-        // the one thing this shim refuses to do anywhere else; a caller that still says `join`
-        // gets told the arm is gone and why, and stops.
+        Some("join") => Ok(OperandJoinArm::Join),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_OPERAND_JOIN does not name an arm: the only values are `off` (silent, \
-             byte-identical to every boot before w282) and `assert` (classify every CE operand \
-             per-VAS and state #255's verdict, join NOTHING, issue no host verb; its expected \
-             reading is `#255 … FIRED`, which is a POSITIVE observation rather than an \
-             absence). ⊘ **`join` WAS DELETED AT w304 and is refused rather than mapped onto \
-             `assert`**: it was measured INERT on two independent boots (w298opjoin, \
-             w304opjoin — `^CUP3_VAL=43` with the arm on `assert`), and the pass's own census \
-             says why — `0 CANDIDATE(S) in the emulated framebuffer` on every one of the 96 \
-             OPERAND-JOIN-TABLE lines of a green boot, every operand page resolving in guest \
-             RAM. Accepting the old spelling silently would make a caller that asked for a \
-             join and a caller that asked for a census indistinguishable. ⊘ `on`/`1` are not \
-             accepted: this is a two-arm instrument, not a boolean.",
+             byte-identical to every boot before w282), `assert` (THE CONTROL — classify every \
+             CE operand per-VAS and state #255's verdict, join NOTHING, issue no host verb; \
+             its expected reading is `#255 … FIRED`, which is a POSITIVE observation rather \
+             than an absence) and `join` (everything `assert` does, plus the framebuffer leaf \
+             goes through the same four-step join the ring source and the GR operand census \
+             already use, so the guest's window and a real host object are ONE memory and the \
+             executor stays HostCe). It is not defaulted, because a typo that silently \
+             disarmed the join would make an evidence run and its own control \
+             indistinguishable. ⊘ `on`/`1` are not accepted: this is a three-arm experiment, \
+             not a boolean.",
         )),
     }
 }
@@ -12667,6 +12916,22 @@ fn selected_pt_witness_exec() -> bool {
     }
 }
 
+/// ★★★★★ **The environment variable that arms the WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem`
+/// (`C: nvkvm_gpu_emul.c:583-591`), driven from the doorbell.
+///
+/// # ⊘⊘ It arms a RELAXED CORRECTNESS GATE, not merely an instrument
+///
+/// Every other arm in this file changes what the port *observes* or *supplies*. This one changes
+/// what the port is willing to **bind**: with it on, a leaf binds because a walk from the address
+/// space's own installed page-directory root reached it, rather than because the guest was seen
+/// to write its page. See [`kayfabe_mmu::reach::ReachShadow::witness_swept`] for the argument and
+/// for the residual the owner accepted on 2026-08-12.
+///
+/// ⊘ **Off by default and refusing an unknown value.** With it unset this port binds exactly what
+/// it bound before the sweep existed, so the disarmed boot **is** the negative control — and a
+/// typo must not be able to produce one silently.
+pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
+
 /// How many coalesced VA runs one address space may print. See
 /// [`kayfabe_rt::device::SharedDevice::vas_reachable_ranges`] — exceeding it is announced, never
 /// silent.
@@ -12767,10 +13032,12 @@ const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_mil
 #[cfg(feature = "host-isolates")]
 const VAS_PUBLISH_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(2000);
 
-/// ⊘ w304 — kept, renamed in spirit only: it now caps [`SharedDoorbell::vas_census`]'s four
-/// range lists. The sweep it was named for is deleted; the cap it applies is unchanged, so
-/// every archived line remains comparable against a fresh one.
 const PT_SWEEP_RANGE_CAP: usize = 48;
+
+/// How many DISTINCT refused virtual addresses one sweep line may list. See the refusal block
+/// in [`SharedDoorbell::sweep_cpu_pt_tables`] — an address absent from a capped list is not
+/// thereby un-refused, and the line says so when it truncates.
+const PT_SWEEP_REFUSAL_CAP: usize = 24;
 
 /// How many DISTINCT straddle signatures one line may list. Small on purpose: the whole
 /// point is that the signature space is tiny (a handful of `(shape, agreement, level, extent)`
@@ -12919,6 +13186,53 @@ fn collision_census(
         first.dropped.phys,
         first.dropped.from_page,
     )
+}
+
+/// The refusal's kind as a stable word, and the address it is about.
+///
+/// ⊘ A `&'static str` rather than `format!("{r:?}")` because the kinds are what a histogram is
+/// over, and `Debug` embeds the payload — every refusal would be its own bucket and the
+/// histogram would be a list. The *addresses* are collected separately, so nothing is lost.
+fn refusal_kind_va(r: &kayfabe_mmu::walker::PopulateRefusal) -> (&'static str, Option<u64>) {
+    use kayfabe_mmu::walker::PopulateRefusal as P;
+    match r {
+        P::Refused { va, .. } => ("Refused", Some(va.0)),
+        P::RepointsPublished { va, .. } => ("RepointsPublished", Some(va.0)),
+        P::StraddlesLiveBinding { va, .. } => ("StraddlesLiveBinding", Some(va.0)),
+        P::UnbindsPublished { va } => ("UnbindsPublished", Some(va.0)),
+        P::UndecidableKind { va, .. } => ("UndecidableKind", Some(va.0)),
+    }
+}
+
+/// Whether `value` arms the whole-VAS sweep — the pure half of [`selected_pt_sweep`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `false`.
+pub fn pt_sweep_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_PT_SWEEP does not name a state: the only values are `off` (the default) \
+             and `on`. It is not defaulted, because the disarmed arm IS this rung's negative \
+             control AND because the armed arm relaxes a correctness gate — a typo that \
+             silently armed it would relax that gate without anyone deciding to.",
+        )),
+    }
+}
+
+/// Whether [`PT_SWEEP_ENV`] arms the whole-VAS sweep.
+///
+/// ⊘ A value naming neither state reads as **disarmed**, which is the safe direction for a flag
+/// that relaxes a gate: an unparseable value must never be able to turn it on.
+#[must_use]
+fn selected_pt_sweep() -> bool {
+    match std::env::var_os(PT_SWEEP_ENV) {
+        None => false,
+        Some(v) => pt_sweep_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
+    }
 }
 
 /// ★★★★★ **§16.78** — the environment variable that arms the `MC_SERVICE_INTERRUPTS`

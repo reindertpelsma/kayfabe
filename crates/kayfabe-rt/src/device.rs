@@ -3010,6 +3010,75 @@ impl SharedDevice {
         Some(out)
     }
 
+    /// ★★★★★ **THE WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem` (`C: nvkvm_gpu_emul.c:583-591`)
+    /// on this port's three-phase shape.
+    ///
+    /// Identical in structure to [`SharedDevice::decode_pt_writes_from`] — plan under rank 1,
+    /// execute under no lock, commit under rank 1, publish under rank 0 — and different in
+    /// exactly two places, both of which are the rung:
+    ///
+    /// 1. the plan seeds **one root task per stale address space**
+    ///    (`kayfabe_fwd::plan_pt_sweep`) instead of draining a dirty set;
+    /// 2. the commit admits every page the descent reached
+    ///    (`kayfabe_mmu::reach::ReachShadow::witness_swept`), because a root descent reaches
+    ///    pages nobody was seen to write and the witness gate would otherwise publish **zero**
+    ///    — `[measured, w275]`.
+    ///
+    /// ⊘ **It is not a second address plane and it resolves nothing.** Same walker, same
+    /// aperture-checked byte source, same one authoritative table, same refusal vocabulary; a
+    /// miss is still a fault and the table is still never reverse-resolved.
+    ///
+    /// ⚠ **Read `witness_swept` before calling this.** It relaxes a deliberate correctness gate
+    /// and carries an accepted residual (owner ruling, 2026-08-12), whose bound is the
+    /// dirty-driven re-sweep — half of which lives in `kayfabe_fwd::plan_pt_decode`. A caller
+    /// that runs this sweep without also running the decode pass has the relaxation and not its
+    /// mitigation.
+    ///
+    /// Returns `None` if `pid` is not live.
+    ///
+    /// # Panics
+    /// If a ranked lock is held across the execute phase and the source asserts it.
+    pub fn sweep_pt_tables_from(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+    ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
+        // PLAN — rank 1.
+        let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
+        if plan.tasks.is_empty() {
+            // ⊘ Returned rather than skipped, and with the plan attached: "every address space
+            // was current" is a result, and it is the one a reader would otherwise confuse with
+            // "the sweep did not run".
+            return Some((plan, kayfabe_fwd::PtDecodeOutcome::default()));
+        }
+        // EXECUTE — no lock. ★ The budget is charged PER TASK; see `PT_SWEEP_BUDGET` for why
+        // reusing the decode pass's run-wide budget would divide the C's number by a
+        // guest-chosen quantity.
+        let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
+        // COMMIT — rank 1, re-resolving every target (R5).
+        let mut out =
+            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
+        // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
+        // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
+        // write into any of them classify as a page-table write.
+        if !out.learned_pages.is_empty() {
+            let mut g = self.state.write();
+            let st = &mut *g;
+            let mut by_vas: std::collections::BTreeMap<(GpuId, Pdb), Vec<u64>> =
+                std::collections::BTreeMap::new();
+            for &(gpu, pdb, page) in &out.learned_pages {
+                by_vas.entry((gpu, pdb)).or_default().push(page);
+            }
+            for ((gpu, pdb), pages) in by_vas {
+                let (published, refused) = st.spine.publish_pt_pages(pid, gpu, pdb, pages);
+                out.pages_published += published;
+                out.pages_publish_refused += refused;
+            }
+        }
+        Some((plan, out))
+    }
+
     /// ★★ **How many page-table pages this proc holds that ONLY a sweep admitted**, summed
     /// over its address spaces.
     ///
