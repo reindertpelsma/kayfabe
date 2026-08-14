@@ -503,8 +503,8 @@ reading (§2.0.1) and the concurrent/re-entrant drain entry the control exposed 
 
 ## 6.3 Verification — exit codes from the real commands, on `vh`
 
-- `cargo test --workspace --features host-isolates --no-fail-fast` ⇒ the failure set is
-  **exactly the 7 rows `w323` §9 recorded on master** — the three
+- `cargo test --workspace --features host-isolates --no-fail-fast` (three runs) ⇒ the stable
+  failure set is **exactly the 7 rows `w323` §9 recorded on master** — the three
   `doorbell_reaches_the_completion_observer` arms, the two `ring_out_of_our_own_framebuffer`
   arms, `guest_os_axis_gate`, and `sticky_answer::the_universe_of_answering_policies_is_derived_from_the_source`.
   **No new red.**
@@ -516,11 +516,21 @@ reading (§2.0.1) and the concurrent/re-entrant drain entry the control exposed 
   with the discrimination stated — for `mmuinval` the load-bearing half is what does **not**
   take the lock (the guest's poll path is two atomics, because a poisoned mutex on that path
   would be an unclearable `TRIGGER`, i.e. a hang). Green after.
-- ⚠ **One flake, named rather than absorbed**: `kayfabe-linux-raw`'s
-  `spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all` failed on the
-  fail-fast run (and aborted it) and **passed on the `--no-fail-fast` run and again in
-  isolation**. Not attributable to this rung — that crate is untouched — but it is why the
-  first suite run reported one failure and stopped.
+- ⚠⚠ **THREE FLAKES, in two crates this rung never touched — and my first attempt to
+  adjudicate one was WRONG.** Across three full-suite runs:
+  `kayfabe-linux-raw::spawn_unsafe::…a_child_runs_from_an_image_with_no_path_at_all` (run 1),
+  `kayfabe-linux-raw::procfd::…the_unmapped_decoy_at_a_lower_number_is_not_selected` (run 3),
+  `kayfabe-util::trapwitness::…the_census_names_the_residue_and_never_prints_unmeasured_as_zero`
+  (run 3). All three test **process-global state** (fd tables, `/proc` layout, thread-local
+  trap counters), which is exactly what parallel test execution perturbs.
+  ⊘ **And here is the part worth banking.** I ran `procfd` once in isolation, saw it fail, and
+  concluded *"not a flake — attributable"*; I then ran it on a master tree, saw it pass, and
+  was one step from hunting a defect in a crate I had not edited. Re-running it on **my** tree
+  **3 more times gave 3 passes**. ⇒ **an isolated re-run is itself a sample of size one, and I
+  used one to rule out flakiness.** The campaign's own *"a single-boot `43` has a ~20 %
+  false-negative rate"* applies to test reruns, in both directions.
+  ⇒ Not attributable to this rung; and the honest residue is that **the flake RATE on master
+  was not measured**, only that master passed the one run of it that was taken.
 - `cargo clippy -p kayfabe-device -p kayfabe-qemu-raw --all-targets --features host-isolates`
   ⇒ **zero warnings attributable to this rung.** Two were, and both were real:
   `observer_loop` reaching 8 arguments (fixed by bundling the device and the gate into one
