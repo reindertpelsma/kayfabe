@@ -512,6 +512,127 @@ pub fn segment_shape(name: &str) -> &'static str {
     }
 }
 
+// =========================================================================================
+// ★★★★★ **THE HOT-OFFSET CENSUS — because "reads dominate" and "reads of REGISTER X
+// dominate" are different findings, and only the second one is a fix target.**
+// =========================================================================================
+
+/// How many distinct `(bar, offset)` pairs are tracked before everything else is folded into
+/// one `other` bucket.
+///
+/// ⊘ Bounded on purpose. A guest can touch an unbounded set of offsets, and an instrument
+/// that grows a row per offset is a memory leak a hostile guest can drive. The overflow is
+/// **counted and named**, so a boot where the interesting offset fell outside the cap says
+/// so rather than reporting a tidy top-20 that is missing the answer.
+const HOT_OFFSETS: usize = 96;
+
+#[derive(Default)]
+struct HotCensus {
+    /// `(key, count, us)` where `key = (bar << 48) | offset`.
+    rows: Vec<(u64, u64, u64)>,
+    overflow_hits: u64,
+    overflow_us: u64,
+    overflow_distinct_seen: bool,
+}
+
+impl HotCensus {
+    fn record(&mut self, bar: u32, off: u64, us: u64) {
+        let key = (u64::from(bar) << 48) | (off & 0xffff_ffff_ffff);
+        if let Some(r) = self.rows.iter_mut().find(|r| r.0 == key) {
+            r.1 += 1;
+            r.2 += us;
+            return;
+        }
+        if self.rows.len() < HOT_OFFSETS {
+            self.rows.push((key, 1, us));
+            return;
+        }
+        self.overflow_hits += 1;
+        self.overflow_us += us;
+        self.overflow_distinct_seen = true;
+    }
+
+    fn report(&self, kind: &str, why: &str) -> String {
+        let total: u64 = self.rows.iter().map(|r| r.1).sum::<u64>() + self.overflow_hits;
+        if total == 0 {
+            return format!(
+                "kayfabe: KFTIME-HOT kind={kind} why={why} accesses=0 ⊘ NOTHING WAS RECORDED"
+            );
+        }
+        let mut s = format!(
+            "kayfabe: KFTIME-HOT kind={kind} why={why} accesses={total} distinct={} \
+             capped_at={HOT_OFFSETS}{}",
+            self.rows.len(),
+            if self.overflow_distinct_seen {
+                format!(
+                    " ⚠ OVERFLOW: {} accesses ({:.3} ms) fell OUTSIDE the tracked set and are \
+                     NOT in the rows below — the answer may be among them",
+                    self.overflow_hits,
+                    self.overflow_us as f64 / 1000.0,
+                )
+            } else {
+                String::new()
+            },
+        );
+        let mut rows = self.rows.clone();
+        rows.sort_by_key(|r| std::cmp::Reverse(r.1));
+        for (key, n, us) in rows.into_iter().take(20) {
+            let bar = key >> 48;
+            let off = key & 0xffff_ffff_ffff;
+            s.push_str(&format!(
+                "\n    KFTIME-HOTREG bar={bar} off={off:#08x} n={n:<9} share={:5.1}% \
+                 total_ms={:<9.3} mean_us={}",
+                100.0 * n as f64 / total as f64,
+                us as f64 / 1000.0,
+                us.checked_div(n).unwrap_or(0),
+            ));
+        }
+        s
+    }
+}
+
+static HOT: OnceLock<Mutex<Vec<(&'static str, HotCensus)>>> = OnceLock::new();
+
+fn hot_table() -> &'static Mutex<Vec<(&'static str, HotCensus)>> {
+    HOT.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// Charge one MMIO access to its `(bar, offset)`.
+///
+/// ★ This is what turns *"the guest spends its time in MMIO"* into *"the guest reads
+/// register `0x…` N times per launch"*, which is the only form of the finding anyone can
+/// act on — and it is bench-independent: a COUNT costs the same on bare metal, even though
+/// the per-exit price here is inflated by nesting.
+pub fn record_hot(kind: &'static str, bar: u32, off: u64, us: u64) {
+    if !arm().on {
+        return;
+    }
+    let mut t = hot_table().lock().unwrap_or_else(|e| e.into_inner());
+    match t.iter_mut().find(|r| r.0 == kind) {
+        Some(r) => r.1.record(bar, off, us),
+        None => {
+            let mut c = HotCensus::default();
+            c.record(bar, off, us);
+            t.push((kind, c));
+        }
+    }
+}
+
+/// Print every hot-offset census.
+pub fn report_hot(why: &str) {
+    if !arm().on {
+        return;
+    }
+    let t = hot_table().lock().unwrap_or_else(|e| e.into_inner());
+    if t.is_empty() {
+        eprintln!("kayfabe: KFTIME-HOT why={why} ⊘ NO MMIO ACCESS WAS EVER CHARGED TO AN OFFSET");
+        return;
+    }
+    for (kind, c) in t.iter() {
+        eprintln!("{}", c.report(kind, why));
+    }
+}
+
 /// One census per event kind. ⊘ A leaf mutex with nothing under it: it is taken on the vCPU
 /// path, so anything blocking beneath it would be charged to the guest by the very
 /// instrument that is supposed to explain the guest's latency.
@@ -595,6 +716,8 @@ pub fn report_all(why: &str) {
     for (kind, c) in t.iter() {
         eprintln!("{}", c.report(kind, why));
     }
+    drop(t);
+    report_hot(why);
 }
 
 // =========================================================================================
@@ -764,6 +887,37 @@ mod tests {
         assert_eq!(segment_shape("log_ptdecode"), "log");
         // ⊘ And there is deliberately no `trap` shape — see `segment_shape`'s own docs.
         assert_ne!(segment_shape("plane"), "trap");
+    }
+
+    /// ★★ The hot-offset census must RANK, and its cap must be LOUD.
+    ///
+    /// ⊘ A top-20 that quietly drops the offset the guest actually hammers is worse than no
+    /// census: it looks complete. The overflow is therefore a printed sentence, not a
+    /// dropped row — `a_census_zero_needs_a_known_positive` in the other direction.
+    #[test]
+    fn the_hot_census_ranks_and_says_when_it_overflowed() {
+        let mut h = HotCensus::default();
+        for _ in 0..100 {
+            h.record(0, 0x30090, 3);
+        }
+        for _ in 0..5 {
+            h.record(0, 0x1000, 1);
+        }
+        let r = h.report("mmio_read", "test");
+        assert!(r.contains("accesses=105"), "{r}");
+        let i_hot = r.find("off=0x030090").expect("hot row");
+        let i_cold = r.find("off=0x001000").expect("cold row");
+        assert!(i_hot < i_cold, "the hammered offset must rank first: {r}");
+        assert!(!r.contains("OVERFLOW"), "nothing overflowed here: {r}");
+
+        // ★ Now overflow it, and the sentence must appear.
+        let mut h2 = HotCensus::default();
+        for i in 0..(HOT_OFFSETS as u64 + 7) {
+            h2.record(0, i * 4, 1);
+        }
+        let r2 = h2.report("mmio_read", "test");
+        assert!(r2.contains("OVERFLOW"), "a capped census must SAY it capped: {r2}");
+        assert!(r2.contains("the answer may be among them"), "{r2}");
     }
 
     #[test]

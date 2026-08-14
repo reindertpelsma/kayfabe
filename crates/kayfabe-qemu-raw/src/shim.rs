@@ -10641,6 +10641,7 @@ impl Regs {
             .read(clamp_bar(bar), off, clamp_size(size))
             .value();
         kft.mark("plane_read");
+        crate::kftime::record_hot("mmio_read", bar, off, kft.total_us());
         // ⊘ NEVER per-event printed, whatever the arming: reads are the hot path and ~900
         // doorbell lines is an instrument, while ~10^5 read lines is a second workload.
         // `record` honours `per_event`, so this kind is filtered at the call site instead.
@@ -11072,6 +11073,16 @@ impl Regs {
         // either. `doorbell` is decided by the plane, so it is read off the outcome rather
         // than re-derived from the offset — two projections of one fact that disagree is this
         // campaign's most expensive failure class.
+        crate::kftime::record_hot(
+            if out.doorbell.is_some() {
+                "mmio_doorbell"
+            } else {
+                "mmio_other"
+            },
+            bar,
+            off,
+            kft.total_us(),
+        );
         crate::kftime::record(
             if out.doorbell.is_some() {
                 "mmio_doorbell"
