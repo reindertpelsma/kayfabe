@@ -1,0 +1,16 @@
+=== w313 INERT GATE — ablation = [KAYFABE_DIRTY_GATE_PUBLISH=off KAYFABE_DIRTY_GATE_WITNESS=off]  tag=d1  repo=/workspace/kayfabe_w318 2026-08-14T17:20:30+00:00
+--- arm 1/2: GR/COMPUTE (cup3)
+--- arm 2/2: RAW CE (R33 arm 1, via the w309 crit1 harness, arm=fresh)
+--- grading BOTH:
+=== ★★★★★ TWO-WORKLOAD INERTNESS GATE (w313) — BOTH PLANES OR NO VERDICT
+    workload 1  GR/COMPUTE  cup3 (libcuda, a real GR launch)   log=[/workspace/bench/run_d1cup3_probe.log] 13215 bytes
+                known-positive '^CUP3_VAL=43'  => [FIRED]
+    workload 2  RAW CE      R33 arm 1 (no libcuda, own VAS)    log=[/workspace/bench/run_d1r33_probe.log] 1016 bytes
+                known-positive '★     R33 arm 1 COPY'  => [UNTERMINATED]
+    ⊘ FIRED = the known-positive is present · RAN-BUT-ABSENT = the workload reached its
+      own terminator and did NOT fire (a finding about the RELAXATION) · UNTERMINATED =
+      the log stops early, empty or truncated (a finding about the HARNESS) · NOLOG.
+W313 INERT-GATE VERDICT = UNMEASURED
+    ⊘ the RAW CE log has no ^R33_RC= terminator: empty or truncated.
+      ⊘ UNMEASURED IS NOT A PASS, and it is not 'inert'. It is the state w304's
+        evidence was actually in for the raw-CE plane: that boot never ran.

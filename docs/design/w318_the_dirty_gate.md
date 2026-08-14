@@ -396,6 +396,29 @@ it.**
 
 
 
+### 5.c ⊘ THE BRANCH A REVIEWER MERGES IS A BRANCH THAT BOOTED
+
+Everything above ran at **`44317766`** — this rung's code on the `d7c26553` base. The branch is
+**rebased onto `ef05f9b3` (w317's merge)**, which applied **without conflict** (w317 is in the
+teardown/disposal path, not the doorbell's page-table segments), but a clean rebase is a claim
+about *text*, not about a GPU.
+
+⇒ Confirmation boots at the rebased head **`3f148d22`**:
+
+| run | gate | result |
+|---|---|---|
+| `r1` | on | cup3 + R33 arm 1 — **`INERT-ON-BOTH-PLANES`** |
+| `r2` | on | cup8 2048² — see below |
+
+<!-- R2 -->
+
+⚠ **Stated rather than assumed:** the *timing* pairs were not re-taken at the rebased head. w317
+changes the disposal budget inside the same `Regs::write` handler, so it could in principle move
+`reap` — but `reap` is **not** one of the twelve launch-doorbell segments this rung measures, and
+the confirmation boots exercise the gate at the same 95–97 % skip rate. **If a reviewer needs the
+per-segment table at `3f148d22`, it is two boots (`w318_gate.sh off` / `on`) and it has not been
+run.**
+
 ### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
 
 Read the R33 rows again: **`publish[fired=3 skipped=0] witness[fired=2 skipped=0]`** — on every

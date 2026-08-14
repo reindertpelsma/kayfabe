@@ -1,0 +1,18 @@
+=== boot_capture tag=d1r33 at 2026-08-14T17:23:12+00:00 ===
+=== source revision: 44317766 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88169312 Aug 14 17:22 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:44317766eca471e1a59ddfc56ea0fd59077d84a8 
+=== BUILD_REV.txt says (informational, NOT authoritative): 28cf456
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /workspace/kayfabe_w318/scripts/bench/boot_nvkvm.sh  sha256=a1daa5c4c557180f
+    used: /workspace/kayfabe_w318/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_COLD
+modprobe: FATAL: Module nvidia not found in directory /lib/modules/6.8.0-137-generic
+MODPROBE_RC=1
+=== nvidia-smi (the device open) ===
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.
+
+SMI_RC=9
+=== /dev nodes (AFTER the open — they are created by it) ===
+ls: cannot access '/dev/nvidia*': No such file or directory
+=== lsmod ===
