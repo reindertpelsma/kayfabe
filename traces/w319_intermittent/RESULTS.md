@@ -26,6 +26,9 @@ Derived threshold, from a source constant and a log row-count with **nothing fit
 | `basecup3` | **251 µs** | **over** | 11883/13313 | `0x2_0326a000` | **RED** |
 | `cup3` | **252 µs** | **over** | 11810/13313 | `0x2_03221000` | **RED** |
 
+★ **The margin, exactly:** `3 000 ms / 225.3 µs` buys **13 315** rows; the workload needs
+**13 313**. **Two rows.** That is the whole of the ~20 %.
+
 `0x2_03221000 < 0x2_0440f000 < 0x2_047fe000`. ★ And the red boot's **next** doorbell drained the
 missing 1 430 rows in 353 ms — **the rows arrive one doorbell too late.**
 
