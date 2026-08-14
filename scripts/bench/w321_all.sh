@@ -40,7 +40,11 @@ bash "$A" "$TREE" w321c 3 KAYFABE_DRAIN_BATCH=coalesce
 echo "=== arm C (coalesce/cup3) done $(date -Is)"
 bash "$A" "$TREE" w321x 3 KAYFABE_DRAIN_BATCH=coalesce KAYFABE_VAS_DRAIN_ROW_LIMIT=11800
 echo "=== arm X (reproducer under the fix) done $(date -Is)"
-W321_WORKLOAD=w308_cup8.sh bash "$A" "$TREE" w321e 3 KAYFABE_DRAIN_BATCH=coalesce
+# ⊘⊘ `w308_cup8.sh` REQUIRES its arm (`baseline|cup8`) and `exit 64`s without one. The first
+#   spelling of this line omitted it and produced **3 boots in 13 seconds**, every field
+#   `⊘ABSENT-UNMEASURED`. ★ The discipline is what caught it: had the arm script printed `0`
+#   for an absent `CUP8_BAD`, the run would have read as **3/3 bit-exact**.
+W321_WORKLOAD="w308_cup8.sh cup8" bash "$A" "$TREE" w321e 3 KAYFABE_DRAIN_BATCH=coalesce
 echo "=== arm E (cup8) done $(date -Is)"
 W321_WORKLOAD="w309_crit1.sh fresh" bash "$A" "$TREE" w321r 3 KAYFABE_DRAIN_BATCH=coalesce
 echo "=== arm R (R33 arm 1) done $(date -Is)"

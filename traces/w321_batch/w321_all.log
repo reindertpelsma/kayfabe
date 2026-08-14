@@ -1,0 +1,7 @@
+=== W321 ALL START 2026-08-14T18:40:10+00:00 tree=/workspace/kayfabe_w321 HEAD=e8ed422c8
+=== arm C (coalesce/cup3) done 2026-08-14T18:48:47+00:00
+=== arm X (reproducer under the fix) done 2026-08-14T18:55:01+00:00
+=== arm E (cup8) done 2026-08-14T18:55:14+00:00
+=== arm R (R33 arm 1) done 2026-08-14T19:00:53+00:00
+=== arm O (off control) done 2026-08-14T19:02:52+00:00
+=== W321 ALL TERMINATOR rc=0 2026-08-14T19:02:52+00:00

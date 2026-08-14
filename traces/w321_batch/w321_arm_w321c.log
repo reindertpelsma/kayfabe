@@ -1,0 +1,46 @@
+=== W321 ARM START tree=/workspace/kayfabe_w321 prefix=w321c n=3 2026-08-14T18:40:10+00:00
+=== HEAD=e8ed422c8ab8acb569787dd24cbdaba58fa56bba
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own KNOB lines are the record of EXECUTION):
+===   KAYFABE_DRAIN_BATCH=coalesce
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[⊘unset ⇒ 3000 default]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[⊘unset ⇒ 65536 default]
+===   KAYFABE_DRAIN_BATCH=[coalesce]
+--- boot 1/3 tag=w321c1 2026-08-14T18:40:14+00:00
+    BOOT 1: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=892 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ]
+            last_pinned_va=0x2047ff000  budget_hit_lines=[0] row_cap_hit_lines=[0]
+            ★★★★★ W321IPC[ipc_calls=9813 (3 /chain) ipc_us=866062 (264 us/chain, 65 us/row) drain_us=892000 ours_us=25938 ipc_share=97%]
+            ★★★★★ W321BATCH[arm=coalesce chunks=3271 chains=3271 rows_pinned=13313 rows_refused=0 fallback_chunks=0 fallback_chains=0 rows_per_chain=4.07]
+            ★★★★★ W321CENSUS[rows=13313 bytes=0x3410000 len_4k=13312 len_lt64k=0 len_lt2m=1 len_ge2m=0 va_runs=3 pair_runs=3266 coalesce_ceiling=4.07x break_va_only=0 break_gpa_only=3263 break_both=2 runsz_4k=2974 runsz_lt64k=185 runsz_lt2m=106 runsz_ge2m=1 max_run=0xbd3000 ⇒ a coalescing fix can reduce 13313 host chains to 3266; a BATCHED-TRANSPORT fix is bounded by neither of these numbers]
+            ★★★★★ child_lines=[31] LAST=[W321CHILD worker=0 served=31000 — CHILD-SIDE SERVICE TIME (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so parent_ipc_us MINUS these is the transport): map_guest_ram[n=5017 tot=59979us mean=11us] describe_guest_ram[n=5017 tot=260377us mean=51us] map_gpu_va[n=5001 tot=442965us mean=88us] other[n=15965 tot=2475238us mean=155us]]
+            hostdmesg_bytes=[0] Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 2/3 tag=w321c2 2026-08-14T18:44:15+00:00
+    BOOT 2: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=154 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ]
+            last_pinned_va=0x2047ff000  budget_hit_lines=[0] row_cap_hit_lines=[0]
+            ★★★★★ W321IPC[ipc_calls=1410 (3 /chain) ipc_us=150525 (320 us/chain, 11 us/row) drain_us=154000 ours_us=3475 ipc_share=97%]
+            ★★★★★ W321BATCH[arm=coalesce chunks=470 chains=470 rows_pinned=13313 rows_refused=0 fallback_chunks=0 fallback_chains=0 rows_per_chain=28.32]
+            ★★★★★ W321CENSUS[rows=13313 bytes=0x3410000 len_4k=13312 len_lt64k=0 len_lt2m=1 len_ge2m=0 va_runs=3 pair_runs=461 coalesce_ceiling=28.87x break_va_only=0 break_gpa_only=458 break_both=2 runsz_4k=125 runsz_lt64k=219 runsz_lt2m=116 runsz_ge2m=1 max_run=0x1321000 ⇒ a coalescing fix can reduce 13313 host chains to 461; a BATCHED-TRANSPORT fix is bounded by neither of these numbers]
+            ★★★★★ child_lines=[4] LAST=[W321CHILD worker=0 served=4000 — CHILD-SIDE SERVICE TIME (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so parent_ipc_us MINUS these is the transport): map_guest_ram[n=509 tot=8124us mean=15us] describe_guest_ram[n=509 tot=49407us mean=97us] map_gpu_va[n=493 tot=52464us mean=106us] other[n=2489 tot=1859851us mean=747us]]
+            hostdmesg_bytes=[0] Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 3/3 tag=w321c3 2026-08-14T18:46:32+00:00
+    BOOT 3: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=86 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ]
+            last_pinned_va=0x2047ff000  budget_hit_lines=[0] row_cap_hit_lines=[0]
+            ★★★★★ W321IPC[ipc_calls=531 (3 /chain) ipc_us=85307 (481 us/chain, 6 us/row) drain_us=86000 ours_us=693 ipc_share=99%]
+            ★★★★★ W321BATCH[arm=coalesce chunks=177 chains=177 rows_pinned=13313 rows_refused=0 fallback_chunks=0 fallback_chains=0 rows_per_chain=75.21]
+            ★★★★★ W321CENSUS[rows=13313 bytes=0x3410000 len_4k=13312 len_lt64k=0 len_lt2m=1 len_ge2m=0 va_runs=3 pair_runs=161 coalesce_ceiling=82.68x break_va_only=0 break_gpa_only=158 break_both=2 runsz_4k=75 runsz_lt64k=20 runsz_lt2m=65 runsz_ge2m=1 max_run=0x204a000 ⇒ a coalescing fix can reduce 13313 host chains to 161; a BATCHED-TRANSPORT fix is bounded by neither of these numbers]
+            ★★★★★ child_lines=[3] LAST=[W321CHILD worker=0 served=3000 — CHILD-SIDE SERVICE TIME (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so parent_ipc_us MINUS these is the transport): map_guest_ram[n=386 tot=7487us mean=19us] describe_guest_ram[n=386 tot=53675us mean=139us] map_gpu_va[n=370 tot=48050us mean=129us] other[n=1858 tot=1925964us mean=1036us]]
+            hostdmesg_bytes=[0] Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W321 ARM EXIT status=0 2026-08-14T18:48:47+00:00
+=== W321 ARM TERMINATOR w321c rc=0 2026-08-14T18:48:47+00:00

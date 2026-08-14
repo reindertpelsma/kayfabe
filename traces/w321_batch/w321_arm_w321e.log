@@ -1,0 +1,46 @@
+=== W321 ARM START tree=/workspace/kayfabe_w321 prefix=w321e n=3 2026-08-14T18:55:01+00:00
+=== HEAD=e8ed422c8ab8acb569787dd24cbdaba58fa56bba
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own KNOB lines are the record of EXECUTION):
+===   KAYFABE_DRAIN_BATCH=coalesce
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[⊘unset ⇒ 3000 default]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[⊘unset ⇒ 65536 default]
+===   KAYFABE_DRAIN_BATCH=[coalesce]
+--- boot 1/3 tag=w321e1 2026-08-14T18:55:05+00:00
+    BOOT 1: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[⊘UNMEASURED — OLD BINARY, ⊘ not 'default']
+            ★★★ DRAIN=[⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete]
+            ⊘last_pinned_va UNMEASURED  budget_hit_lines=[⊘NOFILE] row_cap_hit_lines=[⊘NOFILE]
+            ★★★★★ ⊘W321IPC ABSENT — UNMEASURED, ⊘ not 0
+            ★★★★★ ⊘W321BATCH ABSENT — UNMEASURED, ⊘ not 'off'
+            ★★★★★ ⊘W321CENSUS ABSENT — UNMEASURED, ⊘ not 'contiguous'
+            ★★★★★ child_lines=[⊘NOFILE] LAST=[⊘W321CHILD ABSENT — UNMEASURED]
+            hostdmesg_bytes=[⊘NOFILE] Xid_lines=[⊘NOFILE] 
+            guest NVRM_lines=[⊘NOFILE] stall_lines=[⊘NOFILE]
+--- boot 2/3 tag=w321e2 2026-08-14T18:55:09+00:00
+    BOOT 2: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[⊘UNMEASURED — OLD BINARY, ⊘ not 'default']
+            ★★★ DRAIN=[⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete]
+            ⊘last_pinned_va UNMEASURED  budget_hit_lines=[⊘NOFILE] row_cap_hit_lines=[⊘NOFILE]
+            ★★★★★ ⊘W321IPC ABSENT — UNMEASURED, ⊘ not 0
+            ★★★★★ ⊘W321BATCH ABSENT — UNMEASURED, ⊘ not 'off'
+            ★★★★★ ⊘W321CENSUS ABSENT — UNMEASURED, ⊘ not 'contiguous'
+            ★★★★★ child_lines=[⊘NOFILE] LAST=[⊘W321CHILD ABSENT — UNMEASURED]
+            hostdmesg_bytes=[⊘NOFILE] Xid_lines=[⊘NOFILE] 
+            guest NVRM_lines=[⊘NOFILE] stall_lines=[⊘NOFILE]
+--- boot 3/3 tag=w321e3 2026-08-14T18:55:13+00:00
+    BOOT 3: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[⊘UNMEASURED — OLD BINARY, ⊘ not 'default']
+            ★★★ DRAIN=[⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete]
+            ⊘last_pinned_va UNMEASURED  budget_hit_lines=[⊘NOFILE] row_cap_hit_lines=[⊘NOFILE]
+            ★★★★★ ⊘W321IPC ABSENT — UNMEASURED, ⊘ not 0
+            ★★★★★ ⊘W321BATCH ABSENT — UNMEASURED, ⊘ not 'off'
+            ★★★★★ ⊘W321CENSUS ABSENT — UNMEASURED, ⊘ not 'contiguous'
+            ★★★★★ child_lines=[⊘NOFILE] LAST=[⊘W321CHILD ABSENT — UNMEASURED]
+            hostdmesg_bytes=[⊘NOFILE] Xid_lines=[⊘NOFILE] 
+            guest NVRM_lines=[⊘NOFILE] stall_lines=[⊘NOFILE]
+=== W321 ARM EXIT status=0 2026-08-14T18:55:14+00:00
+=== W321 ARM TERMINATOR w321e rc=0 2026-08-14T18:55:14+00:00
