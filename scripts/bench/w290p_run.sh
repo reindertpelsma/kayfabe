@@ -60,23 +60,40 @@ STAMP=$(strings /workspace/bench/qemu-build/qemu-system-x86_64 2>/dev/null | gre
 echo "=== STAMP=$STAMP HEAD=$HEAD ==="
 [ "$STAMP" = "$HEAD" ] || { echo "=== ★★★ STAMP GATE FAIL ==="; finish 93; }
 
-export KAYFABE_ISOLATES=real
-export KAYFABE_CE_EXECUTOR=host
-export NVKVM_RAM_BACKEND=memfd
-export KAYFABE_GUEST_RAM=memfd
+# ★★★★★ w298 — THE ELEVEN ARE NOW OVERRIDABLE, AND THAT IS THE WHOLE POINT OF THIS EDIT.
+#
+#   Until now every one of these was an UNCONDITIONAL `export`, so a caller that set
+#   `KAYFABE_PT_SWEEP=off` in its environment got `on` anyway — silently, with the log
+#   faithfully recording `on`. ⇒ An ablation was NOT EXPRESSIBLE from outside this file: the
+#   only way to disarm a relaxation was to edit it here, which is exactly the shape that makes
+#   an evidence run and its control indistinguishable at the call site.
+#
+#   ⊘ EVERY DEFAULT IS THE w290p/w294/w297 VALUE, BYTE FOR BYTE. A caller that sets nothing
+#     behaves identically to every boot before this commit; `git diff` on the effective arming
+#     is empty. The change is additive in the strict sense: it adds reachability, not values.
+#
+#   ⚠ `${V:-default}` treats EMPTY as unset. That is deliberate and it is the safe direction:
+#     none of these arms is spelled by the empty string, and the device REFUSES to default any
+#     of them, so an empty value could never have been a valid ablation anyway.
+export KAYFABE_ISOLATES=${KAYFABE_ISOLATES:-real}
+export KAYFABE_CE_EXECUTOR=${KAYFABE_CE_EXECUTOR:-host}
+export NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND:-memfd}
+export KAYFABE_GUEST_RAM=${KAYFABE_GUEST_RAM:-memfd}
 # ⊘ Overridable, DEFAULTED to the value every w290p arm used, so an existing caller keeps
 #   behaving byte-identically. ⚠ The nvdiff hook needs >= 600.
 export GQ_TIMEOUT=${GQ_TIMEOUT:-420}
 export BOOT_TIMEOUT=${BOOT_TIMEOUT:-180}
-export KAYFABE_FB_JOIN=shared
-export KAYFABE_GUEST_RING=ring
-export KAYFABE_GUEST_PUSHBUF=pin
-export KAYFABE_PT_WITNESS_EXEC=on
-export KAYFABE_GUEST_SEMA=pin
-export KAYFABE_GR_ROUTE=passthrough
-export KAYFABE_GUEST_OPERAND=pin
-export KAYFABE_PT_SWEEP=on          # ⊘ RELAXATION 1 (carried)
-export KAYFABE_OPERAND_JOIN=join    # ⊘ RELAXATION 2 (carried)
+export KAYFABE_FB_JOIN=${KAYFABE_FB_JOIN:-shared}
+export KAYFABE_GUEST_RING=${KAYFABE_GUEST_RING:-ring}
+export KAYFABE_GUEST_PUSHBUF=${KAYFABE_GUEST_PUSHBUF:-pin}
+export KAYFABE_PT_WITNESS_EXEC=${KAYFABE_PT_WITNESS_EXEC:-on}
+export KAYFABE_GUEST_SEMA=${KAYFABE_GUEST_SEMA:-pin}
+export KAYFABE_GR_ROUTE=${KAYFABE_GR_ROUTE:-passthrough}
+export KAYFABE_GUEST_OPERAND=${KAYFABE_GUEST_OPERAND:-pin}
+export KAYFABE_PT_SWEEP=${KAYFABE_PT_SWEEP:-on}          # ⊘ RELAXATION 1 (carried)
+export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-join} # ⊘ RELAXATION 2 (carried)
+# ⚠ VAS_PUBLISH stays POSITIONAL — it is the rung's own parameter and is already expressible
+#   by the caller. Overriding it by env as well would give one arm two sources of truth.
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
 unset KAYFABE_RING_VIDMEM
 
