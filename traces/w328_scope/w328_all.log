@@ -1,0 +1,16 @@
+=== W328 ALL START 2026-08-14T21:43:41+00:00 tree=/workspace/kayfabe_w328
+  ✔ fixture 1 ⇒ 0
+  ✔ fixture 2 ⇒ 1
+  ✔ fixture 3 ⇒ 2
+  ✔ fixture 4 ⇒ 3
+  ✔ fixture 5 ⇒ 4
+  ✔ fixture 6 ⇒ 0
+  ✔ nested-bracket extraction ⇒ complete=false
+SELFTEST PASS (6 fixtures + 1 matcher assertion)
+=== w319_attribute --selftest rc=0 2026-08-14T21:43:50+00:00
+=== arm A (control: scope off, batch off, cup3) done 2026-08-14T21:51:36+00:00
+=== arm S (scope on, batch off, cup3) done 2026-08-14T21:59:15+00:00
+=== arm C (scope on, batch on, cup3) done 2026-08-14T22:06:51+00:00
+=== arm E (cup8) done 2026-08-14T22:15:12+00:00
+=== arm X (R33 arm 1) done 2026-08-14T22:21:43+00:00
+=== W328 ALL TERMINATOR rc=0 2026-08-14T22:21:43+00:00

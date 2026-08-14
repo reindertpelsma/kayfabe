@@ -346,6 +346,30 @@ W328PIN[arm=doorbelled scoped=true scoped_out=1 other_vases=0 other_us=0 other_p
 fix.** ★ **Coverage for this rung's claims therefore rests on cup3 and cup8**, at n=3 each,
 and that is stated here rather than rounded up to "three workloads".
 
+⊘ And the census makes it quantitative rather than a judgement call: **R33 runs `passes=2`**
+publication passes in the whole boot, against **229** (cup3) and **275** (cup8), with
+`target_us = 2 271 µs` total. There is nearly nothing of this plane in that workload to
+exercise.
+
+### 3.4 ★★ CUP8 CORROBORATES THE MECHANISM ON A SECOND WORKLOAD — and the cost SCALES WITH IT
+
+`[measured, `w328e1`]`, the same correlation as §2.2 on a completely different program:
+
+| | passes | mean | largest table walked |
+|---|---|---|---|
+| `candidates=0` | **180** | **2 420 µs** | **18 277 rows** |
+| `candidates>0` | **95** | **35 774 µs** | 18 277 rows |
+
+**Identical shape, same table size in both rows** — and `target_us = 3 834 095 µs` cumulative,
+**larger than cup3's 2 666 358**, because cup8 has **95** join-carrying passes where cup3 has
+49. ⇒ the publication join cost **tracks the workload's allocation count**, and on cup8 it
+exceeds the coalesced drain by more than an order of magnitude.
+
+⊘ `other_us = 0` and `other_published = 0` here too — but arm `w328e` is a **scoped** arm
+(`scoped_out=825`), so those zeros are the scope working, **not** an independent measurement of
+the breadth on cup8. The breadth's own price was measured on the **unscoped control only**
+(§2.1), and cup8 has no unscoped arm in this rung. **Stated, not glossed.**
+
 ---
 
 ## 4. ⚠ THE CORRECTNESS HAZARD RUNS THE OTHER WAY, AND IT IS NAMED IN THE CODE

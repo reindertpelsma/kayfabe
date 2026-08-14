@@ -1,5 +1,5 @@
 Warning: Permanently added '[184.144.255.144]:42525' (ED25519) to the list of known hosts.
-=== W328 CENSUS tag=w328c2 log=/workspace/bench/run_w328c2_qemu.log 2026-08-14T22:11:02+00:00
+=== W328 CENSUS tag=w328c2 log=/workspace/bench/run_w328c2_qemu.log 2026-08-14T22:22:41+00:00
 === log bytes = 3959572
 
 --- ★ THE ARM WORDS, from the boot's own lines (⊘ never from the launcher's env)
@@ -42,4 +42,11 @@ expensive(>10ms): n=229 sum=7128882us    cheap(<=10ms): n=0 sum=0us
       1 candidates=32 published=24 refused=8
       1 candidates=25 published=25 refused=0
 
-=== W328 CENSUS TERMINATOR tag=w328c2 rc=0 2026-08-14T22:11:03+00:00
+--- ★★★★★ THE MECHANISM, IN ONE CORRELATION: cost vs WHAT THE PASS WAS ASKED TO DO
+---     ⊘ The two rows must be compared on max_total as well as on cost. If the
+---     candidates=0 row walked a SMALLER table, the difference would be the WALK and
+---     not the joins — which is the reading this correlation exists to exclude.
+candidates=0 : n=180 mean_us=23322 max_total=18277 rows
+candidates>0 : n=49 mean_us=59815 max_total=18277 rows
+
+=== W328 CENSUS TERMINATOR tag=w328c2 rc=0 2026-08-14T22:22:42+00:00
