@@ -209,9 +209,79 @@ this rung attributes it; it is stated as the measurement it is.
 
 ---
 
-## 3. THE SCOPING ARM, and what it is worth
+## 3. THE SCOPING ARM, and what it is worth — measured, and it is worth nothing
 
-<!-- W328-RESULTS-3 -->
+`[measured w328, vh, real GA106, arm `w328s` = `KAYFABE_PUBLISH_SCOPE=doorbelled`, n=3]`
+
+| boot | `CUP3_VAL` | `worst_trap_us` | `DRAIN_MS` | margin | `complete` | `pinned/asked` | attributor |
+|---|---|---|---|---|---|---|---|
+| `w328s1` | 43 | 3 164 107 | **3 000** | **1.00×** | ⚠ **false** | **12 433**/13 313 | `VERDICT=0` |
+| `w328s2` | 43 | 2 860 308 | 2 775 | 1.08× | true | 13 313/13 313 | `VERDICT=0` |
+| `w328s3` | 43 | 2 989 376 | 2 904 | 1.03× | true | 13 313/13 313 | `VERDICT=0` |
+
+**`W328PIN[arm=doorbelled scoped=true scoped_out=1 other_vases=0 other_us=0 other_pinned=0]`
+on all three** — the arm word is in the boot's own line, so `scoped=true` is a measurement and
+not an inference from the launcher's environment.
+
+| | arm A (control) | arm S (scoped) |
+|---|---|---|
+| mean `worst_trap_us` | **2 983 348** | **3 004 597** |
+| mean `DRAIN_MS` | **2 870** | **2 893** |
+
+⇒ **+0.7 % and +0.8 %. Indistinguishable.** Scoping the breadth does not move the worst trap,
+which is exactly what §2.1's 0.0084 % predicts and is the pre-registered outcome for this arm.
+
+### 3.1 ⚠ ONE ARM-S BOOT TRUNCATED — reported, and NOT attributed to scoping
+
+`w328s1` came back **`complete=false`, `pinned=12433/13313`** with `CUP3_VAL=43` and **zero
+`Xid`**. That is `the_drain_budget_truncation.md`'s defect, and it is graded here on **state**
+exactly as w319 asked: a green `CUP3_VAL` on a truncated drain is *"a publication miss waiting
+for a different workload"*.
+
+⊘ **It is not attributed to scoping**, and the control says why: arm A's own margins are
+**1.01× twice** — `DRAIN_MS` 2960 and 2969 against a 3 000 ms budget, i.e. **98.7 % and 99.0 %
+consumed**. On master the drain is one boot's noise from truncating, and scoping removes work
+rather than adding it. **1 of 6 cup3 boots at ≤1.12× margin truncated** — a rate consistent
+with w314's ~20 %.
+
+★ **And this is the finding that matters more than the scoping result:** w326 recorded the
+budget at 93 % consumed and called the remaining 7 % *"a silent truncation that every pass/fail
+metric reports as green"*. **On this branch's control it is 98.7–99.0 % consumed.** The margin
+did not shrink because anything regressed — `[measured w321]` per-row host-pin latency is
+**boot-variable** — but the headroom w326 measured is not a property one can rely on.
+
+---
+
+## 3.2 ★★★★★ WHAT DOES MOVE IT — the coalescer, 30.6× / 16.9× / 14.0× of budget
+
+`[measured w328, arm `w328c` = scope + `KAYFABE_DRAIN_BATCH=coalesce`, n=3]` — one lever added
+to arm S, everything else identical:
+
+| boot | `CUP3_VAL` | `worst_trap_us` | `DRAIN_MS` | residual | drain share | **margin** | `complete` | `pinned/asked` |
+|---|---|---|---|---|---|---|---|---|
+| `w328c1` | 43 | **188 776** | **98** | 90 776 µs | 51.9 % | **30.61×** | true | 13 313/13 313 |
+| `w328c2` | 43 | **459 984** | **177** | 282 984 µs | 38.5 % | **16.95×** | true | 13 313/13 313 |
+| `w328c3` | 43 | **314 033** | **215** | 99 033 µs | 68.5 % | **13.95×** | true | 13 313/13 313 |
+
+- **Margin at 3 points: 13.95× / 16.95× / 30.61× of the 3 000 ms budget**, against **1.01× /
+  1.01× / 1.12×** on the control. Every residual printed; **no point is budget-clamped**, so
+  the fit uses all three, and dropping the largest residual (`w328c2`, 282 984 µs) leaves
+  13.95×–30.61×.
+- `worst_trap_us` **2 983 348 → 320 931 mean, 9.3×**; best boot **16.1×**.
+- **`complete=true` and `pinned == asked` on 3/3**, where the same binary without this one word
+  truncated 1 of 3.
+- ⊘ Squarely inside w321's pre-registered **2.21×–34.9 %-of-budget** band, measured
+  independently three rungs later on a different day.
+- ★ `inline_exceptions` **19 213 → 1 362 / 3 237 / 2 150** — the clause-(b) residue falls with
+  it, because the coalescer's whole mechanism is *fewer, larger* host calls.
+
+### 3.2.1 ★★★ AND THE WORST TRAP CHANGES OWNER
+
+On the control the drain is **95.4–97.1 %** of the worst trap. With the coalescer it is
+**38.5–68.5 %**, and the residual — 91–283 ms — is now comparable to it. ⇒ **once the drain is
+coalesced, the publication CENSUS pass becomes a co-equal term of the worst trap**, which is
+the site §2.2 priced at ~6.4 ms per join attempt and §2.3 found running with its gate
+disarmed. That is what sweep 2's arm `G` tests, and it is why the ladder is ordered this way.
 
 ---
 
