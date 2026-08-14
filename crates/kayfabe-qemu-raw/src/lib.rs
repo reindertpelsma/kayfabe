@@ -80,6 +80,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod kftime;
+pub mod reclaimtick;
 pub mod shim;
 pub mod shim_unsafe;
 

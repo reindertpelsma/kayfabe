@@ -3789,11 +3789,47 @@ fn observer_loop(
     mut vmm: kayfabe_vmm_qemu::QemuVmm,
     plane: &std::sync::Arc<RegPlane>,
     gr_cursors: &std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
+    // ★★★★★ **w326 — THE REVOCATION DRAIN'S DRIVER.** See `crate::reclaimtick` for why
+    // this belongs on THIS thread and not on the publication lane: `Revocation` has no
+    // route into `pubqueue` by construction, and it must not acquire one.
+    device: &std::sync::Arc<kayfabe_rt::device::SharedDevice>,
+    reclaim: &std::sync::Arc<crate::reclaimtick::ReclaimTick>,
 ) {
     use kayfabe_vmm::Vmm as _;
     let mut pages = SemaPageReader::new();
     let mut cursors = GrCursorReader::new();
     while !stop.load(std::sync::atomic::Ordering::Acquire) {
+        // ★★★★★ **w326 — THE REVOCATION TICK.** `w323`: *"the budgeted drain carries its
+        // remainder to the NEXT REGISTER WRITE, and only the guest produces register
+        // writes"* ⇒ a guest that frees and then stops trapping leaves a live host-GPU
+        // translation into pages Linux has reused. **A bound discharged only by the
+        // adversary is not a bound.** This is the other driver.
+        //
+        // ★ `OffTrap::claim` and not `at_a_host_verb`: this thread is genuinely off-trap,
+        // so the honest mint is the one that PANICS if it ever is not. That is the census
+        // row w323 wanted retired — a real claim rather than a counted exception.
+        //
+        // ⊘ Disarmed, `spend` returns without taking the gate or touching the queue, so the
+        // control arm is byte-identical to master.
+        reclaim.spend(|| {
+            let off = kayfabe_util::trapwitness::OffTrap::claim("the revocation drain tick");
+            off.still_off_trap("draining retired host objects");
+            // ⊘ Same ORDER as `Regs::write`'s, and it is mandatory: the reap holds a proc
+            // back while its staged queue is non-empty, so a reap before the drain would
+            // defer every proc by one tick forever.
+            let pins = device.pin_reclaim_gone();
+            let t0 = std::time::Instant::now();
+            let drain = device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
+                // ★ A budget here too — not for the BQL (we hold none) but so one tick
+                // cannot monopolise the thread that also serves the completion watch.
+                u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+                    >= RETIRED_DRAIN_BUDGET_US
+            });
+            let (reaped, _deferred) = device.reap_retired_held();
+            let disposed = u64::try_from(drain.disposed).unwrap_or(u64::MAX)
+                + u64::try_from(pins.released).unwrap_or(0);
+            (disposed, u64::try_from(reaped).unwrap_or(u64::MAX))
+        });
         // ⊘ ONE wait per iteration, so the sweep below runs between every pair of waits.
         // `run_with` returns `Ok(())` when the budget is spent OR when shutdown was
         // requested; the two are told apart by asking the reactor, not by the return value.
@@ -10366,6 +10402,17 @@ fn join_one_fb_leaf(
 /// none — see [`SharedObjectModel`].
 pub struct Regs {
     plane: Arc<RegPlane>,
+    /// ★★★★★ **w326 — the revocation drain's OWN driver** (`crate::reclaimtick`).
+    ///
+    /// `w323` measured that the drain's only production caller is `Regs::write`, i.e. a
+    /// guest MMIO write — so a guest that frees its host objects and then stops trapping
+    /// leaves a live host-GPU translation into pages Linux has reused. **A bound
+    /// discharged only by the adversary is not a bound.** This handle is shared with the
+    /// off-trap observer thread, which spends the queue on its own 250 ms tick.
+    ///
+    /// ⊘ It is also the **mutual exclusion**: two concurrent drains of one queue would
+    /// double-free a host RM object. The vCPU side only ever `try_lock`s.
+    reclaim: Arc<crate::reclaimtick::ReclaimTick>,
     /// ★★★ **E2** — the L1 shell that owns the object model, held here because **two**
     /// paths now reach it: the object bridge (boxed into the register plane's served
     /// chain, and unreachable afterwards) and the doorbell port. Before E2 there was one
@@ -11000,6 +11047,9 @@ impl Regs {
         }));
         Ok(Regs {
             plane,
+            // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
+            //   is a boot that can change its mind halfway through.
+            reclaim: Arc::new(crate::reclaimtick::ReclaimTick::from_env()),
             device,
             refusals,
             promote_diag,
@@ -11140,12 +11190,25 @@ impl Regs {
             // the descent reads cannot be two stores.
             let plane = std::sync::Arc::clone(&self.plane);
             let gr_cursors = std::sync::Arc::clone(&self.ce.gr_cursors);
+            // ★★★★★ w326 — the two handles the revocation tick needs. Both are ALREADY
+            // `Arc`s on `Regs`, which is why this driver costs a clone and not a refactor.
+            let device_for_reclaim = std::sync::Arc::clone(&self.device);
+            let reclaim_for_thread = std::sync::Arc::clone(&self.reclaim);
             let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             let stop_thread = std::sync::Arc::clone(&stop);
             let join = std::thread::Builder::new()
                 .name("kayfabe-completion-observer".into())
                 .spawn(move || {
-                    observer_loop(&mut reactor, &watch, &stop_thread, vmm, &plane, &gr_cursors);
+                    observer_loop(
+                        &mut reactor,
+                        &watch,
+                        &stop_thread,
+                        vmm,
+                        &plane,
+                        &gr_cursors,
+                        &device_for_reclaim,
+                        &reclaim_for_thread,
+                    );
                 })
                 .map_err(|e| format!("{e}"))?;
             Ok(ObserverThread {
@@ -11852,6 +11915,24 @@ impl Regs {
         // ⚠ Printed only on CHANGE, not every register write: this edge is every guest MMIO
         // write, and a per-write line would be the `a_recorder_that_prints_at_teardown` trap
         // pointing the other way — a log so dense the fact is unfindable.
+        // ★★★★★ **w326 — THE GATE.** `w323` found this edge is the drain's ONLY driver;
+        // `crate::reclaimtick` gives it a second one on our own thread, and the two must
+        // never run together — `drain_retired_budgeted` issues its host verbs with no lock
+        // held, so two concurrent drains could plan and free the same retired object twice.
+        //
+        // ⊘ `try_claim_on_trap`, and there is no blocking method on that type at all: a
+        // vCPU that waited here would stop every vCPU and QEMU's main loop until a DIFFERENT
+        // thread finished host I/O — `INLINE-SAFE` clause (a) violated by construction.
+        // Missing the gate is safe and is not a dropped drain: whoever holds it is spending
+        // the same queue right now.
+        //
+        // ⊘ Disarmed, nothing else ever takes the gate, so this always succeeds and the
+        // whole block below is byte-identical to master.
+        //
+        // ⚠ A BLOCK, not an early return: the `kftime` records below this block must run on
+        // EVERY trap. An early return would drop the skipped traps out of the timing census
+        // entirely, so the arm that skips more would look like the arm with fewer traps.
+        if let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap() {
         let pins = self.device.pin_reclaim_gone();
         let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
         if total
@@ -11980,6 +12061,7 @@ impl Regs {
         // either. `doorbell` is decided by the plane, so it is read off the outcome rather
         // than re-derived from the offset — two projections of one fact that disagree is this
         // campaign's most expensive failure class.
+        }
         crate::kftime::record_hot(
             if out.doorbell.is_some() {
                 "mmio_doorbell"
@@ -12257,6 +12339,8 @@ impl Regs {
         // line is UNMEASURED and a present line with `triggers=0` is a measured zero.
         // Those are different facts and this tree has paid for confusing them.
         eprintln!("kayfabe: {}", self.plane.mmu_inval().census());
+        // ★★★★★ w326 — did the revocation drain get a driver that is not the guest?
+        eprintln!("kayfabe: {}", self.reclaim.census());
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
         // TRIGGER: the C printer emits `DELIVERY_UNBUILT` beside it whenever it is non-zero,
         // so serving `0x20800a9b` and stating what serving it did NOT buy are one act.
