@@ -493,6 +493,39 @@ reading (§2.0.1) and the concurrent/re-entrant drain entry the control exposed 
 
 ---
 
+## 6.3 Verification — exit codes from the real commands, on `vh`
+
+- `cargo test --workspace --features host-isolates --no-fail-fast` ⇒ the failure set is
+  **exactly the 7 rows `w323` §9 recorded on master** — the three
+  `doorbell_reaches_the_completion_observer` arms, the two `ring_out_of_our_own_framebuffer`
+  arms, `guest_os_axis_gate`, and `sticky_answer::the_universe_of_answering_policies_is_derived_from_the_source`.
+  **No new red.**
+- ★★★★★ **Except one, and the instrument that found it is the story.**
+  `every_unranked_lock_a_vcpu_thread_can_hold_is_classified` went red **naming both of this
+  rung's new locks by path** — `mmuinval::Mutex<Inner>` and `reclaimtick::Mutex<()>`. That is
+  `w300`'s census firing on the day a lock is written, for the **second** rung running (it
+  caught `pubqueue`'s on w323's day). Both are now classified in `UNRANKED_VCPU_PATH_LOCKS`
+  with the discrimination stated — for `mmuinval` the load-bearing half is what does **not**
+  take the lock (the guest's poll path is two atomics, because a poisoned mutex on that path
+  would be an unclearable `TRIGGER`, i.e. a hang). Green after.
+- ⚠ **One flake, named rather than absorbed**: `kayfabe-linux-raw`'s
+  `spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all` failed on the
+  fail-fast run (and aborted it) and **passed on the `--no-fail-fast` run and again in
+  isolation**. Not attributable to this rung — that crate is untouched — but it is why the
+  first suite run reported one failure and stopped.
+- `cargo clippy -p kayfabe-device -p kayfabe-qemu-raw --all-targets --features host-isolates`
+  ⇒ **zero warnings attributable to this rung.** Two were, and both were real:
+  `observer_loop` reaching 8 arguments (fixed by bundling the device and the gate into one
+  `ReclaimDriver` — ⊘ *deliberately one value, because a caller holding the device without
+  the gate is the double-disposal bug*), and an unevenly-grouped hex literal.
+- ⊘ **`cargo fmt` was NOT applied.** `rust-toolchain.toml` pins `channel = "stable"`, i.e.
+  nothing; the bench's `rustfmt 1.9.0-stable` reformats **62 files** of untouched master
+  (import ordering, mainly). Running it would have buried this rung's diff in unrelated churn
+  attributed to it. ⚠ That is a standing hazard for every rung on this bench and it is worth a
+  pin in `rust-toolchain.toml`.
+
+---
+
 ## 7. What in this rung's brief turned out wrong
 
 - ⊘ **"448 KiB below the doorbell"** — 180 KiB (§1). Wrong in the brief *and* in the research
