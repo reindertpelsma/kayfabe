@@ -1,4 +1,4 @@
-# `traces/w315_floor/` — five guest boots, one variable each
+# `traces/w315_floor/` — six guest boots, one variable each
 
 Reading: `docs/design/w315_the_launch_floor_is_our_own_doorbell_handler.md`.
 Bench `vh2`, RTX 3060 **GA106**, driver 580.159.04, 2026-08-14.
@@ -12,9 +12,17 @@ Bench `vh2`, RTX 3060 **GA106**, driver 580.159.04, 2026-08-14.
 | `w315full` | `on` | `72b6f66f` | 113.562 | 90.865 | 23.391 | **per-event lines — the alignment runs on this** |
 | `w315inject` | `census` + 30 ms → `vas_publish` | `72b6f66f` | 149.628 | **126.247** | 23.293 | ★ **THE KNOWN-POSITIVE** |
 | `w315full2` | `on` | `9196b8fa` | 116.909 | 93.977 | 22.967 | ★ **the confirmation boot — n=2 on the headline** |
+| `w315hot` | `census` | `93785160` | 107.331 | 84.805 | 22.526 | the **hot-offset** census, which had emitted **zero lines** on every boot before it |
 
-All five: `N=512`, `iters=12`, `batch=10`, `verify` every iteration, `bad=0 maxerr=0`,
+All six: `N=512`, `iters=12`, `batch=10`, `verify` every iteration, `bad=0 maxerr=0`,
 (E) VERDICT = 0, **zero Xid**.
+★ `w315hot` also carries the answer to *"which register?"*: **100 % of doorbells are BAR0
+`0xbb0090`** (the USERMODE doorbell), 529 of them, mean **31.8 ms**. ⊘ Its `mmio_other` census
+**overflowed its 96-row cap** and says so; the cap is **first-come-first-served, not top-N**,
+so the rows are only the hottest *among the first 96 offsets seen*. What makes that safe is
+that the overflow's whole cost is reported — **438 ms over 397 356 accesses across the entire
+boot** — so nothing hiding in it can matter against 16.8 s of doorbells.
+
 ⚠ **`bad=0` here is UNGUARDED** — every arm ran `KAYFABE_BENCH_ONLY=measure`, so the
 `BENCH_NOLAUNCH` negative control was **not** run in this rung. Correctness is inherited from
 w311 (guest `262144`), at a different revision.
@@ -47,7 +55,7 @@ inside that trap:  vas_publish 55.7% · pt_decode 25.7% · pt_sweep 7.6% · pt_v
   on any completed boot — a number that looks like a measurement. Read the *positive per-row
   deltas*: `w315base` carries **1 681 577 exits / 277 894 mmio_exits, peak 27 434 mmio/s**,
   with `exits=0` at both ends of the same file.
-- `run_<tag>_hostdmesg.log` — the per-boot host dmesg delta. **0 bytes on four of five**;
+- `run_<tag>_hostdmesg.log` — the per-boot host dmesg delta. **0 bytes on five of six**;
   `w315full` holds one line, `hrtimer: interrupt took 5601309 ns` — the eprintln flood, not an
   Xid. ⊘ A 0-byte delta passes (E1) by having nothing in it; that is a statement about the
   file, and it is why the content is quoted here.

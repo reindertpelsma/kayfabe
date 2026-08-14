@@ -216,6 +216,53 @@ Supporting counts, from the 1 Hz KVM sampler (`run_<tag>_kvmexits.log`) and our 
 thing a nested bench punishes hardest — are **20 ms across an entire boot**. A polling guest
 was a live hypothesis and it is refuted.
 
+### 4.1 ★★★★★ THE EXIT COUNT PER SUBMIT, which is what the question actually turned on
+
+Counted directly, using the derived δ on boot `full2` — **not** inferred from the 1 Hz sampler:
+
+| inside the SUBMIT window | events per launch | time per launch |
+|---|---|---|
+| `mmio_doorbell` | **1.2** | (the trap, §3) |
+| `mmio_other` (BAR0/BAR1/BAR2 writes) | **3.8** | **0.061 ms** |
+| `mmio_read` | 0 observed in-window | — |
+
+⇒ **Our device takes ~5 MMIO exits per launch.** At even 50 µs per *nested* exit that is
+0.25 ms. **The exit count is not the floor and cannot be made into it.**
+
+⊘⊘ **I got this wrong first, by arithmetic, and the direct count corrected me.** From the
+sampler's peak of 27 434 `mmio_exits/s` I estimated *"~2 800 MMIO exits per launch"* and
+briefly treated the nested tax as the leading candidate. The sampler is **host-wide**: those
+exits are overwhelmingly virtio, the APIC and everything else on the box. ⇒ **a rate divided
+by a rate is not an attribution**, and it is the same shape as every other error this campaign
+has paid for. ★ All three BARs funnel through one instrumented entry
+(`kayfabe_shim_regs_{read,write}` with `KAYFABE_BUS_BAR_{REGS,INST,FB}`), so the ~429 000
+accesses our census counts across a boot **are** every MMIO access to this device — nothing is
+outside it.
+
+### 4.2 The doorbell is ONE register, and the hot census says so
+
+`KAYFABE_KFTIME` also keeps a per-`(bar, offset)` census (boot `w315hot`):
+
+```
+KFTIME-HOT kind=mmio_doorbell accesses=529 distinct=1
+    KFTIME-HOTREG bar=0 off=0xbb0090 n=529 share=100.0% total_ms=16828.328 mean_us=31811
+
+KFTIME-HOT kind=mmio_other accesses=400000 distinct=96 capped_at=96
+    ⚠ OVERFLOW: 397356 accesses (438.153 ms) fell OUTSIDE the tracked set
+    KFTIME-HOTREG bar=0 off=0x110c00 n=684 share=0.2% total_ms=4201.600 mean_us=6142
+```
+
+★ **100 % of doorbells are BAR0 `0xbb0090`** — the USERMODE doorbell (`USERMODE base + 0x90`),
+mean **31.8 ms** each.
+
+⊘ **The cap is FIRST-COME-FIRST-SERVED, not top-N**, so `0x110c00` is only the hottest *among
+the first 96 distinct offsets seen*, and the overflow warning is not decoration. ★ What makes
+the reading safe anyway is that the overflow's **entire** cost is bounded and reported:
+**438 ms across the whole boot, over 397 356 accesses (1.1 µs each)**. No offset hiding in
+there can matter against 16.8 s of doorbells. ⇒ **bound the unseen; do not ignore it.** A
+future rung that cares about the write path should raise `HOT_OFFSETS` or make the cap
+evicting.
+
 ⊘ The KVM counters' first delta read **`exits=0`**: `/sys/kernel/debug/kvm/*` is per-live-VM
 and resets when the VM exits, so last-minus-first is zero on any *completed* boot — a number
 that looks like a measurement and is an artefact of the subject being gone. Fixed by summing
@@ -312,6 +359,17 @@ buys, and **this rung deliberately fixed nothing**.
   is not achievable in a plane whose segments are coupled through elapsed time; the honest
   criterion is *"the injected segment moves by the injected amount and the guest sees it"*,
   plus a **named** account of anything else that moved.
+- ⊘⊘ **I briefly believed the nested-virt hypothesis on arithmetic and was wrong** — see
+  §4.1. A host-wide exit *rate* divided by a launch *rate* gave *"~2 800 exits per launch"*;
+  the direct count is **~5**. The coordinator's own note said the arithmetic was not a
+  measurement, and it was right about mine.
+- ⊘⊘ **Two of my own instruments were caught by gates rather than by me.** The workspace lock
+  census refused both new `kftime` mutexes as unclassified vCPU-path locks — correctly; and
+  the hot-offset census **ran on hardware and emitted zero lines**, because its only caller was
+  a teardown path a killed QEMU never reaches. ⚠ And I nearly shipped the first of those red:
+  my `cargo test --workspace` was filtered through a `grep` that matched only `test result`,
+  so twenty `ok` lines printed with `TESTS_EXIT=101` underneath them. **A gate read through a
+  grep cannot fail.**
 - ⊘ **`mmio_read` was an afterthought, added only after the coordinator's nested-virt note,
   and it turned out to matter — by being ~zero.** Without it I could not have refuted the
   polling-guest hypothesis, and a doorbell-only instrument would have reported a fast write
