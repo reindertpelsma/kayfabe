@@ -831,6 +831,30 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     // wrong, because **this control programs no hardware at all** — see
     // `DeniedBecause::SmDebuggerTrapping`'s w292 correction for the ogkm citations.
     ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
+    // ★★★★★ **w296 — ADMITTED BY OWNER RULING 2026-08-14: FOLLOW NVPROXY EXACTLY.**
+    // *"they really thought about it for sandboxed containers meant for adversarial code."*
+    // `gvisor nvproxy: version.go:334-336` carries **exactly three** `0x83de03xx` controls,
+    // all `ctrlHandler(rmControlSimple, compUtil)` — i.e. under the DEFAULT compute
+    // capability, the same set every container gets — beside the class itself at `:427`.
+    // `gvisor pkg/abi/nvgpu/ctrl.go:792-794` defines those three and **no other** `83de`
+    // control, so the rest of the class is denied by OMISSION, not by a judgement of ours.
+    //
+    // ⊘ `rmControlSimple` is a byte-blob passthrough: nvproxy inspects no field of either
+    // params struct. ⇒ *"nvproxy permits it"* is the whole specification; there is no
+    // validation to inherit, and this row must not be read as one.
+    //
+    // ★★★ **`0x83de0317`/`0318` (SUSPEND/RESUME_CONTEXT) STAY DENIED, AND THAT IS WHAT MAKES
+    // ADMITTING `030c` COHERENT.** Reading every SM's error state is a read of whatever GR
+    // context happens to be resident — a race. WITH suspend it stops being a race and becomes
+    // a deterministic cross-context read. ⊘ Do not add them for symmetry: the pair is the
+    // hazard, not either half.
+    //
+    // ⚠ **`0310` CLEAR_ALL is the sharper half on an INTEGRITY axis** — suppressing another
+    // context's fault state only has to *precede* that context's read, never win a race to
+    // observe it. nvproxy carries it anyway, and the ruling is to match nvproxy rather than
+    // to re-adjudicate it here. Named so the next reader knows it was seen, not missed.
+    ControlEntry { cmd: 0x83de030c, name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x83de0310, name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
     // ★★★★★ **w288 TIER 2 — the ONLY control that carries a fault's ADDRESS.** The error
@@ -1503,9 +1527,10 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
         name: "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
         why: DeniedBecause::FabricManagement,
     },
-    // ★★ The `NV83DE` block. The first three MOVED here from the allowlist; the last
-    // three were already absent and are named so a census can tell a debugger attaching
-    // from an unmodelled command. `0x83de0307` is the load-bearing one — see
+    // ★★ The `NV83DE` block, **as of w296: THREE denied, THREE served.** What remains here
+    // is exactly what `gvisor nvproxy` omits — `0307` (SET_MODE_MMU_DEBUG) and the
+    // `0317`/`0318` SUSPEND/RESUME pair — and it remains by matching nvproxy's table, not by
+    // a judgement of ours. `0x83de0307` is the load-bearing one — see
     // `DeniedBecause::SmDebuggerTrapping`'s second half.
     DeniedEntry {
         id: 0x83de_0307,
@@ -1517,16 +1542,11 @@ pub(crate) static DENIED_CONTROLS: &[DeniedEntry] = &[
     // because *"a ruling's DATE and its ARCHITECTURE are both part of the citation"*: the
     // denial was correct on what was known then, and the thing that changed is that we
     // read the driver instead of the name.
-    DeniedEntry {
-        id: 0x83de_030c,
-        name: "NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
-    DeniedEntry {
-        id: 0x83de_0310,
-        name: "NV83DE_CTRL_CMD_DEBUG_CLEAR_ALL_SM_ERROR_STATES",
-        why: DeniedBecause::SmDebuggerTrapping,
-    },
+    // ⊘⊘ `0x83de_030c` and `0x83de_0310` WERE HERE AND ARE NOT ANY MORE — w296, owner-ruled
+    // 2026-08-14 (*"follow nvproxy exactly"*). Both are on the allowlist above; see that
+    // block for `gvisor nvproxy: version.go:334-336` and for why `0317`/`0318` did NOT move
+    // with them. ⚠ Kept as a comment rather than deleted, for the reason the `0309` note
+    // beside it gives: a ruling's DATE and its ARCHITECTURE are both part of the citation.
     DeniedEntry {
         id: 0x83de_0317,
         name: "NV83DE_CTRL_CMD_DEBUG_SUSPEND_CONTEXT",
@@ -2130,14 +2150,14 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                159,
+                161,
                 78,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                160,
+                162,
                 78,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2147,14 +2167,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                159,
+                161,
                 78,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                160,
+                162,
                 86,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2164,7 +2184,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                162,
+                164,
                 92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2176,7 +2196,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                163,
+                165,
                 92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2189,7 +2209,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                163,
+                165,
                 94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2202,7 +2222,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                163,
+                165,
                 94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2693,13 +2713,14 @@ mod tests {
         // ★★★ THE BOUNDARY ITSELF. Every `0x83de` control this port denied before the class
         // was admitted is still denied, and still denied BY NAME rather than by falling off
         // the allowlist.
-        for cmd in [
-            0x83de_0307u32,
-            0x83de_030c,
-            0x83de_0310,
-            0x83de_0317,
-            0x83de_0318,
-        ] {
+        // ⊘⊘ **THREE, NOT FIVE — CORRECTED 2026-08-14 (w296) BY A SECOND OWNER RULING.**
+        // The first version of this test asserted all five `0x83de03xx` rows stayed denied.
+        // The ruling is *"follow nvproxy exactly"*, and nvproxy serves `030c` and `0310`
+        // (`gvisor nvproxy: version.go:334-336`), so those two MOVED to the allowlist and are
+        // asserted SERVED below. What is left here is exactly what nvproxy omits.
+        // ★ This test having to change is the point: the split is now a decision someone
+        // made against a citation, not a set that drifted.
+        for cmd in [0x83de_0307u32, 0x83de_0317, 0x83de_0318] {
             assert!(
                 matches!(
                     bench().control(ControlCmd(cmd)),
@@ -2718,14 +2739,38 @@ mod tests {
                  row would prove nothing about the deny table"
             );
         }
-        // ⊘ w292's ruling is untouched: the one `0x83de` control that IS served stays served.
-        assert!(
-            matches!(
-                bench().control(ControlCmd(0x83de_0309)),
-                ControlPermit::Listed { .. }
-            ),
-            "w292's restored `SET_EXCEPTION_MASK` must still be served — admitting the class \
-             may not silently re-deny it"
+        // ★★★ THE SERVED SIDE — nvproxy's exact three, asserted by id so a future edit cannot
+        // quietly widen or narrow the set without this line moving.
+        for cmd in [0x83de_0309u32, 0x83de_030c, 0x83de_0310] {
+            assert!(
+                matches!(
+                    bench().control(ControlCmd(cmd)),
+                    ControlPermit::Listed { .. }
+                ),
+                "★ {cmd:#010x} is one of nvproxy's three served `0x83de03xx` controls \
+                 (`version.go:334-336`) and this port must serve it too"
+            );
+        }
+        // ⊘ And the two halves are DISJOINT and EXHAUSTIVE over the six ids this port names —
+        // a census that let an id be in neither set would report a clean split while a
+        // control fell off the table entirely.
+        let named: std::collections::BTreeSet<u32> = bench()
+            .all_denied_controls()
+            .map(|e| e.id)
+            .chain(bench().all_controls().map(|e| e.cmd))
+            .filter(|c| c >> 16 == 0x83de)
+            .collect();
+        assert_eq!(
+            named,
+            std::collections::BTreeSet::from([
+                0x83de_0307,
+                0x83de_0309,
+                0x83de_030c,
+                0x83de_0310,
+                0x83de_0317,
+                0x83de_0318
+            ]),
+            "the six `0x83de` ids this port names must each be in exactly one table"
         );
     }
 
@@ -2765,12 +2810,12 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        assert_eq!(bench().all_controls().count(), 163, "controls");
+        assert_eq!(bench().all_controls().count(), 165, "controls");
         assert_eq!(at(550, 54, 4).all_classes().count(), 78, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 86, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 92, "classes at 570");
         assert_eq!(bench().all_classes().count(), 94, "classes at 580");
-        assert_eq!(bench().all_denied_controls().count(), 12, "denied controls");
+        assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
 
@@ -2798,7 +2843,12 @@ mod tests {
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because
         // it forwards to a real GPU — and w292 measured that our own refusal, not the
         // hardware's, is what ended `cuCtxCreate`.
-        assert_eq!(n(Origin::Nvproxy), 149);
+        // ★★★★★ 149 → 151 on 2026-08-14 (w296): `0x83de030c` and `0x83de0310`, admitted by
+        // the owner's *"follow nvproxy exactly"* ruling. `Nvproxy` is not merely defensible
+        // provenance here, it IS the ruling — both rows exist because
+        // `gvisor nvproxy: version.go:334-336` carries them under the default compute
+        // capability, and for no other reason.
+        assert_eq!(n(Origin::Nvproxy), 151);
         assert_eq!(
             bench()
                 .all_classes()
