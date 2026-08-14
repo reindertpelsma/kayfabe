@@ -2076,7 +2076,7 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                157,
+                159,
                 77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
@@ -2100,7 +2100,7 @@ mod tests {
             (
                 "560.28.03",
                 (560, 28, 3),
-                158,
+                160,
                 85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2110,7 +2110,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                160,
+                162,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2122,7 +2122,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                161,
+                163,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2135,7 +2135,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                161,
+                163,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2148,7 +2148,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                161,
+                163,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2599,7 +2599,18 @@ mod tests {
         // `all_denied_controls()` drops 14 → 13 in the same commit for the same one row:
         // the two counters move in OPPOSITE directions, which is what says it MOVED
         // rather than that a second copy was added.
-        assert_eq!(bench().all_controls().count(), 161, "controls");
+        // ★★★★★ **+2 on 2026-08-14 (w294): `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL`
+        // (`0x00802009`) and `..._DISABLE` (`0x00802004`).** SHARED, so this number and
+        // **every** boundary's above move together by the same 2 — which is the evidence the
+        // rows went into the shared base rather than into one boundary by accident, and the
+        // check that would have caught a copy-paste into a single version block.
+        // ⊘ `all_denied_controls()` does **not** move: unlike w292's `0x83de0309`, these two
+        // were never denied — they were never named at all, in either direction. An
+        // unchanged denied count is therefore the right reading here, not a missed edit.
+        // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
+        // not: that id was already admitted and **cannot be served** (not
+        // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
+        assert_eq!(bench().all_controls().count(), 163, "controls");
         assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
@@ -2618,7 +2629,15 @@ mod tests {
         // right provenance and not a convenience: the control is `ROUTE_TO_PHYSICAL`, so on a
         // GSP client it is RPC'd to the GSP — us — and as an ioctl it never crossed the
         // boundary nvproxy gates.
-        assert_eq!(n(Origin::Mode2Rpc), 7);
+        // ★★★★★ 7 → 9 on 2026-08-14 (w294): `0x00802009` and `0x00802004`. `Mode2Rpc` is
+        // the only defensible provenance, and the reason is sharper here than for
+        // `0x906f0106`: these two are `RMCTRL_FLAGS_INTERNAL` and are issued by the guest's
+        // **kernel**, so gVisor's userspace-ioctl allowlist has no opinion on them and never
+        // could — there is no `Nvproxy` row to inherit. They reach us solely because
+        // `ROUTE_TO_PHYSICAL` on a GSP client means the guest RPCs them to the GSP.
+        // ⊘ `Nvproxy` stays at 149: the id nvproxy DOES name here — `0x00801909` — was
+        // already on the list and is unchanged by this rung.
+        assert_eq!(n(Origin::Mode2Rpc), 9);
         assert_eq!(n(Origin::Empirical), 5);
         // ★ 148 → 149 on 2026-08-14 (w292): `0x83de0309` came back to the allowlist with
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because

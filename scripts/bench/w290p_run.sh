@@ -29,7 +29,11 @@ case "$ARM" in
   assert|publish|pinrate|both|drain) ;;
   *) echo "usage: $0 assert|publish|pinrate|both|drain" >&2; exit 64 ;;
 esac
-TAG=w290p${ARM}
+# ⊘ **w294 — OVERRIDABLE, and DEFAULTED so every existing caller behaves byte-identically.**
+# Two boots of the SAME arm under DIFFERENT instruments (cup2 vs nvdiff) otherwise overwrite
+# each other's `run_<tag>_*.log`, and the second boot's logs then read as the first's — the
+# absent-artefact class, except worse, because the file is present and wrong.
+TAG=${KAYFABE_TAG:-w290p${ARM}}
 OUT=/workspace/${TAG}.log
 exec >"$OUT" 2>&1
 finish() { echo "=== W290P EXIT rc=$1 arm=$ARM at $(date -Is) ==="; exit "$1"; }
