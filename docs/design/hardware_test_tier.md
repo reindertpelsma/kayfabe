@@ -147,3 +147,33 @@ existed.** Three rules, each from an incident that produced a *false result*:
 ★ Each rule is a **pure classifier with its own fixtures**, asserted against literal lines
 quoted from the tree *before* it is pointed at the tree. A scanner run only over a clean tree
 returns clean, and clean is exactly what a broken scanner returns.
+
+## 6. The inherited red set, measured — not inferred
+
+Measured at **`origin/master` = `72f902f`**, clean clone, clean target dir, on `vh2`
+(RTX 3060 / GA106), and again at this branch's head. **This rung adds none of them and fixes
+none of them** — they are stated so that a red run is attributable.
+
+```
+cargo test --workspace --no-fail-fast   →  EXIT 101, 5 targets failed, IDENTICAL both times:
+  kayfabe-isolate-host  executor_vas_census
+  kayfabe-isolate-host  guest_ring_census
+  kayfabe-tests         ce_representability_split
+  kayfabe-tests         doorbell_reaches_the_completion_observer
+  kayfabe-tests         ring_out_of_our_own_framebuffer
+```
+
+⊘ **And two more that `traces/w294_cudalimit/README.md` §8 does not name, because it counted
+`cargo test` targets only:**
+
+| gate | at `72f902f` | at this branch |
+|---|---|---|
+| `cargo fmt --all --check` | **RED — 21 files** | RED — the same 21. This rung's two new files were formatted; the pre-existing 21 were left alone, deliberately: reformatting files a sibling lane is editing is a merge conflict wearing a cleanup's clothes |
+| `cargo clippy --workspace --all-targets -- -D warnings` | **RED — 5 errors** | RED — the same 5, at `proto.rs:118`, `rmgraph.rs:584`, `rm.rs:1619`, `rm.rs:2600`, `rm.rs:6780`. None is in code this rung wrote |
+
+⇒ The two CI steps that the README calls "clean" have been red on `master` for at least this
+rung's lifetime. ★ That is worth its own line because **`ci_gates.sh --all` runs both**, so the
+authoritative local gate run cannot currently reach a clean exit for a reason that has nothing
+to do with any rung's change — which is the *"a red caused by the box cannot be reported as a
+red caused by the code"* rule, one category over: **a red caused by the INHERITED TREE must not
+be reported as a red caused by the branch.**
