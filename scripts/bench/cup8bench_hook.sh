@@ -84,6 +84,11 @@ B_BWIT=${KAYFABE_BENCH_BW_ITERS:-7}
 B_BWTGT=${KAYFABE_BENCH_BW_TARGET_MIB:-256}
 B_BWONLY=${KAYFABE_BENCH_BW_ONLY:-0}
 B_BWREPS=${KAYFABE_BENCH_BW_REPS:-0}
+# ★ w327 — the fill chunk is the failure-offset MEASUREMENT'S OWN RESOLUTION. Defaulted to
+#   8 MiB so an un-armed run is byte-identical; forwarded so a rung can bisect the offset.
+#   ⚠ Forwarded AND printed, because `KAYFABE_BENCH_NOLAUNCH` was exported for a whole rung
+#   and silently dropped here, and the omission produced a GREEN known-positive.
+B_BWFC=${KAYFABE_BENCH_BW_FILL_CHUNK_MIB:-}
 # ⊘⊘ KAYFABE_BENCH_NOLAUNCH WAS NEVER FORWARDED, AND THE OMISSION PRODUCED A GREEN.
 #   w322's `bwneg` arm exported it, the hook dropped it, the workload ran in MEASURE mode and
 #   reported `BENCH_VERDICT: PASS (every bw row verified) bad=0` — which is indistinguishable
@@ -111,7 +116,7 @@ echo "BENCH_SRC_MD5=$(md5sum < "$SRC" | cut -d' ' -f1)"
 echo "    ★ THE SAME FILE the native arm builds — w311_native.sh copies THIS path. The md5 is"
 echo "      printed by both arms so 'same source' is a comparison, not a template sentence."
 echo "BENCH_PARAMS sizes=$B_SIZES iters=$B_ITERS batch=$B_BATCH verify=$B_VERIFY"
-echo "BENCH_W322_PARAMS hostmem=$B_HOSTMEM alloc=[$B_ALLOC] bw=[$B_BW] bw_iters=$B_BWIT bw_target_mib=$B_BWTGT bw_only=$B_BWONLY bw_reps=$B_BWREPS nolaunch=$B_NOLAUNCH"
+echo "BENCH_W322_PARAMS hostmem=$B_HOSTMEM alloc=[$B_ALLOC] bw=[$B_BW] bw_iters=$B_BWIT bw_target_mib=$B_BWTGT bw_only=$B_BWONLY bw_reps=$B_BWREPS nolaunch=$B_NOLAUNCH fill_chunk_mib=[${B_BWFC:-<default:8>}]"
 
 # ---------------------------------------------------------------------------------------
 # ★★★ PRECONDITIONS, BY NAME. Each fails in a way INDISTINGUISHABLE from our wall unless it
@@ -218,7 +223,7 @@ run_detached measure "$BENCH_TIMEOUT" \
 BENCH_BATCH_SWEEP=$B_SWEEP BENCH_BATCH_REPS=$B_REPS BENCH_CTX_FLAGS=$B_CTXF \
 BENCH_HOSTMEM=$B_HOSTMEM BENCH_ALLOC=$B_ALLOC BENCH_BW=$B_BW BENCH_BW_ITERS=$B_BWIT \
 BENCH_BW_TARGET_MIB=$B_BWTGT BENCH_BW_ONLY=$B_BWONLY BENCH_BW_REPS=$B_BWREPS \
-BENCH_NOLAUNCH=$B_NOLAUNCH"
+BENCH_NOLAUNCH=$B_NOLAUNCH BENCH_BW_FILL_CHUNK_MIB=$B_BWFC"
 
 echo ""
 echo "=== ★ [measure] FULL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ==="
