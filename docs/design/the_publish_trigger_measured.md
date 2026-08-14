@@ -301,6 +301,30 @@ by one method.
 
 ---
 
+## 6.1 ⊘ AND THE TRIGGER IS DECODED BUT NOT ARMED — the decision, stated
+
+The decoder ships **arming-capable and disarmed**. `KAYFABE_PUBLISH_PLANE` is read and
+reported; nothing sets `MmuInvalidateLog::arm()` in production.
+
+★ **Why, and it is a judgement this doc would rather record than have re-litigated.** Arming
+this trigger makes a bug in *our* publication path into a **guest hang** (§4): the guest is
+spinning on a register only we can clear, for 4 s, and then takes an Xid/reset. Every other
+failure this plane can produce is a GPU fault, which is contained and fail-safe. ⇒ arming it
+is the one change here whose blast radius is the whole VM, and the measurement (§3) says it
+buys **1.6× fewer publication passes** — a real but small win — while the site that actually
+dominates (§5.2, the whole-VAS drain at 95.8–97.0 % of the worst trap) is **untouched by the
+trigger choice**.
+
+⇒ **Arm it in the rung that moves the execution site**, where the two changes can be graded
+against each other, and not at the end of the rung that measured it. That is the same
+discipline `w323` applied to the lane itself, applied one level up.
+
+⊘ **What IS built and watched offline**, so arming later is a wiring change and not a design:
+the `TRIGGER` hold, the idempotent completion, the over-budget diagnostic, the reentrancy
+counter, and — the one that matters — `disarmed_answers_zero_forever_and_can_never_hang_the_guest`.
+
+---
+
 ## 7. What in this rung's brief turned out wrong
 
 - ⊘ **"448 KiB below the doorbell"** — 180 KiB (§1). Wrong in the brief *and* in the research
