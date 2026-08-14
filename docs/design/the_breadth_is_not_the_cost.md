@@ -664,10 +664,24 @@ explicitly **does not** propose flipping it.
 ★★★ **The two levers that matter are already built, already measured, and both default-off.**
 That, not the breadth, is this rung's finding:
 
-| cost | site | the fix that exists | its state |
-|---|---|---|---|
-| the **worst trap** — 1.01× of budget on 2/3 control boots | `measure_guest_ram_pin_rate` | **w321's coalescer** `KAYFABE_DRAIN_BATCH=coalesce` | merged, **disarmed** |
-| the **cumulative BQL** — 2.52 s of refused joins | `publish_vas_rows` | **w318's dirty gate** `KAYFABE_DIRTY_GATE_PUBLISH=on` (228× on `vas_publish`) | merged, **disarmed** |
+| cost | site | the fix that exists | its state | measured here |
+|---|---|---|---|---|
+| the **worst trap** — **1.01× of budget** on 2/3 control boots | `measure_guest_ram_pin_rate` | **w321's coalescer** `KAYFABE_DRAIN_BATCH=coalesce` | merged, **disarmed** | margin **2.34×–47.62×** over 14 boots, `complete=true` **14/14** |
+| the **cumulative BQL** — 2.52 s of refused joins | `publish_vas_rows` | **w318's dirty gate** `KAYFABE_DIRTY_GATE_PUBLISH=on` | merged, **disarmed** | **95.2 % / 95.6 % of passes skipped, byte-identical n=3 per workload**; cup8 wall time **3.88×**, cup3 **suggestive only** |
+
+⇒ **The recommendation, stated as a recommendation and not as a merge:**
+
+1. ★★★ **Arm the coalescer by default.** It is the only thing measured that moves the worst
+   trap, it holds `complete=true`/`pinned == asked` on **14/14** boots across two workloads and
+   both gate settings, and master's own margin is **1.01×** — one boot's host-fragmentation
+   noise from the truncation w319 root-caused. ⊘ Its win is a **distribution, not a constant**:
+   `chains` spans **75 → 5 155** in one hour on one box, so the honest claim is *"2.34× at the
+   worst boot observed"*, not *"30×"*.
+2. ★★ **Arm the dirty gate after one rung that watches `target_published` across more boots.**
+   The skip count is deterministic and the publication set is unchanged (63/66/66 vs 66/63/66),
+   but the wall-clock win is only established on cup8, and the armed direction **removes work**.
+3. ⊘ **Do NOT scope the breadth.** §7's opening.
 
 ⚠ **And the standing hazard neither of them addresses**, because it is not a speed problem:
-a `join_one_fb_leaf` attempt costs **6.4 ms**, refused or not. §2.4.
+a `join_one_fb_leaf` attempt costs **6.4 ms**, refused or not, and **328 of a cup3 boot's ~400
+attempts are refusals of ranges already joined.** §2.4. **That is the next rung.**
