@@ -55,8 +55,29 @@ B_SIZES=${KAYFABE_BENCH_SIZES:-512,1024,2048}
 B_ITERS=${KAYFABE_BENCH_ITERS:-20}
 B_BATCH=${KAYFABE_BENCH_BATCH:-10}
 B_VERIFY=${KAYFABE_BENCH_VERIFY:-1}
+# ★★★★★ ADDED AFTER THE FIRST w311 BOOT, BECAUSE THAT BOOT MEASURED THE PROBLEM.
+#   The negative control ran SECOND, as a second CUDA context, and hung at `cuCtxCreate`
+#   while the first process's teardown was still emitting `STOP_CHANNEL` /
+#   `GPU_EVICT_CTX` NOT_SUPPORTED — the known #12 shape. It hit its own 180 s bound
+#   (rc=124 from the INNER timeout: the job was bounded and reached the bound; ⊘ NOT the
+#   143 that means something killed it, and ⊘ NOT the 124 that means a launcher expired
+#   while the job ran on fine). ⇒ `GUEST_NEGCTRL_TOTAL_BAD=NO_LINE`, and the measurement
+#   was UNGUARDED.
+#   `KAYFABE_BENCH_ONLY=negctrl` runs the control as the FIRST AND ONLY context of its own
+#   boot, which is the configuration it needed all along. ⊘ It is a SEPARATE BOOT and not a
+#   reordering: running it first in the SAME boot would have made the MEASUREMENT the second
+#   context, moving the hang onto the thing we actually came to measure.
+B_ONLY=${KAYFABE_BENCH_ONLY:-both}
 
 die() { echo "★ cup8bench hook FAILED: $*"; exit 2; }
+
+# ⊘ VALIDATED AFTER `die` EXISTS. The first draft put this `case` three lines ABOVE the
+#   function it calls, so the one path that was supposed to reject a typo would itself have
+#   died with `die: command not found` — a guard that fails in a different voice than the one
+#   it was written in is not a guard.
+case "$B_ONLY" in both|measure|negctrl) ;;
+  *) die "KAYFABE_BENCH_ONLY must be both|measure|negctrl (got [$B_ONLY])" ;; esac
+echo "BENCH_ONLY=$B_ONLY"
 
 echo "=== source (md5 — a run cannot silently be a different copy) ==="
 [ -f "$SRC" ] || die "no such source: $SRC"
@@ -158,6 +179,15 @@ GUESTEOF
 # =======================================================================================
 # ★★★★★ THE MEASUREMENT — FIRST, so a second-context hang can only cost the control.
 # =======================================================================================
+if [ "$B_ONLY" = negctrl ]; then
+  echo ""
+  echo "=== ⊘ MEASUREMENT SKIPPED (KAYFABE_BENCH_ONLY=negctrl) ==="
+  echo "    This boot exists ONLY to run the negative control as the FIRST AND ONLY CUDA"
+  echo "    context. Every measurement line below is therefore ABSENT BY CONSTRUCTION, and"
+  echo "    ⊘ an absent line here must not be read as a measured zero."
+  echo "GUEST_BENCH_TOTAL_BAD=SKIPPED_BY_ARM"
+  echo "GUEST_SIZES_DONE=SKIPPED_BY_ARM"
+else
 run_detached measure "$BENCH_TIMEOUT" \
   "BENCH_SIZES=$B_SIZES BENCH_ITERS=$B_ITERS BENCH_BATCH=$B_BATCH BENCH_VERIFY=$B_VERIFY"
 
@@ -201,10 +231,17 @@ done
 echo "    ⊘ ALL ✘ means the output file is empty — a state that needs its own check, NOT 'not yet'."
 echo "=== ★ the FAIL line, if the workload named its own failure ==="
 $G 'grep -h "^FAIL" /tmp/measure.out 2>/dev/null' | sed 's/^/    /'
+fi
 
 # =======================================================================================
-# ★★★★★ THE NEGATIVE CONTROL — second, as its own process/context.
+# ★★★★★ THE NEGATIVE CONTROL — second in arm `both`, FIRST AND ONLY in arm `negctrl`.
 # =======================================================================================
+if [ "$B_ONLY" = measure ]; then
+  echo ""
+  echo "=== ⊘ NEGATIVE CONTROL SKIPPED (KAYFABE_BENCH_ONLY=measure) — the measurement above"
+  echo "    is UNGUARDED by construction. Say so; do not report it as guarded."
+  echo "GUEST_NEGCTRL_TOTAL_BAD=SKIPPED_BY_ARM"
+else
 run_detached negctrl "$NEG_TIMEOUT" \
   "BENCH_NOLAUNCH=1 BENCH_SIZES=256 BENCH_ITERS=3 BENCH_BATCH=2 BENCH_VERIFY=1"
 echo ""
@@ -225,6 +262,7 @@ case "${NCB:-__none__}" in
             echo "      poison fill and the readback are live on our plane, so the measurement's"
             echo "      per-iteration bad=0 is a real assertion and not an absence." ;;
 esac
+fi
 
 echo ""
 echo "=== ★ guest dmesg tail (NVRM/Xid land here, not in the serial log) ==="

@@ -1,0 +1,220 @@
+=== W311 NATIVE START 2026-08-14T14:34:36+00:00 pid=3006155 ===
+SIZES=512,1024,2048 ITERS=30 BATCH=20
+=== GPU STATE BEFORE ===
+name, driver_version, memory.used [MiB], utilization.gpu [%]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB, 0 %
+pid, process_name, used_gpu_memory [MiB]
+    ⊘ any process listed above shares this GPU and the numbers below are CONTENDED.
+=== BUILD ===
+source md5 = 199a5a8e2048b053f53f57dc40ea2c55
+NATIVE_GCC_RC=0
+binary md5 = a757867824eef25fcff8d276b3ba69b3
+
+=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ===
+BENCH_MODE=NOLAUNCH — ★ NEGATIVE CONTROL. Launches are SKIPPED; the verifier MUST report bad = N*N. A 0 here means the verifier is dead.
+ITER N=256 i=0 launch_ms=0.001 verified=yes bad=65536
+ITER N=256 i=1 launch_ms=0.001 verified=yes bad=65536
+ITER N=256 i=2 launch_ms=0.001 verified=yes bad=65536
+B256_BAD=262144
+BENCH_NOLAUNCH_TOTAL_BAD=262144
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the verifier FIRED with launches skipped)
+NATIVE_NEGCTRL_RC=0   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)
+
+=== ★★★★★ THE NATIVE MEASUREMENT ===
+BENCH_BUILD sizes=[512,1024,2048] iters=30 batch=20 verify_every=1 nolaunch=0
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=68.58
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 3060]
+ok   cuCtxCreate_v2(&ctx,0,d)
+BENCH_CTX_MS=302.74
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.15
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_SIZE_BEGIN N=512 per_matrix_MiB=1 device_MiB=3
+B512_ALLOC_MS=0.30
+B512_PTRS=A:0x74be02200000,B:0x74be02300000,C:0x74be02400000
+B512_H2D_MS=0.61  (2 x 1 MiB)
+B512_GRID=(32,32)x(16,16)
+ITER N=512 i=0 launch_ms=7.348 verified=yes bad=0
+ITER N=512 i=1 launch_ms=0.387 verified=yes bad=0
+ITER N=512 i=2 launch_ms=0.388 verified=yes bad=0
+ITER N=512 i=3 launch_ms=0.388 verified=yes bad=0
+ITER N=512 i=4 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=5 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=6 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=7 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=8 launch_ms=0.384 verified=yes bad=0
+ITER N=512 i=9 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=10 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=11 launch_ms=0.396 verified=yes bad=0
+ITER N=512 i=12 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=13 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=14 launch_ms=0.388 verified=yes bad=0
+ITER N=512 i=15 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=16 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=17 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=18 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=19 launch_ms=0.387 verified=yes bad=0
+ITER N=512 i=20 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=21 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=22 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=23 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=24 launch_ms=0.385 verified=yes bad=0
+ITER N=512 i=25 launch_ms=0.386 verified=yes bad=0
+ITER N=512 i=26 launch_ms=0.387 verified=yes bad=0
+ITER N=512 i=27 launch_ms=0.384 verified=yes bad=0
+ITER N=512 i=28 launch_ms=0.384 verified=yes bad=0
+ITER N=512 i=29 launch_ms=0.384 verified=yes bad=0
+
+B512_N=512
+B512_ITERS=30
+B512_FIRST_MS=7.348
+B512_MEDIAN_MS=0.386
+B512_P90_MS=0.388
+B512_MIN_MS=0.384
+B512_MAX_MS=0.396
+B512_MEAN_MS=0.386
+B512_GFLOPS=695.740
+B512_BATCH=20
+B512_BATCH_TOTAL_MS=7.550
+B512_BATCH_PER_LAUNCH_MS=0.377
+B512_BATCH_GFLOPS=711.108
+B512_BATCH_BAD=0
+B512_H2D_MS=0.615
+B512_D2H_MED_MS=0.252
+B512_ALLOC_MS2=0.298
+B512_BAD=0
+B512_MAXERR=0
+BSUM N=512 iters=30 first_ms=7.348 med_ms=0.386 p90_ms=0.388 min_ms=0.384 max_ms=0.396 gflops=695.740 batch_per_launch_ms=0.377 batch_gflops=711.108 h2d_ms=0.615 d2h_med_ms=0.252 bad=0 maxerr=0
+BENCH_SIZE_END N=512
+
+BENCH_SIZE_BEGIN N=1024 per_matrix_MiB=4 device_MiB=12
+B1024_ALLOC_MS=0.35
+B1024_PTRS=A:0x74be02200000,B:0x74be02600000,C:0x74be02a00000
+B1024_H2D_MS=1.10  (2 x 4 MiB)
+B1024_GRID=(64,64)x(16,16)
+ITER N=1024 i=0 launch_ms=3.008 verified=yes bad=0
+ITER N=1024 i=1 launch_ms=3.011 verified=yes bad=0
+ITER N=1024 i=2 launch_ms=3.011 verified=yes bad=0
+ITER N=1024 i=3 launch_ms=3.006 verified=yes bad=0
+ITER N=1024 i=4 launch_ms=3.015 verified=yes bad=0
+ITER N=1024 i=5 launch_ms=3.020 verified=yes bad=0
+ITER N=1024 i=6 launch_ms=2.998 verified=yes bad=0
+ITER N=1024 i=7 launch_ms=2.997 verified=yes bad=0
+ITER N=1024 i=8 launch_ms=3.022 verified=yes bad=0
+ITER N=1024 i=9 launch_ms=3.007 verified=yes bad=0
+ITER N=1024 i=10 launch_ms=2.996 verified=yes bad=0
+ITER N=1024 i=11 launch_ms=3.009 verified=yes bad=0
+ITER N=1024 i=12 launch_ms=3.012 verified=yes bad=0
+ITER N=1024 i=13 launch_ms=3.027 verified=yes bad=0
+ITER N=1024 i=14 launch_ms=3.010 verified=yes bad=0
+ITER N=1024 i=15 launch_ms=3.012 verified=yes bad=0
+ITER N=1024 i=16 launch_ms=3.011 verified=yes bad=0
+ITER N=1024 i=17 launch_ms=3.006 verified=yes bad=0
+ITER N=1024 i=18 launch_ms=3.003 verified=yes bad=0
+ITER N=1024 i=19 launch_ms=3.006 verified=yes bad=0
+ITER N=1024 i=20 launch_ms=3.014 verified=yes bad=0
+ITER N=1024 i=21 launch_ms=3.021 verified=yes bad=0
+ITER N=1024 i=22 launch_ms=3.012 verified=yes bad=0
+ITER N=1024 i=23 launch_ms=3.019 verified=yes bad=0
+ITER N=1024 i=24 launch_ms=3.013 verified=yes bad=0
+ITER N=1024 i=25 launch_ms=3.003 verified=yes bad=0
+ITER N=1024 i=26 launch_ms=3.006 verified=yes bad=0
+ITER N=1024 i=27 launch_ms=2.995 verified=yes bad=0
+ITER N=1024 i=28 launch_ms=2.789 verified=yes bad=0
+ITER N=1024 i=29 launch_ms=2.783 verified=yes bad=0
+
+B1024_N=1024
+B1024_ITERS=30
+B1024_FIRST_MS=3.008
+B1024_MEDIAN_MS=3.010
+B1024_P90_MS=3.020
+B1024_MIN_MS=2.783
+B1024_MAX_MS=3.027
+B1024_MEAN_MS=2.994
+B1024_GFLOPS=713.453
+B1024_BATCH=20
+B1024_BATCH_TOTAL_MS=55.456
+B1024_BATCH_PER_LAUNCH_MS=2.773
+B1024_BATCH_GFLOPS=774.487
+B1024_BATCH_BAD=0
+B1024_H2D_MS=1.101
+B1024_D2H_MED_MS=0.746
+B1024_ALLOC_MS2=0.355
+B1024_BAD=0
+B1024_MAXERR=0
+BSUM N=1024 iters=30 first_ms=3.008 med_ms=3.010 p90_ms=3.020 min_ms=2.783 max_ms=3.027 gflops=713.453 batch_per_launch_ms=2.773 batch_gflops=774.487 h2d_ms=1.101 d2h_med_ms=0.746 bad=0 maxerr=0
+BENCH_SIZE_END N=1024
+
+BENCH_SIZE_BEGIN N=2048 per_matrix_MiB=16 device_MiB=48
+B2048_ALLOC_MS=0.55
+B2048_PTRS=A:0x74be02200000,B:0x74be05000000,C:0x74bdf8000000
+B2048_H2D_MS=4.19  (2 x 16 MiB)
+B2048_GRID=(128,128)x(16,16)
+ITER N=2048 i=0 launch_ms=22.382 verified=yes bad=0
+ITER N=2048 i=1 launch_ms=22.377 verified=yes bad=0
+ITER N=2048 i=2 launch_ms=22.376 verified=yes bad=0
+ITER N=2048 i=3 launch_ms=22.379 verified=yes bad=0
+ITER N=2048 i=4 launch_ms=22.378 verified=yes bad=0
+ITER N=2048 i=5 launch_ms=22.399 verified=yes bad=0
+ITER N=2048 i=6 launch_ms=22.372 verified=yes bad=0
+ITER N=2048 i=7 launch_ms=22.414 verified=yes bad=0
+ITER N=2048 i=8 launch_ms=22.518 verified=yes bad=0
+ITER N=2048 i=9 launch_ms=22.473 verified=yes bad=0
+ITER N=2048 i=10 launch_ms=22.469 verified=yes bad=0
+ITER N=2048 i=11 launch_ms=22.470 verified=yes bad=0
+ITER N=2048 i=12 launch_ms=22.479 verified=yes bad=0
+ITER N=2048 i=13 launch_ms=22.469 verified=yes bad=0
+ITER N=2048 i=14 launch_ms=22.474 verified=yes bad=0
+ITER N=2048 i=15 launch_ms=22.469 verified=yes bad=0
+ITER N=2048 i=16 launch_ms=22.467 verified=yes bad=0
+ITER N=2048 i=17 launch_ms=22.470 verified=yes bad=0
+ITER N=2048 i=18 launch_ms=22.481 verified=yes bad=0
+ITER N=2048 i=19 launch_ms=22.469 verified=yes bad=0
+ITER N=2048 i=20 launch_ms=22.465 verified=yes bad=0
+ITER N=2048 i=21 launch_ms=22.471 verified=yes bad=0
+ITER N=2048 i=22 launch_ms=22.481 verified=yes bad=0
+ITER N=2048 i=23 launch_ms=22.467 verified=yes bad=0
+ITER N=2048 i=24 launch_ms=22.468 verified=yes bad=0
+ITER N=2048 i=25 launch_ms=22.466 verified=yes bad=0
+ITER N=2048 i=26 launch_ms=22.469 verified=yes bad=0
+ITER N=2048 i=27 launch_ms=22.464 verified=yes bad=0
+ITER N=2048 i=28 launch_ms=22.475 verified=yes bad=0
+ITER N=2048 i=29 launch_ms=22.484 verified=yes bad=0
+
+B2048_N=2048
+B2048_ITERS=30
+B2048_FIRST_MS=22.382
+B2048_MEDIAN_MS=22.469
+B2048_P90_MS=22.481
+B2048_MIN_MS=22.372
+B2048_MAX_MS=22.518
+B2048_MEAN_MS=22.452
+B2048_GFLOPS=764.616
+B2048_BATCH=20
+B2048_BATCH_TOTAL_MS=449.361
+B2048_BATCH_PER_LAUNCH_MS=22.468
+B2048_BATCH_GFLOPS=764.636
+B2048_BATCH_BAD=0
+B2048_H2D_MS=4.195
+B2048_D2H_MED_MS=2.136
+B2048_ALLOC_MS2=0.545
+B2048_BAD=0
+B2048_MAXERR=0
+BSUM N=2048 iters=30 first_ms=22.382 med_ms=22.469 p90_ms=22.481 min_ms=22.372 max_ms=22.518 gflops=764.616 batch_per_launch_ms=22.468 batch_gflops=764.636 h2d_ms=4.195 d2h_med_ms=2.136 bad=0 maxerr=0
+BENCH_SIZE_END N=2048
+
+BENCH_SIZES_DONE=3
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+DONE
+NATIVE_RC=0
+NATIVE_WALL_S=2
+
+=== GPU STATE AFTER ===
+0 MiB, 4 %
+=== W311 NATIVE EXIT rc=0 at 2026-08-14T14:34:40+00:00 ===
