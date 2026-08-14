@@ -355,6 +355,74 @@ fn control_loop(control: &UnixDatagram, slots: &[Mutex<SlotState>]) {
     }
 }
 
+/// ★★★ w321 — the four buckets the guest-RAM pin chain is made of, plus everything else.
+///
+/// ⊘ Four and not twenty: `VerbPlan::PinGuestRam` is exactly `MapGuestRam` →
+/// `DescribeGuestRam` → `MapGpuVa`, three separate requests over the socket, and those are
+/// the only ones the drain issues 13 313 times. A per-variant table would report thirty
+/// zeros beside the three numbers that matter.
+const W321_BUCKETS: usize = 4;
+const W321_NAMES: [&str; W321_BUCKETS] = ["map_guest_ram", "describe_guest_ram", "map_gpu_va", "other"];
+
+fn w321_bucket(r: &Request) -> usize {
+    match r {
+        Request::MapGuestRam { .. } => 0,
+        Request::DescribeGuestRam { .. } => 1,
+        Request::MapGpuVa { .. } => 2,
+        _ => 3,
+    }
+}
+
+thread_local! {
+    /// `(count, nanos)` per bucket, and the running total request count.
+    ///
+    /// ⊘ Thread-local, like the parent's `IPC_TOTALS` and for the same reason: one worker
+    /// thread serves one socket, a lock here would add to the quantity being measured, and
+    /// another thread's traffic is simply invisible rather than mixed in.
+    static W321_STAT: std::cell::RefCell<([(u64, u128); W321_BUCKETS], u64)> =
+        const { std::cell::RefCell::new(([(0, 0); W321_BUCKETS], 0)) };
+}
+
+/// How many served requests between cumulative reports.
+///
+/// ⊘ CUMULATIVE and never reset — the parent's counter is monotonic too, so the two align
+/// by subtraction over any interval a reader picks. A resettable counter here would let the
+/// two sides disagree about which interval they are describing.
+const W321_REPORT_EVERY: u64 = 1000;
+
+fn w321_note(index: usize, bucket: usize, nanos: u128) {
+    W321_STAT.with(|c| {
+        let mut s = c.borrow_mut();
+        s.0[bucket].0 += 1;
+        s.0[bucket].1 += nanos;
+        s.1 += 1;
+        if s.1 % W321_REPORT_EVERY != 0 {
+            return;
+        }
+        let mut parts = String::new();
+        for (i, name) in W321_NAMES.iter().enumerate() {
+            let (n, ns) = s.0[i];
+            // ⊘ An UNSERVED bucket prints `⊘UNMEASURED`, never `0us` — a mean over zero
+            // samples is not zero, and this tree has paid for that spelling repeatedly.
+            if n == 0 {
+                parts.push_str(&format!(" {name}[n=0 ⊘UNMEASURED]"));
+            } else {
+                parts.push_str(&format!(
+                    " {name}[n={n} tot={}us mean={}us]",
+                    ns / 1000,
+                    ns / 1000 / u128::from(n)
+                ));
+            }
+        }
+        eprintln!(
+            "kayfabe-isolate: W321CHILD worker={index} served={} — CHILD-SIDE SERVICE TIME \
+             (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so \
+             parent_ipc_us MINUS these is the transport):{parts}",
+            s.1
+        );
+    });
+}
+
 fn worker_loop(
     index: usize,
     sock: UnixStream,
@@ -393,7 +461,24 @@ fn worker_loop(
             let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
             s.txn = envelope.txn;
         }
+        // ★★★★★ **w321 — THE CHILD-SIDE HALF OF THE TIMESTAMP DECOMPOSITION.**
+        //
+        // The parent already owns the OTHER half: `ProxyRmBackend::call`'s `IPC_TOTALS`
+        // counts the **round trip** — request written → reply read — which INCLUDES
+        // everything measured here. Neither counter alone can answer *"is the 225 µs/row
+        // the socket or the ioctl?"*, and that question decides w321's whole fix: if the
+        // cost is transport, one request carrying N rows removes it and **no physical
+        // contiguity is needed**; if the cost is the ioctl, only coalescing or a batched RM
+        // verb can help. ⊘ A hypothesis that fits the magnitude is not a mechanism — hence
+        // two independent brackets on the two sides of the same socket, subtractable.
+        //
+        // ⊘ It times `serve_one`, which is the backend call plus the wire-vocabulary match
+        // and nothing else — the frame read and the frame write are deliberately OUTSIDE
+        // it, because those are the transport this is meant to be subtracted from.
+        let t0 = std::time::Instant::now();
+        let bucket = w321_bucket(&envelope.request);
         let (reply, carried) = serve_one(&mut *backend, envelope.request, exports);
+        w321_note(index, bucket, t0.elapsed().as_nanos());
         {
             let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
             s.txn = 0;

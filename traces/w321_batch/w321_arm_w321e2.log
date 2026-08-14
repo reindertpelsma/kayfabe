@@ -1,0 +1,46 @@
+=== W321 ARM START tree=/workspace/kayfabe_w321 prefix=w321e2 n=3 2026-08-14T19:03:45+00:00
+=== HEAD=e8ed422c8ab8acb569787dd24cbdaba58fa56bba
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own KNOB lines are the record of EXECUTION):
+===   KAYFABE_DRAIN_BATCH=coalesce
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[⊘unset ⇒ 3000 default]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[⊘unset ⇒ 65536 default]
+===   KAYFABE_DRAIN_BATCH=[coalesce]
+--- boot 1/3 tag=w321e21 2026-08-14T19:03:49+00:00
+    BOOT 1: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [CUP8_BAD=0 CUP8_MAXERR=0 ] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[W319KNOB[budget_ms=3000 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=237 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ]
+            last_pinned_va=0x2047ff000  budget_hit_lines=[0] row_cap_hit_lines=[0]
+            ★★★★★ W321IPC[ipc_calls=2184 (3 /chain) ipc_us=231801 (318 us/chain, 17 us/row) drain_us=237000 ours_us=5199 ipc_share=97%]
+            ★★★★★ W321BATCH[arm=coalesce chunks=728 chains=728 rows_pinned=13313 rows_refused=0 fallback_chunks=0 fallback_chains=0 rows_per_chain=18.28]
+            ★★★★★ W321CENSUS[rows=13313 bytes=0x3410000 len_4k=13312 len_lt64k=0 len_lt2m=1 len_ge2m=0 va_runs=3 pair_runs=719 coalesce_ceiling=18.51x break_va_only=0 break_gpa_only=716 break_both=2 runsz_4k=566 runsz_lt64k=55 runsz_lt2m=97 runsz_ge2m=1 max_run=0x1327000 ⇒ a coalescing fix can reduce 13313 host chains to 719; a BATCHED-TRANSPORT fix is bounded by neither of these numbers]
+            ★★★★★ child_lines=[11] LAST=[W321CHILD worker=0 served=11000 — CHILD-SIDE SERVICE TIME (`serve_one` only; the frame read/write and the socket are OUTSIDE it, so parent_ipc_us MINUS these is the transport): map_guest_ram[n=1546 tot=21862us mean=14us] describe_guest_ram[n=1546 tot=95432us mean=61us] map_gpu_va[n=1530 tot=142587us mean=93us] other[n=6378 tot=3422224us mean=536us]]
+            hostdmesg_bytes=[0] Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 2/3 tag=w321e22 2026-08-14T19:06:38+00:00
+    BOOT 2: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[⊘UNMEASURED — OLD BINARY, ⊘ not 'default']
+            ★★★ DRAIN=[⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete]
+            ⊘last_pinned_va UNMEASURED  budget_hit_lines=[⊘NOFILE] row_cap_hit_lines=[⊘NOFILE]
+            ★★★★★ ⊘W321IPC ABSENT — UNMEASURED, ⊘ not 0
+            ★★★★★ ⊘W321BATCH ABSENT — UNMEASURED, ⊘ not 'off'
+            ★★★★★ ⊘W321CENSUS ABSENT — UNMEASURED, ⊘ not 'contiguous'
+            ★★★★★ child_lines=[⊘NOFILE] LAST=[⊘W321CHILD ABSENT — UNMEASURED]
+            hostdmesg_bytes=[⊘NOFILE] Xid_lines=[⊘NOFILE] 
+            guest NVRM_lines=[⊘NOFILE] stall_lines=[⊘NOFILE]
+--- boot 3/3 tag=w321e23 2026-08-14T19:06:43+00:00
+    BOOT 3: [⊘ABSENT-UNMEASURED] [⊘NO-TERMINATOR] [⊘no-cup8] [⊘no-r33]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★ KNOB=[⊘UNMEASURED — OLD BINARY, ⊘ not 'default']
+            ★★★ DRAIN=[⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete]
+            ⊘last_pinned_va UNMEASURED  budget_hit_lines=[⊘NOFILE] row_cap_hit_lines=[⊘NOFILE]
+            ★★★★★ ⊘W321IPC ABSENT — UNMEASURED, ⊘ not 0
+            ★★★★★ ⊘W321BATCH ABSENT — UNMEASURED, ⊘ not 'off'
+            ★★★★★ ⊘W321CENSUS ABSENT — UNMEASURED, ⊘ not 'contiguous'
+            ★★★★★ child_lines=[⊘NOFILE] LAST=[⊘W321CHILD ABSENT — UNMEASURED]
+            hostdmesg_bytes=[⊘NOFILE] Xid_lines=[⊘NOFILE] 
+            guest NVRM_lines=[⊘NOFILE] stall_lines=[⊘NOFILE]
+=== W321 ARM EXIT status=0 2026-08-14T19:06:44+00:00
+=== W321 ARM TERMINATOR w321e2 rc=0 2026-08-14T19:06:44+00:00

@@ -8322,6 +8322,10 @@ impl SharedDoorbell {
         let (mut drain_visited, mut drain_asked, mut drain_pinned) = (false, 0usize, 0usize);
         let (mut drain_refused, mut drain_ms) = (0usize, 0u128);
         let (mut drain_cap_hit, mut drain_budget_hit) = (false, false);
+        // ★★★★★ w321 — the two decomposition rows, both `⊘UNMEASURED` until a drain runs.
+        let mut drain_census = String::from("⊘ NO DRAIN — the contiguity census is UNMEASURED");
+        let mut drain_ipc = String::from("⊘ NO DRAIN — the IPC bracket is UNMEASURED");
+        let mut drain_batch = String::from("⊘ NO DRAIN — the batch accounting is UNMEASURED");
         for pid in self.device.live_pids() {
             // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
             // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
@@ -8356,14 +8360,43 @@ impl SharedDoorbell {
                     drain_visited = true;
                     drain_asked = candidates.len();
                     drain_cap_hit = candidates.len() >= cap;
+                    // ★★★★★ **w321 — THE CONTIGUITY CENSUS, TAKEN BEFORE A SINGLE PIN.**
+                    // O(n) over the rows we are about to walk, and it is the number that
+                    // BOUNDS a coalescing fix before one is built. See `drain_contiguity`.
+                    drain_census = drain_contiguity(&candidates);
                 }
                 let vas_started = std::time::Instant::now();
+                // ★★★★★ **w321 — THE PARENT-SIDE HALF OF THE DECOMPOSITION.**
+                // Read here and again after the loop; the difference is `(calls, µs)` this
+                // drain spent blocked in the isolate IPC. Subtract it from `DRAIN_MS` and
+                // what is left is OUR OWN cost (route locks, `resolve_guest_ram`, commit).
+                // ⊘ Thread-local and monotonic — see `ipc_totals`'s own doc.
+                let ipc_before = kayfabe_isolate_host::isolate::ipc_totals();
                 let mut vas_refused = 0usize;
                 let mut budget_hit = false;
                 let mut last_va: Option<u64> = None;
                 let mut each_us: Vec<u128> = Vec::new();
                 let mut named: Vec<String> = Vec::new();
-                for (va, gpa, len) in &candidates {
+                // ★★★★★ **w321 — THE COALESCER.** `chunks_for` is the identity on every arm
+                // but `KAYFABE_DRAIN_BATCH=coalesce`, where it merges rows that abut in BOTH
+                // `va` and `gpa` into one chain, split at 2 MiB. See its own doc for why the
+                // 2 MiB is the C's number and not a guess, and `drain_contiguity` for the
+                // measurement that says what it can buy.
+                let chunks = if doorbelled {
+                    chunks_for(&candidates)
+                } else {
+                    candidates.iter().map(|&r| DrainChunk::one(r)).collect()
+                };
+                // ⊘ ROWS and CHAINS are counted separately and neither is derived from the
+                // other. `pinned == asked` is w319's grading invariant and it is stated in
+                // ROWS; `chains` is what the host was actually asked, and the whole fix is
+                // the ratio between them. Collapsing them would make the fix invisible in
+                // exactly the line that grades it.
+                let mut rows_pinned = 0usize;
+                let mut rows_refused = 0usize;
+                let mut fallback_chains = 0usize;
+                let mut chunk_split = 0usize;
+                for chunk in &chunks {
                     // ⚠ THE WALL BOUND, and it is checked only on the drained VAS: the sampled
                     // ones are bounded by their row count already, and adding a clock to them
                     // would change the control.
@@ -8372,28 +8405,55 @@ impl SharedDoorbell {
                         drain_budget_hit = true;
                         break;
                     }
+                    let (va, gpa, len) = (chunk.va, chunk.gpa, chunk.len);
                     // The file offset comes from the HYPERVISOR's own stated layout, exactly
                     // as legs 4-6 derive it. ⊘ A row the VMM will not resolve is NOT a pin
                     // failure and is not timed — it never reached the verb.
                     let resolved = {
                         let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
                         held.as_ref()
-                            .map(|vmm| vmm.resolve_guest_ram(backing, *gpa, *len))
+                            .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
                     };
                     let Some(Ok(run)) = resolved else {
-                        named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                        // ★★ w321 — A COALESCED CHUNK CAN BE REFUSED FOR A REASON ITS ROWS
+                        // WOULD NOT BE: `StraddlesRuns` says the chunk left the hypervisor's
+                        // stated run, which is a property of the MERGE and not of any row in
+                        // it. ⊘ So the chunk falls back to its own rows rather than being
+                        // dropped — the alternative loses up to 512 rows for a boundary the
+                        // coalescer invented.
+                        if chunk.rows > 1 {
+                            chunk_split += 1;
+                            let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
+                                backing,
+                                pdb,
+                                &candidates[chunk.first_row..chunk.first_row + chunk.rows],
+                                &mut named,
+                            );
+                            rows_pinned += r_ok;
+                            rows_refused += r_no;
+                            refused += r_no;
+                            vas_refused += r_no;
+                            fallback_chains += chains;
+                            total_pins += chains;
+                            total_us += us_sum;
+                            if r_ok > 0 {
+                                last_va = Some(chunk.last_row_va);
+                            }
+                        } else {
+                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                        }
                         continue;
                     };
                     let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
                         run.file_offset,
-                        *len,
+                        len,
                         kayfabe_vmm::Prot::ReadWrite,
                     );
                     let t0 = std::time::Instant::now();
                     let r = self.device.pin_guest_ram(
                         DOORBELL_TARGET_GPU,
                         pdb,
-                        kayfabe_rt::GpuVa(*va),
+                        kayfabe_rt::GpuVa(va),
                         grant,
                     );
                     let us = t0.elapsed().as_micros();
@@ -8402,13 +8462,15 @@ impl SharedDoorbell {
                             each_us.push(us);
                             total_pins += 1;
                             total_us += us;
-                            last_va = Some(*va);
+                            rows_pinned += chunk.rows;
+                            last_va = Some(chunk.last_row_va);
                             if named.len() < 4 {
                                 named.push(format!(
-                                    "[va=0x{va:x}+0x{len:x} gpa=0x{gpa:x} host_va=0x{:x} \
-                                     placed_as_asked={} {}{us}us]",
+                                    "[va=0x{va:x}+0x{len:x} rows={} gpa=0x{gpa:x} \
+                                     host_va=0x{:x} placed_as_asked={} {}{us}us]",
+                                    chunk.rows,
                                     p.host_va,
-                                    p.host_va == *va,
+                                    p.host_va == va,
                                     if p.already { "replay " } else { "fresh " },
                                 ));
                             }
@@ -8417,11 +8479,44 @@ impl SharedDoorbell {
                         // collision-or-exhaustion and cannot be told apart, so the name is
                         // the only thing that distinguishes "we asked twice" from "the host
                         // is full".
+                        //
+                        // ★★ w321 — AND A MERGED CHUNK FALLS BACK TO ITS ROWS. A refusal of
+                        // a 2 MiB chain would otherwise cost 512 rows for a fault that may
+                        // belong to one of them, which is strictly worse than the truncation
+                        // this rung exists to remove.
                         Err(e) => {
-                            refused += 1;
-                            vas_refused += 1;
-                            if named.len() < 8 {
-                                named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
+                            if chunk.rows > 1 {
+                                chunk_split += 1;
+                                named.push(format!(
+                                    "[va=0x{va:x}+0x{len:x} ⊘CHUNK-REFUSED `{e:?}` \
+                                     {us}us → FALLING BACK TO {} ROWS]",
+                                    chunk.rows
+                                ));
+                                let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
+                                    backing,
+                                    pdb,
+                                    &candidates
+                                        [chunk.first_row..chunk.first_row + chunk.rows],
+                                    &mut named,
+                                );
+                                rows_pinned += r_ok;
+                                rows_refused += r_no;
+                                refused += r_no;
+                                vas_refused += r_no;
+                                fallback_chains += chains;
+                                total_pins += chains;
+                                total_us += us_sum;
+                                if r_ok > 0 {
+                                    last_va = Some(chunk.last_row_va);
+                                }
+                            } else {
+                                refused += 1;
+                                vas_refused += 1;
+                                rows_refused += 1;
+                                if named.len() < 8 {
+                                    named
+                                        .push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
+                                }
                             }
                         }
                     }
@@ -8440,10 +8535,57 @@ impl SharedDoorbell {
                     format!("n/a — only {} timed pin(s), need 8", each_us.len())
                 };
                 if doorbelled {
-                    drain_pinned = each_us.len();
+                    // ★★★★★ **w321 — `pinned` IS IN ROWS, AND THAT IS DELIBERATE.**
+                    // w319's grading invariant is `pinned == asked` and both terms are ROW
+                    // counts. A coalescing fix that reported CHAINS here would make its own
+                    // success read as a 11× regression in the one line every lane grades on.
+                    // ⊘ The chain count is not lost — it is `W321BATCH`'s `chains=`.
+                    drain_pinned = rows_pinned;
                     drain_refused = vas_refused;
                     drain_ms = vas_ms;
                     degrade = vas_degrade.clone();
+                    let chains = each_us.len() + fallback_chains;
+                    drain_batch = format!(
+                        "arm={} chunks={} chains={chains} rows_pinned={rows_pinned} \
+                         rows_refused={rows_refused} fallback_chunks={chunk_split} \
+                         fallback_chains={fallback_chains} rows_per_chain={}.{:02}",
+                        drain_batch_arm(),
+                        chunks.len(),
+                        if chains == 0 { 0 } else { rows_pinned / chains },
+                        if chains == 0 {
+                            0
+                        } else {
+                            (rows_pinned * 100 / chains) % 100
+                        },
+                    );
+                    // ★★★★★ **w321 — CLOSE THE PARENT-SIDE BRACKET AND SUBTRACT.**
+                    let ipc_after = kayfabe_isolate_host::isolate::ipc_totals();
+                    let calls = ipc_after.0.saturating_sub(ipc_before.0);
+                    let us = ipc_after.1.saturating_sub(ipc_before.1);
+                    // ⊘ Per CHAIN, not per row: the chain is what crossed the socket, and on
+                    // the coalescing arm a per-row figure would divide one round trip by the
+                    // rows it happened to cover and report a transport cost that nothing paid.
+                    // ★ The per-ROW figure is beside it, because that is what multiplies out
+                    // to the drain's cost.
+                    drain_ipc = if chains == 0 {
+                        format!(
+                            "⊘ NO CHAIN WAS ISSUED — ipc_calls={calls} ipc_us={us}, and the \
+                             split is UNMEASURED, ⊘ not 0"
+                        )
+                    } else {
+                        let c = chains as u128;
+                        let r = std::cmp::max(rows_pinned + vas_refused, 1) as u128;
+                        let own = u128::from(vas_ms) * 1000;
+                        format!(
+                            "ipc_calls={calls} ({} /chain) ipc_us={us} ({} us/chain, \
+                             {} us/row) drain_us={own} ours_us={} ipc_share={}%",
+                            calls as u128 / c,
+                            u128::from(us) / c,
+                            u128::from(us) / r,
+                            own.saturating_sub(u128::from(us)),
+                            if own == 0 { 0 } else { u128::from(us) * 100 / own },
+                        )
+                    };
                 } else if degrade == "n/a" {
                     degrade = vas_degrade.clone();
                 }
@@ -8458,7 +8600,7 @@ impl SharedDoorbell {
                         "SAMPLED(bounded — an unpinned row here is UNREACHED, not refused)"
                     },
                     candidates.len(),
-                    each_us.len(),
+                    if doorbelled { rows_pinned } else { each_us.len() },
                     vas_refused,
                     last_va.map_or("⊘NONE".to_string(), |v| format!("0x{v:x}")),
                     if budget_hit {
@@ -8537,6 +8679,7 @@ impl SharedDoorbell {
              measurement-only) → pinned={total_pins} refused={refused} in {} ms, \
              per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
              DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
+             W321CENSUS[{drain_census}] W321IPC[{drain_ipc}] W321BATCH[{drain_batch}] \
              over {} VAS row(s) {}",
             total_us / 1000,
             rows.len(),
@@ -8546,6 +8689,64 @@ impl SharedDoorbell {
                 rows.join(" ")
             },
         )
+    }
+
+    /// ★★★★★ **w321 — THE COALESCER'S FALLBACK: pin a refused chunk's rows ONE AT A TIME.**
+    ///
+    /// ⊘ **It exists because a merged chunk can be refused for a reason none of its rows
+    /// would be.** `StraddlesRuns` is a property of the MERGE — the chunk left the
+    /// hypervisor's stated run — and `GuestRamPinOverlaps` can be one too. Dropping the chunk
+    /// on such a refusal would lose up to 512 rows for a boundary this file invented, which
+    /// is strictly worse than the truncation w321 exists to remove.
+    ///
+    /// ⇒ The fallback is **exactly master's loop**, over exactly the rows the table stated,
+    /// so the worst case of the coalescing arm is master's cost for that chunk **plus one
+    /// wasted chain**, and never a missing mapping.
+    ///
+    /// Returns `(rows_pinned, rows_refused, chains_issued, total_us)`.
+    #[cfg(feature = "host-isolates")]
+    fn pin_rows_one_by_one(
+        &self,
+        backing: kayfabe_vmm_qemu::layout::BackingId,
+        pdb: kayfabe_rt::Pdb,
+        rows: &[(u64, u64, u64)],
+        named: &mut Vec<String>,
+    ) -> (usize, usize, usize, u128) {
+        let (mut ok, mut no, mut chains, mut us_sum) = (0usize, 0usize, 0usize, 0u128);
+        for &(va, gpa, len) in rows {
+            let resolved = {
+                let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                held.as_ref()
+                    .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
+            };
+            let Some(Ok(run)) = resolved else {
+                if named.len() < 12 {
+                    named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM (fallback)]"));
+                }
+                continue;
+            };
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                run.file_offset,
+                len,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            let t0 = std::time::Instant::now();
+            let r =
+                self.device
+                    .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(va), grant);
+            us_sum += t0.elapsed().as_micros();
+            chains += 1;
+            match r {
+                Ok(_) => ok += 1,
+                Err(e) => {
+                    no += 1;
+                    if named.len() < 12 {
+                        named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` (fallback)]"));
+                    }
+                }
+            }
+        }
+        (ok, no, chains, us_sum)
     }
 
     /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `join_operand_fb_leaves`' twin's
@@ -13902,6 +14103,261 @@ const VAS_DRAIN_ROW_CAP: usize = 65536;
 #[cfg(feature = "host-isolates")]
 const VAS_DRAIN_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(3000);
 
+/// ★★★★★ **w321 — THE CONTIGUITY CENSUS: what a COALESCING fix could possibly buy, measured
+/// before one is built.**
+///
+/// # Why this is the first thing w321 does
+///
+/// The drain costs `rows × ~225 µs`, and `~225 µs` is **three synchronous cross-process
+/// round trips** — `VerbPlan::PinGuestRam` is `map_guest_ram` → `describe_guest_ram` →
+/// `map_gpu_va`, and each one is its own `Request` over the isolate socket
+/// (`kayfabe_isolate_host::isolate::ProxyRmBackend::call`). Two different fixes follow from
+/// two different mechanisms and **they need different things to be true**:
+///
+/// - if the cost is TRANSPORT, one request carrying many rows removes it, and **physical
+///   contiguity is irrelevant**;
+/// - if the cost is the RM `ioctl`, only **fewer, larger mappings** help — and that is
+///   bounded by exactly this census.
+///
+/// ⊘ `w238` measured *"the GR ring is NOT physically contiguous, so 'one descriptor per run'
+/// is one per PAGE"* on **one buffer**. This asks the same question of the **whole drained
+/// table**, which is a different population, and answers it with a distribution rather than
+/// with a yes/no.
+///
+/// # What a "run" means here, and why there are two kinds
+///
+/// A coalesced pin needs BOTH halves contiguous: the guest VAs must abut (or the fixed map
+/// would cover addresses the guest did not bind) **and** the guest-physical addresses must
+/// abut (or one `OS_DESCRIPTOR` over one `mmap` slice cannot describe them). So:
+///
+/// - `va_runs` — maximal spans where only `va` abuts. The ceiling if physicality were free.
+/// - `pair_runs` — maximal spans where **`va` AND `gpa`** abut. ★ **THIS is the achievable
+///   row count of a coalescing fix**, and `rows / pair_runs` is its speedup ceiling.
+/// - `va_breaks` / `gpa_breaks` — which half does the breaking. ⚠ Load-bearing: a table
+///   broken by VA is SPARSE (nothing to coalesce, and nothing a batched verb fixes either);
+///   a table broken by GPA is SCATTERED (a batched verb helps, a coalescer does not).
+///
+/// ⊘ No square brackets in the returned string: its consumers are `grep -o '…\[[^]]*\]'`
+/// matchers, and `w319`'s own attributor was broken for a day by a nested `]`.
+#[cfg(feature = "host-isolates")]
+fn drain_contiguity(rows: &[(u64, u64, u64)]) -> String {
+    if rows.is_empty() {
+        return "⊘ NO ROWS — the distribution is UNMEASURED, ⊘ not `contiguous`".to_string();
+    }
+    let n = rows.len();
+    let mut bytes: u64 = 0;
+    // len buckets: 4 KiB, <64 KiB, <2 MiB, >= 2 MiB
+    let mut len_hist = [0usize; 4];
+    let (mut va_runs, mut pair_runs) = (1usize, 1usize);
+    let (mut va_breaks, mut gpa_breaks, mut both_breaks) = (0usize, 0usize, 0usize);
+    let mut cur_run: u64 = rows[0].2;
+    let mut max_run: u64 = rows[0].2;
+    // pair-run size buckets: 4 KiB, <64 KiB, <2 MiB, >= 2 MiB
+    let mut run_hist = [0usize; 4];
+    let bucket = |v: u64| -> usize {
+        if v <= 0x1000 {
+            0
+        } else if v < 0x1_0000 {
+            1
+        } else if v < 0x20_0000 {
+            2
+        } else {
+            3
+        }
+    };
+    for (i, &(va, gpa, len)) in rows.iter().enumerate() {
+        bytes = bytes.saturating_add(len);
+        len_hist[bucket(len)] += 1;
+        if i == 0 {
+            continue;
+        }
+        let (pva, pgpa, plen) = rows[i - 1];
+        let va_ok = pva.checked_add(plen) == Some(va);
+        let gpa_ok = pgpa.checked_add(plen) == Some(gpa);
+        if !va_ok {
+            va_runs += 1;
+        }
+        if !(va_ok && gpa_ok) {
+            pair_runs += 1;
+            run_hist[bucket(cur_run)] += 1;
+            max_run = max_run.max(cur_run);
+            cur_run = len;
+            match (va_ok, gpa_ok) {
+                (false, false) => both_breaks += 1,
+                (true, false) => gpa_breaks += 1,
+                (false, true) => va_breaks += 1,
+                (true, true) => unreachable!("a pair break with both halves contiguous"),
+            }
+        } else {
+            cur_run = cur_run.saturating_add(len);
+        }
+    }
+    run_hist[bucket(cur_run)] += 1;
+    max_run = max_run.max(cur_run);
+    format!(
+        "rows={n} bytes=0x{bytes:x} len_4k={} len_lt64k={} len_lt2m={} len_ge2m={} \
+         va_runs={va_runs} pair_runs={pair_runs} coalesce_ceiling={}.{:02}x \
+         break_va_only={va_breaks} break_gpa_only={gpa_breaks} break_both={both_breaks} \
+         runsz_4k={} runsz_lt64k={} runsz_lt2m={} runsz_ge2m={} max_run=0x{max_run:x} \
+         ⇒ a coalescing fix can reduce {n} host chains to {pair_runs}; a BATCHED-TRANSPORT \
+         fix is bounded by neither of these numbers",
+        len_hist[0],
+        len_hist[1],
+        len_hist[2],
+        len_hist[3],
+        n / pair_runs,
+        (n * 100 / pair_runs) % 100,
+        run_hist[0],
+        run_hist[1],
+        run_hist[2],
+        run_hist[3],
+    )
+}
+
+/// ★★★★★ **w321 — one host chain's worth of the drain.**
+///
+/// On the default arm it is exactly one table row and this type is a wrapper. On
+/// `KAYFABE_DRAIN_BATCH=coalesce` it is a MERGED RUN of rows that abut in **both** `va` and
+/// `gpa`, and `rows` is how many of them.
+///
+/// ⊘ `first_row` exists so a refused chunk can fall back to its own rows **by index into the
+/// original candidate list**, rather than by re-deriving them from `(va, len)` — a
+/// re-derivation would be this file inventing a row boundary the table stated.
+#[cfg(feature = "host-isolates")]
+#[derive(Debug, Clone, Copy)]
+struct DrainChunk {
+    va: u64,
+    gpa: u64,
+    len: u64,
+    /// How many table rows this chain covers. **1 on the default arm.**
+    rows: usize,
+    /// Index of this chunk's first row in the candidate list.
+    first_row: usize,
+    /// The base VA of the LAST row covered — what `last_pinned_va` must report, because
+    /// w319's discriminator is *that VA versus the faulting VA* and a chunk's END is not a
+    /// row's base.
+    last_row_va: u64,
+}
+
+#[cfg(feature = "host-isolates")]
+impl DrainChunk {
+    fn one((va, gpa, len): (u64, u64, u64)) -> Self {
+        Self {
+            va,
+            gpa,
+            len,
+            rows: 1,
+            first_row: 0,
+            last_row_va: va,
+        }
+    }
+}
+
+/// ★★★ **w321 — the split boundary, and it is the C's number, not a guess.**
+///
+/// This repo's own record of the C's sysmem chunker: it *"starts the first chunk at the run's
+/// own VA (`cva = a->va0 + off`), splitting only **at 2 MiB boundaries**"*. Two reasons it is
+/// the right bound here as well: it caps how much one `OS_DESCRIPTOR`'s `get_user_pages` and
+/// one `map_gpu_va`'s PTE fill can cost inside a single BQL-held ioctl, and it is the
+/// granule above which RM's own fixed-placement arithmetic stops being 64 KiB-shaped.
+///
+/// ⊘ `[measured w321, boot `w321i1`]` it costs almost nothing on this workload: the census
+/// found ONE run above 2 MiB (16.8 MiB), so the cap turns 1 179 runs into ~1 186.
+#[cfg(feature = "host-isolates")]
+const DRAIN_CHUNK_MAX: u64 = 2 << 20;
+
+/// ★★★★★ **w321 — THE FIX'S ARM.** `KAYFABE_DRAIN_BATCH=coalesce` merges the drain's rows
+/// into contiguous chains. **Absent or anything else ⇒ `off` ⇒ byte-identical to master**, so
+/// the SAME BINARY carries both arms and the only variable between them is this word.
+#[cfg(feature = "host-isolates")]
+fn drain_batch_arm() -> &'static str {
+    static V: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    match V
+        .get_or_init(|| std::env::var("KAYFABE_DRAIN_BATCH").unwrap_or_default())
+        .as_str()
+    {
+        "coalesce" => "coalesce",
+        _ => "off",
+    }
+}
+
+/// ★★★★★ **w321 — THE COALESCER.**
+///
+/// # What it does, and the two facts that make it sound
+///
+/// Merges consecutive candidate rows whose `va` AND `gpa` both abut into one chain, split at
+/// [`DRAIN_CHUNK_MAX`]. **Both halves are required.** VA contiguity alone would place a fixed
+/// GPU mapping over addresses the guest did not bind; GPA contiguity alone cannot be
+/// described by one `mmap` slice of the guest-RAM `memfd`, which is what one `OS_DESCRIPTOR`
+/// is built over.
+///
+/// ⊘ It merges nothing that `vas_guest_ram_rows` did not already classify: every row in the
+/// list is guest RAM, unpinned, non-empty. The merge adds **no** claim about any address —
+/// it only stops asking the host the same question 4 KiB at a time.
+///
+/// # ★★★★★ WHAT IT IS WORTH, MEASURED BEFORE IT WAS BUILT
+///
+/// `[measured w321, vh, real GA106, boot `w321i1`, tag W321CENSUS]` over the 13 313 rows of
+/// the doorbelled VAS at `cuCtxCreate`:
+///
+/// - `len_4k = 13 312` of 13 313 — the table is **all single pages**;
+/// - `va_runs = 3` — in VA the whole 54.5 MiB is **three** contiguous spans;
+/// - `pair_runs = 1 179`, `break_va_only = 0`, `break_gpa_only = 1 176`, `break_both = 2`
+///   ⇒ **every break is PHYSICAL SCATTER and none is VA sparsity**;
+/// - ⇒ `coalesce_ceiling = 11.29×`, `max_run = 0x100_2000` (16.8 MiB).
+///
+/// ⊘ **`w238`'s constraint is confirmed in kind and refuted in magnitude for this
+/// population.** *"The GR ring is not physically contiguous, so one descriptor per run is one
+/// per PAGE"* is true of a ring; over the whole drained table the mean run is **11.29 pages**
+/// and 754 of the 1 179 runs are single pages while the other 425 carry 12 559 of the rows.
+/// ⇒ the mass is in long runs; the count is in short ones.
+#[cfg(feature = "host-isolates")]
+fn chunks_for(rows: &[(u64, u64, u64)]) -> Vec<DrainChunk> {
+    if drain_batch_arm() == "coalesce" {
+        coalesce(rows)
+    } else {
+        rows.iter()
+            .enumerate()
+            .map(|(i, &r)| DrainChunk {
+                first_row: i,
+                ..DrainChunk::one(r)
+            })
+            .collect()
+    }
+}
+
+/// [`chunks_for`]'s merge, **without the environment read**, so it has known-positives.
+///
+/// ⊘ Split out for exactly one reason: `drain_batch_arm` is a process-global `OnceLock` over
+/// an env var, so a test that exercised the merge through it would set the whole process's
+/// arm and could never test the other one. *A criterion nobody has watched fail is a wish*,
+/// and an arm that cannot be exercised in a test is worse.
+#[cfg(feature = "host-isolates")]
+fn coalesce(rows: &[(u64, u64, u64)]) -> Vec<DrainChunk> {
+    let mut out: Vec<DrainChunk> = Vec::new();
+    for (i, &(va, gpa, len)) in rows.iter().enumerate() {
+        if let Some(cur) = out.last_mut()
+            && cur.va.checked_add(cur.len) == Some(va)
+            && cur.gpa.checked_add(cur.len) == Some(gpa)
+            && cur.len.saturating_add(len) <= DRAIN_CHUNK_MAX
+        {
+            cur.len += len;
+            cur.rows += 1;
+            cur.last_row_va = va;
+            continue;
+        }
+        out.push(DrainChunk {
+            va,
+            gpa,
+            len,
+            rows: 1,
+            first_row: i,
+            last_row_va: va,
+        });
+    }
+    out
+}
+
 /// ★★★★★ **w319 — THE MODULATION KNOB, and it is an INSTRUMENT, not a fix.**
 ///
 /// `KAYFABE_VAS_DRAIN_BUDGET_MS` overrides [`VAS_DRAIN_WALL_BUDGET`] for the doorbelled VAS's
@@ -14519,6 +14975,114 @@ mod pushbuffer_pin_tests {
         // ⊘ Empty renders as nothing at all — never as an empty pair of brackets, which
         // reads as "we looked and found none" when nothing was looked at.
         assert_eq!(pushbuffer_sample(&[], 0), "");
+    }
+}
+
+/// ★★★★★ **w321 — THE COALESCER'S KNOWN-POSITIVES.**
+///
+/// Every one of these is a case the boot cannot show me: the census says the production table
+/// is 13 313 rows and I get four numbers out of it, so a merge that quietly dropped a row, or
+/// merged across a GPA break, would show up as *a slightly different count* and nothing else.
+/// ⇒ The properties are asserted here, where they can fail loudly.
+#[cfg(all(test, feature = "host-isolates"))]
+mod w321_coalesce_tests {
+    use super::{DRAIN_CHUNK_MAX, coalesce, drain_contiguity};
+
+    /// The invariant everything else rests on: **every row is covered, exactly once, in
+    /// order.** ⊘ Checked by reconstructing the row list from the chunks rather than by
+    /// counting — `w281b`'s falsifier fired on a count while the thing counted was
+    /// substituted underneath it.
+    fn assert_covers(rows: &[(u64, u64, u64)]) {
+        let chunks = coalesce(rows);
+        let mut i = 0usize;
+        for c in &chunks {
+            assert_eq!(c.first_row, i, "chunks must tile the row list in order");
+            let span: u64 = rows[i..i + c.rows].iter().map(|r| r.2).sum();
+            assert_eq!(c.len, span, "a chunk's length is its rows' lengths");
+            assert_eq!(c.va, rows[i].0);
+            assert_eq!(c.gpa, rows[i].1);
+            assert_eq!(c.last_row_va, rows[i + c.rows - 1].0);
+            i += c.rows;
+        }
+        assert_eq!(i, rows.len(), "every row must be in exactly one chunk");
+    }
+
+    #[test]
+    fn a_gpa_break_splits_the_chunk_even_when_the_vas_abut() {
+        // ★ This is the production shape: `break_gpa_only = 1176` of 1 178 breaks. Merging
+        // here would describe page B's guest bytes with page A+1's physical address.
+        let rows = [
+            (0x2_0000_0000, 0x1_0000_0000, 0x1000),
+            (0x2_0000_1000, 0x1_0000_1000, 0x1000),
+            (0x2_0000_2000, 0x7_0000_0000, 0x1000),
+        ];
+        let c = coalesce(&rows);
+        assert_eq!(c.len(), 2, "{c:?}");
+        assert_eq!(c[0].rows, 2);
+        assert_eq!(c[0].len, 0x2000);
+        assert_eq!(c[1].rows, 1);
+        assert_covers(&rows);
+    }
+
+    #[test]
+    fn a_va_break_splits_the_chunk_even_when_the_gpas_abut() {
+        let rows = [
+            (0x2_0000_0000, 0x1_0000_0000, 0x1000),
+            (0x2_0000_9000, 0x1_0000_1000, 0x1000),
+        ];
+        let c = coalesce(&rows);
+        assert_eq!(c.len(), 2, "a merged chunk would map a VA the guest never bound: {c:?}");
+        assert_covers(&rows);
+    }
+
+    #[test]
+    fn a_perfectly_contiguous_run_splits_at_the_two_mib_bound_and_nowhere_else() {
+        let n = 1024usize; // 4 MiB of 4 KiB pages
+        let rows: Vec<(u64, u64, u64)> = (0..n)
+            .map(|i| {
+                let o = (i as u64) * 0x1000;
+                (0x2_0000_0000 + o, 0x1_0000_0000 + o, 0x1000)
+            })
+            .collect();
+        let c = coalesce(&rows);
+        assert_eq!(c.len(), 2, "4 MiB at a 2 MiB bound is two chunks: {}", c.len());
+        assert!(c.iter().all(|k| k.len <= DRAIN_CHUNK_MAX));
+        assert_covers(&rows);
+    }
+
+    #[test]
+    fn a_single_row_is_a_single_chunk_and_the_empty_list_is_no_chunks() {
+        assert!(coalesce(&[]).is_empty());
+        let rows = [(0x2_0000_0000, 0x1_0000_0000, 0x1000)];
+        let c = coalesce(&rows);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].rows, 1);
+        assert_eq!(c[0].last_row_va, 0x2_0000_0000);
+    }
+
+    /// ⊘ **The census must never call an empty table `contiguous`.** Same class as `dlen=0`:
+    /// an absent measurement that decodes to the favourable answer.
+    #[test]
+    fn the_census_refuses_to_speak_for_an_empty_table() {
+        let s = drain_contiguity(&[]);
+        assert!(s.contains("UNMEASURED"), "{s}");
+        assert!(!s.contains("pair_runs="), "{s}");
+    }
+
+    /// The census and the coalescer must agree about how many chains there are, up to the
+    /// 2 MiB split — two implementations of one fact, checked against each other.
+    #[test]
+    fn the_census_pair_runs_and_the_coalescers_chunk_count_agree() {
+        let rows = [
+            (0x2_0000_0000u64, 0x1_0000_0000u64, 0x1000u64),
+            (0x2_0000_1000, 0x1_0000_1000, 0x1000),
+            (0x2_0000_2000, 0x7_0000_0000, 0x1000),
+            (0x2_0000_3000, 0x7_0000_1000, 0x1000),
+            (0x2_0000_4000, 0x9_0000_0000, 0x1000),
+        ];
+        let s = drain_contiguity(&rows);
+        assert!(s.contains("pair_runs=3"), "{s}");
+        assert_eq!(coalesce(&rows).len(), 3, "{s}");
     }
 }
 

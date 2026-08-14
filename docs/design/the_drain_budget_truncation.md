@@ -178,6 +178,28 @@ over: *a strict-superset argument about a SET says nothing about a bounded TRAVE
 
 ## 5. The fix, and why it is not "raise the budget"
 
+> ### ★★★★★ ANSWERED 2026-08-14 (w321) — **OPTION 2 BELOW IS RIGHT, AND ITS STATED MECHANISM
+> ### IS ONLY 39 % OF THE COST.** Read this before the three options.
+> `docs/design/the_drain_cost_is_per_call_not_per_page.md` measures the 225 µs/row instead of
+> reasoning about it, on both sides of the socket at once.
+> - **The parent's bracket** (`W321IPC`, boot `w321i1`): `ipc_calls=39900` for 13 300 rows —
+>   **exactly 3 per row**, because `VerbPlan::PinGuestRam` is `map_guest_ram` →
+>   `describe_guest_ram` → `map_gpu_va` and each is its own `Request`. `ipc_us=2 904 395` of a
+>   3 000 000 µs drain ⇒ **96 % of the drain is inside those round trips**, and our own cost
+>   (route locks, `resolve_guest_ram`, commit) is **7 µs/row, 3 %**.
+> - **The child's bracket** (`W321CHILD`, same boot): the child's own service time is
+>   `13 + 42 + 77 = 132 µs` per chain.
+> ⇒ **transport ≈ 86 µs (39 %), the RM ioctls ≈ 132 µs (61 %). IT SPLITS.**
+>
+> ⊘ **So *"a batched/bulk pin verb"* read as *"batch the transport"* would have removed 39 % —
+> 3.0 s → 1.83 s — and NOT cleared the budget with margin.** The 61 % comes off only by asking
+> the host **fewer, larger** questions, which is a *coalescing* fix and not a *transport* one.
+> ★ And the reason coalescing works is the measurement's second half: at 3.3 rows per chain the
+> child's per-call means are **10 / 42 / 74 µs** against **13 / 42 / 77 µs** at 1 row per chain
+> — **the RM ioctl cost is PER CALL, not per page**, in this range.
+> ⚠ **The contiguity that bounds it is BOOT-VARIABLE**, 3.31×–11.29× over the first two boots
+> measured, so the win is a distribution and not a constant. See that doc's §3.
+
 Raising `VAS_DRAIN_WALL_BUDGET` works and is the wrong fix. The drain is held under the QEMU
 BQL with **every vCPU halted**, and `[measured w314]` the surrounding disposal already consumes
 **2.65–2.92 s of a 4 s `scrubberDestruct` budget (73 %)**. Completeness bought with more BQL
