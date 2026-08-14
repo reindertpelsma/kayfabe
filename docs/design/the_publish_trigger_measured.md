@@ -509,5 +509,24 @@ reading (§2.0.1) and the concurrent/re-entrant drain entry the control exposed 
   trigger and the completion are one unit (and are built together), but the **execution site**
   is separable and is blocked on §6's refactor. What shipped is coherent: a measured trigger, a
   protocol-specified completion that ships disarmed, and a revocation driver.
+- ⊘ **"the ratio ... needs to be ≪ 1"** as a single number — there is no single number. It is
+  **0.709 / 0.785 / 18.39** on `cup8` / `cup3` / `R33` (§2.0), because the numerator tracks
+  driver setup and the denominator tracks submission (§2.0.1). A ratio whose two terms scale
+  with different things is not a ratio worth quoting without its workload.
+- ⊘ **"give the two doorbell tests a `PublicationQueue::completed()` barrier"** — the
+  obligation does not arise, because publication stayed synchronous (§6). Both tests are
+  **untouched**: neither relaxed nor rewritten. ⚠ And `completed()` is **not** a barrier
+  primitive today — it is a bare monotonic counter with no `wait_until`, so whoever wires the
+  lane owes that method as well as the call sites.
+- ⊘ **"`BENCH_NOLAUNCH=1` must return the known-positive"** — not applicable here and stated
+  rather than silently skipped: `BENCH_NOLAUNCH` is `cup8bench`'s knob (w322's *bandwidth*
+  arm), and this rung's workloads are `w297_cup3.sh`, `w308_cup8.sh` and `w309_crit1.sh`, none
+  of which reads it. The known-positive/known-negative pair actually exercised is the
+  `RECLAIM-TICK` census's two shapes (§5.3), observed on the same binary.
 - ★ **"including that tier 1 is reachable at all, which is unmeasured"** — it is reachable, and
   it was already visible in every boot log as three `UNCLAIMED-CENSUS` rows.
+- ★ **And one the brief got exactly right:** *"a candidate whose magnitude matches your
+  measurement belongs to the INSTRUMENT until proven otherwise"*. It fired twice here — on
+  `worker_disposed = 2 064 292` (§5.3, a cumulative counter summed per tick) and on the
+  budget-clamped `DRAIN_MS = 3000` points in the worst-trap fit (§5.2). Both were caught by the
+  number being implausible, not by anything going red.
