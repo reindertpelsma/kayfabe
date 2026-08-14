@@ -475,6 +475,24 @@ counter, and — the one that matters — `disarmed_answers_zero_forever_and_can
 
 ---
 
+## 6.2 ★★★ THE LETTER, pre-registered vocabulary
+
+`w323` graded itself **(A) for map, (B) for revoke**, where (A) = *the deferred lane lands* and
+(B) = *it stays synchronous, deliberately*. Against that vocabulary this rung is:
+
+| direction | letter | why |
+|---|---|---|
+| **MAP** | **(B)** | Publication is still synchronous and still doorbell-triggered. Tier 1 is now **measured and available** — the decoder is booted, the completion is specified, the hang-safety property is tested — and it is **not armed**, for §6.1's reason. The execution site is blocked on §6's `Regs`-is-a-`Box` refactor. |
+| **REVOKE** | **(B), and now with a second driver** | It stays synchronous and budgeted, as `w323` ruled it must. What changed is that its **completion no longer depends on the guest** (§5) — and the driver ships **disarmed** because §5.1 measures it costing the publication drain its budget 2 of 3 times. |
+
+⊘ **So: (B)/(B), which is one letter short of the brief's target in both directions**, and the
+two blockers are named rather than deferred: a refactor for the map side, a contention fix for
+the revoke side. ★ What is *not* provisional is the measurement — four boots agree to the digit
+— and the two defects the rung found on **master**: the workload-invariant trigger nobody was
+reading (§2.0.1) and the concurrent/re-entrant drain entry the control exposed (§5.1.1).
+
+---
+
 ## 7. What in this rung's brief turned out wrong
 
 - ⊘ **"448 KiB below the doorbell"** — 180 KiB (§1). Wrong in the brief *and* in the research
