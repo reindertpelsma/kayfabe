@@ -13,8 +13,9 @@ is from a boot on that box on that day; the tag of each boot is given so a log c
 > 1. ⊘ **NOT ≥ 32 MiB.** A lone `cuMemAlloc(64 MiB)` passes and streams at 3.04 GB/s (`w327b3`).
 >    A lone 31 MiB passes at 2.961 GB/s (`w327b1`). `29,30,31` passes at all three (`w327b2`).
 > 2. ⊘ **NOT A SIZE THRESHOLD AT ALL.** The same 31 MiB allocation passes alone and fails after
->    a 28 MiB one (`w327b1` vs `w327u2`); the failure has been observed at **29, 31 and 32 MiB**
->    in different boots and never at a fixed number.
+>    a 28 MiB one (`w327b1` vs `w327u2`), and the same **64 MiB** allocation passes after a
+>    4 MiB row and fails after a 28 MiB row (`w327u4` vs `w327x1b`). The failure has been
+>    observed at **29, 31, 32 and 64 MiB** in different boots and never at a fixed number.
 > 3. ⊘ **NOT `budget_hit`, and not w319.** The `DRAIN-TIMING … budget_hit=true` line w322 quotes
 >    is emitted by `SharedDevice::drain_retired_budgeted` (`kayfabe-rt/src/device.rs:1296`),
 >    the **retired-proc disposal** drain, bounded by `RETIRED_DRAIN_BUDGET_US = 40_000`. It
