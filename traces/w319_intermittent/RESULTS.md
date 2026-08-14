@@ -95,7 +95,25 @@ doorbelled VAS **before** the budgeted drain. Default off, so **one binary carri
 | **X-off** | `ROW_LIMIT=11800`, pin **off** | 2 | **1 RED** (same fingerprint) + **1 ⊘UNMEASURED** (the `cuInit 999` mode, §3) |
 | **X-on** | `ROW_LIMIT=11800`, pin **on** | 3 | *see below* |
 
-### ★★★ THE PIN IS ON THE CRITICAL PATH — AND IT IS NOT SUFFICIENT ALONE
+### ⊘⊘⊘ THE CANDIDATE FIX IS **REFUTED**, AND MY FIRST READING OF IT WAS OVER-CLAIMED
+
+**Final: X-on = 1 green / 3. X-off + R = 0 green / 4.** Fisher exact **p ≈ 0.43** — **not
+significant.** ⇒ **The completion pin is NOT a fix**, and the single green boot is **not
+attributable to it**.
+
+⚠ **I drafted this section, before boot 3 landed, as *"the pin converts a deterministic failure
+into an intermittent one … causal evidence the completion page is on the critical path."* That
+was wrong, and it was wrong in the exact way this tree keeps paying for**: n=2 of a 3-boot arm,
+read in the favourable direction, with the word "causal" attached to a single observation. Boot
+3 came back red and the arm is 1/3. The draft is preserved in the commit history rather than
+quietly replaced.
+
+⊘ What survives: the pin **executes, lands, and lands in time** (below), so its failure to fix
+anything is a fact about the *mechanism*, not about the patch being inert. ⇒ **the completion
+page is not the whole of what the truncation drops**, and a one-page patch cannot stand in for
+the missing invariant.
+
+### The pin DID execute, land, and land in time — so this is a real negative, not a dud patch
 
 The pin **executes and lands**, verified from the boot's own emissions:
 
