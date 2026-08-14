@@ -148,6 +148,16 @@ Reverted, from `f20ab952` (w304's deletion), **hunk-selectively**:
 `PUSHBUF_MAX_EXTENTS`, the three `GUEST_*` env constants + enums + parsers + `SharedDoorbell`
 fields, and the 418 lines of arm tests in `shim_logic.rs`.
 
+### ★★ A BONUS RESULT NOBODY ASKED FOR: THE OTHER THREE DELETIONS ARE NOW MEASURED ON THE RAW-CE PLANE TOO
+
+The passing `8d258daa` boot ran with **all five** armed (`GUEST_PUSHBUF=pin GUEST_SEMA=pin
+GUEST_OPERAND=pin PT_SWEEP=on OPERAND_JOIN=join`). The restored tree runs with **only two** —
+the three guest-RAM pins are *deleted*, not defaulted — and **arm 1 still passes.**
+
+⇒ w304's other three deletions, which it justified on cup3 alone, are now **independently
+confirmed inert on the raw-CE plane as well**. They stay deleted, and for the first time on
+evidence from the workload that caught the other two.
+
 ### ★★★ TWO THINGS THAT ARE **NOT** A STRAIGHT REVERT, AND WHY
 
 1. **w304's census un-gating is KEPT.** `GUEST-DESCRIBES / TABLE-DESCRIBES / HOST-PUBLISHED /
