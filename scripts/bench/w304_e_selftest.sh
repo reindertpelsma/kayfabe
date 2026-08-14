@@ -93,11 +93,15 @@ echo "=== PART B — NEW (E) vs OLD (E) OVER EVERY RECORDED w298 BOOT"
 echo "===   dir = $W298DIR"
 echo "===   ★ the defect: the OLD criterion must be seen calling a ^CUP3_VAL=43 a REGRESSION."
 echo "================================================================================"
-printf '  %-11s %-22s %-11s %-11s %s\n' ARM '^CUP3_VAL' 'OLD (E)' 'NEW (E)' NOTE
+printf '  %-18s %-22s %-11s %-11s %s\n' BOOT '^CUP3_VAL' 'OLD (E)' 'NEW (E)' NOTE
 DISAGREE=0
-for t in base ptsweep opjoin gpushbuf gsema goperand vaspub grroute gring fbjoin ceexec ptwitness bothoff; do
-  q="$W298DIR/run_w298${t}_qemu.log"; d="$W298DIR/run_w298${t}_hostdmesg.log"; p="$W298DIR/run_w298${t}_probe.log"
-  [ -e "$q" ] || { printf '  %-11s %s\n' "$t" "⊘ no recorded qemu log — SKIPPED, not passed"; continue; }
+# ⊘ Every recorded boot in the directory, w298 AND w304 — enumerated from the FILESYSTEM, not
+#   from a hand-written list, so a boot that exists and was forgotten cannot be silently
+#   skipped. A named-but-absent log prints "SKIPPED, not passed".
+for q in "$W298DIR"/run_w[23]9[0-9]*_qemu.log "$W298DIR"/run_w30[0-9]*_qemu.log; do
+  [ -e "$q" ] || continue
+  t=$(basename "$q" _qemu.log); t=${t#run_}
+  d="$W298DIR/run_${t}_hostdmesg.log"; p="$W298DIR/run_${t}_probe.log"
   val=$(grep -oE '^CUP3_VAL=[0-9]+' "$p" 2>/dev/null | tail -1); val=${val:-⊘ABSENT-UNMEASURED}
   o=$(old_e "$q" "$d")
   "$E" "$q" "$d" >/dev/null 2>&1; nrc=$?
@@ -109,7 +113,7 @@ for t in base ptsweep opjoin gpushbuf gsema goperand vaspub grroute gring fbjoin
   if [ "$val" = "CUP3_VAL=43" ] && [ "$n" != PASS ]; then
     note="$note  ✘✘ NEW (E) FAILS A GREEN — THE REWRITE IS WRONG"; FAILS=$((FAILS + 1))
   fi
-  printf '  %-11s %-22s %-11s %-11s %s\n' "$t" "$val" "$o" "$n" "$note"
+  printf '  %-18s %-22s %-11s %-11s %s\n' "$t" "$val" "$o" "$n" "$note"
 done
 
 echo ""
