@@ -5,8 +5,10 @@
 #                              itself is not: a defaulted arm makes an evidence run and its
 #                              own control indistinguishable)
 #
-# ⊘ RELAXED ARM, LABELLED: KAYFABE_PT_SWEEP=on + KAYFABE_OPERAND_JOIN=join carried byte for
-#   byte from w290cup2, plus KAYFABE_VAS_PUBLISH=$1. A relaxed green is never the milestone.
+# ⊘ RELAXED ARM, LABELLED — and ⊘⊘ FIVE OF THOSE RELAXATIONS WERE DELETED AT w304 after two
+#   independent boots each measured them INERT. What is carried now is
+#   KAYFABE_OPERAND_JOIN=assert (an instrument, not a relaxation) plus KAYFABE_VAS_PUBLISH=$1.
+#   A relaxed green is never the milestone; a green with five fewer relaxations is closer to it.
 #
 # ★★★ PRE-REGISTERED, BEFORE THE BOOT — all four outcomes, so none of them can be read as
 #     the favourable one after the fact:
@@ -85,13 +87,20 @@ export GQ_TIMEOUT=${GQ_TIMEOUT:-420}
 export BOOT_TIMEOUT=${BOOT_TIMEOUT:-180}
 export KAYFABE_FB_JOIN=${KAYFABE_FB_JOIN:-shared}
 export KAYFABE_GUEST_RING=${KAYFABE_GUEST_RING:-ring}
-export KAYFABE_GUEST_PUSHBUF=${KAYFABE_GUEST_PUSHBUF:-pin}
 export KAYFABE_PT_WITNESS_EXEC=${KAYFABE_PT_WITNESS_EXEC:-on}
-export KAYFABE_GUEST_SEMA=${KAYFABE_GUEST_SEMA:-pin}
 export KAYFABE_GR_ROUTE=${KAYFABE_GR_ROUTE:-passthrough}
-export KAYFABE_GUEST_OPERAND=${KAYFABE_GUEST_OPERAND:-pin}
-export KAYFABE_PT_SWEEP=${KAYFABE_PT_SWEEP:-on}          # ⊘ RELAXATION 1 (carried)
-export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-join} # ⊘ RELAXATION 2 (carried)
+# ★★★★★ **w304 — FOUR NAMES ARE GONE FROM THIS LIST BECAUSE THEY ARE GONE FROM THE DEVICE.**
+#   `KAYFABE_PT_SWEEP`, `KAYFABE_GUEST_PUSHBUF`, `KAYFABE_GUEST_SEMA` and
+#   `KAYFABE_GUEST_OPERAND` no longer exist, and `KAYFABE_OPERAND_JOIN`'s `join` arm no longer
+#   exists — the variable survives as an INSTRUMENT (`off`/`assert`), not a relaxation.
+#   Each was measured green with the arm OFF on TWO independent boots (w298 + w304), and the
+#   post-deletion JOINT boot returned `^CUP3_VAL=43` with all five removed at once.
+#   ⊘ They are not left behind as inert `${V:-...}` lines: a variable the device ignores,
+#   printed under a heading that says it was armed, is worse than an absent one.
+# ⊘ `assert` and not `off`: `assert` is behaviourally `off` plus the OPERAND-JOIN census, and
+#   `assert` is the value that was actually MEASURED green (w298opjoin, w304opjoin). Shipping
+#   `off` would ship a configuration no boot has run.
+export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-assert}
 # ⚠ VAS_PUBLISH stays POSITIONAL — it is the rung's own parameter and is already expressible
 #   by the caller. Overriding it by env as well would give one arm two sources of truth.
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
@@ -109,9 +118,8 @@ unset KAYFABE_RING_VIDMEM
 #   "ARMING ACTUALLY IN FORCE" block below, read from the device's own emissions.
 echo "=== ★ THE ARMING AS THIS SCRIPT SET IT (a record of intent, not of execution) ==="
 for v in KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR NVKVM_RAM_BACKEND KAYFABE_GUEST_RAM \
-         KAYFABE_FB_JOIN KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_PT_WITNESS_EXEC \
-         KAYFABE_GUEST_SEMA KAYFABE_GR_ROUTE KAYFABE_GUEST_OPERAND KAYFABE_PT_SWEEP \
-         KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH GQ_TIMEOUT BOOT_TIMEOUT; do
+         KAYFABE_FB_JOIN KAYFABE_GUEST_RING KAYFABE_PT_WITNESS_EXEC \
+         KAYFABE_GR_ROUTE KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH GQ_TIMEOUT BOOT_TIMEOUT; do
   echo "    $v=${!v}"
 done
 echo "    KAYFABE_RING_VIDMEM=<unset>"
@@ -131,7 +139,7 @@ D=/workspace/bench/run_${TAG}_hostdmesg.log
 echo "=== ★ THE ARMING ACTUALLY IN FORCE (a boot happening is not an arm running) ==="
 grep -oE 'VAS-PUBLISH arm=[a-z]+ fb_join=[a-z]+ host_isolates=[a-z]+' "$Q" 2>/dev/null | head -1 | sed 's/^/      /'
 grep -oE 'OPERAND-JOIN arm=[a-z]+' "$Q" 2>/dev/null | head -1 | sed 's/^/      /'
-grep -oE 'PT-SWEEP tasks=[0-9]+ skipped=[0-9]+ ran=[0-9]+' "$Q" 2>/dev/null | tail -1 | sed 's/^/      /'
+grep -oE 'VAS-CENSUS procs=[0-9]+' "$Q" 2>/dev/null | tail -1 | sed 's/^/      /'
 echo "    ⊘ VAS-PUBLISH lines total = [$(grep -c 'VAS-PUBLISH token=' "$Q" 2>/dev/null)] — if 0 the pass NEVER RAN and every zero below is VACUOUS"
 echo "    ⊘ NOT ARMABLE lines       = [$(grep -c 'VAS-PUBLISH.*NOT ARMABLE' "$Q" 2>/dev/null)]  (MUST be 0)"
 echo "    ⊘ host_isolates=NO stub   = [$(grep -c 'VAS-PUBLISH.*host_isolates=NO' "$Q" 2>/dev/null)]  (MUST be 0)"

@@ -28,8 +28,11 @@
 #       that hid one.
 #       ⊘⊘ REWRITTEN AT w304 — THE OLD (E) WOULD HAVE CALLED A REAL GREEN A REGRESSION. It
 #       read *"`Xid` != 0, or `host_rows` != 18295/18309"*, and w298's `KAYFABE_PT_SWEEP=off`
-#       boot returned `^CUP3_VAL=43` with **no `HOST-PUBLISHED` line at all**. `host_rows` is
-#       a CONSEQUENCE of the framebuffer sweep, not a precondition of the pass. The check now
+#       boot returned `^CUP3_VAL=43` with **no `HOST-PUBLISHED` line at all**. ★★★ And the
+#       reason is worse than "a consequence, not a precondition": `host_rows` was EMITTED FROM
+#       INSIDE THE PT-SWEEP LINE, and that line was suppressed entirely when the flag was off.
+#       **The publication never stopped; its only reporter did.** The old (E) was therefore
+#       grading the output of an unrelated flag's diagnostic. The check now
 #       lives in `regression_check_e.sh`, which is a separate file precisely so it can be
 #       driven over fixtures and over recorded boots by `w304_e_selftest.sh` — a criterion
 #       nobody has watched fail is a wish.
@@ -107,7 +110,9 @@ echo ""
 echo "=== (E) REGRESSION CHECK — ⊘⊘ REWRITTEN AT w304. The old clause was:"
 echo "===       \"REGRESSION if Xid != 0, or host_rows != 18295/18309\""
 echo "===     w298's KAYFABE_PT_SWEEP=off boot returned ^CUP3_VAL=43 with ZERO HOST-PUBLISHED"
-echo "===     lines — so that second clause FAILED A CORRECT RESULT. host_rows is now printed"
+echo "===     lines — so that second clause FAILED A CORRECT RESULT. ★ The number was emitted"
+echo "===     from INSIDE the PT-SWEEP line, so the publication never stopped; its only"
+echo "===     reporter did. (w304 makes the census unconditional.) host_rows is now printed"
 echo "===     and NEVER graded; the graded clauses are Xid, the whole-VAS drain having run,"
 echo "===     and the publication pass's own MUST-be-0 invariants."
 echo "===     ⚠ printed EVEN ON A GREEN: a pass that regressed the address plane is not a pass."
@@ -137,9 +142,13 @@ echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the
 # ★ w298 — KAYFABE_PT_WITNESS_EXEC added. It was set by w290p_run.sh from the first arm and
 #   was the ONLY armed variable this "EVERY RELAXATION THAT WAS ON" block did not enumerate,
 #   so the block's own heading was false by one even after the w297 echo fix landed.
-for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
-         KAYFABE_GR_ROUTE KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_GUEST_SEMA \
-         KAYFABE_GUEST_OPERAND KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
+# ⊘ w304 — FOUR NAMES REMOVED because the device no longer has them. Listing a variable the
+#   device ignores under the heading "EVERY RELAXATION THAT WAS ON" is worse than not listing
+#   it: the row prints a value and means nothing. KAYFABE_OPERAND_JOIN stays — it survives as
+#   an `off`/`assert` instrument and can still be on.
+for v in KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
+         KAYFABE_GR_ROUTE KAYFABE_GUEST_RING \
+         KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
   echo "    $v = [$(grep -oE "$v=[a-z]+" "$OUT" 2>/dev/null | tail -1)]"
 done
 echo ""

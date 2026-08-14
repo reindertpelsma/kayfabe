@@ -27,13 +27,17 @@
 #   |---------------------|----------|------------------|
 #   | `GUEST_PUSHBUF=off` | PB-PIN   1142 | PB-PIN   **0**   |
 #   | `GUEST_SEMA=off`    | SEMA-PIN  458 | SEMA-PIN **0**   |
-#   | `GUEST_OPERAND=off` | PB-PIN   1142 | PB-PIN   **637** |
+#   | `GUEST_OPERAND=off` | OPERAND-PIN 325 | OPERAND-PIN **0** |
 #   | `PT_SWEEP=off`      | PT-SWEEP  230 | PT-SWEEP   **1** |
 #
-# ⚠ `GUEST_OPERAND` is the one that CANNOT be read as an absence: its pin emits `PB-PIN`
-#   lines like the pushbuffer pin's, so its witness is a COUNT CHANGE (1142 → 637), not a
-#   zero. A count cannot see a substitution — so this row prints both counts, never a bare
-#   "0 means off".
+# ⊘⊘ **CORRECTED MID-RUNG, AND THE CORRECTION IS THE LESSON.** This table first said
+#   `GUEST_OPERAND=off` shows as **`PB-PIN` 1142 → 637**, inferred from w298's single pair of
+#   aggregate counts. That is WRONG. The operand pin's own label is `OPERAND-PIN`, and the
+#   real witness is `OPERAND-PIN` **325 → 0** — measured on w298goperand AND w304goperand,
+#   both. ⚠ `PB-PIN` is not a witness for this arm at all: across six GREEN w304 boots it read
+#   1142, 1142, 458, 0, 1142, 1142 — it moves with the workload, so a "count change" in it
+#   would have confirmed nothing. `a_count_cannot_see_a_substitution`, committed by the very
+#   file written to avoid it.
 set -uo pipefail
 
 LABEL=${1:-}
@@ -105,6 +109,7 @@ A_VAS=$(grep -oE 'VAS-PUBLISH arm=[a-z]+' "$Q" 2>/dev/null | head -1)
 A_OPJ=$(grep -oE 'OPERAND-JOIN arm=[a-z]+' "$Q" 2>/dev/null | head -1)
 A_SWP=$(grep -oE 'PT-SWEEP tasks=[0-9]+ skipped=[0-9]+ ran=[0-9]+' "$Q" 2>/dev/null | tail -1)
 N_PB=$(gco 'PB-PIN' "$Q")
+N_OP=$(gco 'OPERAND-PIN' "$Q")
 N_SEMA=$(gco 'SEMA-PIN' "$Q")
 N_SWEEP=$(gco 'PT-SWEEP' "$Q")
 N_OPJT=$(gco 'OPERAND-JOIN-TABLE:' "$Q")
@@ -130,9 +135,10 @@ echo "  fault VA       = ${FVA:-⊘none}"
 echo "  host_rows MAX  = ${HMAX:-⊘ABSENT-UNMEASURED}   (numeric sort)   last=${HLAST:-⊘ABSENT}"
 echo "  HOST-PUBLISHED lines = $HPUB   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero"
 echo "  ARM (device)   = ${A_VAS:-⊘no VAS-PUBLISH arm line} ${A_OPJ:-⊘no OPERAND-JOIN arm line} ${A_SWP:-⊘no PT-SWEEP ran line}"
-echo "  ARM (counts)   = PB-PIN=$N_PB  SEMA-PIN=$N_SEMA  PT-SWEEP=$N_SWEEP  OPERAND-JOIN-TABLE=$N_OPJT"
-echo "                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96"
-echo "                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero"
+echo "  ARM (counts)   = PB-PIN=$N_PB  SEMA-PIN=$N_SEMA  OPERAND-PIN=$N_OP  PT-SWEEP=$N_SWEEP  OPERAND-JOIN-TABLE=$N_OPJT"
+echo "                   ⊘ baseline: PB-PIN 1142 / SEMA-PIN 458 / OPERAND-PIN 325 / PT-SWEEP 230 / OJT 96"
+echo "                   ⚠ GUEST_OPERAND=off is witnessed by OPERAND-PIN 325→0. ⊘ NOT by PB-PIN,"
+ echo "                     which reads 1142/458/0/1142 across GREEN boots — it tracks the workload"
 echo "  drain          = ${PINNED:-⊘ABSENT}   ★DRAINED rows = $DRAINED"
 echo "  doorbells      = ${DOOR:-⊘ABSENT-UNMEASURED}"
 echo "  unserviced ids = $UNSERV"

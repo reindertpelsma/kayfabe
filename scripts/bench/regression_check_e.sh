@@ -13,8 +13,19 @@
 #   `KAYFABE_PT_SWEEP=off` returned **`^CUP3_VAL=43`** — the milestone value, ladder 8/8,
 #   `Xid=0` — with **`host_rows = ⊘ABSENT-UNMEASURED`**: not a different number, *no
 #   `HOST-PUBLISHED` line at all* (`grep -c HOST-PUBLISHED` = **0**, against 229 on the
-#   baseline). ⇒ `host_rows=18295/18309` is a CONSEQUENCE of the framebuffer page-table sweep,
-#   not a PRECONDITION of the pass, and the criterion as written **fails on success**.
+#   baseline). Confirmed at n=2 by `w304ptsweep`, same numbers.
+#
+#   ★★★ **AND THE MECHANISM IS WORSE THAN "A CONSEQUENCE, NOT A PRECONDITION" — measured from
+#   the device's source, 2026-08-14.** `host_rows` was emitted from *inside* the `PT-SWEEP`
+#   line's format string (`shim.rs`, `sweep_cpu_pt_tables`), and that function returned an
+#   EMPTY STRING when the flag was off. So the whole four-picture census — `GUEST-DESCRIBES`,
+#   `TABLE-DESCRIBES`, `HOST-PUBLISHED`, `PROMOTE-PARKED` — vanished with the sweep.
+#   ⇒ **The publication did not stop. Its only reporter did.** The old (E) was grading the
+#   output of an unrelated flag's diagnostic and calling its absence an address-plane
+#   regression. ⚠ The sweep's own source argued the point one level down: the loop that filled
+#   those rows carried a comment saying it was *"deliberately OUTSIDE the sweep loop and NOT
+#   gated"* — while the entire function sat behind the flag. (w304 deletes the flag and makes
+#   the census unconditional, so this particular absence cannot recur.)
 #
 #   ★ A criterion that cannot fail is worse than one that is absent; a criterion that fails on
 #     success is worse still — it teaches the reader to override it, and then it is absent
