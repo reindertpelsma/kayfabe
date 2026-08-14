@@ -1,0 +1,23 @@
+=== W319 ARM START tree=/workspace/kayfabe_w319 prefix=w319m n=2 2026-08-14T17:54:47+00:00
+=== HEAD=97eb77df86298adc74f4a0fe03d28f6ebea3fac7
+=== DIRT=[]
+=== ARM ENV (intent — the boot's own W319KNOB line is the record of EXECUTION):
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=2500
+===   KAYFABE_VAS_DRAIN_BUDGET_MS=[2500]
+===   KAYFABE_VAS_DRAIN_ROW_LIMIT=[⊘unset ⇒ 65536 default]
+--- boot 1/2 tag=w319m1 2026-08-14T17:54:51+00:00
+    BOOT 1: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1]
+            ★ KNOB=[W319KNOB[budget_ms=2500 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=12235 refused=0 DRAIN_MS=2500 W319KNOB[budget_ms=2500 row_limit=65536] complete=false ⚠⚠ WALL BUDGET HIT ]
+            last_pinned_va=0x2033ca000  budget_hit_lines=[1] row_cap_hit_lines=[0]
+            hostdmesg_bytes=[228] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+--- boot 2/2 tag=w319m2 2026-08-14T17:57:00+00:00
+    BOOT 2: [CUP3_VAL=NO_KERNEL_LINE] [CUP3_RC=1]
+            ★ KNOB=[W319KNOB[budget_ms=2500 row_limit=65536]]
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=10628 refused=0 DRAIN_MS=2500 W319KNOB[budget_ms=2500 row_limit=65536] complete=false ⚠⚠ WALL BUDGET HIT ]
+            last_pinned_va=0x202d83000  budget_hit_lines=[1] row_cap_hit_lines=[0]
+            hostdmesg_bytes=[232] Xid_lines=[1] Xid (PCI:0000:00:07): 31 ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x2_0440f000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W319 ARM EXIT status=0 2026-08-14T17:59:04+00:00
+=== W319 ARM TERMINATOR w319m rc=0 2026-08-14T17:59:04+00:00

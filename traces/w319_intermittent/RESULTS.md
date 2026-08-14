@@ -4,7 +4,23 @@
 > `ef05f9b3`, bench `vh`, real GA106, host driver open `580.159.04`.
 > Predictions: `PREREGISTERED.md`, committed before each arm ran.
 > Mechanism: `docs/design/the_drain_budget_truncation.md`.
-> **Outcome: (A)** — reproduced on demand *and* mechanism attributed by modulation.
+> **Outcome: (A)** — reproduced on demand *and* mechanism attributed by modulation — **with
+> (D) folded in**: the brief's *publication-ordering-race* hypothesis is **refuted as stated**.
+> ⊘ **The "fix" half of (A) is NOT delivered**: the cheap candidate fix was built, measured and
+> **refuted**. What is delivered is the mechanism, two working knobs, an on-demand deterministic
+> reproducer, a one-boot attribution tool, and a named structural fix that is *not yet built*.
+
+### The whole rung in one table
+
+| arm | knob | n | outcome | pre-registered? |
+|---|---|---|---|---|
+| **R** | `ROW_LIMIT=11800` | 3 | **3/3 RED**, identical `last_pinned_va` | ✔ as predicted |
+| **X-off** | same, pin off (fix binary) | 2 | 1 RED + 1 ⊘UNMEASURED (other defect) | ✔ control held |
+| **X-on** | same + `COMPLETION_PIN=on` | 3 | **1 green / 3 — fix REFUTED** (p ≈ 0.43) | ✘ falsifier fired |
+| **M** | `BUDGET_MS=2500` | 2 | **2/2 RED**, wall budget hit | ✔ as predicted |
+| **H** | `BUDGET_MS=20000` | 3 | **3/3 green**, `complete=true` 3/3 | ✔ but weakly informative |
+
+**8 faults across 4 arms, every one at exactly `0x2_0440f000`** (`CE3` ×6, `GRAPHICS` ×2).
 
 ---
 
@@ -176,22 +192,49 @@ asked for, in the "make it worse" direction, pre-registered before it ran.
 `KAYFABE_VAS_DRAIN_BUDGET_MS=20000`. Graded on the **mechanism variable**, as pre-registered,
 because the green count alone is weak at this n.
 
-*(filled from `w319_arm_w319h.log`; see the table below)*
+**3 / 3 GREEN.** Every pre-registered discriminating clause met:
+
+| boot | `CUP3_VAL` | `pinned/asked` | `DRAIN_MS` | `complete` | `budget_hit` | `Xid` |
+|---|---|---|---|---|---|---|
+| `w319h1` | **43** | 13313/13313 | 2792 | **true** | 0 | none |
+| `w319h2` | **43** | 13313/13313 | 2958 | **true** | 0 | none |
+| `w319h3` | **43** | 13313/13313 | 2924 | **true** | 0 | none |
 
 ⇒ **Three settings of ONE constant, everything else held:**
 
-| `VAS_DRAIN_WALL_BUDGET` | truncated? | `CUP3_VAL=43` |
+| `VAS_DRAIN_WALL_BUDGET` | truncated | `CUP3_VAL=43` |
 |---|---|---|
-| **2 500 ms** (arm M) | **2/2 truncated** | **0 / 2** |
-| **3 000 ms** (master default) | 3 of 5 recorded w314 boots hit it | ~4 / 5 |
-| **20 000 ms** (arm H) | *see table* | *see table* |
+| **2 500 ms** (arm M) | **2 / 2** | **0 / 2** |
+| **3 000 ms** (master default) | 3 of 5 recorded w314 boots | ~4 / 5 |
+| **20 000 ms** (arm H) | **0 / 3** | **3 / 3** |
 
 ★ A **monotone dose–response across three settings of a single source constant**, with the
-shipping default sitting **inside** the failure region. ⊘ Note what arm H does and does not
-show: raising the budget removes the *truncation*, which is the mechanism. Whether any given
-arm-H boot would have truncated at 3 000 ms is answered by its own `DRAIN_MS`, reported below —
-a boot whose drain finished in under 3 000 ms was going to be green either way and is **not**
-evidence of a rescue.
+shipping default sitting **inside** the failure region.
+
+### ⊘⊘ BUT ARM H IS THE WEAKEST ARM HERE, AND I SAID SO BEFORE RUNNING IT
+
+**None of arm H's three boots needed the extra budget.** Their drains finished in **2 792,
+2 958 and 2 924 ms — all under the default 3 000 ms.** ⇒ all three would have completed at the
+default too, so arm H demonstrates *"a 20 s budget cannot truncate"* (which is arithmetic) and
+**not** *"raising the budget rescues a boot that would otherwise have failed"*. ⊘ It is
+consistent with the mechanism; it is not independent evidence for it. The pre-registration
+named this caveat in advance rather than after the numbers landed.
+
+### ★★★★★ WHAT ARM H ACTUALLY BOUGHT — the cost distribution, and it is the whole finding
+
+Pooling every first-drain `DRAIN_MS` this campaign has recorded:
+
+```
+2672   2792   2898   2924   2958   ≥3000   ≥3000   ≥3000
+ br1    h1     bt1    h3     h2     br4    base    cup3
+green  green  green  green  green  green    RED     RED
+                                   ↑ budget = 3000 ms sits HERE
+```
+
+**8 observations; the budget lands at roughly the 60th percentile of the drain's own cost.**
+⇒ the ~20 % is not a mystery rate — it is **the fraction of the drain's natural cost
+distribution that falls on the far side of a constant sitting in its middle**. And the
+tightest green (`h2`, 2 958 ms) cleared by **42 ms, 1.4 %**.
 
 ---
 
