@@ -146,7 +146,7 @@ echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the
 #   device ignores under the heading "EVERY RELAXATION THAT WAS ON" is worse than not listing
 #   it: the row prints a value and means nothing. KAYFABE_OPERAND_JOIN stays — it survives as
 #   an `off`/`assert` instrument and can still be on.
-for v in KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
+for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
          KAYFABE_GR_ROUTE KAYFABE_GUEST_RING \
          KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
   echo "    $v = [$(grep -oE "$v=[a-z]+" "$OUT" 2>/dev/null | tail -1)]"

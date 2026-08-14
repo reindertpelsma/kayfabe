@@ -89,18 +89,17 @@ export KAYFABE_FB_JOIN=${KAYFABE_FB_JOIN:-shared}
 export KAYFABE_GUEST_RING=${KAYFABE_GUEST_RING:-ring}
 export KAYFABE_PT_WITNESS_EXEC=${KAYFABE_PT_WITNESS_EXEC:-on}
 export KAYFABE_GR_ROUTE=${KAYFABE_GR_ROUTE:-passthrough}
-# ★★★★★ **w304 — FOUR NAMES ARE GONE FROM THIS LIST BECAUSE THEY ARE GONE FROM THE DEVICE.**
-#   `KAYFABE_PT_SWEEP`, `KAYFABE_GUEST_PUSHBUF`, `KAYFABE_GUEST_SEMA` and
-#   `KAYFABE_GUEST_OPERAND` no longer exist, and `KAYFABE_OPERAND_JOIN`'s `join` arm no longer
-#   exists — the variable survives as an INSTRUMENT (`off`/`assert`), not a relaxation.
-#   Each was measured green with the arm OFF on TWO independent boots (w298 + w304), and the
-#   post-deletion JOINT boot returned `^CUP3_VAL=43` with all five removed at once.
-#   ⊘ They are not left behind as inert `${V:-...}` lines: a variable the device ignores,
-#   printed under a heading that says it was armed, is worse than an absent one.
-# ⊘ `assert` and not `off`: `assert` is behaviourally `off` plus the OPERAND-JOIN census, and
-#   `assert` is the value that was actually MEASURED green (w298opjoin, w304opjoin). Shipping
-#   `off` would ship a configuration no boot has run.
-export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-assert}
+# ★★★★★ **w313 — TWO OF w304's FOUR DELETED NAMES ARE BACK, BECAUSE THEY WERE NOT INERT.**
+#   `KAYFABE_GUEST_PUSHBUF`, `KAYFABE_GUEST_SEMA` and `KAYFABE_GUEST_OPERAND` stay deleted —
+#   they were genuinely inert and the w313 ablation re-confirmed it.
+#   ⊘⊘ `KAYFABE_PT_SWEEP` and `KAYFABE_OPERAND_JOIN=join` are RESTORED: each ALONE breaks
+#   `R33 arm 1` (a raw CE client, no libcuda), measured one-variable-per-boot at `8d258daa`,
+#   and the regression bisects to the deletion merge `d2c58075`. w304's gate graded all five
+#   on `^CUP3_VAL=43` alone — cup3 is libcuda + a GR launch, and *inert for cup3* was read as
+#   *inert*. ⇒ Any future inertness claim must clear BOTH workloads; see
+#   `scripts/bench/relaxation_inert_gate.sh`.
+export KAYFABE_PT_SWEEP=${KAYFABE_PT_SWEEP:-on}           # ⊘ RELAXATION 1 (restored w313)
+export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-join} # ⊘ RELAXATION 2 (restored w313)
 # ⚠ VAS_PUBLISH stays POSITIONAL — it is the rung's own parameter and is already expressible
 #   by the caller. Overriding it by env as well would give one arm two sources of truth.
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
@@ -119,7 +118,8 @@ unset KAYFABE_RING_VIDMEM
 echo "=== ★ THE ARMING AS THIS SCRIPT SET IT (a record of intent, not of execution) ==="
 for v in KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR NVKVM_RAM_BACKEND KAYFABE_GUEST_RAM \
          KAYFABE_FB_JOIN KAYFABE_GUEST_RING KAYFABE_PT_WITNESS_EXEC \
-         KAYFABE_GR_ROUTE KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH GQ_TIMEOUT BOOT_TIMEOUT; do
+         KAYFABE_GR_ROUTE KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH \
+         GQ_TIMEOUT BOOT_TIMEOUT; do
   echo "    $v=${!v}"
 done
 echo "    KAYFABE_RING_VIDMEM=<unset>"
@@ -139,6 +139,11 @@ D=/workspace/bench/run_${TAG}_hostdmesg.log
 echo "=== ★ THE ARMING ACTUALLY IN FORCE (a boot happening is not an arm running) ==="
 grep -oE 'VAS-PUBLISH arm=[a-z]+ fb_join=[a-z]+ host_isolates=[a-z]+' "$Q" 2>/dev/null | head -1 | sed 's/^/      /'
 grep -oE 'OPERAND-JOIN arm=[a-z]+' "$Q" 2>/dev/null | head -1 | sed 's/^/      /'
+# ★ w313 — BOTH, and they are different facts: the sweep's arm (restored, and silent when
+#   disarmed) and the census (unconditional). A boot that prints only the second ran with the
+#   sweep OFF, which is exactly the arm R33 arm 1 fails on.
+grep -oE 'PT-SWEEP arm=[a-z]+' "$Q" 2>/dev/null | head -1 | sed 's/^/      /'
+grep -oE 'PT-SWEEP tasks=[0-9]+ skipped=[0-9]+ ran=[0-9]+' "$Q" 2>/dev/null | tail -1 | sed 's/^/      /'
 grep -oE 'VAS-CENSUS procs=[0-9]+' "$Q" 2>/dev/null | tail -1 | sed 's/^/      /'
 echo "    ⊘ VAS-PUBLISH lines total = [$(grep -c 'VAS-PUBLISH token=' "$Q" 2>/dev/null)] — if 0 the pass NEVER RAN and every zero below is VACUOUS"
 echo "    ⊘ NOT ARMABLE lines       = [$(grep -c 'VAS-PUBLISH.*NOT ARMABLE' "$Q" 2>/dev/null)]  (MUST be 0)"

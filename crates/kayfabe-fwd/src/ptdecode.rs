@@ -481,21 +481,6 @@ pub struct PtSweepPlan {
     pub skipped: usize,
 }
 
-/// ## ⊘⊘ STATUS 2026-08-14 (w304) — **NO PRODUCTION CALLER. THIS IS LIBRARY-ONLY CODE.**
-///
-/// `KAYFABE_PT_SWEEP` — the only thing that ever reached this pass from a boot — was DELETED
-/// at w304 after being measured INERT on two independent boots (`w298ptsweep`, `w304ptsweep`:
-/// `^CUP3_VAL=43` with the sweep off). `SharedDevice::sweep_pt_tables_from`, the sole caller,
-/// went with it.
-///
-/// ⚠ **This function and `commit_pt_sweep`'s `Admit::Swept` are now kept alive by
-/// `tests/tests/pt_sweep.rs` and by nothing else.** That is the `a_green_test_can_hold_a_wall_in_place`
-/// shape and it is recorded here rather than left to be rediscovered: a reader must not take
-/// the tests as evidence that anything runs this. Deleting the chain outright
-/// (`plan_pt_sweep` / `run_pt_sweep` / `commit_pt_sweep` / `Admit::Swept` /
-/// `ReachShadow::witness_swept` / `tests/tests/pt_sweep.rs`) was DELIBERATELY NOT done in the
-/// same rung as the behavioural deletion, so a red joint boot could not be ambiguous between
-/// the two. It is the queued follow-up.
 /// ★★★★★ **PLAN THE WHOLE-VAS SWEEP** (owner's lock, rank 1) — the C's `enum_gr_sysmem`
 /// trigger set, ported (`C: nvkvm_gpu_emul.c:583-591`).
 ///
