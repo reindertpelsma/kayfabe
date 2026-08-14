@@ -1,0 +1,72 @@
+================================================================================
+=== PART A — ONE CRAFTED FIXTURE PER CLAUSE  (offline, no GPU)
+================================================================================
+  ✔ PASS: drain ran, no host_rows at all       rc=0 (expected 0)
+            (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            (E2) drain ran: ★DRAINED rows=1  Σpinned=13312  max_single=13312   ✔ PASS
+            (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+  ✔ (E1) fires on an Xid                       rc=1 (expected 1)
+            (E1) Xid = 1                          ✘ REGRESSION
+            (E2) drain ran: ★DRAINED rows=1  Σpinned=13312  max_single=13312   ✔ PASS
+            (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+  ✔ (E2) fires when the drain never ran        rc=1 (expected 1)
+            (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            (E2) drain DID NOT RUN OR PINNED NOTHING: ★DRAINED rows=0  Σpinned=0   ✘ REGRESSION
+            (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+  ✔ (E3) fires on sum_ok=false, everything else green rc=1 (expected 1)
+            (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            (E2) drain ran: ★DRAINED rows=1  Σpinned=13312  max_single=13312   ✔ PASS
+            (E3) pass invariants VIOLATED: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=1   ✘ REGRESSION
+  ✔ (E3) fires on NOT ARMABLE                  rc=1 (expected 1)
+            (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            (E2) drain ran: ★DRAINED rows=1  Σpinned=13312  max_single=13312   ✔ PASS
+            (E3) pass invariants VIOLATED: NOT ARMABLE=1  host_isolates=NO=0  sum_ok=false=0   ✘ REGRESSION
+  ✔ missing inputs ⇒ UNMEASURED, not pass    rc=2 (expected 2)
+            (E1) ⊘ NO HOST DMESG FILE AT ALL — UNMEASURED. ⊘ NOT zero.
+            (E2)(E3) ⊘ NO QEMU LOG — UNMEASURED. ⊘ NOT zero.
+
+================================================================================
+=== PART B — NEW (E) vs OLD (E) OVER EVERY RECORDED w298 BOOT
+===   dir = /workspace/bench
+===   ★ the defect: the OLD criterion must be seen calling a ^CUP3_VAL=43 a REGRESSION.
+================================================================================
+  BOOT               ^CUP3_VAL              OLD (E)     NEW (E)     NOTE
+  w290cup2           ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w290passert        ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w290pboth          ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w290pdrain         ⊘ABSENT-UNMEASURED   PASS        PASS        
+  w290ppinrate       ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w290ppublish       ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w291r33bare        ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w291r33relaxed     ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w294cup2           ⊘ABSENT-UNMEASURED   PASS        PASS        
+  w294nvd            ⊘ABSENT-UNMEASURED   PASS        PASS        
+  w295cup2           ⊘ABSENT-UNMEASURED   PASS        PASS        
+  w297cup3           CUP3_VAL=43            PASS        PASS        
+  w298base           CUP3_VAL=43            PASS        PASS        
+  w298bothoff        ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w298ceexec         ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w298fbjoin         ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w298goperand       CUP3_VAL=43            PASS        PASS        
+  w298gpushbuf       CUP3_VAL=43            PASS        PASS        
+  w298gring          ⊘ABSENT-UNMEASURED   REGRESSION  PASS        
+  w298grroute        ⊘ABSENT-UNMEASURED   REGRESSION  PASS        
+  w298gsema          CUP3_VAL=43            PASS        PASS        
+  w298isolates       ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w298opjoin         CUP3_VAL=43            PASS        PASS        
+  w298ptsweep        CUP3_VAL=43            REGRESSION  PASS        ★★★ OLD (E) FAILS A REAL GREEN
+  w298ptwitness      ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w298vaspub         ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w304base           CUP3_VAL=43            PASS        PASS        
+  w304ekp            ⊘ABSENT-UNMEASURED   REGRESSION  REGRESSION  
+  w304goperand       CUP3_VAL=43            PASS        PASS        
+  w304gpushbuf       CUP3_VAL=43            PASS        PASS        
+  w304gsema          CUP3_VAL=43            PASS        PASS        
+  w304joint          CUP3_VAL=43            PASS        PASS        
+  w304opjoin         CUP3_VAL=43            PASS        PASS        
+  w304ptsweep        CUP3_VAL=43            REGRESSION  PASS        ★★★ OLD (E) FAILS A REAL GREEN
+
+  ⇒ boots where the OLD criterion called a ^CUP3_VAL=43 a REGRESSION: 2
+    (MUST be >= 1, or the defect this rung fixes is not exhibited by this corpus)
+
+=== ★ SELFTEST OK — every clause watched firing, and no green graded as a regression.
