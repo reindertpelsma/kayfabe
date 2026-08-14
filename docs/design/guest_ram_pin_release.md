@@ -68,8 +68,9 @@ isolate is now dropped, its `/dev/nvidiactl` closes and RM cascades the whole cl
 
 ### The bound, measured
 
-`[measured, traces/boots/w291/w291_2a_merge.log.gz]` **15 845 live guest-RAM pins in ONE
-`Vas` on ONE boot** (`pins=15845`, `host_rows=15845 of 16425`).
+`[measured 2026-08-13, boot `w291_2a_merge`, traces/boots/w291/w291_2a_merge.log.gz]`
+**15 845 live guest-RAM pins in ONE `Vas` on ONE boot** (`pins=15845`,
+`host_rows=15845 of 16425`), on a real GA106.
 
 ⇒ Per live guest process, the ceiling is **unbounded** — `GuestRamPlane::live`,
 `Vas::guest_ram_pins` and `FbJoinTable::joins` have no cap and no removal. The only numbers
@@ -90,7 +91,8 @@ mechanism is right and the guard-hole is real. **The parenthetical is wrong**: t
 in `guest_ram_pins`, which is why this rung's reclaim can find it at all. What is lost is the
 **table row**, i.e. `resolve()` answers `Miss` for a VA that IS host-mapped.
 
-⊘ And measured: on the latest boots (`w291_2a_merge` and after) `host_rows >= pins` on every
+⊘ And measured `[2026-08-13, traces/boots/w289…w291, 14 logs swept]`: on the latest boots
+(`w291_2a_merge` and after) `host_rows >= pins` on every
 line, so the **run-pin population is ~0 on the default arm today**. The pre-merge boot
 (`w290ppinrate`, `host_rows=4 pins=15846`) is the only one where it is large. ⇒ the run-pin
 shape is **structurally reachable and currently rare**; the shape that is large *today* is the
@@ -182,6 +184,8 @@ teardown fix. ⚠ It is a real inconsistency and should be answered; it is not a
 
 ### ⊘⊘ What the sever measured that the design above had NOT stated
 
+`[measured 2026-08-14, rented CPU box, `cargo test -p kayfabe-tests --test guest_ram_pin_release`]`
+
 `tests/tests/guest_ram_pin_release.rs`'s pin block was **deleted and the suite run**. Three of
 four tests went red — and the one assertion that stayed **green** is the finding:
 
@@ -250,8 +254,9 @@ per pin is:
 ### ⚠ A PRE-EXISTING clause-(b) exposure this rung did not create and does not fix
 
 w303's armed reap put an **unbounded** disposal on the BQL path: `Proc::drop` drains the whole
-`pending_release` queue inside `Regs::write`. At the measured `host_rows=12 818` and a measured
-`240 µs` mean per guest-RAM row, a whole-proc teardown is **~3 s of blocking host ioctls with
+`pending_release` queue inside `Regs::write`. At `host_rows=12 818`
+`[measured 2026-08-13, boot `w291_2a_merge`]` and the `240 µs` mean per guest-RAM row
+`[measured w291, boot `w290ppinrate`, refused=0 over ~20 000 pins]`, a whole-proc teardown is **~3 s of blocking host ioctls with
 every vCPU halted** — against `scrubberDestruct`'s 4 000 ms and the guest's soft-lockup detector
 well below that.
 
@@ -294,7 +299,54 @@ and tested on a rented CPU box with no GPU. `only_live_boots_are_proof` applies 
 | **E** | `refused_no_host_vas=0` on the same line | a non-zero means a pin existed with no nameable host VAS, which contradicts `commit_pin_guest_ram`'s own invariant and is a finding in its own right. |
 | **F** | no new `Xid` classes vs. the previous green boot's `w291_xids.txt`-style census | a premature unpin's signature is a **new** fault, not more of an old one. `a_count_cannot_see_a_substitution`. |
 
-⚠ **Any bench claim must carry the SOURCE REVISION it was measured at.**
+⚠ **Any bench claim must carry the SOURCE REVISION it was measured at.** This branch's tip at
+writing is `771d5d60`, on master `0ff3e1e2`.
+
+## 7b. ⚠ What master itself is at `0ff3e1e2` — measured, because a comparison needs both sides
+
+`[measured 2026-08-14, rented CPU box, rustc 1.97.1]` **on clean `0ff3e1e2`, with no changes
+from this rung:**
+
+| check | master `0ff3e1e2` | this branch |
+|---|---|---|
+| `cargo build --workspace --all-targets` | **0** | **0** |
+| `cargo test --workspace` | **101** — 7 failing tests | **101** — the same set (see below) |
+| `cargo clippy --workspace --all-targets -D warnings` | **101** — `this if statement can be collapsed`, `kayfabe-isolate-host` | **101**, same |
+| `cargo fmt --all --check` | **1** — 6 unformatted files | **1**, a subset of the same files |
+| `scripts/ci_gates.sh` | **3 FAILED** | **3 FAILED**, same three |
+
+⇒ **The pass condition for this rung is "the same set, unchanged" — not zero**, and that is
+what was measured. The 7 master failures are `a_device_with_no_fb_source_refuses_the_vidmem_ring`,
+`a_guest_doorbell_reaches_the_host_completion_observer`,
+`a_second_doorbell_over_an_unchanged_ring_forwards_nothing`,
+`a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote`,
+`spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all`,
+`the_logic_crates_carry_no_unnamed_guest_os_assumption`,
+`the_observers_negative_verdict_refuses_the_guest_doorbell`.
+
+⊘ **And two of those columns are findings in their own right, for whoever owns CI:** master is
+**red on clippy and on `fmt`**, in files this rung never touched
+(`kayfabe-isolate-host/src/{rm.rs,bin/rmladder.rs}` from w309;
+`kayfabe-qemu-raw/tests/reap_composition_root.rs` from w303;
+`tests/tests/{cancellation_plane_is_honest,preempt_is_decided}.rs` from w305/w306). Those are
+CI-blocking steps (`ci.yml:452`), so **the last several merges went in red on them**. Named
+here rather than fixed, because fixing another lane's formatting inside a safety rung is
+exactly the diff nobody can review.
+
+## 7c. The one lint this rung genuinely caused, and how it was answered
+
+`Orphans`'s third kind took `VerbFailure` to 128 bytes and `kayfabe_fwd::Refusal` with it,
+tripping `clippy::result_large_err` at **1 site in `kayfabe-isolate` and 19 in `kayfabe-fwd`**.
+
+Answered **once**, in `clippy.toml` (`large-error-threshold = 176`), not twenty times in
+attributes. The argument is in that file: the lint is about the **Ok** path paying for the
+error path's size, every function here returns from a host RM ioctl round trip, and clippy's
+suggested `Box<VerbFailure>` adds an allocation on every failure and an indirection to the
+exact value the teardown discipline requires held **by value** (`Orphans` is `#[must_use]`
+precisely so a caller must discharge it).
+
+⊘ **176 is deliberately not generous** — one more field of room, not unbounded growth — so the
+next kind added to `Orphans` arrives as a decision someone makes rather than as a slide.
 
 ## 8. Where the code is
 
