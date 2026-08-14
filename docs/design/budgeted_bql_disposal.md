@@ -6,6 +6,21 @@
 > clause (b) this is about).
 > ⚠ This doc states a **mechanism and its termination argument**. The bench numbers it is
 > graded on are in §7; a claim here that is not in §7 has not been measured on hardware.
+>
+> ### ★★★★★ GRADED — 2026-08-14, bench `vh`, rev `86dd30b7`, outcome **(A)**
+> `[measured 2026-08-14, real GA106 580.159.04, stamp gate PASSED on every boot; full artefacts
+> and the two superseded arms in `traces/w317_drain/`]`
+> - **The worst single BQL hold: 3 702 806 µs → 54 838 µs.** From **92.6 %** of
+>   `scrubberDestruct`'s 4 000 ms to **1.37 %** — a **67.5×** reduction, and **within 4 % of the
+>   bound this document predicted before the boot** (40 ms budget + `4 × 3.3 ms`).
+> - `^CUP3_VAL=43` **4/4** · `R33 arm 1` **FIRED 3/3** · `(E) VERDICT = 0` 4/4 ·
+>   `PIN-RELEASE released=18228 refused_no_host_vas=0` on every boot · **`DRAIN-DEFER 1 → 0`**
+>   on every boot, which is §5.1's termination argument observed rather than asserted.
+> - ⊘ **`max_reap_us` is no longer the disposal** — what is left in the reap is the isolate
+>   child's `waitpid` + namespace teardown, **47–54 ms**, a floor the budget cannot touch.
+> - ⚠ **The first shipped granularity was wrong and the grade caught it**: at `chunk = 64` the
+>   delivered bound was **127 ms**, 3× the stated budget, because a chunk is un-interruptible.
+>   See §4 — the value is now derived from a measurement, not an estimate.
 
 ---
 

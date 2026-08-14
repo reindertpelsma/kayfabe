@@ -30,9 +30,25 @@ Every boot also: `Xid=0` · `PIN-RELEASE released=18228 refused_no_host_vas=0 ro
 · `(E) VERDICT = 0` · `DRAIN-DEFER 1 → 0` · `guest_stall_lines=0` · `NVRM ×31` ·
 `host_rows_max=18295`.
 
-⇒ **Pre-registered outcome (A).** §1–§4 below are the **`chunk = 64` arm**, kept because it is
-what found the granularity defect and because §3's discriminator is the reason the shipped value
-is 4 and not a guess.
+### ★ And the second workload at the shipped value — `R33 arm 1` FIRED 3/3
+
+`[tags `w317c4r331..3`, `w309_crit1.sh fresh`]` the client's own four-fact line, verbatim and
+identical on all three (`4096 bytes moved · dst[0] and dst[last] correct · engine semaphore ==
+declared · GP_GET 1 caught GP_PUT 1`), `R33_RC=1`, `guest_stall_lines=0`.
+
+| boot | `max_reap_us` | `max_drain_us` | `DRAIN-TIMING` |
+|---|---|---|---|
+| 1 | 3 039 | 20 561 | `disposed=15 residue=0 turns=4 budget_hit=false` |
+| 2 | 2 842 | 20 734 | `disposed=15 residue=0 turns=4 budget_hit=false` |
+| 3 | 3 391 | 21 252 | `disposed=15 residue=0 turns=4 budget_hit=false` |
+
+⊘ `turns=4` at `chunk=4` for **15** disposals is the arithmetic working (`ceil(15/4) = 4`), and
+`budget_hit=false` says the whole queue fitted inside the budget — so on this workload the drain
+never defers at all, which is why `DRAIN-DEFER` is correctly **⊘UNMEASURED** rather than 0.
+
+⇒ **Pre-registered outcome (A), on both workloads, at the shipped configuration.** §1–§4 below
+are the **`chunk = 64` arm**, kept because it is what found the granularity defect and because
+§3's discriminator is the reason the shipped value is 4 and not a guess.
 
 ---
 
@@ -228,11 +244,22 @@ pass/fail word of its own.
 
 ## 6. Files
 
-| file | what |
-|---|---|
-| `w317_repeat_w317br.log` | the drive log — every cup3 boot's anchored values, criterion E inline |
-| `w317_repeat_w317r33.log` | the raw-CE arm, n=3 |
-| `run_w317br[1-4]_qemu.log.gz` | the device's own emissions, including every `DRAIN-TIMING` / `DRAIN-DEFER` / `REAP` line |
-| `run_w317br[1-4]_probe.log` | the guest-side workload output (`^CUP3_VAL=`, `^CUP3_RC=`) |
-| `run_w317br[1-4]_dmesg.log` | guest `dmesg` — 5 379 bytes, `NVRM` ×31, **asserted non-empty** |
-| `run_w317br[1-4]_hostdmesg.log` | host `dmesg` **delta**. ⊘ **Zero bytes is the normal green** — no host driver message during the boot, not a truncated capture |
+| file | arm | what |
+|---|---|---|
+| `w317_repeat_w317c4.log` | **shipped, `chunk=4`** | cup3 ×4 — the drive log, every anchored value, criterion E inline |
+| `w317_repeat_w317c4r33.log` | **shipped, `chunk=4`** | raw CE ×3 |
+| `run_w317c4[1-4]_*` | **shipped** | qemu / probe / guest dmesg / host dmesg per cup3 boot |
+| `run_w317c4r33[1-3]_*` | **shipped** | the same for the raw-CE arm |
+| `w317_repeat_w317br.log`, `run_w317br[1-4]_*` | `chunk=64` | the arm that found the granularity defect (§1–§3) |
+| `w317_repeat_w317r33.log`, `run_w317r33[1-3]_*` | `chunk=64` | its raw-CE half (§4) |
+| `w317_chunk1_diag.log`, `run_w317c1diag_*` | `chunk=1`, **throwaway** | the discriminator that settled M1 vs M2 (§3) |
+
+Reading rules for the per-boot files, both of which have cost this campaign time before:
+- `*_dmesg.log` (**guest**) is 5 379 bytes and carries `NVRM` ×31 — **asserted non-empty**,
+  because the serial log is not where the driver's output is.
+- `*_hostdmesg.log` is a per-boot **delta**. ⊘ **Zero bytes is the normal green** on the cup3
+  arm — no host driver message during the boot, *not* a truncated capture. The raw-CE arm's
+  227 bytes are its own deliberately-provoked fault.
+- The `.gz` `qemu.log`s carry every `DRAIN-TIMING` / `DRAIN-DEFER` / `REAP` / `PIN-RELEASE`
+  line, and each `DRAIN-TIMING` is a **new maximum**, not a sample — so the sequence is a
+  monotone envelope, never a distribution.
