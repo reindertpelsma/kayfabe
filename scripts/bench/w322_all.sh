@@ -14,7 +14,7 @@
 #   4. sizes   — the matmul curve: the same-hour correctness control (`bad=0 maxerr=0`) and a
 #                re-measurement of the numbers w320 is quoted for.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."   # scripts/bench -> repo root
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w318}
 for A in bwneg bw2 bwhost sizes; do
   case "$A" in
