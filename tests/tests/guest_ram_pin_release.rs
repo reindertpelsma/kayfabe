@@ -28,18 +28,26 @@
 //!
 //! Deleting the pin block from `Spine::stage_dropped_vases`
 //! (`crates/kayfabe-core/src/gpu.rs`, the `for (_va, pin) in vas.take_guest_ram_pins()`
-//! loop) makes [`a_dead_procs_guest_ram_pins_are_released_from_the_production_path`] fail
-//! on
+//! loop, replaced by a bare `drop(vas.take_guest_ram_pins())`) was **run**, and three of the
+//! four tests here went red:
 //!
 //! ```text
-//! ★★★ THE LEAK. The pin's `OS_DESCRIPTOR` was never freed …
-//!   left: 1
-//!  right: 0
+//! a_dead_procs_guest_ram_pins_are_released_from_the_production_path ... FAILED
+//!   ★★ THE ISOLATE'S OWN WINDOW …   left: 0   right: 1
+//! the_row_walk_skips_a_row_whose_object_its_pin_already_staged ... FAILED
+//!   PinReclaim { released: 0, refused_no_host_vas: 0, rows_deduped: 0 }
+//! a_multi_row_run_pins_descriptor_is_released_too ... FAILED
+//!   ★★★ THE LEAK, in the shape nothing else can reach …   left: 0   right: 1
 //! ```
 //!
-//! and leaves every other test in this workspace green — which is precisely the state
-//! master was in. ⊘ **A gate nobody has seen fail is not a gate**; this one was severed and
-//! restored.
+//! ⊘⊘ **AND THE SEVER TAUGHT SOMETHING THE DESIGN HAD NOT STATED.** On the exact-extent
+//! shape the descriptor free stayed at **1** even severed — because w291's merge put that
+//! same handle on the row, and the row walk freed it. ⇒ *"the descriptor leaks"* is true of
+//! the **run-pin** shape and **false** of the exact-extent one, and a single test would have
+//! reported the fix working for a reason that only holds on one of them. The two shapes are
+//! now separate tests with separate discriminators.
+//!
+//! ⊘ **A gate nobody has seen fail is not a gate**; these were severed and restored.
 //!
 //! ## ⊘ What this file does NOT witness
 //!
@@ -115,21 +123,34 @@ fn device() -> (
     )
 }
 
-/// Declare, in this proc's address table, that the guest's own page tables bind `RING_VA`.
-/// The pin refuses an unbound VA (MISS = FAULT), so without this there is nothing to pin.
-fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId) {
+/// Declare, in this proc's address table, that the guest's own page tables bind `rows` rows
+/// of `PIN_LEN` starting at `RING_VA`. The pin refuses an unbound VA (MISS = FAULT), so
+/// without this there is nothing to pin.
+///
+/// ★★ **`rows` is the whole experiment.** `rows = 1` gives the **exact-extent** shape, where
+/// w291's merge upgrades the row to carry the pin's own handle. `rows = 2` with a grant of
+/// `2 * PIN_LEN` gives the **multi-row run pin**, where the merge binds *nothing* — *"a pin
+/// whose grant spans several rows therefore binds NOTHING here and behaves exactly as
+/// before"* — and *"as before"* is the leak. The two shapes fail in **different places** and
+/// this file asserts both.
+fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, rows: u64) {
     device
         .with_proc_mut(pid, |p| {
             let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
-            vas.table
-                .bind(
-                    PDB,
-                    RING_VA,
-                    PIN_LEN,
-                    Binding::declared_by_guest(RING_GPA, Aperture::SysmemCoherent)
+            for i in 0..rows {
+                vas.table
+                    .bind(
+                        PDB,
+                        GpuVa(RING_VA.0 + i * PIN_LEN),
+                        PIN_LEN,
+                        Binding::declared_by_guest(
+                            RING_GPA + i * PIN_LEN,
+                            Aperture::SysmemCoherent,
+                        )
                         .expect("the fixture declares a kind the guest can declare"),
-                )
-                .expect("the fixture's own bind is well-formed");
+                    )
+                    .expect("the fixture's own bind is well-formed");
+            }
         })
         .expect("the proc is live");
 }
@@ -192,7 +213,7 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
         std::time::Duration::from_secs(60),
     );
     let (device, pid, rec) = device();
-    guest_binds(&device, pid);
+    guest_binds(&device, pid, 1);
 
     // ---- phase 1: the guest pins one of its own pages, through the production verb.
     let pinned = device
@@ -232,12 +253,14 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
     assert_eq!(
         freed(&rec).iter().filter(|h| **h == descriptor).count(),
         1,
-        "★★★ THE LEAK. The pin's `OS_DESCRIPTOR` {descriptor:?} was freed {} times, not \
-         exactly once. ZERO is w301 §3.2's state — `Vas::guest_ram_pins` has no removal, so \
-         the handle is lost with the `Vas` and the host GPU keeps a live translation into \
-         guest pages the guest has taken back. TWO is the double free w291's merge bound \
-         itself to avoid: the same handle staged once by its pin and once by its \
-         exact-extent row, which is what `PinReclaim::rows_deduped` exists to prevent.",
+        "★★ EXACTLY ONCE. The pin's `OS_DESCRIPTOR` {descriptor:?} was freed {} times. \
+         ⊘ **On THIS shape the discriminator is TWO, not zero** — measured by severing the \
+         fix: an exact-extent pin's handle is ALSO on its `Binding::host` row, so the row \
+         walk frees it even with the pin block deleted. What a sever turns to 0 here is the \
+         `munmap` below; what a sever turns to 0 for a RUN pin is this count, and that is \
+         `a_multi_row_run_pins_descriptor_is_released_too`'s job. TWO is the double free \
+         w291's merge bound itself to avoid — the same handle staged once by its pin and \
+         once by its row — which is what `PinReclaim::rows_deduped` exists to prevent.",
         freed(&rec).iter().filter(|h| **h == descriptor).count(),
     );
     assert_eq!(
@@ -264,6 +287,76 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
     );
 }
 
+/// ★★★★★ **THE MULTI-ROW RUN PIN — the half a row-driven reclaim structurally CANNOT see.**
+///
+/// w291's merge is bounded to an **exact-extent** row and says why: *"one handle written into
+/// N rows would be freed N times — a DOUBLE FREE of a host object, strictly worse than the
+/// leak this closes. **A pin whose grant spans several rows therefore binds NOTHING here and
+/// behaves exactly as before.**"* The bound is right and its reason is sound. What was never
+/// followed through is that *"as before"* **is the leak**: for a run pin `Binding::host` is
+/// `None`, so nothing on the address table names the descriptor, and a reclaim that walked
+/// rows would free nothing at all.
+///
+/// ★ **This is the test whose discriminator IS the descriptor free.** On the exact-extent
+/// shape a sever still frees the handle via its row (measured), so
+/// [`a_dead_procs_guest_ram_pins_are_released_from_the_production_path`]'s first assertion
+/// stays green under a sever and only its `munmap` goes red. Here the sever takes the free to
+/// **zero**. ⇒ the two shapes are separate tests because they fail in separate places, and a
+/// single test would have been green for the wrong reason on one of them.
+#[test]
+fn a_multi_row_run_pins_descriptor_is_released_too() {
+    let _wd = watchdog(
+        "guest_ram_pin_release::run_pin",
+        std::time::Duration::from_secs(60),
+    );
+    let (device, pid, rec) = device();
+    // Two adjacent guest rows of `PIN_LEN`…
+    guest_binds(&device, pid, 2);
+    // …and ONE pin spanning both. `commit_pin_guest_ram`'s merge requires
+    // `tlen == grant.len()` at the base VA; `PIN_LEN != 2 * PIN_LEN`, so it binds nothing.
+    let pinned = device
+        .pin_guest_ram(
+            GPU,
+            PDB,
+            RING_VA,
+            GuestRamGrant::originated_by_the_vmm(RING_FILE_OFFSET, 2 * PIN_LEN, Prot::ReadWrite),
+        )
+        .expect("the run pin runs");
+    assert!(
+        !pinned.bound_into_table,
+        "★ NON-VACUITY, and it is the WHOLE experiment: this pin must bind NOTHING into the \
+         address table. If w291's merge ever starts binding a run pin, this test silently \
+         becomes a second copy of the exact-extent one — green, and measuring nothing."
+    );
+    let descriptor = pinned.memory;
+
+    device
+        .apply(RmEvent::Free {
+            client: CLIENT,
+            handle: identical_handles(GR.0, CE.0).client_root,
+        })
+        .expect("the guest frees its own client root");
+    device.reap_retired();
+
+    assert_eq!(
+        freed(&rec).iter().filter(|h| **h == descriptor).count(),
+        1,
+        "★★★ THE LEAK, in the shape nothing else can reach. The run pin's `OS_DESCRIPTOR` \
+         {descriptor:?} was freed {} times, not once. ZERO means the reclaim is walking ROWS \
+         — and a run pin has no row, by w291's deliberate design — so its `pin_user_pages` \
+         pin and its host GPU translation into the guest's own pages survive with nothing \
+         able to name them.",
+        freed(&rec).iter().filter(|h| **h == descriptor).count(),
+    );
+    assert_eq!(guest_ram_unmaps(&rec), 1, "…and its isolate window with it");
+    assert_eq!(
+        device.pin_reclaim_gone().rows_deduped,
+        0,
+        "⊘ and NOTHING was deduped: a run pin shares its handle with no row, so a non-zero \
+         here would mean the dedupe is matching something it should not"
+    );
+}
+
 /// ★★ **The double-free door, asserted as a number rather than as an absence.**
 ///
 /// w291's merge writes the pin's own `memory` handle into an **exact-extent** address-table
@@ -284,7 +377,7 @@ fn the_row_walk_skips_a_row_whose_object_its_pin_already_staged() {
         std::time::Duration::from_secs(60),
     );
     let (device, pid, _rec) = device();
-    guest_binds(&device, pid);
+    guest_binds(&device, pid, 1);
     let pinned = device
         .pin_guest_ram(GPU, PDB, RING_VA, grant())
         .expect("the pin runs");
