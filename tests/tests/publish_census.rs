@@ -23,9 +23,11 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::promote::{CtxPromotion, PromoteDeclined, PromotedRange};
+use kayfabe_isolate::GuestRamGrant;
 use kayfabe_mocks::{MockIsolateFactory, WireClassArch};
 use kayfabe_rt::device::{LockMode, SharedDevice};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
+use kayfabe_vmm::Prot;
 
 const A_CLIENT: HClient = HClient(0xc1d0_000a);
 const A_PDB: Pdb = Pdb(0x20_0000);
@@ -36,7 +38,21 @@ const H_GR_CHANNEL: HObject = HObject(0x5c00_0019);
 const GRANULE: u64 = kayfabe_fwd::FB_LEAF_GRANULE;
 
 fn world() -> Guarded<Gpu> {
+    world_inner(None)
+}
+
+/// [`world`], with the isolates able to see `bytes` of guest RAM — which is what
+/// [`SharedDevice::pin_guest_ram`] needs to run at all.
+fn world_with_guest_ram(bytes: u64) -> Guarded<Gpu> {
+    world_inner(Some(bytes))
+}
+
+fn world_inner(guest_ram: Option<u64>) -> Guarded<Gpu> {
     let (factory, rec) = MockIsolateFactory::new();
+    let factory = match guest_ram {
+        Some(b) => factory.with_guest_ram(b),
+        None => factory,
+    };
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
         Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
@@ -293,6 +309,14 @@ fn the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow() {
 /// that made `host_rows=4 of 16425` wrong: a number that read as complete because nothing
 /// stood beside it. ⊘ A world with no pins is the trivially-agreeing case and must still say
 /// so, or the flag would only ever be read on the boots that already look healthy.
+///
+/// ⊘⊘ **THIS TEST ALONE CANNOT FAIL, AND THAT IS WHY IT DOES NOT STAND ALONE.** Its fixture
+/// yields `rows=0` and `pins=0`, so the predicate actually evaluated is **`0 >= 0`** —
+/// divergence is *unconstructible* here, and a gate whose instrument cannot return the other
+/// answer is not a gate (`a_census_zero_needs_a_known_positive`). It is kept because the
+/// trivial case genuinely must still REPORT rather than omit the field, and it is paired
+/// with [`the_merge_equality_can_be_false_and_says_which_pin_no_row_records`], which drives
+/// the same predicate to **both** answers on a fixture where the halves can move apart.
 #[test]
 fn the_merge_equality_is_reported_and_holds_with_no_pins() {
     let gpu = world();
@@ -304,5 +328,117 @@ fn the_merge_equality_is_reported_and_holds_with_no_pins() {
         published.iter().all(|r| r.contains("MERGE-AGREES=true")),
         "0 host rows >= 0 pins — the trivial case still REPORTS, it is not omitted: \
          {published:?}"
+    );
+    // ★ And say out loud that this arm proved nothing about the comparison, so the green is
+    // not read as covering it. The numbers are printed so a reader can check the claim.
+    assert!(
+        published.iter().all(|r| r.contains("host_rows=0") && r.contains("pins=0")),
+        "⊘ if this ever stops being `0 >= 0` the arm has silently become a real check and \
+         this doc comment is lying: {published:?}"
+    );
+}
+
+/// ★★★★★ **THE KNOWN-POSITIVE FOR `MERGE-AGREES` — the same predicate, driven to FALSE.**
+///
+/// # ⊘⊘ AND THE HEADLINE IS THAT `false` DOES NOT MEAN WHAT ITS PRODUCER'S DOC SAYS
+///
+/// `vas_published_ranges` documents `MERGE-AGREES=false` as *"a pin exists that no row
+/// records — that is exactly the defect."* **Measured here: it is also the DESIGNED outcome
+/// of a legitimate pin.** `commit_pin_guest_ram`'s merge is bounded to a row whose extent
+/// matches the grant EXACTLY (`kayfabe-fwd/src/lib.rs:1930-1932`), and its own comment says
+/// so — *"a pin whose grant spans several rows (legs 4-6's run pins) therefore binds NOTHING
+/// here and behaves exactly as before"* — because one host object written into N rows would
+/// be freed N times by `stage_dropped_vases`, a double free strictly worse than the leak the
+/// merge closes.
+///
+/// ⇒ ★ **The flag is a live comparison, not a defect detector.** Arm A below is that exact
+/// legitimate case and it reports `false`; arm B is the exact-extent case and reports `true`.
+/// A reader who takes `false` as "a bug" on a boot full of run pins will chase nothing.
+///
+/// ⚠ **`>=`, and the asymmetry is real**: `host_rows` may legitimately EXCEED `pins` (the
+/// framebuffer joins carry a backing and no pin), so this predicate can only ever catch the
+/// one direction — pins with no row. That it now catches a *sanctioned* instance of that
+/// direction is the finding, not a failure of this test.
+#[test]
+fn the_merge_equality_can_be_false_and_says_which_pin_no_row_records() {
+    const PIN_VA: u64 = 0x9000_0000;
+    /// Far enough from `PIN_VA` that the two rows can never coalesce into one, so arm A's
+    /// grant is a genuine multi-row run and not a fixture artefact.
+    const FAR_VA: u64 = 0x9020_0000;
+    /// The hypervisor's own offset into its guest-RAM block. ⊘ Deliberately not equal to any
+    /// VA here: a fixture that made them equal could not tell a correct chain from one that
+    /// re-derived the offset from the address.
+    const FILE_OFFSET: u64 = 0x4_0000;
+    const GUEST_RAM_BYTES: u64 = 0x2_0000_0000;
+
+    // ---- ARM A: the RUN pin. Grant spans two rows ⇒ the merge binds nothing ⇒ FALSE ----
+    let gpu = world_with_guest_ram(GUEST_RAM_BYTES);
+    let a_pid = pid_of(&gpu, A_PDB);
+    let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
+    promote(
+        &dev,
+        vec![
+            range(PIN_VA, GRANULE, Aperture::SysmemCoherent),
+            range(FAR_VA, GRANULE, Aperture::SysmemCoherent),
+        ],
+    );
+    let span = FAR_VA + GRANULE - PIN_VA;
+    let pinned = dev
+        .pin_guest_ram(
+            GpuId::ZERO,
+            A_PDB,
+            GpuVa(PIN_VA),
+            GuestRamGrant::originated_by_the_vmm(FILE_OFFSET, span, Prot::ReadWrite),
+        )
+        .expect("★ non-vacuity: the pin itself must RUN, or `pins=0` and we are back to 0>=0");
+    assert!(
+        !pinned.bound_into_table,
+        "★ the fixture is the documented run-pin case: a grant that is not one row's exact \
+         extent binds NOTHING into the table. If this flips, `kayfabe-fwd`'s extent bound \
+         moved and arm A is no longer measuring what its name says"
+    );
+    let published = dev.vas_published_ranges(a_pid, 16);
+    assert!(
+        published
+            .iter()
+            .all(|r| r.contains("host_rows=0") && r.contains("pins=1")),
+        "★ the halves are APART — one pin, no row records it: {published:?}"
+    );
+    assert!(
+        published.iter().all(|r| r.contains("MERGE-AGREES=false")),
+        "★★★ THE KNOWN-POSITIVE. `0 >= 1` is false and the flag must SAY so. A `true` here \
+         means the predicate cannot see a pin with no row, which is the only direction it \
+         was ever able to check: {published:?}"
+    );
+
+    // ---- ARM B: the EXACT-EXTENT pin. Same verb, same flag, opposite answer ------------
+    let gpu = world_with_guest_ram(GUEST_RAM_BYTES);
+    let b_pid = pid_of(&gpu, A_PDB);
+    let dev = gpu.map(|g| Arc::new(SharedDevice::new(g, LockMode::Sharded)));
+    promote(&dev, vec![range(PIN_VA, GRANULE, Aperture::SysmemCoherent)]);
+    let pinned = dev
+        .pin_guest_ram(
+            GpuId::ZERO,
+            A_PDB,
+            GpuVa(PIN_VA),
+            GuestRamGrant::originated_by_the_vmm(FILE_OFFSET, GRANULE, Prot::ReadWrite),
+        )
+        .expect("the exact-extent pin runs");
+    assert!(
+        pinned.bound_into_table,
+        "★ w291 (2a)'s merge: an exact-extent row IS upgraded, and that is what makes the \
+         two records agree rather than a coincidence of counting"
+    );
+    let published = dev.vas_published_ranges(b_pid, 16);
+    assert!(
+        published
+            .iter()
+            .all(|r| r.contains("host_rows=1") && r.contains("pins=1")),
+        "★ one pin, one row, and the row is the one the pin upgraded: {published:?}"
+    );
+    assert!(
+        published.iter().all(|r| r.contains("MERGE-AGREES=true")),
+        "⊘ and the arms must DISAGREE, or the flag is a constant and neither arm measured \
+         anything: {published:?}"
     );
 }
