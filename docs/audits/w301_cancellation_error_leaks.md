@@ -1,5 +1,65 @@
 # w301 — cancellation, error reporting, and lifetime: a read-only audit
 
+> ## ★★★★★ TWO OF THIS AUDIT'S FINDINGS WERE ACTED ON — w303, 2026-08-14. Read this before §1.4 or §3.1.
+>
+> Branch `w303-reap-and-preempt`. Both findings were **re-verified still true at master
+> `8658f0f0`** before anything was changed (`git log --all -S reap_retired`, and the
+> `INPUT_ONLY_CONTROLS` row read at source) — the currency check this tree keeps paying for.
+>
+> ### §3.1 — THE REAP IS NOW ARMED
+> `Regs::write` (`crates/kayfabe-qemu-raw/src/shim.rs`) calls `SharedDevice::reap_retired()`
+> after `materialize_pending` and the engine-forward drain, on the frame where the plane's
+> rank-0 guard is a dropped local. That frame is the shim's **GSP re-handshake edge**: the
+> guest's free chain, the idle release and the status-queue re-publish all arrive as
+> register writes, so it is the L10 quiesce point the core's docs ask the *adapter* to
+> declare. Because the edge recurs, a proc deferred for not being quiesced is retried at the
+> guest's next MMIO write; no deadline and no thread are needed.
+> ★ The missing gate is `crates/kayfabe-qemu-raw/tests/reap_composition_root.rs` — not
+> *"the reap works"* (every teardown test already asserted that, and every one of them was
+> green while a real boot reaped nothing) but ***"the reap is REACHED from the production
+> path"***. Severing the one line turns it red and leaves the rest of the workspace green,
+> which is exactly the state master was in.
+>
+> ### §1.4 — PREEMPT NO LONGER LIES, ⊘ **AND §1.4 PUT IT IN THE WRONG PLACE**
+> `0xa06c0105` has **left `INPUT_ONLY_CONTROLS`** (this audit's own recommendation) and is
+> answered by `ObjectPolicy::respond_preempt`, which **decides**: `NV_OK` when the named
+> group provably has no host twin — nothing has ever reached the GPU, so the preemption is
+> vacuously complete and the ack is *true* — and `NV_ERR_INVALID_STATE`
+> (`PREEMPT_UNPERFORMED_STATUS`, inside `ctrla06c.h`'s own documented status set, unlike
+> `0x56`) when it does.
+>
+> ⊘⊘ **The correction that matters most: §1.4 says record 457 of `ctx_r1` is *"inside
+> `cuCtxCreate`, not teardown"*. It is TEARDOWN.** `[measured 2026-08-14, w303]` decoding
+> `../nvidia-gpu-passthrough/traces/host_reference_ga106/ctx_r1.jsonl.zst` puts 457 inside an
+> unbroken `RM_FREE` cascade — 450, 451, 453, 456, **457**, 459, 463, 465 — i.e.
+> `cuCtxDestroy`; `init_r1`/`dev_r1`, which create no context, never issue it at all. ⇒ the
+> severity scoping in §1.4 (*"not a user-driven cancel … the lie is latent"*) is **wrong in
+> the unsafe direction**: this is the one control that asks *"is the engine still running out
+> of the pages I am about to free?"*, which ties it directly to §3.3's free-after-ring rather
+> than to context setup.
+>
+> ⊘ **And the brief's premise — *"one of four controls I served to get cup2 past its wall"* —
+> is refuted for this id.** `[measured 2026-08-14, w303]` `0xa06c0105` appears **nowhere** in
+> either crossing boot: not in `traces/w294_cudalimit/run_w294cup2_qemu.log`'s served-control
+> census nor its 40-id unserviced ledger, and not in
+> `traces/w297_cup3/run_w297cup3_qemu.log.gz`'s either. ★ Known-positive for that zero — the
+> siblings `0xa06c010a` (×5), `0xa06c0101` (×3) and `0xa06c0103` (×1) **are** named in both,
+> so the census is live. The cause is in the workload: `scripts/bench/cup3.c` calls
+> `cuCtxCreate` and never `cuCtxDestroy`. ⇒ **changing this answer cannot move `CUP2_RC` or
+> `CUP3_RC`.**
+>
+> ⚠ **What is still unmeasured, stated rather than buried:** every committed boot in which we
+> answered `0xa06c0105` non-`NV_OK` (~15, `run_s45`…`run_w216`, all `0x56`, all followed by a
+> clean `FREE` unwind) was a boot where `cuCtxCreate` had already **failed**. A refusal on the
+> *successful* `cuCtxDestroy` path has never been observed. The instrument that would settle
+> it in one run exists — `scripts/rpctrace/inject_matrix_ctxcreate.sh`, the ladder w275 used
+> to prove two other `0x56`s inert on real GA106 — and needs a bench.
+>
+> ⊘ **Neither change performs a preemption.** The successor is to forward it: the host TSG is
+> already reachable (`HostRmBackend::schedule` finds it as `channel_parts(raw).tsg` and issues
+> a group control on it), so the verb is that function with a different command id and the
+> guest's own params. Not built here; it needs a boot to prove.
+
 **STATUS: LIVE — 2026-08-14.** Read-only. Nothing was built, booted or measured on hardware
 for this document; every claim is read off source at `91f8b34b` (kayfabe), the vendored
 `ogkm-580.159.04`, the vendored gVisor `nvproxy`, and committed traces. Where a claim needs a

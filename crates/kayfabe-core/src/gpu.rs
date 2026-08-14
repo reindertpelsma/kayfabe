@@ -865,6 +865,61 @@ pub fn route_schedule_group(
     })
 }
 
+/// ★★★★★ **w303 — how much of a channel group is REACHABLE BY THE HOST GPU.**
+///
+/// The one fact `NVA06C_CTRL_CMD_PREEMPT` turns on: *is there anything a preemption could
+/// preempt?* Work reaches a real GA106 through exactly one door — a **host channel** born
+/// for a guest channel ([`Channel::host_channel`]) and rung through
+/// `kayfabe_isolate::RmBackend::ring_doorbell`. A group with **no** member holding a host
+/// twin has never submitted a byte to hardware, so it is idle **by construction**, and
+/// "the preempt completed" is a true statement about it rather than a forged one.
+///
+/// ⊘ **The converse is deliberately NOT claimed.** `with_host_twin > 0` does not mean work
+/// *is* executing — only that we cannot say it is not. That asymmetry is the whole point:
+/// one side is provable from state we hold, the other needs a cursor read we do not do on
+/// this path, and conflating them is how an ack becomes a lie.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupHostTwins {
+    /// The proc that owns the group.
+    pub proc: ProcId,
+    /// Member channels that resolved to a slot in that proc.
+    pub materialized: usize,
+    /// Members that resolved as channel resources but hold no slot
+    /// ([`ScheduleGroupRoute::unmaterialized`]). They can hold no host twin either, but
+    /// they are reported separately so "the group is empty" and "the group is not placed"
+    /// stay distinguishable.
+    pub unmaterialized: usize,
+    /// ★ How many materialized members have a **live host channel**. This is the number
+    /// the answer turns on.
+    pub with_host_twin: usize,
+}
+
+/// ★ **CENSUS (rank 1, one proc).** Count [`ScheduleGroupRoute`]'s members that hold a
+/// host twin. Pure read — no verb, no mutation — so it is legal wherever
+/// [`apply_schedule_group`] is.
+#[must_use]
+pub fn census_group_host_twins(proc: &Proc, route: &ScheduleGroupRoute) -> GroupHostTwins {
+    let mut materialized = 0usize;
+    let mut with_host_twin = 0usize;
+    for &cid in &route.chans {
+        let Some(chan) = proc.channels.get(&cid) else {
+            // ⊘ Routed but absent from the proc: counted as neither, because it is a
+            // *staleness* fact and not a host-reachability one. It cannot hold a twin.
+            continue;
+        };
+        materialized += 1;
+        if chan.host_channel.is_some() {
+            with_host_twin += 1;
+        }
+    }
+    GroupHostTwins {
+        proc: route.proc,
+        materialized,
+        unmaterialized: route.unmaterialized,
+        with_host_twin,
+    }
+}
+
 /// ★ **ACT (rank 1, one proc).** Record or withdraw the guest's scheduling declaration
 /// for every member of the group. §16.56.
 #[must_use]
