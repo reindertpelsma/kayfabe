@@ -102,6 +102,57 @@ use std::path::{Path, PathBuf};
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
+        "crates/kayfabe-device/src/mmuinval.rs",
+        "Mutex<Inner>",
+        "★★★★★ FOUND BY THIS GATE, 2026-08-14 (w326), beside `reclaimtick`'s — the gate caught \
+         BOTH of that rung's new locks, on the day they were written. This is the guest's TLB \
+         invalidate log (`crate::mmuinval`), and it is taken on the vCPU inside the BAR0 write \
+         trap at `0x00B8_30B0` / `0x00B8_30A0` / `0x00B8_30A4`. \
+         ⊘ **NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES**: the guard's whole body is a \
+         handful of `u64` adds, a `BTreeSet` insert bounded at `MAX_PDBS = 64`, and a pure \
+         bit-decode. No I/O, no call into the core, no allocation past the bounded set. \
+         ★★★ **AND THE LOAD-BEARING HALF IS WHAT DOES *NOT* TAKE IT.** The guest POLLS this \
+         register in a spin loop (`kgmmuCheckPendingInvalidates` reads until `TRIGGER` clears), \
+         and `read_trigger` — the poll's answer — takes **no lock at all**: it reads one \
+         `AtomicBool` and bumps one `AtomicU64`. That is deliberate and it is two properties, \
+         not one: a lock on the poll path would put every spinning vCPU behind whatever the \
+         publication worker is doing, AND a poisoned mutex could leave `TRIGGER` unclearable, \
+         which is a guest **HANG** rather than a fault. ⇒ **if a future edit moves `pending` \
+         inside this mutex, THIS ROW IS THE THING THAT WAS WRONG.** \
+         ⊘ Deliberately unranked: a leaf no other trap path takes.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/reclaimtick.rs",
+        "Mutex<()>",
+        "★★★★★ FOUND BY THIS GATE, 2026-08-14, the day w326 added it — the SECOND new \
+         vCPU-path lock in three days that this instrument caught on the day it appeared, \
+         after `pubqueue`'s. It is the revocation drain's mutual exclusion \
+         (`the_publish_trigger_measured.md` §5): `w323` measured that the drain's only \
+         production driver is a guest MMIO write, so a guest that frees and then stops \
+         trapping leaks a live host-GPU translation; w326 gives it a second driver on the \
+         off-trap observer thread, and the two must never run together because \
+         `drain_retired_budgeted` issues its host verbs with NO lock held — two concurrent \
+         drains would plan and free the same retired object TWICE. \
+         ⊘ **THE DISCRIMINATION IS THE ACQUIRE, AND IT IS ASYMMETRIC BY DESIGN.** The vCPU \
+         side reaches this lock ONLY through `try_claim_on_trap`, which calls `try_lock` and \
+         **cannot block** — there is no blocking method on `ReclaimTick` that a trap can \
+         reach, so `INLINE-SAFE` clause (a) is enforced by the API rather than by this row. \
+         The worker side (`spend`) DOES block on `lock()`, and that is safe for exactly one \
+         reason: **it is called only from the `kayfabe-completion-observer` thread, never \
+         from a vCPU.** ⇒ if a future caller reaches `spend` from a trap, THIS ROW IS THE \
+         THING THAT WAS WRONG. \
+         ⚠ Nothing blocks BENEATH it on either side in the sense this table means — the \
+         worker holds it across host I/O deliberately (that is the whole point), but it is \
+         off-trap, so no vCPU is stopped by it; a vCPU that finds it held simply skips its \
+         drain for that trap and is counted as `vcpu_skipped`. \
+         ⊘ Deliberately unranked: it is a leaf taken by nothing else, and a rank would put \
+         it in an order relation with locks it never coexists with. \
+         ★★★ And `[measured, boot `w326o1`]` `vcpu_skipped=2` **with the worker DISARMED** — \
+         i.e. two vCPU entries into the drain block overlapped with no worker in existence. \
+         Whether that is two vCPUs or one re-entrant thread is UNATTRIBUTED; both are real, \
+         both are refused correctly here, and a `lock()` would have deadlocked on the second.",
+    ),
+    (
         "crates/kayfabe-device/src/pubqueue.rs",
         "Mutex<Inner>",
         "★★★★★ FOUND BY THIS GATE, 2026-08-14, the day w323 added it — and this is the \

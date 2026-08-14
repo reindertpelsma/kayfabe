@@ -581,7 +581,7 @@ mod tests {
         // and the assertion caught it: an off-by-one-nibble PDB is a plausible-looking
         // address that names a different VA space, which is the failure mode this whole
         // plane would be worst at diagnosing later.
-        assert_eq!(inv.pdb, 0x02ef_ba5 << 12);
+        assert_eq!(inv.pdb, 0x02efba5_u64 << 12);
         assert_eq!(inv.pdb, 0x2_EFBA_5000);
     }
 

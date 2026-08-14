@@ -3781,6 +3781,18 @@ const OBSERVER_TICK_MS: u32 = 250;
 /// **instrument**. It is never folded into `NotObserved`, because *"we could not look"* and
 /// *"we looked and it was not there"* are the two answers this whole rung exists to keep
 /// apart.
+/// ★★★ **w326 — the capability to drive the revocation drain, as ONE value.**
+///
+/// ⊘ The device and the gate travel together on purpose: a caller holding the device without
+/// the gate could drain concurrently with a vCPU and free the same retired object twice
+/// (`crate::reclaimtick`'s hazard). Bundling them makes *"drive the drain"* the only thing
+/// that can be handed over, rather than two things that must be remembered together.
+#[cfg(feature = "host-isolates")]
+struct ReclaimDriver {
+    device: std::sync::Arc<kayfabe_rt::device::SharedDevice>,
+    tick: std::sync::Arc<crate::reclaimtick::ReclaimTick>,
+}
+
 #[cfg(feature = "host-isolates")]
 fn observer_loop(
     reactor: &mut kayfabe_shell::Reactor,
@@ -3792,8 +3804,12 @@ fn observer_loop(
     // ★★★★★ **w326 — THE REVOCATION DRAIN'S DRIVER.** See `crate::reclaimtick` for why
     // this belongs on THIS thread and not on the publication lane: `Revocation` has no
     // route into `pubqueue` by construction, and it must not acquire one.
-    device: &std::sync::Arc<kayfabe_rt::device::SharedDevice>,
-    reclaim: &std::sync::Arc<crate::reclaimtick::ReclaimTick>,
+    //
+    // ⊘ ONE parameter and not two, because two would push this signature to 8 arguments and
+    //   clippy's `too_many_arguments` is right about it: the device and the gate are one
+    //   capability — *"drive the revocation drain"* — and splitting them would let a future
+    //   caller hand over the device WITHOUT the gate, which is the double-disposal bug.
+    reclaim: &ReclaimDriver,
 ) {
     use kayfabe_vmm::Vmm as _;
     let mut pages = SemaPageReader::new();
@@ -3811,7 +3827,8 @@ fn observer_loop(
         //
         // ⊘ Disarmed, `spend` returns without taking the gate or touching the queue, so the
         // control arm is byte-identical to master.
-        reclaim.spend(|| {
+        let device = &reclaim.device;
+        reclaim.tick.spend(|| {
             let off = kayfabe_util::trapwitness::OffTrap::claim("the revocation drain tick");
             off.still_off_trap("draining retired host objects");
             // ⊘ Same ORDER as `Regs::write`'s, and it is mandatory: the reap holds a proc
@@ -11204,8 +11221,10 @@ impl Regs {
             let gr_cursors = std::sync::Arc::clone(&self.ce.gr_cursors);
             // ★★★★★ w326 — the two handles the revocation tick needs. Both are ALREADY
             // `Arc`s on `Regs`, which is why this driver costs a clone and not a refactor.
-            let device_for_reclaim = std::sync::Arc::clone(&self.device);
-            let reclaim_for_thread = std::sync::Arc::clone(&self.reclaim);
+            let reclaim_driver = ReclaimDriver {
+                device: std::sync::Arc::clone(&self.device),
+                tick: std::sync::Arc::clone(&self.reclaim),
+            };
             let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             let stop_thread = std::sync::Arc::clone(&stop);
             let join = std::thread::Builder::new()
@@ -11218,8 +11237,7 @@ impl Regs {
                         vmm,
                         &plane,
                         &gr_cursors,
-                        &device_for_reclaim,
-                        &reclaim_for_thread,
+                        &reclaim_driver,
                     );
                 })
                 .map_err(|e| format!("{e}"))?;
