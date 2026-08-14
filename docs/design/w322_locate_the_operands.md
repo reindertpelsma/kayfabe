@@ -5,6 +5,17 @@ of this rung; results are appended below §6 and the prediction is graded agains
 written here.**
 Artifacts: `traces/w322_operands/`.
 
+> ★★★★★ **OUTCOME (A) — THE OPERANDS ARE HOST SYSMEM, READ AT 2.51 GB/s.** That is **125×**
+> below this GA106's VRAM (313.5 GB/s) and **4.9×** below a PCIe-gen3-×16-saturating sysmem
+> read (12.33 GB/s), all measured with the same kernel on the same GPU.
+> ⊘⊘⊘ **AND THE BRIEF'S CENTRAL GAP DISSOLVES: it was w320's CONTROL, not our buffers.**
+> `cuMemHostAlloc` measured **3.70 – 11.89 GB/s over five identical runs** while three other
+> placements reproduced to 0.2 %. Against an honest control our guest is **slower at every
+> size**, not faster.
+> ★★★ The 22–81× splits into **placement 14.8×** and **aperture quality 2.76×**
+> (14.80 × 2.76 = 40.85, the measured same-hour ratio at N=2048), and **neither is the submit
+> path**.
+
 > ⊘ **`git diff master -- crates/` is EMPTY on this branch.** Every edit is under
 > `scripts/bench/`, and every new behaviour in the workload is behind an environment variable
 > that defaults to the previous behaviour. ⇒ **this is a measurement-only rung**, and the
@@ -649,7 +660,9 @@ here is that **the measurement** is sound.
 
 | workload | n | result |
 |---|---|---|
-| `cup8` N=128..2048 bit-exact (`sizes`) | 1 boot, 4 sizes × 12 iters | `bad=0 maxerr=0` ×4, `SIZES_DONE=4`, `Xid=0` |
+| `^CUP3_VAL=43` (GR/compute, libcuda) | **3** boots | `CUP3_VAL=43` ×3 |
+| `R33 arm 1` (raw CE, no libcuda, own VAS) | **3** boots | fired ×3, byte-identical: `4096 bytes moved, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001)` |
+| `^CUP8_BAD=0 ^CUP8_MAXERR=0` (`sizes`) | 1 boot, 4 sizes × 12 iters | `bad=0 maxerr=0` ×4, `SIZES_DONE=4`, `Xid=0` |
 | `bw` rows, all boots | 4 boots, 12 measured rows | `bad=0` in **every** row |
 | `BENCH_ALLOC` mis-arming guard | — | hard refusal by construction (`FAIL-BAD-ARMING`) |
 | native ladder | 5 modes × 6 sizes + 12 reps | `bad=0` in every row; `NATIVE_NEGCTRL_RC=0` each arm |
@@ -662,3 +675,52 @@ on the boot that attempted it. ⊘ Stated as it is: the `bw` verifier is shown a
 build and this box, and *not yet* shown alive inside the guest. The forwarding and the
 assertion are committed; the guest-side known-positive is the first thing to run next and it
 costs one boot.
+
+⚠ **`R33` needed two runners.** `w291_r33.sh` hardcodes `REPO=/workspace/kayfabe_w290` and
+`CARGO_TARGET_DIR=…-w290`, neither of which exists on this bench, so it exits 90 before writing
+a log; `w317_r33_repeat.sh <tree> <prefix> <n>` is the parameterised one and is what should be
+used. ⊘ Recorded because the failure mode is *"three boots, rc=90, no log at all"*, which reads
+as a broken rung rather than as a hardcoded path.
+
+### 6.12 ★★★ WHAT THE NEXT RUNG SHOULD BE
+
+1. ★★★★★ **`pde_info` on one operand VA.** One unprivileged ioctl
+   (`NV0080_CTRL_CMD_DMA_GET_PDE_INFO`, already built at
+   `crates/kayfabe-isolate-host/src/rm.rs:5784-5860`, already driven by `--r33` arm 6) returns
+   `pageSize`, `pteCacheAttrib` and aperture for our own `hVASpace`. It confirms or kills §6.8's
+   page-size hypothesis, and it decides whether the cheap 4.9× is available. **Cheapest
+   decisive measurement in this whole area.**
+2. ★★★★ **The 32 MiB cliff (§6.5).** It is a correctness ceiling, not a performance one: a
+   guest allocation over ~16 MiB in the FB-leaf chain kills the channel with no named refusal.
+   Grade it with `scripts/bench/w319_attribute.sh`, whose `1` outcome is exactly this
+   truncation.
+3. ★★★ **The guest-side `bw` known-positive**, one boot, now that the forwarding and the
+   assertion exist (§6.11).
+4. ⊘ **Do NOT spend a rung on the submit path.** w320 put it at 0.5 % of an N=2048 launch and
+   nothing here moves that.
+5. ⊘ **Do not re-run w320's `cuMemHostAlloc` control expecting a stable number.** §6.2: five
+   runs, 3.2× spread. If a sysmem reference is needed, use `hostreg` or `managed_cpu`.
+
+---
+
+## 7. ★★★ WHAT THE BRIEF GOT WRONG — including the parts that were mine
+
+- ⊘ **The brief's framing "our guest is FASTER than native-with-host-memory, so our buffers are
+  better than plain pinned sysmem" is REFUTED.** They are not better; the comparison was
+  against `cuMemHostAlloc`, which is the least stable and most pessimal member of the sysmem
+  family on this box. Against a link-saturating control our guest is **slower at every size**.
+  ★ The brief listed *"the native host-mem arm being pessimal in a way ours is not"* among its
+  candidates and said to **check it first because it is the cheapest and if the control is bad
+  the whole comparison is soft**. That instruction was correct and it is the answer.
+- ⊘ **My own §4 prediction #3 was refuted** — I predicted the sysmem family would be narrow
+  (within ~2×) and it spans 3.2×. I had flagged #3 as the one I most expected to be wrong,
+  which is the only reason its refutation is legible rather than a surprise.
+- ⚠ **The brief's 28× "magnitude-fit" warning was right to be a warning and the ratio turned
+  out to be real anyway** — VRAM ÷ link-saturating sysmem measured **25.4×** against the
+  brief's ~28× estimate. ⊘ **That is not a vindication of reasoning from the ratio.** The 25.4×
+  is a *measurement of two plateaus with the same kernel on the same GPU*; the fact that it
+  landed near the datasheet arithmetic is a check on the instrument, not evidence that the
+  arithmetic would have been safe to believe. The instrument also produced 1930 GB/s and
+  107 GB/s readings on its first pass, and no amount of ratio-reasoning would have caught those.
+- ⊘ **The FB-counter instrument (§3.3) was mine and it did not resolve** (§6.4). Its three
+  signatures were distinct on paper and indistinguishable at 1 Hz against second-long rows.
