@@ -363,7 +363,20 @@ buys, and **this rung deliberately fixed nothing**.
   §4.1. A host-wide exit *rate* divided by a launch *rate* gave *"~2 800 exits per launch"*;
   the direct count is **~5**. The coordinator's own note said the arithmetic was not a
   measurement, and it was right about mine.
-- ⊘⊘ **Two of my own instruments were caught by gates rather than by me.** The workspace lock
+- ⊘⊘ **THREE of my own instruments were caught by gates rather than by me**, and the third
+  is the worst: `record_inner` read the bracket total **twice** — once to print the per-event
+  line, once inside `Census::record` after taking the census mutex — so **the printed total
+  and the censused total were different numbers for the same event**, by however long the
+  `eprintln!` and the lock took. That is
+  `a_second_source_of_truth_beside_a_complete_value` *inside the instrument built to explain
+  a latency*. It surfaced only as a **flaky unit test** (`199999 != 200000` on the bench, green
+  locally), which is its mildest symptom; nothing but an exact-equality assertion would have
+  said so. Fixed by latching the total once, before the line and before the lock.
+  ⚠ **The numbers in §3 predate that fix**, so each per-event `total_us` there is the *earlier*
+  of the two reads. The difference is the cost of one `eprintln!` plus one uncontended mutex —
+  sub-microsecond against 86 733 µs — and `UNMARKED` at 0.01 % bounds it, but it is stated
+  rather than assumed away.
+- ⊘⊘ **Two other instruments of mine were caught the same way.** The workspace lock
   census refused both new `kftime` mutexes as unclassified vCPU-path locks — correctly; and
   the hot-offset census **ran on hardware and emitted zero lines**, because its only caller was
   a teardown path a killed QEMU never reaches. ⚠ And I nearly shipped the first of those red:
@@ -380,6 +393,36 @@ buys, and **this rung deliberately fixed nothing**.
 - ⚠ **One size (N=512), one guest, one physical GPU, five boots.** The per-launch breakdown
   has **n=12 launches × 2 boots**; the segment shares are stable across them, the absolute
   numbers less so.
+
+## 8.1 ⚠ MASTER IS RED ON THREE TARGETS, AND IT WAS RED BEFORE THIS RUNG
+
+`cargo test --workspace --features kayfabe-qemu-raw/host-isolates --no-fail-fast` at
+**`eb3d99ad` (master)** on `vh2` fails **three targets / six tests**:
+
+```
+kayfabe-tests --test doorbell_reaches_the_completion_observer
+    a_guest_doorbell_reaches_the_host_completion_observer
+    a_second_doorbell_over_an_unchanged_ring_forwards_nothing
+    the_observers_negative_verdict_refuses_the_guest_doorbell
+kayfabe-tests --test ring_out_of_our_own_framebuffer
+    a_device_with_no_fb_source_refuses_the_vidmem_ring
+    a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote
+kayfabe-tests --test guest_os_axis_gate
+    the_logic_crates_carry_no_unnamed_guest_os_assumption
+```
+
+⊘ **Not this rung's, and this rung does not fix them** — it is an attribution rung and the
+brief says fix nothing. It is recorded because *"the branch is red"* and *"the branch made it
+red"* are different facts, and the only way to tell them apart was to run master on the same
+box with the same command. ⚠ Do not read a red `--workspace` on this branch as a regression
+without checking that list first.
+
+★ The two reds this rung **did** introduce were found and fixed: the unranked-lock
+classification and the `kftime` total latch (§8). **Verified**: the branch's failure set at
+`557721a1` is byte-identical to master's — the same three targets and the same six test
+names, with **250 targets ok**, run with the same command on the same box.
+
+---
 
 ## 9. Reproducing
 
