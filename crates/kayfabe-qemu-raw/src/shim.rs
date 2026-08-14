@@ -9801,18 +9801,51 @@ pub struct Regs {
 /// granularity knob, not the bound.
 pub const RETIRED_DRAIN_BUDGET_US: u64 = 40_000;
 
-/// ★★ **w317 — the granularity, not the budget.** Disposals taken per plan→execute→check-in
-/// turn; the deadline is only re-read between turns, so the worst-case overshoot is one
-/// chunk's cost.
+/// ★★★ **w317 — the granularity, not the budget**, and the value below is **MEASURED, not
+/// estimated.** Disposals taken per plan→execute→check-in turn. The deadline is only re-read
+/// *between* turns, so the delivered bound is `RETIRED_DRAIN_BUDGET_US + one chunk` and the
+/// chunk is the only part of it that a wrong cost estimate can inflate.
 ///
-/// `64 × ~70 µs ≈ 4.5 ms` at the cost w314's numbers imply (3.70 s over ~54 700 disposals),
-/// i.e. ~11 % overshoot on a 40 ms budget. ★ It is sized so that even if the per-disposal
-/// cost is wrong by the **same 20× factor** §5's was, one chunk is ~90 ms — still 2 % of the
-/// 4 s bound, i.e. the granularity alone can never reproduce the failure this fixes.
+/// # ⊘⊘ THE FIRST VALUE WAS 64 AND IT WAS WRONG — the bound it delivered was 3× the budget
 ///
-/// ⊘ Not 1: each turn costs a device write-lock acquisition and a `return_worker` round, and
-/// at 1 the loop overhead would dominate the work.
-pub const RETIRED_DRAIN_CHUNK: usize = 64;
+/// `[measured 2026-08-14, vh, real GA106, n=4 cup3 boots at `chunk = 64`]`
+/// `max_drain_us` came back **91 470 · 92 566 · 91 833 · 127 330 µs** — three of them
+/// `disposed=64 turns=1`, i.e. **one chunk, alone, took ~92 ms** and the 40 ms deadline never
+/// got a chance to bind. 64 was chosen against an estimate of ~70 µs per disposal; the truth
+/// is ~120–145 µs typically and **~1.3–1.4 ms in the expensive phase**. ⇒ third estimate of
+/// this quantity, third time low (w310 §5: 1–2 µs vs 35 µs measured).
+///
+/// # ★★★★★ AND THE VALUE BELOW IS DERIVED FROM THE ONE NUMBER THAT SETTLES IT
+///
+/// `[measured 2026-08-14, vh, `w317c1diag`, a THROWAWAY build with `chunk = 1`]` — the
+/// discriminator between *"64 uniformly-slow disposals"* and *"one very slow disposal"*, which
+/// have **opposite** fixes and which `disposed=64 turns=1` fits equally well:
+///
+/// ```text
+///   DRAIN-TIMING max_drain_us=40068 disposed=231 turns=231 budget_hit=true
+///   DRAIN-TIMING max_drain_us=40794 disposed=353 turns=353 budget_hit=true
+///   DRAIN-TIMING max_drain_us=43260 disposed=13  turns=13  budget_hit=true
+///   ⇒ CUP3_VAL=43  CUP3_RC=0 · DRAIN-DEFER 1 → 0
+/// ```
+///
+/// With the deadline re-read after **every** disposal the worst trap is **43 260 µs**. ⇒ the
+/// **worst single disposal is ≤ ~3.3 ms**; there is no monstrous indivisible one, and the
+/// expensive phase is uniformly expensive. **A smaller chunk therefore cures the overshoot
+/// proportionally** — which was exactly the thing not known when 64 was picked.
+///
+/// **The rule, stated so the next person can re-derive it:**
+/// > `chunk × worst_single_disposal` may contribute **at most a third of the budget**.
+///
+/// `4 × 3.3 ms ≈ 13 ms` = **33 % of 40 ms** ⇒ delivered bound **≤ 53 ms = 1.3 % of
+/// `scrubberDestruct`'s 4 000 ms**.
+///
+/// ⊘ **Not 1**, even though 1 measured fine: each turn costs a device write-lock acquisition,
+/// a `return_worker` round and a `Worker::execute` call, and a backend where `execute` is one
+/// IPC per *plan* rather than per verb would pay all of it per disposal. 4 keeps a 4×
+/// amortisation of that while conceding only a third of the budget. ⚠ The overhead was **not
+/// measured in isolation** — the chunk=1 arm's per-disposal cost (111–173 µs) merely sits in
+/// the same range as chunk=64's (121–145 µs), which bounds it as *small*, not as *zero*.
+pub const RETIRED_DRAIN_CHUNK: usize = 4;
 
 /// ⊘ **A zero chunk would make the drain a no-op and the reap's `HoldUndrained` gate a
 /// PERMANENT defer** — every retired proc held forever, its isolate child never `waitpid`ed,

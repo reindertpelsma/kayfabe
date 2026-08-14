@@ -139,11 +139,36 @@ quantity was wrong by **~20×** (`munmap` of a `MAP_SHARED` memfd window RM has
 by whatever factor the estimate is off; **a time budget re-measures the cost every turn, for
 free, by construction.**
 
-`RETIRED_DRAIN_CHUNK = 64` is a **granularity, not the budget** — the deadline is read between
-turns, so the delivered bound is `budget + one chunk`. At w314's implied ~70 µs that is ~4.5 ms
-(11 % overshoot); ★ even if the per-disposal cost were wrong by the same 20× factor, one chunk
-is ~90 ms — still 2 % of the 4 s bound, so **the granularity alone can never reproduce the
-failure this fixes.**
+### ★★★ `RETIRED_DRAIN_CHUNK = 4` — the granularity, and it is MEASURED
+
+The deadline is read *between* turns, so the delivered bound is `budget + one chunk`, and the
+chunk is the only part a wrong cost estimate can inflate. It did:
+
+- **The first value was 64**, sized against an estimated ~70 µs per disposal. `[measured
+  2026-08-14, vh, n=4]` three of four boots came back `disposed=64 turns=1
+  max_drain_us ≈ 92 000` — **one chunk, alone, took ~92 ms**, and the 40 ms deadline never got
+  to bind. ⇒ the delivered bound was **3× the stated budget**.
+- ⊘ `disposed=64 turns=1` fits **two models with opposite fixes**: 64 uniformly-slow disposals
+  (a smaller chunk cures it) or one very slow disposal among 63 fast ones (no chunk cures it —
+  one disposal is indivisible). Retuning on that data would have been **fitting, not
+  measuring**.
+- ★★★★★ **The discriminator was one throwaway boot at `chunk = 1`** (`traces/w317_drain/`,
+  `w317c1diag`), pre-registered before it ran: with the deadline re-read after **every**
+  disposal the worst trap measured **43 260 µs**, `CUP3_VAL=43`, `DRAIN-DEFER 1 → 0`. ⇒ **the
+  worst single disposal is ≤ ~3.3 ms** — the expensive phase is uniformly expensive, there is
+  no monstrous indivisible disposal, and a smaller chunk cures the overshoot proportionally.
+
+**The rule, stated so the next person can re-derive it rather than inherit a number:**
+
+> `chunk × worst_single_disposal` may contribute **at most a third of the budget**.
+
+`4 × 3.3 ms ≈ 13 ms` = 33 % of 40 ms ⇒ **delivered bound ≤ 53 ms = 1.3 % of the 4 000 ms.**
+
+⊘ **Not 1**, though 1 measured fine: each turn costs a device write lock, a `return_worker`
+round and a `Worker::execute` call, and a backend where `execute` is one IPC per *plan* would
+pay all of it per disposal. ⚠ That overhead was **not measured in isolation** — chunk=1's
+per-disposal cost (111–173 µs) merely sits in the same range as chunk=64's (121–145 µs), which
+bounds it as *small*, not *zero*.
 
 ⊘ A zero chunk would make the drain a no-op and `HoldUndrained` a **permanent** defer — strictly
 worse than the stall. Refused at compile time (`const _: () = assert!(RETIRED_DRAIN_CHUNK > 0)`),
