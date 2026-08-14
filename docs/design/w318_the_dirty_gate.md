@@ -125,7 +125,44 @@ exactly the shape w315 §5 got caught by (*"the instrument attributes, it does n
 It is reported because a 6.4× move in a segment the diff does not touch is a claim about the
 plane either way.
 
-### 2.2 ★★★ THE FLOOR MOVED, AND IT IS NOW SOMEWHERE ELSE — twice over
+### 2.2 ⊘⊘⊘ THE 48 ms IS **NOT** AN O(VAS) SCAN — REFUTED FROM THE CONTROL ARM'S OWN LOG
+
+A mid-rung redirect proposed that the publication cost is a **whole-table scan** and offered
+the arithmetic `48.3 ms ÷ ~16 425 rows ≈ 2.9 µs/row` as *"consistent with an O(VAS) pass"*,
+flagged — correctly — as a hypothesis to confirm early. **It is refuted.** Every publication
+line carries both its row count and its candidate count, so the two can be separated without a
+new instrument:
+
+```
+   rows in the biggest VAS   candidates   wall     n
+        16 425                    0        0 ms    69
+        15 913                    0        0 ms    66
+        13 348                    0        0 ms    15
+        18 277                    0        1 ms     8
+        18 309                    8    38–43 ms   ~87
+```
+
+⇒ **Walking 16 425 rows — the exact population the arithmetic used — costs 0 ms.** The four
+VASes are walked *in full* on every one of those doorbells (533 + 6 254 + 0 + ~18 300 ≈
+**25 100 rows**, and `proc=0 pdb=0x2efa9c000` reports `candidates=6144 capped=2048` on both).
+The ~40 ms appears **only, and exactly, when `candidates=8`**.
+
+⇒ **The cost is EIGHT HOST ROUND TRIPS AT ~5 ms EACH, not a scan.** And what those eight do is
+the actual defect: each mints a host object, `install_join` refuses it
+*"that framebuffer range is **already joined**"*, and it is **`⊘ RELEASED and NOT bound`** —
+**87 times, for the same eight leaves, in one boot.**
+
+★★★ **`2.9 µs/row` is a coincidence of magnitudes, and it is the third instance of this
+campaign's named failure shape** — an answer that *arrives pre-corroborated*, after w311's
+`251/2 = 125.5 ms ≈ C` (which was the observer's own scan period) and w315's overlap-maximising
+aligner (which saturated at its own arithmetic ceiling). ⚠ **The tell is the same every time:
+the number agreed before anything was measured.**
+
+⇒ **The defect is neither a scan nor a publication-timing error. It is a missing memo of a
+PERMANENT refusal.** A dirty gate removes it; publishing at bind removes it; so would one
+`if`. What none of those three is, is *"the table is too big to walk"*.
+
+### 2.3 ★★★ THE FLOOR MOVED, AND IT IS NOW SOMEWHERE ELSE — twice over
 
 1. **Inside the trap**, `pt_vascensus` is now the **largest single term at 47.9 %** and its
    absolute cost is *unchanged* (2.105 → 2.196 ms/launch). It is **not gated by this rung**:
@@ -212,7 +249,45 @@ see a CE-only break.
 `^CUP3_VAL=43` grade on these boxes, with the reds identical field for field
 (`Xid 31, chan 0x02000015, CE3, HUBCLIENT_CE1, @ 0x2_0440f000, FAULT_PDE, VIRT_WRITE`).
 
-<!-- RESULTS-TABLE -->
+Four runs, eight boots, **one binary at `c6301a57`** differing only in two environment strings:
+
+| run | gate | plane | known-positive | RC | `Xid` | `host_rows` | gate ratio |
+|---|---|---|---|---|---|---|---|
+| `g1` | **on** | cup3 (GR) | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
+| `g1` | **on** | R33 arm 1 (raw CE) | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
+| `g2` | **on** | cup3 | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
+| `g2` | **on** | R33 arm 1 | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
+| `g3` | **on** | cup3 | **`CUP3_VAL=43`** | 0 | **0** | **18295** | 95.7 % / 94.8 % |
+| `g3` | **on** | R33 arm 1 | **`★ R33 arm 1 COPY`** | 1 | **0** | **3** | 0 % / 0 % |
+| `c1` | **off** | cup3 | `CUP3_VAL=43` | 0 | 0 | 18295 | 0 % / 0 % |
+| `c1` | **off** | R33 arm 1 | `★ R33 arm 1 COPY` | 1 | 0 | 3 | 0 % / 0 % |
+
+**`W313 INERT-GATE VERDICT = INERT-ON-BOTH-PLANES` on all four runs.**
+
+- **`host_rows` is byte-identical to the control and to w297/w314's green**: 18 295 on cup3,
+  3 on R33. The gate did not cost the host VAS a single row.
+- **Zero Xid on all eight boots.** ⊘ The known intermittent
+  (`Xid 31, chan 0x02000015, CE3, HUBCLIENT_CE1, @ 0x2_0440f000, FAULT_PDE, VIRT_WRITE`) did
+  **not** appear on any arm. ⚠ At n=3 gated / n=1 control that is **not** evidence its ~20 %
+  rate changed in either direction — 3 clean gated boots is what a 20 % rate produces 51 % of
+  the time. It is reported as *not observed*, which is what it is.
+
+### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
+
+Read the R33 rows again: **`publish[fired=3 skipped=0] witness[fired=2 skipped=0]`** — on every
+run, gated and control alike. The raw CE client is short-lived and rings **three** doorbells, so
+there is never a second doorbell over an unchanged epoch and **the gate never skips anything on
+that plane.**
+
+⇒ What those four boots establish is that **arming the gate does not break the raw-CE plane** —
+the binary, the extra fields and the counter are all inert there. They do **not** establish that
+a *skip* is safe on it, because no skip occurred. ★ Said out loud because the identical
+`INERT-ON-BOTH-PLANES` banner reads as though both planes were exercised equally, and one of
+them was exercised only as a null.
+
+⊘ This is `a census ZERO needs a KNOWN-POSITIVE` in its exact form: the gate's known-positive
+on the GR plane is 95.7 % skipped beside an unchanged `host_rows`; on the CE plane there is no
+known-positive at all, and the honest word for that is **UNMEASURED**.
 
 ---
 
@@ -255,6 +330,42 @@ see a CE-only break.
 - ⚠ **I cannot account for `core` getting 6.4× faster** (§2.1) and did not distribute it.
 
 ---
+
+## 7.1 ★★★★★ THE MID-RUNG REDIRECT — what it got right, and the one thing it got wrong
+
+A redirect arrived after the measurement, arguing (owner's framing) that **a GPFIFO doorbell is
+asynchronous**, that the trap should be *translate the token, ring the host doorbell, re-enter
+the VM*, and that **publication belongs at bind** — the dirty gate being *"the C's mitigation"*
+that skips the work instead of removing it.
+
+★★★ **The architectural framing is right, and this rung is evidence FOR it, not against it.**
+After the gate the trap is **4.583 ms**, of which the **actual host forward is 0.422 ms** and
+the entire remainder is two *diagnostics* — `pt_vascensus` (2.196) and `ringproj` (1.321) —
+neither of which is publication. ⇒ **the doorbell is already within ~4 ms of translate-and-ring,
+and what is left in it is instrumentation, not the address plane.**
+
+⊘ **Three claims in the redirect are refuted by this rung's own measurements:**
+
+1. **"The scan runs every doorbell over the whole table"** — §2.2. Walking 16 425 rows costs
+   **0 ms**; the cost is eight host round trips. `2.9 µs/row` was a coincidence of magnitudes.
+2. **"Publish at bind removes the 91.5 %"** — it cannot remove `pt_decode`, and the redirect's
+   own text says why: *"the guest writes PTEs via BAR2 CPU stores … blind to RM"*. That segment
+   is **27.4 % of the control trap** and has **no bind hook by construction**. This boot's own
+   first-writer census puts the ratio the redirect asked for at
+   **`PRAMIN 21 / BAR1 9 / BAR2 88 / EXEC 3546 / UNATTRIBUTED 0`** — **3 634 of 3 664 framebuffer
+   pages (99.2 %) are created by a CPU transport with no RPC bind hook.** ⇒ publish-at-bind's
+   ceiling here is `vas_publish` alone, **53.2 %** of a trap the gate reduced by **94 %**.
+3. **"The first doorbell after any PT write still pays the full 86.7 ms"** — refuted at the
+   tail. The gated boot's **worst** launch is `max_ms=32.693` against the control's
+   `max_ms=124.094`; there is no launch anywhere in the gated boot that pays the ungated cost.
+
+⇒ **Recommendation, offered rather than assumed: land the gate, and take publish-at-bind as the
+next rung with its ceiling stated in advance** (≤ 53 % of the *control* trap; ≈ 0.2 ms of the
+*gated* one). ⚠ And note what the real defect turned out to be, because it is smaller and more
+actionable than either framing: **we re-issue eight host join round trips per doorbell for
+framebuffer ranges that are already joined, and release them again — 87 times in one boot.**
+That is a missing memo of a permanent refusal. It is not a scan, and it is not a
+publication-timing error.
 
 ## 8. Reproducing
 
