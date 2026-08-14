@@ -50,6 +50,28 @@ patch; a construction-shaped one cannot be.**
 ⚠ **Known-positive required:** a deliberately-unsatisfied completion must be **observed to be
 refused**. A rule never seen to fire is not a rule.
 
+> ### ★★★ EXTENDED 2026-08-14 — **THE RULE ABOVE PRESUPPOSES WE SEND COMPLETIONS. ON THE USER
+> ### COMPUTE PLANE WE SEND NONE, SO IT IS SATISFIED VACUOUSLY.**
+> `cup3` crossed at `CUP3_VAL=43` with **nothing in this stack waiting on anything**: the guest
+> polls its own semaphore and the host GR engine writes it. ⇒ **the absence of a completion-wait
+> architecture there is the passthrough being real, not a gap** — and by the line directly above,
+> **a rule never seen to fire is not a rule**, so the first completion we ever wire is unexercised
+> code meeting an untested rule.
+>
+> ★★★★★ **And there is a second rule, of the same kind, governing WHERE a completion may be
+> awaited — measured, because every guest MMIO write arrives with the QEMU BQL held**
+> (`shim.rs:4877`, `:6146`). **Blocking in a trap handler freezes EVERY vCPU and QEMU's main loop**,
+> not just the ringing one.
+> ⇒ **`INLINE-SAFE(site) ⇔` it completes (a) without the guest running, (b) within the shortest
+> guest-side timeout covering it — the scrubber's is **4000 ms** — and (c) holding no lock another
+> vCPU's trap path takes.**
+> ⊘ Clause **(c) is violated today and the guest can build it** (`Mutex<PlaneState>` is unranked, so
+> the R1 witness passes **vacuously**). Clauses (a) and (b) have **no mechanism at all**.
+>
+> **Full model, the three tiers, and what is open against it:
+> [`blocking_and_completion_model.md`](blocking_and_completion_model.md).** ⚠ Read it before adding
+> any wait, any lock, or any completion to a path that runs under a guest trap.
+
 ---
 
 ## 1. Gate order — and two of these are reordered from the owner's first draft
