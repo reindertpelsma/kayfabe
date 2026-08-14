@@ -259,6 +259,10 @@ pub struct PtDecodeOutcome {
     /// bound — the one lossy sub-case, counted rather than assumed absent. See
     /// [`kayfabe_mmu::reach::ApplyOutcome::revoked_still_desired`].
     pub revoked_still_desired: usize,
+    /// ★★★ How many host-published unbinds were kept as refusals because they are
+    /// RE-MAPS, not removals — the population a re-point path would serve and this one must
+    /// not touch. See [`kayfabe_mmu::reach::ApplyOutcome::remaps_refused`].
+    pub remaps_refused: usize,
     /// Leaves forward-populated into a free range.
     pub bound: usize,
     /// Leaves that restated a binding already in the table.
@@ -891,6 +895,7 @@ fn commit_pt_decode_with(
             memory: r.host.memory(),
         }));
         out.revoked_still_desired += po.revoked_still_desired;
+        out.remaps_refused += po.remaps_refused;
         out.bound += po.bound;
         out.unchanged += po.unchanged;
         out.repointed += po.repointed;

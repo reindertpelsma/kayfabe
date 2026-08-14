@@ -1316,3 +1316,85 @@ fn the_default_policy_still_refuses_the_very_row_the_arm_revokes() {
     assert!(applied.revoked.is_empty());
     assert!(table.binding_at(va).is_some());
 }
+
+/// ⊘⊘⊘ **w329 — A RE-MAP IS NOT A REMOVAL, and revoking one takes out a LIVE translation.**
+///
+/// `settle` emits a re-map — same VA, different physical page — as `unbinds.push(va)` **plus**
+/// `binds.push(leaf)` in one settlement, because the table's own discipline is unmap-eager.
+/// `[measured, boot `w329b1`]` without this guard the pass revoked the join of
+/// `va=0x7d05d0200000`, the bandwidth workload's **output buffer, live across both of its
+/// rows**, and a `4,64` list that passed for `w327` failed `rc=719`.
+///
+/// ★ The row keeps `UnbindsPublished` — today's behaviour, exactly — and the population is
+/// counted as [`kayfabe_mmu::reach::ApplyOutcome::remaps_refused`] so *"how big is the
+/// unbuilt re-point path"* is a number rather than an impression.
+#[test]
+fn a_remap_of_a_published_row_is_refused_and_counted_not_revoked() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let mut fb = Fb::default();
+    let mut s = shadow();
+    let mut table = AddressTable::new();
+    fb.put(
+        PT_SMALL,
+        page_at(fmt, small_leaf_level(), &[(3, leaf(0x3000_0000))]),
+    );
+    s.witness(PT_SMALL);
+    observe(&mut s, fmt, &mut fb, at(PT_SMALL, small_leaf_level(), 0));
+    link_chain(&mut s, fmt, &mut fb, PT_SMALL, true);
+    let up = s.settle(fmt);
+    apply_settlement(fmt, &mut table, &mut s, A_PDB, &up);
+
+    let va = small_va(fmt, 3);
+    let len = 1u64 << fmt.level_shift(small_leaf_level()).expect("small").shift;
+    table.unbind(va);
+    table
+        .bind(
+            A_PDB,
+            va,
+            len,
+            Binding::real_gpu_memory(0x3000_0000, Aperture::Vidmem, joined_whole(va.0))
+                .expect("a joined row"),
+        )
+        .expect("a published binding at its own VA");
+
+    // ── THE RE-MAP: the same VA, a DIFFERENT physical page. Nothing is freed by the guest.
+    fb.put(
+        PT_SMALL,
+        page_at(fmt, small_leaf_level(), &[(3, leaf(0x9000_0000))]),
+    );
+    observe(&mut s, fmt, &mut fb, at(PT_SMALL, small_leaf_level(), 0));
+    let down = s.settle(fmt);
+    assert_eq!(down.unbinds, vec![va], "a re-map unbinds…");
+    assert!(
+        down.binds.iter().any(|l| l.va == va),
+        "…and binds the SAME VA in the SAME settlement — which is what makes it a re-map"
+    );
+
+    let applied = kayfabe_mmu::reach::apply_settlement_as(
+        fmt,
+        &mut table,
+        &mut s,
+        A_PDB,
+        &down,
+        kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+    );
+    assert!(
+        applied.revoked.is_empty(),
+        "a re-map must NOT be revoked: the range is not finished, it moved"
+    );
+    assert_eq!(applied.remaps_refused, 1, "and the population is COUNTED");
+    assert!(
+        applied
+            .refusals
+            .contains(&PopulateRefusal::UnbindsPublished { va }),
+        "the row keeps today's refusal verbatim: {:?}",
+        applied.refusals
+    );
+    assert!(
+        table
+            .binding_at(va)
+            .is_some_and(|(_, _, b)| b.host().is_some()),
+        "and the live host backing survives"
+    );
+}

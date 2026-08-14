@@ -155,6 +155,36 @@ asymmetry landing on the dangerous side. ⇒ the pre-registered letter for leg 1
 to `d859beb1`, so *"the release broke it"* and *"master drifted"* are both live readings until
 that one boot separates them. `scripts/bench/w329_followup.sh` asks it **first**.
 
+### 2.3 ★★★★★ AND THE REVOKED ADDRESS NAMES THE MECHANISM — it is a RE-MAP, not a removal
+
+`w329b1`'s two revocation events, with the workload's own two rows beside them:
+
+```
+BW_BEGIN mib=4  ... in_ptr=0x7d05d0400000  out_ptr=0x7d05d0200000
+BW_BEGIN mib=64 ... in_ptr=0x7d05c8000000  out_ptr=0x7d05d0200000     ← the SAME out buffer
+revoked=1 ... still_desired=1 first=[va=0x7d05d0000000 fb_phys=0x1e00000 ...]
+revoked=3 ... still_desired=0 first=[va=0x7d05d0200000 fb_phys=0x2000000 ...]   ← THAT VA
+```
+
+★★★★★ **`0x7d05d0200000` is the output buffer, and it is live across BOTH rows.** The
+settlement proposed an unbind of it because the guest **re-mapped** it — freed and re-allocated
+the same VA onto **different frames** — and `ReachShadow::settle` emits a re-map as
+`unbinds.push(va); binds.push(leaf)` **in one settlement** (`reach.rs:741-748`), because the
+table's own discipline is unmap-eager.
+
+⇒ ⊘⊘ **`PublishedUnbind::RevokeWholeJoins` cannot tell a REMOVAL from a RE-MAP**, and it
+treats both as *"this range is finished"*. For a removal that is right. For a re-map the right
+action is a **re-point**: release the old frame's join *and* carry the row forward to the new
+frame — which is the `RepointsPublished` refusal one function over, not this one.
+★ `still_desired` is exactly that population, and it is why the counter was added before any
+of this was known: the first revocation of the boot has `still_desired=1`.
+
+⇒ **The narrow fix is one line of policy**: revoke only unbinds that are **not** accompanied by
+a bind of the same VA in the same settlement. That is `Settlement::binds` keyed by VA rather
+than by `phys`, and it removes the whole re-map population from the revoke path. ⊘ Untested at
+the time of writing — stated as a mechanism with both sides cited, which is what §5 of this
+document exists to keep honest.
+
 ---
 
 ## 3. ⊘⊘⊘ THE REFUTATION — the nominated trigger is not the event that occurs

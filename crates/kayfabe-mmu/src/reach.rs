@@ -859,12 +859,36 @@ pub fn apply_settlement_as(
     } else {
         settlement.binds.iter().map(|l| l.phys).collect()
     };
+    // ★★★★★ **THE RE-MAP IS NOT A REMOVAL, AND TELLING THEM APART IS THE WHOLE
+    // DIFFERENCE BETWEEN A RECLAIM AND A REVOKE OF A LIVE TRANSLATION.**
+    //
+    // `settle` emits a re-map — same VA, different physical page — as
+    // `unbinds.push(va); binds.push(leaf)` **in one settlement**, because the table's own
+    // discipline is unmap-eager and an overlapping bind is refused. So an unbind ACCOMPANIED
+    // BY A BIND OF THE SAME VA does not mean *"this range is finished"*; it means *"this range
+    // now points somewhere else"*, and the right action for a published row is a RE-POINT,
+    // which is `PopulateRefusal::RepointsPublished`'s question and not this one.
+    //
+    // `[measured 2026-08-15, boot `w329b1`]` without this the pass revoked the join of
+    // `va=0x7d05d0200000` — **the bandwidth workload's OUTPUT buffer, live across both of its
+    // rows** — and a `4,64` list that PASSED for `w327` failed at `rc=719`. ⚠ That is a
+    // revoke of a LIVE translation: no double free, and a regression all the same.
+    let remapped: BTreeSet<u64> = if policy == PublishedUnbind::Refuse {
+        BTreeSet::new()
+    } else {
+        settlement.binds.iter().map(|l| l.va.0).collect()
+    };
     for &va in &settlement.unbinds {
         match table.binding_at(va) {
             Some((start, tlen, b)) if b.host.is_some() => {
                 let h = b.host.expect("checked in the guard");
                 let whole_row = start == va.0;
+                let is_remap = remapped.contains(&va.0);
+                if is_remap && policy == PublishedUnbind::RevokeWholeJoins {
+                    out.remaps_refused += 1;
+                }
                 let qualifies = policy == PublishedUnbind::RevokeWholeJoins
+                    && !is_remap
                     && whole_row
                     && h.frees_object()
                     && h.bytes() == crate::BackingBytes::JoinsGuestWindow;
@@ -978,6 +1002,12 @@ pub struct ApplyOutcome {
     /// row is already out of the table when this is returned; the object it named is reachable
     /// through nothing else.
     pub revoked: Vec<RevokedPublication>,
+    /// ★★★ How many host-published unbinds were kept as refusals **because the same
+    /// settlement also binds that VA** — i.e. they are RE-MAPS, not removals. `[measured,
+    /// w329b1]` revoking one of these took out the bandwidth workload's live output buffer.
+    /// ⊘ A re-map wants a RE-POINT (`RepointsPublished`'s question), and this counter is
+    /// how big that unbuilt population is.
+    pub remaps_refused: usize,
     /// ★ How many of [`ApplyOutcome::revoked`] name a framebuffer offset **this same
     /// settlement also wants bound** — i.e. the guest moved the frame to another VA rather
     /// than releasing it. Counted because it is the one sub-case where dropping the join's

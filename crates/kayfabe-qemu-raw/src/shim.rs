@@ -9099,10 +9099,11 @@ impl SharedDoorbell {
         plane: &RegPlane,
         revoked: &[kayfabe_fwd::RevokedLeaf],
         still_desired: usize,
+        remaps_refused: usize,
     ) -> String {
         if revoked.is_empty() {
             return format!(
-                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={}",
+                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={} remaps_refused=                 {remaps_refused}",
                 plane.joined_fb_ranges().len()
             );
         }
@@ -9136,7 +9137,8 @@ impl SharedDoorbell {
         let drained = self.device.drain_pending_releases();
         format!(
             " revoked={} released={released} stranded={stranded} drained={drained} \
-             joined_ranges={} still_desired={still_desired} first=[{}]",
+             joined_ranges={} still_desired={still_desired} remaps_refused={remaps_refused} \
+             first=[{}]",
             revoked.len(),
             plane.joined_fb_ranges().len(),
             first.as_deref().unwrap_or("NONE"),
@@ -9163,7 +9165,7 @@ impl SharedDoorbell {
         let fmt = kayfabe_chips::Ga10xGmmu::new();
         let revoke_policy = selected_join_release();
         let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
-        let mut revoked_still_desired = 0usize;
+        let (mut revoked_still_desired, mut remaps_refused) = (0usize, 0usize);
         let (mut latched, mut vas_gone, mut rounds) = (0usize, 0usize, 0usize);
         // ⊘ A local tally rather than a folded `PtDecodeOutcome`, for one reason that is
         // about linkage and not about style: this crate does not depend on `kayfabe-fwd`
@@ -9201,6 +9203,7 @@ impl SharedDoorbell {
                 // verbs run, and the answer is "this trap, once".
                 revoked.extend(out.revoked.iter().copied());
                 revoked_still_desired += out.revoked_still_desired;
+                remaps_refused += out.remaps_refused;
                 acc.bound += out.bound;
                 acc.unchanged += out.unchanged;
                 acc.repointed += out.repointed;
@@ -9238,7 +9241,8 @@ impl SharedDoorbell {
         // ★★★★★ **w329 — BOTH HALVES OF THE RELEASE, HERE, SYNCHRONOUSLY.** Ordered after
         // every decode of this pass and before the line is printed, so the counts it reports
         // and the state the publication pass will find are the same state.
-        let revoke_clause = self.release_revoked_joins(&plane, &revoked, revoked_still_desired);
+        let revoke_clause =
+            self.release_revoked_joins(&plane, &revoked, revoked_still_desired, remaps_refused);
         // ⊘ THE LEFTOVERS GO BACK. A page the index cannot name an owner for is not a page
         // that was not written, and the witness is the only record that it was.
         let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
@@ -9368,7 +9372,7 @@ impl SharedDoorbell {
         let mut duplicates = 0usize;
         let revoke_policy = selected_join_release();
         let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
-        let mut revoked_still_desired = 0usize;
+        let (mut revoked_still_desired, mut remaps_refused) = (0usize, 0usize);
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
@@ -9386,6 +9390,7 @@ impl SharedDoorbell {
             // below, exactly as the decode pass does.
             revoked.extend(out.revoked.iter().copied());
             revoked_still_desired += out.revoked_still_desired;
+            remaps_refused += out.remaps_refused;
             tasks += plan.tasks.len();
             skipped += plan.skipped;
             for r in &plan.reasons {
@@ -9449,7 +9454,8 @@ impl SharedDoorbell {
             duplicates += out.duplicate_leaves;
         }
         // ★★★★★ **w329 — the sweep's half of the release, discharged before the line prints.**
-        let revoke_clause = self.release_revoked_joins(&plane, &revoked, revoked_still_desired);
+        let revoke_clause =
+            self.release_revoked_joins(&plane, &revoked, revoked_still_desired, remaps_refused);
         format!(
             " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
              pages={pages} reasons={reasons:?} JOIN-RELEASE{revoke_clause} → bound={bound} \
