@@ -4,9 +4,31 @@
 > owner accepted folded in. ⊘ This is a **gate order and a specification**, not a schedule. Supersede
 > it in place; do not write a successor beside it.
 >
-> **Precondition, not yet met:** `CUP2_RC` is **1** (was 124). The address plane is closed —
-> `Xid = 0`, `host_rows = 18 295/18 309` — and the remaining wall is our own control-plane refusal
-> vocabulary. **Everything below assumes cup2 passes first.**
+> ### ⊘⊘ CORRECTED 2026-08-14 — **THE PRECONDITION IS MET, AND THE TEXT BELOW IT WAS STALE IN A
+> ### `LIVE` DOC.** It read *"Precondition, not yet met: `CUP2_RC` is **1**"* — superseded by w294's
+> **2/2 at `^CUP2_RC=0`** (`1c8e508`) and again by w297. Caught by the cup3 lane, not by a reader of
+> this file: ★ **a `STATUS: LIVE` header certifies that the doc has not been RETIRED, never that its
+> body is current.** That is the failure this repo's own doc-hygiene rule exists for, committed in
+> the file that states the rule.
+>
+> **Gate 1 is CLOSED, twice over `[measured, real GA106 580.159.04]`:**
+> - **cup2** — `^CUP2_RC=0`, **2/2** (w294 `1c8e508`). ⊘ A **CE round-trip**, not compute.
+> - **cup3** — `^CUP3_VAL=43` from `out = in*3 + 1`, `in = 14` (w297 `c5d0510`). ★★★★★ **FIRST
+>   COMPUTE**: no copy engine, fill, or forged completion in this stack can produce 43, so the
+>   value is un-forgeable proof the **host GR engine ran the guest's shader**. Full ladder, no
+>   `✘`: CTX → MODULE → FUNC → MEMALLOC → LAUNCH → SYNC → KERNEL → DONE.
+>
+> **The address plane held across both:** `Xid = 0`, `host_rows = 18 295/18 309` — *identical* on
+> cup3, and the unserviced-control ledger is the **same 40 ids** as cup2, so module load and kernel
+> launch demanded **no control we refuse**.
+>
+> ⊘ **Both are RELAXED greens and neither is the milestone.** Eleven relaxations were in force
+> (`PT_SWEEP=on`, `OPERAND_JOIN=join`, `VAS_PUBLISH=drain`, `FB_JOIN=shared`,
+> `GR_ROUTE=passthrough`, ring/pushbuf/sema/operand pinned, `ISOLATES=real`, `CE_EXECUTOR=host`).
+> ★ **But `43` is now a KNOWN-POSITIVE that can grade them one at a time** — a strictly better
+> instrument than cup2 ever was, and the obvious next rung.
+> ⊘ And it is **one boot** of a 1×1×1 launch of a six-instruction shader. cup2 was confirmed 2/2
+> *before* it was believed; cup3 has not been.
 
 ---
 
