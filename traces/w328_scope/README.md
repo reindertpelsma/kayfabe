@@ -28,10 +28,18 @@ one names its source log and its byte count so the omission is auditable rather 
 | `w328g` | `doorbelled` | `coalesce` | **`on`** | cup3 | 3 |
 | `w328ge` | `doorbelled` | `coalesce` | **`on`** | cup8 | 3 |
 | `w328gx` | `doorbelled` | `coalesce` | **`on`** | R33 arm 1 | 3 |
+| **`w328cc`** | `doorbelled` | `coalesce` | ⊘ unset | cup3 | 2 | ★ **THE DISCRIMINATOR** — arm `c`'s exact environment, run **after all 24 sweep boots** |
 
 ★ **One lever per arm**: `a`(none) → `s`(+scope) → `c`(+coalesce) → `g`(+dirty gate).
 ⊘ Arm `w328a` is master's behaviour **on this binary**, so the control and the evidence differ
 in exactly one environment word each step.
+
+★★★★★ **`w328cc` is why the rung has an answer rather than a caveat.** The sweep is
+**sequential**, so arm is confounded with time-in-session — and the drain's cost is governed by
+`chains`, which is host free-list fragmentation. Re-running **arm `c` last** gave
+`chains` = 1 031 / 1 373 against its own earlier 242 / 511 / 690, which attributes the drift to
+the session and **exonerates the dirty gate**. ⚠ Nine boots could not separate what two boots
+in the right order settled. **Interleave the arms.**
 
 ## ⚠ How to read a boot — grade on STATE, never on `CUP3_VAL`
 
