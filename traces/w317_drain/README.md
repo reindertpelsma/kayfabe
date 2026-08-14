@@ -10,7 +10,33 @@
 
 ---
 
-## 1. ★★★★★ THE HEADLINE — the worst BQL hold falls from 92.6 % of budget to 3.2 %
+## 0. ★★★★★ THE SHIPPED RESULT — `chunk = 4`, and the worst BQL hold is **1.4 %** of budget
+
+`[measured 2026-08-14, vh, rev `86dd30b7`, n=4 cup3 boots, tags `w317c41..4`; stamp gate PASSED]`
+
+| | boot 1 | boot 2 | boot 3 | boot 4 | min | median | max |
+|---|---|---|---|---|---|---|---|
+| `^CUP3_VAL` | **43** | **43** | **43** | **43** | — | — | **4/4** |
+| `max_reap_us` | 47 026 | 52 335 | 52 960 | 53 544 | 47 026 | 52 648 | **53 544** |
+| `max_drain_us` | 48 599 | 46 396 | 48 287 | 54 838 | 46 396 | 48 443 | **54 838** |
+| `DRAIN-TIMING` turns | 33 | 12 | 4 | 69 | | | |
+
+**Worst single BQL hold = 54 838 µs = 1.37 % of `scrubberDestruct`'s 4 000 000 µs.**
+Against w314's branch worst of 3 702 806 µs (92.6 %) that is a **67.5× reduction**.
+★ The design predicted ≤ 53 ms (40 ms budget + `4 × 3.3 ms`); measured 54.8 ms — **within 4 %
+of a bound written before the boot.**
+
+Every boot also: `Xid=0` · `PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228`
+· `(E) VERDICT = 0` · `DRAIN-DEFER 1 → 0` · `guest_stall_lines=0` · `NVRM ×31` ·
+`host_rows_max=18295`.
+
+⇒ **Pre-registered outcome (A).** §1–§4 below are the **`chunk = 64` arm**, kept because it is
+what found the granularity defect and because §3's discriminator is the reason the shipped value
+is 4 and not a guess.
+
+---
+
+## 1. ★★★★★ THE `chunk = 64` ARM — the worst BQL hold falls from 92.6 % of budget to 3.2 %
 
 `[measured 2026-08-14, vh, n=4 boots, tags `w317br1..4`; the w314 rows are quoted from
 `traces/w314_confirm/`, same box, same instrument, same workload]`
