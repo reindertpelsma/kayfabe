@@ -1,9 +1,11 @@
 # Guest-RAM pin release — the removal, the safety predicate, and what it deliberately does not do
 
-> **STATUS: LIVE — 2026-08-14 (w310).** Code landed on `w310-pin-release`; **bench confirmation
-> PENDING** (§7). Supersedes nothing. Corrects one sentence in
-> `crates/kayfabe-rt/src/device.rs` (`vas_published_ranges`) and one comment block in
-> `crates/kayfabe-fwd/src/lib.rs` (`commit_pin_guest_ram`), both folded in place.
+> **STATUS: LIVE — 2026-08-14 (w310).** Code landed on `w310-pin-release`, rebased onto master
+> `0ff3e1e2` (w309); built and tested on a rented CPU box, **known-positive watched failing**.
+> ⊘ **BENCH CONFIRMATION PENDING — §7 lists the criteria and this must not merge without
+> them.** Supersedes nothing. Corrects one sentence in `crates/kayfabe-rt/src/device.rs`
+> (`vas_published_ranges`) and one comment block in `crates/kayfabe-fwd/src/lib.rs`
+> (`commit_pin_guest_ram`), both folded in place.
 > Parent finding: `docs/audits/w301_cancellation_error_leaks.md` §3.2, §3.3.
 
 ---
@@ -177,6 +179,44 @@ purpose:**
 
 ⇒ Filed as a separate question, with its own falsifier, rather than smuggled in beside a
 teardown fix. ⚠ It is a real inconsistency and should be answered; it is not answered here.
+
+### ⊘⊘ What the sever measured that the design above had NOT stated
+
+`tests/tests/guest_ram_pin_release.rs`'s pin block was **deleted and the suite run**. Three of
+four tests went red — and the one assertion that stayed **green** is the finding:
+
+> On the **exact-extent** shape the descriptor is freed **exactly once even with the release
+> path deleted**, because w291's merge put that same handle on the row and the row walk frees
+> it.
+
+⇒ *"the descriptor leaks"* is **true of the run-pin shape and false of the exact-extent one.**
+A single test asserting *"the descriptor was freed"* would have reported this rung working for
+a reason that holds on only one of the two shapes — and, on the boots we have, **the shape it
+does not hold for is the common one**. The two shapes are now separate tests with separate
+discriminators: exact-extent goes red on the `munmap`, the run pin on the descriptor free.
+
+★ Restated as the honest scope of what this rung closes, per shape:
+
+| shape | descriptor + GPU unmap, before | isolate `munmap`, before | after |
+|---|---|---|---|
+| exact-extent (common today) | **already released**, via its `Binding::host` row | **never** | both released, exactly once |
+| multi-row run pin (rare today, structurally reachable) | **never** | **never** | both released, exactly once |
+
+### ★★ And an instrument finding, because it is why no existing gate caught this
+
+The harness's own teardown post-condition (`tests/src/teardown.rs`) compares *"leaked per the
+host ledger"* against *"accounted in core state (**reachable ∪ staged**)"*. On 2026-08-10 the
+first green `pin_guest_ram` test failed exactly that post-condition, and the fix was to teach
+`reachable_objects` to enumerate `Vas::guest_ram_pins` (`tests/src/lib.rs`, with a doc that
+says *"the wrong fix would have been a `ResidueClaim` — declaring the leak instead of
+accounting for it"*).
+
+That fix was right. ⊘ **But from that day the audit could no longer see this leak**, because an
+outstanding pin was *accounted* rather than *leaked*:
+
+> **"Accounted for" answers *can something name it*. It does not answer *will something free
+> it*.** w301 §3.2 is precisely the second question, and the gate that exists for this class
+> was satisfied by a record pointing at an object nothing could free.
 
 ---
 
