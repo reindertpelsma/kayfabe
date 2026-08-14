@@ -210,6 +210,49 @@ stays tier 2, budgeted at 40 ms, and is correct there. ⊘ And `[measured w326m1
 `max_drain_us = 53 193`, `max_reap_us = 54 917`: **the retired drain was never the worst
 trap.**
 
+### 5.1 ⚠⚠ MEASURED COST — THE TICK TRUNCATES THE PUBLICATION DRAIN, REPRODUCIBLY
+
+`[measured, boots `w326r1`/`w326r2`, tick armed, vs `w326m1`/`w326o1` disarmed]` — and this is
+the finding that decides how the arm ships:
+
+| boot | tick | whole-VAS drain | `worst_trap_us` |
+|---|---|---|---|
+| `w326m1` | **off** | `pinned=13313/13313 DRAIN_MS=2792` **`complete=true`** | 2 879 349 |
+| `w326r1` | **on** | `pinned=13268/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 106 218 |
+| `w326r2` | **on** | `pinned=12728/13313 DRAIN_MS=3000` **`complete=false` ⚠ WALL BUDGET HIT** | 3 130 278 |
+
+⇒ **the tick reproducibly pushes the whole-VAS publication drain past its 3000 ms budget and
+truncates it** — `w319`'s failure mode 1. The workload is unaffected (`CUP3_VAL=43` on all
+three, `Xid=0`, the same 40 unserviced ids, `w319_attribute.sh ⇒ VERDICT=0 GREEN`), but a
+truncated publication is a publication miss waiting for a different workload.
+
+**The mechanism, and it is not mysterious.** `drain_retired_budgeted` takes the **rank-0 write
+guard** in its plan phase; so does the publication drain. `[measured]` `worst_tick_us =
+118 203` and `vcpu_skipped = 4438` — the worker holds the gate for up to 118 ms at a time and
+4 438 vCPU traps found it held. ⇒ off-BQL is **not** off-contention: the tick pays for the
+guest's freedom with rank-0 pressure on the very pass it is running beside.
+
+⊘ **So the tick ships DISARMED**, and the next lane owns making it cheap (rate-limit the tick,
+yield the rank-0 guard between chunks, or run it only when the publication drain is idle).
+★ The defect it fixes is real and the fix is real; what is not yet true is that it is free.
+
+### 5.2 ★ THE WORST TRAP IS THE PUBLICATION DRAIN — a three-point attribution, residuals printed
+
+| boot | `worst_trap_us` | `DRAIN_MS` | residual | drain's share |
+|---|---|---|---|---|
+| `w326m1` | 2 879 349 | 2 792 000 | **87 349 µs** | 97.0 % |
+| `w326r1` | 3 106 218 | 3 000 000 | **106 218 µs** | 96.6 % |
+| `w326r2` | 3 130 278 | 3 000 000 | **130 278 µs** | 95.8 % |
+
+⇒ the whole-VAS publication drain accounts for **95.8–97.0 %** of the worst MMIO trap on every
+boot, with a small and stable residual. ⊘ **The retired drain is not it** (`max_drain_us` =
+53 193 / 56 280) and neither is the per-doorbell publication pass (w315's 86.7 ms). Three
+different things wear the word *"drain"* in this tree's logs.
+⚠ Per this campaign's own trap — *a candidate whose magnitude matches your measurement belongs
+to the instrument until proven otherwise* — note that `DRAIN_MS` is **budget-clamped at 3000**
+on two of the three points, so those two are not independent evidence of the fit; the fit rests
+on `w326m1`, where the drain ran to completion at 2792 and the residual is the same 87–130 ms.
+
 ---
 
 ## 6. ⊘ WHAT IS NOT BUILT, AND THE STRUCTURAL REASON
