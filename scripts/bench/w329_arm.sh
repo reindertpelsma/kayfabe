@@ -58,6 +58,7 @@ for i in $(seq 1 "$N"); do
   JS=$(grep -ao 'revoked=[0-9]* released=[0-9]* stranded=[0-9]* drained=[0-9]*' "$Q" 2>/dev/null \
         | awk '{for(i=1;i<=NF;i++){split($i,a,"=");s[a[1]]+=a[2]}} END{printf "revoked=%d released=%d stranded=%d drained=%d",s["revoked"],s["released"],s["stranded"],s["drained"]}')
   SD=$(grep -ao 'still_desired=[0-9]*' "$Q" 2>/dev/null | sed 's/.*=//' | awk '{s+=$1} END{print s+0}')
+  RM=$(grep -ao 'remaps_refused=[0-9]*' "$Q" 2>/dev/null | sed 's/.*=//' | sort -n | tail -1)
   DIS=$(grep -ac 'TABLE/STORE DISAGREE' "$Q" 2>/dev/null)
   # ---- ★★★★★ THE TRAJECTORY, and it is graded on `falls`
   TRAJ=$(grep -ao 'joined_ranges=[0-9]*' "$Q" 2>/dev/null | sed 's/.*=//' \
@@ -77,7 +78,7 @@ for i in $(seq 1 "$N"); do
   echo "    BOOT $i: [${V:-⊘ABSENT-UNMEASURED}] [${R:-⊘NO-TERMINATOR}] [${C8:-⊘no-cup8}] [${BM:-⊘no-BENCH_MODE}]"
   echo "            r33_arm1=[${A1:-⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail}]"
   echo "            BW last_ok=[${OK:-⊘NONE}] first_fail=[${FA:-⊘NONE_FAILED}] ${FF:+refusal=[$FF]}"
-  echo "            ★★★★★ JOINREL arm=[${JA:-⊘ABSENT — the clause never printed, UNMEASURED}] ${JS:-⊘UNMEASURED} still_desired=[${SD:-⊘}] table_store_disagree=[${DIS:-⊘NOFILE}]"
+  echo "            ★★★★★ JOINREL arm=[${JA:-⊘ABSENT — the clause never printed, UNMEASURED}] ${JS:-⊘UNMEASURED} still_desired=[${SD:-⊘}] remaps_refused_max=[${RM:-⊘UNMEASURED}] table_store_disagree=[${DIS:-⊘NOFILE}]"
   echo "            ★★★★★ JOINTRAJ ${TRAJ}"
   echo "            already_joined_refusals=[${ALJ:-⊘NOFILE}] (w327 baseline 16, failing boots 26-32)"
   echo "            ★★★ DRAIN=[${DR:-⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete}]"
