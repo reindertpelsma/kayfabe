@@ -23,7 +23,7 @@ Bench tree `/workspace/kayfabe_w309`, clean, stamp gate passed on **every** boot
 
 | letter | verdict |
 |---|---|
-| **(A)** one confound isolated | ⊘ **NOT REACHED** — see §4; blocked by the regression, not by the arm |
+| **(A)** one confound isolated | ⊘ **NOT for criterion 1** — blocked by the regression, not by the arm. ★ But **one confound WAS isolated, on the regression**: of w304's five deleted relaxations, exactly **`PT_SWEEP`** and **`OPERAND_JOIN`** break arm 1, each on its own (§4) |
 | **(B)** the contrast does not reproduce | ⊘ **REFUTED.** It reproduces at `c7c058a3`, **2/2** |
 | **(C)** criterion 1 MET | ⊘ not in the guest. ★ **MET NATIVELY on the isolating arm** — §3 |
 | **(D)** the isolating arm will not build | ⊘ **AVERTED** — it builds, runs, and is a native known-positive |
@@ -150,6 +150,38 @@ never written, nothing moved. w305's contrast was *arm 1 works / arm 4 does not*
 **both fail with one fingerprint**. ⇒ The contrast is real — it just does not exist at HEAD any
 more, because the working side of it died.
 
+### ★★★★★ WHICH RELAXATION — NAMED. **TWO of the five, not one.**
+
+`[measured, vh2, 6 boots at `8d258daa`]` — the last rev where all five are still env-gated.
+**One ablation per boot; everything else at its committed default; the arming read back from the
+device's own emissions on every boot, never from the environment I set.**
+
+| ablation | arming, from the device's own emissions | arm 1 |
+|---|---|---|
+| **BASE** (none) | `PT_SWEEP=on OPERAND_JOIN=join GUEST_*=pin` | ★ **PASS** ← the sweep's own known-positive |
+| `KAYFABE_GUEST_OPERAND=off` | `GUEST_OPERAND=off`, rest default | ★ PASS — genuinely inert |
+| `KAYFABE_GUEST_PUSHBUF=off` | `GUEST_PUSHBUF=off`, rest default | ★ PASS — genuinely inert |
+| `KAYFABE_GUEST_SEMA=off` | `GUEST_SEMA=off`, rest default | ★ PASS — genuinely inert |
+| **`KAYFABE_PT_SWEEP=off`** | `PT_SWEEP=off`, `OPERAND_JOIN=join`, `GUEST_*=pin` | ⊘ **FAIL** |
+| **`KAYFABE_OPERAND_JOIN=assert`** | `OPERAND_JOIN=assert`, `PT_SWEEP=on`, `GUEST_*=pin` | ⊘ **FAIL** |
+
+⇒ **`PT_SWEEP` and `OPERAND_JOIN` are each SUFFICIENT on their own to kill R33 arm 1**, with the
+other four relaxations untouched — and w304 deleted **both**
+(`sweep_cpu_pt_tables`, `SharedDevice::sweep_pt_tables_from`, `OperandJoinArm::Join/joins()`).
+⊘ Three of the five deletions are vindicated by the same sweep; this is a **scoping** failure,
+not a bad rung.
+
+★ **And the PT sweep being load-bearing is coherent with this repo's oldest finding**, not a
+surprise: `CLAUDE.md` records that the C *"mirrored the guest's page tables WHOLESALE and
+committed the mirror before any completion became observable"*, and that every fault this
+campaign chased one at a time was one instance of that single invariant. A raw CE client is
+precisely the workload with no libcuda to establish those mappings by another route.
+
+⊘ **w304's stated reason for `OPERAND_JOIN` being inert names its own scope**: *"all 96
+OPERAND-JOIN-TABLE lines of a green boot read `0 CANDIDATE(S) in the emulated framebuffer`.
+There was never anything to join."* That is a fact about **cup3's** boot. The raw CE client
+evidently presents candidates that cup3 does not.
+
 ### ⊘ Why this was invisible to w304's own gate
 
 w304 confirmed all five relaxations inert on **`^CUP3_VAL=43`**, `n=2`, ladder 8/8, `Xid=0` —
@@ -223,9 +255,10 @@ arm 1 met the whole four-fact bar = [NO ⊘ THE IN-BOOT KNOWN-POSITIVE DID NOT F
 
 ## 7. WHAT THE NEXT RUNG SHOULD DO, IN ORDER
 
-1. ★★★★★ **Land the arm-1 regression.** It is bisected to `d2c58075`. §4's ablation sweep names
-   which of the five deleted relaxations R33 arm 1 depends on; the fix is to restore that one,
-   **with the raw CE client as its gate** rather than `43`.
+1. ★★★★★ **Land the arm-1 regression.** Bisected to `d2c58075`, and the two responsible
+   deletions are **named**: `PT_SWEEP` and `OPERAND_JOIN` (§4). Restore both — each is
+   independently sufficient to break arm 1 — **with the raw CE client as their gate** rather
+   than `43`. ⊘ The other three deletions are vindicated and should stay deleted.
 2. ★★ **Add R33 arm 1 to whatever gate declares a relaxation inert.** w304's gate was sound and
    still missed this, because it had exactly one workload. Two workloads that stress different
    planes is the cheapest possible fix.

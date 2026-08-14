@@ -189,6 +189,46 @@ refused**. A rule never seen to fire is not a rule.
 > ⚠ Not yet isolated: arm 4 also differs from arm 1 by being the **second** channel in the
 > process, by dictating its ring at `0x7_0000_0000`, and by carrying an error notifier.
 >
+> ### ⊘⊘⊘ CORRECTED SAME DAY, 2026-08-14 (w309) — **THE BLOCK DIRECTLY BELOW NAMES THE WRONG
+> ### CAUSE AND THE WRONG FIX, AND THE CONTRAST IT RESTS ON IS NOW UNMEASURABLE AT HEAD.**
+> Full evidence: `traces/w309_crit1/RESULT.md`.
+>
+> **(1) The `BadHandle` was NOT "the space where the range was wanted".** `alloc_vaspace`
+> **returns the range** (`rm.rs:4082-4127`); `ce_control_placement` prints
+> `guest_space = narrow(vas)` (`:6832`), so the `0xcafe0005` in the log **is** that range; and
+> `0xcafe0009` — called *"its paired range"* below — is the **executor VAS** `map_dma_both`
+> mints lazily (`:4149`), a third object. ⇒ **there was no range-vs-space confusion.**
+> ★ **The real cause: `pde_info` resolved its `hVASpace` with `companion_of` (`:5729`), the
+> accessor that REMOVES the pairing** and whose one legitimate caller is `free`. **Arm 6 runs
+> before arm 4 and ate it.** The same defect had been printing itself in every committed R33
+> log as *"arm 6 … ⊘ NOT ASKED (Other(19270)) — the control refused"* — `19270` = `0x4B46` =
+> our own `NOT_ON_THIS_RUNG`, never RM. ⇒ **an error path that cannot separate *they said no*
+> from *I broke it* is read as the first, every time.**
+> `[measured 2026-08-14, w309, vh2, NO QEMU]` with `space_of` instead, the arm builds and
+> reaches `CRIT1 STATE = FAULT-PROVOKED-ADDRESS-READ … VA-IDENTITY HOLDS` at
+> `0x0000000900000000`, corroborated by host `Xid 31 … CE0 HUBCLIENT_CE1 FAULT_PDE`.
+> ⊘ Fixing it exposed a **second, independent** defect: `pde_info` now answers the *same block*
+> for every address (a mapped VA and one 30 GB away), so **arm 6 is not an oracle for any
+> address**. Not fixed here; do not cite it.
+>
+> **(2) ⊘⊘ THE ARM-1-vs-ARM-4 CONTRAST BELOW CANNOT BE READ AT HEAD — ARM 1 IS BROKEN.**
+> `[measured 2026-08-14, w309, vh2, 7 boots, one variable]` R33 arm 1 — the in-boot
+> known-positive the whole contrast depends on — **PASSES at `c7c058a3` (2/2) and at `8d258daa`,
+> and FAILS at `d2c58075`, at master `74200b2b`, and on every boot since.** First bad commit:
+> **`d2c58075`, the w304 merge, *"FIVE INERT RELAXATIONS CONFIRMED AND DELETED"*.**
+> At HEAD arm 1 fails with **arm 4's own fingerprint** — `GP_GET 1 GP_PUT 1`, semaphore `0`,
+> nothing moved — so both sides of the contrast now read identically.
+> ★★★ **Which relaxations: `PT_SWEEP` and `OPERAND_JOIN`, each SUFFICIENT ALONE** (6 ablation
+> boots at `8d258daa`, one variable each, arming read back from the device's own emissions;
+> `GUEST_OPERAND` / `GUEST_PUSHBUF` / `GUEST_SEMA` are genuinely inert and stay deleted).
+> ⊘ **w304's gate was sound and still missed this: it graded all five on `^CUP3_VAL=43` alone.**
+> `43` is cup3 — libcuda, a GR launch. R33 arm 1 is a **raw CE client** with no libcuda. ⇒
+> *inert for cup3* was read as *inert*. **Any future "this relaxation is inert" needs a second
+> workload that stresses a different plane.**
+> ⚠ **Until `PT_SWEEP` and `OPERAND_JOIN` are restored, no criterion-1 arm below is gradeable**
+> — every one of them will print `CONTROL-NEVER-LANDED` for a reason that has nothing to do with
+> the confound it varies.
+>
 > ⊘ **THE ARM BUILT TO ISOLATE IT DID NOT RUN, AND THAT IS REPORTED RATHER THAN SMOOTHED.**
 > `--ce-client-fault-shared-vas` (w305, `rmladder.rs`) runs arm 4 in arm 1's own VAS.
 > `[measured, `run_w305bshared`]` it returns `CRIT1 STATE = PROBE-NOT-BUILT`:
