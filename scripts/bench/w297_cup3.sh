@@ -96,8 +96,23 @@ grep -hE '^ *FAIL ' "$P" 2>/dev/null | sed 's/^/    /'
 echo ""
 echo "=== (E) REGRESSION CHECK — cup2's established values are Xid=0 and host_rows 18295/18309"
 echo "===     ⚠ printed EVEN ON A GREEN: a pass that regressed the address plane is not a pass."
-echo "    Xid count = [$(grep -c Xid "$D" 2>/dev/null || echo '⊘ NO HOST DMESG — UNMEASURED')]"
-grep -E 'Xid' "$D" 2>/dev/null | head -4 | sed 's/^/      /'
+# ⊘⊘ w297 DEFECT FIX — **THIS LINE PRINTED A MEASURED ZERO AND "UNMEASURED" AT THE SAME
+#   TIME, AND THE MEASURED RUN LOOKED LIKE THE UNMEASURED ONE.** `grep -c` prints `0` AND
+#   exits 1 when it matches nothing, so the `||` fallback ALSO fired and the field read
+#   `[0\n⊘ NO HOST DMESG — UNMEASURED]`. ⇒ Exactly the distinction this repo insists on —
+#   *"an empty artefact is not evidence of emptiness"* — collapsed into an unreadable field
+#   by the very check written to preserve it. ★ Existence is now its OWN test, before the
+#   count, so `0 Xid in a file that exists` and `no file at all` are different words.
+#   ⚠ `run_<tag>_hostdmesg.log` is a per-boot DELTA: **0 bytes is the normal green** (no new
+#   host dmesg since the watermark). Its emptiness must therefore read as `Xid=0`, not as a
+#   failed capture — which is only sound because the probe log states the watermark
+#   (`HOST dmesg delta ... watermark N → N`) independently.
+if [ -e "$D" ]; then
+  echo "    Xid count = [$(grep -c Xid "$D")]   (host dmesg DELTA file exists, $(stat -c%s "$D") bytes)"
+  grep -E 'Xid' "$D" 2>/dev/null | head -4 | sed 's/^/      /'
+else
+  echo "    Xid count = [⊘ NO HOST DMESG FILE AT ALL — UNMEASURED. ⊘ NOT zero.]"
+fi
 echo "    host_rows, every distinct reading:"
 grep -oE 'host_rows=[0-9]+ of [0-9]+' "$Q" 2>/dev/null | sort -u | sed 's/^/      /'
 echo ""
@@ -108,7 +123,17 @@ echo "    ⊘ compare against the cup2 baseline ledger: an id that appears HERE 
 echo "      is a cup3-specific demand, which is the most likely shape of a new wall."
 echo ""
 echo "=== ★ DOORBELLS BY ENGINE — a launch is GR work; cup2's shape was GrCompute + Ce"
-grep -oE 'GrCompute=[0-9]+ Ce=[0-9]+( unrouted=[0-9]+)?' "$Q" 2>/dev/null | tail -3 | sed 's/^/      /'
+# ⊘ w297 DEFECT FIX — the pattern was `GrCompute=[0-9]+ Ce=[0-9]+`, and the device emits
+#   `by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 ... unrouted=0`. `GrGraphics=`
+#   sits BETWEEN the two halves, so the anchored pair could never match and this clause
+#   printed NOTHING on a run that had the number. ⇒ A grading clause that greps a shape the
+#   producer no longer emits is silent, and silence here is indistinguishable from zero
+#   doorbells — which on a compute rung is the failure it was written to detect.
+#   ★ Anchor on the emitter's own label instead of on a field adjacency that can drift.
+grep -o 'by engine: .*' "$Q" 2>/dev/null | tail -2 | sed 's/^/      /'
+echo "      ⊘ if the line above is ABSENT the summary never printed — UNMEASURED, not zero."
+echo "      per-doorbell routing tally (independent of the summary line):"
+grep -ho 'engine=[A-Za-z]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | sed 's/^/        /'
 echo ""
 echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the milestone"
 for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \

@@ -80,6 +80,25 @@ export KAYFABE_OPERAND_JOIN=join    # ⊘ RELAXATION 2 (carried)
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
 unset KAYFABE_RING_VIDMEM
 
+# ⊘⊘ w297 DEFECT FIX — **THE RELAXATION REPORT WAS VACUOUS AND LOOKED COMPLETE.** These are
+# `export`ed and were NEVER ECHOED, so every downstream grading block that reads them back
+# out of this log with `grep -oE "$v=[a-z]+"` printed `[]` for all eleven — on a GREEN RUN,
+# under the heading *"EVERY RELAXATION THAT WAS ON"*. ⇒ A reader sees eleven empty brackets
+# and cannot tell "nothing was relaxed" from "the report cannot see them". Same class this
+# tree has paid for repeatedly: an empty artefact reads as benign, and only inspecting its
+# producer distinguishes *nothing happened* from *nothing was recorded*.
+# ★ Additive: pure echo, no behaviour change, and it makes the EXISTING readers correct.
+# ⚠ This is the RECORD of what was set. It is NOT proof the arm ran — that is the
+#   "ARMING ACTUALLY IN FORCE" block below, read from the device's own emissions.
+echo "=== ★ THE ARMING AS THIS SCRIPT SET IT (a record of intent, not of execution) ==="
+for v in KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR NVKVM_RAM_BACKEND KAYFABE_GUEST_RAM \
+         KAYFABE_FB_JOIN KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_PT_WITNESS_EXEC \
+         KAYFABE_GUEST_SEMA KAYFABE_GR_ROUTE KAYFABE_GUEST_OPERAND KAYFABE_PT_SWEEP \
+         KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH GQ_TIMEOUT BOOT_TIMEOUT; do
+  echo "    $v=${!v}"
+done
+echo "    KAYFABE_RING_VIDMEM=<unset>"
+
 # ★★★ w292 — OVERRIDABLE so the SAME arm can be re-run under a DIFFERENT INSTRUMENT.
 # ⊘ Defaulted to the cup2 hook every w290p arm used. ⚠ A hook that does not run cup2 will
 #   print "⊘ NO LINE BEGINS WITH CUP2_RC=" below, and that is CORRECT: the measurement did
