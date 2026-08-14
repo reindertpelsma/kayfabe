@@ -1187,7 +1187,7 @@ fn joined_whole(va: u64) -> HostBacking {
 fn a_joined_whole_object_row_is_revoked_and_hands_its_host_half_back() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let va0 = small_va(&*arch.mmu(), 3).0;
+    let va0 = small_va(arch.mmu(), 3).0;
     let (mut table, mut s, va, down) =
         published_row_then_torn_down(&arch, joined_whole(va0), Aperture::Vidmem);
 
@@ -1236,7 +1236,7 @@ fn a_joined_whole_object_row_is_revoked_and_hands_its_host_half_back() {
 fn an_arena_slice_row_is_still_refused_because_freeing_it_would_be_a_double_free() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let va0 = small_va(&*arch.mmu(), 3).0;
+    let va0 = small_va(arch.mmu(), 3).0;
     let slice = HostBacking::slice(
         HostHandle::new(IsolateId::new(1, GPU), 7),
         va0,
@@ -1272,7 +1272,7 @@ fn an_arena_slice_row_is_still_refused_because_freeing_it_would_be_a_double_free
 fn a_sole_backing_row_is_still_refused_because_only_the_join_is_one_leaf_one_object() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let va0 = small_va(&*arch.mmu(), 3).0;
+    let va0 = small_va(arch.mmu(), 3).0;
     let sole = HostBacking::whole(
         HostHandle::new(IsolateId::new(1, GPU), 7),
         va0,
@@ -1304,7 +1304,7 @@ fn a_sole_backing_row_is_still_refused_because_only_the_join_is_one_leaf_one_obj
 fn the_default_policy_still_refuses_the_very_row_the_arm_revokes() {
     let arch = MockArch::new();
     let fmt = arch.mmu();
-    let va0 = small_va(&*arch.mmu(), 3).0;
+    let va0 = small_va(arch.mmu(), 3).0;
     let (mut table, mut s, va, down) =
         published_row_then_torn_down(&arch, joined_whole(va0), Aperture::Vidmem);
     let applied = apply_settlement(fmt, &mut table, &mut s, A_PDB, &down);

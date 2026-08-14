@@ -9191,7 +9191,7 @@ impl SharedDoorbell {
                 // arms differ from each other rather than from the control.
                 let Some(out) =
                     self.device
-                        .decode_pt_writes_revoking(pid, &fmt, &mut fb, revoke_policy)
+                        .decode_pt_writes_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
                 else {
                     continue;
                 };
@@ -9275,11 +9275,7 @@ impl SharedDoorbell {
             st.pending,
             st.refused,
             requeue_refused,
-            revoke_arm = match revoke_policy {
-                kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins => " | JOIN-RELEASE arm=on",
-                kayfabe_mmu::reach::PublishedUnbind::Refuse =>
-                    " | JOIN-RELEASE arm=off (⊘ w327's negative control: joins are kept forever)",
-            },
+            revoke_arm = format!(" | JOIN-RELEASE arm={}", revoke_policy.as_str()),
         )
     }
 
@@ -9381,7 +9377,7 @@ impl SharedDoorbell {
             let mut fb = plane.pt_bytes();
             let Some((plan, out)) =
                 self.device
-                    .sweep_pt_tables_revoking(pid, &fmt, &mut fb, revoke_policy)
+                    .sweep_pt_tables_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
             else {
                 continue;
             };
@@ -10420,6 +10416,72 @@ fn join_one_fb_leaf(
     pdb: kayfabe_rt::Pdb,
     leaf: kayfabe_rt::completion_watch::FbLeaf,
 ) -> Option<JoinedLeaf> {
+    let release = selected_join_release();
+    // ---- 0. ★★★★★ **w329 LEG 2 - TAKE OVER A STALE JOIN OF THIS FRAME, BEFORE
+    // anything is minted.**
+    //
+    // Ordered FIRST, and that ordering is the whole reason it is cheap: doing it at the
+    // `ALREADY_JOINED` refusal would mean a host object had already been allocated and mapped
+    // for a join that then had to be re-attempted, and `RegPlane::join_fb` consumes the
+    // region on refusal so the retry would need a second `mmap` too. Asked here, the ordinary
+    // four-step join below runs ONCE and installs cleanly.
+    //
+    // ⊘ This can only fire for a candidate row, which by construction has NO host
+    // object of its own - so a join already installed at this frame is necessarily owned by a
+    // DIFFERENT VA. See `SharedDevice::supersede_joined_fb_leaf` for what is and is not proven.
+    if release.supersedes() {
+        let over = {
+            let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
+            l.get(&leaf.phys).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
+        };
+        if over {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
+                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this frame. The old join stands and \
+                 this leaf stays fabricated. ⚠ The cap exists because the superseded row \
+                 is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
+                leaf.va, leaf.phys
+            );
+        } else if let Some(r) = device.supersede_joined_fb_leaf(
+            DOORBELL_TARGET_GPU,
+            pdb,
+            leaf.phys,
+            kayfabe_rt::GpuVa(leaf.va),
+        ) {
+            // ★★★ TABLE ROW GONE (above), STORE next, HOST last. The store must stop
+            // serving out of the region before the host mapping is torn down; the row must
+            // stop naming the object before either.
+            if plane.release_fb_join(r.phys) {
+                device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                let drained = device.drain_pending_releases();
+                *supersede_ledger()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .entry(r.phys)
+                    .or_insert(0) += 1;
+                eprintln!(
+                    "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
+                     this frame from va=0x{:x} (len=0x{:x}, host_va=0x{:x}) to va=0x{:x}. Old \
+                     row UNBOUND, join RELEASED, host object staged and drained={drained}. \
+                     ⊘ The old VA is still DESCRIBED by the guest and now resolves with \
+                     no host backing - an engine still pointed there takes a CONTAINED fault",
+                    r.phys, r.va.0, r.len, r.host_va, leaf.va
+                );
+            } else {
+                // ⊘ The table named a join this store does not hold. LOUD, and the object
+                // is NOT freed - a leak here is strictly better than freeing memory something
+                // may still be reading through. ⚠ The row is already unbound, so this
+                // orphans it; that is the conservative half of a disagreement we did not make.
+                eprintln!(
+                    "{head} {what} ⚠⚠ SUPERSEDE ABORTED fb_phys=0x{:x}: the address \
+                     table carried a JoinsGuestWindow row at va=0x{:x} and the framebuffer \
+                     store holds NO join at that offset. The row is unbound and the host \
+                     object is ⊘ NOT freed",
+                    r.phys, r.va.0
+                );
+            }
+        }
+    }
     // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
     let backed = match device.back_fb_leaf(
         DOORBELL_TARGET_GPU,
@@ -14939,36 +15001,107 @@ fn selected_pt_sweep() -> bool {
 /// must not be able to silently disarm a correctness fix and leave a boot looking armed.
 pub const JOIN_RELEASE_ENV: &str = "KAYFABE_JOIN_RELEASE";
 
-/// Which host-published-unbind policy `value` names — the pure half of
-/// [`selected_join_release`].
+/// ★★★★★ **w329 — the two TRIGGERS, as one arm.** They are different events and only
+/// the second one is the event that actually occurs on this workload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinReleaseArm {
+    /// ⊘ w327's state: a join is never released. The NEGATIVE CONTROL.
+    Off,
+    /// Leg 1 — release on the guest's own UNMAP, via
+    /// [`kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins`]. This is the trigger
+    /// `join_operand_fb_leaves`' cleanup table nominates.
+    Unmap,
+    /// ★★★ Leg 1 **and** leg 2 — also supersede a join whose frame the guest has
+    /// re-pointed into a different VA of the same address space. `[measured, w329a1]` leg 1
+    /// alone fires 8 times in a whole `28,31` run and the failure survives, because CUDA's
+    /// suballocator does not unmap on `cuMemFree`. See
+    /// [`kayfabe_rt::device::SharedDevice::supersede_joined_fb_leaf`].
+    Supersede,
+}
+
+impl JoinReleaseArm {
+    /// The settlement policy this arm implies.
+    #[must_use]
+    pub fn policy(self) -> kayfabe_mmu::reach::PublishedUnbind {
+        match self {
+            JoinReleaseArm::Off => kayfabe_mmu::reach::PublishedUnbind::Refuse,
+            JoinReleaseArm::Unmap | JoinReleaseArm::Supersede => {
+                kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins
+            }
+        }
+    }
+
+    /// Whether a collision with an existing join may take it over.
+    #[must_use]
+    pub fn supersedes(self) -> bool {
+        matches!(self, JoinReleaseArm::Supersede)
+    }
+
+    /// The word a boot's log prints, so a reader never has to infer the arm.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JoinReleaseArm::Off => "off",
+            JoinReleaseArm::Unmap => "on",
+            JoinReleaseArm::Supersede => "supersede",
+        }
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_join_release`].
 ///
 /// # Errors
-/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
-/// the fix.
-pub fn join_release_from(
-    value: Option<&str>,
-) -> Result<kayfabe_mmu::reach::PublishedUnbind, (Status, &'static str)> {
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is the fix.
+pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status, &'static str)> {
     match value {
-        None | Some("on") => Ok(kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins),
-        Some("off") => Ok(kayfabe_mmu::reach::PublishedUnbind::Refuse),
+        None | Some("on") => Ok(JoinReleaseArm::Unmap),
+        Some("off") => Ok(JoinReleaseArm::Off),
+        Some("supersede") => Ok(JoinReleaseArm::Supersede),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_JOIN_RELEASE does not name a state: the only values are `on` (the default \
-             — a joined framebuffer leaf the guest has unmapped is released) and `off` (w327's \
-             negative control, in which the join is kept forever and the guest's next \
-             allocation over a recycled frame dies rc=719).",
+            "KAYFABE_JOIN_RELEASE does not name an arm: the values are `on` (the default — a \
+             joined framebuffer leaf the guest UNMAPS is released), `supersede` (also take \
+             over a join whose frame the guest re-pointed into another VA), and `off` (w327's \
+             negative control, in which a join is kept forever and the guest's next allocation \
+             over a recycled frame dies rc=719).",
         )),
     }
 }
 
-/// Which policy [`JOIN_RELEASE_ENV`] names.
+/// Which arm [`JOIN_RELEASE_ENV`] names.
+///
+/// ⊘ **Read ONCE and cached.** The arm cannot change during a device life, and the two
+/// consumers - the settlement pass and the join site - are on the guest's own MMIO path, where
+/// one of them runs per framebuffer leaf. Re-reading the environment there would put a
+/// `getenv` under the doorbell handler for no fact that can have changed, and would also make
+/// the two consumers capable of disagreeing mid-boot, which is exactly the shape
+/// `a_second_source_of_truth_beside_a_complete_value` is banked for.
 #[must_use]
-fn selected_join_release() -> kayfabe_mmu::reach::PublishedUnbind {
-    match std::env::var_os(JOIN_RELEASE_ENV) {
-        None => kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+fn selected_join_release() -> JoinReleaseArm {
+    static ARM: std::sync::OnceLock<JoinReleaseArm> = std::sync::OnceLock::new();
+    *ARM.get_or_init(|| match std::env::var_os(JOIN_RELEASE_ENV) {
+        None => JoinReleaseArm::Unmap,
         Some(v) => join_release_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
-            .unwrap_or(kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins),
-    }
+            .unwrap_or(JoinReleaseArm::Unmap),
+    })
+}
+
+/// ★★ **How many times ONE framebuffer frame's join may be taken over in a device
+/// life.**
+///
+/// ⚠ Without a cap this is a PING-PONG: the superseded row is re-proposed by the next
+/// settlement (the guest still describes that VA), becomes a publication candidate again, and
+/// takes the join back — host RM verbs on every doorbell, forever. The cap makes the behaviour
+/// bounded and the boot says how often it was reached.
+const SUPERSEDE_CAP_PER_FRAME: usize = 4;
+
+/// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
+/// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
+/// an unbounded loop. It is reset by nothing, which is correct — the bound is per device life.
+fn supersede_ledger() -> &'static std::sync::Mutex<std::collections::HashMap<u64, usize>> {
+    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, usize>>> =
+        std::sync::OnceLock::new();
+    L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 /// ★★★★★ **§16.78** — the environment variable that arms the `MC_SERVICE_INTERRUPTS`

@@ -3711,6 +3711,92 @@ impl SharedDevice {
         .unwrap_or_default()
     }
 
+    /// ★★★★★ **w329 leg 2 — SUPERSEDE the stale join of a recycled framebuffer frame.**
+    ///
+    /// # ⊘⊘⊘ WHY THIS EXISTS: THE TRIGGER THE SOURCE NOMINATES IS NOT THE EVENT THAT OCCURS
+    ///
+    /// `SharedDoorbell::join_operand_fb_leaves`' cleanup table names the ending event as *"the
+    /// guest's own free/unmap of the range, seen as the page-table leaf ceasing to bind"*, and
+    /// `PublishedUnbind::RevokeWholeJoins` wires exactly that. `[measured 2026-08-15, boot
+    /// `w329a1`]` **it fires eight times in a whole `28,31` run and the failure survives**,
+    /// because CUDA's suballocator **does not unmap on `cuMemFree`**: the boot's own
+    /// `GUEST-DESCRIBES` census ends with **one 140 MiB run**, `0x7af90e000000+0x8c00000`,
+    /// which contains the freed buffer *and* the new one. The guest re-points the **physical**
+    /// frame into a new VA and leaves the old VA's PTE naming it.
+    ///
+    /// ⇒ The event that actually occurs is **a NEW leaf naming a framebuffer frame we already
+    /// joined for a DIFFERENT VA in the same address space** — an alias the guest created and
+    /// only one half of which it will ever use again.
+    ///
+    /// # ★★★ WHAT IS SAFE HERE, AND WHAT IS NOT — stated, because this is the risky half
+    ///
+    /// - **The ownership argument is unchanged** and is
+    ///   [`SharedDevice::revoke_published_fb_leaf`]'s, verbatim: the row selected is the only
+    ///   one that names the object (`frees_object()`, `JoinsGuestWindow`, exact extent), and
+    ///   removing it is what creates the obligation the caller then discharges.
+    /// - ⊘ **Scoped to ONE address space.** A join owned by another `Vas` is left alone and
+    ///   the old refusal stands: another proc's row is another isolate's object, and *"the
+    ///   guest re-pointed it"* is not a statement anyone can make across that boundary.
+    /// - ⚠ **What is NOT proven: that the old VA is dead.** The guest describes both. The
+    ///   device can serve only one — one frame carries one join — so today it serves the OLD
+    ///   VA and starves the new one, and this makes it serve the NEW one and starve the old.
+    ///   **Neither is correct in general.** The newest is chosen for the reason
+    ///   `ReachShadow::settle` already chooses it for shape collisions: the guest's most recent
+    ///   page-table write is its most recent statement about what that frame is for. An engine
+    ///   still pointed at the old VA takes a **contained** GPU fault, which is the map/revoke
+    ///   asymmetry's cheap side.
+    ///
+    /// Returns the row that was removed, or `None` when no qualifying row in this address
+    /// space names `phys` — which the caller must read as *"do not release anything"*.
+    pub fn supersede_joined_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        phys: u64,
+        keep_va: GpuVa,
+    ) -> Option<kayfabe_fwd::RevokedLeaf> {
+        let pid = self
+            .route_act(
+                |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                |_spine, proc, ()| proc.id,
+            )
+            .ok()?;
+        self.with_proc_mut(pid, |p| {
+            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            // ⊘ A scan of THIS address space's own rows for a framebuffer offset, not a
+            // reverse resolution of a host address to a guest VA: the join is keyed by
+            // `phys` at every other site too (`FbStore::install_join`,
+            // `FbStore::release_join`), so this asks the table the same question in the same
+            // key. `vas_publish_census` walks the identical iterator every doorbell.
+            let hit = vas.table.iter().find_map(|(va, len, b)| {
+                let h = b.host()?;
+                (b.phys() == phys
+                    && va != keep_va.0
+                    && h.frees_object()
+                    && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow)
+                    .then_some((va, len, h.host_va(), h.memory()))
+            })?;
+            let (va, len, host_va, memory) = hit;
+            vas.table.unbind(GpuVa(va));
+            // ★★★ AND THE SHADOW IS TOLD. A table without the row and a shadow that still
+            // claims it is a hole: the next `settle` would compare `published == desired`,
+            // propose nothing, and the VA would resolve `Miss` forever. Telling it makes the
+            // next pass propose the bind again — as a row with no host object, which is the
+            // truth.
+            vas.reach.confirm_unbind(GpuVa(va));
+            Some(kayfabe_fwd::RevokedLeaf {
+                gpu,
+                pdb,
+                va: GpuVa(va),
+                len,
+                phys,
+                host_va,
+                memory,
+            })
+        })
+        .flatten()
+    }
+
     /// ★★★★★ **THE PARKED PROMOTE HALVES, BY IDENTITY** — every entry of
     /// [`kayfabe_core::gpu::Vas::promote_halves`] rendered with its `buffer_id`, which half
     /// arrived, and the address it carries.
