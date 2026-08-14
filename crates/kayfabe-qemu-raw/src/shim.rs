@@ -9200,6 +9200,10 @@ impl SharedDoorbell {
         let mut refusal_kinds: std::collections::BTreeMap<&'static str, usize> =
             std::collections::BTreeMap::new();
         let mut refusal_vas: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        // ★ w327 — the `RepointsPublished`/`UnbindsPublished` subset, kept apart. See the
+        // comment at its insert site for why the general list cannot answer for it.
+        let mut pubconflict_vas: std::collections::BTreeSet<u64> =
+            std::collections::BTreeSet::new();
         let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
         let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
         let mut duplicates = 0usize;
@@ -9250,6 +9254,24 @@ impl SharedDoorbell {
                 *refusal_kinds.entry(kind).or_default() += 1;
                 if let Some(v) = va {
                     refusal_vas.insert(v);
+                    // ★★★★★ **w327 — THE CAP IS TAKEN FROM A SORTED SET, SO IT ALWAYS SHOWS
+                    // THE LOWEST ADDRESSES — AND THE ONES A READER NEEDS ARE THE HIGHEST.**
+                    //
+                    // `refusal_vas` is a `BTreeSet`, `.take(24)` walks it in ASCENDING order,
+                    // and every boot of this campaign therefore prints the same two dozen
+                    // `0x203e…`/`0x203f…` kernel addresses while the guest's own operands live
+                    // at `0x7xxx_xxxx_xxxx`. `[measured w327]` the failing boots' whole
+                    // question was *"is the faulting buffer among the refused VAs"*, and the
+                    // list that exists to answer it **cannot reach that far** — it is
+                    // `a_count_cannot_see_a_substitution` wearing a list's clothes.
+                    //
+                    // ★ So the two refusals that mean *"the table is holding a binding the
+                    // guest has already reused"* get their own list, and it is printed from
+                    // BOTH ENDS. ⊘ Kind-filtered rather than cap-raised, because raising the
+                    // cap would print 1339 addresses per pass and bury the answer instead.
+                    if matches!(kind, "RepointsPublished" | "UnbindsPublished") {
+                        pubconflict_vas.insert(v);
+                    }
                 }
             }
             straddles.extend(out.refusals.iter().copied());
@@ -9262,7 +9284,8 @@ impl SharedDoorbell {
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
-             refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} first={} \
+             refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} \
+             PUBCONFLICT_VAS[n={} lowest=[{}] highest=[{}]] first={} \
              |{}|{}",
             refusal_vas
                 .iter()
@@ -9279,6 +9302,20 @@ impl SharedDoorbell {
             } else {
                 String::new()
             },
+            pubconflict_vas.len(),
+            pubconflict_vas
+                .iter()
+                .take(PT_SWEEP_REFUSAL_CAP / 2)
+                .map(|v| format!("0x{v:x}"))
+                .collect::<Vec<_>>()
+                .join(","),
+            pubconflict_vas
+                .iter()
+                .rev()
+                .take(PT_SWEEP_REFUSAL_CAP / 2)
+                .map(|v| format!("0x{v:x}"))
+                .collect::<Vec<_>>()
+                .join(","),
             first_fault.as_deref().unwrap_or("NONE"),
             straddle_census(&straddles),
             collision_census(&collisions, duplicates),
