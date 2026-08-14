@@ -439,7 +439,8 @@ impl Census {
         rows.sort_by_key(|r| std::cmp::Reverse(r.2));
         for (name, n, tot, mx) in rows {
             s.push_str(&format!(
-                "\n    KFTIME-SEG {name:<16} n={n:<7} total_ms={:<10.3} mean_us={:<9} max_us={mx:<9} share={:.1}%",
+                "\n    KFTIME-SEG {name:<16} shape={:<5} n={n:<7} total_ms={:<10.3} mean_us={:<9} max_us={mx:<9} share={:.1}%",
+                segment_shape(name),
                 tot as f64 / 1000.0,
                 tot.checked_div(n).unwrap_or(0),
                 if self.total_us == 0 {
@@ -456,6 +457,12 @@ impl Census {
                 tot.checked_div(*calls).unwrap_or(0),
             ));
         }
+        s.push_str(
+            "\n    ⊘ SHAPE: work = costs the same on bare metal (a real finding); host = \
+             blocked in the host RM; log = the instrument's own printing under the BQL. \
+             ⊘ There is NO `trap` shape — the vmexit is already over when these hooks run, \
+             so nested-virt tax appears ONLY as UNACCOUNTED, bounded by the exit COUNT.",
+        );
         s.push_str("\n    KFTIME-HIST us:");
         let mut lo = 0u64;
         for (i, count) in self.hist.iter().enumerate() {
@@ -475,6 +482,36 @@ impl Census {
     }
 }
 
+/// ★★★★★ **WHAT KIND OF COST A SEGMENT IS — and this bench makes the distinction load-bearing.**
+///
+/// `[measured 2026-08-14]` the bench host is itself a KVM guest, so our guest runs at **L2**
+/// and every MMIO access takes a **nested** vmexit. The C artifact attributes a 2.5×
+/// throughput gap to exactly that (`C: docs/MILESTONES.md:12-14`: llama.cpp 49.9 tok/s bare
+/// metal vs ~20 on a nested vast box, *"entirely nested-virt vmexit tax"*). ⇒ a breakdown
+/// that does not say which kind each slice is **cannot answer "does bare metal fix this?"**,
+/// which is the question a large slice immediately raises.
+///
+/// - `work` — decode, translation, census, publication. Costs the same at L1 or L2.
+///   ★ **A slice here is a real finding regardless of the bench.**
+/// - `host` — time blocked in the host RM / the isolate child / the real GPU. Bench-
+///   independent in kind, though it shares a GPU with whatever else runs.
+/// - `log` — our own `eprintln!` under the BQL. ⚠ THE INSTRUMENT'S OWN COST as much as the
+///   plane's, and the reason the `base` arm exists.
+/// - `trap` — ⊘ **THERE IS NO SUCH SEGMENT AND THERE CANNOT BE.** The vmexit has already
+///   happened when any hook here runs. Trap-shaped cost lands in the analyser's
+///   `UNACCOUNTED` row, and is bounded by `exits/launch × per-exit cost` — a COUNT, which
+///   is why `mmio_read` is bracketed at all.
+#[must_use]
+pub fn segment_shape(name: &str) -> &'static str {
+    if name.starts_with("log_") {
+        return "log";
+    }
+    match name {
+        "core" | "core_rm_ipc" | "fwd_drain" | "materialize" => "host",
+        _ => "work",
+    }
+}
+
 /// One census per event kind. ⊘ A leaf mutex with nothing under it: it is taken on the vCPU
 /// path, so anything blocking beneath it would be charged to the guest by the very
 /// instrument that is supposed to explain the guest's latency.
@@ -484,13 +521,26 @@ fn census_table() -> &'static Mutex<Vec<(&'static str, Census)>> {
     CENSUS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+/// Record an event that must NEVER get a per-event line, however the module is armed.
+///
+/// ⊘ Not a convenience: `mmio_read` fires ~10^5 times a boot. A per-event line there is not
+/// an instrument, it is a second workload, and it would be charged to the guest under the
+/// BQL by the very module that is supposed to explain the guest's latency.
+pub fn record_quiet(kind: &'static str, s: &Segs) {
+    record_inner(kind, s, false);
+}
+
 /// Record one finished event, and print its line if per-event printing is armed.
 pub fn record(kind: &'static str, s: &Segs) {
+    record_inner(kind, s, true);
+}
+
+fn record_inner(kind: &'static str, s: &Segs, may_print: bool) {
     if !s.armed {
         return;
     }
     let a = arm();
-    if a.per_event {
+    if may_print && a.per_event {
         eprintln!("{}", s.line(kind));
     }
     let due = {
@@ -692,6 +742,28 @@ mod tests {
         let r = c.report("k", "test");
         // 120 000 µs falls in [100000,200000).
         assert!(r.contains("[100000,200000)=1"), "{r}");
+    }
+
+    /// ★★ Every segment name the hooks actually use must classify, and the two that decide
+    /// *"does bare metal fix this?"* must not classify the same way. A shape table that
+    /// defaults everything to one bucket would pass a spelling check and answer nothing.
+    #[test]
+    fn every_hooked_segment_has_a_shape_and_the_two_kinds_are_distinguished() {
+        for n in [
+            "plane", "plane_read", "materialize", "ring_adopt", "err_grants", "fwd_drain",
+            "reap", "ce_try", "ce_terminal", "ringproj", "pt_witness", "pt_decode",
+            "pt_sweep", "pt_vascensus", "bindcensus", "pin_ring", "operand_join",
+            "vas_publish", "err_notifier", "vmm_lock", "vmm_unlock", "core", "core_rm_ipc",
+            "log_ptdecode", "log_pin_ring", "log_operand_join", "log_vas_publish",
+        ] {
+            let sh = segment_shape(n);
+            assert!(matches!(sh, "work" | "host" | "log"), "{n} -> {sh}");
+        }
+        assert_eq!(segment_shape("core"), "host");
+        assert_eq!(segment_shape("pt_sweep"), "work");
+        assert_eq!(segment_shape("log_ptdecode"), "log");
+        // ⊘ And there is deliberately no `trap` shape — see `segment_shape`'s own docs.
+        assert_ne!(segment_shape("plane"), "trap");
     }
 
     #[test]

@@ -10613,11 +10613,39 @@ impl Regs {
     }
 
     /// Serve one register read.
+    ///
+    /// ★★★★★ **w315 — A READ IS A VMEXIT TOO, and this bench makes that expensive.**
+    ///
+    /// `[measured 2026-08-14]` the bench host is itself a KVM guest
+    /// (`systemd-detect-virt` → `kvm`, `hypervisor` in `/proc/cpuinfo`, nested KVM present),
+    /// so our guest runs at **L2** and every MMIO access is a **nested** vmexit
+    /// (L2 → L1 → L0). The C artifact attributes a 2.5× throughput gap to exactly this
+    /// (`C: docs/MILESTONES.md:12-14` — llama.cpp at 49.9 tok/s on bare metal against 20 on
+    /// vast, *"entirely nested-virt vmexit tax"*).
+    ///
+    /// ⇒ **The exit COUNT matters more than the per-exit handler time**, and a doorbell-only
+    /// instrument cannot see it: a guest that *polls* a status register spends its time in
+    /// reads, and reads outnumber writes on every driver path this device has. Bracketing
+    /// only writes would have reported a fast write path beside an unexplained floor —
+    /// outcome (D) arriving disguised as a mystery.
+    ///
+    /// ⊘ The vmexit itself is **outside** this bracket by construction: it has already
+    /// happened when this function is entered. Trap-shaped cost therefore lands in the
+    /// analyser's `UNACCOUNTED` row and is bounded by `exits × per-exit cost`, never by a
+    /// segment here. See `crate::kftime::segment_shape`.
     #[must_use]
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
-        self.plane
+        let mut kft = crate::kftime::Segs::start();
+        let v = self
+            .plane
             .read(clamp_bar(bar), off, clamp_size(size))
-            .value()
+            .value();
+        kft.mark("plane_read");
+        // ⊘ NEVER per-event printed, whatever the arming: reads are the hot path and ~900
+        // doorbell lines is an instrument, while ~10^5 read lines is a second workload.
+        // `record` honours `per_event`, so this kind is filtered at the call site instead.
+        crate::kftime::record_quiet("mmio_read", &kft);
+        v
     }
 
     /// ★★★★★ **LEG A1 — JOIN THE CHANNEL'S OWN RING, BEFORE ITS HOST CHANNEL IS BORN.**

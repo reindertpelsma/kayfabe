@@ -91,9 +91,53 @@ case "$ARM" in
 esac
 export KAYFABE_KFTIME_CENSUS_EVERY=${KAYFABE_KFTIME_CENSUS_EVERY:-200}
 
+# ★★★★★ **THE VMEXIT SAMPLER — and it is the single most valuable number this rung can get.**
+#
+# `[measured 2026-08-14]` **THIS BENCH IS ITSELF A KVM GUEST** (`systemd-detect-virt` → `kvm`,
+# `hypervisor` in `/proc/cpuinfo`, nested KVM present, Xeon W-2133). ⇒ our guest runs at **L2**
+# and every MMIO access takes a NESTED vmexit (L2 → L1 → L0). The C artifact attributes a 2.5×
+# throughput gap to exactly this: llama.cpp at **49.9 tok/s bare metal vs ~20 on a nested vast
+# box**, *"entirely nested-virt vmexit tax, not Mode-2 design"*
+# (`C: /workspace/nvidia-gpu-passthrough/docs/MILESTONES.md:12-14`).
+#
+# ⊘ The vmexit is ALREADY OVER when any `kftime` hook runs, so trap-shaped cost cannot appear
+# as a segment — it appears only as the analyser's `UNACCOUNTED` row. What bounds it is the
+# **exit COUNT**, and that is what this samples. ★ A count settles in one number what a finer
+# segment split cannot settle at all.
+#
+# ⚠ These are the counters of the KVM instance running OUR guest, on THIS box (L1). They are
+# host-wide, so anything else using /dev/kvm here pollutes them — which is why the bench lock
+# is held and `pgrep -x qemu-system-x86` is checked. ⊘ `qemu-system-x86_64` can never match:
+# /proc/PID/comm truncates at 15 chars.
+KVMDIR=/sys/kernel/debug/kvm
+EXITLOG=/workspace/bench/run_${KAYFABE_TAG}_kvmexits.log
+{
+  echo "# w315 vmexit sampler tag=$KAYFABE_TAG start=$(date -Is)"
+  echo "# epoch_ms exits mmio_exits io_exits irq_exits halt_exits qemu_running"
+} > "$EXITLOG"
+(
+  while :; do
+    R=$(pgrep -x qemu-system-x86 >/dev/null && echo 1 || echo 0)
+    E=$(cat $KVMDIR/exits 2>/dev/null || echo NA)
+    M=$(cat $KVMDIR/mmio_exits 2>/dev/null || echo NA)
+    I=$(cat $KVMDIR/io_exits 2>/dev/null || echo NA)
+    Q=$(cat $KVMDIR/irq_exits 2>/dev/null || echo NA)
+    H=$(cat $KVMDIR/halt_exits 2>/dev/null || echo NA)
+    echo "$(date +%s%3N) $E $M $I $Q $H $R"
+    sleep 1
+  done
+) >> "$EXITLOG" 2>&1 &
+SAMPLER=$!
+# ⊘ A trap, not a trailing kill: if the boot dies the sampler must die with it, or the next
+# arm inherits a writer into a log it is about to read. `143` and `124` mean opposite things
+# and neither of them stops a detached loop.
+trap 'kill $SAMPLER 2>/dev/null' EXIT INT TERM
+
 rm -f /workspace/bench/qemu-build/qemu-system-x86_64
 "$REPO/scripts/bench/w290p_run.sh" "${W315_ARM:-drain}"
 BRC=$?
+kill $SAMPLER 2>/dev/null; wait $SAMPLER 2>/dev/null
+echo "# end=$(date -Is)" >> "$EXITLOG"
 
 OUT=/workspace/${KAYFABE_TAG}.log
 Q=/workspace/bench/run_${KAYFABE_TAG}_qemu.log
@@ -146,6 +190,40 @@ if [ "$ARM" = inject ]; then
   echo "      3. the GUEST's launch_ms grew — otherwise the segment is not on the guest's path"
   grep -E "KFTIME-SEG ${KAYFABE_KFTIME_INJECT_SEG} " "$Q" 2>/dev/null | tail -2 | sed 's/^/      /'
 fi
+
+echo ""
+echo "=== ★★★★★ VMEXITS — the bench is NESTED, so a COUNT bounds what a segment cannot"
+echo "    ⊘ This box is itself a KVM guest ⇒ our guest is L2 and every MMIO access is a"
+echo "      NESTED vmexit. The C blames a 2.5x llama.cpp gap on exactly that. The vmexit is"
+echo "      OVER before any kftime hook runs, so it can only show up as UNACCOUNTED."
+if [ -s "$EXITLOG" ]; then
+  echo "    sampler rows = [$(grep -c '^[0-9]' "$EXITLOG")]  (1 Hz; ⊘ host-wide KVM counters)"
+  python3 - "$EXITLOG" <<'PYEXIT' || echo "    ⊘ the sampler reducer refused — UNMEASURED"
+import sys
+rows=[l.split() for l in open(sys.argv[1]) if l[:1].isdigit()]
+rows=[r for r in rows if len(r)>=7 and r[1]!="NA"]
+if not rows:
+    print("    ⊘ NO USABLE SAMPLER ROWS — UNMEASURED, not zero"); raise SystemExit(0)
+t0,t1=int(rows[0][0]),int(rows[-1][0]); w=(t1-t0)/1000.0
+d=lambda k:int(rows[-1][k])-int(rows[0][k])
+print(f"    whole-boot delta: wall={w:.1f}s exits={d(1)} mmio_exits={d(2)} io_exits={d(3)} "
+      f"irq_exits={d(4)} halt_exits={d(5)}")
+if w>0:
+    print(f"    rates: {d(1)/w:.0f} exits/s  {d(2)/w:.0f} mmio_exits/s")
+# ★ The BUSIEST one-second window, which is the closest a 1 Hz sampler gets to "during the
+# launches". ⊘ It is an upper bound on the launch-phase rate, not the launch-phase rate.
+best=max(((int(b[2])-int(a[2]), int(a[0])) for a,b in zip(rows,rows[1:])), default=(0,0))
+print(f"    busiest 1 s window: {best[0]} mmio_exits  ⊘ an UPPER BOUND on the launch-phase")
+print(f"      rate, not the rate: a 1 Hz sampler cannot see inside a 126 ms launch.")
+PYEXIT
+else
+  echo "    ⊘ THE SAMPLER LOG IS EMPTY OR ABSENT — UNMEASURED. An empty artefact reads as"
+  echo "      benign; this line exists so it does not."
+fi
+echo "    our device's own MMIO census (every one of these was a vmexit):"
+for k in mmio_read mmio_doorbell mmio_other; do
+  echo "      $(grep "KFTIME-CENSUS kind=$k " "$Q" 2>/dev/null | tail -1 | grep -oE 'events=[0-9]+ total_ms=[0-9.]+ mean_us=[0-9]+' || echo "kind=$k ⊘ UNRECORDED")"
+done
 
 echo ""
 echo "=== (E) REGRESSION CHECK — the NEW criterion; host_rows is printed, never graded"

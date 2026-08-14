@@ -256,6 +256,34 @@ def main():
             print("         traffic is in the total), or the clocks are not what this assumes.")
             print("         ⊘ REPORT THIS AS OUTCOME (D)/(E) — do not rescale to make it fit.")
 
+    # ---- 3b. the nested-virt bound -------------------------------------------------------
+    print("\n--- 3b. ⊘⊘ THE BENCH IS NESTED — what UNACCOUNTED could be, and what it cannot")
+    print("    `[measured 2026-08-14]` the bench host is ITSELF a KVM guest, so our guest runs")
+    print("    at L2 and every MMIO access is a NESTED vmexit (L2 -> L1 -> L0). The C artifact")
+    print("    attributes a 2.5x llama.cpp gap to exactly this (49.9 tok/s bare metal vs ~20")
+    print("    nested) — `C: docs/MILESTONES.md:12-14`.")
+    print("    ⊘ NO SEGMENT ABOVE CAN CONTAIN IT. The exit is already over when our handler is")
+    print("      entered, so nested-virt tax lives ENTIRELY in UNACCOUNTED. What bounds it is")
+    print("      the exit COUNT x the per-exit cost.")
+    rd = censuses.get("mmio_read")
+    if rd and steady:
+        nl2 = len(steady) + 1
+        our_exits = rd["events"] + (db["events"] if db else 0) + (other["events"] if other else 0)
+        print(f"    our device's MMIO accesses this boot (each ONE vmexit) = {our_exits}")
+        print(f"      reads={rd['events']}  doorbell_writes={db['events'] if db else 0}  "
+              f"other_writes={other['events'] if other else 0}")
+        print(f"    ⇒ per launch (WHOLE-BOOT OVER-ESTIMATE)                = {our_exits / nl2:.0f}")
+        for c_us in (2, 10, 50):
+            print(f"      at {c_us:>3} us per nested exit ⇒ {our_exits / nl2 * c_us / 1000.0:8.3f} ms per launch")
+        print("      ⚠ THE PER-EXIT COST IS NOT MEASURED HERE. Those three rows are an")
+        print("        ARITHMETIC RANGE, not a finding — exactly the kind of reasoning that")
+        print("        produced `251/2 = 125.5` and was wrong. They bound the question; they")
+        print("        do not answer it.")
+    else:
+        print("    ⊘ UNMEASURED: no `mmio_read` census in this log.")
+    print("    ⚠ And our device is not the only source of exits: the KVM sampler log")
+    print("      (`run_<tag>_kvmexits.log`) counts ALL of them, host-wide.")
+
     # ---- 4. the suspects -----------------------------------------------------------------
     print("\n--- 4. ⚠ SUSPECTS, NOT CORROBORATIONS")
     print("    A period that matches the measured quantity is a suspect. w311 nearly shipped")
