@@ -295,6 +295,20 @@ per pin is:
 - for a **run** pin (population ~0 on today's default arm): one `unmap` + one `free` + one
   `munmap` that were not happening at all.
 
+> ### ★★★★★ ANSWERED 2026-08-14 (w317) — **THE BUDGETED DRAIN NAMED BELOW IS BUILT.**
+> `docs/design/budgeted_bql_disposal.md`, branch `w317-budgeted-drain` off master `73dc2246`.
+> The shape w314 asked for, in one line: **`Regs::write` drains at most 40 ms of staged
+> disposal per trap (1 % of `scrubberDestruct`'s 4 000 ms) and `Spine::reap_retired` holds a
+> proc back while any drainable remainder exists**, so `Proc::drop`'s unbounded burst is never
+> reached with a full queue. It budgets **the whole disposal**, master's 2.75 s included, as
+> w314 required — not this rung's 637 ms share.
+> ★ Termination is a property, not a hope: a retired proc's queue is **closed** (it is out of
+> every routing map) and **strictly decreasing** (a failed disposal's residue is counted and
+> dropped, never re-staged), so it empties in `ceil(len / chunk)` turns of an edge that recurs
+> on every guest MMIO write.
+> ⊘ `SharedDevice::reap_retired` — every caller outside `Regs::write` — is **unchanged**
+> (`ReapPolicy::Unbudgeted`), which is why nothing in §7's confirmation is invalidated.
+>
 > ### ⊘⊘⊘ CORRECTED 2026-08-14 (w314) — **BOTH SENTENCES BELOW ARE WRONG, AND THE SECOND
 > ### ONE'S OWN WITNESS CANNOT SEE THE THING IT WAS CHOSEN TO SEE.**
 > `[measured 2026-08-14, vh, real GA106, `max_reap_us` on both trees, n=4 each]`
@@ -325,7 +339,10 @@ well below that.
 ⊘ **This exists at master, without this rung.** It is named here because it is exactly the kind
 of thing a teardown change gets blamed for. The fix is a **budgeted** drain (dispose at most N
 per register write, leave the rest staged), which needs `Proc::take_pending_release` to accept a
-budget — a separate rung. ★ And it is the reason bench criterion (D) below watches for a guest
+budget — a separate rung. ★★★★★ **BUILT at w317** — `docs/design/budgeted_bql_disposal.md`; and
+⊘ the guess about *which* function needed the budget was wrong: `take_pending_release` was never
+the seam. The budget went on **`Orphans` itself** (`split_off_budget`), because the release order
+has to survive the batch boundaries and only the value knows its own kinds. ★ And it is the reason bench criterion (D) below watches for a guest
 soft lockup rather than assuming there is none.
 
 ---

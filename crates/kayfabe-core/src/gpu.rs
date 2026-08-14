@@ -1809,6 +1809,70 @@ impl Proc {
         self.pending_release.values().map(Orphans::len).sum()
     }
 
+    /// ★★★★★ **w317 — is there staged disposal work here that a budgeted drain can
+    /// actually issue?**
+    ///
+    /// Deliberately **not** `!pending_release.is_empty()`. An entry whose target GPU has no
+    /// isolate is unreachable for *any* drain — [`Proc::drop`] skips it by the same test
+    /// (`isolates.get_mut(&gpu)` ⇒ `continue`), and its disposition of record is §7.0
+    /// namespace death. Gating the reap on the wider predicate would defer such a proc at
+    /// **every** quiesce point forever, turning a bounded drain into a permanent leak — the
+    /// exact "defers indefinitely is a leak with extra steps" failure. The two predicates
+    /// must agree, and this is the one both sides use.
+    #[must_use]
+    pub fn has_drainable_releases(&self) -> bool {
+        self.pending_release
+            .iter()
+            .any(|(gpu, o)| !o.is_empty() && self.isolates.contains_key(gpu))
+    }
+
+    /// ★★★★★ **w317 — the budgeted twin of [`Proc::checkout_with_pending_release`]:** check
+    /// a worker out of one target's isolate and take **at most `budget`** of that target's
+    /// staged disposals, leaving the remainder queued.
+    ///
+    /// Same indivisibility, same reason: the idle test has to be read *before* this caller's
+    /// own checkout makes it false, so both happen inside the one locked phase. What differs
+    /// is only that the queue is **split** rather than taken whole
+    /// ([`Orphans::split_off_budget`], which preserves the release order across batches).
+    ///
+    /// Returns `None` when there is nothing drainable, when the chosen isolate is not
+    /// quiesced (draining under a live verb is the use-after-free
+    /// [`Proc::checkout_with_pending_release`]'s idle test exists to prevent — the budget
+    /// does not relax it), or when its pool has no worker free. All three are **skips**, and
+    /// the queue is simply left where it is.
+    ///
+    /// ⚠ **One target per call, by construction.** A second batch would need a second worker
+    /// of the same isolate; the caller loops instead, and each loop turn re-reads the idle
+    /// test rather than assuming it still holds.
+    pub fn checkout_retired_release_budgeted(
+        &mut self,
+        budget: usize,
+    ) -> Option<(GpuId, Worker, Orphans)> {
+        if budget == 0 {
+            return None;
+        }
+        let Proc {
+            isolates,
+            pending_release,
+            ..
+        } = self;
+        let gpu = *pending_release
+            .iter()
+            .find(|(gpu, o)| !o.is_empty() && isolates.contains_key(gpu))
+            .map(|(gpu, _)| gpu)?;
+        let iso = isolates.get_mut(&gpu)?;
+        if !iso.is_quiesced() {
+            return None;
+        }
+        let worker = iso.checkout()?;
+        let q = pending_release.get_mut(&gpu)?;
+        let batch = q.split_off_budget(budget);
+        if q.is_empty() {
+            pending_release.remove(&gpu);
+        }
+        Some((gpu, worker, batch))
+    }
+
     /// This proc's isolate for GPU `gpu`, if materialized. Address/exec ops route
     /// through the isolate of their **op's target GPU** (MG-5).
     #[must_use]
@@ -2062,7 +2126,60 @@ impl Drop for Proc {
 pub struct Reclaimed {
     procs: Vec<Proc>,
     deferred: usize,
+    deferred_for_drain: usize,
     orphaned: Vec<(GpuId, core::ops::Range<u64>)>,
+}
+
+/// ★★★★★ **w317 — WHAT A REAP DOES WITH A PROC WHOSE STAGED DISPOSAL QUEUE IS NOT EMPTY.**
+///
+/// # ⊘ An enum and not a `bool`, deliberately
+///
+/// `same_flag_opposite_polarity` is a paid-for lesson in this tree, and a bare
+/// `reap_retired(true)` is exactly its shape: the two arms below are **opposite dispositions
+/// of real host objects**, and nothing at a call site would say which one `true` meant. The
+/// names carry the meaning to the call site instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReapPolicy {
+    /// **Reap every quiesced proc**, and let [`Proc`]'s `Drop` issue whatever is still staged
+    /// — *all of it*, in one blocking burst, on the calling thread.
+    ///
+    /// This is what [`Spine::reap_retired`] has always done and what every caller outside the
+    /// QEMU register-write path still wants: a test, a `Gpu` teardown or the executor's
+    /// quiesce point has no guest to stall, so clause (b) of `INLINE-SAFE` does not bind and
+    /// the simplest disposal is the right one.
+    Unbudgeted,
+    /// **Hold a proc back while it still has drainable staged work**
+    /// ([`Proc::has_drainable_releases`]), so the burst above can never happen.
+    ///
+    /// For the one caller where clause (b) *does* bind: `Regs::write` runs with the QEMU BQL
+    /// held, so a blocking disposal there halts **every vCPU and QEMU's main loop**, and
+    /// w314 measured that burst at **2.65–3.70 s** against `scrubberDestruct`'s 4 000 ms.
+    /// Pair this with `SharedDevice::drain_retired_budgeted`, which is what actually empties
+    /// the queue a bounded slice per trap; on its own this arm only defers.
+    HoldUndrained,
+}
+
+/// ★★★★★ **w317 — ONE TURN of the budgeted retired drain**, planned under the device write
+/// lock and executed with none held (`Spine::plan_retired_drain`).
+///
+/// It carries a checked-out [`Worker`] and an [`Orphans`] batch, which is why it is
+/// `#[must_use]` twice over: dropping it on the floor both leaks the host objects the batch
+/// names *and* wedges the isolate's pool slot, so the proc never quiesces and is deferred at
+/// every quiesce point after — the permanent-defer failure the budget exists to avoid.
+#[must_use = "a RetiredDrain holds a checked-out Worker and an undisposed Orphans batch — \
+              dispose of `orphans` on `worker`, then return `worker` via \
+              `Spine::checkin_retired`"]
+pub struct RetiredDrain {
+    /// The retired proc this batch came from.
+    pub pid: ProcId,
+    /// The target whose isolate namespace the handles belong to (MG-5, boundary 2).
+    pub gpu: GpuId,
+    /// A worker of `gpu`'s isolate, checked out as part of the same locked phase that read
+    /// the idle test.
+    pub worker: Worker,
+    /// At most `budget` disposals, in the release order [`Orphans::split_off_budget`]
+    /// preserves across batches.
+    pub orphans: Orphans,
 }
 
 impl Reclaimed {
@@ -2087,6 +2204,22 @@ impl Reclaimed {
         self.deferred
     }
 
+    /// ★★★★★ **w317 — of [`Reclaimed::deferred`], how many were held back because their
+    /// staged disposal queue is not empty yet**, rather than because a verb is in flight.
+    ///
+    /// The two are opposite facts wearing the same word. *Not quiesced* means something is
+    /// still using the proc's host objects and reaping would be a use-after-free; *not
+    /// drained* means the proc is idle and we are deliberately spending its teardown over
+    /// several traps instead of one. Only the second is expected to be non-zero on a healthy
+    /// teardown, and only the second going **monotonically up** is the "deferred work is
+    /// piling up" failure this rung pre-registered as outcome (B). A single `deferred` count
+    /// cannot tell them apart, and `a_count_cannot_see_a_substitution` is what happens when a
+    /// caller tries.
+    #[must_use]
+    pub fn deferred_for_drain(&self) -> usize {
+        self.deferred_for_drain
+    }
+
     /// ★ G7 (§12.19) — GPA ranges the reap **could not route home**: their target no
     /// longer exists, or its window refused them as foreign. Empty on every path the
     /// core can currently reach, and that is the point — this used to be an
@@ -2104,6 +2237,7 @@ impl core::fmt::Debug for Reclaimed {
         f.debug_struct("Reclaimed")
             .field("reaped", &self.procs.len())
             .field("deferred", &self.deferred)
+            .field("deferred_for_drain", &self.deferred_for_drain)
             .field("orphaned", &self.orphaned)
             .finish()
     }
@@ -4594,13 +4728,49 @@ impl Spine {
     /// Returns the reaped procs plus a count of those deferred for not being
     /// quiesced.
     pub fn reap_retired(&mut self) -> Reclaimed {
+        self.reap_retired_with(ReapPolicy::Unbudgeted)
+    }
+
+    /// ★★★★★ **w317 — [`Spine::reap_retired`], with the disposal policy stated at the call
+    /// site instead of assumed.**
+    ///
+    /// See [`ReapPolicy`] for what the two arms mean and why this is an enum rather than a
+    /// `bool`. `reap_retired()` is the [`ReapPolicy::Unbudgeted`] arm and is unchanged, so
+    /// every existing caller keeps exactly the behaviour it was written against.
+    pub fn reap_retired_with(&mut self, policy: ReapPolicy) -> Reclaimed {
         let mut procs = Vec::new();
         let mut deferred = Vec::new();
+        let mut deferred_for_drain = 0usize;
         let mut orphaned: Vec<(GpuId, core::ops::Range<u64>)> = Vec::new();
         // Order-preserving partition: `retired` is a deterministic sequence and a
         // deferred proc keeps its place in it (decision #27).
         for mut p in core::mem::take(&mut self.retired) {
             if !p.is_quiesced() {
+                deferred.push(p);
+                continue;
+            }
+            // ★★★★★ **w317 — THE GATE THAT MAKES THE BUDGET BIND.**
+            //
+            // Without this line the budgeted drain buys nothing: it would take its 40 ms
+            // slice, the proc would then be quiesced again (the worker went back), the reap
+            // would take it, and [`Proc::drop`] would issue **the whole remainder** in one
+            // unbounded blocking burst inside `Regs::write` — the 2.65–3.70 s w314 measured.
+            // Deferring instead keeps the proc, its isolates and its queue exactly where
+            // they are until the drain has emptied it, at which point this predicate goes
+            // false and the drop below is a no-op (`Proc::drop` returns early on an empty
+            // queue) plus the isolate `waitpid` it always was.
+            //
+            // ⚠ **Termination, and it is a property rather than a hope.** A *retired* proc is
+            // out of every routing map and refuses every new op, so nothing the guest does
+            // can add to its queue; the only remaining writer is §7.5's residue staging for
+            // verbs that were already in flight, which is finite. The queue is therefore
+            // **closed and monotonically decreasing** — each drain turn removes
+            // `min(budget, len)` and never puts anything back — so it empties in at most
+            // `ceil(len / budget)` turns of a recurring edge and this defer cannot be
+            // permanent. `Proc::has_drainable_releases` is deliberately the *narrow*
+            // predicate for the other half of that argument: see its docs.
+            if policy == ReapPolicy::HoldUndrained && p.has_drainable_releases() {
+                deferred_for_drain += 1;
                 deferred.push(p);
                 continue;
             }
@@ -4631,8 +4801,46 @@ impl Spine {
         Reclaimed {
             procs,
             deferred: deferred_count,
+            deferred_for_drain,
             orphaned,
         }
+    }
+
+    /// ★★★★★ **w317 — PLAN ONE BUDGETED DRAIN TURN over the retired set.**
+    ///
+    /// The locked half of the bounded disposal: pick the first retired proc with drainable
+    /// staged work, check a worker out of that target's isolate, and split at most `budget`
+    /// disposals off its queue. Pure state — **no verb is issued here** — so it is legal
+    /// under the device write lock, exactly like the staging it drains.
+    ///
+    /// The caller runs [`Orphans::release_plan`] on the returned worker **with zero ranked
+    /// locks held** (R1, asserted by `Worker::execute`) and returns the worker afterwards;
+    /// [`Spine::checkin_retired`] is the path for a proc that is on this list, and it already
+    /// exists for exactly this shape.
+    ///
+    /// ★ **Deliberately ONE turn, not a loop.** The budget that matters is *wall-clock time
+    /// with the BQL held*, and this crate has no clock (§8.3). Splitting the loop out to the
+    /// caller is what lets the shell spend a real time budget while this stays a pure
+    /// function of state — and it is what makes the budget testable offline with a counting
+    /// closure instead of a sleep.
+    #[must_use = "the returned batch names host objects and holds a checked-out Worker — \
+                  dispose of the Orphans and return the Worker, or both leak"]
+    pub fn plan_retired_drain(&mut self, budget: usize) -> Option<RetiredDrain> {
+        if budget == 0 {
+            return None;
+        }
+        for p in &mut self.retired {
+            let pid = p.id;
+            if let Some((gpu, worker, orphans)) = p.checkout_retired_release_budgeted(budget) {
+                return Some(RetiredDrain {
+                    pid,
+                    gpu,
+                    worker,
+                    orphans,
+                });
+            }
+        }
+        None
     }
 
     /// ★ Return a checked-out [`Worker`] to a proc that has **already left the live

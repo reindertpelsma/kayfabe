@@ -121,6 +121,38 @@ predicate has to be checkable rather than remembered.**
 
 ## 4. What is open against this model right now
 
+> ### ★★★★★ SECOND REAL TEST, `[w317, 2026-08-14]` — **CLAUSE (b) WAS BEING VIOLATED IN
+> ### PRODUCTION, BY A TIER-2 SITE NOBODY HAD CLASSIFIED.** Full working:
+> `docs/design/budgeted_bql_disposal.md`.
+>
+> §3 predicted the transition — *"the moment kernel-CE work is forwarded to a REAL engine,
+> clause (b) fails"* — and got the **site** wrong. The site that actually failed is
+> **teardown**: w303's armed reap runs an unbounded host-object disposal inside `Regs::write`,
+> and w314 measured it at **2.65–2.92 s on clean master** and **up to 3.70 s** with w310's pin
+> release — **92.6 % of the 4 000 ms** bound §1 names. ⊘ Not a forwarded engine, not a
+> completion, not a wait: **a loop over a queue that grew with the workload.**
+>
+> **1. ★★★ THE FAILING CLAUSE-(b) SITE WAS FOUND BY MEASURING, NOT BY THE PREDICATE.** §3's own
+> warning was right and understated: *"the expiry is silent … that is why the predicate has to
+> be checkable rather than remembered."* Nothing in §6's list would have flagged this one,
+> because its cost is not visible at the call site at all — `Proc::drop` names no verb; the
+> verbs are in a `Vec` filled by a different subsystem at a different time. ⇒ **an effect-typed
+> or call-graph instrument for (a)/(b) must reach through DATA, not only through calls.**
+>
+> **2. ★★ AND CLAUSE (b) IS SATISFIABLE INLINE, FOR THIS SITE, WITHOUT THE OFF-BQL SITE §4
+> ASKS FOR.** The work is **guest-independent and interruptible**: no ordering constraint ties
+> disposal *n* to the same trap as disposal *n+1*, so the queue can be spent a bounded slice per
+> trap. ⇒ this is a **tier-2 site that stays tier 2** by being budgeted, rather than a tier-3
+> conversion — and §5's warning applies exactly: converting it to tier 3 would have bought an
+> ordering problem and a redelivery problem for nothing.
+> ⚠ **The generalisation is narrow.** It works here because the work is *ours* and divisible.
+> A forwarded `STOP_CHANNEL` is neither: it is one host call with one latency, and no budget
+> can split it. **For that, the off-BQL execution site is still the only answer.**
+>
+> **3. ★ §6's item 2 gets its first entries.** `Regs::write`'s teardown path is now classified:
+> tier 2, clause-(b) bound **40 ms = 1 % of `scrubberDestruct`'s 4 000 ms**, enforced by
+> `RETIRED_DRAIN_BUDGET_US` and instrumented by `DRAIN-TIMING` on every boot.
+
 > ### ★★★★★ FIRST REAL TEST, `[w306, 2026-08-14]` — **THE CANCELLATION PLANE, and it lands on
 > ### (b), not on tier 3.** Full working: `docs/design/cancellation_plane.md`.
 >

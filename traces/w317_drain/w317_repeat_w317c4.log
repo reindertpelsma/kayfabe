@@ -1,0 +1,53 @@
+=== W317 REPEAT START tree=/workspace/kf-w317 prefix=w317c4 n=4 2026-08-14T16:38:52+00:00
+=== HEAD=86dd30b7fa67db5b3e81386061d72b256496cb6c
+=== DIRT=[]
+--- boot 1/4 tag=w317c41 2026-08-14T16:38:57+00:00
+    BOOT 1: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228] REAP_lines=[2]
+            REAP_last=[REAP reaped=1 still_retired=0 deferred_for_drain=0 REAP reaped=1 still_retired=0 deferred_for_drain=0 ]
+            ★ max_reap_us=[47026]   ★ max_drain_us=[48599]
+            DRAIN-TIMING=[DRAIN-TIMING max_drain_us=48599 disposed=132 residue=0 turns=33 budget_hit=true]
+            DRAIN-DEFER lines=[2] traj=[DRAIN-DEFER deferred_for_drain=1 still_retired=1 DRAIN-DEFER deferred_for_drain=0 still_retired=0 ]
+            guest_stall_lines=[0] NVRM_lines=[31] host_rows_max=[18295]
+            E:     (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            E:     (E2) drain ran: ★DRAINED rows=229  Σpinned=18228  max_single=13313   ✔ PASS
+            E:     (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+            E: === (E) VERDICT = 0 (0 pass · 1 REGRESSION · 2 unmeasured)
+--- boot 2/4 tag=w317c42 2026-08-14T16:41:25+00:00
+    BOOT 2: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228] REAP_lines=[2]
+            REAP_last=[REAP reaped=1 still_retired=0 deferred_for_drain=0 REAP reaped=1 still_retired=0 deferred_for_drain=0 ]
+            ★ max_reap_us=[52335]   ★ max_drain_us=[46396]
+            DRAIN-TIMING=[DRAIN-TIMING max_drain_us=46396 disposed=48 residue=0 turns=12 budget_hit=true]
+            DRAIN-DEFER lines=[2] traj=[DRAIN-DEFER deferred_for_drain=1 still_retired=1 DRAIN-DEFER deferred_for_drain=0 still_retired=0 ]
+            guest_stall_lines=[0] NVRM_lines=[31] host_rows_max=[18295]
+            E:     (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            E:     (E2) drain ran: ★DRAINED rows=229  Σpinned=18228  max_single=13313   ✔ PASS
+            E:     (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+            E: === (E) VERDICT = 0 (0 pass · 1 REGRESSION · 2 unmeasured)
+--- boot 3/4 tag=w317c43 2026-08-14T16:43:42+00:00
+    BOOT 3: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228] REAP_lines=[2]
+            REAP_last=[REAP reaped=1 still_retired=0 deferred_for_drain=0 REAP reaped=1 still_retired=0 deferred_for_drain=0 ]
+            ★ max_reap_us=[52960]   ★ max_drain_us=[48287]
+            DRAIN-TIMING=[DRAIN-TIMING max_drain_us=48287 disposed=16 residue=0 turns=4 budget_hit=true]
+            DRAIN-DEFER lines=[2] traj=[DRAIN-DEFER deferred_for_drain=1 still_retired=1 DRAIN-DEFER deferred_for_drain=0 still_retired=0 ]
+            guest_stall_lines=[0] NVRM_lines=[31] host_rows_max=[18295]
+            E:     (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            E:     (E2) drain ran: ★DRAINED rows=229  Σpinned=18228  max_single=13014   ✔ PASS
+            E:     (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+            E: === (E) VERDICT = 0 (0 pass · 1 REGRESSION · 2 unmeasured)
+--- boot 4/4 tag=w317c44 2026-08-14T16:45:58+00:00
+    BOOT 4: [CUP3_VAL=43] [CUP3_RC=0] Xid=[0] 
+            [PIN-RELEASE released=18228 refused_no_host_vas=0 rows_deduped=18228] REAP_lines=[2]
+            REAP_last=[REAP reaped=1 still_retired=0 deferred_for_drain=0 REAP reaped=1 still_retired=0 deferred_for_drain=0 ]
+            ★ max_reap_us=[53544]   ★ max_drain_us=[54838]
+            DRAIN-TIMING=[DRAIN-TIMING max_drain_us=54838 disposed=276 residue=0 turns=69 budget_hit=true]
+            DRAIN-DEFER lines=[2] traj=[DRAIN-DEFER deferred_for_drain=1 still_retired=1 DRAIN-DEFER deferred_for_drain=0 still_retired=0 ]
+            guest_stall_lines=[0] NVRM_lines=[31] host_rows_max=[18295]
+            E:     (E1) Xid = 0                          ✔ PASS   (delta file exists, 0 bytes)
+            E:     (E2) drain ran: ★DRAINED rows=229  Σpinned=18228  max_single=12462   ✔ PASS
+            E:     (E3) pass invariants: NOT ARMABLE=0  host_isolates=NO=0  sum_ok=false=0   ✔ PASS
+            E: === (E) VERDICT = 0 (0 pass · 1 REGRESSION · 2 unmeasured)
+=== W317 REPEAT EXIT status=0 2026-08-14T16:48:13+00:00
+=== W317 REPEAT TERMINATOR w317c4 rc=0 2026-08-14T16:48:13+00:00
