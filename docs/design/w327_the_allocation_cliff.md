@@ -131,8 +131,8 @@ is readable; the nine-row one this started from is not.
 `W327_LAST_OK_MIB=28  W327_FIRST_FAIL_MIB=31`, with
 `BW_FILL_FAIL mib=31 at_element=2097152 … rc=0/719` and **zero Xid on both sides**, every time.
 ⊘ Stated because it is the failure mode this campaign has been burned by twice (w319's
-intermittent `FAULT_PDE`): a state-dependent death with no Xid and no named refusal is exactly
-the shape that turns out to be a rate. **Here it is not.** With `w327u2` that is four boots of
+intermittent `FAULT_PDE`): a state-dependent death with no Xid is exactly the shape that turns
+out to be a rate. **Here it is not.** With `w327u2` that is four boots of
 the same two-row list, all failing identically.
 
 ### 2.3 ★★★ THE FAILURE OFFSET IS AN ADDRESS, NOT AN OPERATION COUNT — three resolutions agree
