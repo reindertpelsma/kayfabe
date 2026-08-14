@@ -4577,10 +4577,21 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // real CE work blocked behind a false refusal — and the remainder are refused by a
         // name that is true. ⊘ The field's own doc at [`SharedDoorbell`] is correct; only
         // this sentence was stale, and being first is what made it costly.
+        // ★★★★★ w315 — THE SEGMENT BRACKET. Opened at the top of the port so every leg
+        // below is a closed interval on ONE clock, on this vCPU thread, inside the MMIO trap
+        // the guest is halted for. See `crate::kftime` for what this may and may not say.
+        let mut kft = crate::kftime::Segs::start();
         let mut seen: Option<kayfabe_rt::device::CeChannelFacts> = None;
         if let Some(report) = self.try_ce_submission(token, &mut seen) {
+            // ⊘ The CE arm returns TERMINALLY, and on the shipping configuration it claims
+            // every routed doorbell. A bracket that only closed on the fall-through would
+            // therefore measure the path the guest does NOT take, and report `events=0` while
+            // looking armed — `a_census_zero_needs_a_known_positive`, exactly.
+            kft.mark("ce_terminal");
+            crate::kftime::record("doorbell_ce", &mut kft);
             return report;
         }
+        kft.mark("ce_try");
         // ★★★★ **§16.71 — THE OTHER PROJECTION OF THE RING, printed on the doorbell that
         // is about to be forwarded**, so the two resolvers' answers appear on the same
         // boot, for the same token, with the identity each one carries.
@@ -4690,6 +4701,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // that ran and found nothing and a populate pass that did not run are different
         // facts, and only one of them is about the guest.
         //
+        kft.mark("ringproj");
         // ★★★★★ **§16.82 — and BEFORE it, the transport G1 does not have.** The order is the
         // same argument one comment up: a page witnessed after the pass that would have
         // decoded it is a page that binds a doorbell too late. See
@@ -4703,16 +4715,23 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // - **before** `forward_ring`, the pins and `SharedDevice::doorbell` below, because a
         //   mapping published after the ring has been rung is a mapping published after the
         //   engine has already faulted for it.
-        eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{}{}{}{}",
-            self.witness_executor_fb_pages(),
-            self.decode_cpu_pt_writes(),
-            // ★ w313 — the sweep is a SEPARATE clause from the census, and it is silent when
-            //   disarmed. The census below is unconditional (w304's fix, kept), so a reader can
-            //   tell "the census ran and found nothing" from "the sweep was not armed".
-            self.sweep_cpu_pt_tables(),
-            self.vas_census()
-        );
+        // ★★★ w315 — the four clauses are evaluated into locals and marked SEPARATELY from
+        // the `eprintln!` that consumes them. The print happens on the vCPU under the BQL and
+        // is the instrument's own cost as much as the plane's; folding it into `ptdecode`
+        // would charge the guest's latency to a page-table pass that may not have run.
+        let pt_witness = self.witness_executor_fb_pages();
+        kft.mark("pt_witness");
+        let pt_decode = self.decode_cpu_pt_writes();
+        kft.mark("pt_decode");
+        // ★ w313 — the sweep is a SEPARATE clause from the census, and it is silent when
+        //   disarmed. The census below is unconditional (w304's fix, kept), so a reader can
+        //   tell "the census ran and found nothing" from "the sweep was not armed".
+        let pt_sweep = self.sweep_cpu_pt_tables();
+        kft.mark("pt_sweep");
+        let pt_vascensus = self.vas_census();
+        kft.mark("pt_vascensus");
+        eprintln!("kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus}");
+        kft.mark("log_ptdecode");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
         // to bind it, on the same doorbell and joined by `proc`/`pdb`/`va`.**
         //
@@ -4746,6 +4765,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
                 );
             }
         }
+        kft.mark("bindcensus");
         // ★★★★★ **§5.8 — THE FIRST GUEST BYTE.** Ordered HERE, and the order is the whole
         // argument: the pin resolves the ring's VA through the address table, and the
         // table only carries that binding because the populate pass one line up has just
@@ -4755,7 +4775,11 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // ⊘ Silent — not merely quiet — when the crossing is not armed. See
         // `SharedDoorbell::guest_ram_backing`.
         if let Some(line) = self.pin_ring_guest_ram(token, seen.as_ref()) {
+            kft.mark("pin_ring");
             eprintln!("kayfabe: {line}");
+            kft.mark("log_pin_ring");
+        } else {
+            kft.mark("pin_ring");
         }
         // ★★★★★ **LEG 7 (w282) — AND IT IS HERE FOR LEG 4's REASON, THREE PLANES ON.**
         //
@@ -4778,8 +4802,13 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // order makes the two lines readable as a partition rather than as a race.
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::operand_join`.
+        crate::kftime::maybe_inject("operand_join");
         if let Some(line) = self.join_operand_fb_leaves(token, seen.as_ref()) {
+            kft.mark("operand_join");
             eprintln!("kayfabe: {line}");
+            kft.mark("log_operand_join");
+        } else {
+            kft.mark("operand_join");
         }
         // ★★★★★ **LEG 8 — w290's publication**, and its position is the C's own invariant:
         // *"a mapping is always backed before the engine that uses it runs."* It is ordered
@@ -4793,8 +4822,13 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm, so the control's log stays
         // byte-comparable.
+        crate::kftime::maybe_inject("vas_publish");
         if let Some(line) = self.publish_vas_rows(token, seen.as_ref()) {
+            kft.mark("vas_publish");
             eprintln!("kayfabe: {line}");
+            kft.mark("log_vas_publish");
+        } else {
+            kft.mark("vas_publish");
         }
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
         // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
@@ -4846,12 +4880,33 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
             seen.as_ref().and_then(|f| f.error_notifier),
             &format!("doorbell token={token:#010x}"),
         );
+        kft.mark("err_notifier");
         let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        kft.mark("vmm_lock");
         let port = held.as_mut().map(|v| v as &mut dyn kayfabe_vmm::Vmm);
+        // ★★★★★ w315 — THE FORWARD. Everything under here is the core's plan/execute split
+        // and, on the forwarding arm, a BLOCKING IPC round trip to the isolate child. The
+        // sub-total of that IPC is taken separately below, by a counter the child's caller
+        // owns, so `core` minus `core_rm_ipc` is the time spent NOT in the host RM.
+        crate::kftime::maybe_inject("core");
+        #[cfg(feature = "host-isolates")]
+        let ipc0 = kayfabe_isolate_host::isolate::ipc_totals();
         let rung = self
             .device
             .doorbell(port, DOORBELL_TARGET_GPU, token, &[], err_notifier);
+        kft.mark("core");
+        #[cfg(feature = "host-isolates")]
+        {
+            let ipc1 = kayfabe_isolate_host::isolate::ipc_totals();
+            // ⊘ A DERIVED row, not a bracket: it is charged inside `core` and is printed
+            // beside it so the two can be subtracted. It must never be added to the
+            // marked sum, or `core` would be counted twice — which is why it goes on the
+            // line as its own field rather than through `mark`.
+            kft.note_nested("core_rm_ipc", ipc1.1.saturating_sub(ipc0.1), ipc1.0.saturating_sub(ipc0.0));
+        }
         drop(held);
+        kft.mark("vmm_unlock");
+        crate::kftime::record("doorbell_fwd", &mut kft);
         match rung {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
                 token,
@@ -10562,6 +10617,14 @@ impl Regs {
     /// guest pointer into a machine that has released its slots. Refusing is the honest
     /// answer at that point and it is the one this restores.
     pub fn detach_ram(&self) {
+        // ★★★★★ w315 — THE FINAL CENSUS, printed BEFORE anything is torn down.
+        //
+        // ⊘ It is not the only census: `kftime::record` prints a running one every
+        // `KAYFABE_KFTIME_CENSUS_EVERY` events, so a boot that is killed (143), whose log is
+        // truncated, or that never reaches teardown still carries a complete breakdown in
+        // whatever prefix survives. `143` and a truncated artefact both READ AS PRESENT —
+        // this line existing is not evidence that it ran.
+        crate::kftime::report_all("detach_ram");
         // ★★★ FIRST, and the order is load-bearing: the observer thread reads guest RAM
         // through its own handle, and the hypervisor releases the regions behind that
         // handle once this returns. Stop and JOIN before anything else is torn down.
@@ -10574,11 +10637,40 @@ impl Regs {
     }
 
     /// Serve one register read.
+    ///
+    /// ★★★★★ **w315 — A READ IS A VMEXIT TOO, and this bench makes that expensive.**
+    ///
+    /// `[measured 2026-08-14]` the bench host is itself a KVM guest
+    /// (`systemd-detect-virt` → `kvm`, `hypervisor` in `/proc/cpuinfo`, nested KVM present),
+    /// so our guest runs at **L2** and every MMIO access is a **nested** vmexit
+    /// (L2 → L1 → L0). The C artifact attributes a 2.5× throughput gap to exactly this
+    /// (`C: docs/MILESTONES.md:12-14` — llama.cpp at 49.9 tok/s on bare metal against 20 on
+    /// vast, *"entirely nested-virt vmexit tax"*).
+    ///
+    /// ⇒ **The exit COUNT matters more than the per-exit handler time**, and a doorbell-only
+    /// instrument cannot see it: a guest that *polls* a status register spends its time in
+    /// reads, and reads outnumber writes on every driver path this device has. Bracketing
+    /// only writes would have reported a fast write path beside an unexplained floor —
+    /// outcome (D) arriving disguised as a mystery.
+    ///
+    /// ⊘ The vmexit itself is **outside** this bracket by construction: it has already
+    /// happened when this function is entered. Trap-shaped cost therefore lands in the
+    /// analyser's `UNACCOUNTED` row and is bounded by `exits × per-exit cost`, never by a
+    /// segment here. See `crate::kftime::segment_shape`.
     #[must_use]
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
-        self.plane
+        let mut kft = crate::kftime::Segs::start();
+        let v = self
+            .plane
             .read(clamp_bar(bar), off, clamp_size(size))
-            .value()
+            .value();
+        kft.mark("plane_read");
+        crate::kftime::record_hot("mmio_read", bar, off, kft.total_us());
+        // ⊘ NEVER per-event printed, whatever the arming: reads are the hot path and ~900
+        // doorbell lines is an instrument, while ~10^5 read lines is a second workload.
+        // `record` honours `per_event`, so this kind is filtered at the call site instead.
+        crate::kftime::record_quiet("mmio_read", &mut kft);
+        v
     }
 
     /// ★★★★★ **LEG A1 — JOIN THE CHANNEL'S OWN RING, BEFORE ITS HOST CHANNEL IS BORN.**
@@ -10871,7 +10963,19 @@ impl Regs {
     /// every other structure in this crate that holds an address.
     #[must_use]
     pub fn write(&self, bar: u32, off: u64, size: u32, val: u64) -> kayfabe_device::WriteOutcome {
+        // ★★★★★ **w315 — THE OUTER BRACKET, and it is the one that matches what the GUEST
+        // measures.** A guest MMIO write is a vmexit: the vCPU is halted for the whole of
+        // this function, so `total_us` here is time the guest cannot be doing anything else.
+        // ⇒ this is the only host-side number that can be compared to a guest-side latency
+        // WITHOUT converting between the two clocks — the containment is structural.
+        //
+        // ⊘ It brackets EVERY trapped register write, not only doorbells. w311's floor is
+        // per-SUBMIT and nobody has shown the submit is the doorbell; if the ~100 ms lives in
+        // a GSP RPC poke or some other register, a doorbell-only instrument would report a
+        // fast doorbell and a mystery, which is the (D) outcome arriving disguised as (C).
+        let mut kft = crate::kftime::Segs::start();
         let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
+        kft.mark("plane");
         // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
         //
         // `RegPlane::write` has returned, so the plane's rank-0 guard is a dropped local and
@@ -10894,6 +10998,7 @@ impl Regs {
         // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
         // is refused **by name, here**, rather than by a spawn six crates away.
         self.device.materialize_pending();
+        kft.mark("materialize");
         // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
         //
         // The spawn was one of *two* blocking calls the plane's rank-0 mutex was held
@@ -10921,12 +11026,15 @@ impl Regs {
         // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
         // nothing to name. ⊘ Ordering, not preference.
         self.adopt_pending_channel_rings();
+        kft.mark("ring_adopt");
         // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
         // reason one field over: the drain births the host channel, and `hObjectError` is a
         // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
         // preference.
         let err_notifier_grants = self.pending_err_notifier_grants();
+        kft.mark("err_grants");
         report_engine_forward_drain(&self.device, &err_notifier_grants);
+        kft.mark("fwd_drain");
         // ★★★★★ **w303 — THE REAP, AND THIS LINE IS THE WHOLE OF FIX A.**
         //
         // `docs/audits/w301_cancellation_error_leaks.md` §3.1: the per-object teardown chain
@@ -11001,7 +11109,17 @@ impl Regs {
         // and changes nothing about it: two `Instant`s and a `fetch_max`.
         let reap_t0 = std::time::Instant::now();
         let reaped = self.device.reap_retired();
+        // ⊘ MERGE NOTE (w314 + w315). Both lanes instrumented this one call and the textual
+        // conflict was not a semantic one: w314 times the disposal against the 4 s
+        // `scrubberDestruct` budget, w315 closes the `reap` segment of the per-doorbell
+        // breakdown. They are independent and BOTH are kept.
+        // ★ The ORDER is load-bearing, and it is the only thing the merge had to decide:
+        // read the elapsed time and close the segment FIRST, then print. Printing before
+        // either would charge w314's `eprintln!` to w315's `reap` segment and to w314's own
+        // `max_reap_us` — an instrument billing itself to the thing it measures, which is the
+        // failure class this tree has now paid for several times over.
         let reap_us = u64::try_from(reap_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        kft.mark("reap");
         if reap_us
             > self
                 .max_reap_us
@@ -11023,6 +11141,30 @@ impl Regs {
                 self.device.retired_len(),
             );
         }
+        // ⊘ Two kinds, deliberately. A doorbell write and an ordinary register write live in
+        // the same census only as `mmio_all`; splitting them means *"the trap is slow"* and
+        // *"the doorbell is slow"* are separate readings, and w311's floor is compatible with
+        // either. `doorbell` is decided by the plane, so it is read off the outcome rather
+        // than re-derived from the offset — two projections of one fact that disagree is this
+        // campaign's most expensive failure class.
+        crate::kftime::record_hot(
+            if out.doorbell.is_some() {
+                "mmio_doorbell"
+            } else {
+                "mmio_other"
+            },
+            bar,
+            off,
+            kft.total_us(),
+        );
+        crate::kftime::record(
+            if out.doorbell.is_some() {
+                "mmio_doorbell"
+            } else {
+                "mmio_other"
+            },
+            &mut kft,
+        );
         out
     }
 

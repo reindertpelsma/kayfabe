@@ -347,6 +347,26 @@ pub struct ProxyRmBackend {
     exports: Arc<ExportRegistry>,
 }
 
+thread_local! {
+    /// `(calls, microseconds)` this thread has spent inside [`ProxyRmBackend::call`].
+    ///
+    /// ⊘ Monotonic and never reset. Callers take a difference around the region they care
+    /// about; a resettable counter would let two readers silently steal each other's
+    /// interval, which is the `a_second_source_of_truth_beside_a_complete_value` shape.
+    static IPC_TOTALS: std::cell::Cell<(u64, u64)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// This thread's running `(calls, microseconds)` spent blocked in the isolate IPC.
+///
+/// ★ Read it twice and subtract. ⚠ It counts the **round trip**, which includes the child's
+/// own RM `ioctl` and anything the child blocks on inside it (`await_semaphore` polls at
+/// 1 ms, `CE_COPY_TIMEOUT` is 2 s) — so a large value here is *"the host RM was slow"*, not
+/// *"the socket was slow"*, and this counter cannot tell those apart.
+#[must_use]
+pub fn ipc_totals() -> (u64, u64) {
+    IPC_TOTALS.with(std::cell::Cell::get)
+}
+
 impl ProxyRmBackend {
     /// ★ One request, one reply.
     ///
@@ -358,6 +378,32 @@ impl ProxyRmBackend {
     /// worker*), and that observable is exactly what `Wedged` names. Splitting them into
     /// separate errors would invite a caller to treat one as retryable.
     fn call(&mut self, request: Request) -> Result<Reply, RmError> {
+        // ★★★★★ **w315 — THE IPC BRACKET.** This is a synchronous write-then-blocking-read
+        // over a unix socket to the isolate child, and **every production caller is inside
+        // the vCPU's MMIO trap under the QEMU BQL** (`blocking_and_completion_model.md`
+        // §172-176). ⇒ whatever the child spends here, the guest pays. w311 measured a
+        // ~100 ms per-launch floor with no mechanism; this counter is what lets the shim
+        // subtract "time in the host RM" from "time in our own submit path" instead of
+        // guessing which it was.
+        //
+        // ⊘ It is a **thread-local** and not a global: every caller on this path is the one
+        // vCPU thread, a thread-local needs no lock, and a lock taken here would add to the
+        // very quantity being measured. A future caller on another thread gets its own
+        // counter and is simply not visible to that thread's reader — which is a
+        // *under*-count, never a phantom.
+        let t0 = std::time::Instant::now();
+        let r = self.call_inner(request);
+        IPC_TOTALS.with(|c| {
+            let (n, us) = c.get();
+            c.set((
+                n + 1,
+                us + u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX),
+            ));
+        });
+        r
+    }
+
+    fn call_inner(&mut self, request: Request) -> Result<Reply, RmError> {
         let txn = self.cancel.current_txn().unwrap_or(0);
         let body = Envelope { txn, request }.encode();
         let mut sock = &*self.sock;
