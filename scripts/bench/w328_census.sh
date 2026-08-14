@@ -85,4 +85,18 @@ grep -ao "proc=[0-9]* pdb=${TPDB:-NOSUCH} total=[0-9]* [^]]*" "$Q" \
   || echo "⊘ NO PER-VAS CENSUS ROW — UNMEASURED"
 
 echo
+echo "--- ★★★★★ THE MECHANISM, IN ONE CORRELATION: cost vs WHAT THE PASS WAS ASKED TO DO"
+echo '---     ⊘ The two rows must be compared on max_total as well as on cost. If the'
+echo '---     candidates=0 row walked a SMALLER table, the difference would be the WALK and'
+echo '---     not the joins — which is the reading this correlation exists to exclude.' 
+grep -ao "W328SCOPE\[[^]]*\].*pdb=${TPDB:-NOSUCH} total=[0-9]* [^]]*" "$Q" \
+  | sed -E "s/.*target_us=([0-9]+).*pdb=${TPDB:-NOSUCH} total=([0-9]+) .*candidates=([0-9]+)\(.*/\1 \2 \3/" \
+  | awk '{if($3==0){n0++; s0+=$1; if($2>t0)t0=$2} else {n8++; s8+=$1; if($2>t8)t8=$2}}
+         END {if(n0+n8==0){print "⊘ NO CORRELATABLE PASS — UNMEASURED"; exit}
+              if(n0) printf "candidates=0 : n=%d mean_us=%.0f max_total=%d rows\n", n0, s0/n0, t0;
+              else print "candidates=0 : ⊘ NONE — the cheap mode is UNMEASURED on this boot";
+              if(n8) printf "candidates>0 : n=%d mean_us=%.0f max_total=%d rows\n", n8, s8/n8, t8;
+              else print "candidates>0 : ⊘ NONE — the expensive mode is UNMEASURED on this boot"}'
+
+echo
 echo "=== W328 CENSUS TERMINATOR tag=$TAG rc=0 $(date -Is)"
