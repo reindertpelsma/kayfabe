@@ -576,9 +576,17 @@ fn the_boot_evidence_gate_still_checks_trackedness_emptiness_and_the_rev_stamp()
             "is EMPTY",
             "a zero-byte log's existence reads as a capture and is not one",
         ),
+        // ⊘⊘ **THE PATTERN THE SCRIPT GREPS WITH, NOT THE WORD IT PRINTS.** `[measured, w295
+        // plant P8]` this row read `"kayfabe-rev:"` and the plant that DELETED the check went
+        // **green**: the script's failure message still contains the words *"carries no
+        // `kayfabe-rev:` stamp"*, so the token survives the removal of the mechanism. A gate
+        // satisfied by a MENTION is the same shape as a citation gate satisfied by a row that
+        // cites an empty body — found by planting the bug, which is the entire argument for
+        // planting it.
         (
-            "kayfabe-rev:",
-            "a boot with no revision stamp cannot be cited against a commit",
+            "kayfabe-rev:[0-9a-f]",
+            "a boot with no revision stamp cannot be cited against a commit — and the check is \
+             the regex, not the sentence that explains it",
         ),
     ] {
         assert!(
