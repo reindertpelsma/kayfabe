@@ -84,7 +84,128 @@ Two populations, both real:
 
 ## 2. MEASURED — the breadth's own cost, split at the source
 
-<!-- W328-RESULTS-2 -->
+`[measured w328, vh, real GA106, host driver open 580.159.04, arm `w328a` = master's behaviour
+on this binary, n=3, tags `w328a1..3`]`
+
+| boot | `CUP3_VAL` | `worst_trap_us` | `DRAIN_MS` | residual | drain share | margin | `complete` | `pinned/asked` |
+|---|---|---|---|---|---|---|---|---|
+| `w328a1` | **43** | 3 048 658 | 2 960 | **88 658 µs** | 97.1 % | **1.01×** | true | 13 313/13 313 |
+| `w328a2` | **43** | 3 112 556 | 2 969 | **143 556 µs** | 95.4 % | **1.01×** | true | 13 313/13 313 |
+| `w328a3` | **43** | 2 788 831 | 2 681 | **107 831 µs** | 96.1 % | **1.12×** | true | 13 313/13 313 |
+
+⇒ w326's 95.8–97.0 % reproduces at **95.4–97.1 %**, 3/3, on a different day and a different
+binary. ⚠ And the margin is **1.01×** on two of three boots — the drain is at **98.7 % and
+99.0 % of its 3 000 ms budget**, tighter than the 93 % w326 recorded.
+
+### 2.1 ★★★★★ THE BREADTH IS 0.0084 % OF THE WORST TRAP AND 0.90 % OF THE BOOT
+
+`[measured, `w328a1`, the same boot as row 1 above]`, summed over **all 229** publication
+passes:
+
+```
+W328SCOPE  CUM over 229 passes:
+    target_us = 2 666 358      target_published = 66
+    other_us  =    24 349      other_published  =  0        breadth_share = 0.9049 %
+W328PIN    CUM over 229 passes:
+    other_vases = 0   other_us = 0   other_pinned = 0
+```
+
+- **On the worst trap itself: `other_us = 256 µs` of `worst_trap_us = 3 048 658 µs` —
+  0.0084 %.**
+- **Over the whole boot: 24 349 µs of 2 690 707 µs — 0.90 %.**
+- **The pin pass's breadth is exactly ZERO, on 3/3 boots.** No non-doorbelled VAS ever offered
+  a single guest-RAM candidate, so the 256-row sample pinned nothing all boot.
+- **`other_published = 0` over 229 passes.** The breadth publishes nothing — w326's yield
+  claim, confirmed.
+
+⇒ **The brief's (A) is HALF RIGHT AND HALF REFUTED.** *Vestigial in yield* — measured, zero,
+all boot. *"Scoping it drops the worst trap far below budget"* — **wrong by a factor of ~11 000
+on the worst trap and ~110 on the boot.** ⊘ **My own pre-registered prediction that this would
+happen was itself unmeasured when I wrote it**; it is recorded in `w328_all.sh`'s header
+before the boots ran, and §2.2 is what it turned into.
+
+### 2.2 ★★★★★ SO WHERE DOES THE 2 529 ms GO? — 328 HOST JOINS, ALL REFUSED, ON 8 RANGES
+
+The doorbelled VAS's own pass is **99.1 %** of it, and it is **bimodal** — the mean is a lie:
+
+```
+per-pass target_us:  n=229  min=477  p25=568  median=661  p75=799  p95=58 011  max=143 964
+expensive(>10 ms):   n=44   sum=2 524 134 us
+cheap   (<=10 ms):   n=185  sum=  142 224 us
+```
+
+Correlating each pass's cost against **what it was asked to do** separates the two modes
+completely:
+
+| | passes | mean cost | largest table walked |
+|---|---|---|---|
+| `candidates=0` | **180** | **632 µs** | **18 277 rows** |
+| `candidates>0` | **49** | **52 094 µs** | 18 309 rows |
+
+★★★ **The table is the same size in both rows.** ⇒ **the census WALK over 18 277 rows costs
+632 µs — 35 ns/row — and is not the cost.** The cost is the join attempts, at
+**≈ 6.4 ms per leaf**.
+
+And the census of what those attempts achieved, on the doorbelled pdb `0x201000`:
+
+```
+    180  candidates=0  published=0  refused=0
+     41  candidates=8  published=0  refused=8        ← 328 REFUSED JOINS
+      3  candidates=1  published=1  refused=0
+      2  candidates=2  published=2  refused=0
+      1  candidates=7  published=7  refused=0
+      1  candidates=32 published=24 refused=8
+      1  candidates=28 published=28 refused=0
+```
+
+⇒ **2 524 134 µs of the boot's 2 690 707 µs of publication BQL is ~400 `join_one_fb_leaf`
+attempts, of which 328 are the SAME 8 framebuffer ranges re-offered 41 times and refused every
+time** — *"that framebuffer range is already joined"*, which is precisely the host-state
+refusal `w318`'s `joined_fb_ranges().len()` term was added to gate on.
+
+### 2.3 ⚠⚠ AND IT IS `gate=off` — NOT THE WORKLOAD
+
+`the_publish_trigger_measured.md:201-203` reads `this_doorbell[fired=4 skipped=0]` on all 229
+passes and attributes it to the workload: *"so `w318`'s dirty gate skipped nothing on this
+workload"*. The boot's own line says otherwise:
+
+```
+... arm=drain W328SCOPE[...] gate=off this_doorbell[fired=4 skipped=0] ...
+DIRTY-GATE publish[fired=912 skipped=0 0.0% skipped] witness[fired=229 skipped=0 0.0% skipped]
+```
+
+**`gate=off`.** `KAYFABE_DIRTY_GATE_PUBLISH` ships **disarmed** (`shim.rs:14261`,
+`None => false`), deliberately and for a stated reason. **The gate skipped nothing because it
+was never asked.**
+
+⊘ **A disarmed gate and a gate that never fires print the SAME COUNTER**, and only the arm word
+separates them — this tree's own `a_census_zero_needs_a_known_positive` shape, arriving in a
+merged doc. ⇒ the arm script now **extracts `gate=`** rather than inferring it.
+
+★ And the question *"what does arming it buy"* was **already answered** and I checked before
+spending boots on it: `w318_the_dirty_gate.md:127`, twelve matched doorbells, one variable —
+`vas_publish` **45.849 → 0.201 ms/launch, 228×**. Sweep 2 therefore spends its boots on what
+w318 did *not* measure: whether the gate **composes** with the scope and the coalescer, and
+what it does to `worst_trap_us`.
+
+### 2.4 ⚠ UNATTRIBUTED, AND IT IS THE NEXT RUNG'S BEST LEAD — a REFUSAL that costs 6.4 ms
+
+A `join_one_fb_leaf` attempt costs **≈ 6.4 ms whether it succeeds or is refused**, against
+**77 µs** for a successful `map_gpu_va` (`the_drain_cost_is_per_call_not_per_page.md` §2).
+**A refusal that costs 83× a success is not a refusal that merely failed a check.** Nothing in
+this rung attributes it; it is stated as the measurement it is.
+
+### 2.5 ⊘ MEASURED LIMITS OF THIS INSTRUMENT, stated rather than discovered later
+
+- `W328PIN`'s `other_us` **excludes** a sampled VAS whose candidate list came back empty —
+  master `continue`s above the bracket. The excluded term is the `vas_guest_ram_rows` walk,
+  and it is bounded above by `W328SCOPE`'s `other_us = 256 µs`, which walks the *same* VASes'
+  rows *including* proc 0's 6 787. ⇒ the omission cannot exceed a fraction of a millisecond.
+- `breadth_share` on a **single pass** is integer-percent and reads `0%` for anything under
+  1 %. The cumulative figure is computed in µs and is the one quoted.
+- ⊘ The later drains end at host-**shaped** VAs (`0x7610_3a9f_f000`). That is UVM unified
+  addressing — `shape_cannot_discriminate_origin.md`: the GPU VA **is** the process VA. It is
+  not a leaked host pointer, and it is recorded here so nobody re-chases it.
 
 ---
 
