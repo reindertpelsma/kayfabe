@@ -66,7 +66,7 @@ isolate is now dropped, its `/dev/nvidiactl` closes and RM cascades the whole cl
 2. the isolate's `mmap` window for **every** pin, in both cases, until the isolate dies;
 3. the handles themselves, which were **unnameable**, so nothing could have been written.
 
-### The bound, measured
+### The bound — boot `w291_2a_merge`, 2026-08-13
 
 `[measured 2026-08-13, boot `w291_2a_merge`, traces/boots/w291/w291_2a_merge.log.gz]`
 **15 845 live guest-RAM pins in ONE `Vas` on ONE boot** (`pins=15845`,
@@ -182,7 +182,7 @@ purpose:**
 ⇒ Filed as a separate question, with its own falsifier, rather than smuggled in beside a
 teardown fix. ⚠ It is a real inconsistency and should be answered; it is not answered here.
 
-### ⊘⊘ What the sever measured that the design above had NOT stated
+### ⊘⊘ What the sever showed, 2026-08-14, that the design above had NOT stated
 
 `[measured 2026-08-14, rented CPU box, `cargo test -p kayfabe-tests --test guest_ram_pin_release`]`
 
@@ -299,8 +299,8 @@ and tested on a rented CPU box with no GPU. `only_live_boots_are_proof` applies 
 | **E** | `refused_no_host_vas=0` on the same line | a non-zero means a pin existed with no nameable host VAS, which contradicts `commit_pin_guest_ram`'s own invariant and is a finding in its own right. |
 | **F** | no new `Xid` classes vs. the previous green boot's `w291_xids.txt`-style census | a premature unpin's signature is a **new** fault, not more of an old one. `a_count_cannot_see_a_substitution`. |
 
-⚠ **Any bench claim must carry the SOURCE REVISION it was measured at.** This branch's tip at
-writing is `771d5d60`, on master `0ff3e1e2`.
+⚠ **Any bench claim must carry the SOURCE REVISION it was measured at** — this branch at rev
+`315c4bed`, on master `0ff3e1e2`, 2026-08-14.
 
 ## 7b. ⚠ What master itself is at `0ff3e1e2` — measured, because a comparison needs both sides
 
@@ -316,7 +316,8 @@ from this rung:**
 | `scripts/ci_gates.sh` | **3 FAILED** | **3 FAILED**, same three |
 
 ⇒ **The pass condition for this rung is "the same set, unchanged" — not zero**, and that is
-what was measured. The 7 master failures are `a_device_with_no_fb_source_refuses_the_vidmem_ring`,
+what was measured on 2026-08-14. The 7 master failures are
+`a_device_with_no_fb_source_refuses_the_vidmem_ring`,
 `a_guest_doorbell_reaches_the_host_completion_observer`,
 `a_second_doorbell_over_an_unchanged_ring_forwards_nothing`,
 `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote`,
