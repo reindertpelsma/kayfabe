@@ -9,7 +9,15 @@
 > `publication_off_the_bql.md` §6 (its *"the guest's invalidate DOES NOT EXIST HERE"* is
 > refuted in place), §4.3.1 (its named defect is fixed in place);
 > `blocking_and_completion_model.md` §1 (a new clause-(b) timeout) and §4 (the w323 block's
-> last sentence is refuted in place); `crates/kayfabe-device/src/pubqueue.rs` §4 item 1.
+> last sentence is refuted in place); `crates/kayfabe-device/src/pubqueue.rs` §4 item 1;
+> and, in the research tree,
+> `nvidia-gpu-passthrough: docs/design/guest_invalidate_discipline_and_the_publish_boundary.md`
+> §2.1 (the 448-KiB error and §8's own falsifier firing).
+>
+> ★ **The one-line summary, if you read nothing else:** the trigger the last three campaigns
+> believed did not exist has been arriving in our BAR0 handler since M5, it fires **377 times
+> on a `cup3` boot**, and it is worth having for **soundness and scope — not for cost**,
+> because its count tracks *driver setup* while the doorbell's tracks *submission*.
 
 ---
 
