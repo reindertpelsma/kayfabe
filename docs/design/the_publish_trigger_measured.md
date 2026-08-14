@@ -115,6 +115,41 @@ bring-up phase, invariant across two completely different clients, and it is the
 says the decoder is measuring the driver rather than the benchmark. `cup3 − R33 = 377 − 331 =
 46` invalidates is then the *workload's own* contribution.
 
+### 2.0.1 ★★★★★ AND THE STRONGER FORM — **THE TRIGGER COUNT IS NEARLY WORKLOAD-INVARIANT**
+
+Put all three workloads' `MMUINVAL` lines side by side (`traces/w326_publish/mmuinval_census.txt`):
+
+| workload | **triggers** | `hubtlb_only` | GPU-VAS | **doorbells** | ratio |
+|---|---|---|---|---|---|
+| `cup3` ×4 boots | **377** | 232 | 145 | 480 | 0.785 |
+| `cup8` | **377** | 232 | 145 | **532** | 0.709 |
+| `R33 arm 1` | **331** | 213 | 118 | **18** | 18.39 |
+
+⇒ ★★★ **The trigger count barely moves (377 / 377 / 331) while the doorbell count moves 30×
+(18 → 532).** `cup3` and `cup8` — a 1×1×1 kernel and a 2048² matmul — produce **bit-identical**
+invalidate counts down to the `hubtlb_only` split. `triggers_at_first_doorbell = 66` on **all
+three**.
+
+⇒ **The guest's TLB invalidates track DRIVER AND CONTEXT SETUP, not submission.** The doorbell
+tracks submission. They are measuring different things, which is why no single ratio describes
+them, and it is the sharpest available statement of *why* tier 1 is the better trigger:
+
+> **Publication work is proportional to mappings changing. The invalidate is proportional to
+> mappings changing. The doorbell is proportional to WORK SUBMITTED, which is the wrong
+> variable.**
+
+★★ **And the boot's own publication log agrees**: the last `cup3` pass reports
+`published=0 refused=8 in 53 ms over 4 VAS rows`, and **all 229** passes fired
+(`this_doorbell[fired=4 skipped=0]` — `w318`'s dirty gate skipped none). ⇒ a large share of
+that **2 529 ms of BQL time is a sweep that publishes nothing**, because by then nothing has
+changed. A trigger keyed on the invalidate would not have run those passes at all.
+
+⊘ **What this rung did NOT measure, and it is the obvious next question:** the *distribution*
+of the 377 over the boot. `triggers_at_first_doorbell = 66` is the only phase marker, and the
+first doorbell lands early in `cuInit`, so *"311 arrived after the first doorbell"* does **not**
+mean 311 arrived during the compute phase. **A per-phase histogram is one counter away** and it
+is what turns the paragraph above from a strong inference into a measurement.
+
 ### 2.1 The C agrees, which is the cross-check that matters
 
 `gmmu_publication_discipline.md` scanned the committed C captures and recorded
@@ -355,6 +390,22 @@ carry no independent information about the fit. **Refit on the three unclamped p
 ⊘ **`n = 3` on `cup3` only.** `cup8` and `R33` are single boots and are therefore evidence that
 the tick did not *break* them, **not** that they are stable under it. The brief asked for
 n ≥ 3 on three workloads; this rung has n ≥ 3 on one. Stated rather than rounded up.
+
+⚠⚠ **AND `R33` IS VACUOUS FOR THIS FIX — the brief predicted exactly this and it happened.**
+The brief warned *"`R33 arm 1` was vacuous for w321's fix (`asked=0`); check whether it is live
+for yours"*. Measured on `w326x1`:
+
+```
+RECLAIM-TICK armed=true working_ticks=0 idle_ticks=322 worker_disposed=0 worker_reaped=0
+             vcpu_skipped=6 worst_tick_us=137
+```
+
+`working_ticks=0` — **the worker ran 322 times and never found anything to drain.** ⇒ that arm
+is evidence the tick does not *break* a raw CE client, and **no evidence at all** about the
+drain. ★ The `DRAIN[asked=0 pinned=0 DRAIN_MS=0]` line on the same boot says the same thing
+from the other side.
+⇒ The arms that are **live** for this fix are `cup3` (`working_ticks` 78–113) and `cup8`
+(`working_ticks=120`, and the only boot where the worker actually **reaped** — `worker_reaped=1`).
 
 ⊘ **The instrument's own known-positive/negative pair**, since a census that only ever prints
 one shape proves nothing: armed ⇒ `working_ticks=78–113 idle_ticks=361–376 off_trap_claims≈360`;
