@@ -266,7 +266,22 @@ static GRADUATED: &[u32] = &[
     // `kayfabe_abi::submit::INPUT_ONLY_CONTROLS`, including the one where the C oracle is
     // **silent rather than negative** (`0xa06c0105` appears zero times in `cap3`).
     0x2081_0108,
-    0x83de_0309,
+    // ⊘⊘⊘ **`0x83de_0309` LEFT THIS LIST ON 2026-08-14 (w295), AND "GRADUATED" WAS THE
+    // WRONG WORD FOR IT ALL ALONG.**
+    //
+    // Graduating means *"it used to fall to the unserviced ledger and now the chain answers
+    // it"*. `[measured]` the first half is right — 16 committed boots have it in their
+    // ledger. The second half was true for one day and should not have been: the chain
+    // answered it while `capability::DENIED_CLASSES` **refused the guest's `RM_ALLOC` of
+    // its class**, so what was being answered was a control on an object we do not hold.
+    //
+    // ★ It has NOT gone back to the ledger, and that distinction is the point. It is now
+    // refused **by name** as `ControlNotPermitted::Refused`, carrying `GT200_DEBUGGER`'s
+    // own reason — a refusal that ANSWERS the command and never reaches the unserviced
+    // list at all. ⇒ Strictly more informative than either previous state: before w292 it
+    // was an unclassified silence, during w292 it was a false `NV_OK`, and now it is a
+    // named `0x56` whose reason points at the class row that produced it. Its `LEDGER` row
+    // records that position.
     0xa06c_0103,
     0xa06c_0105,
     // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ENTERED AND LEFT THIS LIST IN THE
@@ -360,7 +375,37 @@ static LEDGER: &[u32] = &[
     // a table row, which is the admission class this file's module doc says it cannot sweep.
     0x2081_0110,
     0x208f_1105,
+    // ★★★ `NV40_I2C`'s control, and it is the PRECEDENT for the row below it: a control on
+    // a class this port denies, which has sat here correctly the whole time.
     0x402c_0101,
+    // ★★★★★ **`0x83de0309` — BACK ON THIS LIST ON 2026-08-14 (w295), AND ITS POSITION IS
+    // THE OPPOSITE OF THE ONE IT LEFT WITH.**
+    //
+    // `[measured, 16 committed boots]` `p1b_29e7c25_planectl` … `w216_f5f55ad_mcbudget` all
+    // have it in their unserviced ledger. w292 graduated it — the chain began answering
+    // `NV_OK` with the guest's own 4 bytes echoed, on owner ruling, and the ruling's
+    // premise was measured and correct: RM's default exception mask when the control is
+    // never called is `_ALL`, and libcuda asks for `0x3a`, which excludes `_FATAL`.
+    //
+    // ⊘⊘ **What the ruling could not have weighed is that we refuse the OBJECT.**
+    // `GT200_DEBUGGER` (`0x83de`) is in `capability::DENIED_CLASSES` and
+    // `[measured 2026-08-14, run_w294cup2_qemu.log]` the guest's `RM_ALLOC` of it comes
+    // back `AllocClassNotPermitted::Refused id=0x000083de`. ⇒ "Serving" it set nothing,
+    // because there was nothing on our side to set. *"Refusing is more permissive than
+    // serving"* holds only where serving actually writes; here both answers left the guest
+    // on RM's `_ALL` default, and only one of them told the truth about it.
+    //
+    // ★ **The position, stated:** this id is refused, by name, with `GT200_DEBUGGER`'s own
+    // reason, for exactly as long as the class is denied — and it is admitted again the
+    // instant the class is, with no edit here. Which of those two the port should be is an
+    // OWNER ruling on security surface; the evidence, and the boundary admitting the class
+    // would widen, are set out in `docs/design/class_control_consistency.md`.
+    //
+    // ⚠ It will **stop appearing in future boots' unserviced ledgers** — a named refusal
+    // answers the command and never reaches that list. ⊘ That is not this row going stale:
+    // this list is quantified over the *committed* boots, which recorded it 16 times, and
+    // those files do not change.
+    0x83de_0309,
     0xa06f_0112,
 ];
 
@@ -609,11 +654,21 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0x20803601", // InitTablePolicy
         "0x20803801", // InitTablePolicy
         // ★★★★★ **w292 — THE INPUT-ONLY GROUP, `ObjectPolicy::respond_input_only`.**
-        // `0x83de0309` is the one that ended `cuCtxCreate` (`traces/nvdiff_w292`); the other
-        // two here are its neighbours in the same gap. ⊘ `0x2081_0108` does NOT appear in
-        // this list because it is admitted by a RULE rather than by a named row, and this
-        // list quantifies over `all_controls()`.
-        "0x83de0309",
+        // The two remaining members are `0xa06c0103`/`0xa06c0105`, below. ⊘ `0x2081_0108`
+        // does NOT appear in this list because it is admitted by a RULE rather than by a
+        // named row, and this list quantifies over `all_controls()`.
+        //
+        // ⊘⊘⊘ **`0x83de0309` LEFT THIS LIST ON 2026-08-14 (w295), and this list's own
+        // warning — *"LOSING one is a control this port stopped deciding"* — is EXACTLY
+        // BACKWARDS for it.** The port did not stop deciding it; it started deciding it in
+        // the only plane that could be right. This list quantifies over controls the
+        // capability table ADMITS, and `0x83de0309` is no longer admitted: its class
+        // `GT200_DEBUGGER` (`0x83de`) is denied, and `CapabilityTable::control` now refuses
+        // every control scoped to a denied class. So it is decided — as
+        // `ControlNotPermitted::Refused`, one layer above the chain, with the class's own
+        // reason attached — and it leaves this list because this list is about the chain.
+        // ⇒ ★ This is the one shape a "losing a row is a regression" ratchet cannot judge
+        // on its own, which is why the reason is written here rather than the row deleted.
         // ★★★★★ **w288 TIER 2 — `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, `ObjectPolicy`.**
         // ADDED, and adding is the direction this list welcomes: it is the ONLY control that
         // carries a fault's ADDRESS, so *"the guest observed THE SAME FAULT, by identity"* is
