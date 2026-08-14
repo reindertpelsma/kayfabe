@@ -722,6 +722,33 @@ const USERD_OFFSET_IN_RING: u64 = 0x3000;
 /// The granularity RM's `>> 9` imposes on a USERD offset. See [`USERD_OFFSET_MISALIGNED`].
 const USERD_ALIGNMENT: u64 = 512;
 
+/// ★★★ **The `userdOffset` rule, as a value rather than as an `if` inside a 400-line verb.**
+///
+/// Returns the refusal status a caller must return, or `None` when the offset is placeable.
+///
+/// # ⊘ Why this is a function at all
+///
+/// The rule was a two-line `if` in the middle of [`HostRmBackend::alloc_channel`], which needs a
+/// live `/dev/nvidia*` to reach. `[census, w295]` **no test anywhere fed a misaligned offset** —
+/// `USERD_OFFSET_MISALIGNED` had zero occurrences under `tests/`, and the only automated
+/// assertion in the area
+/// (`userd_fits_inside_the_ring_object_without_touching_the_other_three_regions`) checks that
+/// *our own constant* is aligned, which is the opposite direction: it exercises the value we
+/// control and never the value the **guest** supplies. A rule reachable only through a GPU is a
+/// rule that is reviewed rather than tested, and this one refuses guest input.
+///
+/// ⚠ The extraction changes no behaviour — `alloc_channel` calls this and returns exactly what
+/// it returned before — and it deliberately does **not** take the unwind list: the cleanup is
+/// the verb's, the *rule* is not.
+#[must_use]
+pub fn userd_offset_refusal(offset: u64) -> Option<u32> {
+    if offset.is_multiple_of(USERD_ALIGNMENT) {
+        None
+    } else {
+        Some(USERD_OFFSET_MISALIGNED)
+    }
+}
+
 /// Offset of the pushbuffer within the ring object — the methods hardware fetches.
 ///
 /// The layout below is the C's proven one, offset for offset
@@ -5924,9 +5951,9 @@ impl HostRmBackend {
             UserdOwner::Ours => &[userd],
             UserdOwner::HandedIn | UserdOwner::InRing => &[],
         };
-        if !userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+        if let Some(status) = userd_offset_refusal(userd_offset) {
             unwind(self, &[ours, owned_userd].concat());
-            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+            return Err(RmError::Other(status));
         }
 
         // The ring must be resolvable by hardware before a channel may name it.
@@ -9103,6 +9130,147 @@ mod tests {
             .copied(),
             "bytes without a release is a different question, not a pass"
         );
+    }
+
+    /// ★★★★★ **THE `w283c` SHAPE: three of the four facts hold and the verdict must be FAIL.**
+    ///
+    /// `[measured 2026-08-13, boot `w283c_client`, real GA106]` the raw CE client printed its
+    /// **★ success** line — *"4096 bytes moved … engine semaphore 0x00000001 (declared
+    /// 0x00000001), **GP_GET 0 caught GP_PUT 1**"* — and returned `R33_RC=0`. The word *"caught"*
+    /// is template text; the predicate the ★ arm was gated on ([`CeEvidence::copied`]) checks the
+    /// bytes and the semaphore and **never compares the cursors**.
+    ///
+    /// ⇒ [`CeEvidence::met_the_whole_bar`] was added to fix it, and `[census, w295]` **it had no
+    /// test**: `grep met_the_whole_bar` found the definition and one call site in `rmladder.rs`
+    /// and nothing else. A fix with no test is a fix until someone tidies it.
+    ///
+    /// ★ The facts are asserted **separately**, so a future re-collapse of the conjunction
+    /// cannot pass: each row below removes exactly one fact from an otherwise-complete evidence
+    /// value and requires the verdict to move.
+    ///
+    /// ⊘ This is deliberately NOT a re-implementation of the predicate. It states the four
+    /// facts as four independent perturbations of one known-positive; a test that recomputed
+    /// `copied() && landed()` would go green against any predicate, including the broken one.
+    #[test]
+    fn three_of_the_four_facts_is_not_the_whole_bar() {
+        // The known-positive, first: all four hold, so every row below differs from a case
+        // that genuinely passes by exactly one fact.
+        let all_four = CeEvidence {
+            before: 0xFFFF_FFFF,
+            after: 0xC0FF_EE33,
+            after_last: 0xC0FF_F232,
+            expect_after: 0xC0FF_EE33,
+            expect_after_last: 0xC0FF_F232,
+            bytes: 4096,
+            submit: SubmitOutcome {
+                semaphore: 1,
+                gp_get: 1,
+                gp_put: 1,
+            },
+            payload: 1,
+            src_va: 0x1_2000_0000,
+            dst_va: 0x1_2001_0000,
+        };
+        assert!(
+            all_four.met_the_whole_bar(),
+            "★ THE KNOWN-POSITIVE DID NOT FIRE. Every row below is a perturbation of this \
+             value, so if the complete case fails the whole test is vacuous and the rows prove \
+             nothing: {all_four:?}"
+        );
+
+        // ⊘⊘ FACT 4 — THE ACTUAL w283c READING, byte for byte. Bytes moved, semaphore carries
+        // the declared payload, and `GP_GET 0` did not catch `GP_PUT 1`.
+        let w283c = CeEvidence {
+            submit: SubmitOutcome {
+                semaphore: 1,
+                gp_get: 0,
+                gp_put: 1,
+            },
+            ..all_four
+        };
+        assert!(
+            w283c.copied(),
+            "★ non-vacuity for this row: the w283c state really does satisfy the THREE facts \
+             `copied()` checks — if it did not, the row below would pass for the wrong reason"
+        );
+        assert!(
+            !w283c.cursor_caught_up(),
+            "the fourth fact is the one that failed on that boot"
+        );
+        assert!(
+            !w283c.met_the_whole_bar(),
+            "⊘⊘ THE REGRESSION IS BACK: `GP_GET 0` did not catch `GP_PUT 1` and the verdict said \
+             the whole bar was met. That is `w283c` exactly — a ★ line whose own text contains \
+             the criterion it is not testing. {w283c:?}"
+        );
+
+        // FACT 1 — the destination did not change. Non-vacuity of the copy itself.
+        assert!(
+            !CeEvidence {
+                before: 0xC0FF_EE33,
+                ..all_four
+            }
+            .met_the_whole_bar(),
+            "a destination that already held the answer is not evidence that anything moved"
+        );
+
+        // FACT 2 — the last word. A truncated copy is not a copy.
+        assert!(
+            !CeEvidence {
+                after_last: 0,
+                ..all_four
+            }
+            .met_the_whole_bar(),
+            "a copy that moved only the first word is not a copy"
+        );
+
+        // FACT 3 — the semaphore carries the DECLARED payload. A different payload is a
+        // different submission's release, not this one's.
+        assert!(
+            !CeEvidence {
+                payload: 2,
+                ..all_four
+            }
+            .met_the_whole_bar(),
+            "the semaphore must carry the payload this submission declared, not merely a \
+             non-zero one"
+        );
+    }
+
+    /// ★★★ **A guest-supplied `userdOffset` that RM will silently truncate must be refused —
+    /// and `[census, w295]` nothing fed it one.**
+    ///
+    /// `USERD_OFFSET_MISALIGNED` appeared in zero files under `tests/`. The neighbouring test
+    /// `userd_fits_inside_the_ring_object_without_touching_the_other_three_regions` asserts that
+    /// **our own** `USERD_OFFSET_IN_RING` is aligned — the value we control — and says nothing
+    /// about the `HandedIn` arm, which is where the offset arrives from the guest.
+    ///
+    /// ⊘ The refusal is asserted **by its named status**, never by `is_some()`: a misaligned
+    /// offset rejected as `NOT_IN_THIS_OBJECT` would read as a bounds bug and be triaged as one.
+    #[test]
+    fn a_misaligned_userd_offset_is_refused_by_name_and_an_aligned_one_is_not() {
+        // The non-vacuity arm first: every legal offset this crate can produce is accepted, so
+        // a refusal below is the misalignment and not a blanket "no".
+        for aligned in [0, USERD_ALIGNMENT, USERD_OFFSET_IN_RING, 0x1_A000, 1 << 30] {
+            assert_eq!(
+                userd_offset_refusal(aligned),
+                None,
+                "★ {aligned:#x} is 512-aligned and must be placeable — a rule that refuses \
+                 everything cannot distinguish a bad offset from a bad caller"
+            );
+        }
+        // ★ `0x1a000 + 8` is the measured guest layout nudged by one word: the shape a real
+        // driver would hand us if it computed the offset from a differently-aligned base.
+        for bad in [1, 8, 511, USERD_ALIGNMENT - 1, 0x3000 + 1, 0x1_A000 + 8] {
+            assert_eq!(
+                userd_offset_refusal(bad),
+                Some(USERD_OFFSET_MISALIGNED),
+                "★ {bad:#x} truncates under RM's `>> 9` to a DIFFERENT 512-byte slot, and RM \
+                 validates nothing. The refusal must be this status: `GP_GET` written to an \
+                 address nobody reads is character-for-character the wall this campaign is \
+                 hunting, so a generic error here costs a bench day"
+            );
+        }
     }
 
     /// ★★ The two local refusal statuses must be distinguishable from each other AND

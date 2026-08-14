@@ -130,7 +130,7 @@ row '..  fbuserd GET nonzero'    countre qemu.log 'fbuserd@0x[0-9a-f]+ GET=[1-9]
 row '..  ENOSPC/LLVM (SAME log)' countre qemu.log 'No space left on device|LLVM ERROR'
 
 printf '%-36s' 'R13 CUP2_RC'
-for a in $ARMS; do printf '%-26s' "$(first "$D/run_w266_${a}_probe.log" 'CUP2_RC=[0-9]+')"; done
+for a in $ARMS; do printf '%-26s' "$(first "$D/run_w266_${a}_probe.log" '^CUP2_RC=[0-9]+')"; done
 echo
 
 echo
