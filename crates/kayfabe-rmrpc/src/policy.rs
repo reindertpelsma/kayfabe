@@ -1803,7 +1803,14 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // appears only behind a helper is an id nobody can find. The lockstep between the two
     // is asserted by `the_w292_input_only_controls_are_claimed_and_decided`.
     0x2081_0108,
-    0x83de_0309,
+    // ⊘⊘⊘ **`0x83de_0309` WAS HERE AND IS NOT ANY MORE — w295.** Its class,
+    // `GT200_DEBUGGER` (`0x83de`), is in `capability::DENIED_CLASSES` and this port
+    // **refuses the guest's `RM_ALLOC` of it**, so serving a control on it was answering
+    // for an object we do not hold. `CapabilityTable::control` now refuses every control
+    // scoped to a denied class, which means the bridge would refuse this id one layer
+    // above the seat and a row here could never run. ⊘ A claim that cannot fire is worse
+    // than no claim: `served_chain_seats` proves each member CHANGES the chain's answer,
+    // so a dead member is a false statement this list would keep making.
     0xa06c_0103,
     0xa06c_0105,
     // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ARE THE IDS NO IOCTL ORACLE SHOWS.**

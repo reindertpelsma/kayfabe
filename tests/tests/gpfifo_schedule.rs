@@ -562,13 +562,26 @@ fn the_control_claim_is_exactly_these_ids() {
             // servicing never ran. `tests/tests/mc_service_interrupts.rs` carries the
             // argument, including why the dmesg train collapsing is NOT the falsifier.
             kayfabe_abi::submit::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
-            // ★★★★★ **w292 — the four input-only controls**, owner-ruled 2026-08-14. Their
+            // ★★★★★ **w292 — the input-only controls**, owner-ruled 2026-08-14. Their
             // identities, sizes and per-row authorities live in ONE place,
             // `kayfabe_abi::submit::INPUT_ONLY_CONTROLS`; this list only says they are
-            // CLAIMED. `[measured]` a real GA106 leaves all four parameter blocks
+            // CLAIMED. `[measured]` a real GA106 leaves their parameter blocks
             // byte-identical across the call, so there is no `[OUT]` field an echo can miss.
+            //
+            // ⊘⊘⊘ **`0x83de_0309` WAS HERE AND IS NOT ANY MORE — w295.** ★ And this list is
+            // the SECOND mirror of `OBJECT_CONTROLS` to go stale in two rungs: w294 found
+            // it *"STALE BY TWO RUNGS"* and fixed the membership, and the fix did not make
+            // the mirror stop being a mirror. ⇒ It caught this edit, which is the case FOR
+            // it; it is also the reason the edit had to be made in two places, which is the
+            // case against. Left as-is deliberately — `assert_eq!` against the const is a
+            // ratchet whose whole value is that it fires — but noted, because a third
+            // staleness here should convert it into a derivation.
+            //
+            // Why it went: its class `GT200_DEBUGGER` (`0x83de`) is in
+            // `capability::DENIED_CLASSES` and this port refuses the guest's `RM_ALLOC` of
+            // it, so the bridge refuses the control one layer above this seat and a claim
+            // here could never fire.
             0x2081_0108,
-            0x83de_0309,
             0xa06c_0103,
             0xa06c_0105,
             // ★★★★★ **w294 — the CUDA perf limit pair, and they are the ids NO IOCTL ORACLE
