@@ -121,6 +121,48 @@ predicate has to be checkable rather than remembered.**
 
 ## 4. What is open against this model right now
 
+> ### ★★★★★ FIRST REAL TEST, `[w306, 2026-08-14]` — **THE CANCELLATION PLANE, and it lands on
+> ### (b), not on tier 3.** Full working: `docs/design/cancellation_plane.md`.
+>
+> §2's tiers survive, with **two corrections that matter for anything else routed through them**:
+>
+> **1. ⊘ TIER 3 IS NOT AVAILABLE, AND SAYING "it is a WIRING job" OVERSTATES IT.** §2's tier-3
+> paragraph says the machinery *"already exists"* and calls it wiring. For an **RM control**
+> that is not so: `CommandPolicy::respond -> Option<Reply>` (`crates/kayfabe-gsp/src/boot.rs:349-356`)
+> is synchronous **by type** — answer now, or decline — and the alternative was considered and
+> **rejected in source**: *"needs a queue of deferred replies, and a deferred reply is state
+> that can be lost, reordered or double-sent. Answer-then-commit needs no state at all"*
+> (`boot.rs:1296-1301`). The reactor is real (`shim.rs:11707-11772`) but it waits on **epoll fds
+> only** and cannot post a reply: `GspFsm::post` needs `&mut GspFsm` inside the rank-0
+> `RankedMutex<PlaneState>`, so a second thread posting is **clause (c) by construction**.
+> ⇒ **"tier 3 is a wiring job" is true of the completion observer and FALSE of RPC replies.**
+>
+> **2. ★★★ THE BINDING CONSTRAINT IS THE BQL, NOT THE TIMEOUT — and the numbers are now
+> measured.** The guest's GSP RPC deadline is **6 s** in `NV_GPU_MODE_GRAPHICS_MODE` and **45 s**
+> in `COMPUTE_MODE` (`_kgspRpcRecvPoll`, `ogkm-580: kernel_gsp.c:2372-2378`, over `defaultus`
+> = 4 s / 30 s from `os.c:1961-2003`) — **far more generous than the 4 s scrubber bound above.**
+> ⊘ It is not the number that bites. A forwarded `STOP_CHANNEL(bImmediate=FALSE)` may take the
+> *host's* RM timeout to return, and for that whole time **every vCPU and QEMU's main loop are
+> stopped** — the guest's soft-lockup and RCU-stall detectors fire long before either deadline.
+> ⚠ And `gpuGetMode` is **dynamic** (it flips to compute when a `GR_OBJECT_TYPE_COMPUTE` object
+> is allocated, `kernel_graphics_context.c:3183-3186`), so guest and host need not agree, and
+> "the host's timeout is inside the guest's" can be true one instant and false the next.
+>
+> ⇒ **The missing mechanism is not a completion transport. It is an off-BQL execution site for
+> host verbs.** `IsolateSlot::call` (`crates/kayfabe-isolate-host/src/isolate.rs:360`) is
+> write-then-read, every production caller is inside the vCPU MMIO trap, and the one off-vCPU
+> thread — `kayfabe-completion-observer` — is handed a **read-only closure by type**
+> (`shim.rs:3651-3656`). ★ That is the concrete item to add to §6, and it is materially narrower
+> than *"wire the reactor"*.
+>
+> **3. ★ And §2's tier-1 note gets a sharper form.** *"A rule never seen to fire is not a rule"*
+> is right, and on this plane it is worse than vacuous: for `STOP_CHANNEL` the guest **discards
+> the status** (`NV_ASSERT_OK` = *"no other action"*, `nvassert.h:467-473`; both consuming layers
+> are `void`). ⇒ **a kayfabe that lies about a drain and one that reports failure produce
+> identical guest behaviour.** §0's completion rule therefore has to be enforced on **our** side
+> or not at all, because the guest makes no observation to be protected.
+
+
 > ### ⊘⊘⊘ CORRECTED `[w300, 2026-08-13]` — **THE BULLET BELOW WAS ALREADY FALSE WHEN THIS DOC
 > ### WAS WRITTEN, AND IT IS THE CLASS THIS TREE PAYS FOR MOST.**
 > `Mutex<PlaneState>` **is not a bare `std::sync::Mutex` and has not been since 2026-08-11.**

@@ -161,6 +161,46 @@ never reaches for `RmControl` (early return at `policy.rs:2943`). So an allowlis
 
 ### 1.2 The table
 
+> #### ⊘⊘ CORRECTED 2026-08-14 (w306) — **THIS CENSUS IS INCOMPLETE, AND THE MISSING VERB
+> #### ARRIVES IN EXACTLY THE SAME BOOTS AS `STOP_CHANNEL`.** Read before the table.
+> Full treatment: `docs/design/cancellation_plane.md` §0.4, §0.5.
+>
+> **1. `NV2080_CTRL_CMD_GPU_EVICT_CTX` (`0x2080012c`) is missing and belongs here.**
+> `[measured 2026-08-14, w306]` over the **195 committed boot logs that print an unserviced
+> ledger**: `0xa06f0112` in **115**, `0x2080012c` in **115**, **both together in 115/115 with
+> zero singletons.** That is not a coincidence — it is the signature of `nvGpuOpsStopChannel`
+> issuing the two back to back (`ogkm-580: nv_gpu_ops.c:10956-10962`, `:10966-10983`), the
+> second gated on `channelEngineType == GR`. Its flags are `0x1c240`
+> (`g_subdevice_nvoc.c:326-332`) ⇒ `ROUTE_TO_PHYSICAL` without
+> `PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`, compiled out to `NULL`, **no body under
+> `src/nvidia/src/`** — the same structural position as `PREEMPT`. ★ And it is the **exact
+> inverse of `GPU_PROMOTE_CTX` (`0x2080012b`), which we DO serve.**
+>
+> **2. ⊘ *"`RESET_CHANNEL` … never observed reaching us"* is FALSE.** `[measured, w306]`
+> `0x906f0102` is in **1 of 195** ledgers —
+> `traces/w299_multiproc/run_w299concurrent_qemu.log.gz`, the **multi-process concurrent**
+> boot, listed adjacent to `0xa06f0112` and `0x2080012c`. ⇒ the ranking fact: **the
+> cancellation surface widens as the ladder gets further**, so "never observed" on this plane
+> means "not yet", not "not applicable".
+>
+> **3. ⊘ The set is missing the one verb with a NEGOTIATED DEADLINE.**
+> `NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS` (`0x00801714`, also `NV_ESC_RM_IDLE_CHANNELS` and RPC
+> **fn 22**) is the only verb in the whole family whose text says *"idles (deschedules and
+> **waits for pending work to complete**)"* and the only one carrying a **caller-supplied
+> `timeout`** with `NV_ERR_TIMEOUT` in its status set (`ogkm-580: ctrl0080fifo.h:386-421`).
+> `[measured]` 0/195 of our ledgers and 0 native-libcuda uses, so it is latent — but it is the
+> verb to serve first if one ever arrives, because it is the only one that tells us how long
+> the guest is willing to wait.
+>
+> **4. ★ And §1.2's severity scoping for `STOP_CHANNEL` understates it in the unsafe
+> direction.** The row says our `0x56` *"also removes the one notification the guest's own
+> CPU-RM would have written"*. True, and secondary. The primary cost is that UVM stops the
+> channel **specifically** *"to prevent spurious MMU faults during teardown"*
+> (`uvm_user_channel.c:877-878`) and then unmaps its allocations — so refusing the stop
+> **defeats the guest's own safety sequence**, on ordinary teardown, in 115 of 195 boots. See
+> `cancellation_plane.md` §4.1.
+
+
 | verb (id, ogkm header:line) | guest issues it? | kayfabe today | what happens now | verdict |
 |---|---|---|---|---|
 | **`NVA06F_CTRL_CMD_STOP_CHANNEL`** `0xa06f0112` (`ctrla06fgpfifo.h:237`) | **Yes, on every UVM channel teardown.** `nvGpuOpsStopChannel` → `pRmApi->Control(..., STOP_CHANNEL)` at `ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:11194`, reached from `nvUvmInterfaceStopChannel` ← `kernel-open/nvidia-uvm/uvm_user_channel.c:788`. **Measured arriving at us: present in the distinct-unserviced ledger of all 25 captured boots** under `traces/boots/` (see §1.3 for why "25 boots", not an arrival count) | zero mentions anywhere in `crates/` (0 grep hits for the id or the name) | `policy.rs:2037` → `None` → ledger → **`0x56`, empty body**. Our channel state is untouched: the channel stays in `exec.requested` until a `FREE` arrives | **NOT BUILT** |
