@@ -125,3 +125,58 @@ is a second mechanism.
   as a merged fix.
 - **`n` is small on every arm.** The strength here is the *direction of the modulation* and the
   *per-boot mechanism variable*, not the sample size of the binary outcome.
+
+---
+
+## 4. ★★★ SECOND PRE-REGISTRATION — the FIX arms, committed after arm R and before arm X/M/H
+
+Arm R came back **2/2 RED at the time of writing** (boot 3 in flight), with
+`last_pinned_va=0x203217000` **identical on both boots** — the row-limit knob is fully
+deterministic, so this is an on-demand reproducer and not a rate. Fingerprint matched w314's
+reds exactly: `Xid 31 · CE3 · HUBCLIENT_CE1 · @ 0x2_0440f000 · FAULT_PDE · ACCESS_TYPE_VIRT_WRITE`.
+
+### The candidate fix
+
+`KAYFABE_COMPLETION_PIN=on` pins the pages named by `WatchList::declared_sites()` — the
+completions **the guest itself declared** — into the doorbelled VAS **before** the budgeted
+drain runs. Measured population is eight declarations at a 16-byte stride ⇒ **one page**, so
+the cost is one pin rather than 13 313. It restores the content of `pin_completion_guest_ram`
+(deleted at w304, `f20ab952`) as an **ordering guarantee**, not as a second mechanism.
+
+⊘ Deliberately NOT "raise the budget": the drain is held under the QEMU BQL with every vCPU
+halted, and w314 measured the surrounding disposal already at 2.65–2.92 s of a 4 s
+`scrubberDestruct` budget. Completeness bought with more BQL spends headroom that is 73 % gone.
+
+⊘ **DEFAULT OFF**, so ONE binary carries both arms of the fix test and the only variable
+between them is this flag.
+
+### Arm **X-off** — control on the fix binary. `ROW_LIMIT=11800`, pin UNSET, n=2
+
+**PREDICTED: 2/2 RED**, same fingerprint, `SEMAPIN[⊘ off …]`. This arm exists because a new
+binary that silently fixed the defect for an unrelated reason would make arm X-on
+uninterpretable. ⊘ A fix test with no same-binary control is not a fix test.
+**FALSIFIER:** a green ⇒ something other than the pin changed the outcome; arm X-on is void.
+
+### Arm **X-on** — THE FIX UNDER PROVOCATION. `ROW_LIMIT=11800` + `KAYFABE_COMPLETION_PIN=on`, n=3
+
+**PREDICTED: 3/3 GREEN, `^CUP3_VAL=43`** — under a truncation that is *deterministically* red
+without the pin. ★ This is the strongest clause in the rung: the drain is still incomplete
+(`complete=false`, `ROW CAP HIT`, `pinned=11800`), so a green here isolates the completion page
+as **the** page whose absence causes the fault, not merely *a* missing page.
+**PREDICTED log:** `SEMAPIN[★ ARMED … declared_pages=1 pinned=1 refused=0]`, host dmesg 0 bytes.
+**FALSIFIER:** any red ⇒ the completion page is not sufficient and other pages in the dropped
+tail matter too. That is a full result and would redirect the fix to ordering-by-need.
+
+### Arm **M** — the FAITHFUL knob (the clock, i.e. the mechanism itself). `BUDGET_MS=2500`, n=2
+
+**PREDICTED: 2/2 RED**, `⚠⚠ WALL BUDGET HIT`, `complete=false`, `DRAIN_MS≈2500`, `pinned` in
+9 000–11 500, truncating below `0x2_0440f000`. This closes the objection that the row-limit
+proxy is not the thing that actually happens.
+
+### Arm **H** — DRIVE THE RATE DOWN with the budget. `BUDGET_MS=20000`, n=3
+
+**PREDICTED:** `budget_hit` absent on **3/3**, `complete=true` on 3/3, `pinned=13313/13313` on
+3/3, and `^CUP3_VAL=43` on 3/3. ⊘ As stated in §2, the green count alone is weak (p≈0.51 under
+baseline at n=3); **the graded clause is `complete=true` on 3/3**, which at w314's observed
+3-of-5 budget-hit rate has p≈0.064. `DRAIN_MS` is reported as the honest BQL cost of the
+budget-raising fix, for the clause-(b) ledger.
