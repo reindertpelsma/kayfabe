@@ -423,9 +423,55 @@ Also retired: the Explore sweep found **no cadence anywhere in `crates/*/src` be
 - ⊘ **Not measured, and load-bearing for the next rung:** where our buffers actually live.
   §5.5 bounds the *cost* of sysmem placement; it does not locate ours.
 
-### 5.9 CORRECTNESS — three workloads, n ≥ 3
+### 5.9 CORRECTNESS — three workloads, n ≥ 3, plus a guarded negative control
 
-*(filled in below from `w320_corr.log`)*
+All at `468e29de`, gate ON, one boot per row (`w320_corr.log`):
+
+| workload | what it catches | n | result |
+|---|---|---|---|
+| `^CUP3_VAL=43` (GR/compute, libcuda) | **loudly-absent** on the bind-hook-rich path | **3** | `INERT-ON-BOTH-PLANES` ×3 |
+| `R33 arm 1` (raw CE, no libcuda, own VAS) | **loudly-absent** where there are NO bind hooks | **3** | fired ×3 |
+| `cup8` N=2048 bit-exact | ⊘ **quietly-wrong** — a stale mapping the engine reads *successfully* | **3** | `bad=0 maxerr=0` ×3 |
+
+```
+q1  submit_med 4.046  sync_med 768.527  gflops 22.244  bad=0 maxerr=0
+q2  submit_med 4.046  sync_med 942.685  gflops 18.147  bad=0 maxerr=0
+q3  submit_med 4.201  sync_med 935.737  gflops 18.278  bad=0 maxerr=0
+```
+
+★ **The negative control is GUARDED, and the batched arm has its own known-positive** — which
+it needed, because a batched loop that silently skips work is the easiest possible false green:
+
+```
+GUEST_NEGCTRL_TOTAL_BAD           = 524288   ✔ the verifier FIRED with every launch skipped
+GUEST_NEGCTRL_SWEEP_ROWS          = 4        ✔ the SWEEP ran (0 rows would be UNMEASURED, not a pass)
+GUEST_NEGCTRL_SWEEP_ROWS_WITH_BAD_0 = 0      ✔ EVERY batched row fired — none verified vacuously
+```
+
+⊘ **`bad=0` in this rung is therefore asserted, not inherited** — unlike w315, which ran
+`KAYFABE_BENCH_ONLY=measure` throughout and said so.
+
+★★ **And n=3 at N=2048 partly relieves §5.8's one-boot caveat where it matters most.** Four
+independent boots of N=2048 (`sizes` 908.966, then 768.527 / 942.685 / 935.737) give a sync
+range of **768–943 ms** — so the guest÷native ratio there is **34–42×**, and the 40.7× quoted in
+§5.2 sits inside it. ⊘ Note the asymmetry the reps expose: **submit is reproducible to ~4 %
+(4.046 / 4.046 / 4.201) while sync scatters ~23 %.** A fixed cost and a work-dependent one do
+not have the same variance, and quoting a single sync figure without its range would overstate
+its precision.
+
+**Workspace suite** — `cargo test --workspace --features kayfabe-qemu-raw/host-isolates
+--no-fail-fast` on `vh2`: **252 targets ok**, `TESTS_EXIT=101`, failing set =
+
+```
+kayfabe-tests --test doorbell_reaches_the_completion_observer   (3 tests)
+kayfabe-tests --test ring_out_of_our_own_framebuffer            (2 tests)
+kayfabe-tests --test guest_os_axis_gate                         (1 test)
+```
+
+⊘ **Byte-identical to the set w315 §8.1 recorded on master**, and necessarily so: `git diff
+master -- crates/` is **0 lines**. ⚠ The exit status was captured directly; it was **not** read
+through a grep matching only `test result` — that is the trap that nearly shipped a red suite
+with twenty `ok` lines above it.
 
 ### 5.10 WHAT THE NEXT RUNG SHOULD BE
 
