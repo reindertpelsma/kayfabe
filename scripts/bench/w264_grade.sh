@@ -69,7 +69,7 @@ row '..  RING-PROJ'              count    qemu.log 'RING-PROJ token='
 row '..  ENOSPC/LLVM (SAME log)' countre  qemu.log 'No space left on device|LLVM ERROR'
 
 printf '%-34s' 'Q13 CUP2_RC'
-for a in $ARMS; do printf '%-14s' "$(first "$D/run_w264_${a}_probe.log" 'CUP2_RC=[0-9]+')"; done
+for a in $ARMS; do printf '%-14s' "$(first "$D/run_w264_${a}_probe.log" '^CUP2_RC=[0-9]+')"; done
 echo
 
 echo

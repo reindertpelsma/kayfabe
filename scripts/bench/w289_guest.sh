@@ -51,7 +51,7 @@ unset KAYFABE_PT_SWEEP KAYFABE_RING_VIDMEM
 export POST_CAPTURE_HOOK=$REPO/scripts/bench/r33_hook_ce_client.sh
 export KAYFABE_R33_BIN=$CLIENT
 export KAYFABE_R33_ARGS="--ce-client-fault"
-TAG=w289g
+TAG=${KAYFABE_TAG:-w289g}
 echo "=== BOOT $TAG START $(date -Is)  ARGS=[$KAYFABE_R33_ARGS] ==="
 timeout 1500 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
 echo "=== BOOT $TAG RC=$? $(date -Is) ==="

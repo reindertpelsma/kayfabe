@@ -56,7 +56,7 @@ export KAYFABE_OPERAND_JOIN=join    # ⊘ RELAXATION 2
 unset KAYFABE_RING_VIDMEM
 
 export POST_CAPTURE_HOOK=$REPO/scripts/bench/cup2_hook_gdbspin.sh
-TAG=w290cup2
+TAG=${KAYFABE_TAG:-w290cup2}
 echo "=== BOOT $TAG START $(date -Is)  HOOK=[cup2_hook_gdbspin] ==="
 timeout 1500 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
 echo "=== BOOT $TAG RC=$? $(date -Is) ==="

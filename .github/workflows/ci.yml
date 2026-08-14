@@ -448,6 +448,48 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This machine has a vendored ogkm tree: $ran USERD-chid-oracle tests executed."
           fi
+      # ★★★★★ GPU-gate non-vacuity — THE HARDWARE TIER, and the family that had no floor.
+      #
+      # `[census, w295]` `GPU-GATE` has existed since `tests/tests/e6_hw_join.rs` landed and
+      # `grep -rn 'GPU-GATE' .github/ scripts/` returned NOTHING: `run_full_suite.sh`'s
+      # `gate-census` derives the family from the markers and turns a `gpu-box` run red on a
+      # skip, but CI could not see the family at all. ⇒ The one set of tests that touches real
+      # hardware was the one set no reached-count protected, which is the exact hole the five
+      # oracle floors above were invented for.
+      #
+      # ⊘ The floor is over `RAN + SKIPPED`, never `RAN`. GitHub's runners have no NVIDIA GPU,
+      # so on THIS runner the family is counted and never passes — that is the point. What the
+      # floor forbids is the family QUIETLY SHRINKING TO NOTHING, which is what a hardware test
+      # deleted or de-announced looks like from here: green, and one number smaller.
+      - name: GPU-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel — so the producer step did not" \
+                 "finish, or another process is writing the same path. This step reports" \
+                 "NOTHING about the tree."
+            ls -l "$log" || true
+            exit 2
+          fi
+          ran=$(grep -c 'GPU-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'GPU-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          floor=3
+          echo "GPU gate: ran=$ran skipped=$skipped total=$total (floor $floor)"
+          if [ "$total" -lt "$floor" ]; then
+            echo "::error::GPU-gated tests were not reached: $total < $floor." \
+                 "These are the ONLY tests in the tree that drive a real NVIDIA GPU —" \
+                 "the E6 guest-ring acceptance and the owner's raw CE client. Either one" \
+                 "was deleted, or a gate stopped announcing itself on BOTH arms, which is" \
+                 "how a hardware test becomes a silent skip and the suite reports green" \
+                 "over it."
+            exit 1
+          fi
+          if [ "$ran" -gt 0 ]; then
+            echo "This machine has an NVIDIA GPU: $ran GPU-gated tests executed."
+          fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Format check

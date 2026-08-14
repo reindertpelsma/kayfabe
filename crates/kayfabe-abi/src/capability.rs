@@ -2149,18 +2149,25 @@ mod tests {
         // every boundary gains exactly one. ⊘ That the deltas are uniform is the check — a
         // row that landed in one boundary's own block would move ONE of these numbers, and
         // this list would say which.
+        // ★★★★★ **−1 from EVERY boundary's control count on 2026-08-14 (w295)**: the same
+        // row, retracted, because its class `GT200_DEBUGGER` (`0x83de`) is denied and this
+        // port refuses the guest's alloc of it. ⊘ **The uniform −8 is the evidence, and it
+        // is doing real work here**: `0x83de0309` is one id, but a class denial refuses a
+        // whole `cmd >> 16` family, so a retraction that reached only SOME boundaries would
+        // mean the class gate was resolving differently per boundary — which it must never,
+        // since `DENIED_CLASSES` lives in the shared base and nowhere else.
         let want: &[ResolvedExpectation] = &[
             (
                 "550.54.04",
                 (550, 54, 4),
-                159,
+                158,
                 77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                160,
+                159,
                 77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2170,14 +2177,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                159,
+                158,
                 77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                160,
+                159,
                 85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2187,7 +2194,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                162,
+                161,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2199,7 +2206,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                163,
+                162,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2212,7 +2219,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                163,
+                162,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2225,7 +2232,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                163,
+                162,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
