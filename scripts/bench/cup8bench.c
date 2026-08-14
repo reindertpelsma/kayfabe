@@ -586,7 +586,18 @@ int main(void){
                  * it failed at instead of the whole buffer.
                  * ⊘ This is a workaround for the MEASUREMENT, not a fix for whatever refused:
                  *   if the fill still fails the row is UNMEASURED and says where. */
-                const size_t FILL_CHUNK = 2u*1024u*1024u;   /* elements: 8 MiB of fp32 */
+                /* ★★★★★ w327 — THE CHUNK IS THE MEASUREMENT'S OWN RESOLUTION, SO IT IS A KNOB.
+                 * `[measured w327]` every failing row reports `at_element=2097152`, i.e. byte
+                 * offset 0x800000 — which is simply "the second chunk", because the chunk is
+                 * 8 MiB. That number was then read as an 8 MiB boundary in the DEVICE and
+                 * matched against `MAX_PUSH_TOTAL_BYTES = 8 << 20`; it is neither. ⇒ the
+                 * failure offset is known only to +/- one chunk, and the only way to say
+                 * WHERE the buffer stops working is to shrink the chunk.
+                 * ⊘ DEFAULTED TO 8 MiB, so an un-armed run is byte-identical to before. */
+                size_t FILL_CHUNK = 2u*1024u*1024u;   /* elements: 8 MiB of fp32 */
+                { const char*fc=getenv("BENCH_BW_FILL_CHUNK_MIB");
+                  if(fc&&*fc){ long v=atol(fc);
+                    if(v>0) FILL_CHUNK=(size_t)v*1024u*1024u/4u; } }
                 int frc=0, frc2=0; size_t fill_at=0;
                 for(fill_at=0; fill_at<NF && !frc && !frc2; fill_at+=FILL_CHUNK){
                     size_t n = (NF-fill_at < FILL_CHUNK) ? (NF-fill_at) : FILL_CHUNK;

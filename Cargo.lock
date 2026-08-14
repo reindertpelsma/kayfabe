@@ -183,6 +183,7 @@ dependencies = [
  "kayfabe-mmu",
  "kayfabe-trace",
  "kayfabe-util",
+ "trybuild",
 ]
 
 [[package]]
@@ -282,6 +283,7 @@ dependencies = [
  "kayfabe-rmrpc",
  "kayfabe-rt",
  "kayfabe-shell",
+ "kayfabe-util",
  "kayfabe-vmm",
  "kayfabe-vmm-qemu",
 ]

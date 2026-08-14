@@ -361,6 +361,31 @@ static LEDGER: &[u32] = &[
     0x2081_0110,
     0x208f_1105,
     0x402c_0101,
+    // ★★★★★ **w327 — `NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`, AND ITS POSITION IN
+    // THE STREAM IS THE WHOLE OF ITS MEANING: IT IS THE GUEST ASKING WHY THE LAUNCH DIED.**
+    //
+    // `[measured 2026-08-14, w327]` this id reached the unserviced ledger in **eleven** boots
+    // — `w327a w327c1 w327f1 w327f2 w327f3 w327u2 w327x1 w327x1b w327x2 w327z1 w327z2` — and
+    // in **none** of the ten passing ones (`w327b1 b2 b3 u1 u3 u4 u4b r s big`). ★★★ That is
+    // a perfect split with the arm's outcome: **every boot whose `cuMemsetD32` died
+    // `CUDA_ERROR_LAUNCH_FAILED` asked this control, and no boot that succeeded did.**
+    //
+    // ⇒ It is not a wall and it is not on any critical path; it is libcuda's ERROR PATH,
+    // reached only after a launch has already failed. `channel_alloc_forwardability.md`
+    // §1082 row **D** already names it *"the SM error state … `mmuFault.valid/faultInfo` …
+    // the GSP (= us), on demand … ✅ and w277 measured it is THE one"*, admitted to the
+    // capability table at w296 (`kayfabe_abi::capability`, 149 → 151).
+    //
+    // ⚠ **WHAT I BELIEVE, stated because the gate exists to make me:** refusing it is
+    // currently *harmless to the outcome* — the launch is already lost by the time it is
+    // asked (`w327_the_allocation_cliff.md` §3: the operand leaf was never joined, because
+    // the previous allocation's framebuffer frames are still joined and were never released).
+    // ⊘ But it is **not harmless to diagnosis**: this is the plane through which a guest is
+    // supposed to learn *which* fault killed its kernel, and answering it is how `nvidia-smi`
+    // and every CUDA error message stop being blank. Serving it belongs to whichever rung
+    // owns fault reporting, and it must NOT be read as *"unserviced, therefore inert"* —
+    // that reading is exactly what `0x20801702`'s row above was corrected for.
+    0x83de_030c,
     0xa06f_0112,
 ];
 
