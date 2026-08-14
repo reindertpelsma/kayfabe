@@ -36,7 +36,11 @@
 //! silently is worse than a missing one, because the suite then reports green over it.
 
 use kayfabe_arch::ids::GpuId;
-use kayfabe_isolate::IsolateId;
+// ★ `RmBackend` is in scope for `alloc_vaspace` alone: it is a **trait** method, and the raw
+// client reaches it through the same port a production isolate does rather than through a
+// private helper. ⊘ A test that called an inherent shortcut would be testing a path the
+// product does not have.
+use kayfabe_isolate::{IsolateId, RmBackend as _};
 use kayfabe_isolate_host::ChildExports;
 use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection, userd_offset_refusal};
 use kayfabe_linux_raw::DevDir;
