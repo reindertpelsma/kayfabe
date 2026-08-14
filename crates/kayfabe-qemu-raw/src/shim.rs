@@ -3061,6 +3061,17 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.schedule_group(client, object, enable)
     }
 
+    /// ★★★★★ w303 — the shell's seat for the `0xa06c0105` host-reachability census. ⚠ It
+    /// exists for the same measured reason the arm below it does: `as_gpu` is `None` here
+    /// by design, so an arm written against it would refuse on every real boot.
+    fn group_host_twins(
+        &self,
+        client: kayfabe_rt::HClient,
+        object: kayfabe_rt::HObject,
+    ) -> Result<kayfabe_core::gpu::GroupHostTwins, kayfabe_core::gpu::ScheduleGroupFault> {
+        self.0.group_host_twins(client, object)
+    }
+
     /// ★★★★ §16.59 — the shell's seat for `0x20801210`. ⚠ It exists **because**
     /// `SharedObjectModel::as_gpu` is `None` by design: an arm written against `as_gpu`
     /// would refuse on every real boot and pass every bare-`Gpu` test.
@@ -12332,6 +12343,61 @@ impl Regs {
         // preference.
         let err_notifier_grants = self.pending_err_notifier_grants();
         report_engine_forward_drain(&self.device, &err_notifier_grants);
+        // ★★★★★ **w303 — THE REAP, AND THIS LINE IS THE WHOLE OF FIX A.**
+        //
+        // `docs/audits/w301_cancellation_error_leaks.md` §3.1: the per-object teardown chain
+        // (`plan_refresh` → `Spine::vacate` → `Proc::retire` → `self.retired` → `Proc::drop`
+        // issuing real `Release` verbs) is **built, tested and correct**, and its only
+        // non-test caller was `kayfabe_rt::Executor` (`executor.rs:84`), which has **zero
+        // production call sites**. ⇒ under QEMU a dead guest process's whole host RM object
+        // tree — client, device, subdevice, VAS, TSG, channels, USERD, ctx buffers,
+        // `OS_DESCRIPTOR` pins — and its **isolate child process** survived until QEMU
+        // exited, and at `MAX_RETIRED_PROCS = 1024` (`kayfabe_core::gpu`) no new guest
+        // process could be derived at all. BUILT + ORPHANED; the fix is a composition-root
+        // line, not a design.
+        //
+        // # ⊘ Why HERE, and not at the client-root free
+        //
+        // `Spine::reap_retired`'s own docs carry the C's P0 lesson (L10): *"reaping the
+        // heavy tables AT the client-root free hung the dying context's residual polls, so
+        // it reaps at the GSP queue re-handshake instead"*. The core therefore splits
+        // **retire** (eager, inside the apply, under the lock) from **reap** (deferred, at
+        // an *adapter-declared* quiesce point) — and declaring that point is precisely the
+        // obligation this crate had never discharged. `Regs::write` is the shim's
+        // re-handshake edge: the guest's `GSP_RM_FREE` chain, the fn-47 idle release and the
+        // status-queue re-publish all arrive as register writes, and the retirement they
+        // cause is latched inside `RegPlane::write` **on this very call**.
+        //
+        // # ★ Why it is SAFE here, by the same argument the two drains above already make
+        //
+        // `RegPlane::write` has returned, so the plane's rank-0 guard is a dropped local and
+        // this frame holds **no ranked lock at all**. That matters more for the reap than
+        // for the drains: `SharedDevice::reap_retired` releases the device write guard and
+        // *then* drops the corpses, whose `Drop` is `waitpid` + namespace teardown — a
+        // blocking syscall. `IsolateBox`'s own `Drop` asserts lock-freedom, so if any of
+        // this is wrong it is refused **by name, here** (§12.16 G3b).
+        //
+        // # ⚠ It RETRIES, and that is why one line is enough
+        //
+        // A proc with a worker still checked out is **not** quiesced; `Spine::reap_retired`
+        // puts it straight back on the list (§12.16 G3) and it is reaped at a later quiesce
+        // point. Because this edge is every register write, "a later quiesce point" is the
+        // guest's next MMIO write — there is no deadline to arm and no thread to own it.
+        //
+        // ⊘ Cost: one device write-lock acquisition per register write, which is the cost
+        // class `materialize_pending` above already pays on this same frame; when
+        // `self.retired` is empty the body is a `mem::take` of an empty `Vec`.
+        let reaped = self.device.reap_retired();
+        if reaped > 0 {
+            // ★ Visible in the boot log, because "the reap ran" is a claim this tree has
+            // twice mistaken for "the reap exists". A zero prints nothing; a non-zero says
+            // so once per reap, with what is still outstanding beside it.
+            eprintln!(
+                "kayfabe: REAP reaped={reaped} still_retired={} ⇒ each reaped proc's staged \
+                 host `Release` verbs went out and its isolate child was reaped",
+                self.device.retired_len(),
+            );
+        }
         out
     }
 

@@ -4471,6 +4471,23 @@ impl DmaGetPdeInfoParams {
 /// ⇒ ★ **And the security question answers itself the same way:** a reply that is the
 /// caller's own bytes carries nothing belonging to another context, another client, or the
 /// host. Nothing is read to build it.
+///
+/// # ★★★★★ w303 — WHAT MEMBERSHIP HERE MEANS, AND WHAT IT MAY NEVER MEAN
+///
+/// `docs/audits/w301_cancellation_error_leaks.md` §1.4 found one row that had become a lie:
+/// `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) was answered `NV_OK` on a channel group with a
+/// **live, scheduled host twin**, on the strength of the note *"scheduler hints to a runlist
+/// we do not schedule"* — a premise this port outgrew the day it began materializing and
+/// scheduling a real host TSG. That row is **gone** (see [`INPUT_ONLY_CONTROLS`]'s preamble)
+/// and every remaining one now states its disposition **at the id**, in the type, so
+/// "we answered and dropped it" can never again be read off a table whose only signal is
+/// membership.
+///
+/// ⊘ **The distinction the type now carries is not decorative.** *"There is nothing to do"*
+/// and *"there is something to do and we did not do it"* are the two halves of §0's rule —
+/// *a completion is sent only if the observed state after it is intended and safe in the
+/// guest* — and a table that cannot tell them apart makes the rule uncheckable.
+/// [`InputOnlyDisposition`] makes the second half **unrepresentable** here.
 pub struct InputOnlyControl {
     /// The RM control command id.
     pub cmd: u32,
@@ -4479,12 +4496,64 @@ pub struct InputOnlyControl {
     /// `paramsSize` in bytes, as **measured on a real GA106**, not as read off a header.
     /// A guest that declares anything else is refused rather than accommodated.
     pub params_size: usize,
+    /// ★★★★★ **w303 — the kind, ON the value.** Why doing nothing is the whole verb for
+    /// *this* id. See [`InputOnlyDisposition`].
+    ///
+    /// ⊘ There is exactly one variant, deliberately: this is not a switch that selects
+    /// behaviour, it is a **proof obligation** the row must discharge in words. An id whose
+    /// obligation cannot be written down does not belong in this table — which is the rule
+    /// `0xa06c0105` broke and the reason it was removed rather than re-labelled.
+    pub disposition: InputOnlyDisposition,
     /// Who says serving it is right. ⊘ Never empty — an id with no authority does not
     /// belong in this table.
     pub authority: &'static str,
 }
 
-/// The rows. ⊘ `0x2080200a` (`PERF_BOOST`) is **deliberately absent**: `[measured]` it
+/// ★★★★★ **w303 — why an ack is the WHOLE verb for a given id.** A
+/// [`SECOND SOURCE OF TRUTH beside a complete value`] is what this replaces: membership in
+/// [`INPUT_ONLY_CONTROLS`] used to be the only signal, and membership cannot distinguish
+/// *"complete"* from *"parked"*.
+///
+/// [`SECOND SOURCE OF TRUTH beside a complete value`]: INPUT_ONLY_CONTROLS
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputOnlyDisposition {
+    /// ★ **The ack IS the entire operation** — there is no state this port models, no
+    /// state the host holds, and no state the guest can observe that a correct
+    /// implementation would have changed. The carried string says *why*, per id, and is
+    /// the row's discharge of that claim.
+    ///
+    /// ⊘ **`AcceptedAndDropped` is deliberately NOT a sibling variant.** Adding one would
+    /// make "we answer OK and drop it" a *representable, reviewable-looking* state, and the
+    /// w301 finding is precisely that such a state passed review for two days. An id whose
+    /// work we accept and drop must leave this table and get an arm that decides.
+    AckIsTheWholeVerb(&'static str),
+}
+
+/// The rows.
+///
+/// ★★★★★ **w303 — `0xa06c0105` (`NVA06C_CTRL_CMD_PREEMPT`) LEFT THIS TABLE, and the reason
+/// is the table's whole discipline arriving.** It was added at w292 with the weakest
+/// authority string of any row (*"⚠ NATIVE GA106 ONLY … the C is SILENT"*) under the note
+/// *"a scheduler hint to a runlist we do not schedule"*. Both halves are now refuted:
+///
+/// - **We DO schedule.** The isolate issues `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` with
+///   `b_enable: 1` on a real host TSG (`kayfabe-isolate-host/src/rm.rs`, `RmBackend::schedule`),
+///   so a guest `PREEMPT` can name a group with a live, scheduled twin on real silicon.
+/// - **⊘ AND THE AUDIT THAT FOUND IT MISREAD WHERE IT LIVES.**
+///   `docs/audits/w301_cancellation_error_leaks.md` §1.4 places it *"inside `cuCtxCreate`,
+///   not teardown"*. `[measured 2026-08-14, w303]` decoding
+///   `../nvidia-gpu-passthrough/traces/host_reference_ga106/ctx_r1.jsonl.zst` shows record
+///   457 sitting inside an unbroken `RM_FREE` cascade — 450, 451, 453, 456, **457**, 459,
+///   463, 465 — i.e. **`cuCtxDestroy`**. `init_r1`/`dev_r1`, which create no context,
+///   never issue it at all. ⇒ the ack is not a harmless setup nicety; it is a **teardown**
+///   ack, on the one path where "is the engine still running out of the pages I am about
+///   to free?" is the entire question.
+///
+/// ⇒ It is answered by `ObjectPolicy::respond_preempt`, which **decides** rather than
+/// parks: `NV_OK` when the named group provably has nothing a preemption could preempt,
+/// and a named refusal when it does. See [`PREEMPT_UNPERFORMED_STATUS`].
+///
+/// ⊘ `0x2080200a` (`PERF_BOOST`) is **deliberately absent**: `[measured]` it
 /// appears **zero** times in our QEMU log, so its `0x56` is produced inside the guest's own
 /// `nvidia.ko` and is not ours to serve. `0x2080012f` (`GPU_QUERY_ECC_STATUS`) is likewise
 /// absent: a **real GA106 also refuses it** `0x56`, so our refusal AGREES with hardware and
@@ -4494,6 +4563,11 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         cmd: 0x2081_0108,
         name: "NV2081_BINAPI (0x20810108)",
         params_size: 992,
+        disposition: InputOnlyDisposition::AckIsTheWholeVerb(
+            "A BINAPI passthrough block whose 992 bytes RM copies and does not interpret on \
+             this path; there is no device state, host or guest, that a correct \
+             implementation would have moved. Native GA106 leaves ppost == ppre.",
+        ),
         authority: "C cap3_matmul_forwarding SERVED NV_OK psize=992 dlen=992 COMPLETE (the \
                     GREEN run); native GA106 NV_OK @77",
     },
@@ -4501,6 +4575,12 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         cmd: 0x83de_0309,
         name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
         params_size: 4,
+        disposition: InputOnlyDisposition::AckIsTheWholeVerb(
+            "An event FILTER inside RM, not a hardware write (ogkm-580: ctrl83dedebug.h:158-161). \
+             The default when it is never called is _ALL, which is MORE permissive than the \
+             0x3a the guest asks for — so our doing nothing leaves the guest strictly no \
+             better off than RM would have, and nothing observable differs.",
+        ),
         authority: "C cap3 SERVED NV_OK psize=4 dlen=4 COMPLETE; native GA106 NV_OK @425. \
                     ★ THE ONE THAT ENDS cuCtxCreate. ogkm: RM-internal event filter, no \
                     hardware write, default when never called is _ALL (more permissive \
@@ -4510,17 +4590,13 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         cmd: 0xa06c_0103,
         name: "NVA06C_CTRL_CMD_SET_TIMESLICE",
         params_size: 8,
+        disposition: InputOnlyDisposition::AckIsTheWholeVerb(
+            "SET_TIMESLICE names a runlist timeslice. This port runs no runlist and shares no \
+             engine between guest groups, so there is no quantum to set and no other party \
+             whose share it could come out of. ⊘ If this port ever schedules two guest TSGs \
+             against one host engine, this row's claim is FALSE and it must leave the table.",
+        ),
         authority: "C cap3 SERVED NV_OK psize=8 dlen=8 COMPLETE; native GA106 NV_OK @427",
-    },
-    InputOnlyControl {
-        cmd: 0xa06c_0105,
-        name: "NVA06C_CTRL_CMD_PREEMPT",
-        params_size: 8,
-        // ⚠ SAY WHICH AUTHORITY, AND SAY WHERE THE C IS SILENT. An oracle that does not
-        // contain a row is not an oracle that refused it.
-        authority: "⚠ NATIVE GA106 ONLY (NV_OK @457). ⊘ The C is SILENT here — 0xa06c0105 \
-                    appears ZERO times in cap3, because cup8's path differs from \
-                    nvd_prog's. That is an ABSENCE OF EVIDENCE, not evidence of refusal",
     },
     // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ARE NOT THE ID ANY IOCTL ORACLE
     // SHOWS.** See `PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES` for the whole argument; the short
@@ -4535,6 +4611,11 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         // ⚠ SAY WHICH AUTHORITY. There is NO ioctl oracle for this id and there never can
         // be — it is `RMCTRL_FLAGS_INTERNAL` and is issued by the guest's KERNEL, so it
         // crosses no ioctl boundary any LD_PRELOAD recorder watches.
+        disposition: InputOnlyDisposition::AckIsTheWholeVerb(
+            "A per-Device CUDA-limit refcount held in the GSP. We hold no such counter and \
+             expose no perf control, so the only observable consequence is the status the \
+             guest's own kern_cuda_limit.c reads — which NV_OK satisfies exactly.",
+        ),
         authority: "⊘ NO IOCTL ORACLE EXISTS FOR THIS ID, BY CONSTRUCTION (internal; never \
                     crosses the ioctl boundary — native, C and nvdiff are all structurally \
                     blind to it, which is SILENCE and not a negative). Authority is (1) \
@@ -4551,6 +4632,11 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         // `/*paramSize=*/ 0 /* Singleton parameter list */`, and the sole caller passes
         // `NULL, 0` (`kern_cuda_limit.c:64-69`). A row with no body to echo.
         params_size: 0,
+        disposition: InputOnlyDisposition::AckIsTheWholeVerb(
+            "The disable half of 0x00802009, same counter, same reason — and here the ack is \
+             also the SAFE answer: deviceKPerfCudaLimitCliDisable checks our status BEFORE \
+             zeroing the guest's own refcount.",
+        ),
         authority: "⊘ NO IOCTL ORACLE, same reason as 0x00802009. Authority is (1) ogkm-580 \
                     g_device_nvoc.c:1002-1015 flags=0xc0 ROUTE_TO_PHYSICAL; (2) OUR OWN \
                     ledger — `unserviced fn 76 cmd 0x00802004` in run_w290pdrain_qemu.log. \
@@ -4609,6 +4695,63 @@ pub fn input_only_control(cmd: u32) -> Option<&'static InputOnlyControl> {
 /// emitted when we did not serve the id at all, and reusing it would make *"we refused the
 /// shape"* and *"we never heard of it"* the same observation.
 pub const INPUT_ONLY_REFUSED_STATUS: u32 = 0x47;
+
+// =====================================================================================
+// ★★★★★ w303 — `NVA06C_CTRL_CMD_PREEMPT`, THE VERB WE ACCEPTED AND DROPPED
+// =====================================================================================
+
+/// `NVA06C_CTRL_CMD_PREEMPT` = `0xa06c0105` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/ctrl/ctrla06c.h:203`).
+///
+/// > *"This command preempts a channel group. It optionally waits for the preempt to
+/// > complete before returning."* — `ogkm-580: ctrla06c.h:177-198`
+///
+/// # ★★★ It is OURS, and there is no second party that could perform it
+///
+/// Its NVOC export entry carries `flags = 0x10248` (`ogkm-580:
+/// src/nvidia/generated/g_kernel_channel_group_api_nvoc.c:267-280`), which includes
+/// `ROUTE_TO_PHYSICAL` (`0x40`) and **excludes** `PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`. By
+/// `NVOC_EXPORTED_METHOD_DISABLED_BY_FLAG` (`ogkm-580:
+/// src/nvidia/inc/kernel/rmapi/control.h:159-162`) the CPU-RM `_IMPL` is replaced by
+/// **`NULL`** in the export table, and no body exists anywhere under `src/nvidia/src/`. ⇒ on
+/// a GSP client the entire implementation lives behind the RPC. **We are the GSP.** The
+/// guest's own kernel forwards it and returns whatever we say; nothing compensates for our
+/// not performing it.
+///
+/// ⊘ `kernel-open/` never names the class at all — the kernel's channel-teardown verb is
+/// `NVA06F_CTRL_CMD_STOP_CHANNEL` (`ogkm-580: nv_gpu_ops.c:10957-10962`). ⇒ **a refusal of
+/// this id surfaces in userspace `libcuda`, and can produce no guest kernel diagnostic.**
+pub const NVA06C_CTRL_CMD_PREEMPT: u32 = 0xa06c_0105;
+
+/// `NVA06C_CTRL_PREEMPT_PARAMS` — `{ NvBool bWait; NvBool bManualTimeout; NvU32 timeoutUs; }`
+/// (`ogkm-580: ctrla06c.h:207-211`). `NvBool` is `NvU8`, so 8 bytes with padding.
+///
+/// `[measured]` native GA106 and our guest both send `bWait=1, bManualTimeout=0,
+/// timeoutUs=0` (`ppre = ppost = 0100000000000000`), and **`ppost == ppre`** — real RM
+/// writes nothing into this block. ⚠ `bWait = 1` is the caller asking us to **block until
+/// the preempt lands**, which is exactly why an unconditional `NV_OK` is the strong form of
+/// the lie: it promises a postcondition.
+pub const PREEMPT_PARAMS_SIZE: usize = 8;
+
+/// What `PREEMPT` is refused with when the named group **has** a host twin — i.e. when
+/// there is real work we would have to preempt and no verb by which to do it.
+///
+/// ★ `NV_ERR_INVALID_STATE` and deliberately **not** `0x56`, for two reasons that point the
+/// same way:
+///
+/// 1. **The name has to be true** (`refuse_by_name_means_the_name_is_true`).
+///    `NV_ERR_NOT_SUPPORTED` asserts *"this device has no such control"*, which is **false**
+///    — the id is `ROUTE_TO_PHYSICAL`, it reaches us, and we recognise it. *"This group is
+///    not in a state we can preempt"* is the true statement.
+/// 2. **It is inside the header's own contract.** `ogkm-580: ctrla06c.h:194-198` lists
+///    exactly `NV_OK`, `NV_ERR_INVALID_ARGUMENT`, `NV_ERR_INVALID_STATE`. `0x56` is outside
+///    it, so a caller switching on status has no arm for it; `NV_ERR_INVALID_STATE` lands in
+///    a branch the caller was written to have.
+///
+/// ⊘ Distinct from [`INPUT_ONLY_REFUSED_STATUS`] (`0x47`, *"you asked wrongly"*), which this
+/// arm still uses for a malformed params block. *"Wrong shape"* and *"wrong state"* are two
+/// findings and must not collapse into one status.
+pub const PREEMPT_UNPERFORMED_STATUS: u32 = crate::NV_ERR_INVALID_STATE;
 
 #[cfg(test)]
 mod dma_pde_info_tests {

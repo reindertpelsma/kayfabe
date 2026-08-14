@@ -245,6 +245,17 @@ pub const NV_VGPU_MSG_RESULT_VMIOP_BASE: u32 = 0xFF00_0000;
 /// table of 200 status codes with no consumer is the breadth this crate's §4 refuses.
 pub const NV_ERR_NOT_SUPPORTED: u32 = 0x0000_0056;
 
+/// `NV_ERR_INVALID_STATE` — *"Generic Error: Invalid state"* (`ogkm-580:
+/// src/common/sdk/nvidia/inc/nvstatuscodes.h:93`).
+///
+/// ★ **w303 — added because `0x56` is the wrong word for a control we DO recognise.** The
+/// doc above argues why `NV_ERR_NOT_SUPPORTED` stays one value; this is not a split of it,
+/// it is a **different claim**. `0x56` asserts *"this device has no such control"*.
+/// `NV_ERR_INVALID_STATE` asserts *"the object you named is not in a state where this can
+/// be done"* — which is what a `ROUTE_TO_PHYSICAL` verb that reaches us and that we cannot
+/// perform actually means. See `submit::PREEMPT_UNPERFORMED_STATUS`.
+pub const NV_ERR_INVALID_STATE: u32 = 0x0000_0040;
+
 /// A guest driver version, as detected/advertised at device realize.
 /// (Values are data, not code: one generated module per version.)
 ///

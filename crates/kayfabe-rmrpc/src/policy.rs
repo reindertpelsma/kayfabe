@@ -667,6 +667,28 @@ pub trait ObjectModel: Send {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault>;
 
+    /// ★★★★★ **w303 — is there anything in this channel group a preemption could
+    /// preempt?** Pure read; nothing is scheduled, descheduled or recorded.
+    ///
+    /// The one question `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) turns on. See
+    /// [`kayfabe_core::gpu::GroupHostTwins`] for why a host twin is the right predicate
+    /// and why only its **absence** is conclusive.
+    ///
+    /// ⚠ **A trait method rather than a call through [`Self::as_gpu`]**, for exactly
+    /// [`Self::set_ctxsw_preemption_mode`]'s measured reason: the shipped composition root
+    /// installs a sharded shell whose `as_gpu` is `None` **by design**, so an arm built on
+    /// `as_gpu` refuses on every real boot while passing every test that composes a bare
+    /// [`Gpu`].
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::ScheduleGroupFault`], by variant — the same routing, so the
+    /// same refusal vocabulary as the group form of `GPFIFO_SCHEDULE`.
+    fn group_host_twins(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::GroupHostTwins, kayfabe_core::gpu::ScheduleGroupFault>;
+
     /// ★★★★ **§16.59** — verify the guest's
     /// `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` (`0x20801210`) — the wall `s45` and
     /// `s46` both measured at record 331.
@@ -839,6 +861,27 @@ impl ObjectModel for Gpu {
         enable: bool,
     ) -> Result<kayfabe_core::gpu::ScheduleGroupAck, kayfabe_core::gpu::ScheduleGroupFault> {
         Gpu::schedule_group(self, client, object, enable)
+    }
+
+    /// ⊘ **Not a stub, for [`ObjectModel::relay_channel_control`]'s reason:** a bare `Gpu`
+    /// is the single-threaded *reference* form of the model, and an arm that refused here
+    /// would make the differential's reference behaviour *"unimplemented"* — the shape that
+    /// lets a shell-only defect pass every test composing a bare `Gpu`.
+    fn group_host_twins(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::GroupHostTwins, kayfabe_core::gpu::ScheduleGroupFault> {
+        let route = kayfabe_core::gpu::route_schedule_group(&self.spine, client, object)?;
+        let members = route.chans.len() + route.unmaterialized;
+        let proc = self.procs.get(&route.proc).ok_or(
+            kayfabe_core::gpu::ScheduleGroupFault::NoMemberMaterialized {
+                client,
+                object,
+                members,
+            },
+        )?;
+        Ok(kayfabe_core::gpu::census_group_host_twins(proc, &route))
     }
 
     fn set_ctxsw_preemption_mode(
@@ -2063,6 +2106,7 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO => {
                 self.respond_get_mmu_fault_info(cmd, &req)
             }
+            kayfabe_abi::submit::NVA06C_CTRL_CMD_PREEMPT => self.respond_preempt(cmd, &req),
             // ★★★★★ w292 — the input-only group, dispatched by TABLE LOOKUP rather than by
             // four arms, so an id can never be claimed above and undecided here.
             other if kayfabe_abi::submit::input_only_control(other).is_some() => {
@@ -2104,14 +2148,23 @@ impl ObjectPolicy {
     /// envelope with an empty params region — which is what RM's own transport expects,
     /// since `rpc.c:11085-11090` copies nothing back when `paramsSize == 0`.
     ///
-    /// It records **nothing**. These four change no state this port models: `0x83de0309`
-    /// is an RM-internal event filter whose default is already more permissive than the
-    /// value the guest asks for; `SET_TIMESLICE` and `PREEMPT` are scheduler hints to a
-    /// runlist we do not schedule. ⇒ *"the observable consequence of our doing nothing is
-    /// a TRUE statement about this device"* — the same eligibility rule
-    /// `kayfabe_device::inert` states for whole functions, applied to four controls.
-    /// ⊘ If any of them ever needs to change device state, it must leave this table; a row
-    /// here is a claim that the ack is complete, not a parking space.
+    /// It records **nothing**, and each row now says *why that is complete* in its own
+    /// [`kayfabe_abi::submit::InputOnlyDisposition`] — the kind carried **on the value**,
+    /// so membership is no longer the only signal a reader has.
+    ///
+    /// ⊘⊘ **w303 — THE SENTENCE THAT USED TO STAND HERE WAS WRONG, AND IT IS WHY THIS
+    /// PARAGRAPH IS NOW A CORRECTION RATHER THAN A CLAIM.** It read: *"`SET_TIMESLICE` and
+    /// `PREEMPT` are scheduler hints to a runlist we do not schedule."* We **do** schedule —
+    /// the isolate issues `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` with `b_enable: 1` on a real
+    /// host TSG — so for `0xa06c0105` the premise was false and the ack was a forged
+    /// success on a group with a live host twin
+    /// (`docs/audits/w301_cancellation_error_leaks.md` §1.4). That id has **left this
+    /// table**; it is decided by [`Self::respond_preempt`]. `SET_TIMESLICE` stays, and its
+    /// row now states the narrower claim that actually holds — no runlist, and no second
+    /// guest group sharing an engine whose quantum could be taken.
+    ///
+    /// ⊘ A row here is a claim that the ack is complete, not a parking space. An id that
+    /// needs to change state must leave the table and get an arm that decides.
     fn respond_input_only(
         &mut self,
         cmd: &RpcCommand,
@@ -2136,6 +2189,159 @@ impl ObjectPolicy {
             rpc_result: 0, // NV_OK
             body: cmd.payload.clone(),
         })
+    }
+
+    /// ★★★★★ **w303 — `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`): DECIDE, never park.**
+    ///
+    /// # The defect this replaces
+    ///
+    /// `docs/audits/w301_cancellation_error_leaks.md` §1.4: this id was answered `NV_OK`
+    /// with the guest's own bytes echoed, unconditionally, on a channel group that may have
+    /// a **live, scheduled host twin executing on a real GA106**. Nothing was preempted.
+    /// That breaks §0 of `road_to_v1_after_cup2.md` — *a completion is sent only if the
+    /// observed state after it is intended and safe in the guest* — in its strongest form,
+    /// because the measured payload is `bWait = 1`: the caller is asking us to **block until
+    /// the preempt lands**, so `NV_OK` promises a postcondition rather than merely
+    /// acknowledging a hint.
+    ///
+    /// # ⊘⊘ AND IT IS A TEARDOWN CONTROL, WHICH THE AUDIT GOT BACKWARDS
+    ///
+    /// §1.4 places it *"inside `cuCtxCreate`, not teardown"*. `[measured 2026-08-14, w303]`
+    /// decoding `../nvidia-gpu-passthrough/traces/host_reference_ga106/ctx_r1.jsonl.zst`
+    /// puts record 457 inside an unbroken `RM_FREE` cascade — 450, 451, 453, 456, **457**,
+    /// 459, 463, 465 — i.e. **`cuCtxDestroy`**; `init_r1`/`dev_r1` never issue it. ⇒ the
+    /// question it asks is *"is the engine still running out of the pages I am about to
+    /// free?"*, which makes an unconditional yes the worst possible answer and connects this
+    /// row directly to §3.3's free-after-ring.
+    ///
+    /// # ★★★ The decision, and why exactly one side of it is provable
+    ///
+    /// Work reaches the host GPU through exactly one door: a **host channel** born for a
+    /// guest channel and rung through `RmBackend::ring_doorbell`. So:
+    ///
+    /// - **No member of the group holds a host twin** ⇒ nothing of this group has ever been
+    ///   submitted to hardware ⇒ it is idle *by construction*, the preemption is vacuously
+    ///   complete, and `NV_OK` is a **true** statement. Served, and printed.
+    /// - **Some member does** ⇒ we cannot say it is idle, we have no verb that could make it
+    ///   so, and we must not claim the postcondition.
+    ///   [`kayfabe_abi::submit::PREEMPT_UNPERFORMED_STATUS`] (`NV_ERR_INVALID_STATE`), which
+    ///   is inside this control's own documented status set.
+    ///
+    /// ⊘ The asymmetry is deliberate and is stated at
+    /// [`kayfabe_core::gpu::GroupHostTwins`]: `with_host_twin > 0` is **not** "work is
+    /// executing", only "we cannot prove it is not". Reading it as the former would be the
+    /// same conflation in the other direction.
+    ///
+    /// # ⚠ What this is NOT, and what would supersede it
+    ///
+    /// This does not preempt anything. The successor is to **perform** it — the host TSG is
+    /// already reachable, `HostRmBackend::schedule` finds it as `channel_parts(raw).tsg` and
+    /// issues a group control on it, so a `preempt` verb is that function with a different
+    /// command id and the guest's own params. That needs a boot to prove and is **not**
+    /// built here. Until it is, this arm's refusal is the honest half and it is loud.
+    ///
+    /// ⊘ **Refusing costs the current ladder nothing, and that is measured rather than
+    /// hoped.** `[measured 2026-08-14, w303]` `0xa06c0105` appears **nowhere** in either
+    /// crossing boot — not in `traces/w294_cudalimit/run_w294cup2_qemu.log`'s served-control
+    /// census nor its 40-id unserviced ledger, and not in
+    /// `traces/w297_cup3/run_w297cup3_qemu.log.gz`'s either. Known-positive for that zero:
+    /// the sibling ids `0xa06c010a` (x5), `0xa06c0101` (x3) and `0xa06c0103` (x1) **are**
+    /// named in both, so the census is live. The cause is in the workload —
+    /// `scripts/bench/cup3.c` calls `cuCtxCreate` and never `cuCtxDestroy`. ⇒ this arm
+    /// cannot move `CUP2_RC` or `CUP3_RC`.
+    fn respond_preempt(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        use kayfabe_abi::submit::{
+            INPUT_ONLY_REFUSED_STATUS, PREEMPT_PARAMS_SIZE, PREEMPT_UNPERFORMED_STATUS,
+        };
+        let refuse = |status: u32| {
+            Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            })
+        };
+        // The same two shape assertions every other arm makes, refused with the same
+        // "you asked wrongly" status — kept apart from the state refusal below on purpose.
+        if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+            || req.params_size as usize != PREEMPT_PARAMS_SIZE
+            || cmd.payload.len() < req.params_at + PREEMPT_PARAMS_SIZE
+        {
+            eprintln!(
+                "kayfabe: PREEMPT client={:#x} object={:#x} → ⊘ REFUSED BadParams \
+                 (serialized={} params_size={} want={PREEMPT_PARAMS_SIZE} payload={} \
+                 params_at={})",
+                req.client,
+                req.object,
+                kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags),
+                req.params_size,
+                cmd.payload.len(),
+                req.params_at,
+            );
+            return refuse(INPUT_ONLY_REFUSED_STATUS);
+        }
+        let twins = self.gpu.group_host_twins(
+            kayfabe_arch::ids::HClient(req.client),
+            kayfabe_arch::ids::HObject(req.object),
+        );
+        match twins {
+            // ★ NOTHING TO PREEMPT — and the reply is the guest's own bytes, for
+            // `respond_input_only`'s reason: native GA106 leaves `ppost == ppre`, so an
+            // echo is the body real hardware gives and there is no `[OUT]` field to get
+            // wrong.
+            Ok(t) if t.with_host_twin == 0 => {
+                eprintln!(
+                    "kayfabe: PREEMPT client={:#x} object={:#x} proc={} → ★ NV_OK, AND IT IS \
+                     TRUE: materialized={} unmaterialized={} host_twins=0 ⇒ no member of \
+                     this group has ever submitted to the host GPU, so there is nothing a \
+                     preemption could preempt and the completion is vacuous rather than \
+                     forged",
+                    req.client, req.object, t.proc.0, t.materialized, t.unmaterialized,
+                );
+                Some(Reply {
+                    rpc_result: 0, // NV_OK
+                    body: cmd.payload.clone(),
+                })
+            }
+            // ⊘ THERE IS REAL WORK AND WE HAVE NO VERB FOR IT. Refused BY NAME; nothing is
+            // claimed about the group's state that we cannot support.
+            Ok(t) => {
+                eprintln!(
+                    "kayfabe: PREEMPT client={:#x} object={:#x} proc={} → ⊘ UNPERFORMED \
+                     host_twins={} of materialized={} (unmaterialized={}) ⇒ this group has a \
+                     LIVE host twin on real silicon and this port has no preempt verb. \
+                     Answered {PREEMPT_UNPERFORMED_STATUS:#x} NV_ERR_INVALID_STATE — inside \
+                     ctrla06c.h's own status set — rather than NV_OK. ⚠ The guest asked with \
+                     bWait, i.e. for a POSTCONDITION; a forged NV_OK here would tell it the \
+                     engine is idle while it frees the pages the engine is reading",
+                    req.client,
+                    req.object,
+                    t.proc.0,
+                    t.with_host_twin,
+                    t.materialized,
+                    t.unmaterialized,
+                );
+                refuse(PREEMPT_UNPERFORMED_STATUS)
+            }
+            // ⊘ The group did not route. ★ This is the SAFE side of the census and it is
+            // deliberately NOT folded into the two arms above: a group we cannot resolve is
+            // a group whose channels we cannot look at, so "no host twin" would be an
+            // inference from our own blindness. `GroupHasNoChannels` / `NoMemberMaterialized`
+            // both mean nothing was ever placed — but `UnknownGroup` and `GroupSpansProcs`
+            // do not, and one status for all four keeps us from having to guess.
+            Err(f) => {
+                eprintln!(
+                    "kayfabe: PREEMPT client={:#x} object={:#x} → ⊘ UNROUTABLE {f:?} — the \
+                     group could not be resolved, so its host-twin count is UNKNOWN, not \
+                     zero. Answered {PREEMPT_UNPERFORMED_STATUS:#x}; nothing is inferred \
+                     from our own blindness",
+                    req.client, req.object,
+                );
+                refuse(PREEMPT_UNPERFORMED_STATUS)
+            }
+        }
     }
 
     /// ★★★★★ **§16.75 — the `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` arm** (`0x20801702`):

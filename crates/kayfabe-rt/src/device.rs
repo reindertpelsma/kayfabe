@@ -4389,6 +4389,43 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **w303 — the host-reachability census for one channel group.** ROUTE (rank
+    /// 0) then CENSUS (rank 1, one proc), the same two-step
+    /// [`SharedDevice::schedule_group`] takes — deliberately, so a `PREEMPT` and a
+    /// `GPFIFO_SCHEDULE` naming one TSG can never be attributed to different groups.
+    ///
+    /// Pure read: no verb is issued, nothing is scheduled or staged. See
+    /// [`kayfabe_core::gpu::GroupHostTwins`].
+    ///
+    /// # Errors
+    /// [`kayfabe_core::gpu::ScheduleGroupFault`], by variant.
+    pub fn group_host_twins(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        object: kayfabe_arch::ids::HObject,
+    ) -> Result<kayfabe_core::gpu::GroupHostTwins, kayfabe_core::gpu::ScheduleGroupFault> {
+        let route = {
+            let route_in = |spine: &kayfabe_core::gpu::Spine| {
+                kayfabe_core::gpu::route_schedule_group(spine, client, object)
+            };
+            match self.mode {
+                LockMode::Sharded => route_in(&self.state.read().spine),
+                LockMode::Degenerate => route_in(&self.state.write().spine),
+            }?
+        };
+        let members = route.chans.len() + route.unmaterialized;
+        self.with_proc(route.proc, |proc| {
+            kayfabe_core::gpu::census_group_host_twins(proc, &route)
+        })
+        .ok_or(
+            kayfabe_core::gpu::ScheduleGroupFault::NoMemberMaterialized {
+                client,
+                object,
+                members,
+            },
+        )
+    }
+
     /// ★★★★ **§16.59 — verify the guest's `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE`**
     /// (`0x20801210`) — the sharded form of
     /// [`kayfabe_core::gpu::Gpu::set_ctxsw_preemption_mode`].
