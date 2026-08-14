@@ -23,9 +23,19 @@
 #   (D) `^CUP3_VAL=` ABSENT ⇒ ⊘ **THE MEASUREMENT DID NOT HAPPEN.** It is NOT a failure value
 #       and NOT 0. Report where the ladder stopped, and whether `CUP3_JIT_PRESENT=no`
 #       attributes it to the guest image rather than to us.
-#   (E) REGRESSION on what cup2 established: `Xid` != 0, or `host_rows` != 18295/18309.
-#       ⚠ Checked and reported EVEN ON A GREEN — a pass that regressed the address plane is
-#       not a pass, and this tree has shipped a green that hid one.
+#   (E) REGRESSION on the address plane. ⚠ Checked and reported EVEN ON A GREEN — a pass
+#       that regressed the address plane is not a pass, and this tree has shipped a green
+#       that hid one.
+#       ⊘⊘ REWRITTEN AT w304 — THE OLD (E) WOULD HAVE CALLED A REAL GREEN A REGRESSION. It
+#       read *"`Xid` != 0, or `host_rows` != 18295/18309"*, and w298's `KAYFABE_PT_SWEEP=off`
+#       boot returned `^CUP3_VAL=43` with **no `HOST-PUBLISHED` line at all**. ★★★ And the
+#       reason is worse than "a consequence, not a precondition": `host_rows` was EMITTED FROM
+#       INSIDE THE PT-SWEEP LINE, and that line was suppressed entirely when the flag was off.
+#       **The publication never stopped; its only reporter did.** The old (E) was therefore
+#       grading the output of an unrelated flag's diagnostic. The check now
+#       lives in `regression_check_e.sh`, which is a separate file precisely so it can be
+#       driven over fixtures and over recorded boots by `w304_e_selftest.sh` — a criterion
+#       nobody has watched fail is a wish.
 #   (F) `CUP3_JIT_PRESENT=no` ⇒ a MODULE-stage failure is UNATTRIBUTABLE. Say so instead of
 #       reading it as our wall.
 #
@@ -97,27 +107,17 @@ grep -E '^    [✔✘] ' "$P" 2>/dev/null | sed 's/^/    /'
 echo "=== ★ cup3's own FAIL line, if it named its failure"
 grep -hE '^ *FAIL ' "$P" 2>/dev/null | sed 's/^/    /'
 echo ""
-echo "=== (E) REGRESSION CHECK — cup2's established values are Xid=0 and host_rows 18295/18309"
+echo "=== (E) REGRESSION CHECK — ⊘⊘ REWRITTEN AT w304. The old clause was:"
+echo "===       \"REGRESSION if Xid != 0, or host_rows != 18295/18309\""
+echo "===     w298's KAYFABE_PT_SWEEP=off boot returned ^CUP3_VAL=43 with ZERO HOST-PUBLISHED"
+echo "===     lines — so that second clause FAILED A CORRECT RESULT. ★ The number was emitted"
+echo "===     from INSIDE the PT-SWEEP line, so the publication never stopped; its only"
+echo "===     reporter did. (w304 makes the census unconditional.) host_rows is now printed"
+echo "===     and NEVER graded; the graded clauses are Xid, the whole-VAS drain having run,"
+echo "===     and the publication pass's own MUST-be-0 invariants."
 echo "===     ⚠ printed EVEN ON A GREEN: a pass that regressed the address plane is not a pass."
-# ⊘⊘ w297 DEFECT FIX — **THIS LINE PRINTED A MEASURED ZERO AND "UNMEASURED" AT THE SAME
-#   TIME, AND THE MEASURED RUN LOOKED LIKE THE UNMEASURED ONE.** `grep -c` prints `0` AND
-#   exits 1 when it matches nothing, so the `||` fallback ALSO fired and the field read
-#   `[0\n⊘ NO HOST DMESG — UNMEASURED]`. ⇒ Exactly the distinction this repo insists on —
-#   *"an empty artefact is not evidence of emptiness"* — collapsed into an unreadable field
-#   by the very check written to preserve it. ★ Existence is now its OWN test, before the
-#   count, so `0 Xid in a file that exists` and `no file at all` are different words.
-#   ⚠ `run_<tag>_hostdmesg.log` is a per-boot DELTA: **0 bytes is the normal green** (no new
-#   host dmesg since the watermark). Its emptiness must therefore read as `Xid=0`, not as a
-#   failed capture — which is only sound because the probe log states the watermark
-#   (`HOST dmesg delta ... watermark N → N`) independently.
-if [ -e "$D" ]; then
-  echo "    Xid count = [$(grep -c Xid "$D")]   (host dmesg DELTA file exists, $(stat -c%s "$D") bytes)"
-  grep -E 'Xid' "$D" 2>/dev/null | head -4 | sed 's/^/      /'
-else
-  echo "    Xid count = [⊘ NO HOST DMESG FILE AT ALL — UNMEASURED. ⊘ NOT zero.]"
-fi
-echo "    host_rows, every distinct reading:"
-grep -oE 'host_rows=[0-9]+ of [0-9]+' "$Q" 2>/dev/null | sort -u | sed 's/^/      /'
+"$REPO/scripts/bench/regression_check_e.sh" "$Q" "$D"
+echo "    ⇒ (E) exit status = $?   (0 pass · 1 REGRESSION · 2 UNMEASURED — ⊘ 2 is NOT a pass)"
 echo ""
 echo "=== ★ THE UNSERVICED LEDGER — if cup3 walled on a control we refuse, it is named here"
 grep -ho 'unserviced fn 76 cmd 0x[0-9a-f]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -30 | sed 's/^/      /'
@@ -142,9 +142,13 @@ echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the
 # ★ w298 — KAYFABE_PT_WITNESS_EXEC added. It was set by w290p_run.sh from the first arm and
 #   was the ONLY armed variable this "EVERY RELAXATION THAT WAS ON" block did not enumerate,
 #   so the block's own heading was false by one even after the w297 echo fix landed.
-for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
-         KAYFABE_GR_ROUTE KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_GUEST_SEMA \
-         KAYFABE_GUEST_OPERAND KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
+# ⊘ w304 — FOUR NAMES REMOVED because the device no longer has them. Listing a variable the
+#   device ignores under the heading "EVERY RELAXATION THAT WAS ON" is worse than not listing
+#   it: the row prints a value and means nothing. KAYFABE_OPERAND_JOIN stays — it survives as
+#   an `off`/`assert` instrument and can still be on.
+for v in KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
+         KAYFABE_GR_ROUTE KAYFABE_GUEST_RING \
+         KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
   echo "    $v = [$(grep -oE "$v=[a-z]+" "$OUT" 2>/dev/null | tail -1)]"
 done
 echo ""

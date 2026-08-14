@@ -1,0 +1,204 @@
+############ w304 ARM base [] 2026-08-14T12:08:29+00:00 ############
+=== W304 START label=base overrides=[(none — BASELINE)] 2026-08-14T12:08:29+00:00 pid=2981288 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=base  overrides=[(none — BASELINE)]  arc=0  2026-08-14T12:11:05+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 229   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2
+  ARM (counts)   = PB-PIN=1142  SEMA-PIN=458  PT-SWEEP=230  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304base.log  Q=4959478b  P=13262b
+=== W304 ROW EXIT label=base rc=0 2026-08-14T12:11:05+00:00 ===
+############ w304 ARM base DONE rc=0 2026-08-14T12:11:05+00:00 ############
+############ w304 ARM ptsweep [KAYFABE_PT_SWEEP=off] 2026-08-14T12:11:05+00:00 ############
+=== W304 START label=ptsweep overrides=[ KAYFABE_PT_SWEEP=off] 2026-08-14T12:11:05+00:00 pid=2983752 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=ptsweep  overrides=[ KAYFABE_PT_SWEEP=off]  arc=0  2026-08-14T12:13:20+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = ⊘ABSENT-UNMEASURED   (numeric sort)   last=⊘ABSENT
+  HOST-PUBLISHED lines = 0   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join ⊘no PT-SWEEP ran line
+  ARM (counts)   = PB-PIN=1142  SEMA-PIN=458  PT-SWEEP=1  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=358 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304ptsweep.log  Q=4523698b  P=13265b
+=== W304 ROW EXIT label=ptsweep rc=0 2026-08-14T12:13:20+00:00 ===
+############ w304 ARM ptsweep DONE rc=0 2026-08-14T12:13:20+00:00 ############
+############ w304 ARM opjoin [KAYFABE_OPERAND_JOIN=assert] 2026-08-14T12:13:20+00:00 ############
+=== W304 START label=opjoin overrides=[ KAYFABE_OPERAND_JOIN=assert] 2026-08-14T12:13:20+00:00 pid=2984702 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=opjoin  overrides=[ KAYFABE_OPERAND_JOIN=assert]  arc=0  2026-08-14T12:15:32+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 229   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=assert PT-SWEEP tasks=2 skipped=2 ran=2
+  ARM (counts)   = PB-PIN=458  SEMA-PIN=458  PT-SWEEP=230  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304opjoin.log  Q=4712566b  P=13264b
+=== W304 ROW EXIT label=opjoin rc=0 2026-08-14T12:15:32+00:00 ===
+############ w304 ARM opjoin DONE rc=0 2026-08-14T12:15:32+00:00 ############
+############ w304 ARM gpushbuf [KAYFABE_GUEST_PUSHBUF=off] 2026-08-14T12:15:32+00:00 ############
+=== W304 START label=gpushbuf overrides=[ KAYFABE_GUEST_PUSHBUF=off] 2026-08-14T12:15:32+00:00 pid=2985671 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=gpushbuf  overrides=[ KAYFABE_GUEST_PUSHBUF=off]  arc=0  2026-08-14T12:17:44+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 229   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2
+  ARM (counts)   = PB-PIN=0  SEMA-PIN=458  PT-SWEEP=230  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304gpushbuf.log  Q=5396235b  P=13250b
+=== W304 ROW EXIT label=gpushbuf rc=0 2026-08-14T12:17:44+00:00 ===
+############ w304 ARM gpushbuf DONE rc=0 2026-08-14T12:17:44+00:00 ############
+############ w304 ARM gsema [KAYFABE_GUEST_SEMA=off] 2026-08-14T12:17:44+00:00 ############
+=== W304 START label=gsema overrides=[ KAYFABE_GUEST_SEMA=off] 2026-08-14T12:17:44+00:00 pid=2986881 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=gsema  overrides=[ KAYFABE_GUEST_SEMA=off]  arc=0  2026-08-14T12:20:00+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 229   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2
+  ARM (counts)   = PB-PIN=1142  SEMA-PIN=0  PT-SWEEP=230  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304gsema.log  Q=4550290b  P=13247b
+=== W304 ROW EXIT label=gsema rc=0 2026-08-14T12:20:00+00:00 ===
+############ w304 ARM gsema DONE rc=0 2026-08-14T12:20:00+00:00 ############
+############ w304 ARM goperand [KAYFABE_GUEST_OPERAND=off] 2026-08-14T12:20:00+00:00 ############
+=== W304 START label=goperand overrides=[ KAYFABE_GUEST_OPERAND=off] 2026-08-14T12:20:00+00:00 pid=2987932 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=goperand  overrides=[ KAYFABE_GUEST_OPERAND=off]  arc=0  2026-08-14T12:22:09+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 229   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=join PT-SWEEP tasks=2 skipped=2 ran=2
+  ARM (counts)   = PB-PIN=1142  SEMA-PIN=458  PT-SWEEP=230  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline for comparison: PB-PIN 1142 / SEMA-PIN 458 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off shows as PB-PIN 1142→637, a COUNT CHANGE, never a zero
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=359 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 12
+  logs: /workspace/w304goperand.log  Q=4471266b  P=13250b
+=== W304 ROW EXIT label=goperand rc=0 2026-08-14T12:22:09+00:00 ===
+############ w304 ARM goperand DONE rc=0 2026-08-14T12:22:09+00:00 ############
+############ w304 SEQ COMPLETE 2026-08-14T12:22:09+00:00 ############
+############ w304 ARM joint [] 2026-08-14T12:31:27+00:00 ############
+=== W304 START label=joint overrides=[(none — BASELINE)] 2026-08-14T12:31:27+00:00 pid=2989649 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=joint  overrides=[(none — BASELINE)]  arc=0  2026-08-14T12:33:54+00:00
+  ^CUP3_VAL      = CUP3_VAL=43          ^CUP3_RC = CUP3_RC=0
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 8   first ✘ = <none>
+  Xid count      = 0   [no Xid line]
+  fault level    = ⊘none printed
+  fault engine   = ⊘none printed
+  fault VA       = ⊘none
+  host_rows MAX  = 18295   (numeric sort)   last=host_rows=18295 of 18309
+  HOST-PUBLISHED lines = 230   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=drain OPERAND-JOIN arm=assert ⊘no PT-SWEEP ran line
+  ARM (counts)   = PB-PIN=0  SEMA-PIN=0  OPERAND-PIN=0  PT-SWEEP=0  OPERAND-JOIN-TABLE=96
+                   ⊘ baseline: PB-PIN 1142 / SEMA-PIN 458 / OPERAND-PIN 325 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off is witnessed by OPERAND-PIN 325→0. ⊘ NOT by PB-PIN,
+                     which reads 1142/458/0/1142 across GREEN boots — it tracks the workload
+  drain          = DRAIN[visited=true asked=0 pinned=0 refused=0 DRAIN_MS=0 complete=true ]   ★DRAINED rows = 229
+  doorbells      = by engine: GrCompute=125 GrGraphics=0 Ce=355 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 8
+  logs: /workspace/w304joint.log  Q=3051339b  P=13263b
+=== W304 ROW EXIT label=joint rc=0 2026-08-14T12:33:54+00:00 ===
+############ w304 ARM joint DONE rc=0 2026-08-14T12:33:54+00:00 ############
+############ w304 ARM ekp [KAYFABE_VAS_PUBLISH=assert] 2026-08-14T12:33:54+00:00 ############
+=== W304 START label=ekp overrides=[ KAYFABE_VAS_PUBLISH=assert] 2026-08-14T12:33:54+00:00 pid=2992585 ===
+--------------------------------------------------------------------------------
+W304 ROW  label=ekp  overrides=[ KAYFABE_VAS_PUBLISH=assert]  arc=0  2026-08-14T12:35:59+00:00
+  ^CUP3_VAL      = ⊘ABSENT-UNMEASURED          ^CUP3_RC = CUP3_RC=1
+  JIT precond    = CUP3_JIT_PRESENT=yes
+  ladder ✔count  = 0   first ✘ = ✘ CTX OK
+  Xid count      = 16   [Xid (PCI:0000:00:07): 31, pid=2993309]
+  fault level    = FAULT_PDE 
+  fault engine   = ACCESS_TYPE_VIRT_READ ENGINE CE2_PBDMA0 ENGINE CE3_PBDMA0 ENGINE GR0_PBDMA0 HUBCLIENT_ESC 
+  fault VA       = 0x2_02a00000
+  host_rows MAX  = 4   (numeric sort)   last=host_rows=4 of 13348
+  HOST-PUBLISHED lines = 17   ⊘ 0 means the line NEVER PRINTED — unmeasured, not zero
+  ARM (device)   = VAS-PUBLISH arm=assert OPERAND-JOIN arm=assert ⊘no PT-SWEEP ran line
+  ARM (counts)   = PB-PIN=0  SEMA-PIN=0  OPERAND-PIN=0  PT-SWEEP=0  OPERAND-JOIN-TABLE=0
+                   ⊘ baseline: PB-PIN 1142 / SEMA-PIN 458 / OPERAND-PIN 325 / PT-SWEEP 230 / OJT 96
+                   ⚠ GUEST_OPERAND=off is witnessed by OPERAND-PIN 325→0. ⊘ NOT by PB-PIN,
+                     which reads 1142/458/0/1142 across GREEN boots — it tracks the workload
+  drain          = ⊘ABSENT   ★DRAINED rows = 0
+  doorbells      = by engine: GrCompute=8 GrGraphics=0 Ce=198 NvEnc=0 NvDec=0 Other=0 unrouted=0
+  unserviced ids = 40
+  refused pins   = none
+  relaxation report rows = 8
+  logs: /workspace/w304ekp.log  Q=404131b  P=13592b
+=== W304 ROW EXIT label=ekp rc=0 2026-08-14T12:35:59+00:00 ===
+############ w304 ARM ekp DONE rc=0 2026-08-14T12:35:59+00:00 ############
+############ w304 SEQ2 COMPLETE 2026-08-14T12:35:59+00:00 ############
