@@ -102,6 +102,31 @@ use std::path::{Path, PathBuf};
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
+        "crates/kayfabe-qemu-raw/src/kftime.rs",
+        "Mutex<Vec<(&'static str, Census)>>",
+        "★★ FOUND BY THIS GATE, 2026-08-14, the day w315 added it — and the gate was right to \
+         stop the commit. This is the segment timer's per-kind census, and it is taken on the \
+         vCPU thread inside EVERY MMIO trap, which is the hottest path this table describes. \
+         ⊘ NOTHING MAY BLOCK BENEATH IT, and nothing does: the guard's whole body is a linear \
+         scan of a <10-element `Vec`, a few `u64` adds and a comparison. The `eprintln!` that \
+         a periodic census triggers is deliberately OUTSIDE the guard (`record_inner` computes \
+         `due` inside a block and prints after it drops) — printing beneath it would put a \
+         file write under a lock on the vCPU's trap. ⚠ And the instrument exists to explain \
+         the guest's latency, so a wait here would be the measurement causing the thing it \
+         measures. It is also OFF by default: `record` returns before touching this lock \
+         unless `KAYFABE_KFTIME` armed it.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/kftime.rs",
+        "Mutex<Vec<(&'static str, HotCensus)>>",
+        "The hot-offset census, beside the one above and with the same discipline: taken on \
+         the vCPU inside every MMIO trap, held for one bounded linear scan (capped at \
+         `HOT_OFFSETS = 96` rows) and one counter update, with no call of any kind beneath \
+         it. ⊘ The cap is what makes the scan bounded rather than guest-controlled — an \
+         unbounded row set would let a guest touching fresh offsets grow the critical \
+         section it holds this lock across. Off by default, like its neighbour.",
+    ),
+    (
         "crates/kayfabe-qemu-raw/src/shim.rs",
         "Mutex<u32>",
         "★★ FOUND BY THIS GATE, 2026-08-10, and it had ALREADY SHIPPED: `CeShellState::gr_dumps`,          §16.79's bounded GR-pushbuffer dump counter, arrived at `2f616e2` and was never          classified — so `cargo test --workspace` was RED at `fe65678` and two `BOOTED` commits          were made on top of it. ⊘ The mask is cargo's own: without `--no-fail-fast` the run          stops at the first failing target, so ONE unrelated red hides every gate behind it.          The lock itself is SAFE and deliberately so: `dump_gr_pushbuffer_once` (shim.rs:3371-3377)          takes it inside its own block and DROPS it before the dump does anything — every          `eprintln!`, the `plane.upgrade()`, the root resolution and the memory-plane lock are          outside that scope. Nothing blocks beneath it.",

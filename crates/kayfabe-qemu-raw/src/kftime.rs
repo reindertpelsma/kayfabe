@@ -683,6 +683,19 @@ fn record_inner(kind: &'static str, s: &Segs, may_print: bool) {
     // prefix of the log carries a complete, self-describing breakdown.
     if due {
         report(kind, "periodic");
+        // ⊘⊘ **AND THE HOT CENSUS, BECAUSE IT OTHERWISE NEVER PRINTS AT ALL.**
+        //
+        // `[measured 2026-08-14, boot `w315full2`]` the hot-offset census was built, shipped,
+        // ran on hardware and emitted **ZERO lines** — because its only caller was
+        // `report_all`, which runs from `Regs::detach_ram`, and a bench boot is torn down by
+        // killing QEMU so `detach_ram` never executes. Every other signal said the instrument
+        // was live: it compiled, it was armed, its `KFTIME ARMED` line printed, and its unit
+        // tests were green.
+        //
+        // ⇒ Exactly the class this module's own docs name: a teardown-only report is a report
+        // that does not exist for any run that does not reach teardown, and its absence reads
+        // as *"nothing to say"* rather than *"never asked"*.
+        report_hot("periodic");
     }
 }
 
