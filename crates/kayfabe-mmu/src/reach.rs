@@ -803,10 +803,90 @@ pub fn apply_settlement(
     pdb: Pdb,
     settlement: &Settlement,
 ) -> ApplyOutcome {
+    apply_settlement_as(fmt, table, shadow, pdb, settlement, PublishedUnbind::Refuse)
+}
+
+/// ★★★★★ **w329 — [`apply_settlement`] with the host-published unbind's policy as a
+/// parameter**, because *"refuse it"* and *"revoke it"* are both correct answers and which one
+/// is right is not a fact this crate can settle.
+///
+/// # ⊘ Why the refusal existed, and why it is still the default
+///
+/// `walker.rs`'s `UnbindsPublished` is not an oversight: *"dropping the range from the table
+/// would leave the host object still allocated and still mapped into that address space's host
+/// VAS, with **no core state naming it**. That is worse than a leak."* That argument is
+/// **entirely about the caller** — it is true of a caller that drops the row and forgets, and
+/// false of one that takes the host half away with it. So the policy belongs to the caller, and
+/// [`PublishedUnbind::Refuse`] stays the default for every caller that has no release path.
+///
+/// # ★★★ What [`PublishedUnbind::RevokeWholeJoins`] revokes, and what it still refuses
+///
+/// A row qualifies only when **all four** hold, and each one closes a named hazard:
+///
+/// | condition | the hazard it closes |
+/// |---|---|
+/// | `start == va.0` and the row is the whole tabled extent | the **partial extent**: a proposal naming part of a larger binding would revoke bytes nobody proposed. `w291`'s merge was bounded to exact-extent rows for this reason. |
+/// | [`crate::HostBacking::frees_object`] | the **double free**: an [`crate::HostExtent::Slice`] names an arena object that serves sibling bindings at other offsets, so freeing it here destroys what the last one owns. This is the same predicate `kayfabe_fwd::unpublish_backing` already gates its `free` on. |
+/// | `bytes == BackingBytes::JoinsGuestWindow` | the **wrong plane**: `ShadowsGuestMemory` is ruling 3's refused chain and a published-GPA row is the arena case above; only the join is 1 leaf : 1 whole object. |
+/// | the caller asked for it | the **orphan**: the row's host half leaves in [`ApplyOutcome::revoked`] and the caller must dispose of it. A caller that ignores the field has traded a frozen row for a leaked object. |
+///
+/// ⊘ **Everything else keeps the refusal, byte for byte.** A row that is host-published and
+/// fails any condition above still pushes `UnbindsPublished` and still stays in the table.
+///
+/// # ⚠ The residual this does NOT close, stated because it is real
+///
+/// The bytes behind a revoked join are **not carried anywhere**. That is correct for the case
+/// this exists for — a framebuffer frame no page table names is, to this device, an unallocated
+/// frame, and an unallocated frame's truth is *"no page, reads zero"*, the same answer
+/// `FbStore::device_reset` leaves — and it is **lossy** if the guest still reaches the same
+/// frame through a second alias it did not unmap. That case is counted rather than assumed
+/// absent: see [`ApplyOutcome::revoked_still_desired`].
+pub fn apply_settlement_as(
+    fmt: &dyn GmmuFmt,
+    table: &mut crate::AddressTable,
+    shadow: &mut ReachShadow,
+    pdb: Pdb,
+    settlement: &Settlement,
+    policy: PublishedUnbind,
+) -> ApplyOutcome {
     let mut out = ApplyOutcome::default();
+    // ★ The set of framebuffer offsets this very settlement wants bound, so a revocation of a
+    // frame the guest is re-describing in the SAME pass is visible as such. ⊘ It does not gate
+    // the revocation — the re-description is at a different VA and needs the join released
+    // before it can take one of its own — it makes the lossy sub-case countable.
+    let redescribed: BTreeSet<u64> = if policy == PublishedUnbind::Refuse {
+        BTreeSet::new()
+    } else {
+        settlement.binds.iter().map(|l| l.phys).collect()
+    };
     for &va in &settlement.unbinds {
         match table.binding_at(va) {
-            Some((_, _, b)) if b.host.is_some() => {
+            Some((start, tlen, b)) if b.host.is_some() => {
+                let h = b.host.expect("checked in the guard");
+                let whole_row = start == va.0;
+                let qualifies = policy == PublishedUnbind::RevokeWholeJoins
+                    && whole_row
+                    && h.frees_object()
+                    && h.bytes() == crate::BackingBytes::JoinsGuestWindow;
+                if qualifies {
+                    // ★★★ The row leaves the table and its host half leaves WITH it, in one
+                    // statement. There is no instant at which the range is untabled and the
+                    // caller has not been handed the object — which is precisely the state
+                    // `walker.rs:956-972` refused to create.
+                    table.unbind(va);
+                    shadow.confirm_unbind(va);
+                    out.unbound += 1;
+                    if redescribed.contains(&b.phys) {
+                        out.revoked_still_desired += 1;
+                    }
+                    out.revoked.push(RevokedPublication {
+                        va,
+                        len: tlen,
+                        phys: b.phys,
+                        host: h,
+                    });
+                    continue;
+                }
                 out.refusals
                     .push(crate::walker::PopulateRefusal::UnbindsPublished { va });
                 // ★ The shadow is NOT told the unbind happened, because it did not. Next pass
@@ -842,6 +922,42 @@ pub fn apply_settlement(
     out
 }
 
+/// ★★★★★ **w329 — what [`apply_settlement_as`] does with an unbind of a host-published row.**
+///
+/// Two answers, both correct, and the difference is entirely a property of the **caller**:
+/// whether it has a synchronous release path for the host object the row names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PublishedUnbind {
+    /// ⊘ Refuse the unbind and leave the binding — `UnbindsPublished`. The default, and the
+    /// only safe answer for a caller with nowhere to send the host half.
+    #[default]
+    Refuse,
+    /// ★ Perform the unbind for **whole-object joined leaves only**, and hand the host half
+    /// back in [`ApplyOutcome::revoked`]. See [`apply_settlement_as`] for the four conditions.
+    RevokeWholeJoins,
+}
+
+/// ★★★★★ **w329 — one host-published row that left the table**, with everything needed to
+/// release it and nothing that would let a caller re-derive it wrongly.
+///
+/// ⊘ The [`crate::HostBacking`] is carried **whole** rather than decomposed into
+/// `(host_va, memory)`: `frees_object()` is the predicate that separates a whole object from an
+/// arena slice, and a caller handed only the two fields would have to re-decide it — a second
+/// source of truth beside a complete value, which this tree has paid for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RevokedPublication {
+    /// The guest VA the row was bound at — the table's own key, not a re-derivation.
+    pub va: GpuVa,
+    /// The row's tabled length. Equal to the leaf's, because a partial extent is refused.
+    pub len: u64,
+    /// The framebuffer offset the row named — the key the join is installed under in
+    /// `kayfabe_device::FbStore`, and the reason the two halves can be released together.
+    pub phys: u64,
+    /// The host materialization to release: `host_va()` to unmap, `memory()` to free, and
+    /// `frees_object()` already true by the qualification above.
+    pub host: crate::HostBacking,
+}
+
 /// What [`apply_settlement`] did to the table.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApplyOutcome {
@@ -855,6 +971,18 @@ pub struct ApplyOutcome {
     pub unbound: usize,
     /// Leaves decoded faithfully and declined by policy, with the reason.
     pub dropped: Vec<(GpuVa, DropReason)>,
+    /// ★★★★★ **w329 — the host-published rows this pass REVOKED**, each carrying the host
+    /// object the caller must now release. Always empty under [`PublishedUnbind::Refuse`].
+    ///
+    /// ⊘ **A caller that ignores this has not kept the old behaviour — it has leaked.** The
+    /// row is already out of the table when this is returned; the object it named is reachable
+    /// through nothing else.
+    pub revoked: Vec<RevokedPublication>,
+    /// ★ How many of [`ApplyOutcome::revoked`] name a framebuffer offset **this same
+    /// settlement also wants bound** — i.e. the guest moved the frame to another VA rather
+    /// than releasing it. Counted because it is the one sub-case where dropping the join's
+    /// bytes is lossy, and *"it never happens"* is a claim that needs a number.
+    pub revoked_still_desired: usize,
     /// Everything the table or this function refused. Loud; the caller propagates.
     pub refusals: Vec<crate::walker::PopulateRefusal>,
 }

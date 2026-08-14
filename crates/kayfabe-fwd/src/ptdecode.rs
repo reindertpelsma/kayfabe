@@ -247,6 +247,18 @@ pub struct PtDecodeResult {
 /// What the pass did, once committed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PtDecodeOutcome {
+    /// ★★★★★ **w329 — host-published rows this pass REVOKED**, each with everything the shell
+    /// needs to release both halves: the framebuffer offset the join is keyed by, and the
+    /// `(host_va, memory)` the isolate must unmap and free.
+    ///
+    /// ⚠ **Non-empty only under [`kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins`], and
+    /// then it is an OBLIGATION.** The rows are already out of the table; nothing else names
+    /// their host objects. See [`commit_pt_decode_revoking`].
+    pub revoked: Vec<RevokedLeaf>,
+    /// ★ How many of [`Self::revoked`] name a framebuffer offset the SAME settlement also wants
+    /// bound — the one lossy sub-case, counted rather than assumed absent. See
+    /// [`kayfabe_mmu::reach::ApplyOutcome::revoked_still_desired`].
+    pub revoked_still_desired: usize,
     /// Leaves forward-populated into a free range.
     pub bound: usize,
     /// Leaves that restated a binding already in the table.
@@ -624,6 +636,30 @@ pub fn run_pt_decode(
     out
 }
 
+/// ★★★★★ **w329 — one revoked publication, addressed.** [`kayfabe_mmu::reach::RevokedPublication`]
+/// plus the `(gpu, pdb)` that identifies which address space it left, which the shell needs and
+/// the pure crate does not have: the host unmap must name the host VAS the map was made in, and
+/// that is a property of the `Vas`, not of the row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RevokedLeaf {
+    /// The GPU whose `Vas` held the row.
+    pub gpu: GpuId,
+    /// The address space's page-directory base.
+    pub pdb: Pdb,
+    /// The guest VA the row was bound at.
+    pub va: GpuVa,
+    /// The row's tabled length.
+    pub len: u64,
+    /// ★ The framebuffer offset — the key `kayfabe_device::FbStore::release_join` takes. Both
+    /// halves of the release are keyed off this one number, which is what makes them one unit.
+    pub phys: u64,
+    /// The host GPU VA to unmap, inside that `Vas`'s own host VAS.
+    pub host_va: u64,
+    /// The host object to free. `frees_object()` was true at the qualification, so this is a
+    /// whole object and never an arena slice.
+    pub memory: kayfabe_isolate::HostHandle,
+}
+
 /// ★ **COMMIT** (owner's lock, rank 1): forward-populate the decoded leaves and remember
 /// what was learned.
 ///
@@ -638,6 +674,35 @@ pub fn commit_pt_decode(
     commit_pt_decode_as(fmt, proc, results, Admit::Witnessed)
 }
 
+/// ★★★★★ **w329 — [`commit_pt_decode`] with the host-published unbind policy as a parameter.**
+///
+/// The pass is otherwise identical; see [`kayfabe_mmu::reach::apply_settlement_as`] for the four
+/// conditions a row must meet to be revoked and for what is still refused.
+///
+/// ⚠ **The caller MUST dispose of [`PtDecodeOutcome::revoked`].** Those rows are already out of
+/// the table and their host objects are reachable through nothing else; ignoring the field is not
+/// "the old behaviour", it is a leak of exactly the objects the old behaviour kept a row for.
+pub fn commit_pt_decode_revoking(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+    revoke: kayfabe_mmu::reach::PublishedUnbind,
+) -> PtDecodeOutcome {
+    commit_pt_decode_with(fmt, proc, results, Admit::Witnessed, revoke)
+}
+
+/// ★★★★★ **w329 — [`commit_pt_sweep`] with the host-published unbind policy as a parameter.**
+/// Same relationship to [`commit_pt_sweep`] that [`commit_pt_decode_revoking`] has to
+/// [`commit_pt_decode`], and the same obligation on the caller.
+pub fn commit_pt_sweep_revoking(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+    revoke: kayfabe_mmu::reach::PublishedUnbind,
+) -> PtDecodeOutcome {
+    commit_pt_sweep_inner(fmt, proc, results, revoke)
+}
+
 /// ★★★★★ **COMMIT THE SWEEP** — [`commit_pt_decode_as`] with [`Admit::Swept`], plus the
 /// per-address-space bookkeeping that arms the next sweep.
 ///
@@ -649,6 +714,15 @@ pub fn commit_pt_sweep(
     fmt: &dyn GmmuFmt,
     proc: &mut Proc,
     results: &[PtDecodeResult],
+) -> PtDecodeOutcome {
+    commit_pt_sweep_inner(fmt, proc, results, kayfabe_mmu::reach::PublishedUnbind::Refuse)
+}
+
+fn commit_pt_sweep_inner(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+    revoke: kayfabe_mmu::reach::PublishedUnbind,
 ) -> PtDecodeOutcome {
     // ★ The state update runs BEFORE the admit/settle, because a truncated task contributes no
     // leaves and must still leave `truncated` set — a bookkeeping step folded into the success
@@ -672,7 +746,7 @@ pub fn commit_pt_sweep(
             }
         }
     }
-    let mut out = commit_pt_decode_as(fmt, proc, results, Admit::Swept);
+    let mut out = commit_pt_decode_with(fmt, proc, results, Admit::Swept, revoke);
     for r in results {
         match &r.decode {
             Ok(d) => {
@@ -691,6 +765,25 @@ pub fn commit_pt_decode_as(
     proc: &mut Proc,
     results: &[PtDecodeResult],
     admit: Admit,
+) -> PtDecodeOutcome {
+    commit_pt_decode_with(
+        fmt,
+        proc,
+        results,
+        admit,
+        kayfabe_mmu::reach::PublishedUnbind::Refuse,
+    )
+}
+
+/// The body of [`commit_pt_decode_as`], with the host-published unbind policy as a second
+/// parameter (w329). ⊘ Private: every public entry states which policy it takes, so a caller
+/// cannot acquire a release obligation without naming it.
+fn commit_pt_decode_with(
+    fmt: &dyn GmmuFmt,
+    proc: &mut Proc,
+    results: &[PtDecodeResult],
+    admit: Admit,
+    revoke: kayfabe_mmu::reach::PublishedUnbind,
 ) -> PtDecodeOutcome {
     let mut out = PtDecodeOutcome::default();
     // Address spaces this pass observed something for, so `settle` runs once each rather
@@ -777,8 +870,27 @@ pub fn commit_pt_decode_as(
         for phys in &s.retired {
             vas.pt_meta.remove(phys);
         }
-        let po =
-            kayfabe_mmu::reach::apply_settlement(fmt, &mut vas.table, &mut vas.reach, key.1, &s);
+        let po = kayfabe_mmu::reach::apply_settlement_as(
+            fmt,
+            &mut vas.table,
+            &mut vas.reach,
+            key.1,
+            &s,
+            revoke,
+        );
+        // ★★★ The revoked rows are carried up WITH the key that identifies the address space
+        // they left, because a `(host_va, memory)` pair with no `(gpu, pdb)` cannot be unmapped:
+        // the unmap needs the host VAS the map was made in, and that is a property of the `Vas`.
+        out.revoked.extend(po.revoked.iter().map(|r| RevokedLeaf {
+            gpu: key.0,
+            pdb: key.1,
+            va: r.va,
+            len: r.len,
+            phys: r.phys,
+            host_va: r.host.host_va(),
+            memory: r.host.memory(),
+        }));
+        out.revoked_still_desired += po.revoked_still_desired;
         out.bound += po.bound;
         out.unchanged += po.unchanged;
         out.repointed += po.repointed;

@@ -3132,6 +3132,24 @@ impl SharedDevice {
         fmt: &dyn kayfabe_arch::GmmuFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
     ) -> Option<kayfabe_fwd::PtDecodeOutcome> {
+        self.decode_pt_writes_revoking(pid, fmt, fb, kayfabe_mmu::reach::PublishedUnbind::Refuse)
+    }
+
+    /// \u{2605}\u{2605}\u{2605}\u{2605}\u{2605} **w329 - [`SharedDevice::decode_pt_writes_from`] with the
+    /// host-published unbind policy as a parameter.**
+    ///
+    /// \u{26a0} **The caller MUST dispose of [`kayfabe_fwd::PtDecodeOutcome::revoked`]**, and it must
+    /// do BOTH halves: `kayfabe_device::plane::RegPlane::release_fb_join` for the guest's view and
+    /// [`SharedDevice::revoke_published_fb_leaf`] for the host object. One without the other is
+    /// either a store serving bytes out of an unmapped region (`SIGBUS` in the VMM) or a host
+    /// object nothing names (a leak) - which is why the two are named together at every site.
+    pub fn decode_pt_writes_revoking(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+        revoke: kayfabe_mmu::reach::PublishedUnbind,
+    ) -> Option<kayfabe_fwd::PtDecodeOutcome> {
         // PLAN — rank 1, the owner's lock and no other.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_decode)?;
         // EXECUTE — no lock held. `with_proc_mut` released it above, and the borrow of
@@ -3142,8 +3160,9 @@ impl SharedDevice {
             None,
         );
         // COMMIT — rank 1 again, re-resolving every target (R5).
-        let mut out =
-            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_decode(fmt, p, &results.0))?;
+        let mut out = self.with_proc_mut(pid, |p| {
+            kayfabe_fwd::commit_pt_decode_revoking(fmt, p, &results.0, revoke)
+        })?;
         // ★★★ **PUBLISH** — E8, rank 0, and the phase E5 could not have. The pages this
         // pass learned go into the device-global ownership index, so the NEXT guest CE
         // write into one of them is classified as a page-table write instead of forwarded
@@ -3218,6 +3237,19 @@ impl SharedDevice {
         fmt: &dyn kayfabe_arch::GmmuFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
     ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
+        self.sweep_pt_tables_revoking(pid, fmt, fb, kayfabe_mmu::reach::PublishedUnbind::Refuse)
+    }
+
+    /// \u{2605}\u{2605}\u{2605}\u{2605}\u{2605} **w329 - [`SharedDevice::sweep_pt_tables_from`] with the
+    /// host-published unbind policy as a parameter.** Same obligation on the caller as
+    /// [`SharedDevice::decode_pt_writes_revoking`].
+    pub fn sweep_pt_tables_revoking(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+        revoke: kayfabe_mmu::reach::PublishedUnbind,
+    ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
         // PLAN — rank 1.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
         if plan.tasks.is_empty() {
@@ -3231,8 +3263,9 @@ impl SharedDevice {
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
         // COMMIT — rank 1, re-resolving every target (R5).
-        let mut out =
-            self.with_proc_mut(pid, |p| kayfabe_fwd::commit_pt_sweep(fmt, p, &results))?;
+        let mut out = self.with_proc_mut(pid, |p| {
+            kayfabe_fwd::commit_pt_sweep_revoking(fmt, p, &results, revoke)
+        })?;
         // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
         // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
         // write into any of them classify as a page-table write.
@@ -4275,6 +4308,65 @@ impl SharedDevice {
     /// §7.0's process boundary freed the lot; there is no failure this can surface that the
     /// caller could act on.
     pub fn release_unadopted_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        host_va: u64,
+        memory: kayfabe_isolate::HostHandle,
+    ) {
+        self.stage_fb_leaf_release(gpu, pdb, host_va, memory);
+    }
+
+    /// ★★★★★ **w329 — GIVE BACK a join that WAS adopted, because the guest stopped naming it.**
+    ///
+    /// [`SharedDevice::release_unadopted_fb_leaf`]'s twin, and it is a **second name for one
+    /// body on purpose**: the two differ in nothing the host can see and in everything a reader
+    /// needs. The unadopted case is *"the crossing failed halfway, undo it"*; this is *"the
+    /// crossing succeeded, was used, and the guest has since unmapped the range"* — the
+    /// reclamation `w327` measured the absence of, and the case
+    /// `kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins` produces.
+    ///
+    /// # ★★★ THE OWNERSHIP ARGUMENT, because this is where a double free would live
+    ///
+    /// - **Who owns the object at this instant.** Nobody. `apply_settlement_as` removed the one
+    ///   `Binding` that named it from the one `AddressTable` that held it, in the same statement
+    ///   that produced the row this call is servicing. There is no window in which two parties
+    ///   believe they own it, because the table row and the caller's obligation are created and
+    ///   destroyed by the same statement.
+    /// - **What proves no other row references it.** Four independent facts, each checkable:
+    ///   (1) the object was minted per-leaf by `back_fb_leaf(Joined)` and bound as
+    ///   `HostBacking::whole`, so `frees_object()` is true and it is **not** an arena slice
+    ///   serving siblings at other offsets — the exact predicate `unpublish_backing` gates its
+    ///   own `free` on, for the double-free this tree already paid for; (2) `bind_backed_fb_leaf`
+    ///   refuses to bind over a row that already carries a host object
+    ///   (`GuestRamAddressTaken`), so one object can never be reached from two VAs in one `Vas`;
+    ///   (3) `AddressTable::bind` refuses overlaps, so no wider row covers it either;
+    ///   (4) `HostHandle` is `(proc, gpu)`-scoped and the table is per-`Vas`, so another address
+    ///   space's row for the same framebuffer offset is a *different* object from a *different*
+    ///   `back_fb_leaf` call — and `SparseFb::install_join` refuses any second join over the
+    ///   same range, so that second object can never have existed.
+    /// - **A partial extent.** Cannot arise, and is refused twice over rather than handled:
+    ///   `install_join` refuses **any** overlap so a join is always a whole leaf, and
+    ///   `apply_settlement_as` revokes only a row whose tabled start equals the proposed VA.
+    ///
+    /// ⚠ **This call is HALF of the release.** The other half is
+    /// `kayfabe_device::plane::RegPlane::release_fb_join`, and the guest's view must go **first**
+    /// — a store still serving bytes out of a region this call is about to unmap is a `SIGBUS`
+    /// with no other detector.
+    pub fn revoke_published_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        host_va: u64,
+        memory: kayfabe_isolate::HostHandle,
+    ) {
+        self.stage_fb_leaf_release(gpu, pdb, host_va, memory);
+    }
+
+    /// The staging body both framebuffer-leaf release verbs share. ⊘ One body rather than two,
+    /// because *"which host VAS was this mapped in"* is read from the `Vas` and a second copy of
+    /// that read is a second answer that can disagree with the first.
+    fn stage_fb_leaf_release(
         &self,
         gpu: GpuId,
         pdb: Pdb,

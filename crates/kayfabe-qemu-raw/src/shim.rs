@@ -9070,6 +9070,79 @@ impl SharedDoorbell {
         )
     }
 
+    /// ★★★★★ **w329 — EXECUTE the revocations a settlement produced: BOTH halves, in the one
+    /// order that is safe, synchronously.**
+    ///
+    /// # ★★★ The order is the safety argument, and it is not reversible
+    ///
+    /// 1. **The guest's view first** (`RegPlane::release_fb_join`). While the join is installed
+    ///    the framebuffer store serves that range out of the isolate's shared mapping; unmapping
+    ///    the host object first would leave the store reading a region that no longer exists —
+    ///    a `SIGBUS` inside a guest MMIO access, with no other detector.
+    /// 2. **The host object second** — and **only if step 1 said a join was actually there.**
+    ///    `release_fb_join` returning `false` means the store held nothing at that offset, which
+    ///    is a disagreement between the table and the store; the conservative answer is to leave
+    ///    the object alone and count it. ⊘ A leak in that corner is strictly better than a free
+    ///    of an object something is still reading through.
+    /// 3. **The drain, in this same trap.** `revoke_published_fb_leaf` *stages*; the unmap that
+    ///    carries RM's synchronous TLB invalidate happens in `drain_pending_releases`. Per the
+    ///    owner-agreed direction ruling, **a revocation is not deferrable**: the invalidate is
+    ///    *inside* the ioctl, so deferring the ioctl defers the invalidate by the same interval
+    ///    and that interval is a GMMU leak window. It is called here rather than left to the
+    ///    next verb or to `w326`'s 250 ms tick.
+    ///
+    /// Returns the clause to print. ⊘ Prints even when nothing was revoked, because *"the arm
+    /// is on and the guest proposed nothing"* and *"the arm is off"* are different facts and a
+    /// missing clause could not carry either.
+    fn release_revoked_joins(
+        &self,
+        plane: &RegPlane,
+        revoked: &[kayfabe_fwd::RevokedLeaf],
+        still_desired: usize,
+    ) -> String {
+        if revoked.is_empty() {
+            return format!(
+                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={}",
+                plane.joined_fb_ranges().len()
+            );
+        }
+        let (mut released, mut stranded) = (0usize, 0usize);
+        let mut first: Option<String> = None;
+        for r in revoked {
+            if plane.release_fb_join(r.phys) {
+                self.device
+                    .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                released += 1;
+                if first.is_none() {
+                    first = Some(format!(
+                        "va=0x{:x} len=0x{:x} fb_phys=0x{:x} host_va=0x{:x}",
+                        r.va.0, r.len, r.phys, r.host_va
+                    ));
+                }
+            } else {
+                // ⊘ The table said this row was a join and the store held nothing at that
+                // offset. LOUD, and the object is NOT freed — see the doc above.
+                stranded += 1;
+                eprintln!(
+                    "kayfabe: JOIN-RELEASE ⚠ TABLE/STORE DISAGREE va=0x{:x} fb_phys=0x{:x} — the \
+                     address table carried a JoinsGuestWindow row here and the framebuffer store \
+                     holds no join at that offset. ⊘ The host object is NOT freed: a leak here is \
+                     strictly better than freeing memory something may still be reading through",
+                    r.va.0, r.phys
+                );
+            }
+        }
+        // ★★★ SYNCHRONOUS, per the direction ruling. See step 3 above.
+        let drained = self.device.drain_pending_releases();
+        format!(
+            " revoked={} released={released} stranded={stranded} drained={drained} \
+             joined_ranges={} still_desired={still_desired} first=[{}]",
+            revoked.len(),
+            plane.joined_fb_ranges().len(),
+            first.as_deref().unwrap_or("NONE"),
+        )
+    }
+
     fn decode_cpu_pt_writes(&self) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
@@ -9088,6 +9161,9 @@ impl SharedDoorbell {
         // *value* the composition root installed with `plane.set_mmu` — not a second
         // format that could drift from it.
         let fmt = kayfabe_chips::Ga10xGmmu::new();
+        let revoke_policy = selected_join_release();
+        let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
+        let mut revoked_still_desired = 0usize;
         let (mut latched, mut vas_gone, mut rounds) = (0usize, 0usize, 0usize);
         // ⊘ A local tally rather than a folded `PtDecodeOutcome`, for one reason that is
         // about linkage and not about style: this crate does not depend on `kayfabe-fwd`
@@ -9110,9 +9186,21 @@ impl SharedDoorbell {
             rounds += 1;
             for pid in w.procs {
                 let mut fb = plane.pt_bytes();
-                let Some(out) = self.device.decode_pt_writes_from(pid, &fmt, &mut fb) else {
+                // ★★★ w329 - the policy is read ONCE per pass and carried, never re-read
+                // per proc: a variable that could change under a pass would make one boot's
+                // arms differ from each other rather than from the control.
+                let Some(out) =
+                    self.device
+                        .decode_pt_writes_revoking(pid, &fmt, &mut fb, revoke_policy)
+                else {
                     continue;
                 };
+                // ★★★★★ THE OBLIGATION, accumulated whole and discharged ONCE below. Per
+                // proc would drain the release queue once per proc per doorbell; the rows are
+                // already out of the table either way, so the only question is when the host
+                // verbs run, and the answer is "this trap, once".
+                revoked.extend(out.revoked.iter().copied());
+                revoked_still_desired += out.revoked_still_desired;
                 acc.bound += out.bound;
                 acc.unchanged += out.unchanged;
                 acc.repointed += out.repointed;
@@ -9147,13 +9235,18 @@ impl SharedDoorbell {
                 }
             }
         }
+        // ★★★★★ **w329 — BOTH HALVES OF THE RELEASE, HERE, SYNCHRONOUSLY.** Ordered after
+        // every decode of this pass and before the line is printed, so the counts it reports
+        // and the state the publication pass will find are the same state.
+        let revoke_clause = self.release_revoked_joins(&plane, &revoked, revoked_still_desired);
         // ⊘ THE LEFTOVERS GO BACK. A page the index cannot name an owner for is not a page
         // that was not written, and the witness is the only record that it was.
         let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
         let st = plane.pt_witness_stats();
         format!(
             " | PT-DECODE drained={drained} latched={latched} unowned_vas={vas_gone} \
-             requeued={} rounds={rounds} → bound={} unchanged={} repointed={} unbound={} \
+             requeued={} rounds={rounds}{revoke_arm}{revoke_clause} → bound={} unchanged={} \
+             repointed={} unbound={} \
              learned={} published={}/{} meta_refused={} unwitnessed={} unreachable={} \
              sparse={} dropped={} refusals={} faults={} reach_faults={} retired={} \
              pass_vas_gone={} first={}{}{} [witness writes={} pending={} refused={}+{}]",
@@ -9182,6 +9275,11 @@ impl SharedDoorbell {
             st.pending,
             st.refused,
             requeue_refused,
+            revoke_arm = match revoke_policy {
+                kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins => " | JOIN-RELEASE arm=on",
+                kayfabe_mmu::reach::PublishedUnbind::Refuse =>
+                    " | JOIN-RELEASE arm=off (⊘ w327's negative control: joins are kept forever)",
+            },
         )
     }
 
@@ -9272,15 +9370,26 @@ impl SharedDoorbell {
         let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
         let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
         let mut duplicates = 0usize;
+        let revoke_policy = selected_join_release();
+        let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
+        let mut revoked_still_desired = 0usize;
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
             // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
             // reading the isolate's aperture instead would walk a tree nobody wrote.
             let mut fb = plane.pt_bytes();
-            let Some((plan, out)) = self.device.sweep_pt_tables_from(pid, &fmt, &mut fb) else {
+            let Some((plan, out)) =
+                self.device
+                    .sweep_pt_tables_revoking(pid, &fmt, &mut fb, revoke_policy)
+            else {
                 continue;
             };
+            // ★★★★★ w329 — the sweep proposes unbinds too, and from the SAME settlement
+            // machinery, so it carries the same obligation. Accumulated and discharged once
+            // below, exactly as the decode pass does.
+            revoked.extend(out.revoked.iter().copied());
+            revoked_still_desired += out.revoked_still_desired;
             tasks += plan.tasks.len();
             skipped += plan.skipped;
             for r in &plan.reasons {
@@ -9343,9 +9452,12 @@ impl SharedDoorbell {
             collisions.extend(out.shape_collisions.iter().copied());
             duplicates += out.duplicate_leaves;
         }
+        // ★★★★★ **w329 — the sweep's half of the release, discharged before the line prints.**
+        let revoke_clause = self.release_revoked_joins(&plane, &revoked, revoked_still_desired);
         format!(
             " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
-             pages={pages} reasons={reasons:?} → bound={bound} unchanged={unchanged} \
+             pages={pages} reasons={reasons:?} JOIN-RELEASE{revoke_clause} → bound={bound} \
+             unchanged={unchanged} \
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
@@ -14805,6 +14917,57 @@ fn selected_pt_sweep() -> bool {
     match std::env::var_os(PT_SWEEP_ENV) {
         None => false,
         Some(v) => pt_sweep_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
+    }
+}
+
+/// ★★★★★ **w329 — arm the RELEASE of a joined framebuffer leaf the guest has unmapped.**
+///
+/// # ⊘ ON by default, and that is the opposite of [`PT_SWEEP_ENV`]'s default for a reason
+///
+/// The dirty gates and the sweep default off because the armed arm **removes work** and a typo
+/// must not silently skip something nobody decided to skip. This one is the other direction:
+/// the disarmed arm is what `w327` measured as a **hard allocation failure** — a freed
+/// allocation's framebuffer frames stay joined forever, the guest recycles them, and the first
+/// `cuMemsetD32` past the first recycled frame kills the channel with no `Xid` and no `NVRM`
+/// line. Defaulting off would mean the fix ships disabled.
+///
+/// ⇒ `off` is the **negative control**, and it is what makes a one-binary two-arm boot possible:
+/// `KAYFABE_JOIN_RELEASE=off` reproduces `w327`'s `28,31` failure exactly, from the same
+/// archive that passes with the variable unset.
+///
+/// ⚠ An unparseable value reads as **on**, i.e. as the default — never as the control. A typo
+/// must not be able to silently disarm a correctness fix and leave a boot looking armed.
+pub const JOIN_RELEASE_ENV: &str = "KAYFABE_JOIN_RELEASE";
+
+/// Which host-published-unbind policy `value` names — the pure half of
+/// [`selected_join_release`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// the fix.
+pub fn join_release_from(
+    value: Option<&str>,
+) -> Result<kayfabe_mmu::reach::PublishedUnbind, (Status, &'static str)> {
+    match value {
+        None | Some("on") => Ok(kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins),
+        Some("off") => Ok(kayfabe_mmu::reach::PublishedUnbind::Refuse),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_JOIN_RELEASE does not name a state: the only values are `on` (the default \
+             — a joined framebuffer leaf the guest has unmapped is released) and `off` (w327's \
+             negative control, in which the join is kept forever and the guest's next \
+             allocation over a recycled frame dies rc=719).",
+        )),
+    }
+}
+
+/// Which policy [`JOIN_RELEASE_ENV`] names.
+#[must_use]
+fn selected_join_release() -> kayfabe_mmu::reach::PublishedUnbind {
+    match std::env::var_os(JOIN_RELEASE_ENV) {
+        None => kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+        Some(v) => join_release_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
+            .unwrap_or(kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins),
     }
 }
 

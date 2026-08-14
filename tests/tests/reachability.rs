@@ -1112,3 +1112,207 @@ fn with_gpu<R>(gpu: &mut Guarded<Gpu>, f: impl FnOnce(&mut Gpu) -> R) -> R {
 fn only_proc(gpu: &mut Gpu) -> &mut kayfabe_core::gpu::Proc {
     gpu.procs.values_mut().next().expect("one proc")
 }
+
+// =====================================================================================
+// w329 — ★★★★★ AND THE ONE UNBIND THAT MUST BE PERFORMED, WITH ITS HOST HALF
+// =====================================================================================
+
+/// Build the shadow, the table and a published row at one small leaf, then tear the page
+/// down so the settlement proposes exactly one unbind of that VA. Returns
+/// `(table, shadow, fmt-owning arch, settlement, va)`.
+///
+/// ⊘ Factored because the four w329 cases below differ in **one argument** — the
+/// `HostBacking` — and four copies of the scaffolding would let them drift into testing four
+/// different setups instead of four policies over one.
+fn published_row_then_torn_down(
+    arch: &MockArch,
+    backing: HostBacking,
+    aperture: Aperture,
+) -> (AddressTable, ReachShadow, GpuVa, kayfabe_mmu::reach::Settlement) {
+    let fmt = arch.mmu();
+    let mut fb = Fb::default();
+    let mut s = shadow();
+    let mut table = AddressTable::new();
+    fb.put(
+        PT_SMALL,
+        page_at(fmt, small_leaf_level(), &[(3, leaf(0x3000_0000))]),
+    );
+    s.witness(PT_SMALL);
+    observe(&mut s, fmt, &mut fb, at(PT_SMALL, small_leaf_level(), 0));
+    link_chain(&mut s, fmt, &mut fb, PT_SMALL, true);
+    let up = s.settle(fmt);
+    apply_settlement(fmt, &mut table, &mut s, A_PDB, &up);
+
+    let va = small_va(fmt, 3);
+    let len = 1u64 << fmt.level_shift(small_leaf_level()).expect("small").shift;
+    table.unbind(va);
+    table
+        .bind(
+            A_PDB,
+            va,
+            len,
+            Binding::real_gpu_memory(0x3000_0000, aperture, backing)
+                .expect("a host-backed row"),
+        )
+        .expect("a published binding at its own VA");
+
+    fb.put(PT_SMALL, page_at(fmt, small_leaf_level(), &[]));
+    observe(&mut s, fmt, &mut fb, at(PT_SMALL, small_leaf_level(), 0));
+    let down = s.settle(fmt);
+    assert_eq!(down.unbinds, vec![va]);
+    (table, s, va, down)
+}
+
+fn joined_whole(va: u64) -> HostBacking {
+    HostBacking::whole(
+        HostHandle::new(IsolateId::new(1, GPU), 7),
+        va,
+        kayfabe_mmu::BackingBytes::JoinsGuestWindow,
+    )
+}
+
+/// ★★★★★ **w329 — a JOINED, WHOLE-OBJECT row IS revoked, and its host half comes back with
+/// it.**
+///
+/// This is the defect `w327` measured: a freed allocation's framebuffer frames stay joined
+/// forever, the guest recycles them, `SparseFb::install_join` correctly refuses a second
+/// backing, the leaf stays fabricated, and the first `cuMemsetD32` past it kills the channel
+/// with **no `Xid` and no `NVRM` line**, because nothing ever reaches hardware.
+///
+/// ★ The assertion that matters is not `unbound == 1` on its own — it is `unbound == 1`
+/// **together with** a non-empty `revoked`. A pass that dropped the row and reported nothing
+/// would have converted a frozen row into a leaked host object, which is worse than the
+/// refusal it replaces and which a bare `unbound` count cannot tell apart.
+#[test]
+fn a_joined_whole_object_row_is_revoked_and_hands_its_host_half_back() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let va0 = small_va(&*arch.mmu(), 3).0;
+    let (mut table, mut s, va, down) =
+        published_row_then_torn_down(&arch, joined_whole(va0), Aperture::Vidmem);
+
+    let applied = kayfabe_mmu::reach::apply_settlement_as(
+        fmt,
+        &mut table,
+        &mut s,
+        A_PDB,
+        &down,
+        kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+    );
+    assert_eq!(applied.unbound, 1, "the guest's own PTE clear is honoured");
+    assert!(
+        applied.refusals.is_empty(),
+        "nothing is refused on this arm: {:?}",
+        applied.refusals
+    );
+    assert_eq!(
+        applied.revoked.len(),
+        1,
+        "the host half MUST come back — a dropped row with no orphan is a leak, not a fix"
+    );
+    let r = applied.revoked[0];
+    assert_eq!(r.va, va);
+    assert_eq!(
+        r.phys, 0x3000_0000,
+        "the framebuffer offset is the key BOTH halves of the release are taken on"
+    );
+    assert_eq!(r.host.host_va(), va0);
+    assert!(r.host.frees_object(), "whole object, never an arena slice");
+    assert_eq!(
+        table.binding_at(va),
+        None,
+        "and the row is gone, so the recycled frame can be joined again"
+    );
+}
+
+/// ⊘ **w329 — an ARENA SLICE is still refused, and that is the double free the guard exists
+/// for.**
+///
+/// `HostExtent::Slice` names an arena object that serves sibling bindings at other offsets;
+/// freeing it here destroys what the last one owns. It is the same predicate
+/// `kayfabe_fwd::unpublish_backing` gates its own `free` on, and this tree already paid for
+/// the version without it.
+#[test]
+fn an_arena_slice_row_is_still_refused_because_freeing_it_would_be_a_double_free() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let va0 = small_va(&*arch.mmu(), 3).0;
+    let slice = HostBacking::slice(
+        HostHandle::new(IsolateId::new(1, GPU), 7),
+        va0,
+        kayfabe_mmu::HostSlice::new(0, 0x1000).expect("a slice"),
+        kayfabe_mmu::BackingBytes::JoinsGuestWindow,
+    );
+    let (mut table, mut s, va, down) =
+        published_row_then_torn_down(&arch, slice, Aperture::Vidmem);
+    let applied = kayfabe_mmu::reach::apply_settlement_as(
+        fmt,
+        &mut table,
+        &mut s,
+        A_PDB,
+        &down,
+        kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+    );
+    assert_eq!(
+        applied.refusals,
+        vec![PopulateRefusal::UnbindsPublished { va }],
+        "an arena slice keeps the pre-w329 refusal, verbatim"
+    );
+    assert_eq!(applied.unbound, 0);
+    assert!(applied.revoked.is_empty());
+    assert!(table.binding_at(va).is_some());
+}
+
+/// ⊘ **w329 — a row that is NOT a join is still refused**, whatever its extent.
+///
+/// `SoleBacking` is the published-GPA chain: its host object is carved from the proc's arena
+/// and its reclaim point is `unpublish_backing`, which also returns the GPA block. Revoking it
+/// here would drop the row and leak the block — a different bug wearing this rung's fix.
+#[test]
+fn a_sole_backing_row_is_still_refused_because_only_the_join_is_one_leaf_one_object() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let va0 = small_va(&*arch.mmu(), 3).0;
+    let sole = HostBacking::whole(
+        HostHandle::new(IsolateId::new(1, GPU), 7),
+        va0,
+        kayfabe_mmu::BackingBytes::SoleBacking,
+    );
+    let (mut table, mut s, va, down) =
+        published_row_then_torn_down(&arch, sole, Aperture::SysmemCoherent);
+    let applied = kayfabe_mmu::reach::apply_settlement_as(
+        fmt,
+        &mut table,
+        &mut s,
+        A_PDB,
+        &down,
+        kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins,
+    );
+    assert_eq!(
+        applied.refusals,
+        vec![PopulateRefusal::UnbindsPublished { va }],
+    );
+    assert!(applied.revoked.is_empty());
+}
+
+/// ⊘ **w329 — the DEFAULT policy is byte-identical to the pre-w329 behaviour.**
+///
+/// The same joined, whole-object row that the arm above revokes is refused under
+/// [`kayfabe_mmu::reach::PublishedUnbind::Refuse`]. This is what makes
+/// `KAYFABE_JOIN_RELEASE=off` a real negative control rather than a differently-shaped fix.
+#[test]
+fn the_default_policy_still_refuses_the_very_row_the_arm_revokes() {
+    let arch = MockArch::new();
+    let fmt = arch.mmu();
+    let va0 = small_va(&*arch.mmu(), 3).0;
+    let (mut table, mut s, va, down) =
+        published_row_then_torn_down(&arch, joined_whole(va0), Aperture::Vidmem);
+    let applied = apply_settlement(fmt, &mut table, &mut s, A_PDB, &down);
+    assert_eq!(
+        applied.refusals,
+        vec![PopulateRefusal::UnbindsPublished { va }],
+    );
+    assert_eq!(applied.unbound, 0);
+    assert!(applied.revoked.is_empty());
+    assert!(table.binding_at(va).is_some());
+}
