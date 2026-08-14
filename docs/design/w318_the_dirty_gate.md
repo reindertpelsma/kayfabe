@@ -202,10 +202,11 @@ PERMANENT refusal.** A dirty gate removes it; publishing at bind removes it; so 
    27.552) where it was 21.4 %. ⇒ **the next binding constraint on the launch is the
    completion plane, not the submit plane**, and that is a different lane's subject.
 
-⊘ Against the product metric: 60 tok/s needs ~64 µs per launch (w311). This rung takes
+⊘ Against the product metric: 60 tok/s needs ~64 µs per launch (w311). At N=512 this rung takes
 107.8 ms → 27.6 ms. **That is 3.9× of a required ~1700×** — real, and not the answer. ★ What it
 does change is *where the remaining 1700× has to come from*: it is now **85 % on the completion
-plane**, which this rung did not touch and w315 explicitly declined to attribute.
+plane** at N=512 and **~95 % at 2048²** (§5.b), which this rung did not touch and w315 explicitly
+declined to attribute.
 
 ---
 
@@ -432,6 +433,10 @@ known-positive at all, and the honest word for that is **UNMEASURED**.
   revisions**, and that §4's totals are exact rather than statistical.
 - **Display, NVENC and multi-process are UNMEASURED, not inert.**
 - ⊘ **`pt_vascensus` was not gated and `ringproj` was not gated.** §2.3.
+- ⊘⊘ **THE END-TO-END EFFECT AT 2048² IS UNRESOLVED.** §5.b.1. The submit half is settled
+  (84 ms effect against 0.07 ms scatter); the launch is not, because at that size it is ~95 %
+  completion and the completion half scatters ±100 ms. ⚠ **Do not quote the N=512 3.91× as a
+  launch-level result at scale.**
 - ⊘ **Nothing here measures a guest that dirties its VAS before every launch.** Such a guest
   would fire the gate on every doorbell and see the ungated cost — which is pre-registered
   outcome (B) arriving for a *workload* rather than for the *arming edge*. §7.3.
