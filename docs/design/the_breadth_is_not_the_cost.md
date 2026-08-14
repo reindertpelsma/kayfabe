@@ -99,24 +99,30 @@ binary. ⚠ And the margin is **1.01×** on two of three boots — the drain is 
 
 ### 2.1 ★★★★★ THE BREADTH IS 0.0084 % OF THE WORST TRAP AND 0.90 % OF THE BOOT
 
-`[measured, `w328a1`, the same boot as row 1 above]`, summed over **all 229** publication
-passes:
+`[measured, arm `w328a`, n=3]`, summed over **all** of each boot's publication passes
+(`traces/w328_scope/census/w328a*_census.txt`):
+
+| boot | passes | `target_us` | `target_published` | `other_vases` | **`other_us`** | **`other_published`** | **breadth share** |
+|---|---|---|---|---|---|---|---|
+| `w328a1` | **229** | 2 666 358 | 66 | 3 | **24 349** | **0** | **0.9049 %** |
+| `w328a2` | **229** | 2 489 089 | 63 | 3 | **23 408** | **0** | **0.9317 %** |
+| `w328a3` | **229** | 2 544 533 | 66 | 3 | **23 814** | **0** | **0.9272 %** |
+
+and the **pin** pass's breadth, on the same three boots:
 
 ```
-W328SCOPE  CUM over 229 passes:
-    target_us = 2 666 358      target_published = 66
-    other_us  =    24 349      other_published  =  0        breadth_share = 0.9049 %
-W328PIN    CUM over 229 passes:
-    other_vases = 0   other_us = 0   other_pinned = 0
+W328PIN  CUM over 229 passes:   other_vases = 0   other_us = 0   other_pinned = 0     (3/3)
 ```
 
 - **On the worst trap itself: `other_us = 256 µs` of `worst_trap_us = 3 048 658 µs` —
   0.0084 %.**
-- **Over the whole boot: 24 349 µs of 2 690 707 µs — 0.90 %.**
+- **Over the whole boot: 0.9049 % / 0.9317 % / 0.9272 % — n=3, spread 0.03 pp.**
 - **The pin pass's breadth is exactly ZERO, on 3/3 boots.** No non-doorbelled VAS ever offered
   a single guest-RAM candidate, so the 256-row sample pinned nothing all boot.
-- **`other_published = 0` over 229 passes.** The breadth publishes nothing — w326's yield
-  claim, confirmed.
+- **`other_published = 0` on 3/3 boots, over 687 passes in total.** The breadth publishes
+  nothing — w326's yield claim, confirmed and extended from one boot to three.
+- ⊘ **`passes = 229` on all three boots, to the digit.** The doorbell count is workload-fixed
+  here, which is why the three cumulative figures are comparable at all.
 
 ⇒ **The brief's (A) is HALF RIGHT AND HALF REFUTED.** *Vestigial in yield* — measured, zero,
 all boot. *"Scoping it drops the worst trap far below budget"* — **wrong by a factor of ~11 000
