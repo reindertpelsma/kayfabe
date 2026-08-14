@@ -132,6 +132,41 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "★★ FOUND BY THIS GATE, 2026-08-10, and it had ALREADY SHIPPED: `CeShellState::gr_dumps`,          §16.79's bounded GR-pushbuffer dump counter, arrived at `2f616e2` and was never          classified — so `cargo test --workspace` was RED at `fe65678` and two `BOOTED` commits          were made on top of it. ⊘ The mask is cargo's own: without `--no-fail-fast` the run          stops at the first failing target, so ONE unrelated red hides every gate behind it.          The lock itself is SAFE and deliberately so: `dump_gr_pushbuffer_once` (shim.rs:3371-3377)          takes it inside its own block and DROPS it before the dump does anything — every          `eprintln!`, the `plane.upgrade()`, the root resolution and the memory-plane lock are          outside that scope. Nothing blocks beneath it.",
     ),
     (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex< std::collections::HashMap< (kayfabe_core::ProcId, kayfabe_rt::GpuId, kayfabe_rt::Pdb), PublishStamp, >, >",
+        "★★★ FOUND BY THIS GATE, w318, 2026-08-14, AND IT WAS A REAL INVERSION — not a \
+         classification. `DirtyGate::published`, the per-VAS stamp the publication gate skips \
+         on, taken on the vCPU inside the doorbell trap. Written the obvious way — the stamp \
+         built as an ARGUMENT to `insert` — the receiver locks FIRST and the arguments are \
+         evaluated underneath it, so `plane.joined_fb_ranges()` (rank `Plane`) and a `format!` \
+         ran BENEATH this unranked mutex. ⊘ `assert_lock_free` masks only RANKED locks, so \
+         that inversion would have passed every assertion in the tree. Fixed by building the \
+         whole `PublishStamp` before the lock is taken (shim.rs, `publish_vas_rows`); the read \
+         side already `.cloned()`s out of a statement-temporary guard. **Nothing blocks \
+         beneath it and nothing ranked is acquired beneath it now.**",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<Option<u64>>",
+        "`DirtyGate::exec_writes`, w318 — the store's executor write count at the last \
+         page-table witness pass. One compare and one store on the vCPU inside the doorbell \
+         trap. ⊘ Restructured so the guard's scope is a block yielding a `bool`: the `tally` \
+         below it takes a SECOND unranked mutex and the refusal line allocates, and both now \
+         run after this guard is dropped. Holding one unranked lock across the acquisition of \
+         another is how an ordering nobody wrote down gets established.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<[(u64, u64); 2]>",
+        "`DirtyGate::counts`, w318 — the two gates' fire/skip tallies, which are the diagnostic \
+         that separates *the gate is working* from *the gate fires every doorbell*. A \
+         fixed-size array: two `saturating_add`s under `tally`, one `Copy` read under \
+         `census`. ⊘ The size is a CONSTANT, not guest-influenced, so unlike its `kftime` \
+         neighbours there is no cap to argue about — the critical section cannot grow. \
+         **Nothing may block beneath it and nothing is called beneath it** — the ruling, not a \
+         description.",
+    ),
+    (
         "crates/kayfabe-rt/src/device.rs",
         "Mutex<GateState>",
         "PoolGate backpressure. BLOCKING IS ITS PURPOSE — a caller waits here for a worker to \

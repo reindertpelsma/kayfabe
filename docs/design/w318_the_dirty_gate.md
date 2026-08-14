@@ -100,11 +100,17 @@ page-table + publn   71.012     91.8%              2.451      53.5%       29×
 
 - ★★ **`UNMARKED` is 0.008 ms of 4.583 (0.2 %)** on the gated arm. The breakdown still closes;
   the saving is not hiding in an unattributed remainder.
-- ⊘ **The control reproduces w315.** w315's `full` measured `77.4`-equivalent
-  (86.7 ms/launch at a different boot's scatter, `vas_publish` 55.7 %, `pt_decode` 25.7 %);
-  this control reads 53.2 % / 27.4 % of a 77.4 ms trap. **The shares reproduce; the absolute
-  trap is 11 % lower**, which is inside the boot-to-boot scatter w315 itself reported
-  (86.7 vs 93.5 across its own two boots).
+- ⊘ **The control reproduces w315's SHARES and runs ~11 % faster in absolute terms — and the
+  second half of that sentence is not swept under the first.** w315's two boots read
+  `vas_publish` **55.7 % / 55.8 %** and `pt_decode` **25.7 % / 23.8 %**; this control reads
+  **53.2 %** and **27.4 %**. But the trap is **77.367 ms/launch against w315's 86.733 and
+  93.491**, and the guest's `launch_med_ms` is **101.767 against 113.562 and 116.909** — i.e.
+  **below** w315's own two-boot range, not inside it. ⚠ At n=1 per arm I cannot say whether
+  that is a third sample of ordinary scatter or something about this revision, and I am not
+  going to call it *"inside the scatter"* when it is not.
+  ★ **What this does NOT threaten is the comparison this rung makes**, because that comparison
+  is between two boots taken **an hour apart on one box from one binary** — the control is
+  77.367 and the gated arm is 4.583, and both were measured here.
 - ★ **The guest's `sync_med_ms` did not move** — 22.761 → 23.382. The gate is on the submit
   side and the completion half is untouched, which is what a correct localisation looks like.
 

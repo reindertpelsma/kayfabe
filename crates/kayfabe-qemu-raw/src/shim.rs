@@ -8004,30 +8004,39 @@ impl SharedDoorbell {
                 //    ⊘ Re-reading is also what keeps it CORRECT in the other direction: if
                 //    anything else moved the epoch mid-pass, the value stamped is the one this
                 //    census actually describes.
+                //
+                // ⚠⚠ **AND THE STAMP IS BUILT WHOLE BEFORE THE LOCK IS TAKEN** — every field,
+                // including `plane.joined_fb_ranges()` and the `format!`. Written the obvious
+                // way (as arguments to `insert`) the receiver is locked FIRST and the
+                // arguments are evaluated underneath it, which would put **the plane's
+                // rank-`Plane` lock beneath this unranked mutex**. `assert_lock_free` cannot
+                // see an unranked lock — it masks only ranked ones — so that inversion would
+                // pass every assertion in the tree and stall the register plane.
+                // ⊘ `tests/tests/unranked_locks.rs` caught it; it is fixed here rather than
+                // classified as safe, because the honest classification would have been *"a
+                // ranked lock and an allocation run beneath it"*.
                 if !budget_hit && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb) {
+                    let stamp = PublishStamp {
+                        epoch: after,
+                        joined: plane.joined_fb_ranges().len(),
+                        line: format!(
+                            "total={} already_host={} already_pinned={} guest_ram={} \
+                             not_vidmem={} not_granular={} candidates={} published={done} \
+                             refused={failed}",
+                            c.total,
+                            c.already_host,
+                            c.already_pinned,
+                            c.guest_ram,
+                            c.not_vidmem,
+                            c.not_granular,
+                            c.candidates_total(),
+                        ),
+                    };
                     self.dirty
                         .published
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
-                        .insert(
-                            (pid, gpu, pdb),
-                            PublishStamp {
-                                epoch: after,
-                                joined: plane.joined_fb_ranges().len(),
-                                line: format!(
-                                    "total={} already_host={} already_pinned={} guest_ram={} \
-                                     not_vidmem={} not_granular={} candidates={} published={done} \
-                                     refused={failed}",
-                                    c.total,
-                                    c.already_host,
-                                    c.already_pinned,
-                                    c.guest_ram,
-                                    c.not_vidmem,
-                                    c.not_granular,
-                                    c.candidates_total(),
-                                ),
-                            },
-                        );
+                        .insert((pid, gpu, pdb), stamp);
                 }
                 // ★★ EVERY row of the census, per VAS, with the bucket identity printed. ⊘ A
                 // census whose buckets did not sum could report a comfortable zero for a class
@@ -8606,21 +8615,32 @@ impl SharedDoorbell {
         // witnessing on any store but `SparseFb`.
         let gate = selected_dirty_gate(DIRTY_GATE_WITNESS_ENV);
         let now = plane.fb_writes_by(kayfabe_device::fbwin::FbWriter::Executor);
-        if gate && let Some(now) = now {
+        // ⚠ The guard's scope is the `{ }` and nothing else: the decision comes out as a
+        // `bool`, and the `tally` (which takes a SECOND unranked mutex) and the `format!`
+        // (which allocates) both run after it is dropped. Holding one unranked lock across
+        // the acquisition of another is how an ordering nobody wrote down gets established.
+        let clean = if gate && let Some(now) = now {
             let mut last = self
                 .dirty
                 .exec_writes
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            if *last == Some(now) {
-                self.dirty.tally(DirtyGate::WITNESS, false);
-                return format!(
-                    " | EXEC-WITNESS ⊘SKIPPED(w318 dirty gate: the executor has written this \
-                     store {now} times, unchanged since the last pass, so re-queueing its pages \
-                     could only re-derive the same decode)"
-                );
+            let same = *last == Some(now);
+            if !same {
+                *last = Some(now);
             }
-            *last = Some(now);
+            same
+        } else {
+            false
+        };
+        if clean {
+            self.dirty.tally(DirtyGate::WITNESS, false);
+            return format!(
+                " | EXEC-WITNESS ⊘SKIPPED(w318 dirty gate: the executor has written this store \
+                 {} times, unchanged since the last pass, so re-queueing its pages could only \
+                 re-derive the same decode)",
+                now.map_or("⊘UNMEASURED".to_string(), |n| n.to_string()),
+            );
         }
         self.dirty.tally(DirtyGate::WITNESS, true);
         let Some(frames) = plane.fb_resident_frames() else {
