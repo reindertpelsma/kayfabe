@@ -2552,6 +2552,9 @@ fn ce_client(
     rm: &mut HostRmBackend,
     gpu: u32,
     want_fault: bool,
+    // ★ w305 — arm 4 runs in arm 1's ALREADY-WORKING VAS rather than a fresh one. See
+    // `--ce-client-fault-shared-vas`; `false` is the byte-identical committed default.
+    want_fault_shared_vas: bool,
     notifier_aperture: kayfabe_isolate_host::rm::NotifierAperture,
 ) -> bool {
     use kayfabe_isolate_host::rm::{GuestReach, VaProbe};
@@ -2925,24 +2928,70 @@ fn ce_client(
         census::phase("R33 arm4 hw-fault");
         // ★ Its OWN address space, allocated after arms 1–3 have already been read: a
         // faulted channel must not be able to retract a verdict already printed.
-        match rm.alloc_vaspace() {
+        //
+        // ★★★★★ **w305 — `--ce-client-fault-shared-vas` MAKES THE VAS A NAMED ARM, and the
+        // reason it exists is that the ruling it tests is AMBIGUOUS.**
+        //
+        // `road_to_v1_after_cup2.md` §2 (2026-08-14) rules: *"Arm 4's operands live in a third
+        // VAS because arm 4 put them there ⇒ the fix is one line in the probe: allocate its
+        // control operands in the VAS of the channel it rings."*
+        //
+        // ⊘⊘ **READ LITERALLY, THAT FIX IS A NO-OP, and it is a no-op in this file's own
+        // source.** `probe_guest_reachability(fvas, …)` maps every operand into
+        // `narrow(fvas)` (`rm.rs:6976`, `:7036`, `:7044`) and creates the channel it rings on
+        // **the same `fvas`** (`rm.rs:7080`). The operands are ALREADY in the VAS of the
+        // channel that rings them; there is no line to change.
+        //
+        // ⇒ The only ACTIONABLE reading is a different claim: not *"same VAS as the channel"*
+        //   (already true) but *"a VAS that has ALREADY CARRIED WORK"* — i.e. reuse `vas`,
+        //   which arm 1 has just proven end to end in this very process, instead of a VAS
+        //   that is fresh. That is what this flag selects, and it is opt-in so the default
+        //   stays byte-identical to every committed run.
+        //
+        // ⚠ The cost of the shared arm is stated rather than hidden: arm 4 kills its channel,
+        //   so on `shared` the fault lands in the space arms 1–3 used. Their verdicts are
+        //   already PRINTED by this point, so nothing can be retracted — but a reader must
+        //   not treat arms 1–3 as independent of arm 4 on that arm, and the banner says so.
+        let shared = want_fault_shared_vas;
+        let vas_arm = if shared {
+            // ⊘ NOT a fresh allocation: the point is that this space has already carried a
+            // retired copy on a channel this process rang.
+            Ok(vas)
+        } else {
+            rm.alloc_vaspace()
+        };
+        match vas_arm {
             Err(e) => {
                 println!("FAIL  R33 arm 4 vaspace   = {e:?}");
                 false
             }
             Ok(fvas) => {
                 // ⊘⊘ NAMED BEFORE THE VERDICT, because the verdict is meaningless without it:
-                // this arm is in a THIRD address space — not arm 1's operand space and not
-                // arms 2/3's control space. It is NOT a cross-check of arm 3, and an earlier
-                // draft of this rung printed one as if it were.
-                println!(
-                    "info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space \
-                     (range {:#010x}) — NOT arm 1's operand space and NOT arms 2/3's control \
-                     space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in \
-                     DIFFERENT address spaces, so they can disagree without either being \
-                     wrong, and neither corroborates the other",
-                    fvas.raw()
-                );
+                // on the default arm this is a THIRD address space — not arm 1's operand space
+                // and not arms 2/3's control space. It is NOT a cross-check of arm 3, and an
+                // earlier draft of this rung printed one as if it were.
+                if shared {
+                    println!(
+                        "info  R33 arm 4 SPACE     = ★ SHARED — arm 1's OWN address space \
+                         (range {:#010x}), REUSED rather than freshly allocated. This is the \
+                         only actionable reading of road_to_v1_after_cup2.md §2: the operands \
+                         were ALWAYS in the ringing channel's VAS (rm.rs:6976/7080), so the \
+                         literal fix is a no-op; what changes here is that the space has \
+                         ALREADY CARRIED RETIRED WORK. ⚠ arms 1-3's verdicts are already \
+                         printed above and cannot be retracted, but on THIS arm they are not \
+                         independent of the fault below",
+                        fvas.raw()
+                    );
+                } else {
+                    println!(
+                        "info  R33 arm 4 SPACE     = a THIRD, freshly allocated address space \
+                         (range {:#010x}) — NOT arm 1's operand space and NOT arms 2/3's control \
+                         space. ⊘ Arms 3 and 4 ask the same question about the same NUMBER in \
+                         DIFFERENT address spaces, so they can disagree without either being \
+                         wrong, and neither corroborates the other",
+                        fvas.raw()
+                    );
+                }
                 let out = match rm.probe_guest_reachability(fvas, UNMAPPED_VA, notifier_aperture) {
                     Ok(r) => {
                         // ★★★★★ PRINTED FIRST, because it says how to read everything below it.
@@ -3957,6 +4006,8 @@ fn main() -> std::process::ExitCode {
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_ce_client = false;
     let mut want_ce_client_fault = false;
+    // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
+    let mut want_ce_client_fault_shared_vas = false;
     // ★★★★★ w288 TIER 2 — SYSMEM by default; see `--notifier-vidmem` for the measured
     // reason the other arm exists and why neither is a fallback for the other.
     let mut notifier_aperture = kayfabe_isolate_host::rm::NotifierAperture::Sysmem;
@@ -4010,6 +4061,17 @@ fn main() -> std::process::ExitCode {
             "--ce-client-fault" => {
                 want_ce_client = true;
                 want_ce_client_fault = true;
+            }
+            // ★★★★★ **w305 — arm 4 in arm 1's ALREADY-WORKING VAS instead of a fresh one.**
+            //
+            // The `road_to_v1_after_cup2.md` §2 fix, in the only form that is not a no-op:
+            // the operands were always in the ringing channel's VAS, so what this changes is
+            // that the space has already carried retired work. ⊘ Opt-in; the default arm is
+            // byte-identical to every committed run, so the two are comparable.
+            "--ce-client-fault-shared-vas" => {
+                want_ce_client = true;
+                want_ce_client_fault = true;
+                want_ce_client_fault_shared_vas = true;
             }
             // ★★★★★ **w288 TIER 2 — the notifier's APERTURE, as an explicit arm.**
             //
@@ -4127,7 +4189,13 @@ fn main() -> std::process::ExitCode {
              measures NOTHING while looking like it ran",
             notifier_aperture.as_str(),
         );
-        let ok = ce_client(&mut rm, gpu, want_ce_client_fault, notifier_aperture);
+        let ok = ce_client(
+            &mut rm,
+            gpu,
+            want_ce_client_fault,
+            want_ce_client_fault_shared_vas,
+            notifier_aperture,
+        );
         print_ioctl_census(if want_ce_client_fault {
             "R33 raw CE client, arms 1-4"
         } else {
