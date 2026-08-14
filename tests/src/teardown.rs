@@ -196,7 +196,7 @@ pub fn unpublish_and_release(
         .expect("the proc published here, so its isolate is materialized")
         .checkout()
         .expect("a single-threaded test always has an idle worker");
-    let out = w.execute(&orphans.release_plan());
+    let out = w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
     proc.isolate_mut(gpu).expect("isolate").checkin(w);
     assert_eq!(
         out,

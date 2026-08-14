@@ -232,7 +232,7 @@ fn release_on_own_isolate(proc: &mut Proc, gpu: GpuId, orphans: &Orphans) {
         .expect("materialized isolate")
         .checkout()
         .expect("a free worker");
-    let outcome = w.execute(&orphans.release_plan());
+    let outcome = w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
     assert_eq!(
         outcome,
         Ok(VerbReply::Released),
@@ -250,7 +250,7 @@ fn attempt_on_system(gpu: &mut Gpu, plan: &VerbPlan) -> Result<VerbReply, VerbFa
         .expect("the system isolate is materialized at realize time")
         .checkout()
         .expect("a free system worker");
-    let out = w.execute(plan);
+    let out = w.execute(plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
     gpu.system
         .isolate_mut(GPU)
         .expect("system isolate")
@@ -1067,7 +1067,7 @@ fn the_ledger_balances_across_every_teardown_ordering() {
                 .expect("worker");
             assert!(
                 matches!(
-                    w.execute(&plan),
+                    w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")),
                     Err(VerbFailure {
                         err: RmError::ForeignHandle { .. },
                         ..

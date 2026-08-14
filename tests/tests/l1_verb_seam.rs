@@ -182,7 +182,7 @@ fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
         host_vas: None,
         len: 0x1000,
         at: VA,
-    });
+    }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
 }
 
 /// R1's success polarity, and the *ownership* half of the enforcement: a worker is
@@ -201,7 +201,7 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
             host_vas: None,
             len: 0x1000,
             at: VA,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("the chain runs");
     match reply {
         kayfabe_isolate::VerbReply::Published { host_vas, .. } => {

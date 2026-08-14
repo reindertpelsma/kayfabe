@@ -26,6 +26,9 @@ kayfabe-trace.workspace = true
 # `FbStore`.
 kayfabe-mmu.workspace = true
 
+[dev-dependencies]
+trybuild = "1.0"
+
 [lints]
 workspace = true
 

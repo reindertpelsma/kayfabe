@@ -117,7 +117,7 @@ fn a_real_isolate_serves_a_verb_chain_through_the_port() {
             host_vas: None,
             len: 0x1000,
             at: AT,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("the child served it");
     match reply {
         VerbReply::Published {
@@ -159,7 +159,7 @@ fn every_verb_shape_survives_the_round_trip() {
         None,
     )
     .expect("the gate passes an all-published working set");
-    match w.execute(&plan).expect("doorbell") {
+    match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")).expect("doorbell") {
         VerbReply::Doorbell {
             host_vas: Some(_),
             channel: Some((chan, token)),
@@ -173,14 +173,14 @@ fn every_verb_shape_survives_the_round_trip() {
 
     // A control, payload in and out by value.
     let obj = w
-        .with_rm(|rm| rm.alloc_vaspace())
+        .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace())
         .expect("a control target");
     let plan = VerbPlan::Control {
         obj,
         cmd: kayfabe_isolate::ControlCmd(0x801813),
         payload: vec![0xAB; 32],
     };
-    match w.execute(&plan).expect("control") {
+    match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")).expect("control") {
         VerbReply::Control { payload } => assert_eq!(payload, vec![0xAB; 32]),
         other => panic!("expected a control reply, got {other:?}"),
     }
@@ -191,7 +191,7 @@ fn every_verb_shape_survives_the_round_trip() {
             unmap: Vec::new(),
             free: vec![obj],
             guest_ram: Vec::new(),
-        }),
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")),
         Ok(VerbReply::Released)
     );
     isolate.checkin(w);
@@ -210,7 +210,7 @@ fn an_unknown_handle_is_a_bad_handle_and_not_a_wedge() {
             unmap: Vec::new(),
             free: vec![bogus],
             guest_ram: Vec::new(),
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect_err("an unknown handle must be refused");
     assert_eq!(failure.err, RmError::BadHandle(bogus));
     // The disposal path reports what it could not dispose of, rather than swallowing it.
@@ -232,8 +232,8 @@ fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
     let mut wa = a.checkout().expect("worker a");
     let mut wb = b.checkout().expect("worker b");
 
-    let ha = wa.with_rm(|rm| rm.alloc_vaspace()).expect("a's vas");
-    let hb = wb.with_rm(|rm| rm.alloc_vaspace()).expect("b's vas");
+    let ha = wa.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace()).expect("a's vas");
+    let hb = wb.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace()).expect("b's vas");
 
     assert_eq!(
         ha.raw(),
@@ -251,7 +251,7 @@ fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
             host_vas: Some(ha),
             len: 0x1000,
             at: AT,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect_err("a foreign handle must be refused");
     assert_eq!(
         failure.err,
@@ -284,7 +284,7 @@ fn spawn_verb(
 ) -> (mpsc::Receiver<VerbOutcome>, std::thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
     let h = std::thread::spawn(move || {
-        let r = worker.execute(&plan);
+        let r = worker.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
         let _ = tx.send((worker, r));
     });
     (rx, h)
@@ -324,7 +324,7 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
             host_vas: None,
             len: 0x1000,
             at: AT,
-        });
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
         assert!(
             reply.is_ok(),
             "round {round}: a peer isolate stalled behind a parked one: {reply:?}"
@@ -444,7 +444,7 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
                     host_vas: None,
                     len: 0x1000,
                     at: AT,
-                })
+                }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
                 .is_ok(),
                 "round {round}: the peer isolate must keep running"
             );
@@ -521,7 +521,7 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
             host_vas: None,
             len: 0x1000,
             at: AT,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .is_ok()
     );
     isolate.checkin(w);
@@ -538,7 +538,7 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
             host_vas: None,
             len: 0x1000,
             at: AT,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .is_ok(),
         "a stale cancel landed on an innocent later operation"
     );
@@ -666,7 +666,7 @@ fn a_retired_isolate_refuses_new_checkouts() {
             host_vas: None,
             len: 0x1000,
             at: AT,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .is_ok()
     );
     isolate.checkin(w);
@@ -776,7 +776,7 @@ fn a_verb_under_a_ranked_lock_panics_naming_r1() {
             host_vas: None,
             len: 0x1000,
             at: AT,
-        });
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
     }));
     kayfabe_util::lockwitness::note_released(1);
     let payload = caught.expect_err("R1 must fire");
@@ -880,7 +880,7 @@ fn an_environment_variable_can_no_longer_redirect_the_isolate() {
                 host_vas: None,
                 len: 0x1000,
                 at: AT,
-            })
+            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
             .expect("the EMBEDDED isolate served the verb");
         assert!(
             matches!(reply, VerbReply::Published { .. }),

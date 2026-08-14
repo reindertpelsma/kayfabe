@@ -1,0 +1,28 @@
+error[E0277]: `*mut ()` cannot be sent between threads safely
+  --> tests/ui/send_a_trap_witness_to_another_thread.rs:20:24
+   |
+20 |       std::thread::spawn(move || {
+   |       ------------------ ^------
+   |       |                  |
+   |  _____|__________________within this `{closure@$DIR/tests/ui/send_a_trap_witness_to_another_thread.rs:20:24: 20:31}`
+   | |     |
+   | |     required by a bound introduced by this call
+21 | |         off.still_off_trap("a host RM verb on the wrong thread");
+22 | |     });
+   | |_____^ `*mut ()` cannot be sent between threads safely
+   |
+   = help: within `{closure@$DIR/tests/ui/send_a_trap_witness_to_another_thread.rs:20:24: 20:31}`, the trait `Send` is not implemented for `*mut ()`
+note: required because it appears within the type `PhantomData<*mut ()>`
+  --> $RUST/core/src/marker.rs
+note: required because it appears within the type `OffTrap`
+  --> $WORKSPACE/crates/kayfabe-util/src/trapwitness.rs
+   |
+   | pub struct OffTrap {
+   |            ^^^^^^^
+note: required because it's used within this closure
+  --> tests/ui/send_a_trap_witness_to_another_thread.rs:20:24
+   |
+20 |     std::thread::spawn(move || {
+   |                        ^^^^^^^
+note: required by a bound in `spawn`
+  --> $RUST/std/src/thread/functions.rs

@@ -3967,7 +3967,7 @@ mod tests {
         let (f, _rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
         let mut w = iso.checkout().expect("fresh pool has an idle worker");
-        w.with_rm(|rm| {
+        w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| {
             let vas_a = rm.alloc_vaspace().unwrap();
             let vas_b = rm.alloc_vaspace().unwrap();
             let mem = rm.alloc_sysmem(0x1000).unwrap();
@@ -4008,7 +4008,7 @@ mod tests {
     fn recorder_compact_preserves_the_ledger_exactly() {
         let (f, rec) = MockIsolateFactory::new();
         let mut iso = f.spawn(IsolateId::new(1, GpuId::ZERO));
-        let (vas, mem) = iso.checkout().expect("idle worker").with_rm(|rm| {
+        let (vas, mem) = iso.checkout().expect("idle worker").with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| {
             let vas = rm.alloc_vaspace().unwrap();
             let mem = rm.alloc_sysmem(0x1000).unwrap();
             let _ = rm
@@ -4049,7 +4049,7 @@ mod tests {
         // rather than replacing it: freeing `mem` must leave exactly `vas` outstanding.
         iso.checkout()
             .expect("idle worker")
-            .with_rm(|rm| rm.free(mem))
+            .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.free(mem))
             .expect("free");
         let after = rec.lock().expect("recorder").ledger();
         assert_eq!(
@@ -4080,11 +4080,11 @@ mod tests {
         let ha = a
             .checkout()
             .expect("idle worker")
-            .with_rm(|rm| rm.alloc_vaspace().unwrap());
+            .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace().unwrap());
         assert_eq!(
             b.checkout()
                 .expect("idle worker")
-                .with_rm(|rm| rm.schedule(ha)),
+                .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.schedule(ha)),
             Err(RmError::BadHandle(ha))
         );
     }
@@ -4120,11 +4120,11 @@ mod tests {
         let ha = a
             .checkout()
             .expect("idle worker")
-            .with_rm(|rm| rm.alloc_vaspace().unwrap());
+            .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace().unwrap());
         let hb = b
             .checkout()
             .expect("idle worker")
-            .with_rm(|rm| rm.alloc_vaspace().unwrap());
+            .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace().unwrap());
 
         // ---- (1) one base, two clients, one value.
         assert_ne!(ha, hb, "the recorded PROVENANCE still separates them");
@@ -4136,7 +4136,7 @@ mod tests {
 
         // ---- (2)+(3) B serves A's handle against B's own object.
         assert_eq!(
-            b.checkout().expect("idle worker").with_rm(|rm| rm.free(ha)),
+            b.checkout().expect("idle worker").with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.free(ha)),
             Ok(()),
             "★★ a real host does not fault here — it names a different, LIVE object"
         );
@@ -4154,7 +4154,7 @@ mod tests {
         assert_eq!(
             b.checkout()
                 .expect("idle worker")
-                .with_rm(|rm| rm.schedule(hb)),
+                .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.schedule(hb)),
             Err(RmError::BadHandle(hb)),
             "★★ B's OWN object was destroyed by a verb that never named it"
         );
@@ -4178,7 +4178,7 @@ mod tests {
         assert_eq!(
             c.checkout()
                 .expect("idle worker")
-                .with_rm(|rm| rm.schedule(ha)),
+                .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.schedule(ha)),
             Err(RmError::BadHandle(ha)),
             "a client with no object at that value still refuses — this is not a \
              blanket accept"
@@ -4214,7 +4214,7 @@ mod tests {
 
         std::thread::scope(|sc| {
             sc.spawn(|| {
-                w.with_rm(|rm| {
+                w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| {
                     lockwitness::note_acquired(1); // ★ past the entry assert
                     let r = rm.alloc_vaspace();
                     lockwitness::note_released(1);
@@ -4278,14 +4278,14 @@ mod tests {
         let mut w0 = a.checkout().expect("slot 0");
         let mut w1 = a.checkout().expect("slot 1");
         std::thread::scope(|sc| {
-            sc.spawn(|| w0.with_rm(|rm| rm.alloc_vaspace().expect("released eventually")));
+            sc.spawn(|| w0.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace().expect("released eventually")));
             hold.wait_until_pending();
             assert_eq!(
                 lock_a.held_by(),
                 Some((WorkerId(0), VerbKind::AllocVaSpace))
             );
 
-            sc.spawn(|| w1.with_rm(|rm| rm.alloc_sysmem(0x1000).expect("released eventually")));
+            sc.spawn(|| w1.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_sysmem(0x1000).expect("released eventually")));
             lock_a.wait_until_blocked(1);
             assert_eq!(
                 lock_a.queued(),
@@ -4294,7 +4294,7 @@ mod tests {
             );
 
             // …while the OTHER client runs to completion, on this very thread.
-            b.checkout().expect("idle worker").with_rm(|rm| {
+            b.checkout().expect("idle worker").with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| {
                 rm.alloc_vaspace()
                     .expect("a different client is unaffected")
             });

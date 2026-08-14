@@ -883,7 +883,7 @@ fn fresh_host_vas(worker: &mut Worker) -> HostHandle {
             host_vas: None,
             len: 0x1000,
             at: GpuVa(0x4000_0000),
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("a host VAS")
     {
         VerbReply::Published { host_vas, .. } => host_vas.expect("freshly allocated"),
@@ -909,7 +909,7 @@ fn write_fabricated(
                 by: CeExecutor::Ours,
                 guest_release: None,
             }],
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("an unrepresentable copy is ours to perform");
 }
 

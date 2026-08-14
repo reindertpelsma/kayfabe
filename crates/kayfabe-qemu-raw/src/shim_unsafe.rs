@@ -1288,7 +1288,17 @@ pub unsafe extern "C" fn kayfabe_shim_regs_read(
 ) -> u64 {
     match borrow_regs(handle) {
         None => 0,
-        Some(regs) => regs.read(bar, off, size),
+        // ★★★ w323 — the read path is a guest trap too, and it is marked for the SAME
+        // reason the write path is: it holds the BQL. ⊘ It is expected to be cheap
+        // (`[w320, measured]` MMIO reads total **20.5 ms per BOOT**, and this tree's
+        // standing directive is READ-NATIVE, WRITE-TRAP), so marking it should cost
+        // nothing — and if a host verb ever appears beneath a read, this is what makes it
+        // say so instead of being invisible. **A gate that only watches the path you
+        // already suspect cannot refute you.**
+        Some(regs) => {
+            let _trap = kayfabe_util::trapwitness::TrapGuard::enter();
+            regs.read(bar, off, size)
+        }
     }
 }
 
@@ -1309,6 +1319,26 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     let Some(regs) = borrow_regs(handle) else {
         return;
     };
+    // ★★★★★ **w323 — THE TRAP MARK, AT THE ONE PLACE THE GUEST CROSSES INTO US.**
+    //
+    // Every guest MMIO write arrives here with the QEMU BQL held, so everything beneath
+    // this line runs with **every vCPU and QEMU's main loop** blocked
+    // (`blocking_and_completion_model.md` §0). The guard is what makes that expressible: a
+    // host RM verb reached from below it can no longer obtain an honest
+    // `kayfabe_util::trapwitness::OffTrap` and is counted as an **enumerated inline
+    // exception** instead of passing unremarked.
+    //
+    // ⊘ Installed here rather than in `Regs::write` deliberately: this is the OUTERMOST
+    // boundary — the C's `nvkvm_trap_write` calls exactly this symbol — and a guard one
+    // frame in would leave the drains `Regs::write` runs *after* the plane call
+    // (materialize, err-grants, the budgeted drain, the reap) outside the mark, which is
+    // precisely where `w317` measured a 3.70 s hold.
+    //
+    // ⚠ It measures a duration too, published on `Drop` as
+    // `kayfabe_util::trapwitness::worst_trap_us()`. A census that only counted violations
+    // could not answer clause (b) — *"is the residue BOUNDED"* — and that is the half a
+    // predicate about placement cannot reach on its own.
+    let _trap = kayfabe_util::trapwitness::TrapGuard::enter();
     let o = KayfabeRegWrite::from_outcome(&regs.write(bar, off, size, val));
     if out.is_null() {
         return;

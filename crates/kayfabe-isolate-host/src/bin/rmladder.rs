@@ -57,11 +57,11 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
             handles.push(std::thread::spawn(move || {
                 for _ in 0..verbs {
                     let start = origin.elapsed().as_nanos();
-                    let h = w.with_rm(|rm| rm.alloc_vaspace());
+                    let h = w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace());
                     let end = origin.elapsed().as_nanos();
                     spans.lock().expect("spans").push((t, start, end));
                     if let Ok(h) = h {
-                        let _ = w.with_rm(|rm| rm.free(h));
+                        let _ = w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.free(h));
                     }
                 }
                 w
@@ -4840,7 +4840,7 @@ fn main() -> std::process::ExitCode {
                 host_vas: None,
                 len: LEN,
                 at: AT,
-            }) {
+            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
                 }) => {
@@ -4891,7 +4891,7 @@ fn main() -> std::process::ExitCode {
                 None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
-                Ok(plan) => match w.execute(&plan) {
+                Ok(plan) => match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
                     Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
                         "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
                          the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \

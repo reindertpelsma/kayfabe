@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+  --> tests/ui/defer_a_revocation.rs:15:21
+   |
+15 |     let _ = q.offer(Revocation::of_a_host_mapping());
+   |               ----- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `MapPublication`, found `Revocation`
+   |               |
+   |               arguments to this method are incorrect
+   |
+note: method defined here
+  --> src/pubqueue.rs
+   |
+   |     pub fn offer(&self, job: MapPublication) -> Offered {
+   |            ^^^^^

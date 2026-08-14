@@ -102,7 +102,7 @@ fn join_on(w: &mut Worker) -> FbLeafJoined {
         len: LEN,
         at: AT,
         phys: PHYS,
-    }) {
+    }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
         Ok(VerbReply::FbLeafJoined { joined, .. }) => joined,
         other => panic!("the join chain must answer FbLeafJoined, got {other:?}"),
     }

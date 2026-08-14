@@ -319,7 +319,7 @@ fn tr_isolate_verb(
         payload: vec![0u8; 16],
     };
     let (isolate, wid, t) = (worker.isolate(), worker.id(), worker.txn());
-    let outcome = match worker.execute(&plan) {
+    let outcome = match worker.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
         Ok(_) => VerbOutcome::Ok,
         Err(f) => VerbOutcome::Failed(f.err),
     };

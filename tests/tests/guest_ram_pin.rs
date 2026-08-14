@@ -780,7 +780,7 @@ fn a_relocated_fixed_map_is_refused_and_everything_it_built_is_unwound() {
             host_vas: None,
             grant: grant(),
             at: RING_VA,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect_err("a relocated placement must never be adopted");
 
     match failure.err {
@@ -823,7 +823,7 @@ fn and_the_same_chain_on_an_honest_backend_places_it_exactly() {
             host_vas: None,
             grant: grant(),
             at: RING_VA,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("the chain runs");
     match reply {
         VerbReply::GuestRamPinned {

@@ -4880,9 +4880,21 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // not drop"* — is indistinguishable from a working gate by `trap_ms` alone; only this
         // ratio separates them. ⊘ It is the WHOLE-BOOT running total; the per-doorbell counts
         // are on the `VAS-PUBLISH` line, and the two are different questions.
+        // ★★★★★ **w323 — THE TRAP WITNESS'S OWN RATIO, on the line every doorbell prints.**
+        //
+        // Same argument as the `w318` dirty-gate census beside it: a gate whose fire/skip
+        // ratio is not printed is indistinguishable from a gate that never fired. ⊘ This one
+        // is the whole grading criterion for "publication is off the BQL": `inline_exceptions`
+        // counts host RM verbs that ran **with the BQL held**, and the target state of
+        // `publication_off_the_bql.md` is **zero**. It is the WHOLE-BOOT running total.
+        //
+        // ⚠ `worst_trap` prints `UNMEASURED` rather than `0` when no guard has closed — an
+        // absent measurement and an instantaneous one are different facts and this tree has
+        // paid for reading one as the other.
         eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus} | {}",
-            self.dirty.census()
+            "kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus} | {} | {}",
+            self.dirty.census(),
+            kayfabe_util::trapwitness::census(),
         );
         kft.mark("log_ptdecode");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
