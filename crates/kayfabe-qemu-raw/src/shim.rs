@@ -9747,7 +9747,78 @@ pub struct Regs {
     /// the `PIN-RELEASE` line above already documents. ⚠ A boot with no line has **not**
     /// measured zero; it has never reaped, and that is `UNMEASURED` for this instrument.
     max_reap_us: std::sync::atomic::AtomicU64,
+    /// ★★★★★ **w317 — the same instrument on the BUDGETED half.** The longest single
+    /// [`SharedDevice::drain_retired_budgeted`] this boot has spent inside [`Regs::write`],
+    /// in microseconds.
+    ///
+    /// It exists because the budget is a *claim* and this is its falsifier: the drain is
+    /// supposed to stop at [`RETIRED_DRAIN_BUDGET_US`] plus one chunk's overshoot, and the
+    /// only way to know it does on real hardware — where the per-disposal cost is whatever
+    /// RM makes it — is to measure the thing itself. ⚠ Same reading rule as
+    /// [`Regs::max_reap_us`]: **a boot with no line is UNMEASURED, not zero.**
+    max_drain_us: std::sync::atomic::AtomicU64,
+    /// ★★★ **w317 — the last `deferred_for_drain` this shim printed**, so the
+    /// `DRAIN-DEFER` line fires on **change** rather than on every register write.
+    ///
+    /// ★ It is the trajectory, not the value, that answers the pre-registered outcome (B).
+    /// A run that goes `0 → 1 → 0` is the budget working: a proc vacated, its queue was spent
+    /// over several traps, and it reaped. A run that goes `0 → 1` and stays there is the
+    /// budget having **moved** the cost rather than removed it — and it is unreadable from
+    /// any single sample, which is why the line prints every transition.
+    last_deferred_for_drain: std::sync::atomic::AtomicUsize,
 }
+
+/// ★★★★★ **w317 — THE BUDGET, and what it is a fraction OF.**
+///
+/// **40 000 µs = 40 ms = 1 % of `scrubberDestruct`'s 4 000 ms** — the shortest *named*
+/// guest-side timeout in this tree (`ce_utils.c:349`, quoted in
+/// `blocking_and_completion_model.md` §1 as the bound on `INLINE-SAFE` clause (b)).
+///
+/// # Why a fraction, and why this fraction
+///
+/// ⊘ **Not "4 s minus epsilon".** The 4 s is one guest operation on one workload; a budget
+/// sized to just fit it fails on the next workload with a tighter timeout, and this campaign
+/// has already been bitten once by grading a single workload (`relaxation_inert_gate.sh`
+/// exists because of it). The number therefore has to buy headroom for timeouts nobody has
+/// enumerated yet.
+///
+/// **1 % buys two independent margins at once:**
+/// 1. **A 100× margin on the named bound.** A guest operation whose timeout is 100× tighter
+///    than the scrubber's — 40 ms — still survives one full drain, and an operation at the
+///    scrubber's own scale survives ~100 of them.
+/// 2. **Below human/timer perceptibility.** 40 ms is under one 24 Hz frame and under the
+///    10 ms×4 scale at which QEMU's own main loop starts visibly missing timers. A freeze of
+///    the whole VM (which is what a BQL hold is — §0 of the blocking model) at this size is
+///    indistinguishable from ordinary scheduling jitter.
+///
+/// # ⚠ And what it is deliberately NOT derived from
+///
+/// It is **not** `N disposals × the measured per-disposal cost`. w314 measured that exact
+/// estimate wrong by **~20×** (`munmap` of a `MAP_SHARED` memfd window RM has
+/// `pin_user_pages`-pinned: 35 µs, not the 1–2 µs §5 assumed), and a count-based budget
+/// silently degrades by whatever factor that estimate is off. A **time** budget cannot: it
+/// re-measures the cost every turn, for free, by construction. The count below is a
+/// granularity knob, not the bound.
+pub const RETIRED_DRAIN_BUDGET_US: u64 = 40_000;
+
+/// ★★ **w317 — the granularity, not the budget.** Disposals taken per plan→execute→check-in
+/// turn; the deadline is only re-read between turns, so the worst-case overshoot is one
+/// chunk's cost.
+///
+/// `64 × ~70 µs ≈ 4.5 ms` at the cost w314's numbers imply (3.70 s over ~54 700 disposals),
+/// i.e. ~11 % overshoot on a 40 ms budget. ★ It is sized so that even if the per-disposal
+/// cost is wrong by the **same 20× factor** §5's was, one chunk is ~90 ms — still 2 % of the
+/// 4 s bound, i.e. the granularity alone can never reproduce the failure this fixes.
+///
+/// ⊘ Not 1: each turn costs a device write-lock acquisition and a `return_worker` round, and
+/// at 1 the loop overhead would dominate the work.
+pub const RETIRED_DRAIN_CHUNK: usize = 64;
+
+/// ⊘ **A zero chunk would make the drain a no-op and the reap's `HoldUndrained` gate a
+/// PERMANENT defer** — every retired proc held forever, its isolate child never `waitpid`ed,
+/// its GPA arena never recycled. That is a strictly worse leak than the stall this rung
+/// fixes, and it is one keystroke away. Refused at compile time rather than reasoned about.
+const _: () = assert!(RETIRED_DRAIN_CHUNK > 0, "the drain chunk must make progress");
 
 impl core::fmt::Debug for Regs {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -10199,6 +10270,8 @@ impl Regs {
             exports: exports_for_regs,
             last_pin_reclaim: std::sync::atomic::AtomicUsize::new(0),
             max_reap_us: std::sync::atomic::AtomicU64::new(0),
+            max_drain_us: std::sync::atomic::AtomicU64::new(0),
+            last_deferred_for_drain: std::sync::atomic::AtomicUsize::new(0),
         })
     }
 
@@ -10997,10 +11070,51 @@ impl Regs {
                 pins.released, pins.refused_no_host_vas, pins.rows_deduped,
             );
         }
+        // ★★★★★ **w317 — THE BUDGETED DRAIN, AND IT MUST BE THE LINE ABOVE THE REAP.**
+        //
+        // Ordering, not preference. The reap holds a proc back while it still has drainable
+        // staged work (`Spine::reap_retired`'s w317 gate), so this line is what eventually
+        // lets the reap below take anything at all. Reversed, the first trap after a proc
+        // vacates would reap it with a full queue and `Proc::drop` would issue the whole
+        // thing — the 2.65–3.70 s stall w314 measured, unchanged.
+        //
+        // ⊘ **This is not a new call site in the `INLINE-SAFE` sense.** The verbs it issues
+        // are the same verbs `Proc::drop` issued from this same frame at master; what is new
+        // is that a bounded number of them run per trap instead of all of them. It holds no
+        // ranked lock while executing (R1, asserted inside `Worker::execute`), for the same
+        // reason and by the same construction as the reap below.
+        //
+        // ⚠ The deadline is read BETWEEN turns, so the bound delivered is
+        // `RETIRED_DRAIN_BUDGET_US` + one chunk — see both constants' docs.
+        let drain_t0 = std::time::Instant::now();
+        let drain = self.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
+            u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+                >= RETIRED_DRAIN_BUDGET_US
+        });
+        let drain_us = u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        if drain.turns > 0
+            && drain_us
+                > self
+                    .max_drain_us
+                    .fetch_max(drain_us, std::sync::atomic::Ordering::Relaxed)
+        {
+            // ★ Printed on a NEW MAXIMUM only — the density rule the two lines above already
+            // carry. `budget_hit` is on the line because "we stopped early and the rest rides
+            // to the next trap" is the mechanism working, and a reader must be able to tell
+            // it from "there was nothing left".
+            eprintln!(
+                "kayfabe: DRAIN-TIMING max_drain_us={drain_us} disposed={} residue={} \
+                 turns={} budget_hit={} ⇒ the longest BUDGETED disposal yet inside \
+                 Regs::write, with the BQL held. Budget: {RETIRED_DRAIN_BUDGET_US} us \
+                 (1% of scrubberDestruct's 4000000 us) + one {RETIRED_DRAIN_CHUNK}-disposal \
+                 chunk of overshoot.",
+                drain.disposed, drain.residue, drain.turns, drain.budget_hit,
+            );
+        }
         // ★★★ **w314 — TIME THE DISPOSAL.** See [`Regs::max_reap_us`]. This wraps the call
         // and changes nothing about it: two `Instant`s and a `fetch_max`.
         let reap_t0 = std::time::Instant::now();
-        let reaped = self.device.reap_retired();
+        let (reaped, deferred_for_drain) = self.device.reap_retired_held();
         let reap_us = u64::try_from(reap_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
         if reap_us
             > self
@@ -11018,8 +11132,32 @@ impl Regs {
             // twice mistaken for "the reap exists". A zero prints nothing; a non-zero says
             // so once per reap, with what is still outstanding beside it.
             eprintln!(
-                "kayfabe: REAP reaped={reaped} still_retired={} ⇒ each reaped proc's staged \
-                 host `Release` verbs went out and its isolate child was reaped",
+                "kayfabe: REAP reaped={reaped} still_retired={} deferred_for_drain=\
+                 {deferred_for_drain} ⇒ each reaped proc's staged host `Release` verbs went \
+                 out and its isolate child was reaped; `deferred_for_drain` are procs held \
+                 back because w317's budgeted drain has not emptied their queue yet",
+                self.device.retired_len(),
+            );
+        }
+        // ★★★★★ **w317 — THE TRAJECTORY, and it prints on every TRANSITION.**
+        //
+        // A bound that defers indefinitely is a leak with extra steps. `Spine::reap_retired`'s
+        // termination argument (the queue of a retired proc is CLOSED and monotonically
+        // decreasing) says this must return to 0; this line is what makes that argument
+        // **checkable on a live boot** rather than a paragraph. ⚠ Absent = UNMEASURED: a boot
+        // where no proc ever vacated prints nothing, and that is a different fact from
+        // "nothing was ever deferred".
+        if deferred_for_drain
+            != self
+                .last_deferred_for_drain
+                .swap(deferred_for_drain, std::sync::atomic::Ordering::Relaxed)
+        {
+            eprintln!(
+                "kayfabe: DRAIN-DEFER deferred_for_drain={deferred_for_drain} \
+                 still_retired={} ⇒ procs the reap is holding back because their staged \
+                 disposal queue is not empty yet. MUST return to 0: the queue of a retired \
+                 proc is closed and strictly decreasing, so a value that never falls is the \
+                 budget having moved the cost rather than removed it",
                 self.device.retired_len(),
             );
         }

@@ -2324,6 +2324,51 @@ impl Orphans {
     pub fn len(&self) -> usize {
         self.unmap.len() + self.free.len() + self.guest_ram.len()
     }
+
+    /// ★★★★★ **w317 — TAKE AT MOST `budget` DISPOSALS, AND LEAVE THE REST HERE.**
+    ///
+    /// The whole of the budgeted drain's cutting edge. `self` keeps the remainder, so a
+    /// caller that disposes of the returned batch and comes back later finishes the job;
+    /// nothing is discarded and nothing is duplicated.
+    ///
+    /// ## ⚠ THE ORDER IS PRESERVED **ACROSS** BATCHES, not merely inside one
+    ///
+    /// [`Worker::execute`]'s `Release` arm runs `unmap` → `free` → `guest_ram`, and both
+    /// orderings are load-bearing: unmap-before-free protects **our mirror** of the mapping
+    /// (RM auto-unmaps inside `clientFreeResource_IMPL` regardless), and free-before-`munmap`
+    /// is [`Self::guest_ram`]'s stated invariant that the GPU's translation never outlives our
+    /// view of the pages.
+    ///
+    /// A naive split that took `budget/3` from each kind would break both the instant a batch
+    /// boundary fell inside an object's own pair. This one cannot: it fills the batch from
+    /// `unmap` **to exhaustion** before it touches `free`, and from `free` to exhaustion
+    /// before it touches `guest_ram`. ⇒ every `unmap` in the whole queue is issued before any
+    /// `free`, and every `free` before any `munmap`, no matter where the boundaries land —
+    /// the single-batch order, stretched over time.
+    ///
+    /// `budget == 0` returns an empty batch and takes nothing (and is what makes a
+    /// budget-exhausted caller a no-op rather than a spin).
+    #[must_use = "the returned batch is an Orphans — dispose of it on a checked-out worker \
+                  or the objects it names leak; see this type's own #[must_use]"]
+    pub fn split_off_budget(&mut self, budget: usize) -> Orphans {
+        let mut out = Orphans::default();
+        let mut room = budget;
+        let n = room.min(self.unmap.len());
+        out.unmap = self.unmap.drain(..n).collect();
+        room -= n;
+        // `room > 0` implies `self.unmap` is now empty: either it fitted entirely, or `n`
+        // was `room` and `room` is now 0. Same argument one kind down.
+        if room > 0 {
+            let n = room.min(self.free.len());
+            out.free = self.free.drain(..n).collect();
+            room -= n;
+            if room > 0 {
+                let n = room.min(self.guest_ram.len());
+                out.guest_ram = self.guest_ram.drain(..n).collect();
+            }
+        }
+        out
+    }
 }
 
 /// ★ What a [`Worker::execute`] failure actually leaves behind: **why it failed, and

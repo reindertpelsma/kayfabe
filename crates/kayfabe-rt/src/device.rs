@@ -461,6 +461,30 @@ pub struct PoolWaits {
     pub waiting: u32,
 }
 
+/// ★★★★★ **w317 — what one [`SharedDevice::drain_retired_budgeted`] call did.**
+///
+/// ⊘ **Counted, never timed**, for [`PoolWaits`]'s reason exactly: there is no clock in this
+/// crate. The *caller* owns the wall clock (it hands the deadline in), so the caller is also
+/// the only party that can honestly report a duration — and it does, on the `DRAIN-TIMING`
+/// boot line.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RetiredDrainStats {
+    /// Host objects, GPU mappings and guest-RAM windows actually disposed of.
+    pub disposed: usize,
+    /// Disposals the host **refused**, and which are therefore gone from the queue without
+    /// having been done. ★ Their disposition of record is the isolate's own death (§7.0);
+    /// they are counted rather than re-staged because re-staging a permanently-refusing
+    /// object is the one shape that would make this drain non-terminating.
+    pub residue: usize,
+    /// Plan→execute→check-in turns. `turns × chunk` bounds `disposed + residue`.
+    pub turns: usize,
+    /// ★ **The budget ran out with work still queued.** This is the flag that says the
+    /// remainder is riding to the next trap — i.e. the mechanism working, not failing. A
+    /// boot where it is *always* set and `SharedDevice::retired_len` never falls is outcome
+    /// (B): the cost moved rather than went away.
+    pub budget_hit: bool,
+}
+
 /// The gate's own mutable state: the wakeup generation plus the per-target counters.
 ///
 /// Keyed by [`GpuId`] and **deliberately not by `(ProcId, GpuId)`**: a `ProcId` is
@@ -1201,6 +1225,113 @@ impl SharedDevice {
         let n = reclaimed.len();
         drop(reclaimed); // ← the blocking teardown, with zero ranked locks held.
         n
+    }
+
+    /// ★★★★★ **w317 — the reap under [`ReapPolicy::HoldUndrained`]:** reap only the procs
+    /// whose staged disposal queue [`SharedDevice::drain_retired_budgeted`] has already
+    /// emptied, and hold the rest for the next quiesce edge.
+    ///
+    /// Returns `(reaped, deferred_for_drain)`. ★ **The pair is the point.** Under the budget,
+    /// "nothing was reaped" stops being one fact: a trap that reaps zero because nothing died
+    /// and a trap that reaps zero because a proc's queue is not draining are the same number
+    /// on [`SharedDevice::reap_retired`]'s signature, and the second is precisely this rung's
+    /// pre-registered outcome (B) — the bound having **moved** cost rather than removed it.
+    /// `a_count_cannot_see_a_substitution`.
+    ///
+    /// ⚠ Call it **after** the drain, never instead of it. On its own this only defers, and a
+    /// deferral with nothing draining it is the leak with extra steps.
+    pub fn reap_retired_held(&self) -> (usize, usize) {
+        let reclaimed = {
+            let mut g = self.state.write();
+            g.spine.reap_retired_with(kayfabe_core::gpu::ReapPolicy::HoldUndrained)
+            // ↑ the write guard dies at this brace, BEFORE the drop below.
+        };
+        let n = reclaimed.len();
+        let d = reclaimed.deferred_for_drain();
+        drop(reclaimed); // ← the blocking teardown, with zero ranked locks held.
+        (n, d)
+    }
+
+    /// ★★★★★ **w317 — THE BUDGETED DRAIN: dispose of retired procs' staged host objects a
+    /// bounded slice at a time, instead of all of them inside one guest MMIO trap.**
+    ///
+    /// # The number this exists for
+    ///
+    /// `[measured 2026-08-14 (w314), bench vh, real GA106, n=4 per arm, non-overlapping
+    /// ranges]` `Regs::write`'s reap halted **every vCPU and QEMU's main loop** — they all
+    /// serialise on the BQL — for **2.65–2.92 s** on clean master and up to **3.70 s** with
+    /// w310's pin release, against `scrubberDestruct`'s **4 000 ms**
+    /// (`ce_utils.c:349`). That is `INLINE-SAFE` clause (b)
+    /// (`blocking_and_completion_model.md` §1) failing at 92.6 % of budget on a *green* boot
+    /// of the *standard* workload.
+    ///
+    /// # The shape — deferral was already there; only the bound was missing
+    ///
+    /// w303 armed the reap at the **GSP re-handshake edge**, and that edge **recurs**: a proc
+    /// deferred for not being quiesced is retried at the guest's next MMIO write. This adds
+    /// nothing to that structure. It drains a bounded slice, and `Spine::reap_retired` holds
+    /// the proc back while any drainable remainder exists — so the unbounded burst in
+    /// [`kayfabe_core::gpu::Proc`]'s `Drop` is never reached with a full queue.
+    ///
+    /// # ⊘ Why the budget is a CLOSURE and not a `Duration`
+    ///
+    /// This crate is *pure std with no OS waiting primitives*, and the core it drives has no
+    /// clock at all (§8.3). Handing the deadline in as `over_budget` keeps the wall clock in
+    /// the shell where it belongs **and** makes the bound testable offline: a closure that
+    /// returns `true` after k turns exercises the exact control flow a 40 ms deadline does,
+    /// with no sleep and no flake. ★ A budget that can only be checked on the bench is a
+    /// budget nobody re-checks.
+    ///
+    /// `chunk` is a **granularity**, not the budget: it caps how far past the deadline one
+    /// turn can carry us. The bound delivered is `budget + (chunk × per-disposal cost)`.
+    ///
+    /// # ⚠ What it does NOT do
+    ///
+    /// It does not make the disposal asynchronous, and it does not reduce the total work: the
+    /// same objects are freed by the same verbs on the same thread. It converts **one 3.7 s
+    /// stall** into **many bounded ones with the guest running in between**. That is a clause
+    /// (b) fix and nothing else; clause (b) is the clause that was failing.
+    pub fn drain_retired_budgeted(
+        &self,
+        chunk: usize,
+        mut over_budget: impl FnMut() -> bool,
+    ) -> RetiredDrainStats {
+        let mut stats = RetiredDrainStats::default();
+        loop {
+            // ---- PLAN: pure state, under the device write guard. No verb here.
+            let planned = {
+                let mut g = self.state.write();
+                g.spine.plan_retired_drain(chunk)
+                // ↑ the write guard dies at this brace, BEFORE the verb below.
+            };
+            let Some(kayfabe_core::gpu::RetiredDrain {
+                pid,
+                gpu,
+                mut worker,
+                orphans,
+            }) = planned
+            else {
+                break; // nothing drainable — the overwhelming majority of traps.
+            };
+            let n = orphans.len();
+            // ---- EXECUTE: zero ranked locks held (R1, asserted by `Worker::execute`).
+            let undisposed = kayfabe_fwd::dispose_on(&mut worker, orphans);
+            stats.residue += undisposed.len();
+            stats.disposed += n - undisposed.len();
+            stats.turns += 1;
+            // ⊘ The residue is DROPPED, exactly as `Proc::drop` and
+            // `SharedDevice::drain_pending_releases` already drop theirs. Re-staging it
+            // would be the one shape that breaks this rung's termination argument: a
+            // permanently-refusing object would be split off and put back forever, and the
+            // proc would never reap. It is counted instead, which is what makes
+            // "the drain is not making progress" a readable number rather than a hang.
+            self.return_worker(pid, gpu, worker);
+            if over_budget() {
+                stats.budget_hit = true;
+                break;
+            }
+        }
+        stats
     }
 
     /// Read one live proc's state under whichever guards the configured mode requires —
