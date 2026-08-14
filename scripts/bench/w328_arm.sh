@@ -19,6 +19,15 @@
 #   the doorbell FASTER makes that truncation RARER WITHOUT FIXING IT. ⇒ `w319_attribute.sh`
 #   is run on every boot, not only on the reds, and its verdict is printed either way.
 #
+# ⊘⊘ FROZEN AT SWEEP START — READ THIS BEFORE COMPARING THE ARM LOGS TO THIS FILE.
+#   The `gate=` / `DIRTY-GATE` / `CUM over N passes` lines below were added to this file AFTER
+#   the sweep had begun, and were DELIBERATELY NOT SYNCED to the bench. All eight arms
+#   therefore ran the SAME instrument, and the arm logs in `traces/w328_scope/` do not carry
+#   those three lines. They are recovered per boot by `w328_census.sh`, which reads the same
+#   qemu log. ⚠ Changing an instrument mid-sweep makes the arms before and after the change
+#   incomparable in the one dimension the change touches — and the change would have looked
+#   harmless, because it only ADDS output.
+#
 #   usage: w328_arm.sh <TREE> <PREFIX> <N> [env assignments...]
 set -uo pipefail
 TREE=$1; PREFIX=$2; N=${3:-3}; shift 3 || true
