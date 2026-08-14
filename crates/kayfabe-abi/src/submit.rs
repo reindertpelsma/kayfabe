@@ -4753,6 +4753,363 @@ pub const PREEMPT_PARAMS_SIZE: usize = 8;
 /// findings and must not collapse into one status.
 pub const PREEMPT_UNPERFORMED_STATUS: u32 = crate::NV_ERR_INVALID_STATE;
 
+// =====================================================================================
+// ★★★★★ w306 — THE CANCELLATION PLANE: what each cancel verb PROMISES, written down
+// =====================================================================================
+
+/// ★★★ **What a caller may CONCLUDE from a successful cancellation verb.**
+///
+/// `docs/design/cancellation_plane.md` §2. The axis is deliberately **not**
+/// drain-vs-no-drain — that split does not survive the headers. `STOP_CHANNEL`'s
+/// `bImmediate=TRUE` form is the one the brief expected to be cheap, and it still
+/// *"forcefully preempt[s] it off the runlist"* and RCs the channel if that times out
+/// (`ogkm-580: ctrla06fgpfifo.h:224-231`). **Both forms name host hardware state.**
+///
+/// The axis that decides what we may answer is what the guest is entitled to believe
+/// afterwards, and there are exactly two answers in the whole set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancelPromise {
+    /// **No NEW work will be scheduled.** Anything already running may keep running —
+    /// RM says so itself, in the one header that spells both out side by side
+    /// (`ogkm-580: ctrl2080fifo.h:315-321`).
+    ///
+    /// The carried string is the verbatim contract sentence plus the parameter value
+    /// that selects this promise.
+    NoNewWork(&'static str),
+    /// ★ **The engine has STOPPED EXECUTING this channel.** The caller may unmap the
+    /// channel's pages. This is the promise we cannot manufacture: it is a statement
+    /// about a real GA106, and this port has **no verb on `RmBackend` that could produce
+    /// it** (`crates/kayfabe-isolate/src/lib.rs:764-1219` — no stop, preempt, idle,
+    /// disable, reset, halt or quiesce).
+    ///
+    /// The carried string is the verbatim contract sentence plus the parameter value
+    /// that selects this promise.
+    NotRunning(&'static str),
+}
+
+/// Where the verb is actually performed on a **GA106 with a GSP client** — the HAL
+/// resolution, which is load-bearing and which two prior leads died for skipping.
+///
+/// ⚠ In ogkm the `.c` you read is often not the code that runs: a control carrying
+/// `ROUTE_TO_PHYSICAL` (`0x40`) **without** `PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST`
+/// (`0x40000`) has its CPU-RM `_IMPL` replaced by **`NULL`** in the export table
+/// (`ogkm-580: src/nvidia/inc/kernel/rmapi/control.h:159-162`) and is auto-forwarded to
+/// the GSP. **We are the GSP.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerformedBy {
+    /// The CPU-RM `_IMPL` runs: the guest's own `nvidia.ko` does some part of the verb and
+    /// RPCs the rest to us. ⚠ *"Some part"* has never once been the hardware part — in
+    /// every row below the CPU-RM body is a parameter check and a verbatim RPC. The
+    /// carried string is the export-table citation and what CPU-RM does around the RPC.
+    GuestCpuRmThenUs(&'static str),
+    /// ★ Compiled out to `NULL`; the **entire** verb is ours. There is no other party that
+    /// could perform it and no NVIDIA code path that compensates for our not performing
+    /// it. The carried string is the export-table citation with the flags.
+    UsAlone(&'static str),
+}
+
+/// ★★★★★ **w306 — one cancellation verb, with its promise attached to it.**
+///
+/// # Why this table exists at all
+///
+/// `docs/audits/w301_cancellation_error_leaks.md` §1.4 found `NVA06C_CTRL_CMD_PREEMPT`
+/// answered `NV_OK` with the guest's bytes echoed, on a channel group that may have had a
+/// live host twin on real silicon. w303 fixed **that row**. This table exists to make the
+/// **class** unrepresentable: the finding was never that a row was wrong, it was that
+/// membership in a table carried **no reason**, so a row that had stopped being true looked
+/// exactly like one that never was — and it passed review for two days.
+///
+/// ⇒ A verb cannot be listed here without writing down what it promises, and
+/// [`CANCELLATION_VERBS`]' gate refuses to let any member also be an input-only echo.
+///
+/// ⊘ **This table decides nothing.** It is a specification and a checkable claim, not a
+/// dispatch mechanism — `a_table_does_not_decide_behaviour`. What each id is *answered*
+/// with is `ObjectPolicy`'s business, and `docs/design/cancellation_plane.md` §1 records
+/// what that is today, per id, with its measured arrival census.
+#[derive(Debug, Clone, Copy)]
+pub struct CancellationVerb {
+    /// The RM control command id.
+    pub cmd: u32,
+    /// Its name, for a reader who meets the id in a boot census.
+    pub name: &'static str,
+    /// ★ What the guest is entitled to believe after an `NV_OK`. See [`CancelPromise`].
+    pub promise: CancelPromise,
+    /// Where the promise is written down. ⊘ Never empty, and it must name `ogkm-580` —
+    /// a promise with no citation is a promise somebody remembered.
+    pub contract: &'static str,
+    /// The HAL resolution for GA106 + GSP client. See [`PerformedBy`].
+    pub performed_by: PerformedBy,
+    /// ★★ The status this port must answer when it **cannot perform** the verb.
+    ///
+    /// ⊘ **Never `NV_OK`**, and the gate enforces it. This is the field that makes
+    /// *"we accepted it and dropped it"* impossible to express as data: there is no value
+    /// here that means *"answer success anyway"*.
+    ///
+    /// ⚠ It is **not** a claim about what the id is answered with today — several rows are
+    /// not claimed by `OBJECT_CONTROLS` at all and reach the ledger's blanket `0x56`.
+    /// `docs/design/cancellation_plane.md` §1 is the record of today; this is the record of
+    /// what honesty requires, chosen from each verb's own documented status set.
+    pub unperformed_status: u32,
+    /// ★ How often it has actually arrived, measured rather than assumed. ⊘ Never empty —
+    /// `rank by what a guest can actually cause` needs a number, and a row without one
+    /// invites ranking by apparent severity.
+    pub arrivals: &'static str,
+}
+
+/// `NVA06F_CTRL_CMD_STOP_CHANNEL`.
+pub const NVA06F_CTRL_CMD_STOP_CHANNEL: u32 = 0xa06f_0112;
+/// `NV906F_CTRL_CMD_RESET_CHANNEL`.
+pub const NV906F_CTRL_CMD_RESET_CHANNEL: u32 = 0x906f_0102;
+/// `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS`.
+pub const NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS: u32 = 0x2080_110b;
+/// `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS`.
+pub const NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS: u32 = 0x2080_1117;
+/// `NV2080_CTRL_CMD_GPU_EVICT_CTX` — ⊘ **absent from w301's census**, and it arrives in
+/// exactly the same boots as [`NVA06F_CTRL_CMD_STOP_CHANNEL`].
+pub const NV2080_CTRL_CMD_GPU_EVICT_CTX: u32 = 0x2080_012c;
+/// `NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS` — the only verb in the set that carries a
+/// caller-supplied timeout.
+pub const NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS: u32 = 0x0080_1714;
+
+/// The rows. `docs/design/cancellation_plane.md` §1 is the prose form, with the
+/// what-we-do-today column this table deliberately does not carry.
+///
+/// ⊘ **What is NOT here, and why** — recorded so it is not re-derived:
+///
+/// - The `NV2080_CTRL_CMD_RC_*` family (`0x208022xx`) is the error-**reporting** and
+///   watchdog-**policy** plane. `…05/06/13` read the error list, `…07` wipes history,
+///   `…0a/0b/0c/10` are watchdog votes. **Nothing there stops an engine.**
+/// - `NV2080_CTRL_CMD_FIFO_CHANNEL_PREEMPTIVE_REMOVAL` (`0x2080110a`) is documented
+///   (`ogkm-580: ctrl2080fifo.h:281-292`) but has **no export entry at all** in
+///   580.159.04, so nobody can issue it. ★ Known-positive: the identical grep for its
+///   neighbour `0x2080110b` hits `g_subdevice_nvoc.c:4923`.
+/// - `NV0080_CTRL_CMD_INTERNAL_FIFO_RC_AND_PERMANENTLY_DISABLE_CHANNELS` (`0x00802008`) is
+///   the IMEX/fabric client kill-switch on the physical RMAPI, not reachable from a guest.
+pub const CANCELLATION_VERBS: &[CancellationVerb] = &[
+    CancellationVerb {
+        cmd: NVA06F_CTRL_CMD_STOP_CHANNEL,
+        name: "NVA06F_CTRL_CMD_STOP_CHANNEL",
+        promise: CancelPromise::NotRunning(
+            "bImmediate=FALSE — the ONLY form production ever sends: \"we will wait for \
+             default RM timeout for channel to idle\". bImmediate=TRUE is NOT the cheap \
+             form: \"if channel is not idle, we forcefully preempt it off the runlist. If \
+             the preempt times out, we will RC the channel.\" Both end with the channel \
+             unbound and off the runlist.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:216-243. \
+                   bImmediate is effectively constant: UVM's only call site passes \
+                   va_space->user_channel_stops_are_immediate (kernel-open/nvidia-uvm/\
+                   uvm_user_channel.c:788), written in exactly one place in the tree — \
+                   uvm_test.c:89, a test ioctl — over a uvm_kvmalloc_zero'd struct.",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x10008, ogkm-580: g_kernel_channel_nvoc.c:391 — no ROUTE_TO_PHYSICAL, so \
+             kchannelCtrlCmdStopChannel_IMPL runs. Its whole body is one NV_RM_RPC_CONTROL \
+             (kernel_channel.c:1958-1968) and then, ONLY on NV_OK, kchannelNotifyRc_HAL \
+             (:1979). ⇒ the drain is 100% behind the RPC, i.e. ours.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 115 of the 195 committed boot logs that print \
+                   an unserviced ledger. Always co-occurring with GPU_EVICT_CTX, 115/115, \
+                   zero singletons — the signature of nvGpuOpsStopChannel issuing both \
+                   (ogkm-580: nv_gpu_ops.c:10956-10962, :10966-10983).",
+    },
+    CancellationVerb {
+        cmd: NV2080_CTRL_CMD_GPU_EVICT_CTX,
+        name: "NV2080_CTRL_CMD_GPU_EVICT_CTX",
+        promise: CancelPromise::NotRunning(
+            "\"This command is used to evict a Virtual Context\" — a GR context cannot be \
+             evicted while the engine is executing it, so an NV_OK asserts it has been \
+             switched out.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h:1003-1035.",
+        performed_by: PerformedBy::UsAlone(
+            "flags 0x1c240, ogkm-580: g_subdevice_nvoc.c:326-332 — ROUTE_TO_PHYSICAL (0x40) \
+             without PHYSICAL_IMPLEMENTED_ON_VGPU_GUEST (0x40000) ⇒ compiled out to NULL, \
+             and no body exists under src/nvidia/src/. ★ Known-positive for that zero: the \
+             identical search over its mirror subdeviceCtrlCmdGpuPromoteCtx_IMPL \
+             (0x2080012b, flags 0x10244) also finds no body — and THAT one we serve, as \
+             ObjectPolicy::respond_promote_ctx.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 115 of 195 ledgers, in lockstep with \
+                   STOP_CHANNEL. ⊘ Absent from w301's census entirely, and used as a \
+                   \"not in the table\" negative fixture at kayfabe-abi/tests/mean_wire.rs:1882.",
+    },
+    CancellationVerb {
+        cmd: NV906F_CTRL_CMD_RESET_CHANNEL,
+        name: "NV906F_CTRL_CMD_RESET_CHANNEL",
+        promise: CancelPromise::NotRunning(
+            "\"resets the channel corresponding to specified engine and also resets the \
+             specified engine\". ⊘ No idle or preempt language anywhere: this is the \
+             post-RC RECOVERY verb, not a graceful drain — but an engine reset is at least \
+             as strong a statement about the engine as a drain is.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h:105-148.",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x10008, ogkm-580: g_kernel_channel_nvoc.c:271. CPU-RM validates \
+             resetReason, writes bIsRcPending OUT from its own shadow before the RPC \
+             (kernel_channel.c:3056), then RPCs verbatim. Its own comment: \"All real \
+             hardware management is done in the host. Do an RPC to the host\".",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 1 of 195 ledgers — \
+                   traces/w299_multiproc/run_w299concurrent_qemu.log.gz, the MULTI-PROCESS \
+                   concurrent boot. ⊘ w301 §1.2 says \"never observed reaching us\"; that is \
+                   corrected here, and the correction is the ranking fact: the cancellation \
+                   surface widens as the ladder gets further.",
+    },
+    CancellationVerb {
+        cmd: NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS,
+        name: "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS",
+        promise: CancelPromise::NotRunning(
+            "bOnlyDisableScheduling=FALSE — the form UVM sends: \"the call will ensure none \
+             of the listed channels are RUNNING IN HARDWARE and will not run until a call \
+             with bDisable=NV_FALSE is made\". With =TRUE it degrades to NoNewWork: \"will \
+             not remove any of the listed channels from hardware if they are currently \
+             running\". ★ This is the one header in the set that spells both promises out \
+             side by side, which is why it is the authority for the distinction.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:301-355. \
+                   ⚠ AND IT IS THE ONE CALLER THAT CONSUMES THE STATUS: \
+                   nvGpuOpsDisableVaSpaceChannels (nv_gpu_ops.c:926-982) leaves \
+                   bOnlyDisableScheduling zero and PROPAGATES the return — unlike \
+                   nvGpuOpsStopChannel, which is void and NV_ASSERT_OKs. ⇒ the day this id \
+                   first appears in a ledger, cancellation_plane.md §3.2's \"the guest does \
+                   not look\" stops being true.",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x10108, ogkm-580: g_subdevice_nvoc.c:4921. CPU-RM does one privilege \
+             check on pRunlistPreemptEvent and then RPCs verbatim; ⊘ its BARE-METAL branch \
+             is NV_ERR_NOT_SUPPORTED (kernel_fifo_ctrl.c:746), so this control only exists \
+             via GSP at all.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 0 of 195 ledgers. ★ Known-positive for that \
+                   zero: the same scan over the same 195 files finds STOP_CHANNEL in 115 \
+                   and RESET_CHANNEL in 1.",
+    },
+    CancellationVerb {
+        cmd: NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS,
+        name: "NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS",
+        promise: CancelPromise::NoNewWork(
+            "\"This command will disable or enable SCHEDULING of all usermode channels\" — \
+             one NvBool, no channel list, no idle language. A global doorbell gate.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h:831-849. \
+                   Callers are rm_stop_user_channels / rm_restart_user_channels \
+                   (arch/nvalloc/unix/src/osapi.c:2671-2727) — the suspend/resume and \
+                   GPU-reset gate, not a per-channel cancel.",
+        performed_by: PerformedBy::UsAlone(
+            "flags 0x40, ogkm-580: g_subdevice_nvoc.c:5056 ⇒ compiled out to NULL; there is \
+             no .c body anywhere in the tree, only the generated declaration.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 0 of 195 ledgers, and no guest path we have \
+                   ever exercised suspends. ⇒ do not build on spec.",
+    },
+    CancellationVerb {
+        cmd: NVA06C_CTRL_CMD_PREEMPT,
+        name: "NVA06C_CTRL_CMD_PREEMPT",
+        promise: CancelPromise::NotRunning(
+            "bWait=TRUE — the value both a native GA106 and our guest measurably send: \
+             \"this control call waits till the preempt completes\". A completed preempt is \
+             the group context-switched out. ⊘ With bWait=FALSE it degrades to NoNewWork, \
+             and the header warns that repeating it without waiting \"can lead to undefined \
+             results\".",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06c.h:177-213; \
+                   NVA06C_CTRL_CMD_PREEMPT_MAX_MANUAL_TIMEOUT_US = 1000000 at :212.",
+        performed_by: PerformedBy::UsAlone(
+            "flags 0x10248, ogkm-580: g_kernel_channel_group_api_nvoc.c:273 ⇒ compiled out \
+             to NULL; no body under src/nvidia/src/.",
+        ),
+        unperformed_status: PREEMPT_UNPERFORMED_STATUS,
+        arrivals: "[measured 2026-08-14, w303] 1 per run in every native GA106 trace that \
+                   creates a context, inside the cuCtxDestroy RM_FREE cascade; 0 in \
+                   init_r1/dev_r1. [w306] 0 of 195 of our own ledgers — our workloads never \
+                   call cuCtxDestroy. ★ This is the ONE row already answered by a decision \
+                   rather than a refusal: ObjectPolicy::respond_preempt.",
+    },
+    CancellationVerb {
+        cmd: NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
+        name: "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE(bEnable=FALSE)",
+        promise: CancelPromise::NoNewWork(
+            "\"the channel will be disabled and removed from runlist\" — and no idle, \
+             preempt or wait language anywhere. ⊘ Removal from the runlist is NOT \
+             not-running: RM's own DISABLE_CHANNELS text is explicit that a channel already \
+             executing keeps executing.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h:35-65. \
+                   ⊘ The CPU-RM body does not branch on bEnable at all \
+                   (kernel_channel.c:3105-3131).",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x10008, ogkm-580: g_kernel_channel_nvoc.c:316.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "Present in both crossing boots (w294 cup2, w297 cup3). ★ SERVED on the \
+                   guest plane — kayfabe_core::gpu::apply_schedule_channel — and the \
+                   withdrawal never reaches the host, because RmBackend::schedule has no \
+                   enable flag and kayfabe-isolate-host/src/rm.rs:4595 hardcodes b_enable:1. \
+                   ⇒ the cheapest honest increment on this whole plane.",
+    },
+    CancellationVerb {
+        cmd: NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+        name: "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE(bEnable=FALSE)",
+        promise: CancelPromise::NoNewWork(
+            "\"See NVA06F_CTRL_CMD_GPFIFO_SCHEDULE for parameter definitions\" — the same \
+             promise, fanned over every member of the channel group.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrla06c.h:80-100.",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x10008, ogkm-580: g_kernel_channel_group_api_nvoc.c:213. CPU-RM makes \
+             the group's runlist ids consistent, then RPCs \
+             (kernel_channel_group_api.c:1181-1189).",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "Present in both crossing boots. Same guest-plane-served / host-plane-deaf \
+                   split as the channel form.",
+    },
+    CancellationVerb {
+        cmd: NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS,
+        name: "NV0080_CTRL_CMD_FIFO_IDLE_CHANNELS",
+        promise: CancelPromise::NotRunning(
+            "★ The only verb in the set whose text says the word: \"idles (deschedules and \
+             WAITS FOR PENDING WORK TO COMPLETE) channels belonging to a particular \
+             device\" — and the only one that carries a CALLER-SUPPLIED timeout, with \
+             NV_ERR_TIMEOUT in its status set. ⇒ if a guest ever asks, this is the one verb \
+             that tells us how long it is willing to wait.",
+        ),
+        contract: "ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h:386-421. \
+                   Second entry point NV_ESC_RM_IDLE_CHANNELS = 0x41 (nv_escape.h:39) → \
+                   NV_RM_RPC_IDLE_CHANNELS, RPC function 22 (rpc_global_enums.h).",
+        performed_by: PerformedBy::GuestCpuRmThenUs(
+            "flags 0x109, ogkm-580: g_device_nvoc.c:721-724. ★ CPU-RM deliberately does NOT \
+             use ROUTE_TO_PHYSICAL here — it acquires the GPU lock itself first \
+             (kernel_fifo_ctrl.c:120-133, with that reason in its own comment) and then \
+             calls the PHYSICAL RMAPI, i.e. RPCs us.",
+        ),
+        unperformed_status: crate::NV_ERR_INVALID_STATE,
+        arrivals: "[measured 2026-08-14, w306] 0 of 195 ledgers, and RPC function 22 appears \
+                   in NONE of them. ★ Known-positive that the function-level ledger can see \
+                   a non-control RPC at all: 'unserviced fn 21' (DUP_OBJECT) does appear. \
+                   And 0 native-libcuda uses: NV_ESC_RM_IDLE_CHANNELS is issued 0 times on \
+                   /dev/nvidiactl or /dev/nvidia0 across all six host_reference_ga106 \
+                   workloads. ⊘ I first read that census as 1-per-run by matching nr=65 \
+                   without the device: those records are dev=nvidia-uvm, i.e. UVM ioctl 0x41 \
+                   (MAP_DYNAMIC_PARALLELISM_REGION), a DIFFERENT NAMESPACE sharing the \
+                   number. A number is not an identity until the namespace is named.",
+    },
+];
+
+/// Look a cmd id up in [`CANCELLATION_VERBS`].
+///
+/// ⊘ Returning `Some` says **nothing** about whether the id is served — see
+/// [`CancellationVerb::unperformed_status`]. It says the id is a cancellation verb whose
+/// promise has been written down.
+#[must_use]
+pub fn cancellation_verb(cmd: u32) -> Option<&'static CancellationVerb> {
+    CANCELLATION_VERBS.iter().find(|v| v.cmd == cmd)
+}
+
 #[cfg(test)]
 mod dma_pde_info_tests {
     use super::{DmaGetPdeInfoParams, DmaPdeInfoBlock};
