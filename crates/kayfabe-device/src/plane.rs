@@ -554,6 +554,12 @@ pub struct PlaneResidue {
     /// served-but-refused class the `unserviced` list cannot see (`crate::census`).
     /// Guest-driven observation state, in the residue for `fb_window`'s reason.
     pub census: crate::census::CensusSnapshot,
+    /// ★★★★★ **w326 — the guest's own TLB invalidates** (`crate::mmuinval`): how many
+    /// arrived, their scope, and whether any publication is still outstanding.
+    ///
+    /// ⊘ Carried in the residue because `pending == true` at teardown is a **guest hang**
+    /// that has already happened, and the only place it can be seen is here.
+    pub mmu_inval: crate::mmuinval::MmuInvalidateSnapshot,
     /// ★ The replayable-fault-buffer registrations the guest asked for and this port
     /// declined. Guest-driven, and — like `fb_window` — in no snapshot before `#130`.
     pub fault_buffers: Vec<crate::faultbuffer::FaultBufferNote>,
@@ -746,6 +752,15 @@ pub enum ReadOutcome {
     /// so a boot in which this count is zero and a vector was raised is a boot in which the
     /// ISR never looked — a completely different diagnosis from "we answered wrong".
     CpuIntr(u64),
+    /// ★★★★★ **w326 — the MMU-invalidate register's `TRIGGER` bit**, i.e. RM's completion
+    /// poll (`crate::mmuinval`).
+    ///
+    /// ⚠ A variant of its own, and **the only [`ReadOutcome`] whose value depends on work
+    /// this device has not finished yet**. It is called out in the type rather than folded
+    /// into [`ReadOutcome::Gsp`] precisely so that the exception to
+    /// *"every read arm is local"* is impossible to overlook: `grep MmuInvalidate` finds
+    /// the whole of it.
+    MmuInvalidate(u64),
     /// ★★★ Framebuffer bytes, served through the BAR0 moving window.
     Fb {
         /// Which window (always [`FbWindow::Pramin`] today).
@@ -800,7 +815,8 @@ impl ReadOutcome {
             | Self::Rom(v)
             | Self::Gsp(v)
             | Self::Bar0Window(v)
-            | Self::CpuIntr(v) => v,
+            | Self::CpuIntr(v)
+            | Self::MmuInvalidate(v) => v,
             Self::Fb { value, .. } => value,
             Self::GspFault(_)
             | Self::FbWindow(_)
@@ -886,6 +902,26 @@ pub struct WriteOutcome {
     /// how a *"was a doorbell"* and a *"went somewhere"* come to disagree; see
     /// [`crate::DoorbellReport`], which has the same shape for the same reason.
     pub doorbell: Option<DoorbellReport>,
+    /// ★★★★★ **w326 — this write was the guest's TLB invalidate, and it COMMITTED.**
+    ///
+    /// `Some(inv)` means the guest set `TRIGGER` at BAR0 `0x00B8_30B0`, i.e. it has
+    /// finished writing page tables and is **now spinning on the same register waiting for
+    /// us**. The shell must publish and then call
+    /// [`crate::mmuinval::MmuInvalidateLog::complete`] — see [`RegPlane::mmu_inval`].
+    ///
+    /// ⊘ Reported for **every** trigger, armed or not, because *"the register fired"* and
+    /// *"we acted on it"* are different facts and the disarmed control needs the first
+    /// without the second. Whether the shell must act is
+    /// [`Self::publish_before_completing`], and it is a separate field for exactly that
+    /// reason.
+    pub invalidate: Option<crate::mmuinval::Invalidate>,
+    /// ★★★ Set iff the shell **owes a publication and a completion** for this write.
+    ///
+    /// ⚠ When this is `true` the guest is blocked in `kgmmuCheckPendingInvalidates` and
+    /// will spin to its `gpuCheckTimeout` — **4 s** before its first compute object,
+    /// **30 s** after (`crate::mmuinval` §3) — if the completion never comes. A dropped
+    /// completion here is a guest **hang**, not a fault.
+    pub publish_before_completing: bool,
     /// How many transitions fired.
     pub transitions: usize,
     /// How many commands were decoded off the command queue.
@@ -912,6 +948,8 @@ impl WriteOutcome {
             raise_status_irq: false,
             raise_cpu_intr: false,
             doorbell: None,
+            invalidate: None,
+            publish_before_completing: false,
             transitions: 0,
             commands: 0,
         }
@@ -1044,6 +1082,14 @@ pub struct RegPlane {
     /// (`crate::census`). Held here for [`RegPlane::unserviced`]'s two reasons: readable
     /// without the FSM's lock, and it survives [`RegPlane::set_policy`].
     census: crate::census::ControlCensusLog,
+    /// ★★★★★ **w326 — the guest's own TLB invalidate** (`crate::mmuinval`), BAR0
+    /// `0x00B8_30B0`. This is the MAP side's **tier-1 publish trigger**: the exact instant
+    /// the guest declares its page-table writes live, and — because RM spin-polls the same
+    /// register — an instant at which the guest is already blocked.
+    ///
+    /// Held here for `unserviced`'s two reasons and one of its own: the guest polls this
+    /// register in a tight loop, so answering it must never take the FSM's lock.
+    mmu_inval: crate::mmuinval::MmuInvalidateLog,
     /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
     /// (`crate::faultbuffer`). Recorded, never answered.
     fault_buffer: crate::faultbuffer::FaultBufferLog,
@@ -1508,6 +1554,7 @@ impl RegPlane {
             c: PlaneCounters::default(),
             unserviced,
             census,
+            mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
             fault_buffer,
             bar_pdes,
             gvas_pub,
@@ -1784,6 +1831,20 @@ impl RegPlane {
     #[must_use]
     pub fn doorbell_reg(&self) -> Option<u64> {
         crate::doorbell::doorbell_reg(self.chip)
+    }
+
+    /// Where this chip's MMU-invalidate registers are (`crate::mmuinval`), or `None` if it
+    /// advertises no usermode window.
+    #[must_use]
+    pub fn invalidate_regs(&self) -> Option<crate::mmuinval::InvalidateRegs> {
+        crate::mmuinval::invalidate_regs(self.chip)
+    }
+
+    /// ★★★★★ **The guest's TLB-invalidate log** — the publish plane's trigger and its
+    /// completion. See [`crate::mmuinval`].
+    #[must_use]
+    pub fn mmu_inval(&self) -> &crate::mmuinval::MmuInvalidateLog {
+        &self.mmu_inval
     }
 
     /// What the guest has published about the bus apertures' page-table roots.
@@ -2439,6 +2500,7 @@ impl RegPlane {
             c: _,
             unserviced,
             census,
+            mmu_inval,
             fault_buffer,
             bar_pdes,
             gvas_pub,
@@ -2505,6 +2567,7 @@ impl RegPlane {
             fb_window: fb_window.clone(),
             unserviced: unserviced.sample(),
             census: census.snapshot(),
+            mmu_inval: mmu_inval.snapshot(),
             fault_buffers: fault_buffer.sample(),
             fault_buffers_registered: fault_buffer.total(),
             shadow_fault_buffers_registered: fault_buffer.shadow_total(),
@@ -2750,6 +2813,11 @@ impl RegPlane {
                 self.note_unclaimed(bar, off);
                 self.c.unclaimed_reads.fetch_add(1, Ordering::Relaxed)
             }
+            // ⊘ Counted inside `crate::mmuinval` and NOT here: the poll count and the
+            // trigger count have to come from one structure or they can disagree about a
+            // boot, and `polls` is the only evidence that distinguishes "we held TRIGGER
+            // and the guest spun" from "we answered immediately".
+            ReadOutcome::MmuInvalidate(_) => 0,
         };
         out
     }
@@ -2788,6 +2856,28 @@ impl RegPlane {
         {
             let s = self.state.lock();
             return ReadOutcome::CpuIntr(mask(u64::from(s.cpu_intr.read(reg)), size));
+        }
+        // ★★★★★ **THE INVALIDATE COMPLETION** (w326) — and it is the EIGHTH arm.
+        //
+        // ⚠⚠ `publication_off_the_bql.md` §5.2 measured that all seven arms above are local
+        // and concluded that **no guest-visible MMIO read depends on completed work**. That
+        // finding is now **SCOPED, NOT REFUTED**: it remains true of all seven, and this
+        // eighth one is a deliberate exception, added with its eyes open. It is also the
+        // only one, and the only one it may ever be without this note being rewritten.
+        //
+        // ★ Why it is safe to make this read mean something: the guest is **already
+        // blocking on it**. `kgmmuCheckPendingInvalidates` spin-polls until `TRIGGER` reads
+        // false, so we are not introducing a wait — we are answering one the hardware
+        // protocol already specified. ⊘ And when the plane is **disarmed** this answers `0`
+        // unconditionally, which is byte-identical to the `Unclaimed` arm it took before.
+        //
+        // ⊘ Lock-free: it reads one atomic. A lock here would put every polling vCPU behind
+        // the worker, which is the cost this rung exists to remove.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(regs) = self.invalidate_regs()
+            && off == regs.trigger
+        {
+            return ReadOutcome::MmuInvalidate(mask(self.mmu_inval.read_trigger(), size));
         }
         // ★★★ Device memory, not a register — asked BEFORE the GSP model and before the
         // unclaimed arm, because a framebuffer window that some future model happened to
@@ -3270,6 +3360,55 @@ impl RegPlane {
         {
             return self.ring_doorbell(mask(val, size));
         }
+        // ★★★★★ **THE GUEST'S TLB INVALIDATE** (w326) — `crate::mmuinval`.
+        //
+        // Classified **here**, immediately after the doorbell and before the FSM's lock, for
+        // the doorbell's own two reasons and a third that is stronger than either:
+        //
+        // 1. ⚠ **No plane lock may be held.** The armed path hands the shell a publication
+        //    to run; every arm below this one is inside `self.state.lock()`, and a
+        //    publication classified there would put the whole publish plane under the lock
+        //    every other vCPU needs to read a register.
+        // 2. ★ A write that fell through would be **dropped into the unclaimed census** —
+        //    which is exactly where it went from M5 until this rung, and is why three
+        //    campaigns believed the guest emitted no invalidate at all.
+        // 3. ★★★★★ **The guest BLOCKS on this register.** `kgmmuCheckPendingInvalidates`
+        //    spin-polls it until `TRIGGER` reads false. Answering late is not a latency
+        //    cost here; it is the guest's whole VM stopped. It therefore gets the earliest
+        //    classification that is correct, and the completion is unconditional.
+        //
+        // ⊘ `bar` is checked, not assumed — same aliasing hazard the doorbell arm names.
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && let Some(regs) = self.invalidate_regs()
+        {
+            if off == regs.pdb || off == regs.upper_pdb {
+                // ⊘ The PDB halves are a LATCH, not a command: RM writes both, then
+                // triggers (`kgmmuSetPdbToInvalidate_TU102`). Recording them without
+                // acting is the whole point — the trigger word alone does not say which
+                // VA space it means.
+                self.mmu_inval
+                    .note_pdb_write(regs, off, mask(val, size) as u32);
+                return WriteOutcome {
+                    claimed: true,
+                    ..WriteOutcome::nothing()
+                };
+            }
+            if off == regs.trigger {
+                let now_us = self.clock.now_ns() / 1_000;
+                let (inv, act) = self
+                    .mmu_inval
+                    .note_trigger(mask(val, size) as u32, now_us);
+                return WriteOutcome {
+                    claimed: true,
+                    invalidate: Some(inv),
+                    publish_before_completing: matches!(
+                        act,
+                        crate::mmuinval::TriggerAction::Publish
+                    ),
+                    ..WriteOutcome::nothing()
+                };
+            }
+        }
         // ★★★ THE INTERRUPT TREE. Classified here, beside the window latch and before the
         // model's `decode_reg` gate, because the model does not own these offsets and a
         // write that fell through would be DROPPED — and the dropped write would be
@@ -3450,6 +3589,10 @@ impl RegPlane {
         // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
         // the GUEST did and cannot be reduced by anything the core decides.
         self.c.doorbells.fetch_add(1, Ordering::Relaxed);
+        // ★★ w326 — the invalidate-per-doorbell ratio is the number the trigger-vs-doorbell
+        // decision turns on, so BOTH its terms are taken by one observer over one interval.
+        // Two logs correlated afterwards is how a ratio comes to describe two boots.
+        self.mmu_inval.note_doorbell();
         let report = {
             let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
             port.ring(token)

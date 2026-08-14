@@ -12247,6 +12247,16 @@ impl Regs {
                 eprintln!("kayfabe:   UNCLAIMED-CENSUS bar{bar} off=0x{off:06x}");
             }
         }
+        // ★★★★★ **w326 — THE GUEST'S OWN TLB INVALIDATE.** Printed directly under the
+        // unclaimed census, because until this rung `0xb830b0`, `0xb830a0` and `0xb830a4`
+        // were three rows *of that list* — the guest's exact publish boundary, answered
+        // with a defaulted zero, on every boot since M5. Three campaigns concluded from
+        // two other transports' measured zeros that no such signal existed.
+        //
+        // ⊘ Printed unconditionally, armed or not, and every number anchored: an absent
+        // line is UNMEASURED and a present line with `triggers=0` is a measured zero.
+        // Those are different facts and this tree has paid for confusing them.
+        eprintln!("kayfabe: {}", self.plane.mmu_inval().census());
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
         // TRIGGER: the C printer emits `DELIVERY_UNBUILT` beside it whenever it is non-zero,
         // so serving `0x20800a9b` and stating what serving it did NOT buy are one act.

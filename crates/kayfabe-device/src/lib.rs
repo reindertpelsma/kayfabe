@@ -63,6 +63,7 @@ pub mod guestsysinfo;
 pub mod gvaspub;
 pub mod inert;
 pub mod inittables;
+pub mod mmuinval;
 pub mod nonstall;
 pub mod osevent;
 pub mod plane;
