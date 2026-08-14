@@ -102,7 +102,8 @@ fn backend(conn: &Arc<RmConnection>) -> HostRmBackend {
 /// completed through raw RM ioctls, with all four facts asserted SEPARATELY.**
 #[test]
 fn the_raw_ce_client_moves_bytes_and_each_of_the_four_facts_holds_on_its_own() {
-    let Some(conn) = gate("the_raw_ce_client_moves_bytes_and_each_of_the_four_facts_holds_on_its_own")
+    let Some(conn) =
+        gate("the_raw_ce_client_moves_bytes_and_each_of_the_four_facts_holds_on_its_own")
     else {
         return;
     };
@@ -111,10 +112,10 @@ fn the_raw_ce_client_moves_bytes_and_each_of_the_four_facts_holds_on_its_own() {
     let vas = rm
         .alloc_vaspace()
         .expect("★ R7: the client needs its own address space before any operand exists");
-    let evidence = rm
-        .prove_ce_copy(vas, PATTERN)
-        .expect("★ R33 arm 1: the copy could not be built at all — this is a bring-up failure, \
-                 not a result about the four facts below");
+    let evidence = rm.prove_ce_copy(vas, PATTERN).expect(
+        "★ R33 arm 1: the copy could not be built at all — this is a bring-up failure, \
+                 not a result about the four facts below",
+    );
 
     // ---- FACT 1 — NON-VACUITY. Asserted FIRST, because every fact after it is conditional
     // on the destination not having held the answer already.

@@ -564,8 +564,8 @@ fn no_bench_scripts_grading_block_sits_below_its_own_exit() {
 #[test]
 fn the_boot_evidence_gate_still_checks_trackedness_emptiness_and_the_rev_stamp() {
     let p = bench_dir().join("assert_boot_evidence.sh");
-    let src = std::fs::read_to_string(&p)
-        .unwrap_or_else(|e| panic!("★ {} is gone: {e}", p.display()));
+    let src =
+        std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("★ {} is gone: {e}", p.display()));
     for (needle, why) in [
         (
             "git ls-files --others",
