@@ -594,3 +594,42 @@ measuring instead of relying on two statements staying adjacent.
 already in this tree, and the second states the governing rule verbatim: *"work decided under
 a lock can be deferred only if nothing in the response depends on it — a signature bounds what
 a function CAN return; only the call site says what is READ."*
+
+---
+
+## 12. Verification — exit codes taken from the real command
+
+Built on a rented CPU-only box (19 cores / 49 GB), `rustc 1.97.1`, destroyed afterwards.
+**⊘ No GPU was involved and none of the §8 criteria has been collected.**
+
+| command | result |
+|---|---|
+| `cargo test --workspace --no-fail-fast` | `TEST_DEFAULT_EXIT=101` — **254 targets ok, 4 FAILED, 2886 passed** |
+| `cargo clippy --workspace --all-targets` | `CLIPPY_DEFAULT_EXIT=0` |
+| `cargo check --workspace --all-targets --features kayfabe-qemu-raw/host-isolates` | `CHECK_HOSTISO_EXIT=0` |
+
+**The 4 failing targets, against the master baseline taken from `git archive 53d6375c` into a
+fresh target dir on the same box:**
+
+| target | on master? | verdict |
+|---|---|---|
+| `doorbell_reaches_the_completion_observer` (3 tests) | ✔ red | **pre-existing** |
+| `ring_out_of_our_own_framebuffer` (2 tests) | ✔ red | **pre-existing** |
+| `guest_os_axis_gate` (1 test) | ✔ red | **pre-existing** |
+| `sticky_answer::the_universe_of_answering_policies_is_derived_from_the_source` | ✔ red on master too | ⊘ **MY HARNESS, and the test says so itself** |
+
+⇒ **the brief's "3 targets / 6 tests" is right**, and my two extras were both instruments, not
+code:
+
+- ★ `sticky_answer` shells out to `git ls-files` and its own assertion message names the cause
+  in advance — *"a `--exclude=.git` rsync fakes exactly this"*. My sync excluded `.git`. **The
+  test predicted my harness's failure mode by name, a rung before I hit it.**
+- `kayfabe-linux-raw spawn_unsafe::a_child_runs_from_an_image_with_no_path_at_all` failed on
+  the master-archive run and not on mine: container-dependent, and it is **not evidence about
+  either tree**.
+
+⊘ **New tests are GREEN, and their known-positives were watched failing first**:
+`staged_release_carries_every_orphan_kind` (4), `off_trap_census` (4),
+`pubqueue` unit tests (8), `trapwitness` unit tests (6), and the 4 compile-fail rows.
+⚠ The ogkm-backed oracles announce themselves **SKIPPED** on this box (no vendored open-kernel
+tree at the absolute path they expect) — they assert nothing here and are not evidence.
