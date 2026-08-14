@@ -65,6 +65,10 @@ set -uo pipefail
 TREE=${1:-/workspace/kayfabe_w328}
 A="$TREE/scripts/bench/w328_arm.sh"
 echo "=== W328 ALL2 START $(date -Is) tree=$TREE"
+# ⚠ `build_qom_shim.sh` REFUSES an archive >30 min old on an unchanged tree. Sweep 1 ran for
+#   ~45 min immediately before this, so the FIRST arm here would fail as a BUILD refusal that
+#   looks nothing like a workload problem. One line, and it has cost two rungs.
+touch "$TREE/crates/kayfabe-util/src/lib.rs"
 
 bash "$A" "$TREE" w328g 3 KAYFABE_DIRTY_GATE_PUBLISH=on \
   KAYFABE_PUBLISH_SCOPE=doorbelled KAYFABE_DRAIN_BATCH=coalesce
