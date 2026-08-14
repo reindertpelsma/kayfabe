@@ -225,6 +225,53 @@ Aligned `host_reference_ga106/ce_r1.jsonl.zst` against `w294nvd_ce_r1.jsonl.zst`
 
 ---
 
+## 8. ⊘⊘ THE PRE-EXISTING RED IS **SIX** TARGETS, NOT ONE — measured, not assumed
+
+The brief named one inherited failure (`kayfabe-isolate-host executor_vas_census`). Measured
+at **`origin/master @ eed8de7`, unmodified, in a clean clone and a clean target dir**
+(`cargo test --workspace --no-fail-fast`):
+
+```
+error: 6 targets failed:
+  kayfabe-isolate-host  executor_vas_census                      ← the one the brief names
+  kayfabe-isolate-host  guest_ring_census
+  kayfabe-tests         ce_representability_split
+  kayfabe-tests         doorbell_reaches_the_completion_observer
+  kayfabe-tests         gpfifo_schedule                          ← deterministic, and FIXED here
+  kayfabe-tests         ring_out_of_our_own_framebuffer
+```
+
+⚠ **`gpfifo_schedule` is not environmental — it is a stale list.**
+`the_control_claim_is_exactly_these_ids` pins `OBJECT_CONTROLS` by **full membership**, and
+neither w288 (`NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`) nor w292 (the four input-only ids) updated
+it. It has been red for two rungs. ⇒ Fixed **loudly** rather than inherited silently; the list
+now carries all thirteen ids, each with its rung.
+
+### Two gates this rung's own change turned red, and both resistances were RIGHT
+
+| gate | why it fired | the fix |
+|---|---|---|
+| `capability::the_ported_surface_is_the_reviewed_size` + `each_origin_is_represented` + `each_boundarys_resolved_delta_is_materialised` | counters must move **with arguments** | `all_controls` 161→163, `Mode2Rpc` 7→9, and **all eight boundary rows +2 together** |
+| `bind_channel::every_claimed_control_is_decided_even_when_malformed` | it sent **one garbage byte** to every claimed id, relying on *"1 is the wrong size for every control"* — true until `0x00802009`, whose params really **are** one `NvBool` | the probe now picks a length **against the id's own measured size** |
+
+★ And the boundary table has **eight** rows: I bumped six by hand, the gate named
+`550.90.07`; I bumped seven, it named `555.42.02`. ⇒ A hand enumeration of a list is precisely
+what a gate quantifying over that list exists to replace.
+
+### One more red, and it is a FLAKE — measured, not assumed
+
+`kayfabe-linux-raw --lib` appeared in the w294 run and not in the baseline. `[measured, machine
+idle]` it **passed, then failed, then passed at baseline** — and it failed on a *different test
+each time* (`a_child_runs_from_an_image_with_no_path_at_all`, then
+`one_image_spawns_more_than_once`). ⊘ This rung's diff touches **zero** files in that crate
+(`git diff --name-only origin/master...HEAD | grep -c kayfabe-linux-raw` → `0`). ⇒ *Flaky
+indicts the system, deterministic indicts the test* — it is a pre-existing process-spawn flake,
+not this rung's.
+
+### ⇒ NET: the red set goes 6 → 5, and this rung adds none
+
+---
+
 ## FILES
 
 | file | what |
