@@ -1,0 +1,849 @@
+=== W290P START arm=assert 2026-08-14T09:45:16+00:00 pid=2960039 ===
+=== HEAD=50a8ca28956190979d2681a1cc46157529da9620 ===
+=== BUILD SHIM 2026-08-14T09:45:16+00:00 ===
+== target: /workspace/bench/qemu-10.2.4 (10.2.4)
+== archive features: host-isolates
+== building the archive
+warning: kayfabe-isolate-host@0.1.0: embedded isolate image: 750304 bytes, x86_64-unknown-linux-musl
+    Finished `release` profile [optimized] target(s) in 0.07s
+== archive: /workspace/bench/cargo-target-w298/release/libkayfabe_qemu_raw.a (2026-08-14 09:39:45.211818484 +0000)
+== laying the overlay into hw/misc/nvkvm
+== building
+ninja: Entering directory `/workspace/bench/qemu-build'
+[0/1] Regenerating build files
+The Meson build system
+Version: 1.9.0
+Source dir: /workspace/bench/qemu-10.2.4
+Build dir: /workspace/bench/qemu-build
+Build type: native build
+Project name: qemu
+Project version: 10.2.4
+C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+C linker for the host machine: cc -m64 ld.bfd 2.38
+Host machine cpu family: x86_64
+Host machine cpu: x86_64
+Program scripts/symlink-install-tree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py)
+Program sh found: YES (/usr/bin/sh)
+Program python3 found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3)
+Compiler for language rust skipped: feature rust disabled
+Program iasl found: NO
+Program bzip2 found: YES (/usr/bin/bzip2)
+Compiler for C supports link arguments -Wl,-z,relro: YES (cached)
+Compiler for C supports link arguments -Wl,-z,now: YES (cached)
+Checking if "-fzero-call-used-regs=used-gpr" compiles: YES (cached)
+Compiler for C supports arguments -ftrivial-auto-var-init=zero: NO (cached)
+Compiler for C supports arguments -fzero-init-padding-bits=all: NO (cached)
+Compiler for C supports arguments -fzero-call-used-regs=used-gpr: YES (cached)
+Compiler for C supports arguments -Wempty-body: YES (cached)
+Compiler for C supports arguments -Wendif-labels: YES (cached)
+Compiler for C supports arguments -Wexpansion-to-defined: YES (cached)
+Compiler for C supports arguments -Wformat-security: YES (cached)
+Compiler for C supports arguments -Wformat-y2k: YES (cached)
+Compiler for C supports arguments -Wignored-qualifiers: YES (cached)
+Compiler for C supports arguments -Wimplicit-fallthrough=2: YES (cached)
+Compiler for C supports arguments -Winit-self: YES (cached)
+Compiler for C supports arguments -Wmissing-format-attribute: YES (cached)
+Compiler for C supports arguments -Wmissing-prototypes: YES (cached)
+Compiler for C supports arguments -Wnested-externs: YES (cached)
+Compiler for C supports arguments -Wold-style-declaration: YES (cached)
+Compiler for C supports arguments -Wold-style-definition: YES (cached)
+Compiler for C supports arguments -Wredundant-decls: YES (cached)
+Compiler for C supports arguments -Wshadow=local: YES (cached)
+Compiler for C supports arguments -Wstrict-prototypes: YES (cached)
+Compiler for C supports arguments -Wtype-limits: YES (cached)
+Compiler for C supports arguments -Wundef: YES (cached)
+Compiler for C supports arguments -Wvla: YES (cached)
+Compiler for C supports arguments -Wwrite-strings: YES (cached)
+Compiler for C supports arguments -Wno-gnu-variable-sized-type-not-at-end: NO (cached)
+Compiler for C supports arguments -Wno-initializer-overrides: NO (cached)
+Compiler for C supports arguments -Wno-missing-include-dirs: YES (cached)
+Compiler for C supports arguments -Wno-psabi: YES (cached)
+Compiler for C supports arguments -Wno-shift-negative-value: YES (cached)
+Compiler for C supports arguments -Wno-string-plus-int: NO (cached)
+Compiler for C supports arguments -Wno-tautological-type-limit-compare: NO (cached)
+Compiler for C supports arguments -Wno-typedef-redefinition: NO (cached)
+Program cgcc skipped: feature sparse disabled
+Library m found: YES
+Dependency threads found: YES unknown (cached)
+Library util found: YES
+Dependency glib-2.0 found: YES 2.72.4 (cached)
+Dependency gio-2.0 skipped: feature gio disabled
+Program scripts/xml-preprocess.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/xml-preprocess.py)
+Dependency pixman-1 skipped: feature pixman disabled
+Dependency zlib found: YES 1.2.11 (cached)
+Library aio skipped: feature linux_aio disabled
+Dependency liburing skipped: feature linux_io_uring disabled
+Dependency libnfs skipped: feature libnfs disabled
+Dependency appleframeworks (modules: Cocoa, CoreVideo, QuartzCore) skipped: feature cocoa disabled
+Dependency appleframeworks (modules: vmnet) skipped: feature vmnet disabled
+Dependency libseccomp skipped: feature seccomp disabled
+Library cap-ng skipped: feature cap_ng disabled
+Dependency xkbcommon skipped: feature xkbcommon disabled
+Dependency slirp skipped: feature slirp disabled
+Library vdeplug skipped: feature vde disabled
+Dependency libpulse skipped: feature pa disabled
+Dependency alsa skipped: feature alsa disabled
+Dependency jack skipped: feature jack disabled
+Dependency libpipewire-0.3 skipped: feature pipewire disabled
+Dependency sndio skipped: feature sndio disabled
+Dependency spice-protocol skipped: feature spice_protocol disabled
+Checking for function "shm_open" : YES (cached)
+Dependency libiscsi skipped: feature libiscsi disabled
+Dependency libzstd skipped: feature zstd disabled
+Dependency qpl skipped: feature qpl disabled
+Dependency libwd skipped: feature uadk disabled
+Dependency libwd_comp skipped: feature uadk disabled
+Dependency qatzip skipped: feature qatzip disabled
+Dependency virglrenderer skipped: feature virglrenderer disabled
+Dependency rutabaga_gfx_ffi skipped: feature rutabaga_gfx disabled
+Dependency blkio skipped: feature blkio disabled
+Dependency libcurl skipped: feature curl disabled
+Dependency libudev skipped: feature libudev disabled
+Dependency igvm skipped: feature igvm disabled
+Library brlapi skipped: feature brlapi disabled
+Dependency sdl2 skipped: feature sdl disabled
+Library rados skipped: feature rbd disabled
+Library rbd skipped: feature rbd disabled
+Dependency glusterfs-api skipped: feature glusterfs disabled
+Dependency libssh skipped: feature libssh disabled
+Library bz2 skipped: feature bzip2 disabled
+Library lzfse skipped: feature lzfse disabled
+Has header "dsound.h" : NO (cached)
+Dependency appleframeworks (modules: CoreAudio) skipped: feature coreaudio disabled
+Dependency epoxy skipped: feature opengl disabled
+Has header "epoxy/egl.h" with dependency epoxy: NO (cached)
+Dependency libcbor skipped: feature libcbor disabled
+Dependency libgcrypt skipped: feature gcrypt disabled
+Dependency nettle skipped: feature nettle disabled
+Dependency capstone skipped: feature capstone disabled
+Found pkg-config: YES (/usr/bin/pkg-config) 0.29.2
+Run-time dependency gmp found: NO (tried pkgconfig)
+Library pam skipped: feature auth_pam disabled
+Library snappy skipped: feature snappy disabled
+Library lzo2 skipped: feature lzo disabled
+Library numa skipped: feature numa disabled
+Library fdt found: NO
+
+Executing subproject dtc 
+
+dtc| Project name: dtc
+dtc| Project version: 1.6.0
+dtc| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+dtc| C linker for the host machine: cc -m64 ld.bfd 2.38
+dtc| Compiler for C supports arguments -Wpointer-arith: YES (cached)
+dtc| Compiler for C supports arguments -Wcast-qual: YES (cached)
+dtc| Compiler for C supports arguments -Wnested-externs: YES (cached)
+dtc| Compiler for C supports arguments -Wstrict-prototypes: YES (cached)
+dtc| Compiler for C supports arguments -Wmissing-prototypes: YES (cached)
+dtc| Compiler for C supports arguments -Wredundant-decls: YES (cached)
+dtc| Compiler for C supports arguments -Wshadow: YES (cached)
+dtc| Dependency yaml-0.1 skipped: feature yaml disabled
+dtc| Dependency valgrind skipped: feature valgrind disabled
+dtc| Program python found: NO (disabled by: python )
+dtc| Program swig skipped: feature python disabled
+dtc| Found git repository at /workspace/bench/qemu-10.2.4/subprojects/dtc
+dtc| Compiler for C supports link arguments -Wl,--version-script=/workspace/bench/qemu-10.2.4/subprojects/dtc/libfdt/version.lds: YES (cached)
+dtc| Build targets in project: 2
+dtc| Subproject dtc finished.
+
+Library rdmacm skipped: feature rdma disabled
+Library ibverbs skipped: feature rdma disabled
+Dependency libcacard skipped: feature smartcard disabled
+Dependency u2f-emu skipped: feature u2f disabled
+Dependency canokey-qemu skipped: feature canokey disabled
+Dependency libusbredirparser-0.5 skipped: feature usb_redir disabled
+Dependency libusb-1.0 skipped: feature libusb disabled
+Dependency libpmem skipped: feature libpmem disabled
+Dependency libdaxctl skipped: feature libdaxctl disabled
+Dependency libkeyutils skipped: feature libkeyutils disabled
+Checking for function "gettid" : YES (cached)
+Dependency libselinux skipped: feature selinux disabled
+Dependency fuse3 skipped: feature fuse disabled
+Dependency libbpf skipped: feature bpf disabled
+Dependency libdw skipped: feature libdw disabled
+Header "linux/fs.h" has symbol "FIFREEZE" : YES (cached)
+Header "linux/fs.h" has symbol "FITRIM" : YES (cached)
+Has header "sys/epoll.h" : YES (cached)
+Has header "linux/magic.h" : YES (cached)
+Has header "linux/btrfs.h" : YES (cached)
+Has header "libdrm/drm.h" : NO (cached)
+Has header "linux/openat2.h" : YES (cached)
+Has header "pty.h" : YES (cached)
+Has header "sys/disk.h" : NO (cached)
+Has header "sys/ioccom.h" : NO (cached)
+Has header "sys/kcov.h" : NO (cached)
+Checking for function "close_range" : YES (cached)
+Checking for function "accept4" : YES (cached)
+Checking for function "clock_adjtime" : YES (cached)
+Checking for function "dup3" : YES (cached)
+Checking for function "fallocate" : YES (cached)
+Checking for function "posix_fallocate" : YES (cached)
+Checking for function "sched_getcpu" : NO (cached)
+Checking for function "posix_memalign" : YES (cached)
+Checking for function "_aligned_malloc" : NO (cached)
+Checking for function "valloc" : YES (cached)
+Checking for function "memalign" : YES (cached)
+Checking for function "ppoll" : YES (cached)
+Checking for function "preadv" : YES (cached)
+Checking for function "pthread_fchdir_np" : NO (cached)
+Checking for function "sendfile" : YES (cached)
+Checking for function "setns" : YES (cached)
+Checking for function "unshare" : YES (cached)
+Checking for function "syncfs" : YES (cached)
+Checking for function "sync_file_range" : YES (cached)
+Checking for function "timerfd_create" : YES (cached)
+Checking for function "getloadavg" : YES (cached)
+Checking for function "htonll" : NO (cached)
+Checking for function "copy_file_range" : YES (cached)
+Checking for function "getifaddrs" : YES (cached)
+Checking for function "openpty" with dependency -lutil: YES (cached)
+Checking for function "strchrnul" : YES (cached)
+Checking for function "system" : YES (cached)
+Header "sys/inotify.h" has symbol "inotify_init" : YES (cached)
+Header "sys/inotify.h" has symbol "inotify_init1" : YES (cached)
+Header "linux/blkzoned.h" has symbol "BLKOPENZONE" : YES (cached)
+Header "sys/epoll.h" has symbol "epoll_create1" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_PUNCH_HOLE" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_KEEP_SIZE" : YES (cached)
+Header "linux/falloc.h" has symbol "FALLOC_FL_ZERO_RANGE" : YES (cached)
+Has header "linux/fiemap.h" : YES (cached)
+Header "linux/fs.h" has symbol "FS_IOC_FIEMAP" : YES (cached)
+Header "sched.h" has symbol "getcpu" : YES (cached)
+Checking for function "getrandom" : YES (cached)
+Header "sys/random.h" has symbol "GRND_NONBLOCK" : YES (cached)
+Header "sys/prctl.h" has symbol "PR_SET_TIMERSLACK" : YES (cached)
+Header "linux/rtnetlink.h" has symbol "IFLA_PROTO_DOWN" : YES (cached)
+Header "sys/sysmacros.h" has symbol "makedev" : YES (cached)
+Header "getopt.h" has symbol "optreset" : NO (cached)
+Header "netinet/in.h" has symbol "IPPROTO_MPTCP" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPCNT" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPIDLE" : YES (cached)
+Header "netinet/tcp.h" has symbol "TCP_KEEPINTVL" : YES (cached)
+Checking whether type "struct sigevent" has member "sigev_notify_thread_id" : NO (cached)
+Checking whether type "struct stat" has member "st_atim" : YES (cached)
+Checking whether type "struct blk_zone" has member "capacity" : YES (cached)
+Checking for type "struct iovec" : YES (cached)
+Checking for type "struct utmpx" : YES (cached)
+Header "asm/hwprobe.h" has symbol "RISCV_HWPROBE_EXT_ZBA" : NO (cached)
+Header "linux/vm_sockets.h" has symbol "AF_VSOCK" : YES (cached)
+Checking for size of "void *" : 8 (cached)
+Program scripts/minikconf.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/minikconf.py)
+Configuring x86_64-softmmu-config-target.h using configuration
+Configuring x86_64-softmmu-config-devices.mak with command
+Reading depfile: /workspace/bench/qemu-build/meson-private/x86_64-softmmu-config-devices.mak.d
+Configuring x86_64-softmmu-config-devices.h using configuration
+Program scripts/make-config-poison.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/make-config-poison.sh)
+Configuring config-host.h using configuration
+Program scripts/hxtool found: YES (/workspace/bench/qemu-10.2.4/scripts/hxtool)
+Program scripts/shaderinclude.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/shaderinclude.py)
+Program scripts/qapi-gen.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/qapi-gen.py)
+Program scripts/qemu-version.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/qemu-version.sh)
+
+Executing subproject keycodemapdb 
+
+keycodemapdb| Project name: keycodemapdb
+keycodemapdb| Project version: undefined
+keycodemapdb| Program tools/keymap-gen found: YES (/workspace/bench/qemu-10.2.4/subprojects/keycodemapdb/tools/keymap-gen)
+keycodemapdb| Build targets in project: 427
+keycodemapdb| Subproject keycodemapdb finished.
+
+Program scripts/decodetree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/decodetree.py)
+Program ../scripts/modules/module_block.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/block/../scripts/modules/module_block.py)
+Program ../scripts/block-coroutine-wrapper.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/block/../scripts/block-coroutine-wrapper.py)
+Program scripts/modinfo-collect.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/modinfo-collect.py)
+Program scripts/modinfo-generate.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/modinfo-generate.py)
+Program nm found: YES
+Program scripts/undefsym.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/undefsym.py)
+Program scripts/feature_to_c.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/feature_to_c.py)
+Program scripts/rust/rust_root_crate.sh found: YES (/workspace/bench/qemu-10.2.4/scripts/rust/rust_root_crate.sh)
+Configuring 50-edk2-i386-secure.json using configuration
+Configuring 50-edk2-x86_64-secure.json using configuration
+Configuring 60-edk2-aarch64.json using configuration
+Configuring 60-edk2-arm.json using configuration
+Configuring 60-edk2-i386.json using configuration
+Configuring 60-edk2-x86_64.json using configuration
+Configuring 60-edk2-loongarch64.json using configuration
+Configuring 60-edk2-riscv64.json using configuration
+Program dtc found: NO
+Program qemu-keymap found: NO
+Program /workspace/bench/qemu-build/pyvenv/bin/sphinx-build skipped: feature docs disabled
+Program /workspace/bench/qemu-10.2.4/scripts/decodetree.py found: YES (/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/decodetree.py)
+
+Executing subproject berkeley-softfloat-3 
+
+berkeley-softfloat-3| Project name: berkeley-softfloat-3
+berkeley-softfloat-3| Project version: undefined
+berkeley-softfloat-3| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+berkeley-softfloat-3| C linker for the host machine: cc -m64 ld.bfd 2.38
+berkeley-softfloat-3| Configuring platform.h using configuration
+berkeley-softfloat-3| Build targets in project: 525
+berkeley-softfloat-3| Subproject berkeley-softfloat-3 finished.
+
+
+Executing subproject berkeley-testfloat-3 
+
+berkeley-testfloat-3| Project name: berkeley-testfloat-3
+berkeley-testfloat-3| Project version: undefined
+berkeley-testfloat-3| C compiler for the host machine: cc -m64 (gcc 11.4.0 "cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0")
+berkeley-testfloat-3| C linker for the host machine: cc -m64 ld.bfd 2.38
+berkeley-testfloat-3| Configuring platform.h using configuration
+berkeley-testfloat-3| Compiler for C supports arguments -Wno-ignored-pragmas: NO (cached)
+berkeley-testfloat-3| Build targets in project: 527
+berkeley-testfloat-3| Subproject berkeley-testfloat-3 finished.
+
+Program diff found: YES (/usr/bin/diff)
+Program dbus-daemon found: YES (/usr/bin/dbus-daemon)
+Run-time dependency sysprof-capture-4 found: NO (tried pkgconfig)
+Dependency glib-2.0 found: YES 2.72.4 (cached)
+Program initrd-stress.sh found: YES (/workspace/bench/qemu-10.2.4/tests/migration-stress/initrd-stress.sh)
+Build targets in project: 718
+
+qemu 10.2.4
+
+  Build environment
+    Build directory                 : /workspace/bench/qemu-build
+    Source path                     : /workspace/bench/qemu-10.2.4
+    Download dependencies           : YES
+
+  Directories
+    Build directory                 : /workspace/bench/qemu-build
+    Source path                     : /workspace/bench/qemu-10.2.4
+    Download dependencies           : YES
+    Install prefix                  : /usr/local
+    BIOS directory                  : share/qemu
+    firmware path                   : share/qemu-firmware
+    binary directory                : /usr/local/bin
+    library directory               : /usr/local/lib/x86_64-linux-gnu
+    module directory                : lib/x86_64-linux-gnu/qemu
+    libexec directory               : /usr/local/libexec
+    include directory               : /usr/local/include
+    config directory                : /usr/local/etc
+    local state directory           : /var/local
+    Manual directory                : /usr/local/share/man
+    Doc directory                   : /usr/local/share/doc
+
+  Host binaries
+    python                          : /workspace/bench/qemu-build/pyvenv/bin/python3 (version: 3.10)
+    sphinx-build                    : NO
+    gdb                             : 
+    iasl                            : NO
+    genisoimage                     : /usr/bin/genisoimage
+
+  Configurable features
+    Documentation                   : NO
+    system-mode emulation           : YES
+    user-mode emulation             : NO
+    block layer                     : YES
+    Install blobs                   : YES
+    module support                  : NO
+    fuzzing support                 : NO
+    Audio drivers                   : 
+    Trace backends                  : log
+    QOM debugging                   : YES
+    Relocatable install             : YES
+    vhost-kernel support            : NO
+    vhost-net support               : NO
+    vhost-user support              : NO
+    vhost-user-crypto support       : NO
+    vhost-user-blk server support   : NO
+    vhost-vdpa support              : NO
+    build guest agent               : NO
+
+  Compilation
+    host CPU                        : x86_64
+    host endianness                 : little
+    C compiler                      : cc -m64
+    Host C compiler                 : cc -m64
+    C++ compiler                    : NO
+    Objective-C compiler            : NO
+    Rust support                    : NO
+    CFLAGS                          : -g -O2
+    QEMU_CFLAGS                     : -mcx16 -msse2 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -fno-strict-aliasing -fno-common -fwrapv -fzero-call-used-regs=used-gpr
+    QEMU_LDFLAGS                    : -Wl,-z,relro -Wl,-z,now
+    link-time optimization (LTO)    : NO
+    PIE                             : YES
+    static build                    : NO
+    malloc trim support             : NO
+    membarrier                      : NO
+    debug graph lock                : NO
+    debug stack usage               : NO
+    mutex debugging                 : NO
+    memory allocator                : system
+    avx2 optimization               : YES
+    avx512bw optimization           : YES
+    gcov                            : NO
+    thread sanitizer                : NO
+    CFI support                     : NO
+    strip binaries                  : NO
+    sparse                          : NO
+    mingw32 support                 : NO
+
+  Cross compilers
+    x86_64                          : cc
+
+  Targets and accelerators
+    KVM support                     : YES
+    HVF support                     : NO
+    WHPX support                    : NO
+    NVMM support                    : NO
+    MSHV support                    : NO
+    Xen support                     : NO
+    Xen emulation                   : YES
+    TCG support                     : YES
+    TCG backend                     : native (x86_64)
+    TCG plugins                     : NO
+    TCG debug enabled               : NO
+    target list                     : x86_64-softmmu
+    default devices                 : YES
+    out of process emulation        : NO
+    vfio-user server                : NO
+
+  Block layer support
+    coroutine backend               : ucontext
+    coroutine pool                  : YES
+    Block whitelist (rw)            : 
+    Block whitelist (ro)            : 
+    Use block whitelist in tools    : NO
+    VirtFS (9P) support             : NO
+    replication support             : NO
+    bochs support                   : NO
+    cloop support                   : NO
+    dmg support                     : NO
+    qcow v1 support                 : NO
+    vdi support                     : NO
+    vhdx support                    : NO
+    vmdk support                    : NO
+    vpc support                     : NO
+    vvfat support                   : NO
+    qed support                     : NO
+    parallels support               : NO
+    FUSE exports                    : NO
+    VDUSE block exports             : NO
+
+  Crypto
+    TLS priority                    : NORMAL
+    GNUTLS support                  : NO
+    libgcrypt                       : NO
+    nettle                          : NO
+    SM4 ALG support                 : NO
+    SM3 ALG support                 : NO
+    AF_ALG support                  : NO
+    rng-none                        : NO
+    Linux keyring                   : NO
+    Linux keyutils                  : NO
+
+  User interface
+    D-Bus display                   : NO
+    SDL support                     : NO
+    SDL image support               : NO
+    GTK support                     : NO
+    pixman                          : NO
+    VTE support                     : NO
+    PNG support                     : NO
+    VNC support                     : NO
+    spice protocol support          : NO
+    curses support                  : NO
+    brlapi support                  : NO
+
+  Graphics backends
+    VirGL support                   : NO
+    Rutabaga support                : NO
+
+  Audio backends
+    OSS support                     : NO
+    sndio support                   : NO
+    ALSA support                    : NO
+    PulseAudio support              : NO
+    PipeWire support                : NO
+    JACK support                    : NO
+
+  Network backends
+    AF_XDP support                  : NO
+    passt support                   : NO
+    slirp support                   : NO
+    vde support                     : NO
+    netmap support                  : NO
+    l2tpv3 support                  : NO
+
+  Dependencies
+    libtasn1                        : NO
+    PAM                             : NO
+    iconv support                   : NO
+    blkio support                   : NO
+    curl support                    : NO
+    Multipath support               : NO
+    Linux AIO support               : NO
+    Linux io_uring support          : NO
+    ATTR/XATTR support              : NO
+    RDMA support                    : NO
+    fdt support                     : internal
+    libcap-ng support               : NO
+    bpf support                     : NO
+    rbd support                     : NO
+    smartcard support               : NO
+    U2F support                     : NO
+    libusb                          : NO
+    usb net redir                   : NO
+    OpenGL support (epoxy)          : NO
+    GBM                             : NO
+    libiscsi support                : NO
+    libnfs support                  : NO
+    seccomp support                 : NO
+    GlusterFS support               : NO
+    hv-balloon support              : NO
+    TPM support                     : NO
+    IGVM support                    : NO
+    libssh support                  : NO
+Cleaning... 0 files.
+    lzo support                     : NO
+    snappy support                  : NO
+    bzip2 support                   : NO
+    lzfse support                   : NO
+    zstd support                    : NO
+    Query Processing Library support: NO
+    UADK Library support            : NO
+    qatzip support                  : NO
+    NUMA host support               : NO
+    capstone                        : NO
+    libpmem support                 : NO
+    libdaxctl support               : NO
+    libcbor support                 : NO
+    libudev                         : NO
+    FUSE lseek                      : NO
+    selinux                         : NO
+    libdw                           : NO
+    valgrind                        : NO
+
+  Subprojects
+    berkeley-softfloat-3            : YES
+    berkeley-testfloat-3            : YES
+    dtc                             : YES
+    keycodemapdb                    : YES
+
+  User defined options
+    Native files                    : /workspace/bench/qemu-build/config-meson.cross
+    auto_features                   : disabled
+    curses                          : disabled
+    docs                            : disabled
+    gtk                             : disabled
+    guest_agent                     : disabled
+    kvm                             : enabled
+    libssh                          : disabled
+    sdl                             : disabled
+    slirp                           : disabled
+    tools                           : disabled
+    tpm                             : disabled
+    vde                             : disabled
+    vnc                             : disabled
+    werror                          : false
+
+Found ninja-1.10.1 at /usr/bin/ninja
+Running postconf script '/workspace/bench/qemu-build/pyvenv/bin/python3 /workspace/bench/qemu-10.2.4/scripts/symlink-install-tree.py'
+[1/7] Generating qemu-version.h with a custom command (wrapped by meson to capture output)
+[2/5] Generating qemu.syms with a custom command (wrapped by meson to capture output)
+[3/5] Generating block.syms with a custom command (wrapped by meson to capture output)
+[4/5] Compiling C object libsystem.a.p/hw_misc_nvkvm_nvkvm.c.o
+In file included from ../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:61:
+../qemu-10.2.4/hw/misc/nvkvm/kayfabe_shim.h:400:22: warning: "/*" within comment [-Wcomment]
+  400 |  * traces/guest_boots/*_qemu.log] `grep -c hClass` over every committed device log returns
+      |                       
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c: In function ‘nvkvm_report_registers’:
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:2612:22: warning: declaration of ‘i’ shadows a previous local [-Wshadow=compatible-local]
+ 2612 |             uint64_t i;
+      |                      ^
+../qemu-10.2.4/hw/misc/nvkvm/nvkvm.c:2563:18: note: shadowed declaration is here
+ 2563 |         uint64_t i, shown = a.served_len;
+      |                  ^
+[5/5] Linking target qemu-system-x86_64
+== built: /workspace/bench/qemu-build/qemu-system-x86_64
+=== BUILD RC=0 2026-08-14T09:45:32+00:00 ===
+=== STAMP=50a8ca28956190979d2681a1cc46157529da9620 HEAD=50a8ca28956190979d2681a1cc46157529da9620 ===
+=== ★ THE ARMING AS THIS SCRIPT SET IT (a record of intent, not of execution) ===
+    KAYFABE_ISOLATES=real
+    KAYFABE_CE_EXECUTOR=host
+    NVKVM_RAM_BACKEND=memfd
+    KAYFABE_GUEST_RAM=memfd
+    KAYFABE_FB_JOIN=shared
+    KAYFABE_GUEST_RING=ring
+    KAYFABE_GUEST_PUSHBUF=pin
+    KAYFABE_PT_WITNESS_EXEC=on
+    KAYFABE_GUEST_SEMA=pin
+    KAYFABE_GR_ROUTE=passthrough
+    KAYFABE_GUEST_OPERAND=pin
+    KAYFABE_PT_SWEEP=on
+    KAYFABE_OPERAND_JOIN=join
+    KAYFABE_VAS_PUBLISH=assert
+    GQ_TIMEOUT=900
+    BOOT_TIMEOUT=180
+    KAYFABE_RING_VIDMEM=<unset>
+=== BOOT w298vaspub START 2026-08-14T09:45:33+00:00  HOOK=[cup3_hook.sh] ===
+[boot_capture:w298vaspub] host dmesg watermark: 1107 lines
+[boot_capture:w298vaspub] booting (extra args: none)
+[boot_capture:w298vaspub] guest is up after 35s
+[boot_capture:w298vaspub] module unloaded and ring buffer cleared; loading cold
+[boot_capture:w298vaspub] opening the device (this is what runs RmInitAdapter)
+[boot_capture:w298vaspub] captured 34 dmesg lines, 31 NVRM, 0 adapter → /workspace/bench/run_w298vaspub_dmesg.log
+[boot_capture:w298vaspub] --- the verdict lines ---
+[boot_capture:w298vaspub] running POST_CAPTURE_HOOK: /workspace/kayfabe_w298/scripts/bench/cup3_hook.sh
+[boot_capture:w298vaspub] hook finished: rc=0
+[boot_capture:w298vaspub] host dmesg delta: 1 lines, 1 NVRM, 1 Xid → /workspace/bench/run_w298vaspub_hostdmesg.log
+[boot_capture:w298vaspub] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:w298vaspub] census present:
+    2026-08-14T09:47:12.418122Z qemu-system-x86_64: info: nvkvm: doorbells: 324 arrived, 324 served, 0 REFUSED by name; last token 0x00010001 (16 logged)
+[boot_capture:w298vaspub] evidence carried into the repo: /workspace/kayfabe_w298/traces/guest_boots/run_w298vaspub_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:w298vaspub] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:w298vaspub]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:w298vaspub] done. serial=/workspace/bench/run_w298vaspub_serial.log qemu=/workspace/bench/run_w298vaspub_qemu.log dmesg=/workspace/bench/run_w298vaspub_dmesg.log probe=/workspace/bench/run_w298vaspub_probe.log hostdmesg=/workspace/bench/run_w298vaspub_hostdmesg.log
+=== BOOT w298vaspub RC=0 2026-08-14T09:47:14+00:00 ===
+=== ★ THE ARMING ACTUALLY IN FORCE (a boot happening is not an arm running) ===
+      VAS-PUBLISH arm=assert fb_join=shared host_isolates=true
+      OPERAND-JOIN arm=join
+      PT-SWEEP tasks=2 skipped=2 ran=2
+    ⊘ VAS-PUBLISH lines total = [88] — if 0 the pass NEVER RAN and every zero below is VACUOUS
+    ⊘ NOT ARMABLE lines       = [0]  (MUST be 0)
+    ⊘ host_isolates=NO stub   = [0]  (MUST be 0)
+
+=== ★★★★★ LEG 8 — THE LAST EMISSION, VERBATIM ===
+      VAS-PUBLISH token=0x00000007 arm=assert → published=0 refused=0 in 0 ms over 4 VAS row(s) [proc=0 pdb=0x200000 ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; candidates below 
+      are REAL and UNPUBLISHABLE, not refused) total=533 already_host=0 already_pinned=0 guest_ram=525 not_vidmem=0 not_granular=0(0 bytes) candidates=8(524288 bytes, capped=0) published=0 refused=0 sum_ok=
+      true] [proc=0 pdb=0x2efa9c000 ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; candidates below are REAL and UNPUBLISHABLE, not refused) total=6254 already_host=0 already_pinned=0
+       guest_ram=110 not_vidmem=0 not_granular=0(0 bytes) candidates=6144(12884901888 bytes, capped=2048) published=0 refused=0 sum_ok=true] [proc=2 pdb=0x0 total=0 already_host=0 already_pinned=0 guest_ram
+      =0 not_vidmem=0 not_granular=0(0 bytes) candidates=0(0 bytes, capped=0) published=0 refused=0 sum_ok=true] [proc=2 pdb=0x201000 total=16425 already_host=23 already_pinned=31 guest_ram=16335 not_vidmem
+      =0 not_granular=6(1021440 bytes) candidates=30(24772608 bytes, capped=0) published=0 refused=0 sum_ok=true]
+--- the FIRST emission (the picture BEFORE anything was published):
+      VAS-PUBLISH token=0x00020013 arm=assert → published=0 refused=0 in 0 ms over 4 VAS row(s) [proc=0 pdb=0x200000 ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; candidates below 
+      are REAL and UNPUBLISHABLE, not refused) total=21 already_host=0 already_pinned=0 guest_ram=13 not_vidmem=0 not_granular=0(0 bytes) candidates=8(524288 bytes, capped=0) published=0 refused=0 sum_ok=tr
+      ue] [proc=0 pdb=0x2efa9c000 ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; candidates below are REAL and UNPUBLISHABLE, not refused) total=6254 already_host=0 already_pinned=0 g
+      uest_ram=110 not_vidmem=0 not_granular=0(0 bytes) candidates=6144(12884901888 bytes, capped=2048) published=0 refused=0 sum_ok=true] [proc=2 pdb=0x0 total=0 already_host=0 already_pinned=0 guest_ram=0
+       not_vidmem=0 not_granular=0(0 bytes) candidates=0(0 bytes, capped=0) published=0 refused=0 sum_ok=true] [proc=2 pdb=0x201000 total=13348 already_host=3 already_pinned=0 guest_ram=13311 not_vidmem=0 n
+      ot_granular=6(1021440 bytes) candidates=28(20578304 bytes, capped=0) published=0 refused=0 sum_ok=true]
+--- published / refused / wall, every distinct value seen:
+           80 published=0 refused=0 in 0 ms
+            8 published=0 refused=0 in 1 ms
+--- ★★★★★ w291 PINRATE (only on arm=pinrate; ⊘ MEASUREMENT, NOT THE MERGE):
+    ⊘ PINRATE emissions = [0] — 0 on this arm means UNMEASURED, not 0 ms
+    per-row + degrade, every distinct reading:
+    ⊘ rows the VMM would not resolve = [0]  (never reached the verb — NOT pin failures)
+    ⊘ REFUSED pins, by name          = []
+
+=== ★★★★★ w292 THE DRAIN — SCOPED TO THE DOORBELLED VAS, AND ITS COST ON THE DOORBELL PATH ===
+⊘ On any arm but `drain` every clause below MUST read `⊘ NOT ARMED`. If it does on
+  arm=drain, the rung DID NOT RUN and every number after it is VACUOUS, not zero.
+--- SCOPE[...] — which VAS was the target, or by NAME why there was none:
+--- DRAIN[...] — every distinct reading (visited / asked / pinned / refused / DRAIN_MS / complete):
+    ⊘ DRAIN[ ] emissions total = [0] — 0 means the pass NEVER PRINTED, so nothing below is measured
+    ⊘ TARGET NEVER VISITED     = [0]  (pinned=0 there is UNREACHED, not 'already complete')
+    ⊘ complete=false           = [0]   complete=true = [0]
+    ⚠ DRAIN WALL BUDGET hits   = [0]   DRAIN ROW CAP hits = [0]
+--- ★ THE COST ON THE DOORBELL PATH — every distinct DRAIN_MS, and the largest:
+      max DRAIN_MS = []
+      ⊘ this is WALL TIME of the drained VAS's loop (VMM resolve + verb + refusals), not a sum of pin times
+--- ★★ THE DRAINED VAS's own row — last emission, verbatim (last_pinned_va says HOW FAR it got):
+    ⊘ ★DRAINED row emissions = [0]  (0 on arm=drain ⇒ the target was never reached)
+
+--- ⚠ wall-budget exhaustions = [0]  (an unpublished row is NOT thereby refused)
+--- ⊘ bucket-identity violations (sum_ok=false) = [0]  (MUST be 0)
+--- every REFUSED leaf, by name (this is where 'exhausts something' would appear):
+
+=== ★★★★★ THE INDEPENDENT PROOF — HOST-PUBLISHED, BEFORE vs AFTER ===
+⊘ This number proves the build did its job whether or not cup2 passes.
+--- FIRST emission:
+      HOST-PUBLISHED [proc=0 gpu=0 pdb=0x200000 host_rows=0 of 21 runs=0  pins=0=[] MERGE-AGREES=true] [proc=0 gpu=0 pdb=0x2efa9c000 host_rows=0 of 6254 runs=0  pins=0=[] MERGE-AGREES=true] [proc=2 gpu=0 pd
+      b=0x0 host_rows=0 of 0 runs=0  pins=0=[] MERGE-AGREES=true] [proc=2 gpu=0 pdb=0x201000 host_rows=1 of 13348 runs=1 0x200200000+0x200000 pins=0=[] MERGE-AGREES=true] | PROMOTE-PARKED [proc=0 gpu=0 pdb=
+      0x200000 parked=0  bound=0=[]] [proc=0 gpu=0 pdb=0x2efa9c000 parked=0  bound=0=[]] [proc=2 gpu=0 pdb=0x0 parked=0  bound=0=[]] [proc=2 gpu=0 pdb=0x201000 parked=9 {bid=0x0 AwaitingPhysical va=0x203fb0
+      000} {bid=0x1 AwaitingPhysical va=0x20409d000} {bid=0x2 AwaitingPhysical va=0x2040a6000} {bid=0x3 AwaitingPhysical va=0x20409a000} {bid=0x4 AwaitingPhysical va=0x203f10000} {bid=0x5 AwaitingPhysical v
+      a=0x203400000} {bid=0x6 AwaitingPhysical va=0x203f30000} {bid=0x9 AwaitingPhysical va=0x203e80000} {bid=0xb AwaitingPhysical va=0x203e00000} bound=4=[0x203e90000,0x203fb0000,0x20409d000,0x2040a6000]]
+--- LAST emission:
+      HOST-PUBLISHED [proc=0 gpu=0 pdb=0x200000 host_rows=0 of 533 runs=0  pins=0=[] MERGE-AGREES=true] [proc=0 gpu=0 pdb=0x2efa9c000 host_rows=0 of 6254 runs=0  pins=0=[] MERGE-AGREES=true] [proc=2 gpu=0 p
+      db=0x0 host_rows=0 of 0 runs=0  pins=0=[] MERGE-AGREES=true] [proc=2 gpu=0 pdb=0x201000 host_rows=23 of 16425 runs=20 0x200000000+0x401000,0x200800000+0x1000,0x200c00000+0x1000,0x201000000+0x1000,0x20
+      1400000+0x1000,0x201800000+0x1000,0x201c00000+0x1000,0x202000000+0x1000,0x202400000+0x2000,0x202600000+0x1000,0x202800000+0x1000,0x202a00000+0x1000,0x202c00000+0x1000,0x202e00000+0x1000,0x203000000+0x
+      1000,0x203200000+0x1000,0x20440f000+0x1000,0x20443f000+0x1000,0x10000000000+0x200000,0x10002000000+0x200000 pins=23=[0x200400000+0x1000,0x200800000+0x1000,0x200c00000+0x1000,0x201000000+0x1000,0x20140
+      0000+0x1000,0x201800000+0x1000,0x201c00000+0x1000,0x202000000+0x1000,0x202400000+0x1000,0x202401000+0x1000,0x202600000+0x1000,0x202800000+0x1000,0x202a00000+0x1000,0x202c00000+0x1000,0x202e00000+0x100
+      0,0x203000000+0x1000,0x203200000+0x1000,0x20440f000+0x1000,0x204420000+0x8000,0x204428000+0x8000,0x204430000+0x8000,0x204438000+0x7000,0x20443f000+0x1000] MERGE-AGREES=true] | PROMOTE-PARKED [proc=0 g
+      pu=0 pdb=0x200000 parked=0  bound=0=[]] [proc=0 gpu=0 pdb=0x2efa9c000 parked=0  bound=0=[]] [proc=2 gpu=0 pdb=0x0 parked=0  bound=0=[]] [proc=2 gpu=0 pdb=0x201000 parked=9 {bid=0x0 AwaitingPhysical va
+      =0x203fb0000} {bid=0x1 AwaitingPhysical va=0x20409d000} {bid=0x2 AwaitingPhysical va=0x2040a6000} {bid=0x3 AwaitingPhysical va=0x20409a000} {bid=0x4 AwaitingPhysical va=0x203f10000} {bid=0x5 AwaitingP
+      hysical va=0x203400000} {bid=0x6 AwaitingPhysical va=0x203f30000} {bid=0x9 AwaitingPhysical va=0x203e80000} {bid=0xb AwaitingPhysical va=0x203e00000} bound=4=[0x203e90000,0x203fb0000,0x20409d000,0x204
+      0a6000]]
+--- every distinct host_rows= reading:
+      host_rows=0 of 0
+      host_rows=0 of 21
+      host_rows=0 of 533
+      host_rows=0 of 6254
+      host_rows=1 of 13348
+      host_rows=13 of 13348
+      host_rows=14 of 13348
+      host_rows=15 of 13348
+      host_rows=16 of 13348
+      host_rows=17 of 13348
+      host_rows=18 of 13348
+      host_rows=19 of 13348
+      host_rows=20 of 13348
+      host_rows=21 of 14886
+      host_rows=21 of 14887
+      host_rows=22 of 15913
+      host_rows=23 of 15913
+      host_rows=23 of 16425
+      host_rows=3 of 13348
+      host_rows=4 of 13348
+
+=== ⚠ THE PRE-REGISTERED COST — a published row is FROZEN against the guest's own edits ===
+    RepointsPublished = [0]
+    UnbindsPublished  = [0]
+    (⊘ these are refusal-KIND mentions across the log, not distinct VAs — the by_kind
+     map on the sweep line carries the per-doorbell counts)
+      by_kind={"StraddlesLiveBinding": 255}
+
+=== ★ THE FAULT, BY IDENTITY (host dmesg, watermarked to THIS boot) ===
+      [496622.957828] NVRM: Xid (PCI:0000:00:07): 31, pid=2960505, name=memfd:kayfabe-i, channel 0x00000009, intr 00000000. MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x70ab_a8e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+      Xid count = [1]
+      ★★ DESCENT LEVEL, every distinct value = [      1 FAULT_PDE ]
+         ⊘ empty here means NO FAULT LEVEL WAS PRINTED — UNMEASURED, not 'no fault'
+      ★★ ENGINE / HUBCLIENT / ACCESS = [      1 ACCESS_TYPE_VIRT_WRITE       1 ENGINE GRAPHICS       1 HUBCLIENT_FE ]
+      ★★ CHANNEL(S) named by the fault = []
+      fault VA, normalised = [0x70aba8e00000]
+
+=== ★★★★★ THE JOIN — after publication, who owns the faulting VA? ===
+    faulting VA = 0x70aba8e00000
+    GUEST-DESCRIBES  OWNS-FAULT = YES proc=2 pdb=0x201000 run=0x70aba8e00000+0x400000  
+    TABLE-DESCRIBES  OWNS-FAULT = YES proc=2 pdb=0x201000 run=0x70aba8e00000+0x400000  
+    HOST-PUBLISHED   OWNS-FAULT = NO  
+
+=== ★★★★★ CUP2_RC — ANCHORED (baseline 1 at w290cup2 @ c2b2a22; 1 again at w290pboth) ===
+--- ★★★★★ CUP2_RC, ^ANCHORED = [⊘ NO LINE BEGINS WITH CUP2_RC= — THE MEASUREMENT DID NOT HAPPEN. ⊘ This is NOT 0]
+    loose anchor (^|non-word), for contrast: [⊘ NONE]
+    UNANCHORED, for contrast: []
+    ⊘ the unanchored read has printed [CUP2_RC=0 CUP2_RC=1] on five consecutive rungs — the 0 is the harness's own echo, not a result
+=== ★ THE LAST PRINT — where it got to if it did not cross ===
+
+=== ★★ HARNESS SELF-CHECK — assert this block's own output exists ===
+    lines written so far = [718]
+    qemu log bytes       = [1766600]
+    probe log bytes      = [13566]
+    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check.
+=== W290P EXIT rc=0 arm=assert at 2026-08-14T09:47:15+00:00 ===
+
+================================================================================
+=== ★★★★★ W297 GRADING — cup3, FIRST COMPUTE  inner_rc=0  2026-08-14T09:47:15+00:00
+================================================================================
+
+=== (F) ATTRIBUTION PRECONDITION — was the PTX JIT present in the guest?
+    CUP3_JIT_PRESENT = [CUP3_JIT_PRESENT=yes]
+    ⊘ if 'no', a MODULE-stage failure is the guest image's, not ours.
+
+=== ★★★★★ THE METRIC — ^ANCHORED. ⊘ The unanchored read matches GCC_CUP3_RC=0 and has
+===     printed the headline success value on a FAILING arm on seven cup2 rungs.
+--- ★★★★★ ⊘ NO LINE BEGINS WITH CUP3_VAL= — THE MEASUREMENT DID NOT HAPPEN. ⊘ NOT 0, NOT a failure value.
+--- ★★★★  CUP3_RC=1
+    the kernel line, verbatim = [CUP3_KERNEL_LINE=ABSENT]
+    UNANCHORED, for contrast  = [CUP3_RC=0 CUP3_RC=1 ]
+
+=== ★★★★★ THE VERDICT, stated once, in the pre-registered vocabulary
+    (D) ⊘ UNMEASURED. Read the stage ladder; do not read this as 0.
+
+=== ★ THE STAGE LADDER, as the hook recorded it
+        ✘ CTX OK
+        ✘ MODULE OK
+        ✘ FUNC OK
+        ✘ MEMALLOC
+        ✘ LAUNCH OK
+        ✘ SYNC OK
+        ✘ KERNEL rv=
+        ✘ DONE
+=== ★ cup3's own FAIL line, if it named its failure
+        FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+        FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)
+
+=== (E) REGRESSION CHECK — cup2's established values are Xid=0 and host_rows 18295/18309
+===     ⚠ printed EVEN ON A GREEN: a pass that regressed the address plane is not a pass.
+    Xid count = [1]   (host dmesg DELTA file exists, 235 bytes)
+      [496622.957828] NVRM: Xid (PCI:0000:00:07): 31, pid=2960505, name=memfd:kayfabe-i, channel 0x00000009, intr 00000000. MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x70ab_a8e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+    host_rows, every distinct reading:
+      host_rows=0 of 0
+      host_rows=0 of 21
+      host_rows=0 of 533
+      host_rows=0 of 6254
+      host_rows=1 of 13348
+      host_rows=13 of 13348
+      host_rows=14 of 13348
+      host_rows=15 of 13348
+      host_rows=16 of 13348
+      host_rows=17 of 13348
+      host_rows=18 of 13348
+      host_rows=19 of 13348
+      host_rows=20 of 13348
+      host_rows=21 of 14886
+      host_rows=21 of 14887
+      host_rows=22 of 15913
+      host_rows=23 of 15913
+      host_rows=23 of 16425
+      host_rows=3 of 13348
+      host_rows=4 of 13348
+      host_rows=5 of 13348
+      host_rows=6 of 13348
+      host_rows=7 of 13348
+      host_rows=8 of 13348
+      host_rows=9 of 13348
+
+=== ★ THE UNSERVICED LEDGER — if cup3 walled on a control we refuse, it is named here
+            1 unserviced fn 76 cmd 0xa06f0112
+            1 unserviced fn 76 cmd 0x402c0101
+            1 unserviced fn 76 cmd 0x208f1105
+            1 unserviced fn 76 cmd 0x20810110
+            1 unserviced fn 76 cmd 0x2080a618
+            1 unserviced fn 76 cmd 0x2080a612
+            1 unserviced fn 76 cmd 0x20809009
+            1 unserviced fn 76 cmd 0x2080852e
+            1 unserviced fn 76 cmd 0x20808513
+            1 unserviced fn 76 cmd 0x20802a12
+            1 unserviced fn 76 cmd 0x20802a0f
+            1 unserviced fn 76 cmd 0x20802068
+            1 unserviced fn 76 cmd 0x20801357
+            1 unserviced fn 76 cmd 0x20800b05
+            1 unserviced fn 76 cmd 0x20800b03
+            1 unserviced fn 76 cmd 0x20800aff
+            1 unserviced fn 76 cmd 0x20800afe
+            1 unserviced fn 76 cmd 0x20800ab8
+            1 unserviced fn 76 cmd 0x20800a9e
+            1 unserviced fn 76 cmd 0x20800a9c
+            1 unserviced fn 76 cmd 0x20800a9a
+            1 unserviced fn 76 cmd 0x20800a87
+            1 unserviced fn 76 cmd 0x20800a80
+            1 unserviced fn 76 cmd 0x20800a70
+            1 unserviced fn 76 cmd 0x20800a4b
+            1 unserviced fn 76 cmd 0x20800a3f
+            1 unserviced fn 76 cmd 0x20800a38
+            1 unserviced fn 76 cmd 0x20800a34
+            1 unserviced fn 76 cmd 0x20800a30
+            1 unserviced fn 76 cmd 0x20800a2e
+      distinct ids = [40]
+    ⊘ compare against the cup2 baseline ledger: an id that appears HERE and not there
+      is a cup3-specific demand, which is the most likely shape of a new wall.
+
+=== ★ DOORBELLS BY ENGINE — a launch is GR work; cup2's shape was GrCompute + Ce
+      by engine: GrCompute=12 GrGraphics=0 Ce=312 NvEnc=0 NvDec=0 Other=0 unrouted=0
+      ⊘ if the line above is ABSENT the summary never printed — UNMEASURED, not zero.
+      per-doorbell routing tally (independent of the summary line):
+            518 engine=Ce
+            156 engine=GrCompute
+              4 engine=GrGraphics
+
+=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the milestone
+    KAYFABE_PT_SWEEP = [KAYFABE_PT_SWEEP=on]
+    KAYFABE_OPERAND_JOIN = [KAYFABE_OPERAND_JOIN=join]
+    KAYFABE_FB_JOIN = [KAYFABE_FB_JOIN=shared]
+    KAYFABE_VAS_PUBLISH = [KAYFABE_VAS_PUBLISH=assert]
+    KAYFABE_GR_ROUTE = [KAYFABE_GR_ROUTE=passthrough]
+    KAYFABE_GUEST_RING = [KAYFABE_GUEST_RING=ring]
+    KAYFABE_GUEST_PUSHBUF = [KAYFABE_GUEST_PUSHBUF=pin]
+    KAYFABE_GUEST_SEMA = [KAYFABE_GUEST_SEMA=pin]
+    KAYFABE_GUEST_OPERAND = [KAYFABE_GUEST_OPERAND=pin]
+    KAYFABE_ISOLATES = [KAYFABE_ISOLATES=real]
+    KAYFABE_CE_EXECUTOR = [KAYFABE_CE_EXECUTOR=host]
+    KAYFABE_PT_WITNESS_EXEC = [KAYFABE_PT_WITNESS_EXEC=on]
+
+=== ★★ HARNESS SELF-CHECK — assert THIS block's own output exists
+    w297 grading lines = [1]  (MUST be >= 1)
+    qemu log bytes     = [1766600]
+    probe log bytes    = [13566]
+    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check.
+=== W297 EXIT rc=0 at 2026-08-14T09:47:15+00:00 ===

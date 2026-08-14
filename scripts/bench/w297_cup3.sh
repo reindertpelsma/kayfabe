@@ -52,7 +52,10 @@ rm -f /workspace/bench/cup3 2>/dev/null
 
 # w290p_run.sh does the stamp gate, the boot, and the address-plane grading, and writes
 # everything to /workspace/$KAYFABE_TAG.log. Invoked, never copied, so the rungs cannot drift.
-"$REPO/scripts/bench/w290p_run.sh" drain
+# ★ w298 — the VAS_PUBLISH arm is POSITIONAL in w290p_run.sh, so it is the one relaxation an
+#   env override could not reach. `W298_ARM` makes it reachable; ⊘ DEFAULTED to `drain`, the
+#   byte-identical w297 value, so every existing caller is unchanged.
+"$REPO/scripts/bench/w290p_run.sh" "${W298_ARM:-drain}"
 BRC=$?
 
 OUT=/workspace/${KAYFABE_TAG}.log
@@ -136,9 +139,12 @@ echo "      per-doorbell routing tally (independent of the summary line):"
 grep -ho 'engine=[A-Za-z]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | sed 's/^/        /'
 echo ""
 echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the milestone"
+# ★ w298 — KAYFABE_PT_WITNESS_EXEC added. It was set by w290p_run.sh from the first arm and
+#   was the ONLY armed variable this "EVERY RELAXATION THAT WAS ON" block did not enumerate,
+#   so the block's own heading was false by one even after the w297 echo fix landed.
 for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
          KAYFABE_GR_ROUTE KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_GUEST_SEMA \
-         KAYFABE_GUEST_OPERAND KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR; do
+         KAYFABE_GUEST_OPERAND KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR KAYFABE_PT_WITNESS_EXEC; do
   echo "    $v = [$(grep -oE "$v=[a-z]+" "$OUT" 2>/dev/null | tail -1)]"
 done
 echo ""
