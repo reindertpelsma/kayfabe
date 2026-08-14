@@ -345,7 +345,55 @@ byte-identical to w297/w314's own green in all of them.**
   *not observed*, which is what it is — ★ and *not observed on the control either*, so nothing
   here even establishes the intermittent was live on this box today.
 
-<!-- CUP8 -->
+### 5.b THE QUIETLY-WRONG ARM — cup8, 2048², bit-exact, GUARDED
+
+⊘ **Guarded first, because an unguarded `bad=0` is not a measurement.** One boot with
+`KAYFABE_BENCH_ONLY=negctrl`, **gates armed**:
+
+```
+BENCH_NOLAUNCH_TOTAL_BAD=262144
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the verifier FIRED with launches skipped)
+```
+
+⇒ **the verifier is live under the gate.** A `bad=0` from this harness is now a statement about
+the data rather than about a verifier that might have been asleep. ★ This is what w315's §8 and
+§2 of this doc flagged as missing (*"`bad=0` is UNGUARDED"*); it is no longer missing.
+
+| run | gate | `bad` / `maxerr` | verdict | `Xid` | **`submit_med_ms`** | `sync_med_ms` | `med_ms` |
+|---|---|---|---|---|---|---|---|
+| `k1` | **on** | **0 / 0** | PASS | **0** | **4.282** | 574.268 | 578.261 |
+| `k2` | **on** | **0 / 0** | PASS | **0** | **4.260** | 422.913 | 427.172 |
+| `k3` | **on** | **0 / 0** | PASS | **0** | **4.400** | 524.734 | 529.133 |
+| `kc` | **off** | 0 / 0 | PASS | 0 | **88.770** | 361.767 | 450.395 |
+| `kg` | **on** | *negctrl* | **PASS-NEGATIVE-CONTROL** | **0** | — | — | — |
+
+⊘ Gate ratio on `k1`/`k2`/`k3`: **`publish[fired=43 skipped=1497 97.2 %] witness[fired=12
+skipped=374 96.9 %]` — bit-identical across all three.** `kc`: `fired=1540 skipped=0`.
+
+★★★★★ **THE FINDING: the submit cost is FIXED IN SIZE, and the gate removes it at both sizes.**
+`submit_med_ms` is **4.28 / 4.26 / 4.40 ms at 2048²** against **4.040 ms at N=512** — the same
+number for a workload **16× larger in each dimension** — and the control pays **88.770 ms** at
+2048² against **85.935 ms** at N=512. ⇒ **20.7× at 2048², 21.3× at N=512.** This is w311's
+*"C ≈ 115–132 ms FIXED per launch"* term, and this rung takes it to ~4.3 ms.
+
+### 5.b.1 ⊘⊘ AND END-TO-END AT 2048² DOES **NOT** RELIABLY IMPROVE — said before anyone reads the table hopefully
+
+`med_ms` reads **578 / 427 / 529 gated against 450 control.** Two of three gated boots are
+*slower end-to-end than the control*. **That is not a regression and it is not a win**: at 2048²
+the launch is **~95 % `cuCtxSynchronize`**, whose boot-to-boot scatter here is **362–574 ms
+(±100 ms)** — far larger than the **84 ms** the gate removes from the submit half.
+
+⇒ **At n=3 gated / n=1 control I cannot resolve the end-to-end effect at 2048², and I am not
+going to quote the 3.91× from N=512 as though it carried.** What *is* resolved is the submit
+half, because its scatter is **0.07 ms** against an 84 ms effect — a signal-to-noise ratio of
+~1200, which is why three boots settle it and three boots cannot settle the other.
+
+★ **This is §2.3 arriving as a measurement rather than a projection**: the floor moved to the
+completion plane, and at 2048² it has *already* moved so far that the submit half is 1 % of the
+launch. **The next binding constraint is `cuCtxSynchronize`, and nothing in this rung touches
+it.**
+
+
 
 ### 5.1 ⊘⊘ THE R33 PLANE IS A CONTROL, **NOT** EVIDENCE THE GATE IS SAFE WHEN IT FIRES THERE
 
