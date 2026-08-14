@@ -20,9 +20,11 @@
    been receiving it since M5 and dropping it into the unclaimed-offset census.
 2. ★★★★★ **Measured on a real `cup3` boot** (`w326m1`, GA106, stock guest, `CUP3_VAL=43`):
    **377 triggers**, **`ALL_PDB` fraction 0.0000**, **`triggers_per_doorbell` 0.785**.
-3. ⊘⊘ **The cost argument collapses**, exactly as `gmmu_publication_discipline.md` §8
-   pre-registered it might. 0.785 is not ≪ 1. GPU-VAS-only it is 0.302 — a **1.6×** reduction
-   in publication passes against the doorbell trigger, not an order of magnitude.
+3. ⊘⊘⊘ **The cost argument does not merely collapse — it REVERSES.**
+   `gmmu_publication_discipline.md` §8 pre-registered *"if that ratio is not ≪ 1 the argument
+   collapses"*. On `cup3` it is **0.785**; on **`R33 arm 1` it is 18.39** — the invalidate
+   fires **18× MORE often than the doorbell**. ⇒ the ratio is a property of the **workload's
+   submission density**, not of the mechanism, and no single number for it is meaningful.
 4. ★★★ **Tier 1 is still the right trigger, for two reasons that are not cost**: it is
    **sound** where the doorbell is not (a PTE can change between two GPFIFO commands with no
    doorbell), and it names its **PDB** where a doorbell names only a token.
@@ -81,6 +83,37 @@ The three numbers the brief pre-registered, and one it did not ask for that chan
 plane keyed naively on this register would do 377 passes where 145 are relevant; keyed on
 `!hubtlb_only` it does 145. **Against the 229 publication passes the doorbell trigger actually
 fired on this boot, that is 1.6× — a real but small win.**
+
+### 2.0 ⊘⊘⊘ THE RATIO IS A PROPERTY OF THE WORKLOAD, NOT OF THE MECHANISM — **it REVERSES on `R33`**
+
+`[measured, boot `w326x1`, `R33 arm 1` — a raw CE client with no libcuda]`:
+
+```
+MMUINVAL writes=331 triggers=331 all_pdb=0 all_va=331 hubtlb_only=213 gpu_vas=118
+         polls=662 distinct_pdbs=8 doorbells=18 triggers_per_doorbell=18.3889
+         triggers_at_first_doorbell=66
+```
+
+| workload | triggers | GPU-VAS triggers | doorbells | **triggers / doorbell** |
+|---|---|---|---|---|
+| `cup3` (×4 boots, identical) | 377 | 145 | 480 | **0.785** |
+| `R33 arm 1` | 331 | 118 | **18** | **18.39** |
+
+⇒ ★★★★★ **On `cup3` the invalidate fires 1.3× LESS often than the doorbell; on `R33` it fires
+18× MORE often.** The mechanism did not change — the *workload's submission density* did.
+`R33` does the same driver bring-up (hence a similar invalidate count) and then submits almost
+nothing (18 doorbells), while `cup3` submits 480 times.
+
+⊘ **This kills the frequency argument outright rather than merely weakening it.** A publish
+trigger chosen for being *rarer than the doorbell* is, on one of this rung's own three
+workloads, **18× more expensive**. Any future rung that revives *"the invalidate is cheaper"*
+must say **on which workload**, and this table is why.
+
+★★ **And a cross-check that fell out of it, which is worth more than the ratio.**
+`triggers_at_first_doorbell = 66` on **both** workloads — bit-identical. That is the driver's
+bring-up phase, invariant across two completely different clients, and it is the number that
+says the decoder is measuring the driver rather than the benchmark. `cup3 − R33 = 377 − 331 =
+46` invalidates is then the *workload's own* contribution.
 
 ### 2.1 The C agrees, which is the cross-check that matters
 
@@ -308,6 +341,31 @@ largest* — `DRAIN_MS` is **budget-clamped at 3000 on two of the five points**,
 carry no independent information about the fit. **Refit on the three unclamped points alone**
 (`w326o1`, `w326m1`, `w326r3`): residuals 88 454 / 87 349 / 112 088 µs, share 96.3–97.0 %.
 ★ The fit survives dropping both clamped points **and** the largest residual.
+
+### 5.3 The arms, and what each one is evidence for
+
+| arm | tick | workload | n | result |
+|---|---|---|---|---|
+| `w326m` | absent from the binary | `cup3` | 1 | `CUP3_VAL=43`, the decoder's first boot |
+| `w326r` | **on** | `cup3` | **3** | `CUP3_VAL=43` **3/3**, `Xid=0`, 40 unserviced ids, `off_trap_claims` 358–369 |
+| `w326o` | **off** — the control, **same binary** | `cup3` | 1 | `CUP3_VAL=43`, `off_trap_claims=0`, `working_ticks=0` |
+| `w326e` | on | `cup8` | 1 | **`CUP8_BAD=0 CUP8_MAXERR=0`** — the oracle that fails quietly-wrong |
+| `w326x` | on | `R33 arm 1` | 1 | a different mapping path |
+
+⊘ **`n = 3` on `cup3` only.** `cup8` and `R33` are single boots and are therefore evidence that
+the tick did not *break* them, **not** that they are stable under it. The brief asked for
+n ≥ 3 on three workloads; this rung has n ≥ 3 on one. Stated rather than rounded up.
+
+⊘ **The instrument's own known-positive/negative pair**, since a census that only ever prints
+one shape proves nothing: armed ⇒ `working_ticks=78–113 idle_ticks=361–376 off_trap_claims≈360`;
+disarmed ⇒ `working_ticks=0 idle_ticks=0 off_trap_claims=0`. Both observed, same binary.
+
+⚠ **`worker_disposed` is WRONG in these logs and the fix is committed but UNBOOTED.** It reads
+`1 426 388`–`2 064 292` because the first spelling summed `pin_reclaim_gone().released`, which
+is a **cumulative** tally, once per tick (§5, and the source comment records it). The fix
+(`drain.disposed` only) is in the tree; **no boot has run it**. ⇒ treat every `worker_disposed`
+figure here as **UNMEASURED**, not as large. The counters that *are* sound — `working_ticks`,
+`idle_ticks`, `vcpu_skipped`, `worst_tick_us`, `off_trap_claims` — carry the finding.
 
 ---
 
