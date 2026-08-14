@@ -1665,6 +1665,47 @@ impl RegPlane {
         out
     }
 
+    /// ★★★★★ **w329 — RELEASE the join installed at `phys`**, [`RegPlane::join_fb`]'s inverse
+    /// and the half `w327` measured the absence of as a hard `rc=719`.
+    ///
+    /// Returns `true` if a join was installed at exactly `phys` and is now gone; `false` means
+    /// **nothing was there**, and a caller must read that as *"do not release the host object
+    /// either"* — the store would still be serving bytes out of it.
+    ///
+    /// # ⚠⚠ THE `munmap` IS OUTSIDE THE LOCK, FOR [`RegPlane::join_fb`]'s MEASURED REASON
+    ///
+    /// Dropping the region `munmap`s, which blocks, and `lockwitness`' R1 assert fires inside
+    /// an `extern "C"` QEMU callback as a **non-unwinding panic** — the whole VMM aborts, on
+    /// the guest's own MMIO write path. `join_fb` pays for this once already
+    /// (`[measured 2026-08-13, vh, boot w289j]`); this function is the second site that can
+    /// hit it and the ordering here is that fix, not an imitation of it.
+    ///
+    /// ⊘ The `drop` is a **statement**, deliberately not a `let _ =` and not an inlined match:
+    /// either of those would put it back under the guard and re-arm the abort.
+    pub fn release_fb_join(&self, phys: u64) -> bool {
+        let released = {
+            let mut s = self.state.lock();
+            s.fb.release_join(phys)
+        };
+        let had = released.is_some();
+        // ⊘ HERE, after the guard is gone. See the doc above.
+        drop(released);
+        had
+    }
+
+    /// ★★ **w329 — is a join installed at EXACTLY `phys`?** The cheap half of
+    /// [`RegPlane::release_fb_join`], for a caller that must decide whether a collision is even
+    /// possible before doing anything expensive.
+    ///
+    /// ⊘ EXACT base, for [`crate::fbwin::FbStore::release_join`]'s reason: a join covers a
+    /// whole leaf, so an interior address names no join and answering `true` for one would send
+    /// the caller to release a range it did not name.
+    #[must_use]
+    pub fn fb_join_installed_at(&self, phys: u64) -> bool {
+        let s = self.state.lock();
+        s.fb.joined_ranges().iter().any(|(b, _)| *b == phys)
+    }
+
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
     #[must_use]
     pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {

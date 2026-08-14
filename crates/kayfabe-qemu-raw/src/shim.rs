@@ -9196,6 +9196,82 @@ impl SharedDoorbell {
         )
     }
 
+    /// ★★★★★ **w329 — EXECUTE the revocations a settlement produced: BOTH halves, in the one
+    /// order that is safe, synchronously.**
+    ///
+    /// # ★★★ The order is the safety argument, and it is not reversible
+    ///
+    /// 1. **The guest's view first** (`RegPlane::release_fb_join`). While the join is installed
+    ///    the framebuffer store serves that range out of the isolate's shared mapping; unmapping
+    ///    the host object first would leave the store reading a region that no longer exists —
+    ///    a `SIGBUS` inside a guest MMIO access, with no other detector.
+    /// 2. **The host object second** — and **only if step 1 said a join was actually there.**
+    ///    `release_fb_join` returning `false` means the store held nothing at that offset, which
+    ///    is a disagreement between the table and the store; the conservative answer is to leave
+    ///    the object alone and count it. ⊘ A leak in that corner is strictly better than a free
+    ///    of an object something is still reading through.
+    /// 3. **The drain, in this same trap.** `revoke_published_fb_leaf` *stages*; the unmap that
+    ///    carries RM's synchronous TLB invalidate happens in `drain_pending_releases`. Per the
+    ///    owner-agreed direction ruling, **a revocation is not deferrable**: the invalidate is
+    ///    *inside* the ioctl, so deferring the ioctl defers the invalidate by the same interval
+    ///    and that interval is a GMMU leak window. It is called here rather than left to the
+    ///    next verb or to `w326`'s 250 ms tick.
+    ///
+    /// Returns the clause to print. ⊘ Prints even when nothing was revoked, because *"the arm
+    /// is on and the guest proposed nothing"* and *"the arm is off"* are different facts and a
+    /// missing clause could not carry either.
+    fn release_revoked_joins(
+        &self,
+        plane: &RegPlane,
+        revoked: &[kayfabe_fwd::RevokedLeaf],
+        still_desired: usize,
+        remaps_refused: usize,
+    ) -> String {
+        if revoked.is_empty() {
+            return format!(
+                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={} \
+                 remaps_refused={remaps_refused}",
+                plane.joined_fb_ranges().len()
+            );
+        }
+        let (mut released, mut stranded) = (0usize, 0usize);
+        let mut first: Option<String> = None;
+        for r in revoked {
+            if plane.release_fb_join(r.phys) {
+                self.device
+                    .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                released += 1;
+                if first.is_none() {
+                    first = Some(format!(
+                        "va=0x{:x} len=0x{:x} fb_phys=0x{:x} host_va=0x{:x}",
+                        r.va.0, r.len, r.phys, r.host_va
+                    ));
+                }
+            } else {
+                // ⊘ The table said this row was a join and the store held nothing at that
+                // offset. LOUD, and the object is NOT freed — see the doc above.
+                stranded += 1;
+                eprintln!(
+                    "kayfabe: JOIN-RELEASE ⚠ TABLE/STORE DISAGREE va=0x{:x} fb_phys=0x{:x} — the \
+                     address table carried a JoinsGuestWindow row here and the framebuffer store \
+                     holds no join at that offset. ⊘ The host object is NOT freed: a leak here is \
+                     strictly better than freeing memory something may still be reading through",
+                    r.va.0, r.phys
+                );
+            }
+        }
+        // ★★★ SYNCHRONOUS, per the direction ruling. See step 3 above.
+        let drained = self.device.drain_pending_releases();
+        format!(
+            " revoked={} released={released} stranded={stranded} drained={drained} \
+             joined_ranges={} still_desired={still_desired} remaps_refused={remaps_refused} \
+             first=[{}]",
+            revoked.len(),
+            plane.joined_fb_ranges().len(),
+            first.as_deref().unwrap_or("NONE"),
+        )
+    }
+
     fn decode_cpu_pt_writes(&self) -> String {
         let Some(plane) = self.plane.upgrade() else {
             return String::new();
@@ -9214,6 +9290,9 @@ impl SharedDoorbell {
         // *value* the composition root installed with `plane.set_mmu` — not a second
         // format that could drift from it.
         let fmt = kayfabe_chips::Ga10xGmmu::new();
+        let revoke_policy = selected_join_release();
+        let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
+        let (mut revoked_still_desired, mut remaps_refused) = (0usize, 0usize);
         let (mut latched, mut vas_gone, mut rounds) = (0usize, 0usize, 0usize);
         // ⊘ A local tally rather than a folded `PtDecodeOutcome`, for one reason that is
         // about linkage and not about style: this crate does not depend on `kayfabe-fwd`
@@ -9236,9 +9315,22 @@ impl SharedDoorbell {
             rounds += 1;
             for pid in w.procs {
                 let mut fb = plane.pt_bytes();
-                let Some(out) = self.device.decode_pt_writes_from(pid, &fmt, &mut fb) else {
+                // ★★★ w329 - the policy is read ONCE per pass and carried, never re-read
+                // per proc: a variable that could change under a pass would make one boot's
+                // arms differ from each other rather than from the control.
+                let Some(out) =
+                    self.device
+                        .decode_pt_writes_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
+                else {
                     continue;
                 };
+                // ★★★★★ THE OBLIGATION, accumulated whole and discharged ONCE below. Per
+                // proc would drain the release queue once per proc per doorbell; the rows are
+                // already out of the table either way, so the only question is when the host
+                // verbs run, and the answer is "this trap, once".
+                revoked.extend(out.revoked.iter().copied());
+                revoked_still_desired += out.revoked_still_desired;
+                remaps_refused += out.remaps_refused;
                 acc.bound += out.bound;
                 acc.unchanged += out.unchanged;
                 acc.repointed += out.repointed;
@@ -9273,13 +9365,19 @@ impl SharedDoorbell {
                 }
             }
         }
+        // ★★★★★ **w329 — BOTH HALVES OF THE RELEASE, HERE, SYNCHRONOUSLY.** Ordered after
+        // every decode of this pass and before the line is printed, so the counts it reports
+        // and the state the publication pass will find are the same state.
+        let revoke_clause =
+            self.release_revoked_joins(&plane, &revoked, revoked_still_desired, remaps_refused);
         // ⊘ THE LEFTOVERS GO BACK. A page the index cannot name an owner for is not a page
         // that was not written, and the witness is the only record that it was.
         let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
         let st = plane.pt_witness_stats();
         format!(
             " | PT-DECODE drained={drained} latched={latched} unowned_vas={vas_gone} \
-             requeued={} rounds={rounds} → bound={} unchanged={} repointed={} unbound={} \
+             requeued={} rounds={rounds}{revoke_arm}{revoke_clause} → bound={} unchanged={} \
+             repointed={} unbound={} \
              learned={} published={}/{} meta_refused={} unwitnessed={} unreachable={} \
              sparse={} dropped={} refusals={} faults={} reach_faults={} retired={} \
              pass_vas_gone={} first={}{}{} [witness writes={} pending={} refused={}+{}]",
@@ -9308,6 +9406,7 @@ impl SharedDoorbell {
             st.pending,
             st.refused,
             requeue_refused,
+            revoke_arm = format!(" | JOIN-RELEASE arm={}", revoke_policy.as_str()),
         )
     }
 
@@ -9398,15 +9497,27 @@ impl SharedDoorbell {
         let mut straddles: Vec<kayfabe_mmu::walker::PopulateRefusal> = Vec::new();
         let mut collisions: Vec<kayfabe_mmu::reach::ShapeCollision> = Vec::new();
         let mut duplicates = 0usize;
+        let revoke_policy = selected_join_release();
+        let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
+        let (mut revoked_still_desired, mut remaps_refused) = (0usize, 0usize);
         for pid in pids {
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
             // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
             // reading the isolate's aperture instead would walk a tree nobody wrote.
             let mut fb = plane.pt_bytes();
-            let Some((plan, out)) = self.device.sweep_pt_tables_from(pid, &fmt, &mut fb) else {
+            let Some((plan, out)) =
+                self.device
+                    .sweep_pt_tables_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
+            else {
                 continue;
             };
+            // ★★★★★ w329 — the sweep proposes unbinds too, and from the SAME settlement
+            // machinery, so it carries the same obligation. Accumulated and discharged once
+            // below, exactly as the decode pass does.
+            revoked.extend(out.revoked.iter().copied());
+            revoked_still_desired += out.revoked_still_desired;
+            remaps_refused += out.remaps_refused;
             tasks += plan.tasks.len();
             skipped += plan.skipped;
             for r in &plan.reasons {
@@ -9469,9 +9580,13 @@ impl SharedDoorbell {
             collisions.extend(out.shape_collisions.iter().copied());
             duplicates += out.duplicate_leaves;
         }
+        // ★★★★★ **w329 — the sweep's half of the release, discharged before the line prints.**
+        let revoke_clause =
+            self.release_revoked_joins(&plane, &revoked, revoked_still_desired, remaps_refused);
         format!(
             " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
-             pages={pages} reasons={reasons:?} → bound={bound} unchanged={unchanged} \
+             pages={pages} reasons={reasons:?} JOIN-RELEASE{revoke_clause} → bound={bound} \
+             unchanged={unchanged} \
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
@@ -10434,6 +10549,75 @@ fn join_one_fb_leaf(
     pdb: kayfabe_rt::Pdb,
     leaf: kayfabe_rt::completion_watch::FbLeaf,
 ) -> Option<JoinedLeaf> {
+    let release = selected_join_release();
+    // ---- 0. ★★★★★ **w329 LEG 2 - TAKE OVER A STALE JOIN OF THIS FRAME, BEFORE
+    // anything is minted.**
+    //
+    // Ordered FIRST, and that ordering is the whole reason it is cheap: doing it at the
+    // `ALREADY_JOINED` refusal would mean a host object had already been allocated and mapped
+    // for a join that then had to be re-attempted, and `RegPlane::join_fb` consumes the
+    // region on refusal so the retry would need a second `mmap` too. Asked here, the ordinary
+    // four-step join below runs ONCE and installs cleanly.
+    //
+    // ⊘ This can only fire for a candidate row, which by construction has NO host
+    // object of its own - so a join already installed at this frame is necessarily owned by a
+    // DIFFERENT VA. See `SharedDevice::supersede_joined_fb_leaf` for what is and is not proven.
+    // ★ The store is asked FIRST, and it is the cheap question: `joined_ranges` is
+    // tens of entries while the address-table scan below is tens of thousands of rows, and on
+    // the overwhelming majority of leaves there is no collision at all.
+    if release.supersedes() && plane.fb_join_installed_at(leaf.phys) {
+        let over = {
+            let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
+            l.get(&leaf.phys).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
+        };
+        if over {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
+                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this frame. The old join stands and \
+                 this leaf stays fabricated. ⚠ The cap exists because the superseded row \
+                 is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
+                leaf.va, leaf.phys
+            );
+        } else if let Some(r) = device.supersede_joined_fb_leaf(
+            DOORBELL_TARGET_GPU,
+            pdb,
+            leaf.phys,
+            kayfabe_rt::GpuVa(leaf.va),
+        ) {
+            // ★★★ TABLE ROW GONE (above), STORE next, HOST last. The store must stop
+            // serving out of the region before the host mapping is torn down; the row must
+            // stop naming the object before either.
+            if plane.release_fb_join(r.phys) {
+                device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                let drained = device.drain_pending_releases();
+                *supersede_ledger()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .entry(r.phys)
+                    .or_insert(0) += 1;
+                eprintln!(
+                    "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
+                     this frame from va=0x{:x} (len=0x{:x}, host_va=0x{:x}) to va=0x{:x}. Old \
+                     row UNBOUND, join RELEASED, host object staged and drained={drained}. \
+                     ⊘ The old VA is still DESCRIBED by the guest and now resolves with \
+                     no host backing - an engine still pointed there takes a CONTAINED fault",
+                    r.phys, r.va.0, r.len, r.host_va, leaf.va
+                );
+            } else {
+                // ⊘ The table named a join this store does not hold. LOUD, and the object
+                // is NOT freed - a leak here is strictly better than freeing memory something
+                // may still be reading through. ⚠ The row is already unbound, so this
+                // orphans it; that is the conservative half of a disagreement we did not make.
+                eprintln!(
+                    "{head} {what} ⚠⚠ SUPERSEDE ABORTED fb_phys=0x{:x}: the address \
+                     table carried a JoinsGuestWindow row at va=0x{:x} and the framebuffer \
+                     store holds NO join at that offset. The row is unbound and the host \
+                     object is ⊘ NOT freed",
+                    r.phys, r.va.0
+                );
+            }
+        }
+    }
     // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
     let backed = match device.back_fb_leaf(
         DOORBELL_TARGET_GPU,
@@ -14985,6 +15169,128 @@ fn selected_pt_sweep() -> bool {
         None => false,
         Some(v) => pt_sweep_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
     }
+}
+
+/// ★★★★★ **w329 — arm the RELEASE of a joined framebuffer leaf the guest has unmapped.**
+///
+/// # ⊘ ON by default, and that is the opposite of [`PT_SWEEP_ENV`]'s default for a reason
+///
+/// The dirty gates and the sweep default off because the armed arm **removes work** and a typo
+/// must not silently skip something nobody decided to skip. This one is the other direction:
+/// the disarmed arm is what `w327` measured as a **hard allocation failure** — a freed
+/// allocation's framebuffer frames stay joined forever, the guest recycles them, and the first
+/// `cuMemsetD32` past the first recycled frame kills the channel with no `Xid` and no `NVRM`
+/// line. Defaulting off would mean the fix ships disabled.
+///
+/// ⇒ `off` is the **negative control**, and it is what makes a one-binary two-arm boot possible:
+/// `KAYFABE_JOIN_RELEASE=off` reproduces `w327`'s `28,31` failure exactly, from the same
+/// archive that passes with the variable unset.
+///
+/// ⚠ An unparseable value reads as **on**, i.e. as the default — never as the control. A typo
+/// must not be able to silently disarm a correctness fix and leave a boot looking armed.
+pub const JOIN_RELEASE_ENV: &str = "KAYFABE_JOIN_RELEASE";
+
+/// ★★★★★ **w329 — the two TRIGGERS, as one arm.** They are different events and only
+/// the second one is the event that actually occurs on this workload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinReleaseArm {
+    /// ⊘ w327's state: a join is never released. The NEGATIVE CONTROL.
+    Off,
+    /// Leg 1 — release on the guest's own UNMAP, via
+    /// [`kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins`]. This is the trigger
+    /// `join_operand_fb_leaves`' cleanup table nominates.
+    Unmap,
+    /// ★★★ Leg 1 **and** leg 2 — also supersede a join whose frame the guest has
+    /// re-pointed into a different VA of the same address space. `[measured, w329a1]` leg 1
+    /// alone fires 8 times in a whole `28,31` run and the failure survives, because CUDA's
+    /// suballocator does not unmap on `cuMemFree`. See
+    /// [`kayfabe_rt::device::SharedDevice::supersede_joined_fb_leaf`].
+    Supersede,
+}
+
+impl JoinReleaseArm {
+    /// The settlement policy this arm implies.
+    #[must_use]
+    pub fn policy(self) -> kayfabe_mmu::reach::PublishedUnbind {
+        match self {
+            JoinReleaseArm::Off => kayfabe_mmu::reach::PublishedUnbind::Refuse,
+            JoinReleaseArm::Unmap | JoinReleaseArm::Supersede => {
+                kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins
+            }
+        }
+    }
+
+    /// Whether a collision with an existing join may take it over.
+    #[must_use]
+    pub fn supersedes(self) -> bool {
+        matches!(self, JoinReleaseArm::Supersede)
+    }
+
+    /// The word a boot's log prints, so a reader never has to infer the arm.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JoinReleaseArm::Off => "off",
+            JoinReleaseArm::Unmap => "on",
+            JoinReleaseArm::Supersede => "supersede",
+        }
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_join_release`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is the fix.
+pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status, &'static str)> {
+    match value {
+        None | Some("on") => Ok(JoinReleaseArm::Unmap),
+        Some("off") => Ok(JoinReleaseArm::Off),
+        Some("supersede") => Ok(JoinReleaseArm::Supersede),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_JOIN_RELEASE does not name an arm: the values are `on` (the default — a \
+             joined framebuffer leaf the guest UNMAPS is released), `supersede` (also take \
+             over a join whose frame the guest re-pointed into another VA), and `off` (w327's \
+             negative control, in which a join is kept forever and the guest's next allocation \
+             over a recycled frame dies rc=719).",
+        )),
+    }
+}
+
+/// Which arm [`JOIN_RELEASE_ENV`] names.
+///
+/// ⊘ **Read ONCE and cached.** The arm cannot change during a device life, and the two
+/// consumers - the settlement pass and the join site - are on the guest's own MMIO path, where
+/// one of them runs per framebuffer leaf. Re-reading the environment there would put a
+/// `getenv` under the doorbell handler for no fact that can have changed, and would also make
+/// the two consumers capable of disagreeing mid-boot, which is exactly the shape
+/// `a_second_source_of_truth_beside_a_complete_value` is banked for.
+#[must_use]
+fn selected_join_release() -> JoinReleaseArm {
+    static ARM: std::sync::OnceLock<JoinReleaseArm> = std::sync::OnceLock::new();
+    *ARM.get_or_init(|| match std::env::var_os(JOIN_RELEASE_ENV) {
+        None => JoinReleaseArm::Unmap,
+        Some(v) => join_release_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
+            .unwrap_or(JoinReleaseArm::Unmap),
+    })
+}
+
+/// ★★ **How many times ONE framebuffer frame's join may be taken over in a device
+/// life.**
+///
+/// ⚠ Without a cap this is a PING-PONG: the superseded row is re-proposed by the next
+/// settlement (the guest still describes that VA), becomes a publication candidate again, and
+/// takes the join back — host RM verbs on every doorbell, forever. The cap makes the behaviour
+/// bounded and the boot says how often it was reached.
+const SUPERSEDE_CAP_PER_FRAME: usize = 4;
+
+/// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
+/// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
+/// an unbounded loop. It is reset by nothing, which is correct — the bound is per device life.
+fn supersede_ledger() -> &'static std::sync::Mutex<std::collections::HashMap<u64, usize>> {
+    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, usize>>> =
+        std::sync::OnceLock::new();
+    L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 /// ★★★★★ **§16.78** — the environment variable that arms the `MC_SERVICE_INTERRUPTS`

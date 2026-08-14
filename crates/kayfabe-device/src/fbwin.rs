@@ -422,6 +422,47 @@ pub trait FbStore: Send + core::fmt::Debug {
         Vec::new()
     }
 
+    /// ★★★★★ **w329 — GIVE BACK the join installed at `phys`**, so this store serves that
+    /// range from its own pages again. [`FbStore::install_join`]'s inverse, and the half whose
+    /// absence `w327` measured as an allocation failure.
+    ///
+    /// Returns the backing that was installed, so the caller — the only party that knows what
+    /// the second holder is — can release its half. `None` means **nothing was installed at
+    /// exactly `phys`**, which is a refusal and not a success: a caller that read it as *"the
+    /// join is gone"* would go on to free a host object this store is still serving bytes out
+    /// of, and the next guest read of that range would be a `SIGBUS` in the VMM.
+    ///
+    /// # ★★★ The base must match EXACTLY, and that is the partial-extent refusal
+    ///
+    /// A join covers a whole leaf and [`FbStore::install_join`] refuses **any** overlap, so a
+    /// release naming an address inside a join is a caller that has confused a leaf with an
+    /// address in one. Refused rather than resolved to the containing range: releasing more
+    /// than the caller named is exactly the shape that turns a correct release into a
+    /// double-free of the neighbour's object.
+    ///
+    /// # ⊘ THE BYTES ARE NOT CARRIED BACK, and that is a decision with a residual
+    ///
+    /// [`FbStore::install_join`] copies this store's pages **into** the join, because bytes the
+    /// guest wrote before the backing existed are real. The mirror image is deliberately NOT
+    /// performed here, for two reasons that point the same way:
+    ///
+    /// 1. **It would be the wrong answer.** A range is released because the guest's own page
+    ///    tables stopped naming it; to this device a framebuffer frame no page table names is
+    ///    an unallocated frame, whose truth is *"no page, reads zero"* — the same answer
+    ///    [`FbStore::device_reset`] leaves, and the same one a never-written frame gives.
+    /// 2. **It would trade one unbounded growth for another.** Copying back materialises one
+    ///    resident 4 KiB page per page of every freed allocation, forever — the join leak
+    ///    re-created in [`SparseFb::pages`], where the residency ceiling turns it into a
+    ///    different hard failure.
+    ///
+    /// ⚠ **The residual, named:** if the guest still reaches the same frame through a second
+    /// alias it did not unmap, that alias's bytes are gone. The caller counts that case rather
+    /// than assuming it absent (`kayfabe_mmu::reach::ApplyOutcome::revoked_still_desired`).
+    fn release_join(&mut self, phys: u64) -> Option<Box<dyn FbJoined>> {
+        let _ = phys;
+        None
+    }
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -1144,6 +1185,22 @@ impl FbStore for SparseFb {
         let mut v: Vec<(u64, u64)> = self.joined.iter().map(|(b, r)| (*b, r.len())).collect();
         v.sort_unstable();
         v
+    }
+
+    fn release_join(&mut self, phys: u64) -> Option<Box<dyn FbJoined>> {
+        // ★ EXACT base, per the trait's doc. `install_join` refuses any overlap, so at most
+        // one entry can match and a linear scan answers whole.
+        let i = self.joined.iter().position(|(b, _)| *b == phys)?;
+        let (_, region) = self.joined.remove(i);
+        // ⊘ No page is created here. The range now has no join and no local pages, which is
+        // exactly `is_resident == Some(false)` / reads-as-zero — the state a framebuffer frame
+        // nothing has written is in, and the state this store started in. ⚠ Any bytes the join
+        // held are gone; see the trait's residual.
+        //
+        // ★ The `Vec` stays sorted: `remove` preserves the order of the rest, so
+        // `joined_ranges`'s "already ascending" property survives a release as well as an
+        // install.
+        Some(region)
     }
 
     fn device_reset(&mut self) {

@@ -525,3 +525,96 @@ fn the_write_counter_sees_rewrites_and_joins_and_keeps_the_writers_apart() {
          blind exactly where the join plane is busiest"
     );
 }
+
+// =====================================================================================
+// w329 — ★★★★★ THE RELEASE, which is the half `w327` measured the absence of
+// =====================================================================================
+
+/// ★★★★★ **`release_join` gives the range back, and the SAME range can then be joined
+/// again.**
+///
+/// `w327` measured what the absence of this costs: a freed allocation's framebuffer frames
+/// stay joined forever, the guest recycles them into its next allocation, `install_join`
+/// **correctly** refuses a second backing over them, the leaf stays fabricated, and the first
+/// `cuMemsetD32` past the first recycled frame kills the CUDA context with **no `Xid` and no
+/// `NVRM` line** — because nothing ever reaches hardware. The re-join at the end is the whole
+/// point: a release that freed the memory but left the range claimed would fix nothing.
+#[test]
+fn a_released_join_gives_the_range_back_and_the_same_range_can_be_joined_again() {
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the join installs");
+    assert_eq!(fb.joined_ranges(), vec![(AT, LEN)]);
+
+    let back = fb.release_join(AT).expect("a join was installed at exactly AT");
+    assert_eq!(back.len(), LEN, "the caller gets the backing whole");
+    assert!(
+        fb.joined_ranges().is_empty(),
+        "and the store no longer claims the range"
+    );
+
+    // ★★★ THE FALSIFIER: the recycled frame takes a NEW backing. Before w329 this is
+    // `ALREADY_JOINED` forever, which is `w327`'s hard `rc=719`.
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("a released range can be joined again — this is the whole rung");
+}
+
+/// ⊘ **Releasing an address INSIDE a join is refused, not resolved to the containing range.**
+///
+/// A join covers a whole leaf and `install_join` refuses **any** overlap, so a caller naming
+/// an interior address has confused a leaf with an address in one. Resolving it would release
+/// more than the caller named — the shape that turns a correct release into a double free of
+/// the neighbour's object one call later.
+#[test]
+fn releasing_an_address_inside_a_join_is_refused_rather_than_widened() {
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the join installs");
+    assert!(
+        fb.release_join(AT + 0x1000).is_none(),
+        "an interior address names no join"
+    );
+    assert!(
+        fb.release_join(AT + LEN).is_none(),
+        "and neither does the byte after it"
+    );
+    assert_eq!(
+        fb.joined_ranges(),
+        vec![(AT, LEN)],
+        "the join is untouched by either refusal"
+    );
+}
+
+/// ⊘ **The bytes do NOT come back, and that is stated as a property rather than left to be
+/// discovered.**
+///
+/// `install_join` copies the store's pages **into** the join because bytes the guest wrote
+/// before the backing existed are real. The mirror image is deliberately not performed: a
+/// framebuffer frame no page table names is an unallocated frame, whose truth is *"no page,
+/// reads zero"* — the same answer `device_reset` leaves — and copying back would materialise
+/// one resident page per page of every freed allocation forever, trading the join leak for a
+/// page leak with a hard residency ceiling.
+#[test]
+fn a_released_range_reads_as_never_written_and_holds_no_resident_page() {
+    let mut fb = SparseFb::new(FB);
+    fb.write_tagged(AT, &image(0x5151_0000, 0x1000), FbWriter::Executor)
+        .expect("inside the advertised framebuffer");
+    let est = fb
+        .install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the join installs");
+    assert!(est.nonzero > 0, "the establishment copy was not vacuous");
+
+    fb.release_join(AT).expect("installed at exactly AT");
+    let mut buf = [0xffu8; 8];
+    fb.read(AT, &mut buf).expect("inside the framebuffer");
+    assert_eq!(
+        buf,
+        [0u8; 8],
+        "an unallocated frame reads zero — the same answer a never-written one gives"
+    );
+    assert_eq!(
+        fb.is_resident(AT),
+        Some(false),
+        "and no page was materialised to hold what the join had"
+    );
+}
