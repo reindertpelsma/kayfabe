@@ -116,6 +116,7 @@ fn two_slices_of_one_arena(gpu: &mut Gpu, pid: ProcId) -> HostHandle {
             w.execute(&VerbPlan::Release {
                 unmap: vec![],
                 free: vec![b.memory],
+                guest_ram: Vec::new(),
             }),
             Ok(VerbReply::Released)
         );

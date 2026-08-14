@@ -190,6 +190,7 @@ fn every_verb_shape_survives_the_round_trip() {
         w.execute(&VerbPlan::Release {
             unmap: Vec::new(),
             free: vec![obj],
+            guest_ram: Vec::new(),
         }),
         Ok(VerbReply::Released)
     );
@@ -208,6 +209,7 @@ fn an_unknown_handle_is_a_bad_handle_and_not_a_wedge() {
         .execute(&VerbPlan::Release {
             unmap: Vec::new(),
             free: vec![bogus],
+            guest_ram: Vec::new(),
         })
         .expect_err("an unknown handle must be refused");
     assert_eq!(failure.err, RmError::BadHandle(bogus));

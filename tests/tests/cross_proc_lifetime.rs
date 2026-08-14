@@ -373,6 +373,7 @@ fn c_2026_06_18_a_system_verb_on_a_user_procs_backing_is_refused_before_it_runs(
         &VerbPlan::Release {
             unmap: vec![],
             free: vec![owned],
+            guest_ram: Vec::new(),
         },
     );
 
@@ -435,6 +436,7 @@ fn a_foreign_unmap_is_refused_as_loudly_as_a_foreign_free() {
         &VerbPlan::Release {
             unmap: vec![(host_vas, published.host_va)],
             free: vec![],
+            guest_ram: Vec::new(),
         },
     );
     assert_eq!(
@@ -599,6 +601,7 @@ fn the_owner_dying_cleanly_cannot_dangle_a_system_reference() {
     let foreign_release = VerbPlan::Release {
         unmap: vec![],
         free: vec![owned],
+        guest_ram: Vec::new(),
     };
     assert!(
         matches!(
@@ -728,6 +731,7 @@ fn a_condemned_owner_cannot_dangle_a_system_reference() {
                 &VerbPlan::Release {
                     unmap: vec![],
                     free: vec![h],
+                    guest_ram: Vec::new(),
                 },
             ),
             Err(VerbFailure {
@@ -804,6 +808,7 @@ fn a_reference_taken_during_the_owners_teardown_is_refused_too() {
             &VerbPlan::Release {
                 unmap: vec![],
                 free: vec![owned],
+                guest_ram: Vec::new(),
             },
         ),
         Err(VerbFailure {
@@ -1050,6 +1055,7 @@ fn the_ledger_balances_across_every_teardown_ordering() {
             let plan = VerbPlan::Release {
                 unmap: vec![],
                 free: vec![foreign],
+                guest_ram: Vec::new(),
             };
             let mut w = gpu
                 .procs
@@ -1108,6 +1114,7 @@ fn the_ledger_balances_across_every_teardown_ordering() {
                         &VerbPlan::Release {
                             unmap: vec![],
                             free: vec![corpse],
+                            guest_ram: Vec::new(),
                         },
                     ),
                     Err(VerbFailure {
@@ -1225,7 +1232,7 @@ fn free_owner_root(gpu: &mut Gpu) {
 fn drain_pending(gpu: &mut Gpu, pid: ProcId) -> usize {
     let proc = gpu.procs.get_mut(&pid).expect("a live proc");
     let (worker, orphans) = kayfabe_fwd::checkout_and_drain(proc, GPU).expect("live, materialized");
-    let n = orphans.free.len() + orphans.unmap.len();
+    let n = orphans.len();
     let mut worker = worker.expect("a free worker");
     let residue = kayfabe_fwd::dispose_on(&mut worker, orphans);
     assert_eq!(

@@ -1475,10 +1475,14 @@ impl SharedDevice {
                 let Some((orphans, mut worker)) = taken else {
                     continue; // pool full, or the proc retired — next sweep.
                 };
-                let n = orphans.free.len() + orphans.unmap.len();
+                // ★ **w310** — `Orphans::len()` and not a hand-rolled sum of two fields: the
+                // hand-rolled version silently omitted `guest_ram` the moment a third kind
+                // existed, and *"how much did this drain dispose of"* would have under-read
+                // by exactly the kind this rung added.
+                let n = orphans.len();
                 // ---- EXECUTE: zero locks held.
                 let undisposed = kayfabe_fwd::dispose_on(&mut worker, orphans);
-                disposed += n - (undisposed.free.len() + undisposed.unmap.len());
+                disposed += n - undisposed.len();
                 self.return_worker(pid, gpu, worker);
             }
         }
@@ -1491,6 +1495,32 @@ impl SharedDevice {
     #[must_use]
     pub fn retired_len(&self) -> usize {
         self.state.read().spine.retired_len()
+    }
+
+    /// ★★★ **w310 — guest-RAM pin reclaim, from procs that have already vacated.**
+    ///
+    /// **Spine op** (read guard only), which is why it is the *gone* half and not the whole
+    /// device total: summing live procs would take one rank-1 proc lock each, and this is
+    /// called from `Regs::write` where the point of the frame is that it holds nothing.
+    ///
+    /// It is not a partial answer for long: `Spine::vacate` absorbs a proc's **cumulative**
+    /// tally — including pins released at VAS deaths while it was still alive — so every
+    /// release a dead proc ever made lands here. A live proc's own running tally is read
+    /// per-proc through [`SharedDevice::pin_reclaim_of`].
+    ///
+    /// ⊘ **Monotone. Grade it as a FLOOR, never as an exact value** — the mistake w304's
+    /// criterion (E) was rewritten for.
+    #[must_use]
+    pub fn pin_reclaim_gone(&self) -> kayfabe_core::gpu::PinReclaim {
+        self.state.read().spine.pin_reclaim_gone()
+    }
+
+    /// One live proc's cumulative guest-RAM pin reclaim tally. See
+    /// [`SharedDevice::pin_reclaim_gone`].
+    #[must_use]
+    pub fn pin_reclaim_of(&self, pid: ProcId) -> kayfabe_core::gpu::PinReclaim {
+        self.with_proc_mut(pid, |p| p.pin_reclaim)
+            .unwrap_or_default()
     }
 
     /// Register a completion source (spine mutation — write guard). The
@@ -3249,9 +3279,24 @@ impl SharedDevice {
     ///
     /// ⇒ This row therefore prints **both**: `host_rows`/runs from `Binding::host`, **and**
     /// `pins=` from `guest_ram_pins`. ⚠ A reader must join them; neither alone is the host
-    /// VAS. ⊘ They are NOT merged into one number here, because they have different
-    /// lifetimes (`stage_dropped_vases` reclaims the first; the pin map is reclaimed
-    /// separately) and a sum would hide which record a range lives in.
+    /// VAS. ⊘ They are NOT merged into one number here, because a sum would hide which
+    /// record a range lives in.
+    ///
+    /// # ⊘⊘ CORRECTED 2026-08-14 (w310) — **"THE PIN MAP IS RECLAIMED SEPARATELY" WAS FALSE**
+    ///
+    /// This paragraph used to justify keeping the two numbers apart by saying they *"have
+    /// different lifetimes (`stage_dropped_vases` reclaims the first; the pin map is
+    /// reclaimed **separately**)"*. There was no separate reclaim. `Vas::guest_ram_pins` had
+    /// **no `remove`, `retain`, `clear` or `drain` anywhere in the tree**
+    /// (`docs/audits/w301_cancellation_error_leaks.md` §3.2), so the map was dropped with its
+    /// `Vas` and its handles were lost. ⇒ the sentence read as a design decision and was in
+    /// fact a **description of the leak**, which is why nobody chasing it started here.
+    /// ★ Same class this tree keeps paying for: *a correct-sounding doc is the last place a
+    /// reader looks for a missing mechanism.*
+    ///
+    /// It is true **now**: `Spine::stage_dropped_vases` reclaims both, the pin first and the
+    /// row deduped against it. The conclusion (keep the numbers apart) survives; only its
+    /// stated reason changed.
     #[must_use]
     pub fn vas_published_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
         self.with_proc_mut(pid, |p| {
@@ -4093,6 +4138,7 @@ impl SharedDevice {
             Ok(Some(vas)) => kayfabe_isolate::Orphans {
                 unmap: vec![(vas, host_va)],
                 free: vec![memory],
+                guest_ram: Vec::new(),
             },
             // ⊘ No VAS means no mapping to unmap — but the OBJECT still exists and is still
             // ours to free. Freeing it without the unmap is correct here and not a shortcut:
@@ -4100,6 +4146,7 @@ impl SharedDevice {
             _ => kayfabe_isolate::Orphans {
                 unmap: Vec::new(),
                 free: vec![memory],
+                guest_ram: Vec::new(),
             },
         };
         self.stage_orphans(pid, gpu, orphans);
