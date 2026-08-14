@@ -9103,7 +9103,8 @@ impl SharedDoorbell {
     ) -> String {
         if revoked.is_empty() {
             return format!(
-                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={} remaps_refused=                 {remaps_refused}",
+                " revoked=0 released=0 stranded=0 drained=0 joined_ranges={} \
+                 remaps_refused={remaps_refused}",
                 plane.joined_fb_ranges().len()
             );
         }
