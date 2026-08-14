@@ -453,7 +453,7 @@ fn the_split_takes_at_most_the_budget_and_loses_nothing() {
     let mut empty = Orphans::default();
     assert_eq!(empty.split_off_budget(10).len(), 0, "an empty queue splits to nothing");
     let mut q2 = Orphans {
-        unmap: vec![(HostHandle(1), 0)],
+        unmap: vec![(HostHandle::new(iso, 1), 0)],
         free: Vec::new(),
         guest_ram: Vec::new(),
     };
