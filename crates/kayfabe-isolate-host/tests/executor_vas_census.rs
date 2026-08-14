@@ -117,7 +117,7 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
         "★★★ **7 → 8 at `2533adf6` (w282b), ADMITTED HERE 2026-08-14 (w296) — and the row \
          had been RED for every rung in between.** The eighth is `join_fb_leaf`'s \
          `OS_DESCRIPTOR` (`src/rm.rs:5057`), which w282b moved off `raw_map_dma` because \
-         `[measured 2026-08-13, boot `w282_client`, real GA106]` leg 7 joined both CE \
+         `[measured 2026-08-13, boot `w282_client`]` leg 7 joined both CE \
          operand leaves with `placed_as_asked=true` and the host copy engine STILL took \
          `Xid 31 CE0 HUBCLIENT_CE1 FAULT_PTE @ 0x1_20010000` — the object was in ONE \
          address space and the engine runs in another. ⇒ This is precisely the failure \

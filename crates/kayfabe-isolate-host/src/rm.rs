@@ -6062,7 +6062,7 @@ impl HostRmBackend {
         if already != 0 {
             eprintln!(
                 "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED TSG_NOT_SINGLETON tsg={tsg:#x} \
-                 children={already} (a freshly minted KEPLER_CHANNEL_GROUP_A already has \
+                 children={already} (a freshly minted channel group already has \
                  members; RC notification is TSG-SCOPED, so this group's fault would write \
                  every member's error notifier — ogkm-580 kern_gmmu_gv100.c:2124-2131 over \
                  kernel_rc_notification.c:270-289)"

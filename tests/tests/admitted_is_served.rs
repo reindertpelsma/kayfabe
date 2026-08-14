@@ -285,7 +285,7 @@ static GRADUATED: &[u32] = &[
     // are limited on CUDA's behalf"* on a device that models **no clock domain at all**, so
     // there is no observable it can make false — the `kayfabe_device::inert` eligibility
     // rule, applied to a control. `0x00802004` is its teardown half, and refusing THAT is
-    // the actively unsafe side: `deviceKPerfCudaLimitCliDisable`
+    // the actively HAZARDOUS side: `deviceKPerfCudaLimitCliDisable`
     // (`ogkm-580: kern_cuda_limit.c:62-75`) checks our status **before** `nCudaLimitRefCnt
     // = 0`, so a refusal leaves the guest's own refcount permanently non-zero.
     //
