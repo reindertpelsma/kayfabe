@@ -4588,7 +4588,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
             // therefore measure the path the guest does NOT take, and report `events=0` while
             // looking armed — `a_census_zero_needs_a_known_positive`, exactly.
             kft.mark("ce_terminal");
-            crate::kftime::record("doorbell_ce", &kft);
+            crate::kftime::record("doorbell_ce", &mut kft);
             return report;
         }
         kft.mark("ce_try");
@@ -4906,7 +4906,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         }
         drop(held);
         kft.mark("vmm_unlock");
-        crate::kftime::record("doorbell_fwd", &kft);
+        crate::kftime::record("doorbell_fwd", &mut kft);
         match rung {
             Ok(o) => kayfabe_device::DoorbellReport::Served {
                 token,
@@ -10645,7 +10645,7 @@ impl Regs {
         // ⊘ NEVER per-event printed, whatever the arming: reads are the hot path and ~900
         // doorbell lines is an instrument, while ~10^5 read lines is a second workload.
         // `record` honours `per_event`, so this kind is filtered at the call site instead.
-        crate::kftime::record_quiet("mmio_read", &kft);
+        crate::kftime::record_quiet("mmio_read", &mut kft);
         v
     }
 
@@ -11089,7 +11089,7 @@ impl Regs {
             } else {
                 "mmio_other"
             },
-            &kft,
+            &mut kft,
         );
         out
     }

@@ -236,6 +236,20 @@ pub struct Segs {
     /// it to the sum would double-count and would make the residual — the one number this
     /// module exists to keep honest — read as negative or as zero when it is neither.
     nested: Vec<(&'static str, u64, u64)>,
+    /// ★★★ **THE BRACKET'S TOTAL, LATCHED ONCE — and it was a real defect that it was not.**
+    ///
+    /// `[found by its own test, 2026-08-14, bench `vh2`]` `record_inner` called `total_us()`
+    /// **twice** for one event: once inside `line()` to print it, and again inside
+    /// `Census::record` after taking the census mutex. Those are two reads of a live clock,
+    /// so **the printed total and the censused total were different numbers for the same
+    /// event**, differing by however long the `eprintln!` and the lock acquisition took —
+    /// i.e. by more, the busier the machine.
+    ///
+    /// ⊘ That is `a_second_source_of_truth_beside_a_complete_value` inside the instrument
+    /// built to explain a latency. It surfaced as a flaky unit test (`199999 != 200000` on
+    /// the bench, green on a fast local box), which is the *mildest* symptom it has: the
+    /// numbers this module publishes were quietly inconsistent with each other.
+    frozen: Option<u64>,
 }
 
 impl Segs {
@@ -252,6 +266,7 @@ impl Segs {
             dropped: 0,
             armed: arm().on,
             nested: Vec::new(),
+            frozen: None,
         }
     }
 
@@ -293,10 +308,19 @@ impl Segs {
         self.nested.push((name, us, count));
     }
 
-    /// The bracket total — wall time from [`Segs::start`] to now.
+    /// Close the bracket, latching the total. Idempotent: a second call keeps the first
+    /// value, because *"when did this event end"* must have exactly one answer.
+    pub fn close(&mut self) {
+        if self.frozen.is_none() {
+            self.frozen = Some(u64::try_from(self.t0.elapsed().as_micros()).unwrap_or(u64::MAX));
+        }
+    }
+
+    /// The bracket total. Latched by [`Segs::close`]; live until then.
     #[must_use]
     pub fn total_us(&self) -> u64 {
-        u64::try_from(self.t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+        self.frozen
+            .unwrap_or_else(|| u64::try_from(self.t0.elapsed().as_micros()).unwrap_or(u64::MAX))
     }
 
     /// The sum of the marked segments.
@@ -364,6 +388,20 @@ struct Census {
     /// `(name, calls, total_us)` for nested sub-totals. Kept apart from `segs` so a reader
     /// cannot sum the two columns together by accident.
     nested: Vec<(&'static str, u64, u64)>,
+    /// ★★★ **THE BRACKET'S TOTAL, LATCHED ONCE — and it was a real defect that it was not.**
+    ///
+    /// `[found by its own test, 2026-08-14, bench `vh2`]` `record_inner` called `total_us()`
+    /// **twice** for one event: once inside `line()` to print it, and again inside
+    /// `Census::record` after taking the census mutex. Those are two reads of a live clock,
+    /// so **the printed total and the censused total were different numbers for the same
+    /// event**, differing by however long the `eprintln!` and the lock acquisition took —
+    /// i.e. by more, the busier the machine.
+    ///
+    /// ⊘ That is `a_second_source_of_truth_beside_a_complete_value` inside the instrument
+    /// built to explain a latency. It surfaced as a flaky unit test (`199999 != 200000` on
+    /// the bench, green on a fast local box), which is the *mildest* symptom it has: the
+    /// numbers this module publishes were quietly inconsistent with each other.
+    frozen: Option<u64>,
 }
 
 impl Census {
@@ -647,19 +685,21 @@ fn census_table() -> &'static Mutex<Vec<(&'static str, Census)>> {
 /// ⊘ Not a convenience: `mmio_read` fires ~10^5 times a boot. A per-event line there is not
 /// an instrument, it is a second workload, and it would be charged to the guest under the
 /// BQL by the very module that is supposed to explain the guest's latency.
-pub fn record_quiet(kind: &'static str, s: &Segs) {
+pub fn record_quiet(kind: &'static str, s: &mut Segs) {
     record_inner(kind, s, false);
 }
 
 /// Record one finished event, and print its line if per-event printing is armed.
-pub fn record(kind: &'static str, s: &Segs) {
+pub fn record(kind: &'static str, s: &mut Segs) {
     record_inner(kind, s, true);
 }
 
-fn record_inner(kind: &'static str, s: &Segs, may_print: bool) {
+fn record_inner(kind: &'static str, s: &mut Segs, may_print: bool) {
     if !s.armed {
         return;
     }
+    // ⊘ FIRST, before the line and before the lock. See [`Segs::frozen`].
+    s.close();
     let a = arm();
     if may_print && a.per_event {
         eprintln!("{}", s.line(kind));
@@ -783,9 +823,11 @@ mod tests {
             s.us[s.n] = *us;
             s.n += 1;
         }
-        // Force the bracket total by rewinding `t0`. ⊘ This is the ONLY place the clock is
-        // faked, and it is faked so the sum check can be tested at all.
-        s.t0 = Instant::now() - std::time::Duration::from_micros(total_us);
+        // ⊘ The total is LATCHED, not faked by rewinding `t0`. The first draft rewound the
+        // clock and then let `total_us()` read it live, so every assertion here was off by
+        // however long the test itself took — green on a fast box, `199999 != 200000` on the
+        // bench. A test whose subject is an interval must not measure a real one.
+        s.frozen = Some(total_us);
         s
     }
 
