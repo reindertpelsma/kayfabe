@@ -330,6 +330,28 @@ our buffers are placed this way**. Where they actually are is unmeasured and is 
 ⊘ Corroborating but not decisive: guest H2D at N=2048 is **274.952 ms** vs native **4.712 ms**
 (**58×**) — a *copy* path showing the same order of penalty as the *compute* path.
 
+★★ **A SHAPE agreement, which is worth more than the magnitude agreement.** Effective
+throughput (work ÷ `sync_med`), GFLOP/s:
+
+| N | 128 | 512 | 1024 | 2048 | shape |
+|---|---|---|---|---|---|
+| native VRAM | 350 | 750 | 780 | 770 | **flat** once warmed |
+| **native HOST-MEM** | 32.0 | 42.6 | **16.6** | **11.6** | rises, then **collapses** |
+| **our guest** | 4.3 | 11.8 | **35.9** | **18.9** | rises, then **collapses** |
+
+The guest and the host-memory arm both **peak and then fall**; VRAM does not. A collapse past a
+working-set threshold is the signature of a *slow backing store* behind a cache, and native
+VRAM shows no such knee. ⚠ **Suggestive, not decisive, and the peaks are at different N (1024
+vs 512)** — I am recording a shape, not fitting one curve to the other.
+
+⊘ **AND A MODEL TO STOP ANYONE RE-DERIVING:** `sync = C + work/T` (a fixed GPU-side turnaround
+plus a constant throughput) **is refuted by this data**. Solved on the two largest sizes it
+gives `T = 17.70 GFLOP/s` and **`C = −61.5 ms`** — a negative fixed cost. There is no
+constant-throughput regime to hang a fixed term on, because **throughput itself varies with N**,
+in both our plane and the host-memory arm. ★ Anyone who fits a two-term model here will get an
+apparently reasonable `C` from some pair of points; it is an artefact of the same curvature
+that produced §5.3's `b = 20.979`.
+
 ### 5.6 ⊘ IS THIS THE THIRD INSTANCE OF THE ROUND-TRIP PATTERN? **NO** — and that is worth saying
 
 The mid-rung note asked whether sync is round-trip-bound, like w318's 8 joins at ~5 ms and
