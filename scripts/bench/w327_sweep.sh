@@ -48,6 +48,23 @@ export PATH=/root/.cargo/bin:$PATH
 #   Touching a source that is genuinely compiled into the archive is the documented fix.
 touch "$REPO/crates/kayfabe-qemu-raw/src/shim.rs"
 
+# ⚠⚠ THE DIRT GATE, HOISTED — measured 2026-08-14, and it cost FIVE ARMS IN 43 SECONDS.
+#   `w290p_run.sh:50` refuses a dirty tree with rc=91, and the FIRST build of a fresh clone
+#   rewrites `Cargo.lock`. So arm 1 of a batch boots normally and every LATER arm dies as a
+#   *tree* refusal — while the batch writes its terminator and exits 0. ⊘ The failure is
+#   silent exactly where the CLAUDE.md trap says to look: a complete, healthy-looking
+#   artefact that measured nothing.
+# ★ Checked HERE so the refusal names itself before ~40 s of build and boot are spent, and so
+#   `⊘UNMEASURED` in the ceiling block can never be confused with "the sweep ran and found no
+#   ceiling".
+DIRT=$(cd "$REPO" && git status --porcelain --untracked-files=no)
+if [ -n "$DIRT" ]; then
+  echo "=== ⊘⊘ W327 REFUSES TO BOOT: THE TREE IS DIRTY, and w290p_run.sh would exit 91 anyway."
+  echo "$DIRT" | sed 's/^/===   /'
+  echo "W327_SWEEP_TERMINATOR tag=$TAG rc=91 DIRTY-TREE $(date -Is)"
+  exit 91
+fi
+
 echo "=== ★★★★★ W327 SWEEP tag=$TAG $(date -Is)"
 echo "===   bw=[$BW]"
 echo "===   HEAD=[$(cd "$REPO" && git rev-parse HEAD)]"
