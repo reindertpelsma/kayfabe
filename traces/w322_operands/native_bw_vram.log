@@ -1,0 +1,108 @@
+=== W311 NATIVE START 2026-08-14T19:02:57+00:00 pid=1685369 ===
+SIZES=256 ITERS=3 BATCH=2
+W322 ALLOC=[vram] BW=[4,16,32,64,128,256] BW_ITERS=7 BW_TARGET_MIB=256 BW_ONLY=1 BW_REPS=1
+=== GPU STATE BEFORE ===
+name, driver_version, memory.used [MiB], utilization.gpu [%]
+NVIDIA GeForce RTX 3060, 580.159.04, 0 MiB, 4 %
+pid, process_name, used_gpu_memory [MiB]
+    ⊘ any process listed above shares this GPU and the numbers below are CONTENDED.
+=== BUILD ===
+source md5 = 2b9f9f6e96e88df44fdd66606b44e8b2
+NATIVE_GCC_RC=0
+binary md5 = 5bce6452bb5c9f89752b15a498a5de40
+
+=== ★★★★★ NEGATIVE CONTROL (BENCH_NOLAUNCH=1) — the verifier must FIRE ===
+BENCH_MODE=NOLAUNCH — ★ NEGATIVE CONTROL. Launches are SKIPPED; the verifier MUST report bad = N*N. A 0 here means the verifier is dead.
+BENCH_NOLAUNCH_TOTAL_BAD=11010048
+BENCH_VERDICT: PASS-NEGATIVE-CONTROL (the bw verifier FIRED with launches skipped)
+NATIVE_NEGCTRL_RC=0   (0 = the verifier fired; ⊘ 3 = it is DEAD and every green below is vacuous)
+
+=== ★★★★★ THE NATIVE MEASUREMENT ===
+BENCH_BUILD sizes=[256] iters=3 batch=2 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+BENCH_W322 alloc=[vram] bw=[4,16,32,64,128,256] bw_iters=7 bw_target_mib=256 bw_only=1 bw_reps=1
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=2.364449 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=366418521.213 real_ms=1786734184208.469
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=1690.22
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 3060]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=100.09
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.10
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_BW_MODULE_RC=0
+BENCH_BW_FUNC_RC=0
+BW_BEGIN mib=4 nf=1048576 reps=1 bytes_per_launch=4194304 alloc=vram in_ptr=0x717ef6400000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=4 i=0 submit_ms=0.014 sync_ms=0.020 total_ms=0.034 bad=0
+BWITER mib=4 i=1 submit_ms=0.005 sync_ms=0.020 total_ms=0.025 bad=0
+BWITER mib=4 i=2 submit_ms=0.003 sync_ms=0.020 total_ms=0.023 bad=0
+BWITER mib=4 i=3 submit_ms=0.003 sync_ms=0.020 total_ms=0.023 bad=0
+BWITER mib=4 i=4 submit_ms=0.003 sync_ms=0.020 total_ms=0.022 bad=0
+BWITER mib=4 i=5 submit_ms=0.003 sync_ms=0.020 total_ms=0.023 bad=0
+BWITER mib=4 i=6 submit_ms=0.003 sync_ms=0.020 total_ms=0.023 bad=0
+BWROW mib=4 alloc=vram nf=1048576 reps=1 bytes=4194304 iters=7 submit_med_ms=0.003 sync_med_ms=0.020 sync_min_ms=0.020 sync_max_ms=0.020 total_med_ms=0.023 read_GBps=213.137 read_GBps_incl_submit=181.635 expect=4 got0=4 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=16 nf=4194304 reps=1 bytes_per_launch=16777216 alloc=vram in_ptr=0x717ef6400000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=16 i=0 submit_ms=0.004 sync_ms=0.063 total_ms=0.067 bad=0
+BWITER mib=16 i=1 submit_ms=0.004 sync_ms=0.062 total_ms=0.066 bad=0
+BWITER mib=16 i=2 submit_ms=0.003 sync_ms=0.062 total_ms=0.065 bad=0
+BWITER mib=16 i=3 submit_ms=0.003 sync_ms=0.062 total_ms=0.065 bad=0
+BWITER mib=16 i=4 submit_ms=0.003 sync_ms=0.062 total_ms=0.066 bad=0
+BWITER mib=16 i=5 submit_ms=0.004 sync_ms=0.062 total_ms=0.066 bad=0
+BWITER mib=16 i=6 submit_ms=0.003 sync_ms=0.062 total_ms=0.065 bad=0
+BWROW mib=16 alloc=vram nf=4194304 reps=1 bytes=16777216 iters=7 submit_med_ms=0.003 sync_med_ms=0.062 sync_min_ms=0.062 sync_max_ms=0.063 total_med_ms=0.066 read_GBps=269.596 read_GBps_incl_submit=255.945 expect=16 got0=16 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=32 nf=8388608 reps=1 bytes_per_launch=33554432 alloc=vram in_ptr=0x717ef0000000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=32 i=0 submit_ms=0.004 sync_ms=0.116 total_ms=0.120 bad=0
+BWITER mib=32 i=1 submit_ms=0.004 sync_ms=0.116 total_ms=0.120 bad=0
+BWITER mib=32 i=2 submit_ms=0.003 sync_ms=0.116 total_ms=0.119 bad=0
+BWITER mib=32 i=3 submit_ms=0.003 sync_ms=0.116 total_ms=0.119 bad=0
+BWITER mib=32 i=4 submit_ms=0.003 sync_ms=0.116 total_ms=0.118 bad=0
+BWITER mib=32 i=5 submit_ms=0.003 sync_ms=0.115 total_ms=0.118 bad=0
+BWITER mib=32 i=6 submit_ms=0.003 sync_ms=0.115 total_ms=0.118 bad=0
+BWROW mib=32 alloc=vram nf=8388608 reps=1 bytes=33554432 iters=7 submit_med_ms=0.003 sync_med_ms=0.116 sync_min_ms=0.115 sync_max_ms=0.116 total_med_ms=0.119 read_GBps=290.037 read_GBps_incl_submit=282.978 expect=32 got0=32 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=64 nf=16777216 reps=1 bytes_per_launch=67108864 alloc=vram in_ptr=0x717eee000000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=64 i=0 submit_ms=0.004 sync_ms=0.222 total_ms=0.226 bad=0
+BWITER mib=64 i=1 submit_ms=0.004 sync_ms=0.221 total_ms=0.225 bad=0
+BWITER mib=64 i=2 submit_ms=0.003 sync_ms=0.221 total_ms=0.224 bad=0
+BWITER mib=64 i=3 submit_ms=0.003 sync_ms=0.221 total_ms=0.224 bad=0
+BWITER mib=64 i=4 submit_ms=0.003 sync_ms=0.221 total_ms=0.224 bad=0
+BWITER mib=64 i=5 submit_ms=0.003 sync_ms=0.221 total_ms=0.224 bad=0
+BWITER mib=64 i=6 submit_ms=0.003 sync_ms=0.221 total_ms=0.224 bad=0
+BWROW mib=64 alloc=vram nf=16777216 reps=1 bytes=67108864 iters=7 submit_med_ms=0.003 sync_med_ms=0.221 sync_min_ms=0.221 sync_max_ms=0.222 total_med_ms=0.224 read_GBps=303.545 read_GBps_incl_submit=299.652 expect=64 got0=64 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=128 nf=33554432 reps=1 bytes_per_launch=134217728 alloc=vram in_ptr=0x717eea000000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=128 i=0 submit_ms=0.004 sync_ms=0.434 total_ms=0.438 bad=0
+BWITER mib=128 i=1 submit_ms=0.003 sync_ms=0.433 total_ms=0.436 bad=0
+BWITER mib=128 i=2 submit_ms=0.003 sync_ms=0.433 total_ms=0.436 bad=0
+BWITER mib=128 i=3 submit_ms=0.003 sync_ms=0.433 total_ms=0.436 bad=0
+BWITER mib=128 i=4 submit_ms=0.003 sync_ms=0.433 total_ms=0.436 bad=0
+BWITER mib=128 i=5 submit_ms=0.003 sync_ms=0.433 total_ms=0.436 bad=0
+BWITER mib=128 i=6 submit_ms=0.003 sync_ms=0.433 total_ms=0.437 bad=0
+BWROW mib=128 alloc=vram nf=33554432 reps=1 bytes=134217728 iters=7 submit_med_ms=0.003 sync_med_ms=0.433 sync_min_ms=0.433 sync_max_ms=0.434 total_med_ms=0.436 read_GBps=309.821 read_GBps_incl_submit=307.565 expect=128 got0=128 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=256 nf=67108864 reps=1 bytes_per_launch=268435456 alloc=vram in_ptr=0x717ee2000000 out_ptr=0x717ef6200000 grid=1024x256
+BWITER mib=256 i=0 submit_ms=0.004 sync_ms=0.983 total_ms=0.987 bad=0
+BWITER mib=256 i=1 submit_ms=0.011 sync_ms=0.856 total_ms=0.866 bad=0
+BWITER mib=256 i=2 submit_ms=0.003 sync_ms=0.856 total_ms=0.859 bad=0
+BWITER mib=256 i=3 submit_ms=0.003 sync_ms=0.856 total_ms=0.859 bad=0
+BWITER mib=256 i=4 submit_ms=0.003 sync_ms=0.858 total_ms=0.860 bad=0
+BWITER mib=256 i=5 submit_ms=0.003 sync_ms=0.857 total_ms=0.860 bad=0
+BWITER mib=256 i=6 submit_ms=0.003 sync_ms=0.856 total_ms=0.859 bad=0
+BWROW mib=256 alloc=vram nf=67108864 reps=1 bytes=268435456 iters=7 submit_med_ms=0.003 sync_med_ms=0.856 sync_min_ms=0.856 sync_max_ms=0.983 total_med_ms=0.860 read_GBps=313.599 read_GBps_incl_submit=312.153 expect=256 got0=256 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BENCH_BW_ROWS=6
+BENCH_BW_ROWS_UNMEASURED=0
+BENCH_MATMUL_SKIPPED=1 (BENCH_BW_ONLY)
+BENCH_CLOCK_END mono_ms=366420351.499 real_ms=1786734186038.755
+
+BENCH_SIZES_DONE=0
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every bw row verified)
+DONE
+NATIVE_RC=0
+NATIVE_WALL_S=2
+
+=== GPU STATE AFTER ===
+0 MiB, 4 %
+=== W311 NATIVE EXIT rc=0 at 2026-08-14T19:03:08+00:00 ===

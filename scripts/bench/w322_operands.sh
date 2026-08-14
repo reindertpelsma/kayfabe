@@ -191,6 +191,32 @@ else
 fi
 
 echo ""
+if [ "$ARM" = bwneg ]; then
+  echo "=== ★★★★★ THE ARMING ASSERTION — a known-positive that did not fire is WORSE than none"
+  echo "    ⊘ Measured 2026-08-14: this arm exported KAYFABE_BENCH_NOLAUNCH=1, the hook did not"
+  echo "      forward it, the workload ran in MEASURE mode and returned"
+  echo "      BENCH_VERDICT: PASS (every bw row verified) bad=0 — a GREEN, and the only tell"
+  echo "      was BENCH_MODE. So the mode is asserted here rather than assumed."
+  if grep -aq 'BENCH_MODE=NOLAUNCH' "$P" 2>/dev/null; then
+    NB=$(grep -ah 'BENCH_NOLAUNCH_TOTAL_BAD=' "$P" 2>/dev/null | tail -1 | sed 's/.*=//' | tr -d '
+ ')
+    echo "    ✔ BENCH_MODE=NOLAUNCH present — the launches really were skipped."
+    echo "    BENCH_NOLAUNCH_TOTAL_BAD=${NB:-ABSENT}"
+    if [ -n "${NB:-}" ] && [ "${NB:-0}" -gt 0 ] 2>/dev/null; then
+      echo "    ★★★★★ KNOWN-POSITIVE FIRED (bad>0 with no launches). Every bad=0 elsewhere is now"
+      echo "          ASSERTED rather than inherited."
+    else
+      echo "    ⊘⊘ KNOWN-POSITIVE DEAD: launches skipped and the verifier still reported 0."
+      echo "       Every bad=0 in this rung is VACUOUS."
+    fi
+  else
+    echo "    ⊘⊘⊘ VOID: BENCH_MODE=NOLAUNCH is ABSENT. This arm ran the MEASUREMENT workload"
+    echo "        under a negative-control name. It grades NOTHING, and a bad=0 from it must"
+    echo "        not be quoted as a control."
+  fi
+fi
+
+echo ""
 echo "=== ★★ CORRECTNESS — never optional, and INVERTED in the bwneg arm"
 for k in GUEST_BENCH_TOTAL_BAD GUEST_BENCH_VERDICT GUEST_SIZES_DONE GUEST_XID_COUNT; do
   L=$(grep -h "^$k=" "$P" 2>/dev/null | tail -1)
