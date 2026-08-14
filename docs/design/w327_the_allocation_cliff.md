@@ -39,10 +39,23 @@ is from a boot on that box on that day; the tag of each boot is given so a log c
 sync**, on the **second** chunk. The CUDA context becomes sticky-dead, so every later row
 reports `alloc_failed rc=719` and says nothing about its own size.
 
-**There is no Xid** in the host dmesg, **no `NVRM` line** in the guest dmesg at the failure,
-and **no named refusal** in our own device log: a token-set diff of a failing boot's QEMU log
-against a passing one's returns **empty in both directions**. ⇒ nothing reaches hardware and
-nothing in the shipped vocabulary says so.
+**There is no Xid** in the host dmesg and **no `NVRM` line** in the guest dmesg at the failure.
+⇒ nothing reaches hardware.
+
+> ### ⚠⚠ AND HERE IS THE INSTRUMENT MISTAKE THAT COST THIS RUNG SEVERAL HOURS, KEPT BECAUSE IT
+> ### IS THE GENERAL SHAPE AND NOT A ONE-OFF
+> My first move was a **token-set diff** of a failing boot's QEMU log against a passing one's —
+> extract every uppercase run, normalise digits away, `comm` the two sorted sets. It returned
+> **EMPTY IN BOTH DIRECTIONS**, and I wrote down *"the device never says anything different."*
+> ⊘ **It says exactly the right thing, 32 times, and my diff was structurally unable to see
+> it.** The refusal that explains the whole failure is `⚠ THE INSTALL REFUSED …
+> why=\`that framebuffer range is already joined\`` — and it appears in **every** boot,
+> passing ones included, at a **baseline of 16**. The failing boots print **26–32**.
+> ⇒ **A VOCABULARY DIFF CANNOT SEE A QUANTITY**, and it cannot see an address. It is
+> `a_count_cannot_see_a_substitution` turned inside out: there the count was blind to the
+> substitution, here the *set of names* was blind to the count. ★ The fix that actually worked
+> was to stop diffing and **ask the log about one address** — the failing `in_ptr` — which took
+> one `grep` and gave the answer immediately.
 
 ## 2. The measurement — every boot, with its tag
 
@@ -56,9 +69,12 @@ nothing in the shipped vocabulary says so.
 | `w327s` | `16` ×8 | **16** | — | **no** | 16 |
 | `w327u3` | `4,31` | **31** | — | yes | 4 |
 | `w327u4` | `4,64` | **64** | — | yes | 4 |
+| `w327u4b` | `4,64` (repeat, new binary) | **64** | — | yes | 4 |
 | `w327u2` | `28,31` | 28 | **31** | **yes** | 28 |
 | `w327x1b` | `28,64` | 28 | **64** | **yes** | 28 |
 | `w327x2` | `16,31` | 16 | **31** | **yes** | 16 |
+| `w327z1` | `28,31`, fill chunk **1 MiB** | 28 | **31** | **yes** | 28 |
+| `w327z2` | `28,31`, fill chunk **2 MiB** | 28 | **31** | **yes** | 28 |
 | `w327c1` | `16,24,28,29,30,31,32,40,64` (+`coalesce`) | 28 | **29** | **yes** | 28 |
 | `w327a` | `16,17,18,20,22,24,28,31,32` | 28 | **31** | **yes** | 28 |
 | w322 `bw`,`bw2` | `4,16,32` | 16 | **32** | **yes** | 16 |
@@ -75,6 +91,7 @@ boot and dies `rc=719` in another; a 29 MiB one does the same.**
 |---|---|---|
 | `w327u4` | `4,64` | **PASSES**, 22.130 ms, `bad=0` |
 | `w327x1b` | `28,64` | **FAILS**, `rc=0/719` at byte offset `0x800000` |
+| `w327u4b` | `4,64` | **PASSES** — repeat of `u4` on the newer binary |
 
 **Same allocation, same size, same binary, same box, same hour. The only difference is the
 size of the row before it.** ⇒ the axis is not the allocation being made; it is the state left
@@ -118,106 +135,107 @@ intermittent `FAULT_PDE`): a state-dependent death with no Xid and no named refu
 the shape that turns out to be a rate. **Here it is not.** With `w327u2` that is four boots of
 the same two-row list, all failing identically.
 
-## 3. The mechanism — ⊘ STILL UNATTRIBUTED. What follows is a candidate and its evidence, and
-## the section ends by saying why the evidence does not yet close.
+### 2.3 ★★★ THE FAILURE OFFSET IS AN ADDRESS, NOT AN OPERATION COUNT — three resolutions agree
 
-### 3.1 A published range can never be released or repointed in this build
+Every failing row in this rung and in w322 reports `at_element=2097152`, byte offset
+**`0x800000` = 8 MiB**. ⚠ **That number is the harness's own `FILL_CHUNK`**
+(`scripts/bench/cup8bench.c`), i.e. *"the second chunk"*, and I matched it against
+`MAX_PUSH_TOTAL_BYTES = 8 << 20` before reading that constant's definition site — where it
+turns out to bound pushbuffer **method** bytes and to have nothing to do with operands.
+**A candidate whose magnitude matches your measurement belongs to the instrument until proven
+otherwise**, and here the magnitude *was* the instrument's own constant.
 
-`apply_settlement` (`crates/kayfabe-mmu/src/reach.rs:807-820`) **refuses** to unbind a range
-whose binding is host-published, and `populate` refuses to repoint one:
+⇒ the chunk is now a knob (`BENCH_BW_FILL_CHUNK_MIB`, defaulted to 8 so an un-armed run is
+byte-identical), and the same `28,31` list was run at three resolutions:
 
-- `PopulateRefusal::UnbindsPublished` (`crates/kayfabe-mmu/src/walker.rs:958-975`) — its own
-  doc: *"Unpublishing needs a worker and an unmap verb, i.e. the forwarding plane. So the
-  refusal is the answer, and the binding stays."*
-- `PopulateRefusal::RepointsPublished` — *"the mirror image … a different act with the same
-  consequence."*
-
-⇒ When the guest frees a buffer and CUDA later reuses that virtual address for a different
-allocation, **our table keeps the stale published binding**, and the new allocation's leaves
-are refused rather than repointed. This is the map/revoke asymmetry `w323` names as a type and
-`w326` is rebuilding the publish plane around.
-
-### 3.2 What 1339 refused unbinds look like, at the address level
-
-With the new `PUBCONFLICT_VAS` list (§5) armed, `w327x2` (`16,31`, FAILS at 31) prints, on the
-pass that matters:
-
-```
-PUBCONFLICT_VAS[n=1339
-  lowest =[0x753544000000,0x753544200000,0x753544400000,0x753544600000,0x753544800000,
-           0x753544a00000,0x753544c00000,0x753544e00000,0x753547600000,0x753547601000,…]
-  highest=[0x753547b32000,0x753547b31000,0x753547b30000,…]]
-```
-
-★ Read against the workload's own `BW_BEGIN` lines — row 1 `in_ptr=0x753544400000`,
-`out_ptr=0x753544200000`; row 2 `in_ptr=0x75353e000000` — **the 1339 addresses we refused to
-release are the FIRST row's region**, `0x753544000000 … 0x753547b32000`. The guest freed that
-buffer; it asked us to unbind 1339 leaves; we refused every one **because they were published**,
-and they are still in the table when row 2 runs.
-
-⚠ **And here is the part that does NOT fit the obvious story, stated because it is the part
-that matters:** the *failing* row's own base, `0x75353e000000`, is **NOT** in that list — it
-sorts below `0x753544000000` and would have appeared in `lowest=` if it were. So *"the new
-allocation lands on a stale published binding"* is **not** what `w327x2` shows. What it does
-show is that **`0x753544200000` — the address row 2's `out` buffer is allocated at — IS in the
-list.** ⊘ In `w327c1` the very first refusal of the pass *was* the failing `in_ptr`
-(`UnbindsPublished { va: 0x7b00f8000000 }`, five times, log lines 3888–5774), so the two
-failing boots do not agree about which buffer collides. **Both readings are recorded; neither
-is promoted.**
-
-### 3.3 What the counts say, and how far they go
-
-`RepointsPublished` separates the two halves cleanly over six boots:
-
-| boot | outcome | max `"RepointsPublished": N` | max `"UnbindsPublished": N` |
+| boot | chunk | reported failure offset | ⇒ the buffer is good up to |
 |---|---|---|---|
-| `w327a` | FAIL | **8** | 1339 |
-| `w327c1` | FAIL | **8** | 1339 |
-| `w327u4` | pass | 4 | 1335 |
-| `w327b1` | pass | 2 | 1333 |
-| `w327b2` | pass | 2 | 1333 |
-| `w327b3` | pass | 2 | 1333 |
+| `w327f1..3`, `w327u2` | 8 MiB | `0x800000` (chunk 2) | somewhere in [8, 16) MiB |
+| `w327z2` | 2 MiB | **`0xc00000`** (chunk 7) | [12, 14) MiB |
+| `w327z1` | 1 MiB | **`0xc00000`** (chunk 13) | **[12, 13) MiB** |
 
-★ And in `w327c1` the **first** refusal of the pass is
-`UnbindsPublished { va: GpuVa(135244191629312) }` = **`0x7b00f8000000`** — *exactly* the
-`in_ptr` of the row that failed, refused five times (log lines 3888, 4583, 4975, 5358, 5774)
-before the publication pass reaches that VA at line 5780.
+★ **All three are consistent and the two fine ones agree exactly: the allocation works for its
+first 12 MiB and not past it.** ⊘ And this rules out an operation-count story on its own: at
+1 MiB the fill issues **twelve** successful memsets before dying, at 8 MiB it issues **one** —
+same address, different counts. The boundary is a place in the buffer.
 
-⚠⚠⚠ **AND HERE IS WHY §3 DOES NOT CLOSE, STATED AS PLAINLY AS I CAN.**
-`UnbindsPublished` is **1333 in every passing boot and 1339 in the failing ones — a delta of
-six** on a base of thirteen hundred. The refusal to release a published range is therefore a
-**universal background condition of every boot this campaign has ever taken**, green ones
-included; `w327b1`'s own first refusal is at a guest CUDA VA (`0x7d30ac000000`). It cannot, on
-its own, be why one boot dies and another does not. `RepointsPublished` separates 8 from ≤4,
-which is six data points and a difference of four — precisely the shape this tree banks as
-*"a candidate whose magnitude matches your measurement belongs to the instrument until proven
-otherwise"*, and I am not promoting it.
+## 3. ★★★★★ THE MECHANISM, SETTLED — A FREED ALLOCATION'S FRAMEBUFFER FRAMES ARE STILL
+## JOINED, SO THE NEXT ALLOCATION THAT RECYCLES THEM CANNOT BE PUBLISHED
 
-⇒ **The trigger is measured to 14 boots and a single-variable pair (§2). The mechanism is
-not.** What §3 establishes is that the plane the trigger points at — publish with no revoke —
-is real, is documented in its own source as deliberate-for-now, and is the plane `w326` is
-rebuilding. What it does not establish is the step from *"1339 stale published leaves"* to
-*"this particular `cuMemsetD32` returns 719."*
+### 3.1 The refusal names itself, at the exact failing address
+
+`w327z1` (`28,31`, fill chunked to **1 MiB** so the offset is resolved eight times finer):
+
+```
+BW_FILL_FAIL mib=31 at_element=3145728 of 8126464 (byte offset 0xc00000) rc=0/719
+```
+
+and in the device log, for the same buffer (`in_ptr = 0x79d4d2000000`):
+
+```
+leaf va=0x79d4d2000000 len=0x200000 fb_phys=0x6200000 → JOINED
+leaf va=0x79d4d2200000 len=0x200000 fb_phys=0x6400000 → JOINED
+leaf va=0x79d4d2400000 len=0x200000 fb_phys=0x6600000 → JOINED
+leaf va=0x79d4d2600000 len=0x200000 fb_phys=0x6800000 → JOINED
+leaf va=0x79d4d2800000 len=0x200000 fb_phys=0x6a00000 → JOINED
+leaf va=0x79d4d2a00000 len=0x200000 fb_phys=0x6c00000 → JOINED
+leaf va=0x79d4d2c00000            fb_phys=0x6e00000 → ⚠ THE INSTALL REFUSED
+    why=`that framebuffer range is already joined; installing a second backing over it
+         would give one leaf two memories again, which is the defect the join exists to end`
+    — this device still serves that range from its own pages. ⊘ RELEASED and NOT bound
+```
+
+★★★★★ **`0x79d4d2c00000` is `in_ptr + 12 MiB`, and `0xc00000` is 12 MiB.** The fill dies at
+**the first byte past the last leaf that could be joined**, exactly. Thirty-two consecutive
+leaves — the whole rest of the buffer — carry the identical refusal.
+
+⇒ **THE CAUSE.** The guest freed the previous (28 MiB) allocation; its framebuffer frames went
+back to the guest's own allocator; the guest handed some of them to the new buffer. **Our join
+of those frames was never released**, so `SparseFb::install_join`
+(`crates/kayfabe-device/src/fbwin.rs:1069-1091`) refuses the new backing with `ALREADY_JOINED`
+— *correctly*, because two backings over one frame is the two-memories defect the join exists
+to end. The leaf therefore stays **fabricated** (served from the emulator's own pages), the
+host engine's operand has no host backing there, and the `cuMemsetD32` that first touches it
+kills the channel.
+
+### 3.2 Why the release never happens — and the source says so in advance
+
+`join_operand_fb_leaves` carries a table headed *"★★ CLEANUP — named now, because a join
+without a release is a leak"* (`crates/kayfabe-qemu-raw/src/shim.rs:7422-7437`). It names the
+owner, the unit, the lifetime, **the event that ends it** (*"the guest's own free/unmap of the
+range, seen as the page-table leaf ceasing to bind"*) and the primitive
+(`SharedDevice::release_unadopted_fb_leaf`, *"already stages the unmap; the missing half is the
+**trigger**, not the mechanism"*) — and then states:
+
+> ⊘ **Not wired this rung**, and the shape admits it rather than assuming it away.
+
+★★★ **w327 is the measurement of what that costs.** The join count is append-only and visibly
+so: across `w327a` the device's `joined=` reading climbs `0 → 4 → 29 → 31 → 34 → 35 → 43 → 67 →
+… → 83` over nine allocate/free cycles and **never once falls**.
+
+⊘ And the trigger is blocked by a second refusal on the same plane: the page-table leaf *does*
+cease to bind, but `apply_settlement` **refuses to unbind a host-published range** —
+`PopulateRefusal::UnbindsPublished` (`crates/kayfabe-mmu/src/reach.rs:807-820`,
+`crates/kayfabe-mmu/src/walker.rs:958-975`), whose own doc says *"Unpublishing needs a worker
+and an unmap verb, i.e. the forwarding plane. So the refusal is the answer, and the binding
+stays."* ⇒ **the exact event the cleanup table nominates as the trigger is the event the
+address table is built to swallow.** That is the map/revoke asymmetry `w323` names as a type,
+observed end to end.
+
+### 3.3 The mechanism predicts every row of §2, including the ones that refuted my earlier guesses
+
+| observation | why |
+|---|---|
+| a lone 31 or 64 MiB passes | nothing has been freed, so no frame is stale-joined |
+| the VA must MOVE | if it does not, the leaf re-binds to the **same** `fb_phys` and the existing join is a legitimate replay (`already`), not a collision |
+| the predecessor must be LARGE | a 4 MiB predecessor occupies ~2 frames; a 28 MiB one occupies 14, so a recycling allocator is far likelier to hit one |
+| the NEW allocation's size is irrelevant | `4,64` passes and `28,64` fails — the collision is with the *predecessor's* frames |
+| 16 × 4 MiB and 8 × 16 MiB pass | same VA every row ⇒ same frames ⇒ replay, never collision |
+| the failing size is 29/31/32/64 by boot | it is whichever row is the first to land on a recycled frame |
+| **no Xid, no NVRM line, no fault** | nothing reaches hardware: the operand is simply still fabricated |
+| the first *N* MiB works | the frames below the first collision were free to join |
 
 ### 3.4 What was ruled OUT, with the number
-
-| candidate | number | why it cannot bind here |
-|---|---|---|
-| `VAS_PUBLISH_LEAF_BUDGET` = 4096 candidates | 4096 × 64 KiB = **256 MiB** | the `capped=2048` seen on every boot is the **system proc's** 12 GiB identity VAS (6144 candidates × 2 MiB), which `§12.26` never publishes anyway; it fires identically on passing boots |
-| `MAX_PUSH_TOTAL_BYTES` = `8 << 20` | 8 MiB | pushbuffer **method** bytes. It matches the failure offset only because 8 MiB is `cup8bench.c:589`'s own `FILL_CHUNK`. **Instrument, confirmed.** |
-| `SWEEP_FRAMES_MAX` = 8192 | 8192 × 4 KiB = **32 MiB** | pure magnitude coincidence: bounds a diagnostic ring sweep, touches no join |
-| `OUR_SLOT_BUDGET` = 64 KVM slots | 64 × 64 KiB = 4 MiB | not on this path — a joined leaf goes to `SparseFb.joined`, never `install_ram_window` |
-| `MAX_CE_SPANS` = 4096 | 256 MiB at 64 KiB rows | the 8 MiB-chunked memset makes 128 spans |
-| a `u32`/shift truncation | — | `len` is `u64` end to end through `Reply::JoinedBacking`, `Nvos46Parameters.length`, `alloc_os_descriptor`, `SharedRam::create`; the one narrowing (`u32::try_from(sub.len)`) **refuses** and only above 4 GiB |
-| the CE **fill** refusal (`ce_copy` rejects `CeSource::Constant`, `kayfabe-isolate-host/src/rm.rs:4858`, `:6716`) | — | a real refusal, but `NOT_ON_THIS_RUNG`, `CeSource::Constant`, `CeWork::Fill` and `Constant` appear **zero times** in all four inspected QEMU logs. ⊘ Recorded as *not fired here*, **not** as ruled out: an absent string is not proof the path was untaken |
-
-### 3.5 The table is right; only the publication is not
-
-`TABLE-DESCRIBES` for the failing boot carries the whole failing buffer —
-`0x7b00f8000000+0x1e00000` (30 MiB) — and `GUEST-DESCRIBES` carries the identical run. ⇒
-**population is not the defect**, exactly as `the_table_is_right_and_the_host_vas_is_empty`
-already established for the GR fault. The defect is on the publication/revocation plane.
-
 ## 4. `KAYFABE_DRAIN_BATCH=coalesce` — MEASURED, and it is NOT sufficient
 
 `w327c1` ran `16,24,28,29,30,31,32,40,64` with `KAYFABE_DRAIN_BATCH=coalesce` and failed at
@@ -246,10 +264,22 @@ allocations are fine: 64 MiB allocates, fills and reads at 3.04 GB/s. What is no
 constantly, so the practical impact is at least as bad — it is just not size-shaped and no
 size limit will fix it.
 
-**The dependency, stated for `w326` (the publish plane):** the fix is a **revoke verb** —
-`UnbindsPublished`/`RepointsPublished` must become *"unpublish, then unbind/repoint"* instead
-of *"refuse and keep the binding"*. Nothing in this rung can raise a ceiling without it,
-because there is no ceiling to raise: the defect is that a published range has no way back.
+**The dependency, stated for `w326` (the publish plane), and it is a TRIGGER, not a mechanism.**
+`join_operand_fb_leaves`' own cleanup table says the primitive exists
+(`SharedDevice::release_unadopted_fb_leaf`, *"already stages the unmap; the missing half is the
+trigger, not the mechanism"*) and names the event that should fire it: *"the guest's own
+free/unmap of the range, seen as the page-table leaf ceasing to bind"*. **Two things must land
+together, and landing either alone does nothing:**
+
+1. **The trigger.** When a leaf stops binding, release the join keyed on its `fb_phys`.
+2. **The unbind must be allowed to happen at all.** Today `apply_settlement` refuses it
+   (`UnbindsPublished`), so the event the trigger listens for is swallowed one layer down.
+   ⇒ these are the same fix, and doing (1) without (2) leaves it dead code.
+
+★ **The cheapest falsifier, already built and already exercised:** `KAYFABE_BENCH_BW=28,31`
+must stop failing; the device's `joined=` reading must **fall** across an allocate/free cycle
+instead of climbing monotonically 0 → 83; and `w327u4b`'s `4,64` must still pass. Three
+numbers, one boot each, and the two-row repro is 3/3 deterministic so a green is meaningful.
 
 ★ **The cheapest falsifier for that fix, already built:** `KAYFABE_BENCH_BW=28,31` must stop
 failing, `PUBCONFLICT_VAS[n=…]` must fall from 1339 toward 0, and `w327u4`'s `4,64` must
@@ -276,6 +306,27 @@ GUEST_BENCH_TOTAL_BAD=0  GUEST_SIZES_DONE=1  GUEST_XID_COUNT=0   host Xid = 0
 note what this does *not* say: cup8 allocates its three buffers once and keeps them, so it
 never performs the allocate → free → allocate-elsewhere sequence §2.1 identifies. It is
 evidence that the size is fine, and it is **not** evidence that the defect is gone.
+
+## 6.2 GRADING — three workloads at n = 3, and a known-positive that FIRED
+
+| workload | n | result |
+|---|---|---|
+| `^CUP3_VAL=43` (GR/compute, libcuda) | **3** boots | `CUP3_VAL=43  CUP3_RC=0` ×3 |
+| `^CUP8_BAD=0 ^CUP8_MAXERR=0` | **3** boots | `CUP8_BAD=0 CUP8_MAXERR=0` ×3 |
+| `R33 arm 1` (raw CE, no libcuda, own VAS) | **3** boots | fired ×3, byte-identical: `4096 bytes moved, dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001 (declared 0x00000001), GP_GET 1 caught GP_PUT 1` |
+| cup8 at N=3072 (36 MiB) | 1 boot, 3 iters | `bad=0 maxerr=0`, `Xid=0` |
+| every `bw` row that measured | 21 boots | `bad=0` in **every** row |
+
+★★ **`R33` is LIVE for this rung, not vacuous.** The brief warned it was vacuous for w321's fix
+(`asked=0`); here it does its own CE round trip through its own VA space and prints the full
+COPY line on all three boots. ⊘ Its `R33_RC=1` is the *fresh* arm provoking a fault on purpose
+and is expected — it is graded on the client's own words, never on the rc.
+
+★★★★★ **AND THE KNOWN-POSITIVE FIRED**, which w322 could not get (`VOID` on its one attempt):
+`w327n` ran `BENCH_NOLAUNCH=1`, the arming assertion found `BENCH_MODE=NOLAUNCH` **present**,
+and the verifier reported `BENCH_NOLAUNCH_TOTAL_BAD=3670016 > 0`.
+⇒ **every `bad=0` above is asserted, not inherited.** ⊘ This is the guest-side control w322
+listed as *"the first thing to run next"*; it is now shown alive inside the guest.
 
 ## 7. ⊘ WHAT THIS RUNG DID NOT DO, AND WHY
 
