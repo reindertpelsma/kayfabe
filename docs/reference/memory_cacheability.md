@@ -1,8 +1,18 @@
 # Memory cacheability — the four deciders, the C's scars, and what `kayfabe-linux-raw` can and cannot enforce
 
-> Status: **research + design record** for `CachePolicy` in `kayfabe-linux-raw`
-> (`l1_os_shell.md` §4). Written before M2-c builds on the mapping API, because a cache
-> attribute cannot be retrofitted into a mapping API — every call site would have to change.
+> **STATUS: LIVE — 2026-08-14 (w312).** Research + design record for `CachePolicy` in
+> `kayfabe-linux-raw` (`l1_os_shell.md` §4). Supersede it in place; do not write a successor
+> beside it.
+>
+> **§§0–6 are unchanged and still current.** ★ **§7 and §8 are new in w312** and are the
+> reason to re-read this file: §7 records the owner's *"map everything write-back in the VMM"*
+> proposal and the verdict the rest of this document supports, so it is not re-proposed from
+> scratch; §8 records the **guest-side instrument** that closes the gap §1.1 and
+> `memtype.rs`'s header both name — *"nothing in userspace can read a guest's effective type"*
+> — together with three things it measured that correct claims made elsewhere in this tree.
+>
+> Written before M2-c builds on the mapping API, because a cache attribute cannot be
+> retrofitted into a mapping API — every call site would have to change.
 >
 > Sources: the C tree at `/workspace/nvidia-gpu-passthrough` (`src/`, `docs/`, `tools/`) and
 > the NVIDIA open kernel modules at `research_clones/ogkm`. Every claim below carries a
@@ -332,3 +342,291 @@ says so at the top rather than in a footnote.
 3. **arm64:** if it is ever built, `MappedRegion`'s bulk-copy accessors are **not** a legal
    surface over a Device-typed mapping (§1.2 consequence 2). That is a real constraint on the
    region-type/attribute pairing, and it is invisible from x86.
+
+---
+
+## 7. ★★★ "Map everything write-back in the VMM and let the host module impose UC where it needs it" — the owner's proposal, 2026-08-14, and the verdict
+
+Recorded here in full so it is not re-proposed from scratch. The proposal, as put:
+
+> *"Map everything write-back in the VMM, since the host NVIDIA module will already enforce
+> uncached where it needs to and that wins; and the guest will set it correctly anyway since
+> it thinks it is on real hardware."*
+
+It has **two independent claims**, and they do not stand or fall together.
+
+### 7.1 ★ Where it is RIGHT, and the code already agrees
+
+- **For sysmem the host GPU reaches by DMA** — rings, pushbuffers, semaphores, notifiers,
+  the RPC queue — **write-back is correct and it is the permissive choice.** On x86 PCIe DMA
+  snoops, so a write-back mapping of a page the GPU also touches is coherent with no explicit
+  flush (§1.1). The evidence in §4 is one-directional and overwhelming: 118×, 8.9×, ~100×,
+  2.76×, all from moving a host-RAM-backed mapping *to* write-back. Every production
+  `CachePolicy::WriteBack` site in `kayfabe-isolate-host` is of this class and every one of
+  them is right.
+- **The host NVIDIA module's own UC choice for a true register aperture should be inherited,
+  not second-guessed** — and structurally it *cannot* be second-guessed, which is the
+  stronger form of the same point: `mmap(2)` has no cacheability argument, so for a
+  `Backing::DeviceFile` the attribute is whatever `nv_encode_caching()` put in
+  `vma->vm_page_prot`, decided from the `NV_MEMORY_*` attribute fixed at allocation time.
+  `Backing::attainable_cache_policy()` returns `None` for that backing precisely to say so.
+  `rm.rs:2311-2320` states the same thing at the one call site where it bites:
+  > *"a hardcoded write-combining is right for a framebuffer object and **wrong for the
+  > doorbell**, which is a BAR0 register range NVIDIA maps uncached unconditionally"*
+
+⇒ So for **our own host mappings** the proposal is very nearly a description of what the code
+already does. That is not the half worth arguing about.
+
+### 7.2 ⊘ Where it FAILS — and this is the load-bearing correction
+
+The second claim — *"the guest will set it correctly since it thinks it is on real
+hardware"* — is a claim about **decider 3**, and it silently assumes decider 3 is *consulted*.
+
+**On Intel it is not.** For a normal-RAM-backed memslot KVM sets the EPT memory type with
+**`IPAT`**, and `IPAT` means the guest PTE is **discarded, not combined**. On **AMD NPT there
+is no `IPAT`** and the guest PTE is honoured (§1.1, quoting `src/guest/nvkvm_mmap.c:52-57`).
+
+⇒ **"Map write-back and let the guest decide" becomes "map write-back and impose write-back"
+on half the fleet.** The two readings are indistinguishable from the host, produce identical
+logs, and differ only in whether a guest that asks for uncached gets it.
+
+★★ **And that exact asymmetry already cost this project a full false green.** #111 was a
+guest PTE silently downgraded to `UC-`; on the Intel bench `IPAT` overrode it and everything
+passed, and on an AMD host the `UC-` stuck and the same code ran at **0.12 GB/s against 14
+GB/s** — correct results, one to two orders of magnitude slower, nothing logged. A rule
+justified by *"the guest will set it correctly"* is a rule whose failure mode is invisible on
+the machine most likely to be used for the test.
+
+> ### ⚠ AND A CORRECTION TO THE CORRECTION — the split may be KERNEL-VERSION dependent, not
+> ### purely vendor dependent, and this document does not know
+>
+> §1.1's Intel/AMD statement is sourced from a **2026-era C-repo comment**, not from a reading
+> of the KVM in the bench's kernel. Upstream KVM has changed when it sets `IPAT` for normal
+> RAM (the self-snoop / "honor guest PAT" work), so *"Intel ⇒ `IPAT` ⇒ the guest is
+> overridden"* is **believed here and not verified on this fleet**.
+>
+> ⊘ Do not treat it as measured. ★ **A ruling's DATE and its ARCHITECTURE are both part of the
+> citation**, and this one has neither pinned. §8's **arm 2** exists to settle it *by
+> measurement, per host, at run time* rather than by vendor lookup — and until it has run on
+> an Intel bench, the honest statement is: **the guest's choice may or may not be consulted,
+> we do not know which on any given host, and the design must not depend on the answer.**
+
+### 7.3 ⚠ arm64 — the proposal is an x86-only bet, and our portability commitment forbids leaving that implicit
+
+Everything in §7.1 rests on x86 facts. On arm64:
+
+- **Normal vs Device is a difference in kind, not degree** (§1.2). `Device-nGnRE` forbids
+  unaligned and multi-register access *architecturally* — a bulk copy that is merely slow on
+  x86 can **fault** there.
+- **Mismatched aliases are UNPREDICTABLE**, not merely slow. NVIDIA does not create them: on
+  x86 it re-types pages with `set_memory_uc`/`set_pages_uc` and restores write-back before
+  free; on arm64, which has no `set_memory_*`, it marks the allocation `flags.aliased` and
+  maps on demand (§2).
+- **DMA coherence is not guaranteed.** The snoop argument in §7.1 holds only on an IO-coherent
+  chipset; NVIDIA carries an explicit `flush_cache_all()` path for the rest, compiled for
+  aarch64 only.
+
+⇒ A blanket write-back policy is **an x86 bet**. It may still be the right bet — we ship x86
+first — but it must be *recorded as a bet*, because `support_matrix_asymmetry` commits us to
+Turing+ across architectures and the cost of discovering this at arm64 bring-up is a redesign
+of the mapping API, not a patch.
+
+### 7.4 ⚠ Mode 1 — the seam, written down before it is rediscovered
+
+The owner's own caveat, and it deserves more than a footnote. In **Mode 1** the guest runs a
+paravirt module **we wrote**. So *"the guest will set it correctly since it thinks it is on
+real hardware"* has no subject: the guest does not think anything we did not tell it, and the
+attribute is **ours to choose and ours to get wrong**.
+
+⇒ Record this as a **seam**, not a caveat: the Mode-1 guest module is a *fifth* decider in
+practice even though it is architecturally decider 3, because it is inside our trust boundary
+and inside our source tree. Any rule of the form *"the guest handles it"* is Mode-2-only and
+must say so at the point it is stated.
+
+### 7.5 Is a blanket write-back a SECURITY issue? — ⊘ UNVERIFIED ASSUMPTION, recorded as one
+
+The owner asked directly. **My reading is that it is not a confidentiality or integrity
+issue**, and the argument is short: *a caching attribute grants no access*. A write-back alias
+of a page the guest already owns adds no reach — the guest could already read and write those
+bytes; it now does so through a cache. There is no new object, no new mapping, no new
+capability.
+
+⊘ **But that is a reading, not a measurement, and it is stated here as an assumption so that
+nobody later cites this document as having settled it.** Three specific ways it could be
+wrong, each with the falsifier that would settle it:
+
+| the worry | why it is not obviously fine | what would settle it |
+|---|---|---|
+| **Mismatched-alias behaviour** — the same physical page mapped write-back by us and uncached by someone else | Intel's SDM warns that aliasing a page with different memory types *"may lead to undefined operations that can result in a system failure"*. On **arm64 it is architecturally UNPREDICTABLE** (§1.2). A guest-reachable path to a host machine check is an **availability** failure, and `hostile_guest_isolation_is_the_value_proposition` puts host availability squarely inside the threat model. | An enumeration of every page this design maps twice, with the two attributes named. Today the answer is believed to be "none" (§2: *"we never re-type pages, so we never create this hazard"*), but that is a claim about the **current** backings and it has no test. |
+| **Coherence, not caching** — a write-back host mapping of a page a non-IO-coherent GPU DMAs into | The host then parses **stale bytes** out of a page an attacker controls the timing of. That is an integrity question about our own parsing, not about the guest's access. x86 snooping makes it moot; arm64 does not. | An arm64 bring-up measurement, or an explicit refusal to support non-IO-coherent arm64. |
+| **Timing observability** — a cached alias is a faster and more stable side channel than an uncached one | Marginal: the guest already has cached mappings of its own RAM. But *"marginal"* is a judgement and the threat model does not currently contain a cache-side-channel section at all. | A decision in `SECURITY_MODEL.md` about whether cross-guest cache side channels are in scope. They are almost certainly out of scope for v1, but that should be **written**, not assumed. |
+
+⇒ **Status: my reading is "no C/I issue; an availability question that is unmeasured on both
+architectures".** Do not launder it into a settled fact, and do not cite §7.5 as clearance.
+
+---
+
+## 8. ★★★★★ The guest-side instrument (w312) — closing the gap §1.1 names
+
+§1.1 and `memtype.rs`'s header both end at the same wall:
+
+> *"Nothing in userspace can read a guest's effective type. A consumer that needs that answer
+> must measure it **in the guest**."*
+
+- **`scripts/bench/memtype_probe.c`** — the probe. One C file, no dependencies, compiled
+  **inside** the guest (`gcc`), the same delivery pattern as `cup3.c` and
+  `e2_doorbell_poke.c`. ⊘ Deliberately not Rust: the bench guest has no toolchain, and a
+  musl-static cross build would put a build system between the question and the answer.
+- **`scripts/bench/memtype_probe_hook.sh`** — the `POST_CAPTURE_HOOK` arm, with the three
+  pre-registered readings in its header.
+
+### 8.1 ★★★ The finding that shaped it: in the guest the three instruments are NOT co-equal
+
+`memtype.rs` has three instruments and says they are *"deliberately three, because each one
+alone has a way of being green while wrong"*. **That framing does not port unchanged.**
+
+- `/proc/iomem` and `pat_memtype_list`, read **inside the guest**, observe **decider 3 only** —
+  the guest kernel's own request and its own bookkeeping. They are structurally blind to
+  deciders 1 and 2 exactly as the host module is blind to 2 and 3. ⊘ **Two blind instruments
+  do not add up to sight.**
+- **The timing witness is the only instrument that observes the COMBINATION.** The CPU
+  resolves all three deciders in hardware; a load's latency *is* the resolution.
+
+⇒ The categorical half is not there to **corroborate** the timing half. It is there to
+**attribute** it. The timing says *what the type is*; the disagreement between the two says
+*which decider produced it*. **The pair is the measurement; neither alone is.**
+
+| guest record (iomem / PAT) | timed verdict | reading |
+|---|---|---|
+| `System RAM` / write-back | cached | consistent — nothing overrode the guest |
+| `System RAM` / write-back | uncached-class | ★★★ decider 1 or 2 forced UC. The guest believes it holds cached RAM and every access is a bus transaction. **A real problem** — this is the 0.12 GB/s shape. |
+| uncached / uncached-minus | cached | ★★★ the guest asked for uncached and did not get it. **Decider 2 DISCARDED the guest's choice** — on x86 that is `IPAT`. A register poll here can hang. **This is §7.2, measured.** |
+| uncached / uncached-minus | uncached-class | consistent — the guest's choice was honoured |
+
+★★ Rows 3 and 4 are the whole point of the exercise. *"Let the guest decide"* is a proposal
+about decider 3; **whether decider 3 is consulted at all** is what this table answers, per
+host, at run time, instead of per vendor from a comment written in another repo.
+
+### 8.2 ★★★★★ What it measured, and the correction it forces on `memtype.rs`'s own constants
+
+Run 2026-08-14 on the **local development box**, which is itself a **KVM guest on an AMD EPYC
+7543** — i.e. the "guest PTE is honoured" side of §7.2. Not the GA106 bench; no GPU involved.
+Verbatim:
+
+```
+region                 role                       guest record          timed                   ratio
+anon-wb                control:wb                 untracked/System RAM  cached                  1.0x
+control-mismatch       control:footprint-mismatch untracked/System RAM  inconclusive(in-band)   8.1x
+devmem-nonram          known-positive             uncached-minus        uncached-class        129.1x
+★ MEMTYPE PROBE regions=3 subjects=0 known_positive=FIRED controls_ok=categorical-available
+```
+
+**The known-positive fired, watched: 129.1× and `uncached-class`, on a region whose only
+difference from `anon-wb` is the mapping attribute** — same DRAM, same footprint, same
+stride, `/dev/mem` at an `ACPI Non-volatile Storage` range that x86 maps `UC-`. The probe
+reported two different answers, which is the whole of what a known-positive is for.
+
+★ **A second subject, and it is the one this project should look at twice.** Pointing the
+probe at an **emulated PCI BAR** in the same guest (`--pci 0000:00:03.0:1`, a virtio device):
+
+```
+pci:0000:00:03.0:bar1  subject  uncached-minus  uncached-class  8535.6x  0xc0082000
+```
+
+**8 535×** — two orders of magnitude beyond a real `UC` aperture, because every load is a VM
+exit into the VMM rather than a bus cycle. ⚠ That is the cost class of **our own emulated
+GPU's BAR0**, per 32-bit register read, and it is a number worth having in front of anyone
+designing a guest-side polling loop against `nvkvm_gpu_emul.c`. ⊘ It is *not* a cacheability
+finding — the record and the verdict agree, nothing is overridden, the guest asked for
+uncached and got it. It is a **trap-cost** finding that this instrument happens to be able to
+see, and it is recorded here rather than in a design doc only because this is where it was
+measured.
+
+> ### ★★★★★ AND THE THIRD ROW IS A CORRECTION TO `memtype.rs`
+>
+> `control-mismatch` is **ordinary write-back RAM** — 256 MiB of anonymous memory, one load
+> per page — judged against a 4 KiB reference. It measured **8.1×** (and **9.1×** on a second
+> run under a different uid). `memtype.rs` documents `Inconclusive(InTheBand)` as existing
+> because **a real device aperture came in at 9.1×** (task #150, 2026-08-01).
+>
+> ⇒ **Ordinary DRAM and a real uncached aperture produce the SAME ratio.** The band is not a
+> region of low confidence that a better floor would shrink — it is a region where two
+> genuinely different memory types **overlap**, and no choice of `UNCACHED_RATIO_FLOOR` can
+> separate them.
+>
+> ⇒ ⊘ **`UNCACHED_RATIO_FLOOR`, `CACHED_RATIO_CEILING` and `REFERENCE_SPREAD_CEILING` are
+> documented in `memtype.rs` as properties of the MEMORY TYPE. They are properties of the
+> COMPARISON**, and they hold only when the subject and the reference have the **same
+> footprint and the same stride**. `tests/effective_memtype.rs` happens to satisfy that (its
+> control and its BAR are the same shape), so the constants have never been wrong in practice —
+> but nothing states the requirement, and the next caller to time a large region against a
+> small reference gets a confident `UncachedClass` for write-back memory.
+>
+> ⇒ `memtype_probe.c` therefore measures a **fresh reference at the subject's own footprint**
+> for every region, and runs the mismatched comparison as a **standing control** so the
+> failure mode is exhibited on every run rather than trusted not to occur.
+
+### 8.3 ⊘ Two more things the probe found — both by refusing itself
+
+- **★★★★★ The first "known-positive" was not one, and the VOID gate caught it.** The probe
+  originally opened `/dev/mem` `O_RDONLY` and asserted, from `/proc/iomem` not calling the
+  range `System RAM`, that the mapping was `UC-` *by construction*. **It was write-back**, and
+  timed at **1.0×**. `drivers/char/mem.c` decides with `uncached_access()`, whose entire x86
+  test is `O_DSYNC` set, or the address above `high_memory` — the `/proc/iomem` label is not
+  consulted at all. ⇒ **A "known" positive that was reasoned rather than watched is a
+  hypothesis.** The probe exits **2 = VOID** when nothing fired, so the run was refused rather
+  than reported as three tidy write-back readings.
+- **The PAT list must be read WHILE THE MAPPING IS LIVE.** It records *reservations*, and the
+  reservation being asked about is the one the probe itself just created. A copy slurped at
+  startup answered `untracked` for the known-positive **while it was timing at 129×** — and
+  `untracked` reads as *"ordinary memory, so write-back"*, the permissive answer, for exactly
+  the region the probe exists to look at.
+
+### 8.4 The pre-registered bench arms — what a sibling should run, and what would mean trouble
+
+Run: `POST_CAPTURE_HOOK=scripts/bench/memtype_probe_hook.sh scripts/bench/boot_capture.sh <tag>`
+(`GQ_TIMEOUT >= 120`). It needs no GPU state, disturbs nothing, and is safe beside another arm.
+
+| arm | expected on the GA106 bench guest | what a different reading means |
+|---|---|---|
+| **1. controls** | `anon-wb` → `cached` ~1×; `devmem-nonram` → `uncached-class` ≥ 10×; `control-mismatch` → **not** `cached`; `known_positive=FIRED` | ⊘ `known_positive` not `FIRED` ⇒ **the run is VOID**, not green-with-a-caveat. ★★ `anon-wb` anything but `cached` is the **loud** result: guest RAM is where every ring, pushbuffer and semaphore we place lives, and `uncached-class` there is the 0.12-GB/s-with-correct-results shape. `control-mismatch` coming back `cached` would mean §8.2's correction has stopped being load-bearing. |
+| **2. the vendor question (§7.2)** | **no row** saying *"THE GUEST ASKED FOR UNCACHED AND GOT CACHED"* — the bench host is AMD, so the guest's choice should be honoured everywhere | ★★★ Such a row **on AMD** falsifies §1.1 for this fleet and voids every *"let the guest decide"* argument here. Running the same arm on an **Intel** host is how §7.2's ⚠ correction gets settled; a *present* row there confirms `IPAT` is live on that kernel, an *absent* one confirms it is not. |
+| **3. the NVIDIA BARs** (`KAYFABE_MEMTYPE_NVIDIA=1`) | the `mmap` arms report `EBUSY` while the module is loaded — a **refusal**, not an answer. The **categorical** half still answers and needs no `mmap`. | ★★★ **If the guest's PAT list records `uncached`/`uncached-minus` for the NVIDIA BAR0 range, the declared requirement at `rm.rs:1520` and `rm.rs:1731` is false** — see §8.5. |
+
+⊘ Arm 3's timing half needs the NVIDIA module unloaded (`e2_doorbell_witness.sh` does this).
+The hook deliberately does **not** unload it: doing so mid-capture changes what every other
+arm is measuring.
+
+### 8.5 ★★★ A contradiction this rung found and did NOT fix
+
+Two call sites declare `CachePolicy::WriteBack` while their own rustdoc argues **uncached**:
+
+- `crates/kayfabe-isolate-host/src/rm.rs:1500-1520` — `open_usermode`, the **BAR0 window the
+  doorbell store lands in**. The bullet is headed *"★★ `CachePolicy::WriteBack`, not
+  write-combining"* and its body then cites
+  `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)` — i.e. the evidence
+  says **uncached** and the conclusion says write-back. The heading rules out the wrong
+  alternative (write-combining) and then picks the other wrong one.
+- `crates/kayfabe-isolate-host/src/rm.rs:1708-1733` — **`map_object_uncached`**, whose first
+  doc line is *"CPU-map an already-allocated object, **uncached**"* and whose body passes
+  `CachePolicy::WriteBack`. ★ **The name is false**, which is the failure class
+  `refuse_by_name_means_the_name_is_true` was banked for.
+
+**Scope, honestly:** this is **not** a live runtime bug. `mmap(2)` cannot install a cache
+attribute, so for a `Backing::DeviceFile` the policy argument is **purely declarative** — the
+real attribute comes from `nv_encode_caching()` either way, and the doorbell path works
+because the declaration is inert. It is an **oracle** bug: `require_attainable` cannot refuse
+it (`DeviceFile` ⇒ `attainable == None`, and `an_unadjudicable_backing_accepts_every_policy`
+is that behaviour under test), and a future `memtype::require_effective` over that mapping
+would report `Downgraded { requested: WriteBack, effective: Uncached }` **for a correct
+mapping** — the check inverted.
+
+⊘ Not changed here: this rung is measurement, and `docs/design/mode2_doorbell_mapping.md:180-183`
+already rules that *"the doorbell call site must pass `Uncached`"*. The fix is a separate rung
+with its own falsifier, and **arm 3 above is that falsifier**: measure what the guest kernel
+records for the BAR0 range before editing the declaration to match a comment.
+
+⚠ Related and worth one line: **no production call site anywhere in the workspace requests
+`CachePolicy::Uncached`.** For a three-variant enum with no `Default`, whose whole purpose is
+to force each site to state its requirement, one variant being unreachable in production is
+either a fact about our mappings or a symptom of the above. It is currently unexamined.
