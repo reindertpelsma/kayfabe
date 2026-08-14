@@ -3256,19 +3256,24 @@ impl Crit1State {
     #[must_use]
     pub const fn why(self) -> &'static str {
         match self {
-            Crit1State::ArmNotSelected =>
-                "the deliberate-fault arm was not requested, so criterion 1 was never attempted",
-            Crit1State::ProbeNotBuilt =>
-                "the probe could not be constructed; nothing was submitted, so no fault exists",
-            Crit1State::ControlNeverLanded =>
+            Crit1State::ArmNotSelected => {
+                "the deliberate-fault arm was not requested, so criterion 1 was never attempted"
+            }
+            Crit1State::ProbeNotBuilt => {
+                "the probe could not be constructed; nothing was submitted, so no fault exists"
+            }
+            Crit1State::ControlNeverLanded => {
                 "the positive control did not land, so the deliberate fault was never issued \
-                 and any notifier that fired belongs to the CONTROL",
-            Crit1State::FaultProvokedAddressSilent =>
+                 and any notifier that fired belongs to the CONTROL"
+            }
+            Crit1State::FaultProvokedAddressSilent => {
                 "the fault WAS provoked but GET_MMU_FAULT_INFO gave no address, so this run \
-                 carries the fault's CODE and not its ADDRESS",
-            Crit1State::FaultProvokedAddressRead =>
+                 carries the fault's CODE and not its ADDRESS"
+            }
+            Crit1State::FaultProvokedAddressRead => {
                 "the fault was provoked AND the address plane answered — the VA-identity \
-                 comparison on this run is a measurement",
+                 comparison on this run is a measurement"
+            }
         }
     }
 }

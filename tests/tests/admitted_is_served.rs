@@ -749,7 +749,10 @@ fn the_probe_can_both_answer_and_decline() {
 #[test]
 fn the_w292_input_only_controls_are_claimed_and_decided() {
     use kayfabe_abi::submit::INPUT_ONLY_CONTROLS;
-    assert!(!INPUT_ONLY_CONTROLS.is_empty(), "the table must not be empty");
+    assert!(
+        !INPUT_ONLY_CONTROLS.is_empty(),
+        "the table must not be empty"
+    );
     for row in INPUT_ONLY_CONTROLS {
         assert!(
             kayfabe_rmrpc::OBJECT_CONTROLS.contains(&row.cmd),
@@ -832,7 +835,10 @@ fn every_committed_boot_tag_has_its_qemu_log() {
         let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
-        let Some(rest) = name.strip_prefix("run_").and_then(|s| s.strip_suffix(".log")) else {
+        let Some(rest) = name
+            .strip_prefix("run_")
+            .and_then(|s| s.strip_suffix(".log"))
+        else {
             continue;
         };
         // `run_<tag>_<suffix>.log` — the suffix is everything after the last `_`.
@@ -853,7 +859,10 @@ fn every_committed_boot_tag_has_its_qemu_log() {
     // carries four of these suffixes and is still named when its QEMU log is absent.
     let booted: BTreeMap<&String, &BTreeSet<String>> = tags
         .iter()
-        .filter(|(_, sfx)| sfx.iter().any(|s| BOOT_WITNESS_SUFFIXES.contains(&s.as_str())))
+        .filter(|(_, sfx)| {
+            sfx.iter()
+                .any(|s| BOOT_WITNESS_SUFFIXES.contains(&s.as_str()))
+        })
         .collect();
     assert!(
         booted.len() >= 40,
@@ -948,8 +957,14 @@ fn the_cuda_limit_pair_is_served_and_the_ioctl_id_is_not() {
 #[test]
 fn the_two_ids_w292_left_alone_are_not_in_the_input_only_table() {
     for (cmd, why) in [
-        (0x2080_200au32, "PERF_BOOST never reaches us — the guest's own nvidia.ko refuses it"),
-        (0x2080_012fu32, "a real GA106 also refuses it; our refusal AGREES with hardware"),
+        (
+            0x2080_200au32,
+            "PERF_BOOST never reaches us — the guest's own nvidia.ko refuses it",
+        ),
+        (
+            0x2080_012fu32,
+            "a real GA106 also refuses it; our refusal AGREES with hardware",
+        ),
     ] {
         assert!(
             kayfabe_abi::submit::input_only_control(cmd).is_none(),

@@ -148,10 +148,7 @@ fn only_a_provoked_fault_with_an_address_licenses_a_va_identity_claim() {
         Crit1State::FaultProvokedAddressSilent,
         Crit1State::FaultProvokedAddressRead,
     ];
-    let measured: Vec<_> = all
-        .iter()
-        .filter(|s| s.va_identity_is_measured())
-        .collect();
+    let measured: Vec<_> = all.iter().filter(|s| s.va_identity_is_measured()).collect();
     assert_eq!(
         measured,
         vec![&Crit1State::FaultProvokedAddressRead],

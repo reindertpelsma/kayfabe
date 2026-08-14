@@ -183,9 +183,9 @@ fn the_served_reply_carries_the_requests_own_byte_back() {
 fn a_wrong_params_size_is_refused_by_name() {
     let (_ioctl, set_control, disable) = PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES;
     for (cmd, bad) in [
-        (set_control, vec![0u8; 4]),  // the NvBool is ONE byte, not a word
-        (set_control, Vec::new()),    // and not zero
-        (disable, vec![0u8; 1]),      // the singleton list takes NOTHING
+        (set_control, vec![0u8; 4]), // the NvBool is ONE byte, not a word
+        (set_control, Vec::new()),   // and not zero
+        (disable, vec![0u8; 1]),     // the singleton list takes NOTHING
     ] {
         let n = bad.len();
         let r = answer(cmd, &bad)

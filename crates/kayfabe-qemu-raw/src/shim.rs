@@ -8930,7 +8930,9 @@ impl SharedDoorbell {
             ));
         }
         let Some(plane) = self.plane.upgrade() else {
-            return Some(format!("{head} → ⊘ NO PLANE. ⊘ Nothing was asked of the host"));
+            return Some(format!(
+                "{head} → ⊘ NO PLANE. ⊘ Nothing was asked of the host"
+            ));
         };
         let exports = match (self.exports.as_ref(), self.vas_publish.publishes()) {
             (Some(e), _) => Some(e),
@@ -9051,7 +9053,9 @@ impl SharedDoorbell {
         }
         Some(format!(
             "{}{head} → published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
-            pin_clause.map(|l| format!("{l}\nkayfabe: ")).unwrap_or_default(),
+            pin_clause
+                .map(|l| format!("{l}\nkayfabe: "))
+                .unwrap_or_default(),
             started.elapsed().as_millis(),
             if budget_hit {
                 format!(

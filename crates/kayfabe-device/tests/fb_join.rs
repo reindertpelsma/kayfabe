@@ -178,7 +178,11 @@ fn a_failed_establishment_copy_installs_no_join_at_all() {
     assert_eq!(e.0.why, ESTABLISH_FAILED, "refused by name");
     // ★ R1: the refusal must hand the region BACK so the caller can `munmap` it OUTSIDE the
     //   plane lock. `w289j` aborted the whole VMM because it did not.
-    assert_eq!(e.1.len(), LEN, "the refused region is returned to the caller, whole");
+    assert_eq!(
+        e.1.len(),
+        LEN,
+        "the refused region is returned to the caller, whole"
+    );
 
     assert!(fb.joined_ranges().is_empty(), "no range went live");
     let mut got = vec![0u8; 0x1000];

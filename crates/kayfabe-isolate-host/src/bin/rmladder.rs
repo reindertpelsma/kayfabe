@@ -2893,8 +2893,18 @@ fn ce_client(
             let _ = say(rm, "arm1 src", vas, e.src_va);
             let _ = say(rm, "arm1 dst", vas, e.dst_va);
         }
-        let _ = say(rm, "probe ctrlsrc", vas, kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0 + 0x10_0000);
-        let _ = say(rm, "probe ring", vas, kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0);
+        let _ = say(
+            rm,
+            "probe ctrlsrc",
+            vas,
+            kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0 + 0x10_0000,
+        );
+        let _ = say(
+            rm,
+            "probe ring",
+            vas,
+            kayfabe_isolate_host::rm::REACH_PROBE_WINDOW.0,
+        );
     } else {
         println!(
             "info  R33 arm 6 PTE-INFO  = NOT MEASURED — no CE channel is recorded over this \
@@ -3312,7 +3322,11 @@ fn rm_status_of(r: &kayfabe_linux_raw::census::IoctlRecord) -> RmStatus {
         r.reply[at + 2],
         r.reply[at + 3],
     ]);
-    if s == 0 { RmStatus::Ok } else { RmStatus::Refused(s) }
+    if s == 0 {
+        RmStatus::Ok
+    } else {
+        RmStatus::Refused(s)
+    }
 }
 
 /// ★★★★★ **THE MANDATORY KNOWN-POSITIVE for [`rm_status_of`]** — issue a call that MUST be
@@ -3339,9 +3353,7 @@ fn in_band_known_positive(rm: &mut HostRmBackend, subdevice: kayfabe_isolate::Ho
     let after = census::snapshot();
     let new: Vec<_> = after.log.iter().filter(|r| r.seq > before.total).collect();
     let seen = new.iter().map(|r| rm_status_of(r)).collect::<Vec<_>>();
-    let refused_in_band = seen
-        .iter()
-        .any(|s| matches!(s, RmStatus::Refused(_)));
+    let refused_in_band = seen.iter().any(|s| matches!(s, RmStatus::Refused(_)));
     let syscall_ok = new.iter().all(|r| r.errno == 0);
     if refused_in_band && syscall_ok {
         println!(

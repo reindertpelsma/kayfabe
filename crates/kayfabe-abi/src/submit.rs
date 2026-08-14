@@ -4215,7 +4215,10 @@ mod dma_pte_info_tests {
         .expect("encode");
         assert_eq!(&buf[0..8], &0x0000_0001_2000_0000u64.to_le_bytes());
         assert_eq!(&buf[176..180], &0xCAFE_0005u32.to_le_bytes());
-        assert!(buf[16..176].iter().all(|&b| b == 0), "the [OUT] area is ours to zero");
+        assert!(
+            buf[16..176].iter().all(|&b| b == 0),
+            "the [OUT] area is ours to zero"
+        );
     }
 
     /// ⊘⊘ **`pageSize == 0` outranks `VALID`.** An unwritten block is all zeros, which reads
@@ -4439,7 +4442,6 @@ impl DmaGetPdeInfoParams {
             .find(|b| b.describes_a_page_table())
     }
 }
-
 
 /// ★★★★★ **w292 — THE INPUT-ONLY CONTROLS, AND THE AUTHORITY FOR EACH.**
 ///

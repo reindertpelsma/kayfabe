@@ -125,7 +125,11 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
     let c = dev.vas_publish_census(a_pid, GpuId::ZERO, A_PDB, 16);
     assert!(c.buckets_sum(), "every row in exactly one bucket: {c:?}");
     assert_eq!(c.total, 4, "{c:?}");
-    assert_eq!(c.candidates_total(), 1, "exactly the granular Vidmem row: {c:?}");
+    assert_eq!(
+        c.candidates_total(),
+        1,
+        "exactly the granular Vidmem row: {c:?}"
+    );
     assert_eq!(
         c.candidates,
         vec![(0x8000_0000, GRANULE, 0x1000_0000 + 0x8000_0000)],
@@ -202,7 +206,8 @@ fn a_promote_bind_is_never_host_backed() {
         "⊘ every row must carry the pin count too — one field is not the host VAS: {published:?}"
     );
     assert_eq!(
-        dev.vas_publish_census(a_pid, GpuId::ZERO, A_PDB, 16).already_pinned,
+        dev.vas_publish_census(a_pid, GpuId::ZERO, A_PDB, 16)
+            .already_pinned,
         0,
         "no pin exists in this world, and the bucket says so rather than being absent"
     );
@@ -332,7 +337,9 @@ fn the_merge_equality_is_reported_and_holds_with_no_pins() {
     // ★ And say out loud that this arm proved nothing about the comparison, so the green is
     // not read as covering it. The numbers are printed so a reader can check the claim.
     assert!(
-        published.iter().all(|r| r.contains("host_rows=0") && r.contains("pins=0")),
+        published
+            .iter()
+            .all(|r| r.contains("host_rows=0") && r.contains("pins=0")),
         "⊘ if this ever stops being `0 >= 0` the arm has silently become a real check and \
          this doc comment is lying: {published:?}"
     );

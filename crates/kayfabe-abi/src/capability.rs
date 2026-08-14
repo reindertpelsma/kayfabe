@@ -2667,7 +2667,10 @@ mod tests {
         // wrong everywhere else.
         for t in ALL_BOUNDARIES {
             assert!(
-                matches!(t.alloc_class(ClassId(0x0000_83de)), AllocPermit::Listed { .. }),
+                matches!(
+                    t.alloc_class(ClassId(0x0000_83de)),
+                    AllocPermit::Listed { .. }
+                ),
                 "GT200_DEBUGGER is not admitted at every boundary — the row did not go into \
                  the SHARED base"
             );

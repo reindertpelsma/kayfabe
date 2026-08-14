@@ -3110,8 +3110,14 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     assert_eq!(vas_publish_from(None), Ok(VasPublishArm::Off));
     assert_eq!(vas_publish_from(Some("off")), Ok(VasPublishArm::Off));
     assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
-    assert_eq!(vas_publish_from(Some("publish")), Ok(VasPublishArm::Publish));
-    assert_eq!(vas_publish_from(Some("pinrate")), Ok(VasPublishArm::PinRate));
+    assert_eq!(
+        vas_publish_from(Some("publish")),
+        Ok(VasPublishArm::Publish)
+    );
+    assert_eq!(
+        vas_publish_from(Some("pinrate")),
+        Ok(VasPublishArm::PinRate)
+    );
     assert_eq!(vas_publish_from(Some("both")), Ok(VasPublishArm::Both));
     assert_eq!(vas_publish_from(Some("drain")), Ok(VasPublishArm::Drain));
     for bad in ["on", "1", "true", "yes", "", "Publish"] {
