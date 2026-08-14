@@ -46,7 +46,11 @@ set -uo pipefail
 MODE="${1:-}"
 case "$MODE" in
   concurrent|staggered) ;;
-  *) echo "usage: $0 concurrent|staggered" >&2; exit 64 ;;
+  # ⊘ `solo` is NOT an arm of the question — it is the BEACON CONTROL. The concurrent arm
+  #   measured a 1.221 s beacon gap, and a gap has no meaning without a one-process baseline
+  #   taken through the SAME instrument. Same hook, same arming, ONE cup3.
+  solo) ;;
+  *) echo "usage: $0 concurrent|staggered|solo" >&2; exit 64 ;;
 esac
 
 REPO=${KAYFABE_REPO:-/workspace/kayfabe_w299}
@@ -68,134 +72,18 @@ Q=/workspace/bench/run_${KAYFABE_TAG}_qemu.log
 P=/workspace/bench/run_${KAYFABE_TAG}_probe.log
 D=/workspace/bench/run_${KAYFABE_TAG}_hostdmesg.log
 
-{
-echo ""
-echo "================================================================================"
-echo "=== ★★★★★ W299 GRADING — TWO PROCESSES, mode=$MODE  inner_rc=$BRC  $(date -Is)"
-echo "================================================================================"
-echo ""
-echo "=== (F) ATTRIBUTION PRECONDITIONS"
-echo "    JIT present       = [$(grep -oE 'CUP3X2_JIT_PRESENT=(yes|no)' "$P" 2>/dev/null | tail -1)]"
-echo "    stagger achieved  = [$(grep -oE 'CUP3X2_STAGGER_ACHIEVED=[a-zA-Z-]+' "$P" 2>/dev/null | tail -1)]"
-echo "    ⊘ on mode=staggered a value of 'no-A-already-past' means B did NOT start inside A's"
-echo "      cuCtxCreate — the arm did not land, and a green here does not answer the #14 shape."
-echo ""
-echo "=== ★★★★★ THE METRICS — ^ANCHORED and SEPARATELY IDENTIFIABLE PER PROCESS"
-echo "===     ⊘ a grader that cannot tell A's value from B's is the substitution failure itself."
-AV=$(grep -oE '^CUP3A_VAL=[0-9]+' "$P" 2>/dev/null | tail -1)
-BV=$(grep -oE '^CUP3B_VAL=[0-9]+' "$P" 2>/dev/null | tail -1)
-AR=$(grep -oE '^CUP3A_RC=[0-9]+' "$P" 2>/dev/null | tail -1)
-BR=$(grep -oE '^CUP3B_RC=[0-9]+' "$P" 2>/dev/null | tail -1)
-echo "--- ★★★★★ ${AV:-⊘ NO LINE BEGINS WITH CUP3A_VAL= — A's MEASUREMENT DID NOT HAPPEN. ⊘ NOT 0.}"
-echo "--- ★★★★★ ${BV:-⊘ NO LINE BEGINS WITH CUP3B_VAL= — B's MEASUREMENT DID NOT HAPPEN. ⊘ NOT 0.}"
-echo "--- ★★★★  ${AR:-⊘ NO LINE BEGINS WITH CUP3A_RC= — no terminator was written for A.}"
-echo "--- ★★★★  ${BR:-⊘ NO LINE BEGINS WITH CUP3B_RC= — no terminator was written for B.}"
-echo "    kernel lines, verbatim:"
-grep -hE '^CUP3[AB]_KERNEL_LINE=' "$P" 2>/dev/null | sed 's/^/      /'
-echo "    UNANCHORED, for contrast = [$(grep -oh 'CUP3[AB]_RC=[0-9]*' "$P" 2>/dev/null | tr '\n' ' ')]"
-echo "    ⊘ a bare CUP3_VAL= is deliberately NEVER emitted by this rung's hook."
-echo ""
-echo "=== ★★★★★ THE VERDICT, stated once, in the pre-registered vocabulary"
-A=${AV#CUP3A_VAL=}; B=${BV#CUP3B_VAL=}
-CTXA=$(grep -c '^    ✔ A CTX OK' "$P" 2>/dev/null)
-CTXB=$(grep -c '^    ✔ B CTX OK' "$P" 2>/dev/null)
-SDP=$(grep -c 'SystemDataPlane' "$Q" 2>/dev/null)
-if [ "$SDP" -gt 0 ]; then
-  echo "    ⚠ SystemDataPlane mentions in the qemu log = $SDP — see the (E) section below"
-fi
-if [ "$A" = 43 ] && [ "$B" = 43 ]; then
-  echo "    (A) ★★★★★ BOTH PROCESSES COMPUTED. 43 twice, from two separately-identified processes."
-  echo "        ⊘ ONE SHAPE ONLY: two identical short workloads. NOT a multi-tenancy claim."
-elif { [ "$A" = 43 ] && [ "$B" != 43 ]; } || { [ "$B" = 43 ] && [ "$A" != 43 ]; }; then
-  W=B; [ "$B" = 43 ] && W=A
-  echo "    (B) ★★★ ONE CROSSED, ONE DID NOT. The one that did NOT is [$W]."
-  echo "        ⊘ THIS IS NOT 'mostly working'. Its wait is named in the DIAG block below."
-  if [ "$W" = B ] && [ "${CTXB:-0}" = 0 ]; then
-    echo "    (D) ★★★★★ AND B NEVER REACHED 'CTX OK' — it failed at cuCtxCreate/allocation."
-    echo "        ⇒ THIS IS THE C's #14 SHAPE REPRODUCING. Name the refusal."
-  fi
-elif [ -z "$A" ] && [ -z "$B" ]; then
-  echo "    (C) ★★★★★ BOTH UNMEASURED — the second process broke the first."
-  echo "        ⊘ STRONGER than (B), not weaker. Read the beacon: global freeze or two waits?"
-else
-  echo "    ⚠ MIXED / NON-LADDER VALUES — A=[${A:-UNMEASURED}] B=[${B:-UNMEASURED}]. Reported raw."
-fi
-echo "    reached CTX OK: A=[$([ "${CTXA:-0}" != 0 ] && echo yes || echo NO)] B=[$([ "${CTXB:-0}" != 0 ] && echo yes || echo NO)]"
-echo ""
-echo "=== ★ THE STAGE LADDERS, BOTH PROCESSES, as the hook recorded them"
-grep -E '^    [✔✘] [AB] ' "$P" 2>/dev/null | sed 's/^/    /'
-echo "=== ★ each process's own FAIL line, if it named its failure"
-grep -hE '^ *FAIL ' "$P" 2>/dev/null | sed 's/^/    /'
-echo ""
-echo "=== ★★★★★ THE BEACON VERDICT — GLOBAL FREEZE (BQL) vs PER-PROCESS WAIT"
-echo "===     ⊘ this is the whole diagnostic value of the rung; a bare timeout cannot separate them."
-sed -n '/THE BEACON — DID THE WHOLE GUEST STOP/,/^=== ★★ GUEST dmesg/p' "$P" 2>/dev/null | sed 's/^/    /'
-echo ""
-echo "=== ★★ THE LIVE DIAGNOSTIC — what the stalled process was waiting on"
-echo "===     ⊘ a hang with a NAMED wait beats a hang with a timeout."
-sed -n '/ONE PROCESS TERMINATED AND THE OTHER DID NOT/,/beacon state AT THIS MOMENT/p' "$P" 2>/dev/null | head -80 | sed 's/^/    /'
-echo "    DIAG blocks present = [$(grep -c 'DIAG for cup3' "$P" 2>/dev/null)] (0 ⇒ never fired: either both finished or both hung)"
-echo ""
-echo "=== ★★ DIRECT PER-PROCESS LIVENESS (⊘ never inferred from an empty file)"
-grep -hE 'CUP3[AB]_WRAPPER=|CUP3[AB]_OUT_BYTES=|LIVE_CUP3_PIDS=' "$P" 2>/dev/null | sed 's/^/    /'
-echo ""
-echo "=== ★★ GUEST dmesg — soft-lockup / RCU stall / hung task / NVRM / Xid"
-echo "===     ★ a soft-lockup or RCU stall is STRONG evidence for a BQL-held stall."
-grep -iE 'soft lockup|softlockup|rcu.*stall|hung task|blocked for more than|watchdog:' "$P" 2>/dev/null | head -20 | sed 's/^/    /'
-echo "    matches = [$(grep -icE 'soft lockup|softlockup|rcu.*stall|hung task|blocked for more than' "$P" 2>/dev/null)]"
-echo ""
-echo "=== (E) REGRESSION CHECK — cup2/cup3's established values are Xid=0 and host_rows 18295/18309"
-echo "===     ⚠ printed EVEN ON A GREEN: a pass that regressed the address plane is not a pass."
-if [ -e "$D" ]; then
-  echo "    Xid count = [$(grep -c Xid "$D")]   (host dmesg DELTA file exists, $(stat -c%s "$D") bytes)"
-  grep -E 'Xid' "$D" 2>/dev/null | head -6 | sed 's/^/      /'
-else
-  echo "    Xid count = [⊘ NO HOST DMESG FILE AT ALL — UNMEASURED. ⊘ NOT zero.]"
-fi
-echo "    host_rows, every distinct reading:"
-grep -oE 'host_rows=[0-9]+ of [0-9]+' "$Q" 2>/dev/null | sort -u | sed 's/^/      /'
-echo ""
-echo "=== (E) NAMED REFUSALS — SystemDataPlane and every other FwdFault, by name"
-echo "    SystemDataPlane mentions = [$SDP]"
-grep -o 'SystemDataPlane[^ ]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -10 | sed 's/^/      /'
-echo "    every FwdFault variant seen:"
-grep -oE 'FwdFault::[A-Za-z]+' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
-echo "    ⊘REFUSED, by name:"
-grep -o '⊘REFUSED `[^`]*`' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -20 | sed 's/^/      /'
-echo ""
-echo "=== ★ THE UNSERVICED LEDGER — cup3's single-process baseline was 40 distinct ids"
-grep -ho 'unserviced fn 76 cmd 0x[0-9a-f]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -30 | sed 's/^/      /'
-echo "      distinct ids = [$(grep -ho 'unserviced fn 76 cmd 0x[0-9a-f]*' "$Q" 2>/dev/null | sort -u | wc -l)]"
-echo "    ⊘ an id appearing HERE and not in the single-process baseline is a MULTI-PROCESS-"
-echo "      specific demand, which is the most likely shape of a new wall."
-echo ""
-echo "=== ★ DOORBELLS BY ENGINE — two processes should show MORE work, not the same"
-grep -o 'by engine: .*' "$Q" 2>/dev/null | tail -2 | sed 's/^/      /'
-echo "      ⊘ if the line above is ABSENT the summary never printed — UNMEASURED, not zero."
-echo "      per-doorbell routing tally (independent of the summary line):"
-grep -ho 'engine=[A-Za-z]*' "$Q" 2>/dev/null | sort | uniq -c | sort -rn | sed 's/^/        /'
-echo ""
-echo "=== ★★ HOW MANY DISTINCT GUEST PROCESSES DID THE DEVICE SEE?"
-echo "===     ⊘ if this is 1, the two guest processes were NOT distinguished by us and every"
-echo "===       per-process claim below is unattributable."
-grep -oE 'proc=[0-9]+' "$Q" 2>/dev/null | sort -u | head -20 | sed 's/^/      /'
-echo "      distinct proc= values = [$(grep -oE 'proc=[0-9]+' "$Q" 2>/dev/null | sort -u | wc -l)]"
-grep -oE 'pdb=0x[0-9a-f]+' "$Q" 2>/dev/null | sort -u | head -20 | sed 's/^/      /'
-echo "      distinct pdb= values  = [$(grep -oE 'pdb=0x[0-9a-f]+' "$Q" 2>/dev/null | sort -u | wc -l)]"
-echo ""
-echo "=== ⊘ EVERY RELAXATION THAT WAS ON — a relaxed green is a MAP, not the milestone"
-for v in KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_FB_JOIN KAYFABE_VAS_PUBLISH \
-         KAYFABE_GR_ROUTE KAYFABE_GUEST_RING KAYFABE_GUEST_PUSHBUF KAYFABE_GUEST_SEMA \
-         KAYFABE_GUEST_OPERAND KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR; do
-  echo "    $v = [$(grep -oE "$v=[a-z]+" "$OUT" 2>/dev/null | tail -1)]"
-done
-echo ""
-echo "=== ★★ HARNESS SELF-CHECK — assert THIS block's own output exists"
-echo "    w299 grading lines = [$(grep -c 'W299 GRADING' "$OUT" 2>/dev/null)]  (MUST be >= 1)"
-echo "    qemu log bytes     = [$(stat -c%s "$Q" 2>/dev/null || echo MISSING)]"
-echo "    probe log bytes    = [$(stat -c%s "$P" 2>/dev/null || echo MISSING)]"
-echo "    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check."
-echo "=== W299 EXIT rc=$BRC mode=$MODE at $(date -Is) ==="
-} >>"$OUT" 2>&1
+# ⊘⊘ GRADING LIVES IN `w299_grade.sh`, NOT HERE — and that split was PAID FOR.
+#
+# The first concurrent run graded inline and **printed `CUP3A_VAL=43` and no `CUP3B_VAL` line
+# at all**, while the probe log held `CUP3B_VAL=43` and the verdict logic read it correctly.
+# Cause: an apostrophe inside a `${VAR:-default}` opens a single-quoted region in bash which
+# ran to the apostrophe in the NEXT line's default, swallowing that whole `echo`. `bash -n`
+# accepts it; `dash` prints both lines. ⇒ the defect was in the text of the
+# "THE MEASUREMENT DID NOT HAPPEN" fallbacks, so a genuinely MISSING value would have printed
+# NOTHING — not even the warning written to catch it. See `w299_grade.sh` for the full note.
+#
+# ⇒ A standalone grader also means a boot can be RE-GRADED from its logs without re-booting,
+#   which is what let the defective run be recovered instead of repeated.
+"$REPO/scripts/bench/w299_grade.sh" "$KAYFABE_TAG" >>"$OUT" 2>&1
 
 exit "$BRC"

@@ -73,8 +73,13 @@ MODE=${KAYFABE_CUP3X2_MODE:-concurrent}
 die() { echo "★ cup3x2 hook FAILED: $*"; exit 2; }
 
 case "$MODE" in
-  concurrent|staggered) ;;
-  *) die "KAYFABE_CUP3X2_MODE must be concurrent|staggered, got [$MODE]" ;;
+  concurrent|staggered) NEED_B=yes ;;
+  # ⊘ `solo` is the BEACON CONTROL, not an arm: ONE cup3, same hook, same arming, same beacon.
+  #   A beacon gap measured with two processes means nothing without a one-process baseline
+  #   taken through the SAME instrument. B's rows below will read NO_RC_FILE / NO_KERNEL_LINE,
+  #   and that is CORRECT for this mode — B was never launched.
+  solo) NEED_B=no ;;
+  *) die "KAYFABE_CUP3X2_MODE must be concurrent|staggered|solo, got [$MODE]" ;;
 esac
 
 echo "=== ★★★★★ w299 — TWO CONCURRENT CUDA PROCESSES.  MODE=$MODE  $(date -Is) ==="
@@ -204,7 +209,10 @@ echo ""
 echo "=== ★★★★★ LAUNCH — mode=$MODE, each under its own ${CUP3_TIMEOUT}s timeout ==="
 echo "    ⊘ NOT comparable to the cup2 180 s baseline — a different program, a longer bound."
 STAGGER_ACHIEVED=n/a
-if [ "$MODE" = concurrent ]; then
+if [ "$MODE" = solo ]; then
+  echo "    ⊘ BEACON CONTROL: launching A ONLY. B is deliberately never started."
+  $G 'sh /tmp/run_cup3_one.sh A '"$CUP3_TIMEOUT" 2>&1 | sed 's/^/    /'
+elif [ "$MODE" = concurrent ]; then
   echo "    both launched back-to-back in ONE ssh call (skew ~0.3 s)"
   $G 'sh /tmp/run_cup3_one.sh A '"$CUP3_TIMEOUT"'; sh /tmp/run_cup3_one.sh B '"$CUP3_TIMEOUT" 2>&1 | sed 's/^/    /'
 else
@@ -246,6 +254,10 @@ for i in $(seq 1 "$LIMIT"); do
     echo "    [~$((i*10))s] A: ${NA:-<no output yet>}"
     echo "    [~$((i*10))s] B: ${NB:-<no output yet>}"
     LASTA="$NA"; LASTB="$NB"
+  fi
+  if [ "$NEED_B" = no ]; then
+    if [ "$RCA" = yes ]; then echo "    ✔ A terminator present after ~$((i*10))s (solo control)"; break; fi
+    sleep 10; continue
   fi
   if [ "$RCA" = yes ] && [ "$RCB" = yes ]; then
     echo "    ✔ BOTH terminators present after ~$((i*10))s"; break
