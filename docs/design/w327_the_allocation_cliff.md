@@ -108,6 +108,16 @@ refuted.** I pre-registered *"`4,64` moves the region, therefore it fails"*; it 
 ⇒ **Minimal reproducer: `KAYFABE_BENCH_BW=28,31` — two rows** (`w327u2`). A two-row device log
 is readable; the nine-row one this started from is not.
 
+### 2.2 ★ n = 3 ON THE FAILURE ITSELF — it is deterministic, not a rate
+
+`w327f1`, `w327f2`, `w327f3`: three identical boots of `28,31`. **3/3** report
+`W327_LAST_OK_MIB=28  W327_FIRST_FAIL_MIB=31`, with
+`BW_FILL_FAIL mib=31 at_element=2097152 … rc=0/719` and **zero Xid on both sides**, every time.
+⊘ Stated because it is the failure mode this campaign has been burned by twice (w319's
+intermittent `FAULT_PDE`): a state-dependent death with no Xid and no named refusal is exactly
+the shape that turns out to be a rate. **Here it is not.** With `w327u2` that is four boots of
+the same two-row list, all failing identically.
+
 ## 3. The mechanism — ⊘ STILL UNATTRIBUTED. What follows is a candidate and its evidence, and
 ## the section ends by saying why the evidence does not yet close.
 
@@ -244,6 +254,28 @@ because there is no ceiling to raise: the defect is that a published range has n
 ★ **The cheapest falsifier for that fix, already built:** `KAYFABE_BENCH_BW=28,31` must stop
 failing, `PUBCONFLICT_VAS[n=…]` must fall from 1339 toward 0, and `w327u4`'s `4,64` must
 still pass. Three numbers, one boot each.
+
+## 6.1 ★★★★★ CORRECTNESS ABOVE THE OLD "CEILING" — it does not merely allocate, it COMPUTES
+
+The brief's sharpest requirement: *"a raised ceiling must be shown to still COMPUTE CORRECTLY
+at the new size, not merely to allocate. A big allocation that returns success and produces
+wrong values is the worse failure."* Since the ceiling turned out not to exist, the equivalent
+statement is *does a size above w322's claimed 32 MiB compute bit-exactly*.
+
+`w327big` — cup8 at **N = 3072**, i.e. three **36 MiB** operands (3072² × 4 B = 37 748 736 B),
+one CUDA context, three timed iterations, every one verified:
+
+```
+B3072_MAXERR=0
+BSUM N=3072 iters=3 med_ms=1713.958 gflops=33.829 … bad=0 maxerr=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+GUEST_BENCH_TOTAL_BAD=0  GUEST_SIZES_DONE=1  GUEST_XID_COUNT=0   host Xid = 0
+```
+
+⇒ **`bad=0 maxerr=0` on 36 MiB operands — bit-exact, on a size w322 reported as fatal.** ⊘ And
+note what this does *not* say: cup8 allocates its three buffers once and keeps them, so it
+never performs the allocate → free → allocate-elsewhere sequence §2.1 identifies. It is
+evidence that the size is fine, and it is **not** evidence that the defect is gone.
 
 ## 7. ⊘ WHAT THIS RUNG DID NOT DO, AND WHY
 

@@ -24,6 +24,9 @@ the **print-only** `PUBCONFLICT_VAS` diagnostic and changes nothing else.
 | `w327x1b` | `28,64` | ★★★★★ the single-variable pair against `w327u4` |
 | `w327x2` | `16,31` | w322's own predecessor size, in two rows |
 | `w327f1..3` | `28,31` | n=3 on the failure, with `PUBCONFLICT_VAS` armed |
+| `w327u4b` | `4,64` | the PASSING control for `PUBCONFLICT_VAS` (u4 predates the diagnostic) |
+| `w327z1` | `28,31`, `FILL_CHUNK=1 MiB` | ★ bisect the failure offset — `at_element=2097152` is the *harness's* chunk, not an address |
+| `w327z2` | `28,31`, `FILL_CHUNK=2 MiB` | a second resolution, so a chunk-dependent artefact shows as one |
 | `w327big` | cup8 `N=3072` | ★ bit-exact **above** w322's claimed 32 MiB ceiling |
 | `w327v3*`, `w327v8*`, `w327vr*` | — | the three-workload grading ladder, n=3 |
 
