@@ -115,37 +115,47 @@ fn is_unanchored_cup2_read(line: &str) -> bool {
     if !line.contains("CUP2_RC") {
         return false;
     }
-    // Only greps read it; an `echo "CUP2_RC=..."` is a producer, not a consumer.
-    if !line.contains("grep") && !line.contains("first ") {
+    // ⊘⊘ **ONLY AN *EXTRACTING* READ CAN HIDE THE PREFIX.** `grep -o` prints the MATCH, so
+    // `GCC_CUP2_RC=0` comes out as `CUP2_RC=0` and the ambiguity becomes invisible. A plain
+    // `grep -E '…|CUP2_RC=|…'` prints the whole LINE, prefix and all, and the reader can see
+    // which one it is — those are the multi-metric display greps in `w269_run.sh:173` and
+    // friends, and flagging them would be a false positive on a line that is not lying.
+    // `first`/`last` are the grade scripts' own `grep -m1 -oE` / `grep -oE | tail -1` helpers.
+    let extracting = line.contains("grep -o")
+        || line.contains("first \"")
+        || line.contains("first $")
+        || line.contains("last \"");
+    if !extracting {
         return false;
     }
     if line.to_ascii_lowercase().contains("contrast") {
         return false;
     }
-    // Every occurrence in the line must be safe — a line that anchors one read and not the
-    // other is exactly `w290p_run.sh`'s `strict=`/`loose=` pair, and only the first is a
-    // verdict. Occurrences are examined by the two characters in front of them.
+    // ★ **ANY anchored occurrence makes the line safe.** The tree's standard idiom is a
+    // two-stage pipeline — `grep -oE '(^|[^A-Z_])CUP2_RC=…' | grep -oE 'CUP2_RC=…'` — whose
+    // second stage re-extracts the match text from output the FIRST stage already filtered.
+    // ⊘ An earlier version of this rule demanded that *every* occurrence be anchored and
+    // flagged thirteen correct lines, which is how a gate earns its own deletion.
     let bytes = line.as_bytes();
     let mut idx = 0;
-    let mut any_unsafe = false;
+    let mut bare = false;
+    let mut anchored = false;
     while let Some(hit) = line[idx..].find("CUP2_RC") {
         let at = idx + hit;
         idx = at + "CUP2_RC".len();
-        // `GCC_CUP2_RC` and friends: a different identifier.
+        // `GCC_CUP2_RC` and `[A-Z_]*CUP2_RC`: a different identifier, or a prefix-preserving
+        // pattern whose own output shows which one matched.
         if at > 0 && matches!(bytes[at - 1], b'A'..=b'Z' | b'_' | b'*') {
             continue;
         }
-        // `^CUP2_RC` — the regex anchor immediately in front.
-        if at > 0 && bytes[at - 1] == b'^' {
+        // `^CUP2_RC` — the regex anchor immediately in front — or the boundary alternation.
+        if (at > 0 && bytes[at - 1] == b'^') || line[..at].ends_with("(^|[^A-Z_])") {
+            anchored = true;
             continue;
         }
-        // `(^|[^A-Z_])CUP2_RC` — the boundary alternation.
-        if line[..at].ends_with("(^|[^A-Z_])") {
-            continue;
-        }
-        any_unsafe = true;
+        bare = true;
     }
-    any_unsafe
+    bare && !anchored
 }
 
 /// The classifier's own known-positives and known-negatives, **quoted from the tree**, asserted
@@ -174,6 +184,10 @@ fn the_anchor_classifier_bites_the_line_that_actually_shipped() {
         r#"echo "    UNANCHORED, for contrast = [$(grep -oh 'CUP2_RC=[0-9]*' "$P" 2>/dev/null)]""#,
         r#"echo "        GCC_CUP2_RC    = [$(grep -oE 'GCC_CUP2_RC=[0-9]+' "$P" 2>/dev/null)]""#,
         r#"grep -oE '[A-Z_]*CUP2_RC=[A-Z0-9_]+' "$P" 2>/dev/null | sort | uniq -c"#,
+        // ⊘ A DISPLAY grep, not an extraction: no `-o`, so the printed line carries whatever
+        // prefix was there and the reader can see it. Flagging this was the classifier's own
+        // first false positive, on 13 lines.
+        r#"  grep -E 'POLLED ADDRESS|SNAPSHOT at|CUP2_RC=|SPINPROBE_RC=' "$P" | sed 's/^/  /'"#,
         r#"# ⊘⊘ `grep -o 'CUP2_RC=[0-9]*'` ALSO matches `GCC_CUP2_RC=0`, the compiler's status"#,
         r#"echo "CUP2_RC=$rc""#,
     ] {
@@ -353,6 +367,58 @@ fn every_bench_scripts_boot_tag_can_be_changed_by_its_caller() {
 /// ⊘ Heredoc bodies are skipped: a `<<EOF` payload containing a column-0 `exit 0` is data, not
 /// control flow, and treating it as a terminator would make this gate fire on the scripts that
 /// *write* other scripts.
+/// Does this script end in a top-level `exit`/`finish` at all? The non-vacuity question for
+/// [`statements_after_the_terminator`], answered by **that function's own** search rather than
+/// by a second one beside it.
+#[must_use]
+fn has_top_level_terminator(src: &str) -> bool {
+    last_top_level_terminator(src).is_some()
+}
+
+/// The index of the last top-level, non-heredoc `exit`/`finish` line, if any.
+#[must_use]
+fn last_top_level_terminator(src: &str) -> Option<usize> {
+    let lines: Vec<&str> = src.lines().collect();
+    let heredoc = heredoc_mask(&lines);
+    let is_terminator = |l: &str| {
+        let w = l.split_whitespace().next().unwrap_or("");
+        w == "exit" || w == "finish"
+    };
+    (0..lines.len()).rev().find(|&i| {
+        !heredoc[i] && !lines[i].starts_with(char::is_whitespace) && is_terminator(lines[i])
+    })
+}
+
+/// Per-line: is this line inside a heredoc BODY?
+#[must_use]
+fn heredoc_mask(lines: &[&str]) -> Vec<bool> {
+    let mut in_heredoc: Vec<bool> = vec![false; lines.len()];
+    let mut delimiter: Option<String> = None;
+    for (i, line) in lines.iter().enumerate() {
+        if let Some(d) = delimiter.clone() {
+            in_heredoc[i] = true;
+            if line.trim() == d {
+                delimiter = None;
+            }
+            continue;
+        }
+        if let Some(pos) = line.find("<<") {
+            let tail = &line[pos + 2..];
+            let tail = tail.strip_prefix('-').unwrap_or(tail);
+            let word: String = tail
+                .trim_start()
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '"' || *c == '\'')
+                .filter(|c| *c != '"' && *c != '\'')
+                .collect();
+            if !word.is_empty() {
+                delimiter = Some(word);
+            }
+        }
+    }
+    in_heredoc
+}
+
 #[must_use]
 fn statements_after_the_terminator(src: &str) -> Vec<(usize, String)> {
     let lines: Vec<&str> = src.lines().collect();
@@ -452,23 +518,27 @@ fn no_bench_scripts_grading_block_sits_below_its_own_exit() {
     let mut terminated = 0usize;
     let mut offenders = Vec::new();
     for (name, src) in &scripts {
-        let lines: Vec<&str> = src.lines().collect();
-        if lines
-            .iter()
-            .any(|l| !l.starts_with(char::is_whitespace) && l.starts_with("exit"))
-        {
+        // ⊘ Counted with the CLASSIFIER'S OWN predicate, not a second one. The first version
+        // of this line asked `starts_with("exit")` while the classifier accepted `exit` **or**
+        // `finish` and skipped heredocs — so the non-vacuity check measured a different set
+        // from the scan it was vouching for and reported `5 of 64`. Two records of one fact,
+        // in the guard whose entire job is to notice that shape.
+        if has_top_level_terminator(src) {
             terminated += 1;
         }
         for (n, text) in statements_after_the_terminator(src) {
             offenders.push(format!("{name}:{n}: {text}"));
         }
     }
-    // ★ Non-vacuity: most runners end in an explicit `exit`, so a near-zero count means the
-    // terminator search is failing rather than the tree being clean.
+    // ★ Non-vacuity: the runners that grade a boot end in an explicit terminator. Many small
+    // helpers legitimately run off the end of the file and have none — the floor is on the set
+    // the classifier can actually judge, and a collapse in it means the terminator search
+    // broke rather than the tree got clean.
     assert!(
-        terminated >= 15,
-        "★ NON-VACUITY: only {terminated} of {} scripts were seen to have a top-level `exit`. \
-         The classifier is not finding terminators, so it cannot find code after them",
+        terminated >= 10,
+        "★ NON-VACUITY: only {terminated} of {} scripts were seen to have a top-level \
+         `exit`/`finish`. The classifier is not finding terminators, so it cannot find code \
+         after them",
         scripts.len()
     );
     assert!(
