@@ -32,15 +32,30 @@
 #
 # ## ★★★ PRE-REGISTERED, BEFORE THESE BOOTS
 #
-#   D  gate ON only,          cup3, n=3   THE ISOLATED LEVER. PREDICT the cumulative publication
-#                                         BQL falls far below 2.67 s and `skipped` goes NON-ZERO.
-#                                         ⊘ If `skipped` stays 0 WITH the gate armed, the epoch
-#                                         really does move every doorbell and w326's reading was
-#                                         right after all — SAY SO. That is the falsifier.
+# ⊘⊘ AND THE FIRST THING I DID WAS CHECK WHETHER THE QUESTION IS ALREADY ANSWERED — IT IS,
+#    HALF OF IT, AND THE CHECK CHANGED THIS SWEEP. `w318_the_dirty_gate.md:127` already
+#    measured the gate ARMED against its own control, one variable, twelve matched doorbells:
+#
+#        segment            ms/launch (gates off)   ms/launch (GATED)   ratio
+#        vas_publish              45.849                 0.201          228x
+#
+#    ⇒ A "gate ON only" arm here would RE-DERIVE w318 at the cost of three boots. It is cited
+#      instead, and sweep 2 spends its boots on what w318 did NOT measure: whether the gate
+#      COMPOSES with the scope and the coalescer, and what it does to `worst_trap_us`, which
+#      w318 never reported. ★ Together with sweep 1's arms the ladder adds ONE LEVER PER ARM:
+#      A(none) → S(scope) → C(scope+batch) → G(scope+batch+gate).
+#
 #   G  gate + scope + batch,  cup3, n=3   EVERYTHING THIS RUNG CAN TURN ON. PREDICT worst_trap
 #                                         well under the 3 000 ms budget with margin, cumulative
 #                                         publication BQL down, ^CUP3_VAL=43, complete=true.
+#                                         ⊘ `skipped` MUST go non-zero; if it stays 0 with the
+#                                         gate ARMED then the epoch really does move every
+#                                         doorbell and w326's reading was right after all. That
+#                                         is the falsifier, and it is pre-registered here.
 #   GE gate + scope + batch,  cup8, n=3   The oracle that fails QUIETLY-WRONG. ^CUP8_BAD=0.
+#   GX gate + scope + batch,  R33,  n=3   ⚠ R33 was VACUOUS for w321 (`asked=0`) and for w326
+#                                         (`working_ticks=0`). Graded on `scoped_out`/`skipped`:
+#                                         if BOTH are 0 the arm tests nothing and SAYS SO.
 #
 # ⚠⚠ THE GATE IS THE MORE DANGEROUS DIRECTION AND ITS OWN DOC SAYS SO: arming it makes a
 #    correctness-relevant pass STOP RUNNING on a doorbell it judges clean. ⇒ graded on
@@ -51,10 +66,6 @@ TREE=${1:-/workspace/kayfabe_w328}
 A="$TREE/scripts/bench/w328_arm.sh"
 echo "=== W328 ALL2 START $(date -Is) tree=$TREE"
 
-bash "$A" "$TREE" w328d 3 KAYFABE_DIRTY_GATE_PUBLISH=on
-echo "=== arm D (dirty gate ONLY, cup3) done $(date -Is)"
-touch "$TREE/crates/kayfabe-util/src/lib.rs"
-
 bash "$A" "$TREE" w328g 3 KAYFABE_DIRTY_GATE_PUBLISH=on \
   KAYFABE_PUBLISH_SCOPE=doorbelled KAYFABE_DRAIN_BATCH=coalesce
 echo "=== arm G (gate + scope + batch, cup3) done $(date -Is)"
@@ -63,5 +74,10 @@ touch "$TREE/crates/kayfabe-util/src/lib.rs"
 W328_WORKLOAD="w308_cup8.sh cup8" bash "$A" "$TREE" w328ge 3 KAYFABE_DIRTY_GATE_PUBLISH=on \
   KAYFABE_PUBLISH_SCOPE=doorbelled KAYFABE_DRAIN_BATCH=coalesce
 echo "=== arm GE (gate + scope + batch, cup8) done $(date -Is)"
+touch "$TREE/crates/kayfabe-util/src/lib.rs"
+
+W328_WORKLOAD="w309_crit1.sh fresh" bash "$A" "$TREE" w328gx 3 KAYFABE_DIRTY_GATE_PUBLISH=on \
+  KAYFABE_PUBLISH_SCOPE=doorbelled KAYFABE_DRAIN_BATCH=coalesce
+echo "=== arm GX (gate + scope + batch, R33 arm 1) done $(date -Is)"
 
 echo "=== W328 ALL2 TERMINATOR rc=0 $(date -Is)"
