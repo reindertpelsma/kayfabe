@@ -1,5 +1,17 @@
 //! # `memtype` — the **effective** memory type, read back from the kernel rather than assumed
 //!
+//! > **STATUS: LIVE — 2026-08-14 (w312).** Two things changed under this module and both are
+//! > folded in below, above the text they correct:
+//! >
+//! > 1. ★★★★★ **The three ratio constants are properties of the COMPARISON, not of the
+//! >    memory type.** Measured: ordinary write-back DRAM and a real uncached aperture
+//! >    produce the *same* ratio. See the correction above [`UNCACHED_RATIO_FLOOR`].
+//! > 2. ★★★ **The guest-side half now EXISTS.** The last paragraph of this header used to end
+//! >    at *"a consumer that needs that answer must measure it in the guest"* with nothing to
+//! >    point at. It is `scripts/bench/memtype_probe.c` +
+//! >    `scripts/bench/memtype_probe_hook.sh`, and what it can and cannot say is
+//! >    `docs/reference/memory_cacheability.md` §8.
+//!
 //! ## ★★★ Why this module exists, and what it is not
 //!
 //! [`crate::CachePolicy`] is a **request**. It is checked structurally
@@ -51,6 +63,30 @@
 //! ⊘ Nothing in userspace can read a guest's effective type. A consumer that needs that
 //! answer must measure it **in the guest**, and this module's job is to stop the *host* half
 //! from being assumed.
+//!
+//! ### ★★★ UPDATED 2026-08-14 (w312) — the guest half is BUILT, and it is not a mirror of
+//! ### this one
+//!
+//! `scripts/bench/memtype_probe.c` measures the guest side; `memtype_probe_hook.sh` is the
+//! bench arm; `docs/reference/memory_cacheability.md` §8 is the reading. ⊘ **Do not read it
+//! as "the same three instruments, run over there".** In the guest the relationship between
+//! them inverts:
+//!
+//! - `/proc/iomem` and `pat_memtype_list`, read *inside the guest*, observe **decider 3
+//!   only** — blind to 1 and 2 exactly as this module is blind to 2 and 3. Two blind
+//!   instruments do not add up to sight.
+//! - **Only the timing witness sees the combination**, because the CPU resolves all three
+//!   deciders in hardware and a load's latency *is* the resolution.
+//!
+//! ⇒ Over there the categorical half does not corroborate the timing half; it **attributes**
+//! it. A region the guest records as *uncached* that nevertheless times as *cached* is
+//! decider 2 **discarding** the guest's choice — the Intel/AMD split above, measured on the
+//! host it is running on instead of looked up by vendor.
+//!
+//! ⚠ And note what that means for the paragraph above: the *"On Intel … ; AMD NPT …"* claim
+//! is sourced from a comment in the C tree, not from the KVM in any bench's kernel, and
+//! upstream KVM has changed when it sets `IPAT` for normal RAM. **Treat it as believed, not
+//! measured**, until the probe's arm 2 has run on an Intel host.
 
 use std::fmt;
 use std::fs;
@@ -511,6 +547,34 @@ pub fn require_effective(
 // Instrument 3 — the mapping itself, timed
 // ─────────────────────────────────────────────────────────────────────────────────────
 
+/// ⊘⊘⊘ **CORRECTED 2026-08-14 (w312) — THIS CONSTANT AND THE TWO BELOW IT ARE PROPERTIES OF
+/// THE *COMPARISON*, NOT OF THE MEMORY TYPE, AND THE TEXT UNDER EVERY ONE OF THEM READS AS
+/// THOUGH THEY WERE.**
+///
+/// A read-bandwidth ratio cannot tell **uncached** from **cache-missing**. Measured
+/// 2026-08-14 by `scripts/bench/memtype_probe.c` on an AMD KVM guest: **256 MiB of ordinary
+/// anonymous write-back memory, one load per page, judged against a 4 KiB reference, came in
+/// at 8.1× — and at 9.1× on a second run.** `Unsettled::InTheBand` exists in this file
+/// because *a real device aperture* came in at **9.1×** (task #150, 2026-08-01).
+///
+/// ⇒ **The same number, from two memory types that could not be more different.** The band is
+/// therefore not a low-confidence region that a better floor would shrink — it is a region
+/// where the two populations **overlap**, and **no choice of floor separates them.**
+///
+/// ★★★ **What separates them is holding the shape fixed.** The ratio means what these
+/// constants say it means **only when the subject pass and the reference pass have the same
+/// footprint and the same stride**, so that cache residency is constant and the memory type is
+/// the only variable. `tests/effective_memtype.rs` happens to satisfy that — its anonymous
+/// control and its BAR are the same shape — which is why these numbers have never been wrong
+/// in practice. ⊘ **Nothing states the requirement**, and the next caller to time a large
+/// region against a small reference gets a confident [`BandwidthVerdict::UncachedClass`] for
+/// write-back memory.
+///
+/// ⇒ Callers of [`BandwidthWitness::against`] **must** build their reference at the subject's
+/// own footprint and stride. `memtype_probe.c` does, and runs the mismatched comparison as a
+/// standing control so the failure mode is exhibited on every run rather than trusted not to
+/// occur.
+///
 /// ★★ **The ratio at or above which a mapping is uncached**, as a dimensionless number.
 ///
 /// A cached load is a few nanoseconds; an uncached one is a bus transaction. The gap is
