@@ -102,6 +102,27 @@ use std::path::{Path, PathBuf};
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
+        "crates/kayfabe-device/src/pubqueue.rs",
+        "Mutex<Inner>",
+        "★★★★★ FOUND BY THIS GATE, 2026-08-14, the day w323 added it — and this is the \
+         instrument working exactly as designed on a lock whose whole purpose is to be taken \
+         on the vCPU trap path. It is the deferred publication lane's queue \
+         (`publication_off_the_bql.md` §3). ⊘ **NOTHING MAY BLOCK BENEATH IT ON THE PRODUCER \
+         SIDE, and nothing does**: `offer`'s entire body under the guard is a `HashSet` \
+         lookup+insert, a `VecDeque::push_back` and two counter adds — no I/O, no call into \
+         the core, no allocation beyond the queue's own growth — and the `notify_one` is \
+         deliberately issued AFTER the guard is dropped. That is the whole point of the \
+         rung: the BQL path does no host I/O. ⚠ THE CONSUMER SIDE **DOES** BLOCK — \
+         `take_blocking` waits on a `Condvar` under this guard — and that is safe for \
+         exactly one reason, stated rather than assumed: **it is called only from the \
+         publication worker thread, never from a vCPU.** A vCPU calling it would be waiting \
+         under the BQL for something only the guest can cause, which is `INLINE-SAFE` clause \
+         (a)'s guaranteed whole-VM deadlock. ⇒ if a future caller reaches `take_blocking` \
+         from a trap, THIS ROW IS THE THING THAT WAS WRONG. ⊘ It is deliberately unranked: \
+         it is a leaf that no other trap path takes, and giving it a rank would put it in an \
+         order relation with locks it never coexists with.",
+    ),
+    (
         "crates/kayfabe-qemu-raw/src/kftime.rs",
         "Mutex<Vec<(&'static str, Census)>>",
         "★★ FOUND BY THIS GATE, 2026-08-14, the day w315 added it — and the gate was right to \

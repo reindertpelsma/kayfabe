@@ -66,6 +66,7 @@ pub mod inittables;
 pub mod nonstall;
 pub mod osevent;
 pub mod plane;
+pub mod pubqueue;
 pub mod setpagedir;
 pub mod staticinfo;
 pub mod sticky;

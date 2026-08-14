@@ -2723,15 +2723,44 @@ impl Worker {
     /// including [`VerbPlan::Release`] — the disposal path, which is where a
     /// cross-namespace handle would otherwise `free` a **bystander** object.
     ///
+    /// # ★★★★★ w323 — THE SECOND WITNESS: `off` PROVES THIS IS NOT A GUEST TRAP
+    ///
+    /// `assert_lock_free` answers *"what do I hold"*. It has **never** answered *"where am
+    /// I"*, and that second question is the one `INLINE-SAFE` clauses (a) and (b) are made
+    /// of — the two the model doc records as *"prose in this file, which by this repo's own
+    /// history means they will be violated by a well-meaning patch"*. Three measured
+    /// violations since it was written: `w317`'s 3.70 s disposal, `w319`'s 13 313 serialized
+    /// round trips, `w306`'s isolate call reachable only from the vCPU trap.
+    ///
+    /// [`kayfabe_util::trapwitness::OffTrap`] answers it, and **this is the one door** — the
+    /// single entry to a host RM verb in the whole tree — so one parameter quantifies over
+    /// every call site in the workspace, including ones written tomorrow.
+    ///
+    /// ⊘ **The witness is re-asserted HERE, not trusted from the mint**, because this crate
+    /// has already ruled on that: [`kayfabe_util::lock::BlockingSection`] — *"a capability
+    /// minted while lock-free must not launder a later acquisition past the invariant"*. The
+    /// same hazard one axis over is a token held across a re-entrant trap dispatch.
+    ///
+    /// ⚠ **What it does not prove**, said here rather than discovered later:
+    /// `OffTrap::inline_under_bql` mints one on a trap thread by design (the enumerated
+    /// exception, `assert_only_ranks`' role in the lock axis). It is **counted**, and the
+    /// count going to zero is what would make this gate absolute.
+    ///
     /// # Panics
-    /// If this thread holds any ranked lock (R1).
+    /// If this thread holds any ranked lock (R1), or if `off` is not an inline exception and
+    /// this thread has entered a guest trap since it was minted.
     // ⊘ **w310 — `clippy::result_large_err` fires here and is answered in `clippy.toml`, not
     // by an attribute.** [`Orphans`] gained a third disposal kind this rung, which took
     // [`VerbFailure`] to 128 bytes and `kayfabe_fwd::Refusal` with it — **19 further sites in
     // one crate**. Twenty scoped `#[allow]`s state the same policy twenty times; one stated
     // threshold states it once, where a reviewer can see it. See that file for the argument.
-    pub fn execute(&mut self, plan: &VerbPlan) -> Result<VerbReply, VerbFailure> {
+    pub fn execute(
+        &mut self,
+        plan: &VerbPlan,
+        off: &kayfabe_util::trapwitness::OffTrap,
+    ) -> Result<VerbReply, VerbFailure> {
         kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
+        off.still_off_trap("issuing a host RM verb");
         if let Some(&handle) = plan.handles().iter().find(|h| !h.belongs_to(self.isolate)) {
             return Err(VerbFailure::bare(RmError::ForeignHandle {
                 handle,
@@ -3314,10 +3343,20 @@ impl Worker {
     /// Production forwarding paths use [`VerbPlan`]; this exists so the port stays
     /// usable for bring-up probes without reopening a door that skips the assert.
     ///
+    /// ★★★ **w323 — it takes the trap witness too, and it HAS to.** This is the door that
+    /// exists to bypass [`VerbPlan`]; a gate present on the planned path and absent on the
+    /// escape hatch is a gate with a documented way round it, which is the
+    /// `the_orphan_gate_asks_visibility_not_reachability` shape.
+    ///
     /// # Panics
-    /// If this thread holds any ranked lock (R1).
-    pub fn with_rm<R>(&mut self, f: impl FnOnce(&mut dyn RmBackend) -> R) -> R {
+    /// If this thread holds any ranked lock (R1), or if `off` does not still hold.
+    pub fn with_rm<R>(
+        &mut self,
+        off: &kayfabe_util::trapwitness::OffTrap,
+        f: impl FnOnce(&mut dyn RmBackend) -> R,
+    ) -> R {
         kayfabe_util::lockwitness::assert_lock_free("issuing a host RM verb");
+        off.still_off_trap("issuing a host RM verb (raw)");
         f(&mut *self.backend)
     }
 }

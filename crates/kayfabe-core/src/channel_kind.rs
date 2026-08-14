@@ -170,6 +170,27 @@ pub enum HostChannelKind {
 /// It is a **declared contract**, total in [`GuestChannelKind`]. It is **not an
 /// enforcement**, and the reason is precise rather than an omission:
 ///
+/// # ⊘⊘⊘ CORRECTED `[w323, 2026-08-14]` — THE PARAGRAPH BELOW IS TRUE OF A **TYPE ALONE**
+///
+/// It is now **built**, and it is built the way this very paragraph predicted: a witness
+/// token whose obtaining is checked. [`kayfabe_util::trapwitness::OffTrap`] is required by
+/// `kayfabe_isolate::Worker::execute` — **the one door to a host RM verb** — and it carries
+/// thread identity as a composition of three facts, no two of which suffice:
+/// **(1)** a private field with no struct literal ⇒ minted by the constructor;
+/// **(2)** `OffTrap::claim` panics when `trapwitness::in_trap()` ⇒ the minting thread was
+/// off-trap; **(3)** `!Send` + `!Sync` ⇒ it is **still that thread**.
+///
+/// ★ The paragraph's own condition for building it — *"that token is NOT built here because
+/// it would have nothing to guard: the emulated arm's handler is not a separable object
+/// yet"* — was **precisely right**, and `w323` is the rung that gives it something to guard
+/// (`kayfabe_device::pubqueue`, the deferred publication lane). ⇒ this is a ruling that
+/// **expired on schedule**, not one that was wrong.
+///
+/// ⊘ **The ceiling is unchanged and is stated here so nobody over-credits it:**
+/// `OffTrap::at_a_host_verb` still mints a **counted** exception on a trap thread, so the
+/// guarantee remains `VerbPlan::gated_doorbell`'s — *omission → commission* — plus a
+/// census. See `docs/design/publication_off_the_bql.md` §7.
+///
 /// ⇒ **Rust cannot express *"this call is not on the vCPU thread"*.** Thread identity is
 /// not in any type here, and the only shape that would carry it is a witness token whose
 /// constructor lives on the worker side — the `ExecutorVas` / `DeclaredCompletion` idiom

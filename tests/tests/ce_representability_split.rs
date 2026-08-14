@@ -175,7 +175,7 @@ fn lone_worker() -> (MockIsolateFactory, SharedRecorder) {
 fn execute_spans(worker: &mut Worker, vas: HostHandle, spans: &[CeSpan]) -> (usize, usize) {
     match plan_ce_split(vas, spans) {
         None => (0, 0),
-        Some(plan) => match worker.execute(&plan).expect("the split runs") {
+        Some(plan) => match worker.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")).expect("the split runs") {
             VerbReply::CeSplit { host_ce, ours } => (host_ce, ours),
             other => panic!("a CeSplit plan must reply CeSplit, got {other:?}"),
         },
@@ -189,7 +189,7 @@ fn fresh_host_vas(worker: &mut Worker) -> HostHandle {
             host_vas: None,
             len: 0x1000,
             at: GpuVa(0x1_0000_0000),
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("a host VAS")
     {
         VerbReply::Published { host_vas, .. } => host_vas.expect("freshly allocated"),

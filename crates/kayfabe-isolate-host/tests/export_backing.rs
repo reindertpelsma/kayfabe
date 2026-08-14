@@ -370,7 +370,7 @@ fn the_device_class_is_refused_by_name_and_nothing_crosses() {
             host_vas: None,
             len: 4096,
             at: kayfabe_arch::ids::GpuVa(0x2_0000_0000),
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
     })
     .expect("a publish must succeed against the fixture");
     let kayfabe_isolate::VerbReply::Published { memory, .. } = memory else {

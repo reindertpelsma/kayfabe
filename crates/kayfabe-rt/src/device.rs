@@ -2039,7 +2039,19 @@ impl SharedDevice {
             // process-boundary backstop is the disposition of record.
             let _undisposed =
                 kayfabe_fwd::dispose_on(&mut worker, core::mem::take(&mut staged.release));
-            let executed = worker.execute(&verbs);
+            // ★★★★★ **w323 — THE TRAP WITNESS, MINTED AT THE ONE PLACE THAT ISSUES.**
+            //
+            // `assert_lock_free` (inside `execute`) answers *"what do I hold"*. This answers
+            // *"where am I"* — `INLINE-SAFE` clauses (a)/(b), which had no mechanism until
+            // this rung. `at_a_host_verb` takes the honest branch: a `claim` on the
+            // publication worker, a **counted** `inline_under_bql` on a vCPU inside a guest
+            // trap. ⇒ `kayfabe_util::trapwitness::inline_exceptions()` is a boot-visible
+            // count of how many host verbs still ran with the BQL held, and driving it to
+            // zero is what "publication is off the BQL" means, measured rather than claimed.
+            let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
+                "kayfabe_rt::SharedDevice::verb_op — the execute phase",
+            );
+            let executed = worker.execute(&verbs, &off);
             let gpu = staged.gpu;
             let Ok(reply) = executed else {
                 let failure = executed.expect_err("matched Err");

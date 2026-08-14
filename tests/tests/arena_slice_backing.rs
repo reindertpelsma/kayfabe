@@ -117,7 +117,7 @@ fn two_slices_of_one_arena(gpu: &mut Gpu, pid: ProcId) -> HostHandle {
                 unmap: vec![],
                 free: vec![b.memory],
                 guest_ram: Vec::new(),
-            }),
+            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")),
             Ok(VerbReply::Released)
         );
         proc.isolate_mut(GPU).expect("isolate").checkin(w);
@@ -172,7 +172,7 @@ fn release(gpu: &mut Gpu, pid: ProcId, orphans: &kayfabe_fwd::Orphans) {
         .expect("materialized")
         .checkout()
         .expect("idle worker");
-    assert_eq!(w.execute(&orphans.release_plan()), Ok(VerbReply::Released));
+    assert_eq!(w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")), Ok(VerbReply::Released));
     proc.isolate_mut(GPU).expect("isolate").checkin(w);
 }
 
@@ -549,7 +549,7 @@ fn dropping_a_vas_full_of_slices_queues_the_arena_zero_times_not_once_per_slice(
         .unwrap()
         .checkout_with_pending_release(GPU);
     let mut w = worker.expect("an idle worker");
-    assert_eq!(w.execute(&orphans.release_plan()), Ok(VerbReply::Released));
+    assert_eq!(w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")), Ok(VerbReply::Released));
     gpu.procs
         .get_mut(&pid)
         .unwrap()

@@ -193,7 +193,7 @@ fn run_release(proc: &mut Proc, gpu: GpuId, orphans: &Orphans) {
         .expect("materialized isolate")
         .checkout()
         .expect("a free worker");
-    let outcome = w.execute(&orphans.release_plan());
+    let outcome = w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
     assert_eq!(
         outcome,
         Ok(VerbReply::Released),
@@ -785,7 +785,7 @@ fn g4_a_mid_chain_failure_enumerates_the_orphans_it_could_not_free() {
             host_vas: None,
             len: 0x1000,
             at: VA,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect_err("the map fails, so the chain fails");
 
     // The CAUSE is the original error, never the cleanup's.
@@ -840,7 +840,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
             host_vas: None,
             len: 0x1000,
             at: VA,
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect("the chain runs");
     let VerbReply::Published {
         host_vas: Some(vas),
@@ -899,7 +899,7 @@ fn g4_a_failing_release_reports_its_residue_instead_of_swallowing_it() {
             unmap: vec![],
             free: vec![vas],
             guest_ram: Vec::new(),
-        })
+        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
         .expect_err("the free fails");
     assert_eq!(failure.err, RmError::Other(7));
     assert_eq!(failure.orphans.free, vec![vas]);

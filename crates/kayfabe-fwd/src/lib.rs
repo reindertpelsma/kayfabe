@@ -1338,13 +1338,19 @@ fn round_trip<T>(
     let Some(mut worker) = checkout(proc, gpu)? else {
         return Err(FwdFault::PoolSaturated { proc: pid, gpu });
     };
-    let executed = worker.execute(&verbs);
+    // ★★★ w323 — see `kayfabe_rt::SharedDevice::verb_op` for the full argument. One
+    // witness for the whole round trip: it is one thread, one lock-free window, and two
+    // mints would let the two verbs below disagree about where they ran.
+    let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
+        "kayfabe_fwd::round_trip — the execute phase",
+    );
+    let executed = worker.execute(&verbs, &off);
     let out = match executed {
         Ok(reply) => commit(proc, Some(reply)).map_err(|r| {
             if !r.orphans.is_empty() {
                 // Residue of a failed release has no sink in the core yet — see
                 // `dispose_on` and §12.16's "what remains".
-                let _ = worker.execute(&r.orphans.release_plan());
+                let _ = worker.execute(&r.orphans.release_plan(), &off);
             }
             r.fault
         }),
@@ -1398,7 +1404,16 @@ pub fn dispose_on(worker: &mut Worker, orphans: Orphans) -> Orphans {
     if orphans.is_empty() {
         return orphans;
     }
-    match worker.execute(&orphans.release_plan()) {
+    // ★★★ w323 — the disposal path takes the witness like every other host verb. ⚠ NOTE
+    // WHICH DIRECTION THIS IS: a `Release` chain is the **revocation** side, and the owner's
+    // 2026-08-14 ruling is that revocation may NOT be deferred (a deferred unmap is a leak
+    // window, not a latency choice). It is therefore expected — and correct — that this site
+    // reports `inline_under_bql` on the trap path: it is tier 2 by design, bounded by
+    // `w317`'s budget, and `kayfabe_device::pubqueue` refuses to accept it at compile time.
+    let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
+        "kayfabe_fwd::dispose_on — the revocation chain (NOT deferrable; see pubqueue)",
+    );
+    match worker.execute(&orphans.release_plan(), &off) {
         Ok(_) => Orphans::default(),
         Err(f) => f.orphans,
     }

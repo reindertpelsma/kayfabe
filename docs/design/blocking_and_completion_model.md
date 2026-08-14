@@ -235,7 +235,33 @@ predicate has to be checkable rather than remembered.**
   `SYSTEM_PROC`/`SYSTEM_ANCHOR` at all three sites that can set `Binding::host`. **Open owner
   ruling.** ★ When it is ruled on, check the resolution against **clause (a)**: any design where we
   wait inline for something the guest must supply is a whole-VM deadlock, not a slow path.
-- ⊘ **Clauses (a) and (b) have no mechanism at all.** (c) is getting one via `w300`. (a) and (b) are
+> ### ★★★★★ ANSWERED `[w323, 2026-08-14]` — **(a) AND (b) NOW HAVE A MECHANISM, AND THE
+> ### RULING THAT SAID THEY COULD NOT IS TRUE OF A TYPE ALONE.**
+> `kayfabe_util::trapwitness`: a per-thread `TrapGuard` installed at both MMIO FFI entry
+> points, and an `OffTrap` witness that `kayfabe_isolate::Worker::execute` — **the one door to
+> a host RM verb** — now requires. `TrapContract`'s *"Rust cannot express *this call is not on
+> the vCPU thread*"* is correct **about a type on its own** and false about a type composed
+> with a per-thread witness: the private field says the token was minted by the constructor,
+> `claim`'s check of `in_trap()` says the minting thread was off-trap, and `!Send` says it is
+> **still that thread**. Three facts, no two sufficient. Four compile-fail rows watch the
+> violations fail to build.
+> ⊘ **Read the ceiling before crediting it.** `OffTrap::at_a_host_verb` still mints a
+> **counted** exception on a trap thread, so the gate **cannot panic in production today** —
+> deliberately, because the current architecture legitimately runs host verbs under the BQL and
+> a gate that broke every boot would be deleted. What it buys is `gated_doorbell`'s upgrade,
+> **omission → commission**, plus two numbers: the **mint-site census**
+> (`tests/tests/off_trap_census.rs`, **4 sites / 3 files**) and the runtime
+> `trapwitness::inline_exceptions()`. ⊘ Neither implies the other.
+> ⇒ **The finish line is the census going empty**, and w323's design says which rows can go
+> (the map/publication side) and which are correct forever (the **revocation** side — a
+> deferred unmap is a leak window, not a latency choice). Full argument:
+> `publication_off_the_bql.md`.
+> ⚠ And w323's own §3 tier table now belongs beside §2's: **tier 1 is unavailable on the
+> Mode-2 compute path** because the guest emits **zero** TLB invalidates there (measured), so
+> tier 2 — *trap the write, latch O(1), commit later* — is the real ceiling for MAP.
+
+- ⊘ **[ANSWERED — see the block directly above. Kept for the reasoning, not the status.]**
+  **Clauses (a) and (b) have no mechanism at all.** (c) is getting one via `w300`. (a) and (b) are
   currently **prose in this file**, which by this repo's own history means they will be violated by
   a well-meaning patch. **Making them checkable is the next build item under this doc.**
   ★ `[w300, 2026-08-13]` **Still true, and w300 did not change it.** w300's mechanism is a

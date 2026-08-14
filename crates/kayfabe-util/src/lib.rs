@@ -14,6 +14,11 @@
 //!   (`mode2_rust_testing_strategy.md` §4: "the virtual clock is load-bearing").
 //! - [`assert_send_sync!`] / [`assert_send!`] — the compile-time concurrency
 //!   assertions every logic crate applies to its public types (decision #17).
+//! - [`trapwitness`] — the per-thread **guest-trap** witness, and [`trapwitness::OffTrap`],
+//!   the token a host verb requires. It is [`lockwitness`]'s complement on the other axis:
+//!   that one asks *what do I hold*, this one asks *where am I*. Together they are the
+//!   mechanism behind `INLINE-SAFE` clauses (a)/(b)/(c)
+//!   (`docs/design/blocking_and_completion_model.md` §1).
 //! - [`lockwitness`] — the per-thread lock witness invariant **R1** is asserted with
 //!   (`l1_concurrency.md` §3.3). It lives at the bottom of the graph because the
 //!   counter is *maintained* by the L1 guard wrappers but *asserted* at the isolate
@@ -25,6 +30,7 @@ pub mod leafwitness;
 pub mod lock;
 pub mod lockwitness;
 pub mod time;
+pub mod trapwitness;
 
 /// Re-export of the pure, OS-free duration type (from `core::time`).
 pub use core::time::Duration;

@@ -1940,6 +1940,47 @@ impl Proc {
     ///
     /// Pure bookkeeping — no verb — so it is legal under the device write lock, exactly
     /// like the T0 staging it shares a queue with.
+    ///
+    /// # ⊘⊘⊘ FIXED `[w323, 2026-08-14]` — **THIS FUNCTION SILENTLY DROPPED A THIRD OF ITS
+    /// # ARGUMENT, AND THE THIRD IT DROPPED WAS THE ONE THAT LEAKS**
+    ///
+    /// It read `q.unmap.extend(..); q.free.extend(..);` and **nothing extended
+    /// `q.guest_ram`**, so every [`kayfabe_isolate::GuestRamMapped`] in a failed verb's
+    /// residue was discarded at the one call that exists *precisely so outstanding host
+    /// objects stay nameable*. Found and deliberately not fixed by `w317`
+    /// (`budgeted_bql_disposal.md` §6) because staging it makes `munmap`s happen that did
+    /// not happen before, and an unmeasured behaviour change inside a **timing** rung would
+    /// have made that rung's measurement unattributable. That reason expired with that rung.
+    ///
+    /// ⚠ **BE EXACT ABOUT WHAT LEAKED, because the obvious reading is worse than the truth
+    /// and the truth is bad enough.** [`Orphans`] has three kinds and only one of them was
+    /// dropped:
+    ///
+    /// | kind | what it is | was it staged? |
+    /// |---|---|---|
+    /// | `unmap` | the **host GPU's** translation `(host VAS, host GPU VA)` | ✔ yes |
+    /// | `free` | the RM objects, incl. the `OS_DESCRIPTOR` that **pins** the guest pages | ✔ yes |
+    /// | `guest_ram` | the **isolate process's own `mmap` window** onto guest RAM | ⊘ **DROPPED** |
+    ///
+    /// ⇒ ⊘ It is **not** true that this left a live host-GPU translation into freed guest
+    /// pages — that is `unmap`, and `unmap` was staged. What it left live is the
+    /// **unprivileged host process's CPU-visible mapping of guest RAM**, outliving the
+    /// verb, the proc and the guest's own release of those pages. That is a lifetime and
+    /// confidentiality leak in the isolate, in the same family as the GPU-side one and
+    /// through a different aperture.
+    ///
+    /// ★ **Ordering is preserved by [`Orphans::dispose_plan`]**, and it has to be: the
+    /// window must be `munmap`ped **last**, after the `OS_DESCRIPTOR` is freed, because
+    /// *"RM's descriptor pins the pages independently of our mapping"* — dropping our view
+    /// while the GPU's translation is still live is a state [`Orphans::guest_ram`]'s own
+    /// doc exists to make impossible.
+    ///
+    /// ⚠ **This is a BEHAVIOUR CHANGE, not a no-op, and it is graded as one.** `munmap`s
+    /// now occur on the live verb path that did not occur before. The known-positive
+    /// `w317` specified for it — *"a `VerbFailure` carrying `guest_ram` residue, watched
+    /// surviving the round trip"* — is
+    /// `tests/tests/staged_release_carries_every_orphan_kind.rs`, and it is RED against the
+    /// two-line body above.
     pub fn stage_release(&mut self, gpu: GpuId, orphans: Orphans) {
         if orphans.is_empty() {
             return;
@@ -1947,6 +1988,13 @@ impl Proc {
         let q = self.pending_release.entry(gpu).or_default();
         q.unmap.extend(orphans.unmap);
         q.free.extend(orphans.free);
+        // ★★★ THE THIRD KIND. `Orphans::is_empty` above already quantifies over all three
+        // (`unmap.is_empty() && free.is_empty() && guest_ram.is_empty()`), so before this
+        // line a residue of *only* guest-RAM windows passed the early return and was then
+        // dropped by a body that named two kinds — the shape `Orphans::len`'s own doc was
+        // written against, one function over, where the omission is a leak rather than a
+        // miscount.
+        q.guest_ram.extend(orphans.guest_ram);
     }
 
     /// ★★ **VACATE — the clean death** (`l1_concurrency.md` §12.35): this proc's
@@ -2126,7 +2174,13 @@ impl Drop for Proc {
             // Best effort by construction: a refused release leaves objects that the
             // isolate's imminent death disposes of in bulk anyway. `execute` is what
             // asserts R1.
-            let _ = worker.execute(&orphans.release_plan());
+            // ★★★ w323 — the drop-time revocation chain. Same direction, same ruling as
+            // `kayfabe_fwd::dispose_on`: this is valid→invalid and is deliberately NOT
+            // deferred.
+            let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
+                "kayfabe_core::Proc::drop — the staged release chain",
+            );
+            let _ = worker.execute(&orphans.release_plan(), &off);
             iso.checkin(worker);
         }
     }

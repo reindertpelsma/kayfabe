@@ -251,7 +251,27 @@ a bounded drain turned into a permanent leak. Both sides use the one predicate.
 - **It changes nothing for any caller that is not `Regs::write`.** `reap_retired()` keeps its
   exact semantics, which is why no existing test needed editing.
 
-### ⊘⊘ AND ONE DEFECT FOUND WHILE READING THIS PATH, NAMED AND NOT FIXED HERE
+### ★★★ FIXED `[w323, 2026-08-14]` — **THE DEFECT BELOW IS CLOSED, AND ONE SENTENCE OF ITS DESCRIPTION IS WRONG**
+
+`Proc::stage_release` now extends all three kinds (`kayfabe-core/src/gpu.rs`), with exactly the
+known-positive this section asked for — *"a `VerbFailure` carrying `guest_ram` residue, watched
+surviving the round trip"* — as `tests/tests/staged_release_carries_every_orphan_kind.rs`, plus
+the polarity a one-of-each test cannot reach: a residue of **only** `guest_ram` windows passed
+`is_empty`'s three-kind check and was then discarded **whole**.
+
+⊘ **AND BE EXACT ABOUT WHAT LEAKED, because the obvious reading is worse than the truth and the
+truth is bad enough.** Of `Orphans`' three kinds, `unmap` (the **host GPU's** translation) and
+`free` (the RM objects, including the `OS_DESCRIPTOR` that pins the pages) **were** staged. What
+was dropped is the **isolate process's own `mmap` window** onto guest RAM. ⇒ this did **not**
+leave a live host-GPU translation into freed guest pages — it left an unprivileged host
+process's CPU-visible mapping of them, outliving the verb, the proc and the guest's release.
+Same family, different aperture; naming the wrong one points a reader at the wrong plane.
+
+⚠ **Still a behaviour change, and still graded as one**: `munmap`s now happen on the live verb
+path that did not before. `publication_off_the_bql.md` §8 item 6 names the boot evidence it
+owes, and that item is due **even if the deferred publication lane is never armed**.
+
+### ⊘⊘ [FIXED — see directly above; kept for the reasoning] AND ONE DEFECT FOUND WHILE READING THIS PATH, NAMED AND NOT FIXED HERE
 
 `Proc::stage_release` (`kayfabe-core/src/gpu.rs`) takes an `Orphans` **by value** and stages
 only two of its three kinds:
