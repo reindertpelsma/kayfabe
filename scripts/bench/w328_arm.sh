@@ -61,6 +61,11 @@ for i in $(seq 1 "$N"); do
   #   channel resolves carry `drain_ms=0` and would report the breadth as the whole cost.
   NW=$(grep -ao 'W328PIN\[[^]]*\]' "$Q" 2>/dev/null | grep -av 'drain_ms=0]' | head -1)
   TW=$(grep -ao 'TRAPWITNESS [^"]*' "$Q" 2>/dev/null | tail -1)
+  # ★★★★★ w328 sweep 2 — THE GATE'S OWN ARM WORD AND ITS OWN TALLY. ⊘ `gate=off` beside
+  #   `skipped=0` and `gate=on` beside `skipped=0` are OPPOSITE facts that print the same
+  #   counter; w326 read one as the other. The arm word is therefore extracted, not inferred.
+  GT=$(grep -ao 'gate=\(on\|off\) this_doorbell\[[^]]*\]' "$Q" 2>/dev/null | tail -1)
+  DG=$(grep -ao 'DIRTY-GATE [^|]*' "$Q" 2>/dev/null | tail -1)
   # ★ w319's grading clause, with the NESTED bracket its own selftest was broken on.
   DR=$(grep -ao 'DRAIN\[visited=true asked=[0-9]* pinned=[0-9]* refused=[0-9]* DRAIN_MS=[0-9]* W319KNOB\[[^]]*\] complete=[a-z]*[^]]*' "$Q" 2>/dev/null | head -1)
   LV=$(grep -ao 'last_pinned_va=0x[0-9a-f]*' "$Q" 2>/dev/null | head -1)
@@ -84,6 +89,12 @@ for i in $(seq 1 "$N"); do
   echo "            ★★★★★ LAST   ${SN:-⊘W328SCOPE ABSENT — UNMEASURED}   passes=[${SC:-⊘NOFILE}]"
   echo "            ★★★★★ ${NW:-${N1:-⊘W328PIN ABSENT — UNMEASURED, ⊘ NOT 'the sample costs nothing'}}"
   echo "            ★★★★★ ${TW:-⊘TRAPWITNESS ABSENT — UNMEASURED, ⊘ NOT 'zero exceptions'}"
+  echo "            ★★★★★ ${GT:-⊘ NO gate= WORD — UNMEASURED, ⊘ NOT 'the gate was off'}  ${DG:-⊘no DIRTY-GATE census}"
+  # ★★★★★ THE CUMULATIVE BREADTH — summed over EVERY pass, because the "2 529 ms of BQL" figure
+  #   is CUMULATIVE and comparing it against a single pass's µs is the conflation this rung undoes.
+  grep -ao 'W328SCOPE\[[^]]*\]' "$Q" 2>/dev/null \
+    | sed -E 's/.*target_us=([0-9]+) target_published=([0-9]+) other_vases=([0-9]+) other_us=([0-9]+) other_published=([0-9]+).*/\1 \2 \4 \5/' \
+    | awk '{t+=$1; tp+=$2; o+=$3; op+=$4; n++} END {if (n==0) print "            ⊘ CUM: no W328SCOPE pass — UNMEASURED"; else printf "            ★★★★★ CUM over %d passes: target_us=%d target_published=%d other_us=%d other_published=%d breadth_share=%.3f%%\n", n, t, tp, o, op, (t+o>0)?100*o/(t+o):0}'
   echo "            ★★★ DRAIN=[${DR:-⊘ NO DRAIN CLAUSE — UNMEASURED, ⊘ not complete}] ${LV:-⊘no last_pinned_va}"
   echo "            ★★★ ATTRIBUTOR rc=$AT ${AL:-⊘ no VERDICT line}"
   echo "            ${KF:-⊘KFTIME-SEG vas_publish ABSENT — UNMEASURED}"
