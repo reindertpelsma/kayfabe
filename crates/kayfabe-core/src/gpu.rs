@@ -298,6 +298,31 @@ pub struct Vas {
 }
 
 impl Vas {
+    /// ★★★★★ **w318 — EVERYTHING THE PUBLICATION CENSUS READS, AS ONE COMPARABLE VALUE.**
+    ///
+    /// `(table generation, guest-RAM pin count)`. Two terms because
+    /// `SharedDevice::vas_publish_census` reads exactly two mutable things off a `Vas`:
+    ///
+    /// - `self.table` — every row it buckets, and every `Binding::host` it tests. Covered by
+    ///   [`kayfabe_mmu::AddressTable::generation`], which is bumped at the table's only two
+    ///   write sites.
+    /// - `self.guest_ram_pins` — the `already_pinned` bucket, which is a **containment test
+    ///   against this map**. Pins are only ever inserted (`commit_pin_guest_ram`) and dropped
+    ///   with the whole `Vas`, so a length is a faithful epoch for it; ⊘ if a *removal* of a
+    ///   single pin is ever added, this term must become a generation too, and the type here
+    ///   is what a reader will find when they look.
+    ///
+    /// # ⊘ WHAT THIS DOES NOT COVER, said here rather than discovered by a fault
+    ///
+    /// It is an epoch of **our record**, not of the host. The publication verb's outcome also
+    /// depends on host state this cannot see — a framebuffer range already joined, an isolate
+    /// that went away. A gate built on this owes a second term for that; the shim's
+    /// `PublishStamp` carries one and names it.
+    #[must_use]
+    pub fn publish_epoch(&self) -> (u64, usize) {
+        (self.table.generation(), self.guest_ram_pins.len())
+    }
+
     /// ★★★ **The orphan count** — parked halves that never found their partner, split by
     /// which half is missing.
     ///

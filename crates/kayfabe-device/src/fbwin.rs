@@ -331,6 +331,28 @@ pub trait FbStore: Send + core::fmt::Debug {
         None
     }
 
+    /// ★★★★★ **w318 — HOW MANY WRITES THIS STORE HAS TAKEN FROM `by`**, monotone, never
+    /// reset. ⊘ [`None`] when the store does not count — *unmeasured*, never `0`, and a
+    /// consumer that gates on it must treat `None` as **arm, do not skip**.
+    ///
+    /// # Why a WRITE count when [`FbStore::page_origin`] already exists
+    ///
+    /// `page_origin` is deliberately **first**-writer and bumps its sequence only on page
+    /// CREATION, so it cannot see the case this exists for: the executor rewriting a page
+    /// it already created. `[measured 2026-08-14, w315 boot `full`]` the doorbell handler
+    /// re-queues **every** executor-created page for page-table decode on every doorbell —
+    /// `resident=171 by-executor=53`, unconditionally — and that alone costs **22.3 ms per
+    /// launch** producing `bound=0`. The set of pages is unchanged doorbell to doorbell; what
+    /// a gate needs to know is whether their BYTES are, and only a write count says that.
+    ///
+    /// ⚠ It counts **calls that landed bytes**, not bytes and not pages: a consumer may
+    /// conclude *"nothing this writer wrote has changed"* from an unchanged value, and
+    /// nothing finer.
+    fn writes_by(&self, by: FbWriter) -> Option<u64> {
+        let _ = by;
+        None
+    }
+
     /// Whether this store holds a page for `phys` — [`None`] when it cannot say.
     ///
     /// ⊘ Deliberately **not** derivable from [`FbStore::read`]: a read of an unwritten
@@ -800,6 +822,16 @@ pub struct SparseFb {
     /// the guest's write through this window and the engine's read through the GPU MMU are
     /// the same byte. Everything outside these ranges is still [`SparseFb::pages`].
     joined: Vec<(u64, Box<dyn FbJoined>)>,
+    /// ★★★★★ **w318 — per-writer WRITE counts**, indexed by [`FbWriter::index`]. See
+    /// [`FbStore::writes_by`] for why a *write* count is needed beside
+    /// [`SparseFb::origin`]'s *creation* sequence, and what a consumer may conclude.
+    ///
+    /// ⊘ Bumped **before** the joined-range early return and before the residency ceiling,
+    /// so a write into a joined leaf and a write refused for want of room both count. A
+    /// counter a gate reads must move whenever the writer *acted*; making it move only on the
+    /// paths that happened to land bytes in `pages` would give the gate a blind spot exactly
+    /// where the join plane is busiest.
+    writes_by: [u64; FB_WRITER_KINDS],
 }
 
 impl SparseFb {
@@ -819,6 +851,7 @@ impl SparseFb {
             origin: HashMap::new(),
             seq: 0,
             joined: Vec::new(),
+            writes_by: [0; FB_WRITER_KINDS],
         }
     }
 
@@ -940,6 +973,11 @@ impl FbStore for SparseFb {
                 why: OUTSIDE_FRAMEBUFFER,
             });
         }
+        // ★★★★★ w318 — the arming edge, bumped HERE: past the "is this even our aperture"
+        // refusal (a write to somebody else's address changed nothing of ours) and **before**
+        // the joined-range return and the residency ceiling below, so every write this store
+        // accepted responsibility for moves it. See [`SparseFb::writes_by`].
+        self.writes_by[by.index()] = self.writes_by[by.index()].saturating_add(1);
         // ★★★★★ THE JOIN, checked FIRST and BEFORE the residency ceiling — a joined range
         // costs this store no page at all, so charging it against the budget would refuse a
         // guest write to memory that is already allocated. ⊘ The write does not touch
@@ -1006,6 +1044,10 @@ impl FbStore for SparseFb {
 
     fn page_origin(&self, phys: u64) -> Option<FbPageOrigin> {
         self.origin.get(&(phys / FB_PAGE)).copied()
+    }
+
+    fn writes_by(&self, by: FbWriter) -> Option<u64> {
+        Some(self.writes_by[by.index()])
     }
 
     fn resident_frames(&self) -> Option<Vec<u64>> {

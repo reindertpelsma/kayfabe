@@ -2047,6 +2047,15 @@ impl RegPlane {
         s.fb.page_origin(phys)
     }
 
+    /// ★★★★★ **w318 — how many writes this store has taken from `by`.** [`None`] means the
+    /// store does not count, which is **UNMEASURED and not `0`**: a gate reading this must
+    /// arm on `None`, never skip. See [`crate::fbwin::FbStore::writes_by`].
+    #[must_use]
+    pub fn fb_writes_by(&self, by: crate::fbwin::FbWriter) -> Option<u64> {
+        let s = self.state.lock();
+        s.fb.writes_by(by)
+    }
+
     /// ★★★ **Read RAW framebuffer bytes at a framebuffer-physical address** — no walk, no
     /// translation, no [`crate::ceresolve::Demand`], and **strictly an observation**.
     ///

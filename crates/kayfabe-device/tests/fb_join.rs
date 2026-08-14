@@ -458,3 +458,70 @@ fn the_plane_still_names_a_never_written_page_outside_every_join() {
         "★★★ so `fetch_ring_bytes` still refuses forbidden #2 by name off a joined range"
     );
 }
+
+/// ★★★★★ **w318 — THE ARMING EDGE COUNTS WRITES, NOT PAGE CREATIONS, AND IT COUNTS INSIDE A
+/// JOIN.**
+///
+/// [`FbStore::writes_by`] is the signal the doorbell handler's dirty gate skips a 22 ms
+/// page-table decode on (`[measured 2026-08-14, w315]`: the decode costs 22.3 ms per launch
+/// and reports `bound=0`, on a page set that never changes). The gate is only sound if the
+/// counter moves on **every** write that writer performed — so the two cases that would give
+/// it a blind spot are asserted here rather than reasoned about:
+///
+/// - a **rewrite** of a page the writer already created. [`FbStore::page_origin`]'s sequence
+///   is deliberately first-writer and does NOT move here, which is exactly why the gate cannot
+///   be built on it.
+/// - a write into a **joined** range, which returns before `pages` is touched at all.
+///
+/// ⊘ And the counter is **per writer**: a BAR2 window write must not arm the executor's gate,
+/// or the gate fires on every doorbell and buys nothing (w318 outcome (B)).
+#[test]
+fn the_write_counter_sees_rewrites_and_joins_and_keeps_the_writers_apart() {
+    let mut fb = SparseFb::new(0x10_0000);
+    assert_eq!(
+        fb.writes_by(FbWriter::Executor),
+        Some(0),
+        "a store that counts starts at zero — and `Some(0)` is a MEASUREMENT, where `None` \
+         would be `unmeasured` and must arm the gate instead"
+    );
+
+    fb.write_tagged(0x1000, &[1u8; 8], FbWriter::Executor)
+        .expect("in range");
+    assert_eq!(fb.writes_by(FbWriter::Executor), Some(1));
+    let created = fb.page_origin(0x1000).expect("resident").seq;
+
+    // ★ THE CASE THE ORIGIN SEQUENCE CANNOT SEE: the same writer, the same page, new bytes.
+    fb.write_tagged(0x1000, &[2u8; 8], FbWriter::Executor)
+        .expect("in range");
+    assert_eq!(
+        fb.writes_by(FbWriter::Executor),
+        Some(2),
+        "a rewrite is a write — this is the whole reason the gate is not built on page_origin"
+    );
+    assert_eq!(
+        fb.page_origin(0x1000).expect("resident").seq,
+        created,
+        "…and the creation sequence deliberately did NOT move, which is the contrast"
+    );
+
+    // ⊘ A different writer must not arm this one's gate.
+    fb.write_tagged(0x2000, &[3u8; 8], FbWriter::Window(kayfabe_device::FbWindow::InstanceWindow))
+        .expect("in range");
+    assert_eq!(
+        fb.writes_by(FbWriter::Executor),
+        Some(2),
+        "a BAR2 write is not an executor write"
+    );
+
+    // ★ AND INSIDE A JOIN, where `write_tagged` returns before `pages` is touched.
+    fb.install_join(0x8000, Box::new(Elsewhere::new(0x1000)))
+        .expect("a fresh range joins");
+    fb.write_tagged(0x8000, &[4u8; 8], FbWriter::Executor)
+        .expect("the joined range takes it");
+    assert_eq!(
+        fb.writes_by(FbWriter::Executor),
+        Some(3),
+        "a write into a joined leaf still moved the writer's counter — the gate must not go \
+         blind exactly where the join plane is busiest"
+    );
+}
