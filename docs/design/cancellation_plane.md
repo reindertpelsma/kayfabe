@@ -496,9 +496,30 @@ exactly like one that never was — and it survived review for two days. w303 fi
 This fixes the **class**: a cancellation verb cannot be added to the echo-ack path without the gate
 going red, and cannot be added to the table without writing its promise down.
 
-★ **The known-positive, watched failing.** `0xa06c0105` was in `INPUT_ONLY_CONTROLS` at `91f8b34b`.
-Re-inserting that row makes `no_cancellation_verb_is_answered_by_an_input_only_echo` fail by name;
-the transcript is in the test's own doc comment. ⊘ *A gate nobody has seen fail is not a gate.*
+★ **The known-positive, watched failing — twice, and the second one is the argument.**
+Re-inserting `0xa06c0105` into `INPUT_ONLY_CONTROLS` (its state at `91f8b34b`) makes
+`no_cancellation_verb_is_answered_by_an_input_only_echo` fail by name. ⊘ But
+`preempt_is_decided.rs` already catches *that id*, so it proves the gate fires and not that it is
+worth having. The injection that does is a **different** verb — `0xa06f0112`:
+
+```text
+=== w303's gate (id-specific — GREEN, i.e. BLIND to this):
+test result: ok. 6 passed; 0 failed
+=== w306's gate (RED):
+★★★★★ FORGED COMPLETION. 0xa06f0112 NVA06F_CTRL_CMD_STOP_CHANNEL is a cancellation verb
+promising `NotRunning`, and it is in INPUT_ONLY_CONTROLS — …
+test result: FAILED. 4 passed; 1 failed
+```
+
+⇒ **the existing suite is green while the new forgery is present.** w303 fixed a row; this
+quantifies over the class, including verbs nobody has written an arm for yet.
+⊘ *A gate nobody has seen fail is not a gate.*
+
+⚠ **And one operational lesson, paid for in this rung.** The first injection was reverted with
+`git checkout <file>` while the *table itself* was still uncommitted — **which deleted it**. It was
+recoverable only because the edit text was still in the session. ⇒ **commit before injecting a
+known-positive**, always: the revert step of a watched-failing experiment is
+`git checkout`, and that verb cannot distinguish the injection from the work.
 
 **Why it was safe to build with no bench:** it adds data and a test. No control's answer, status,
 body or claimed-set membership changes, so no boot can observe it.

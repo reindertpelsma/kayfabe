@@ -46,6 +46,26 @@
 //! ⊘ *A gate nobody has seen fail is not a gate*, and this campaign has shipped several that
 //! could not.
 //!
+//! ### ★★★ …and the SECOND injection is the one that shows this is not a duplicate
+//!
+//! `preempt_is_decided.rs::preempt_left_the_input_only_table_and_is_still_claimed` already
+//! asserts the same thing **for `0xa06c0105`**. So the injection above proves the gate fires,
+//! but not that it is worth having. The one that does is a **different** verb — inserting
+//! `0xa06f0112` (`STOP_CHANNEL`) into `INPUT_ONLY_CONTROLS` instead:
+//!
+//! ```text
+//! === w303's gate (id-specific — GREEN, i.e. BLIND to this):
+//! test result: ok. 6 passed; 0 failed
+//! === w306's gate (RED):
+//! ★★★★★ FORGED COMPLETION. 0xa06f0112 NVA06F_CTRL_CMD_STOP_CHANNEL is a cancellation verb
+//! promising `NotRunning`, and it is in INPUT_ONLY_CONTROLS — …
+//! test result: FAILED. 4 passed; 1 failed
+//! ```
+//!
+//! ⇒ **The existing suite is green while the new forgery is present.** That is the whole
+//! argument for this file: w303 fixed a row; this quantifies over the class, including verbs
+//! nobody has written an arm for yet.
+//!
 //! ## ⊘ What this file does NOT claim
 //!
 //! **Nothing here cancels anything, and no verb's answer changed in w306.** Every row whose
