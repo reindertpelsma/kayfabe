@@ -1,0 +1,16 @@
+=== W326 ARM START tree=/workspace/kayfabe_w326 prefix=w326o n=1 2026-08-14T20:46:47+00:00
+=== REV=[52a499da4365767fb19e69b247739501212b8421 w326-the-publish-plane 2026-08-14T22:39:07+02:00]
+=== ARM ENV (intent — the boot's own lines are the record of EXECUTION):
+===   KAYFABE_PUBLISH_PLANE=[⊘unset ⇒ off ⇒ master behaviour]
+--- boot 1/1 tag=w326o1 2026-08-14T20:46:51+00:00
+    BOOT 1: [CUP3_VAL=43] [CUP3_RC=0] [⊘no-cup8]
+            r33_arm1=[⊘ NO arm-1 LINE — the measurement did not happen, ⊘ NOT a fail]
+            ★★★★★ MMUINVAL armed=false writes=377 triggers=377 all_pdb=0 all_pdb_frac=0.0000 all_va=377 hubtlb_only=232 gpu_vas=145 polls=754 pdb_writes=754 distinct_pdbs=8 doorbells=480 triggers_per_doorbell=0.7854 triggers_at_first_doorbell=66 worst_hold_us=0 over_budget=0 reentrant=0 pending=false
+            ★★★★★ ⊘PUBQUEUE ABSENT — UNMEASURED, ⊘ NOT 'nothing was queued'
+            ★★★★★ TRAPWITNESS off_trap_claims=0 inline_exceptions=19213 worst_trap=2820454us (target: inline_exceptions=0)
+            ★★★ DRAIN=[DRAIN[visited=true asked=13313 pinned=13313 refused=0 DRAIN_MS=2732 W319KNOB[budget_ms=3000 row_limit=65536] complete=true ]
+            ⊘host_rows UNMEASURED  unserviced_distinct=[40]
+            Xid_lines=[0] 
+            guest NVRM_lines=[31] stall_lines=[0]
+=== W326 ARM EXIT status=0 2026-08-14T20:49:35+00:00
+=== W326 ARM TERMINATOR w326o rc=0 2026-08-14T20:49:35+00:00
