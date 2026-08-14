@@ -118,16 +118,44 @@ is closed either way; this is a refinement, not a residual failure.
 
 ---
 
-## 4. The second workload
+## 4. ★★★★★ THE SECOND WORKLOAD — `R33 arm 1` FIRED 3/3
 
 ⊘ **`43` alone is not sufficient evidence** — `scripts/bench/relaxation_inert_gate.sh` exists on
-master because a single-workload grade let a regression in (w304 → w313). See
-`w317_repeat_w317r33.log` in this directory for the raw-CE arm at n=3.
+master because a single-workload grade let a regression in (w304 → w313).
+
+`[measured 2026-08-14, vh, tags `w317r331..3`, `w309_crit1.sh fresh`]` **All three boots print
+the client's own four-fact line, verbatim and identical:**
+
+```
+★     R33 arm 1 COPY      = 4096 bytes moved: dst[0] 0x3f0011cc -> 0xc0ffee33,
+      dst[last] 0xc0fff232 (want 0xc0fff232), engine semaphore 0x00000001
+      (declared 0x00000001), GP_GET 1 caught GP_PUT 1 — read back through an
+      INDEPENDENT mapping (its own device node, its own mmap, a kernel-chosen address)
+```
+
+⇒ **the raw-CE plane — no libcuda in the process, its own `FERMI_VASPACE_A`, its own operands —
+is green with the budgeted drain active.** `R33_RC=1` on all three, identical to w314's.
+
+| boot | `max_reap_us` | `max_drain_us` | `DRAIN-TIMING` |
+|---|---|---|---|
+| `w317r331` | 3 675 | 21 108 | `disposed=15 residue=0 turns=1 budget_hit=false` |
+| `w317r332` | 3 205 | 20 869 | `disposed=15 residue=0 turns=1 budget_hit=false` |
+| `w317r333` | 3 341 | 19 362 | `disposed=15 residue=0 turns=1 budget_hit=false` |
+
+⊘ `budget_hit=false` and `DRAIN-DEFER` **⊘UNMEASURED** are the **correct** readings here, not
+failures: this workload's whole queue is **15** disposals, so it fits inside one turn, the
+deadline is never reached, and no proc is ever held back. ⚠ An absent `DRAIN-DEFER` on this arm
+is *"the mechanism had nothing to do"*, which is a different fact from *"it did nothing"* — the
+cup3 arm is where it is exercised.
+
+★ **And this arm is the cleanest per-disposal cost measurement in the whole run**: 15 disposals,
+one turn, no deadline, no batching — **~1 291–1 407 µs per disposal**, three times. See §3.
 
 ⚠ **A, B and F of w310's list are cup3-only and must not be graded over this arm**:
 `w309_crit1.sh`'s `fresh` arm **provokes a fault on purpose**, so its boot legitimately carries
-`Xid 31 CE0 … @ 0x7_00100000`. The harness prints the client's own four-fact line verbatim and
-never a pass/fail word of its own.
+`Xid 31 CE0 … @ 0x7_00100000` — arm 4's own control operand — and its `hostdmesg` is 227 bytes
+rather than the cup3 arm's 0. The harness prints the client's own line verbatim and never a
+pass/fail word of its own.
 
 ---
 
