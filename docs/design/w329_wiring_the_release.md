@@ -310,5 +310,37 @@ of the map/revoke asymmetry.
 
 ## 6. GRADING
 
-Filled from `traces/w329_release/w329_arm_*.log`. See §7 of that directory's README for what
-an excerpt can and cannot be counted over.
+All from `traces/w329_release/w329_arm_*.log`, `vh2`, 2026-08-14/15. ⊘ Every arm here ran with
+`KAYFABE_JOIN_RELEASE` at its **default (`on`, leg 1)** unless the row says otherwise.
+
+| workload | n | result | live? |
+|---|---|---|---|
+| `^CUP3_VAL=43` | **3** | `CUP3_VAL=43 CUP3_RC=0` ×3, `Xid=0`, `unserviced_distinct=40`, `host_rows=18297` | ★ LIVE — `revoked=2 released=2` on every boot, so the release fired on the graded workload rather than beside it |
+| `^CUP8_BAD=0 ^CUP8_MAXERR=0` | 2 | *(filled below)* | |
+| `R33 arm 1` | 2 | *(filled below)* | |
+| cup8 at N=3072 (36 MiB) | 1 | *(filled below)* | |
+| ★ known-positive `BENCH_NOLAUNCH` | 1 | **`BENCH_MODE=NOLAUNCH` PRESENT and `BENCH_NOLAUNCH_TOTAL_BAD=3670016`** | ★★★ FIRED ⇒ every `bad=0` here is asserted, not inherited |
+
+**Offline suite** (`cargo test --workspace --features host-isolates --no-fail-fast`, `vh2`):
+**7 failed across 4 targets** — and that is **master's**, not this rung's: §5 item 4 records
+the check that established it. This rung adds **7 new passing tests** (4 in
+`tests/tests/reachability.rs`, 3 in `crates/kayfabe-device/tests/fb_join.rs`) and no new red.
+
+---
+
+## 7. WHAT SHIPS, AND WHAT THE DEFAULT MUST BE
+
+⊘ **`KAYFABE_JOIN_RELEASE` must default to `off` until the `4,64` control (§2.2) answers**, and
+`on` must not be the default while a workload that passed at `w327` fails with it armed. The
+mechanism is built, tested offline, and measured on hardware; what is not established is that
+it is a net improvement on any workload this campaign runs.
+
+★ **The three things this rung leaves standing, in priority order:**
+
+1. ★★★ **A frame's join must be mappable at every VA the guest names it at.** One host object,
+   N host VA mappings. That removes the choice §4.1 has to make and dissolves both the
+   collision and the ping-pong. It is a `back_fb_leaf` change, not a policy change.
+2. ★★ **A RE-POINT path for published rows.** `remaps_refused` now counts the population; today
+   a re-mapped published row is frozen at its old frame forever.
+3. ★ **Corroborate a revoke with an RPC `FREE`.** Row 2a of the reclamation-gap census: those
+   RPCs demonstrably arrive (`FreeUnknown x8`); nothing joins them to a VA.
