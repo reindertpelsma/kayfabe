@@ -470,12 +470,14 @@ drain"*:
 | `w328e3` | off | 594 | 182 407 | 186 000 | **+2.0 %** |
 | `w328c3` | off | 690 | 204 679 | 215 000 | +5.0 % |
 | `w328g3` | **on** | 938 | 262 215 | 256 000 | **−2.4 %** |
+| `w328cc1` | off ★ | 1 031 | 283 791 | 297 000 | +4.7 % |
+| `w328cc2` | off ★ | 1 373 | 363 135 | 388 000 | +6.8 % |
 | `w328g1` | **on** | 1 751 | 450 831 | 524 000 | +16.2 % |
 | `w328ge1` | **on** | 2 698 | 670 535 | 627 000 | −6.5 % |
 | `w328g2` | **on** | 5 155 | 1 240 559 | 1 281 000 | **+3.3 %** |
 
-**12/12 within 16.2 %, median absolute error 5.0 %, across a 69× range in `chains`, a 20×
-range in `DRAIN_MS`, two workloads and both gate arms.** ⇒ w321's model, fitted on w321's boots, **predicts w328's boots on a different
+**14/14 within 16.2 %, median absolute error 5.0 %, across a 69× range in `chains`, a 20×
+range in `DRAIN_MS`, two workloads, both gate arms, and the same-hour control.** ⇒ w321's model, fitted on w321's boots, **predicts w328's boots on a different
 day without a single parameter moved.** That is a stronger corroboration of the model than
 w321 could give itself.
 
@@ -516,8 +518,33 @@ arms**, which costs nothing and is the standing recommendation from §3.5.2.
 ★ **The design flaw is mine and it is worth stating plainly: a SEQUENTIAL arm sweep on a box
 whose free lists drift CONFOUNDS ARM WITH SESSION TIME.** Every arm in this rung — and in
 w321, w326 and w327 before it — is ordered, not interleaved. The fix is one line (interleave
-the tags) and it costs nothing. ⇒ **The gate's effect on `chains` is UNATTRIBUTED**, and a
-same-hour re-run of arm C **after** arm G is the discriminator; see §3.6.
+the tags) and it costs nothing.
+
+### 3.6 ★★★★★ THE DISCRIMINATOR — the SAME ARM, run LAST, and the gate is EXONERATED
+
+`[measured w328, arm `w328cc` = arm C's exact environment (`scope` + `coalesce`, **gate OFF**),
+launched immediately after all 24 sweep boots, n=2]`:
+
+| boot | when | gate | `chains` | `DRAIN_MS` | `worst_trap_us` | margin | `complete` | `CUP3_VAL` |
+|---|---|---|---|---|---|---|---|---|
+| `w328c1` | early | off | **242** | 98 | 188 776 | 30.61× | true | 43 |
+| `w328c2` | early | off | **511** | 177 | 459 984 | 16.95× | true | 43 |
+| `w328c3` | early | off | **690** | 215 | 314 033 | 13.95× | true | 43 |
+| **`w328cc1`** | **last** | off | **1 031** | 297 | 449 933 | **10.10×** | true | 43 |
+| **`w328cc2`** | **last** | off | **1 373** | 388 | 498 146 | **7.73×** | true | 43 |
+
+⇒ **The SAME ARM, with the gate OFF, run at the END of the session, produces `chains` = 1 031
+and 1 373 — above ALL THREE of its own earlier boots, and above three of the six gate-ON
+boots** (188, 213, 938).
+
+★★★★★ **THE CONFOUND RESOLVES IN FAVOUR OF SESSION DRIFT, AND THE GATE IS EXONERATED.**
+`chains` is host free-list state that drifts with time-in-session; the arm word does not
+predict it. ⊘ **And the exoneration was cheap — two boots, six minutes** — because the
+question was posed as *"what would distinguish these two explanations"* rather than argued
+from the nine boots already in hand.
+
+⚠ **The standing recommendation is unchanged and is now paid for twice: INTERLEAVE THE ARMS.**
+Nine boots could not separate what two boots in the right order settled.
 
 ⊘ **What is NOT in doubt:** `complete=true` and `pinned == asked` on **9/9** coalesced boots,
 `CUP3_VAL=43` on 6/6 cup3 boots, `CUP8_BAD=0` on 4/4 cup8 boots, and **the worst margin
