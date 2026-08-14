@@ -30,10 +30,22 @@ DONE
 CUP2_RC=0                                       ← 4. ^ANCHORED = 0   (baseline 1)
 ```
 
-| | boot 1 `w294cup2` | boot 3 `w294cup2b` (confirmation) |
+| | boot 1 `w294cup2` | **boot 3, confirmation** |
 |---|---|---|
-| `^CUP2_RC=` **anchored** | ★ **0** | see §6 |
-| unanchored, for contrast | `[CUP2_RC=0 CUP2_RC=0]` | |
+| `^CUP2_RC=` **anchored** | ★ **0** | ★ **0** |
+| `CE rv=… want=…` | `0xabcd1234` / `0xabcd1234` → **PASS** | `0xabcd1234` / `0xabcd1234` → **PASS** |
+| `MEMALLOC OK` | `0x7f263c200000` | `0x708a80200000` |
+
+⇒ **2 / 2 `cup2` boots crossed, plus the `nvd` arm's `CTX OK`. Three boots, two instruments.**
+
+> ⊘⊘ **AND THE CONFIRMATION NEARLY READ AS THE FIRST BOOT.** `w294_run.sh` set
+> `export KAYFABE_TAG=w294${ARM}` **unconditionally**, so the caller's `KAYFABE_TAG=w294cup2b`
+> was discarded and boot 3 **overwrote boot 1's `run_w294cup2_*.log`**. Nothing said so — the
+> grading block printed a perfect result, under boot 1's filename, from boot 3's data. The
+> only thing that separated them was that `MEMALLOC OK` carries an **ASLR-moved address**, a
+> discriminator that exists by luck. Boot 1's artefacts survive only because they were pulled
+> before the overwrite. ⚠ Fixed to `${KAYFABE_TAG:-…}`, and recorded because it is the same
+> trap the parent script's own comment warns about, re-committed one layer up.
 
 ⚠ **The anchor trap, resolved rather than avoided.** The unanchored read is `0 0`, not the
 `[0 1]` of the last seven rungs. Both zeros are real: `grep -oh 'CUP2_RC=[0-9]*'` also matches

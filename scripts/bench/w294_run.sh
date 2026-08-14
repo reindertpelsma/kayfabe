@@ -29,7 +29,17 @@ case "$ARM" in cup2|nvd) ;; *) echo "usage: $0 cup2|nvd" >&2; exit 64 ;; esac
 REPO=${KAYFABE_REPO:-/workspace/kayfabe_w294}
 export KAYFABE_REPO="$REPO"
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w294}
-export KAYFABE_TAG=w294${ARM}
+# ⊘⊘ **OVERRIDABLE, AND THIS LINE COST A CONFIRMATION RUN.** `[measured 2026-08-14]` it read
+# `export KAYFABE_TAG=w294${ARM}` unconditionally, so a caller invoking
+# `KAYFABE_TAG=w294cup2b ./w294_run.sh cup2` had its override silently discarded and the
+# **third boot overwrote the first boot's `run_w294cup2_*.log`**. ⚠ Nothing said so: the
+# grading block printed a perfect result, under the first boot's filename, from the third
+# boot's data. What separated them afterwards was only that `MEMALLOC OK` carries an
+# ASLR-moved address (`0x7f263c200000` vs `0x708a80200000`) — a discriminator that exists by
+# luck, not by design. ⇒ The same defect the parent script's own `KAYFABE_TAG` comment warns
+# about, re-committed one layer up, which is this tree's *knowing a trap by name does not
+# prevent committing it; only a check does*.
+export KAYFABE_TAG=${KAYFABE_TAG:-w294${ARM}}
 case "$ARM" in
   cup2) export POST_CAPTURE_HOOK="$REPO/scripts/bench/cup2_hook_gdbspin.sh" ;;
   nvd)  export POST_CAPTURE_HOOK="$REPO/scripts/bench/nvdiff_hook.sh"; export GQ_TIMEOUT=${GQ_TIMEOUT:-900} ;;
