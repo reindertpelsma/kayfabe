@@ -1243,7 +1243,8 @@ impl SharedDevice {
     pub fn reap_retired_held(&self) -> (usize, usize) {
         let reclaimed = {
             let mut g = self.state.write();
-            g.spine.reap_retired_with(kayfabe_core::gpu::ReapPolicy::HoldUndrained)
+            g.spine
+                .reap_retired_with(kayfabe_core::gpu::ReapPolicy::HoldUndrained)
             // ↑ the write guard dies at this brace, BEFORE the drop below.
         };
         let n = reclaimed.len();

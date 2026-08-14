@@ -9818,7 +9818,10 @@ pub const RETIRED_DRAIN_CHUNK: usize = 64;
 /// PERMANENT defer** — every retired proc held forever, its isolate child never `waitpid`ed,
 /// its GPA arena never recycled. That is a strictly worse leak than the stall this rung
 /// fixes, and it is one keystroke away. Refused at compile time rather than reasoned about.
-const _: () = assert!(RETIRED_DRAIN_CHUNK > 0, "the drain chunk must make progress");
+const _: () = assert!(
+    RETIRED_DRAIN_CHUNK > 0,
+    "the drain chunk must make progress"
+);
 
 impl core::fmt::Debug for Regs {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

@@ -227,8 +227,8 @@ fn a_spent_budget_disposes_a_bounded_slice_and_finishes_the_rest_later() {
         1,
         "the teardown really did retire the proc"
     );
-    let owed = device
-        .with_retired(|procs| procs.iter().map(|p| p.pending_release_len()).sum::<usize>());
+    let owed =
+        device.with_retired(|procs| procs.iter().map(|p| p.pending_release_len()).sum::<usize>());
     assert!(
         owed >= 3 * PINS as usize,
         "★ NON-VACUITY: the dead proc must owe at least one unmap + one free + one munmap per \
@@ -242,7 +242,10 @@ fn a_spent_budget_disposes_a_bounded_slice_and_finishes_the_rest_later() {
         turns += 1;
         turns >= 1 // the budget is spent after exactly one turn
     });
-    assert!(stats.budget_hit, "the fixture must actually spend the budget");
+    assert!(
+        stats.budget_hit,
+        "the fixture must actually spend the budget"
+    );
     assert_eq!(
         stats.turns, 1,
         "exactly one plan→execute→check-in turn ran before the deadline was read"
@@ -268,8 +271,7 @@ fn a_spent_budget_disposes_a_bounded_slice_and_finishes_the_rest_later() {
          inside the pre-existing `deferred` count."
     );
     assert!(
-        device
-            .with_retired(|procs| procs.iter().map(|p| p.pending_release_len()).sum::<usize>())
+        device.with_retired(|procs| procs.iter().map(|p| p.pending_release_len()).sum::<usize>())
             > 0,
         "…and the remainder is still queued, still named, still reachable — deferred, not lost"
     );
@@ -442,7 +444,11 @@ fn the_split_takes_at_most_the_budget_and_loses_nothing() {
         "the second batch finishes `unmap` and only then starts `free`"
     );
     let third = q.split_off_budget(99);
-    assert_eq!(third.len(), 3, "a budget larger than the remainder takes it all");
+    assert_eq!(
+        third.len(),
+        3,
+        "a budget larger than the remainder takes it all"
+    );
     assert_eq!(q.len(), 0, "…and the queue is empty");
     assert_eq!(
         first.len() + second.len() + third.len(),
@@ -451,7 +457,11 @@ fn the_split_takes_at_most_the_budget_and_loses_nothing() {
     );
 
     let mut empty = Orphans::default();
-    assert_eq!(empty.split_off_budget(10).len(), 0, "an empty queue splits to nothing");
+    assert_eq!(
+        empty.split_off_budget(10).len(),
+        0,
+        "an empty queue splits to nothing"
+    );
     let mut q2 = Orphans {
         unmap: vec![(HostHandle::new(iso, 1), 0)],
         free: Vec::new(),
