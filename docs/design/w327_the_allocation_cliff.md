@@ -322,6 +322,25 @@ evidence that the size is fine, and it is **not** evidence that the defect is go
 COPY line on all three boots. ⊘ Its `R33_RC=1` is the *fresh* arm provoking a fault on purpose
 and is expected — it is graded on the client's own words, never on the rc.
 
+**Offline suite, `cargo test --workspace --features host-isolates --no-fail-fast` on `vh2` at
+`15d52b10`: 2926 passed, 6 failed across 3 targets** —
+`a_device_with_no_fb_source_refuses_the_vidmem_ring`,
+`a_guest_doorbell_reaches_the_host_completion_observer`,
+`a_second_doorbell_over_an_unchanged_ring_forwards_nothing`,
+`a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote`,
+`the_logic_crates_carry_no_unnamed_guest_os_assumption`,
+`the_observers_negative_verdict_refuses_the_guest_doorbell`.
+⇒ **exactly master's stated baseline of 3 targets / 6 tests. This rung adds none.**
+
+★ **And it briefly added a SEVENTH, which turned out to be the most useful thing the suite
+did all day.** `every_unserviced_id_a_boot_recorded_is_classified` went red the moment this
+rung's boot logs entered the tree, naming `0x83de030c`
+(`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`) and every boot that recorded it — and that
+list is **exactly the 11 failing boots and none of the 10 passing ones**. It is libcuda's error
+path: the guest asking *which* fault killed its kernel, reached only after the launch is
+already lost. Now carried in `LEDGER` with what this rung believes about it
+(`tests/tests/admitted_is_served.rs`). ⊘ Not served, and explicitly **not** read as inert.
+
 ★★★★★ **AND THE KNOWN-POSITIVE FIRED**, which w322 could not get (`VOID` on its one attempt):
 `w327n` ran `BENCH_NOLAUNCH=1`, the arming assertion found `BENCH_MODE=NOLAUNCH` **present**,
 and the verifier reported `BENCH_NOLAUNCH_TOTAL_BAD=3670016 > 0`.
