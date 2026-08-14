@@ -4520,7 +4520,79 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
                     appears ZERO times in cap3, because cup8's path differs from \
                     nvd_prog's. That is an ABSENCE OF EVIDENCE, not evidence of refusal",
     },
+    // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ARE NOT THE ID ANY IOCTL ORACLE
+    // SHOWS.** See `PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES` for the whole argument; the short
+    // form is that the guest's `0x00801909` is answered **inside the guest's own kernel**
+    // and only its *internal* consequence, `0x00802009`, is RPC'd to us.
+    InputOnlyControl {
+        cmd: 0x0080_2009,
+        name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL",
+        // `NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS { NvBool bCudaLimit; }`,
+        // `ogkm-580: ctrl0080perf.h:39-43`; `NvBool` is `NvU8` (`nvtypes.h:272`).
+        params_size: 1,
+        // ⚠ SAY WHICH AUTHORITY. There is NO ioctl oracle for this id and there never can
+        // be — it is `RMCTRL_FLAGS_INTERNAL` and is issued by the guest's KERNEL, so it
+        // crosses no ioctl boundary any LD_PRELOAD recorder watches.
+        authority: "⊘ NO IOCTL ORACLE EXISTS FOR THIS ID, BY CONSTRUCTION (internal; never \
+                    crosses the ioctl boundary — native, C and nvdiff are all structurally \
+                    blind to it, which is SILENCE and not a negative). Authority is (1) \
+                    ogkm-580 g_device_nvoc.c:1017-1030 flags=0x1d8 ROUTE_TO_PHYSICAL ⇒ it \
+                    is OURS to answer; (2) OUR OWN boot ledger — `unserviced fn 76 cmd \
+                    0x00802009` in run_w290pdrain_qemu.log; (3) its CONSEQUENCE measured at \
+                    the ioctl boundary — traces/nvdiff_w292/serve_r1 i=412, the guest's \
+                    0x00801909 carrying our 0x56 back verbatim (kern_cuda_limit.c:126-136)",
+    },
+    InputOnlyControl {
+        cmd: 0x0080_2004,
+        name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE",
+        // ⊘ ZERO, and it is not an omission: `g_device_nvoc.c:1011` reads
+        // `/*paramSize=*/ 0 /* Singleton parameter list */`, and the sole caller passes
+        // `NULL, 0` (`kern_cuda_limit.c:64-69`). A row with no body to echo.
+        params_size: 0,
+        authority: "⊘ NO IOCTL ORACLE, same reason as 0x00802009. Authority is (1) ogkm-580 \
+                    g_device_nvoc.c:1002-1015 flags=0xc0 ROUTE_TO_PHYSICAL; (2) OUR OWN \
+                    ledger — `unserviced fn 76 cmd 0x00802004` in run_w290pdrain_qemu.log. \
+                    ★ Refusing it is the UNSAFE side: deviceKPerfCudaLimitCliDisable \
+                    (kern_cuda_limit.c:62-75) checks our status BEFORE `nCudaLimitRefCnt = \
+                    0`, so a refusal leaves the guest's own refcount permanently non-zero \
+                    at device teardown",
+    },
 ];
+
+/// ★★★★★ **w294 — `0x00801909` IS NOT THE ID THAT ARRIVES, AND SERVING IT WOULD HAVE BEEN
+/// A NO-OP THAT LOOKED LIKE A FIX.**
+///
+/// `[measured 2026-08-14]` `traces/nvdiff_w292/serve_r1.jsonl.zst` record **412** shows the
+/// guest's `NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL` (`0x00801909`, `psize=1`,
+/// `ppre=ppost=01`) coming back `NV_ERR_NOT_SUPPORTED`, where a native GA106 answers `NV_OK`
+/// twice (`host_reference_ga106/ctx_r1` i=431 `01`, i=460 `00`). The obvious reading — *"add
+/// `0x00801909` to the served table"* — is **wrong**, and the ABI says so:
+///
+/// | id | flags | `ROUTE_TO_PHYSICAL`? | who answers it |
+/// |---|---|---|---|
+/// | `0x00801909` | `0x118` (`g_device_nvoc.c:920`) | ⊘ **NO** | the **guest's own kernel** |
+/// | `0x00802009` | `0x1d8` (`g_device_nvoc.c:1025`) | ★ **YES** | **us** |
+/// | `0x00802004` | `0x0c0` (`g_device_nvoc.c:1010`) | ★ **YES** | **us** |
+///
+/// `deviceCtrlCmdKPerfCudaLimitSetControl_IMPL` (`ogkm-580:
+/// src/nvidia/src/kernel/gpu/perf/kern_cuda_limit.c:94-137`) bumps a per-`Device` refcount
+/// in guest RAM, and **only on the 0↔1 edge** issues the *internal* `0x00802009` to physical
+/// RM — *"`status = pRmApi->Control(… NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL
+/// …); return status;`"*. ⇒ **The `0x56` the guest reports on `0x00801909` is OUR `0x56` on
+/// `0x00802009`, relayed verbatim.**
+///
+/// ★★★ **AND NEITHER INSTRUMENT CAN SEE BOTH HALVES — that is the seam, not the ids.**
+/// The `LD_PRELOAD` nvdiff recorder sits at the **ioctl** boundary and can only ever see
+/// `0x00801909`; our `UnservicedLedger` sits at the **GSP RPC** boundary and can only ever
+/// see `0x00802009`/`0x00802004` (`[measured]` all three appear, each in exactly one of the
+/// two). A reader holding one instrument concludes the wrong id, with a correct citation.
+/// ⊘ Do not add `0x00801909` to [`INPUT_ONLY_CONTROLS`] or to
+/// `kayfabe_rmrpc::OBJECT_CONTROLS`: it cannot arrive, so a row for it would be a served id
+/// that is never asked — indistinguishable, from the outside, from a fix.
+/// `tests/tests/admitted_is_served.rs::the_cuda_limit_pair_is_served_and_the_ioctl_id_is_not`
+/// is the assertion that keeps it that way.
+pub const PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES: (u32, u32, u32) =
+    (0x0080_1909, 0x0080_2009, 0x0080_2004);
 
 /// The row for `cmd`, if this port serves it as an input-only ack.
 #[must_use]

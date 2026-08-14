@@ -1,3 +1,37 @@
+//! ★★★★★ **CORRECTED 2026-08-14 (w294) — READ THIS FIRST. "THE CONTROL `cuCtxCreate` STOPS
+//! AT" IS FALSE, IN BOTH POLARITIES, AND TWO COMMITTED MEASUREMENTS SAY SO.**
+//!
+//! Everything below opens by calling `0x20801210` *the control `cuCtxCreate` stops at*, and
+//! §16.59/§16.60 built a rung on it. It never stopped anything:
+//!
+//! **(1) Serving it changes NOTHING the guest does next.** `[measured, traces/guest_boots/
+//! run_s45_748a207_tsgsched_probe.log:449 vs run_s47_81582e3_ctxsw_probe.log:449]` two boots
+//! differing only in this record's status — `0x56` vs `NV_OK`, identical request bytes.
+//! **456 records each; exactly one record differs, and it is that status field.** Records
+//! 332…456 are byte-identical after pointer canonicalisation, and **`CUP2_RC=1` in both**.
+//!
+//! **(2) "Record 332 begins the `FREE` burst" is not a failure signature — a SUCCESSFUL run
+//! has it too.** `[measured, ../nvidia-gpu-passthrough/traces/host_reference_ga106/
+//! ctx_r1.jsonl.zst]` a native GA106 whose own stdout prints `CTX OK` also begins a large
+//! `FREE` burst two records after this control (i=433, after `0x00801909` at i=431). The
+//! burst is `cuCtxDestroy`/exit unwind, and **both outcomes produce one**. ⇒ A teardown
+//! cannot discriminate success from failure, because both programs exit.
+//!
+//! **(3) When the guest asks for CILP and we refuse, IT DOWNGRADES AND RETRIES.**
+//! `[measured, traces/nvdiff_w292/serve_r1.jsonl.zst]` i=391 `cilpPreemptMode=2` → our
+//! `0x56`; **i=392 `cilpPreemptMode=0` → our `NV_OK`**, `psize=pgot=32` on both. ⇒ The
+//! classifier's refusal lands the guest on the mode this port is actually in, one record
+//! later, by libcuda's own fallback. **Serving CILP would delete record 392.**
+//!
+//! ⇒ ★★★ **The ruling (w294): the refusal STAYS, and it is a measurement rather than an
+//! owner question.** The table below — *"C asks `2`, ours asks `0`"* — is also superseded:
+//! `[measured, w292]` ours asks `2` as well now, because the `0` was itself a downstream
+//! effect of our refusing `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` one control upstream.
+//! The **lesson** below survives (a green C oracle is evidence about the C's payload); its
+//! **example** does not.
+//!
+//! ---
+//!
 //! ★★★★ **`NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` (`0x20801210`) — §16.59.**
 //!
 //! The control `cuCtxCreate` stops at, `[measured 2026-08-10, boots s45_748a207_tsgsched and

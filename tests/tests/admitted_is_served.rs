@@ -143,6 +143,15 @@ const BOOT_LOGS: &str = "traces/guest_boots";
 
 /// The newest boot this file is calibrated against. Named, not inferred: a gate whose
 /// universe depends on lexical filename order changes meaning when a tag is added.
+///
+/// ⚠ **w294 — this constant is a CALIBRATION POINT, not a claim about recency**, and it was
+/// read as the latter. It has said `s47_81582e3_ctxsw` since §16.60 while five later boots
+/// entered the tree, because the only test that reads it
+/// ([`the_s45_wall_is_served_and_the_newest_boot_no_longer_records_it`]) asks whether *that*
+/// boot still records `0x20801210` — a question whose answer never expires. Nothing checked
+/// that a **newer** boot had arrived, so "newest" quietly stopped being true.
+/// ⇒ [`every_committed_boot_tag_has_its_qemu_log`] is the gate that quantifies over the
+/// whole directory instead, which is what actually needed doing.
 const NEWEST_BOOT: &str = "s47_81582e3_ctxsw";
 
 /// Every `unserviced fn 76 cmd 0x…` id in every committed boot log, mapped to the set of
@@ -248,6 +257,31 @@ static GRADUATED: &[u32] = &[
     0x83de_0309,
     0xa06c_0103,
     0xa06c_0105,
+    // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ENTERED AND LEFT THIS LIST IN THE
+    // SAME COMMIT, FOR A REASON THAT INDICTS THE GATE.**
+    //
+    // `[measured 2026-08-14]` both ids sit in `run_w290pdrain_qemu.log`'s unserviced ledger.
+    // That boot ran on 2026-08-13 and **its QEMU log was never committed** — only its
+    // `probe`/`dmesg`/`hostdmesg`/`harness` logs were — so this gate's universe
+    // (`traces/guest_boots/*_qemu.log`) could not see them, `files >= 40` still passed on
+    // the forty older logs, and the gate reported healthy while blind to the newest boot.
+    // `every_committed_boot_tag_has_its_qemu_log` is the assertion that ends that, and it
+    // fires on this tree as it stood before this commit — a known-positive, not a hope.
+    //
+    // ⚠ "Served" here means `NV_OK` with the guest's own bytes, via
+    // `ObjectPolicy::respond_input_only`. What it asserts: `0x00802009` declares *"clocks
+    // are limited on CUDA's behalf"* on a device that models **no clock domain at all**, so
+    // there is no observable it can make false — the `kayfabe_device::inert` eligibility
+    // rule, applied to a control. `0x00802004` is its teardown half, and refusing THAT is
+    // the actively unsafe side: `deviceKPerfCudaLimitCliDisable`
+    // (`ogkm-580: kern_cuda_limit.c:62-75`) checks our status **before** `nCudaLimitRefCnt
+    // = 0`, so a refusal leaves the guest's own refcount permanently non-zero.
+    //
+    // ⊘ The id a reader will look for — `0x00801909` — is deliberately absent; it cannot
+    // reach us. See `kayfabe_abi::submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES` and
+    // `the_cuda_limit_pair_is_served_and_the_ioctl_id_is_not`.
+    0x0080_2004,
+    0x0080_2009,
 ];
 
 static LEDGER: &[u32] = &[
@@ -706,9 +740,17 @@ fn the_w292_input_only_controls_are_claimed_and_decided() {
             row.cmd,
             row.name
         );
+        // ⊘ **w294 — `> 0` WAS AN OVER-TIGHT PROXY FOR "somebody measured this".** A real
+        // control can have `paramsSize == 0`: `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE`
+        // is `/*paramSize=*/ 0 /* Singleton parameter list */`
+        // (`ogkm-580: g_device_nvoc.c:1011`) and its only caller passes `NULL, 0`
+        // (`kern_cuda_limit.c:64-69`). So zero is allowed — **but only by name**, so that
+        // "measured as zero" can never be confused with "nobody filled the field in".
+        const MEASURED_ZERO_PARAMS: &[u32] = &[0x0080_2004];
         assert!(
-            row.params_size > 0,
-            "0x{:08x} {} has no measured params size",
+            row.params_size > 0 || MEASURED_ZERO_PARAMS.contains(&row.cmd),
+            "0x{:08x} {} has params_size 0 and is not on MEASURED_ZERO_PARAMS — a zero here \
+             is indistinguishable from an unfilled field unless the id is named",
             row.cmd,
             row.name
         );
@@ -723,6 +765,140 @@ fn the_w292_input_only_controls_are_claimed_and_decided() {
             Some(row.cmd),
             "0x{:08x} is not findable through its own lookup",
             row.cmd
+        );
+    }
+}
+
+/// ★★★★★ **w294 — THE SEAM, AND IT IS NOT AN ID. A BOOT WHOSE `_qemu.log` WAS NEVER
+/// COMMITTED IS A BOOT THIS ENTIRE FILE CANNOT SEE.**
+///
+/// # The defect, measured on this tree
+///
+/// `[measured 2026-08-14]` `traces/guest_boots/` carried `run_w290pdrain_{probe,dmesg,
+/// hostdmesg,harness}.log` and **no `run_w290pdrain_qemu.log`**. That boot — the newest in
+/// the tree, and the one `traces/nvdiff_w292` is written about — put **two ids in its
+/// unserviced ledger that appear in no other boot**: `0x00802009` and `0x00802004`. Neither
+/// was in [`LEDGER`], neither was in [`GRADUATED`], and
+/// [`every_unserviced_id_a_boot_recorded_is_classified`] **passed**, because the file that
+/// recorded them was not in the universe it quantifies over.
+///
+/// ⊘⊘ **And nothing looked wrong.** [`ledger_ids`]'s own guard is `files >= 40`, which the
+/// forty older logs satisfy on their own; the tag's other four logs were present, freshly
+/// timestamped and correctly named. **Every signal said the evidence was there.** This is
+/// the tree's serial-log trap in a new place: *an artefact that is absent reads as an
+/// artefact that had nothing to say.*
+///
+/// # Why this gate and not "assert the newest boot is listed"
+///
+/// A gate naming one boot is a gate that ages (see [`NEWEST_BOOT`]). This one is a
+/// **closure property over the directory**: any tag that produced *any* committed log must
+/// have produced its `_qemu.log`, because that file is the only instrument in the tree that
+/// records the GSP-RPC boundary — `unserviced fn 76 cmd 0x…`. An ioctl capture cannot
+/// substitute for it: `[measured]` `0x00802009` appears in **zero** ioctl captures and
+/// **can** appear in none, being `RMCTRL_FLAGS_INTERNAL`.
+///
+/// ★ **Known-positive:** this test fails on the parent commit of the one that introduced
+/// it, naming `w290pdrain`. It was not written against a green tree.
+#[test]
+fn every_committed_boot_tag_has_its_qemu_log() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the workspace root is the tests crate's parent")
+        .join(BOOT_LOGS);
+    // Every tag that produced any committed log, and the suffixes it produced.
+    let mut tags: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for e in std::fs::read_dir(&dir).expect("the committed boot logs are in the tree") {
+        let p = e.expect("a readable dir entry").path();
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(rest) = name.strip_prefix("run_").and_then(|s| s.strip_suffix(".log")) else {
+            continue;
+        };
+        // `run_<tag>_<suffix>.log` — the suffix is everything after the last `_`.
+        let Some((tag, suffix)) = rest.rsplit_once('_') else {
+            continue;
+        };
+        tags.entry(tag.to_string())
+            .or_default()
+            .insert(suffix.to_string());
+    }
+    assert!(
+        tags.len() >= 40,
+        "only {} boot tags found under {BOOT_LOGS} — this gate lost its universe",
+        tags.len(),
+    );
+    let blind: Vec<String> = tags
+        .iter()
+        .filter(|(_, sfx)| !sfx.contains("qemu"))
+        .map(|(tag, sfx)| {
+            let mut s: Vec<&str> = sfx.iter().map(String::as_str).collect();
+            s.sort_unstable();
+            format!("{tag}  (has: {})", s.join(", "))
+        })
+        .collect();
+    assert!(
+        blind.is_empty(),
+        "★★★★★ {} boot tag(s) committed logs but NOT their `_qemu.log`. That file is the \
+         ONLY instrument in this tree that records the GSP-RPC boundary (`unserviced fn 76 \
+         cmd 0x…`), so every gate in this file is BLIND to those boots while reporting \
+         healthy — which is exactly how `0x00802009` and `0x00802004` stayed unclassified. \
+         ⊘ Do not delete the tag's other logs to satisfy this: commit the QEMU log.\n  {}",
+        blind.len(),
+        blind.join("\n  "),
+    );
+}
+
+/// ★★★★★ **w294 — TWO BOUNDARIES, TWO IDS, ONE EVENT: `0x00801909` MUST NOT BE SERVED AND
+/// `0x00802009`/`0x00802004` MUST BE.**
+///
+/// The obvious reading of `traces/nvdiff_w292/serve_r1.jsonl.zst` record **412** — the
+/// guest's `NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL` answered `0x56` where a native
+/// GA106 answers `NV_OK` — is *"serve `0x00801909`"*. That change would have compiled,
+/// passed every gate in this file, and **done nothing**, because the id cannot reach us:
+/// `flags=0x118`, no `ROUTE_TO_PHYSICAL` (`ogkm-580: g_device_nvoc.c:920`), so the guest's
+/// own kernel answers it and only its internal consequence is RPC'd to us.
+///
+/// ⇒ This test pins the direction of the fix, in both polarities, so a later lane cannot
+/// quietly move the row to the id the ioctl recorder shows.
+#[test]
+fn the_cuda_limit_pair_is_served_and_the_ioctl_id_is_not() {
+    let (ioctl_id, set_control, disable) = kayfabe_abi::submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES;
+
+    assert!(
+        !is_served(ioctl_id),
+        "★★★ 0x{ioctl_id:08x} is served, and it CANNOT ARRIVE — it is not \
+         ROUTE_TO_PHYSICAL, so the guest's own kernel answers it. A row for it is an answer \
+         to traffic that does not exist, which from outside is indistinguishable from a fix",
+    );
+    assert!(
+        !kayfabe_rmrpc::OBJECT_CONTROLS.contains(&ioctl_id),
+        "0x{ioctl_id:08x} is claimed by OBJECT_CONTROLS — see above",
+    );
+
+    let seen = ledger_ids();
+    for cmd in [set_control, disable] {
+        assert!(
+            is_served(cmd),
+            "★★★ 0x{cmd:08x} is unserved — w294 claimed it, and its 0x56 is what the guest \
+             reports back on 0x{ioctl_id:08x}",
+        );
+        // ⊘ The evidence half: a served id whose arrival nobody measured is a guess.
+        let boots = seen.get(&cmd).unwrap_or_else(|| {
+            panic!(
+                "0x{cmd:08x} is served but NO committed boot log records it reaching the \
+                 unserviced ledger — either the evidence left the tree or this id never \
+                 arrived. ⚠ Check `every_committed_boot_tag_has_its_qemu_log` first: a \
+                 missing `_qemu.log` produces exactly this symptom."
+            )
+        });
+        assert!(
+            !boots.is_empty(),
+            "0x{cmd:08x} has an empty boot set — an entry that records nothing",
+        );
+        assert!(
+            GRADUATED.contains(&cmd) && !LEDGER.contains(&cmd),
+            "0x{cmd:08x} is served: it belongs in GRADUATED and not in LEDGER",
         );
     }
 }

@@ -1806,6 +1806,20 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     0x83de_0309,
     0xa06c_0103,
     0xa06c_0105,
+    // ★★★★★ **w294 — THE CUDA PERF LIMIT PAIR, AND THEY ARE THE IDS NO IOCTL ORACLE SHOWS.**
+    //
+    // `[measured 2026-08-14, traces/nvdiff_w292/serve_r1 i=412]` the guest's
+    // `0x00801909` comes back `0x56` where a native GA106 answers `NV_OK`. ⊘ `0x00801909`
+    // is **not** on this list and must never be: `flags=0x118`, **no `ROUTE_TO_PHYSICAL`**
+    // (`ogkm-580: g_device_nvoc.c:920`), so it is answered inside the guest's own kernel and
+    // cannot reach us. What reaches us is its internal consequence — and
+    // `[measured, run_w290pdrain_qemu.log]` **both** of these appear in that boot's
+    // `unserviced fn 76 cmd 0x…` ledger, which is the only instrument that can see them.
+    //
+    // ⚠ Two boundaries, two ids, one event; neither recorder sees both halves. The whole
+    // argument is `kayfabe_abi::submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
+    0x0080_2004,
+    0x0080_2009,
 ];
 
 impl ObjectPolicy {
@@ -2082,6 +2096,14 @@ impl ObjectPolicy {
     ///
     /// # ⚠ What this does NOT do, said out loud
     ///
+    /// ⊘ **w294 — a row may measure `params_size == 0`, and the checks below already handle
+    /// it correctly rather than by accident.** `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE`
+    /// is `/*paramSize=*/ 0 /* Singleton parameter list */` (`ogkm-580:
+    /// g_device_nvoc.c:1011`) and its only caller passes `NULL, 0` (`kern_cuda_limit.c:64-69`).
+    /// The size equality then demands the guest declare `0` too, and the echoed body is the
+    /// envelope with an empty params region — which is what RM's own transport expects,
+    /// since `rpc.c:11085-11090` copies nothing back when `paramsSize == 0`.
+    ///
     /// It records **nothing**. These four change no state this port models: `0x83de0309`
     /// is an RM-internal event filter whose default is already more permissive than the
     /// value the guest asks for; `SET_TIMESLICE` and `PREEMPT` are scheduler hints to a
@@ -2270,9 +2292,64 @@ impl ObjectPolicy {
         })
     }
 
+    /// ★★★★★ **RULING, MEASURED 2026-08-14 (w294): THIS ARM IS NOT A WALL IN EITHER
+    /// POLARITY, AND THE REFUSAL STAYS. ⊘ Everything below that calls it "the wall" or "an
+    /// owner question" is superseded by the two measurements in this block.**
+    ///
+    /// The w292 note below hands the reader an open design question — *"answer honestly and
+    /// block, or promise preemption we do not have"*. It is **closed**, by evidence that was
+    /// already committed when the question was written:
+    ///
+    /// **(1) The controlled pair says the answer is causally inert.**
+    /// `[measured, traces/guest_boots/run_s45_748a207_tsgsched_probe.log:449 vs
+    /// run_s47_81582e3_ctxsw_probe.log:449]` two boots differing **only** in the status
+    /// returned at record 331 — `0x56` in `s45`, `NV_OK` in `s47`, identical request bytes.
+    /// **456 records each; exactly one record differs, and it is that status field.**
+    /// Records 332…456 are byte-identical after pointer canonicalisation, and `CUP2_RC=1` in
+    /// both. ⇒ *"refusing here ends `cuCtxCreate`"* is **refuted**: serving it changed
+    /// nothing the guest did next.
+    ///
+    /// **(2) When the guest asks for CILP and we refuse, IT DOWNGRADES AND RETRIES — and we
+    /// serve the retry.** `[measured, traces/nvdiff_w292/serve_r1.jsonl.zst]`:
+    ///
+    /// | record | `cilpPreemptMode` | our answer |
+    /// |---|---|---|
+    /// | i=391 | `2` `COMPUTE_CILP` | `0x56` `PreemptionNotImplemented` |
+    /// | **i=392** | ★ **`0` `COMPUTE_WFI`** | ★ **`NV_OK`** |
+    ///
+    /// `psize = pgot = 32` on both, so neither row is short. ⇒ ★★★ **Refusing lands the
+    /// guest on the mode this port is actually in, one record later, by libcuda's own
+    /// fallback.** Serving CILP would **delete record 392** and leave the guest believing
+    /// instruction-level compute preemption is armed — which is the standing construction
+    /// rule (*a completion is sent only if the observed state after it is intended and safe
+    /// in the guest*) violated for no measured gain.
+    ///
+    /// ⊘ **And the C is not an authority to overturn this with.** `[measured, cap3
+    /// #453716/#453717]` the C answered `NV_OK` to `cilp=2` — but `0x20801210` appears
+    /// **zero times** in `nvkvm_gpu_emul.c`; the reply came from the blanket default
+    /// (`C: nvkvm_gpu_emul.c:3060`, *"body.status = NV_OK (default)"*) with the request
+    /// echoed. Citing it is citing the C where it forges.
+    ///
+    /// ⚠ What is genuinely unknown stays unknown: `subdeviceCtrlCmdKGrSetCtxswPreemptionMode_IMPL`
+    /// has **no body in the open tree** (`ogkm-580`, searched whole; the control is
+    /// `flags=0x10348` `ROUTE_TO_PHYSICAL` with `pFunc` compiled to `NULL`, so the semantics
+    /// live in signed GSP firmware), and no `bCilpSupported`-style property exists anywhere.
+    /// ⇒ We cannot inherit an answer, so refusing remains the only position that is not a
+    /// guess — now with the added fact that it costs the guest one record.
+    ///
+    /// ---
+    ///
     /// ★★★★ **§16.59 — the `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` arm** (`0x20801210`):
     /// the wall `s45` and `s46` both measured at record **331** of 456, two records before
     /// `cuCtxCreate` gives up and one record before the `FREE` burst.
+    ///
+    /// ⊘ **CORRECTED (w294): "two records before `cuCtxCreate` gives up" reads a teardown as
+    /// a verdict, and it is not one.** `[measured, host_reference_ga106/ctx_r1.jsonl.zst]` a
+    /// **native GA106 whose run prints `CTX OK`** also begins a large `FREE` burst two
+    /// records after this control (i=433, after `0x00801909` at i=431). The burst is
+    /// `cuCtxDestroy`/exit unwind, and **both a successful and a failed run produce one**.
+    /// ⇒ *"record 332 begins the `FREE` burst"* has been carried as a failure signature
+    /// since §16.56 and cannot discriminate anything.
     ///
     /// # ★★★ What is being claimed, in the two words the brief asked for
     ///

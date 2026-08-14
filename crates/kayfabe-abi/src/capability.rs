@@ -715,9 +715,24 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x0080180d, name: "NV0080_CTRL_CMD_DMA_GET_CAPS", origin: Origin::Nvproxy },
     ControlEntry { cmd: crate::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY, name: "NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: crate::versions::NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY, name: "NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY", origin: Origin::Mode2Rpc },
+    // ⊘⊘ **w294 — ADMITTED AND UNSERVEABLE, AND THE ROW SAYS SO.** `0x00801909` is
+    // `flags=0x118` (`ogkm-580: g_device_nvoc.c:920`) — **no `ROUTE_TO_PHYSICAL`** — so the
+    // guest's own kernel answers it out of a per-`Device` refcount and it NEVER reaches our
+    // GSP. Admitting it at the ioctl boundary is right (the guest may name it); serving it
+    // would be impossible, not merely unnecessary. The id that actually arrives is
+    // `0x00802009`, three rows below. See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
     ControlEntry { cmd: 0x00801909, name: "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00801b01, name: "NV0080_CTRL_CMD_MSENC_GET_CAPS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00801c02, name: "NV0080_CTRL_CMD_BSP_GET_CAPS_V2", origin: Origin::Nvproxy },
+    // ★★★★★ **w294 — THE PAIR THAT ACTUALLY ARRIVES.** `Origin::Mode2Rpc`, not `Nvproxy`:
+    // these are `RMCTRL_FLAGS_INTERNAL` and are issued by the guest's KERNEL, so gVisor's
+    // userspace-ioctl allowlist has no opinion on them and never could. They reach us for
+    // exactly the reason `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` does — `ROUTE_TO_PHYSICAL` on
+    // a GSP client means the guest RPCs them to the GSP, which is us.
+    // ⚠ Admitting is NOT serving; the arm is `kayfabe_rmrpc`'s `OBJECT_CONTROLS` +
+    // `submit::INPUT_ONLY_CONTROLS`, held in lockstep by `tests/tests/admitted_is_served.rs`.
+    ControlEntry { cmd: 0x00802004, name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE", origin: Origin::Mode2Rpc },
+    ControlEntry { cmd: 0x00802009, name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x00da0002, name: "NV_SEMAPHORE_SURFACE_CTRL_CMD_BIND_CHANNEL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00f80103, name: "NV00F8_CTRL_CMD_ATTACH_MEM", origin: Origin::Nvproxy },
