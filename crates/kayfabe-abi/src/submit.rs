@@ -4495,15 +4495,21 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
         authority: "C cap3_matmul_forwarding SERVED NV_OK psize=992 dlen=992 COMPLETE (the \
                     GREEN run); native GA106 NV_OK @77",
     },
-    InputOnlyControl {
-        cmd: 0x83de_0309,
-        name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
-        params_size: 4,
-        authority: "C cap3 SERVED NV_OK psize=4 dlen=4 COMPLETE; native GA106 NV_OK @425. \
-                    ★ THE ONE THAT ENDS cuCtxCreate. ogkm: RM-internal event filter, no \
-                    hardware write, default when never called is _ALL (more permissive \
-                    than the 0x3a the guest asks for)",
-    },
+    // ⊘⊘⊘ **`0x83de_0309` WAS A ROW HERE (w292) AND IS NOT ANY MORE — w295.**
+    //
+    // Its authority was never wrong: the C's `cap3` serves it `NV_OK` at `dlen == psize == 4`
+    // (COMPLETE, so trustworthy by this tree's own `dlen >= psize` rule) and a native GA106
+    // serves it `NV_OK` at record 425. ⊘ What both oracles ALSO do, and what no row here
+    // recorded, is **permit `GT200_DEBUGGER` itself**: the C allowlists class `0x83de`
+    // (`nvidia-gpu-passthrough/src/qemu/nvkvm_fe_alloc_allowlist.h:79`) and a real GA106
+    // allocates the object at record 401 and frees it at 451, once per CUDA context, in
+    // every capture that reaches `cuCtxCreate`.
+    //
+    // ⇒ ★★★ **The oracles are consistent and we were not.** They serve the control BECAUSE
+    // they hold the object; this port refuses the object and served the control anyway.
+    // Citing them for the control alone was citing half of what they do — this tree's
+    // *"a CORRECT CITATION narrowed by the READING"*. The row returns the moment the class
+    // does, and not before; see `docs/design/class_control_consistency.md`.
     InputOnlyControl {
         cmd: 0xa06c_0103,
         name: "NVA06C_CTRL_CMD_SET_TIMESLICE",

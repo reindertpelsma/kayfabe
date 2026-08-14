@@ -166,6 +166,32 @@ pub const RM_GSS_LEGACY_MASK: u32 = 0x0000_8000;
 /// (`gvisor/pkg/abi/nvgpu/classes.go:69`).
 pub const NV2081_BINAPI_CLASS: u32 = 0x2081;
 
+/// ★★★★★ **The class a control ACTS ON, read out of the command word itself.**
+///
+/// RM encodes it in the top half: `NVxxxx_CTRL_CMD_*` is
+/// `(FINN_<CLASS>_<IFACE>_INTERFACE_ID << 8) | index`, and the interface id is
+/// `(class << 8) | iface` — so `cmd >> 16` **is** the external class id. Read off NVIDIA's
+/// own generated table rather than inferred: `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK`
+/// is `0x83de0309` and `GT200_DEBUGGER` is `0x83de`
+/// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl83de/ctrl83dedebug.h:225`,
+/// `src/common/sdk/nvidia/inc/class/cl83de.h:33`); `NVA06C_CTRL_CMD_SET_TIMESLICE` is
+/// `0xa06c0103` on `KEPLER_CHANNEL_GROUP_A` `0xa06c`.
+///
+/// ⊘ **This is not a new convention — this module already depended on it**, in
+/// [`CapabilityTable::control`]'s binary-API rule, which has always tested
+/// `(cmd >> 16) & 0xffff == NV2081_BINAPI_CLASS`. Naming it is what lets a *class*
+/// question be asked of a *control*, which is the quantification the deny tables were
+/// missing (see [`DENIED_CLASSES`]).
+///
+/// ⚠ **It is a derivation, not a lookup, and it is exact only for class-scoped ids.** The
+/// `NV0000_*` root controls decode to class `0x0000`, which is `NV01_ROOT` and is a real
+/// class — correctly so, since those controls genuinely act on the client root. No id this
+/// port carries decodes to a class it does not act on.
+#[must_use]
+pub const fn control_owner_class(cmd: u32) -> u32 {
+    (cmd >> 16) & 0xffff
+}
+
 /// Where a permitted row came from. Not decoration: it is what distinguishes a row with
 /// an upstream oracle from one this project added on its own evidence, and the two are
 /// audited differently.
@@ -603,10 +629,46 @@ impl CapabilityTable {
                 why: d.why,
             });
         }
+        // ★★★★★ **THE CLASS GATE OVER CONTROLS — w295. A control on an object we refused
+        // to create is refused with the CLASS's reason.**
+        //
+        // `[measured 2026-08-14, traces/w294_cudalimit + traces/nvdiff_w292]` this port
+        // held `GT200_DEBUGGER` (`0x83de`) in [`DENIED_CLASSES`], **refused the guest's
+        // `RM_ALLOC` of it** (`run_w294cup2_qemu.log`:
+        // `AllocClassNotPermitted::Refused … id=0x000083de`), and then answered
+        // `0x83de0309` — a control ON that class — with `NV_OK`
+        // (`control 0x83de0309 result 0x00000000 x1`). ⇒ **We answered on behalf of an
+        // object we do not have.** That is an echo, not a service: the exception mask the
+        // guest believes it set on the GSP side was never held by anything.
+        //
+        // ⊘ **It was invisible because every gate here quantified over CONTROLS.** The two
+        // deny tables were independent lists with no predicate relating them, so a class
+        // could be refused and its own controls admitted with nothing in the type system,
+        // the tables or the tests able to notice. `no_control_is_admitted_on_a_denied_class`
+        // is the quantifier that closes it; this branch is what makes the answer follow.
+        //
+        // ★★★ **Placed ABOVE the two blanket rules on purpose, and that is the half that
+        // matters more than the one measured id.** `RM_GSS_LEGACY_MASK` is bit 15 — *half
+        // the command space of every class* — and the binary-API rule takes a whole class.
+        // Both pass a command with **no table row at all**, so without this ordering a
+        // denied class's controls would leak through a blanket that never names them, and
+        // no allowlist edit could ever have shown it. `0x83de0309` has bit 15 clear and so
+        // arrives at the allowlist today; `0x83de8xxx` would not have.
+        //
+        // ⇒ ★ **The owner's lever is now ONE LINE.** Denying a class denies its controls,
+        // and admitting a class re-admits them, with no second edit and no second list to
+        // keep in step. Which way `0x83de` should go is an owner ruling and is written up
+        // in `docs/design/class_control_consistency.md`.
+        if let Some(d) = find_denied(self.shared.denied_classes, control_owner_class(cmd.0)) {
+            return ControlPermit::Denied(Denial::Refused {
+                name: d.name,
+                why: d.why,
+            });
+        }
         if cmd.0 & RM_GSS_LEGACY_MASK != 0 {
             return ControlPermit::GssLegacyRule;
         }
-        if (cmd.0 >> 16) & 0xffff == NV2081_BINAPI_CLASS {
+        if control_owner_class(cmd.0) == NV2081_BINAPI_CLASS {
             return ControlPermit::BinApiRule;
         }
         // ★ Own blocks before the shared base. The two are disjoint by construction
@@ -814,13 +876,28 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x503c0102, name: "NV503C_CTRL_CMD_REGISTER_VA_SPACE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0104, name: "NV503C_CTRL_CMD_REGISTER_VIDMEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x503c0105, name: "NV503C_CTRL_CMD_UNREGISTER_VIDMEM", origin: Origin::Nvproxy },
-    // ★★★★★ **w292 — RESTORED TO THE ALLOWLIST BY OWNER RULING** (2026-08-14, *"no
-    // objection, feel free to do it"*), after `traces/nvdiff_w292` measured it ending
-    // `cuCtxCreate`. It was moved to `DENIED_CONTROLS` on the premise that this port does
-    // not implement SM debugger trapping; the premise is right and the conclusion was
-    // wrong, because **this control programs no hardware at all** — see
-    // `DeniedBecause::SmDebuggerTrapping`'s w292 correction for the ogkm citations.
-    ControlEntry { cmd: 0x83de0309, name: "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", origin: Origin::Nvproxy },
+    // ⊘⊘⊘ **`0x83de0309` WAS HERE (w292) AND IS NOT ANY MORE — w295, and this is NOT a
+    // reversal of w292's ARGUMENT.**
+    //
+    // w292 restored it by owner ruling on a measured, correct premise: the control writes
+    // no hardware, and RM's default when it is never called is `_ALL`, so refusing it
+    // leaves the guest strictly MORE permissive than serving it does. ★ **Every word of
+    // that survives.** What it did not ask — because nothing in this file could ask it —
+    // is *whether we hold the object the control acts on*. We do not:
+    // `GT200_DEBUGGER` (`0x83de`) is in `DENIED_CLASSES` and we refuse the guest's
+    // `RM_ALLOC` of it (`traces/w294_cudalimit/run_w294cup2_qemu.log`,
+    // `AllocClassNotPermitted::Refused … id=0x000083de`).
+    //
+    // ⇒ Serving it was answering `NV_OK` for state nothing on our side holds — and
+    // "refusing is more permissive than serving" is only true when serving actually SETS
+    // something. It did not. `CapabilityTable::control`'s class gate now derives this
+    // answer from the class row instead of from a hand-kept second list, so the two can
+    // never disagree again.
+    //
+    // ★ **To restore it, move the class, not the control**: delete the `0x83de` row from
+    // `DENIED_CLASSES` and this id is permitted again with no edit here — that is the
+    // owner decision `docs/design/class_control_consistency.md` sets out, with the
+    // boundary it widens named.
     ControlEntry { cmd: 0x906f0101, name: "NV906F_CTRL_GET_CLASS_ENGINEID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x906f0102, name: "NV906F_CTRL_CMD_RESET_CHANNEL", origin: Origin::Nvproxy },
     // ★★★★★ **w288 TIER 2 — the ONLY control that carries a fault's ADDRESS.** The error
@@ -2072,18 +2149,25 @@ mod tests {
         // every boundary gains exactly one. ⊘ That the deltas are uniform is the check — a
         // row that landed in one boundary's own block would move ONE of these numbers, and
         // this list would say which.
+        // ★★★★★ **−1 from EVERY boundary's control count on 2026-08-14 (w295)**: the same
+        // row, retracted, because its class `GT200_DEBUGGER` (`0x83de`) is denied and this
+        // port refuses the guest's alloc of it. ⊘ **The uniform −8 is the evidence, and it
+        // is doing real work here**: `0x83de0309` is one id, but a class denial refuses a
+        // whole `cmd >> 16` family, so a retraction that reached only SOME boundaries would
+        // mean the class gate was resolving differently per boundary — which it must never,
+        // since `DENIED_CLASSES` lives in the shared base and nowhere else.
         let want: &[ResolvedExpectation] = &[
             (
                 "550.54.04",
                 (550, 54, 4),
-                159,
+                158,
                 77,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                160,
+                159,
                 77,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2093,14 +2177,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                159,
+                158,
                 77,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                160,
+                159,
                 85,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2110,7 +2194,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                162,
+                161,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2122,7 +2206,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                163,
+                162,
                 91,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2135,7 +2219,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                163,
+                162,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2148,7 +2232,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                163,
+                162,
                 93,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2482,6 +2566,179 @@ mod tests {
         );
     }
 
+    // ── ★★★★★ w295: the CLASS-level quantifier ──────────────────────────────────────
+
+    /// ★★★★★ **NO CONTROL IS ADMITTED ON A CLASS THIS PORT REFUSES TO CREATE — asked of
+    /// every DENIED CLASS, at every boundary.**
+    ///
+    /// # The defect it exists for, measured before it existed
+    ///
+    /// `[measured 2026-08-14]` this port simultaneously held `GT200_DEBUGGER` (`0x83de`) in
+    /// [`DENIED_CLASSES`], **refused** the guest's `RM_ALLOC` of it
+    /// (`traces/w294_cudalimit/run_w294cup2_qemu.log`:
+    /// `AllocClassNotPermitted::Refused … id=0x000083de`), and **served** `0x83de0309` —
+    /// a control on that very class — with `NV_OK` (`control 0x83de0309 result 0x00000000`).
+    /// Downstream, the guest's `RM_FREE` of the object came back `0x56`
+    /// (`traces/w294_cudalimit/w294nvd_ce_r1.jsonl.zst` i=422, `hOld=0x5c000072`), which is
+    /// the correct consequence of the refused alloc and is how the disagreement finally
+    /// surfaced — as a **free status**, three planes away from its cause.
+    ///
+    /// ⊘⊘ **It hid for a rung because EVERY gate in this tree quantifies over CONTROLS.**
+    /// `no_denied_id_is_a_boundary_specific_control`, `the_two_deny_lists_are_disjoint`,
+    /// `admitted_is_served`, `served_chain_seats` — all of them sweep *ids*, and the two
+    /// deny tables were independent lists with no predicate relating a class to the
+    /// controls that act on it. A class-level contradiction is invisible to every one of
+    /// them, by construction and not by oversight. This is the missing quantifier.
+    ///
+    /// ★ **Quantified over the RESOLVED answer, not over table membership.** It asks
+    /// [`CapabilityTable::control`] — so it also covers the two blanket rules
+    /// ([`RM_GSS_LEGACY_MASK`], [`NV2081_BINAPI_CLASS`]), which admit commands that have no
+    /// table row at all and which a membership sweep could therefore never see.
+    #[test]
+    fn no_control_is_admitted_on_a_denied_class() {
+        for t in crate::versions::TABLES {
+            let caps = t.capabilities();
+            for denied in caps.all_denied_classes() {
+                // Every command word this port carries, plus the two blanket rules' worth
+                // of shape, re-asked as "…but on the denied class".
+                for e in caps.all_controls() {
+                    assert_ne!(
+                        control_owner_class(e.cmd),
+                        denied.id,
+                        "{}: control {:#010x} {} is ADMITTED, but its class {:#06x} {} is \
+                         DENIED ({:?}). We would answer a control on an object we refuse to \
+                         create — an echo, not a service. Move the CLASS or drop the \
+                         CONTROL; they may not disagree.",
+                        t.note,
+                        e.cmd,
+                        e.name,
+                        denied.id,
+                        denied.name,
+                        denied.why,
+                    );
+                }
+                // ★ …and the blanket rules, asked directly. `deny_beats_the_rule_based_
+                // passthrough` pins this for DENIED_CONTROLS; these two ids pin it for
+                // DENIED_CLASSES, which is the half that had no coverage at all.
+                for probe in [
+                    (denied.id << 16) | 0x8123, // GSS-legacy bit set
+                    (denied.id << 16) | 0x0101, // ordinary, no row
+                ] {
+                    match caps.control(ControlCmd(probe)) {
+                        ControlPermit::Denied(_) => {}
+                        other => panic!(
+                            "{}: {probe:#010x} is on DENIED class {:#06x} {} and the \
+                             boundary answered {other:?} — a blanket rule passed a control \
+                             on a class we refuse to create",
+                            t.note, denied.id, denied.name,
+                        ),
+                    }
+                }
+            }
+        }
+    }
+
+    /// ★★★★★ **THE KNOWN-POSITIVE — a deliberate class/control disagreement, and the gate
+    /// must NAME it.**
+    ///
+    /// ⊘ Without this, `no_control_is_admitted_on_a_denied_class` is a test whose only
+    /// evidence of working is that it is green — and this tree has measured *"a census ZERO
+    /// needs a KNOWN-POSITIVE"* and *"suspect the instrument first"* often enough that a
+    /// silent sweep is not evidence of anything. Here the disagreement is **built on
+    /// purpose**, through the real [`CapabilityTable::control`], and the assertion is that
+    /// the answer FLIPS with the class row and with nothing else.
+    #[test]
+    fn the_class_gate_names_a_deliberate_disagreement() {
+        // The alloc side: one class, refused by name.
+        static DENIED_CLS: &[DeniedEntry] = &[DeniedEntry {
+            id: 0x0000_83de,
+            name: "SYNTHETIC_DENIED_CLASS",
+            why: DeniedBecause::SmDebuggerTrapping,
+        }];
+        // The control side: a control ON that class, admitted by name. This is exactly the
+        // shape w294 measured in production.
+        static ADMITTED_CTL: &[ControlEntry] = &[ControlEntry {
+            cmd: 0x83de_0309,
+            name: "SYNTHETIC_CONTROL_ON_A_DENIED_CLASS",
+            origin: Origin::Nvproxy,
+        }];
+        static DISAGREEING: SharedCapabilities = SharedCapabilities {
+            controls: ADMITTED_CTL,
+            classes: &[],
+            denied_controls: &[],
+            denied_classes: DENIED_CLS,
+        };
+        static T_BAD: CapabilityTable = CapabilityTable {
+            shared: &DISAGREEING,
+            own_controls: &[],
+            own_classes: &[],
+            note: "test fixture: a deliberate class/control disagreement",
+        };
+
+        // ★ 1. The gate's PREDICATE fires on the disagreement. Written as the predicate
+        // rather than by calling the sweep, because the sweep panics and a `should_panic`
+        // cannot say WHICH assertion tripped — the failure mode this tree names as
+        // *"a falsifier that can't tell THE blocker from the ONLY blocker"*.
+        let disagreements: Vec<u32> = T_BAD
+            .all_denied_classes()
+            .flat_map(|d| {
+                T_BAD
+                    .all_controls()
+                    .filter(move |e| control_owner_class(e.cmd) == d.id)
+                    .map(|e| e.cmd)
+            })
+            .collect();
+        assert_eq!(
+            disagreements,
+            vec![0x83de_0309],
+            "the gate's predicate did not name the deliberate disagreement"
+        );
+
+        // ★ 2. And the RESOLVED answer follows the class, not the control row: the id is
+        // on the allowlist and is refused anyway, with the CLASS's name and reason.
+        assert_eq!(
+            T_BAD.control(ControlCmd(0x83de_0309)),
+            ControlPermit::Denied(Denial::Refused {
+                name: "SYNTHETIC_DENIED_CLASS",
+                why: DeniedBecause::SmDebuggerTrapping,
+            }),
+            "a control on a denied class was admitted by its own allowlist row"
+        );
+
+        // ⊘ 3. NON-VACUITY, and it is the half that makes 1 and 2 mean anything: the SAME
+        // control row, with the class row removed, is LISTED. So the refusal above is the
+        // class gate acting, not the fixture being unreachable for some other reason.
+        static AGREEING: SharedCapabilities = SharedCapabilities {
+            controls: ADMITTED_CTL,
+            classes: &[],
+            denied_controls: &[],
+            denied_classes: &[],
+        };
+        static T_OK: CapabilityTable = CapabilityTable {
+            shared: &AGREEING,
+            own_controls: &[],
+            own_classes: &[],
+            note: "test fixture: the same control, class not denied",
+        };
+        assert_eq!(
+            T_OK.control(ControlCmd(0x83de_0309)),
+            ControlPermit::Listed {
+                name: "SYNTHETIC_CONTROL_ON_A_DENIED_CLASS",
+                origin: Origin::Nvproxy,
+            },
+            "the fixture's control row was never reachable — 1 and 2 prove nothing"
+        );
+        assert!(
+            T_OK.all_denied_classes()
+                .flat_map(|d| T_OK
+                    .all_controls()
+                    .filter(move |e| control_owner_class(e.cmd) == d.id))
+                .next()
+                .is_none(),
+            "the predicate reported a disagreement in the AGREEING fixture"
+        );
+    }
+
     // ── The founding entries: shortening the list must fail a test ───────────────────
 
     /// ★★★ **The pin.** Named rows the port is known to need, asserted individually, so
@@ -2610,7 +2867,18 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        assert_eq!(bench().all_controls().count(), 163, "controls");
+        // ⊘⊘⊘ **−1 on 2026-08-14 (w295): `0x83de0309` RETRACTED, and the retraction is
+        // NOT the mirror of w292's addition.** w292 moved it OUT of `DENIED_CONTROLS` and
+        // INTO here, so the two counters moved in opposite directions and that opposition
+        // was the evidence it MOVED. w295 moves it out of here and into **nothing**:
+        // `all_denied_controls()` stays at 12. That is the right reading and not a missed
+        // edit — the id is now refused by its CLASS (`GT200_DEBUGGER` `0x83de`, in
+        // `DENIED_CLASSES`) through `CapabilityTable::control`'s class gate, so a
+        // `DENIED_CONTROLS` row would be a second source of truth beside a complete value.
+        // ⚠ The number a reader will expect to move and which does NOT is
+        // `all_denied_classes()`: it stays at 4. Nothing was added to the deny side; a
+        // contradiction was removed from the admit side.
+        assert_eq!(bench().all_controls().count(), 162, "controls");
         assert_eq!(at(550, 54, 4).all_classes().count(), 77, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 85, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 91, "classes at 570");
@@ -2643,7 +2911,11 @@ mod tests {
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because
         // it forwards to a real GPU — and w292 measured that our own refusal, not the
         // hardware's, is what ended `cuCtxCreate`.
-        assert_eq!(n(Origin::Nvproxy), 149);
+        // ⊘ 149 → 148 on 2026-08-14 (w295): `0x83de0309` was an `Nvproxy`-origin row and
+        // is retracted. ★ `Mode2Rpc` and `Empirical` are UNCHANGED, which is what says the
+        // retraction hit exactly the row intended — nvproxy's opinion is still that the id
+        // is fine, and it is; what changed is that we do not hold its object.
+        assert_eq!(n(Origin::Nvproxy), 148);
         assert_eq!(
             bench()
                 .all_classes()
