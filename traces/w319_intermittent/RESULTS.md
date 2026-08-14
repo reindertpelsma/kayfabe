@@ -142,6 +142,32 @@ Pinning one page is a patch on one symptom of a missing invariant.
 
 ---
 
+## 4b. ★★★★★ ARM M — THE **FAITHFUL** KNOB. THE CLOCK ITSELF MODULATES IT TO 100 %
+
+`KAYFABE_VAS_DRAIN_BUDGET_MS=2500` — not a proxy, **the very clock the defect trips on**.
+**2 / 2 RED**, both pre-registered clauses met (`⚠⚠ WALL BUDGET HIT`, `complete=false`,
+`DRAIN_MS=2500`, truncation below `0x2_0440f000`):
+
+| boot | `pinned/asked` | `last_pinned_va` | host `Xid` |
+|---|---|---|---|
+| `w319m1` | 12235 / 13313 | `0x2033ca000` | 31 · **CE3 · HUBCLIENT_CE1** · @ `0x2_0440f000` · `FAULT_PDE` |
+| `w319m2` | 10628 / 13313 | `0x202d83000` | 31 · **GRAPHICS · HUBCLIENT_FE** · @ `0x2_0440f000` · `FAULT_PDE` |
+
+⚠ **A second prediction of mine missed its range:** I pre-registered `pinned` in 9 000–11 500;
+the measurements are **12 235** and **10 628** — one inside, one above. The essential clauses
+(red, budget hit, incomplete, truncated below the page) all held; the range did not, and it is
+recorded as a miss rather than quietly widened.
+
+★ **The engine varied again** — `CE3` then `GRAPHICS` — at the *same* VA, on the *same* arm.
+That is now **2 independent arms × 5 boots** showing the engine is incidental and the page is
+the invariant.
+
+⇒ **THE RATE IS MODULATED TO 100 % BY TWO INDEPENDENT KNOBS** — a row count (arm R, 3/3) and a
+wall clock (arm M, 2/2) — both acting on the same truncation. That is the modulation the brief
+asked for, in the "make it worse" direction, pre-registered before it ran.
+
+---
+
 ## 5. What every other lane should do about it, starting now
 
 **Stop grading this on `CUP3_VAL`.** The binary outcome is a ~20 %-probability *consequence*;
@@ -161,3 +187,30 @@ DRAIN[visited=true asked=N pinned=M refused=0 DRAIN_MS=T complete=BOOL ⚠⚠ WA
 | `budget_hit` alone | ⊘ **NOT a discriminator** — `w314br4` hit the budget and was green. |
 
 ⇒ **One boot now grades**, where before it took n ≥ 4 plus a same-hour control.
+
+`scripts/bench/w319_attribute.sh <tag>` implements exactly that table. `--selftest` runs six
+offline fixtures plus an explicit matcher assertion; it is validated on four real boots.
+★ **Run `--selftest` before trusting it** — its first version passed 5/5 fixtures while broken
+on every real log (see the script header, trap 2).
+
+---
+
+## 6. ★★★ FOR `w318` SPECIFICALLY — three things, one of them a prediction
+
+1. **Your hypothesis's framing is wrong and that is load-bearing.** There is no publication
+   *ordering race*: publication is synchronous on the vCPU thread, before the forward. If your
+   dirty-set gate is being designed against a race, it is being designed against something that
+   does not exist. The real hazard is **incomplete delivery under a budget**.
+2. **Grade with `w319_attribute.sh`, not with `CUP3_VAL`.** `VERDICT=0` on a faulting boot means
+   *your* gate missed. `VERDICT=1` means the pre-existing truncation fired. `VERDICT=3` means
+   the other intermittent. This is the discrimination you are blocked on, and it costs 0 boots.
+3. ★★★ **PREDICTION, pre-registered here: a dirty-set gate will make this defect RARER, and you
+   must not read that as your gate being correct.** The defect is *cost-driven* — 13 313 rows ×
+   ~225 µs against a 3 000 ms budget. Anything that shrinks the candidate set shrinks the drain
+   below the budget and the truncation stops happening. ⇒ **a green run after your change is
+   consistent with both "my gate is right" and "my gate accidentally suppressed someone else's
+   bug".** The discriminator is `pinned == asked` **and** `complete=true` on the boot in
+   question — publish that number, not the outcome.
+   ⊘ And the mirror: **a dirty-set MISS and this defect produce the same `FAULT_PDE` symptom**
+   but different clauses — a miss shows `complete=true` with the page never a candidate; this
+   defect shows `complete=false` with the page above `last_pinned_va`.

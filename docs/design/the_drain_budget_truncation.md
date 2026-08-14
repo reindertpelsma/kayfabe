@@ -183,14 +183,39 @@ BQL with **every vCPU halted**, and `[measured w314]` the surrounding disposal a
 **2.65–2.92 s of a 4 s `scrubberDestruct` budget (73 %)**. Completeness bought with more BQL
 spends headroom that is nearly gone, and it scales with the guest's table, not with need.
 
-★ **Restore the guarantee, not the budget.** `KAYFABE_COMPLETION_PIN=on` pins the pages named
-by `WatchList::declared_sites()` — the completions **the guest itself declared** — into the
-doorbelled VAS *before* the budgeted drain. Measured population is eight declarations at a
-16-byte stride ⇒ **one page**, so the cost is one pin rather than 13 313. It restores
-`pin_completion_guest_ram`'s content as an **ordering guarantee**, not as a second mechanism.
+### ⊘⊘⊘ THE OBVIOUS CHEAP FIX WAS TRIED AND **REFUTED** — and that is the useful half
 
-⊘ It is default-off, so one binary carries both arms of the fix test and the only variable
-between them is the flag. Results in `traces/w319_intermittent/RESULTS.md`.
+`KAYFABE_COMPLETION_PIN=on` (added and measured this rung, default off) pins the pages
+`WatchList::declared_sites()` names — the completions **the guest itself declared** — into the
+doorbelled VAS *before* the budgeted drain. One page, one pin, restoring what w304 deleted.
+
+It **executes, lands at the right VA, and lands in time** (`SEMAPIN[… declared_pages=1 pinned=1
+… placed_as_asked=true fresh]`, on the same doorbell as the declaration, after the decode and
+before the forward), through the identical verb the drain uses.
+
+**And it does not fix the defect.** Under a truncation that is 0 green / 4 without it, the pin
+arm returned **1 green / 3** — Fisher exact **p ≈ 0.43, not significant**.
+⇒ **the completion page is not the whole of what the truncation drops.** A one-page patch
+cannot stand in for a missing invariant, and the negative is worth more than the patch: it says
+the fix must be about **completeness**, not about any particular page.
+
+### ★ So what the fix has to be
+
+The invariant is the C's, verbatim: **a mapping is always backed before the engine that uses it
+runs.** Three ways to hold it, in increasing order of how much they deserve:
+
+1. **Raise / remove the budget for the doorbelled VAS's first drain.** Immediate, ~0.7 s more
+   BQL on top of 3.0 s. ⊘ Spends clause-(b) headroom that w314 measured at 73 % consumed.
+   Mitigation, not a fix.
+2. ★★★ **Make the pins cheap enough that completeness is affordable.** The cost driver is
+   **13 313 individual host round trips at ~225 µs each**. A batched/bulk pin verb collapses
+   the drain from ~3 s to a fraction of it, and it fixes the clause-(b) BQL problem *at the
+   same time*. **This is the structural answer and it is the one to build.**
+3. **Refuse to ring on an incomplete drain.** Holds the invariant by construction, but the
+   guest has no retry contract here; architecturally the largest change.
+
+⊘ Nothing is merged. The knobs are instruments, default-off, byte-identical to master when
+unset. Results and per-boot artefacts in `traces/w319_intermittent/RESULTS.md`.
 
 ---
 
