@@ -469,9 +469,20 @@ fn decode_and_encode_round_trip_the_measured_image() {
 fn every_claimed_control_is_decided_even_when_malformed() {
     for &cmd_id in OBJECT_CONTROLS {
         let mut p = policy_with_a_channel();
-        // One garbage byte: wrong size for every claimed control's params.
+        // ⊘⊘ **w294 — "one garbage byte" WAS AN UNSTATED ASSUMPTION, AND IT EXPIRED.**
+        // This probe sent `&[0xee]` unconditionally, relying on *"1 is the wrong size for
+        // every claimed control"* — true until `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL`
+        // (`0x00802009`) arrived, whose params really are **one `NvBool`**
+        // (`ogkm-580: ctrl0080perf.h:39-43`). One byte is then a *well-formed* request, the
+        // arm serves it `NV_OK`, and the gate reads a correct answer as a drift.
+        // ⇒ The length is now chosen **against the id's own measured size**, so "malformed"
+        // is a property of the request rather than a coincidence about the table. ★ The gate
+        // stays quantified over the whole list; it is the probe that was wrong, not the list.
+        let want = kayfabe_abi::submit::input_only_control(cmd_id).map(|r| r.params_size);
+        let n = if want == Some(1) { 2 } else { 1 };
+        let garbage = vec![0xeeu8; n];
         let mut s = w::RpcScript::new();
-        s.control(CLIENT, CHANNEL, cmd_id, &[0xee]);
+        s.control(CLIENT, CHANNEL, cmd_id, &garbage);
         let m = s.messages().into_iter().next().expect("one");
         let reply = p.respond(&command(&m));
         let reply = reply.unwrap_or_else(|| {
