@@ -1,5 +1,32 @@
 //! # ★★★ The locks the R1 witness cannot see are ENUMERATED (`l1_concurrency.md` §3.3.1)
 //!
+//! ## ★★★★★ WHICH CLAUSE THIS GATE ENFORCES, AND WHICH IT CANNOT SEE `[w300, 2026-08-13]`
+//!
+//! `blocking_and_completion_model.md` §1 states the predicate a guest-trap site must satisfy:
+//!
+//! > **INLINE-SAFE(site) ⇔ (a)** completes **without the guest running**, **and (b)** completes
+//! > **within the shortest guest-side timeout covering it**, **and (c)** holds **no lock
+//! > another vCPU's trap path takes**.
+//!
+//! - **(c) — ENFORCED for RANKED locks**, by `kayfabe_util::lock::check_acquire`: a total order,
+//!   checked *before* the OS-level acquire, always-on (not a `debug_assert`). An inversion
+//!   panics by name instead of occasionally deadlocking.
+//! - **(c) — ENUMERATED, NOT ENFORCED, for the unranked locks in this file.** Nothing fires when
+//!   one is taken in a bad order. What this gate buys is that the *set* cannot grow silently:
+//!   a new unranked lock goes RED until someone writes the ruling down.
+//! - **(a) and (b) — NOT VISIBLE HERE AT ALL.** Neither has a mechanism anywhere in the tree
+//!   (that doc's §4 says so). A lock on this list that is held across a wait for something the
+//!   *guest* must do is an (a) violation this gate is structurally unable to report, and every
+//!   row's ruling is therefore about (c) and about blocking-in-general, never about (a).
+//!
+//! ⚠ **And the stakes are higher than "a stalled thread"**: every guest MMIO write arrives with
+//! the **QEMU BQL** held (`shim.rs:4877`, `:6146`, `:6046`), so blocking in a trap handler
+//! freezes **every vCPU and QEMU's main loop** — the whole VM, not the ringing thread.
+//!
+//! ★ This block exists because of *how* (c) stayed violated for months: `assert_lock_free`
+//! masked only ranked locks and **nothing said so at the point of use**. Saying it in prose in
+//! one file was not enough once — so it is said here, in the file a reader lands in.
+//!
 //! R1 says *"no blocking call under ANY lock, ever"*. `kayfabe_util::lockwitness` enforces it
 //! over a mask of **ranked** locks — device = 0, proc = 1, leaf = 2. A plain `std::sync::Mutex`
 //! that nobody ranked is invisible to that mask, so `assert_lock_free` returns cleanly while
@@ -157,6 +184,96 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
          already this file's second named hazard. It is a fixed-size array of counters with no \
          guest-supplied key, so it can neither grow nor allocate while held.",
     ),
+    // =================================================================================
+    // ★★★★★ THE NINE BELOW WERE INVISIBLE UNTIL `[w300, 2026-08-13]` — every one of them
+    // is spelled `Arc<Mutex<…>>`, and the scanner's field test rejected a lock preceded by
+    // `<` instead of by its field's own colon. See `collect_locks` step 3 and
+    // `the_scanner_finds_every_spelling_a_lock_has_ever_been_written_in`.
+    // ⊘ Note WHICH locks the blind spot hid: `Arc<Mutex<…>>` is how a lock shared between
+    // the vCPU and another thread is written, so the spelling this gate could not see was
+    // exactly the spelling the dangerous entries use.
+    // =================================================================================
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<Vec<GrCursorWatch>>",
+        "★★★★★ `CeShellState::gr_cursors`, and the most load-bearing of the nine: like \
+         `completion_watch`'s `Mutex<Inner>` it is held by TWO threads — the vCPU pushes one \
+         row per GR channel at the first declare (:5252), the observer's reactor clones it \
+         every tick (:3766). ⊘ NOTHING may block beneath it, and today nothing does: the \
+         reader CLONES the `Vec` and DROPS the guard before it touches the plane (:3762-3768, \
+         whose own comment gives the reason — holding it across a plane read *'would nest two \
+         unranked locks on two threads in two orders'*), and the vCPU writer drops the guard \
+         before the `eprintln!` on its miss arm (:5263). ⚠ Its doc at :3526 already CLAIMED a \
+         classification in this file; there was none, because this gate could not see the \
+         field. A doc asserting a ruling that does not exist is worse than silence.",
+    ),
+    (
+        "crates/kayfabe-device/src/osevent.rs",
+        "Mutex<Vec<OsEventRegistration>>",
+        "`OsEventLog::live` — the live `(hClient, hEvent)` registrations. Taken for a \
+         scan-then-push (:156), a `retain` (:192), a `map(post).collect()` (:213) and a \
+         `clone` (:220). ⊘ No call beneath it may block and none does: \
+         `OsEventRegistration::post` (:115-121) copies three `Copy` fields into a `PostEvent` \
+         and calls nothing. Every counter beside it is an `AtomicU64` outside the guard.",
+    ),
+    (
+        "crates/kayfabe-device/src/osevent.rs",
+        "Mutex<JoinPoint>",
+        "`OsEventLog::last_join` — one `Copy` struct recording the last delivery join. Taken to \
+         overwrite it (:352) and to copy it out (:384). No call of any kind runs beneath it, so \
+         nothing can block; the `woke_with_nothing` tally beside it is a relaxed atomic.",
+    ),
+    (
+        "crates/kayfabe-device/src/setpagedir.rs",
+        "Mutex<Option<SetPageDirRecord>>",
+        "`SetPageDirLog::latest` — the most recent accepted `SET_PAGE_DIRECTORY`, a single \
+         `Copy` record. Taken to read it out (:259), to overwrite it (:292) and to clear it \
+         (:307). No call runs beneath it and nothing may block there; the totals are atomics.",
+    ),
+    (
+        "crates/kayfabe-device/src/bar2.rs",
+        "Mutex<BarPdes>",
+        "`BarPdeLog::pdes` — the published BAR1/BAR2 PDEs, two `Option<u64>`s. Taken to copy \
+         them out (:159), for a single field assignment (:181) and to reset (:206). ⊘ No call \
+         beneath it, so nothing can block; `updates`/`refusals` are atomics outside the guard.",
+    ),
+    (
+        "crates/kayfabe-device/src/unserviced.rs",
+        "Mutex<Vec<UnservicedCommand>>",
+        "`UnservicedLog::seen` — the de-duplicated sample of commands we did not service. \
+         Taken for a `clone` (:262) and for the contains-then-push (:274-280), deliberately in \
+         ONE guard so the distinct counter and the membership set cannot disagree. ⊘ Nothing \
+         blocks beneath it and nothing may: the push is capped at `UNSERVICED_SAMPLE_MAX`, so \
+         a hostile guest cannot make the critical section grow.",
+    ),
+    (
+        "crates/kayfabe-device/src/faultbuffer.rs",
+        "Mutex<Vec<FaultBufferNote>>",
+        "`FaultBufferLog::seen` — the sample of fault-buffer notes. Taken for a `clone` (:159) \
+         and a capped push (:186-189). ⊘ No call runs beneath it and none may block. Unlike \
+         the unserviced ledger it does NOT de-duplicate, so the cap \
+         (`FAULT_BUFFER_SAMPLE_MAX`) is the only bound on the section — which is why the push \
+         is guarded by the length test rather than trimmed afterwards.",
+    ),
+    (
+        "crates/kayfabe-device/src/gvaspub.rs",
+        "Mutex<GvasPubInner>",
+        "`GvasPubLog::inner` — the VA-space publication table and its report sample. Taken for \
+         the table insert plus the capped sample push (:270), a single `+= 1` (:316), a \
+         `clone` into a snapshot (:323) and a reset (:343). ⊘ Nothing blocks beneath it and \
+         nothing may; the table is keyed last-write-wins on `(client, object)` so it is \
+         bounded by the guest's live objects rather than by its call count.",
+    ),
+    (
+        "crates/kayfabe-device/src/census.rs",
+        "Mutex<CensusInner>",
+        "`ControlCensus::inner` — the served/arming/bind tallies. Taken for a field set (:244) \
+         and for three find-then-push-or-increment paths (:250, :272, :292), each of which \
+         does a linear scan of a distinct-row vector under the guard, plus a `clone` into a \
+         snapshot (:312). ⊘ No call beneath it may block and none does. ⚠ The linear scans \
+         are the one thing to watch: they are bounded by the number of DISTINCT rows, not by \
+         guest call count, so this stays O(small) only while the row keys stay coarse.",
+    ),
 ];
 
 /// Crates a vCPU thread executes through — the scope of the list above.
@@ -284,11 +401,53 @@ fn collect_locks(text: &str, rel: &str, out: &mut BTreeSet<(String, String)>) {
             }
             // 3. It is a FIELD only if a `:` (the field's own colon, not a path's `::`)
             //    precedes it. Anything else is a `let`, a return type or a bound.
-            let mut k = s0;
-            while k > 0 && b[k - 1].is_ascii_whitespace() {
-                k -= 1;
-            }
-            if k == 0 || b[k - 1] != b':' || (k >= 2 && b[k - 2] == b':') {
+            //
+            // ★★★★★ **…possibly through one or more WRAPPER generics — the THIRD spelling
+            // this scanner was blind to** `[w300, 2026-08-13]`. A lock inside an `Arc` is
+            // preceded by `<`, not by its field's colon:
+            //
+            // ```text
+            //     gr_cursors: std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>,
+            //                               ^ the byte before `std::sync::Mutex`
+            // ```
+            //
+            // so the bare `b[k-1] != b':'` test rejected it and **NINE** unranked vCPU-path
+            // locks were never classified — the gate reporting `unclassified.is_empty()`
+            // the whole time. `Arc<Mutex<…>>` is the *normal* way to write a lock shared
+            // between the vCPU and the observer's reactor thread, so this blind spot was
+            // aimed squarely at the entries that matter most.
+            // ⊘ Stepping out is bounded and structural: skip back over the wrapper's own
+            // path name and look again. A `<` with no name before it is not a wrapper, and
+            // a generic ARGUMENT (`BTreeMap<K, Mutex<V>>` — preceded by `,`) still does not
+            // match, which is right: the lock there is not this field's to hold.
+            let mut s = s0;
+            let is_field = loop {
+                let mut k = s;
+                while k > 0 && b[k - 1].is_ascii_whitespace() {
+                    k -= 1;
+                }
+                if k == 0 {
+                    break false;
+                }
+                if b[k - 1] == b':' {
+                    // A single `:` is the field's; a `::` means we are still inside a path.
+                    break !(k >= 2 && b[k - 2] == b':');
+                }
+                if b[k - 1] != b'<' {
+                    break false;
+                }
+                let mut w = k - 1;
+                while w > 0
+                    && (b[w - 1].is_ascii_alphanumeric() || b[w - 1] == b'_' || b[w - 1] == b':')
+                {
+                    w -= 1;
+                }
+                if w == k - 1 {
+                    break false;
+                }
+                s = w;
+            };
+            if !is_field {
                 continue;
             }
             // 4. BRACKET-MATCH the generic argument, so a nested `BTreeMap<…>` cannot end
@@ -355,6 +514,117 @@ fn every_unranked_lock_a_vcpu_thread_can_hold_is_classified() {
         "⊘ these are classified but no longer declared — a list describing code that does not \
          exist makes its other rows less believable: {vanished:#?}"
     );
+}
+
+/// ★★★★★ **THE KNOWN-POSITIVES — the scanner is run against shapes it MUST find, before any
+/// zero it reports is believed.**
+///
+/// # ⊘ Why `!actual.is_empty()` is not this check, and never was
+///
+/// The gate above already refuses an empty scan. That floor proves the walker found
+/// *something*; it cannot distinguish *"the tree declares eleven locks and we found eleven"*
+/// from *"the tree declares twenty and we found the eleven written in the one spelling this
+/// scanner understands."* Both report **zero unclassified**, and the second is the state this
+/// file has now been in **three times**:
+///
+/// | shape | found by | rows it hid |
+/// |---|---|---|
+/// | `std::sync::Mutex<…>` fully qualified | `[2026-08-06]` `Mutex<ParkState>` | 1 |
+/// | field broken after the colon by rustfmt | `[2026-08-09]` `CeShellState::cursors` | 2 |
+/// | **a lock nested inside `Arc<…>`** | `[w300, 2026-08-13]` **this test** | **9** |
+///
+/// ★★★ Each time the gate was **green** while blind, each time the fix was to the scanner,
+/// and each time the blindness was found by someone reading the code rather than by the gate.
+/// ⇒ **this tree's rule, applied to this file: a census zero needs a known-positive.** The
+/// fixtures below are that known-positive, and they are checked against the scanner
+/// **directly**, so a regression fails here — naming the shape — instead of silently
+/// shortening the list the gate above compares.
+///
+/// ⊘ **Fixtures, not the live tree, and deliberately.** A known-positive that reads the real
+/// source dies the moment someone refactors the field it names, and its death looks like a
+/// pass. These strings cannot rot.
+#[test]
+fn the_scanner_finds_every_spelling_a_lock_has_ever_been_written_in() {
+    /// `(fixture, what must be found, why this shape is here)`
+    const KNOWN_POSITIVES: &[(&str, &str, &str)] = &[
+        (
+            "struct S { plain: Mutex<u64>, }",
+            "Mutex<u64>",
+            "the baseline spelling — if this fails the scanner is broken outright",
+        ),
+        (
+            "struct S { sysproc_kept: std::sync::Mutex<u64>, }",
+            "Mutex<u64>",
+            "★★★ `CeShellState::sysproc_kept` AS IT WAS DECLARED at `b6c5442` — the gate's \
+             third catch and its first TRUE POSITIVE (a guard held across an `eprintln!` and \
+             a `String` build, on the vCPU's own MMIO trap). The first scanner could not see \
+             this spelling at all.",
+        ),
+        (
+            "struct S {\n    cursors:\n        std::sync::Mutex<std::collections::BTreeMap<(u32, u32), GpCursor>>,\n}",
+            "Mutex<std::collections::BTreeMap<(u32, u32), GpCursor>>",
+            "`CeShellState::cursors`' shape — rustfmt breaks a long field AFTER the colon, so \
+             the line carrying the name has no type and the line carrying the type has no \
+             field colon. `[measured 2026-08-09]` this hid TWO locks.",
+        ),
+        (
+            "struct S {\n    /// ★★★★★ ⊘ ⚠ a doc comment of multi-byte characters\n    after_unicode: Mutex<u8>,\n}",
+            "Mutex<u8>",
+            "the byte-vs-char bug: every ★/⊘/⚠ is 3 bytes and 1 char, and indexing a \
+             `Vec<char>` with a byte offset made `plane.rs`' three locks vanish from the scan.",
+        ),
+        (
+            "struct S { gr_cursors: std::sync::Arc<std::sync::Mutex<Vec<GrCursorWatch>>>, }",
+            "Mutex<Vec<GrCursorWatch>>",
+            "★★★★★ **THE THIRD BLIND SPELLING, and it is the reason this test exists.** \
+             `[w300, 2026-08-13]` A lock inside an `Arc` is preceded by `<`, not by the \
+             field's colon, so the field test rejected it and NINE unranked vCPU-path locks \
+             were invisible — including `shim.rs`' `gr_cursors`, which is held by TWO \
+             threads (the vCPU pushes, the observer's reactor reads) and whose own doc \
+             claimed a classification in this file that did not exist.",
+        ),
+    ];
+
+    for (src, want, why) in KNOWN_POSITIVES {
+        let mut got = BTreeSet::new();
+        collect_locks(src, "fixture.rs", &mut got);
+        let found: BTreeSet<&str> = got.iter().map(|(_, t)| t.as_str()).collect();
+        assert!(
+            found.contains(want),
+            "★★★★★ THE SCANNER IS BLIND TO A SPELLING IT HAS TO SEE. Expected `{want}`, got \
+             {found:?}.\n  why this fixture is here: {why}\n  ⊘ Every `unclassified.is_empty()` \
+             this scanner reports is only as wide as the spellings it can parse — a shape it \
+             cannot see is a lock nobody was ever asked to classify, and the gate stays GREEN \
+             while it happens.\n  fixture:\n{src}"
+        );
+    }
+}
+
+/// ★★★★ **THE NEGATIVE KNOWN-POSITIVE — a RANKED lock must NOT appear on this list.**
+///
+/// ⊘ Without this arm the scanner could be "fixed" by matching anything containing `Mutex`,
+/// which would pass every fixture above and then demand a classification for the rank system
+/// itself. `RankedMutex<PlaneState>` is the live case and the brief's second known-positive:
+/// `kayfabe_device::RegPlane::state` **was** this table's worst entry and left it by being
+/// ranked (`LockRank::Plane`, w236 §16.87), not by being reworded. It must be absent for
+/// that reason — and a gate that cannot tell "absent because ranked" from "absent because
+/// unparsed" is the exact failure the positives above guard.
+#[test]
+fn a_ranked_lock_is_not_reported_as_unranked() {
+    for src in [
+        "struct RegPlane { state: RankedMutex<PlaneState>, }",
+        "struct S { spine: kayfabe_rt::lock::RankedRwLock<Spine>, }",
+        "struct S { held: std::sync::Arc<RankedMutex<PlaneState>>, }",
+    ] {
+        let mut got = BTreeSet::new();
+        collect_locks(src, "fixture.rs", &mut got);
+        assert!(
+            got.is_empty(),
+            "⊘ a RANKED lock was reported as unranked — `check_acquire` already enforces its \
+             order, so demanding a row for it pads the list with entries that are not review \
+             obligations, and a padded list is a list nobody reads. Got {got:?} from:\n{src}"
+        );
+    }
 }
 
 /// ★★ Every entry says something about blocking, because the classification IS the artefact.

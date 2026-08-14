@@ -121,7 +121,34 @@ predicate has to be checkable rather than remembered.**
 
 ## 4. What is open against this model right now
 
-- ★★★★★ **Clause (c) is violated today, and the guest can build it.** `Mutex<PlaneState>`
+> ### ⊘⊘⊘ CORRECTED `[w300, 2026-08-13]` — **THE BULLET BELOW WAS ALREADY FALSE WHEN THIS DOC
+> ### WAS WRITTEN, AND IT IS THE CLASS THIS TREE PAYS FOR MOST.**
+> `Mutex<PlaneState>` **is not a bare `std::sync::Mutex` and has not been since 2026-08-11.**
+> It is `RankedMutex<PlaneState>` at `plane.rs:1035`, `LockRank::Plane` (rank 0), ranked by
+> **w236 `56269390`** — *two days before this doc was committed* — and `forward_ring` was
+> restructured by **w237 `7107bba5`** into PLAN / **FETCH** / ACT, where the framebuffer read
+> happens in the FETCH phase with **every ranked guard dropped**. Both are ancestors of
+> `master`. ⇒ **the specific ABBA described below is CLOSED**: `core → plane` now panics by
+> name in `check_acquire`, always-on (not a `debug_assert`), *before* the OS-level acquire.
+> ⚠ **The reason it read as live is worth more than the correction.** The finding was true at
+> `e683681`, was fixed four commits later, and was carried forward verbatim into an
+> owner-agreed doc by someone citing the finding rather than re-reading the code. *A ruling's
+> date is part of its citation* — and **citing the oracle is not the oracle being right.**
+>
+> ★★★ **WHAT IS ACTUALLY STILL OPEN FOR CLAUSE (c), measured at `77ad6c2f`:** the enforcement
+> covers **ranked** locks only, and the census that was supposed to catch the rest —
+> `tests/tests/unranked_locks.rs` — was **blind to `Arc<Mutex<…>>`**, the spelling used for
+> every lock shared between the vCPU and another thread. **Nine unranked vCPU-path locks were
+> never classified** while the gate reported zero unclassified, including
+> `CeShellState::gr_cursors`, which is held by two threads and whose own doc *claimed* a
+> classification in that file that did not exist. Fixed in w300: the scanner steps out through
+> wrapper generics, the nine are classified, and a **known-positive fixture suite** now pins
+> every spelling — so a future blind spot fails **naming the shape** instead of shortening the
+> list silently. ⇒ **(c) is ENFORCED for ranked locks and ENUMERATED for unranked ones; it is
+> still not *enforced* for the unranked set.**
+
+- ⊘ **[SUPERSEDED — see the correction directly above; kept for the reasoning, not the status.]**
+  ★★★★★ **Clause (c) is violated today, and the guest can build it.** `Mutex<PlaneState>`
   (`plane.rs:1034`) is a bare `std::sync::Mutex`; `RegPlane::pt_bytes` takes it per read, while
   `forward_ring` calls the ring reader inside a `route_act` closure already holding the rank-0
   device read lock + rank-1 proc mutex — **and the opposite order already ships** (the policy chain
@@ -137,6 +164,12 @@ predicate has to be checkable rather than remembered.**
 - ⊘ **Clauses (a) and (b) have no mechanism at all.** (c) is getting one via `w300`. (a) and (b) are
   currently **prose in this file**, which by this repo's own history means they will be violated by
   a well-meaning patch. **Making them checkable is the next build item under this doc.**
+  ★ `[w300, 2026-08-13]` **Still true, and w300 did not change it.** w300's mechanism is a
+  *census* — it enumerates locks and demands a written ruling per lock. That shape cannot see
+  (a) or (b) even in principle: both are properties of **what runs beneath a lock**, not of the
+  lock's existence, and a fixture-checked scanner over field declarations has no reach into
+  call graphs. ⇒ (a)/(b) need a different instrument (a call-graph or effect-typed one), and it
+  was deliberately **not** widened into w300's rung.
 
 ---
 
