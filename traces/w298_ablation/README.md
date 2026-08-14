@@ -12,24 +12,42 @@ Byte-identical arming to w297. ⇒ every ablation below rests on a reproduced po
 
 ## The table
 
-`FIRST ✘` is the first failed rung of cup3's own stage ladder. `host_rows` is the last/peak reading.
+`FIRST ✘` is the first failed rung of cup3's own stage ladder.
 
-| # | variable | w297 value → ablated | `^CUP3_VAL=` | first ✘ | Xid | host_rows | verdict |
+> ### ⊘⊘ CORRECTED WITHIN THE HOUR — **THE `host_rows` COLUMN WAS SORTED LEXICOGRAPHICALLY, NOT
+> ### NUMERICALLY, AND TWO CELLS WERE WRONG IN THE DIRECTION THAT FLATTERED A CONCLUSION.**
+> The summary row built its `host_rows` field with `sort -u`, so `"host_rows=4 of 13348"` sorts
+> **after** `"host_rows=18295 of 18309"` (`'4' > '1'`) and the *lexicographic last* was printed as
+> if it were the peak. Two cells changed on re-derivation with `sort -n`:
+> - **`GUEST_PUSHBUF=off`: `4/13348` → `18295/18309`.** Harmless — it strengthens the row (the
+>   address plane was *unchanged*, not degraded).
+> - ★ **`PT_WITNESS_EXEC=off`: `4/8` → `13342/13348`.** **Not harmless.** `4 of 8` supported a claim
+>   in §3 that the address table was *empty*; `13342 of 13348` says it was **substantially
+>   published** and the arm failed anyway. §3 is corrected below.
+> ⚠ Same class this tree keeps paying for: the number was *present, plausible, and cited* — only
+> re-deriving it with the right comparator showed it was not the number it was labelled as.
+> The table below is the `sort -n` re-derivation.
+
+| # | variable | w297 value → ablated | `^CUP3_VAL=` | first ✘ | Xid | host_rows (peak) | verdict |
 |---|---|---|---|---|---|---|---|
 | — | *(baseline)* | — | **43** | none | 0 | 18295/18309 | ★ reproduced |
-| 1 | `KAYFABE_PT_SWEEP` | `on` → **`off`** | **43** | none | 0 | ⊘ no `HOST-PUBLISHED` line | ★★★★★ **INERT** |
-| 2 | `KAYFABE_VAS_PUBLISH` | `drain` → **`assert`** | ⊘ ABSENT (`RC=1`) | `CTX OK` | 1 | 9/13348 | **LOAD-BEARING** |
+| 1 | `KAYFABE_PT_SWEEP` | `on` → **`off`** | **43** | none | 0 | ⊘ no `HOST-PUBLISHED` line at all | ★★★★★ **INERT** |
+| 2 | `KAYFABE_VAS_PUBLISH` | `drain` → **`assert`** | ⊘ ABSENT (`RC=1`) | `CTX OK` | 1 | 23/16425 | **LOAD-BEARING** |
 | 3 | `KAYFABE_OPERAND_JOIN` | `join` → **`assert`** | **43** | none | 0 | 18295/18309 | ★★★ **INERT** |
 | 4 | `KAYFABE_GR_ROUTE` | `passthrough` → **`refuse`** | ⊘ ABSENT (`RC=124`) | `CTX OK` | 0 | 13342/13348 | **LOAD-BEARING** |
 | 5 | `KAYFABE_GUEST_RING` | `ring` → **`off`** | ⊘ ABSENT (`RC=124`) | `CTX OK` | 0 | 13342/13348 | **LOAD-BEARING** |
-| 6 | `KAYFABE_GUEST_PUSHBUF` | `pin` → **`off`** | **43** | none | 0 | 4/13348 | ★★★ **INERT** |
+| 6 | `KAYFABE_GUEST_PUSHBUF` | `pin` → **`off`** | **43** | none | 0 | 18295/18309 | ★★★ **INERT** |
 | 7 | `KAYFABE_GUEST_SEMA` | `pin` → **`off`** | **43** | none | 0 | 18295/18309 | ★★★ **INERT** |
 | 8 | `KAYFABE_GUEST_OPERAND` | `pin` → **`off`** | **43** | none | 0 | 18295/18309 | ★★★ **INERT** |
-| 9 | `KAYFABE_FB_JOIN` | `shared` → **`off`** | ⊘ ABSENT (`RC=124`) | `CTX OK` | 0 | 9/13348 | LOAD-BEARING ⚠ *not single-variable* |
+| 9 | `KAYFABE_FB_JOIN` | `shared` → **`off`** | ⊘ ABSENT (`RC=124`) | `CTX OK` | 0 | 17 (of 13348) | LOAD-BEARING ⚠ *not single-variable* |
 | 10 | `KAYFABE_ISOLATES` | `real` → **`stillborn`** | ⊘ ABSENT | — | ⊘ | ⊘ | ⊘ **NOT MEASURABLE** (realize refused) |
 | 11 | `KAYFABE_CE_EXECUTOR` | `host` → **`local`** | ⊘ ABSENT (`RC=1`) | `CTX OK` | 0 | ⊘ absent | **LOAD-BEARING** |
-| 12 | `KAYFABE_PT_WITNESS_EXEC` | `on` → **`off`** | ⊘ ABSENT (`RC=1`) | `CTX OK` | 1 | 4/**8** | **LOAD-BEARING** |
+| 12 | `KAYFABE_PT_WITNESS_EXEC` | `on` → **`off`** | ⊘ ABSENT (`RC=1`) | `CTX OK` | 1 | **13342/13348** | **LOAD-BEARING** |
 | 13 | *(combined)* `PT_SWEEP=off` **+** `VAS_PUBLISH=assert` | | ⊘ ABSENT (`RC=1`) | `CTX OK` | 1 | ⊘ absent | see §2 |
+
+★ Note the totals cluster: every arm that fails to get the compute channel running tops out at a
+**13 348-row** VAS, while every passing arm reaches **18 309**. The 13 348 shape is therefore a
+*consequence* of not getting there, not a cause — do not read it as a distinguishing cause.
 
 ⊘ **`^CUP3_VAL=` ABSENT is UNMEASURED, not 0 and not a failure value.** Rows 2, 4, 5, 9, 11, 12, 13
 each carry a `^CUP3_RC=`, so the *program* terminated and was graded; only the computed value is
@@ -111,12 +129,25 @@ publication (`host_rows`), which was absent from a passing boot.
   documents `host` as the arm that died three times (`Other(19270)`, `RmInitAdapter failed`). That
   text records a **w231-era** measurement and is now **inverted**: on this revision `host` passes and
   `local` fails. A dated STATUS block is owed on `CE_EXECUTOR_ENV`'s doc.
-- **`PT_WITNESS_EXEC=off`** — `FAULT_PDE GRAPHICS/FE VIRT_WRITE @ 0x7328_14e00000`, and the address
-  plane is **empty**: `host_rows=4 of 8` (baseline 18295 of 18309), with `PT-SWEEP tasks=0 skipped=4
-  ran=0`. Exactly what the source predicts — the executor's own pages go unwitnessed, `ReachShadow`
-  refuses to bind them by design, the table stays empty for that VAS, and **the sweep cannot run
-  either**. ⇒ `PT_WITNESS_EXEC` is upstream of `PT_SWEEP`; the `PT_SWEEP` ablation in §1 is only
-  meaningful *because* the witness stayed armed.
+- **`PT_WITNESS_EXEC=off`** — `FAULT_PDE GRAPHICS/FE VIRT_WRITE @ 0x7328_14e00000`, arm witnessed in
+  force by **88 × `EXEC-WITNESS DISARMED`** emissions.
+  > ⊘ **CORRECTED — the first draft of this bullet said "the address plane is **empty**:
+  > `host_rows=4 of 8`", and that was the lexicographic-sort artefact described above.** The real
+  > peak is **`13342 of 13348`**, and `PT-SWEEP` **did** run (`tasks=4 skipped=0 ran=4` appears
+  > beside the `tasks=0 … ran=0` reading the summary's `tail -1` happened to catch). ⇒ the tidy
+  > story — *"unwitnessed executor pages ⇒ `ReachShadow` refuses to bind ⇒ the table stays empty
+  > ⇒ fault"* — **is not what this boot shows.** The table was substantially populated and
+  > published and the engine faulted anyway.
+
+  What the arm *is* measured to do: it never reaches the **18 309**-row VAS shape every passing boot
+  has, stalling at the 13 348 shape shared by every failing arm, and it faults `FAULT_PDE` — the
+  descent dying above the leaf. ⚠ **Why** is not established here. `PT_WITNESS_EXEC` is load-bearing
+  on the evidence (green→red, one variable), but the *mechanism* claimed by the source's doc-comment
+  (an empty table) is **not corroborated by this boot** and needs its own measurement.
+- ★ On the ordering claim: `PT_WITNESS_EXEC` feeds the queue `decode_cpu_pt_writes` drains, which is
+  what arms the sweep, so it is upstream of `PT_SWEEP` — the §1 ablation is only meaningful *because*
+  the witness stayed armed. That dependency is stated in the source; this rung did not test it
+  directly and does not claim to have.
 
 ## §4 — the two arms that are NOT clean single-variable ablations
 
@@ -192,7 +223,15 @@ pin set contains the specific pages each of the three would have pinned.
 2. ★★★ **`KAYFABE_PT_WITNESS_EXEC` was armed but not enumerated** by the "EVERY RELAXATION THAT WAS
    ON" block, so that heading was false by one even after the w297 fix. Now 12 rows, asserted
    non-empty per boot (`relaxation report rows = 12`) rather than merely printed.
-3. ⊘ **The 30-minute artefact-staleness guard ate three arms.** No Rust changes between arms ⇒ cargo
+3. ⊘⊘ **The summary row's `host_rows` field sorted LEXICOGRAPHICALLY.** `sort -u` on
+   `host_rows=<n> of <m>` puts `4 of 13348` after `18295 of 18309`, so the field printed the
+   lexicographic last under a column labelled as the peak — and it was wrong in the direction that
+   supported a conclusion (§3's "the table is empty"). ★ Fix: sort numerically on the extracted
+   integer, or print the whole distinct set rather than one representative. ⚠ Note what did **not**
+   catch it: the value was present, well-formed, plausible, and *cited* — every signal said it was
+   measured. Only re-deriving it with a different comparator showed it was not the number its label
+   claimed.
+4. ⊘ **The 30-minute artefact-staleness guard ate three arms.** No Rust changes between arms ⇒ cargo
    did nothing (`Finished in 0.08s`) ⇒ after ~33 min of boots `build_qom_shim.sh` correctly refused:
    *"is more than 30 minutes old — cargo did not rebuild it and this script will not install an
    archive it did not just produce."* Arms 10–12 exited **`rc=92` at the build, never booted**. The
