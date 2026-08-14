@@ -56,6 +56,35 @@ refused**. A rule never seen to fire is not a rule.
 - ★ **`FaultEmission` is built and orphaned** (`kayfabe-rmrpc/src/fault.rs`) — and per the
   2026-08-13 finding it is **the wrong shape anyway**: the host RM writes the guest's own notifier
   pages when we register them, so **we are not the writer.**
+- ⊘⊘ **CORRECTED 2026-08-14 — the bullet below carries TWO FACTS AS ONE, and the wrong one.**
+  Full derivation: `docs/reference/sm_debugger_scope_and_sm_error_registers.md` (branch
+  `w289-sm-debugger-scope-and-registers`).
+  **(a) `hTargetChannel` is not "never validated" — CPU-RM NEVER READS IT AT ALL.** It is a *control*
+  parameter; the handle RM actually resolves is `HClass3DObject`, an **alloc** parameter, and it
+  resolves it **inside the calling client's handle space** and demands `RS_ACCESS_DEBUG`
+  (`= ALLOW_OWNER`) on the ref (`kernel_sm_debugger_session.c:255`, `:291-302`). ⇒ **Attaching to a
+  stranger's context is structurally blocked**, and forging `hTargetChannel` buys an attacker
+  nothing.
+  **(b) The exposure is RESIDENCY, not the handle.** NVIDIA's own header: the control *"acts upon
+  the **currently resident** GR context"* (`ctrl83dedebug.h:325-327`), and `accessRight = 0x0` on all
+  31 exported methods ⇒ **there is no second gate at control time.** So the tier split is real, but
+  its cause is the residency race, and the reachable leak is a **resident neighbour's**
+  `hwwWarpEsrPc64` / `hwwEsrAddr` while it faults — **metadata about a faulting neighbour, not a
+  read primitive.**
+  ★★ **POLICY, owner 2026-08-14: FOLLOW NVPROXY.** *"they really thought about it for sandboxed
+  containers meant for adversarial code."* nvproxy admits **exactly three** `0x83de03xx` controls,
+  all on `compUtil` (`gvisor/pkg/sentry/devices/nvproxy/version.go:334-336`):
+  `0x83de0309` SET_EXCEPTION_MASK, `0x83de030c` READ_ALL_SM_ERROR_STATES, `0x83de0310`
+  CLEAR_ALL_SM_ERROR_STATES — plus the class `GT200_DEBUGGER` itself (`:427`). ⇒ **Admit those
+  three and the class; deny `0307`/`0317`/`0318`** (SUSPEND/RESUME are absent from nvproxy's table,
+  and denying them is what keeps `030c` coherent — they would turn the residency race into a
+  **deterministic** read).
+  ⚠ **`CLEAR_ALL` (`0310`) is the sharper half of the pair**: suppressing a victim's fault needs only
+  to **precede**, not to win a race to observe. nvproxy carries it anyway; we match.
+  ⚠ **Architecture constraint that falls out of this:** GSP's own check is
+  `VALIDATE_MATCHING_SEC_TOKENS`, and a NULL token *"allows access to any client in the system"* ⇒
+  **isolation here is per-RM-client, so multiplexing several guests into one host client would grant
+  DEBUG across all of them.** See §3's cross-process requirement.
 - ⊘ **`0x83de030c` is a DIFFERENT TIER from `0x83de0309`** (global SM registers for the currently
   resident GR context; `hTargetChannel` never validated). Serving `0309` **neither implies nor
   requires** it. Measured, not assumed.
