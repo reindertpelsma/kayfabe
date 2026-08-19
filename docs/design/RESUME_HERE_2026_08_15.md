@@ -1,3 +1,20 @@
+> ### ⊘⊘ SUPERSEDED IN PART BY w330 (2026-08-19) — READ `w330_the_bench_rebuild_and_three_flags.md` FIRST
+> **§2 item 1 ("FLIP TWO DEFAULTS") is DONE as a measurement and its framing was INCOMPLETE.**
+> - The bench is rebuilt on a **fresh GA106** (580.159.04, deliberately downgraded to match every
+>   recorded green boot). cup3 `=43`, cup8 `bad=0 maxerr=0` @2048².
+> - ⊘ **There are THREE default-off flags, not two.** `KAYFABE_JOIN_RELEASE=supersede` is the
+>   third, and it is a **correctness** flag: the shipped default (`arm=on`, leg 1) fires **zero
+>   times** on this workload and is behaviourally identical to `off`. Measured 2/2 clean vs 2/2
+>   host-Xid `FAULT_PDE`.
+> - ⊘ **The two perf flags act on DIFFERENT STATISTICS and neither is sufficient.** Gate: median
+>   8.5× / p90 19.4×, **max unchanged**. Coalescer: **max 12.7×**, median 1.6× **worse**. Graded on
+>   one statistic, one of them reads as a regression.
+> - ⊘ **§4's `0x110094` line of thought is REFUTED** — that register appears ONCE here. The hot
+>   register is `0xbb0090` at **100.0 % share, 12.28 s, 25.4 ms mean** — our own doorbell.
+> - ⚠ **The nesting caveat is now load-bearing.** ≤2.2 ms/launch was 2.6 % of an 85 ms trap and is
+>   **up to 55 % of a 4 ms one**. Bare metal matters more *because* w318 worked.
+> ⇒ **The next-step ordering below still holds from item 2 onward.**
+
 # RESUME HERE — 2026-08-15
 
 **STATUS: LIVE.** Written at master `68bd47f9` immediately after w329 merged, with **nothing in
