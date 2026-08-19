@@ -5132,10 +5132,21 @@ impl RmBackend for HostRmBackend {
         // so an env-var arm here would mean opening a config channel into the isolate. The arm
         // selector for the measurement is the HOST KNOB plus a build without this call.
         match region.request_huge_pages() {
-            Ok(pmd_backed) => println!(
-                "kayfabe-isolate: LEAF-HUGE len={len} pmd_backed={pmd_backed} \u{2298} bytes the \
-                 kernel actually PMD-mapped, read back from smaps — not the madvise return"
-            ),
+            Ok(r) => {
+                let backed = match r.pmd_backed {
+                    Some(b) => format!("{b}"),
+                    // ⊘ NOT `0`. See `pmd_mapped_bytes` — the isolate is pivot_rooted with no
+                    // `/proc`, and the first boot of this line reported `0` on 107 of 107
+                    // leaves while a plain process on the same host measured 100 %.
+                    None => "UNMEASURABLE(no /proc/self/smaps in this sandbox)".to_owned(),
+                };
+                let eligible = if r.len >= 2 * 1024 * 1024 { "yes" } else { "no(<2MiB)" };
+                println!(
+                    "kayfabe-isolate: LEAF-HUGE len={len} pmd_backed={backed} \
+                     base_2m_aligned={} eligible={eligible}",
+                    r.base_2m_aligned
+                );
+            }
             Err(e) => println!(
                 "kayfabe-isolate: LEAF-HUGE len={len} \u{2298} madvise REFUSED ({e:?}) — the leaf \
                  stays 4 KiB-granular and is mapped anyway"

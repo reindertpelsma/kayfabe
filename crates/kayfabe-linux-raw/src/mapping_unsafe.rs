@@ -352,6 +352,24 @@ fn decode_backing(
 // MappedRegion — the guest-concurrent one, copies only
 // =====================================================================================
 
+/// What [`MappedRegion::request_huge_pages`] found — a measurement, an alignment fact, and
+/// an explicit *"I could not measure"*.
+///
+/// ⊘ `pmd_backed: None` is **not** zero. See [`pmd_mapped_bytes`] for the boot that made the
+/// distinction load-bearing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HugePageReport {
+    /// Bytes the kernel actually PMD-mapped, or `None` where `/proc/self/smaps` is unreadable
+    /// (a sandboxed process with no `/proc` — which the isolate is).
+    pub pmd_backed: Option<u64>,
+    /// Whether the mapping's base is 2 MiB-aligned. Derived from the pointer, so it survives
+    /// where the measurement does not. A `false` here explains a `Some(0)` on its own.
+    pub base_2m_aligned: bool,
+    /// The mapping's length, so a reader can see at a glance that a sub-2 MiB leaf was never
+    /// eligible.
+    pub len: u64,
+}
+
 /// A host mapping the **guest** may be writing while we look at it.
 ///
 /// The access surface is deliberately *copies only*: [`read_into`] and [`write_from`], no
@@ -476,9 +494,18 @@ impl MappedRegion {
     /// [`RawError::Syscall`] if `madvise` itself refused. A refusal to *provide* huge pages
     /// is not an error — it is a return value of `0`, which is the caller's to judge.
     ///
+    /// ★ Also reports whether the mapping's base is 2 MiB-aligned. A mapping shorter than
+    /// 2 MiB, or one whose base straddles a PMD boundary, **cannot** be PMD-mapped no matter
+    /// what the knob says — and that fact is derivable from the pointer alone, so it stays
+    /// available on a host where `smaps` is not.
+    /// `[measured 2026-08-19]` on this bench the kernel aligns every shmem mapping of
+    /// >= 2 MiB by itself, and 64 KiB / 512 KiB leaves came back **0 % even when forced to a
+    /// 2 MiB-aligned base** — they are simply too short. ⇒ **a leaf under 2 MiB is out of
+    /// scope for this call, and that is a property of the leaf, not a failure.**
+    ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5) — it faults in the whole range.
-    pub fn request_huge_pages(&self) -> Result<u64, RawError> {
+    pub fn request_huge_pages(&self) -> Result<HugePageReport, RawError> {
         lockwitness::assert_lock_free("request_huge_pages (faults in the whole range)");
         let base = self.map.base.as_ptr();
         let len = self.map.len;
@@ -503,7 +530,11 @@ impl MappedRegion {
                 off += 4096;
             }
         }
-        Ok(pmd_mapped_bytes(base as usize, len))
+        Ok(HugePageReport {
+            pmd_backed: pmd_mapped_bytes(base as usize, len),
+            base_2m_aligned: (base as usize) % (2 * 1024 * 1024) == 0,
+            len: len as u64,
+        })
     }
 
     /// Copy `dst.len()` bytes from `offset` into `dst`.
@@ -617,16 +648,24 @@ impl MappedRegion {
 // The write-combining release fence — the seam VolatileRegion's docs named
 // =====================================================================================
 
-/// How many bytes of the VMA starting at `base` are PMD-mapped (2 MiB) huge pages.
+/// How many bytes of the VMA starting at `base` are PMD-mapped (2 MiB) huge pages, or
+/// `None` if this process cannot read `/proc/self/smaps` at all.
 ///
-/// ⊘ Reads `/proc/self/smaps` because there is no syscall that answers it. A missing or
-/// unreadable `smaps` yields `0` — *"I could not see any"*, which is the same answer this
-/// function gives for *"there are none"*. That collapse is deliberate: the caller's decision
-/// (report the number it got) is identical in both cases, and inventing a third state here
-/// would put an unmeasurable distinction into a diagnostic.
-fn pmd_mapped_bytes(base: usize, len: usize) -> u64 {
+/// ⊘⊘⊘ **CORRECTED 2026-08-19, WITHIN THE HOUR, AND THE FIRST VERSION'S JUSTIFICATION WAS
+/// EXACTLY BACKWARDS.** This returned `0` for an unreadable `smaps`, arguing that *"the
+/// caller's decision is identical in both cases"*. It is not, and the very first boot proved
+/// it: the isolate reported `pmd_backed=0` on **107 of 107 leaves** — and the isolate is
+/// `pivot_root`ed into a sandbox with its own mount namespace and **no `/proc`**, while a
+/// plain process on the same host, same knob, same 2 MiB length measured **100 %**.
+/// ⇒ **`0` meant "I am blind", and it is indistinguishable from "the kernel refused".** That
+/// is [[a_census_zero_needs_a_known_positive]] and [[suspect_the_instrument_first]] in one
+/// line, in code I had just written to avoid exactly this.
+///
+/// ⇒ **Three states, and the caller must print which.** `Some(0)` is a measurement; `None`
+/// is the absence of one.
+fn pmd_mapped_bytes(base: usize, len: usize) -> Option<u64> {
     let Ok(text) = std::fs::read_to_string("/proc/self/smaps") else {
-        return 0;
+        return None;
     };
     let want = format!("{base:x}-{:x} ", base + len);
     let mut in_vma = false;
@@ -654,7 +693,7 @@ fn pmd_mapped_bytes(base: usize, len: usize) -> u64 {
             }
         }
     }
-    total
+    Some(total)
 }
 
 /// ★★★ **The store barrier that must sit between the ring stores and the doorbell
