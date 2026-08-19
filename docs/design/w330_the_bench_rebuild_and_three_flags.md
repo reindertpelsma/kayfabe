@@ -64,6 +64,26 @@ comparisons that *ran*.
 ⇒ Every discriminating instrument was a **COUNT**; the verdict string discriminated nothing.
 ⊘ And `GUEST_XID_COUNT=0` sat beside a host Xid — two counters named `XID`, two different planes.
 
+> ### ⊘⊘ SCOPED 2026-08-19 BY w331 — **THE `GATE` AND `COAL` ROWS BELOW ARE n = 1, AND A
+> ### PER-BOOT LOTTERY OF 9.1× IS AVAILABLE FOR FREE ON THIS BENCH.**
+> `[measured w331]` three **consecutive** boots at ONE build (`1c802610`), ONE knob and ONE
+> workload gave `submit_ms` = **85.32 / 9.41 / 64.39 ms** — non-monotone, middle boot fastest,
+> ±2 % *within* each boot. The value is decided at boot and then holds.
+> ⇒ **Any per-boot timing compared across boots at n = 1 is inside that spread.**
+>
+> ⚠ **What that does and does not touch here, stated exactly:**
+> - **`GATE` and `COAL` are one boot each.** Their 8.5× / 19.4× / 12.7× are **UNCONFIRMED**
+>   against the lottery and are owed a re-grade at boots-per-arm.
+> - **`CTL ×2` agrees to 3 %** (18 741 / 19 286) and **`BOTH ×2` only to ~40 %** — which is
+>   itself a measurement that this metric's boot-to-boot spread is **not** uniform, and the
+>   `n=2/arm` caveat already written below was understating it, not overstating it.
+> - ★ **`GATE`'s p90 (86.1 → 4.43 ms) independently reproduces `w318`'s 85.248 → 4.078 ms on
+>   different hardware, driver and guest kernel.** Two agreeing measurements on two machines are
+>   not one boot, so *that* row is the strongest thing in the table — but it is a reproduction of
+>   a ratio, not a repeat of this arm.
+> ⇒ **Re-grade `GATE` and `COAL` with n boots per arm before either number is quoted again.**
+> Full statement: `w331_the_leaf_huge_pages_and_the_session_drift.md` §4.1.
+
 ## 4. ★★★★★ THE TWO PERF FLAGS ACT ON DIFFERENT STATISTICS
 
 `KFTIME mmio_doorbell total_us`, first 400 events, one binary, interleaved:
