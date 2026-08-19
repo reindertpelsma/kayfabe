@@ -14465,8 +14465,16 @@ pub const DIRTY_GATE_WITNESS_ENV: &str = "KAYFABE_DIRTY_GATE_WITNESS";
 /// `false`.
 pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
+        // ★★★★★ w330 — DEFAULT MOVED off → ON, on measurement.
+        // `[w330, KFTIME mmio_doorbell, 400 events, interleaved, one binary]` median
+        // 18 741 → 2 197 us (8.5x), p90 86 104 → 4 431 us (19.4x) — reproducing w318's
+        // 85.248 → 4.078 ms on different hardware, driver build and guest kernel.
+        // `^CUP3_VAL=43` held on every armed boot.
+        // ⊘ The MAX is UNCHANGED (2.75 s → 2.82 s): this gate does not touch the worst
+        //   trap. That one is the pin drain and it is `KAYFABE_DRAIN_BATCH`'s. The two act
+        //   on DIFFERENT STATISTICS of one distribution and neither is sufficient alone.
+        None | Some("on") => Ok(true),
+        Some("off") => Ok(false),
         Some(_) => Err((
             Status::Unsupported,
             "a KAYFABE_DIRTY_GATE_* variable does not name a state: the only values are `off` \
@@ -14800,8 +14808,13 @@ fn drain_batch_arm() -> &'static str {
         .get_or_init(|| std::env::var("KAYFABE_DRAIN_BATCH").unwrap_or_default())
         .as_str()
     {
-        "coalesce" => "coalesce",
-        _ => "off",
+        // ★★★★★ w330 — DEFAULT MOVED off → coalesce, on measurement. `[w330]` the doorbell
+        // trap's MAX falls 2 753 760 → 217 190 us (12.7x). ⊘ Its MEDIAN gets 1.6x WORSE
+        // (18 741 → 30 311), so graded on a median alone this reads as a REGRESSION — it acts
+        // on a different statistic of the same distribution than the dirty gate does.
+        // ⊘ `off` is KEPT as the named escape hatch and as w321's negative control.
+        "off" => "off",
+        _ => "coalesce",
     }
 }
 
@@ -15243,9 +15256,18 @@ impl JoinReleaseArm {
 /// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is the fix.
 pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status, &'static str)> {
     match value {
-        None | Some("on") => Ok(JoinReleaseArm::Unmap),
+        // ★★★★★ w330 — DEFAULT MOVED `Unmap` → `Supersede`, on measurement.
+        // `[w330, fresh GA106, same binary, interleaved, 2/2 vs 2/2]` leg 1's own counters
+        // read `revoked=0 released=0` on BOTH arms: the unmap trigger fires ZERO times,
+        // because CUDA's suballocator does not unmap on `cuMemFree`. ⇒ `on` was
+        // behaviourally IDENTICAL to `off`, so the DEFAULT SHIPPED THE FAILURE: `28,31`
+        // gave 0 BWITER rows, 32 `already joined`, and a host `Xid 31 FAULT_PDE` at an
+        // address inside the row's own `in_ptr`. With `supersede`: 7 rows, 0 refusals,
+        // 0 Xid, 279 takeovers.
+        // ⊘ `on` is KEPT as its own word so the old arm stays reachable BY NAME.
+        None | Some("supersede") => Ok(JoinReleaseArm::Supersede),
+        Some("on") => Ok(JoinReleaseArm::Unmap),
         Some("off") => Ok(JoinReleaseArm::Off),
-        Some("supersede") => Ok(JoinReleaseArm::Supersede),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_JOIN_RELEASE does not name an arm: the values are `on` (the default — a \
@@ -15269,9 +15291,9 @@ pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status,
 fn selected_join_release() -> JoinReleaseArm {
     static ARM: std::sync::OnceLock<JoinReleaseArm> = std::sync::OnceLock::new();
     *ARM.get_or_init(|| match std::env::var_os(JOIN_RELEASE_ENV) {
-        None => JoinReleaseArm::Unmap,
+        None => JoinReleaseArm::Supersede,
         Some(v) => join_release_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
-            .unwrap_or(JoinReleaseArm::Unmap),
+            .unwrap_or(JoinReleaseArm::Supersede),
     })
 }
 
