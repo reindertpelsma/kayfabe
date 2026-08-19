@@ -2753,9 +2753,15 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
 /// ⇒ ⊘ **Absent is `off`, an unknown value is an ERROR, and the runtime selector reads any
 /// error as `off`.** The safe direction for a flag that removes work is always to do the work.
 #[test]
-fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
+fn the_w318_dirty_gate_is_on_by_default_and_refuses_an_unknown_value() {
     use kayfabe_qemu_raw::shim::dirty_gate_from;
-    assert_eq!(dirty_gate_from(None), Ok(false), "absent is OFF");
+    // ⊘⊘ **THIS TEST WAS RED FOR A WHOLE DAY AND NOTHING NOTICED.** w330 flipped this
+    // default `off` -> `on` on measurement, booted it eight times, and never ran the crate's
+    // unit tests — a guest boot does not run them, so the only assertion that could have
+    // caught the stale expectation was never executed. The flip was right; shipping it
+    // without re-running the test that names the default was not.
+    // ⇒ **A default and the test that asserts it are ONE edit.**
+    assert_eq!(dirty_gate_from(None), Ok(true), "absent is ON since w330");
     assert_eq!(dirty_gate_from(Some("off")), Ok(false));
     assert_eq!(dirty_gate_from(Some("on")), Ok(true));
     for bad in ["1", "true", "yes", "", "On", "ON", "enabled"] {
@@ -2763,6 +2769,48 @@ fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
             dirty_gate_from(Some(bad)).is_err(),
             "⊘ `{bad}` must be REFUSED — a mistyped value that armed this gate would skip a \
              publication nobody decided to skip"
+        );
+    }
+}
+
+/// ★★★★★ **w332 — THE OTHER TWO w330 FLIPS HAD NO TEST AT ALL.**
+///
+/// The dirty gate's default was at least *asserted* (and the assertion went red, unnoticed,
+/// for a day). `KAYFABE_JOIN_RELEASE` and `KAYFABE_DRAIN_BATCH` were flipped the same
+/// morning with **nothing checking either default** — so a later edit could have flipped
+/// them back and every test would still have passed.
+///
+/// ⊘ The point is not the values. It is that **an unasserted default is a value no one is
+/// responsible for**, and both of these are load-bearing: `supersede` is the arm that makes
+/// `KAYFABE_BENCH_BW=28,31` pass (2/2, `already joined` 32 -> 0), and the coalescer is what
+/// bounds the worst doorbell trap.
+///
+/// ★ The old words stay reachable BY NAME, deliberately — a flipped default that deletes its
+/// predecessor destroys the negative control the flip was graded against.
+#[test]
+fn the_w330_flips_keep_their_defaults_and_their_old_arms_reachable_by_name() {
+    use kayfabe_qemu_raw::shim::{JoinReleaseArm, join_release_from};
+    assert_eq!(
+        join_release_from(None),
+        Ok(JoinReleaseArm::Supersede),
+        "absent is SUPERSEDE since w330 — the arm 28,31 passes on"
+    );
+    assert_eq!(
+        join_release_from(Some("supersede")),
+        Ok(JoinReleaseArm::Supersede)
+    );
+    assert_eq!(
+        join_release_from(Some("on")),
+        Ok(JoinReleaseArm::Unmap),
+        "⊘ `on` is the PREVIOUS default and must stay reachable: it is the arm w330 measured \
+         as behaviourally identical to `off` (7/0/32/1 on both), i.e. a negative control"
+    );
+    assert_eq!(join_release_from(Some("off")), Ok(JoinReleaseArm::Off));
+    for bad in ["1", "true", "Supersede", "", "unmap"] {
+        assert!(
+            join_release_from(Some(bad)).is_err(),
+            "⊘ `{bad}` must be REFUSED — a mistyped arm here silently picks a reclamation \
+             policy nobody chose"
         );
     }
 }

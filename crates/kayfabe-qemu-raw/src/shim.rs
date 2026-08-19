@@ -3348,7 +3348,7 @@ struct SharedDoorbell {
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
     vas_publish: VasPublishArm,
     /// ★★★★★ **w318 — THE DIRTY GATE'S STATE.** See [`DirtyGate`] for the whole argument.
-    dirty: DirtyGate,
+    dirty: Arc<DirtyGate>,
 }
 
 /// ★★★★★ **w318 — THE DIRTY GATE: what the last doorbell already did, so this one need not
@@ -5053,7 +5053,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // ⊘ Silent — not merely quiet — on the disarmed arm, so the control's log stays
         // byte-comparable.
         crate::kftime::maybe_inject("vas_publish");
-        if let Some(line) = self.publish_vas_rows(token, seen.as_ref()) {
+        if let Some(line) = self.publish_ctx().publish_vas_rows(token, seen.as_ref()) {
             kft.mark("vas_publish");
             eprintln!("kayfabe: {line}");
             kft.mark("log_vas_publish");
@@ -5294,6 +5294,27 @@ impl PinnedRun {
 }
 
 impl SharedDoorbell {
+    /// ★★★★★ **w332 — the publication's handles, as a value a worker can own.**
+    ///
+    /// ⊘ It CLONES handles, never state: `Arc`/`Weak`/`Copy`/`Clone` throughout, so the
+    /// returned context addresses the same [`DirtyGate`], the same device and the same
+    /// export directory as this port. Two contexts are two names for one publication.
+    ///
+    /// ⚠ Calling this does not make anything asynchronous. It removes the reason publication
+    /// *could not* leave the trap thread; the call site above is still synchronous.
+    fn publish_ctx(&self) -> PublishContext {
+        PublishContext {
+            device: Arc::clone(&self.device),
+            plane: self.plane.clone(),
+            ce: Arc::clone(&self.ce),
+            dirty: Arc::clone(&self.dirty),
+            exports: self.exports.clone(),
+            fb_join: self.fb_join,
+            vas_publish: self.vas_publish,
+            guest_ram_backing: self.guest_ram_backing,
+        }
+    }
+
     /// ★★★ **E10e item (c) — SERVE a doorbell on a VAS-less copy-engine channel, on the
     /// CPU, in the shell.** `None` means *"not ours"*, and the forwarding path runs.
     ///
@@ -7822,1143 +7843,6 @@ impl SharedDoorbell {
         ))
     }
 
-    /// ★★★★★ **LEG 8 — PUBLISH THE GUEST'S DECLARED ROWS INTO THE HOST VAS** (w290).
-    ///
-    /// # The measurement that commissioned it
-    ///
-    /// `[measured, boot w290cup2]` the faulting VA was owned by `GUEST-DESCRIBES` **and** by
-    /// `TABLE-DESCRIBES` and by **neither** host page table: `HOST-PUBLISHED host_rows=4 of
-    /// 16425`. Our shadow is right and hardware walks something else. ⇒ the wall is
-    /// **publication, not population**, and `FAULT_PDE` rather than `FAULT_PTE` is that fact
-    /// in the Xid's own vocabulary — with nothing published within a terabyte there is no
-    /// page *directory* to miss a leaf in.
-    ///
-    /// # ⊘⊘ WHAT THIS PASS CANNOT DO, AND IT IS RM'S LIMIT RATHER THAN A CHOICE
-    ///
-    /// The brief that commissioned this said *"coalesce by RUN, not by row — publish
-    /// extents"*. **The proven verb cannot be handed a run.** `plan_back_fb_leaf` refuses on
-    /// three grounds before any host verb exists (`kayfabe-fwd/src/lib.rs:2328-2371`), and
-    /// they pull in opposite directions:
-    ///
-    /// - `FbLeafGranularity` — *"RM places a fixed mapping in 64 KiB granules"* (`:2244-2247`).
-    ///   A run **passes** this; the 4 KiB rows it is made of **cannot**.
-    /// - `FbLeafExtent` — the request must be **exactly one table row**, start and length.
-    ///   A run **fails** this whenever it spans more than one row.
-    ///
-    /// ⇒ Coalescing is what the first gate wants and what the third forbids. This pass
-    /// therefore publishes **per row**, and [`kayfabe_rt::device::PublishCensus`] reports
-    /// `not_granular` so *"how much of the table would run-coalescing have rescued"* is a
-    /// **measured number rather than an estimate**. ⚠ Widening `FbLeafExtent` to accept a
-    /// multi-row extent is a real change to the fwd plane's commit — one host object would
-    /// have to write `host` into many rows, and the reclaim below frees per row — so it is
-    /// deliberately **not** smuggled into an instrument rung.
-    ///
-    /// # ★★★ RECLAIM — ALREADY EXISTS, ON EVERY TEARDOWN ROUTE, AND HERE IS THE CITATION
-    ///
-    /// The owner's standing rule is that every pin needs an unpin. It is satisfied **by
-    /// construction** rather than by new code, because this pass mints nothing new: a leaf
-    /// bound by `adopt_joined_fb_leaf` is an ordinary `Binding` carrying a
-    /// [`kayfabe_mmu::HostBacking`], and `Spine::stage_dropped_vases`
-    /// (`kayfabe-core/src/gpu.rs:3229-3273`) walks `vas.table.iter()` and stages
-    /// `unmap`-then-`free` for **every** binding whose `host()` is `Some`. It is reached from
-    /// `Spine::vacate` (`gpu.rs:3645-3664`), *"THE ONE REMOVAL POINT"* (`gpu.rs:3622`), on
-    /// all three routes: a VAS leaving the live set while the proc lives
-    /// (`sync_proc_to_boundary`, `gpu.rs:3117`), clean proc death (`RmEvent::Free` of the
-    /// client root ⇒ the component vanishes, `gpu.rs:3903`), and violent death
-    /// (`retire_proc`, `gpu.rs:4181-4225`).
-    ///
-    /// ⊘⊘ **AND THE TRIGGER IS NOT WHAT THE BRIEF NAMED.** There is no UVM plane in this
-    /// port to key an unpublish on: we emulate a **GPU**, so the guest's `nvidia-uvm` talks to
-    /// the guest's `nvidia.ko` and `uvm_release` / `uvm_va_space_destroy` /
-    /// `uvm_va_space_mm_shutdown` are **not observable events here at all** — they reach us
-    /// only after the guest driver turns them into `RpcFunction::Free` (fn 10,
-    /// `kayfabe-gsp/src/rpc.rs:261`) ⇒ `RmEvent::Free` ⇒ `Spine::refresh`. A `SIGKILL`ed guest
-    /// process still gets there, because the guest's own `nvidia.ko` `close()` frees the
-    /// client root. The genuinely kernel-guaranteed backstop is the **isolate process
-    /// boundary** (§7.0), which is what `retire_proc`'s undrained queue relies on
-    /// (`gpu.rs:1812-1817`).
-    ///
-    /// ⚠ **The residual gap, named rather than left to be found:** there is no per-leaf
-    /// release short of VAS death. It is **pre-existing and shared with leg 7** — that leg's
-    /// own doc already says *"the missing half is the trigger, not the mechanism … ⊘ Not
-    /// wired this rung"* — and this pass widens the population it applies to. Its cost is
-    /// **measured on the same line**: `RepointsPublished` / `UnbindsPublished`
-    /// (`kayfabe-mmu/src/walker.rs:917-930`, `:956-972`) already print in the sweep's
-    /// `by_kind`, so a boot says how often the guest tried to edit a row we had frozen.
-    ///
-    /// # Ordering
-    ///
-    /// Runs after the decode pass and the sweep have populated the table and after leg 7, and
-    /// **before** `SharedDevice::doorbell` — the C's invariant, *"a mapping is always backed
-    /// before the engine that uses it runs"*. ⊘ There is nothing to be lazy against: we
-    /// emulate no fault buffer, so there is no fault to publish on demand from.
-    ///
-    /// ★★★★★ **w292 — `seen` is the CHANNEL THIS DOORBELL ROUTED TO, and it is taken as a
-    /// parameter for legs 4-7's reason exactly.** It names the `(proc, pdb)` the ring about to
-    /// be rung will be fetched through, which is the only thing that lets
-    /// [`VasPublishArm::Drain`] scope its drain to *the VAS about to be doorbelled* instead of
-    /// raising a budget across the board. ⊘ It is the facts this doorbell **already resolved**,
-    /// never a second `ce_channel_facts` call — two resolutions of one fact can disagree, and
-    /// this file has paid for that shape once already.
-    #[cfg(feature = "host-isolates")]
-    fn publish_vas_rows(
-        &self,
-        token: u64,
-        seen: Option<&kayfabe_rt::device::CeChannelFacts>,
-    ) -> Option<String> {
-        if !self.vas_publish.observes() {
-            return None;
-        }
-        let head = format!(
-            "VAS-PUBLISH token={token:#010x} arm={}",
-            self.vas_publish.as_str()
-        );
-        // ⚠ Same necessary-not-sufficient gate leg 7 states out loud, and refused rather than
-        // downgraded: with `KAYFABE_FB_JOIN` off this pass could only map PRIVATE ANONYMOUS
-        // pages — two memories under a name that says one.
-        // ⊘ Enforced only on the arm that would publish; the census must still run on
-        // `assert`, or the control loses the very number it exists to produce.
-        if self.vas_publish.publishes() && !self.fb_join.armed() {
-            return Some(format!(
-                "{head} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. ⊘ Nothing was asked of the \
-                 host",
-                self.fb_join.as_str()
-            ));
-        }
-        let Some(plane) = self.plane.upgrade() else {
-            return Some(format!(
-                "{head} → ⊘ NO PLANE. ⊘ Nothing was asked of the host"
-            ));
-        };
-        let exports = match (self.exports.as_ref(), self.vas_publish.publishes()) {
-            (Some(e), _) => Some(e),
-            (None, false) => None,
-            (None, true) => {
-                return Some(format!(
-                    "{head} → ⊘ NOT ARMABLE: exports_directory=false — no route from a backing \
-                     token to a descriptor. ⊘ Nothing was asked of the host"
-                ));
-            }
-        };
-        // ★★★★★ w291 — THE BOUNDED PIN-RATE MEASUREMENT. Runs INSTEAD of the publication
-        // pass, never beside it: they touch disjoint populations through different chains,
-        // and one line reporting both would be the count that cannot see a substitution.
-        // ★★★ On `pinrate` this REPLACES the publication pass; on `both` it PRECEDES it, so
-        // one boot carries both halves and the line carries both sentences. ⊘ The two are
-        // printed as separate clauses and never summed into one counter — they are different
-        // chains over disjoint populations, and one number could not see the substitution.
-        let pin_clause = if self.vas_publish.measures_pin_rate() {
-            let line = self.measure_guest_ram_pin_rate(&head, seen);
-            if !self.vas_publish.publishes() {
-                return Some(line);
-            }
-            Some(line)
-        } else {
-            None
-        };
-        let started = std::time::Instant::now();
-        let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
-        let mut rows: Vec<String> = Vec::new();
-        // ★★★★★ **w318 — THE DIRTY GATE'S HOST TERM, read ONCE for the whole pass.**
-        //
-        // `[measured 2026-08-14, w315 boot `full`]` every one of this pass's eight refusals is
-        // *"that framebuffer range is already joined"* — an outcome of **host** state, which
-        // `Vas::publish_epoch` cannot see. Without this term the gate would be an epoch of our
-        // record gating a verb whose answer is not a function of our record alone, which is
-        // the `a_second_source_of_truth_beside_a_complete_value` shape one plane over.
-        //
-        // ⊘ A count of ranges, not the ranges: it moves on every install and every release,
-        // which is all a re-arm needs, and materialising the set per doorbell would put back a
-        // slice of the very cost this removes.
-        let gate = selected_dirty_gate(DIRTY_GATE_PUBLISH_ENV);
-        let joined_now = plane.joined_fb_ranges().len();
-        let (mut gate_fired, mut gate_skipped) = (0usize, 0usize);
-        // ★★★★★ **w328 — THE DOORBELLED VAS, NAMED HERE TOO.**
-        //
-        // The drain half already derives it (`measure_guest_ram_pin_rate`'s `drain_target`);
-        // this half never did, and that asymmetry is the whole of the breadth question. ⊘ It
-        // is derived from the SAME `seen` facts through the SAME two fields, so the two
-        // passes cannot come to disagree about which VAS a doorbell is about.
-        let scope_target = seen.and_then(|f| f.vas_pdb.map(|p| (f.proc, p)));
-        let scope_arm = publish_scope_arm();
-        // ⚠⚠ **THE FALLBACK IS THE SAFETY PROPERTY, AND IT IS NOT AN OPTIMISATION.** Scoping
-        // with NO target would publish NOTHING at all — strictly worse than master, and it
-        // would present as a GPU fault, which is indistinguishable by symptom from the
-        // pre-existing drain-truncation intermittent. ⇒ no target ⇒ full breadth, said out
-        // loud in the line below rather than inferred from a count.
-        // ⊘ AND THE SECOND REFUSAL: a target of `SYSTEM_PROC` is a target that is NEVER
-        // ATTEMPTED (§12.26, `shim.rs`'s own `system` guard below). Scoping to it would leave
-        // every publishable VAS unvisited while the line still read `scoped=true target=proc0`
-        // — the favourable-looking absence this tree has paid for repeatedly.
-        let scoped = publish_scope_scoped(scope_arm, scope_target);
-        // ★★★★★ **w328 — THE BREADTH'S OWN COST, SPLIT AT THE SOURCE.** Not a fit and not a
-        // residual: each VAS's own wall time is attributed to the bucket it belongs to as it
-        // is spent. ⊘ `other_*` counts what the breadth DELIVERS beside what it COSTS,
-        // because "2 529 ms of BQL" and "and it publishes nothing" are two different claims
-        // and only the pair decides whether the breadth is vestigial.
-        let (mut pub_target_us, mut pub_other_us) = (0u128, 0u128);
-        let (mut pub_other_vases, mut pub_other_published, mut pub_other_refused) =
-            (0usize, 0usize, 0usize);
-        let (mut pub_target_published, mut pub_scoped_out) = (0usize, 0usize);
-        for pid in self.device.live_pids() {
-            for (gpu, pdb) in self.device.vas_keys(pid) {
-                // ⊘ The isolate is keyed `(proc, gpu)`, so a `Vas` on another GPU has no
-                // isolate to mint into here. Skipped and SAID, never silently dropped.
-                if gpu != DOORBELL_TARGET_GPU {
-                    rows.push(format!(
-                        "[proc={} pdb=0x{:x} ⊘ SKIPPED gpu={} != doorbell target]",
-                        pid.0, pdb.0, gpu.0
-                    ));
-                    continue;
-                }
-                // ★★★★★ **w318 — THE SKIP.** Everything below this point — the census walk
-                // over every row of this `Vas`, and the join attempt over every candidate it
-                // buckets — is a **pure function of** `(Vas::publish_epoch, joined_now)`. If
-                // neither has moved since the last pass **that ran to completion**, re-running
-                // it produces the identical census and the identical set of join outcomes.
-                //
-                // ⚠ Three refusals to skip, and each of them is a case that would otherwise
-                // strand real work:
-                // - the epoch is **unreadable** (`None`, the `Vas` is gone) ⇒ arm. UNMEASURED
-                //   is not clean.
-                // - this key has **no stamp** ⇒ arm. A key that appeared this doorbell has
-                //   never been published.
-                // - the last pass was **incomplete** (wall budget) ⇒ it left candidates
-                //   unattempted, so no stamp was taken for it and it arms again below.
-                let epoch_now = self.device.vas_publish_epoch(pid, gpu, pdb);
-                if gate && let Some(epoch_now) = epoch_now {
-                    let cached = self
-                        .dirty
-                        .published
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .get(&(pid, gpu, pdb))
-                        .filter(|s| s.epoch == epoch_now && s.joined == joined_now)
-                        .cloned();
-                    if let Some(s) = cached {
-                        gate_skipped += 1;
-                        rows.push(format!(
-                            "[proc={} pdb=0x{:x} ⊘SKIPPED(w318 dirty gate: epoch={:?} joined={} \
-                             unchanged since the last COMPLETED pass) REPLAY-OF-LAST-CENSUS \
-                             {}]",
-                            pid.0, pdb.0, epoch_now, joined_now, s.line
-                        ));
-                        continue;
-                    }
-                }
-                // ★★★★★ **w328 — THE SCOPE SKIP.** Above the census, because the census walk
-                // itself is the cost: `vas_publish_census` is O(rows of this Vas) and proc 0
-                // alone holds 6787 of them. ⊘ Placed BELOW the w318 dirty gate deliberately —
-                // the two are independent reasons not to walk a VAS, and collapsing them
-                // would make one arm's tally speak for the other's.
-                //
-                // ⚠ NO STAMP IS TAKEN for a scoped-out VAS. A stamp says *"this census ran to
-                // completion and here is what it found"*; taking one here would tell the next
-                // doorbell that a VAS we never looked at is clean, which is the
-                // publication-silently-never-performed shape this pass's own docs forbid.
-                let is_target = scope_target == Some((pid, pdb));
-                if scoped && !is_target {
-                    pub_scoped_out += 1;
-                    rows.push(format!(
-                        "[proc={} pdb=0x{:x} ⊘SCOPED-OUT(w328 KAYFABE_PUBLISH_SCOPE=doorbelled: \
-                         this is NOT the doorbelled VAS) ⊘ ITS CENSUS WAS NOT TAKEN — the rows \
-                         below are UNMEASURED for this doorbell, ⊘ not zero, and NO STAMP WAS \
-                         TAKEN]",
-                        pid.0, pdb.0
-                    ));
-                    continue;
-                }
-                gate_fired += 1;
-                let vas_t0 = std::time::Instant::now();
-                let c = self
-                    .device
-                    .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
-                let mut done = 0usize;
-                let mut failed = 0usize;
-                // ⊘⊘ **THE SYSTEM PROC CAN NEVER HOLD A PUBLICATION, AND THAT IS §12.26 —
-                // SO IT IS NOT ATTEMPTED, NOT ATTEMPTED-AND-REFUSED.**
-                //
-                // `plan_back_fb_leaf` refuses `Gpu::SYSTEM_PROC` by name before any host verb
-                // exists (`kayfabe-fwd/src/lib.rs:2318-2323`): the system proc's work is
-                // forged precisely so it holds no host state whose reclaim has no defined
-                // point, and a framebuffer object is host state.
-                //
-                // ⚠ `[measured, boot w290cup2]` proc 0 holds **6787 rows** across two VASes.
-                // Handing them to the verb would issue 6787 doomed round trips and report
-                // them as `refused=6787` — which reads exactly like RM exhaustion and is
-                // nothing of the kind. ⇒ The refusal is stated HERE, once, as a property of
-                // the proc, and the census still prints so the rows are visible rather than
-                // absent.
-                let system = pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC;
-                if self.vas_publish.publishes() && !system {
-                    if let Some(exports) = exports {
-                        let isolate = kayfabe_isolate::IsolateId::new(pid.0, gpu);
-                        for &(va, len, phys) in &c.candidates {
-                            if started.elapsed() > VAS_PUBLISH_WALL_BUDGET {
-                                budget_hit = true;
-                                break;
-                            }
-                            let what = format!("VAS-PUBLISH(proc={} pdb=0x{:x})", pid.0, pdb.0);
-                            match join_one_fb_leaf(
-                                &head,
-                                &what,
-                                &self.device,
-                                &plane,
-                                exports,
-                                self.fb_join,
-                                isolate,
-                                pdb,
-                                kayfabe_rt::completion_watch::FbLeaf { va, len, phys },
-                            ) {
-                                Some(_) => done += 1,
-                                None => failed += 1,
-                            }
-                        }
-                    }
-                }
-                published += done;
-                refused += failed;
-                // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.**
-                //
-                // ⊘ The census WALK is inside the bracket as well as the joins, so the two
-                // can be separated afterwards by correlating cost against `candidates` —
-                // which is what settled the mechanism. `[measured w328, boot w328a1]` with
-                // `candidates=0` and a table of **18 277 rows** a pass costs **632 µs**
-                // (35 ns/row); with `candidates>0` and the same table it costs **52 094 µs**.
-                // ⇒ **the walk is not the cost; ~6.4 ms per `join_one_fb_leaf` attempt is**,
-                // and 328 of the boot's ~400 attempts are the same 8 already-joined ranges
-                // re-offered 41 times. A bracket around the joins alone could not have shown
-                // that, because it could not have priced the walk it excluded.
-                let vas_us = vas_t0.elapsed().as_micros();
-                if is_target {
-                    pub_target_us += vas_us;
-                    pub_target_published += done;
-                } else {
-                    pub_other_us += vas_us;
-                    pub_other_vases += 1;
-                    pub_other_published += done;
-                    pub_other_refused += failed;
-                }
-                // ★★★★★ **w318 — THE STAMP, and the two conditions on taking it.**
-                //
-                // 1. **`!budget_hit`.** A pass that ran out of wall budget left candidates
-                //    unattempted; stamping it clean would strand them until something else
-                //    happened to move the epoch, which is a publication silently never
-                //    performed — the exact failure mode the gate's own docs forbid.
-                // 2. **The epoch is RE-READ here, after the joins.** A successful join binds
-                //    into the table and therefore moves the epoch *during* this pass; stamping
-                //    the pre-pass value would make the very next doorbell see a mismatch and
-                //    re-run — a gate that can never go clean on a VAS that ever published.
-                //    ⊘ Re-reading is also what keeps it CORRECT in the other direction: if
-                //    anything else moved the epoch mid-pass, the value stamped is the one this
-                //    census actually describes.
-                //
-                // ⚠⚠ **AND THE STAMP IS BUILT WHOLE BEFORE THE LOCK IS TAKEN** — every field,
-                // including `plane.joined_fb_ranges()` and the `format!`. Written the obvious
-                // way (as arguments to `insert`) the receiver is locked FIRST and the
-                // arguments are evaluated underneath it, which would put **the plane's
-                // rank-`Plane` lock beneath this unranked mutex**. `assert_lock_free` cannot
-                // see an unranked lock — it masks only ranked ones — so that inversion would
-                // pass every assertion in the tree and stall the register plane.
-                // ⊘ `tests/tests/unranked_locks.rs` caught it; it is fixed here rather than
-                // classified as safe, because the honest classification would have been *"a
-                // ranked lock and an allocation run beneath it"*.
-                if !budget_hit && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb) {
-                    let stamp = PublishStamp {
-                        epoch: after,
-                        joined: plane.joined_fb_ranges().len(),
-                        line: format!(
-                            "total={} already_host={} already_pinned={} guest_ram={} \
-                             not_vidmem={} not_granular={} candidates={} published={done} \
-                             refused={failed}",
-                            c.total,
-                            c.already_host,
-                            c.already_pinned,
-                            c.guest_ram,
-                            c.not_vidmem,
-                            c.not_granular,
-                            c.candidates_total(),
-                        ),
-                    };
-                    self.dirty
-                        .published
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .insert((pid, gpu, pdb), stamp);
-                }
-                // ★★ EVERY row of the census, per VAS, with the bucket identity printed. ⊘ A
-                // census whose buckets did not sum could report a comfortable zero for a class
-                // it never reached, so `sum_ok` is a value and not a comment.
-                rows.push(format!(
-                    "[proc={} pdb=0x{:x}{} total={} already_host={} already_pinned={} \
-                     guest_ram={} not_vidmem={} not_granular={}({} bytes) candidates={}({} \
-                     bytes, capped={}) published={done} refused={failed} sum_ok={}]",
-                    pid.0,
-                    pdb.0,
-                    if system {
-                        " ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; \
-                         candidates below are REAL and UNPUBLISHABLE, not refused)"
-                    } else {
-                        ""
-                    },
-                    c.total,
-                    c.already_host,
-                    c.already_pinned,
-                    c.guest_ram,
-                    c.not_vidmem,
-                    c.not_granular,
-                    c.not_granular_bytes,
-                    c.candidates_total(),
-                    c.candidate_bytes,
-                    c.capped,
-                    c.buckets_sum(),
-                ));
-            }
-        }
-        // ⊘ Tallied ONCE per doorbell, per VAS visited, and only after the loop: a gate that
-        // is consulted N times on one doorbell must not report N doorbells.
-        for _ in 0..gate_fired {
-            self.dirty.tally(DirtyGate::PUBLISH, true);
-        }
-        for _ in 0..gate_skipped {
-            self.dirty.tally(DirtyGate::PUBLISH, false);
-        }
-        // ★★★★★ **w328 — THE BREADTH LINE. Both halves, always, on every arm.**
-        //
-        // ⊘ `arm=` is printed even when unset, so `absent` means an OLD BINARY and never
-        // `all` — this tree has paid for a knob whose setting lived only in the launcher's
-        // environment. ⊘ `target=` prints `⊘NONE` rather than a plausible pair when this
-        // doorbell resolved no channel facts, because `scoped` is FALSE in that case and a
-        // reader must be able to see why.
-        let w328 = format!(
-            "arm={scope_arm} scoped={scoped} target={} scoped_out={pub_scoped_out} \
-             target_us={pub_target_us} target_published={pub_target_published} \
-             other_vases={pub_other_vases} other_us={pub_other_us} \
-             other_published={pub_other_published} other_refused={pub_other_refused} \
-             breadth_share={}",
-            scope_target.map_or("⊘NONE (no channel facts ⇒ FULL BREADTH, by design)".to_string(), |(p, d)| format!(
-                "proc={} pdb=0x{:x}",
-                p.0, d.0
-            )),
-            (pub_other_us * 100).checked_div(pub_target_us + pub_other_us).map_or_else(
-                || "⊘UNMEASURED (this pass spent no time in any VAS)".to_string(),
-                |p| format!("{p}%"),
-            ),
-        );
-        Some(format!(
-            "{}{head} W328SCOPE[{w328}] gate={} this_doorbell[fired={gate_fired} \
-             skipped={gate_skipped}] → \
-             published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
-            pin_clause
-                .map(|l| format!("{l}\nkayfabe: "))
-                .unwrap_or_default(),
-            if gate { "on" } else { "off" },
-            started.elapsed().as_millis(),
-            if budget_hit {
-                format!(
-                    " ⚠⚠ WALL BUDGET {} ms EXHAUSTED — the remaining candidates were NOT \
-                     attempted this doorbell; an unpublished row below is NOT thereby a refusal",
-                    VAS_PUBLISH_WALL_BUDGET.as_millis()
-                )
-            } else {
-                String::new()
-            },
-            rows.len(),
-            rows.join(" "),
-        ))
-    }
-
-    /// ★★★★★ **w291 — THE BOUNDED GUEST-RAM PIN-RATE MEASUREMENT.**
-    ///
-    /// # ⊘ WHAT IT REPLACES, SAID PLAINLY
-    ///
-    /// `guest_ram_publication_merge.md` costed option (2a) at **"~49 s per VAS"**. That
-    /// number was an **EXTRAPOLATION**: leg 8's *framebuffer* rate (34 joins in 101 ms,
-    /// ~3 ms each) multiplied by 16 328 guest-RAM rows. A framebuffer join and a guest-RAM
-    /// pin are **different chains** — the join mints memory, copies the establishment bytes
-    /// and re-points the guest's window; the pin describes pages the guest already owns — so
-    /// the extrapolation had no right to speak for it. This measures the real thing.
-    ///
-    /// # What it does, and what it deliberately does not
-    ///
-    /// Pins up to [`VAS_PINRATE_ROWS`] guest-RAM rows of every non-system proc's `Vas`
-    /// through the **existing** `pin_guest_ram` verb, timing each. ⊘ It writes **nothing**
-    /// into `Binding::host`, adds no representation, touches no refcount, and puts no pointer
-    /// between the two records. The pins land in `Vas::guest_ram_pins`, where that verb has
-    /// always put them. **This is the measurement, not the merge.**
-    ///
-    /// ★★ **`degrade` is what lets a bounded sample speak about 16 328 rows.** It reports the
-    /// mean of the last quarter against the mean of the first quarter. Flat (≈1.0) means the
-    /// per-row cost is a constant and the bounded number extrapolates honestly; rising means
-    /// it does not, and **that** is the finding rather than the headline rate.
-    ///
-    /// # ★★★★★ w292 — AND ON [`VasPublishArm::Drain`] IT IS NO LONGER ONLY A MEASUREMENT
-    ///
-    /// The VAS **this doorbell is about** — `(seen.proc, seen.vas_pdb)`, the address space the
-    /// ring about to be rung is fetched through — is drained to empty rather than sampled,
-    /// bounded by [`VAS_DRAIN_ROW_CAP`] and [`VAS_DRAIN_WALL_BUDGET`], both of which announce
-    /// themselves. **Every other `Vas` keeps the bounded [`VAS_PINRATE_ROWS`] sample**, so the
-    /// budget is raised for exactly one address space and `both` remains the control.
-    ///
-    /// ⊘ Four ways there is no drain, and they are **named exits rather than a silent
-    /// sample**, because *"we drained and it was already empty"* and *"we never identified a
-    /// target"* are opposite facts that would otherwise print the same line: the arm is not
-    /// `drain`; this doorbell resolved no channel facts; the channel declared no `vas_pdb`; or
-    /// the doorbelled proc is `SYSTEM_PROC`, whose refusal is a property of the proc (§12.26)
-    /// and is **kept**.
-    #[cfg(feature = "host-isolates")]
-    fn measure_guest_ram_pin_rate(
-        &self,
-        head: &str,
-        seen: Option<&kayfabe_rt::device::CeChannelFacts>,
-    ) -> String {
-        let Some(backing) = self.guest_ram_backing else {
-            return format!(
-                "{head} → ⊘ NO GUEST-RAM BACKING (no hypervisor layout to resolve a GPA \
-                 against). ⊘ Nothing was asked of the host — this is UNMEASURED, not 0 ms"
-            );
-        };
-        // ★★★★★ **w292 — WHICH VAS THIS DOORBELL IS ABOUT.** `None` on every arm but `drain`,
-        // and `None` on `drain` itself whenever the facts cannot name one — which is a
-        // DIFFERENT fact from "drained and found nothing", and is reported as one below.
-        let drain_target = if self.vas_publish.drains_doorbelled_vas() {
-            seen.and_then(|f| f.vas_pdb.map(|p| (f.proc, p)))
-        } else {
-            None
-        };
-        let drain_scope = match (self.vas_publish.drains_doorbelled_vas(), seen, drain_target) {
-            (false, _, _) => format!(
-                "⊘ NO DRAIN: arm=`{}` samples every VAS at {VAS_PINRATE_ROWS} rows/doorbell. \
-                 An unpinned row below is UNREACHED, not refused",
-                self.vas_publish.as_str()
-            ),
-            (true, None, _) => "⊘ DRAIN ARMED BUT NO TARGET: this doorbell resolved NO channel \
-                                facts, so the VAS it is about has no name here. Every VAS got \
-                                the bounded sample — ⚠ THIS LINE IS NOT A DRAIN"
-                .to_string(),
-            (true, Some(f), None) => format!(
-                "⊘ DRAIN ARMED BUT NO TARGET: chan={} declared NO vas_pdb, so there is no \
-                 address space to drain. Every VAS got the bounded sample — ⚠ THIS LINE IS \
-                 NOT A DRAIN",
-                f.chan.0
-            ),
-            (true, Some(_), Some((pid, pdb))) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
-                format!(
-                    "⊘⊘ THE DOORBELLED VAS IS SYSTEM_PROC (proc={} pdb=0x{:x}) — NOT DRAINED, \
-                     AND NOT ATTEMPTED-AND-REFUSED. §12.26: `plan_pin_guest_ram` refuses proc 0 \
-                     by name, and its 6787 rows would print as `refused=6144`, which reads \
-                     exactly like RM exhaustion and is nothing of the kind",
-                    pid.0, pdb.0
-                )
-            }
-            (true, Some(_), Some((pid, pdb))) => format!(
-                "★ DRAIN TARGET = proc={} pdb=0x{:x} (the VAS this doorbell's ring is fetched \
-                 through); every OTHER VAS keeps the {VAS_PINRATE_ROWS}-row sample",
-                pid.0, pdb.0
-            ),
-        };
-        // ★★★★★ **w319 — THE CANDIDATE FIX, AND IT RUNS BEFORE THE BUDGETED DRAIN.**
-        //
-        // `[measured w319]` the drain below walks the doorbelled VAS in **ascending VA order**
-        // (`IntervalMap` is a `BTreeMap<u64, _>`; `iter()` is documented "ascending start
-        // order") and is cut off by a clock. ⇒ **whatever it drops, it drops from the TOP of
-        // the address space** — and the guest's completion-semaphore page `0x2_0440f000` sits
-        // near the top of the `0x2_004…–0x2_047ff000` span the drain covers. That is the whole
-        // defect: a boot on the slow side of a 3 s budget stops below it, the engine is rung
-        // anyway, and the host MMU reports `FAULT_PDE` on a page no directory was built for.
-        //
-        // ⊘ **Raising the budget is the WRONG fix even though it works.** The drain is held
-        // under the QEMU BQL with every vCPU halted, and `[measured w314]` the surrounding
-        // disposal already consumes 2.65–2.92 s of a 4 s `scrubberDestruct` budget. Buying
-        // completeness with more BQL is spending headroom that is 73 % gone.
-        //
-        // ★ This instead makes the **few pages the engine is certain to touch** independent of
-        // any budget: the completions the guest has itself DECLARED, de-duplicated to pages.
-        // Measured population is **eight declarations at a 16-byte stride ⇒ ONE page**, so the
-        // cost is one pin, not 13 313. It is the content of `pin_completion_guest_ram` —
-        // deleted at w304 (`f20ab952`) on a "strict superset" argument that is true of the
-        // candidate SET and false of the DELIVERY — restored as an ordering guarantee rather
-        // than as a second mechanism, and `shim.rs:3851` records that pinning this page took
-        // these exact Xids to ZERO at w266.
-        //
-        // ⊘ **DEFAULT OFF.** `KAYFABE_COMPLETION_PIN=on` arms it. Off ⇒ not one byte differs
-        // from master, so the SAME BINARY carries both arms of the fix test and the only
-        // variable between them is this flag.
-        let mut sema_clause = String::from("⊘ off (KAYFABE_COMPLETION_PIN unset)");
-        if completion_pin_armed() {
-            let mut pinned_pages = 0usize;
-            let mut refused_pages = 0usize;
-            let mut skipped = 0usize;
-            let mut named: Vec<String> = Vec::new();
-            match drain_target {
-                None => sema_clause = "⊘ ARMED BUT NO TARGET — this doorbell named no VAS, so \
-                                       there is no address space to pin into. ⊘ UNREACHED, \
-                                       not `nothing to do`"
-                    .to_string(),
-                Some((pid, _pdb)) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
-                    sema_clause = "⊘ ARMED BUT TARGET IS SYSTEM_PROC — refused by name, \
-                                   §12.26, exactly as the drain refuses it"
-                        .to_string();
-                }
-                Some((pid, pdb)) => {
-                    // ⊘ De-duplicate to PAGES first. Eight declarations at a 16-byte stride
-                    // are ONE page, and pinning eight times would read as eight pins in every
-                    // tally downstream.
-                    let mut pages: std::collections::BTreeSet<(u64, u64)> =
-                        std::collections::BTreeSet::new();
-                    for (key, site) in &self.ce.watch.declared_sites() {
-                        // ★ A pin lands in ONE proc's VA space. A completion another guest
-                        // process declared is not this channel's to place. Counted, never
-                        // dropped silently.
-                        if key.proc != pid {
-                            skipped += 1;
-                            continue;
-                        }
-                        let kayfabe_rt::completion_watch::Site::GuestRam { gpa } = site else {
-                            skipped += 1;
-                            continue;
-                        };
-                        let mask = Self::RING_PIN_BYTES - 1;
-                        pages.insert((key.va & !mask, gpa & !mask));
-                    }
-                    for (va, gpa) in &pages {
-                        let len = Self::RING_PIN_BYTES;
-                        let resolved = {
-                            let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                            held.as_ref().map(|vmm| vmm.resolve_guest_ram(backing, *gpa, len))
-                        };
-                        let Some(Ok(run)) = resolved else {
-                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
-                            continue;
-                        };
-                        let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                            run.file_offset,
-                            len,
-                            kayfabe_vmm::Prot::ReadWrite,
-                        );
-                        match self.device.pin_guest_ram(
-                            DOORBELL_TARGET_GPU,
-                            pdb,
-                            kayfabe_rt::GpuVa(*va),
-                            grant,
-                        ) {
-                            Ok(p) => {
-                                pinned_pages += 1;
-                                named.push(format!(
-                                    "[va=0x{va:x} gpa=0x{gpa:x} host_va=0x{:x} \
-                                     placed_as_asked={} {}]",
-                                    p.host_va,
-                                    p.host_va == *va,
-                                    if p.already { "replay" } else { "fresh" },
-                                ));
-                            }
-                            Err(e) => {
-                                refused_pages += 1;
-                                named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}`]"));
-                            }
-                        }
-                    }
-                    sema_clause = format!(
-                        "★ ARMED proc={} pdb=0x{:x} declared_pages={} pinned={pinned_pages} \
-                         refused={refused_pages} skipped={skipped} {}",
-                        pid.0,
-                        pdb.0,
-                        pages.len(),
-                        named.join(" ")
-                    );
-                }
-            }
-        }
-        let mut rows: Vec<String> = Vec::new();
-        let (mut total_pins, mut total_us) = (0usize, 0u128);
-        let mut refused = 0usize;
-        let mut degrade = String::from("n/a");
-        // ★★ THE DRAIN'S OWN FOUR FACTS, kept apart from the totals: whether the target VAS was
-        // REACHED at all, what it cost ON THE DOORBELL PATH, and — separately — which of the
-        // two bounds stopped it. ⊘ `visited=false` beside `pinned=0` is "we never got there";
-        // `visited=true` beside `pinned=0` is "there was nothing left to pin". Collapsing them
-        // is the absent-artefact-reads-as-favourable class.
-        let (mut drain_visited, mut drain_asked, mut drain_pinned) = (false, 0usize, 0usize);
-        let (mut drain_refused, mut drain_ms) = (0usize, 0u128);
-        let (mut drain_cap_hit, mut drain_budget_hit) = (false, false);
-        // ★★★★★ w321 — the two decomposition rows, both `⊘UNMEASURED` until a drain runs.
-        let mut drain_census = String::from("⊘ NO DRAIN — the contiguity census is UNMEASURED");
-        let mut drain_ipc = String::from("⊘ NO DRAIN — the IPC bracket is UNMEASURED");
-        let mut drain_batch = String::from("⊘ NO DRAIN — the batch accounting is UNMEASURED");
-        // ★★★★★ **w328 — THE SAME BREADTH QUESTION ON THIS PASS.** The doorbelled VAS is
-        // DRAINED here and every other one is SAMPLED at 256 rows; the question is what the
-        // sample costs and what it delivers. ⊘ Same fallback rule as the publication half: no
-        // target ⇒ full breadth, because scoping to a VAS we cannot name is scoping to none.
-        let scope_arm = publish_scope_arm();
-        // ⊘ Same two refusals as the publication half, and the SYSTEM_PROC one is load-bearing
-        // here too: this loop `continue`s past proc 0 unconditionally, so scoping to it would
-        // skip every VAS and pin nothing at all.
-        let scoped = publish_scope_scoped(scope_arm, drain_target);
-        let (mut pin_other_us, mut pin_other_vases, mut pin_other_pinned) = (0u128, 0usize, 0usize);
-        let mut pin_scoped_out = 0usize;
-        for pid in self.device.live_pids() {
-            // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
-            // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
-            // print hundreds of refusals that read exactly like RM exhaustion.
-            // ⊘ w292: this guard runs BEFORE the drain target is honoured, deliberately — the
-            // refusal is a property of the proc and a budget change may not relax it. The
-            // `drain_scope` line above says so when the target IS proc 0.
-            if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC {
-                continue;
-            }
-            for (gpu, pdb) in self.device.vas_keys(pid) {
-                if gpu != DOORBELL_TARGET_GPU {
-                    continue;
-                }
-                // ★★★★★ **w292 — THE ONE SCOPED BUDGET CHANGE, AND IT IS THIS PREDICATE.**
-                let doorbelled = drain_target == Some((pid, pdb));
-                // ★★★★★ **w328 — THE SCOPE SKIP, above `vas_guest_ram_rows`.** That call is
-                // what materialises the candidate list, so skipping below it would save the
-                // pins and keep the walk. ⊘ The drained VAS is never scoped out: `scoped`
-                // implies `drain_target.is_some()`, so exactly one VAS survives the filter.
-                if scoped && !doorbelled {
-                    pin_scoped_out += 1;
-                    continue;
-                }
-                let cap = if doorbelled {
-                    // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
-                    // instrument env var is set, so master's behaviour is unchanged.
-                    vas_drain_row_limit()
-                } else {
-                    VAS_PINRATE_ROWS
-                };
-                let candidates = self.device.vas_guest_ram_rows(pid, gpu, pdb, cap);
-                // ⊘ An empty candidate list is skipped on a SAMPLED VAS (it says nothing) and
-                // PRINTED on the drained one (it says the drain found the table already
-                // complete, which is the whole question this rung asks).
-                if candidates.is_empty() && !doorbelled {
-                    continue;
-                }
-                if doorbelled {
-                    drain_visited = true;
-                    drain_asked = candidates.len();
-                    drain_cap_hit = candidates.len() >= cap;
-                    // ★★★★★ **w321 — THE CONTIGUITY CENSUS, TAKEN BEFORE A SINGLE PIN.**
-                    // O(n) over the rows we are about to walk, and it is the number that
-                    // BOUNDS a coalescing fix before one is built. See `drain_contiguity`.
-                    drain_census = drain_contiguity(&candidates);
-                }
-                let vas_started = std::time::Instant::now();
-                // ★★★★★ **w321 — THE PARENT-SIDE HALF OF THE DECOMPOSITION.**
-                // Read here and again after the loop; the difference is `(calls, µs)` this
-                // drain spent blocked in the isolate IPC. Subtract it from `DRAIN_MS` and
-                // what is left is OUR OWN cost (route locks, `resolve_guest_ram`, commit).
-                // ⊘ Thread-local and monotonic — see `ipc_totals`'s own doc.
-                let ipc_before = kayfabe_isolate_host::isolate::ipc_totals();
-                let mut vas_refused = 0usize;
-                let mut budget_hit = false;
-                let mut last_va: Option<u64> = None;
-                let mut each_us: Vec<u128> = Vec::new();
-                let mut named: Vec<String> = Vec::new();
-                // ★★★★★ **w321 — THE COALESCER.** `chunks_for` is the identity on every arm
-                // but `KAYFABE_DRAIN_BATCH=coalesce`, where it merges rows that abut in BOTH
-                // `va` and `gpa` into one chain, split at 2 MiB. See its own doc for why the
-                // 2 MiB is the C's number and not a guess, and `drain_contiguity` for the
-                // measurement that says what it can buy.
-                let chunks = if doorbelled {
-                    chunks_for(&candidates)
-                } else {
-                    candidates.iter().map(|&r| DrainChunk::one(r)).collect()
-                };
-                // ⊘ ROWS and CHAINS are counted separately and neither is derived from the
-                // other. `pinned == asked` is w319's grading invariant and it is stated in
-                // ROWS; `chains` is what the host was actually asked, and the whole fix is
-                // the ratio between them. Collapsing them would make the fix invisible in
-                // exactly the line that grades it.
-                let mut rows_pinned = 0usize;
-                let mut rows_refused = 0usize;
-                let mut fallback_chains = 0usize;
-                let mut chunk_split = 0usize;
-                for chunk in &chunks {
-                    // ⚠ THE WALL BOUND, and it is checked only on the drained VAS: the sampled
-                    // ones are bounded by their row count already, and adding a clock to them
-                    // would change the control.
-                    if doorbelled && vas_started.elapsed() > vas_drain_wall_budget() {
-                        budget_hit = true;
-                        drain_budget_hit = true;
-                        break;
-                    }
-                    let (va, gpa, len) = (chunk.va, chunk.gpa, chunk.len);
-                    // The file offset comes from the HYPERVISOR's own stated layout, exactly
-                    // as legs 4-6 derive it. ⊘ A row the VMM will not resolve is NOT a pin
-                    // failure and is not timed — it never reached the verb.
-                    let resolved = {
-                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                        held.as_ref()
-                            .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
-                    };
-                    let Some(Ok(run)) = resolved else {
-                        // ★★ w321 — A COALESCED CHUNK CAN BE REFUSED FOR A REASON ITS ROWS
-                        // WOULD NOT BE: `StraddlesRuns` says the chunk left the hypervisor's
-                        // stated run, which is a property of the MERGE and not of any row in
-                        // it. ⊘ So the chunk falls back to its own rows rather than being
-                        // dropped — the alternative loses up to 512 rows for a boundary the
-                        // coalescer invented.
-                        if chunk.rows > 1 {
-                            chunk_split += 1;
-                            let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
-                                backing,
-                                pdb,
-                                &candidates[chunk.first_row..chunk.first_row + chunk.rows],
-                                &mut named,
-                            );
-                            rows_pinned += r_ok;
-                            rows_refused += r_no;
-                            refused += r_no;
-                            vas_refused += r_no;
-                            fallback_chains += chains;
-                            total_pins += chains;
-                            total_us += us_sum;
-                            if r_ok > 0 {
-                                last_va = Some(chunk.last_row_va);
-                            }
-                        } else {
-                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
-                        }
-                        continue;
-                    };
-                    let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                        run.file_offset,
-                        len,
-                        kayfabe_vmm::Prot::ReadWrite,
-                    );
-                    let t0 = std::time::Instant::now();
-                    let r = self.device.pin_guest_ram(
-                        DOORBELL_TARGET_GPU,
-                        pdb,
-                        kayfabe_rt::GpuVa(va),
-                        grant,
-                    );
-                    let us = t0.elapsed().as_micros();
-                    match r {
-                        Ok(p) => {
-                            each_us.push(us);
-                            total_pins += 1;
-                            total_us += us;
-                            rows_pinned += chunk.rows;
-                            last_va = Some(chunk.last_row_va);
-                            if named.len() < 4 {
-                                named.push(format!(
-                                    "[va=0x{va:x}+0x{len:x} rows={} gpa=0x{gpa:x} \
-                                     host_va=0x{:x} placed_as_asked={} {}{us}us]",
-                                    chunk.rows,
-                                    p.host_va,
-                                    p.host_va == va,
-                                    if p.already { "replay " } else { "fresh " },
-                                ));
-                            }
-                        }
-                        // ⊘ REFUSED BY NAME, never a tally: `0x51 NV_ERR_NO_MEMORY` is
-                        // collision-or-exhaustion and cannot be told apart, so the name is
-                        // the only thing that distinguishes "we asked twice" from "the host
-                        // is full".
-                        //
-                        // ★★ w321 — AND A MERGED CHUNK FALLS BACK TO ITS ROWS. A refusal of
-                        // a 2 MiB chain would otherwise cost 512 rows for a fault that may
-                        // belong to one of them, which is strictly worse than the truncation
-                        // this rung exists to remove.
-                        Err(e) => {
-                            if chunk.rows > 1 {
-                                chunk_split += 1;
-                                named.push(format!(
-                                    "[va=0x{va:x}+0x{len:x} ⊘CHUNK-REFUSED `{e:?}` \
-                                     {us}us → FALLING BACK TO {} ROWS]",
-                                    chunk.rows
-                                ));
-                                let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
-                                    backing,
-                                    pdb,
-                                    &candidates
-                                        [chunk.first_row..chunk.first_row + chunk.rows],
-                                    &mut named,
-                                );
-                                rows_pinned += r_ok;
-                                rows_refused += r_no;
-                                refused += r_no;
-                                vas_refused += r_no;
-                                fallback_chains += chains;
-                                total_pins += chains;
-                                total_us += us_sum;
-                                if r_ok > 0 {
-                                    last_va = Some(chunk.last_row_va);
-                                }
-                            } else {
-                                refused += 1;
-                                vas_refused += 1;
-                                rows_refused += 1;
-                                if named.len() < 8 {
-                                    named
-                                        .push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
-                                }
-                            }
-                        }
-                    }
-                }
-                // ⊘ w328 — read in µs as well as ms. A sampled VAS costs single-digit ms, so a
-                // ms-granular sum over ~4 of them rounds toward zero and would report the
-                // breadth as free.
-                let vas_us = vas_started.elapsed().as_micros();
-                let vas_ms = vas_started.elapsed().as_millis();
-                // ★★ FLAT OR DEGRADING — the property that decides whether 256 rows may
-                // speak for 16 328. ⊘ w292: computed per VAS and printed IN the VAS's own row,
-                // because a single file-scope `degrade` is the last VAS's answer wearing the
-                // whole pass's name.
-                let vas_degrade = if each_us.len() >= 8 {
-                    let q = each_us.len() / 4;
-                    let first: u128 = each_us[..q].iter().sum::<u128>() / q as u128;
-                    let last: u128 = each_us[each_us.len() - q..].iter().sum::<u128>() / q as u128;
-                    format!("first_q={first}us last_q={last}us")
-                } else {
-                    format!("n/a — only {} timed pin(s), need 8", each_us.len())
-                };
-                if doorbelled {
-                    // ★★★★★ **w321 — `pinned` IS IN ROWS, AND THAT IS DELIBERATE.**
-                    // w319's grading invariant is `pinned == asked` and both terms are ROW
-                    // counts. A coalescing fix that reported CHAINS here would make its own
-                    // success read as a 11× regression in the one line every lane grades on.
-                    // ⊘ The chain count is not lost — it is `W321BATCH`'s `chains=`.
-                    drain_pinned = rows_pinned;
-                    drain_refused = vas_refused;
-                    drain_ms = vas_ms;
-                    degrade = vas_degrade.clone();
-                    let chains = each_us.len() + fallback_chains;
-                    drain_batch = format!(
-                        "arm={} chunks={} chains={chains} rows_pinned={rows_pinned} \
-                         rows_refused={rows_refused} fallback_chunks={chunk_split} \
-                         fallback_chains={fallback_chains} rows_per_chain={}.{:02}",
-                        drain_batch_arm(),
-                        chunks.len(),
-                        if chains == 0 { 0 } else { rows_pinned / chains },
-                        if chains == 0 {
-                            0
-                        } else {
-                            (rows_pinned * 100 / chains) % 100
-                        },
-                    );
-                    // ★★★★★ **w321 — CLOSE THE PARENT-SIDE BRACKET AND SUBTRACT.**
-                    let ipc_after = kayfabe_isolate_host::isolate::ipc_totals();
-                    let calls = ipc_after.0.saturating_sub(ipc_before.0);
-                    let us = ipc_after.1.saturating_sub(ipc_before.1);
-                    // ⊘ Per CHAIN, not per row: the chain is what crossed the socket, and on
-                    // the coalescing arm a per-row figure would divide one round trip by the
-                    // rows it happened to cover and report a transport cost that nothing paid.
-                    // ★ The per-ROW figure is beside it, because that is what multiplies out
-                    // to the drain's cost.
-                    drain_ipc = if chains == 0 {
-                        format!(
-                            "⊘ NO CHAIN WAS ISSUED — ipc_calls={calls} ipc_us={us}, and the \
-                             split is UNMEASURED, ⊘ not 0"
-                        )
-                    } else {
-                        let c = chains as u128;
-                        let r = std::cmp::max(rows_pinned + vas_refused, 1) as u128;
-                        let own = u128::from(vas_ms) * 1000;
-                        format!(
-                            "ipc_calls={calls} ({} /chain) ipc_us={us} ({} us/chain, \
-                             {} us/row) drain_us={own} ours_us={} ipc_share={}%",
-                            calls as u128 / c,
-                            u128::from(us) / c,
-                            u128::from(us) / r,
-                            own.saturating_sub(u128::from(us)),
-                            if own == 0 { 0 } else { u128::from(us) * 100 / own },
-                        )
-                    };
-                } else {
-                    // ★★★★★ **w328 — WHAT THE SAMPLED (non-doorbelled) VASes COST AND DELIVER.**
-                    pin_other_us += vas_us;
-                    pin_other_vases += 1;
-                    pin_other_pinned += each_us.len();
-                    if degrade == "n/a" {
-                        degrade = vas_degrade.clone();
-                    }
-                }
-                rows.push(format!(
-                    "[proc={} pdb=0x{:x} {} asked={} pinned={} refused={} in {vas_ms} ms \
-                     last_pinned_va={} degrade[{vas_degrade}]{}{} {}]",
-                    pid.0,
-                    pdb.0,
-                    if doorbelled {
-                        "★DRAINED(this doorbell's VAS)"
-                    } else {
-                        "SAMPLED(bounded — an unpinned row here is UNREACHED, not refused)"
-                    },
-                    candidates.len(),
-                    if doorbelled { rows_pinned } else { each_us.len() },
-                    vas_refused,
-                    last_va.map_or("⊘NONE".to_string(), |v| format!("0x{v:x}")),
-                    if budget_hit {
-                        format!(
-                            " ⚠⚠ DRAIN WALL BUDGET {} ms EXHAUSTED — THE DRAIN IS INCOMPLETE; \
-                             the rows after this point were NOT attempted and are NOT refused",
-                            vas_drain_wall_budget().as_millis()
-                        )
-                    } else {
-                        String::new()
-                    },
-                    if doorbelled && candidates.len() >= vas_drain_row_limit() {
-                        format!(
-                            " ⚠⚠ DRAIN ROW CAP {} HIT — THE DRAIN IS \
-                             INCOMPLETE by construction",
-                            vas_drain_row_limit()
-                        )
-                    } else {
-                        String::new()
-                    },
-                    named.join(" "),
-                ));
-            }
-        }
-        let per_row = if total_pins == 0 {
-            "⊘ NO ROW WAS PINNED — the per-row rate is UNMEASURED, not 0".to_string()
-        } else {
-            let us = total_us / total_pins as u128;
-            format!(
-                "{us} us/row ⇒ 16328 rows would cost {} ms IF FLAT",
-                us * 16328 / 1000
-            )
-        };
-        // ★★★★★ **THE DRAIN'S OWN COST ON THE DOORBELL PATH — FOUR FACTS, NEVER A WORD.**
-        // `visited` / `asked` / `pinned` / `ms`, plus which bound stopped it, because
-        // "complete" and "we ran out" are the difference between a result and a non-result.
-        let drain_clause = if !self.vas_publish.drains_doorbelled_vas() {
-            "⊘ NOT ARMED".to_string()
-        } else if !drain_visited {
-            format!(
-                "⚠⚠ TARGET NEVER VISITED — the drain did NOT run. The VAS named above was not \
-                 among this device's live (proc, pdb) keys on the doorbell target GPU, so \
-                 `pinned=0` here is UNREACHED and NOT `already complete`. [{drain_scope}]"
-            )
-        } else {
-            format!(
-                "visited=true asked={drain_asked} pinned={drain_pinned} \
-                 refused={drain_refused} DRAIN_MS={drain_ms} \
-                 W319KNOB[budget_ms={} row_limit={}] complete={} {}{}",
-                // ★★★ w319 — THE ARM ANNOUNCES ITSELF, in the same line as the number it
-                // moves. ⊘ A knob whose setting is only in the launcher's environment is a
-                // number nobody can attribute a log to six weeks from now, and this tree has
-                // paid for exactly that ("anchor every metric"). Printed on EVERY boot,
-                // including the default one, so `absent` means an OLD BINARY and never `3000`.
-                vas_drain_wall_budget().as_millis(),
-                vas_drain_row_limit(),
-                // ★ COMPLETE means: every row the table offered was attempted, and neither
-                // bound cut it short. It is the invariant this rung exists to establish —
-                // "a mapping is always backed before the engine that uses it runs".
-                !drain_cap_hit && !drain_budget_hit,
-                if drain_cap_hit {
-                    "⚠⚠ ROW CAP HIT "
-                } else {
-                    ""
-                },
-                if drain_budget_hit {
-                    "⚠⚠ WALL BUDGET HIT "
-                } else {
-                    ""
-                },
-            )
-        };
-        format!(
-            "{head} PINRATE(w291 rate; ★w292 DRAIN — on arm `drain` the doorbelled VAS's rows \
-             ARE merged into Binding::host by `commit_pin_guest_ram`, so this is no longer \
-             measurement-only) → pinned={total_pins} refused={refused} in {} ms, \
-             per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
-             DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
-             W321CENSUS[{drain_census}] W321IPC[{drain_ipc}] W321BATCH[{drain_batch}] \
-             W328PIN[arm={scope_arm} scoped={scoped} scoped_out={pin_scoped_out} \
-             other_vases={pin_other_vases} other_us={pin_other_us} \
-             other_pinned={pin_other_pinned} drain_ms={drain_ms}] \
-             over {} VAS row(s) {}",
-            total_us / 1000,
-            rows.len(),
-            if rows.is_empty() {
-                "⊘ NO CANDIDATE ROW IN ANY NON-SYSTEM VAS — UNMEASURED, not zero".to_string()
-            } else {
-                rows.join(" ")
-            },
-        )
-    }
-
-    /// ★★★★★ **w321 — THE COALESCER'S FALLBACK: pin a refused chunk's rows ONE AT A TIME.**
-    ///
-    /// ⊘ **It exists because a merged chunk can be refused for a reason none of its rows
-    /// would be.** `StraddlesRuns` is a property of the MERGE — the chunk left the
-    /// hypervisor's stated run — and `GuestRamPinOverlaps` can be one too. Dropping the chunk
-    /// on such a refusal would lose up to 512 rows for a boundary this file invented, which
-    /// is strictly worse than the truncation w321 exists to remove.
-    ///
-    /// ⇒ The fallback is **exactly master's loop**, over exactly the rows the table stated,
-    /// so the worst case of the coalescing arm is master's cost for that chunk **plus one
-    /// wasted chain**, and never a missing mapping.
-    ///
-    /// Returns `(rows_pinned, rows_refused, chains_issued, total_us)`.
-    #[cfg(feature = "host-isolates")]
-    fn pin_rows_one_by_one(
-        &self,
-        backing: kayfabe_vmm_qemu::layout::BackingId,
-        pdb: kayfabe_rt::Pdb,
-        rows: &[(u64, u64, u64)],
-        named: &mut Vec<String>,
-    ) -> (usize, usize, usize, u128) {
-        let (mut ok, mut no, mut chains, mut us_sum) = (0usize, 0usize, 0usize, 0u128);
-        for &(va, gpa, len) in rows {
-            let resolved = {
-                let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                held.as_ref()
-                    .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
-            };
-            let Some(Ok(run)) = resolved else {
-                if named.len() < 12 {
-                    named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM (fallback)]"));
-                }
-                continue;
-            };
-            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
-                run.file_offset,
-                len,
-                kayfabe_vmm::Prot::ReadWrite,
-            );
-            let t0 = std::time::Instant::now();
-            let r =
-                self.device
-                    .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(va), grant);
-            us_sum += t0.elapsed().as_micros();
-            chains += 1;
-            match r {
-                Ok(_) => ok += 1,
-                Err(e) => {
-                    no += 1;
-                    if named.len() < 12 {
-                        named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` (fallback)]"));
-                    }
-                }
-            }
-        }
-        (ok, no, chains, us_sum)
-    }
-
-    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `join_operand_fb_leaves`' twin's
-    /// reason: an archive built without the feature prints nothing, exits 0, and every other
-    /// signal says the boot happened.
-    #[cfg(not(feature = "host-isolates"))]
-    fn publish_vas_rows(
-        &self,
-        token: u64,
-        _seen: Option<&kayfabe_rt::device::CeChannelFacts>,
-    ) -> Option<String> {
-        if !self.vas_publish.observes() {
-            return None;
-        }
-        Some(format!(
-            "VAS-PUBLISH token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT PUBLISH A \
-             ROW AT ALL. The arm was requested and this build has no isolate plane — ⚠ do NOT \
-             grade a boot from this binary as `armed and nothing moved`"
-        ))
-    }
-
     /// ★★★★★ **#255 — THE OWNER'S ASSERTION: fake framebuffer must never be what a guest
     /// USERSPACE channel's engine is pointed at.**
     ///
@@ -10236,6 +9120,1182 @@ impl SharedDoorbell {
     }
 }
 
+/// ★★★★★ **w332 — THE PUBLICATION'S OWN STATE, LIFTED OUT OF THE PORT SO A WORKER CAN HOLD IT.**
+///
+/// `SharedDoorbell` is `Box::new(..)` into the register plane (`plane.set_doorbell`), and
+/// `publish_vas_rows` was a `&self` method on it — so **no thread but the trapping vCPU could
+/// ever run a publication**. That is the structural reason the deferred lane in
+/// `the_publish_trigger_measured.md` §6 stayed unwired, and it is why publication still runs
+/// inline with the BQL held.
+///
+/// ⊘⊘ **THAT DOC NAMES THE WRONG TYPE.** It says *"`Regs` is a `Box`, not an `Arc` …
+/// `publish_vas_rows` is a `&self` method on it"*. `Regs` is a different type; the publisher
+/// lives on `SharedDoorbell`. It also lists **five** fields to lift where the transitive set
+/// is **eight**, and **one** method where **three** move. Following it literally refactors a
+/// type that is not in the way. Corrected here rather than only there.
+///
+/// ★ Every field is `Arc`, `Weak`, `Clone` or `Copy`, so this is a **handle bundle, not a
+/// copy of any state**: two `PublishContext`s made from one port address the same
+/// `DirtyGate`, the same device and the same export directory. [`DirtyGate`] became an
+/// `Arc` for exactly this and is otherwise untouched — every one of its fields was already
+/// behind a `Mutex`, so sharing it changes no synchronisation.
+///
+/// ⚠ **This lift alone moves nothing off the BQL.** It removes the ownership obstacle and
+/// nothing else; the call site is still synchronous and still on the trap thread. A rung
+/// that claims otherwise from this commit is claiming a wiring that does not exist.
+#[derive(Clone)]
+struct PublishContext {
+    device: Arc<kayfabe_rt::device::SharedDevice>,
+    plane: std::sync::Weak<RegPlane>,
+    ce: Arc<CeShellState>,
+    dirty: Arc<DirtyGate>,
+    exports: FbExportDir,
+    fb_join: FbJoinArm,
+    vas_publish: VasPublishArm,
+    guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+}
+
+impl PublishContext {
+
+    /// ★★★★★ **LEG 8 — PUBLISH THE GUEST'S DECLARED ROWS INTO THE HOST VAS** (w290).
+    ///
+    /// # The measurement that commissioned it
+    ///
+    /// `[measured, boot w290cup2]` the faulting VA was owned by `GUEST-DESCRIBES` **and** by
+    /// `TABLE-DESCRIBES` and by **neither** host page table: `HOST-PUBLISHED host_rows=4 of
+    /// 16425`. Our shadow is right and hardware walks something else. ⇒ the wall is
+    /// **publication, not population**, and `FAULT_PDE` rather than `FAULT_PTE` is that fact
+    /// in the Xid's own vocabulary — with nothing published within a terabyte there is no
+    /// page *directory* to miss a leaf in.
+    ///
+    /// # ⊘⊘ WHAT THIS PASS CANNOT DO, AND IT IS RM'S LIMIT RATHER THAN A CHOICE
+    ///
+    /// The brief that commissioned this said *"coalesce by RUN, not by row — publish
+    /// extents"*. **The proven verb cannot be handed a run.** `plan_back_fb_leaf` refuses on
+    /// three grounds before any host verb exists (`kayfabe-fwd/src/lib.rs:2328-2371`), and
+    /// they pull in opposite directions:
+    ///
+    /// - `FbLeafGranularity` — *"RM places a fixed mapping in 64 KiB granules"* (`:2244-2247`).
+    ///   A run **passes** this; the 4 KiB rows it is made of **cannot**.
+    /// - `FbLeafExtent` — the request must be **exactly one table row**, start and length.
+    ///   A run **fails** this whenever it spans more than one row.
+    ///
+    /// ⇒ Coalescing is what the first gate wants and what the third forbids. This pass
+    /// therefore publishes **per row**, and [`kayfabe_rt::device::PublishCensus`] reports
+    /// `not_granular` so *"how much of the table would run-coalescing have rescued"* is a
+    /// **measured number rather than an estimate**. ⚠ Widening `FbLeafExtent` to accept a
+    /// multi-row extent is a real change to the fwd plane's commit — one host object would
+    /// have to write `host` into many rows, and the reclaim below frees per row — so it is
+    /// deliberately **not** smuggled into an instrument rung.
+    ///
+    /// # ★★★ RECLAIM — ALREADY EXISTS, ON EVERY TEARDOWN ROUTE, AND HERE IS THE CITATION
+    ///
+    /// The owner's standing rule is that every pin needs an unpin. It is satisfied **by
+    /// construction** rather than by new code, because this pass mints nothing new: a leaf
+    /// bound by `adopt_joined_fb_leaf` is an ordinary `Binding` carrying a
+    /// [`kayfabe_mmu::HostBacking`], and `Spine::stage_dropped_vases`
+    /// (`kayfabe-core/src/gpu.rs:3229-3273`) walks `vas.table.iter()` and stages
+    /// `unmap`-then-`free` for **every** binding whose `host()` is `Some`. It is reached from
+    /// `Spine::vacate` (`gpu.rs:3645-3664`), *"THE ONE REMOVAL POINT"* (`gpu.rs:3622`), on
+    /// all three routes: a VAS leaving the live set while the proc lives
+    /// (`sync_proc_to_boundary`, `gpu.rs:3117`), clean proc death (`RmEvent::Free` of the
+    /// client root ⇒ the component vanishes, `gpu.rs:3903`), and violent death
+    /// (`retire_proc`, `gpu.rs:4181-4225`).
+    ///
+    /// ⊘⊘ **AND THE TRIGGER IS NOT WHAT THE BRIEF NAMED.** There is no UVM plane in this
+    /// port to key an unpublish on: we emulate a **GPU**, so the guest's `nvidia-uvm` talks to
+    /// the guest's `nvidia.ko` and `uvm_release` / `uvm_va_space_destroy` /
+    /// `uvm_va_space_mm_shutdown` are **not observable events here at all** — they reach us
+    /// only after the guest driver turns them into `RpcFunction::Free` (fn 10,
+    /// `kayfabe-gsp/src/rpc.rs:261`) ⇒ `RmEvent::Free` ⇒ `Spine::refresh`. A `SIGKILL`ed guest
+    /// process still gets there, because the guest's own `nvidia.ko` `close()` frees the
+    /// client root. The genuinely kernel-guaranteed backstop is the **isolate process
+    /// boundary** (§7.0), which is what `retire_proc`'s undrained queue relies on
+    /// (`gpu.rs:1812-1817`).
+    ///
+    /// ⚠ **The residual gap, named rather than left to be found:** there is no per-leaf
+    /// release short of VAS death. It is **pre-existing and shared with leg 7** — that leg's
+    /// own doc already says *"the missing half is the trigger, not the mechanism … ⊘ Not
+    /// wired this rung"* — and this pass widens the population it applies to. Its cost is
+    /// **measured on the same line**: `RepointsPublished` / `UnbindsPublished`
+    /// (`kayfabe-mmu/src/walker.rs:917-930`, `:956-972`) already print in the sweep's
+    /// `by_kind`, so a boot says how often the guest tried to edit a row we had frozen.
+    ///
+    /// # Ordering
+    ///
+    /// Runs after the decode pass and the sweep have populated the table and after leg 7, and
+    /// **before** `SharedDevice::doorbell` — the C's invariant, *"a mapping is always backed
+    /// before the engine that uses it runs"*. ⊘ There is nothing to be lazy against: we
+    /// emulate no fault buffer, so there is no fault to publish on demand from.
+    ///
+    /// ★★★★★ **w292 — `seen` is the CHANNEL THIS DOORBELL ROUTED TO, and it is taken as a
+    /// parameter for legs 4-7's reason exactly.** It names the `(proc, pdb)` the ring about to
+    /// be rung will be fetched through, which is the only thing that lets
+    /// [`VasPublishArm::Drain`] scope its drain to *the VAS about to be doorbelled* instead of
+    /// raising a budget across the board. ⊘ It is the facts this doorbell **already resolved**,
+    /// never a second `ce_channel_facts` call — two resolutions of one fact can disagree, and
+    /// this file has paid for that shape once already.
+    #[cfg(feature = "host-isolates")]
+    fn publish_vas_rows(
+        &self,
+        token: u64,
+        seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        if !self.vas_publish.observes() {
+            return None;
+        }
+        let head = format!(
+            "VAS-PUBLISH token={token:#010x} arm={}",
+            self.vas_publish.as_str()
+        );
+        // ⚠ Same necessary-not-sufficient gate leg 7 states out loud, and refused rather than
+        // downgraded: with `KAYFABE_FB_JOIN` off this pass could only map PRIVATE ANONYMOUS
+        // pages — two memories under a name that says one.
+        // ⊘ Enforced only on the arm that would publish; the census must still run on
+        // `assert`, or the control loses the very number it exists to produce.
+        if self.vas_publish.publishes() && !self.fb_join.armed() {
+            return Some(format!(
+                "{head} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. ⊘ Nothing was asked of the \
+                 host",
+                self.fb_join.as_str()
+            ));
+        }
+        let Some(plane) = self.plane.upgrade() else {
+            return Some(format!(
+                "{head} → ⊘ NO PLANE. ⊘ Nothing was asked of the host"
+            ));
+        };
+        let exports = match (self.exports.as_ref(), self.vas_publish.publishes()) {
+            (Some(e), _) => Some(e),
+            (None, false) => None,
+            (None, true) => {
+                return Some(format!(
+                    "{head} → ⊘ NOT ARMABLE: exports_directory=false — no route from a backing \
+                     token to a descriptor. ⊘ Nothing was asked of the host"
+                ));
+            }
+        };
+        // ★★★★★ w291 — THE BOUNDED PIN-RATE MEASUREMENT. Runs INSTEAD of the publication
+        // pass, never beside it: they touch disjoint populations through different chains,
+        // and one line reporting both would be the count that cannot see a substitution.
+        // ★★★ On `pinrate` this REPLACES the publication pass; on `both` it PRECEDES it, so
+        // one boot carries both halves and the line carries both sentences. ⊘ The two are
+        // printed as separate clauses and never summed into one counter — they are different
+        // chains over disjoint populations, and one number could not see the substitution.
+        let pin_clause = if self.vas_publish.measures_pin_rate() {
+            let line = self.measure_guest_ram_pin_rate(&head, seen);
+            if !self.vas_publish.publishes() {
+                return Some(line);
+            }
+            Some(line)
+        } else {
+            None
+        };
+        let started = std::time::Instant::now();
+        let (mut published, mut refused, mut budget_hit) = (0usize, 0usize, false);
+        let mut rows: Vec<String> = Vec::new();
+        // ★★★★★ **w318 — THE DIRTY GATE'S HOST TERM, read ONCE for the whole pass.**
+        //
+        // `[measured 2026-08-14, w315 boot `full`]` every one of this pass's eight refusals is
+        // *"that framebuffer range is already joined"* — an outcome of **host** state, which
+        // `Vas::publish_epoch` cannot see. Without this term the gate would be an epoch of our
+        // record gating a verb whose answer is not a function of our record alone, which is
+        // the `a_second_source_of_truth_beside_a_complete_value` shape one plane over.
+        //
+        // ⊘ A count of ranges, not the ranges: it moves on every install and every release,
+        // which is all a re-arm needs, and materialising the set per doorbell would put back a
+        // slice of the very cost this removes.
+        let gate = selected_dirty_gate(DIRTY_GATE_PUBLISH_ENV);
+        let joined_now = plane.joined_fb_ranges().len();
+        let (mut gate_fired, mut gate_skipped) = (0usize, 0usize);
+        // ★★★★★ **w328 — THE DOORBELLED VAS, NAMED HERE TOO.**
+        //
+        // The drain half already derives it (`measure_guest_ram_pin_rate`'s `drain_target`);
+        // this half never did, and that asymmetry is the whole of the breadth question. ⊘ It
+        // is derived from the SAME `seen` facts through the SAME two fields, so the two
+        // passes cannot come to disagree about which VAS a doorbell is about.
+        let scope_target = seen.and_then(|f| f.vas_pdb.map(|p| (f.proc, p)));
+        let scope_arm = publish_scope_arm();
+        // ⚠⚠ **THE FALLBACK IS THE SAFETY PROPERTY, AND IT IS NOT AN OPTIMISATION.** Scoping
+        // with NO target would publish NOTHING at all — strictly worse than master, and it
+        // would present as a GPU fault, which is indistinguishable by symptom from the
+        // pre-existing drain-truncation intermittent. ⇒ no target ⇒ full breadth, said out
+        // loud in the line below rather than inferred from a count.
+        // ⊘ AND THE SECOND REFUSAL: a target of `SYSTEM_PROC` is a target that is NEVER
+        // ATTEMPTED (§12.26, `shim.rs`'s own `system` guard below). Scoping to it would leave
+        // every publishable VAS unvisited while the line still read `scoped=true target=proc0`
+        // — the favourable-looking absence this tree has paid for repeatedly.
+        let scoped = publish_scope_scoped(scope_arm, scope_target);
+        // ★★★★★ **w328 — THE BREADTH'S OWN COST, SPLIT AT THE SOURCE.** Not a fit and not a
+        // residual: each VAS's own wall time is attributed to the bucket it belongs to as it
+        // is spent. ⊘ `other_*` counts what the breadth DELIVERS beside what it COSTS,
+        // because "2 529 ms of BQL" and "and it publishes nothing" are two different claims
+        // and only the pair decides whether the breadth is vestigial.
+        let (mut pub_target_us, mut pub_other_us) = (0u128, 0u128);
+        let (mut pub_other_vases, mut pub_other_published, mut pub_other_refused) =
+            (0usize, 0usize, 0usize);
+        let (mut pub_target_published, mut pub_scoped_out) = (0usize, 0usize);
+        for pid in self.device.live_pids() {
+            for (gpu, pdb) in self.device.vas_keys(pid) {
+                // ⊘ The isolate is keyed `(proc, gpu)`, so a `Vas` on another GPU has no
+                // isolate to mint into here. Skipped and SAID, never silently dropped.
+                if gpu != DOORBELL_TARGET_GPU {
+                    rows.push(format!(
+                        "[proc={} pdb=0x{:x} ⊘ SKIPPED gpu={} != doorbell target]",
+                        pid.0, pdb.0, gpu.0
+                    ));
+                    continue;
+                }
+                // ★★★★★ **w318 — THE SKIP.** Everything below this point — the census walk
+                // over every row of this `Vas`, and the join attempt over every candidate it
+                // buckets — is a **pure function of** `(Vas::publish_epoch, joined_now)`. If
+                // neither has moved since the last pass **that ran to completion**, re-running
+                // it produces the identical census and the identical set of join outcomes.
+                //
+                // ⚠ Three refusals to skip, and each of them is a case that would otherwise
+                // strand real work:
+                // - the epoch is **unreadable** (`None`, the `Vas` is gone) ⇒ arm. UNMEASURED
+                //   is not clean.
+                // - this key has **no stamp** ⇒ arm. A key that appeared this doorbell has
+                //   never been published.
+                // - the last pass was **incomplete** (wall budget) ⇒ it left candidates
+                //   unattempted, so no stamp was taken for it and it arms again below.
+                let epoch_now = self.device.vas_publish_epoch(pid, gpu, pdb);
+                if gate && let Some(epoch_now) = epoch_now {
+                    let cached = self
+                        .dirty
+                        .published
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&(pid, gpu, pdb))
+                        .filter(|s| s.epoch == epoch_now && s.joined == joined_now)
+                        .cloned();
+                    if let Some(s) = cached {
+                        gate_skipped += 1;
+                        rows.push(format!(
+                            "[proc={} pdb=0x{:x} ⊘SKIPPED(w318 dirty gate: epoch={:?} joined={} \
+                             unchanged since the last COMPLETED pass) REPLAY-OF-LAST-CENSUS \
+                             {}]",
+                            pid.0, pdb.0, epoch_now, joined_now, s.line
+                        ));
+                        continue;
+                    }
+                }
+                // ★★★★★ **w328 — THE SCOPE SKIP.** Above the census, because the census walk
+                // itself is the cost: `vas_publish_census` is O(rows of this Vas) and proc 0
+                // alone holds 6787 of them. ⊘ Placed BELOW the w318 dirty gate deliberately —
+                // the two are independent reasons not to walk a VAS, and collapsing them
+                // would make one arm's tally speak for the other's.
+                //
+                // ⚠ NO STAMP IS TAKEN for a scoped-out VAS. A stamp says *"this census ran to
+                // completion and here is what it found"*; taking one here would tell the next
+                // doorbell that a VAS we never looked at is clean, which is the
+                // publication-silently-never-performed shape this pass's own docs forbid.
+                let is_target = scope_target == Some((pid, pdb));
+                if scoped && !is_target {
+                    pub_scoped_out += 1;
+                    rows.push(format!(
+                        "[proc={} pdb=0x{:x} ⊘SCOPED-OUT(w328 KAYFABE_PUBLISH_SCOPE=doorbelled: \
+                         this is NOT the doorbelled VAS) ⊘ ITS CENSUS WAS NOT TAKEN — the rows \
+                         below are UNMEASURED for this doorbell, ⊘ not zero, and NO STAMP WAS \
+                         TAKEN]",
+                        pid.0, pdb.0
+                    ));
+                    continue;
+                }
+                gate_fired += 1;
+                let vas_t0 = std::time::Instant::now();
+                let c = self
+                    .device
+                    .vas_publish_census(pid, gpu, pdb, VAS_PUBLISH_LEAF_BUDGET);
+                let mut done = 0usize;
+                let mut failed = 0usize;
+                // ⊘⊘ **THE SYSTEM PROC CAN NEVER HOLD A PUBLICATION, AND THAT IS §12.26 —
+                // SO IT IS NOT ATTEMPTED, NOT ATTEMPTED-AND-REFUSED.**
+                //
+                // `plan_back_fb_leaf` refuses `Gpu::SYSTEM_PROC` by name before any host verb
+                // exists (`kayfabe-fwd/src/lib.rs:2318-2323`): the system proc's work is
+                // forged precisely so it holds no host state whose reclaim has no defined
+                // point, and a framebuffer object is host state.
+                //
+                // ⚠ `[measured, boot w290cup2]` proc 0 holds **6787 rows** across two VASes.
+                // Handing them to the verb would issue 6787 doomed round trips and report
+                // them as `refused=6787` — which reads exactly like RM exhaustion and is
+                // nothing of the kind. ⇒ The refusal is stated HERE, once, as a property of
+                // the proc, and the census still prints so the rows are visible rather than
+                // absent.
+                let system = pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC;
+                if self.vas_publish.publishes() && !system {
+                    if let Some(exports) = exports {
+                        let isolate = kayfabe_isolate::IsolateId::new(pid.0, gpu);
+                        for &(va, len, phys) in &c.candidates {
+                            if started.elapsed() > VAS_PUBLISH_WALL_BUDGET {
+                                budget_hit = true;
+                                break;
+                            }
+                            let what = format!("VAS-PUBLISH(proc={} pdb=0x{:x})", pid.0, pdb.0);
+                            match join_one_fb_leaf(
+                                &head,
+                                &what,
+                                &self.device,
+                                &plane,
+                                exports,
+                                self.fb_join,
+                                isolate,
+                                pdb,
+                                kayfabe_rt::completion_watch::FbLeaf { va, len, phys },
+                            ) {
+                                Some(_) => done += 1,
+                                None => failed += 1,
+                            }
+                        }
+                    }
+                }
+                published += done;
+                refused += failed;
+                // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.**
+                //
+                // ⊘ The census WALK is inside the bracket as well as the joins, so the two
+                // can be separated afterwards by correlating cost against `candidates` —
+                // which is what settled the mechanism. `[measured w328, boot w328a1]` with
+                // `candidates=0` and a table of **18 277 rows** a pass costs **632 µs**
+                // (35 ns/row); with `candidates>0` and the same table it costs **52 094 µs**.
+                // ⇒ **the walk is not the cost; ~6.4 ms per `join_one_fb_leaf` attempt is**,
+                // and 328 of the boot's ~400 attempts are the same 8 already-joined ranges
+                // re-offered 41 times. A bracket around the joins alone could not have shown
+                // that, because it could not have priced the walk it excluded.
+                let vas_us = vas_t0.elapsed().as_micros();
+                if is_target {
+                    pub_target_us += vas_us;
+                    pub_target_published += done;
+                } else {
+                    pub_other_us += vas_us;
+                    pub_other_vases += 1;
+                    pub_other_published += done;
+                    pub_other_refused += failed;
+                }
+                // ★★★★★ **w318 — THE STAMP, and the two conditions on taking it.**
+                //
+                // 1. **`!budget_hit`.** A pass that ran out of wall budget left candidates
+                //    unattempted; stamping it clean would strand them until something else
+                //    happened to move the epoch, which is a publication silently never
+                //    performed — the exact failure mode the gate's own docs forbid.
+                // 2. **The epoch is RE-READ here, after the joins.** A successful join binds
+                //    into the table and therefore moves the epoch *during* this pass; stamping
+                //    the pre-pass value would make the very next doorbell see a mismatch and
+                //    re-run — a gate that can never go clean on a VAS that ever published.
+                //    ⊘ Re-reading is also what keeps it CORRECT in the other direction: if
+                //    anything else moved the epoch mid-pass, the value stamped is the one this
+                //    census actually describes.
+                //
+                // ⚠⚠ **AND THE STAMP IS BUILT WHOLE BEFORE THE LOCK IS TAKEN** — every field,
+                // including `plane.joined_fb_ranges()` and the `format!`. Written the obvious
+                // way (as arguments to `insert`) the receiver is locked FIRST and the
+                // arguments are evaluated underneath it, which would put **the plane's
+                // rank-`Plane` lock beneath this unranked mutex**. `assert_lock_free` cannot
+                // see an unranked lock — it masks only ranked ones — so that inversion would
+                // pass every assertion in the tree and stall the register plane.
+                // ⊘ `tests/tests/unranked_locks.rs` caught it; it is fixed here rather than
+                // classified as safe, because the honest classification would have been *"a
+                // ranked lock and an allocation run beneath it"*.
+                if !budget_hit && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb) {
+                    let stamp = PublishStamp {
+                        epoch: after,
+                        joined: plane.joined_fb_ranges().len(),
+                        line: format!(
+                            "total={} already_host={} already_pinned={} guest_ram={} \
+                             not_vidmem={} not_granular={} candidates={} published={done} \
+                             refused={failed}",
+                            c.total,
+                            c.already_host,
+                            c.already_pinned,
+                            c.guest_ram,
+                            c.not_vidmem,
+                            c.not_granular,
+                            c.candidates_total(),
+                        ),
+                    };
+                    self.dirty
+                        .published
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert((pid, gpu, pdb), stamp);
+                }
+                // ★★ EVERY row of the census, per VAS, with the bucket identity printed. ⊘ A
+                // census whose buckets did not sum could report a comfortable zero for a class
+                // it never reached, so `sum_ok` is a value and not a comment.
+                rows.push(format!(
+                    "[proc={} pdb=0x{:x}{} total={} already_host={} already_pinned={} \
+                     guest_ram={} not_vidmem={} not_granular={}({} bytes) candidates={}({} \
+                     bytes, capped={}) published={done} refused={failed} sum_ok={}]",
+                    pid.0,
+                    pdb.0,
+                    if system {
+                        " ⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 — it may hold no host state; \
+                         candidates below are REAL and UNPUBLISHABLE, not refused)"
+                    } else {
+                        ""
+                    },
+                    c.total,
+                    c.already_host,
+                    c.already_pinned,
+                    c.guest_ram,
+                    c.not_vidmem,
+                    c.not_granular,
+                    c.not_granular_bytes,
+                    c.candidates_total(),
+                    c.candidate_bytes,
+                    c.capped,
+                    c.buckets_sum(),
+                ));
+            }
+        }
+        // ⊘ Tallied ONCE per doorbell, per VAS visited, and only after the loop: a gate that
+        // is consulted N times on one doorbell must not report N doorbells.
+        for _ in 0..gate_fired {
+            self.dirty.tally(DirtyGate::PUBLISH, true);
+        }
+        for _ in 0..gate_skipped {
+            self.dirty.tally(DirtyGate::PUBLISH, false);
+        }
+        // ★★★★★ **w328 — THE BREADTH LINE. Both halves, always, on every arm.**
+        //
+        // ⊘ `arm=` is printed even when unset, so `absent` means an OLD BINARY and never
+        // `all` — this tree has paid for a knob whose setting lived only in the launcher's
+        // environment. ⊘ `target=` prints `⊘NONE` rather than a plausible pair when this
+        // doorbell resolved no channel facts, because `scoped` is FALSE in that case and a
+        // reader must be able to see why.
+        let w328 = format!(
+            "arm={scope_arm} scoped={scoped} target={} scoped_out={pub_scoped_out} \
+             target_us={pub_target_us} target_published={pub_target_published} \
+             other_vases={pub_other_vases} other_us={pub_other_us} \
+             other_published={pub_other_published} other_refused={pub_other_refused} \
+             breadth_share={}",
+            scope_target.map_or("⊘NONE (no channel facts ⇒ FULL BREADTH, by design)".to_string(), |(p, d)| format!(
+                "proc={} pdb=0x{:x}",
+                p.0, d.0
+            )),
+            (pub_other_us * 100).checked_div(pub_target_us + pub_other_us).map_or_else(
+                || "⊘UNMEASURED (this pass spent no time in any VAS)".to_string(),
+                |p| format!("{p}%"),
+            ),
+        );
+        Some(format!(
+            "{}{head} W328SCOPE[{w328}] gate={} this_doorbell[fired={gate_fired} \
+             skipped={gate_skipped}] → \
+             published={published} refused={refused} in {} ms{} over {} VAS row(s) {}",
+            pin_clause
+                .map(|l| format!("{l}\nkayfabe: "))
+                .unwrap_or_default(),
+            if gate { "on" } else { "off" },
+            started.elapsed().as_millis(),
+            if budget_hit {
+                format!(
+                    " ⚠⚠ WALL BUDGET {} ms EXHAUSTED — the remaining candidates were NOT \
+                     attempted this doorbell; an unpublished row below is NOT thereby a refusal",
+                    VAS_PUBLISH_WALL_BUDGET.as_millis()
+                )
+            } else {
+                String::new()
+            },
+            rows.len(),
+            rows.join(" "),
+        ))
+    }
+
+    /// ★★★★★ **w291 — THE BOUNDED GUEST-RAM PIN-RATE MEASUREMENT.**
+    ///
+    /// # ⊘ WHAT IT REPLACES, SAID PLAINLY
+    ///
+    /// `guest_ram_publication_merge.md` costed option (2a) at **"~49 s per VAS"**. That
+    /// number was an **EXTRAPOLATION**: leg 8's *framebuffer* rate (34 joins in 101 ms,
+    /// ~3 ms each) multiplied by 16 328 guest-RAM rows. A framebuffer join and a guest-RAM
+    /// pin are **different chains** — the join mints memory, copies the establishment bytes
+    /// and re-points the guest's window; the pin describes pages the guest already owns — so
+    /// the extrapolation had no right to speak for it. This measures the real thing.
+    ///
+    /// # What it does, and what it deliberately does not
+    ///
+    /// Pins up to [`VAS_PINRATE_ROWS`] guest-RAM rows of every non-system proc's `Vas`
+    /// through the **existing** `pin_guest_ram` verb, timing each. ⊘ It writes **nothing**
+    /// into `Binding::host`, adds no representation, touches no refcount, and puts no pointer
+    /// between the two records. The pins land in `Vas::guest_ram_pins`, where that verb has
+    /// always put them. **This is the measurement, not the merge.**
+    ///
+    /// ★★ **`degrade` is what lets a bounded sample speak about 16 328 rows.** It reports the
+    /// mean of the last quarter against the mean of the first quarter. Flat (≈1.0) means the
+    /// per-row cost is a constant and the bounded number extrapolates honestly; rising means
+    /// it does not, and **that** is the finding rather than the headline rate.
+    ///
+    /// # ★★★★★ w292 — AND ON [`VasPublishArm::Drain`] IT IS NO LONGER ONLY A MEASUREMENT
+    ///
+    /// The VAS **this doorbell is about** — `(seen.proc, seen.vas_pdb)`, the address space the
+    /// ring about to be rung is fetched through — is drained to empty rather than sampled,
+    /// bounded by [`VAS_DRAIN_ROW_CAP`] and [`VAS_DRAIN_WALL_BUDGET`], both of which announce
+    /// themselves. **Every other `Vas` keeps the bounded [`VAS_PINRATE_ROWS`] sample**, so the
+    /// budget is raised for exactly one address space and `both` remains the control.
+    ///
+    /// ⊘ Four ways there is no drain, and they are **named exits rather than a silent
+    /// sample**, because *"we drained and it was already empty"* and *"we never identified a
+    /// target"* are opposite facts that would otherwise print the same line: the arm is not
+    /// `drain`; this doorbell resolved no channel facts; the channel declared no `vas_pdb`; or
+    /// the doorbelled proc is `SYSTEM_PROC`, whose refusal is a property of the proc (§12.26)
+    /// and is **kept**.
+    #[cfg(feature = "host-isolates")]
+    fn measure_guest_ram_pin_rate(
+        &self,
+        head: &str,
+        seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> String {
+        let Some(backing) = self.guest_ram_backing else {
+            return format!(
+                "{head} → ⊘ NO GUEST-RAM BACKING (no hypervisor layout to resolve a GPA \
+                 against). ⊘ Nothing was asked of the host — this is UNMEASURED, not 0 ms"
+            );
+        };
+        // ★★★★★ **w292 — WHICH VAS THIS DOORBELL IS ABOUT.** `None` on every arm but `drain`,
+        // and `None` on `drain` itself whenever the facts cannot name one — which is a
+        // DIFFERENT fact from "drained and found nothing", and is reported as one below.
+        let drain_target = if self.vas_publish.drains_doorbelled_vas() {
+            seen.and_then(|f| f.vas_pdb.map(|p| (f.proc, p)))
+        } else {
+            None
+        };
+        let drain_scope = match (self.vas_publish.drains_doorbelled_vas(), seen, drain_target) {
+            (false, _, _) => format!(
+                "⊘ NO DRAIN: arm=`{}` samples every VAS at {VAS_PINRATE_ROWS} rows/doorbell. \
+                 An unpinned row below is UNREACHED, not refused",
+                self.vas_publish.as_str()
+            ),
+            (true, None, _) => "⊘ DRAIN ARMED BUT NO TARGET: this doorbell resolved NO channel \
+                                facts, so the VAS it is about has no name here. Every VAS got \
+                                the bounded sample — ⚠ THIS LINE IS NOT A DRAIN"
+                .to_string(),
+            (true, Some(f), None) => format!(
+                "⊘ DRAIN ARMED BUT NO TARGET: chan={} declared NO vas_pdb, so there is no \
+                 address space to drain. Every VAS got the bounded sample — ⚠ THIS LINE IS \
+                 NOT A DRAIN",
+                f.chan.0
+            ),
+            (true, Some(_), Some((pid, pdb))) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
+                format!(
+                    "⊘⊘ THE DOORBELLED VAS IS SYSTEM_PROC (proc={} pdb=0x{:x}) — NOT DRAINED, \
+                     AND NOT ATTEMPTED-AND-REFUSED. §12.26: `plan_pin_guest_ram` refuses proc 0 \
+                     by name, and its 6787 rows would print as `refused=6144`, which reads \
+                     exactly like RM exhaustion and is nothing of the kind",
+                    pid.0, pdb.0
+                )
+            }
+            (true, Some(_), Some((pid, pdb))) => format!(
+                "★ DRAIN TARGET = proc={} pdb=0x{:x} (the VAS this doorbell's ring is fetched \
+                 through); every OTHER VAS keeps the {VAS_PINRATE_ROWS}-row sample",
+                pid.0, pdb.0
+            ),
+        };
+        // ★★★★★ **w319 — THE CANDIDATE FIX, AND IT RUNS BEFORE THE BUDGETED DRAIN.**
+        //
+        // `[measured w319]` the drain below walks the doorbelled VAS in **ascending VA order**
+        // (`IntervalMap` is a `BTreeMap<u64, _>`; `iter()` is documented "ascending start
+        // order") and is cut off by a clock. ⇒ **whatever it drops, it drops from the TOP of
+        // the address space** — and the guest's completion-semaphore page `0x2_0440f000` sits
+        // near the top of the `0x2_004…–0x2_047ff000` span the drain covers. That is the whole
+        // defect: a boot on the slow side of a 3 s budget stops below it, the engine is rung
+        // anyway, and the host MMU reports `FAULT_PDE` on a page no directory was built for.
+        //
+        // ⊘ **Raising the budget is the WRONG fix even though it works.** The drain is held
+        // under the QEMU BQL with every vCPU halted, and `[measured w314]` the surrounding
+        // disposal already consumes 2.65–2.92 s of a 4 s `scrubberDestruct` budget. Buying
+        // completeness with more BQL is spending headroom that is 73 % gone.
+        //
+        // ★ This instead makes the **few pages the engine is certain to touch** independent of
+        // any budget: the completions the guest has itself DECLARED, de-duplicated to pages.
+        // Measured population is **eight declarations at a 16-byte stride ⇒ ONE page**, so the
+        // cost is one pin, not 13 313. It is the content of `pin_completion_guest_ram` —
+        // deleted at w304 (`f20ab952`) on a "strict superset" argument that is true of the
+        // candidate SET and false of the DELIVERY — restored as an ordering guarantee rather
+        // than as a second mechanism, and `shim.rs:3851` records that pinning this page took
+        // these exact Xids to ZERO at w266.
+        //
+        // ⊘ **DEFAULT OFF.** `KAYFABE_COMPLETION_PIN=on` arms it. Off ⇒ not one byte differs
+        // from master, so the SAME BINARY carries both arms of the fix test and the only
+        // variable between them is this flag.
+        let mut sema_clause = String::from("⊘ off (KAYFABE_COMPLETION_PIN unset)");
+        if completion_pin_armed() {
+            let mut pinned_pages = 0usize;
+            let mut refused_pages = 0usize;
+            let mut skipped = 0usize;
+            let mut named: Vec<String> = Vec::new();
+            match drain_target {
+                None => sema_clause = "⊘ ARMED BUT NO TARGET — this doorbell named no VAS, so \
+                                       there is no address space to pin into. ⊘ UNREACHED, \
+                                       not `nothing to do`"
+                    .to_string(),
+                Some((pid, _pdb)) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
+                    sema_clause = "⊘ ARMED BUT TARGET IS SYSTEM_PROC — refused by name, \
+                                   §12.26, exactly as the drain refuses it"
+                        .to_string();
+                }
+                Some((pid, pdb)) => {
+                    // ⊘ De-duplicate to PAGES first. Eight declarations at a 16-byte stride
+                    // are ONE page, and pinning eight times would read as eight pins in every
+                    // tally downstream.
+                    let mut pages: std::collections::BTreeSet<(u64, u64)> =
+                        std::collections::BTreeSet::new();
+                    for (key, site) in &self.ce.watch.declared_sites() {
+                        // ★ A pin lands in ONE proc's VA space. A completion another guest
+                        // process declared is not this channel's to place. Counted, never
+                        // dropped silently.
+                        if key.proc != pid {
+                            skipped += 1;
+                            continue;
+                        }
+                        let kayfabe_rt::completion_watch::Site::GuestRam { gpa } = site else {
+                            skipped += 1;
+                            continue;
+                        };
+                        let mask = SharedDoorbell::RING_PIN_BYTES - 1;
+                        pages.insert((key.va & !mask, gpa & !mask));
+                    }
+                    for (va, gpa) in &pages {
+                        let len = SharedDoorbell::RING_PIN_BYTES;
+                        let resolved = {
+                            let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                            held.as_ref().map(|vmm| vmm.resolve_guest_ram(backing, *gpa, len))
+                        };
+                        let Some(Ok(run)) = resolved else {
+                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                            continue;
+                        };
+                        let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                            run.file_offset,
+                            len,
+                            kayfabe_vmm::Prot::ReadWrite,
+                        );
+                        match self.device.pin_guest_ram(
+                            DOORBELL_TARGET_GPU,
+                            pdb,
+                            kayfabe_rt::GpuVa(*va),
+                            grant,
+                        ) {
+                            Ok(p) => {
+                                pinned_pages += 1;
+                                named.push(format!(
+                                    "[va=0x{va:x} gpa=0x{gpa:x} host_va=0x{:x} \
+                                     placed_as_asked={} {}]",
+                                    p.host_va,
+                                    p.host_va == *va,
+                                    if p.already { "replay" } else { "fresh" },
+                                ));
+                            }
+                            Err(e) => {
+                                refused_pages += 1;
+                                named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}`]"));
+                            }
+                        }
+                    }
+                    sema_clause = format!(
+                        "★ ARMED proc={} pdb=0x{:x} declared_pages={} pinned={pinned_pages} \
+                         refused={refused_pages} skipped={skipped} {}",
+                        pid.0,
+                        pdb.0,
+                        pages.len(),
+                        named.join(" ")
+                    );
+                }
+            }
+        }
+        let mut rows: Vec<String> = Vec::new();
+        let (mut total_pins, mut total_us) = (0usize, 0u128);
+        let mut refused = 0usize;
+        let mut degrade = String::from("n/a");
+        // ★★ THE DRAIN'S OWN FOUR FACTS, kept apart from the totals: whether the target VAS was
+        // REACHED at all, what it cost ON THE DOORBELL PATH, and — separately — which of the
+        // two bounds stopped it. ⊘ `visited=false` beside `pinned=0` is "we never got there";
+        // `visited=true` beside `pinned=0` is "there was nothing left to pin". Collapsing them
+        // is the absent-artefact-reads-as-favourable class.
+        let (mut drain_visited, mut drain_asked, mut drain_pinned) = (false, 0usize, 0usize);
+        let (mut drain_refused, mut drain_ms) = (0usize, 0u128);
+        let (mut drain_cap_hit, mut drain_budget_hit) = (false, false);
+        // ★★★★★ w321 — the two decomposition rows, both `⊘UNMEASURED` until a drain runs.
+        let mut drain_census = String::from("⊘ NO DRAIN — the contiguity census is UNMEASURED");
+        let mut drain_ipc = String::from("⊘ NO DRAIN — the IPC bracket is UNMEASURED");
+        let mut drain_batch = String::from("⊘ NO DRAIN — the batch accounting is UNMEASURED");
+        // ★★★★★ **w328 — THE SAME BREADTH QUESTION ON THIS PASS.** The doorbelled VAS is
+        // DRAINED here and every other one is SAMPLED at 256 rows; the question is what the
+        // sample costs and what it delivers. ⊘ Same fallback rule as the publication half: no
+        // target ⇒ full breadth, because scoping to a VAS we cannot name is scoping to none.
+        let scope_arm = publish_scope_arm();
+        // ⊘ Same two refusals as the publication half, and the SYSTEM_PROC one is load-bearing
+        // here too: this loop `continue`s past proc 0 unconditionally, so scoping to it would
+        // skip every VAS and pin nothing at all.
+        let scoped = publish_scope_scoped(scope_arm, drain_target);
+        let (mut pin_other_us, mut pin_other_vases, mut pin_other_pinned) = (0u128, 0usize, 0usize);
+        let mut pin_scoped_out = 0usize;
+        for pid in self.device.live_pids() {
+            // ⊘ Same §12.26 guard the publication pass carries, and for the same reason:
+            // `plan_pin_guest_ram` refuses `SYSTEM_PROC` too, so attempting proc 0 would
+            // print hundreds of refusals that read exactly like RM exhaustion.
+            // ⊘ w292: this guard runs BEFORE the drain target is honoured, deliberately — the
+            // refusal is a property of the proc and a budget change may not relax it. The
+            // `drain_scope` line above says so when the target IS proc 0.
+            if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC {
+                continue;
+            }
+            for (gpu, pdb) in self.device.vas_keys(pid) {
+                if gpu != DOORBELL_TARGET_GPU {
+                    continue;
+                }
+                // ★★★★★ **w292 — THE ONE SCOPED BUDGET CHANGE, AND IT IS THIS PREDICATE.**
+                let doorbelled = drain_target == Some((pid, pdb));
+                // ★★★★★ **w328 — THE SCOPE SKIP, above `vas_guest_ram_rows`.** That call is
+                // what materialises the candidate list, so skipping below it would save the
+                // pins and keep the walk. ⊘ The drained VAS is never scoped out: `scoped`
+                // implies `drain_target.is_some()`, so exactly one VAS survives the filter.
+                if scoped && !doorbelled {
+                    pin_scoped_out += 1;
+                    continue;
+                }
+                let cap = if doorbelled {
+                    // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
+                    // instrument env var is set, so master's behaviour is unchanged.
+                    vas_drain_row_limit()
+                } else {
+                    VAS_PINRATE_ROWS
+                };
+                let candidates = self.device.vas_guest_ram_rows(pid, gpu, pdb, cap);
+                // ⊘ An empty candidate list is skipped on a SAMPLED VAS (it says nothing) and
+                // PRINTED on the drained one (it says the drain found the table already
+                // complete, which is the whole question this rung asks).
+                if candidates.is_empty() && !doorbelled {
+                    continue;
+                }
+                if doorbelled {
+                    drain_visited = true;
+                    drain_asked = candidates.len();
+                    drain_cap_hit = candidates.len() >= cap;
+                    // ★★★★★ **w321 — THE CONTIGUITY CENSUS, TAKEN BEFORE A SINGLE PIN.**
+                    // O(n) over the rows we are about to walk, and it is the number that
+                    // BOUNDS a coalescing fix before one is built. See `drain_contiguity`.
+                    drain_census = drain_contiguity(&candidates);
+                }
+                let vas_started = std::time::Instant::now();
+                // ★★★★★ **w321 — THE PARENT-SIDE HALF OF THE DECOMPOSITION.**
+                // Read here and again after the loop; the difference is `(calls, µs)` this
+                // drain spent blocked in the isolate IPC. Subtract it from `DRAIN_MS` and
+                // what is left is OUR OWN cost (route locks, `resolve_guest_ram`, commit).
+                // ⊘ Thread-local and monotonic — see `ipc_totals`'s own doc.
+                let ipc_before = kayfabe_isolate_host::isolate::ipc_totals();
+                let mut vas_refused = 0usize;
+                let mut budget_hit = false;
+                let mut last_va: Option<u64> = None;
+                let mut each_us: Vec<u128> = Vec::new();
+                let mut named: Vec<String> = Vec::new();
+                // ★★★★★ **w321 — THE COALESCER.** `chunks_for` is the identity on every arm
+                // but `KAYFABE_DRAIN_BATCH=coalesce`, where it merges rows that abut in BOTH
+                // `va` and `gpa` into one chain, split at 2 MiB. See its own doc for why the
+                // 2 MiB is the C's number and not a guess, and `drain_contiguity` for the
+                // measurement that says what it can buy.
+                let chunks = if doorbelled {
+                    chunks_for(&candidates)
+                } else {
+                    candidates.iter().map(|&r| DrainChunk::one(r)).collect()
+                };
+                // ⊘ ROWS and CHAINS are counted separately and neither is derived from the
+                // other. `pinned == asked` is w319's grading invariant and it is stated in
+                // ROWS; `chains` is what the host was actually asked, and the whole fix is
+                // the ratio between them. Collapsing them would make the fix invisible in
+                // exactly the line that grades it.
+                let mut rows_pinned = 0usize;
+                let mut rows_refused = 0usize;
+                let mut fallback_chains = 0usize;
+                let mut chunk_split = 0usize;
+                for chunk in &chunks {
+                    // ⚠ THE WALL BOUND, and it is checked only on the drained VAS: the sampled
+                    // ones are bounded by their row count already, and adding a clock to them
+                    // would change the control.
+                    if doorbelled && vas_started.elapsed() > vas_drain_wall_budget() {
+                        budget_hit = true;
+                        drain_budget_hit = true;
+                        break;
+                    }
+                    let (va, gpa, len) = (chunk.va, chunk.gpa, chunk.len);
+                    // The file offset comes from the HYPERVISOR's own stated layout, exactly
+                    // as legs 4-6 derive it. ⊘ A row the VMM will not resolve is NOT a pin
+                    // failure and is not timed — it never reached the verb.
+                    let resolved = {
+                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                        held.as_ref()
+                            .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
+                    };
+                    let Some(Ok(run)) = resolved else {
+                        // ★★ w321 — A COALESCED CHUNK CAN BE REFUSED FOR A REASON ITS ROWS
+                        // WOULD NOT BE: `StraddlesRuns` says the chunk left the hypervisor's
+                        // stated run, which is a property of the MERGE and not of any row in
+                        // it. ⊘ So the chunk falls back to its own rows rather than being
+                        // dropped — the alternative loses up to 512 rows for a boundary the
+                        // coalescer invented.
+                        if chunk.rows > 1 {
+                            chunk_split += 1;
+                            let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
+                                backing,
+                                pdb,
+                                &candidates[chunk.first_row..chunk.first_row + chunk.rows],
+                                &mut named,
+                            );
+                            rows_pinned += r_ok;
+                            rows_refused += r_no;
+                            refused += r_no;
+                            vas_refused += r_no;
+                            fallback_chains += chains;
+                            total_pins += chains;
+                            total_us += us_sum;
+                            if r_ok > 0 {
+                                last_va = Some(chunk.last_row_va);
+                            }
+                        } else {
+                            named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
+                        }
+                        continue;
+                    };
+                    let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                        run.file_offset,
+                        len,
+                        kayfabe_vmm::Prot::ReadWrite,
+                    );
+                    let t0 = std::time::Instant::now();
+                    let r = self.device.pin_guest_ram(
+                        DOORBELL_TARGET_GPU,
+                        pdb,
+                        kayfabe_rt::GpuVa(va),
+                        grant,
+                    );
+                    let us = t0.elapsed().as_micros();
+                    match r {
+                        Ok(p) => {
+                            each_us.push(us);
+                            total_pins += 1;
+                            total_us += us;
+                            rows_pinned += chunk.rows;
+                            last_va = Some(chunk.last_row_va);
+                            if named.len() < 4 {
+                                named.push(format!(
+                                    "[va=0x{va:x}+0x{len:x} rows={} gpa=0x{gpa:x} \
+                                     host_va=0x{:x} placed_as_asked={} {}{us}us]",
+                                    chunk.rows,
+                                    p.host_va,
+                                    p.host_va == va,
+                                    if p.already { "replay " } else { "fresh " },
+                                ));
+                            }
+                        }
+                        // ⊘ REFUSED BY NAME, never a tally: `0x51 NV_ERR_NO_MEMORY` is
+                        // collision-or-exhaustion and cannot be told apart, so the name is
+                        // the only thing that distinguishes "we asked twice" from "the host
+                        // is full".
+                        //
+                        // ★★ w321 — AND A MERGED CHUNK FALLS BACK TO ITS ROWS. A refusal of
+                        // a 2 MiB chain would otherwise cost 512 rows for a fault that may
+                        // belong to one of them, which is strictly worse than the truncation
+                        // this rung exists to remove.
+                        Err(e) => {
+                            if chunk.rows > 1 {
+                                chunk_split += 1;
+                                named.push(format!(
+                                    "[va=0x{va:x}+0x{len:x} ⊘CHUNK-REFUSED `{e:?}` \
+                                     {us}us → FALLING BACK TO {} ROWS]",
+                                    chunk.rows
+                                ));
+                                let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
+                                    backing,
+                                    pdb,
+                                    &candidates
+                                        [chunk.first_row..chunk.first_row + chunk.rows],
+                                    &mut named,
+                                );
+                                rows_pinned += r_ok;
+                                rows_refused += r_no;
+                                refused += r_no;
+                                vas_refused += r_no;
+                                fallback_chains += chains;
+                                total_pins += chains;
+                                total_us += us_sum;
+                                if r_ok > 0 {
+                                    last_va = Some(chunk.last_row_va);
+                                }
+                            } else {
+                                refused += 1;
+                                vas_refused += 1;
+                                rows_refused += 1;
+                                if named.len() < 8 {
+                                    named
+                                        .push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
+                                }
+                            }
+                        }
+                    }
+                }
+                // ⊘ w328 — read in µs as well as ms. A sampled VAS costs single-digit ms, so a
+                // ms-granular sum over ~4 of them rounds toward zero and would report the
+                // breadth as free.
+                let vas_us = vas_started.elapsed().as_micros();
+                let vas_ms = vas_started.elapsed().as_millis();
+                // ★★ FLAT OR DEGRADING — the property that decides whether 256 rows may
+                // speak for 16 328. ⊘ w292: computed per VAS and printed IN the VAS's own row,
+                // because a single file-scope `degrade` is the last VAS's answer wearing the
+                // whole pass's name.
+                let vas_degrade = if each_us.len() >= 8 {
+                    let q = each_us.len() / 4;
+                    let first: u128 = each_us[..q].iter().sum::<u128>() / q as u128;
+                    let last: u128 = each_us[each_us.len() - q..].iter().sum::<u128>() / q as u128;
+                    format!("first_q={first}us last_q={last}us")
+                } else {
+                    format!("n/a — only {} timed pin(s), need 8", each_us.len())
+                };
+                if doorbelled {
+                    // ★★★★★ **w321 — `pinned` IS IN ROWS, AND THAT IS DELIBERATE.**
+                    // w319's grading invariant is `pinned == asked` and both terms are ROW
+                    // counts. A coalescing fix that reported CHAINS here would make its own
+                    // success read as a 11× regression in the one line every lane grades on.
+                    // ⊘ The chain count is not lost — it is `W321BATCH`'s `chains=`.
+                    drain_pinned = rows_pinned;
+                    drain_refused = vas_refused;
+                    drain_ms = vas_ms;
+                    degrade = vas_degrade.clone();
+                    let chains = each_us.len() + fallback_chains;
+                    drain_batch = format!(
+                        "arm={} chunks={} chains={chains} rows_pinned={rows_pinned} \
+                         rows_refused={rows_refused} fallback_chunks={chunk_split} \
+                         fallback_chains={fallback_chains} rows_per_chain={}.{:02}",
+                        drain_batch_arm(),
+                        chunks.len(),
+                        if chains == 0 { 0 } else { rows_pinned / chains },
+                        if chains == 0 {
+                            0
+                        } else {
+                            (rows_pinned * 100 / chains) % 100
+                        },
+                    );
+                    // ★★★★★ **w321 — CLOSE THE PARENT-SIDE BRACKET AND SUBTRACT.**
+                    let ipc_after = kayfabe_isolate_host::isolate::ipc_totals();
+                    let calls = ipc_after.0.saturating_sub(ipc_before.0);
+                    let us = ipc_after.1.saturating_sub(ipc_before.1);
+                    // ⊘ Per CHAIN, not per row: the chain is what crossed the socket, and on
+                    // the coalescing arm a per-row figure would divide one round trip by the
+                    // rows it happened to cover and report a transport cost that nothing paid.
+                    // ★ The per-ROW figure is beside it, because that is what multiplies out
+                    // to the drain's cost.
+                    drain_ipc = if chains == 0 {
+                        format!(
+                            "⊘ NO CHAIN WAS ISSUED — ipc_calls={calls} ipc_us={us}, and the \
+                             split is UNMEASURED, ⊘ not 0"
+                        )
+                    } else {
+                        let c = chains as u128;
+                        let r = std::cmp::max(rows_pinned + vas_refused, 1) as u128;
+                        let own = u128::from(vas_ms) * 1000;
+                        format!(
+                            "ipc_calls={calls} ({} /chain) ipc_us={us} ({} us/chain, \
+                             {} us/row) drain_us={own} ours_us={} ipc_share={}%",
+                            calls as u128 / c,
+                            u128::from(us) / c,
+                            u128::from(us) / r,
+                            own.saturating_sub(u128::from(us)),
+                            if own == 0 { 0 } else { u128::from(us) * 100 / own },
+                        )
+                    };
+                } else {
+                    // ★★★★★ **w328 — WHAT THE SAMPLED (non-doorbelled) VASes COST AND DELIVER.**
+                    pin_other_us += vas_us;
+                    pin_other_vases += 1;
+                    pin_other_pinned += each_us.len();
+                    if degrade == "n/a" {
+                        degrade = vas_degrade.clone();
+                    }
+                }
+                rows.push(format!(
+                    "[proc={} pdb=0x{:x} {} asked={} pinned={} refused={} in {vas_ms} ms \
+                     last_pinned_va={} degrade[{vas_degrade}]{}{} {}]",
+                    pid.0,
+                    pdb.0,
+                    if doorbelled {
+                        "★DRAINED(this doorbell's VAS)"
+                    } else {
+                        "SAMPLED(bounded — an unpinned row here is UNREACHED, not refused)"
+                    },
+                    candidates.len(),
+                    if doorbelled { rows_pinned } else { each_us.len() },
+                    vas_refused,
+                    last_va.map_or("⊘NONE".to_string(), |v| format!("0x{v:x}")),
+                    if budget_hit {
+                        format!(
+                            " ⚠⚠ DRAIN WALL BUDGET {} ms EXHAUSTED — THE DRAIN IS INCOMPLETE; \
+                             the rows after this point were NOT attempted and are NOT refused",
+                            vas_drain_wall_budget().as_millis()
+                        )
+                    } else {
+                        String::new()
+                    },
+                    if doorbelled && candidates.len() >= vas_drain_row_limit() {
+                        format!(
+                            " ⚠⚠ DRAIN ROW CAP {} HIT — THE DRAIN IS \
+                             INCOMPLETE by construction",
+                            vas_drain_row_limit()
+                        )
+                    } else {
+                        String::new()
+                    },
+                    named.join(" "),
+                ));
+            }
+        }
+        let per_row = if total_pins == 0 {
+            "⊘ NO ROW WAS PINNED — the per-row rate is UNMEASURED, not 0".to_string()
+        } else {
+            let us = total_us / total_pins as u128;
+            format!(
+                "{us} us/row ⇒ 16328 rows would cost {} ms IF FLAT",
+                us * 16328 / 1000
+            )
+        };
+        // ★★★★★ **THE DRAIN'S OWN COST ON THE DOORBELL PATH — FOUR FACTS, NEVER A WORD.**
+        // `visited` / `asked` / `pinned` / `ms`, plus which bound stopped it, because
+        // "complete" and "we ran out" are the difference between a result and a non-result.
+        let drain_clause = if !self.vas_publish.drains_doorbelled_vas() {
+            "⊘ NOT ARMED".to_string()
+        } else if !drain_visited {
+            format!(
+                "⚠⚠ TARGET NEVER VISITED — the drain did NOT run. The VAS named above was not \
+                 among this device's live (proc, pdb) keys on the doorbell target GPU, so \
+                 `pinned=0` here is UNREACHED and NOT `already complete`. [{drain_scope}]"
+            )
+        } else {
+            format!(
+                "visited=true asked={drain_asked} pinned={drain_pinned} \
+                 refused={drain_refused} DRAIN_MS={drain_ms} \
+                 W319KNOB[budget_ms={} row_limit={}] complete={} {}{}",
+                // ★★★ w319 — THE ARM ANNOUNCES ITSELF, in the same line as the number it
+                // moves. ⊘ A knob whose setting is only in the launcher's environment is a
+                // number nobody can attribute a log to six weeks from now, and this tree has
+                // paid for exactly that ("anchor every metric"). Printed on EVERY boot,
+                // including the default one, so `absent` means an OLD BINARY and never `3000`.
+                vas_drain_wall_budget().as_millis(),
+                vas_drain_row_limit(),
+                // ★ COMPLETE means: every row the table offered was attempted, and neither
+                // bound cut it short. It is the invariant this rung exists to establish —
+                // "a mapping is always backed before the engine that uses it runs".
+                !drain_cap_hit && !drain_budget_hit,
+                if drain_cap_hit {
+                    "⚠⚠ ROW CAP HIT "
+                } else {
+                    ""
+                },
+                if drain_budget_hit {
+                    "⚠⚠ WALL BUDGET HIT "
+                } else {
+                    ""
+                },
+            )
+        };
+        format!(
+            "{head} PINRATE(w291 rate; ★w292 DRAIN — on arm `drain` the doorbelled VAS's rows \
+             ARE merged into Binding::host by `commit_pin_guest_ram`, so this is no longer \
+             measurement-only) → pinned={total_pins} refused={refused} in {} ms, \
+             per_row={per_row}, degrade[{degrade}] SEMAPIN[{sema_clause}] \
+             DRAIN[{drain_clause}] SCOPE[{drain_scope}] \
+             W321CENSUS[{drain_census}] W321IPC[{drain_ipc}] W321BATCH[{drain_batch}] \
+             W328PIN[arm={scope_arm} scoped={scoped} scoped_out={pin_scoped_out} \
+             other_vases={pin_other_vases} other_us={pin_other_us} \
+             other_pinned={pin_other_pinned} drain_ms={drain_ms}] \
+             over {} VAS row(s) {}",
+            total_us / 1000,
+            rows.len(),
+            if rows.is_empty() {
+                "⊘ NO CANDIDATE ROW IN ANY NON-SYSTEM VAS — UNMEASURED, not zero".to_string()
+            } else {
+                rows.join(" ")
+            },
+        )
+    }
+
+    /// ★★★★★ **w321 — THE COALESCER'S FALLBACK: pin a refused chunk's rows ONE AT A TIME.**
+    ///
+    /// ⊘ **It exists because a merged chunk can be refused for a reason none of its rows
+    /// would be.** `StraddlesRuns` is a property of the MERGE — the chunk left the
+    /// hypervisor's stated run — and `GuestRamPinOverlaps` can be one too. Dropping the chunk
+    /// on such a refusal would lose up to 512 rows for a boundary this file invented, which
+    /// is strictly worse than the truncation w321 exists to remove.
+    ///
+    /// ⇒ The fallback is **exactly master's loop**, over exactly the rows the table stated,
+    /// so the worst case of the coalescing arm is master's cost for that chunk **plus one
+    /// wasted chain**, and never a missing mapping.
+    ///
+    /// Returns `(rows_pinned, rows_refused, chains_issued, total_us)`.
+    #[cfg(feature = "host-isolates")]
+    fn pin_rows_one_by_one(
+        &self,
+        backing: kayfabe_vmm_qemu::layout::BackingId,
+        pdb: kayfabe_rt::Pdb,
+        rows: &[(u64, u64, u64)],
+        named: &mut Vec<String>,
+    ) -> (usize, usize, usize, u128) {
+        let (mut ok, mut no, mut chains, mut us_sum) = (0usize, 0usize, 0usize, 0u128);
+        for &(va, gpa, len) in rows {
+            let resolved = {
+                let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                held.as_ref()
+                    .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
+            };
+            let Some(Ok(run)) = resolved else {
+                if named.len() < 12 {
+                    named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM (fallback)]"));
+                }
+                continue;
+            };
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                run.file_offset,
+                len,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            let t0 = std::time::Instant::now();
+            let r =
+                self.device
+                    .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(va), grant);
+            us_sum += t0.elapsed().as_micros();
+            chains += 1;
+            match r {
+                Ok(_) => ok += 1,
+                Err(e) => {
+                    no += 1;
+                    if named.len() < 12 {
+                        named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` (fallback)]"));
+                    }
+                }
+            }
+        }
+        (ok, no, chains, us_sum)
+    }
+
+    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `join_operand_fb_leaves`' twin's
+    /// reason: an archive built without the feature prints nothing, exits 0, and every other
+    /// signal says the boot happened.
+    #[cfg(not(feature = "host-isolates"))]
+    fn publish_vas_rows(
+        &self,
+        token: u64,
+        _seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+    ) -> Option<String> {
+        if !self.vas_publish.observes() {
+            return None;
+        }
+        Some(format!(
+            "VAS-PUBLISH token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT PUBLISH A \
+             ROW AT ALL. The arm was requested and this build has no isolate plane — ⚠ do NOT \
+             grade a boot from this binary as `armed and nothing moved`"
+        ))
+    }
+}
+
+
 /// ★★★★ **THE FORWARD SEARCH FOR THE RING** — §16.16, and it is the one measurement in
 /// this file that never consults the walker.
 ///
@@ -11419,7 +11479,7 @@ impl Regs {
             vas_publish,
             // ★ w318 — empty. The gate's first consultation on any key always ARMS, so a
             // fresh port cannot skip work it has never done.
-            dirty: DirtyGate::default(),
+            dirty: Arc::new(DirtyGate::default()),
         }));
         Ok(Regs {
             plane,
