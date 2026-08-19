@@ -5110,6 +5110,37 @@ impl RmBackend for HostRmBackend {
         )
         .map_err(|e| region_error(&e))?;
         drop(fd);
+        // ★★★★★ **w331 — ASK FOR 2 MiB BACKING BEFORE RM IS TOLD WHAT THIS OBJECT IS, AND
+        // REPORT WHAT THE KERNEL ACTUALLY GAVE.**
+        //
+        // `alloc_os_descriptor` is where RM reads our page geometry and decides what GPU PTEs
+        // to install; after that call the placement is fixed. `[measured w322]` this leaf chain
+        // hands RM **4 KiB-granular, `PHYSICALITY_NONCONTIGUOUS`** sysmem and the guest's
+        // operands run at **2.51 GB/s** against a link-saturating **12.33** on the same GPU and
+        // kernel — a 4.9× gap whose named mechanism is small GPU PTEs over our small pages.
+        //
+        // ⊘⊘ **THE REQUEST AND THE RESULT ARE DIFFERENT FACTS, AND THIS PRINTS THE SECOND.**
+        // `[measured 2026-08-19, bench 48097794]` `madvise(MADV_HUGEPAGE)` on a `memfd` mapping
+        // returns **0 while delivering nothing** — a `memfd` is shmem, and shmem THP is its own
+        // knob (`shmem_enabled`) that ships `[never]`. So `pmd_backed=0` here is a real and
+        // expected state on an unconfigured host, it is NOT an error, and it must be visible:
+        // reading `pmd_backed` is the only way to tell "the host gave huge pages" from "the
+        // call succeeded".
+        //
+        // ⚠ Deliberately UNCONDITIONAL. The isolate is spawned with a CLEARED environment
+        // (`envp = {NULL}`, `spawn_unsafe.rs`) — that is a security property, not an oversight —
+        // so an env-var arm here would mean opening a config channel into the isolate. The arm
+        // selector for the measurement is the HOST KNOB plus a build without this call.
+        match region.request_huge_pages() {
+            Ok(pmd_backed) => println!(
+                "kayfabe-isolate: LEAF-HUGE len={len} pmd_backed={pmd_backed} \u{2298} bytes the \
+                 kernel actually PMD-mapped, read back from smaps — not the madvise return"
+            ),
+            Err(e) => println!(
+                "kayfabe-isolate: LEAF-HUGE len={len} \u{2298} madvise REFUSED ({e:?}) — the leaf \
+                 stays 4 KiB-granular and is mapped anyway"
+            ),
+        }
         let desc = self
             .conn
             .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;

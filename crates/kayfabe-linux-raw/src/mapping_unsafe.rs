@@ -454,6 +454,58 @@ impl MappedRegion {
         self.map.len_bytes()
     }
 
+    /// ★★★★★ **Ask the kernel for 2 MiB backing, fault the range in, then REPORT HOW MANY
+    /// BYTES IT ACTUALLY GAVE.** Returns bytes covered by PMD-mapped huge pages.
+    ///
+    /// ⊘⊘ **`madvise` RETURNING `0` PROVES NOTHING, AND THIS IS MEASURED, NOT REASONED.**
+    /// `[measured 2026-08-19, bench 48097794]` on a 64 MiB `memfd` mapping:
+    /// `madvise(MADV_HUGEPAGE) rc=0` with `ShmemPmdMapped=0kB` — **zero huge pages** —
+    /// because a `memfd` is **shmem**, and shmem THP is a *separate* knob
+    /// (`/sys/kernel/mm/transparent_hugepage/shmem_enabled`) that ships `[never]`. Flipping
+    /// that knob to `advise` and re-running the identical binary gave `ShmemPmdMapped=65536kB`,
+    /// and flipping it back gave `0` again. ⇒ **The success of the call and the success of
+    /// the request are different facts**, so this returns the second one and never the first.
+    /// Same class as `a_flag_is_not_progress`: an accepted request is not a serviced one.
+    ///
+    /// ★ The fault-in is a **read-modify-write of one byte per 4 KiB**, not a zero-fill:
+    /// THP for shmem is decided at *fault* time, not at `madvise` time, and a read alone
+    /// leaves a hole mapped to the shared zero page. Writing the byte back preserves
+    /// content, so this is safe on a region that already holds data.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] if `madvise` itself refused. A refusal to *provide* huge pages
+    /// is not an error — it is a return value of `0`, which is the caller's to judge.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5) — it faults in the whole range.
+    pub fn request_huge_pages(&self) -> Result<u64, RawError> {
+        lockwitness::assert_lock_free("request_huge_pages (faults in the whole range)");
+        let base = self.map.base.as_ptr();
+        let len = self.map.len;
+        // SAFETY: `base`/`len` are this mapping's own extent, established by one `mmap` in
+        // `map` and never rewritten. `madvise` reads no user memory and only advises.
+        let rc = unsafe { libc::madvise(base.cast::<libc::c_void>(), len, libc::MADV_HUGEPAGE) };
+        if rc != 0 {
+            return Err(last_syscall_error("madvise(MADV_HUGEPAGE)"));
+        }
+        if self.prot.bits() & libc::PROT_WRITE != 0 {
+            let mut off = 0usize;
+            while off < len {
+                // SAFETY: `off < len`, so `base.add(off)` is inside this mapping, which is
+                // mapped `PROT_READ|PROT_WRITE` (checked above) and lives as long as `self`.
+                // Reading the byte and writing the same value back changes nothing observable
+                // and forces the write fault that THP collapse keys on.
+                unsafe {
+                    let p = base.add(off);
+                    let b = core::ptr::read_volatile(p);
+                    core::ptr::write_volatile(p, b);
+                }
+                off += 4096;
+            }
+        }
+        Ok(pmd_mapped_bytes(base as usize, len))
+    }
+
     /// Copy `dst.len()` bytes from `offset` into `dst`.
     ///
     /// # Errors
@@ -564,6 +616,46 @@ impl MappedRegion {
 // =====================================================================================
 // The write-combining release fence — the seam VolatileRegion's docs named
 // =====================================================================================
+
+/// How many bytes of the VMA starting at `base` are PMD-mapped (2 MiB) huge pages.
+///
+/// ⊘ Reads `/proc/self/smaps` because there is no syscall that answers it. A missing or
+/// unreadable `smaps` yields `0` — *"I could not see any"*, which is the same answer this
+/// function gives for *"there are none"*. That collapse is deliberate: the caller's decision
+/// (report the number it got) is identical in both cases, and inventing a third state here
+/// would put an unmeasurable distinction into a diagnostic.
+fn pmd_mapped_bytes(base: usize, len: usize) -> u64 {
+    let Ok(text) = std::fs::read_to_string("/proc/self/smaps") else {
+        return 0;
+    };
+    let want = format!("{base:x}-{:x} ", base + len);
+    let mut in_vma = false;
+    let mut total = 0u64;
+    for line in text.lines() {
+        if line.starts_with(&want) {
+            in_vma = true;
+            continue;
+        }
+        if in_vma {
+            // A new header line (hex-hex perms) ends this VMA's block.
+            if line.split(' ').next().is_some_and(|f| f.contains('-') && !line.contains("kB")) {
+                break;
+            }
+            for key in ["ShmemPmdMapped:", "FilePmdMapped:", "AnonHugePages:"] {
+                if let Some(rest) = line.strip_prefix(key) {
+                    total += rest
+                        .trim()
+                        .trim_end_matches(" kB")
+                        .trim()
+                        .parse::<u64>()
+                        .unwrap_or(0)
+                        * 1024;
+                }
+            }
+        }
+    }
+    total
+}
 
 /// ★★★ **The store barrier that must sit between the ring stores and the doorbell
 /// store**, and NOT the same thing as a Rust `atomic::fence(Release)`.
@@ -1054,6 +1146,47 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write as _;
+
+    /// ★★★★★ **The fault-in must be NON-DESTRUCTIVE, and this is the property the whole
+    /// call rests on.** `request_huge_pages` forces a write fault on every 4 KiB page, because
+    /// shmem THP is decided at fault time and a read alone leaves a hole on the shared zero
+    /// page. It does that as a **read-modify-write of the same byte** — so a region already
+    /// holding data must come back byte-identical. A zero-fill would have been simpler and
+    /// would silently destroy any leaf mapped after its first use.
+    #[test]
+    fn requesting_huge_pages_preserves_every_byte_it_faults_in() {
+        let len = 4 * 1024 * 1024;
+        let f = shared_file(len);
+        let r = MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&f),
+                offset: 0,
+            },
+            len,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page(),
+        )
+        .expect("a shared-file mapping");
+
+        // A pattern that is different in every page, so a lost page is visible as a value
+        // and not merely as a length.
+        let mut want = vec![0u8; len as usize];
+        for (i, b) in want.iter_mut().enumerate() {
+            *b = (i / 4096 + 1) as u8;
+        }
+        r.write_from(HostOffset::ZERO, &want).expect("seed");
+
+        // ⊘ The RETURN VALUE is deliberately not asserted: whether the kernel grants huge
+        // pages depends on `shmem_enabled`/THP config, which is a property of the host this
+        // test happens to run on. Asserting it would make a correct build red on a correctly
+        // configured host — and asserting `== 0` would make it red on the hosts we WANT.
+        let _pmd = r.request_huge_pages().expect("madvise is accepted on a private mapping");
+
+        let mut got = vec![0u8; len as usize];
+        r.read_into(HostOffset::ZERO, &mut got).expect("read back");
+        assert_eq!(got, want, "the fault-in changed bytes it was only supposed to touch");
+    }
 
     fn page() -> HostPageSize {
         HostPageSize::query()
