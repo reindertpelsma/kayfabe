@@ -1045,6 +1045,9 @@ pub enum WantedTable {
     CudartInit9001,
     /// `0x20809064` — GSS-legacy, 520 bytes, ten content words then a measured zero tail.
     CudartInit9064,
+    /// `0x2080a001` — the FALLBACK. Reached only after `a084`/`a026` fail, which is exactly
+    /// where our guest is. See [`kayfabe_abi::cudartinit::CUDART_INIT_0XA001`].
+    CudartInit9A001,
 }
 
 impl WantedTable {
@@ -1075,7 +1078,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 45] = [
+    pub const ALL: [WantedTable; 46] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1121,6 +1124,7 @@ impl WantedTable {
         Self::CudartInit9009,
         Self::CudartInit9001,
         Self::CudartInit9064,
+        Self::CudartInit9A001,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1209,6 +1213,7 @@ impl WantedTable {
             Self::CudartInit9009 => kayfabe_abi::cudartinit::CUDART_INIT_0X9009,
             Self::CudartInit9001 => kayfabe_abi::cudartinit::CUDART_INIT_0X9001,
             Self::CudartInit9064 => kayfabe_abi::cudartinit::CUDART_INIT_0X9064,
+            Self::CudartInit9A001 => kayfabe_abi::cudartinit::CUDART_INIT_0XA001,
             Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1278,6 +1283,7 @@ impl WantedTable {
             Self::CudartInit9009 => 8,
             Self::CudartInit9001 => 8,
             Self::CudartInit9064 => 520,
+            Self::CudartInit9A001 => 16,
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -2398,7 +2404,8 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::CudartWatchdogInfo
             | WantedTable::CudartInit9009
             | WantedTable::CudartInit9001
-            | WantedTable::CudartInit9064 => {
+            | WantedTable::CudartInit9064
+            | WantedTable::CudartInit9A001 => {
                 match kayfabe_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

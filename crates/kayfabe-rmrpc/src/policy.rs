@@ -1837,7 +1837,6 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // ⚠ The four below stay: `0x2080a026` and `0x2080a084` were measured INNOCENT (refusing
     // either alone leaves a bare-metal host's `cudaGetDeviceCount` at `0`), and `0x2080a001`
     // / `0x2080a097` are unmeasured. All four remain forward-or-refuse.
-    0x2080_a001,
     0x2080_a026,
     0x2080_a084,
     0x2080_a097,
@@ -2178,7 +2177,9 @@ impl ObjectPolicy {
             // ⊘ w349: `0x20809009` / `0x9001` / `0x9064` deliberately ABSENT — they are
             // answered downstream from a measured table, and claiming them here refused
             // them before that table could run. See `OBJECT_CONTROLS`'s note.
-            0x2080_a001 | 0x2080_a026 | 0x2080_a084 | 0x2080_a097 => {
+            // ⊘ w352: 0x2080a001 un-claimed — it is the measured FALLBACK and is now
+            //   answered downstream from a table. Claiming it here refused it.
+            0x2080_a026 | 0x2080_a084 | 0x2080_a097 => {
                 self.respond_subdevice_control(cmd, &req)
             }
             kayfabe_abi::submit::NVA06C_CTRL_CMD_PREEMPT => self.respond_preempt(cmd, &req),

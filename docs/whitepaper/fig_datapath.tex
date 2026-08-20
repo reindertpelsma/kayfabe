@@ -37,10 +37,10 @@
 % =============================================== EMULATED DEVICE ===========
 \node[box, fill=white, draw=kfcoreln, line width=0.8pt,
       minimum width=106mm, minimum height=15.6mm] (l2) at (-30,77.6)
-  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 5\,056 L (S0--S5)}\;$\rightarrow$\;\tc{RpcCommand}\\[1pt]
+  {\textbf{\color{kfcoreln}\tc{kayfabe-gsp} — BUILT, 5\,497 L (S0--S5)}\;$\rightarrow$\;\tc{RpcCommand}\\[1pt]
    \tiny falcon boot FSM (\tc{BootPhase}$\times$\tc{QueueState}, E1--E11) $\cdot$ the \tc{msgq} ring algebra
    $\cdot$ element framing + checksum $\cdot$ RPC decode/dispatch\\[2.5pt]
-   \textbf{\color{kfcoreln}★ \tc{kayfabe-rmrpc} — BUILT, 3\,265 L}\;$\rightarrow$\;\tc{RmEvent}\\[1pt]
+   \textbf{\color{kfcoreln}★ \tc{kayfabe-rmrpc} — BUILT, 6\,097 L}\;$\rightarrow$\;\tc{RmEvent}\\[1pt]
    \tiny \tc{translate} (stateless free fn) $\cdot$ \tc{GraphPolicy}: translate $\rightarrow$ \tc{Gpu::apply}
    $\rightarrow$ reply $\cdot$ named refusals + a bounded census + the capability table\\[1.5pt]
    \tiny \textbf{\color{kfcoreln}★★★ FED BY A REAL GUEST DRIVER}: \tc{kayfabe-qemu-raw}'s

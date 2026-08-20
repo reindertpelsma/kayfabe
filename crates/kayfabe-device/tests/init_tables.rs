@@ -463,7 +463,7 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
     // reply is the guest's own facts re-encoded from what the decoder accepted; this port
     // states no number of its own anywhere in it. See `kayfabe_abi::fmbpromote`.
-    assert_eq!(WantedTable::ALL.len(), 45, "the served universe\'s size");
+    assert_eq!(WantedTable::ALL.len(), 46, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

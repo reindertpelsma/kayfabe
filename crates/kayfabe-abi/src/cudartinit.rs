@@ -89,12 +89,32 @@ pub const CUDART_INIT_0X9001: u32 = 0x2080_9001;
 /// content and the remaining 120 words are zero **on hardware** — measured, not assumed.
 pub const CUDART_INIT_0X9064: u32 = 0x2080_9064;
 
+/// `0x2080a001` — ★★★★★ **THE FALLBACK, and the one control a host-side experiment could
+/// NEVER have found.**
+///
+/// `[measured 2026-08-20, real GA106]` It appears **ZERO times** in an unmodified host trace,
+/// because a healthy host never needs it. It is reached only *after* `0x2080a084` and
+/// `0x2080a026` have failed — which is precisely the state our guest is in.
+///
+/// Proven by putting the host INTO that state: refusing `a084` + `a026` on bare metal under
+/// the recorder makes the host take the identical branch, ask `0x2080a001` twice, get
+/// `status = 0x0`, and return **`cudaGetDeviceCount = 0`**. Our guest asks the same control,
+/// with a **byte-identical request**, and we answer `0x56`.
+///
+/// ⇒ `a084` and `a026` measured "innocent" on the host *because the host served the
+/// fallback*. Refusing all three is what is fatal, and no refusal or substitution experiment
+/// driven by the host trace could have covered a control the host trace does not contain.
+pub const CUDART_INIT_0XA001: u32 = 0x2080_a001;
+
 /// The measured reply words, in `u32` order. The body is these words little-endian, then
 /// zero-padded to [`params_size`] — and the padding is itself measured, not a default.
 const WORDS_2209: &[u32] = &[0x5];
 const WORDS_9009: &[u32] = &[0x0, 0xd];
 const WORDS_9001: &[u32] = &[0x03fc_007f, 0x0];
 const WORDS_9064: &[u32] = &[0x0, 0x2, 0x1, 0x1, 0x1, 0x64, 0x4, 0x10, 0x1, 0x64];
+/// ★ Stable across both host calls, and the guest's request is `{0,0,0,0}` exactly as the
+/// host's is — so this row is not merely captured, it is captured against the same input.
+const WORDS_A001: &[u32] = &[0x1, 0x5, 0x2, 0x11];
 
 /// `(cmd, paramsSize, leading words)` — the whole served universe of this module.
 ///
@@ -106,6 +126,7 @@ pub const SERVED: &[(u32, usize, &[u32])] = &[
     (CUDART_INIT_0X9009, 8, WORDS_9009),
     (CUDART_INIT_0X9001, 8, WORDS_9001),
     (CUDART_INIT_0X9064, 520, WORDS_9064),
+    (CUDART_INIT_0XA001, 16, WORDS_A001),
 ];
 
 /// The measured `paramsSize` for a served id, or `None` for anything else.
@@ -186,6 +207,16 @@ mod tests {
     }
 
     #[test]
+    fn the_fallback_row_is_what_the_host_answered_in_the_SAME_failing_state() {
+        // ⊘ Not "what a healthy host answers" — a healthy host never asks this. The bytes
+        // come from a host DRIVEN INTO the guest's state by refusing a084+a026.
+        assert_eq!(
+            answer_cudart_init(0x2080_a001, 16).unwrap(),
+            vec![1, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 0x11, 0, 0, 0]
+        );
+    }
+
+    #[test]
     fn the_two_innocent_ids_are_not_served() {
         // ⊘ Refusing either of these left the host at `cudaGetDeviceCount=0`, so they are
         // outside the measurement and must stay outside the table.
@@ -222,10 +253,15 @@ mod tests {
         // The watchdog id is a normal, nvproxy-known control; the other three are opaque.
         let m = crate::capability::RM_GSS_LEGACY_MASK;
         assert_eq!(RC_GET_WATCHDOG_INFO & m, 0);
-        for c in [CUDART_INIT_0X9009, CUDART_INIT_0X9001, CUDART_INIT_0X9064] {
+        for c in [
+            CUDART_INIT_0X9009,
+            CUDART_INIT_0X9001,
+            CUDART_INIT_0X9064,
+            CUDART_INIT_0XA001,
+        ] {
             assert_ne!(c & m, 0, "{c:#010x} should be GSS-legacy");
         }
-        assert_eq!(SERVED.len(), 4);
+        assert_eq!(SERVED.len(), 5);
     }
 
     #[test]
