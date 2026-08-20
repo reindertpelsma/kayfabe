@@ -120,6 +120,7 @@ pub mod grinfo;
 pub mod grstatic;
 pub mod gspfeatures;
 pub mod gspstaticinfo;
+pub mod cudartinit;
 pub mod gsslegacy;
 pub mod guest_os;
 pub mod guestsysinfo;

@@ -1028,6 +1028,23 @@ pub enum WantedTable {
     /// than clamped, and a buffer whose aperture this port cannot name is refused rather than
     /// folded into sysmem.
     PromoteFaultMethodBuffers,
+    /// ★★★★★ **The four the CUDA RUNTIME needs and the DRIVER API never asks for** — w349.
+    ///
+    /// `[measured 2026-08-20, real GA106 on 580.159.04]` Refusing any ONE of these on the
+    /// BARE-METAL host turns its own `cudaGetDeviceCount` from `0` into **3**
+    /// (`cudaErrorInitializationError`) — the guest's exact symptom, reproduced with no
+    /// guest, no emulator and no QEMU. See [`kayfabe_abi::cudartinit`] for the trace
+    /// method, the per-id bisection table and the negative controls.
+    ///
+    /// ⊘ Two further runtime-only ids (`0x2080a026`, `0x2080a084`) were measured **innocent**
+    /// and are deliberately NOT here: the served set is the measured set, not the observed one.
+    CudartWatchdogInfo,
+    /// `0x20809009` — GSS-legacy, unnamed in every open header. Hardware: `{0, 0xd}`.
+    CudartInit9009,
+    /// `0x20809001` — GSS-legacy, unnamed in every open header. Hardware: `{0x03fc007f, 0}`.
+    CudartInit9001,
+    /// `0x20809064` — GSS-legacy, 520 bytes, ten content words then a measured zero tail.
+    CudartInit9064,
 }
 
 impl WantedTable {
@@ -1058,7 +1075,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 41] = [
+    pub const ALL: [WantedTable; 45] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1100,6 +1117,10 @@ impl WantedTable {
         Self::GssLegacy8162,
         Self::C2cInfo,
         Self::PromoteFaultMethodBuffers,
+        Self::CudartWatchdogInfo,
+        Self::CudartInit9009,
+        Self::CudartInit9001,
+        Self::CudartInit9064,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1184,6 +1205,10 @@ impl WantedTable {
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162,
+            Self::CudartWatchdogInfo => kayfabe_abi::cudartinit::RC_GET_WATCHDOG_INFO,
+            Self::CudartInit9009 => kayfabe_abi::cudartinit::CUDART_INIT_0X9009,
+            Self::CudartInit9001 => kayfabe_abi::cudartinit::CUDART_INIT_0X9001,
+            Self::CudartInit9064 => kayfabe_abi::cudartinit::CUDART_INIT_0X9064,
             Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1249,6 +1274,10 @@ impl WantedTable {
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162_PARAMS_SIZE,
+            Self::CudartWatchdogInfo => 4,
+            Self::CudartInit9009 => 8,
+            Self::CudartInit9001 => 8,
+            Self::CudartInit9064 => 520,
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -2336,6 +2365,26 @@ impl CommandPolicy for InitTablePolicy {
             // ⊘ The bytes are copied through this arm rather than left to the tail's
             // `copy_from_slice` no-op on purpose: the identity is then something the code
             // SAYS, and `answer_gss_legacy` is where the id and the length are checked.
+            // ★★★★★ w349 — the four the CUDA RUNTIME needs. The body is a MEASURED
+            // constant, not a chip derivation, because three of the four are GSS-legacy and
+            // have no definition in any open header to derive from. `answer_cudart_init`
+            // refuses any size other than the measured one rather than padding to it, so a
+            // guest that asks a different shape gets a refusal and not an invention.
+            //
+            // ⚠ Forwarding to the host is the better answer and is BUILT
+            // (`VerbPlan::SubdeviceControl`), but it is gated off until an off-BQL execution
+            // site exists — a synchronous host verb from `respond` trips R1. This table is
+            // what makes the runtime work in the meantime, and it carries its own expiry
+            // conditions in `kayfabe_abi::cudartinit`.
+            WantedTable::CudartWatchdogInfo
+            | WantedTable::CudartInit9009
+            | WantedTable::CudartInit9001
+            | WantedTable::CudartInit9064 => {
+                match kayfabe_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
             WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;
                 match kayfabe_abi::gsslegacy::answer_gss_legacy(
