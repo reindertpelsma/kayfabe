@@ -411,7 +411,7 @@ Mode-2 multi-process & 2 &
   \emph{concurrent} processes computed on 2026-08-14 (w299); \emph{sequential} processes ---
   three of them --- passed on 2026-08-20 (\code{w367}, \S\ref{sec:seqfix}). \\
 Mode-2 sequential processes & 2 &
-  \textbf{Broken at the C's HEAD} (\code{c86b69d}; the C tree has not moved since 2026-08-13).
+  \textbf{Broken at the C artifact's HEAD}, and this row is about the C rather than the port.
   Measured 2026-07-25: exactly \emph{one} CUDA process works per QEMU lifetime; the second fails
   \code{cuInit}$\to$999 regardless of how the first exited. The "fresh boot per clean run" bench
   discipline \emph{is} this bug, not a precaution.
