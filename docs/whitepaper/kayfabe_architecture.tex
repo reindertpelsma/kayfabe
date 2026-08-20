@@ -2952,6 +2952,17 @@ the doctrine is being applied rather than quoted.
 \label{sec:gsp}
 
 \begin{claimbox}\small
+⊘⊘⊘ \textbf{SUPERSEDED IN ITS TITLE, 2026-08-21 --- read \S\ref{sec:pcd7} first.} This
+subsection is called \emph{"reboot is modelled and never exercised"}. \textbf{It has now been
+exercised} --- eight consecutive device opens in one boot, driven by nothing more exotic than
+\code{nvidia-smi} --- \textbf{and it broke on the fifth}, permanently, from a message-queue
+sequence carried across a driver life. The prediction below that this was the untested seam was
+\emph{correct}; what it could not say is that the first workload to touch it would find a defect
+in the first five seconds. ★ The sharper form of the warning stands and is now evidenced:
+\textbf{"modelled" and "exercised" are different words, and the gap between them was hiding a
+bug that makes the product unusable after five invocations of its simplest command.}
+
+\smallskip
 \textbf{Two revisions ago this section said "34 lines, and it is the critical path". One revision
 ago it said "3\,550 lines, and nothing calls it". Both are now superseded}: the crate is
 \textbf{5\,497} lines across 8 modules, it has \emph{six} production consumers, a stock guest
@@ -3202,6 +3213,14 @@ that much suspicion.
 \label{sec:seqfix}
 
 \begin{warnbox}\small
+⊘⊘ \textbf{FRAMING SUPERSEDED 2026-08-21 by \S\ref{sec:pcd7}: the ordinal is not over CUDA
+processes, it is over DEVICE OPENS.} A bare \code{nvidia-smi} --- no CUDA, no context --- both
+consumes the resource and dies of it, at \#5 of 8. Every measurement below is still correct as
+measured; only the word \emph{"process"} in the reasoning is wrong, and it kept the search inside
+CUDA for an evening. The framebuffer-join defect it names is real and was really fixed; it was
+simply not the whole of what this workload was hitting.
+
+\smallskip
 \textbf{★★★★★ This subsection was added after the rest of the paper was written, and it falsifies
 the paper's own headline blocker.} Everything in it is dated \code{w361}--\code{w367} and landed
 in the five hours \emph{after} this document's pin (\code{5c367a38}, 15:36) and before its first
@@ -3324,6 +3343,123 @@ expected consequence of the fix, not evidence against it. ⇒ \textbf{The outcom
 and the mechanism clause was measuring the wrong quantity.} \emph{Pre-register outcome and
 mechanism separately, and say in advance which one grades the rung.}
 \end{claimbox}
+
+\subsection{\texorpdfstring{★★★★★ The fifth device open wedges the GPU --- and the code predicted it, then filed it as a trade-off}{The fifth device open wedges the GPU --- and the code predicted it}}
+\label{sec:pcd7}
+
+\begin{warnbox}\small
+\textbf{★★★★★ Added 2026-08-21, and it supersedes \S\ref{sec:seqfix}'s framing and
+\S\ref{sec:gsp}'s subsection title at the same time.} \S\ref{sec:seqfix} calls the defect
+\emph{"sequential multi-process"} and reasons about CUDA processes throughout.
+\measured{} \code{w370}: running \code{nvidia-smi} \textbf{eight times} in one boot --- no CUDA
+anywhere, no context ever created --- \textbf{\#1--4 print the GPU name and \#5--8 print "No
+devices were found"}, permanently. A bare \code{nvidia-smi} is both a consumer of the resource
+and a victim of its exhaustion. \textbf{The ordinal was never over CUDA processes. It is over
+device opens.}
+
+\smallskip
+And \S\ref{sec:gsp} is titled \emph{"reboot is modelled and never exercised"}. It has now been
+exercised, eight times in a row, by the cheapest possible workload --- \textbf{and it broke.}
+\end{warnbox}
+
+\subsubsection*{Why nothing had ever seen it}
+
+A census of every probe log on the bench: \textbf{no boot has ever run more than five
+GPU-touching processes}, and every boot before \code{w361} ran \emph{one or two}. The pattern was
+always \emph{boot $\to$ one CUDA program $\to$ grade $\to$ tear down}. The defect lives at $N=5$;
+every instrument stopped at $N=2$. ⊘ \textbf{This is therefore not a regression} --- it is a limit
+that was always there and was never probed, and the reason it was never probed is that
+\textbf{the project's own workflow documentation told everyone to reboot between runs.} The line
+\emph{"the emulated GSP's WPR2 state only resets on a full QEMU restart, so each clean run needs
+a fresh boot"} has been in this tree's contributor guide for months, written as a
+\emph{convention}. It was a defect report the whole time.
+
+\subsubsection*{The guest kernel's own words, and a decode error worth recording}
+
+No boot in this series had ever captured guest \code{dmesg} \emph{during} a workload: the harness
+took it at boot time, so all twelve boots wrote a \textbf{5\,379-byte, byte-identical} file whose
+last line is at 28.99\,s uptime. That absence had already been reported upward as
+\emph{"the guest kernel logged nothing"} --- a measured-sounding claim that had never been
+measured. With the capture moved after the workload, the guest says:
+
+\begin{quote}\small\ttfamily
+NVRM: GspMsgQueueReceiveStatus: Bad sequence number.  Expected 0 got 161.\\
+NVRM: \ldots NV\_ERR\_INVALID\_DATA (0x25) from rpcRecvPoll(\ldots, GSP\_INIT\_DONE, 0)\\
+NVRM: \_kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP\\
+NVRM: RmInitAdapter failed! (0x62:0x40:2028)
+\end{quote}
+
+⊘ \textbf{The triple is \code{initStatus:rmStatus:line}, and reading it as a status cost an
+hour.} \code{0x62} decodes as \code{NV\_ERR\_RESET\_REQUIRED} if you assume it is an
+\code{NV\_STATUS} --- plausible, thematically perfect, and wrong: it is an \code{RM\_INIT\_*} enum
+and the actual status is the \emph{second} field, \code{0x40}. ★ The same class as this paper's
+\code{\_IOC\_SIZE} finding: \textbf{a field parsed as the wrong type still yields a believable
+name}. And the \code{0x40} is not even the first domino --- it is the \emph{retry's} failure at
+the WPR2 gate. The poll returned \code{0x25}.
+
+\subsubsection*{PC-D7: the comment that described this exactly, and filed it}
+
+The root cause is that we post \code{GSP\_INIT\_DONE} carrying a message-queue sequence carried
+out of the \emph{previous} driver life --- 161 --- into a queue the new life has just constructed
+at \code{rxSeqNum = 0}. The guest recovers only from \code{seqNum < rxSeqNum}; for \code{>} there
+is \textbf{no branch}, so the stream never resynchronises and every later open dies instantly at
+the WPR2 gate.
+
+★★★ \textbf{The code predicted this failure verbatim, symptom for symptom, and marked it
+\emph{"a named trade-off, not a defect to be fixed"}.} The instance identity was the shared
+region's \emph{guest-physical address}; the comment observes that the allocator recycles pages,
+that a recycled page therefore reads as "same instance", and that the guest then sees
+\code{seqNum > rxSeqNum} \emph{"permanently"}. It judged the collision rare because it modelled
+the guest's queue as living from module load to module unload. \textbf{At 580 that queue lives and
+dies with the \emph{adapter}}: every \code{nvidia-smi} destroys and reconstructs it, so
+\emph{every} open is a coin flip on allocator reuse. That nondeterminism is why the failing
+cycle wandered between 3 and 5 across boots and read like a counter --- and why a day went into
+looking for a resource with four units.
+
+\begin{claimbox}\small
+\textbf{The lesson is not "write the hazard down".} It was written down, in the right place, in
+detail, with the exact symptom. \textbf{The load-bearing claim was the \emph{frequency estimate}
+attached to it} --- and that estimate, not the mechanism, was what made it a trade-off instead of
+a bug. A hazard note without a measured rate is a hypothesis wearing a decision's clothes.
+\end{claimbox}
+
+\subsubsection*{The fix, and the two rejected fixes recorded beside it}
+
+\measured{} \code{w374}, real GA106, \code{147694ff}. The discriminator is now the guest's own
+command sequence rather than an address: the guest stamps its private \code{txSeqNum} into every
+command element it submits and zeroes that counter only at queue construction, so the command
+stream carries the instance's identity \textbf{in-band, in memory we already read}. The
+address survives as a logged cross-check, and a publish where the two disagree is exactly this
+bug happening --- now a counted line. ★ It fired on hardware:
+
+\begin{quote}\small\ttfamily
+GSP-PUBLISH gpa=0x23200000 gpa\_same=true seq\_last=Some(1) cmd\_seq=162 $\Rightarrow$ same\_instance=false\\
+\ \ ★ PC-D7 COLLISION: address and sequence disagree --- the address was lying
+\end{quote}
+
+\code{Bad sequence number} went \textbf{3 $\to$ 0}; cycles 1--4 are now completely clean.
+⊘ \textbf{And the device still wedges at cycle 5}, of a \emph{different} cause --- a scrub-channel
+event-notification failure --- which an independent analysis had pre-registered as a separate bug
+that this fix would not touch. \textbf{The wall moved; it did not fall.}
+
+★★ \textbf{Two rejected fixes are recorded at the source site so they are not retried.} The
+obvious one --- releasing the instance identity at the driver-life boundary --- fails an existing
+test that encodes the C artifact's own expensive lesson, because that boundary serves both a real
+teardown and an idle release, which need opposite answers. Its "safe" repair, scoping to the
+Booter-Unload transition, is \textbf{worse}: measurement of the 580 teardown path shows that
+transition \textbf{never fires} in this configuration, because our own emulation takes WPR2 down
+first and the guest's own gate then skips it. That variant would have been \textbf{inert on the
+bench with every test green} --- the exact shape of a change that reads as done.
+
+\subsubsection*{What this says about the amplifier}
+
+★ \textbf{The "WPR2 already up" wedge is faithful to real hardware and is not the defect.} Any
+single failed adapter init leaves the device unusable until the guest reboots; a real GPU behaves
+the same way. So this was never one bug --- it is $N$ triggers behind one amplifier, and each
+trigger has to be killed separately. \textbf{The amplifier is also why the symptom is so much
+larger than any individual cause}, and why "the GPU stops working after the fifth
+\code{nvidia-smi}" is a fair description of a defect whose actual mechanism is a
+sequence-number comparison.
 
 \subsection{\texorpdfstring{What contact with hardware has and has not bought}{What contact with hardware has and has not bought}}
 \label{sec:contact}
@@ -3789,6 +3925,18 @@ carelessness, it is entropy.
 \hfill \src{docs/design/testing\_doctrine.md \S6}
 \end{claimbox}
 
+★★★★★ \textbf{The 2026-08-21 instance is the most expensive one yet, and it is a variant this
+list did not previously contain.} Every entry below is a claim that \emph{became} false. The
+\code{PC-D7} comment (\S\ref{sec:pcd7}) was \textbf{never true}: it described a real hazard in
+correct detail, predicted the exact failure symptom, and attached a \emph{frequency estimate} ---
+"rare" --- that was wrong by orders of magnitude because it modelled the guest's message queue as
+living for the module's lifetime rather than the adapter's. On that estimate the item was filed
+as \emph{"a named trade-off, not a defect to be fixed"}, and it then made the GPU unusable after
+five invocations of \code{nvidia-smi}. ⇒ \textbf{A documented hazard carries two claims --- the
+mechanism and its rate --- and only the first is usually checked. The second is what decides
+whether it gets fixed.}
+
+\smallskip
 The instances are specific and they are not small:
 
 \begin{itemize}
