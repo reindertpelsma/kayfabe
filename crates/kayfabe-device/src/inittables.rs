@@ -1048,6 +1048,10 @@ pub enum WantedTable {
     /// `0x2080a001` — the FALLBACK. Reached only after `a084`/`a026` fail, which is exactly
     /// where our guest is. See [`kayfabe_abi::cudartinit::CUDART_INIT_0XA001`].
     CudartInit9A001,
+    /// `0x2080200b` `PERF_GET_LEVEL_INFO_V2` — the second member of the minimal fatal pair,
+    /// and the first SPLICED row (the request carries content, so a constant body would
+    /// clobber it). See [`kayfabe_abi::cudartinit::SPLICED`].
+    CudartPerfLevelInfoV2,
 }
 
 impl WantedTable {
@@ -1078,7 +1082,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 46] = [
+    pub const ALL: [WantedTable; 47] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1125,6 +1129,7 @@ impl WantedTable {
         Self::CudartInit9001,
         Self::CudartInit9064,
         Self::CudartInit9A001,
+        Self::CudartPerfLevelInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1214,6 +1219,7 @@ impl WantedTable {
             Self::CudartInit9001 => kayfabe_abi::cudartinit::CUDART_INIT_0X9001,
             Self::CudartInit9064 => kayfabe_abi::cudartinit::CUDART_INIT_0X9064,
             Self::CudartInit9A001 => kayfabe_abi::cudartinit::CUDART_INIT_0XA001,
+            Self::CudartPerfLevelInfoV2 => kayfabe_abi::cudartinit::PERF_GET_LEVEL_INFO_V2,
             Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1284,6 +1290,7 @@ impl WantedTable {
             Self::CudartInit9001 => 8,
             Self::CudartInit9064 => 520,
             Self::CudartInit9A001 => 16,
+            Self::CudartPerfLevelInfoV2 => 780,
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -2410,6 +2417,17 @@ impl CommandPolicy for InitTablePolicy {
                     Ok(p) => p,
                     Err(_) => return refuse(),
                 }
+            }
+            // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
+            // a real GA106 overwrites. A constant body here would clobber content the guest
+            // sent — the `#203` zero-fill defect pointing the other way.
+            WantedTable::CudartPerfLevelInfoV2 => {
+                let at = req.params_at;
+                let mut p = cmd.payload[at..at + want.params_size()].to_vec();
+                if !kayfabe_abi::cudartinit::splice_cudart_init(req.cmd, &mut p) {
+                    return refuse();
+                }
+                p
             }
             WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;

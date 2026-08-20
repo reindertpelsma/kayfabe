@@ -14,93 +14,78 @@
 \begin{claimbox}
 \small
 \textbf{Subject.} Two repositories on one machine. \file{/workspace/nvidia-gpu-passthrough} —
-the C research artifact, 753 commits, 44\,783 lines of C, developed 2026-05-24 to 2026-08-01; it
-works on real hardware, and it is no longer history: it is maintained as this project's
-\emph{standing differential oracle}. \file{kayfabe} — a clean-slate Rust rewrite, 414 commits,
-120\,979 lines of implementation (plus a 3\,284-line detached ABI generator), 118\,160 lines of
-test code, and 2\,676 lines of C QOM shim, developed 2026-07-24 to 2026-08-03. This document is
-pinned to Rust HEAD \code{f33e1c8} and C HEAD \code{8001cb5}.
+the C research artifact, 44\,783 lines of C, developed 2026-05-24 to 2026-08-01; it works on real
+hardware, and it is not history: it is maintained as this project's \emph{standing differential
+oracle}. \file{kayfabe} — the clean-slate Rust rewrite that is the product, \textbf{1\,388
+commits}, \textbf{198\,021 lines of implementation} across 23 crates, \textbf{158\,170 lines of
+test code}, and a C QOM shim that links the whole thing into a stock QEMU. Developed 2026-07-24 to
+today. \textbf{This document is pinned to Rust HEAD \code{0f577b15} (2026-08-20).}
 
 \smallskip
-\textbf{★★★ What moved since the previous pin (\code{15651b1}) is the sentence this paper has led
-with three times.} It read: \emph{"No part of the Rust codebase has ever driven a real GPU."}
-\textbf{That is now false, and retiring it is the single most important edit in this revision.}
-Two things happened on real hardware, and the discipline that matters is that \emph{they are two
-different experiments and they have not met}:
+\textbf{★★★★★ What moved since the previous pin (\code{f33e1c8}, 2026-08-03) is the whole thesis
+of the document.} The previous four revisions were each built around a sentence of the form
+\emph{"the Rust port has not reached compute"}, and the fourth's specific version was: \emph{"the
+boot dies in the memory manager's scrubber"}, \emph{"there is no \code{cuInit}, no
+\code{cuCtxCreate} and no compute in Mode 2 anywhere in this codebase"}, and \emph{"on every boot
+to date the device reports \code{doorbells: 0 arrived}"}. \textbf{All three are now false, and
+retiring them is the single largest edit in this revision.} What replaced them, on a real GA106
+(RTX 3060) with host driver 580.159.04 open, stock unpatched guest driver:
+
+\begin{itemize}\small
+\item \textbf{\code{cup3}: FIRST COMPUTE.} \measured{} 2026-08-14, rev \code{0655e6aa},
+  \file{traces/w297\_cup3/}. A JITed PTX shader computing \code{out = in*3 + 1} returned
+  \code{^CUP3\_VAL=43} from \code{in = 14}. \textbf{43 cannot be copied, filled or forged}: a copy
+  engine copies and memsets, our emulator has no arithmetic, and a forged completion carries a
+  payload \emph{we} chose. ⇒ the host GA106 \textbf{GR} engine executed the guest's shader.
+  Reproduced \textbf{6/6} across subsequent rungs.
+\item \textbf{\code{cup8}: byte-exact matmul at scale.} \code{CUP8 RESULT N=2048 bad=0 maxerr=0
+  C[0]=2048 -> PASS}, \file{traces/w308\_cup8/}, and again at \textbf{N=3072} (36\,MiB operands)
+  over 12 iterations, \file{traces/w327\_cliff/}.
+\item \textbf{Doorbells are rung, routed and served.} On the \code{cup3} boot: \textbf{870}
+  \code{GrCompute} + \textbf{686} \code{Ce} + 4 \code{GrGraphics} doorbells, \code{unrouted = 0}.
+  Completions are hardware-written.
+\item \textbf{The isolate plane is real and is on the path.} A capability-less, six-namespace,
+  unprivileged child process holding \file{/dev/nvidiactl} and \file{/dev/nvidia0} is what issues
+  the host RM ioctls that carry the compute.
+\end{itemize}
 
 \smallskip
-\textbf{(1) A stock, unpatched NVIDIA 580.159.04 open kernel module, in a KVM guest, binds to our
-emulated GA106.} \measured{} 2026-08-01, rev \code{55a106f}, and on every boot since: the
-device presents \code{10de:2504}, the guest loads five modules (\code{nvidia}, \code{nvidia\_modeset},
-\code{nvidia\_drm}, \code{video}, \code{ecc}), and \code{nvidia-drm} initialises on
-\code{0000:00:03.0}. \textbf{⊘ And the boot does not complete.} \code{RmInitAdapter} fails, no
-\file{/dev/nvidia*} node is created, and \code{nvidia-smi} finds no device. There is no
-\code{cuInit}, no \code{cuCtxCreate} and no compute in Mode 2 anywhere in this codebase.
+\textbf{★★★ And the new headline blocker is one layer above everything this project used to worry
+about.} \code{libcuda} — the CUDA \emph{driver} API — works in the guest: \code{cuInit},
+\code{cuDeviceGetName}, \code{cuDevicePrimaryCtxRetain}, managed allocation, CPU touch and
+\code{cuCtxSynchronize} all return \code{0}. \code{libcudart} — the \emph{runtime} API — returns
+\textbf{3} (\code{cudaErrorInitializationError}) from its first call, which is what stops PyTorch
+and therefore stops the LLM rung. Host \code{Xid} is \textbf{0}; the guest's \code{NVRM} line count
+is identical to a green boot; \textbf{every \code{ioctl(2)} returns 0} on both sides, because RM
+puts its verdict \emph{inside} the parameter struct. \S\ref{sec:llmwall} is the account.
 
 \smallskip
-\textbf{(2) A guest-shaped copy-engine request was executed by a real host GPU and read back.}
-\measured{} 2026-08-03 on vast \code{46529600} (RTX 3060 / GA106, host driver 580.159.04
-open), twice at two revisions (\code{147c069} and \code{5511cda}) with byte-identical evidence:
-\code{CeEvidence::copied() == true} — a real GA10x GPFIFO entry naming five real CE method runs,
-carried by \code{read\_pushbuffer} $\rightarrow$ \code{decode\_run} $\rightarrow$
-\code{partition\_ce} $\rightarrow$ \code{plan\_ce} $\rightarrow$ \code{Worker::execute} through
-production crates, 4\,096 bytes moved, the release semaphore landed, read back through an
-\emph{independent} second mapping. The predicate was watched to \textbf{fail} first on the same
-hardware under a live mutation. \textbf{⊘ No live guest drove it}, and the test says so in its own
-header: the entry is a guest's \emph{bytes} and a guest's \emph{declarations}, not a booted
-guest's submission. The boot in (1) dies inside \code{RmInitAdapter}, long before any channel is
-scheduled, so it never rings anything for (2) to carry.
+⚠ \textbf{And this paragraph was rewritten twice in the four hours it took to write this
+document}, which is the drift rate (\S\ref{sec:drift}) observed live. As of \code{b21f72f7}
+(2026-08-20 14:32) five ranked hypotheses had been built, tested against the working bare-metal
+host and \emph{refuted}, and the honest answer was \emph{"we do not know"}. As of \code{0f577b15}
+(2026-08-20, later the same day) the chain is \measured{}: the guest asks \code{0x2080a084}, we
+refuse; it asks \code{0x2080a026}, we refuse; it \textbf{falls back} to \code{0x2080a001}, we
+refuse that too, and \code{cudart} returns 3. \textbf{⊘ The fix is landed and \emph{not yet
+booted}} — the pre-registered falsifier (\code{0x2080a001 served $\geq$ 1} \emph{and}
+\code{RT\_cudaGetDeviceCount} $3 \to 0$) is unmet at this pin. \S\ref{sec:questions} states what
+an outsider can still attack, including the parts of the residue that no host-side experiment can
+reach.
 
 \smallskip
-\textbf{★★★ Second, and it is why (1) and (2) have not met: the execution plane is the wall, and
-it cannot be faked.} The boot dies in the memory manager's scrubber — as of 2026-08-03 at
-\code{mem\_utils.c:2022}, registering the scrubber channel's completion notifier, one step past
-the channel schedule that held it before. \inferred{} from source and immediately past both,
-\code{memmgrInitCeUtils\_IMPL} calls \textbf{\code{memmgrTestCeUtils} unconditionally}: it writes a
-sentinel to framebuffer, issues a copy with \code{TRANSFER\_FLAGS\_PREFER\_CE}, reads it back and
-asserts equality. \textbf{There is no control-shaped answer to a read-back test}, and its status
-returns into an \code{NV\_ASSERT(0)} that is fatal for any non-\code{NV\_OK} in this phase. Every
-escape hatch is closed by citation — most sharply \code{!IS\_SILICON}, whose three flags are
-\emph{declared in the driver's headers and assigned nowhere in the tree}, so it is structurally
-constant true: \emph{this is not a lie we decline to tell, it is a lie we cannot tell.}
-⊘ \textbf{No boot has ever reached \code{memmgrTestCeUtils}} — the last one died two statements
-short of it — so that specific wall is \inferred{}, and this paper marks it so. Increments
-E0--E7 exist to move the driver of (2)'s predicate from a ladder to a guest;
-§\ref{sec:execplane} is that story, including the walls it hit and the one it has not.
+\textbf{★★ The C artifact's fifth oracle limit still stands and is still the sharpest warning in
+the document.} Its captured control table has 56 rows: \textbf{29 complete, 16 truncated, 11
+empty}. \emph{Every} empty row checked against a real GA106 was contradicted, and the truncated
+class — the larger one — passes the gate written to catch the empty one.
+\textbf{⊘ An empty capture is evidence of nothing, not evidence of emptiness.} \S\ref{sec:oraclelimits}.
 
 \smallskip
-\textbf{★★ Third, and it bounds the oracle in a way the previous revision did not know: there is
-a FIFTH limit, and on it the C is POSITIVELY WRONG rather than blind.} The four measured limits
-of a C recording still stand (§\ref{sec:oraclelimits}) and are still the right frame. But the C's
-captured control table \file{mode2\_initctrl\_ga106.h} has 56 rows of which \textbf{11 (19.6\%)
-carry \code{dlen = 0}} — the reply body was never captured — and asked of a real GA106,
-\textbf{nine of the eleven are contradicted}. \code{CE\_GET\_FAULT\_METHOD\_BUFFER\_SIZE} decodes
-from its empty row as size 0; the part answers \textbf{20\,480}, and RM DMAs fault records into a
-buffer of exactly that size. \textbf{⊘ An empty capture is evidence of nothing, not evidence of
-emptiness.} ★ And note how it survived four rungs: a gate demanding a \code{C:} citation was
-\emph{satisfied} by a row citing the empty body as corroboration. \textbf{A citation gate checks
-that a claim is sourced; it can never check that the source says what the claim says.}
-
-\smallskip
-\textbf{Fourth: for the first time this project owns a trace of a boot that SUCCEEDS.} A recorder
-inside CPU-RM (two call sites, complete elements, both directions) captured a real GA106 booting
-to a working \code{nvidia-smi}: 1\,076 records, 104 distinct controls, zero dropped, zero replies
-declaring params with no bytes present. From it the ladder is \emph{enumerated} rather than
-discovered one boot at a time — 53 controls beyond what the failing \code{cap1} capture reaches —
-and a real GSP is seen to \textbf{refuse 13 controls on the boot that works}, with CPU-RM's own
-source carrying an explicit provision for 7 of the 7 it can name. \textbf{Refusal is ordinary
-protocol behaviour, not only our posture.} ⚠ Those artifacts live on branch
-\code{replay-conformance}, not on \code{master}, and §\ref{sec:recorder} says so where it uses
-them.
-
-\smallskip
-\textbf{Stance.} Every number here was measured from the tree while writing, not copied from a
-document and not inherited from an adjacent sentence — every error previously found in this paper
-came from restating its own neighbouring prose. \textbf{Two numbers supplied to this revision in
-its own brief were checked and found wrong}, and the measured values are what appear below
-(\S\ref{sec:corrections} rows 31--32). Where a project document and the code disagree, the code
-wins and the disagreement is recorded. Roughly a third of the document is about what does not
-work, is not built, or is not known.
+\textbf{Stance.} Every number here was re-measured from the tree while writing, not carried across
+from the previous revision and not restated from a design document. Where a claim is a reading of
+NVIDIA source rather than an observation it is marked \inferred{}; where it is neither it is marked
+\assumed{} or \unver{}. \textbf{Roughly half of this document is about what does not work, is not
+built, or is not known}, and it ends (\S\ref{sec:questions}) with the open questions stated so
+that a reader with no access to this tree can answer them.
 \end{claimbox}
 
 \vspace{2mm}
@@ -139,38 +124,52 @@ for the claim to fail.
 
 \begin{warnbox}
 \small
-\textbf{The single most important paragraph in this paper, and it is no longer one sentence.}
-The previous three revisions led with \emph{"no part of the Rust codebase has ever driven a real
-GPU."} \textbf{That is retired.} What replaces it is longer because the truth is now a
-\emph{conjunction}, and every reader who takes only half of it will be wrong in one direction or
-the other.
+\textbf{The single most important paragraph in this paper.} Each of the five revisions of this
+document has led with a claim about \emph{what the critical path is}, and \textbf{four of the five
+were falsified by the work they named, usually within days}. Revision one said the critical path
+was a disconnected crate; two said it was the bridge; three said it was the guest driver reaching
+the bridge; four said it was the execution plane, which "cannot be faked". \textbf{All four have
+been crossed.} So read this revision's version knowing the base rate.
 
 \smallskip
-\textbf{What has happened.} A stock, unpatched NVIDIA driver in a KVM guest binds to our emulated
-GPU and loads its whole module stack. Real host RM ioctls are issued by a real, sandboxed,
-unprivileged isolate process spawned in response to the guest's own action. A real host copy
-engine has moved 4\,096 bytes because our production core decoded a GA10x pushbuffer, and the
-bytes were read back through an independent mapping. Three binaries exist
-(\code{kayfabe-isolate}, \code{kayfabe-rm-ladder}, \code{kayfabe-sandbox-probe}), plus a
-2\,676-line C QOM shim that links our \code{staticlib} into a real QEMU. \textbf{None of that was
-true at the previous pin.}
+\textbf{What is established, and it is a real result.} A stock, unpatched NVIDIA 580.159.04 open
+kernel module, in a KVM guest, against our emulated GA106 and faked GSP, runs a CUDA program that
+produces a numerically correct answer computed by the \emph{host} GPU's graphics/compute engine —
+\code{cup3}'s \code{43}, and \code{cup8}'s 2048² and 3072² matmuls at \code{bad=0 maxerr=0}. The
+guest driver is unmodified. The host work is issued by an unprivileged, sandboxed process. That is
+the thing this project exists to do, and it is done for one workload shape on one part.
 
 \smallskip
-\textbf{What has not happened, and it is the larger half.} \textbf{The boot does not complete.}
-\code{RmInitAdapter} fails, every time, on every box. No \file{/dev/nvidia*} node is created in
-the guest, \code{nvidia-smi} finds no device, and \textbf{there is no \code{cuInit}, no
-\code{cuCtxCreate}, and no compute of any kind in Mode 2} — a grep for the CUDA entry points
-across every crate and test returns doc comments about the C artifact and zero call sites.
-\textbf{And the two hardware results above are two different experiments that have not met}: the
-copy-engine acceptance is driven by a test harness feeding a guest-shaped GPFIFO entry through
-the production path, because the booted guest dies long before it would ring a doorbell. On every
-boot to date the device reports \code{doorbells: 0 arrived}.
+\textbf{What is not established, and it is the larger half.}
+\begin{itemize}\small
+\item \textbf{Nothing above a hand-written CUDA kernel runs.} The CUDA \emph{runtime} library
+  fails to initialise in the guest (\S\ref{sec:llmwall}), so PyTorch, and therefore the LLM
+  workload that is the project's own definition of a useful v1, does not start. The cause is
+  \textbf{unknown}, and five ranked hypotheses have been refuted by measurement.
+\item \textbf{The multi-process property is unmeasured on hardware} — every graded boot runs
+  \emph{one} guest CUDA process. Bug \#14, the defect that motivated the entire rewrite, is
+  addressed structurally in the type system and has \emph{never} been shown fixed on a GPU.
+\item \textbf{There is no tenant axis at all.} No \code{VmId}, \code{TenantId} or \code{GuestId}
+  exists anywhere in \file{crates/}. Cross-VM separation is the incidental consequence of two VMs
+  being two host processes, and at the one place two tenants meet — the host NVIDIA driver — RM's
+  own cross-client check is defeated by a shared euid. \textbf{No two-VM run has ever been
+  attempted.} \S\ref{sec:multitenant}.
+\item \textbf{Performance is 22--81× off native for large kernels and dominated by our own
+  doorbell handler for small ones} (\S\ref{sec:perf}). The operands sit in host system memory
+  reached at \textbf{2.51\,GB/s} against VRAM's 313.5.
+\item \textbf{Everything is one part, one driver, one guest kernel, one guest at a time.} GA106,
+  580.159.04 open, and \emph{n} is small: this project has measured a single-boot \code{43} to be
+  wrong \textbf{1 time in 5}, so a single green boot is weak evidence and is treated as such
+  throughout.
+\end{itemize}
 
 \smallskip
-\textbf{★ The \code{cuCtxCreate} $\rightarrow$ 2048² matmul at \code{bad=0 maxerr=0} belongs to
-the C artifact, not to this codebase}, and this paper names the subject every time it quotes that
-result. Everything below describes a system that is real, tested, internally coherent, and that
-has now met a small and carefully-delimited part of the thing it exists to talk to.
+\textbf{★ And one instrument this paper holds itself to is currently RED.} The repository's claim
+ledger (\S\ref{sec:ledger}) — a gate that asks whether every block using the word \emph{measured}
+names what is behind it — fails at this pin: \textbf{1\,166 unattributed against a bar of 381, 90
+conflated against 66, 36 bare-hardware against 17}. The bars have not been moved since
+2026-07-31 while the tree tripled. That is reported here rather than in a footnote because a
+document that quotes a gate is obliged to say when the gate is failing.
 \end{warnbox}
 
 % ===========================================================================
@@ -517,7 +516,7 @@ anywhere, the mock would not work.
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_layers.tex}}
-\caption{The layer model and the hexagonal ports. Line counts are measured at \code{f33e1c8}
+\caption{The layer model and the hexagonal ports. Line counts are measured at \code{0f577b15}
 (\code{crates/<name>/src/**/*.rs}; \code{kayfabe-abi}'s figure excludes its detached offline
 generator, 3\,284 lines). \textbf{★★★ The bands inverted at this revision}: L2 and L3 were drawn
 as dashed \unbuilt{} boxes at the previous pin and are now built, shipped and booted against.
@@ -586,24 +585,31 @@ answered, and answering it took three revisions and one commit each time to inva
 answer.}
 
 \smallskip
-\textbf{★ What replaces it, stated so it can be checked the same way.} The successor property is
-no longer about \emph{reachability} — everything is reachable now — it is about \emph{arrival}:
-\textbf{on every boot to date the device reports \code{doorbells: 0 arrived}}. The bridge is
-called, the register plane answers, 92--95 commands decode per boot, and the execution plane
-below it has never been asked for anything by a guest. That is a sentence a single boot can
-falsify, which is the only kind worth printing here.
+\textbf{★★★ And the successor property this paper printed at the previous revision has been
+falsified too, in the direction the project wanted.} It read: \emph{"on every boot to date the
+device reports \code{doorbells: 0 arrived}"} — offered explicitly as \emph{"a sentence a single
+boot can falsify, which is the only kind worth printing here."} \textbf{A single boot falsified
+it.} On the \code{cup3} boot the device routes \textbf{1\,560} doorbells (870 \code{GrCompute},
+686 \code{Ce}, 4 \code{GrGraphics}) with \code{unrouted = 0}, and the host GR engine executes what
+they announce. \emph{The mechanism worked exactly as designed: the claim was stated so that
+evidence could kill it, and evidence killed it in eleven days.} That is the shape every claim in
+this document is meant to have, and \S\ref{sec:questions} is the same discipline applied to what
+is still open.
 \end{claimbox}
 
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_deps.tex}}
 \caption{The crate dependency matrix, re-derived from scratch by script from the manifests at
-\code{f33e1c8} — \textbf{24 members}, 126 \code{[dependencies]} edges and 9
-\code{[dev-dependencies]} edges that are not already hard edges. \code{kayfabe-qemu-raw} is the
-row that matters: it is the composition root, the \code{staticlib} a C QOM shim links into a
-real QEMU, and it is what gives \code{gsp}, \code{rmrpc}, \code{device}, \code{chips} and
-\code{isolate-host} a production consumer for the first time. The previous revision's matrix is
-superseded rather than corrected — it was accurate for the 18 members it drew.}
+\code{0f577b15} — \textbf{24 members}, \textbf{134} \code{[dependencies]} edges and 9
+\code{[dev-dependencies]} edges that are not already hard edges. \code{kayfabe-qemu-raw} (row 23)
+is the row that matters: it is the composition root, the \code{staticlib} a C QOM shim links into
+a real QEMU, and it depends on \emph{eighteen} of the twenty-two crates above it. \textbf{★ The
+previous revision's row ordering is no longer topological} — \code{qemu-raw} has since acquired a
+dependency on \code{shell}, which sat below it — so \code{shell} and \code{qemu-raw} are swapped
+here and the strictly-lower-triangular property (which \emph{is} the acyclicity proof) holds
+again. Drawn in the old order the matrix would have carried one dot above the diagonal and
+nothing in the build would have said so.}
 \label{fig:deps}
 \end{figure}\end{landscape}
 
@@ -633,30 +639,38 @@ struct expression for it exists outside \code{kayfabe-isolate}, and the sole con
 \code{VerbPlan::gated\_doorbell} \emph{runs} the gate. Constructing an ungated doorbell is now
 compile error E0639, pinned by a \code{trybuild} row (\file{crates/kayfabe-isolate/tests/ui/}).
 
-\textbf{The upper half of the diagram is now fed by a real guest, and what remains missing has
-moved from the top of the diagram to the middle.} Three revisions ago there was no register
-model, no GSP transport and no RPC decode; two revisions ago all three existed and nothing
-consumed them; one revision ago the bridge consumed them and nothing fed the bridge. \textbf{That
-last gap is closed}: \code{kayfabe-qemu-raw}'s \code{MachineRam} is a production \code{GuestRam},
-a C QOM shim links the crate into a real QEMU, and a stock NVIDIA driver's own writes reach
-\code{GspFsm} — 92 to 95 commands decode on every boot. The sentence that survived three
-revisions — \emph{"no guest driver has ever posted to any of it"} — is \textbf{retired}. Its
-replacement is narrower, sharper, and is the shape of the whole remaining problem:
+\textbf{The diagram is now driven end to end by a guest, and the previous revision's replacement
+headline died with it.} Three revisions ago there was no register model, no GSP transport and no
+RPC decode; two revisions ago all three existed and nothing consumed them; one revision ago the
+bridge consumed them and nothing fed the bridge; \emph{last} revision the guest fed the bridge and
+never reached the execution plane, and this paper printed \emph{"the diagram is now two working
+halves that have not been joined."} \textbf{They are joined.}
 
-\begin{warnbox}\small
-\textbf{A guest drives the control plane. No guest has ever reached the execution plane.} Every
-boot to date reports \code{doorbells: 0 arrived}. Steps \textbf{5}--\textbf{9} of
-Figure~\ref{fig:datapath} — route, gate, plan, execute, silicon — have been driven end to end on
-real hardware and have moved real bytes with a real copy engine, but they were driven by a test
-harness handing the core a guest-shaped GPFIFO entry, \emph{not} by the guest in the top lane.
-The guest dies in \code{RmInitAdapter} at step 0. \textbf{The diagram is now two working halves
-that have not been joined}, and §\ref{sec:execplane} is the account of what stands between them.
-\end{warnbox}
+\begin{claimbox}\small
+\textbf{★★★ One guest CUDA call, all the way down.} On the \code{cup3} boot (\measured{}
+2026-08-14, rev \code{0655e6aa}, RTX 3060 GA106, host driver 580.159.04 open, stock guest driver)
+a guest \code{cuLaunchKernel} traverses every numbered step of Figure~\ref{fig:datapath}: the
+guest's MMIO doorbell store is trapped, decoded to a token, routed to \code{(GpuId, VChid)} and
+then \code{(ProcId, ChanId)}, passed through the \#14 ring gate, planned, executed by a real
+unprivileged host isolate against a real GA106, and the \textbf{host GR engine} — not a copy
+engine, not our emulator — runs the guest's JITed PTX and produces \code{43}. \textbf{1\,560
+doorbells route on that boot with \code{unrouted = 0}.}
+
+\smallskip
+⊘ \textbf{What "joined" does not mean, and the three things it hides.} \textbf{(1)} One guest
+\emph{process}. The multi-\code{Proc} property this architecture exists to provide has never been
+exercised on hardware. \textbf{(2)} The path is green with \textbf{named relaxations still on}
+— on \code{cup3} they were \code{KAYFABE\_PT\_SWEEP=on} and \code{KAYFABE\_OPERAND\_JOIN=join},
+carried from the \code{cup2} arming and listed in the run's own record; \emph{a relaxed green is a
+map, not the milestone.} \textbf{(3)} The CUDA \emph{runtime} does not initialise in the guest at
+all (\S\ref{sec:llmwall}), so the only programs that traverse this path are ones written against
+the driver API directly.
+\end{claimbox}
 
 \begin{landscape}\begin{figure}[p]
 \centering
 \adjustbox{max width=\linewidth, max totalheight=0.86\textheight}{\input{fig_datapath.tex}}
-\caption{The data path, verified function by function against the tree at \code{f33e1c8}.
+\caption{The data path, verified function by function against the tree at \code{0f577b15}.
 Numbered steps are the execution plane; \textbf{C} is the control plane, which populates the
 address table from declared protocol facts. Boxes name \emph{symbols}, not line numbers: the
 repository converted its own 105 pins to symbols in \code{3fd1455} after they drifted.
@@ -726,7 +740,7 @@ indistinguishable; it is that the driver unload has \emph{no} observable signal.
 \section{The crates}
 \label{sec:crates}
 
-Sizes are \code{crates/<name>/src/**/*.rs}, measured at \code{f33e1c8}. "Maturity" is this
+Sizes are \code{crates/<name>/src/**/*.rs}, measured at \code{0f577b15}. "Maturity" is this
 document's reading of the tree. ⚠ \textbf{It is no longer cross-checked against
 \file{docs/design/crate\_maturity\_map.md}, because that document is now wholly stale} and this
 paper will not launder a number through it: it is pinned at \code{d65eb75} ("496 tests green"),
@@ -735,16 +749,25 @@ skeleton} where it is 5\,056 lines, and records defect \#57 as open five days af
 closed. It is a worked instance of \S\ref{sec:drift} and is listed there
 (\S\ref{sec:corrections} row 29).
 
-\textbf{The tree grew by 2.7$\times$ and gained six crates since the previous pin.} The six are
-the reason \S\ref{sec:qemu} and \S\ref{sec:execplane} read differently from every previous
-revision: \code{kayfabe-device}, \code{kayfabe-vmm-qemu} and \code{kayfabe-qemu-raw} are the L2
-adapter this paper twice described as not started; \code{kayfabe-chips} is the L3 adapter whose
-contract had never been tested by anyone doing it; \code{kayfabe-isolate-host} is the real
-unprivileged host worker; and \code{kayfabe-crec} is the C-trace differential harness.
+\textbf{★ The shape of the growth inverted at this revision, and that is the most informative
+thing in this section.} The previous pin added \emph{six new crates} and grew 2.7$\times$. This one
+added \textbf{zero} — the member list is byte-identical at 24 — and still grew \textbf{1.6$\times$},
+from 120\,979 to 198\,021 lines. \emph{All of it went into crates that already existed}, and almost
+all of it into four: \code{kayfabe-qemu-raw} 3\,435\,$\to$\,18\,720 (5.5$\times$),
+\code{kayfabe-isolate-host} 9\,939\,$\to$\,21\,557, \code{kayfabe-device}
+9\,832\,$\to$\,19\,577, \code{kayfabe-abi} 28\,630\,$\to$\,42\,428. ⇒ \textbf{The architecture
+stopped being extended and started being filled in} — which is what the interval between "a
+driver binds" and "a guest computes" actually cost, and it is concentrated entirely in the three
+\emph{adapter} crates plus the wire-format crate, i.e.\ exactly the layers the hexagonal design
+predicted would absorb the contact with reality. \emph{The pure logic core grew least in
+proportion}: \code{kayfabe-core} 10\,528\,$\to$\,14\,617, \code{kayfabe-gsp}
+5\,056\,$\to$\,5\,497 (+8.7\%). ⊘ That is a favourable reading of a number, so state the
+unfavourable one beside it: the growth landed in the crates with the \emph{least} test coverage
+and the \emph{only} \code{unsafe}.
 
 \newcommand{\crate}[3]{\needspace{3\baselineskip}\subsection{\texttt{#1} \normalfont\small — #2 lines, #3}}
 
-\crate{kayfabe-core}{10\,528}{\built{} and mutation-hardened}
+\crate{kayfabe-core}{14\,617}{\built{} and mutation-hardened}
 Owns the spine. \code{RmGraph} is the source of truth: a refcounted resource/handle split with
 \code{DUP\_OBJECT} aliasing, order-tolerant "parked" facts (a mapping that arrives before its
 target is held, not rejected), mapping refcounts and capacity bounds. \code{project()} is a pure
@@ -761,7 +784,7 @@ in \S\ref{sec:oracle}} — a live-memory-free in \code{RmGraph::apply} whose ind
 carried the identical bug. Nothing since has displaced it, and the parked-fact machinery that
 produced it is still where the difficulty in this design lives.
 
-\crate{kayfabe-abi}{28\,630}{\built{} --- now the largest crate in the tree}
+\crate{kayfabe-abi}{42\,428}{\built{} --- now the largest crate in the tree}
 Axis A: the per-driver-version wire layouts. Contains an offline generator
 (\file{crates/kayfabe-abi/gen}, a separate cargo project with zero third-party dependencies)
 that parses NVIDIA's own FINN-emitted C headers from the open kernel modules and emits Rust;
@@ -800,7 +823,7 @@ built capability with a test-only interrogator" because \code{gsp\_element\_wire
 in \code{crates/*/src}. It has one now — the shipped register plane selects a wire layout to
 answer a real guest through.
 
-\crate{kayfabe-linux-raw}{12\,470}{\built{} --- the \emph{first} of two \code{unsafe} crates}
+\crate{kayfabe-linux-raw}{14\,208}{\built{} --- the \emph{first} of two \code{unsafe} crates}
 One of exactly two crates permitted \code{unsafe}, and one of the two that do not inherit the
 workspace lints (because \code{forbid} cannot be relaxed by an inner \code{allow}). It restates
 \code{unsafe\_code = "allow"} plus \code{clippy::undocumented\_unsafe\_blocks = "deny"}. Every
@@ -810,8 +833,8 @@ covering things like a bare \code{MAP\_FIXED} address, a page-size literal, and 
 its region.
 
 \textbf{★ The ratchet moved from a constant to a named two-element list, exactly as
-\S\ref{sec:qemu} predicted it would have to} — \code{AUDITED="kayfabe-linux-raw:87
-kayfabe-qemu-raw:47"} — and the acceptance criterion the gate protects is now "read two crates".
+\S\ref{sec:qemu} predicted it would have to} — \code{AUDITED="kayfabe-linux-raw:91
+kayfabe-qemu-raw:49"} — and the acceptance criterion the gate protects is now "read two crates".
 The movement is itemised per step in the workflow with an argument each: $7 \to 25$ (first
 consumers) $\to 37$ (a reactor and a guest) $\to 47$ (a host GPU and a child process) $\to 50$
 (a machine it did not create) $\to 57$ (\textbf{closing a measured host-filesystem escape})
@@ -829,7 +852,7 @@ emitting the call would collapse all thirteen into one textual relaxation, becau
 counts source tokens and a macro body is one token. \emph{That is gaming the instrument.}
 \end{warnbox}
 
-\crate{kayfabe-gsp}{5\,056}{\built{} (S0--S5) --- \textbf{and a real guest driver now writes into it}}
+\crate{kayfabe-gsp}{5\,497}{\built{} (S0--S5) --- \textbf{and a real guest driver now writes into it}}
 The faked GSP: the guest driver's entire picture of its GPU arrives through this crate. Eight
 modules. \code{ram} owns the guest-RAM port and walks the shared region's \emph{self-describing
 page table} (the region is allocated \code{NV\_MEMORY\_NONCONTIGUOUS}, so the C artifact's
@@ -863,7 +886,7 @@ most security-relevant thing in this document that is a sentence rather than a m
 remains a mechanism and is now one a real guest is on the other side of. \S\ref{sec:gsp} is about
 what remains.
 
-\crate{kayfabe-rmrpc}{3\,265}{\built{} --- \textbf{the bridge, and no longer an island}}
+\crate{kayfabe-rmrpc}{6\,098}{\built{} --- \textbf{the bridge, and no longer an island}}
 \textbf{Named by \file{crates/kayfabe-qemu-raw/Cargo.toml}, which is what retires the previous
 revision's headline about it.} Its whole entry point is still one signature:
 
@@ -901,7 +924,7 @@ descriptor-passing controls that a multi-tenant audit says should be denied are 
 allowlist, and the only thing stopping them mattering is that \textbf{the forward arm is
 unwritten} — \emph{which is a schedule, not a control} (\S\ref{sec:multitenant}).
 
-\crate{kayfabe-rt}{3\,009}{\built{} (L1-M1)}
+\crate{kayfabe-rt}{10\,079}{\built{} (L1-M1)}
 The threaded shell. \code{LockRank\{Device=0, Proc=1, Leaf=2\}} with an always-on (not
 \code{debug\_assert}) rank check that panics \emph{before} the OS acquire, so an inversion is
 deterministic. \code{SharedDevice} is the plan/execute/commit driver, and it ships \textbf{both}
@@ -909,7 +932,7 @@ lock modes — \code{Sharded} and \code{Degenerate} — from day one, tested as 
 configurations with a differential asserting a bit-identical end state, specifically so a late
 granularity change is never the untested mode.
 
-\crate{kayfabe-fwd}{4\,490}{\built{} --- and \textbf{part of it has now moved bytes on silicon}}
+\crate{kayfabe-fwd}{8\,509}{\built{} --- and \textbf{part of it has now moved bytes on silicon}}
 The entry points an adapter calls: \code{handle\_doorbell}, \code{publish\_backing},
 \code{parse\_pushbuffer} (the one parser: CE page-table-write capture, semaphore release,
 TLB invalidate, everything else opaque and passed through), \code{forward\_engine\_object} and
@@ -929,7 +952,7 @@ planned (\S\ref{sec:execplane}). \textbf{That is one path.} The doorbell path ha
 control long tail, the fence arms and the present route remain claims about NVIDIA's behaviour
 that nothing here has checked against NVIDIA.
 
-\crate{kayfabe-mocks}{4\,172}{\built{}, test-only --- \textbf{and where an invariant hid}}
+\crate{kayfabe-mocks}{4\,609}{\built{}, test-only --- \textbf{and where an invariant hid}}
 One deterministic fake per port, plus the shared verb recorder and the conservation ledger.
 Excluded from the mutation denominator on the argument that mutating an instrument is a category
 error. \emph{Strictly}, the crate is not confined to dev-dependencies: \code{tests/} and
@@ -949,7 +972,7 @@ belongs at the seam they share.} It was moved there — \code{IsolateBox::new} n
 turns the entire mock-driven suite into a live guard for it.
 \end{warnbox}
 
-\crate{kayfabe-vmm-kvm}{2\,706}{\built{} --- \textbf{defect \#57 CLOSED}}
+\crate{kayfabe-vmm-kvm}{2\,724}{\built{} --- \textbf{defect \#57 CLOSED}}
 The real KVM memory plane: real \file{/dev/kvm} file descriptors, real memslots, real vCPU
 run loops, MMIO exit classification. \textbf{Defect \#57 — which this paper twice printed as the
 reason the QEMU adapter had not been started — was closed at \code{020790c}}, and the shape of
@@ -958,7 +981,7 @@ lock order, or a syscall inside a critical section. It was \code{Arc} ownership}
 clone became the last one and \code{munmap} ran on a thread legally holding rank 0.
 \textbf{R1 is about blocking calls, and a \code{Drop} is a call site.}
 
-\crate{kayfabe-isolate}{2\,666}{\built{} traits --- \textbf{with real implementations now}}
+\crate{kayfabe-isolate}{4\,246}{\built{} traits --- \textbf{with real implementations now}}
 The port for the unprivileged host worker: \code{RmBackend} (12 verbs, all of which must be
 issuable unprivileged), \code{Isolate} (two-stage retire, cancellation, quiesce predicate),
 \code{IsolateFactory}. A \code{HostHandle} carries its \code{IsolateId}, so a cross-isolate
@@ -967,7 +990,7 @@ this crate — "no real implementation" — is retired by \code{kayfabe-isolate-
 \code{Worker::execute} is no longer "the single door": \code{IsolateBox::new} and
 \code{IsolateBox::drop} are now R1 doors too, closing birth and death of an isolate respectively.
 
-\crate{kayfabe-isolate-host}{9\,939}{\built{} --- \textbf{the real unprivileged host worker}}
+\crate{kayfabe-isolate-host}{21\,557}{\built{} --- \textbf{the real unprivileged host worker}}
 \textbf{New, and it is what makes half of this paper's hardware claims possible.} A sandboxed
 child process: capability-less, six fresh namespaces, holding \file{/dev/nvidiactl} and
 \file{/dev/nvidia0}, issuing real host RM ioctls. It carries three binaries —
@@ -984,7 +1007,7 @@ a real host. That is a defect the C artifact had found, fixed and documented, an
 rewrite reproduced before re-fixing it — a worked example of \emph{port the C and subtract its
 named bugs} failing on a bug that was named.
 
-\crate{kayfabe-trace}{1\,470}{\built{} vocabulary; \textbf{still not threaded}}
+\crate{kayfabe-trace}{1\,497}{\built{} vocabulary; \textbf{still not threaded}}
 The typed \code{TraceEvent} vocabulary, a \code{TraceSink} port, one-counter total ordering,
 perf-budget counters and a projection differential. It exists because the GSP milestone's oracle
 \emph{is} trace replay, so the replay format had to be defined before the harness that consumes
@@ -1002,7 +1025,7 @@ the restated F1 rule — \emph{assert a bound, never an absence} — as a concre
 than spinning. That restatement came from the mutation gate: three spin-versus-park mutants
 survived precisely because "never busy-poll" is an absence, and an absence is not observable.
 
-\crate{kayfabe-vmm}{914}{\built{} traits --- \textbf{and the agnosticism claim is now settleable}}
+\crate{kayfabe-vmm}{943}{\built{} traits --- \textbf{and the agnosticism claim is now settleable}}
 The hypervisor and display ports: \code{Vmm} (7 capability groups), \code{Device},
 \code{Present}. An eighth group — the memory-lock primitive — was \emph{removed} from the trait
 when it turned out to need no hypervisor cooperation on any backend, which is a good sign about
@@ -1014,7 +1037,7 @@ the layer diagram whose only implementors are test types} — the shipped QEMU p
 \code{GuestRam} and the register plane instead, so the trait was routed around rather than
 implemented, which is worth noticing before treating it as a live seam.
 
-\crate{kayfabe-device}{9\,832}{\built{} (L2 stage Q4) --- the chip table and register plane}
+\crate{kayfabe-device}{19\,577}{\built{} (L2 stage Q4) --- the chip table and register plane}
 \textbf{New.} Two things and nothing else: \code{ChipProfile}, one row per GPU generation
 carrying the PCI identity, the \code{GspModel} constructor, the silicon-constant registers and
 the VBIOS aperture; and \code{RegPlane}, the routing of one trapped register access into
@@ -1027,7 +1050,7 @@ encoder the guest reads through}. Adding a generation costs a module, a VBIOS ro
 appended table entry, and \file{tests/chip\_table.rs} proves that by \emph{doing} it with a chip
 whose register map is deliberately not GA10x.
 
-\crate{kayfabe-chips}{2\,735}{\built{} (L3) --- \textbf{the adapter contract, finally measured}}
+\crate{kayfabe-chips}{3\,202}{\built{} (L3) --- \textbf{the adapter contract, finally measured}}
 \textbf{New, and it exists to take one measurement.} The port plan had named the home of an
 \code{Arch} implementation as "an arch-impl crate" for months; \textbf{no such crate existed}, so
 \emph{"adding a generation is \code{impl Arch for <Gen>} in an adapter crate"} had never been
@@ -1043,22 +1066,22 @@ landing a second one changed \textbf{zero lines} of \code{kayfabe-gsp}, \code{ka
 the Ada module. \emph{Arch-specific boot code is legitimate and has to exist somewhere; the
 defect was that it was unhooked.}
 
-\crate{kayfabe-vmm-qemu}{5\,215}{\built{} (L2) --- the QEMU memory plane}
+\crate{kayfabe-vmm-qemu}{5\,852}{\built{} (L2) --- the QEMU memory plane}
 \textbf{New.} The second \code{Vmm} adapter: slot management, region classification, viewer
 installation, tiering. Under \code{forbid(unsafe\_code)} — all the \code{unsafe} is quarantined
 one crate over.
 
-\crate{kayfabe-qemu-raw}{3\,435}{\built{} (L2) --- \textbf{the composition root and the second \code{unsafe} crate}}
+\crate{kayfabe-qemu-raw}{18\,720}{\built{} (L2) --- \textbf{the composition root and the second \code{unsafe} crate}}
 \textbf{New, and it is the widest row in the dependency matrix.} A \code{staticlib} that a
 2\,676-line C QOM shim (\file{qemu/hw/misc/nvkvm/}) links into a stock QEMU 10.2.4 tree. It owns
 the FFI surface — \code{extern "C"} entry points, raw \code{MemoryRegion} handles, adoption of
-host pointers QEMU owns — at \textbf{47} audited \code{unsafe} relaxations, ratcheted separately
+host pointers QEMU owns — at \textbf{49} audited \code{unsafe} relaxations, ratcheted separately
 from \code{kayfabe-linux-raw}. Its bar started at \textbf{0} deliberately, \emph{"so that this
 had to be a reviewed commit rather than a manifest edit"}. \code{MachineRam} is the production
 \code{GuestRam}; \code{Regs::object\_model()} is the single composition root that the object
 bridge declares into and the doorbell rings.
 
-\crate{kayfabe-crec}{2\,030}{\built{}, harness-only --- the C-trace differential}
+\crate{kayfabe-crec}{2\,041}{\built{}, harness-only --- the C-trace differential}
 \textbf{New.} Decodes the committed C captures and replays them against the real
 \code{GspFsm}. Two committed traces (\code{cap1}, \code{cap1b}) are stored \emph{decompressed} so
 the harness needs no decoder and no third-party crate. \S\ref{sec:oraclelimits} is its output.
@@ -1068,14 +1091,14 @@ Per-process queues (pending $\to$ in-flight $\to$ awaiting-ack $\to$ ack), a dra
 delivery plane whose re-post is driven off \emph{the owner's own poll} (the starvation fix), and
 mapped-fence arms with the \#12 backwards-jump guard. Scored 100\% on the mutation gate.
 
-\crate{kayfabe-util}{739}{\built{}}
+\crate{kayfabe-util}{1\,796}{\built{}}
 \code{IntervalMap} (the address table's container, loud on overlap, empty and wrap), a
 \emph{virtual} \code{Instant} so no wall clock exists anywhere in the core, the
 \code{assert\_send\_sync!} compile-time gate, and the lock witness that invariant R1 asserts
 against. The witness lives here rather than in \code{kayfabe-rt} specifically so that
 \code{kayfabe-isolate}, which cannot depend on \code{rt}, can still assert it.
 
-\crate{kayfabe-arch}{2\,198}{\built{} traits --- \textbf{with three production implementations}}
+\crate{kayfabe-arch}{2\,942}{\built{} traits --- \textbf{with three production implementations}}
 The identity vocabulary (\code{HClient}, \code{HObject}, \code{Pdb}, \code{VChid},
 \code{ClassId}, \code{GpuVa}, \code{Gpa}, \code{GpuId}, \code{EngineKind}) and the Axis-B port
 set, which grew to include \code{GspModel}, \code{UserdModel}, \code{PushbufferAbi} and
@@ -1085,7 +1108,7 @@ has been settled by doing it.} There are three (\code{kayfabe-chips}), and the p
 partly favourable and partly not: Ada needed no seam, Hopper needed one, and \emph{the seam it
 needed was in this crate}.
 
-\crate{kayfabe-mmu}{3\,729}{table \built{}; \textbf{walker built; GPGA new}}
+\crate{kayfabe-mmu}{5\,128}{table \built{}; \textbf{walker built; GPGA new}}
 \code{AddressTable} is complete and is the enforcement point for the project's most-cited
 directive: forward-populate only, unbind eagerly, and \textbf{a miss is a fault} — no reverse
 resolve, no heuristic pick, no MRU fallback exists anywhere in the codebase.
@@ -1099,8 +1122,8 @@ beside \code{gpga.rs} (1\,390 lines), the guest-physical address space, and \cod
 reachability-on-transition machinery.
 
 \subsection*{\texttt{tests/} --- the conformance suite}
-118\,160 lines of test code against 120\,979 lines of implementation. There are \textbf{65} files
-in \file{tests/tests/} and \textbf{67} more under \file{crates/*/tests/}, plus a \code{Scenario}
+158\,170 lines of test code against 198\,021 lines of implementation. There are \textbf{106} files
+in \file{tests/tests/} and \textbf{96} more under \file{crates/*/tests/}, plus a \code{Scenario}
 DSL in \file{tests/src/}. The suite is a workspace member with a \code{[lib]}, which is why
 \code{kayfabe-mocks} compiles as a normal dependency. \textbf{★ Note the ratio flipped}: at the
 previous pin test code exceeded implementation by 16\% and this paper listed that as a risk;
@@ -1241,6 +1264,7 @@ GL1--GL13 &
 \end{longtable}}
 
 \subsection{The two-layer trust model}
+\label{sec:trust}
 
 One normative rule deserves its own space, because it decides designs and because it is the
 cleanest statement the project has produced:
@@ -1304,13 +1328,18 @@ a device.
 \toprule
 \textbf{Measurement} & \textbf{Value} & \textbf{How} \\
 \midrule
-Tests reported green & \textbf{2\,007} &
-  \code{cargo test --workspace --no-fail-fast} \emph{with \code{KAYFABE\_NO\_KVM} unset}, on the
-  RTX 3060 bench, recorded at \code{3ab1305} — \unver{} here, since no \code{cargo} was run for
-  this revision either. \emph{Was 651.} The progression is recorded per increment: 1\,835
-  $\to$ 1\,851 $\to$ 1\,895 $\to$ 1\,960 $\to$ 1\,975 $\to$ 1\,986 $\to$ 2\,007 \\
-\code{\#[test]} attribute sites & 2\,034 & grep over workspace members; excludes the
-  detached generator and the \code{trybuild} ui fixtures \\
+Tests reported passing & \textbf{2\,926} &
+  \code{cargo test --workspace --no-fail-fast} on the RTX 3060 bench, recorded at \code{9871d315}
+  (2026-08-14). \emph{Was 651, then 2\,007.} \unver{} here — no \code{cargo test} was run for this
+  revision \\
+\textbf{Tests standing RED at master} & \textbf{7 on 4 targets} &
+  \textbf{★★★ The previous revision printed a green count with no red count beside it, and there
+  has been a standing red set the whole time.} It is enumerated in
+  \file{docs/design/hardware\_test\_tier.md} \S6 and re-verified at w329; the count itself
+  \emph{"moved and was mis-stated twice"} (6/3, then 7/3, then 7/4). \emph{A pass count without a
+  fail count is not a result} \\
+\code{\#[test]} attribute sites & \textbf{2\,985} & grep over workspace members; excludes the
+  detached generator and the \code{trybuild} ui fixtures. \measured{} here \\
 \code{proptest!} blocks & 16 & each is one test that runs many cases \\
 Checked-in proptest failures & \textbf{20 seeds, 4 files} &
   Unmoved since the previous revision. \textbf{★ This paper said "0" two revisions ago and that
@@ -1323,8 +1352,17 @@ Compiled \code{ogkm} oracles & \textbf{5 families} & VBIOS, GMMU-format, work-su
   pushbuffer, USERD-chid — each compiles NVIDIA's \emph{own} encoder as the oracle \\
 TSan targets & 4 files & nightly only \\
 Fuzz targets & 1 & \code{parse\_pushbuffer}; CI compiles it, does not run it \\
-Implementation lines & 120\,979 & \code{crates/*/src/**/*.rs}, excluding the detached generator \\
-Test lines & 118\,160 & \code{tests/}, \code{crates/*/tests/}, \code{fuzz/} \\
+Implementation lines & \textbf{198\,021} & \code{crates/*/src/**/*.rs}, excluding the detached
+  generator. \measured{} here \\
+Test lines & \textbf{158\,170} & \code{tests/}, \code{crates/*/tests/}. \measured{} here \\
+\code{cargo fmt --all --check} & \textbf{RED, 40 files} & \measured{} here, at \code{0f577b15},
+  \code{rustfmt 1.9.0-stable}. \textbf{★ And it cannot be attributed}: \file{rust-toolchain.toml}
+  pins \code{channel = "stable"}, not a version, so the gate's own definition of correct moves
+  underneath the tree — the project's bench notes record the same toolchain \emph{"reformatting 62
+  files of untouched master"}. \emph{This is a gate that can go red with no commit} \\
+\code{cargo clippy -D warnings} & \textbf{RED, 5 errors} & Recorded red at master since at least
+  \code{72f902f} (2026-08-14), at \file{proto.rs:118}, \file{rmgraph.rs:584} and three sites in
+  \file{rm.rs}. \unver{} here — not run \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -1340,7 +1378,7 @@ affordable on every change.
 \subsection{The CI gates --- and the gate that GitHub cannot be}
 
 There is one workflow file with six jobs, and the \code{stable} job grew from fourteen steps to
-\textbf{twenty-three}. Seven of the nine new ones are \emph{reached-count} floors for oracle
+\textbf{twenty-four}. Seven of the nine new ones are \emph{reached-count} floors for oracle
 families that only exist on a box with the vendored NVIDIA trees, plus an
 \emph{ABI-quarantine} gate, an \emph{ogkm-version-tag} gate (every NVIDIA citation names its
 tree) and \textbf{the claim-ledger gate} described below.
@@ -1371,14 +1409,15 @@ smaller true statement.}
 \end{claimbox}
 
 \subsection{The claim ledger --- a gate on the paper's own vocabulary}
+\label{sec:ledger}
 
 The most unusual instrument in the repository, and the one this document is itself held to.
 \file{scripts/claim\_ledger.py} sweeps every tracked Rust source and design document, finds every
 prose \emph{block} making an epistemic claim (\emph{measured}, \emph{observed}, \emph{verified},
 \emph{confirmed}, \emph{proven}), and asks one question of each: \textbf{does the block name what
 is behind the claim?} It classifies into \measured{} / \inferred{} / \assumed{} /
-\textsc{unattributed}, and enforces three bars, currently \textbf{382 unattributed (a ceiling),
-66 conflated (exact), 17 bare-hardware (exact)}.
+\textsc{unattributed}, and enforces three bars: \textbf{381 unattributed (a ceiling), 66 conflated
+(exact), 17 bare-hardware (exact)}.
 
 \textbf{The middle class is the named failure mode.} \textsc{conflated} means a block says
 \emph{measured} or \emph{proven} and the only thing behind it is a \emph{citation into source} —
@@ -1406,8 +1445,44 @@ the wrong one: a gate that penalises the behaviour it is for teaches people to s
 down.}
 \end{claimbox}
 
-\textbf{This document was checked against that gate} (\S\ref{sec:method}), and the ledger stands
-at 382/66/17 with it. ⊘ \emph{With one honest note}: \code{.tex} is not in the gate's universe —
+\begin{warnbox}\small
+\textbf{★★★ And at this pin the gate is RED, which the previous revision could report as green and
+this one cannot.} \measured{} here, \code{scripts/claim\_ledger.py --gate} at \code{0f577b15},
+\textbf{exit 1}:
+
+\begin{center}\small
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+\textbf{class} & \textbf{count} & \textbf{bar} & \\
+\midrule
+\textsc{unattributed} & 1\,166 & 381 & ceiling — \textbf{3.1$\times$ over} \\
+\quad\textsc{conflated} & 90 & 66 & exact \\
+\quad\textsc{bare-hardware} & 36 & 17 & exact \\
+\midrule
+\multicolumn{4}{@{}l@{}}{\emph{for scale}: \measured{} 2\,167 \quad \inferred{} 857 \quad
+\assumed{} 136} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\smallskip
+\textbf{The bars have not been touched since \code{1227babe}, 2026-07-31}, while the tree tripled
+and roughly forty directories of committed bench artifacts (\file{traces/**/*.md}) entered the
+gate's universe — which is derived from \code{git ls-files}, so committing a trace README
+containing the word \emph{measured} moves the number with no source change at all.
+
+\smallskip
+⊘ \textbf{Two readings, and this paper will not choose between them without a measurement it did
+not take.} Either the tree really has accumulated 785 new unattributed claims, or the gate's
+universe grew in a way its bar was never re-derived for. \textbf{Both are failures of the same
+kind} — a ratchet whose denominator moves is not a ratchet — and the project's own doctrine names
+the second one exactly: \emph{"a gate quantified over a hand-list is a smaller true statement"},
+here inverted into \emph{a gate quantified over a growing derived set is a bar that means
+something different every week}. What is \emph{not} in doubt is that the authoritative local gate
+run (\file{scripts/ci\_gates.sh --all}) cannot currently reach a clean exit.
+\end{warnbox}
+
+⊘ \textbf{And one honest note that has not changed}: \code{.tex} is not in the gate's universe —
 it sweeps \code{*.rs} and \code{*.md} — so \textbf{the whitepaper is the one artifact in this
 repository the claim ledger does not police}, which is worth knowing before trusting any
 \emph{measured} in it more than the design document it came from.
@@ -1418,7 +1493,7 @@ repository the claim ledger does not police}, which is worth knowing before trus
 \textbf{Job} & \textbf{When} & \textbf{What it asserts} \\
 \midrule
 \code{stable} & every push + PR &
-  \textbf{Twenty-three steps}: build; \textbf{test with KVM forced absent}; \emph{six}
+  \textbf{Twenty-four steps}: build; \textbf{test with KVM forced absent}; \emph{six}
   reached-count floors (KVM, sandbox, VBIOS-oracle, GMMU-oracle, token-oracle,
   pushbuffer-oracle, USERD-chid-oracle); clippy \code{-D warnings}; \code{fmt --check}; the
   hexagonal-boundary grep; the VMM-vocabulary grep; \textbf{the generation-name grep} (no
@@ -1427,7 +1502,7 @@ repository the claim ledger does not police}, which is worth knowing before trus
   host-pointer gate; the GPA-accessor gate; the bridge-exclusivity gate; \textbf{the
   ogkm-version-tag gate} (every NVIDIA citation names its tree, ratcheted at 161 untagged);
   \textbf{the claim-ledger gate}; three unsafe-containment asserts including the
-  \textbf{two-crate ratchet at 87 and 47}; and \code{fmt --check} for the fuzz workspace. \\
+  \textbf{two-crate ratchet at 91 and 49}; and \code{fmt --check} for the fuzz workspace. \\
 \code{aarch64} & every push + PR & \code{cargo check --workspace --target
   aarch64-unknown-linux-gnu} \\
 \code{nightly-fuzz} & every push + PR & the fuzz harness \emph{compiles} \\
@@ -1438,6 +1513,27 @@ repository the claim ledger does not police}, which is worth knowing before trus
 \bottomrule
 \end{tabularx}
 \end{center}
+
+\begin{warnbox}\small
+\textbf{★★ Two of the steps in that table are RED on \code{master} and have been for at least a
+week, and the previous revision of this paper listed them as things CI asserts.}
+\code{cargo fmt --all --check} fails on \textbf{40 files} (\measured{} here) and
+\code{cargo clippy --workspace --all-targets -- -D warnings} fails with \textbf{5 errors}
+(recorded at \code{72f902f}, not re-run here). The consequence is stated in the project's own
+words: \emph{"\code{ci\_gates.sh --all} runs both, so the authoritative local gate run cannot
+currently reach a clean exit for a reason that has nothing to do with any rung's change."}
+
+\smallskip
+★ \textbf{And the \code{fmt} red is not attributable, which is the more interesting half.}
+\file{rust-toolchain.toml} pins \code{channel = "stable"} — a \emph{moving} channel, not a version
+— so what "formatted" means changes underneath the repository whenever the toolchain updates, and
+the bench notes record this exact toolchain \emph{"reformatting 62 files of untouched master"}.
+⊘ This paper therefore cannot say whether 40 files drifted or \code{rustfmt} did. \textbf{A gate
+that can go red with no commit is a gate whose red carries no information}, and it is the same
+species as everything in \S\ref{sec:drift}: not a wrong statement, a statement whose subject
+moved.
+\end{warnbox}
+
 
 \subsection{Exercised versus merely present --- the project's own core doctrine}
 
@@ -1731,138 +1827,147 @@ was wrong — and because this is the clearest example in the file of the failur
 document exists to resist: a chain of assertions read as a chain of causes."} A project that
 writes that down about itself is a project whose other claims are worth more.
 
-\subsection{\texorpdfstring{★★★ The execution plane is the wall, and it cannot be faked}{The execution plane is the wall, and it cannot be faked}}
+\subsection{\texorpdfstring{★★★ The execution plane was the wall --- and it was crossed}{The execution plane was the wall --- and it was crossed}}
 \label{sec:execplane}
 
 \begin{claimbox}\small
-\textbf{This is the section that replaces every previous revision's headline}, and its shape is
-different from theirs. The last three said, in various words, \emph{"the critical path is one
-layer up."} It never was. \textbf{The critical path was always the plane where a real engine has
-to move real bytes, and no amount of protocol work reaches it.}
+\textbf{This section replaced every previous revision's headline, and then was itself falsified.}
+The previous revision's version read: \emph{"the critical path was always the plane where a real
+engine has to move real bytes, and no amount of protocol work reaches it"}, with a specific,
+well-cited prediction of where the boot would keep dying. \textbf{It was right about the kind of
+problem and wrong about its finality.} The plane was crossed in eleven days, and this section is
+now the account of \emph{how}, which is more useful than the wall was.
 \end{claimbox}
 
-\subsubsection*{How the wall was found, and why it is not a control}
+\subsubsection*{What the wall was, and why it could not be answered with a protocol}
 
-The boot climbed. Rung after rung, a control was served, the guest advanced, and a new control
-was demanded — the ordinary shape of this work, and the record of it runs to seventeen hundred
-lines of dated, revision-stamped boot log. Then it stopped being that shape.
+Partway through initialisation the guest driver stops asking questions and runs an experiment.
+\code{memmgrInitCeUtils\_IMPL} calls \code{memmgrTestCeUtils} unconditionally: it writes
+\code{0xAABBCCDD} to framebuffer, issues \code{memmgrMemCopy} with
+\code{TRANSFER\_FLAGS\_PREFER\_CE}, reads it back, and asserts \code{sysmemData == vidmemData}.
+\textbf{A functional end-to-end test of the copy engine with a read-back comparison. There is no
+control-shaped answer to it.} Its status returns through \code{NV\_ASSERT\_OK\_OR\_RETURN} into a
+\code{kernel\_fifo.c} arm that is \code{NV\_ASSERT(0)}, fatal for any non-\code{NV\_OK} in this
+phase, so the pre-init sweep's \emph{"\code{NV\_ERR\_NOT\_SUPPORTED} = amputate and carry on"}
+rule does not apply.
 
-The guest dies in the memory manager's scrubber, constructing \code{CeUtils}. \inferred{} from
-source and immediately past that point, \code{memmgrInitCeUtils\_IMPL} calls
-\textbf{\code{memmgrTestCeUtils} unconditionally}: it writes \code{0xAABBCCDD} to framebuffer,
-issues \code{memmgrMemCopy} with \code{TRANSFER\_FLAGS\_PREFER\_CE}, reads it back, and asserts
-\code{sysmemData == vidmemData}. \textbf{A functional end-to-end test of the copy engine with a
-read-back comparison. There is no control-shaped answer to it.} Its status returns through
-\code{NV\_ASSERT\_OK\_OR\_RETURN} into a \code{kernel\_fifo.c} arm that is \code{NV\_ASSERT(0)} —
-\textbf{fatal for any non-\code{NV\_OK} in this phase}, so the pre-init sweep's
-"\code{NV\_ERR\_NOT\_SUPPORTED} = amputate and carry on" rule does not apply here.
+Every escape hatch was closed by citation, and one structurally: the Blackwell-only skip takes the
+\code{else} arm on GA106; \code{bDisableGlobalCeUtils} requires modifying the guest, which is
+outside "stock, unpatched"; the \code{IS\_VIRTUAL\_WITHOUT\_SRIOV} arm makes the interrupt
+self-test permanently unpassable; and \code{!IS\_SILICON} \textbf{does not exist} — the three flags
+behind it are declared in the driver's own headers and \emph{assigned nowhere in the tree}, so it
+is constant true. \emph{This is not a lie we decline to tell; it is a lie we cannot tell.}
 
-\begin{warnbox}\small
-\textbf{Every escape hatch is closed, by citation, and one of them is closed in an unusual way.}
-The Blackwell-only property that skips the test takes the \code{else} arm on GA106; the
-\code{bDisableGlobalCeUtils} regkey requires modifying the guest, which is outside "stock,
-unpatched"; the \code{IS\_VIRTUAL\_WITHOUT\_SRIOV} arm makes the interrupt self-test permanently
-unpassable; the scrubber's own gate is cleared only by build configurations we do not have.
+\textbf{★★★ That analysis was correct, and the conclusion drawn from it was wrong in an
+instructive way.} The reading was \emph{"the driver demands a real copy engine, therefore the
+remaining problem is the copy engine"}. The actual remaining problem was that the driver demands
+\textbf{a real GPU behind every plane it touches} — and the way through was not to satisfy this
+one test but to stop treating the planes as separable. The engine executes; we do not answer for
+it. \S\ref{sec:ladder} is what that took.
 
-\smallskip
-★★★ And the obvious lever, \code{!IS\_SILICON}, \textbf{does not exist}. \code{IS\_SILICON} is
-\code{!(IS\_EMULATION || IS\_SIMULATION)}; the three flags behind it are \textbf{declared in the
-driver's own headers and assigned nowhere in the tree}, and the emulation property is never set
-either. It is structurally constant true. \emph{This is not a lie we decline to tell; it is a lie
-we cannot tell.}
+\subsection{\texorpdfstring{★★★★★ The ladder to first compute --- \code{cup2} $\to$ \code{cup3} $\to$ \code{cup8}}{The ladder to first compute}}
+\label{sec:ladder}
 
-\smallskip
-⊘ \textbf{And the C artifact does not rescue us.} Its per-control synthesis ladder is for
-\emph{incomplete captures}. The C reached this same point and needed a \textbf{real CE}.
-\end{warnbox}
-
-\textbf{⊘ The honest limit, and this paper marks it because the design record does.} \textbf{No
-boot has ever reached \code{memmgrTestCeUtils}} — the deepest one died at
-\code{objCreate(CeUtils)}, two statements short. That specific wall is \inferred{} from source,
-never \measured{}. What \emph{is} measured is that the driver demands a scheduled channel with an
-armed completion and a work-submit token, and that serving those individually walks the boot from
-each to the next without changing kind.
-
-\subsubsection*{E0--E7: what was built, and the two things it establishes}
-
-Eight increments, each with a named run at a named revision on named hardware.
+Every rung below is a boot on a real RTX 3060 (GA106) with host driver \textbf{580.159.04 open}, a
+\textbf{stock, unpatched} guest NVIDIA driver, QEMU 10.2.4 with the QOM shim, and a named source
+revision embedded in the binary and checked by a stamp gate before the run is graded.
 
 \begin{center}\small
-\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}X@{}}
 \toprule
-\textbf{Increment} & \textbf{What it built, and what a boot then measured} \\
+\textbf{Rung} & \textbf{Metric} & \textbf{What it does and does not establish} \\
 \midrule
-\textbf{E0} & The isolate plane becomes selectable at runtime. ★ The boot \textbf{falsified} the
-  claim it was built on: the spawn was \code{realize}-time, ${\sim}28$\,s \emph{before} the guest
-  opened the device. \\
-\textbf{E0b} & Spawn made lazy, so it follows the guest's action. Re-measured, not assumed: child
-  at \code{t+33\,s} against a device open at \code{t+31\,s}, and a fault-injected arm goes red. \\
-\textbf{E1} & An isolate can \emph{refuse} and say why; a census the device prints on teardown. \\
-\textbf{E2} & A guest MMIO write reaches \code{SharedDevice::doorbell}. ⊘ And the same run
-  measured that \textbf{the guest driver rings no doorbell at this wall} — 0 arrived across boot,
-  \code{modprobe} and device open. \\
-\textbf{E3} & The doorbell token decode, settled by compiling NVIDIA's \emph{own} generator as an
-  oracle, then paired against six real tokens on hardware. ⊘ The runlist field could not be
-  reached: the control that would give it is \code{KERNEL\_PRIVILEGED} and refuses \emph{root}. \\
-\textbf{E4} & The GA10x USERD model and pushbuffer codec. ★ It \textbf{refuted its own seam}: a
-  real CE copy is \emph{five} method runs and the launch method carries none of its operands, so
-  a stateless per-method decoder is structurally incapable. ⊘ No boot — every number from
-  NVIDIA's macros on a build box. \\
-\textbf{E5} ◐ & Pushbuffer reads now \emph{translate} through the address table. \textbf{PARTIAL},
-  and asserted so by a test that goes red the day it stops being partial: the CE page-table-write
-  populate source witnesses a root page and no further. \\
-\textbf{E6} & \textbf{The join.} \code{CeEvidence::copied() == true} on real hardware. \\
-\textbf{E7} & The R1 spawn deferral (\S\ref{sec:r1}) — the real isolate plane can be switched on
-  at all. \\
+\code{cup2} & \code{CUP2\_RC=0} &
+  A CUDA \emph{copy-engine} round trip: \code{cuCtxCreate}, \code{cuMemAlloc},
+  \code{cuMemcpyHtoD}/\code{DtoH}. ⊘ \textbf{Not compute}, and the project renamed it to say so.
+  Its 4-byte transfer does not even use a copy engine on real hardware — it is the compute class's
+  I2M unit with the payload as a \emph{pushbuffer literal}, so a passthrough is correct by
+  construction and proves nothing about an engine. \\
+\addlinespace
+\textbf{\code{cup3}} & \textbf{\code{CUP3\_VAL=43}} &
+  \textbf{★★★★★ FIRST COMPUTE.} \measured{} 2026-08-14, rev \code{0655e6aa},
+  \file{traces/w297\_cup3/}. A JITed PTX kernel computes \code{out = in*3 + 1} on \code{in = 14}.
+  \textbf{43 is unforgeable in this stack}: a copy engine copies and memsets, our emulator has no
+  arithmetic, and a forged completion carries a payload \emph{we} chose. ⇒ the host GA106
+  \textbf{GR} engine executed the guest's shader. Reproduced \textbf{6/6}. \\
+\addlinespace
+\code{cup8} & \code{bad=0 maxerr=0} &
+  \textbf{Byte-exact matmul at scale.} \code{N=2048}, 16\,MiB per matrix, 48\,MiB device,
+  \code{grid=(128,128) block=(16,16)}, \file{traces/w308\_cup8/}; and again at \textbf{N=3072}
+  (36\,MiB operands) over 12 iterations, \file{traces/w327\_cliff/}. \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\paragraph{★★ What E6 establishes, stated as narrowly as the evidence allows.} On an RTX 3060
-(GA106) with host driver 580.159.04 open, twice at two revisions with byte-identical evidence: a
-real GA10x GPFIFO entry naming five real CE method runs went through \code{read\_pushbuffer}
-$\rightarrow$ \code{decode\_run} $\rightarrow$ \code{partition\_ce} $\rightarrow$ \code{plan\_ce}
-$\rightarrow$ \code{Worker::execute} $\rightarrow$ a real host copy engine. 4\,096 bytes moved,
-the release semaphore landed, and the destination read back correct \emph{through an independent
-second mapping} — first word and last. \textbf{The predicate was watched to fail first}, on the
-same hardware, with a live mutation: setting the copy's source to its destination left the engine
-executing a copy that \emph{moved nothing}, and the evidence said so.
-
 \begin{warnbox}\small
-\textbf{⊘ And what it does not establish, which the test says in its own header.} \textbf{(1) No
-live guest drove it} — it is a guest's \emph{bytes} and a guest's \emph{declarations}, not a
-booted guest's submission, because a booted guest dies before it ever rings. \textbf{(2) Nothing
-about the sandboxed isolate} — the acceptance runs an \emph{in-process} backend, because a
-CPU mapping and a witness both die at the process boundary. \textbf{(3) Nothing about guest RAM}
-— the method words live in a mock; no hypervisor is running. \textbf{(4) Nothing about the
-completion plane} — nothing is rung for the guest and no interrupt is raised.
+\textbf{⊘ Four things the ladder does not establish, each recorded by the run that produced it
+rather than found by a critic.}
 
 \smallskip
-★ \textbf{And it needed two arms because a published backing is CPU-opaque by design.} The first
-draft died at its own sentinel write: memory minted for the GPU carries a no-map flag, so
-\code{NV\_ESC\_RM\_MAP\_MEMORY} refuses it — the sentinel cannot be written and the answer cannot
-be read. Arm 1 (published at the guest's own VAs) proves the \emph{address} plane; arm 2
-(hand-mapped, device-local) proves the \emph{bytes}. \textbf{Neither substitutes for the other},
-and relaxing the flag to make the diagnostic work would have been changing the product to fit its
-instrument.
+\textbf{(1) Every green is a RELAXED green, and the relaxations are named.} \code{cup3} ran with
+\code{KAYFABE\_PT\_SWEEP=on} and \code{KAYFABE\_OPERAND\_JOIN=join} carried from \code{cup2}'s
+arming — and the run's own record says \emph{"a relaxed green is a MAP, not the milestone"},
+listing removing them one at a time as the natural next rung. ★ The arming was verified from the
+device's own emissions rather than from the environment, \emph{because a boot happening is not an
+arm running}.
+
+\smallskip
+\textbf{(2) \code{n} is small and this project has measured its own false-negative rate.} A
+single-boot \code{43} is \textbf{wrong 1 time in 5} on these boxes. \code{cup3} was 1 boot when
+first claimed and 6/6 by the time it was believed; \code{cup8} at \code{N=2048} is fewer.
+
+\smallskip
+\textbf{(3) It is one shape of work on one part.} \code{cup3} is a \textbf{1$\times$1$\times$1
+launch of a six-instruction shader}: it says nothing about occupancy, multi-block dispatch, shared
+memory, barriers or throughput. Everything is GA106, 580.159.04, one guest kernel, \textbf{one
+guest CUDA process at a time}.
+
+\smallskip
+\textbf{(4) The bench is nested and that now matters.} The rented box is itself a VM, so the
+Mode-2 guest is L2. The nested-virt tax is bounded at $\leq 2.2$\,ms/launch — which was 2.6\% of
+an 85\,ms doorbell trap and is \textbf{up to 55\% of a 4\,ms one}. ⇒ \emph{Bare metal matters more
+now precisely because the doorbell path got fast.}
 \end{warnbox}
 
-\paragraph{★★★ The control found a hang, and it is the better finding.} E6's own control arm —
-"the same boot with the real plane off must \emph{not} produce this" — turned up a defect that
-the acceptance could not have. \code{Isolate::checkout} answers \code{None} for two conditions
-its own documentation runs together: \emph{the pool is saturated}, and \emph{the isolate is
-retired and refuses new checkouts}. The forwarding layer passed both up identically, and the
-device treats that as \emph{backpressure}: drop the locks, park on the pool gate, re-enter. The
-shipped default plane is a stillborn isolate with pool width \textbf{zero}, retired at birth — so
-the generation never moves and \textbf{the vCPU thread parks forever}. It was unreachable until
-E6 only because nothing had ever routed as far as a checkout, and \textbf{the configuration that
-hangs is the shipped default}.
+\subsubsection*{★★ How the boot got through, in the terms a reader can check}
 
-\textbf{And the first fix was wrong in the way this project keeps being bitten.} It changed one
-function. Every unit test went green — and the test named
-\code{a\_permanently\_dead\_isolate\_is\_REFUSED\_and\_does\_not\_park\_forever} still \emph{timed
-out}, because the threaded path does not go through that function. \emph{A mutation must be shown
-to change behaviour on the path the product takes, not merely to change bytes.}
+The mechanism is not one fix; it is one invariant, and the C artifact stated it in its own source
+before the Rust port re-derived it the hard way: \emph{"a mapping is always backed before the
+engine that uses it runs."} The port's version has \textbf{three co-equal population sources},
+which is one more than either project's design documents claimed for most of the campaign:
+
+\begin{enumerate}[itemsep=0.3ex]
+\item \textbf{An RPC capture.} \code{NV2080\_CTRL\_CMD\_GPU\_PROMOTE\_CTX} (\code{0x2080012b}) is
+  snooped in flight and its \code{\{gpuPhysAddr, gpuVirtAddr, size, physAttr\}} entries folded into
+  the address table. This is the source both trees' documents kept omitting.
+\item \textbf{A doorbell-time sweep of the guest's GR page tables}, re-swept when a tracked
+  page-table page is written.
+\item \textbf{The observed CE page-table write}, decoded and latched at the completion-semaphore
+  release — the commit point that replaces the TLB invalidate, \emph{which on this path does not
+  occur} (\S\ref{sec:trust}).
+\end{enumerate}
+
+\textbf{★ And one difference between the two implementations turned out to be load-bearing, at the
+granularity of a single line.} The C rounds every promote-derived mapping \emph{up to 64\,KiB}
+before mapping it (\code{asize = (size + 0xffff) \& ~0xffffull}). The Rust port originally bound at
+the \emph{declared} length, which produced non-page-aligned rows and a \textbf{sub-page hole} —
+2\,560 bytes the port's own \code{resolve} answered \code{Miss} for, inside a page the guest had
+mapped. \textbf{The C could not have that hole; the port had it by construction.} The C also
+treats \code{NV\_ERR\_NO\_MEMORY} on a \code{FIXED} map as \emph{success} — it means the VA is
+already mapped in the host VAS — a semantic the port had to match or it would refuse exactly the
+context buffers the host RM had already placed.
+
+\subsubsection*{★ And a whole class of walls turned out to be one wall}
+
+Six months of this campaign chased faults one at a time: pushbuffer VAs, the semaphore page, the
+CE operand, its extent, the GR write. \textbf{Each is one instance of the same missing invariant},
+and the C artifact went green \emph{without servicing or forwarding a single GPU fault} — there is
+no fault-buffer emulation anywhere in it — because publishing the whole working set before the
+engine runs makes that class of fault \textbf{impossible} rather than handled.
+
+⊘ \textbf{The honest cost of that design is stated in \S\ref{sec:perf}}: publishing the working set
+before every submission is what makes our doorbell handler the dominant term in a kernel launch.
+\emph{The correctness argument and the performance problem are the same mechanism.}
 
 \subsection{\texorpdfstring{★★ A trace of a boot that SUCCEEDS --- and the ladder, enumerated}{A trace of a boot that SUCCEEDS --- and the ladder, enumerated}}
 \label{sec:recorder}
@@ -1973,15 +2078,22 @@ establishes what an uninstrumented driver issues}. ⚠ For the same reason this 
 it a stock-driver capture: it is real GA106 silicon and real GSP firmware, with the CPU-side
 driver rebuilt from stock \emph{source} plus two hooks.
 
-\subsection{\texorpdfstring{★ The bridge exists --- and it does \emph{not} unlock compute}{The bridge exists --- and it does not unlock compute}}
+\subsection{\texorpdfstring{★ The bridge, and the two NVIDIA findings that survived being right}{The bridge, and the two NVIDIA findings that survived being right}}
 \label{sec:bridge}
 
 \begin{claimbox}\small
-\textbf{This section replaces the previous revision's headline, which was: "the critical path is
-the bridge, not the crate."} The bridge is built. It was designed first
-(\file{docs/design/gsp\_core\_bridge.md}, 865 lines) and then built in four stages, each
-independently green, each recording where the design met the compiler. If you only read one thing
-about it, read \S2.7 of that design document, which is the finding that changed the roadmap.
+\textbf{This section has been the paper's headline twice and been falsified twice.} Revision two:
+\emph{"the critical path is the bridge, not the crate."} Revision four: \emph{"the bridge exists
+and it does \emph{not} unlock compute."} \textbf{Compute is unlocked} (\S\ref{sec:ladder}), so the
+second is retired with the first.
+
+\smallskip
+★ \textbf{What is worth keeping is the part that was a claim about NVIDIA rather than about our
+schedule}, and both such claims held up. They are stated below unchanged, because \emph{they are
+the reason the address plane had to be built out of three unusual sources instead of the obvious
+one} — and a reader who wants to know why this system's address table looks the way it does will
+find the answer here rather than in the architecture section. If you read one supporting document,
+read \S2.7 of \file{docs/design/gsp\_core\_bridge.md}.
 \end{claimbox}
 
 \subsubsection*{What was built}
@@ -2013,15 +2125,18 @@ own generated HAL tables; the C artifact, which booted a real GA106 guest to CUD
 two C-era design documents that say it in words — \emph{"there is no per-map GSP-RPC carrying
 VA$\leftrightarrow$phys"}.
 
-\textbf{The consequence, stated so nobody reads the bridge as one stage from compute.} The
-address table's populate sources are the \code{GPU\_PROMOTE\_CTX} control and \textbf{CE
-page-table-write capture} — and both are \code{kayfabe-fwd} / \code{kayfabe-mmu} work in
-different crates, neither of which is built. \code{GPU\_PROMOTE\_CTX} is not even shaped like an
-\code{RmEvent}: it declares a \emph{set} of \code{(gpuPhysAddr, gpuVirtAddr, size, bufferId)}
-entries, which is an address-table population rather than an object-model edge, so it does not
-belong in this seam and was deliberately left out of it. Finishing the bridge to B6 would give a
-complete object model from wire bytes and \textbf{still} leave the address plane empty. The
-compute path is not one stage away; it is a different plane.
+\textbf{★★ The consequence, and it is the one prediction in this paper that was both correct and
+acted on.} If no RPC carries VA$\leftrightarrow$phys, then the address table cannot be populated
+from the object model at all, and \emph{finishing the bridge would leave the address plane empty}.
+That is what the previous revision said, and it was right: the compute path was never one bridge
+stage away, it was a different plane. \textbf{So the different plane was built}, out of the three
+sources \S\ref{sec:ladder} enumerates — the \code{GPU\_PROMOTE\_CTX} snoop, the doorbell-time GR
+page-table sweep, and the CE page-table write latched at the release semaphore. None of them is an
+\code{RmEvent}; \code{GPU\_PROMOTE\_CTX} in particular declares a \emph{set} of
+\code{(gpuPhysAddr, gpuVirtAddr, size, bufferId)} entries, which is an address-table population
+rather than an object-model edge, and it was deliberately kept out of this seam for that reason.
+\emph{The seam discipline held: a fact that is not object-model shaped did not get forced through
+the object-model door.}
 
 \subsubsection*{\texorpdfstring{★ \code{SET\_PAGE\_DIRECTORY} is not how an ordinary address space declares its root}{SET_PAGE_DIRECTORY is not how an ordinary address space declares its root}}
 
@@ -2728,7 +2843,7 @@ host pointer QEMU owns — all \code{unsafe}. The workspace's CI gate exists to 
 surface at \emph{one} crate readable in one sitting, and its own failure text says adding a
 second is "a design decision, not a manifest edit". \textbf{That decision was taken and the
 price was paid in full}: \code{kayfabe-qemu-raw} is the second audited \code{unsafe} crate at
-\textbf{47} relaxations, the ratchet is now a named two-element list, and the acceptance
+\textbf{49} relaxations, the ratchet is now a named two-element list, and the acceptance
 criterion the gate protects \emph{is} "read two crates". ★ Its bar started at \textbf{0}
 deliberately, so the first relaxation had to be a reviewed commit rather than a manifest edit —
 and the crate's first act as an FFI consumer was to prove the ratchet's own counting pattern
@@ -2924,7 +3039,7 @@ knew it was second-hand. The claim that did not survive was marked \textbf{RESOL
   unmeasured} (\S\ref{sec:oraclelimits}). 16 truncated rows — more than the 11 empty ones — have
   never been checked, and a truncated row passes the test built to catch the empty ones.
 \item \textbf{★ The security review of the new FFI surface is the declared exit gate of the L2
-  work and has not been done}, while the surface itself is now 47 audited \code{unsafe}
+  work and has not been done}, while the surface itself is now 49 audited \code{unsafe}
   relaxations in a crate a hypervisor calls directly. There is no \code{seccomp} anywhere in the
   tree.
 \item \textbf{One open item bears directly on a stated product requirement and has no proposed
@@ -3396,8 +3511,8 @@ restates.
 \label{sec:method}
 
 Every number in this paper that is not attributed to a document was produced by one of the
-following, run against the kayfabe tree at \code{f33e1c8} and
-\file{/workspace/nvidia-gpu-passthrough} at \code{8001cb5}. \textbf{No compilation, no test
+following, run against the kayfabe tree at \code{0f577b15} and
+\file{/workspace/nvidia-gpu-passthrough} at \code{c86b69d}. \textbf{No compilation, no test
 execution and no network access was involved}, and on this box none was possible: it has no GPU
 and roughly 10\,GB of free disk, so a \code{cargo build} was ruled out before writing began
 rather than skipped afterwards. The measurements were taken from a clean checkout of the pinned
@@ -3451,15 +3566,15 @@ wrote the brief — both were close to right, and the second was a fair summary 
 document that a later measurement had superseded. \textbf{The rule is that an instruction and a
 citation decay the same way.}
 
-\paragraph{★ The claim ledger was run against this tree, and the result is honest in both
-directions.} \code{scripts/claim\_ledger.py --gate} returns \textbf{382 unattributed / 66
-conflated / 17 bare-hardware}, all three bars holding, before and after every edit in this
-revision. ⊘ \textbf{And that is a weaker statement than it looks}: the ledger's universe is
-\code{*.rs} and \code{*.md}, so \textbf{this file is not in it}. The gate confirms the surrounding
-tree did not regress while the whitepaper was written; it says nothing whatever about the
-whitepaper. That gap is stated here rather than left for a reader to discover, because a green
-gate beside an unpoliced artifact is precisely the shape of \emph{a green instrument on an
-unexercised path}.
+\paragraph{★★★ The claim ledger was run against this tree and it is RED.}
+\code{scripts/claim\_ledger.py --gate} exits \textbf{1} at \code{0f577b15} with \textbf{1\,166
+unattributed / 90 conflated / 36 bare-hardware} against bars of 381 / 66 / 17
+(\S\ref{sec:ledger}). The previous revision reported this gate green with all three bars holding;
+that is no longer the case, and the bars have not moved since 2026-07-31. ⊘ \textbf{And the result
+is weaker than it looks in both directions}: the ledger's universe is \code{*.rs} and \code{*.md},
+so \textbf{this file is not in it} — the gate says nothing whatever about the whitepaper — and its
+universe now includes the committed bench-trace READMEs, so part of the growth is denominator and
+not regression. \emph{Which part, this paper did not measure.}
 
 \vfill
 \begin{claimbox}\small

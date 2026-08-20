@@ -92,12 +92,16 @@
 
 % ---------------------------------------------------------------- honesty box --
 \node[box, fill=kfhost!30, draw=kfhostln, minimum width=178mm, minimum height=11mm] at (0,-29)
-  {\textbf{\color{kfhostln}What is actually running, as of this document.}\\[2pt]
-   \tiny The per-\tc{Proc} plane ownership above is \textbf{built and heavily tested} in Rust — against
-   \tc{MockIsolateFactory}, in one process, with no OS sandbox.\\[-0.5pt]
-   \tiny \textbf{No real isolate process has ever been spawned by this codebase}: \tc{IsolateFactory} and
-   \tc{RmBackend} have exactly one implementation each, and it is the mock.\\[-0.5pt]
-   \tiny The sandbox posture described above is the \emph{C artifact's} Mode-1 stub, cited as the target.
-   Porting it is L1 work that has not been done.};
+  {\textbf{\color{kfhostln}What is actually running, as of this document (2026-08-20).}\\[2pt]
+   \tiny The per-\tc{Proc} plane ownership above is \textbf{built, heavily tested against mocks, and
+   now driven on real hardware} — \tc{kayfabe-isolate-host} is a real sandboxed, capability-less,\\[-0.5pt]
+   \tiny six-namespace child holding \file{/dev/nvidiactl} and \file{/dev/nvidia0}, and it is what
+   executes the guest's compute. Its \tc{RmBackend} issues real host RM ioctls.\\[-0.5pt]
+   \tiny \textbf{\color{kfhostln}⊘ What is NOT established is the multi-\tc{Proc} axis this figure
+   exists to argue}: every graded boot to date runs \textbf{one} guest CUDA process. Bug \#14 —
+   the reason this codebase exists —\\[-0.5pt]
+   \tiny is structurally addressed and has \emph{never} been shown fixed on a GPU. \textbf{There is
+   also no tenant axis at all} — no \tc{VmId} anywhere in \file{crates/}; cross-VM separation is
+   incidental to two host processes.};
 
 \end{tikzpicture}

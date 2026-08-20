@@ -1,0 +1,92 @@
+\contentsline {section}{\numberline {1}What this document is, and how to attack it}{4}{section.1}%
+\contentsline {section}{\numberline {2}The idea}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}The problem}{4}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Vocabulary}{5}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Mode 1 and Mode 2}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}The correctness criterion, and why it is not "replay everything"}{5}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}Why this is hard}{6}{subsection.2.5}%
+\contentsline {section}{\numberline {3}Provenance: the C artifact, and what it actually proved}{6}{section.3}%
+\contentsline {paragraph}{The structural reason for the rewrite.}{7}{paragraph*.1}%
+\contentsline {paragraph}{One provenance correction worth carrying.}{7}{paragraph*.2}%
+\contentsline {subsection}{\numberline {3.1}★★ The C artifact is a standing oracle --- and it has FIVE measured limits, the fifth different in kind}{7}{subsection.3.1}%
+\contentsline {paragraph}{The four limits of a C \emph {recording}, all pre-registered before the capture.}{8}{paragraph*.3}%
+\contentsline {paragraph}{★★★ How it survived four rungs, which is the part that generalises.}{8}{paragraph*.4}%
+\contentsline {paragraph}{Has any replay been closed? No --- and the wall changed kind, which is the result.}{9}{paragraph*.5}%
+\contentsline {paragraph}{And the oracle is perishable.}{9}{paragraph*.6}%
+\contentsline {section}{\numberline {4}The architecture}{9}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Layers and ports}{9}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}The crate dependency graph}{11}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}The data path}{13}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}The isolation model}{15}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}The lifecycle}{17}{subsection.4.5}%
+\contentsline {section}{\numberline {5}The crates}{19}{section.5}%
+\contentsline {subsection}{\numberline {5.1}\texttt {kayfabe-core} \normalfont \small — 14\,617 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} and mutation-hardened}{19}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}\texttt {kayfabe-abi} \normalfont \small — 42\,428 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- now the largest crate in the tree}{19}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}\texttt {kayfabe-linux-raw} \normalfont \small — 14\,208 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- the \emph {first} of two \texttt {\small unsafe} crates}{20}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}\texttt {kayfabe-gsp} \normalfont \small — 5\,497 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (S0--S5) --- \textbf {and a real guest driver now writes into it}}{20}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}\texttt {kayfabe-rmrpc} \normalfont \small — 6\,098 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- \textbf {the bridge, and no longer an island}}{21}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}\texttt {kayfabe-rt} \normalfont \small — 10\,079 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L1-M1)}{21}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}\texttt {kayfabe-fwd} \normalfont \small — 8\,509 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- and \textbf {part of it has now moved bytes on silicon}}{21}{subsection.5.7}%
+\contentsline {subsection}{\numberline {5.8}\texttt {kayfabe-mocks} \normalfont \small — 4\,609 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{}, test-only --- \textbf {and where an invariant hid}}{21}{subsection.5.8}%
+\contentsline {subsection}{\numberline {5.9}\texttt {kayfabe-vmm-kvm} \normalfont \small — 2\,724 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- \textbf {defect \#57 CLOSED}}{22}{subsection.5.9}%
+\contentsline {subsection}{\numberline {5.10}\texttt {kayfabe-isolate} \normalfont \small — 4\,246 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} traits --- \textbf {with real implementations now}}{22}{subsection.5.10}%
+\contentsline {subsection}{\numberline {5.11}\texttt {kayfabe-isolate-host} \normalfont \small — 21\,557 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} --- \textbf {the real unprivileged host worker}}{22}{subsection.5.11}%
+\contentsline {subsection}{\numberline {5.12}\texttt {kayfabe-trace} \normalfont \small — 1\,497 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} vocabulary; \textbf {still not threaded}}{22}{subsection.5.12}%
+\contentsline {subsection}{\numberline {5.13}\texttt {kayfabe-shell} \normalfont \small — 995 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L1-M2, in progress)}{22}{subsection.5.13}%
+\contentsline {subsection}{\numberline {5.14}\texttt {kayfabe-vmm} \normalfont \small — 943 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} traits --- \textbf {and the agnosticism claim is now settleable}}{22}{subsection.5.14}%
+\contentsline {subsection}{\numberline {5.15}\texttt {kayfabe-device} \normalfont \small — 19\,577 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L2 stage Q4) --- the chip table and register plane}{23}{subsection.5.15}%
+\contentsline {subsection}{\numberline {5.16}\texttt {kayfabe-chips} \normalfont \small — 3\,202 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L3) --- \textbf {the adapter contract, finally measured}}{23}{subsection.5.16}%
+\contentsline {subsection}{\numberline {5.17}\texttt {kayfabe-vmm-qemu} \normalfont \small — 5\,852 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L2) --- the QEMU memory plane}{23}{subsection.5.17}%
+\contentsline {subsection}{\numberline {5.18}\texttt {kayfabe-qemu-raw} \normalfont \small — 18\,720 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} (L2) --- \textbf {the composition root and the second \texttt {\small unsafe} crate}}{23}{subsection.5.18}%
+\contentsline {subsection}{\numberline {5.19}\texttt {kayfabe-crec} \normalfont \small — 2\,041 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{}, harness-only --- the C-trace differential}{23}{subsection.5.19}%
+\contentsline {subsection}{\numberline {5.20}\texttt {kayfabe-completion} \normalfont \small — 756 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{}}{23}{subsection.5.20}%
+\contentsline {subsection}{\numberline {5.21}\texttt {kayfabe-util} \normalfont \small — 1\,796 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{}}{23}{subsection.5.21}%
+\contentsline {subsection}{\numberline {5.22}\texttt {kayfabe-arch} \normalfont \small — 2\,942 lines, {\color {kfcoreln}\textbf {\textsf {BUILT}}}{} traits --- \textbf {with three production implementations}}{24}{subsection.5.22}%
+\contentsline {subsection}{\numberline {5.23}\texttt {kayfabe-mmu} \normalfont \small — 5\,128 lines, table {\color {kfcoreln}\textbf {\textsf {BUILT}}}{}; \textbf {walker built; GPGA new}}{24}{subsection.5.23}%
+\contentsline {section}{\numberline {6}The invariant catalogue}{24}{section.6}%
+\contentsline {subsection}{\numberline {6.1}The two-layer trust model}{26}{subsection.6.1}%
+\contentsline {section}{\numberline {7}What is tested, how, and what that does and does not prove}{27}{section.7}%
+\contentsline {subsection}{\numberline {7.1}The shape of the suite}{27}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}The CI gates --- and the gate that GitHub cannot be}{28}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}The claim ledger --- a gate on the paper's own vocabulary}{28}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}Exercised versus merely present --- the project's own core doctrine}{29}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}The mean test, and composed versus isolated runs}{30}{subsection.7.5}%
+\contentsline {subsection}{\numberline {7.6}The conservation ledger}{30}{subsection.7.6}%
+\contentsline {subsection}{\numberline {7.7}The mutation gate --- \textbf {five} lies deep, and the fifth is the best one}{30}{subsection.7.7}%
+\contentsline {subsection}{\numberline {7.8}The OS-free configuration, and why it exists}{32}{subsection.7.8}%
+\contentsline {subsection}{\numberline {7.9}What the suite does not prove}{32}{subsection.7.9}%
+\contentsline {section}{\numberline {8}Discussion: the good, the bad, and the risky}{32}{section.8}%
+\contentsline {subsection}{\numberline {8.1}What is genuinely good}{32}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}★★★ The execution plane was the wall --- and it was crossed}{33}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}★★★★★ The ladder to first compute --- \texttt {\small cup2} $\to $ \texttt {\small cup3} $\to $ \texttt {\small cup8}}{33}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}★★ A trace of a boot that SUCCEEDS --- and the ladder, enumerated}{35}{subsection.8.4}%
+\contentsline {paragraph}{The ladder, enumerated rather than discovered one boot at a time.}{35}{paragraph*.7}%
+\contentsline {paragraph}{What the recorder cannot see, stated by its own author.}{36}{paragraph*.8}%
+\contentsline {subsection}{\numberline {8.5}★ The bridge exists --- and it does \emph {not} unlock compute}{36}{subsection.8.5}%
+\contentsline {subsection}{\numberline {8.6}★★ A live-memory-free defect --- and the independent oracle had the identical bug}{37}{subsection.8.6}%
+\contentsline {subsection}{\numberline {8.7}★★ The quality instruments were wrong --- three of them, in one day}{38}{subsection.8.7}%
+\contentsline {paragraph}{1. The mutation configuration was never read.}{38}{paragraph*.9}%
+\contentsline {paragraph}{2. The gate could report 100\% from a broken suite.}{38}{paragraph*.10}%
+\contentsline {paragraph}{3. Thirteen test park-points hung forever instead of failing, producing zero output.}{38}{paragraph*.11}%
+\contentsline {paragraph}{And a fourth, smaller, which is the same species.}{39}{paragraph*.12}%
+\contentsline {subsection}{\numberline {8.8}\texttt {kayfabe-gsp}: boot is modelled, reboot is not, and one open item has no proposed resolution}{39}{subsection.8.8}%
+\contentsline {subsection}{\numberline {8.9}What contact with hardware has and has not bought}{41}{subsection.8.9}%
+\contentsline {subsection}{\numberline {8.10}The quadratic control plane --- an open, measured DoS}{42}{subsection.8.10}%
+\contentsline {subsection}{\numberline {8.11}Reclamation is the least finished plane}{42}{subsection.8.11}%
+\contentsline {subsection}{\numberline {8.12}arm64 is measured for the core and unmeasured for the shell}{42}{subsection.8.12}%
+\contentsline {subsection}{\numberline {8.13}★★★ R1 was broken on the one path the suite could not see}{43}{subsection.8.13}%
+\contentsline {paragraph}{★ Five bite-checks, four bit, and the fifth found the test.}{43}{paragraph*.13}%
+\contentsline {subsection}{\numberline {8.14}Multi-tenancy: two shapes contained, one that bites, and no tenant axis at all}{43}{subsection.8.14}%
+\contentsline {paragraph}{So where does that leave "red-teamed at the logic layer only"?}{44}{paragraph*.14}%
+\contentsline {subsection}{\numberline {8.15}The QEMU $\geq $ 10.2 floor buys less than the decision that took it assumed}{45}{subsection.8.15}%
+\contentsline {subsection}{\numberline {8.16}The bench --- rented, serialised, and now more than one box}{46}{subsection.8.16}%
+\contentsline {subsection}{\numberline {8.17}The recurring failure mode: claims that were true \emph {once}}{46}{subsection.8.17}%
+\contentsline {subsection}{\numberline {8.18}Risks this document adds}{47}{subsection.8.18}%
+\contentsline {section}{\numberline {9}How to read the code}{49}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Entry points}{49}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Conventions}{49}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Which design documents to read, in order}{49}{subsection.9.3}%
+\contentsline {section}{\numberline {10}Claims corrected while writing this paper}{50}{section.10}%
+\contentsline {subsection}{\numberline {10.1}What this paper could not verify}{54}{subsection.10.1}%
+\contentsline {section}{\numberline {A}Measurement method}{54}{appendix.A}%
+\contentsline {paragraph}{★★★ The claim ledger was run against this tree and it is RED.}{55}{paragraph*.15}%

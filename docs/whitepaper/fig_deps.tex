@@ -1,15 +1,22 @@
 % ===========================================================================
 % FIGURE — the crate dependency graph, DERIVED from every Cargo.toml in the
 % workspace (crates/*/Cargo.toml + tests/) and cross-checked against
-% Cargo.lock, at f33e1c8. Rows = the depending crate, columns = the crate
+% Cargo.lock, at 0f577b15. Rows = the depending crate, columns = the crate
 % depended on. Crates are listed in topological order, so the matrix being
 % strictly lower-triangular IS the proof that the graph is acyclic.
 %
-% ★ RE-DERIVED BY SCRIPT at this revision, as at the previous one, and the
-% shape changed more than at any revision before it: 18 members -> 24, and
-% six of the new rows are the L2/L3/host bands the previous matrix drew as
-% empty space outside the picture. The previous revision's matrix is
-% superseded rather than corrected — it was accurate for the 18 it drew.
+% ★ RE-DERIVED BY SCRIPT at this revision, as at the previous two. The member
+% count is unchanged at 24 and the edge count moved 126 -> 134 (+9 dev-only,
+% unchanged). What DID change is the thing the figure exists to demonstrate:
+% ⊘ THE PREVIOUS REVISION'S ORDER IS NO LONGER TOPOLOGICAL. `qemu-raw` (was
+% row 22) now depends on `shell` (was row 23), so drawn in the old order the
+% matrix would carry one dot ABOVE the diagonal — which reads as a cycle and
+% is not one. shell and qemu-raw are swapped here and the property holds.
+% ⇒ A figure whose correctness is a VISUAL property (lower-triangularity) is
+% exactly the kind that decays silently: the dot would have been one pixel
+% out of place in a 24x24 grid, and nothing in the build would have said so.
+% This is why the edge list is re-derived by script every revision and never
+% edited by hand.
 % ===========================================================================
 \begin{tikzpicture}[x=1mm,y=1mm, font=\sffamily\scriptsize]
 \def\cs{5.2}      % cell size (mm)
@@ -38,8 +45,8 @@
   19/crec/TEST,
   20/isolate-host/HOST,
   21/rt/L1,
-  22/qemu-raw/L2,
-  23/shell/L1,
+  22/shell/L1,
+  23/qemu-raw/L2,
   24/tests/TEST}
 
 % -- grid --------------------------------------------------------------------
@@ -54,7 +61,7 @@
 \draw[kfportln, line width=0.7pt] (0,0) -- (\N*\cs,-\N*\cs);
 
 % -- highlight the qemu-raw row: the composition root, and the new consumer ---
-\fill[kfcoreln, opacity=0.10] (0,{-21*\cs}) rectangle ({\N*\cs},{-22*\cs});
+\fill[kfcoreln, opacity=0.10] (0,{-22*\cs}) rectangle ({\N*\cs},{-23*\cs});
 % -- and the rmrpc row, faintly: it is no longer the island ------------------
 \fill[kfshellln, opacity=0.07] (0,{-17*\cs}) rectangle ({\N*\cs},{-18*\cs});
 
@@ -86,20 +93,18 @@
 \dep{10}{1}\dep{10}{2}\dep{10}{3}\dep{10}{6}\dep{10}{7}\dep{10}{8}
 \dep{11}{1}\dep{11}{5}\dep{11}{6}\dev{11}{9}
 \dep{12}{1}\dep{12}{2}\dep{12}{5}\dep{12}{6}\dep{12}{7}\dep{12}{8}\dev{12}{9}
-\dep{13}{1}\dep{13}{2}\dep{13}{3}\dep{13}{7}\dep{13}{8}\dep{13}{10}\dev{13}{9}
+\dep{13}{1}\dep{13}{2}\dep{13}{3}\dep{13}{7}\dep{13}{8}\dev{13}{9}\dep{13}{10}
 \dep{14}{1}\dep{14}{2}\dep{14}{4}\dep{14}{10}
 \dep{15}{1}\dep{15}{2}\dep{15}{4}\dep{15}{9}\dep{15}{14}
 \dep{16}{1}\dep{16}{2}\dep{16}{4}\dep{16}{8}\dep{16}{10}\dep{16}{14}
 \dep{17}{1}\dep{17}{2}\dep{17}{3}\dep{17}{6}\dep{17}{7}\dep{17}{8}\dep{17}{10}\dep{17}{13}
-\dep{18}{1}\dep{18}{2}\dep{18}{4}\dep{18}{10}\dep{18}{13}\dep{18}{14}\dev{18}{9}
+\dep{18}{1}\dep{18}{2}\dep{18}{4}\dev{18}{9}\dep{18}{10}\dep{18}{13}\dep{18}{14}\dep{18}{17}
 \dep{19}{1}\dep{19}{2}\dep{19}{4}\dep{19}{9}\dep{19}{10}\dep{19}{14}\dep{19}{16}
 \dep{20}{1}\dep{20}{2}\dep{20}{4}\dep{20}{5}\dep{20}{6}\dep{20}{7}\dep{20}{15}
-\dep{21}{1}\dep{21}{2}\dep{21}{3}\dep{21}{6}\dep{21}{7}\dep{21}{8}\dep{21}{13}\dep{21}{17}\dev{21}{9}
-\dep{22}{4}\dep{22}{6}\dep{22}{7}\dep{22}{12}\dep{22}{13}\dep{22}{14}\dep{22}{15}\dep{22}{16}\dep{22}{18}\dep{22}{20}\dep{22}{21}\dev{22}{2}\dev{22}{9}
-\dep{23}{1}\dep{23}{5}\dep{23}{13}\dep{23}{21}
-\dep{24}{1}\dep{24}{2}\dep{24}{3}\dep{24}{4}\dep{24}{5}\dep{24}{6}\dep{24}{7}\dep{24}{8}
-\dep{24}{9}\dep{24}{10}\dep{24}{11}\dep{24}{12}\dep{24}{13}\dep{24}{14}\dep{24}{15}\dep{24}{16}
-\dep{24}{17}\dep{24}{18}\dep{24}{19}\dep{24}{21}\dep{24}{23}\dev{24}{20}
+\dep{21}{1}\dep{21}{2}\dep{21}{3}\dep{21}{4}\dep{21}{6}\dep{21}{7}\dep{21}{8}\dev{21}{9}\dep{21}{13}\dep{21}{16}\dep{21}{17}
+\dep{22}{1}\dep{22}{5}\dep{22}{13}\dep{22}{21}
+\dep{23}{1}\dev{23}{2}\dep{23}{4}\dep{23}{5}\dep{23}{6}\dep{23}{7}\dep{23}{8}\dev{23}{9}\dep{23}{12}\dep{23}{13}\dep{23}{14}\dep{23}{15}\dep{23}{16}\dep{23}{17}\dep{23}{18}\dep{23}{20}\dep{23}{21}\dep{23}{22}
+\dep{24}{1}\dep{24}{2}\dep{24}{3}\dep{24}{4}\dep{24}{5}\dep{24}{6}\dep{24}{7}\dep{24}{8}\dep{24}{9}\dep{24}{10}\dep{24}{11}\dep{24}{12}\dep{24}{13}\dep{24}{14}\dep{24}{15}\dep{24}{16}\dep{24}{17}\dep{24}{18}\dep{24}{19}\dev{24}{20}\dep{24}{21}\dep{24}{22}
 
 % -- annotations -------------------------------------------------------------
 \draw[ar, kfcoreln] ({11*\cs},{-\N*\cs-7}) -- ({11*\cs},{-22*\cs+1});

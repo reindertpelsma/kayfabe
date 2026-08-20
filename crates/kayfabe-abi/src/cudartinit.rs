@@ -177,6 +177,66 @@ pub enum CudartInitError {
     },
 }
 
+/// ★★★★★ **SPLICED rows — `(cmd, paramsSize, &[(word, value)])`.**
+///
+/// A [`SERVED`] row replaces the whole body with a constant. That is right when the guest
+/// sends all-zeros, and **wrong** the moment the request carries content: it would clobber
+/// the guest's own words with our zeros — the `#203` defect pointing the other way.
+///
+/// `0x2080200b` `NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2` is the first row of that kind. Its
+/// request carries `[0]=0x4 [3]=0x1 [9]=0x10 [194]=0x2`, and a real GA106 writes exactly
+/// **nine** words and leaves the rest alone. So we do the same: keep the guest's buffer,
+/// overwrite only what RM overwrites.
+///
+/// `[measured 2026-08-20, real GA106 580.159.04]` Captured from a host DRIVEN INTO the
+/// guest's state (`0x2080a026` + `0x2080a084` refused), because a healthy host never asks
+/// this control at all. Request byte-identical to the guest's; reply stable across both calls.
+///
+/// ⚠ The nine values decode as clock frequencies in kHz (≈465/930 MHz core, ≈7.5/7.3/9.0 GHz
+/// memory). They are a property of the GA106 SKU, not of this machine — but they are still
+/// **capture-derived and therefore expiring**, exactly like [`SERVED`].
+pub const SPLICED: &[(u32, usize, &[(usize, u32)])] = &[(
+    PERF_GET_LEVEL_INFO_V2,
+    780,
+    &[
+        (1, 0x4),
+        (4, 0x7_1868),
+        (5, 0x7_1868),
+        (6, 0x7_1868),
+        (7, 0xe_30d0),
+        (10, 0x72_74c8),
+        (11, 0x72_74c8),
+        (12, 0x6f_6788),
+        (13, 0x89_58f0),
+    ],
+)];
+
+/// `0x2080200b` — the SECOND member of the minimal fatal pair.
+///
+/// ★★★ `[measured 2026-08-20]` The full subset lattice over
+/// `{0x2080a084, 0x2080a026, 0x2080200b}` on bare metal: **every singleton is innocent**, and
+/// so are `{a084,a026}` and `{a084,200b}`. Only **`{a026, 200b}`** is fatal. ⇒ three
+/// individually-harmless controls, one fatal PAIR — invisible to any one-at-a-time
+/// experiment, and the lattice also proves serving EITHER member is sufficient.
+pub const PERF_GET_LEVEL_INFO_V2: u32 = 0x2080_200b;
+
+/// Apply a [`SPLICED`] row onto the guest's own request buffer, in place.
+///
+/// Returns `false` if the id has no spliced row or the buffer is not the measured length —
+/// refusing rather than writing at a guessed offset.
+pub fn splice_cudart_init(cmd: u32, buf: &mut [u8]) -> bool {
+    let Some((_, size, words)) = SPLICED.iter().find(|(c, _, _)| *c == cmd) else {
+        return false;
+    };
+    if buf.len() != *size {
+        return false;
+    }
+    for (w, v) in words.iter() {
+        buf[w * 4..w * 4 + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,6 +274,29 @@ mod tests {
             answer_cudart_init(0x2080_a001, 16).unwrap(),
             vec![1, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 0x11, 0, 0, 0]
         );
+    }
+
+    #[test]
+    fn a_spliced_row_preserves_every_word_rm_did_not_write() {
+        // ★ The whole point: the guest's own content survives. A constant body would not.
+        let mut buf = vec![0xABu8; 780];
+        assert!(splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut buf));
+        let w = |i: usize| u32::from_le_bytes(buf[i * 4..i * 4 + 4].try_into().unwrap());
+        assert_eq!(w(1), 0x4);
+        assert_eq!(w(4), 0x7_1868);
+        assert_eq!(w(13), 0x89_58f0);
+        // untouched words still carry the caller's bytes, not zeros
+        assert_eq!(w(0), 0xABAB_ABAB);
+        assert_eq!(w(2), 0xABAB_ABAB);
+        assert_eq!(w(194), 0xABAB_ABAB);
+    }
+
+    #[test]
+    fn a_spliced_row_refuses_a_length_that_is_not_the_measured_one() {
+        let mut short = vec![0u8; 776];
+        assert!(!splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut short));
+        let mut wrong_id = vec![0u8; 780];
+        assert!(!splice_cudart_init(0x2080_a026, &mut wrong_id));
     }
 
     #[test]

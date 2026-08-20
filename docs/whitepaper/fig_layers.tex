@@ -19,7 +19,7 @@
   {\textbf{L2 — the VMM / device adapter}\;\; \built};
 \node[align=center, anchor=north, font=\sffamily\tiny, text width=81mm] at (-45.5,113)
   {\tc{kayfabe-vmm-qemu} 5\,852 L \;$\cdot$\; \tc{kayfabe-qemu-raw} 18\,720 L (\emph{staticlib})
-   \;$\cdot$\; \tc{kayfabe-device} 19\,570 L\\
+   \;$\cdot$\; \tc{kayfabe-device} 19\,577 L\\
    + a \textbf{2\,676-line C QOM shim} (\tc{qemu/hw/misc/nvkvm/}) dropped into a stock QEMU
    10.2.4 tree.\\
    The BAR aperture, the register plane, the chip table and a real \tc{GuestRam}.\\
@@ -91,7 +91,7 @@
   {\textbf{kayfabe-completion} \;756 L\\[1pt]\tiny per-proc queues, delivery gate,\\[-0.5pt]
    \tiny mapped-fence arms};
 \node[coreb, minimum width=88mm, minimum height=9.5mm] at (0,23)
-  {\textbf{kayfabe-rmrpc} \;6\,097 L \;— \textbf{★ THE BRIDGE}\\[1pt]
+  {\textbf{kayfabe-rmrpc} \;6\,098 L \;— \textbf{★ THE BRIDGE}\\[1pt]
    \tiny \tc{translate(\&DriverAbiTable, \&RpcCommand)} — a \emph{stateless free function}\\[-0.5pt]
    \tiny the capability table: default-DENY at the guest ingress (for half the command space)\\[-0.5pt]
    \tiny the only crate permitted to name both \tc{RpcCommand} and \tc{RmEvent} (CI-gated)
@@ -135,7 +135,7 @@
    \tiny \textbf{\color{kfcoreln}3 production impls} in \tc{kayfabe-chips}};
 \node[portb, minimum width=34mm, minimum height=10mm] at (70,36)
   {\textbf{DriverAbi} — "Axis A"\\[1pt]
-   \tiny \textbf{kayfabe-abi} 42\,392 L, codegen'd\\[-0.5pt]
+   \tiny \textbf{kayfabe-abi} 42\,428 L, codegen'd\\[-0.5pt]
    \tiny + the capability table and the\\[-0.5pt]
    \tiny \tc{oracle} that refuses an uncaptured row};
 \node[portb, minimum width=34mm, minimum height=9mm] at (70,24)
