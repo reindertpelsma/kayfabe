@@ -1377,6 +1377,90 @@ impl CommandPolicy for InitTablePolicy {
         // even classify; leave it to the baseline rather than inventing a refusal for a
         // message that may not be one.
         let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+
+        // ★★★★★ w341 PROBE — the cudart init-gate cluster, and it is a PROBE, not the fix.
+        //
+        // `[measured 2026-08-20, real GA106]` `libcuda` answers every driver-API call
+        // correctly on the boot `libcudart` cannot initialise: `cuInit`=0,
+        // `cuDeviceGetCount`=1, `cuDeviceTotalMem`=12 540 182 528,
+        // `cuDevicePrimaryCtxRetain` returns a context, CC 8.6 — while
+        // `cudaGetDeviceCount` in the SAME process returns 3 = `cudaErrorInitializationError`.
+        // Every ioctl returns 0, and the guest kernel log is identical in count to a boot
+        // where cup8 is bit-exact.
+        //
+        // The C research artifact names the cause in its own source
+        // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`): libcudart issues `0x20809009`,
+        // `0x20809001` and `0x20809064` at the end of its lazy device enumeration; **the
+        // driver API never issues them**, which is exactly the asymmetry we measured. They
+        // are serviced entirely by GSP firmware — no kernel `#define`, absent from nvproxy —
+        // so the C's zero-echo *"returned all-zeros, so cudart read 0 where it expects real
+        // data and aborted with cudaErrorInitializationError(3) — silently (the reject is in
+        // the reply PAYLOAD, not an errno/dmesg line)"*.
+        //
+        // ⊘⊘ **This port refuses them today, and `kayfabe_abi::gsslegacy`'s module doc cites
+        // that same C site as its REASON to refuse.** It took half the C's lesson: *do not
+        // echo zeros*. But refusing fails cudart too — `0x56` is not an answer it can use.
+        // The C's actual remedy is the third option, and its PRIMARY is **forward to the
+        // host**, with a capture replay only as fallback.
+        //
+        // ⇒ **What this arm is for.** The host forward is a real build (isolate verb +
+        // handle translation + call site; `raw_control` already exists at
+        // `kayfabe-isolate-host/src/rm.rs:2041`). Before paying for it, one boot answers
+        // whether these three ids are the wall at all. This arm replays the C's captured
+        // GA106/580.159.04 bodies, **default OFF**, so an unset variable leaves every byte
+        // of every boot unchanged.
+        //
+        // ⚠ **Why it is not the fix, stated so nobody ships it.** (1) A replayed constant is
+        // not READ-NATIVE and would rot on the next driver or chip — the exact thing the
+        // owner's ruling forbids. (2) `0x20809064`'s capture is **incomplete**: the C records
+        // only *"520B, leading 10 u32s"*, so this arm zero-fills a 480-byte tail it has never
+        // measured — precisely the truncated-row hazard `kayfabe_abi::oracle` was written for.
+        // ⇒ A GREEN result justifies building the forward. A RED result on `…064` alone would
+        // point at that tail, not at the mechanism, and must not be read as refuting it.
+        if std::env::var("KAYFABE_CUDART_GATE").as_deref() == Ok("replay")
+            && matches!(req.cmd, 0x2080_9009 | 0x2080_9001 | 0x2080_9064)
+        {
+            // The guest's OWN declared size, never a constant of ours: the C reads the same
+            // field (`ps = ldl_le_p(resp + 96)`) rather than asserting a length, and these
+            // ids have no documented struct for us to check one against.
+            let ps = req.params_size as usize;
+            if ps == 0 || cmd.payload.len() < req.params_at + ps {
+                return refuse();
+            }
+            // `C: nvkvm_gpu_emul.c:3358-3363`, the native-host capture, verbatim.
+            let head: &[u32] = match req.cmd {
+                0x2080_9009 => &[0x0000_0000, 0x0000_000d], // 0x0d = 13 = CUDA major
+                0x2080_9001 => &[0x03fc_007f, 0x0000_0000], // capability mask
+                _ => &[0, 2, 1, 1, 1, 0x64, 4, 0x10, 1, 0x64],
+            };
+            let mut params = vec![0u8; ps];
+            let mut wrote = 0usize;
+            for (i, w) in head.iter().enumerate() {
+                let off = i * 4;
+                if off + 4 > ps {
+                    break;
+                }
+                params[off..off + 4].copy_from_slice(&w.to_le_bytes());
+                wrote += 4;
+            }
+            // ⚠ Say how much of the reply is MEASURED and how much is zero-fill, every time.
+            // A boot that reads "served" without that ratio cannot tell a complete capture
+            // from a 4-byte head on a 520-byte struct.
+            eprintln!(
+                "W341GSS cmd={:#010x} ps={ps} measured_bytes={wrote} zerofill_bytes={}                  src=C:nvkvm_gpu_emul.c:3358-3363 note=PROBE-replay-not-the-fix",
+                req.cmd,
+                ps - wrote
+            );
+            let mut body = cmd.payload.clone();
+            body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                .copy_from_slice(&NV_OK.to_le_bytes());
+            body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+            return Some(Reply {
+                rpc_result: NV_OK,
+                body,
+            });
+        }
+
         let want = WantedTable::from_cmd(req.cmd)?;
 
         // A FINN-serialized payload is not the flat struct these encoders produce. Neither
