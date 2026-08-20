@@ -1905,6 +1905,24 @@ pub enum VerbPlan {
         /// The in/out payload.
         payload: Vec<u8>,
     },
+    /// ★★★★★ **w346 — one control on the ISOLATE'S OWN subdevice**, for the per-GPU
+    /// family that twins no guest object.
+    ///
+    /// ⊘ **It carries NO handle, and that is the point.** [`VerbPlan::Control`] names an
+    /// object in this isolate's namespace and so must be listed in
+    /// [`VerbPlan::handles`] for the foreign-handle gate to check it. This variant names
+    /// nothing: the child resolves its own subdevice, so there is no handle to check, none
+    /// to mis-attribute across isolates, and none the port could have fabricated.
+    ///
+    /// ⚠ Which also means the gate that protects `Control` **cannot** protect this — so
+    /// the protection has to come from the id being one this port chose to forward, not
+    /// from a handle check. See `kayfabe_rmrpc::policy`'s forwarded set.
+    SubdeviceControl {
+        /// The command.
+        cmd: ControlCmd,
+        /// The in/out payload.
+        payload: Vec<u8>,
+    },
     /// ★★★ **A copy-engine request, already PARTITIONED by representability**
     /// (`eight_blockers_resolved.md` §12.3).
     ///
@@ -2172,6 +2190,10 @@ impl VerbPlan {
                 .chain(channel.map(|(h, _)| h))
                 .collect(),
             VerbPlan::Control { obj, .. } => vec![*obj],
+            // ⊘ EMPTY BY CONSTRUCTION, not by omission — the exact mistake this method's
+            // doc warns about, so it is written out. A `SubdeviceControl` names no handle:
+            // the child resolves its own subdevice. There is nothing here to check.
+            VerbPlan::SubdeviceControl { .. } => vec![],
             VerbPlan::CeSplit { vas, .. } => vec![*vas],
             // ★★ **w310 — `guest_ram` IS chained in, and this line is exactly what this
             // method's own doc warns about**: *"adding a variant that carries a handle and
@@ -3262,6 +3284,14 @@ impl Worker {
             VerbPlan::Control { obj, cmd, payload } => {
                 let mut payload = payload.clone();
                 rm.control(*obj, *cmd, &mut payload)?;
+                Ok(VerbReply::Control { payload })
+            }
+            VerbPlan::SubdeviceControl { cmd, payload } => {
+                let mut payload = payload.clone();
+                rm.subdevice_control(*cmd, &mut payload)?;
+                // ⊘ Reuses `VerbReply::Control` deliberately: the reply IS the same thing —
+                // the payload as the host wrote it back — and a second reply variant
+                // carrying an identical field would be two names for one fact.
                 Ok(VerbReply::Control { payload })
             }
             VerbPlan::CeSplit { vas, subs } => {

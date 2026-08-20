@@ -4499,6 +4499,103 @@ pub struct ControlPlan {
     pub cmd: ControlCmd,
 }
 
+/// Why a [`crate::plan_subdevice_control`] forward did not happen.
+///
+/// ⊘ A dedicated type rather than a reused [`FwdFault`] variant, because the pure core
+/// model's answer — *"I have no host plane at all"* — is not any of `FwdFault`'s, and
+/// borrowing e.g. `RetiredProc` to say it would put a false cause in a log that reads as
+/// a real one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubdeviceControlFault {
+    /// This object model does not forward to a host: the pure core model, and every mock.
+    /// Not a failure of the plane — a statement that there isn't one.
+    NoHostPlane,
+    /// The forward was attempted and the plane refused, by name.
+    Fwd(FwdFault),
+}
+
+/// ★★★★★ **w346 — the plan for a control on the isolate's OWN subdevice.**
+///
+/// A sibling of [`ControlPlan`] rather than a reuse of it, because [`ControlPlan::obj`] is
+/// **the control object in the target isolate's namespace** and this verb HAS no such
+/// object. Reusing the type would have meant putting `HostHandle::NULL` in a field whose
+/// documentation says it names something — a lie that reads as a value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubdeviceControlPlan {
+    /// Owning proc.
+    pub proc: ProcId,
+    /// The op's TARGET GPU. There is no handle to be in a namespace, so this is the whole
+    /// of the addressing: *"the subdevice of the isolate this proc has for that GPU"*.
+    pub gpu: GpuId,
+    /// The command.
+    pub cmd: ControlCmd,
+}
+
+/// PLAN (R1) for a subdevice-control forward. Same shape and same deferral as
+/// [`plan_control`]; see [`SubdeviceControlPlan`] for why the plan type differs.
+///
+/// # Errors
+/// [`FwdFault::RetiredProc`] for a retired proc, or R1's spawn deferral when the target
+/// isolate does not exist yet.
+pub fn plan_subdevice_control(
+    proc: &Proc,
+    target_gpu: GpuId,
+    cmd: ControlCmd,
+    payload: &[u8],
+) -> Result<Planned<SubdeviceControlPlan>, FwdFault> {
+    let pid = proc.id;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
+    if !proc.isolates.contains_key(&target_gpu) {
+        return Err(missing_isolate(proc, target_gpu));
+    }
+    Ok(Planned {
+        plan: SubdeviceControlPlan {
+            proc: pid,
+            gpu: target_gpu,
+            cmd,
+        },
+        verbs: Some(VerbPlan::SubdeviceControl {
+            cmd,
+            payload: payload.to_vec(),
+        }),
+    })
+}
+
+/// COMMIT (R5) for a subdevice-control forward. The same staleness shape as
+/// [`commit_control`]: the host effect has already happened, so a refusal here means
+/// *"the answer has nowhere to go"*, and there is no orphan to release.
+///
+/// # Errors
+/// [`Refusal`] if the proc retired or the target isolate went away between plan and commit.
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::Control`] its plan asked for.
+pub fn commit_subdevice_control(
+    proc: &mut Proc,
+    plan: &SubdeviceControlPlan,
+    reply: Option<VerbReply>,
+    payload: &mut [u8],
+) -> Result<(), Refusal> {
+    let Some(VerbReply::Control { payload: out }) = reply else {
+        return wrong_reply("subdevice control");
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Proc(plan.proc))));
+    }
+    if !proc.isolates.contains_key(&plan.gpu) {
+        return Err(Refusal::bare(FwdFault::Stale(Stale::Target {
+            proc: plan.proc,
+            gpu: plan.gpu,
+        })));
+    }
+    let n = payload.len().min(out.len());
+    payload[..n].copy_from_slice(&out[..n]);
+    Ok(())
+}
+
 /// PLAN (R1) for a Case-1 control forward. The payload is copied into the plan by
 /// value: a plan outlives the lock scope that made it, so it may not borrow.
 pub fn plan_control(

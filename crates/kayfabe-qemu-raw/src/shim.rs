@@ -3109,6 +3109,23 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.relay_channel_control(client, object, cmd, payload)
     }
 
+    /// ★ w346 — the shell's seat for the subdevice-control forward. Routes to
+    /// `SYSTEM_PROC` inside [`kayfabe_rt::SharedDevice::route_subdevice_control`]; see
+    /// there for why that proc and not another.
+    fn relay_subdevice_control(
+        &mut self,
+        cmd: kayfabe_rt::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<(), kayfabe_fwd::SubdeviceControlFault> {
+        // ⊘ GPU 0: this family names a PART, and the bench is single-GPU. A multi-GPU
+        // guest asking "which part?" needs the id routed per target, which this port
+        // cannot yet express — stated rather than silently answered for the wrong one.
+        self.0
+            .route_subdevice_control(kayfabe_rt::GpuId(0), cmd, payload)
+            .map(|_| ())
+            .map_err(kayfabe_fwd::SubdeviceControlFault::Fwd)
+    }
+
     /// ★★★★★ §16.80 — the shell's seat for the Case-1 engine-object forward, and **the
     /// place its outcome is named**.
     ///

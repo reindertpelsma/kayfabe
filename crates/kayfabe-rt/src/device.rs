@@ -4914,6 +4914,67 @@ impl SharedDevice {
         Ok(ControlRoute::Forwarded)
     }
 
+    /// ★★★★★ **w346 — RELAY ONE CONTROL TO THE HOST'S OWN SUBDEVICE.**
+    ///
+    /// For the GSS-legacy family that asks **the part about itself** — a CUDA major
+    /// version, a capability mask — and so twins no guest object at all.
+    ///
+    /// # ⊘ Why `SYSTEM_PROC`, and why that is the SAFE choice rather than the lazy one
+    ///
+    /// Every other route in this port reaches a proc **through a GPU object**
+    /// (`by_pdb`, `by_chan`). A control that names no object has no such route, so the proc
+    /// must be chosen rather than derived — and the choice is load-bearing for isolation:
+    ///
+    /// - **the asking process's own isolate** — no route exists to find it from a bare
+    ///   `hClient`, and building one would be inventing an index for this one verb;
+    /// - **any live proc** — ⊘ **REFUSED.** That would answer one guest process's question
+    ///   inside **another tenant's** isolate. Two processes in one guest do not have to
+    ///   trust each other, and this is exactly the cross-process leakage that rules out;
+    /// - **`SYSTEM_PROC`** — the device's own client, which is the isolate whose subdevice
+    ///   this is. It is neither the asker's nor a peer's.
+    ///
+    /// ⚠ **The cost, named:** one isolate's health then gates this family for every guest
+    /// process. That is a real coupling and it is the price of not crossing tenants.
+    ///
+    /// ⊘ **No `classify_control` here.** The Case-1/Case-2 split asks whether a control's
+    /// host effect is already achieved; these have no local effect to have achieved, and
+    /// the caller has already decided this id is one to forward. Running the classifier
+    /// would let a Case-2 row silently turn a forward into an ack.
+    ///
+    /// # Errors
+    /// [`FwdFault`] by variant — a retired proc, a target with no isolate, or the host's
+    /// own refusal. ⚠ **`payload` is left untouched on every failure arm**: a zero-filled
+    /// `NV_OK` is precisely the answer the CUDA runtime reads as real data and dies on
+    /// (`C: nvkvm_gpu_emul.c:3334-3350`), which is the defect this whole verb exists to
+    /// avoid re-creating.
+    pub fn route_subdevice_control(
+        &self,
+        target_gpu: GpuId,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<ControlRoute, FwdFault> {
+        let pid = kayfabe_core::gpu::Gpu::SYSTEM_PROC;
+        let out: Vec<u8> = self.verb_op(
+            || {
+                self.route_act(
+                    |_| Ok((pid, ())),
+                    |_spine, proc, ()| {
+                        let planned =
+                            kayfabe_fwd::plan_subdevice_control(proc, target_gpu, cmd, payload)?;
+                        Staged::check_out(proc, target_gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| {
+                let mut buf = vec![0u8; payload.len()];
+                kayfabe_fwd::commit_subdevice_control(proc, plan, reply, &mut buf)?;
+                Ok(buf)
+            },
+        )?;
+        payload.copy_from_slice(&out);
+        Ok(ControlRoute::Forwarded)
+    }
+
     /// ★★★★★ **w288 TIER 2 — RELAY ONE CHANNEL CONTROL TO THE SAME CHANNEL ON THE HOST**,
     /// one guest ask to exactly one host issue, and the reply back verbatim.
     ///

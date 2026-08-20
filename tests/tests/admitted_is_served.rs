@@ -216,6 +216,27 @@ fn ledger_ids() -> BTreeMap<u32, BTreeSet<String>> {
 /// This is also the only place the gate can show its own direction of travel — every row
 /// here was once a row in [`LEDGER`].
 static GRADUATED: &[u32] = &[
+    // ★★★★★ `0x20809009` — one of the **cudart init-gate** family, answered by
+    // `kayfabe_rmrpc::ObjectPolicy::respond_subdevice_control` since w346, which FORWARDS it
+    // to the host's own subdevice rather than encoding a reply.
+    //
+    // ⊘ It has no `ogkm` name and no documented struct: bit 15 is set, so it reaches physical
+    // RM under its own id and is serviced entirely by GSP firmware. That is precisely why it
+    // is forwarded — there is nothing to encode, and the C research artifact's zero-echo of
+    // this family is what killed `cudart` with `cudaErrorInitializationError(3)`
+    // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`).
+    //
+    // ⚠ **"Served" here means CLAIMED, not "the host answered".** With no host plane the
+    // claim still ends in a named refusal — which is the honest outcome and is what the mock
+    // suite exercises. Whether the forward returns real bytes is a question only a boot can
+    // answer, and this gate cannot and does not assert it.
+    //
+    // ⊘ Its six siblings (`0x20809001`, `0x20809064`, `0x2080a001`, `0x2080a026`,
+    // `0x2080a084`, `0x2080a097`) are NOT here because they were never in `LEDGER`: no
+    // committed boot had recorded them. `[measured 2026-08-20]` the last four appear only
+    // once the first three are served — the guest cannot ask for them until it gets past
+    // the gate, which is exactly why an unserviced census is a snapshot of one depth.
+    0x2080_9009,
     // ★ `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`, answered by
     // `kayfabe_device::setpagedir::SetPageDirPolicy` since §16.30.
     0x0080_1813,
@@ -353,7 +374,6 @@ static LEDGER: &[u32] = &[
     0x2080_2a12,
     0x2080_8513,
     0x2080_852e,
-    0x2080_9009,
     0x2080_a612,
     0x2080_a618,
     // ★ `NV2081_BINAPI` — the §14.26 "phantom". Admitted by the `BinApiRule` rather than by
