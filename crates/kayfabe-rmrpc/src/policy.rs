@@ -1819,9 +1819,24 @@ pub const OBJECT_CONTROLS: &[u32] = &[
     // PRIMARY, with a capture replay only as a fallback.
     //
     // ⚠ Guest-declared `paramsSize`, measured on the bench: 8, 8, 520, 16, 532, 4, 1168.
-    0x2080_9009,
-    0x2080_9001,
-    0x2080_9064,
+    //
+    // ⊘⊘⊘ **CORRECTED 2026-08-20 (w349) — THREE IDS LEFT THIS LIST, AND CLAIMING THEM HERE
+    // WAS ACTIVELY SHADOWING THE FIX.** `0x20809009`, `0x20809001` and `0x20809064` are now
+    // ANSWERED from a measured table by `kayfabe_device::inittables` (see
+    // `kayfabe_abi::cudartinit`). While they sat in this list, `respond_control` claimed
+    // them, `respond_subdevice_control` refused them (the forward gate ships OFF), and the
+    // device chain's table never ran — `[measured, boot w349cud1]` `0x20809009 refused=1,
+    // served=0` with the `WantedTable` rows present and correct.
+    //
+    // ★★★ The general shape, and it is worth more than the three ids: **this list is a
+    // CLAIM, and a claim that ends in a refusal spends every later policy's turn.** An id
+    // belongs here only if this policy will DECIDE it — not merely if this policy has an
+    // opinion about it. `respond_control` returns `None` for anything absent, which is what
+    // lets a downstream table answer.
+    //
+    // ⚠ The four below stay: `0x2080a026` and `0x2080a084` were measured INNOCENT (refusing
+    // either alone leaves a bare-metal host's `cudaGetDeviceCount` at `0`), and `0x2080a001`
+    // / `0x2080a097` are unmeasured. All four remain forward-or-refuse.
     0x2080_a001,
     0x2080_a026,
     0x2080_a084,
@@ -2160,8 +2175,12 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO => {
                 self.respond_get_mmu_fault_info(cmd, &req)
             }
-            0x2080_9009 | 0x2080_9001 | 0x2080_9064 | 0x2080_a001 | 0x2080_a026
-            | 0x2080_a084 | 0x2080_a097 => self.respond_subdevice_control(cmd, &req),
+            // ⊘ w349: `0x20809009` / `0x9001` / `0x9064` deliberately ABSENT — they are
+            // answered downstream from a measured table, and claiming them here refused
+            // them before that table could run. See `OBJECT_CONTROLS`'s note.
+            0x2080_a001 | 0x2080_a026 | 0x2080_a084 | 0x2080_a097 => {
+                self.respond_subdevice_control(cmd, &req)
+            }
             kayfabe_abi::submit::NVA06C_CTRL_CMD_PREEMPT => self.respond_preempt(cmd, &req),
             // ★★★★★ w292 — the input-only group, dispatched by TABLE LOOKUP rather than by
             // four arms, so an id can never be claimed above and undecided here.
