@@ -3797,6 +3797,69 @@ impl SharedDevice {
         .flatten()
     }
 
+    /// ★★★★★ **w363 — EVERY FRAMEBUFFER JOIN A *RETIRED* PROC STILL OWNS.**
+    ///
+    /// # The defect this exists for, measured
+    ///
+    /// `[measured w361/w362, 2026-08-20, real GA106]` the **first** CUDA process in a boot
+    /// gets its GR context framebuffer leaves joined and **8/8 completions**; **every later
+    /// one** gets `THE INSTALL REFUSED … already joined` on the same three frames
+    /// (`0x400000` `SET_VALID_SPAN_OVERFLOW_AREA`, `0x600000` `SET_TEX_HEADER_POOL`,
+    /// `0x800000` `SET_TEX_SAMPLER_POOL`), **zero** joins, and therefore **0/8** completions
+    /// — libcuda then spins forever. The effect is ORDINAL: the predecessor's *kind* is
+    /// irrelevant (a second `torch` with nothing between it and the first fails identically).
+    ///
+    /// # Why the existing takeover cannot reach it
+    ///
+    /// [`SharedDevice::supersede_joined_fb_leaf`] routes by the **caller's own** `(gpu, pdb)`
+    /// and searches only `p.vases[&(gpu, pdb)]`. A join left behind by a **different,
+    /// exited** process lives in a different VAS under a different PDB, so the takeover path
+    /// **cannot reach it by construction** — no amount of arming helps.
+    ///
+    /// # Why release-on-death and not a cross-process takeover
+    ///
+    /// Two guest processes do not have to trust each other, so reaching into a **live**
+    /// peer's table to steal its backing is exactly the cross-process leakage this design
+    /// forbids. A **dead** proc is different: nothing can still be reading through it, and
+    /// real RM does precisely this at `fd` close — which is why the Mode-1 sibling has no
+    /// analog of this bug. It **delegates** lifecycle to RM; Mode 2 **models** it, so Mode 2
+    /// owes the implicit free.
+    ///
+    /// ⊘ **Read-only, and that is sufficient.** The rows are not unbound here: the caller
+    /// runs this immediately before the reap that **drops** these procs, so their tables die
+    /// with them. What the caller must still do, in this order, is
+    /// [`kayfabe_device::plane::RegPlane::release_fb_join`] (the guest's view stops being
+    /// served out of the join) and *then*
+    /// [`SharedDevice::revoke_published_fb_leaf`] + [`SharedDevice::drain_pending_releases`]
+    /// (the host half). Guest view first is the same ordering the supersede path states.
+    #[must_use]
+    pub fn retired_fb_joins(&self) -> Vec<kayfabe_fwd::RevokedLeaf> {
+        self.with_retired(|corpses| {
+            let mut out = Vec::new();
+            for p in corpses {
+                for ((gpu, pdb), vas) in p.vases.iter() {
+                    for (va, len, b) in vas.table.iter() {
+                        let Some(h) = b.host() else { continue };
+                        if h.frees_object()
+                            && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow
+                        {
+                            out.push(kayfabe_fwd::RevokedLeaf {
+                                gpu: *gpu,
+                                pdb: *pdb,
+                                va: GpuVa(va),
+                                len,
+                                phys: b.phys(),
+                                host_va: h.host_va(),
+                                memory: h.memory(),
+                            });
+                        }
+                    }
+                }
+            }
+            out
+        })
+    }
+
     /// ★★★★★ **THE PARKED PROMOTE HALVES, BY IDENTITY** — every entry of
     /// [`kayfabe_core::gpu::Vas::promote_halves`] rendered with its `buffer_id`, which half
     /// arrived, and the address it carries.

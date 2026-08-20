@@ -3882,6 +3882,61 @@ fn observer_loop(
                 u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX)
                     >= RETIRED_DRAIN_BUDGET_US
             });
+            // ★★★★★ **w363 — A DEAD PROC'S FRAMEBUFFER JOINS DIE WITH IT.**
+            //
+            // `[measured w361/w362]` the FIRST CUDA process in a boot joins its GR context
+            // leaves and gets 8/8 completions; EVERY later one is refused on the same three
+            // frames with `already joined`, gets ZERO joins, and therefore 0/8 completions —
+            // libcuda spins forever. The stale join belongs to a proc that has already
+            // exited, and `supersede_joined_fb_leaf` cannot reach it: that path routes by the
+            // CALLER's `(gpu, pdb)` and searches only the caller's own VAS, so a predecessor's
+            // join in a different VAS is unreachable BY CONSTRUCTION.
+            //
+            // ⊘ Deliberately NOT a cross-process takeover. Two guest processes do not have to
+            // trust each other, so stealing a LIVE peer's backing is the cross-process leakage
+            // this design forbids. A DEAD proc is different — nothing can still be reading
+            // through it — and real RM does exactly this at `fd` close, which is why the
+            // Mode-1 sibling has no analog of this bug: it DELEGATES lifecycle to RM, while
+            // Mode 2 MODELS it and therefore owes the implicit free.
+            //
+            // ★ Ordering is the supersede path's ordering: the guest's VIEW goes first
+            // (`release_fb_join`), then the HOST half. A host object freed while the store
+            // still serves bytes out of it is a `SIGBUS` in the VMM.
+            //
+            // ⊘ Idempotent by construction: a proc held back for drain is visited again on
+            // the next tick, and `release_fb_join` answers `false` for a join already given
+            // back. The line prints only when something actually moved, so a quiet tick stays
+            // quiet and a release is never inferred from silence.
+            let stale = device.retired_fb_joins();
+            if !stale.is_empty() {
+                let (mut released, mut already) = (0usize, 0usize);
+                for r in &stale {
+                    if plane.release_fb_join(r.phys) {
+                        device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                        released += 1;
+                    } else {
+                        already += 1;
+                    }
+                }
+                if released > 0 {
+                    let drained = device.drain_pending_releases();
+                    eprintln!(
+                        "kayfabe: RETIRED-FB-RELEASE ★★★★★ {released} join(s) of EXITED proc(s) \
+                         given back (already_free={already} rows_seen={} drained={drained}) — \
+                         the frames are installable again, so the NEXT process's GR context can \
+                         join them. ⊘ Guest view released BEFORE the host object, per the \
+                         supersede ordering",
+                        stale.len()
+                    );
+                    for r in &stale {
+                        eprintln!(
+                            "    RETIRED-FB-RELEASE fb_phys=0x{:x} va=0x{:x} len=0x{:x} \
+                             host_va=0x{:x} memory=0x{:x}",
+                            r.phys, r.va.0, r.len, r.host_va, r.memory.raw()
+                        );
+                    }
+                }
+            }
             let (reaped, _deferred) = device.reap_retired_held();
             // ⊘ `drain.disposed` ONLY — a per-call count. See the note above.
             (
