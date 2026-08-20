@@ -22,6 +22,21 @@ test code}, and a C QOM shim that links the whole thing into a stock QEMU. Devel
 today. \textbf{This document is pinned to Rust HEAD \code{5c367a38} (2026-08-20).}
 
 \smallskip
+⊘ \textbf{SUPERSEDED IN PART BEFORE ITS FIRST READING --- 2026-08-20 20:32, at \code{56dc01f3},
+and the superseded claim is this document's own headline blocker.} Twelve commits landed after
+this pin (boots \code{w357}--\code{w367}, all on the same real GA106). Two of them retire claims
+made below and both are corrected in place rather than deleted:
+\textbf{(a) sequential multi-process no longer fails} --- three consecutive guest CUDA processes
+in one boot all return \code{TORCH\_OK}, with identical doorbell counts and 8/8 completions each
+(\S\ref{sec:seqfix}); \textbf{(b) the "object graph" wall named two paragraphs below does not
+exist} --- every refusal in it was re-measured against the boot that \emph{passes}, at the same
+revision and the same binary, and every one is \emph{more numerous there} (\S\ref{sec:llmwall}).
+⚠ \textbf{Every structural count in this paper --- lines, crates, dependency edges, test counts,
+the claim-ledger numbers --- is \measured{} at \code{5c367a38} and has NOT been re-derived at
+\code{56dc01f3}.} Read those as pinned; read every behavioural claim through the corrections
+marked in place.
+
+\smallskip
 \textbf{★★★★★ What moved since the previous pin (\code{f33e1c8}, 2026-08-03) is the whole thesis
 of the document.} The previous four revisions were each built around a sentence of the form
 \emph{"the Rust port has not reached compute"}, and the fourth's specific version was: \emph{"the
@@ -58,10 +73,22 @@ returned \textbf{3} from its first call, which is what stops PyTorch. \textbf{Th
 2026-08-20}: \code{cudaGetDeviceCount}, \code{cudaSetDevice}, \code{cudaMalloc} and
 \code{cudaDeviceSynchronize} all return 0, and \code{torch.cuda.is\_available()} is \code{True}.
 \textbf{⊘ And the model still does not run} — \code{torch.\_C.\_cuda\_init()} raises
-\emph{"CUDA unknown error"} and \code{LLM\_TOKENS = 0}. The failure moved one rung into a
-\emph{different subsystem}: our own object graph, where a handle resolves to the \textbf{wrong
-kind} of object on the context-promotion path. Host \code{Xid} is 0 and guest \code{NVRM} sits at
-the green baseline, so it is a refusal we issue, not a fault.
+\emph{"CUDA unknown error"} and \code{LLM\_TOKENS = 0}. Host \code{Xid} is 0 and guest
+\code{NVRM} sits at the green baseline, so it is a refusal we issue, not a fault.
+
+\smallskip
+⊘ \textbf{CORRECTED at \code{129dd316}, 2026-08-20 15:39 --- three minutes after this document's
+pin.} This paragraph used to continue: \emph{"the failure moved one rung into a different
+subsystem: our own object graph, where a handle resolves to the wrong kind of object on the
+context-promotion path."} \textbf{That wall does not exist.} Its every element was re-measured on
+the boot that \emph{passes}, same revision and same binary
+(\code{PromoteFault::UnknownContextObject} 4 vs 3, \code{RmGraphError::FreeUnknown} 14 vs 10,
+unmapped alloc classes 6 vs 4), and the census line called \emph{"the sharpest on the board"}
+turned out to be an eleven-day-old baseline line describing a route that legitimately does not
+apply (\code{dbc6c953}). ⇒ \textbf{What \code{torch.\_C.\_cuda\_init()} fails on is
+unidentified}, and the paper's account of it is \S\ref{sec:llmwall} read with that block on top.
+⚠ \textbf{The LLM workload has not been re-run since \code{3887be37}}, so it has not been retested
+across the multi-process fixes of \S\ref{sec:seqfix} either.
 
 \smallskip
 ⚠ \textbf{This paragraph was rewritten three times in the hours it took to write this document},
@@ -136,6 +163,12 @@ were falsified by the work they named, usually within days}. Revision one said t
 was a disconnected crate; two said it was the bridge; three said it was the guest driver reaching
 the bridge; four said it was the execution plane, which "cannot be faked". \textbf{All four have
 been crossed.} So read this revision's version knowing the base rate.
+⊘ \textbf{UPDATED 2026-08-20 20:32: make that FIVE of five, and the fifth did not survive the
+afternoon it was written in.} This revision's version --- \emph{"the remaining wall is our own
+object model, reached through closed CUDA userspace"} --- was refuted \textbf{three minutes} after
+this document was committed (\S\ref{sec:corrections} row 44), and its headline blocker was fixed
+\textbf{four hours and fifty-five minutes} after it (row 43, \S\ref{sec:seqfix}).
+\emph{The base rate is now 5/5 and the interval is measured in minutes.}
 
 \smallskip
 \textbf{What is established, and it is a real result.} A stock, unpatched NVIDIA 580.159.04 open
@@ -152,16 +185,28 @@ the thing this project exists to do, and it is done for one workload shape on on
   and \code{torch.cuda.is\_available()} is \code{True} — \textbf{and the model still does not
   run}: torch's full CUDA init raises \emph{"CUDA unknown error"} and produces \textbf{zero
   tokens} (\S\ref{sec:llmwall}). The LLM workload is this project's own definition of a useful
-  v1 and it has never produced a token.
-\item \textbf{Multi-process works for one shape and the general claim is not made.} Two
-  \emph{concurrent} guest CUDA processes both computed \code{43} (\measured{} 2026-08-14, w299,
-  rev \code{f459cffa}), including on a staggered arm where the second started while the first was
-  demonstrably \emph{inside} \code{cuCtxCreate} — so the C artifact's \#14 shape did not
-  reproduce. ⊘ \textbf{The rung scoped itself}: two identical short workloads whose CE work is
+  v1 and it has never produced a token. ⚠ \textbf{Last measured at \code{3887be37}
+  (\code{w355llm1}); it has not been re-run across the multi-process fixes of
+  \S\ref{sec:seqfix}}, so its current status is \unver{} rather than known-failing. ⊘ And the
+  \emph{cause} this bullet used to name — our object graph — was refuted the same afternoon
+  (\S\ref{sec:llmwall}): the cause is unidentified.
+\item \textbf{Multi-process works for two shapes now, and the general claim is still not made.}
+  Two \emph{concurrent} guest CUDA processes both computed \code{43} (\measured{} 2026-08-14,
+  w299, rev \code{f459cffa}), including on a staggered arm where the second started while the
+  first was demonstrably \emph{inside} \code{cuCtxCreate} — so the C artifact's \#14 shape did
+  not reproduce. ⊘ \textbf{The rung scoped itself}: two identical short workloads whose CE work is
   emulated, and the underlying serialisation (the QEMU BQL plus a device-global unranked mutex
   held across the host verb) is real, structural, and \emph{latent rather than absent} — it
-  arrives when the inline span grows. \textbf{And a second context \emph{sequentially} in one
-  boot still hung} at \code{cuCtxCreate} (w311). \emph{Nothing here is a multi-tenancy claim.}
+  arrives when the inline span grows.
+  \newline ⊘ \textbf{CORRECTED 2026-08-20 at \code{56dc01f3}, and this bullet used to end with the
+  paper's headline blocker.} It read: \emph{"and a second context sequentially in one boot still
+  hung at \code{cuCtxCreate} (w311)."} \textbf{That is now false.} \measured{} \code{w367}, rev
+  \code{cca2eb4b}, one boot: a first torch process, a second with no \code{nvidia-smi} between,
+  and a third after \code{nvidia-smi} \textbf{all return \code{TORCH\_OK}}, with \textbf{8/8}
+  completions and \emph{identical} doorbell counts (104 \code{Ce} + 403 \code{GrCompute}) each,
+  and host \code{dmesg} at 0 \code{NVRM} / 0 \code{Xid} (\S\ref{sec:seqfix}). ⚠ \textbf{A
+  \emph{fourth} process still fails}, above the \code{ioctl} boundary, cause unknown; $n = 1$
+  boot. \emph{Nothing here is a multi-tenancy claim.}
 \item \textbf{There is no tenant axis at all.} No \code{VmId}, \code{TenantId} or \code{GuestId}
   exists anywhere in \file{crates/}. Cross-VM separation is the incidental consequence of two VMs
   being two host processes, and at the one place two tenants meet — the host NVIDIA driver — RM's
@@ -361,11 +406,20 @@ Mode-2 CUDA correctness & 2 &
 Mode-2 multi-process & 2 &
   \textbf{Never.} Bug \#14 is open. Root-caused on hardware 2026-07-24 by a host Xid 31
   \code{FAULT\_PDE} naming the loser's exact GR channel: the second process's identical guest
-  VAs were never published into \emph{its own} host address space. \\
+  VAs were never published into \emph{its own} host address space.
+  ★ \textbf{The Rust port has since done both halves, and this row is about the C.} Two
+  \emph{concurrent} processes computed on 2026-08-14 (w299); \emph{sequential} processes ---
+  three of them --- passed on 2026-08-20 (\code{w367}, \S\ref{sec:seqfix}). \\
 Mode-2 sequential processes & 2 &
-  \textbf{Broken at HEAD.} Measured 2026-07-25: exactly \emph{one} CUDA process works per QEMU
-  lifetime; the second fails \code{cuInit}$\to$999 regardless of how the first exited. The
-  "fresh boot per clean run" bench discipline \emph{is} this bug, not a precaution. \\
+  \textbf{Broken at the C's HEAD} (\code{c86b69d}; the C tree has not moved since 2026-08-13).
+  Measured 2026-07-25: exactly \emph{one} CUDA process works per QEMU lifetime; the second fails
+  \code{cuInit}$\to$999 regardless of how the first exited. The "fresh boot per clean run" bench
+  discipline \emph{is} this bug, not a precaution.
+  ⊘ \textbf{SUPERSEDED FOR THE PORT, 2026-08-20 (\code{56dc01f3}):} three sequential guest CUDA
+  processes now pass in one boot with \textbf{8/8} completions and identical doorbell counts each
+  (\code{w367}, \S\ref{sec:seqfix}). ⚠ The \emph{fourth} still fails. The C's limitation was
+  \textbf{not} inherited after all --- the port's cause was its own: a framebuffer join orphaned
+  by an exited process. \\
 Mode-2 graphics / display & 2 & \textbf{Never.} All Vulkan/OpenGL/present results are Mode 1. \\
 Mode-2 on the 22-app matrix & 2 & \textbf{Never run.} It is Mode-2's definition of done. \\
 Multi-GPU, MIG, non-Ampere & — & \textbf{Never.} Ampere GA106 only. Turing/Ada/Hopper/Blackwell
@@ -748,7 +802,12 @@ the wire — see \S\ref{sec:bridge}) or downstream (\S\ref{sec:llmwall}).}
 \caption{The process and isolation model, and the problem it exists to solve. \textbf{★ Two
 concurrent guest CUDA processes have now been driven through this model on real hardware}, each
 with its own isolate, arena and address space, both computing correctly — so the founding \#14
-hazard did not reproduce. \emph{One VM, two identical short workloads.} The per-\code{Proc}
+hazard did not reproduce. \emph{One VM, two identical short workloads.} \textbf{★★★★★ And as of
+2026-08-20 (\code{w367}, \S\ref{sec:seqfix}) so have three \emph{sequential} ones}, in one boot,
+with identical doorbell counts and 8/8 completions each — the model's own cross-process refusal
+held throughout (a live peer's framebuffer backing was refused \emph{by name} 132 times), and what
+was reclaimed was a join no live or dead process named. ⊘ \textbf{A fourth process still fails};
+$n = 1$ boot. The per-\code{Proc}
 ownership of all four planes is built and heavily tested against mocks. \textbf{★ The sandboxed
 isolate process at the bottom is now real} — capability-less, six fresh namespaces, holding
 \file{/dev/nvidiactl} and \file{/dev/nvidia0}, spawned in response to the guest's own action. ⊘
@@ -1966,6 +2025,16 @@ revision embedded in the binary and checked by a stamp gate before the run is gr
   a staggered arm where the second process started while the first was \emph{demonstrably inside}
   \code{cuCtxCreate}, gated on the first's own print rather than a sleep. \\
 \addlinespace
+\textbf{w367} & \textbf{\code{TORCH\_OK} $\times 3$} \newline \code{8/8, 8/8, 8/8} &
+  \textbf{★★★★★ THREE SEQUENTIAL GUEST PROCESSES PASSED IN ONE BOOT.} \measured{} 2026-08-20,
+  rev \code{cca2eb4b}, 600\,s step bounds. A first torch process, a second with no
+  \code{nvidia-smi} between it and the first, and a third after \code{nvidia-smi} --- all
+  \code{avail=True sum=4.0}, all \textbf{8/8} completions observed, all ringing
+  \emph{identically} 104 \code{Ce} + 403 \code{GrCompute} doorbells; host \code{dmesg} 0
+  \code{NVRM} 0 \code{Xid}. Two boots earlier every process after the first rang exactly eight
+  doorbells and stalled forever. ⊘ \textbf{A \emph{fourth} process still fails}, above the
+  \code{ioctl} boundary, cause unknown; $n = 1$ boot. \S\ref{sec:seqfix}. \\
+\addlinespace
 \code{cup8} & \code{bad=0 maxerr=0} &
   \textbf{Byte-exact matmul at scale.} \code{N=2048}, 16\,MiB per matrix, 48\,MiB device,
   \code{grid=(128,128) block=(16,16)}, \file{traces/w308\_cup8/}; and again at \textbf{N=3072}
@@ -2290,6 +2359,15 @@ commits landed in one afternoon. That is not an apology — it is the measuremen
 \emph{"the cause is unknown and five hypotheses are refuted"} $\to$ \emph{"the cause is one
 control we refuse"} $\to$ \emph{"the wall is broken"} $\to$ \textbf{the version below, which is
 that the initialisation wall is genuinely broken and \emph{the LLM still does not run}.}
+
+\smallskip
+⊘ \textbf{AND A FOURTH TIME, 2026-08-20 15:39 --- three minutes after this document was pinned,
+and it is the one that changes what a reader should do with this section.} The version below ends
+by naming \emph{the object graph} as the next wall. \textbf{That wall does not exist}
+(\code{129dd316}, \code{dbc6c953}), and the fold-in sits above it rather than beside it. ⚠ Read
+the whole of this section as \measured{} at \code{3887be37}: \textbf{the LLM workload has not
+been re-run since}, and in particular not across the multi-process fixes of \S\ref{sec:seqfix}.
+Its current status is \unver{}, not known-failing.
 \end{claimbox}
 
 \subsubsection*{The symptom as it stood, and why every conventional instrument said "healthy"}
@@ -2434,7 +2512,63 @@ init, which walks the primary-context path; and the control-serving plane is gen
 the refusal counter on that path fired \textbf{zero} times.
 \end{warnbox}
 
-\subsubsection*{★★ The next wall is a different subsystem: the object graph}
+\subsubsection*{\texorpdfstring{⊘⊘⊘ REFUTED: "the next wall is the object graph" --- there is no object-graph wall}{REFUTED: there is no object-graph wall}}
+
+\begin{warnbox}\small
+\textbf{⊘⊘⊘ EVERYTHING BELOW THIS BOX IS REFUTED, AND IT WAS REFUTED THREE MINUTES AFTER THIS
+DOCUMENT WAS PINNED.} It is kept, not deleted, because the \emph{way} it was wrong is the
+section's most useful content. \measured{} \code{129dd316}, 2026-08-20: the same refusal census
+was run against the boot that \textbf{passes} --- \code{w354cud1} (\code{cudart} green) versus
+\code{w355llm1} (LLM failing), \textbf{same revision \code{3887be37}, same binary}:
+
+\begin{center}\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{refusal} & \textbf{passes} & \textbf{fails} \\
+\midrule
+\code{PromoteFault::UnknownContextObject} & 4 & 3 \\
+\code{RmGraphError::FreeUnknown} & 14 & 10 \\
+\code{BridgeRefusal::UnmappedAllocClass} & 6 & 4 \\
+\code{wrong-kind(Device)} census lines & 2 & 2 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{★★★★★ Every element of the "wall" is MORE NUMEROUS in the boot that works.} It is
+baseline. \textbf{There is no object-graph wall}, and the failing run was never the experiment ---
+the \emph{difference} is.
+
+\smallskip
+⊘ \textbf{And the sharpest line was the most wrong.} \code{tsg = mid-miss(h0xa,
+wrong-kind(Device))} is \textbf{not a defect} (\code{dbc6c953}): a channel's parent is
+legitimately either a TSG or a Device --- grouped channels have the first, bare channels the
+second --- and the route that does not apply says so by name. The same line appears
+\emph{byte-identical} in a boot from 2026-08-09 with the same count. \textbf{"The sharpest line
+on the board" was an eleven-day-old baseline line.} Two of the three refusals were separately
+already ruled: \code{PromoteFault} is the guest kernel RM's \emph{RC watchdog} channel, refused
+deliberately since 2026-08-09; \code{FreeUnknown} is faithful RM behaviour, decided 2026-07-28.
+
+\smallskip
+★ \textbf{The process failure is the transferable part, and it is this project's own written
+rule.} \file{memory/a\_refusal\_needs\_a\_negative\_control.md} says \emph{"the failing run is
+not the experiment; the DIFFERENCE is"} --- and the census below was read as a wall
+\textbf{without running the control, which was two log files already on the bench and one
+\code{grep} away}. ⇒ \textbf{Before naming any refusal a wall, run the control. Mechanically,
+first, always.} ⚠ A second-order cost: the refuted claim lived in a \emph{commit message}, and a
+research agent later returned it as its top-ranked candidate \emph{with a hash attached to lend it
+weight}. Speculation in a commit message becomes somebody's premise.
+
+\smallskip
+\textbf{⇒ What replaces it: nothing yet.} What fails inside \code{\_cuda\_init()}'s ${\sim}479$-ioctl
+primary-context graph is \textbf{unidentified}. Eliminated by measurement so far: the reply-body
+plane, the C artifact's CE-caps precedent (both of its controls are never issued here),
+\code{pdb=N} (by design since 2026-08-09), \code{wrong-kind} (a route that legitimately does not
+apply), and now the entire refusal census. The recorded method that has worked twice is to trace
+host versus guest at the failing layer and \textbf{diff the bodies} --- not to read a census.
+\end{warnbox}
+
+\smallskip
+\emph{The refuted text follows, verbatim.}
 
 \code{Xid} is \textbf{0} and guest \code{NVRM} sits at the green baseline, so this is a
 \emph{refusal}, not a fault. The boot names it:
@@ -2457,6 +2591,10 @@ kind of object.} That is a named, specific defect in the context-promotion path,
 \emph{not} the class of thing the previous six rungs were about. \emph{The campaign has moved from
 "which control does the driver want" to "is our object model right", which is a different kind of
 problem and squarely inside our own code.}
+
+\smallskip
+\emph{End of the refuted text.} ⊘ \textbf{The caveats below are about the \code{cudart} control
+ladder --- the fix that \emph{did} land --- and they stand.}
 
 \begin{claimbox}\small
 \textbf{⊘ Four caveats on the fix, none of them small, all from the rung that landed it.}
@@ -3060,6 +3198,133 @@ not a layer.} It is recorded here because the fourth answer above should be read
 that much suspicion.
 \end{claimbox}
 
+\subsection{\texorpdfstring{★★★★★ Sequential multi-process: the wall fell, three processes pass, and the fourth does not}{Sequential multi-process: the wall fell, three processes pass, and the fourth does not}}
+\label{sec:seqfix}
+
+\begin{warnbox}\small
+\textbf{★★★★★ This subsection was added after the rest of the paper was written, and it falsifies
+the paper's own headline blocker.} Everything in it is dated \code{w361}--\code{w367} and landed
+in the five hours \emph{after} this document's pin (\code{5c367a38}, 15:36) and before its first
+reading (\code{56dc01f3}, 20:32). The claim it replaces --- \emph{"a second CUDA context
+sequentially in one boot still hangs"} --- is left standing wherever it appeared, corrected in
+place rather than deleted, per this paper's own house style (\S\ref{sec:drift}).
+\end{warnbox}
+
+\textbf{What it was.} \measured{} boots \code{w361}, \code{w362}, \code{w363} (revs
+\code{3887be37} and \code{ecb67fae}), real GA106, internally controlled inside each boot: the
+\emph{first} guest CUDA process rang 403 \code{GrCompute} + 104 \code{Ce} doorbells and got
+\textbf{8/8} completions; \emph{every later one} rang exactly \textbf{8 + 8} and got
+\textbf{0/8}, then spun forever (\code{R} state, 100\% CPU, unbounded at a 600\,s step limit).
+★ The effect was \textbf{ordinal, not predecessor-kind}: an \code{A2} arm --- a second torch
+process with no \code{nvidia-smi} between --- failed identically, which retracted this project's
+own earlier reading that a predecessor \emph{poisoned} its successor.
+
+\textbf{The cause, named by our own refusal text.} Three GR context frames --- \code{0x400000}
+(\code{SET\_VALID\_\allowbreak SPAN\_\allowbreak OVERFLOW\_AREA}), \code{0x600000} (\code{SET\_TEX\_HEADER\_POOL}),
+\code{0x800000} (\code{SET\_TEX\_SAMPLER\_POOL}) --- were refused 48 times each with \emph{"that
+framebuffer range is already joined; installing a second backing over it would give one leaf two
+memories"}. The first process joined all three; the later ones got \emph{zero} joins, so their GR
+context had no host backing, so nothing completed and \code{libcuda} waited forever. Everything
+upstream was identical between the working and failing processes and everything downstream was
+proportional to doorbell count; ⊘ \textbf{the vocabulary diff was empty both ways} --- only the
+\emph{count} diff could see this.
+
+⊘ \textbf{And the takeover mechanism that already existed could not fix it \emph{by
+construction}.} \code{supersede\_\allowbreak joined\_\allowbreak fb\_leaf} routes by the \emph{caller's own}
+\code{(gpu, pdb)} and searches only that address space, while the framebuffer store is
+per-\emph{device} and keyed by physical address --- so a join left by a different, exited process
+lives under another page-directory base and is unreachable to it. Arming it harder does nothing:
+32 successful supersedes in the same boot and \textbf{zero} on these frames.
+
+\textbf{The two fixes.}
+\begin{enumerate}[itemsep=0.4ex]
+\item \textbf{Orphan reclaim} (\code{4d88723c}, \code{w366}). \measured{} \code{w365}: all 48
+  refusals of each of the three frames, arriving from \emph{two independent} later processes,
+  censused \code{live=0 retired=0}. \textbf{The framebuffer store held a join that no address
+  table anywhere named} --- refusing it refused on behalf of nobody. The fix gives the store's
+  join back at the \code{SUPERSEDE NO-ROW} branch when neither a live nor a retired row names the
+  frame, recomputed at the decision point rather than read from the diagnostic's cache.
+  ★ \textbf{The cross-process boundary is kept, and it is measured}: \code{live > 0} stays refused
+  \emph{by name} --- \textbf{132} times in the passing boot. A live peer's backing is never taken.
+\item \textbf{Re-key the takeover cap} (\code{cca2eb4b}, \code{w367}).
+  \code{SUPERSEDE\_CAP\_PER\_FRAME = 4} was keyed by \emph{frame} and reset by nothing, so a
+  device-lifetime budget spent by early actors left later leaves \emph{fabricated} --- with no
+  host backing behind them. \textbf{Our own bound then raised a host \code{Xid}}: \code{w366}
+  recorded \code{Xid 31 FAULT\_PDE} on \code{CE2} at \code{0x7e59\_c6000000}, traced to
+  \code{fb\_phys=0x1e00000}, which appears \code{CAPPED} nine times in our own log. Re-keyed by
+  \code{(phys, taking va)}, a ping-pong between one pair of aliases is still bounded --- at
+  $2\times$\,CAP for that pair --- while a genuinely new owner arriving later gets its own budget.
+\end{enumerate}
+
+\textbf{The result.} \measured{} \code{w367}, rev \code{cca2eb4b}, real GA106, 600\,s step bounds,
+one boot:
+
+\begin{center}\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{arm} & \textbf{what it is} & \textbf{at \code{w363}} & \textbf{at \code{w367}} \\
+\midrule
+\code{A}  & first torch process & \code{TORCH\_OK} & \code{TORCH\_OK} \\
+\code{A2} & second, \emph{no} \code{nvidia-smi} between & \code{TORCH\_HUNG} at 600\,s & \textbf{\code{TORCH\_OK}} \\
+\code{C}  & torch after \code{nvidia-smi} ran and exited & \code{TORCH\_HUNG} at 600\,s & \textbf{\code{TORCH\_OK}} \\
+\code{D}  & a \emph{fourth} process & \code{TORCH\_FAIL} & \code{TORCH\_FAIL} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\code{avail=True sum=4.0} on all three passing arms; completions \textbf{8/8 OBSERVED} for
+\code{proc=2}, \code{proc=4} and \code{proc=7}; doorbells \textbf{104 \code{Ce} + 403
+\code{GrCompute}, identically for all three}; the three frames at \code{refused=0 joined=3} each;
+reclaim \code{ORPHAN-RECLAIMED=192 NOT-AN-ORPHAN=132 NO-OP=0}; host \code{dmesg} \textbf{0 lines,
+0 \code{NVRM}, 0 \code{Xid}} --- both of \code{w366}'s faults gone.
+
+\textbf{★ The identical doorbell counts are the strongest single line}: the second and third
+processes now do exactly the same amount of work as the first, where two boots earlier they rang
+eight doorbells and stalled forever.
+
+\begin{claimbox}\small
+\textbf{⊘ What this is NOT, stated at the width the evidence supports.}
+
+\smallskip
+\textbf{(1) Three is not unbounded.} \code{D}, the \emph{fourth} process, still fails ---
+\code{avail=False}, \emph{"CUDA unknown error"}. \measured{} \code{w367}: only \emph{three}
+processes ever existed for four workloads, so \code{D} never reached the device at all, and the
+guest kernel logged nothing while it ran --- guest \code{dmesg}'s last line is at 28.99\,s uptime.
+\textbf{It fails above the \code{ioctl} boundary and the cause is unknown.} ⚠ The \code{w367}
+run's logs are not committed to this tree; this row rests on the boot's commit message
+(\code{56dc01f3}) and on its operator's reading of the log, not on an artifact a reader can open.
+
+\smallskip
+\textbf{(2) The LLM workload has not been re-run at this revision}, so nothing here says it
+passes, and \S\ref{sec:llmwall} should be read as pinned to \code{3887be37}. ⚠ \code{D}'s error
+string is \emph{verbatim} the LLM workload's, which makes the two plausibly one defect that bites
+after $\geq 2$ processes --- \textbf{deliberately not welded}: the \code{w355}/\code{w360} LLM
+boots died \emph{earlier}, with \code{COMPLETION-WATCH = 0}.
+
+\smallskip
+\textbf{(3) A host object is leaked per reclaimed orphan frame} --- deliberately, and the log says
+so. With no table row there is no host virtual address and no memory to hand to the revoke path;
+\emph{the missing row is exactly what would have carried them}. Bounded at one object per orphaned
+frame, and a frame can be orphaned only once. The follow-up is named: plumb the backing that
+\code{FbStore::release\_join} already returns out through \code{RegPlane::release\_fb\_join},
+which currently discards it.
+
+\smallskip
+\textbf{(4) $n = 1$ boot}, against this project's own measured rule that a single-boot green is
+wrong \textbf{1 time in 5}. \unver{} at any larger $n$.
+\end{claimbox}
+
+\begin{claimbox}\small
+\textbf{★★ And the mechanism prediction was wrong in sign, which is the transferable part.} The
+rung pre-registered \emph{"\code{SUPERSEDE CAPPED} falls sharply"} as its mechanism clause. It went
+\textbf{202 $\rightarrow$ 5\,291}, and the frame that raised the \code{Xid} still reports
+\code{refused=482} --- while \code{joined} went to 21 and the \code{CE} \code{Xid} disappeared.
+Re-keying creates far \emph{more} tracked pairs, so \emph{more} \code{CAPPED} lines is the
+expected consequence of the fix, not evidence against it. ⇒ \textbf{The outcome clauses were met
+and the mechanism clause was measuring the wrong quantity.} \emph{Pre-register outcome and
+mechanism separately, and say in advance which one grades the rung.}
+\end{claimbox}
+
 \subsection{\texorpdfstring{What contact with hardware has and has not bought}{What contact with hardware has and has not bought}}
 \label{sec:contact}
 
@@ -3074,21 +3339,34 @@ production implementations} — false, there are three. \emph{The boot does not 
 the guest reaches a working \code{nvidia-smi}. \emph{No compute exists in Mode 2} — false;
 \code{cup3} returns 43 and \code{cup8} is byte-exact at 2048² and 3072². \emph{Every boot reports
 \code{doorbells: 0 arrived}} — false; the \code{cup3} boot reports \code{480 arrived, 480 served, 0 REFUSED}. \emph{The control plane and the execution plane have not met} — false.
+\textbf{★ And one added 2026-08-20, hours after this list was written:} \emph{"a second CUDA
+context sequentially in one boot still hangs"} — \textbf{false}; three sequential processes pass
+(\code{w367}, \S\ref{sec:seqfix}). \emph{"The next wall is our own object graph"} —
+\textbf{false}; every refusal in it is more numerous in the boot that passes
+(\S\ref{sec:llmwall}).
 
 \textbf{What is still true, and it is now a different list rather than a shorter one.}
 
 \begin{itemize}
 \item \textbf{No LLM has ever produced a token in this guest.} The \code{cudart}
-  \emph{initialisation} wall is broken (\S\ref{sec:llmwall}) and the failure moved one rung, into
-  our own object graph: torch's full CUDA init raises \emph{"CUDA unknown error"} against
-  \code{PromoteFault::UnknownContextObject} and a handle resolving to the \textbf{wrong kind} on
-  the context-promotion path. ⚠ \code{Xid} 0 — \emph{a refusal we issue, not a fault.}
-\item \textbf{Multi-process is demonstrated for \emph{concurrent} processes and not for
-  \emph{sequential} ones}, which is the opposite of what anyone predicted. \#14's shape did not
-  reproduce on two concurrent CUDA processes (w299); a second context after the first's teardown
-  in the same boot \emph{still hangs} at \code{cuCtxCreate} (w311). The C artifact had the same
-  sequential defect and called it \emph{"exactly one CUDA process works per QEMU lifetime"} — so
-  the bench's "fresh boot per clean run" discipline is still standing in for a fix.
+  \emph{initialisation} wall is broken (\S\ref{sec:llmwall}); torch's full CUDA init raises
+  \emph{"CUDA unknown error"}. ⚠ \code{Xid} 0 — \emph{a refusal we issue, not a fault.}
+  ⊘ \textbf{This bullet used to name the cause} — \emph{"the failure moved one rung, into our own
+  object graph: \code{PromoteFault::UnknownContextObject} and a handle resolving to the wrong kind
+  on the context-promotion path"} — \textbf{and that was refuted three minutes after this
+  document's pin} (\code{129dd316}): every one of those refusals is \emph{more} numerous in the
+  boot that passes. \textbf{The cause is unidentified.} ⚠ And the workload has not been re-run
+  since \code{3887be37}, so its status across the \S\ref{sec:seqfix} fixes is \unver{}.
+\item \textbf{Multi-process is demonstrated for \emph{concurrent} and for \emph{sequential}
+  processes, and bounded at three.} ⊘ \textbf{This bullet has moved out of the "still true" list
+  it was written for.} It read: \emph{"a second context after the first's teardown in the same
+  boot still hangs at \code{cuCtxCreate} (w311) \dots{} the bench's 'fresh boot per clean run'
+  discipline is still standing in for a fix."} \textbf{That is false as of \code{56dc01f3}}: three
+  sequential processes pass in one boot, 8/8 completions each, identical doorbell counts
+  (\code{w367}, \S\ref{sec:seqfix}). ⚠ \textbf{What is still true is narrower and is a different
+  sentence}: a \emph{fourth} process fails, above the \code{ioctl} boundary, on $n = 1$ boot,
+  cause unknown --- and the C artifact's own \emph{"exactly one CUDA process works per QEMU
+  lifetime"} was \textbf{not} the same defect after all.
 \item \textbf{There is no tenant axis.} \S\ref{sec:multitenant}. No two-VM run has been attempted
   by anyone.
 \item \textbf{Every green is a relaxed green} with named relaxations still armed
@@ -3116,9 +3394,13 @@ CUDA program whose numerical answer only a real GR engine could have produced.} 
 whole class of doubt about whether the protocol model is \emph{right}.
 
 \smallskip
-⊘ \textbf{It retires nothing about whether it is \emph{complete}}, and the two remaining walls are
-both of that kind: \code{cudart} fails on a control we refuse (\S\ref{sec:llmwall}), and the
-multi-process property fails or holds on publication paths no boot has exercised. \emph{The
+⊘ \textbf{It retires nothing about whether it is \emph{complete}}, and the remaining walls are all
+of that kind. ⊘ \textbf{CORRECTED 2026-08-20 (\code{56dc01f3}), and both halves of this sentence
+had moved by the time it was read.} It named \emph{"\code{cudart} fails on a control we refuse"}
+--- already superseded by \S\ref{sec:llmwall} at this very pin, which reports that wall broken
+--- and \emph{"the multi-process property fails or holds on publication paths no boot has
+exercised"}, which \code{w361}--\code{w367} then exercised, found a defect in, and fixed
+(\S\ref{sec:seqfix}). \textbf{What stands is the shape rather than the instances}: \emph{the
 project has stopped being blocked on "does this work at all" and started being blocked on "what
 else does the driver want" — which is a better problem and a much longer tail.}
 
@@ -3168,6 +3450,23 @@ event: the last reference retires and reaps the owner \emph{without issuing a si
 verb}, and the disposition of record is the isolate process's death. GPA is conserved
 independently and asserted. But any future reclamation ledger, quota or accounting hook will be
 wrong on that path first — which the design says, in advance, in its own words.
+
+\textbf{★★ And a third disposition arrived on 2026-08-20, unplanned, as the fix for the
+sequential multi-process wall} (\S\ref{sec:seqfix}). A framebuffer join can outlive \emph{every}
+table row that named it: the store is per-device and keyed by physical address, the tables are
+per-address-space, and a process's rows are unbound in the same tick as the reap --- so by the
+time anything looks, the corpse's table is empty while the store still holds the join.
+\measured{} \code{w365}: three GR context frames, 48 refusals each, from two independent later
+processes, all censused \code{live=0 retired=0}. \textbf{An orphan is provably unowned, so
+reclaiming it needs no cross-process trust argument at all} --- and \code{live > 0} stays refused
+\emph{by name}, 132 times in the passing boot. ⊘ \textbf{The disposition is a deliberate,
+logged leak}: with no table row there is no host virtual address and no memory to hand to the
+revoke path, so the host object is dropped rather than freed. Bounded at one per orphaned frame,
+and a frame can be orphaned only once. \textbf{The follow-up is named and not done}: plumb the
+backing that \code{FbStore::release\_join} already returns out through
+\code{RegPlane::release\_fb\_join}, which discards it. ⇒ \emph{This is the second reclamation
+path whose disposition of record is "the owner died", and any future ledger or quota will be wrong
+on it first --- for the same reason as the one above.}
 
 \textbf{And the most leak-prone moment has no vocabulary at all until L1-M2 lands.} A worker that
 dies \emph{mid-chain} cannot run its own unwind, so everything allocated before the failure is in
@@ -3519,12 +3818,40 @@ a compiler behind it. The house style for corrections is \emph{strike visibly} �
 struck, with the correction and its evidence — so a reader who remembers the old claim learns it
 was wrong rather than doubting their memory.
 
+\begin{warnbox}\small
+\textbf{★★★★★ A FURTHER INSTANCE, ADDED 2026-08-20 AT \code{56dc01f3}, AND IT IS THE SHORTEST
+INTERVAL YET MEASURED: FOUR HOURS AND FIFTY-FIVE MINUTES.} This paragraph is folded in above the
+tally below because the tally is what it corrects.
+
+\smallskip
+This revision was pinned at \code{5c367a38} and committed at \textbf{15:36}. Its
+\textbf{headline blocker} --- \emph{"a second CUDA context sequentially in one boot still
+hangs"} --- was \textbf{fixed at 18:31} (\code{ecb67fae} onwards) and \textbf{measured passing
+at 20:20} (\code{cca2eb4b}, three sequential processes, \S\ref{sec:seqfix}). A \emph{second}
+headline --- \emph{"the next wall is a different subsystem: the object graph"} --- was refuted at
+\textbf{15:39}, \textbf{three minutes} after the pin, by a negative control that had been sitting
+on the bench as two log files the whole time (\S\ref{sec:llmwall}).
+
+\smallskip
+⇒ \textbf{That makes four consecutive revisions in which the falsified claim was the one the
+paper led with}, and the interval has gone from \emph{days} to \emph{minutes} --- this time
+without a new revision being written at all. ⊘ \textbf{And the two
+instances are different species, which is the useful part.} The multi-process claim
+\emph{went} stale --- true when written, overtaken by work done afterwards, and no discipline
+available to a writer would have caught it. The object-graph claim was \textbf{false when
+written}, and the control that refutes it \emph{already existed}: it was a census of a failing
+run read as a wall, by an author who had written down the rule \emph{"the failing run is not the
+experiment; the DIFFERENCE is"} eleven messages earlier. \emph{Only one of those two is a drift
+problem. The other is a method problem wearing a drift problem's clothes.}
+\end{warnbox}
+
 \textbf{And the pattern is live right now, in this document's subject, and in this document.}
 The first revision found fourteen instances (\S\ref{sec:corrections} rows 1--14). The second
 found six more, two of them in the first revision's own text. The third found six more again,
 \emph{three} in this paper including its headline. \textbf{This revision found eight more, and
 \emph{five} of them are in this paper} — including, again, the sentence it led with, which has
-now been the falsified claim in \textbf{three consecutive revisions}.
+now been the falsified claim in \textbf{three consecutive revisions} — \textbf{four} counting
+the post-pin correction pass recorded in the box above.
 
 \begin{claimbox}\small
 \textbf{★★ The direction of the drift inverted at this revision, and that is a new thing to say
@@ -3569,11 +3896,17 @@ first run on. The claim that survived that audit was the one marked \code{[infer
 knew it was second-hand. The claim that did not survive was marked \textbf{RESOLVED}.
 
 \subsection{Risks this document adds}
+\label{sec:risks}
 
 \begin{itemize}
 \item \textbf{★★★★★ Nothing anyone would actually run works.} \S\ref{sec:llmwall}. The
   \code{cudart} initialisation wall is broken ($n = 2$ workloads) and \textbf{the model still
-  produces zero tokens}: the failure moved one rung into our object graph. ⊘ \textbf{And the
+  produces zero tokens}. ⊘ \textbf{This bullet used to continue} \emph{"the failure moved one rung
+  into our object graph"} \textbf{--- refuted at \code{129dd316}}, three minutes after this paper
+  was committed (\S\ref{sec:corrections} row 44): \textbf{the cause is unidentified}, which is
+  worse news than a named wall, not better. ⚠ \textbf{And the workload has not been re-run since
+  \code{3887be37}}, so "zero tokens" is \measured{} at that revision and \unver{} at HEAD.
+  ⊘ \textbf{And the
   milestone before it was graded on a proxy} — \code{is\_available()} went \code{True}, was
   reported as the wall breaking, and the actual model disagreed within the hour. \emph{This
   project has now made that exact mistake twice}, the first time declaring "first compute" on a
@@ -3611,20 +3944,30 @@ knew it was second-hand. The claim that did not survive was marked \textbf{RESOL
   experiment that would settle any of it — two VMs on one box — has never been attempted}. The
   highest-value fix is one line of deployment policy, which is encouraging and is not the same as
   having done it.
-\item \textbf{★ Multi-process holds for \emph{concurrent} processes and fails for
-  \emph{sequential} ones.} \#14's shape did not reproduce on two concurrent CUDA processes; a
-  second context after the first's teardown in the same boot still hangs at \code{cuCtxCreate},
-  which is the C artifact's own limitation inherited. \textbf{The bench's "fresh boot per clean
-  run" discipline is still standing in for a fix}, and the run that settled the concurrent case
-  scoped itself explicitly: two identical short workloads with emulated copy work, bounded by the
-  hypervisor's big lock — \emph{a bound that weakens exactly when the forwarded work gets
+\item \textbf{★ Multi-process holds for three processes, sequential or concurrent, and fails at
+  the fourth.} ⊘ \textbf{This bullet was the paper's headline blocker and it was fixed at 18:31 on
+  the day the paper was pinned.} It read: \emph{"fails for sequential ones \dots{} a second
+  context after the first's teardown in the same boot still hangs at \code{cuCtxCreate}, which is
+  the C artifact's own limitation inherited \dots{} the bench's 'fresh boot per clean run'
+  discipline is still standing in for a fix."} \textbf{False at \code{56dc01f3}}
+  (\S\ref{sec:seqfix}) --- and the C's limitation was not inherited: the port's cause was its own
+  orphaned framebuffer join. \textbf{What remains a risk is smaller and sharper}: a
+  \emph{fourth} process still fails above the \code{ioctl} boundary with the cause unknown, the
+  result is $n = 1$ boot, and \textbf{a host object is leaked per reclaimed orphan frame} ---
+  bounded at one per frame, logged, with the plumbing fix named and not done. The concurrent run
+  still scopes itself as before: two identical short workloads with emulated copy work, bounded by
+  the hypervisor's big lock — \emph{a bound that weakens exactly when the forwarded work gets
   longer}.
 \item \textbf{★★★ Reclamation is built on an event that does not occur, and the fix is capped by
   a constant nobody has justified.} CUDA's suballocator does not unmap on \code{cuMemFree}, so the
   nominated release trigger fires \textbf{zero times}; the working mechanism is a takeover, capped
-  at four per frame because without the cap the settlement oscillates forever. \textbf{Which of
-  two live aliases should win is unproven}, and failure in this area is a function of allocation
-  \emph{history} rather than size — which is why it took a campaign to find and why \code{cup8}
+  because without a cap the settlement oscillates forever. ⊘ \textbf{The cap's key changed on
+  2026-08-20 and the old key was itself a defect}: keyed by \emph{frame} with no reset, a
+  device-lifetime budget spent by early actors left later leaves unbacked, and \textbf{our own
+  bound raised a host \code{Xid} 31 \code{FAULT\_PDE}} (\code{cca2eb4b}, \S\ref{sec:seqfix}).
+  It is now keyed by \code{(phys, taking va)}. \textbf{Which of two live aliases should win is
+  still unproven}, and failure in this area is a function of allocation \emph{history} rather than
+  size — which is why it took a campaign to find and why \code{cup8}
   cannot close it (its buffers never move).
 \item \textbf{★★ Every mutation number this project has published has been wrong upward, five
   times, by five different mechanisms} (\S\ref{sec:mutgate}). The most recent scored
@@ -3735,7 +4078,10 @@ what a test is supposed to look like & \file{tests/tests/l1\_mean.rs} (the arbit
   "drain"}, a misattribution that propagated through three rungs.
 \item \file{traces/cudart\_ga106/README.md} — the live blocker's evidence.
   ⚠ \textbf{And it is one rung stale at this pin} (\S\ref{sec:corrections} row 41): read the
-  commit messages after it, not it alone.
+  commit messages after it, not it alone. ⊘ \textbf{As of \code{56dc01f3} it is several rungs
+  stale}: the wall it documents was refuted the same afternoon (row 44). The commit messages
+  \code{dbc6c953}\,$\to$\,\code{56dc01f3} are the current record and they carry their evidence
+  verbatim.
 \item \file{docs/design/execution\_plane\_increments.md} and
   \file{docs/design/boot\_measured\_2026\_08\_01.md} — the dated, revision-stamped boot logs.
   ⚠ \textbf{Both predate first compute} (last touched 2026-08-11 and 2026-08-01) and describe
@@ -3775,7 +4121,10 @@ descriptions of the code.
 
 Rows 1--14 are from the first revision, at \code{0b78102}; rows 15--20 from the second, at
 \code{6ce8599}; rows 21--26 from the third, at \code{b612a91}; rows 27--34 from the fourth, at
-\code{f33e1c8}; \textbf{rows 35--41 are new at \code{5c367a38}}. \textbf{Eleven of the first
+\code{f33e1c8}; \textbf{rows 35--42 (and 41b) are new at \code{5c367a38}}; \textbf{rows 43--45
+were added after this document was pinned, at \code{56dc01f3}, without a new revision being
+written} --- they correct claims in the text above rather than in a predecessor, and rows 43 and
+44 are this paper's \emph{headline} claims. \textbf{Eleven of the first
 fourteen were fixed or superseded within four days}, and each row says which — that is the loop
 working, and it is the single most encouraging measurement in this paper. Row 9 is the
 instructive exception: it was fixed \emph{in one document}, which then recorded four further
@@ -4115,7 +4464,10 @@ on a GPU"} &
   correction has a correction: the property that \emph{does} still fail is the
   \textbf{sequential} one — a second context after the first's teardown in the same boot hangs —
   which is the opposite of what everyone predicted, and is the C artifact's own limitation
-  inherited rather than fixed. \\
+  inherited rather than fixed.
+  ⊘⊘ \textbf{AND THE CORRECTION'S CORRECTION HAS ONE, five hours later: see row 43.} The
+  sequential property \textbf{passes} for three processes as of \code{56dc01f3}, and the C's
+  limitation was \emph{not} inherited --- the port's cause was its own. \\
 \addlinespace
 38 & \textbf{The repository's own claim-ledger gate}, which the previous revision reported green
 with all three bars holding &
@@ -4182,6 +4534,53 @@ it &
   and \code{Missing character} in its log, all three at \textbf{zero}, and that check is the only
   reason this row exists. \\
 \addlinespace
+43 & \textbf{★★★★★ This paper's own headline blocker, in six places} (the front-matter pin, the
+executive summary, \S\ref{sec:contact} twice, \S\ref{sec:risks} and row 37 above), and in
+Figure~\ref{fig:isolation}: \emph{"a second context sequentially in one boot still hangs at
+\code{cuCtxCreate}"} &
+  \textbf{False, 4 h 55 min after this document was committed.} \measured{} \code{w367}, rev
+  \code{cca2eb4b}, 2026-08-20, real GA106: three sequential guest CUDA processes --- first,
+  second with no \code{nvidia-smi} between, third after \code{nvidia-smi} --- all
+  \code{TORCH\_OK avail=True sum=4.0}, all \textbf{8/8} completions observed, all ringing
+  \emph{identically} 104 \code{Ce} + 403 \code{GrCompute} doorbells; host \code{dmesg} 0
+  \code{NVRM} 0 \code{Xid} (\S\ref{sec:seqfix}). Two fixes: an \textbf{orphaned framebuffer
+  join} --- held by the per-device store, named by no address table, live or dead --- is now given
+  back, with \code{live > 0} still refused \emph{by name} 132 times; and the takeover cap was
+  \textbf{re-keyed} from \emph{frame} to \code{(phys, taking va)} after the old key left our own
+  leaves unbacked and \textbf{raised a host \code{Xid} 31}. ⊘ \textbf{The claim that survived is
+  the narrow one}: a \emph{fourth} process still fails, above the \code{ioctl} boundary, cause
+  unknown, $n = 1$ boot. ★ \emph{And the inherited-from-the-C framing in row 37 was wrong: the
+  port's defect was the port's own.} \\
+\addlinespace
+44 & \textbf{★★★ This paper's second headline, \S\ref{sec:llmwall} and \S\ref{sec:questions}
+Q1:} \emph{"the next wall is a different subsystem: the object graph"}, and \emph{"the sharpest
+single line is \code{tsg = mid-miss(h0xa, wrong-kind(Device))} --- a named, specific defect in the
+context-promotion path"} &
+  \textbf{★★★★★ Refuted \emph{three minutes} after this document was committed}
+  (\code{129dd316}, 2026-08-20 15:39), by a negative control that was two log files already on the
+  bench. Same revision, same binary, passing boot vs failing boot:
+  \code{PromoteFault::UnknownContextObject} \textbf{4 vs 3};
+  \code{RmGraphError::FreeUnknown} \textbf{14 vs 10}; unmapped alloc classes \textbf{6 vs 4};
+  \code{wrong-kind} census lines \textbf{2 vs 2}. \textbf{Every element of the wall is more
+  numerous in the boot that works.} \code{wrong-kind(Device)} is not a defect at all --- a
+  channel's parent is legitimately a TSG or a Device --- and the line appears byte-identical in a
+  boot eleven days older (\code{dbc6c953}). ⊘ \textbf{This row is a method defect, not drift}:
+  the rule that would have caught it was written down by the same author, in the same session,
+  eleven messages earlier. ⇒ \emph{Before naming any refusal a wall, run the control ---
+  mechanically, first, always. A census of a failing run is not an experiment.} \\
+\addlinespace
+45 & \textbf{This paper's own closing note and \S\ref{sec:reading}}, at the moment it was
+committed &
+  \textbf{Internally inconsistent with its own \S\ref{sec:llmwall} at the same pin.} The closing
+  note describes the open item as \emph{"the CUDA runtime does not initialise, and the fix is
+  unbooted"} while \S\ref{sec:llmwall} of the same document reports that wall broken and booted
+  ($n = 2$ workloads); and the reading list points at a trace \code{README} the paper itself
+  flags as one rung stale. ⊘ \textbf{Listed because it is the cheapest species on this list and
+  the only one no external event caused}: two passages of one document, written hours apart,
+  disagreeing --- exactly the failure \S\ref{sec:drift} attributes to \emph{other} people's
+  design docs. \emph{Found while correcting rows 43 and 44; not found by any gate, because no
+  gate covers prose.} \\
+\addlinespace
 \bottomrule
 \end{longtable}}
 
@@ -4211,6 +4610,11 @@ it &
   driver; and the object-graph refusals that replaced it have had exactly one boot.
   \emph{This is the section most likely to be wrong by the time it is read}, and it is the reason
   the closing note says what it says.
+  \newline ★★★★★ \textbf{THIS PREDICTION WAS CORRECT WITHIN THREE MINUTES.} The object-graph
+  refusals were refuted at \code{129dd316} (\S\ref{sec:corrections} row 44) --- \emph{by the
+  one-boot control this bullet asked for}, which found them \emph{more} numerous in the boot that
+  passes. ⊘ \textbf{Kept as written, because a correct pre-registered doubt that nobody acted on
+  is worth more on this list than a corrected sentence.}
 \item \textbf{★ Whether the QEMU/KVM backend differential passes.} \S\ref{sec:qemu} reports that
   \file{crates/\allowbreak kayfabe-vmm-qemu/\allowbreak tests/\allowbreak kvm\_differential.rs}
   exists and is the experiment the
@@ -4290,12 +4694,32 @@ would not initialise in our guest at all: \code{libcuda} answered every call cor
 
 \textbf{What the failing boot reports.} Host \code{Xid} \textbf{0}; guest \code{NVRM} line count
 at the green baseline — \textbf{so this is a refusal we issue, not a hardware fault.} The
-control-serving path refused \textbf{nothing}. What did refuse, and it is a different subsystem
-entirely, is our \emph{object graph}: \code{PromoteFault::UnknownContextObject} $\times 3$,
-\code{RmGraphError::FreeUnknown} $\times 10$, and an unmapped allocation class $\times 4$
-(\code{0x70}, \code{0x208f}). The sharpest single line is a census entry reading
-\code{tsg = mid-miss(h0xa, wrong-kind(Device))}: \textbf{a handle that resolves, but to the wrong
-kind of object}, on the context-promotion path.
+control-serving path refused \textbf{nothing}.
+
+\begin{warnbox}\small
+⊘⊘⊘ \textbf{CORRECTED 2026-08-20 (\code{129dd316}, \code{dbc6c953}), and the correction removes
+this question's most attractive answer.} This paragraph used to continue: \emph{"what did refuse,
+and it is a different subsystem entirely, is our object graph
+--- \code{PromoteFault::UnknownContextObject} $\times 3$, \code{RmGraphError::FreeUnknown}
+$\times 10$, an unmapped allocation class $\times 4$ (\code{0x70}, \code{0x208f}) --- and the
+sharpest single line is \code{tsg = mid-miss(h0xa, wrong-kind(Device))}."}
+\textbf{Every one of those is baseline.} Run against the boot that \emph{passes}, at the same
+revision and the same binary, they count \textbf{4, 14, 6 and 2} respectively --- all
+\emph{higher} than in the failing boot. \code{wrong-kind(Device)} is not a defect at all: a
+channel's parent is legitimately a TSG \emph{or} a Device, and that exact line appears
+byte-identical in a boot eleven days earlier. \textbf{⇒ Do not answer sub-question 3 below about
+\code{0x208f}: it is measured innocent by negative control.} What \code{\_cuda\_init()} fails on
+is \textbf{unidentified}, and that is the honest state of this question.
+\end{warnbox}
+
+★ \textbf{And one datum arrived after this question was written that may or may not belong to it.}
+\measured{} \code{w367}, 2026-08-20: a \emph{fourth} sequential CUDA process in one boot fails
+with the \textbf{verbatim same string} --- \code{avail=False}, \emph{"CUDA unknown error"} ---
+while the first three now pass completely (\S\ref{sec:seqfix}). ⊘ \textbf{Deliberately not
+welded to the LLM failure}: the LLM boots died \emph{earlier}, with no completions watched at all,
+so the two may share only an error string. \emph{If they are the same defect, this question is
+about process ordinality and not about torch at all} --- which is exactly the kind of "there is a
+fourth possibility your experiment cannot distinguish" answer this section asks for.
 
 \textbf{The questions.}
 \begin{enumerate}[itemsep=0.3ex]
@@ -4466,9 +4890,22 @@ preceded it. \emph{We spent a campaign looking for a size cliff that does not ex
 \textbf{What works now, and why it is not an answer.} A \emph{takeover} — when the guest re-points
 a range we already hold, we release and re-install at the same key inside one operation. It works
 (measured 7 rows versus 0, zero stale refusals versus 32, zero \code{Xid} versus one). But it is
-capped at 4 takeovers per frame, and \textbf{that cap is load-bearing}: without it the settlement
-re-proposes the superseded row and ping-pongs host operations forever. \textbf{Which of two live
-aliases should win is unproven.}
+capped, and \textbf{that cap is load-bearing}: without it the settlement re-proposes the
+superseded row and ping-pongs host operations forever. \textbf{Which of two live aliases should
+win is unproven.}
+
+\smallskip
+⊘ \textbf{UPDATED 2026-08-20 (\code{cca2eb4b}), and the update is part of the question.} The cap
+used to be \textbf{4 per frame, reset by nothing}, and that key was wrong in a way that produced a
+\emph{hardware fault of our own making}: a device-lifetime budget spent by early actors left a
+later process's leaves fabricated with no host backing, and the copy engine wrote into one ---
+\code{Xid 31 FAULT\_PDE} at \code{0x7e59\_c6000000}, traced to a frame our own log had marked
+\code{CAPPED} (\S\ref{sec:seqfix}). It is now keyed by \code{(phys, taking va)}: a ping-pong
+between one pair of aliases is still bounded at $2\times$\,CAP, while a genuinely new owner gets
+its own budget. ⚠ \textbf{A separate defect of the same shape was found in the same campaign} ---
+a join left behind by an \emph{exited} process, named by no address-table row at all, which the
+per-address-space takeover could not reach by construction. That one is now reclaimed when nothing
+names the frame. \emph{Both are workarounds for the missing event this question asks about.}
 
 \textbf{The question.} \emph{Is there any protocol-visible event, on a GSP-client part, that means
 "this GPU VA range's backing is no longer referenced"?} We have measured that TLB invalidates do
@@ -4586,6 +5023,16 @@ validation, and which of them can an emulated GSP choose freely?}
   successful boot on a teardown was made on 2026-08-05; many dozens of successful boots later, no
   such run is recorded. \emph{Nothing surfaces this incidentally, which is exactly why it is
   still open.}
+\item \textbf{What kills the fourth CUDA process, when the first three now pass identically?}
+  \measured{} \code{w367}, 2026-08-20 (\S\ref{sec:seqfix}): three sequential guest CUDA
+  processes complete with \emph{identical} doorbell counts and 8/8 completions each, host
+  \code{Xid} 0. The fourth reports \code{avail=False}, \emph{"CUDA unknown error"}. \textbf{Only
+  three processes ever existed for four workloads}, so the fourth never reached the device; the
+  guest kernel logged nothing while it ran. \textbf{It fails above the \code{ioctl} boundary},
+  which is precisely where our instruments stop --- our differential covers \file{/dev/nvidia*}
+  \code{ioctl} traffic and nothing else. \emph{What state does \code{libcuda} or the guest kernel
+  driver keep that is per-boot rather than per-process, and exhausts or wedges after three
+  contexts?} ⚠ $n = 1$ boot, and the run's logs are not committed.
 \item \textbf{A quadratic control plane, measured.} Deriving process boundaries is
   $O(\text{live objects})$ per event, so $N$ events cost $O(N^2)$: \textbf{1\,000 events 0.85\,s,
   8\,000 events 54.8\,s} on a debug build, against a cap of $2^{18}$ live handles. Deleting the
@@ -4639,6 +5086,16 @@ the LLM-wall paragraph was rewritten twice as a result. \textbf{Everything is re
 final pin}, but a reader should treat \emph{"pinned at a commit"} as a claim about a moving ref
 unless the working tree was also clean — which the project itself learned when a rung reported
 \emph{"byte-identical to master"} and \code{master} had advanced 30 files underneath it.
+
+\smallskip
+⊘ \textbf{AND IT KEPT MOVING AFTER THE DOCUMENT WAS COMMITTED, WHICH IS THE STRONGER FORM OF THE
+SAME HAZARD.} Twelve further commits landed between the pin (\code{5c367a38}, 15:36) and this
+paper's first reading (\code{56dc01f3}, 20:32), and two of them falsified headline claims. The
+corrections are folded in above the text they correct rather than appended, and are listed as
+\S\ref{sec:corrections} rows 43--45. ⚠ \textbf{No structural quantity in this paper was
+re-measured at \code{56dc01f3}} --- the commands in the table below were run at \code{5c367a38}
+and their outputs are pinned there. ⇒ \emph{"Re-measured at the final pin" is a claim with a
+timestamp, and the timestamp expires.}
 
 \begin{center}\small
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}X@{}}
@@ -4703,7 +5160,11 @@ not regression. \emph{Which part, this paper did not measure.}
 \textbf{One closing note on how to use this paper.} If you are here to find what is wrong with
 kayfabe, start at \textbf{\S\ref{sec:questions}} — the open questions are written to be attacked
 by someone with no access to this tree, and each carries the evidence needed to attack it. Then,
-in order: \S\ref{sec:llmwall} (the CUDA runtime does not initialise, and the fix is unbooted),
+in order: \S\ref{sec:seqfix} (the paper's headline blocker, fixed and measured passing five hours
+after this document was committed), \S\ref{sec:llmwall} (the LLM wall --- ⊘ \textbf{this line
+used to read} \emph{"the CUDA runtime does not initialise, and the fix is unbooted"}, which
+contradicted that very section \emph{at this pin}: the wall broke, the model still produces no
+token, and the cause named there was refuted, \S\ref{sec:corrections} rows 44--45),
 \S\ref{sec:perf} (the performance picture, and why one statistic grades two flags backwards),
 \S\ref{sec:ladder} (what "first compute" does and does not mean — every green is a relaxed green
 and the shipping default is not among the relaxations), \S\ref{sec:contact} (what contact with
@@ -4729,12 +5190,21 @@ mode is not update latency, it is that \textbf{nobody re-derives the sentence ev
 believes.}
 
 \smallskip
-This revision's lead claim is that the remaining wall is \emph{no longer} a question about what
+This revision's lead claim was that the remaining wall is \emph{no longer} a question about what
 NVIDIA's protocol wants — it is our own object model, reached through closed CUDA userspace. It is
 the fifth answer to "what is the critical path", \textbf{and it changed twice in the hours this
 document took to write}, the second time because a milestone had been graded on a proxy.
-\textbf{Treat every unhedged sentence here exactly the way the previous four deserved to be
-treated} — including this one, and including that one.
+
+\smallskip
+⊘ \textbf{AND IT CHANGED A THIRD TIME, THREE MINUTES AFTER THIS DOCUMENT WAS COMMITTED, AND A
+FOURTH FIVE HOURS AFTER THAT.} \emph{"Our own object model"} is refuted --- every refusal in it is
+more numerous in the boot that passes (\S\ref{sec:corrections} row 44). \emph{"A second CUDA
+context sequentially in one boot still hangs"} is fixed --- three sequential processes pass
+(row 43, \S\ref{sec:seqfix}). \textbf{The fifth answer lasted three minutes and there is no
+sixth}: what \code{torch.\_C.\_cuda\_init()} fails on, and what kills a \emph{fourth} CUDA
+process, are both \textbf{unidentified}. ⇒ \textbf{The base rate did not merely hold; it
+accelerated.} \textbf{Treat every unhedged sentence here exactly the way the previous four
+deserved to be treated} — including this one, and including that one.
 \end{claimbox}
 
 \end{document}
