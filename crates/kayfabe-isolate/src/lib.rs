@@ -897,6 +897,43 @@ pub trait RmBackend: Send + Sync {
         payload: &mut [u8],
     ) -> Result<(), RmError>;
 
+    /// ★★★★★ **w345 — THIS ISOLATE'S OWN SUBDEVICE**, as a [`HostHandle`] the port may
+    /// name in a later [`RmBackend::control`].
+    ///
+    /// # Why a whole verb, when the port already has `control`
+    ///
+    /// `control` needs a `HostHandle`, and every other one the port holds is the host twin
+    /// of a *guest* object — a channel, a VA space. The GSS-legacy cudart init-gate family
+    /// has no guest object to twin: `0x20809009`, `0x20809001`, `0x20809064` and their
+    /// successors ask **the GPU about itself** (a CUDA major version, a capability mask),
+    /// and the answer is a property of the part, not of anything the guest allocated.
+    ///
+    /// `[measured 2026-08-20, real GA106, 2/2 boots]` those three are the wall `libcudart`
+    /// dies on while `libcuda` is entirely healthy in the same process — `cuInit`,
+    /// `cuDeviceGetCount`, `cuDevicePrimaryCtxRetain` and CC 8.6 all correct, and
+    /// `cudaGetDeviceCount` returning **3 = `cudaErrorInitializationError`**. Serving them
+    /// moves the guest ON to four more of the same family. The C research artifact names
+    /// the mechanism in its own source and its PRIMARY remedy is to forward
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3334-3363`).
+    ///
+    /// ⊘ **The alternative was a captured constant, and it is the thing this verb exists to
+    /// avoid.** A replayed body is not READ-NATIVE, rots on the next driver or chip, and for
+    /// `0x20809064` the only capture available covers **40 of 520 bytes**. Forwarding needs
+    /// no capture at all.
+    ///
+    /// ⚠ **This is the isolate's OWN subdevice, never a guest's.** It is the same object the
+    /// isolate already uses for its own per-GPU controls, so no guest handle is translated
+    /// and no guest object becomes reachable that was not already.
+    ///
+    /// # Errors
+    /// The default is a **named refusal**: a backend with no real RM connection has no
+    /// subdevice, and inventing one would hand the caller a handle that names nothing. Only
+    /// the real host backend and the proxy that carries it override this.
+    fn subdevice(&mut self) -> Result<HostHandle, RmError> {
+        // 0x56 = NV_ERR_NOT_SUPPORTED — RM's own way of saying "not on this part".
+        Err(RmError::Other(0x56))
+    }
+
     /// Map `len` bytes of `memory` into the host GPU VA space owned by `vas`
     /// **at `at`**, returning the host GPU VA actually achieved.
     ///

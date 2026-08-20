@@ -76,6 +76,9 @@ pub enum Request {
     },
     /// [`kayfabe_isolate::RmBackend::alloc_vaspace`].
     AllocVaSpace,
+    /// [`kayfabe_isolate::RmBackend::subdevice`] — this isolate's own subdevice handle,
+    /// so the port can issue a per-GPU control that twins no guest object.
+    Subdevice,
     /// [`kayfabe_isolate::RmBackend::alloc_sysmem`].
     AllocSysmem {
         /// Bytes requested.
@@ -682,6 +685,7 @@ impl Envelope {
                 put_blob(&mut out, params);
             }
             Request::AllocVaSpace => out.push(2),
+            Request::Subdevice => out.push(22),
             Request::AllocSysmem { len } => {
                 out.push(3);
                 out.extend_from_slice(&len.to_le_bytes());
@@ -888,6 +892,7 @@ impl Envelope {
                 params: c.blob("alloc params")?,
             },
             2 => Request::AllocVaSpace,
+            22 => Request::Subdevice,
             3 => Request::AllocSysmem {
                 len: c.u64("sysmem len")?,
             },
@@ -1293,6 +1298,7 @@ mod tests {
                 params: vec![1, 2, 3],
             },
             Request::AllocVaSpace,
+            Request::Subdevice,
             Request::AllocSysmem { len: 0x4000 },
             Request::AllocVidmem { len: 0x20_0000 },
             Request::AllocChannel {
@@ -1469,6 +1475,7 @@ mod tests {
         match r {
             Request::Alloc { .. } => "Alloc",
             Request::AllocVaSpace => "AllocVaSpace",
+            Request::Subdevice => "Subdevice",
             Request::AllocSysmem { .. } => "AllocSysmem",
             Request::AllocVidmem { .. } => "AllocVidmem",
             Request::AllocChannel { .. } => "AllocChannel",
@@ -1517,6 +1524,7 @@ mod tests {
                 "MapGuestRam",
                 "RingDoorbell",
                 "Schedule",
+                "Subdevice",
                 "UnmapGpuVa",
                 "UnmapGuestRam",
             ]

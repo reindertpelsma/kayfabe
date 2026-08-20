@@ -688,6 +688,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             params,
         } => handle(rm.alloc(raw(parent), ClassId(class), &params)),
         Request::AllocVaSpace => handle(rm.alloc_vaspace()),
+        Request::Subdevice => handle(rm.subdevice()),
         Request::AllocSysmem { len } => handle(rm.alloc_sysmem(len)),
         Request::AllocVidmem { len } => handle(rm.alloc_vidmem(len)),
         Request::AllocChannel {

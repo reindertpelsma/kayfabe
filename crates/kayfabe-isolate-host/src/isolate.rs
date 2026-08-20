@@ -592,6 +592,10 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::AllocVaSpace)
     }
 
+    fn subdevice(&mut self) -> Result<HostHandle, RmError> {
+        self.handle(Request::Subdevice)
+    }
+
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         self.handle(Request::AllocSysmem { len })
     }
