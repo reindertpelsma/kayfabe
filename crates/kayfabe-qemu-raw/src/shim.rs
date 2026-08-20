@@ -3716,6 +3716,19 @@ struct CeShellState {
 /// runs on the forwarding fall-through and the three CE refusal sites, and
 /// `grep -c "GET=" run_w267_on_qemu.log` is **9** — eight `RING-PROJ` lines, every one `Ce`,
 /// plus the first-refusal summary. ⇒ This rung is a **call site**, not a capability.
+/// # ⊘⊘ THIS LIST IS APPEND-ONLY, AND A ROW IS NOT A STATEMENT THAT THE PROC IS ALIVE
+///
+/// `latch_gr_cursor` only ever INSERTS; nothing anywhere removes from `gr_cursors`. A
+/// channel latched at its first doorbell keeps being sampled for the life of the device,
+/// **including after its proc has exited and been reaped**. `[measured w361, 2026-08-20]`
+/// proc=2's eight channels were still printing `GR-CURSOR … GET=0 PUT=1` at `t=+288 s`,
+/// long after that guest process was gone, while a second process was running — and that
+/// reads as *"the predecessor's channels are never torn down"* to anyone who has not read
+/// this line. It is a fact about THIS VEC, not about proc liveness or about teardown.
+///
+/// ⇒ To ask whether a proc was reaped, read the `REAP` lines. To ask whether its host
+/// objects went back, read the disposal accounting. Never infer either from the continued
+/// presence of a cursor row.
 #[derive(Debug, Clone, Copy)]
 struct GrCursorWatch {
     /// The guest token this channel's doorbell carries — the join key to every other line.
@@ -4032,7 +4045,10 @@ impl GrCursorReader {
         eprintln!(
             "kayfabe: GR-CURSOR-READER stopped why={why} ticks={} channels={} rows_printed={} \
              elapsed={}ms ⊘ a row prints on FIRST SIGHT and on CHANGE only, so \
-             rows_printed == channels means NOT ONE CURSOR EVER MOVED",
+             rows_printed == channels means NOT ONE CURSOR EVER MOVED. ⊘⊘ And `channels` \
+             is CUMULATIVE over the whole boot: this list is APPEND-ONLY, so it still \
+             holds the channels of procs that have exited and been reaped — a late row \
+             for an old proc is NOT evidence that proc is alive (w361)",
             self.ticks,
             self.seen.len(),
             self.printed,
