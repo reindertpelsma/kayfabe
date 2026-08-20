@@ -1417,6 +1417,29 @@ impl CommandPolicy for InitTablePolicy {
         // measured — precisely the truncated-row hazard `kayfabe_abi::oracle` was written for.
         // ⇒ A GREEN result justifies building the forward. A RED result on `…064` alone would
         // point at that tail, not at the mechanism, and must not be read as refuting it.
+        // ★★ w343 CENSUS — size the GSS-legacy family before forwarding it.
+        //
+        // `[measured 2026-08-20, 2/2 boots]` serving the three cudart init-gate ids moves the
+        // guest ON: `0x20809009` leaves the unserviced ledger and FOUR NEW ids appear that no
+        // gate-off boot ever asks for — `0x2080a001`, `0x2080a026`, `0x2080a084`, `0x2080a097`.
+        // All four have **bit 15 set** and resolve in NO `ogkm` `ctrl2080` header, i.e. the same
+        // GSP-firmware-only family. cudart's init walks a CHAIN of them.
+        //
+        // ⊘ The unserviced ledger records the id and NOT the size, so the host forward has no
+        // way to know how big a buffer each one needs. This line is the only place the guest's
+        // own `paramsSize` for these is visible. Read-only: it changes no reply.
+        if req.cmd & kayfabe_abi::capability::RM_GSS_LEGACY_MASK != 0
+            && WantedTable::from_cmd(req.cmd).is_none()
+        {
+            eprintln!(
+                "W343GSSCENSUS cmd={:#010x} params_size={} params_at={} payload_len={}",
+                req.cmd,
+                req.params_size,
+                req.params_at,
+                cmd.payload.len()
+            );
+        }
+
         if std::env::var("KAYFABE_CUDART_GATE").as_deref() == Ok("replay")
             && matches!(req.cmd, 0x2080_9009 | 0x2080_9001 | 0x2080_9064)
         {
