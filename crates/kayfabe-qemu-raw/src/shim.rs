@@ -10680,14 +10680,35 @@ fn join_one_fb_leaf(
     // tens of entries while the address-table scan below is tens of thousands of rows, and on
     // the overwhelming majority of leaves there is no collision at all.
     if release.supersedes() && plane.fb_join_installed_at(leaf.phys) {
+        // ★★★★★ **w367 — THE CAP IS KEYED BY (FRAME, TAKER), NOT BY FRAME.**
+        //
+        // `[measured w366]` keyed by frame alone and never reset, this cap became the wall the
+        // moment the orphan reclaim let later processes run at all: eight frames each spent
+        // their 4 takeovers and then refused **293 times each**, and the refusal is not
+        // abstract — `0x1e00000` stayed *fabricated*, so the CE wrote to the VA that leaf
+        // backs and the host raised `Xid 31 FAULT_PDE ACCESS_TYPE_VIRT_WRITE @
+        // 0x7e59_c6000000`. Our own bound produced a hardware fault.
+        //
+        // ⊘ The hazard the cap exists for is REAL and is not what a lifetime-per-frame count
+        // measures. Its own words: *"the superseded row is re-proposed by the next settlement
+        // … an uncapped takeover is a ping-pong"* — that is **one pair of VAs fighting over
+        // one frame**. A genuinely NEW owner arriving later is not that, and a per-frame
+        // lifetime budget cannot tell the two apart: it spends the same four tickets on both.
+        //
+        // ⇒ Key it by `(phys, taking va)`. A ping-pong between two VAs still increments each
+        // side and is still bounded — at `2 × CAP` for that pair, not unbounded — while the
+        // Nth process to legitimately want a frame gets its own budget. The fix is a KEY, not
+        // an explanation, and not a bigger number (`the_key_was_the_va_not_the_extent`,
+        // `a_discrepancy_can_be_an_artefact_of_a_join`).
         let over = {
             let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
-            l.get(&leaf.phys).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
+            l.get(&(leaf.phys, leaf.va)).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
         };
         if over {
             eprintln!(
                 "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
-                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this frame. The old join stands and \
+                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this (frame, VA) pair. The old join \
+                 stands and \
                  this leaf stays fabricated. ⚠ The cap exists because the superseded row \
                  is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
                 leaf.va, leaf.phys
@@ -10707,7 +10728,7 @@ fn join_one_fb_leaf(
                 *supersede_ledger()
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .entry(r.phys)
+                    .entry((r.phys, leaf.va))
                     .or_insert(0) += 1;
                 eprintln!(
                     "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
@@ -15576,8 +15597,9 @@ fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
 /// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
 /// an unbounded loop. It is reset by nothing, which is correct — the bound is per device life.
-fn supersede_ledger() -> &'static std::sync::Mutex<std::collections::HashMap<u64, usize>> {
-    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, usize>>> =
+fn supersede_ledger()
+-> &'static std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>> {
+    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>>> =
         std::sync::OnceLock::new();
     L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
