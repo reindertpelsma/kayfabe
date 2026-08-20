@@ -3907,7 +3907,22 @@ fn observer_loop(
             // the next tick, and `release_fb_join` answers `false` for a join already given
             // back. The line prints only when something actually moved, so a quiet tick stays
             // quiet and a release is never inferred from silence.
-            let stale = device.retired_fb_joins();
+            // ⊘⊘ THE CENSUS PRINTS EVEN WHEN IT FINDS NOTHING, and that is the whole point.
+            // `RETIRED-FB-RELEASE: 0` in w363 could not distinguish *"no proc was retired in
+            // this window"* from *"retired procs were visited and held no join rows"* — the
+            // same ambiguity as the print cap and the append-only cursor list this campaign
+            // already paid for twice today. A number that cannot separate those two is not a
+            // measurement. `corpses` and `rows` separate them.
+            let (corpses, stale) = device.retired_fb_join_census();
+            if corpses > 0 {
+                eprintln!(
+                    "kayfabe: RETIRED-FB-CENSUS corpses={corpses} join_rows={} ⊘ `join_rows=0` \
+                     with `corpses>0` means the retired procs WERE visited and held no \
+                     JoinsGuestWindow row — a statement about their tables, not about whether \
+                     this pass ran",
+                    stale.len()
+                );
+            }
             if !stale.is_empty() {
                 let (mut released, mut already) = (0usize, 0usize);
                 for r in &stale {

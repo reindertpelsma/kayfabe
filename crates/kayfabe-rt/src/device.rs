@@ -3834,7 +3834,17 @@ impl SharedDevice {
     /// (the host half). Guest view first is the same ordering the supersede path states.
     #[must_use]
     pub fn retired_fb_joins(&self) -> Vec<kayfabe_fwd::RevokedLeaf> {
+        self.retired_fb_join_census().1
+    }
+
+    /// ★★ The same sweep, but it also answers **how many corpses it looked at** — so a caller
+    /// can tell *"nothing was retired"* from *"retired procs held no join rows"*. A count that
+    /// conflates those two is the failure class this campaign has now paid for three times in
+    /// one day (a global print cap, an append-only watch list, and this).
+    #[must_use]
+    pub fn retired_fb_join_census(&self) -> (usize, Vec<kayfabe_fwd::RevokedLeaf>) {
         self.with_retired(|corpses| {
+            let n = corpses.len();
             let mut out = Vec::new();
             for p in corpses {
                 for ((gpu, pdb), vas) in p.vases.iter() {
@@ -3856,7 +3866,7 @@ impl SharedDevice {
                     }
                 }
             }
-            out
+            (n, out)
         })
     }
 
