@@ -4312,7 +4312,18 @@ impl SemaPageReader {
                 || changed
                 || why != "tick"
                 || self.ticks.is_multiple_of(SEMA_PAGE_HEARTBEAT_TICKS);
-            if !due || (self.printed >= SEMA_PAGE_DUMPS_MAX && why != "final") {
+            // ★★★ `!first` IS LOAD-BEARING, AND IT WAS PAID FOR (w361, 2026-08-20).
+            // The cap is GLOBAL, not per-page. In a two-process boot the FIRST process
+            // exhausted all 128 dumps (`distinct page dumps = 128`, measured), so the SECOND
+            // process's semaphore page — a different `page_gpa` entirely — was never printed
+            // once: `grep -c 1fe85 <qemu.log>` → **0**. Its absence then reads as *"the slot
+            // machinery never ran for proc=5"*, which is a statement about the BUDGET and not
+            // about the GPU. ⊘ A newly-seen page is the highest-information event this dumper
+            // has; spending the budget on repeat views of a page already seen and then
+            // dropping the first view of a new one inverts the value ordering exactly.
+            // ⇒ first sight of a page ALWAYS prints, like `why == "final"`. Bounded: one page
+            // per process, not per tick.
+            if !due || (self.printed >= SEMA_PAGE_DUMPS_MAX && why != "final" && !first) {
                 if due {
                     self.suppressed += 1;
                 }
