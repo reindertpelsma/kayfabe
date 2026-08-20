@@ -60,3 +60,56 @@ GPU name string, per-process handles).
   `len(hex)//8`, inspecting exactly **half** of every body and under-reporting nonzero words.
 - ⚠ **A shim that fails to load produces an empty trace, which reads as "no ioctls".** The
   capture hook checks the loader and reports the record count separately.
+
+---
+
+## ⊘⊘⊘ ALL FIVE RANKED LEADS ABOVE ARE REFUTED — 2026-08-20, same box, no boot
+
+The leads were ranked by *plausibility*, then tested by **substituting our value into the
+working host** (`tools/cudart_probe/subst_shim.c`: run the real ioctl, then overwrite the
+named reply word, so the caller sees exactly what our guest would have seen).
+
+★ **Instrument proven before use.** Known-positive: corrupting `0x20809009` word[1] from
+`0xd` to `0` turns the host from `0` into **`3`**. So a wrong VALUE at `status = 0` *can* kill
+cudart and this shim *can* produce it. Every "innocent" below is therefore a real negative,
+not a silent no-op.
+
+| lead | injected | host verdict |
+|---|---|---|
+| 1 `GPU_GET_ENGINES_V2` count 9→6 + zero the 3 entries | yes | **0** innocent |
+| 2 `BUS_GET_PCI_BAR_INFO` four fields → 0 | yes | **0** innocent |
+| 3 `FB_GET_INFO_V2` → our `0xbadd00` sentinel | yes | **0** innocent |
+| 1+2+3 together | yes | **0** innocent |
+| **ALL 136 non-identifier divergences at once (241 substitutions)** | yes | **0** innocent |
+
+⊘ And lead 1 was never a bug to begin with: `deviceinfo.rs:98` **deliberately** omits
+NVDEC0/NVENC0/OFA/SEC2 with the reason written down — *"an engine we advertise is an engine RM
+goes on to use."*
+
+⇒ ★★★★★ **THE WALL IS NOT IN THE RM REPLY CONTENT AT ALL.** Not the vocabulary (98 records
+identical), not the statuses (2 divergences, innocent alone and jointly), not the bodies (all
+136, injected together). Whatever kills guest cudart is **outside the ioctl reply stream**.
+
+## ★★★ THE PRIME SUSPECT IS NOW THE ONE THING I EXCLUDED
+
+The `7`-vs-`3` family across `0x201 0x202 0x205 0x214 0x215 0x288 0x13a` is the **only**
+injection that changes the host's verdict — to **`100` `cudaErrorNoDevice`**, after which
+cudart exits and no later rule fires.
+
+⚠ I excluded it as *"an identifier, so environmental by construction."* **That was an
+assumption, not a measurement**, and it is now the only surviving candidate. The question it
+raises is sharp and testable:
+
+> Is the guest's `3` the guest's own consistent identifier (benign), or a value we report
+> that disagrees with what our own guest driver expects (a real defect)?
+
+⊘ Note the instrument's limit, which this exposes: **substituting an IDENTIFIER cannot
+distinguish "our value is wrong" from "our value is a different valid identifier"** — the host
+fails either way, for reasons that may have nothing to do with our port. The identifier family
+needs a different experiment than the value family.
+
+## Other unexplored residue
+
+- The host issues **105** records, the guest **104**. One call the guest never makes — untested.
+- `mmap` results, `/proc` and `/sys` reads, and UVM behaviour are **outside this trace pair**
+  entirely.
