@@ -10753,6 +10753,62 @@ fn join_one_fb_leaf(
                  was TRUE; there was simply nothing here to take",
                 leaf.phys, leaf.va
             );
+            // ★★★★★ **w366 — RECLAIM AN ORPHANED JOIN. This is the fix, and it belongs
+            // exactly here: the branch that was silent is the orphan case.**
+            //
+            // `[measured w365, real GA106]` on the three GR context frames that block every
+            // process after the first — `0x400000` `SET_VALID_SPAN_OVERFLOW_AREA`, `0x600000`
+            // `SET_TEX_HEADER_POOL`, `0x800000` `SET_TEX_SAMPLER_POOL` — the namer census
+            // answers **`live=0 retired=0`** on all 48 refusals of each, from TWO independent
+            // later processes. The store holds a join that **no address table anywhere
+            // names**. Refusing it refuses on behalf of nobody.
+            //
+            // ⊘ **RECOMPUTED HERE, NOT READ FROM THE DIAGNOSTIC CACHE.** The call site that
+            // PRINTS this at the refusal is memoised per frame for the device's life, which
+            // is fine for describing and wrong for deciding — a frame first seen while its
+            // owner lived would answer `live=1` forever. This is a decision, so it asks
+            // again, now.
+            //
+            // ⚠ **THE HOST OBJECT IS LEAKED, DELIBERATELY, AND COUNTED.** With no table row
+            // there is no `host_va`/`memory` to hand to `revoke_published_fb_leaf` — the row
+            // that would have carried them is what is missing. The `SUPERSEDE ABORTED` arm
+            // above already rules on this exact trade: *"a leak here is strictly better than
+            // freeing memory something may still be reading through"*. It is a bounded leak
+            // (one object per orphaned frame, and a frame can only be orphaned once) against
+            // an unbounded failure (every later process gets no GR backing at all). ⇒ A
+            // follow-up should plumb the backing out of `FbStore::release_join`, which
+            // already returns it, through `RegPlane::release_fb_join`, which discards it.
+            let (live_now, retired_now) = device.fb_join_namers(leaf.phys);
+            if live_now == 0 && retired_now == 0 {
+                if plane.release_fb_join(leaf.phys) {
+                    let drained = device.drain_pending_releases();
+                    eprintln!(
+                        "{head} {what} ★★★★★ ORPHAN-RECLAIMED fb_phys=0x{:x}: no LIVE and no \
+                         RETIRED address-table row named this frame, so the store's join was \
+                         owned by nobody and is given back. The install below can now \
+                         succeed. drained={drained} ⚠ host object LEAKED by design (no row \
+                         carried its handle); bounded at one per frame",
+                        leaf.phys
+                    );
+                } else {
+                    eprintln!(
+                        "{head} {what} ⊘ ORPHAN-RECLAIM NO-OP fb_phys=0x{:x}: the census said \
+                         nobody names this frame, but the store held no join at it either. \
+                         Nothing was reclaimed and nothing is wrong — the two are simply \
+                         consistent",
+                        leaf.phys
+                    );
+                }
+            } else {
+                eprintln!(
+                    "{head} {what} ⊘ NOT AN ORPHAN fb_phys=0x{:x} live={live_now} \
+                     retired={retired_now} — someone still names this frame, so the join is \
+                     NOT ours to take and the install stays refused BY NAME. ★ A live peer's \
+                     backing is never taken; that is the cross-process boundary, not an \
+                     obstacle to route around",
+                    leaf.phys
+                );
+            }
         }
     }
     // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
