@@ -26,6 +26,12 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,
                 shapes.misc,decorations.pathreplacing,patterns,shadows.blur}
+% \text{} inside math is amsmath's, not the kernel's. It was used in the performance and
+% open-questions sections and silently produced `Undefined control sequence` SEVEN times in a
+% build that still exited 0 and still wrote a PDF -- the argument typeset, the macro vanished.
+% Same class as the dropped-glyph traps below: nonstopmode makes a LaTeX error look like
+% a successful build, and only the log distinguishes them. Load amsmath before amssymb.
+\usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[hidelinks,colorlinks=true,linkcolor=kfblue,urlcolor=kfblue,
             citecolor=kfblue]{hyperref}

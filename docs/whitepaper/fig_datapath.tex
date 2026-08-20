@@ -50,8 +50,8 @@
 \node[box, fill=white, draw=kfcoreln, minimum width=58mm, minimum height=9mm] (bar) at (52,77)
   {doorbell BAR decode: offset $\rightarrow$ \tc{(GpuId, token)}\\[1pt]
    \tiny built and wired (\tc{SharedDoorbell}); \tc{Ga10xArch::decode\_doorbell}\\[-0.5pt]
-   \tiny \textbf{\color{kfcoreln}★★★ RUNG by a real guest}: 1\,560 routed on the cup3 boot\\[-0.5pt]
-   \tiny (870 \tc{GrCompute} / 686 \tc{Ce} / 4 \tc{GrGraphics}), \tc{unrouted=0}};
+   \tiny \textbf{\color{kfcoreln}★★★ RUNG by a real guest}: cup3 boot, device census verbatim —\\[-0.5pt]
+   \tiny \tc{480 arrived, 480 served, 0 REFUSED}; \tc{GrCompute=125 Ce=355 unrouted=0}};
 
 \draw[ar, kfhostln, dashed] (-70,88) -- (-70,86.1)
   node[midway, left=0.8mm, align=center, font=\sffamily\tiny, color=kfhostln]{RM ioctls,\\GSP RPC};
