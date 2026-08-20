@@ -1195,7 +1195,7 @@ pub fn served_chain(
         Box::new(inittables::InitTablePolicy::with_probe_arm(
             chip, driver, probe_arm,
         )),
-        Box::new(staticinfo::StaticInfoPolicy::new(chip, driver)),
+        Box::new(gpu_name_from_seam(staticinfo::StaticInfoPolicy::new(chip, driver))),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and
         // before `InertPolicy` would have a chance to grow an arm for it. It answers
@@ -1253,4 +1253,62 @@ pub fn served_chain(
         Box::new(unserviced::UnservicedLedger::new(driver, unserviced)),
     ]);
     Box::new(kayfabe_gsp::PolicyChain::new(links))
+}
+
+/// ★★★ **w337 — feed `gpuNameString` through the seam `GspStaticInfo::name` documents.**
+///
+/// `kayfabe_abi::gspstaticinfo::GpuName` records that this value's proper source is the
+/// **host GPU's own answer** to `NV2080_CTRL_CMD_GPU_GET_NAME_STRING` under READ-NATIVE,
+/// and that fn 65 cannot issue a host ioctl because it runs before any isolate exists — so
+/// *"the value must therefore already be in hand when the policy is built, which makes
+/// this a **seam** and not a query site"*. This function IS that seam, fed by hand.
+///
+/// ⚠ **NOT the shippable fix, and deliberately not a default.** With the variable unset the
+/// name stays `None` — byte-identical to every boot before this — so nothing here hardcodes
+/// a per-generation string, which is what the READ-NATIVE ruling exists to prevent. It
+/// answers ONE measured question:
+///
+/// > `w337`, real GA106, ONE process: `cuInit`, `cuDeviceGetCount`, `cuDeviceGet`,
+/// > `cuDeviceTotalMem` (12 540 182 528), `cuDeviceGetUuid`, `cuDevicePrimaryCtxRetain` and
+/// > `cuDeviceGetAttribute` (CC 8.6) **all returned 0 on the FAILING boot**, while
+/// > `cudaGetDeviceCount` in that same process returned **3 = cudaErrorInitializationError**.
+/// > The single anomaly in the sweep is `cuDeviceGetName = 0` with an **empty string** — the
+/// > long-known `GPU_GET_NAME_STRING`-returns-zeros defect, filed as cosmetic because it had
+/// > only ever surfaced as `nvidia-smi Name: ERR!`.
+///
+/// ⇒ Does the CUDA **runtime** refuse a device whose name is empty? `KAYFABE_GPU_NAME`
+/// answers it in one boot. If the runtime initialises, the seam is worth building properly
+/// (query the host once at device construct, pass the answer in); if not, this cost one boot.
+/// ⊘ Until that boot reports, the empty name is a **correlation, not the cause.**
+fn gpu_name_from_seam(p: staticinfo::StaticInfoPolicy) -> staticinfo::StaticInfoPolicy {
+    let Ok(raw) = std::env::var("KAYFABE_GPU_NAME") else {
+        return p;
+    };
+    // `GpuName::new` wants `&'static str` because a chip row's name is a literal. A value
+    // arriving at runtime is leaked ONCE, at device construct, and lives as long as the
+    // device would have. Bounded by construction: this runs a single time per device.
+    let leaked: &'static str = Box::leak(raw.into_boxed_str());
+    let short: &'static str = std::env::var("KAYFABE_GPU_SHORT_NAME")
+        .ok()
+        .map(|s| Box::leak(s.into_boxed_str()) as &'static str)
+        .unwrap_or(leaked);
+    match (
+        kayfabe_abi::gspstaticinfo::GpuName::new(leaked),
+        kayfabe_abi::gspstaticinfo::GpuName::new(short),
+    ) {
+        (Some(n), Some(sn)) => {
+            eprintln!("W337NAME accepted name={leaked:?} short={short:?}");
+            p.with_name(n, sn)
+        }
+        // ⊘ Refuse BY NAME rather than silently keeping `None`: an unusable value would
+        // otherwise be indistinguishable from never having set the variable, and the whole
+        // point of the boot is knowing which arm ran.
+        _ => {
+            eprintln!(
+                "W337NAME REFUSED name={leaked:?} short={short:?} why=not non-empty \
+                 printable ASCII shorter than 64 bytes; name stays None"
+            );
+            p
+        }
+    }
 }

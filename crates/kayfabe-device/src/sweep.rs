@@ -269,21 +269,44 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_0afe,
         engine: "GpuUserSharedData",
+        // ⊘⊘ MIS-TYPED, corrected 2026-08-20 (w337). The disposition below is WRONG and the
+        // `why` used to state a mechanism that MEASUREMENT REFUTES. Both are corrected in the
+        // text; the variant is left in place because no existing variant fits (see the last
+        // paragraph) and inventing one is an owner decision, not a drive-by edit.
         disposition: SweepDisposition::RefusalHalts,
-        why: "_gpushareddataInitGsp hands GSP the physical address of the RUSD page under \
-              NV_ASSERT_OK_OR_RETURN (ogkm-580: gpu_user_shared_data.c:221-238); the status \
-              propagates to gpushareddataConstruct_IMPL and the RM_USER_SHARED_DATA class \
-              allocation fails, which is loud and attributable. ⊘ Serving would be a LIE \
-              rather than an omission — this port has no RUSD publisher, so an NV_OK would \
-              promise a page that is never written",
+        why: "⊘⊘ THIS ROW USED TO SAY the status `propagates to gpushareddataConstruct_IMPL \
+              and the RM_USER_SHARED_DATA class allocation fails, which is loud and \
+              attributable`. MEASURED FALSE, three boots, real GA106: the refusal is present \
+              at IDENTICAL COUNTS in w333s11/w333s41 (green, cup8 bit-exact at 2048²) and in \
+              w336llm, `hClass=0x000000de` fails in NONE of them, and every boot reaches \
+              compute. ★ The mechanism is at ogkm-580: gpu_user_shared_data.c:307-312: \
+              NV_ASSERT_OK_OR_RETURN returns out of _gpushareddataInitGsp, but the CALLER \
+              DISCARDS the value — `_gpushareddataInitGsp(pGpu);` as a bare statement — and \
+              then `return NV_OK` unconditionally. So the refusal does NOT halt and nothing \
+              behind it is unreachable. ★★★ THE REFUSAL IS STILL CORRECT, for the row's \
+              ORIGINAL second reason, which survives untouched: this port has no RUSD \
+              publisher, so an NV_OK would promise a page that is never written — and the \
+              owner's standing rule is that a completion may only be sent when the guest's \
+              observable state after it is intended. ⚠ TAXONOMY GAP, owner call: none of the \
+              four variants fits. RefusalHalts is refuted above; RefusalIsInvisible requires \
+              the left-behind state to match a real GSP's and an all-zero RUSD page does not; \
+              RefusalFailsOpen fits the LETTER (RM pre-zeroes at :305, discards the status, \
+              and zeros are not what a GSP would have said) but implies must_be_served, and \
+              SERVING DOES NOT FIX THE STATE — the wrongness is in the PAGE, not the reply. \
+              That is the gap: this variant set assumes serving the control repairs what \
+              refusing it left wrong, and for RUSD those come apart",
     },
     SweepControl {
         cmd: 0x2080_0aff,
         engine: "GpuUserSharedData",
         disposition: SweepDisposition::RefusalHalts,
         why: "the polling half of the same subsystem, issued by _gpushareddataSendDataPollRpc \
-              under NV_ASSERT_OK_OR_RETURN (ogkm-580: gpu_user_shared_data.c:265-274). Same \
-              argument as 0x20800afe and it must be decided with it: answering one and \
+              under NV_ASSERT_OK_OR_RETURN (ogkm-580: gpu_user_shared_data.c:265-274). ⊘ Same \
+              argument as 0x20800afe — INCLUDING THAT ROW'S 2026-08-20 CORRECTION: this does \
+              NOT halt either (measured on the same three boots; its assert fires at :373 and \
+              the boot still reaches bit-exact compute), and the disposition here is \
+              mis-typed for the same reason. Read that row before this one. The refusal \
+              remains correct on the publisher argument, and it must be decided with it: answering one and \
               refusing the other would tell the guest a shared page exists and then never \
               refresh it",
     },
