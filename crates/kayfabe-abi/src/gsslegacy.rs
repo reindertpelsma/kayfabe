@@ -207,6 +207,31 @@ pub fn params_size(cmd: u32) -> Option<usize> {
     SERVED.iter().find(|(c, _)| *c == cmd).map(|(_, n)| *n)
 }
 
+/// Does this GSS-legacy control id carry a WRITTEN argument for why the guest may cache our
+/// answer forever?
+///
+/// ★★★★★ **This exists because the same question was asked in two places and only one of
+/// them was updated — w349b, measured on hardware.** The serve-site tripwire in
+/// `kayfabe_device::inittables` carried a hardcoded pair of ids, while
+/// `init_tables.rs`'s sticky-answer gate quantified over a DERIVED set. Adding three served
+/// ids satisfied the derived gate, left the hardcoded tripwire untouched, and the boot
+/// refused all three anyway (`0x20809009 served=0 refused=1`) with the table rows present
+/// and correct. **A list that answers a question in one place and a predicate that answers
+/// it in another will drift, and the drift is invisible to the test that only knows one.**
+///
+/// ⇒ Both sides now call this. `gates_quantified_over_a_list` in the other direction: the
+/// remedy is not a longer list, it is ONE list.
+///
+/// The argument itself differs per id and lives with the id:
+/// - [`GSS_LEGACY_0X8159`] — the reply is the IDENTITY on the guest's own buffer.
+/// - [`GSS_LEGACY_0X8162`] — no such property; safe only via `StickyAnswerGuard`.
+/// - [`crate::cudartinit`]'s three — the answers are CONSTANTS, so a cached answer and a
+///   fresh one are the same bytes by construction.
+pub fn carries_cache_argument(cmd: u32) -> bool {
+    SERVED.iter().any(|(c, _)| *c == cmd)
+        || crate::cudartinit::SERVED.iter().any(|(c, _, _)| *c == cmd)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

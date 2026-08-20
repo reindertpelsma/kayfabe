@@ -2465,12 +2465,16 @@ impl CommandPolicy for InitTablePolicy {
         // exactly that. So the obligation is named here and discharged there, and the one
         // served id records that its answer is safe to cache anyway: it is the identity on the
         // guest's own buffer, so a cache that replayed it would replay what the guest sent.
-        if is_gss_legacy(req.cmd)
-            && !matches!(
-                want,
-                WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162
-            )
-        {
+        //
+        // ⊘⊘⊘ **CORRECTED 2026-08-20 (w349b) — THIS WAS A SECOND HARDCODED LIST, AND IT COST
+        // A BOOT.** It used to read `!matches!(want, GssLegacy8159 | GssLegacy8162)`. w349
+        // added three served GSS-legacy ids with their cache argument written and their
+        // `init_tables.rs` gate updated — and this tripwire, which nothing pointed at,
+        // refused all three anyway: `[measured, boot w349bcud1]` `0x20809009 served=0
+        // refused=1` with the rows present and correct.
+        // ⇒ It now asks [`kayfabe_abi::gsslegacy::carries_cache_argument`], **the same
+        // predicate its test asks**, so the runtime and the gate cannot disagree again.
+        if is_gss_legacy(req.cmd) && !kayfabe_abi::gsslegacy::carries_cache_argument(req.cmd) {
             return refuse();
         }
 

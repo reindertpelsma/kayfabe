@@ -531,15 +531,13 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
     // an id earns a place here by having its cache argument WRITTEN somewhere, not by being
     // convenient. `kayfabe_abi::cudartinit` carries the argument for its three, and it is a
     // DIFFERENT argument from either of `gsslegacy`'s two — see the executable check below.
-    let argument_bearing: std::collections::BTreeSet<u32> = kayfabe_abi::gsslegacy::SERVED
+    // ⊘ w349b: built from the SAME predicate the runtime tripwire asks
+    // (`carries_cache_argument`), not a second hand-rolled union. Rebuilding it here is
+    // exactly the drift that cost a boot.
+    let argument_bearing: std::collections::BTreeSet<u32> = gss_legacy_served
         .iter()
-        .map(|(c, _)| *c)
-        .chain(
-            kayfabe_abi::cudartinit::SERVED
-                .iter()
-                .map(|(c, _, _)| *c)
-                .filter(|id| id & 0x0000_8000 != 0),
-        )
+        .copied()
+        .filter(|id| kayfabe_abi::gsslegacy::carries_cache_argument(*id))
         .collect();
     assert_eq!(
         gss_legacy_served,
