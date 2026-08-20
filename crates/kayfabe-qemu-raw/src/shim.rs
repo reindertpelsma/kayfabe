@@ -10730,6 +10730,29 @@ fn join_one_fb_leaf(
                     r.phys, r.va.0
                 );
             }
+        } else {
+            // ⊘⊘⊘ **THE FOURTH OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
+            //
+            // `supersede_joined_fb_leaf` returning `None` printed NOTHING, so a boot showing
+            // zero supersede lines read as *"the guard above was false"*. It was not: the
+            // guard was TRUE and the takeover simply found no row to take. `[measured
+            // w362/w363]` 48 refusals per frame on three GR frames with zero supersede lines,
+            // which I read as a disagreement between `fb_join_installed_at` (exact base) and
+            // `install_join` (any overlap). ⊘ That reading was WRONG — both predicates agree
+            // here; the store is per-DEVICE and keyed by phys, while the takeover is
+            // per-VAS and keyed by the CALLER's own pdb, so a join left by a different,
+            // exited process is unreachable to it BY CONSTRUCTION.
+            //
+            // ⇒ A branch whose failure case prints nothing is not a branch that "did not
+            // run" — and there is no way to tell those apart from the log. Same class as the
+            // global print cap and the append-only cursor list this campaign paid for today.
+            eprintln!(
+                "{head} {what} ⊘ SUPERSEDE NO-ROW fb_phys=0x{:x} va=0x{:x}: the store HOLDS a \
+                 join at this frame and THIS VAS has no row naming it — the owner is another \
+                 (probably exited) address space, which this takeover cannot reach. The guard \
+                 was TRUE; there was simply nothing here to take",
+                leaf.phys, leaf.va
+            );
         }
     }
     // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
