@@ -66,6 +66,7 @@ shift || true
 
 LOG=$BENCH/run_${TAG}
 DMESG=${LOG}_dmesg.log
+DMESG_AFTER=${LOG}_dmesg_after.log
 PROBE=${LOG}_probe.log
 HOSTD=${LOG}_hostdmesg.log
 BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
@@ -285,6 +286,52 @@ if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
   say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
 fi
 
+# ---- phase 3b2: ★★★★★ THE GUEST'S dmesg **AFTER** THE WORKLOAD ---------------------------
+#
+# ⊘⊘ `[measured 2026-08-20, boots w361..w372]` **THE GUEST CAPTURE HAD THE EXACT DEFECT THE
+# HOST CAPTURE BELOW WAS ALREADY FIXED FOR, AND IT WENT UNNOTICED FOR TWELVE BOOTS.** Phase 3b
+# takes `$DMESG` BEFORE the hook. Every boot w361..w372 therefore wrote a guest dmesg of
+# **5379 bytes, byte-identical, mtime at boot start, last line at 28.99 s uptime** — a file
+# that exists, is freshly named after the boot, and contains **nothing the workload did**.
+# ★ It was read as *"the guest kernel logged nothing during the workloads"* and reported to
+# the owner as a measured fact. It was never measured. Same class as CLAUDE.md's serial-log
+# trap, and as the block below, which says in its own words: *"a capture taken before the hook
+# misses 94 % of exactly what it exists to collect."* The lesson was written down, applied to
+# ONE of the two captures, and the other was left alone.
+#
+# ⊘ **`sudo` is required**: the guest's ssh user is unprivileged and `kernel.dmesg_restrict=1`
+# is on, so a bare `dmesg` returns *"read kernel buffer failed: Operation not permitted"* —
+# which prints ONE line and reads, to a grep for NVRM, exactly like a silent kernel.
+# ⇒ the emptiness assertion below distinguishes "nothing happened" from "nothing was recorded".
+# ⊘ **DO NOT call `gq` unguarded here.** `gq` invokes `die` when QEMU is gone — and a workload
+# that KILLS the guest is precisely the boot whose remaining evidence (phase 3c host dmesg, the
+# census) you most need. An unguarded call would turn "the guest died" into "the harness
+# collected nothing and exited 2". Check liveness first and degrade to UNREADABLE instead.
+if kill -0 "$QPID" 2>/dev/null \
+   && gq 'sudo -n dmesg' > "$DMESG_AFTER" 2>/dev/null && [ -s "$DMESG_AFTER" ]; then
+  a_lines=$(wc -l < "$DMESG_AFTER"); a_nvrm=$(grep -c NVRM "$DMESG_AFTER" || true)
+  b_lines=$(wc -l < "$DMESG" 2>/dev/null || echo 0)
+  {
+    echo "=== GUEST dmesg AFTER the workload (phase 3b captured $b_lines lines BEFORE it) ==="
+    echo "GUEST_DMESG_AFTER_LINES=$a_lines"
+    echo "GUEST_DMESG_AFTER_NVRM=$a_nvrm"
+    echo "GUEST_DMESG_WORKLOAD_DELTA=$(( a_lines - b_lines ))"
+  } >> "$PROBE"
+  say "guest dmesg after workload: $a_lines lines ($a_nvrm NVRM), delta $(( a_lines - b_lines )) → $DMESG_AFTER"
+  # ★ The delta is the whole point of this phase. Zero delta is legitimate ONLY if the hook ran
+  #   nothing that touched the driver; say so loudly rather than letting it pass as normal.
+  if [ "$(( a_lines - b_lines ))" -le 0 ] && [ -n "${POST_CAPTURE_HOOK:-}" ]; then
+    say "⊘ the workload added ZERO guest kernel lines. Either the hook never touched the GPU,"
+    say "  or this capture is not seeing what it thinks it is. Do NOT read it as 'driver silent'."
+  fi
+else
+  echo "GUEST_DMESG_AFTER_LINES=UNREADABLE" >> "$PROBE"
+  say "⊘ the GUEST's dmesg was UNREADABLE after the workload (QEMU gone? sudo? guest down?) —"
+  say "  this boot has NO post-workload guest evidence, and that is a fact about the CAPTURE."
+  say "  ⚠ If QEMU died, the reason is in ${LOG}_qemu.log — the rest of this capture still runs."
+  : > "$DMESG_AFTER"
+fi
+
 # ---- phase 3c: ★★★ THE HOST'S OWN dmesg, FOR THIS BOOT ------------------------------------
 #
 # Everything after the watermark taken in phase 0b. See there for why this exists.
@@ -429,7 +476,7 @@ BOOTS="$REPO_ROOT/traces/guest_boots"
 if [ -d "$BOOTS" ]; then
   mkdir -p "$BOOTS"
   copied=0
-  for f in "${LOG}_qemu.log" "$DMESG" "$PROBE"; do
+  for f in "${LOG}_qemu.log" "$DMESG" "$DMESG_AFTER" "$PROBE"; do
     [ -s "$f" ] || { say "★ refusing to carry an EMPTY $f into the repo"; continue; }
     cp -f "$f" "$BOOTS/$(basename "$f")" && copied=$(( copied + 1 ))
   done
@@ -449,4 +496,4 @@ else
   say "  made from this run cannot be re-verified by anyone reading the repository."
 fi
 
-say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG probe=$PROBE hostdmesg=$HOSTD"
+say "done. serial=${LOG}_serial.log qemu=${LOG}_qemu.log dmesg=$DMESG dmesg_after=$DMESG_AFTER probe=$PROBE hostdmesg=$HOSTD"
