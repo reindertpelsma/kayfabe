@@ -1519,7 +1519,18 @@ impl CommandPolicy for InitTablePolicy {
         // control appears serialized anywhere this port has looked — the C answers both
         // flat and a real driver accepted it — but that is an absence of observation, not
         // a guarantee, and an unchecked flat answer is the kind of wrong that never logs.
+        //
+        // ★★★ w349c — NAME THE REFUSAL. `refuse by name` is this tree's own rule and these
+        // two gates broke it: a control with a `WantedTable` row that gets refused here
+        // logs exactly what a control with NO row logs, which is why two boots were spent
+        // guessing which site was firing. A row exists ⇒ someone MEANT to serve it ⇒ a
+        // refusal is a fact worth a line.
         if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=finn-serialized rmapi_rpc_flags={:#x}",
+                req.cmd,
+                req.rmapi_rpc_flags
+            );
             return refuse();
         }
         // The guest's own declared size must be the size we encode, and its payload must
@@ -1527,6 +1538,14 @@ impl CommandPolicy for InitTablePolicy {
         if req.params_size as usize != want.params_size()
             || cmd.payload.len() < req.params_at + want.params_size()
         {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={}",
+                req.cmd,
+                req.params_size,
+                want.params_size(),
+                cmd.payload.len(),
+                req.params_at
+            );
             return refuse();
         }
 
@@ -2475,6 +2494,10 @@ impl CommandPolicy for InitTablePolicy {
         // ⇒ It now asks [`kayfabe_abi::gsslegacy::carries_cache_argument`], **the same
         // predicate its test asks**, so the runtime and the gate cannot disagree again.
         if is_gss_legacy(req.cmd) && !kayfabe_abi::gsslegacy::carries_cache_argument(req.cmd) {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=gss-legacy-without-cache-argument",
+                req.cmd
+            );
             return refuse();
         }
 
