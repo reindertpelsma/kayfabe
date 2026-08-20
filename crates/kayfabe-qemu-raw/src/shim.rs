@@ -10869,11 +10869,37 @@ fn join_one_fb_leaf(
             })
         }
         Err(e) => {
+            // ★★★★★ **w364 — WHO STILL NAMES THIS FRAME? The refusal alone cannot say.**
+            //
+            // `[measured w361–w363]` this refusal fires 48× per frame on three GR context
+            // frames for every process after the first, and the supersede pre-check above
+            // printed NONE of its three outcomes for them — so the guard was false while this
+            // said `ALREADY_JOINED`. The census forks that three ways and each fork implies a
+            // DIFFERENT fix, which is why it is printed rather than assumed:
+            //
+            //   live=0 retired=0 → an ORPHAN: the store holds a join no table row names.
+            //                      Reclaiming it takes nothing from anyone.
+            //   live=0 retired>0 → a corpse whose rows still stand; the retired sweep should
+            //                      have taken it and did not — ask why it ran and skipped.
+            //   live>0           → the predecessor is STILL LIVE in our model. Then this is
+            //                      a MISSED TEARDOWN, not a stale join, and reclaiming would
+            //                      be theft from a running process. Refuse, and fix elsewhere.
+            let (live, retired) = device.fb_join_namers(leaf.phys);
             eprintln!(
                 "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
                  phys=0x{:x} len={} why=`{}` — this device still serves that range from its \
-                 own pages. ⊘ RELEASED and NOT bound",
-                leaf.va, leaf.phys, e.phys, e.len, e.why
+                 own pages. ⊘ RELEASED and NOT bound \
+                 FB-JOIN-NAMERS[live={live} retired={retired} ⇒ {}]",
+                leaf.va,
+                leaf.phys,
+                e.phys,
+                e.len,
+                e.why,
+                match (live, retired) {
+                    (0, 0) => "ORPHAN — named by nobody, live or dead",
+                    (0, _) => "CORPSE-ROWS — a retired proc still names it",
+                    _ => "LIVE — a running proc still names it; refusing is CORRECT",
+                }
             );
             device.release_unadopted_fb_leaf(
                 DOORBELL_TARGET_GPU,
