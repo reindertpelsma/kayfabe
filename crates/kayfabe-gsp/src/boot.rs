@@ -55,7 +55,7 @@
 
 use crate::element::{
     ElementLayout, IncomingRpc, MsgLen, OutgoingRpc, decode_message, encode_message, max_elements,
-    peek_elem_count, peek_len,
+    peek_elem_count, peek_len, peek_seq_num,
 };
 use crate::fault::GspFault;
 use crate::ram::{GuestRam, RegionMap};
@@ -1009,6 +1009,14 @@ impl GspFsm {
         // The boot-args pair stops meaning anything when the life ends; the register
         // shadow keeps reading back what was written, as hardware would.
         self.boot_args_seen = (false, false);
+        // ⊘⊘ **DO NOT clear `region_identity` here — MEASURED WRONG 2026-08-20.**
+        // Clearing it at `enter_halted` was the obvious fix for PC-D7 (see `publish`) and it
+        // FAILS `an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers`:
+        // `BadSequence { expected: 5, got: 0 }`. `enter_halted` is reached from BOTH E4 (the
+        // Booter-Unload STARTCPU — a real driver-life end, guest reconstructs its msgq) and
+        // E2 (the trailing teardown STARTCPU, which an IDLE RELEASE also takes — guest KEEPS
+        // its queue and its `rxSeqNum`). The two need OPPOSITE treatment, so the reset must be
+        // scoped to the transition, not to this function. ⚠ Unfixed: see the PC-D7 block.
     }
 
     /// ★ **E6 — the boot handshake.** Idempotent: it recomputes everything from the
@@ -1131,7 +1139,38 @@ impl GspFsm {
         // `msgqTxCreate` at module load, so a same-instance rebind must resume where we
         // stopped, and a new instance starts at 0 because the guest's producer did.
         //
-        // ═══ ★★★ PC-D7 — A NAMED TRADE-OFF, NOT A DEFECT TO BE FIXED ═══════════════════
+        // ═══ ★★★ PC-D7 — ⊘⊘ **CLOSED 2026-08-20. THE TRADE-OFF BELOW WAS REAL AND ITS**
+        // ═══ **RARITY JUDGEMENT WAS WRONG**, and that judgement is what kept it open. ═══
+        //
+        // The analysis below is correct in every mechanism and wrong in one quantity: it
+        // says the wrong-preserve "needs an allocator to return the same page across a
+        // module unload/reload". `[measured 2026-08-20, boot `w373`]` **it needs no unload at
+        // all.** Running `nvidia-smi` in a loop — no CUDA, no `rmmod`, persistence off —
+        // every cycle destroys and reconstructs the guest's `MESSAGE_QUEUE_INFO`, because at
+        // 580 `rxSeqNum` lives and dies with the *adapter*, not with the module. The guest
+        // printed `Expected 0 got 161` on the **third** `nvidia-smi` of the boot.
+        // ⇒ Not rare: a coin flip per cycle on allocator reuse. It fired at cycle 3 in w373
+        //   and cycle 5 in w370/w371 — **that nondeterminism is why the wall's ordinal
+        //   varied**, which cost a day of hunting a counter that does not exist.
+        // ⇒ **Fixed by replacing the discriminator, not by trading one wrong case for the
+        //   other.** ⊘ The first attempt — dropping `region_identity` at `enter_halted` —
+        //   is REFUTED and must not be retried: `enter_halted` is reached from BOTH E4 (the
+        //   Booter-Unload STARTCPU) and E2 (the trailing teardown STARTCPU, which an IDLE
+        //   RELEASE also takes), and those two need OPPOSITE answers. It failed
+        //   `an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers` with
+        //   `BadSequence { expected: 5, got: 0 }` on the first test run.
+        //   ⚠ And scoping it to E4 would have been WORSE THAN USELESS: measured from the
+        //   580 source, `kgspTeardown_TU102` runs FWSEC-SB *before* Booter Unload, our E2
+        //   takes WPR2 down with the phase, and the guest's own gate then skips the SEC2
+        //   launch entirely (`ogkm-580: kernel_gsp_booter_tu102.c:148-153`) — so **E4 never
+        //   fires on this path at all**. An E4-scoped fix is inert on the bench while
+        //   keeping every test green: the exact shape of a change that reads as done.
+        //   ⇒ The discriminator is now the guest's own command `seqNum` (see below), which
+        //   answers both cases from evidence the guest authored.
+        // ★ The lesson worth keeping: **this comment predicted the failure verbatim, named
+        //   the exact symptom, and was filed as "a named trade-off, not a defect to be
+        //   fixed". Writing the hazard down is not the same as bounding how often it fires**
+        //   — and the frequency estimate, not the mechanism, was the load-bearing claim.
         //
         // `sharedMemPhysAddr` is an ADDRESS, and the guest's allocator recycles pages. A
         // destruct → construct cycle that lands the new shared memdesc on the SAME physical
@@ -1155,7 +1194,52 @@ impl GspFsm {
         // which instance it thinks it is — and that is a design change with its own reads,
         // not a one-line swap. Written down here rather than fixed, so the next reader finds
         // a decision instead of a bug.
-        let same_instance = self.region_identity == Some(shared_mem_pa);
+        // ★★★★★ **THE DISCRIMINATOR IS THE GUEST'S OWN COMMAND SEQUENCE, NOT THE ADDRESS.**
+        // The guest stamps its private `txSeqNum` into every command element it submits
+        // (`ogkm-580: message_queue_cpu.c:481`), and zeroes that counter only at queue
+        // construction. So the most recently submitted command answers "is this the same
+        // queue instance I was already talking to?" directly, in-band, with no dependence
+        // on where the guest's allocator happened to place the region.
+        //
+        // `S + 1 == self.cmd_seq` — the guest's producer continues exactly where our
+        // consumer stopped (`cmd_seq` is the sequence we NEXT expect; see
+        // [`GspFsm::command_seq`]). `W == 0` is fresh by definition: a same-instance rebind
+        // has necessarily submitted the two async init RPCs plus fn-47 already.
+        //
+        // ⊘ **Peek, never decode.** No checksum, no validation, no cursor movement — a
+        // stale or hostile element must yield a *number*, not a refusal. Both possible
+        // answers ("continue", "reset") are safe, so this read cannot fail the boot.
+        let seq_evidence = (|| -> Result<Option<u32>, GspFault> {
+            let count = geom.msg_count();
+            let w = geom.region().read_u32(ram, geom.cmd_write_ptr_off())?;
+            if w == 0 {
+                return Ok(None);
+            }
+            let last = count.slot(w.wrapping_sub(1));
+            let mut buf = vec![0u8; geom.element_size() as usize];
+            geom.region()
+                .read(ram, geom.cmd_element_off(last), &mut buf)?;
+            Ok(Some(peek_seq_num(&self.abi.element, &buf)?))
+        })()
+        .unwrap_or(None);
+        let same_instance = seq_evidence.is_some_and(|s| s.wrapping_add(1) == self.cmd_seq);
+
+        // ★ The GPA is kept ONLY as a cross-check, because a publish where the two
+        // disagree IS PC-D7 happening live — the case that used to wedge the GPU silently
+        // and is now merely a counted line. `gpa_same=true seq_same=false` is the recycled
+        // page; `gpa_same=false seq_same=true` would mean a live queue moved, which nothing
+        // in 580 does and which we would want to hear about immediately.
+        let gpa_same = self.region_identity == Some(shared_mem_pa);
+        eprintln!(
+            "kayfabe: GSP-PUBLISH gpa=0x{shared_mem_pa:x} gpa_same={gpa_same} seq_last={seq_evidence:?} \
+             cmd_seq={} ⇒ same_instance={same_instance}{}",
+            self.cmd_seq,
+            if gpa_same == same_instance {
+                ""
+            } else {
+                "  ★ PC-D7 COLLISION: address and sequence disagree — the address was lying"
+            }
+        );
         if !same_instance {
             self.stat_seq = 0;
             self.cmd_seq = 0;

@@ -3402,3 +3402,114 @@ fn the_minimum_rpc_length_is_the_drivers_own_and_zero_is_legal_at_610() {
          the defect this replaced"
     );
 }
+
+/// ★★★★★ **THE BENCH WEDGE, AS A UNIT TEST: a fresh guest whose allocator handed back the
+/// previous life's region must NOT be read as the same queue instance.**
+///
+/// `[measured 2026-08-20, boot `w373`]` This is the defect that made the GPU unusable after
+/// the third `nvidia-smi` of a boot — no CUDA, no `rmmod`, nothing exotic. The guest printed:
+///
+/// ```text
+/// NVRM: GspMsgQueueReceiveStatus: Bad sequence number.  Expected 0 got 161.
+/// NVRM: ... NV_ERR_INVALID_DATA (0x25) from rpcRecvPoll(..., GSP_INIT_DONE, 0)
+/// NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+/// ```
+///
+/// and every later cycle failed instantly, permanently. `161` was the status sequence we
+/// carried out of the previous `nvidia-smi`'s life, posted into a queue the new one had just
+/// constructed at `rxSeqNum = 0`. The guest's receive path recovers only from
+/// `seqNum < rxSeqNum` (`ogkm-580: message_queue_cpu.c:695-713`); for `>` **there is no
+/// branch**, so the stream never resynchronises.
+///
+/// ⊘ **The identity used to be the region's GPA, and an address cannot answer this.** The
+/// guest's allocator recycles pages, so "same address" and "same queue instance" are
+/// different questions that agree most of the time — and the boot where they disagreed was
+/// unrecoverable. Whether they disagree on cycle 3 or cycle 5 is allocator nondeterminism,
+/// which is why the failure's ordinal wandered between boots and looked like a counter.
+///
+/// ★ This test is deliberately the MIRROR of
+/// [`an_idle_release_re_acquire_rebinds_and_preserves_the_sequence_numbers`]: same teardown,
+/// same rebind, same region — and the opposite required answer. Neither passes with a rule
+/// that only looks at the address, and that is the point. The discriminator is the guest's
+/// own `txSeqNum`, which it stamps into every command element it submits
+/// (`ogkm-580: message_queue_cpu.c:481`) and zeroes only at queue construction.
+#[test]
+fn a_fresh_guest_on_a_recycled_region_resets_the_sequence() {
+    let mut w = World::new(P580, MODEL_A);
+    w.boot();
+    w.link_and_drain();
+    for i in 0..3 {
+        w.guest
+            .send(&mut w.ram, FN_RM_CONTROL, 500 + i, &[7; 8])
+            .unwrap();
+        w.doorbell().unwrap();
+        assert_eq!(w.guest.recv(&mut w.ram).unwrap().len(), 1);
+    }
+    let carried = w.fsm.command_seq();
+    assert!(
+        carried >= 3,
+        "the life must have advanced the command stream well past a fresh instance's, \
+         else this test cannot tell the two apart: {carried}",
+    );
+
+    // The life ends: fn-47, then the teardown STARTCPU (E2 → Halted). This is the SAME
+    // transition an idle release takes — the harness cannot distinguish them, and neither
+    // can the guest. Only the sequence evidence can.
+    w.guest.send(&mut w.ram, FN_UNLOADING, 600, &[]).unwrap();
+    w.doorbell().unwrap();
+    assert_eq!(w.guest.recv(&mut w.ram).unwrap().len(), 1, "the fn-47 ack");
+    let m = w.arch.model();
+    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E2 -> Halted
+
+    // ★★★ THE RECYCLE. A brand-new driver life — fresh `MESSAGE_QUEUE_INFO`, so
+    // `txSeqNum == 0` — that the allocator placed on the **same pages at the same GPA**.
+    let pages = w.guest.pages.clone();
+    let gpa = w.guest.boot_args_gpa;
+    let rmargs_id = w.arch.model().rmargs_id;
+    w.guest = Guest::new(P580, pages, gpa, rmargs_id);
+    w.guest.publish(&mut w.ram);
+    assert_eq!(
+        w.guest.boot_args_gpa, gpa,
+        "the whole point: the address is IDENTICAL across the two lives",
+    );
+
+    // 580 queues its two async init RPCs before the bind (`kgspQueueAsyncInitRpcs`), so the
+    // command stream the bind observes starts at 0 — the evidence that says "fresh".
+    w.guest.send(&mut w.ram, FN_RM_CONTROL, 1, &[1; 8]).unwrap();
+    w.guest.send(&mut w.ram, FN_RM_CONTROL, 2, &[1; 8]).unwrap();
+
+    w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E1
+    w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF)
+        .unwrap();
+    let r = w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
+    assert!(r.transitions.contains(&Transition::E6), "the queue rebinds");
+
+    // ★ The guest links its fresh queue (rxSeqNum = 0) and must be able to READ what we
+    // posted. Before the fix this is where it printed `Expected 0 got N` and wedged.
+    w.guest.linked = false;
+    w.guest.rx_link(&mut w.ram).expect("the fresh queue links");
+    assert_eq!(w.guest.rx_seq, 0, "a fresh instance starts at zero");
+    let msgs = w
+        .guest
+        .recv(&mut w.ram)
+        .expect("★ NO SEQUENCE GAP — this is the assertion the bench wedge violates");
+    // Three messages: the replies to the two async init RPCs, then INIT_DONE. ⊘ The count
+    // is incidental; what is load-bearing is that `recv` returned Ok at all — a gap here is
+    // the wedge, and the guest has no branch that recovers from it.
+    assert_eq!(
+        msgs[0].seq_num, 0,
+        "★ the stream must START at the sequence the NEW instance expects. `161` here is \
+         the measured w373 wedge, and it is unrecoverable by construction.",
+    );
+    assert!(
+        msgs.iter().any(|m| m.function == INIT_DONE),
+        "and INIT_DONE must be among what the fresh guest could actually read: {:?}",
+        msgs.iter().map(|m| m.function).collect::<Vec<_>>(),
+    );
+    for (i, m) in msgs.iter().enumerate() {
+        assert_eq!(
+            m.seq_num, i as u32,
+            "the whole run is contiguous from zero — a fresh instance's stream",
+        );
+    }
+}

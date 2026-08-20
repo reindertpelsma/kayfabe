@@ -634,6 +634,44 @@ pub fn peek_elem_count(layout: &ElementLayout, first: &[u8]) -> Result<Option<u3
     Ok(Some(u32::from_le_bytes(b)))
 }
 
+/// Peek the guest's `seqNum` out of a command element without decoding or validating it.
+///
+/// ★★★★★ **THIS IS THE INSTANCE DISCRIMINATOR** — see `boot.rs`'s PC-D7 block. The guest
+/// stamps its CPU-private `txSeqNum` into every command element it submits
+/// (`ogkm-580: message_queue_cpu.c:481`, `pCQE->seqNum = pMQI->txSeqNum;`), and that
+/// counter is zeroed only at queue construction. So the command stream carries the queue
+/// instance's identity **in-band, in the shared region**, and a fresh instance is
+/// distinguishable from a continued one without reference to any address.
+///
+/// ⊘ **Why the obvious discriminator does not exist**: no sequence number crosses the
+/// shared region in a header. `msgqTxHeader` is `{version, size, msgSize, msgCount,
+/// writePtr, flags, rxHdrOff, entryOff}` and `msgqRxHeader` is `{readPtr}`
+/// (`ogkm-580: src/common/shared/msgq/inc/msgq/msgq_priv.h:49-65`) — `rxSeqNum` and
+/// `txSeqNum` live in the CPU-private `MESSAGE_QUEUE_INFO` and are unreadable to us. This
+/// is why PC-D7 recorded "read the guest's `rxSeqNum` at bind time" as the dissolving
+/// discriminator and then could not build it.
+///
+/// ⚠ **Peek, not decode, and deliberately so.** This runs at bind time, before any
+/// service pass, on an element the guest may have written at any point in its life. It
+/// must not checksum, must not validate, and must not advance anything — a hostile or
+/// simply stale element must be able to produce a *number* without producing a refusal.
+/// The number is then used only to choose between "continue" and "reset", and both of
+/// those are safe answers.
+///
+/// # Errors
+///
+/// [`GspFault::Truncated`] if the buffer is shorter than the header.
+pub fn peek_seq_num(layout: &ElementLayout, first: &[u8]) -> Result<u32, GspFault> {
+    let at = layout.seqnum_off();
+    let bytes = first.get(at..at + 4).ok_or(GspFault::Truncated {
+        need: at + 4,
+        have: first.len(),
+    })?;
+    let mut b = [0u8; 4];
+    b.copy_from_slice(bytes);
+    Ok(u32::from_le_bytes(b))
+}
+
 /// Verify and decode a complete element run.
 ///
 /// The checks are the driver's, in the driver's order: checksum folds to zero, then the
