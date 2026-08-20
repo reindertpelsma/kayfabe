@@ -3870,6 +3870,63 @@ impl SharedDevice {
         })
     }
 
+    /// ★★★★★ **w364 — WHO, IF ANYONE, STILL NAMES THIS FRAMEBUFFER FRAME?**
+    ///
+    /// Returns `(live_rows, retired_rows)`: how many `JoinsGuestWindow` rows across **live**
+    /// procs' address tables, and across **retired-but-unreaped** ones, name `phys`.
+    ///
+    /// # What it is for
+    ///
+    /// `[measured w361–w363, real GA106]` the framebuffer store can hold a join at `phys`
+    /// that **no table row names at all** — the owning proc exited, and
+    /// `drain_retired_budgeted` unbound its rows before anything gave the store's half back.
+    /// The next process's `install_join` then refuses `ALREADY_JOINED` forever
+    /// (`refused=48 joined=1` per frame, three frames, every boot), its GR context never gets
+    /// host backing, and its completions never land: `0/8` against the first proc's `8/8`.
+    ///
+    /// # Why this predicate and not a cross-process takeover
+    ///
+    /// `live_rows == 0` is the **proof of orphanhood**. A join nobody names cannot be read
+    /// through by anybody, so reclaiming it takes nothing from anyone — no trust argument
+    /// between mutually-untrusting guest processes is required, which is exactly what a
+    /// takeover that reached into a **live** peer's table would need and could not have.
+    /// ⊘ `live_rows > 0` is a genuine conflict between two living processes over one frame
+    /// and must stay refused **by name**; it is not this function's business to resolve.
+    ///
+    /// ⚠ **Both halves are returned because a single number cannot separate the two cases.**
+    /// `(0, 0)` is an orphan; `(0, n)` is a corpse whose rows are still standing and whose
+    /// join the retired sweep should take; `(n, _)` is live and must be refused. Collapsing
+    /// these into one count is the failure class this campaign paid for three times in one
+    /// day — most recently in the fix for it.
+    #[must_use]
+    pub fn fb_join_namers(&self, phys: u64) -> (usize, usize) {
+        let mut live = 0usize;
+        for pid in self.live_pids() {
+            self.with_proc(pid, |p| {
+                for vas in p.vases.values() {
+                    for (_va, _len, b) in vas.table.iter() {
+                        if b.phys() == phys
+                            && b.host().is_some_and(|h| {
+                                h.frees_object()
+                                    && h.bytes()
+                                        == kayfabe_mmu::BackingBytes::JoinsGuestWindow
+                            })
+                        {
+                            live += 1;
+                        }
+                    }
+                }
+            });
+        }
+        let retired = self
+            .retired_fb_join_census()
+            .1
+            .iter()
+            .filter(|r| r.phys == phys)
+            .count();
+        (live, retired)
+    }
+
     /// ★★★★★ **THE PARKED PROMOTE HALVES, BY IDENTITY** — every entry of
     /// [`kayfabe_core::gpu::Vas::promote_halves`] rendered with its `buffer_id`, which half
     /// arrived, and the address it carries.
