@@ -4322,9 +4322,9 @@ impl RmBackend for HostRmBackend {
     /// already opened for its own per-GPU controls (`RmConnection::subdevice`), so a control
     /// issued against it asks the part about itself — which is exactly what the GSS-legacy
     /// cudart init-gate family does. Nothing here widens what a guest can reach.
-    fn subdevice(&mut self) -> Result<HostHandle, RmError> {
-        let raw = self.conn.subdevice();
-        Ok(self.stamp(raw))
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let obj = self.conn.subdevice();
+        self.conn.raw_control(obj, cmd.0, payload)
     }
 
     fn alloc(

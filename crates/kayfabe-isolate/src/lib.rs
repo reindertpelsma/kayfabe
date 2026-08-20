@@ -897,13 +897,21 @@ pub trait RmBackend: Send + Sync {
         payload: &mut [u8],
     ) -> Result<(), RmError>;
 
-    /// ★★★★★ **w345 — THIS ISOLATE'S OWN SUBDEVICE**, as a [`HostHandle`] the port may
-    /// name in a later [`RmBackend::control`].
+    /// ★★★★★ **w346 — ONE CONTROL ON THIS ISOLATE'S OWN SUBDEVICE**, issued and answered in a
+    /// single hop.
     ///
     /// # Why a whole verb, when the port already has `control`
     ///
     /// `control` needs a `HostHandle`, and every other one the port holds is the host twin
-    /// of a *guest* object — a channel, a VA space. The GSS-legacy cudart init-gate family
+    /// of a *guest* object — a channel, a VA space.
+    ///
+    /// ⊘⊘ **This verb was first written as `subdevice() -> HostHandle`, and that shape was
+    /// WRONG.** Handing the port a handle means it needs somewhere to keep it: `IsolateBox`
+    /// wraps `dyn Isolate`, not `dyn RmBackend`, so caching it at spawn drags a one-time
+    /// query through the worker pool's lifecycle, and fetching it per control costs TWO
+    /// round trips where one does. Resolving the subdevice **inside the child** costs one
+    /// hop, needs no storage, and — the part that decided it — means the port never holds a
+    /// host handle it could name in some other verb. The GSS-legacy cudart init-gate family
     /// has no guest object to twin: `0x20809009`, `0x20809001`, `0x20809064` and their
     /// successors ask **the GPU about itself** (a CUDA major version, a capability mask),
     /// and the answer is a property of the part, not of anything the guest allocated.
@@ -929,7 +937,8 @@ pub trait RmBackend: Send + Sync {
     /// The default is a **named refusal**: a backend with no real RM connection has no
     /// subdevice, and inventing one would hand the caller a handle that names nothing. Only
     /// the real host backend and the proxy that carries it override this.
-    fn subdevice(&mut self) -> Result<HostHandle, RmError> {
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let _ = (cmd, payload);
         // 0x56 = NV_ERR_NOT_SUPPORTED — RM's own way of saying "not on this part".
         Err(RmError::Other(0x56))
     }
