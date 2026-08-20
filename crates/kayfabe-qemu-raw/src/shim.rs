@@ -10907,7 +10907,38 @@ fn join_one_fb_leaf(
             //   live>0           → the predecessor is STILL LIVE in our model. Then this is
             //                      a MISSED TEARDOWN, not a stale join, and reclaiming would
             //                      be theft from a running process. Refuse, and fix elsewhere.
-            let (live, retired) = device.fb_join_namers(leaf.phys);
+            // ⊘⊘⊘ **MEMOISED PER FRAME, AND THAT IS NOT AN OPTIMISATION — IT IS THE FIX FOR
+            // AN INSTRUMENT THAT CHANGED ITS OWN EXPERIMENT.**
+            //
+            // `[measured w364]` the unmemoised version ran `fb_join_namers` on **every**
+            // refusal — 2457 of them — and that call is O(live procs × VASes × table rows)
+            // against a 13 348-row table, i.e. ~33 M row visits on the refusal path. That
+            // boot **lost the GPU after the first process** (`nvidia-smi: No devices were
+            // found`, only ever ONE proc, A2 failing instantly instead of hanging), so the
+            // census answered a question about a run **it had altered**. The datum it
+            // produced (`live=1`) was real and useless: with one proc alive, the frame's only
+            // namer was that proc ITSELF — a self-collision, not the cross-process case the
+            // fork exists to resolve.
+            //
+            // ⇒ Compute once per frame and reuse. The first refusal for a frame pays for the
+            // scan and prints the verdict; every later one reads the cache. `a_probe_that_
+            // shares_the_allocator_is_not_an_observer`, and the campaign's own rule that a
+            // capture path must be **observationally neutral**.
+            let (live, retired) = {
+                let mut l = namer_census_cache()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                match l.get(&leaf.phys) {
+                    Some(&v) => v,
+                    None => {
+                        // ⊘ Computed with the cache lock held, deliberately: two vCPUs racing
+                        // the same fresh frame would otherwise both pay the full scan.
+                        let v = device.fb_join_namers(leaf.phys);
+                        l.insert(leaf.phys, v);
+                        v
+                    }
+                }
+            };
             eprintln!(
                 "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
                  phys=0x{:x} len={} why=`{}` — this device still serves that range from its \
@@ -15468,6 +15499,23 @@ fn selected_join_release() -> JoinReleaseArm {
 /// takes the join back — host RM verbs on every doorbell, forever. The cap makes the behaviour
 /// bounded and the boot says how often it was reached.
 const SUPERSEDE_CAP_PER_FRAME: usize = 4;
+
+/// ★★ **w364 — the per-frame `FB-JOIN-NAMERS` cache.** One scan per framebuffer frame for
+/// the life of the device, because the scan is O(procs × VASes × rows) and the refusal path
+/// it hangs off fires thousands of times per boot. Unmemoised it cost the GPU: see the block
+/// at the call site.
+///
+/// ⊘ Staleness is acceptable **for a diagnostic** and would not be for a decision: if this
+/// value is ever used to DECIDE a reclaim rather than to describe one, it must be recomputed
+/// at the decision point, not read from here.
+#[cfg(feature = "host-isolates")]
+fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u64, (usize, usize)>>
+{
+    static C: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<u64, (usize, usize)>>,
+    > = std::sync::OnceLock::new();
+    C.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
 
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
 /// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
