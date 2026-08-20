@@ -2425,6 +2425,24 @@ impl CommandPolicy for InitTablePolicy {
             return refuse();
         }
 
+        // ★★★ A SHORT ENCODER IS A SILENT SUBSTRUCT CORRUPTION, so refuse instead of serving.
+        //
+        // The entry guard above established `req.params_size == want.params_size()`. It says
+        // nothing about the ENCODER's output. The splice below writes `params.len()` bytes at
+        // `req.params_at`, so an encoder returning fewer bytes than the control declares leaves
+        // the tail of the guest's parameter struct holding whatever its own REQUEST buffer had
+        // there — and for a pure-out struct the guest zeroed, that decodes to zeros with no
+        // marker distinguishing it from a real value. That is the defect class of task #203
+        // (our empty reply body zero-filled the guest's `numEntries`) and of the C oracle's
+        // truncated rows (`dlen < psize`, `numDispChannels` read as 0 → NULL channel table).
+        //
+        // ⊘ Whether any encoder is short today is not the point: this converts an unmeasured,
+        // silent, guest-visible corruption into a named refusal that the per-control tests and
+        // the boot census can both see. `refuse()` is the same verdict an unknown id gets.
+        if params.len() != want.params_size() {
+            return refuse();
+        }
+
         // Keep the guest's own control header — `hClient`/`hObject`/`cmd` are echoed, as
         // they are on every real reply — and overwrite only the two fields a GSP owns.
         let mut body = cmd.payload.clone();
