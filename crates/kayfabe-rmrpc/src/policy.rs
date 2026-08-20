@@ -3110,6 +3110,34 @@ impl ObjectPolicy {
         if want == 0 || cmd.payload.len() < req.params_at + want {
             return refuse();
         }
+        // ⊘⊘ **GATED OFF BY DEFAULT AS OF w347, AND THE BOOT IS WHY.**
+        //
+        // `[measured 2026-08-20, real GA106, boot w347fwd1]` the forward reached the host-verb
+        // issue point on the FIRST control — `W343GSSCENSUS cmd=0x20809009` and then:
+        //
+        //   panicked at kayfabe-util/src/lockwitness.rs:152:
+        //   R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): issuing a host RM
+        //   verb while holding rank(s) [0]
+        //
+        // ⇒ The wiring is CORRECT and COMPLETE; a synchronous host round-trip from a
+        // `CommandPolicy::respond` is not permissible under the current locking. That is not
+        // a defect of this verb — it is `blocking_and_completion_model.md:106` verbatim:
+        // *"The missing mechanism is not a completion transport. It is an off-BQL execution
+        // site for host verbs."* This is the first code to actually walk that path;
+        // `relay_channel_control`'s host call is a fault-info read these boots never trigger,
+        // so the template compiled and shipped without ever exercising it.
+        //
+        // ⚠ I read the guard wrong before booting: `trapwitness::at_a_host_verb` cannot panic
+        // and takes an honest branch, but the guard that fires here is
+        // `lockwitness::assert_lock_free`, which DOES panic. Two guards, similar roles,
+        // opposite failure modes — and only a boot told them apart.
+        //
+        // ⇒ Default OFF until the off-BQL site exists. `KAYFABE_SUBDEV_FWD=on` arms it for
+        // whoever builds that site, so the plumbing is one env var from being testable
+        // rather than needing to be rebuilt.
+        if std::env::var("KAYFABE_SUBDEV_FWD").as_deref() != Ok("on") {
+            return refuse();
+        }
         let mut payload = cmd.payload[req.params_at..req.params_at + want].to_vec();
         if self
             .gpu
