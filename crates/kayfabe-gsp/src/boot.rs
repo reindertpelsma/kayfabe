@@ -1194,6 +1194,50 @@ impl GspFsm {
         // which instance it thinks it is — and that is a design change with its own reads,
         // not a one-line swap. Written down here rather than fixed, so the next reader finds
         // a decision instead of a bug.
+        // ═══ ★★★★★ REACHABILITY THEOREM (2026-08-21) — EVERY E6 PUBLISH IS FRESH ═══════
+        //
+        // ⚠ **This whole discriminator may be dead code, and knowing that is worth more than
+        // the branch.** The GSP boot-args mailboxes have exactly THREE writers at 580:
+        //   1. `kgspBootstrap_TU102` (`kernel_gsp_tu102.c:533`), inside the
+        //      `bootMode == KGSP_BOOT_MODE_NORMAL`-only block;
+        //   2. `kgspExecuteSequencerCommand_TU102`, `CORE_RESUME` (`:933`);
+        //   3. `kgspExecuteSequencerCommand_GA102`, `CORE_RESUME` (`ga102.c:162`).
+        // (A fourth grep hit, `tu102.c:363`, is the function's own definition.)
+        //
+        // **(1) is fresh by construction.** `MESSAGE_QUEUE_INFO` lives exactly one
+        // RmInitAdapter↔RmShutdownAdapter span (`kernel_gsp.c:3607` create, `:4353` destroy),
+        // which the bench measured directly: the guest printed `Expected 0` on EVERY cycle.
+        // A second publish per queue instance needs the `bRetry` loop, and a first attempt
+        // that published necessarily ran FWSEC-FRTS first, so WPR2 is up and attempt two dies
+        // at the gate (`kernel_gsp.c:3872-3880`) BEFORE publishing.
+        // **(2)/(3) are the surviving-queue case — suspend/resume — and they are REAL**
+        // (the source says so: *"for resume or GC6 exit, GSP-RM will restore queue state"*,
+        // `tu102.c:568-570`). ⊘ But they cannot reach E6: `kflcnResetIntoRiscv_GA102` issues
+        // no STARTCPU, so our phase is still `Halted` when the `CORE_RESUME` mailbox pair
+        // lands, and E6's guard demands `ProtectedRegionUp | Booted` (`seq.rs:174-180`).
+        // ⇒ **Resume is simply unbuilt in our FSM; when it is built it must RESTORE the
+        // binding without publishing, and the preserved-sequence contract belongs at THAT
+        // door, not this one.**
+        //
+        // ⊘⊘ **CHIP-CONDITIONAL, AND THIS IS THE SEAM.** The WPR2 gate that fences (1) is
+        // bypassed by `PDB_PROP_GPU_PREINITIALIZED_WPR_REGION`, which is NOT setter-less: it
+        // is set for **`GB10B | GB20B | GB20C`** (`generated/g_gpu_nvoc.c:191-199`) and false
+        // for GA106. ⚠ Adding any of those chips silently un-fences the retry path and this
+        // theorem stops holding — with no test to notice, because the theorem lives in a
+        // comment. ★ An audit reported this property as having "zero setters in the tree";
+        // it does not, and a `src/`-only grep is how that happened.
+        //
+        // ⇒ **Consequence for the code below: on every reachable path today it takes the
+        // reset arm anyway**, so the seq test and an unconditional reset are observationally
+        // identical here. The branch is kept because deleting it is a simplification that
+        // wants a boot to confirm, and because the `w == 0` hazard below is real in general
+        // even though it is unreachable now.
+        // ⊘ **`w == 0` DOES NOT MEAN "FRESH".** The guest's write pointer WRAPS
+        // (`msgq.c:559-562`: `writePtr += n; if (writePtr >= msgCount) writePtr -= msgCount`),
+        // so `W == 0` is equally a same-instance producer that wrapped. Unreachable only
+        // because same-instance E6 publishes do not exist — i.e. this is safe **by the
+        // theorem above and by nothing else.**
+        //
         // ★★★★★ **THE DISCRIMINATOR IS THE GUEST'S OWN COMMAND SEQUENCE, NOT THE ADDRESS.**
         // The guest stamps its private `txSeqNum` into every command element it submits
         // (`ogkm-580: message_queue_cpu.c:481`), and zeroes that counter only at queue
