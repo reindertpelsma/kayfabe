@@ -2454,6 +2454,20 @@ impl ObjectPolicy {
     ///
     /// # ⊘⊘ What this arm deliberately does NOT do — and it is half the rung
     ///
+    /// ⚠⚠ **THE DEFERRAL BELOW HAS A MEASURED COST THAT WAS NEVER PRICED — read
+    /// [`kayfabe_completion::CompletionQueue::observe`] before extending it.**
+    /// `[measured 2026-08-21]` The producer this decision leaves running has **23
+    /// production call sites**; the consumer it defers has **zero**, and so does every
+    /// other drain in that plane. `outstanding_len` is therefore monotonically
+    /// non-decreasing in production, and at 262 144 completions the queue refuses every
+    /// subsequent CE doorbell for that process, **permanently** — reached by any
+    /// long-lived process, i.e. by this project's own north-star workload.
+    /// ⇒ The two reasons below are sound and the decision may well still be right. What is
+    /// missing is the third line: *what the producer does while the consumer is deferred.*
+    /// **A deferral is a claim about consequences, not only about intent** — this is the
+    /// same shape as PC-D7 (`kayfabe-gsp/src/boot.rs`), which was reviewed on its mechanism,
+    /// accepted on an unmeasured rate, and made the GPU unusable after five `nvidia-smi`s.
+    ///
     /// It does **not** drive [`kayfabe_completion::DeliveryPlane::on_poll`], although that
     /// is exactly the trigger the C hangs off this control (`C: nvkvm_gpu_emul.c:3041-3053`,
     /// `m2_poll_kick`). Two measured reasons, in order of severity:
