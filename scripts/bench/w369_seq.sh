@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ★★★★★ w362 — SEPARATE "SECOND PROCESS" FROM "AFTER nvidia-smi", AND BOUND EVERY STEP.
+# ★★★★★ w369 — SEPARATE "SECOND PROCESS" FROM "AFTER nvidia-smi", AND BOUND EVERY STEP.
 #
 # w361 measured, in ONE boot: A (torch first) PASSED 8/8 completions OBSERVED; C (torch
 # after nvidia-smi) got 0/8 and spun forever. But C was BOTH "the second torch process"
@@ -17,11 +17,11 @@
 #   D distinguishes permanent damage from one-shot.
 set -uo pipefail
 SELF=$(readlink -f "$0")
-STEP_TIMEOUT=${STEP_TIMEOUT:-180}
+STEP_TIMEOUT=${STEP_TIMEOUT:-600}
 
 if [ "${W362_ROLE:-}" = hook ]; then
   TAG=${1:?tag}; REPO=${KAYFABE_REPO:?}; G="$REPO/scripts/bench/gssh_nv"
-  echo "=== w362 SEQUENTIAL-PROCESS A/A2/B/C/D tag=$TAG step_timeout=${STEP_TIMEOUT}s ==="
+  echo "=== w369 SEQUENTIAL-PROCESS A/A2/B/C/D tag=$TAG step_timeout=${STEP_TIMEOUT}s ==="
   if ! $G true >/dev/null 2>&1; then echo "W362_OUTCOME=UNMEASURED_GUEST_UNREACHABLE"; exit 0; fi
   $G "cat > /tmp/t.py" <<'PYEOF'
 import sys, torch
@@ -41,18 +41,29 @@ PYEOF
     rc=$?
     if [ -n "$out" ]; then echo "$out"; else echo "$nm TORCH_HUNG (no verdict line in ${STEP_TIMEOUT}s, harness rc=$rc)"; fi
   }
-  echo "--- A: torch FIRST, nothing before it (predicted PASS) ---";           torch_step A
+  # ★★★★★ w369 — REPRODUCE THE LLM'S SHAPE IN THE SMALL HARNESS.
+  # w368 measured: the LLM boot's device log is 93 KB / 498 lines with ZERO doorbells and
+  # ZERO completion declares, vs 10 MB for w367 -- so the LLM dies BEFORE any context
+  # exists, and the w366/w367 fixes correctly never fired. Its one structural difference
+  # from the passing harness is that TWO lightweight enumerate-and-exit processes run
+  # first: `nvidia-smi`, then a torch probe that answers is_available()=True WITHOUT
+  # creating a context. nvidia-smi alone is NOT fatal (w367's C passed after it). The pair
+  # is untested. P is that missing arm.
+  echo "--- ★ P: nvidia-smi, then a torch PROBE (is_available only, NO context) ---"
+  $G "timeout ${STEP_TIMEOUT} nvidia-smi --query-gpu=name,memory.used --format=csv,noheader 2>&1 | head -1" 2>&1 | tr -d '\r'
+  $G "timeout ${STEP_TIMEOUT} /opt/llm/venv/bin/python -c 'import torch;print(\"P_AVAIL=\"+str(torch.cuda.is_available()));print(\"P_COUNT=\"+str(torch.cuda.device_count()))' 2>&1 | tail -3" 2>&1 | tr -d '\r'
+  echo "--- A: torch full init AFTER the probe pair (LLM shape). w367 baseline: PASS ---"; torch_step A
   echo "--- A2: torch AGAIN, NO nvidia-smi between — ★ THE CONTROL w361 LACKED ---"; torch_step A2
   echo "--- B: nvidia-smi runs and EXITS ---"
   $G "timeout ${STEP_TIMEOUT} nvidia-smi --query-gpu=name --format=csv,noheader 2>&1 | head -1; echo smi_rc=\$?" 2>&1 | tr -d '\r'
   echo "--- C: torch after the nvidia-smi predecessor ---";                    torch_step C
   echo "--- D: once more — permanent or one-shot? ---";                        torch_step D
-  echo "=== w362 STEPS DONE ==="
+  echo "=== w369 STEPS DONE ==="
   exit 0
 fi
 case "${1:-}" in run) ;; *) echo "usage: $0 run" >&2; exit 64 ;; esac
 REPO=${KAYFABE_REPO:?}
-export KAYFABE_REPO="$REPO" KAYFABE_TAG=${KAYFABE_TAG:-w362seq} W362_ROLE=hook STEP_TIMEOUT
+export KAYFABE_REPO="$REPO" KAYFABE_TAG=${KAYFABE_TAG:-w369seq} W362_ROLE=hook STEP_TIMEOUT
 export POST_CAPTURE_HOOK="$SELF" GQ_TIMEOUT=${GQ_TIMEOUT:-900}
 rm -f /workspace/bench/qemu-build/qemu-system-x86_64
 "$REPO/scripts/bench/w290p_run.sh" "${W362_ARM:-drain}"
