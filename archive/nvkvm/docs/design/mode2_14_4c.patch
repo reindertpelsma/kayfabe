@@ -1,0 +1,86 @@
+# mode2 #14 4c — DIAGNOSTIC-ONLY notes (NO fix banked; baseline reverted to b8467e8)
+#
+# This round did NOT close 4c. The tree is reverted to the clean b8467e8 baseline
+# (single-proc green, winner-passes-concurrent). This file records what was traced
+# and why the attempted fix failed, so the next round is resumable.
+#
+# ============================================================================
+# THE (i)/(ii) VERDICT — NEITHER, as originally framed. Premise FALSIFIED.
+# ============================================================================
+# The task premise ("the loser's PD0[1] leaf PDE is never written into our FB
+# shadow") is FALSE on the trace-proven loser-hang boot. A refined enum-walk probe
+# (descend the loser's OWN pdb at working-set VA 0x200200000: PD3[0]->PD2[0]->
+# PD1[16]->PD0[1]) showed:
+#   #14-4c STARVE pdb=0x3405000 client=0xc1d00003 wsVA=0x200200000
+#     PD0page=0x340a000 idx=1 lo=0x600000000500001 hi=0x0 in_cpt=YES rec_pdb=0x3405000
+# i.e. the loser's PD0[1] leaf IS PRESENT (valid 2MiB VIDMEM leaf, bit0=1), the PD0
+# page IS in m2_cpt, captured under the loser's OWN pdb. Both procs' compute VASes
+# fully resolve their working set. (enum backed=0 is NORMAL post-first-sweep: it
+# counts only NEWLY-backed leaves; already-mapped leaves give backed=0.)
+#
+# A CE-write capture-attribution probe (in ce_fb_write_hook) showed every CE-PT-
+# write executes under the KERNEL CeUtils identity-alias PDB (chan_pdb=0x3118000,
+# client=0xc1d00001) and lands on PD0 pages that ARE cpt-recorded under the CORRECT
+# compute PDB (rec_pdb=0x3401000 / 0x3405000). "REC!=EXEC" is expected (the CE dst
+# is an FB physical addr; exec PDB is the alias) — NOT wrong-PDB capture. (ii) ruled
+# out; (i) ruled out (the leaf executes and is captured correctly).
+#
+# ============================================================================
+# THE REAL ROOT CAUSE (trace-proven 2026-07-19) — completion starvation via
+# compute-USERMODE-ring resolution failure, NOT page-table publication.
+# ============================================================================
+# On the loser-hang boot (A=124 B=0): the loser's GR channel RANG and the host
+# CONSUMED its work (M5.9 exec_doorbell GR gp_get 1->128, client=0xc1d00003; its GR
+# TSG GPFIFO_SCHEDULE'd rc=0 st=0). Host GPU went idle (0%) — the compute completed.
+# BUT the loser then spins forever in fn=76 ctrl=0x20801702 MC_SERVICE_INTERRUPTS,
+# reading interrupt-status regs (BAR0 0xb8101x = 0) — waiting a completion that
+# never arrives.
+#
+# WHY: the loser's completion semaphore is produced by its user-CE channel's
+# SEM_RELEASE (CPU-parsed in chan_execute). Its user-CE client 0xc1e0000a wrote its
+# finishPayload (va=0x42006c004) only to payload=2 then STOPPED (winner 0xc1e00009
+# reached 36). The loser's compute USERMODE channels (gpfifo 0x1210d0000, 0x121010000,
+# userd fb=0x3200000) NEVER ring-resolve: chan_exec picked_pdb=0x0 on EVERY attempt.
+# They resolve via NEITHER own-PDB (chan_own_pdb returns 0) NOR M5.16 (the global
+# 64-entry bar1_wpg MRU only ever holds the KERNEL ring page 0x31f0000 — the loser's
+# compute ring loses the MRU race to the winner's + kernel's doubled BAR1 traffic).
+# 4b's pin can't help: it needs a prior M5.16 success to seed chans[].gpfifo_phys,
+# which never happens for the loser's compute channel. So its final SEM_RELEASE
+# never runs -> completion sema stuck -> loser spins in MC_SERVICE_INTERRUPTS.
+# The only RING-DARK events are the transient early 0xc1d0000c channel (proc=-1),
+# NOT the loser's compute channels — consistent with the task's "PIN=0/DARK=2"
+# loser-hang signature, but the cause is compute-ring resolution, not PT publication.
+#
+# ============================================================================
+# FAILED FIX ATTEMPT (reverted) — per-channel BAR1-write ring-pin.
+# ============================================================================
+# Tried: at each guest BAR1 vidmem write, scan the written page as a GP-entry ring
+# and, if it validated as a registered channel's ring, pin it into chans[].gpfifo_phys
+# immediately (survive MRU eviction; feed 4b). RESULT: FAILED TWO WAYS.
+#  (1) INEFFECTIVE: 0 pins matched. The content-validation used M5.16's pushbuffer-
+#      adjacency heuristic (pb in [gpfifo_va-0x100000, gpfifo_va)), which is specific
+#      to the KERNEL CeUtils layout. A COMPUTE channel's pushbuffer lives far away in
+#      the UVM working-set VAS (0x2xxxxxxxx), so it never matched -> no compute ring
+#      was ever pinned.
+#  (2) HARMFUL: the per-write 512-entry x chan_n (~44) scan regressed BOTH procs to a
+#      hang (A=124 B=124) — even the winner, which previously passed. The scan cost on
+#      the compute BAR1-write storm is prohibitive.
+# The correct resolution for a compute ring would key on the channel's OWN pdb (from
+# the P1 per-proc registry: client->UVM PDB) to walk+validate the GP entry's
+# pushbuffer — but doing that cheaply at BAR1-write time (or at chan_exec without the
+# global-MRU dependency) is the unsolved crux. This is the same wall rounds 5-6 hit,
+# now re-localized to COMPUTE-USERMODE-ring resolution under 2-proc MRU contention.
+#
+# ============================================================================
+# NEXT (for a real both-pass):
+# ============================================================================
+#  - Resolve the loser's compute USERMODE ring WITHOUT the global bar1_wpg MRU:
+#    at chan_execute, when chan_pdb=0 for a user-compute channel, derive the
+#    channel's PDB from its owning client via the P1 registry (client -> proc ->
+#    UVM PDB), walk the channel's gpfifo_va under THAT pdb to get the ring FB phys
+#    directly (forward, PDB-keyed), pin it per-channel. This makes M5.16's global
+#    MRU race irrelevant for compute channels. Must be O(1)-ish (no per-write scan)
+#    and single-proc byte-identical (single-proc channels already resolve, so the
+#    new path is inert). Verify no perf regression on the compute BAR1 storm.
+#  - Bench helpers on vh: /tmp/m14_boot.sh [trace], /tmp/run_conc.sh (fresh-boot +
+#    2x cup8), /tmp/m14_runtest.sh <t> <runner> <to> [env].

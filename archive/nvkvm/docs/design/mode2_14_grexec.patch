@@ -1,0 +1,27 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index f41ab60..2535f7f 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -3392,6 +3392,22 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+         s->m2_poll_kick = false;
+         nvkvm_bar0_write(s, NVKVM_VF_DOORBELL,
+                          s->m2_last_db_valid ? s->m2_last_db_token : 0, 4);
++        /* #14 piece-2b (2026-07-19): the doorbell replay above only re-delivers a
++         * completion when a channel produced NEW work in that service pass
++         * (nvkvm_gsp_deliver_events is gated behind `any_completed` in the doorbell
++         * handler).  A process busy-polling MC_SERVICE_INTERRUPTS inside cuCtxCreate
++         * submits nothing, and once the OTHER process is done ringing doorbells there
++         * are no more completions from anyone — so the poller's ALREADY-REGISTERED
++         * os-event completion is never re-posted and it starves forever (root cause of
++         * the flaky 2× cup8 concurrency: the loser hangs in cuCtxCreate polling the
++         * interrupt LEAF regs, which stay 0 because SWGEN0 is never re-raised).  Force
++         * the os-event batch + SWGEN0 here so the starved poller's pending completion
++         * is delivered.  nvkvm_gsp_deliver_events is idempotent — it self-gates on
++         * !gsp_swgen0_pending (one outstanding batch), posts only to live registered
++         * os-events, and self-drops dead (hClient,hEvent) — so an extra kick with no
++         * pending completion is a harmless no-op.  multiproc()-gated via m2_poll_kick
++         * (only ever set in multiproc mode): single process is byte-identical. */
++        nvkvm_gsp_deliver_events(s);
+     }
+ }
+ 

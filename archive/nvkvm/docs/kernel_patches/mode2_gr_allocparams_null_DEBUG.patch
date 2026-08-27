@@ -1,0 +1,31 @@
+DEBUG-ONLY guest-driver patch (NOT for production — production must run the
+stock open driver). Confirms the Mode-2 cuCtxCreate SIGSEGV root cause and
+unblocks progress to the next blocker.
+
+Root cause (see memory mode2_cuctxcreate_crash_root_cause): the GR-object
+(AMPERE_COMPUTE_B 0xc7c0) RM_ALLOC copies a 16-byte NV_GR_ALLOCATION_PARAMETERS
+back into libcuda's 8-byte pAllocParms stack slot, clobbering a saved rbp ->
+SIGSEGV. The real GSP makes the stock driver copy 0 bytes (host proves it); our
+fake GSP makes it copy 16. This patch makes the guest driver null pAllocParms for
+GR-object allocs so the OPTIONAL param becomes a no-copy (matches host).
+
+Apply to nvidia/nv.c, in nvidia_ioctl(), right after the NV_COPY_FROM_USER block:
+
+    if (arg_cmd == 0x2b /* NV_ESC_RM_ALLOC */ && arg_copy != NULL &&
+        (arg_size == 48 /*NVOS64*/ || arg_size == 40 /*NVOS21*/)) {
+        NvU32 _hc = *(NvU32 *)((char *)arg_copy + 12);   /* hClass */
+        NvU32 _lb = _hc & 0xff, _fam = (_hc >> 8) & 0xff;
+        if (_fam >= 0xb0 && (_lb == 0xc0 || _lb == 0x97)) {  /* GR compute/3D */
+            *(NvU64 *)((char *)arg_copy + 16) = 0;           /* NULL pAllocParms */
+            printk(KERN_INFO "NVKVMDBG null pAllocParms GR class 0x%x\n", _hc);
+        }
+    }
+
+RESULT (2026-06-04, fresh boot): cuCtxCreate SIGSEGV -> gone; now returns
+CUDA error 999 (next blocker). Build: mount 9p ogkm, copy source to tmpfs,
+make modules SYSSRC=/lib/modules/$(uname -r)/build. Staged in guest at
+~/nvmods-dbg/nvidia.ko.
+
+PRODUCTION FIX (TODO): replicate the real-GSP alloc reply so the stock driver
+copies 0 (the GSP lever is internal to nv-kernel.o; needs GSP-RPC reply trace
+or driver instrumentation of the rpcRmApiAlloc return path).

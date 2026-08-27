@@ -1,0 +1,22 @@
+STAGE ce
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11909 MiB
+ok   cuCtxCreate(&ctx, 0, d)
+CTX OK
+ok   cuMemAlloc(&da, 4096)
+MEMALLOC OK
+ok   cuMemcpyHtoD(da, &hv, 4)
+ok   cuMemcpyDtoH(&rv, da, 4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+ok   cuMemFree(da)
+ok   cuCtxDestroy(ctx)
+DONE

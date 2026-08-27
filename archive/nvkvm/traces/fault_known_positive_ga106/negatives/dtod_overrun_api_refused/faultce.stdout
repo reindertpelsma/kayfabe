@@ -1,0 +1,41 @@
+STAGE faultce
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11909 MiB
+ok   cuCtxCreate(&victim, 0, d)
+ok   cuCtxCreate(&byst, 0, d)
+ok   cuMemAlloc(&db, 4096)
+ok   cuCtxSetCurrent(victim)
+ok   cuMemAlloc(&da, 1 << 20)
+VICTIM da=0x73f3fe400000  BYSTANDER db=0x73f3fe200000
+-- PROVOKE: COPY ENGINE write to an UNMAPPED device VA --
+ok   cuMemAlloc(&big, BIG)
+  big=0x73f3ea000000 size=268435456  end=0x73f3fa000000
+  expect first unmapped write at ~0x73f3fa000000
+  TRY A_dtod_overrun         cuMemcpyDtoD(big + (BIG - 4096), big, BIG) rc=1 invalid argument
+  TRY A_sync                 cuCtxSynchronize()                 rc=0 no error
+FAULT how=A_dtod_overrun_past_allocation_end va=0x73f3fa000000 first_op_rc=1(invalid argument) sync_rc=0(no error) delivered_on=THE_OFFENDING_CALL
+-- POST-FAULT INTERROGATION (victim context) --
+  TRY q1_sync                cuCtxSynchronize()                 rc=0 no error
+  TRY q2_dtoh                cuMemcpyDtoH(&rv, da, 4)           rc=0 no error
+  TRY q3_alloc               cuMemAlloc(&tmp, 4096)             rc=0 no error
+  TRY q4_htod                cuMemcpyHtoD(da, &hv, 4)           rc=0 no error
+-- BYSTANDER, SAME PROCESS, SAME GPU, DIFFERENT CONTEXT --
+  TRY b1_setcurrent          cuCtxSetCurrent(bystander)         rc=0 no error
+  TRY b2_htod                cuMemcpyHtoD(db, &bv, 4)           rc=0 no error
+  TRY b3_dtoh                cuMemcpyDtoH(&brv, db, 4)          rc=0 no error
+  TRY b4_sync                cuCtxSynchronize()                 rc=0 no error
+BYSTANDER_INPROC rc=0/0/0/0 value=0x1234abcd want=0x1234abcd -> ALIVE
+  TRY b5_setcurrent_back     cuCtxSetCurrent(victim)            rc=0 no error
+  TRY q5_ctxdestroy          cuCtxDestroy(victim)               rc=0 no error
+VICTIM_STATE sync=0 dtoh=0 alloc=0 htod=0 destroy=0 -> STILL_HEALTHY
+VERDICT FAULT_PROVOKED how=A_dtod_overrun_past_allocation_end
+DONE

@@ -1,0 +1,613 @@
+[ 0.000149] === nvdp: NATIVE data-plane capture of the cup2 workload ===
+[ 0.000206] pid=1043611 pagesize=4096 pagemap=open
+[ 0.000214] GPU pci device = 0000:00:07.0 ; 5 BAR(s):
+[ 0.000217]   BAR0 0x0000c0000000-0x0000c0ffffff flags=0x40200
+[ 0.000219]   BAR1 0x001000000000-0x00100fffffff flags=0x14220c
+[ 0.000221]   BAR3 0x001010000000-0x001011ffffff flags=0x14220c
+[ 0.000223]   BAR5 0x00000000c000-0x00000000c07f flags=0x40101
+[ 0.000224]   BAR6 0x0000000c0000-0x0000000dffff flags=0x212
+[ 0.001728] --- STAGE 1: cuInit / device / cuCtxCreate ---
+[ 1.685706]   p_cuInit(0)                  -> 0
+[ 1.685732]   p_cuDeviceGetCount(&ndev)    -> 0
+[ 1.685735]   devices=1
+[ 1.685736]   p_cuDeviceGet(&dev, 0)       -> 0
+[ 1.685751]   p_cuDeviceGetName(nm, sizeof nm, dev) -> 0
+[ 1.685753]   name=NVIDIA GeForce RTX 3060
+[ 1.782719]   p_cuCtxCreate(&ctx, 0, dev)  -> 0
+[ 1.782740] --- RM_ALLOC CLASS CENSUS (99 alloc(s) total) ---
+[ 1.782759]   class 0x00000000 x2
+[ 1.782762]   class 0x0000cb33 x1
+[ 1.782763]   class 0x00000080 x1
+[ 1.782765]   class 0x00002080 x1
+[ 1.782767]   class 0x00002081 x1
+[ 1.782768]   class 0x0000c461 x1
+[ 1.782770]   class 0x000000de x1
+[ 1.782772]   class 0x000090f1 x2
+[ 1.782773]   class 0x000050a0 x1
+[ 1.782775]   class 0x00000040 x14
+[ 1.782776]   class 0x0000a06c x3
+[ 1.782778]   class 0x00009067 x1
+[ 1.782779]   class 0x0000003e x22
+[ 1.782781]   class 0x0000c56f x16   <== CHANNEL CLASS
+[ 1.782783]   class 0x0000c7c0 x8
+[ 1.782784]   class 0x0000c7b5 x16
+[ 1.782786]   class 0x00000079 x7
+[ 1.782788]   class 0x000083de x1
+[ 1.782789] --- CHANNEL-ALLOC DECODE DIAGNOSIS (16 channel-class alloc(s) reached it) ---
+[ 1.782795]   [0] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782797]       first48=1800005c1400005c000020000200000000040000200000001300005c000000001400005c000000000000000000000000
+[ 1.782802]   [1] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782804]       first48=1e00005c1400005c003020000200000000040000300000001300005c000000001400005c000000000000000000000000
+[ 1.782809]   [2] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782811]       first48=2200005c1400005c006020000200000000040000200000001300005c000000001400005c000000000000000000000000
+[ 1.782816]   [3] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782817]       first48=2600005c1400005c009020000200000000040000300000001300005c000000001400005c000000000000000000000000
+[ 1.782822]   [4] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782824]       first48=2a00005c1400005c00c020000200000000040000200000001300005c000000001400005c000000000000000000000000
+[ 1.782829]   [5] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782830]       first48=2e00005c1400005c00f020000200000000040000300000001300005c000000001400005c000000000000000000000000
+[ 1.782835]   [6] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782837]       first48=3200005c1400005c002021000200000000040000200000001300005c000000001400005c000000000000000000000000
+[ 1.782842]   [7] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782843]       first48=3600005c1400005c005021000200000000040000300000001300005c000000001400005c000000000000000000000000
+[ 1.782848]   [8] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782850]       first48=3c00005c1400005c0080210002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782855]   [9] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782856]       first48=3f00005c1400005c00b0210002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782861]   [10] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782863]       first48=4200005c1400005c00e0210002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782878]   [11] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782880]       first48=4500005c1400005c0010220002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782885]   [12] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782887]       first48=4a00005c1400005c0040220002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782892]   [13] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782893]       first48=4d00005c1400005c0070220002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782898]   [14] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782900]       first48=5000005c1400005c00a0220002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782905]   [15] class=0xc56f iocsize=48 pAllocParms=0x7ffcb85a5560 paramsSize=512 bytes_read=512
+[ 1.782907]       first48=5300005c1400005c00d0220002000000000400002000000000000000000000001400005c000000000000000000000000
+[ 1.782908] --- CHANNELS DECODED (NV_CHANNEL_ALLOC_PARAMS) : 16 ---
+[ 1.782910]   ch[0] t=1.708552 class=0xc56f hObj=0x5c000019 parent=0x5c000012
+[ 1.782912]         gpFifoOffset(GPU VA)=0x0000000200200000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782914]         engineType=0 cid=17949 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x2000
+[ 1.782916]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782918]   ch[1] t=1.711275 class=0xc56f hObj=0x5c00001f parent=0x5c000012
+[ 1.782920]         gpFifoOffset(GPU VA)=0x0000000200203000  gpFifoEntries=1024  flags=0x00000030
+[ 1.782921]         engineType=0 cid=17950 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x5000
+[ 1.782923]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782925]   ch[2] t=1.712806 class=0xc56f hObj=0x5c000023 parent=0x5c000012
+[ 1.782927]         gpFifoOffset(GPU VA)=0x0000000200206000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782928]         engineType=0 cid=17951 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x8000
+[ 1.782930]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782932]   ch[3] t=1.714262 class=0xc56f hObj=0x5c000027 parent=0x5c000012
+[ 1.782933]         gpFifoOffset(GPU VA)=0x0000000200209000  gpFifoEntries=1024  flags=0x00000030
+[ 1.782935]         engineType=0 cid=17952 hUserdMemory[0]=0x5c000014 userdOffset[0]=0xb000
+[ 1.782937]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782938]   ch[4] t=1.715752 class=0xc56f hObj=0x5c00002b parent=0x5c000012
+[ 1.782940]         gpFifoOffset(GPU VA)=0x000000020020c000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782942]         engineType=0 cid=17953 hUserdMemory[0]=0x5c000014 userdOffset[0]=0xe000
+[ 1.782944]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782945]   ch[5] t=1.717230 class=0xc56f hObj=0x5c00002f parent=0x5c000012
+[ 1.782947]         gpFifoOffset(GPU VA)=0x000000020020f000  gpFifoEntries=1024  flags=0x00000030
+[ 1.782949]         engineType=0 cid=17954 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x11000
+[ 1.782950]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782952]   ch[6] t=1.718683 class=0xc56f hObj=0x5c000033 parent=0x5c000012
+[ 1.782954]         gpFifoOffset(GPU VA)=0x0000000200212000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782955]         engineType=0 cid=17955 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x14000
+[ 1.782957]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782959]   ch[7] t=1.720206 class=0xc56f hObj=0x5c000037 parent=0x5c000012
+[ 1.782961]         gpFifoOffset(GPU VA)=0x0000000200215000  gpFifoEntries=1024  flags=0x00000030
+[ 1.782962]         engineType=0 cid=17956 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x17000
+[ 1.782964]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782965]   ch[8] t=1.733870 class=0xc56f hObj=0x5c00003d parent=0x5c00003b
+[ 1.782967]         gpFifoOffset(GPU VA)=0x0000000200218000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782969]         engineType=0 cid=17958 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x1a000
+[ 1.782973]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782975]   ch[9] t=1.734927 class=0xc56f hObj=0x5c000040 parent=0x5c00003b
+[ 1.782976]         gpFifoOffset(GPU VA)=0x000000020021b000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782978]         engineType=0 cid=17959 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x1d000
+[ 1.782980]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782981]   ch[10] t=1.735959 class=0xc56f hObj=0x5c000043 parent=0x5c00003b
+[ 1.782983]         gpFifoOffset(GPU VA)=0x000000020021e000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782985]         engineType=0 cid=17960 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x20000
+[ 1.782986]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782988]   ch[11] t=1.737005 class=0xc56f hObj=0x5c000046 parent=0x5c00003b
+[ 1.782990]         gpFifoOffset(GPU VA)=0x0000000200221000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782991]         engineType=0 cid=17961 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x23000
+[ 1.782993]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.782995]   ch[12] t=1.742683 class=0xc56f hObj=0x5c00004b parent=0x5c000049
+[ 1.782996]         gpFifoOffset(GPU VA)=0x0000000200224000  gpFifoEntries=1024  flags=0x00000020
+[ 1.782998]         engineType=0 cid=17963 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x26000
+[ 1.783000]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.783001]   ch[13] t=1.743800 class=0xc56f hObj=0x5c00004e parent=0x5c000049
+[ 1.783003]         gpFifoOffset(GPU VA)=0x0000000200227000  gpFifoEntries=1024  flags=0x00000020
+[ 1.783005]         engineType=0 cid=17964 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x29000
+[ 1.783006]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.783008]   ch[14] t=1.744867 class=0xc56f hObj=0x5c000051 parent=0x5c000049
+[ 1.783010]         gpFifoOffset(GPU VA)=0x000000020022a000  gpFifoEntries=1024  flags=0x00000020
+[ 1.783011]         engineType=0 cid=17965 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x2c000
+[ 1.783013]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.783015]   ch[15] t=1.745917 class=0xc56f hObj=0x5c000054 parent=0x5c000049
+[ 1.783016]         gpFifoOffset(GPU VA)=0x000000020022d000  gpFifoEntries=1024  flags=0x00000020
+[ 1.783018]         engineType=0 cid=17966 hUserdMemory[0]=0x5c000014 userdOffset[0]=0x2f000
+[ 1.783020]         instanceMem base=0x0 AS=0 | userdMem base=0x0 AS=0
+[ 1.783219] --- nvidia mmap windows (26) ---
+[ 1.783224]   mmap[0] t=1.648609 nvidia0      off=0x000000000000 len=0x10000 prot=0x2 -> 0x00007f4f85abd000
+[ 1.783227]   mmap[1] t=1.648669 nvidiactl    off=0x000000000000 len=0x1000 prot=0x1 -> 0x00007f4f85b22000
+[ 1.783229]   mmap[2] t=1.693738 nvidia0      off=0x000000000000 len=0x200000 prot=0x3 -> 0x0000000200200000
+[ 1.783231]   mmap[3] t=1.706928 nvidiactl    off=0x000000000000 len=0x3000000 prot=0x3 -> 0x0000000200400000
+[ 1.783233]   mmap[4] t=1.707712 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70ddf000
+[ 1.783235]   mmap[5] t=1.710224 nvidiactl    off=0x000000000000 len=0x200000 prot=0x3 -> 0x0000000204400000
+[ 1.783237]   mmap[6] t=1.710558 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de0000
+[ 1.783239]   mmap[7] t=1.712177 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de1000
+[ 1.783241]   mmap[8] t=1.713651 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de2000
+[ 1.783243]   mmap[9] t=1.715134 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de3000
+[ 1.783245]   mmap[10] t=1.716626 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de4000
+[ 1.783247]   mmap[11] t=1.718078 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de5000
+[ 1.783248]   mmap[12] t=1.719592 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de6000
+[ 1.783250]   mmap[13] t=1.732892 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de7000
+[ 1.783252]   mmap[14] t=1.734326 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de8000
+[ 1.783257]   mmap[15] t=1.735360 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70de9000
+[ 1.783259]   mmap[16] t=1.736389 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70dea000
+[ 1.783261]   mmap[17] t=1.741771 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70deb000
+[ 1.783263]   mmap[18] t=1.743146 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70dec000
+[ 1.783265]   mmap[19] t=1.744254 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70ded000
+[ 1.783267]   mmap[20] t=1.745294 nvidiactl    off=0x000000000000 len=0x1000 prot=0x3 -> 0x00007f4f70dee000
+[ 1.783269]   mmap[21] t=1.750309 nvidiactl    off=0x000000000000 len=0x200000 prot=0x3 -> 0x0000000204600000
+[ 1.783271]   mmap[22] t=1.752126 nvidia-uvm   off=0x000204800000 len=0x200000 prot=0x3 -> 0x0000000204800000
+[ 1.783273]   mmap[23] t=1.752982 nvidiactl    off=0x000000000000 len=0x200000 prot=0x3 -> 0x00007f4f6a400000
+[ 1.783275]   mmap[24] t=1.759359 nvidiactl    off=0x000000000000 len=0x200000 prot=0x3 -> 0x00007f4f6b000000
+[ 1.783277]   mmap[25] t=1.771950 nvidiactl    off=0x000000000000 len=0x533000 prot=0x3 -> 0x00007f4f6b600000
+[ 1.783279] --- STAGE 2: cuMemAlloc ---
+[ 1.783452]   p_cuMemAlloc(&dp, 4096)      -> 0
+[ 1.783459]   dp (device VA) = 0x00007f4f66200000  cpu-readable=0
+[ 1.783461] === CHANNEL DATA-PLANE TABLE (derived from NV_CHANNEL_ALLOC_PARAMS) ===
+[ 1.783462]   gpFifoOffset is a GPU VA. The window that CONTAINS it gives the CPU VA of
+[ 1.783464]   the same allocation, and hUserdMemory[0]/userdOffset[0] index into it.
+[ 1.783469]   ch[ 0] ring GPU VA=0x200200000 cpu_readable=1 | window base=0x200200000 | USERD=0x200202000
+[ 1.783484]          ring APERTURE : UNDETERMINED
+[ 1.783486]                          [pagemap gave no PFN (not present, or no privilege)]
+[ 1.783488]          ring mapping  : DEVICE-WINDOW (BAR / vidmem or driver-managed sysmem)
+[ 1.783489]                          [inside nvidia mmap window #2 dev=nvidia0 devoff=0x0 len=0x200000]
+[ 1.783494]   ch[ 1] ring GPU VA=0x200203000 cpu_readable=1 | window base=0x200200000 | USERD=0x200205000
+[ 1.783498]   ch[ 2] ring GPU VA=0x200206000 cpu_readable=1 | window base=0x200200000 | USERD=0x200208000
+[ 1.783502]   ch[ 3] ring GPU VA=0x200209000 cpu_readable=1 | window base=0x200200000 | USERD=0x20020b000
+[ 1.783506]   ch[ 4] ring GPU VA=0x20020c000 cpu_readable=1 | window base=0x200200000 | USERD=0x20020e000
+[ 1.783510]   ch[ 5] ring GPU VA=0x20020f000 cpu_readable=1 | window base=0x200200000 | USERD=0x200211000
+[ 1.783514]   ch[ 6] ring GPU VA=0x200212000 cpu_readable=1 | window base=0x200200000 | USERD=0x200214000
+[ 1.783518]   ch[ 7] ring GPU VA=0x200215000 cpu_readable=1 | window base=0x200200000 | USERD=0x200217000
+[ 1.783522]   ch[ 8] ring GPU VA=0x200218000 cpu_readable=1 | window base=0x200200000 | USERD=0x20021a000
+[ 1.783526]   ch[ 9] ring GPU VA=0x20021b000 cpu_readable=1 | window base=0x200200000 | USERD=0x20021d000
+[ 1.783530]   ch[10] ring GPU VA=0x20021e000 cpu_readable=1 | window base=0x200200000 | USERD=0x200220000
+[ 1.783534]   ch[11] ring GPU VA=0x200221000 cpu_readable=1 | window base=0x200200000 | USERD=0x200223000
+[ 1.783538]   ch[12] ring GPU VA=0x200224000 cpu_readable=1 | window base=0x200200000 | USERD=0x200226000
+[ 1.783542]   ch[13] ring GPU VA=0x200227000 cpu_readable=1 | window base=0x200200000 | USERD=0x200229000
+[ 1.783546]   ch[14] ring GPU VA=0x20022a000 cpu_readable=1 | window base=0x200200000 | USERD=0x20022c000
+[ 1.783550]   ch[15] ring GPU VA=0x20022d000 cpu_readable=1 | window base=0x200200000 | USERD=0x20022f000
+[ 1.783552] --- STAGE 3: USERD differential across ALL channels ---
+[ 1.783672]   33 candidate USERD window(s) snapshotted
+[ 1.783697]   p_cuMemcpyHtoD(dp, &hv, 4)   -> 0
+[ 1.783807]   userd_cand[ 0] ch=0   0x0000000200202000 GP_GET 110->111 GP_PUT 110->111   <== MOVED: this channel ran the copy
+[ 1.783809]   userd_cand[ 1] ch=1   0x0000000200205000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783816]   userd_cand[ 2] ch=2   0x0000000200208000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783818]   userd_cand[ 3] ch=3   0x000000020020b000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783820]   userd_cand[ 4] ch=4   0x000000020020e000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783822]   userd_cand[ 5] ch=5   0x0000000200211000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783824]   userd_cand[ 6] ch=6   0x0000000200214000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783826]   userd_cand[ 7] ch=7   0x0000000200217000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783827]   userd_cand[ 8] ch=8   0x000000020021a000 GP_GET 96->96 GP_PUT 96->96 
+[ 1.783829]   userd_cand[ 9] ch=9   0x000000020021d000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783831]   userd_cand[10] ch=10  0x0000000200220000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783833]   userd_cand[11] ch=11  0x0000000200223000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783835]   userd_cand[12] ch=12  0x0000000200226000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783836]   userd_cand[13] ch=13  0x0000000200229000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783838]   userd_cand[14] ch=14  0x000000020022c000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783840]   userd_cand[15] ch=15  0x000000020022f000 GP_GET 1->1 GP_PUT 1->1 
+[ 1.783842]   userd_cand[16] ch=-1  0x00007f4f85b22000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783844]   userd_cand[17] ch=-1  0x00007f4f70ddf000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783845]   userd_cand[18] ch=-1  0x00007f4f70de0000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783847]   userd_cand[19] ch=-1  0x00007f4f70de1000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783849]   userd_cand[20] ch=-1  0x00007f4f70de2000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783851]   userd_cand[21] ch=-1  0x00007f4f70de3000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783852]   userd_cand[22] ch=-1  0x00007f4f70de4000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783854]   userd_cand[23] ch=-1  0x00007f4f70de5000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783856]   userd_cand[24] ch=-1  0x00007f4f70de6000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783858]   userd_cand[25] ch=-1  0x00007f4f70de7000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783859]   userd_cand[26] ch=-1  0x00007f4f70de8000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783861]   userd_cand[27] ch=-1  0x00007f4f70de9000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783863]   userd_cand[28] ch=-1  0x00007f4f70dea000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783865]   userd_cand[29] ch=-1  0x00007f4f70deb000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783866]   userd_cand[30] ch=-1  0x00007f4f70dec000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783868]   userd_cand[31] ch=-1  0x00007f4f70ded000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.783870]   userd_cand[32] ch=-1  0x00007f4f70dee000 GP_GET 0->0 GP_PUT 0->0 
+[ 1.784022] === ITEM 2: THE PUSHBUFFER (found via the device pointer it names) ===
+[ 1.784024]   A CE writes OFFSET_OUT_UPPER then _LOWER; the compute class's I2M unit
+[ 1.784026]   writes OFFSET_OUT_UPPER (0x188) then OFFSET_OUT (0x18c). Either way the
+[ 1.784028]   pair reads as (dp>>32) followed by (dp & 0xffffffff).
+[ 2.159580]   scan(OUT_UPPER,OUT_LOWER pat=0x6620000000007f4f): 7 hit(s), 96 MiB present-scanned
+[ 2.159612]     hit 000000020044c548  0000000200400000-0000000203400000 rw-s /dev/nvidiactl +0x4c548
+[ 2.159614]     hit 0000620a2ce60b5c  0000620a2c75b000-0000620a2d3c4000 rw-p [heap] +0x705b5c
+[ 2.159616]     hit 0000620a2d244434  0000620a2c75b000-0000620a2d3c4000 rw-p [heap] +0xae9434
+[ 2.159619]     hit 00007ffcb85a368c  00007ffcb8589000-00007ffcb85aa000 rw-p [stack] +0x1a68c
+[ 2.159621]     hit 00007ffcb85a5d04  00007ffcb8589000-00007ffcb85aa000 rw-p [stack] +0x1cd04
+[ 2.159623]     hit 00007ffcb85a6a20  00007ffcb8589000-00007ffcb85aa000 rw-p [stack] +0x1da20
+[ 2.159625]     hit 00007ffcb85a6a50  00007ffcb8589000-00007ffcb85aa000 rw-p [stack] +0x1da50
+[ 2.159627]   chosen pushbuffer anchor = 0x000000020044c548
+[ 2.159711]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/pb_anchor_context.bin (4096 bytes from 0x20044bd48)
+[ 2.159714] === ITEM 1: THE RING (GPFIFO) ===
+[ 2.160265]   RING HIT: entry at 0x0000000200200370 = 0044c544 00003e02 -> pbuf 0x020044c544 len=15 dw  (contains 0x20044c548)
+[ 2.492794]   find_ring_for(0x20044c548): 1 candidate entr(ies), 84 MiB present-scanned
+[ 2.492825]   AUTHORITATIVE: the channel whose GP_PUT moved is ch[0]; its ring is at
+[ 2.492841]   gpFifoOffset 0x200200000 with 1024 entries.
+[ 2.492843]   ring entry VA = 0x0000000200200000  (page 0x0000000200200000, entry #0 within the page)
+[ 2.492848]   containing mapping: 0000000200200000-0000000200400000 rw-s /dev/nvidia0 +0x0
+[ 2.492852]   ring APERTURE: UNDETERMINED [pagemap gave no PFN (not present, or no privilege)]
+[ 2.493952]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/ring.bin (8192 bytes from 0x200200000)
+[ 2.494431]   the entry that CONTAINS our pushbuffer anchor is gpe[110]
+[ 2.498204]   --- live GPFIFO entries in the containing page ---
+[ 2.498212]     gpe[  0] @0x200200000 = 00400000 00036202 -> pbuf 0x0200400000 len=216 dw priv=0 lvl=1 sync=0
+[ 2.498218]     gpe[  1] @0x200200008 = 00400360 00001e02 -> pbuf 0x0200400360 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498225]     gpe[  2] @0x200200010 = 0040037c 00023a02 -> pbuf 0x020040037c len=142 dw priv=0 lvl=1 sync=0
+[ 2.498231]     gpe[  3] @0x200200018 = 004005b4 00001e02 -> pbuf 0x02004005b4 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498237]     gpe[  4] @0x200200020 = 004005d0 00001e02 -> pbuf 0x02004005d0 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498243]     gpe[  5] @0x200200028 = 004005ec 00093a02 -> pbuf 0x02004005ec len=590 dw priv=0 lvl=1 sync=0
+[ 2.498249]     gpe[  6] @0x200200030 = 00400f24 00001e02 -> pbuf 0x0200400f24 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498255]     gpe[  7] @0x200200038 = 00400f40 00023a02 -> pbuf 0x0200400f40 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498261]     gpe[  8] @0x200200040 = 00401178 00023a02 -> pbuf 0x0200401178 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498267]     gpe[  9] @0x200200048 = 004013b0 00023a02 -> pbuf 0x02004013b0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498273]     gpe[ 10] @0x200200050 = 004015e8 00023a02 -> pbuf 0x02004015e8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498279]     gpe[ 11] @0x200200058 = 00401820 00023a02 -> pbuf 0x0200401820 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498285]     gpe[ 12] @0x200200060 = 00401a58 00023a02 -> pbuf 0x0200401a58 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498291]     gpe[ 13] @0x200200068 = 00401c90 00023a02 -> pbuf 0x0200401c90 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498297]     gpe[ 14] @0x200200070 = 00401ec8 00023a02 -> pbuf 0x0200401ec8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498303]     gpe[ 15] @0x200200078 = 00402100 00023a02 -> pbuf 0x0200402100 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498309]     gpe[ 16] @0x200200080 = 00402338 00023a02 -> pbuf 0x0200402338 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498315]     gpe[ 17] @0x200200088 = 00402570 00023a02 -> pbuf 0x0200402570 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498322]     gpe[ 18] @0x200200090 = 004027a8 00023a02 -> pbuf 0x02004027a8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498328]     gpe[ 19] @0x200200098 = 004029e0 00023a02 -> pbuf 0x02004029e0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498334]     gpe[ 20] @0x2002000a0 = 00402c18 00023a02 -> pbuf 0x0200402c18 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498340]     gpe[ 21] @0x2002000a8 = 00402e50 00023a02 -> pbuf 0x0200402e50 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498346]     gpe[ 22] @0x2002000b0 = 00403088 00023a02 -> pbuf 0x0200403088 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498352]     gpe[ 23] @0x2002000b8 = 004032c0 00023a02 -> pbuf 0x02004032c0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498358]     gpe[ 24] @0x2002000c0 = 004034f8 00023a02 -> pbuf 0x02004034f8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498364]     gpe[ 25] @0x2002000c8 = 00403730 00023a02 -> pbuf 0x0200403730 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498370]     gpe[ 26] @0x2002000d0 = 00403968 00023a02 -> pbuf 0x0200403968 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498376]     gpe[ 27] @0x2002000d8 = 00403ba0 00023a02 -> pbuf 0x0200403ba0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498382]     gpe[ 28] @0x2002000e0 = 00403dd8 00023a02 -> pbuf 0x0200403dd8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498388]     gpe[ 29] @0x2002000e8 = 00404010 00023a02 -> pbuf 0x0200404010 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498394]     gpe[ 30] @0x2002000f0 = 00404248 00023a02 -> pbuf 0x0200404248 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498400]     gpe[ 31] @0x2002000f8 = 00404480 00023a02 -> pbuf 0x0200404480 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498412]     gpe[ 32] @0x200200100 = 004046b8 00023a02 -> pbuf 0x02004046b8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498418]     gpe[ 33] @0x200200108 = 004048f0 00023a02 -> pbuf 0x02004048f0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498424]     gpe[ 34] @0x200200110 = 00404b28 00023a02 -> pbuf 0x0200404b28 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498430]     gpe[ 35] @0x200200118 = 00404d60 00023a02 -> pbuf 0x0200404d60 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498436]     gpe[ 36] @0x200200120 = 00404f98 00023a02 -> pbuf 0x0200404f98 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498442]     gpe[ 37] @0x200200128 = 004051d0 00023a02 -> pbuf 0x02004051d0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498448]     gpe[ 38] @0x200200130 = 00405408 00023a02 -> pbuf 0x0200405408 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498454]     gpe[ 39] @0x200200138 = 00405640 00023a02 -> pbuf 0x0200405640 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498460]     gpe[ 40] @0x200200140 = 00405878 00023a02 -> pbuf 0x0200405878 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498466]     gpe[ 41] @0x200200148 = 00405ab0 00023a02 -> pbuf 0x0200405ab0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498472]     gpe[ 42] @0x200200150 = 00405ce8 00023a02 -> pbuf 0x0200405ce8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498478]     gpe[ 43] @0x200200158 = 00405f20 00023a02 -> pbuf 0x0200405f20 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498484]     gpe[ 44] @0x200200160 = 00406158 00023a02 -> pbuf 0x0200406158 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498490]     gpe[ 45] @0x200200168 = 00406390 00023a02 -> pbuf 0x0200406390 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498496]     gpe[ 46] @0x200200170 = 004065c8 00023a02 -> pbuf 0x02004065c8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498502]     gpe[ 47] @0x200200178 = 00406800 00023a02 -> pbuf 0x0200406800 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498508]     gpe[ 48] @0x200200180 = 00406a38 00023a02 -> pbuf 0x0200406a38 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498514]     gpe[ 49] @0x200200188 = 00406c70 00023a02 -> pbuf 0x0200406c70 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498520]     gpe[ 50] @0x200200190 = 00406ea8 00023a02 -> pbuf 0x0200406ea8 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498526]     gpe[ 51] @0x200200198 = 004070e0 00023a02 -> pbuf 0x02004070e0 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498532]     gpe[ 52] @0x2002001a0 = 00407318 00023a02 -> pbuf 0x0200407318 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498538]     gpe[ 53] @0x2002001a8 = 00407550 00023a02 -> pbuf 0x0200407550 len=142 dw priv=0 lvl=1 sync=0
+[ 2.498544]     gpe[ 54] @0x2002001b0 = 00407788 00008602 -> pbuf 0x0200407788 len=33 dw priv=0 lvl=1 sync=0
+[ 2.498550]     gpe[ 55] @0x2002001b8 = 0040780c 00008202 -> pbuf 0x020040780c len=32 dw priv=0 lvl=1 sync=0
+[ 2.498556]     gpe[ 56] @0x2002001c0 = 0040788c 00001e02 -> pbuf 0x020040788c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498563]     gpe[ 57] @0x2002001c8 = 004078a8 00003602 -> pbuf 0x02004078a8 len=13 dw priv=0 lvl=1 sync=0
+[ 2.498569]     gpe[ 58] @0x2002001d0 = 004078dc 00001e02 -> pbuf 0x02004078dc len=7 dw priv=0 lvl=1 sync=0
+[ 2.498575]     gpe[ 59] @0x2002001d8 = 004078f8 00003602 -> pbuf 0x02004078f8 len=13 dw priv=0 lvl=1 sync=0
+[ 2.498581]     gpe[ 60] @0x2002001e0 = 0040792c 00001e02 -> pbuf 0x020040792c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498587]     gpe[ 61] @0x2002001e8 = 00407948 00153a02 -> pbuf 0x0200407948 len=1358 dw priv=0 lvl=1 sync=0
+[ 2.498593]     gpe[ 62] @0x2002001f0 = 00408e80 00001e02 -> pbuf 0x0200408e80 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498599]     gpe[ 63] @0x2002001f8 = 00408e9c 00001e02 -> pbuf 0x0200408e9c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498605]     gpe[ 64] @0x200200200 = 00408eb8 0003ba02 -> pbuf 0x0200408eb8 len=238 dw priv=0 lvl=1 sync=0
+[ 2.498611]     gpe[ 65] @0x200200208 = 00409270 00001e02 -> pbuf 0x0200409270 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498617]     gpe[ 66] @0x200200210 = 0040928c 00001e02 -> pbuf 0x020040928c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498623]     gpe[ 67] @0x200200218 = 004092a8 0001ba02 -> pbuf 0x02004092a8 len=110 dw priv=0 lvl=1 sync=0
+[ 2.498629]     gpe[ 68] @0x200200220 = 00409460 00001e02 -> pbuf 0x0200409460 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498635]     gpe[ 69] @0x200200228 = 0040947c 00006202 -> pbuf 0x020040947c len=24 dw priv=0 lvl=1 sync=0
+[ 2.498644]     gpe[ 70] @0x200200230 = 004094dc 00001e02 -> pbuf 0x02004094dc len=7 dw priv=0 lvl=1 sync=0
+[ 2.498650]     gpe[ 71] @0x200200238 = 004094f8 00b53e02 -> pbuf 0x02004094f8 len=11599 dw priv=0 lvl=1 sync=0
+[ 2.498656]     gpe[ 72] @0x200200240 = 00414a34 00001e02 -> pbuf 0x0200414a34 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498662]     gpe[ 73] @0x200200248 = 00414a50 00001e02 -> pbuf 0x0200414a50 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498668]     gpe[ 74] @0x200200250 = 00414a6c 00ee3e02 -> pbuf 0x0200414a6c len=15247 dw priv=0 lvl=1 sync=0
+[ 2.498674]     gpe[ 75] @0x200200258 = 004238a8 00001e02 -> pbuf 0x02004238a8 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498680]     gpe[ 76] @0x200200260 = 004238c4 00002202 -> pbuf 0x02004238c4 len=8 dw priv=0 lvl=1 sync=0
+[ 2.498686]     gpe[ 77] @0x200200268 = 004238e4 00002e02 -> pbuf 0x02004238e4 len=11 dw priv=0 lvl=1 sync=0
+[ 2.498692]     gpe[ 78] @0x200200270 = 00423910 00004602 -> pbuf 0x0200423910 len=17 dw priv=0 lvl=1 sync=0
+[ 2.498698]     gpe[ 79] @0x200200278 = 00423954 00003602 -> pbuf 0x0200423954 len=13 dw priv=0 lvl=1 sync=0
+[ 2.498704]     gpe[ 80] @0x200200280 = 00423988 00001e02 -> pbuf 0x0200423988 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498710]     gpe[ 81] @0x200200288 = 004239a4 005a3a02 -> pbuf 0x02004239a4 len=5774 dw priv=0 lvl=1 sync=0
+[ 2.498716]     gpe[ 82] @0x200200290 = 004293dc 00001e02 -> pbuf 0x02004293dc len=7 dw priv=0 lvl=1 sync=0
+[ 2.498722]     gpe[ 83] @0x200200298 = 004293f8 00001e02 -> pbuf 0x02004293f8 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498728]     gpe[ 84] @0x2002002a0 = 00429414 009a3e02 -> pbuf 0x0200429414 len=9871 dw priv=0 lvl=1 sync=0
+[ 2.498735]     gpe[ 85] @0x2002002a8 = 00432e50 00001e02 -> pbuf 0x0200432e50 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498741]     gpe[ 86] @0x2002002b0 = 00432e6c 00001e02 -> pbuf 0x0200432e6c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498747]     gpe[ 87] @0x2002002b8 = 00432e88 00723a02 -> pbuf 0x0200432e88 len=7310 dw priv=0 lvl=1 sync=0
+[ 2.498753]     gpe[ 88] @0x2002002c0 = 0043a0c0 00001e02 -> pbuf 0x020043a0c0 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498759]     gpe[ 89] @0x2002002c8 = 0043a0dc 00004602 -> pbuf 0x020043a0dc len=17 dw priv=0 lvl=1 sync=0
+[ 2.498765]     gpe[ 90] @0x2002002d0 = 0043a120 00005202 -> pbuf 0x020043a120 len=20 dw priv=0 lvl=1 sync=0
+[ 2.498771]     gpe[ 91] @0x2002002d8 = 0043a170 00004602 -> pbuf 0x020043a170 len=17 dw priv=0 lvl=1 sync=0
+[ 2.498777]     gpe[ 92] @0x2002002e0 = 0043a1b4 00005202 -> pbuf 0x020043a1b4 len=20 dw priv=0 lvl=1 sync=0
+[ 2.498783]     gpe[ 93] @0x2002002e8 = 0043a204 00001e02 -> pbuf 0x020043a204 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498789]     gpe[ 94] @0x2002002f0 = 0043a220 00873e02 -> pbuf 0x020043a220 len=8655 dw priv=0 lvl=1 sync=0
+[ 2.498795]     gpe[ 95] @0x2002002f8 = 0044295c 00001e02 -> pbuf 0x020044295c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498801]     gpe[ 96] @0x200200300 = 00442978 00001e02 -> pbuf 0x0200442978 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498807]     gpe[ 97] @0x200200308 = 00442994 001d3a02 -> pbuf 0x0200442994 len=1870 dw priv=0 lvl=1 sync=0
+[ 2.498813]     gpe[ 98] @0x200200310 = 004446cc 00001e02 -> pbuf 0x02004446cc len=7 dw priv=0 lvl=1 sync=0
+[ 2.498819]     gpe[ 99] @0x200200318 = 004446e8 00001e02 -> pbuf 0x02004446e8 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498825]     gpe[100] @0x200200320 = 00444704 00263a02 -> pbuf 0x0200444704 len=2446 dw priv=0 lvl=1 sync=0
+[ 2.498831]     gpe[101] @0x200200328 = 00446d3c 00001e02 -> pbuf 0x0200446d3c len=7 dw priv=0 lvl=1 sync=0
+[ 2.498837]     gpe[102] @0x200200330 = 00446d58 00006a02 -> pbuf 0x0200446d58 len=26 dw priv=0 lvl=1 sync=0
+[ 2.498843]     gpe[103] @0x200200338 = 00446dc0 00005202 -> pbuf 0x0200446dc0 len=20 dw priv=0 lvl=1 sync=0
+[ 2.498849]     gpe[104] @0x200200340 = 00446e10 00001e02 -> pbuf 0x0200446e10 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498855]     gpe[105] @0x200200348 = 00446e2c 004e3a02 -> pbuf 0x0200446e2c len=5006 dw priv=0 lvl=1 sync=0
+[ 2.498861]     gpe[106] @0x200200350 = 0044bc64 00001e02 -> pbuf 0x020044bc64 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498881]     gpe[107] @0x200200358 = 0044bc80 00001e02 -> pbuf 0x020044bc80 len=7 dw priv=0 lvl=1 sync=0
+[ 2.498888]     gpe[108] @0x200200360 = 0044bc9c 00087e02 -> pbuf 0x020044bc9c len=543 dw priv=0 lvl=1 sync=0
+[ 2.498894]     gpe[109] @0x200200368 = 0044c518 00002e02 -> pbuf 0x020044c518 len=11 dw priv=0 lvl=1 sync=0
+[ 2.498900]     gpe[110] @0x200200370 = 0044c544 00003e02 -> pbuf 0x020044c544 len=15 dw priv=0 lvl=1 sync=0   <== the entry carrying our copy
+[ 2.500558] === ITEM 2b: THE METHOD STREAM ===
+[ 2.500561]   decoding pushbuffer segment 0x020044c544, 15 dwords
+[ 2.500592]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/pushbuffer.bin (60 bytes from 0x20044c544)
+[ 2.500596]       +0    20022062  INC    sub=1 mth=0x0188 cnt=2
+[ 2.500599]            [ 0] mth=0x0188 val=0x00007f4f  NVC7C0_OFFSET_OUT_UPPER
+[ 2.500601]            [ 1] mth=0x018c val=0x66200000  NVC7C0_OFFSET_OUT
+[ 2.500603]       +12   20022060  INC    sub=1 mth=0x0180 cnt=2
+[ 2.500605]            [ 0] mth=0x0180 val=0x00000004  NVC7C0_LINE_LENGTH_IN
+[ 2.500607]            [ 1] mth=0x0184 val=0x00000001  NVC7C0_LINE_COUNT
+[ 2.500609]       +24   2001206c  INC    sub=1 mth=0x01b0 cnt=1
+[ 2.500610]            [ 0] mth=0x01b0 val=0x00000041  NVC7C0_LAUNCH_DMA(I2M)
+[ 2.500612]       +32   6001206d  NONINC sub=1 mth=0x01b4 cnt=1
+[ 2.500614]            [ 0] mth=0x01b4 val=0xabcd1234  NVC7C0_LOAD_INLINE_DATA <== PAYLOAD IS A LITERAL
+[ 2.500616]       +40   200426c0  INC    sub=1 mth=0x1b00 cnt=4
+[ 2.500618]            [ 0] mth=0x1b00 val=0x00000002  NVC7C0_SET_REPORT_SEMAPHORE_A(upper)
+[ 2.500620]            [ 1] mth=0x1b04 val=0x0440fff0  NVC7C0_SET_REPORT_SEMAPHORE_B(lower)
+[ 2.500621]            [ 2] mth=0x1b08 val=0x0000006f  NVC7C0_SET_REPORT_SEMAPHORE_C(payload)
+[ 2.500623]            [ 3] mth=0x1b0c val=0x00000000  NVC7C0_SET_REPORT_SEMAPHORE_D(operation)
+[ 2.500625]   FACTS: i2m_launch=1 inline_dwords=1 first_inline=0xabcd1234 ce_launch_dma=0 ce_setsem=0 host_sem=0 gr_report_sem=1 qmd=0
+[ 2.500628]   I2M destination = 0x00007f4f66200000  line_len=4 line_count=1 launch=0x00000041  (dp=0x7f4f66200000, match=1)
+[ 2.500630] === ITEM 3: THE REPORT SEMAPHORE ===
+[ 2.500632]   GR  SET_REPORT_SEMAPHORE   : VA=0x000000020440fff0
+[ 2.500634]        page offset          = +0xff0
+[ 2.500638]        cpu-readable         = 1
+[ 2.500643]        APERTURE (phys/BAR)  = SYSMEM (host RAM, snooped)
+[ 2.500644]                               [phys 0x103ea1ff0 is in NO GPU BAR -- host RAM]
+[ 2.500647]        APERTURE (mapping)   = DEVICE-WINDOW (BAR / vidmem or driver-managed sysmem)
+[ 2.500648]                               [inside nvidia mmap window #5 dev=nvidiactl devoff=0x0 len=0x200000]
+[ 2.500650]        mapping              = 0000000204400000-0000000204600000 rw-s /dev/nvidiactl +0xfff0
+[ 2.500652]        declared payload     = 0x0000006f  (from the method stream)
+[ 2.500656]        report words NOW     = [payload=0x0000006f pad=0x00000000 ts_lo=0x948f0c00 ts_hi=0x18cb0a88]
+[ 2.500658]        ts as u64            = 1786533258906766336  (GPU clock -- nothing CPU-side can synthesise it)
+[ 2.500660]        landed == declared   = 1
+[ 2.500682]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/sempage_0.bin (4096 bytes from 0x20440f000)
+[ 2.500684]        --- the whole semaphore page, last 256 bytes (the slot region) ---
+[ 2.500690]       000000020440ff00: 01 00 00 00 00 00 00 00 00 70 95 92 88 0a cb 18
+[ 2.500693]       000000020440ff10: 01 00 00 00 00 00 00 00 20 69 95 92 88 0a cb 18
+[ 2.500695]       000000020440ff20: 01 00 00 00 00 00 00 00 c0 62 95 92 88 0a cb 18
+[ 2.500698]       000000020440ff30: 01 00 00 00 00 00 00 00 a0 5b 95 92 88 0a cb 18
+[ 2.500701]       000000020440ff40: 01 00 00 00 00 00 00 00 c0 a8 95 92 88 0a cb 18
+[ 2.500704]       000000020440ff50: 01 00 00 00 00 00 00 00 00 a1 95 92 88 0a cb 18
+[ 2.500706]       000000020440ff60: 01 00 00 00 00 00 00 00 e0 98 95 92 88 0a cb 18
+[ 2.500709]       000000020440ff70: 60 00 00 00 00 00 00 00 60 66 30 94 88 0a cb 18
+[ 2.500712]       000000020440ff80: 01 00 00 00 00 00 00 00 00 04 a2 92 88 0a cb 18
+[ 2.500718]       000000020440ff90: 01 00 00 00 00 00 00 00 00 fc a1 92 88 0a cb 18
+[ 2.500721]       000000020440ffa0: 01 00 00 00 00 00 00 00 00 dc a0 92 88 0a cb 18
+[ 2.500724]       000000020440ffb0: 01 00 00 00 00 00 00 00 00 bc 9f 92 88 0a cb 18
+[ 2.500727]       000000020440ffc0: 01 00 00 00 00 00 00 00 00 84 9d 92 88 0a cb 18
+[ 2.500729]       000000020440ffd0: 01 00 00 00 00 00 00 00 00 80 9d 92 88 0a cb 18
+[ 2.500732]       000000020440ffe0: 01 00 00 00 00 00 00 00 00 40 9b 92 88 0a cb 18
+[ 2.500735]       000000020440fff0: 6f 00 00 00 00 00 00 00 00 0c 8f 94 88 0a cb 18
+[ 2.500736]   CE  SET_SEMAPHORE          : NOT PRESENT in the decoded stream
+[ 2.500738]   HOST SEM_ADDR              : NOT PRESENT in the decoded stream
+[ 2.500740] === ITEM 4: WHO WRITES IT ===
+[ 2.500741]   PRIMARY = the polling loop: the GPU timestamp inside the report, the landed
+[ 2.500743]   payload vs the declared one, and the ordering against GP_GET.
+[ 2.500744]   The write-breakpoint is a NEGATIVE CONTROL ONLY. A GPU release is a DMA
+[ 2.500746]   write: it never touches the CPU MMU and x86 debug registers watch CPU
+[ 2.500747]   accesses only, so SILENCE IS EXPECTED FOR ANY DMA AND PROVES NOTHING.
+[ 2.500749]   If it FIRES, a CPU store did it and GPU authorship is REFUTED.
+[ 2.500750]   GP_PUT carries the same breakpoint as the KNOWN-POSITIVE that the
+[ 2.500752]   mechanism is live -- a census zero needs one.
+[ 2.506316]   armed: GR_SEM on 4 thread(s), GP_PUT on 4 thread(s)
+[ 2.506335]   polling 16 channel cursor pair(s) and 16 semaphore slots from 0x20440ff00
+[ 2.506563] --- STAGE 4: the WATCHED copies ---
+[ 2.506567]   t_pre_htod  = 2.506567
+[ 2.506624]   p_cuMemcpyHtoD(dp, &hv, 4)   -> 0
+[ 2.506627]   t_post_htod = 2.506627
+[ 2.506668]   p_cuMemcpyDtoH(&rv, dp, 4)   -> 0
+[ 2.506670]   t_post_dtoh = 2.506670
+[ 2.506832]   copy result: rv=0x5a5a1234 want=0x5a5a1234 -> PASS
+[ 2.506835]   --- report words BEFORE -> AFTER (raw, [payload pad ts_lo ts_hi]) ---
+[ 2.506837]   GR  0x000000020440fff0 : [0000006f 00000000 948f0c00 18cb0a88] -> [00000070 00000000 bfa60400 18cb0a88]
+[ 2.506839]       GPU ts 1786533258906766336 -> 1786533259629691904   (delta 722925568 ns-ish; GPU clock, not ours)
+[ 2.506841]   CE  0x0000000000000000 : [00000000 00000000 00000000 00000000] -> [00000000 00000000 00000000 00000000]
+[ 2.506843]   --- NEGATIVE CONTROL (CPU-store breakpoints) ---
+[ 2.506845]   GR_SEM cpu-store count = 0 (4 thread bps)  [>0 would REFUTE GPU authorship]
+[ 2.506847]   GP_PUT cpu-store count = 1 (4 thread bps)  [KNOWN-POSITIVE: if this is 0 the
+[ 2.506848]          instrument is dead and the GR_SEM zero above is UNINTERPRETABLE]
+[ 2.506850]   VERDICT-INPUTS: gr_payload_changed=1 gr_ts_changed=1 gr_cpu_stores=0 known_positive=1
+[ 2.506852] === ITEM 5: GP_GET vs GP_PUT vs SEMAPHORE, sampled ===
+[ 2.506853]   USERD polled at 0x0000000200202000 (GP_GET +0x88, GP_PUT +0x8c)
+[ 2.506855]   17 samples; each carries its OWN timestamp, so a dump at teardown still
+[ 2.506857]   reports time correctly, not just order.
+[ 2.506903]   T t=2.506477024 SEM[0000006f pad=00000000 ts=18cb0a88948f0c00]
+[ 2.506905]        ch get/put: 111/111 1/1 1/1 1/1 1/1 1/1 1/1 1/1 96/96 1/1 1/1 1/1 1/1 1/1 1/1 1/1 
+[ 2.506908]        slots +0xf00..+0xff0: 1 1 1 1 1 1 1 60 1 1 1 1 1 1 1 6f 
+[ 2.506927]   T t=2.506616247 SEM[00000070 pad=00000000 ts=18cb0a88bfa60400]
+[ 2.506929]        ch get/put: 111/112 1/1 1/1 1/1 1/1 1/1 1/1 1/1 96/96 1/1 1/1 1/1 1/1 1/1 1/1 1/1 
+[ 2.506931]        slots +0xf00..+0xff0: 1 1 1 1 1 1 1 60 1 1 1 1 1 1 1 70 
+[ 2.506936]   T t=2.506632945 SEM[00000070 pad=00000000 ts=18cb0a88bfa60400]
+[ 2.506938]        ch get/put: 112/112 1/1 1/1 1/1 1/1 1/1 1/1 1/1 96/96 1/1 1/1 1/1 1/1 1/1 1/1 1/1 
+[ 2.506941]        slots +0xf00..+0xff0: 1 1 1 1 1 1 1 60 1 1 1 1 1 1 1 70 
+[ 2.506946]   T t=2.506649591 SEM[00000070 pad=00000000 ts=18cb0a88bfa60400]
+[ 2.506947]        ch get/put: 112/112 1/1 1/1 1/1 1/1 1/1 1/1 1/1 96/96 1/1 1/1 1/1 1/2 1/1 1/1 1/1 
+[ 2.506950]        slots +0xf00..+0xff0: 1 1 1 1 1 1 1 60 1 1 1 1 1 1 1 70 
+[ 2.506958]   T t=2.506666263 SEM[00000070 pad=00000000 ts=18cb0a88bfa60400]
+[ 2.506960]        ch get/put: 112/112 1/1 1/1 1/1 1/1 1/1 1/1 1/1 96/96 1/1 1/1 1/1 2/2 1/1 1/1 1/1 
+[ 2.506962]        slots +0xf00..+0xff0: 1 1 1 2 1 1 1 60 1 1 1 1 1 1 1 70 
+[ 2.506973]   5 transition(s); full series -> /workspace/nvdp_out/run_20260812T111414Z/raw/samples.csv
+[ 2.506977] === PER-CHANNEL CURSORS, before STAGE 3 vs after STAGE 4 ===
+[ 2.506979]   Any channel whose GP_PUT moved between the two took a submission.
+[ 2.506987]   ch[ 0] USERD 0x200202000 GP_GET 111->112 GP_PUT 111->112   <== took work
+[ 2.506993]   ch[ 1] USERD 0x200205000 GP_GET 1->1 GP_PUT 1->1
+[ 2.506999]   ch[ 2] USERD 0x200208000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507005]   ch[ 3] USERD 0x20020b000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507011]   ch[ 4] USERD 0x20020e000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507017]   ch[ 5] USERD 0x200211000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507023]   ch[ 6] USERD 0x200214000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507029]   ch[ 7] USERD 0x200217000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507035]   ch[ 8] USERD 0x20021a000 GP_GET 96->96 GP_PUT 96->96
+[ 2.507041]   ch[ 9] USERD 0x20021d000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507047]   ch[10] USERD 0x200220000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507053]   ch[11] USERD 0x200223000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507059]   ch[12] USERD 0x200226000 GP_GET 1->2 GP_PUT 1->2   <== took work
+[ 2.507065]   ch[13] USERD 0x200229000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507071]   ch[14] USERD 0x20022c000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507077]   ch[15] USERD 0x20022f000 GP_GET 1->1 GP_PUT 1->1
+[ 2.507078] === POST-RUN: the ring after the watched copies ===
+[ 2.508128]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/ring_post.bin (8192 bytes from 0x200200000)
+[ 2.508138]     gpe[  0] = 00400000 00036202 -> 0x0200400000 len=216 dw
+[ 2.508144]     gpe[  1] = 00400360 00001e02 -> 0x0200400360 len=7 dw
+[ 2.508150]     gpe[  2] = 0040037c 00023a02 -> 0x020040037c len=142 dw
+[ 2.508162]     gpe[  3] = 004005b4 00001e02 -> 0x02004005b4 len=7 dw
+[ 2.508169]     gpe[  4] = 004005d0 00001e02 -> 0x02004005d0 len=7 dw
+[ 2.508174]     gpe[  5] = 004005ec 00093a02 -> 0x02004005ec len=590 dw
+[ 2.508180]     gpe[  6] = 00400f24 00001e02 -> 0x0200400f24 len=7 dw
+[ 2.508195]     gpe[  7] = 00400f40 00023a02 -> 0x0200400f40 len=142 dw
+[ 2.508202]     gpe[  8] = 00401178 00023a02 -> 0x0200401178 len=142 dw
+[ 2.508207]     gpe[  9] = 004013b0 00023a02 -> 0x02004013b0 len=142 dw
+[ 2.508214]     gpe[ 10] = 004015e8 00023a02 -> 0x02004015e8 len=142 dw
+[ 2.508220]     gpe[ 11] = 00401820 00023a02 -> 0x0200401820 len=142 dw
+[ 2.508225]     gpe[ 12] = 00401a58 00023a02 -> 0x0200401a58 len=142 dw
+[ 2.508231]     gpe[ 13] = 00401c90 00023a02 -> 0x0200401c90 len=142 dw
+[ 2.508237]     gpe[ 14] = 00401ec8 00023a02 -> 0x0200401ec8 len=142 dw
+[ 2.508243]     gpe[ 15] = 00402100 00023a02 -> 0x0200402100 len=142 dw
+[ 2.508249]     gpe[ 16] = 00402338 00023a02 -> 0x0200402338 len=142 dw
+[ 2.508255]     gpe[ 17] = 00402570 00023a02 -> 0x0200402570 len=142 dw
+[ 2.508261]     gpe[ 18] = 004027a8 00023a02 -> 0x02004027a8 len=142 dw
+[ 2.508267]     gpe[ 19] = 004029e0 00023a02 -> 0x02004029e0 len=142 dw
+[ 2.508273]     gpe[ 20] = 00402c18 00023a02 -> 0x0200402c18 len=142 dw
+[ 2.508279]     gpe[ 21] = 00402e50 00023a02 -> 0x0200402e50 len=142 dw
+[ 2.508285]     gpe[ 22] = 00403088 00023a02 -> 0x0200403088 len=142 dw
+[ 2.508291]     gpe[ 23] = 004032c0 00023a02 -> 0x02004032c0 len=142 dw
+[ 2.508297]     gpe[ 24] = 004034f8 00023a02 -> 0x02004034f8 len=142 dw
+[ 2.508302]     gpe[ 25] = 00403730 00023a02 -> 0x0200403730 len=142 dw
+[ 2.508308]     gpe[ 26] = 00403968 00023a02 -> 0x0200403968 len=142 dw
+[ 2.508314]     gpe[ 27] = 00403ba0 00023a02 -> 0x0200403ba0 len=142 dw
+[ 2.508320]     gpe[ 28] = 00403dd8 00023a02 -> 0x0200403dd8 len=142 dw
+[ 2.508326]     gpe[ 29] = 00404010 00023a02 -> 0x0200404010 len=142 dw
+[ 2.508332]     gpe[ 30] = 00404248 00023a02 -> 0x0200404248 len=142 dw
+[ 2.508338]     gpe[ 31] = 00404480 00023a02 -> 0x0200404480 len=142 dw
+[ 2.508344]     gpe[ 32] = 004046b8 00023a02 -> 0x02004046b8 len=142 dw
+[ 2.508386]     gpe[ 33] = 004048f0 00023a02 -> 0x02004048f0 len=142 dw
+[ 2.508392]     gpe[ 34] = 00404b28 00023a02 -> 0x0200404b28 len=142 dw
+[ 2.508397]     gpe[ 35] = 00404d60 00023a02 -> 0x0200404d60 len=142 dw
+[ 2.508403]     gpe[ 36] = 00404f98 00023a02 -> 0x0200404f98 len=142 dw
+[ 2.508410]     gpe[ 37] = 004051d0 00023a02 -> 0x02004051d0 len=142 dw
+[ 2.508416]     gpe[ 38] = 00405408 00023a02 -> 0x0200405408 len=142 dw
+[ 2.508421]     gpe[ 39] = 00405640 00023a02 -> 0x0200405640 len=142 dw
+[ 2.508427]     gpe[ 40] = 00405878 00023a02 -> 0x0200405878 len=142 dw
+[ 2.508433]     gpe[ 41] = 00405ab0 00023a02 -> 0x0200405ab0 len=142 dw
+[ 2.508439]     gpe[ 42] = 00405ce8 00023a02 -> 0x0200405ce8 len=142 dw
+[ 2.508445]     gpe[ 43] = 00405f20 00023a02 -> 0x0200405f20 len=142 dw
+[ 2.508451]     gpe[ 44] = 00406158 00023a02 -> 0x0200406158 len=142 dw
+[ 2.508457]     gpe[ 45] = 00406390 00023a02 -> 0x0200406390 len=142 dw
+[ 2.508463]     gpe[ 46] = 004065c8 00023a02 -> 0x02004065c8 len=142 dw
+[ 2.508469]     gpe[ 47] = 00406800 00023a02 -> 0x0200406800 len=142 dw
+[ 2.508475]     gpe[ 48] = 00406a38 00023a02 -> 0x0200406a38 len=142 dw
+[ 2.508481]     gpe[ 49] = 00406c70 00023a02 -> 0x0200406c70 len=142 dw
+[ 2.508487]     gpe[ 50] = 00406ea8 00023a02 -> 0x0200406ea8 len=142 dw
+[ 2.508493]     gpe[ 51] = 004070e0 00023a02 -> 0x02004070e0 len=142 dw
+[ 2.508499]     gpe[ 52] = 00407318 00023a02 -> 0x0200407318 len=142 dw
+[ 2.508505]     gpe[ 53] = 00407550 00023a02 -> 0x0200407550 len=142 dw
+[ 2.508511]     gpe[ 54] = 00407788 00008602 -> 0x0200407788 len=33 dw
+[ 2.508516]     gpe[ 55] = 0040780c 00008202 -> 0x020040780c len=32 dw
+[ 2.508522]     gpe[ 56] = 0040788c 00001e02 -> 0x020040788c len=7 dw
+[ 2.508528]     gpe[ 57] = 004078a8 00003602 -> 0x02004078a8 len=13 dw
+[ 2.508534]     gpe[ 58] = 004078dc 00001e02 -> 0x02004078dc len=7 dw
+[ 2.508540]     gpe[ 59] = 004078f8 00003602 -> 0x02004078f8 len=13 dw
+[ 2.508546]     gpe[ 60] = 0040792c 00001e02 -> 0x020040792c len=7 dw
+[ 2.508552]     gpe[ 61] = 00407948 00153a02 -> 0x0200407948 len=1358 dw
+[ 2.508558]     gpe[ 62] = 00408e80 00001e02 -> 0x0200408e80 len=7 dw
+[ 2.508563]     gpe[ 63] = 00408e9c 00001e02 -> 0x0200408e9c len=7 dw
+[ 2.508569]     gpe[ 64] = 00408eb8 0003ba02 -> 0x0200408eb8 len=238 dw
+[ 2.508575]     gpe[ 65] = 00409270 00001e02 -> 0x0200409270 len=7 dw
+[ 2.508581]     gpe[ 66] = 0040928c 00001e02 -> 0x020040928c len=7 dw
+[ 2.508587]     gpe[ 67] = 004092a8 0001ba02 -> 0x02004092a8 len=110 dw
+[ 2.508593]     gpe[ 68] = 00409460 00001e02 -> 0x0200409460 len=7 dw
+[ 2.508599]     gpe[ 69] = 0040947c 00006202 -> 0x020040947c len=24 dw
+[ 2.508604]     gpe[ 70] = 004094dc 00001e02 -> 0x02004094dc len=7 dw
+[ 2.508610]     gpe[ 71] = 004094f8 00b53e02 -> 0x02004094f8 len=11599 dw
+[ 2.508616]     gpe[ 72] = 00414a34 00001e02 -> 0x0200414a34 len=7 dw
+[ 2.508622]     gpe[ 73] = 00414a50 00001e02 -> 0x0200414a50 len=7 dw
+[ 2.508628]     gpe[ 74] = 00414a6c 00ee3e02 -> 0x0200414a6c len=15247 dw
+[ 2.508634]     gpe[ 75] = 004238a8 00001e02 -> 0x02004238a8 len=7 dw
+[ 2.508640]     gpe[ 76] = 004238c4 00002202 -> 0x02004238c4 len=8 dw
+[ 2.508646]     gpe[ 77] = 004238e4 00002e02 -> 0x02004238e4 len=11 dw
+[ 2.508651]     gpe[ 78] = 00423910 00004602 -> 0x0200423910 len=17 dw
+[ 2.508657]     gpe[ 79] = 00423954 00003602 -> 0x0200423954 len=13 dw
+[ 2.508663]     gpe[ 80] = 00423988 00001e02 -> 0x0200423988 len=7 dw
+[ 2.508669]     gpe[ 81] = 004239a4 005a3a02 -> 0x02004239a4 len=5774 dw
+[ 2.508675]     gpe[ 82] = 004293dc 00001e02 -> 0x02004293dc len=7 dw
+[ 2.508681]     gpe[ 83] = 004293f8 00001e02 -> 0x02004293f8 len=7 dw
+[ 2.508687]     gpe[ 84] = 00429414 009a3e02 -> 0x0200429414 len=9871 dw
+[ 2.508693]     gpe[ 85] = 00432e50 00001e02 -> 0x0200432e50 len=7 dw
+[ 2.508698]     gpe[ 86] = 00432e6c 00001e02 -> 0x0200432e6c len=7 dw
+[ 2.508704]     gpe[ 87] = 00432e88 00723a02 -> 0x0200432e88 len=7310 dw
+[ 2.508710]     gpe[ 88] = 0043a0c0 00001e02 -> 0x020043a0c0 len=7 dw
+[ 2.508716]     gpe[ 89] = 0043a0dc 00004602 -> 0x020043a0dc len=17 dw
+[ 2.508722]     gpe[ 90] = 0043a120 00005202 -> 0x020043a120 len=20 dw
+[ 2.508730]     gpe[ 91] = 0043a170 00004602 -> 0x020043a170 len=17 dw
+[ 2.508736]     gpe[ 92] = 0043a1b4 00005202 -> 0x020043a1b4 len=20 dw
+[ 2.508742]     gpe[ 93] = 0043a204 00001e02 -> 0x020043a204 len=7 dw
+[ 2.508748]     gpe[ 94] = 0043a220 00873e02 -> 0x020043a220 len=8655 dw
+[ 2.508754]     gpe[ 95] = 0044295c 00001e02 -> 0x020044295c len=7 dw
+[ 2.508760]     gpe[ 96] = 00442978 00001e02 -> 0x0200442978 len=7 dw
+[ 2.508766]     gpe[ 97] = 00442994 001d3a02 -> 0x0200442994 len=1870 dw
+[ 2.508772]     gpe[ 98] = 004446cc 00001e02 -> 0x02004446cc len=7 dw
+[ 2.508778]     gpe[ 99] = 004446e8 00001e02 -> 0x02004446e8 len=7 dw
+[ 2.508783]     gpe[100] = 00444704 00263a02 -> 0x0200444704 len=2446 dw
+[ 2.508789]     gpe[101] = 00446d3c 00001e02 -> 0x0200446d3c len=7 dw
+[ 2.508795]     gpe[102] = 00446d58 00006a02 -> 0x0200446d58 len=26 dw
+[ 2.508801]     gpe[103] = 00446dc0 00005202 -> 0x0200446dc0 len=20 dw
+[ 2.508807]     gpe[104] = 00446e10 00001e02 -> 0x0200446e10 len=7 dw
+[ 2.508813]     gpe[105] = 00446e2c 004e3a02 -> 0x0200446e2c len=5006 dw
+[ 2.508819]     gpe[106] = 0044bc64 00001e02 -> 0x020044bc64 len=7 dw
+[ 2.508825]     gpe[107] = 0044bc80 00001e02 -> 0x020044bc80 len=7 dw
+[ 2.508830]     gpe[108] = 0044bc9c 00087e02 -> 0x020044bc9c len=543 dw
+[ 2.508836]     gpe[109] = 0044c518 00002e02 -> 0x020044c518 len=11 dw
+[ 2.508842]     gpe[110] = 0044c544 00003e02 -> 0x020044c544 len=15 dw
+[ 2.508848]     gpe[111] = 0044c580 00003e02 -> 0x020044c580 len=15 dw
+[ 2.512613]   --- decoding the LAST entry (#111), i.e. the most recent submission ---
+[ 2.512645]   raw -> /workspace/nvdp_out/run_20260812T111414Z/raw/pushbuffer_last.bin (60 bytes from 0x20044c580)
+[ 2.512650]       +0    20022062  INC    sub=1 mth=0x0188 cnt=2
+[ 2.512653]            [ 0] mth=0x0188 val=0x00007f4f  NVC7C0_OFFSET_OUT_UPPER
+[ 2.512655]            [ 1] mth=0x018c val=0x66200000  NVC7C0_OFFSET_OUT
+[ 2.512657]       +12   20022060  INC    sub=1 mth=0x0180 cnt=2
+[ 2.512659]            [ 0] mth=0x0180 val=0x00000004  NVC7C0_LINE_LENGTH_IN
+[ 2.512661]            [ 1] mth=0x0184 val=0x00000001  NVC7C0_LINE_COUNT
+[ 2.512662]       +24   2001206c  INC    sub=1 mth=0x01b0 cnt=1
+[ 2.512664]            [ 0] mth=0x01b0 val=0x00000041  NVC7C0_LAUNCH_DMA(I2M)
+[ 2.512666]       +32   6001206d  NONINC sub=1 mth=0x01b4 cnt=1
+[ 2.512668]            [ 0] mth=0x01b4 val=0x5a5a1234  NVC7C0_LOAD_INLINE_DATA <== PAYLOAD IS A LITERAL
+[ 2.512670]       +40   200426c0  INC    sub=1 mth=0x1b00 cnt=4
+[ 2.512672]            [ 0] mth=0x1b00 val=0x00000002  NVC7C0_SET_REPORT_SEMAPHORE_A(upper)
+[ 2.512673]            [ 1] mth=0x1b04 val=0x0440fff0  NVC7C0_SET_REPORT_SEMAPHORE_B(lower)
+[ 2.512675]            [ 2] mth=0x1b08 val=0x00000070  NVC7C0_SET_REPORT_SEMAPHORE_C(payload)
+[ 2.512677]            [ 3] mth=0x1b0c val=0x00000000  NVC7C0_SET_REPORT_SEMAPHORE_D(operation)
+[ 2.512679]   LAST-ENTRY FACTS: i2m_launch=1 inline_dw=1 first_inline=0x5a5a1234 ce_launch=0 gr_report_sem=1 qmd=0
+[ 2.512681]   LAST-ENTRY GR sem VA=0x000000020440fff0 payload=0x00000070
+[ 2.512682]   LAST-ENTRY I2M out=0x00007f4f66200000 len=4
+[ 2.512684] === SUMMARY ===
+[ 2.512686]   channels_decoded=16 rm_allocs=100 userd=FOUND ring=FOUND sem=0x20440fff0
+[ 2.512688]   DONE

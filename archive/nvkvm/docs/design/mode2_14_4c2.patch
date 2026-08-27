@@ -1,0 +1,88 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index f41ab60..26dc2a8 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -5846,6 +5846,83 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+             }
+         }
+     }
++    /* #14 P4-4c (DEFAULT-ON, multiproc-gated, #12-safe): PDB-keyed compute-ring
++     * resolution via the P1 per-proc registry.  The live resolution above (own-PDB,
++     * content-pick, M5.16 BAR1-MRU, 4b pin) can ALL miss a user process's COMPUTE
++     * USERMODE ring under two-process contention (round-7 trace-proven):
++     *   - chan_own_pdb=0: the compute channel is GSP-managed with hVASpace=0 and an
++     *     empty instance block, so no handle gives its PDB;
++     *   - M5.16's global 64-entry bar1_wpg MRU only ever holds the KERNEL ring page —
++     *     the loser's compute ring LOSES the MRU race to the winner's + kernel's
++     *     doubled 2-proc BAR1 traffic, so it never seeds chan_gpfifo_phys (hence 4b's
++     *     pin, which needs a prior M5.16 success, is never armed either).
++     * So the loser's final SEM_RELEASE never runs -> its user-CE finishPayload stalls
++     * -> it spins in MC_SERVICE_INTERRUPTS forever.  Resolve the ring DETERMINISTICALLY
++     * and forward-populated (address-table doctrine, no MRU race, O(1)): try every LIVE
++     * process's registered compute PDB set, walk gpfifo_va under each to get the ring's
++     * FB physical address, and pin the PDB under which the pending GP entry decodes to a
++     * valid pushbuffer that itself resolves in that SAME PDB.
++     *
++     * WHY ALL PROCS, NOT chan_client's proc: these GSP-managed compute-USERMODE rings
++     * (gpfifo 0x1210dxxxx / 0x121010000) are EXECUTED in the doorbell loop under the
++     * kernel UVM/CeUtils client 0xc1d00001 (bench-proven: chan_client=0xc1d00001 for
++     * these channels), NOT their owning user compute client — so is_user_client(
++     * chan_client) is false and proc_find_by_client(0xc1d00001) is ambiguous (the kernel
++     * client is dup-linked into every proc).  The ring's TRUE owner is the process whose
++     * PDB validly resolves the pushbuffer; content-validation (below) makes the choice
++     * unambiguous — two procs sit 256MB+ apart in their working sets and only one PDB
++     * maps a given compute gpfifo_va to a real pushbuffer.
++     *
++     * #12/single-proc SAFETY: multiproc()-gated (>1 live proc = genuine concurrency)
++     * AND fires only when the ring is STILL unresolved (chan_pdb==0 &&
++     * chan_gpfifo_phys==0) with pending work.  Single-process compute channels resolve
++     * their ring via own-PDB / content-pick every doorbell (bench-stable) -> this path
++     * is inert -> byte-identical.  The pushbuffer-content re-validation (torn-down/reused
++     * ring reads 0 / out-of-range -> rejected) also makes it teardown-safe. */
++    if (s->chan_pdb == 0 && s->chan_gpfifo_phys == 0 &&
++        gp_put < s->chan_gpfifo_ent && gp_put != s->chan_gp_get &&
++        nvkvm_m2_multiproc(s)) {
++        uint64_t off = (uint64_t)s->chan_gp_get * 8;
++        if (off + 8 <= 0x1000) {
++            for (int rpi = 0; rpi < s->m2_proc_n && s->chan_gpfifo_phys == 0; rpi++) {
++                struct nvkvm_proc *rp = &s->m2_proc[rpi];
++                if (!rp->live) { continue; }
++                for (int pj = 0; pj < rp->pdbs_n && s->chan_gpfifo_phys == 0; pj++) {
++                    uint64_t rpdb = rp->pdbs[pj];
++                    if (!rpdb) { continue; }
++                    /* Walk gpfifo_va under this proc PDB to the ring's FB backing page. */
++                    bool rsy = false;
++                    uint64_t rp_phys = nvkvm_walk_pdb(s, rpdb, s->chan_gpfifo_va, &rsy);
++                    if (rp_phys == NVKVM_GMMU_FAULT || rsy) { continue; }
++                    uint64_t ringpg = rp_phys & ~0xfffull;
++                    uint32_t e0 = (uint32_t)nvkvm_fb_read(s, ringpg + off, 4);
++                    uint32_t e1 = (uint32_t)nvkvm_fb_read(s, ringpg + off + 4, 4);
++                    uint64_t pb = (uint64_t)(e0 & 0xFFFFFFFCu) | ((uint64_t)(e1 & 0xFFu) << 32);
++                    uint32_t pblen = (e1 >> 10) & 0x1FFFFFu;
++                    if (!pb || !pblen || pblen > 0x40000) { continue; }
++                    /* Validate the decoded pushbuffer resolves to real content UNDER THIS
++                     * SAME proc PDB (the whole compute working set lives in this VAS) —
++                     * this is the forward-populated address-table key + the disambiguator
++                     * across the two procs, not a scan. */
++                    bool psy = false;
++                    uint64_t pp = nvkvm_walk_pdb(s, rpdb, pb, &psy);
++                    if (pp == NVKVM_GMMU_FAULT || nvkvm_phys_rd32(s, pp, psy) == 0) { continue; }
++                    s->chan_gpfifo_phys    = ringpg;
++                    s->chan_gpfifo_bar1off = 0;   /* resolved by PDB walk, not a BAR1 page */
++                    s->chan_pdb            = rpdb;
++                    if (s->m2_ringdark_logs < 200) {
++                        s->m2_ringdark_logs++;
++                        qemu_log("nvkvm-gpu[%s] #14 P4-4c RING-REGWALK resolved client=0x%08x "
++                                 "proc=%d gpfifo=0x%llx pdb=0x%llx -> ring FB 0x%llx pb=0x%llx "
++                                 "[compute ring, PDB-keyed, no MRU]\n", s->chip->name,
++                                 s->chan_client, rpi, (unsigned long long)s->chan_gpfifo_va,
++                                 (unsigned long long)rpdb, (unsigned long long)ringpg,
++                                 (unsigned long long)pb);
++                    }
++                }
++            }
++        }
++    }
+     /* #14 P4-4c INSTRUMENT (bounded): pending work but the ring is unreadable — no VAS
+      * pick, no BAR1-written ring page, and no valid pin.  This is the residual starvation
+      * the ring-pin can't reach (round-5's "2nd path": the leaf push dropped WITHOUT ring

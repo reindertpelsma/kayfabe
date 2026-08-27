@@ -1,0 +1,23 @@
+M8.14 QEMU proof for no-LD_PRELOAD / no-NVUVM_SHADOW bridge pass, 2026-06-07.
+
+Source: /tmp/m0_qemu.log on vh from the passing fresh-boot run.
+
+The guest kernel bridge reported the HtoD destination device VA with a coherent
+guest-RAM shadow GPA through BAR0 0xFFF520..0xFFF538:
+
+```text
+nvkvm-gpu[GA106] M8.14 UVM-SHADOW[0] VA=0x753d1e200000 GPA=0x13a989000 size=0x4 commit=0x1
+```
+
+The subsequent DtoH CE source resolved through that shadow GPA and copied the
+expected payload into the guest staging page:
+
+```text
+nvkvm-gpu[GA106] M5:   COPY[0] src 0x13a989000(sys)=0xabcd1234 -> dst 0x13730d100(sys)
+nvkvm-gpu[GA106] M5: CE COPY in=0x753d1e200000(virt) out=0x753d22800100(virt) bytes=4 const=0x0
+nvkvm-gpu[GA106] M5:   COPY[0] src 0x13a989000(sys)=0xabcd1234 -> dst 0x13730d100(sys)
+nvkvm-gpu[GA106] M5: CE COPY in=0x753d1e200000(virt) out=0x753d22800100(virt) bytes=4 const=0x0
+```
+
+This proves the local CE dataplane can return the right data once QEMU has a
+coherent backing row for the UVM external allocation.

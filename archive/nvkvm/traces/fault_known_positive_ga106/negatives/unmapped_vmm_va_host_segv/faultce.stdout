@@ -1,0 +1,32 @@
+STAGE faultce
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11909 MiB
+ok   cuCtxCreate(&victim, 0, d)
+ok   cuCtxCreate(&byst, 0, d)
+ok   cuMemAlloc(&db, 4096)
+ok   cuCtxSetCurrent(victim)
+ok   cuMemAlloc(&da, 1 << 20)
+VICTIM da=0x7ff2cc400000  BYSTANDER db=0x7ff2cc200000
+-- PROVOKE: COPY ENGINE write to an UNMAPPED device VA --
+ok   cuMemAlloc(&big, BIG)
+  big=0x7ff2b8000000 size=268435456  end=0x7ff2c8000000
+  TRY A_granularity          cuMemGetAllocationGranularity(&gran, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM) rc=0 no error
+  vmm granularity=2097152 size=4194304
+  TRY A_reserve              cuMemAddressReserve(&va, sz, 0, 0, 0) rc=0 no error
+  TRY A_create               cuMemCreate(&h, sz, &prop, 0)      rc=0 no error
+  TRY A_map                  cuMemMap(va, sz, 0, h, 0)          rc=0 no error
+  TRY A_setaccess            cuMemSetAccess(va, sz, &acc, 1)    rc=0 no error
+  TRY A_probe_mapped         cuMemcpyDtoD(va, big, 4096)        rc=0 no error
+  TRY A_probe_sync           cuCtxSynchronize()                 rc=0 no error
+  TRY A_unmap                cuMemUnmap(va, sz)                 rc=0 no error
+  UNMAPPED-but-registered device VA = 0x7ff2cc600000
+timeout: the monitored command dumped core

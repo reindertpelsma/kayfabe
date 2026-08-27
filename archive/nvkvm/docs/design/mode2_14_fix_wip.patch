@@ -1,0 +1,303 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index d028664..248dd10 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -382,6 +382,20 @@ struct NvkvmGpuEmul {
+      * resolves under its OWN client's VAS even after the handle is gone. */
+     struct { uint32_t client; uint64_t pdb; bool root_sys; } m2_cli_vas[64];
+     int      m2_cli_vas_n;
++    /* #14: DUP_OBJECT (RPC fn=21, NVOS55) handle-graph edges.  UVM's per-process
++     * gpu-ops client DUPs the user's FERMI_VASPACE_A out of libcuda's compute client
++     * (nvGpuOpsDupAddressSpace), then issues SET_PAGE_DIRECTORY under the dup handle —
++     * so chan_vas[] captures the user VAS under UVM's client, NOT the compute client
++     * that owns the executing channel.  With ONE process that ambiguity is harmless;
++     * with TWO, the stock driver hands both processes IDENTICAL guest VAs, and any
++     * client-blind VAS pick resolves process B's channel under process A's PDB (the
++     * #14 concurrent-cuCtxCreate hang).  These observed dup edges are the forward-
++     * populated ownership facts (address-table principle: transport-observed, never
++     * reverse-derived) that let the pick require "VAS belongs to the executing
++     * channel's client".  Edges are dropped when either side's client is freed
++     * (RM handle values are reused across process lifetimes). */
++    struct { uint32_t dst_client, dst_obj, src_client, src_obj; } m2_dup[64];
++    int      m2_dup_n;
+     uint32_t chan_hvaspace;    /* the tracked channel's hVASpace handle */
+ 
+     /* DEBUG-PROOF backdoor (mode2_uvm_complete): the patched guest UVM reports
+@@ -1819,6 +1833,20 @@ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t f
+                      s->chip->name, flushed, fClient);
+         }
+     }
++    /* #14 m2_dup[]: drop dup edges naming the freed client (root free) or the freed
++     * object on either side.  RM reuses handle values across process lifetimes, so a
++     * stale edge could alias a later process's fresh client/VAS onto the wrong owner. */
++    for (int i = 0; i < s->m2_dup_n; ) {
++        bool hit = root ? (s->m2_dup[i].dst_client == fClient ||
++                           s->m2_dup[i].src_client == fClient)
++                        : ((s->m2_dup[i].dst_client == fClient && s->m2_dup[i].dst_obj == fObj) ||
++                           (s->m2_dup[i].src_client == fClient && s->m2_dup[i].src_obj == fObj));
++        if (hit) {
++            s->m2_dup[i] = s->m2_dup[s->m2_dup_n - 1];
++            s->m2_dup_n--; dropped++; continue;
++        }
++        i++;
++    }
+     /* chan_vas[] (no client key): drop the directly-freed VASpace handle, plus any whose
+      * handle was referenced by a just-removed devvas entry of this client. */
+     for (int i = 0; i < s->chan_vas_n; ) {
+@@ -2080,6 +2108,14 @@ static void nvkvm_m2_capture_devinfo(NvkvmGpuEmul *s); /* M14 fwd-decl */
+ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+                                 uint64_t *out_redir); /* M5.18 fwd-decl */
+ static bool nvkvm_m2_va_seen(NvkvmGpuEmul *s, uint32_t client, uint64_t va); /* M5.19 fwd-decl */
++/* #14 fwd-decls: dup-edge (fn=21) ownership helpers — see definitions near
++ * nvkvm_chan_own_pdb_rs. */
++static bool nvkvm_m2_vas_client_match(NvkvmGpuEmul *s, uint32_t vas_client,
++                                      uint32_t vas_hobj, uint32_t client);
++static uint32_t nvkvm_m2_vas_dup_owner(NvkvmGpuEmul *s, uint32_t vas_client,
++                                       uint32_t vas_hobj);
++static bool nvkvm_m2_dup_src_client(NvkvmGpuEmul *s, uint32_t client);
++static bool nvkvm_m2_vas_foreign(NvkvmGpuEmul *s, int v, uint32_t client);
+ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys); /* #12 L3b fwd-decl */
+ static void nvkvm_m2_ce_fb_write_hook(NvkvmGpuEmul *s, uint64_t dst, uint64_t len); /* #13 fwd-decl */
+ static void nvkvm_m2_cpt_sync_at_release(NvkvmGpuEmul *s); /* #13 fwd-decl */
+@@ -2207,6 +2243,15 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].root_sys = false;            /* FB-rooted (GSP-client) */
+                 s->chan_vas[k].uvm = false;                 /* RESERVED_PDES, not the UVM handover */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, s->chan_vas[k].pdb, false);
++                /* #14: a VAS captured under a dup handle also belongs to the dup's
++                 * SOURCE client — key the sticky sema-resolution root under the true
++                 * owner so that owner's channels resolve their semas in their OWN
++                 * address space (two processes share the capture client). */
++                {
++                    uint32_t own14 = nvkvm_m2_vas_dup_owner(s, s->chan_vas[k].client,
++                                                            s->chan_vas[k].hvas);
++                    if (own14) { nvkvm_m2_cli_vas_add(s, own14, s->chan_vas[k].pdb, false); }
++                }
+                 qemu_log("nvkvm-gpu[%s] M5: VAS hObject=0x%08x client=0x%08x PDB=0x%llx\n",
+                          s->chip->name, s->chan_vas[k].hvas, s->chan_vas[k].client,
+                          (unsigned long long)s->chan_vas[k].pdb);
+@@ -2251,12 +2296,48 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                 s->chan_vas[k].root_sys = rsys;
+                 s->chan_vas[k].uvm = true;                  /* #13: UVM-managed user VAS */
+                 nvkvm_m2_cli_vas_add(s, s->chan_vas[k].client, phys, rsys);
++                /* #14: also key under the dup-source (owning compute) client. */
++                {
++                    uint32_t own14 = nvkvm_m2_vas_dup_owner(s, s->chan_vas[k].client, hvas);
++                    if (own14) { nvkvm_m2_cli_vas_add(s, own14, phys, rsys); }
++                }
+                 qemu_log("nvkvm-gpu[%s] M5.30 SET_PAGE_DIR UVM-VAS hVASpace=0x%08x "
+                          "PDB=0x%llx aperture=%u root=%s (candidate %d)\n",
+                          s->chip->name, hvas, (unsigned long long)phys,
+                          flags & 0x3u, rsys ? "SYS" : "FB", k);
+             }
+         }
++        /* #14: snoop DUP_OBJECT (fn=21) — the handle-graph edge that attributes a
++         * VAS captured under one RM client (typically UVM's per-process gpu-ops
++         * client) to the compute client that owns it.  rpc_dup_object body =
++         * NVOS55_PARAMETERS @cmd+80: hClient(dst)@+0, hParent@+4, hObject(new dup
++         * handle)@+8, hClientSrc@+12, hObjectSrc@+16 (g_sdk-structures.h v03_00).
++         * Pure bookkeeping: the RPC itself is echoed/forwarded exactly as before. */
++        if (fn == 21) {
++            uint32_t d_cli = ldl_le_p(cmd + 80);
++            uint32_t d_obj = ldl_le_p(cmd + 88);
++            uint32_t s_cli = ldl_le_p(cmd + 92);
++            uint32_t s_obj = ldl_le_p(cmd + 96);
++            if (d_cli && d_obj && s_cli && s_obj) {
++                bool seen = false;
++                for (int i = 0; i < s->m2_dup_n; i++) {
++                    if (s->m2_dup[i].dst_client == d_cli && s->m2_dup[i].dst_obj == d_obj &&
++                        s->m2_dup[i].src_client == s_cli && s->m2_dup[i].src_obj == s_obj) {
++                        seen = true; break;
++                    }
++                }
++                if (!seen && s->m2_dup_n < (int)ARRAY_SIZE(s->m2_dup)) {
++                    int k = s->m2_dup_n++;
++                    s->m2_dup[k].dst_client = d_cli;
++                    s->m2_dup[k].dst_obj   = d_obj;
++                    s->m2_dup[k].src_client = s_cli;
++                    s->m2_dup[k].src_obj   = s_obj;
++                    qemu_log("nvkvm-gpu[%s] #14 DUP_OBJECT edge[%d]: dst=0x%08x/0x%08x "
++                             "<- src=0x%08x/0x%08x\n", s->chip->name, k,
++                             d_cli, d_obj, s_cli, s_obj);
++                }
++            }
++        }
+         if (fn == 103) {
+             uint32_t hclass = ldl_le_p(cmd + 92);
+             /* M5/M7 — record NV01_EVENT_OS_EVENT (0x0079) allocations so we can
+@@ -4318,6 +4399,93 @@ static uint64_t nvkvm_walk_pdb(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+     return nvkvm_walk_pdb_root(s, pdb, va, false, out_sys);
+ }
+ 
++/* #14: does a snooped VAS root (captured under RM client `vas_client`, VASpace
++ * handle `vas_hobj`) BELONG to the executing channel's client `client`?  TRUE when
++ * captured directly under that client, or when an observed DUP_OBJECT edge links
++ * the two: UVM's per-process gpu-ops client dups the user's VASpace out of the
++ * compute client (so the user VAS is captured under UVM's client — the miss that
++ * made the client-keyed pass-0 degrade to the blind content-pick and cross two
++ * concurrent processes' identical guest VAs, #14).  One hop, either direction —
++ * the dup edge is a transport-observed handle-graph fact, not a heuristic. */
++static bool nvkvm_m2_vas_client_match(NvkvmGpuEmul *s, uint32_t vas_client,
++                                      uint32_t vas_hobj, uint32_t client)
++{
++    if (!client || !vas_client) {
++        return false;
++    }
++    if (vas_client == client) {
++        return true;
++    }
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        /* VAS captured under the dup DST (UVM's dup handle): owner = the src client. */
++        if (s->m2_dup[i].dst_client == vas_client && s->m2_dup[i].dst_obj == vas_hobj &&
++            s->m2_dup[i].src_client == client) {
++            return true;
++        }
++        /* VAS captured under the SRC side; `client` holds a dup of it. */
++        if (s->m2_dup[i].src_client == vas_client && s->m2_dup[i].src_obj == vas_hobj &&
++            s->m2_dup[i].dst_client == client) {
++            return true;
++        }
++    }
++    return false;
++}
++
++/* #14: if (vas_client, vas_hobj) is the DST of an observed dup edge, return the edge's
++ * SOURCE client — the compute client that owns the dupped object (UVM dups the user's
++ * VASpace out of libcuda's client, so the SET_PAGE_DIRECTORY capture under the dup
++ * handle really belongs to that source client).  0 = no edge (not dup-created). */
++static uint32_t nvkvm_m2_vas_dup_owner(NvkvmGpuEmul *s, uint32_t vas_client,
++                                       uint32_t vas_hobj)
++{
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        if (s->m2_dup[i].dst_client == vas_client && s->m2_dup[i].dst_obj == vas_hobj) {
++            return s->m2_dup[i].src_client;
++        }
++    }
++    return 0;
++}
++
++/* #14: is `client` a USER COMPUTE client — i.e. did it dup one of its objects (its
++ * VASpace/TSG/channel) out to another client (the UVM handover)?  Kernel-internal
++ * clients (CeUtils, UVM gpu-ops) appear only on the DST side, never as SRC.  This is
++ * the transport-observed definition of "a process's libcuda client"; with one process
++ * the set is exactly {m2_gr_client}, so every consumer below is single-process-neutral. */
++static bool nvkvm_m2_dup_src_client(NvkvmGpuEmul *s, uint32_t client)
++{
++    if (!client) { return false; }
++    for (int i = 0; i < s->m2_dup_n; i++) {
++        if (s->m2_dup[i].src_client == client) { return true; }
++    }
++    return false;
++}
++
++/* #14: is chan_vas[v] PROVABLY another user process's VAS (relative to `client`)?
++ * TRUE only on positive transport evidence: (a) it is the DST of a dup edge whose
++ * source client is a different user client, or (b) it was captured directly under a
++ * different user compute client.  Kernel/UVM-internal roots (no dup linkage) are
++ * NEVER foreign — they stay visible to every client exactly as before, so with a
++ * single process this predicate is constant-false (no behavior change).  Used to
++ * stop the walk-all-roots paths (enum_gr_sysmem / resolve_fb / the blind pick
++ * passes) from crossing two processes' IDENTICAL guest VAs. */
++static bool nvkvm_m2_vas_foreign(NvkvmGpuEmul *s, int v, uint32_t client)
++{
++    if (nvkvm_m2_vas_client_match(s, s->chan_vas[v].client, s->chan_vas[v].hvas,
++                                  client)) {
++        return false;
++    }
++    uint32_t owner = nvkvm_m2_vas_dup_owner(s, s->chan_vas[v].client,
++                                            s->chan_vas[v].hvas);
++    if (owner && owner != client) {
++        return true;            /* (a) dup handle of another user's object */
++    }
++    if (s->chan_vas[v].client != client &&
++        nvkvm_m2_dup_src_client(s, s->chan_vas[v].client)) {
++        return true;            /* (b) captured under another user compute client */
++    }
++    return false;
++}
++
+ /* M5.21: the executing channel's OWN VAS PDB, derived from its client's GR
+  * VASpace (chan_client -> m2_devvas vas handle -> chan_vas pdb).  This is the
+  * AUTHORITATIVE address space for the channel's pushbuffer/sema — unlike the
+@@ -4392,8 +4560,15 @@ static uint64_t nvkvm_chan_own_pdb_rs(NvkvmGpuEmul *s, bool *out_root_sys)
+                 if (!s->chan_vas[i].pdb) {
+                     continue;
+                 }
+-                if (pass == 0 && s->chan_vas[i].client != s->chan_client) {
+-                    continue;   /* pass 0: same-client roots only */
++                /* #14: pass-0 ownership is dup-edge aware — the user working-set
++                 * VASes are captured under UVM's per-process gpu-ops client, so the
++                 * plain client==chan_client test always missed them and degraded to
++                 * the blind pass-1 probe, which crossed two concurrent processes'
++                 * identical guest VAs (B's channel picked A's PDB -> B faulted). */
++                if (pass == 0 &&
++                    !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                               s->chan_vas[i].hvas, s->chan_client)) {
++                    continue;   /* pass 0: own-client (direct or dup-linked) roots only */
+                 }
+                 bool sy = false;
+                 if (nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
+@@ -4488,7 +4663,13 @@ static uint64_t nvkvm_chan_translate(NvkvmGpuEmul *s, uint64_t va, bool *out_sys
+      * before. */
+     if (s->chan_client) {
+         for (int i = 0; i < s->chan_vas_n; i++) {
+-            if (s->chan_vas[i].client != s->chan_client) { continue; }
++            /* #14: ownership is dup-edge aware (user VASes are captured under UVM's
++             * per-process gpu-ops client), so concurrent processes' identical VAs
++             * resolve under their OWN process's VAS here, not the blind pass below. */
++            if (!nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                           s->chan_vas[i].hvas, s->chan_client)) {
++                continue;
++            }
+             uint64_t p = nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, va,
+                                              s->chan_vas[i].root_sys, out_sys);
+             if (p != NVKVM_GMMU_FAULT) { return p; }
+@@ -4618,8 +4799,11 @@ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+             for (int pass = 0; pass < 2 && p == NVKVM_GMMU_FAULT; pass++) {
+                 for (int i = 0; i < s->chan_vas_n; i++) {
+                     if (!s->chan_vas[i].pdb) { continue; }
+-                    if (pass == 0 && s->chan_vas[i].client != s->chan_client) {
+-                        continue;   /* pass 0: same-client roots only */
++                    if (pass == 0 &&
++                        !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                                   s->chan_vas[i].hvas,
++                                                   s->chan_client)) {
++                        continue;   /* pass 0: own-client (direct or dup-linked) only (#14) */
+                     }
+                     bool gsy = false;
+                     if (nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
+@@ -4821,13 +5005,28 @@ static void nvkvm_chan_execute(NvkvmGpuEmul *s)
+                 s->chan_pdb = own;
+             }
+         }
+-        for (int i = 0; s->chan_pdb == 0 && i < s->chan_vas_n; i++) {
+-            bool sy = false;
+-            uint64_t p = nvkvm_walk_pdb(s, s->chan_vas[i].pdb, eva, &sy);
+-            if (p == NVKVM_GMMU_FAULT) { continue; }
+-            if (nvkvm_phys_rd32(s, p, sy) != 0) {   /* valid GP_ENTRY0 (pb low) */
+-                s->chan_pdb = s->chan_vas[i].pdb;
+-                break;
++        /* #14: TWO passes.  Pass 0 restricts the content-pick to VASes owned by the
++         * executing channel's client (directly or via an observed DUP_OBJECT edge —
++         * the user VAS is captured under UVM's per-process gpu-ops client).  With two
++         * concurrent processes the stock driver hands out IDENTICAL guest VAs, so the
++         * blind first-non-zero scan below landed on process A's PDB while executing
++         * process B's channel -> B's pushbuffer walked under A's VAS -> FAULT -> both
++         * cuCtxCreate spun.  Pass 1 = the original blind probe, kept for channels
++         * whose true root has no client linkage (single-process legacy behavior). */
++        for (int pass = 0; s->chan_pdb == 0 && pass < 2; pass++) {
++            for (int i = 0; i < s->chan_vas_n; i++) {
++                if (pass == 0 &&
++                    !nvkvm_m2_vas_client_match(s, s->chan_vas[i].client,
++                                               s->chan_vas[i].hvas, s->chan_client)) {
++                    continue;   /* pass 0: own-client (direct or dup-linked) roots only */
++                }
++                bool sy = false;
++                uint64_t p = nvkvm_walk_pdb(s, s->chan_vas[i].pdb, eva, &sy);
++                if (p == NVKVM_GMMU_FAULT) { continue; }
++                if (nvkvm_phys_rd32(s, p, sy) != 0) {   /* valid GP_ENTRY0 (pb low) */
++                    s->chan_pdb = s->chan_vas[i].pdb;
++                    break;
++                }
+             }
+         }
+         qemu_log("nvkvm-gpu[%s] M5: chan_exec hvas=0x%08x picked_pdb=0x%llx "
