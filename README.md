@@ -288,22 +288,57 @@ list of record. Found by the whitepaper's verification pass.)
 
 ## Crate map (details: `ARCHITECTURE.md`)
 
-| Crate | What it is | State |
-|---|---|---|
-| `kayfabe-util` | `IntervalMap`, virtual `Instant`, `assert_send_sync!` — zero GPU concepts | full |
-| `kayfabe-arch` | domain-identity newtypes + the Axis-B `Arch` trait set | full (traits; no real impl yet) |
-| `kayfabe-core` | ★ `RmGraph` → projections → `Gpu`/`Proc`/`Vas`/`Channel` + GPA arenas | full |
-| `kayfabe-mmu` | the per-VAS address table (MISS=FAULT) | full (table); walker = skeleton |
-| `kayfabe-completion` | per-proc queues + delivery policy + fence arms | full |
-| `kayfabe-fwd` | doorbell demux, publish/gate, pushbuffer parser, control split, present route | full (core slice) |
-| `kayfabe-vmm` | `Vmm`/`Device`/`Present` ports | traits only |
-| `kayfabe-isolate` | `RmBackend`/`Isolate`/`IsolateFactory` ports | traits only |
-| `kayfabe-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
-| `kayfabe-abi` | Axis-A codegen'd wire ABI: offline generator, generated structs, version-dispatch decode, oracle tests | full (Axis-A slice) — ★ corrected 2026-07-27, was "**stub**" |
-| `kayfabe-gsp` | faked GSP boot FSM + seqNum transport + RPC decode (8 modules, ~3,550 L) | ~~**stub**~~ **BUILT (S0–S5)** — ★ corrected 2026-07-28. Reboot/resume (S6–S8) is NOT built and is hardware-blocked. ★ It has **no production consumer**: `RpcCommand` has zero references outside the crate, so the `RpcCommand → RmEvent` bridge does not exist yet — that bridge, not the crate, is now the critical path |
-| `kayfabe-trace` | structured trace/replay + budget counters | vocabulary built; no plane call sites |
-| `kayfabe-rt` | the L1 threaded shell: ranked locks (R1/R3 asserted), `SharedDevice`, inbox, executor | full (L1-M1) |
-| `tests/` | the conformance suite (`tests/tests/`, plus per-crate suites under `crates/*/tests/`) + `Scenario` DSL | full |
+23 crates plus the conformance suite. Purposes are the crates' own `Cargo.toml`
+descriptions; per-layer state is in the status table above rather than repeated here.
+
+**The emulated GPU (L0 — pure logic core)**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-core` | composition root: the `RmGraph` source of truth and ownership spine |
+| `kayfabe-mmu` | address plane: per-VAS address table (guest TLB) and GMMU walk |
+| `kayfabe-completion` | per-process completion engine with pending sets and drain-gated batching |
+| `kayfabe-fwd` | intent recovery to host ops: doorbell demux, Vas materialization |
+| `kayfabe-gsp` | faked GSP with falcon boot FSM, message queues, RPC codec |
+| `kayfabe-rmrpc` | GSP-to-core bridge: decodes GSP RPC into `RmEvent`, stateless and pure |
+| `kayfabe-device` | emulated GPU device's chip table, register plane, and PCI routing |
+| `kayfabe-abi` | codegen'd NVIDIA ABI structs (NVOS, class IDs, alloc-params, GSP-RPC, registers) |
+| `kayfabe-arch` | abstract GPU vocabulary and `Arch` trait set for cross-generation abstraction |
+| `kayfabe-chips` | per-generation GPU architecture implementations (Ada, Hopper) |
+
+**Ports — the seams the outer layers implement**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-vmm` | hypervisor-adapter port: `Vmm` and `Device` traits |
+| `kayfabe-isolate` | per-process sandbox port (`Isolate`, `IsolateFactory`, `RmBackend`) |
+
+**L1 — the Linux OS layer**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-rt` | L1 threaded shell with ranked-lock discipline and executor inbox |
+| `kayfabe-shell` | L1 OS shell with reactor loop, descriptor registrar, and executor thread |
+| `kayfabe-linux-raw` | audited Linux-only raw-OS adapter with host mappings and bounded regions |
+| `kayfabe-isolate-host` | sandboxed child process: request/reply protocol and the real NVIDIA RM ioctls |
+
+**L2 — hypervisor adapters**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-vmm-qemu` | QEMU adapter logic: `Vmm` impl, guest-physical map, region classification |
+| `kayfabe-qemu-raw` | QEMU hypervisor FFI surface: `extern "C"` entry points and `QemuHost` |
+| `kayfabe-vmm-kvm` | KVM-direct adapter with real VM descriptors, memslots and mmap'd backings |
+
+**Support and testing**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-trace` | structured trace events, budgets, and replay format for conformance |
+| `kayfabe-crec` | C↔Rust trace decoder and divergence classifier against the emulator |
+| `kayfabe-mocks` | in-process mock adapters for GPU-free testing (`Vmm`, `Arch`, `RmBackend`, `Isolate`) |
+| `kayfabe-util` | purely generic utilities, with no GPU concepts |
+| `tests/` | the conformance suite plus per-crate suites under `crates/*/tests/`, and the `Scenario` DSL |
 
 ## Design sources (settled — implement, don't improvise)
 
