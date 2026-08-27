@@ -1,24 +1,35 @@
 # whitepaper
 
-**`kayfabe_architecture.pdf` is the current paper. Read that one.**
+**`kayfabe_architecture.pdf` — the architecture paper.** Start there; it is the
+best single description of the project that exists.
 
 It is pinned to Rust HEAD `5c367a38` (2026-08-20), with twelve further commits'
 worth of corrections applied in place at `56dc01f3` — including the two that
 matter most: sequential multi-process no longer fails, and the "object graph"
-wall named in earlier revisions does not exist.
+wall named in earlier revisions turned out not to exist.
 
-## The `.tex` in this directory is older than the PDF
+It is written to be attacked. Roughly half of it is about what does not work, is
+not built, or is not known, and it ends with open questions posed so that a reader
+with no access to this tree can answer them. Where it states a number it names the
+source; where a claim could not be verified it is marked `[unverified]` rather than
+softened.
 
-`kayfabe_architecture.tex` here is an **earlier source** and will **not** rebuild
-the committed PDF. It still contains claims the PDF has since retired, notably:
+## Rebuilding
 
-> `:2911` — "The multi-process property is unmeasured on hardware, and it is the
-> founding requirement…"
+Source and PDF in this directory are in sync — the committed PDF is built from the
+committed `.tex` (verified by checksum).
 
-That is **superseded**. Two concurrent guest CUDA processes both computed `43` on
-2026-08-14 (w299, rev `f459cffa`), including a staggered arm that starts the second
-process inside the first's `cuCtxCreate`. The PDF records this; the `.tex` predates it.
+```sh
+./build.sh
+```
 
-Where the two disagree, the PDF is newer. Where a dated measurement disagrees with
-prose, believe the measurement — that rule is the paper's own (§8.21, "claims that
-were true *once*").
+Needs **xelatex** (TeX Live) with fontspec and TikZ. Every diagram is native TikZ, so
+the output stays vector at any zoom. `lualatex` is deliberately not used. Two passes
+are required, which `build.sh` does for you.
+
+## Reading order
+
+`§1` says what the document is and how to attack it. `§8` is the uncomfortable one
+and is where to start if you only read one section — it is also the longest, which is
+the point. `§10` lists claims corrected *while the paper was being written*, and `§11`
+the open questions.

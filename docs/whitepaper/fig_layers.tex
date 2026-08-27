@@ -18,8 +18,8 @@
 \node[align=center, anchor=north] at (-45.5,118)
   {\textbf{L2 — the VMM / device adapter}\;\; \built};
 \node[align=center, anchor=north, font=\sffamily\tiny, text width=81mm] at (-45.5,113)
-  {\tc{kayfabe-vmm-qemu} 5\,215 L \;$\cdot$\; \tc{kayfabe-qemu-raw} 3\,435 L (\emph{staticlib})
-   \;$\cdot$\; \tc{kayfabe-device} 9\,832 L\\
+  {\tc{kayfabe-vmm-qemu} 5\,852 L \;$\cdot$\; \tc{kayfabe-qemu-raw} 18\,720 L (\emph{staticlib})
+   \;$\cdot$\; \tc{kayfabe-device} 19\,595 L\\
    + a \textbf{2\,676-line C QOM shim} (\tc{qemu/hw/misc/nvkvm/}) dropped into a stock QEMU
    10.2.4 tree.\\
    The BAR aperture, the register plane, the chip table and a real \tc{GuestRam}.\\
@@ -31,7 +31,7 @@
 \node[align=center, anchor=north] at (45.5,118)
   {\textbf{L3 — the per-generation NVIDIA adapter}\;\; \built};
 \node[align=center, anchor=north, font=\sffamily\tiny, text width=81mm] at (45.5,113)
-  {\tc{kayfabe-chips} 2\,735 L — \tc{Ga10xArch} (Ampere), \tc{Ad10xArch} (Ada),
+  {\tc{kayfabe-chips} 3\,202 L — \tc{Ga10xArch} (Ampere), \tc{Ad10xArch} (Ada),
    \tc{Gh100Arch} (Hopper).\\
    \textbf{The adapter contract was finally MEASURED, and it answered in two directions}: Ada
    cost a struct and a table row; Hopper needed a \emph{seam} (\tc{BootSequence}) because its
@@ -50,19 +50,19 @@
   at (86.5,93.4) {M1 complete; M2 part-built. \textbf{Defect \#57 is CLOSED} (\tc{020790c})};
 
 \node[shellb, minimum width=41mm, minimum height=10mm] at (-65,83)
-  {\textbf{kayfabe-rt} \;3\,009 L\\[1pt]\tiny ranked locks, always-on R1/R3/R5\\[-0.5pt]
+  {\textbf{kayfabe-rt} \;10\,079 L\\[1pt]\tiny ranked locks, always-on R1/R3/R5\\[-0.5pt]
    \tiny \tc{SharedDevice}, executor, worker pool};
 \node[shellb, minimum width=41mm, minimum height=10mm] at (-21.7,83)
   {\textbf{kayfabe-shell} \;995 L\\[1pt]\tiny the reactor: epoll loop,\\[-0.5pt]
    \tiny vCPU / MMIO dispatch, the F1 gate};
 \node[shellb, minimum width=41mm, minimum height=10mm] at (21.7,83)
-  {\textbf{kayfabe-vmm-kvm} \;2\,706 L\\[1pt]\tiny the real KVM memory plane\\[-0.5pt]
+  {\textbf{kayfabe-vmm-kvm} \;2\,724 L\\[1pt]\tiny the real KVM memory plane\\[-0.5pt]
    \tiny \tc{Vmm}'s \emph{first} adapter};
 \node[hostb, minimum width=41mm, minimum height=10mm] at (65,83)
-  {\textbf{kayfabe-isolate-host} \;9\,939 L\\[1pt]\tiny \textbf{the real unprivileged isolate}\\[-0.5pt]
+  {\textbf{kayfabe-isolate-host} \;21\,557 L\\[1pt]\tiny \textbf{the real unprivileged isolate}\\[-0.5pt]
    \tiny 3 binaries; sandboxed child; real RM ioctls};
 \node[shellb, minimum width=170mm, minimum height=7mm] at (0,71)
-  {\textbf{kayfabe-linux-raw} \;12\,470 L \;— the \emph{first} of \textbf{two} crates permitted
+  {\textbf{kayfabe-linux-raw} \;14\,208 L \;— the \emph{first} of \textbf{two} crates permitted
    \tc{unsafe}: \textbf{87} relaxations here and \textbf{47} in \tc{kayfabe-qemu-raw},
    every file named \tc{*\_unsafe.rs}};
 
@@ -75,29 +75,29 @@
   {L0 — THE PURE LOGIC CORE};
 
 \node[coreb, minimum width=88mm, minimum height=8mm] at (0,52)
-  {\textbf{kayfabe-fwd} \;4\,490 L\\[1pt]
+  {\textbf{kayfabe-fwd} \;8\,509 L\\[1pt]
    \tiny doorbell demux $\cdot$ publish backing $\cdot$ the ring-gate $\cdot$ the ONE pushbuffer
    parser $\cdot$ Case-1/Case-2 control split\\[-0.5pt]
    \tiny \textbf{\color{kfcoreln}\tc{plan\_ce} / \tc{commit\_ce} / \tc{exec\_ce} / \tc{submit\_ring}}
    — the E6 join, the path a real host CE copy took};
 \node[coreb, minimum width=88mm, minimum height=9mm] at (0,42.5)
-  {\textbf{kayfabe-core} \;10\,528 L\\[1pt]
+  {\textbf{kayfabe-core} \;14\,617 L\\[1pt]
    \tiny \tc{RmGraph} (source of truth) $\rightarrow$ \tc{project()} $\rightarrow$\\[-0.5pt]
    \tiny \tc{Gpu} / \tc{Proc} / \tc{Vas} / \tc{Channel} + per-proc GPA arenas};
 \node[coreb, minimum width=42mm, minimum height=8mm] at (-22,33)
-  {\textbf{kayfabe-mmu} \;3\,729 L\\[1pt]\tiny per-VAS \tc{AddressTable}\\[-0.5pt]
+  {\textbf{kayfabe-mmu} \;5\,128 L\\[1pt]\tiny per-VAS \tc{AddressTable}\\[-0.5pt]
    \tiny forward-populate only; MISS = FAULT};
 \node[coreb, minimum width=42mm, minimum height=8mm] at (22,33)
   {\textbf{kayfabe-completion} \;756 L\\[1pt]\tiny per-proc queues, delivery gate,\\[-0.5pt]
    \tiny mapped-fence arms};
 \node[coreb, minimum width=88mm, minimum height=9.5mm] at (0,23)
-  {\textbf{kayfabe-rmrpc} \;3\,265 L \;— \textbf{★ THE BRIDGE}\\[1pt]
+  {\textbf{kayfabe-rmrpc} \;6\,098 L \;— \textbf{★ THE BRIDGE}\\[1pt]
    \tiny \tc{translate(\&DriverAbiTable, \&RpcCommand)} — a \emph{stateless free function}\\[-0.5pt]
    \tiny the capability table: default-DENY at the guest ingress (for half the command space)\\[-0.5pt]
    \tiny the only crate permitted to name both \tc{RpcCommand} and \tc{RmEvent} (CI-gated)
    $\cdot$ \textbf{\color{kfcoreln}called from \tc{kayfabe-qemu-raw}}};
 \node[coreb, minimum width=88mm, minimum height=10mm] at (0,11.8)
-  {\textbf{kayfabe-gsp} \;5\,056 L \;— \textbf{the faked GSP}, S0--S5\\[1pt]
+  {\textbf{kayfabe-gsp} \;5\,497 L \;— \textbf{the faked GSP}, S0--S5\\[1pt]
    \tiny \tc{ram} (self-describing region) $\cdot$ \tc{ring} (\tc{msgq} algebra) $\cdot$
    \tc{element} (framing, checksum)\\[-0.5pt]
    \tiny \tc{boot} (\tc{BootPhase}$\times$\tc{QueueState}, E1--E11) $\cdot$ \tc{rpc} (dispatch)
@@ -111,16 +111,16 @@
 % ============================================================ ports, left ==
 \node[portb, minimum width=34mm, minimum height=10mm] at (-70,51)
   {\textbf{Vmm} $\cdot$ \textbf{Device} $\cdot$ \textbf{Present}\\[1pt]
-   \tiny \textbf{kayfabe-vmm} 914 L\\[-0.5pt]
+   \tiny \textbf{kayfabe-vmm} 943 L\\[-0.5pt]
    \tiny \textbf{\color{kfcoreln}two \tc{Vmm} adapters} (KVM, QEMU);\\[-0.5pt]
    \tiny \textbf{\color{kfhostln}\tc{Device}: still test types only}};
 \node[portb, minimum width=34mm, minimum height=11mm] at (-70,36.5)
   {\textbf{Isolate} $\cdot$ \textbf{IsolateFactory}\\ \textbf{RmBackend}\\[1pt]
-   \tiny \textbf{kayfabe-isolate} 2\,666 L\\[-0.5pt]
+   \tiny \textbf{kayfabe-isolate} 4\,246 L\\[-0.5pt]
    \tiny \textbf{\color{kfcoreln}real implementors exist} — \tc{HostIsolate},\\[-0.5pt]
    \tiny \tc{HostRmBackend}, and a sandboxed child};
 \node[portb, minimum width=34mm, minimum height=9mm] at (-70,23)
-  {\textbf{TraceSink}\\[1pt]\tiny \textbf{kayfabe-trace} 1\,470 L\\[-0.5pt]
+  {\textbf{TraceSink}\\[1pt]\tiny \textbf{kayfabe-trace} 1\,497 L\\[-0.5pt]
    \tiny \textbf{\color{kfhostln}vocabulary built; the planes still do not emit}};
 
 \draw[arb, kfportln] (-53,51) -- (-46,51);
@@ -131,11 +131,11 @@
 \node[portb, minimum width=34mm, minimum height=11mm] at (70,49)
   {\textbf{Arch} $\cdot$ \textbf{GmmuFmt} $\cdot$ \textbf{GspModel}\\
    \textbf{UserdModel} $\cdot$ \textbf{PushbufferAbi}\\ \textbf{BootSequence}\\[1pt]
-   \tiny \textbf{kayfabe-arch} 2\,198 L — "Axis B"\\[-0.5pt]
+   \tiny \textbf{kayfabe-arch} 2\,942 L — "Axis B"\\[-0.5pt]
    \tiny \textbf{\color{kfcoreln}3 production impls} in \tc{kayfabe-chips}};
 \node[portb, minimum width=34mm, minimum height=10mm] at (70,36)
   {\textbf{DriverAbi} — "Axis A"\\[1pt]
-   \tiny \textbf{kayfabe-abi} 28\,630 L, codegen'd\\[-0.5pt]
+   \tiny \textbf{kayfabe-abi} 42\,511 L, codegen'd\\[-0.5pt]
    \tiny + the capability table and the\\[-0.5pt]
    \tiny \tc{oracle} that refuses an uncaptured row};
 \node[portb, minimum width=34mm, minimum height=9mm] at (70,24)
@@ -149,7 +149,7 @@
 
 % ================================================== shared vocabulary base ==
 \node[coreb, minimum width=46mm, minimum height=7mm] at (-25,-5.5)
-  {\textbf{kayfabe-util} \;739 L\\[1pt]
+  {\textbf{kayfabe-util} \;1\,796 L\\[1pt]
    \tiny \tc{IntervalMap}, \emph{virtual} \tc{Instant}, \tc{assert\_send\_sync!}, the lock witness};
 \node[coreb, minimum width=46mm, minimum height=7mm] at (25,-5.5)
   {\textbf{kayfabe-arch} — the newtypes\\[1pt]\tiny \tc{HClient}/\tc{HObject}/\tc{Pdb}/\tc{VChid}/\tc{GpuId}};
@@ -157,8 +157,8 @@
 \draw[ar, kfcoreln] ( 25,-1.9) -- ( 25,0.5);
 
 \node[box, fill=white, draw=kfgrey, dotted, minimum width=150mm, minimum height=8mm] at (0,-16)
-  {\textbf{kayfabe-mocks} \;4\,172 L \;— one deterministic fake per port \quad$\cdot$\quad
-   \textbf{kayfabe-crec} \;2\,030 L \;— the C-trace differential harness\\[1pt]
+  {\textbf{kayfabe-mocks} \;4\,609 L \;— one deterministic fake per port \quad$\cdot$\quad
+   \textbf{kayfabe-crec} \;2\,041 L \;— the C-trace differential harness\\[1pt]
    \tiny \tc{MockArch} uses deliberately non-NVIDIA encodings, which is what makes the seam claim
    falsifiable. \textbf{\color{kfhostln}★★★ And a mock is where R1 hid}: the whole suite spawns
    through \tc{MockIsolateFactory}, which cannot violate the rule, so 1\,975 green tests ran over
