@@ -897,6 +897,52 @@ pub trait RmBackend: Send + Sync {
         payload: &mut [u8],
     ) -> Result<(), RmError>;
 
+    /// ★★★★★ **w346 — ONE CONTROL ON THIS ISOLATE'S OWN SUBDEVICE**, issued and answered in a
+    /// single hop.
+    ///
+    /// # Why a whole verb, when the port already has `control`
+    ///
+    /// `control` needs a `HostHandle`, and every other one the port holds is the host twin
+    /// of a *guest* object — a channel, a VA space.
+    ///
+    /// ⊘⊘ **This verb was first written as `subdevice() -> HostHandle`, and that shape was
+    /// WRONG.** Handing the port a handle means it needs somewhere to keep it: `IsolateBox`
+    /// wraps `dyn Isolate`, not `dyn RmBackend`, so caching it at spawn drags a one-time
+    /// query through the worker pool's lifecycle, and fetching it per control costs TWO
+    /// round trips where one does. Resolving the subdevice **inside the child** costs one
+    /// hop, needs no storage, and — the part that decided it — means the port never holds a
+    /// host handle it could name in some other verb. The GSS-legacy cudart init-gate family
+    /// has no guest object to twin: `0x20809009`, `0x20809001`, `0x20809064` and their
+    /// successors ask **the GPU about itself** (a CUDA major version, a capability mask),
+    /// and the answer is a property of the part, not of anything the guest allocated.
+    ///
+    /// `[measured 2026-08-20, real GA106, 2/2 boots]` those three are the wall `libcudart`
+    /// dies on while `libcuda` is entirely healthy in the same process — `cuInit`,
+    /// `cuDeviceGetCount`, `cuDevicePrimaryCtxRetain` and CC 8.6 all correct, and
+    /// `cudaGetDeviceCount` returning **3 = `cudaErrorInitializationError`**. Serving them
+    /// moves the guest ON to four more of the same family. The C research artifact names
+    /// the mechanism in its own source and its PRIMARY remedy is to forward
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3334-3363`).
+    ///
+    /// ⊘ **The alternative was a captured constant, and it is the thing this verb exists to
+    /// avoid.** A replayed body is not READ-NATIVE, rots on the next driver or chip, and for
+    /// `0x20809064` the only capture available covers **40 of 520 bytes**. Forwarding needs
+    /// no capture at all.
+    ///
+    /// ⚠ **This is the isolate's OWN subdevice, never a guest's.** It is the same object the
+    /// isolate already uses for its own per-GPU controls, so no guest handle is translated
+    /// and no guest object becomes reachable that was not already.
+    ///
+    /// # Errors
+    /// The default is a **named refusal**: a backend with no real RM connection has no
+    /// subdevice, and inventing one would hand the caller a handle that names nothing. Only
+    /// the real host backend and the proxy that carries it override this.
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let _ = (cmd, payload);
+        // 0x56 = NV_ERR_NOT_SUPPORTED — RM's own way of saying "not on this part".
+        Err(RmError::Other(0x56))
+    }
+
     /// Map `len` bytes of `memory` into the host GPU VA space owned by `vas`
     /// **at `at`**, returning the host GPU VA actually achieved.
     ///
@@ -1859,6 +1905,24 @@ pub enum VerbPlan {
         /// The in/out payload.
         payload: Vec<u8>,
     },
+    /// ★★★★★ **w346 — one control on the ISOLATE'S OWN subdevice**, for the per-GPU
+    /// family that twins no guest object.
+    ///
+    /// ⊘ **It carries NO handle, and that is the point.** [`VerbPlan::Control`] names an
+    /// object in this isolate's namespace and so must be listed in
+    /// [`VerbPlan::handles`] for the foreign-handle gate to check it. This variant names
+    /// nothing: the child resolves its own subdevice, so there is no handle to check, none
+    /// to mis-attribute across isolates, and none the port could have fabricated.
+    ///
+    /// ⚠ Which also means the gate that protects `Control` **cannot** protect this — so
+    /// the protection has to come from the id being one this port chose to forward, not
+    /// from a handle check. See `kayfabe_rmrpc::policy`'s forwarded set.
+    SubdeviceControl {
+        /// The command.
+        cmd: ControlCmd,
+        /// The in/out payload.
+        payload: Vec<u8>,
+    },
     /// ★★★ **A copy-engine request, already PARTITIONED by representability**
     /// (`eight_blockers_resolved.md` §12.3).
     ///
@@ -2126,6 +2190,10 @@ impl VerbPlan {
                 .chain(channel.map(|(h, _)| h))
                 .collect(),
             VerbPlan::Control { obj, .. } => vec![*obj],
+            // ⊘ EMPTY BY CONSTRUCTION, not by omission — the exact mistake this method's
+            // doc warns about, so it is written out. A `SubdeviceControl` names no handle:
+            // the child resolves its own subdevice. There is nothing here to check.
+            VerbPlan::SubdeviceControl { .. } => vec![],
             VerbPlan::CeSplit { vas, .. } => vec![*vas],
             // ★★ **w310 — `guest_ram` IS chained in, and this line is exactly what this
             // method's own doc warns about**: *"adding a variant that carries a handle and
@@ -3216,6 +3284,14 @@ impl Worker {
             VerbPlan::Control { obj, cmd, payload } => {
                 let mut payload = payload.clone();
                 rm.control(*obj, *cmd, &mut payload)?;
+                Ok(VerbReply::Control { payload })
+            }
+            VerbPlan::SubdeviceControl { cmd, payload } => {
+                let mut payload = payload.clone();
+                rm.subdevice_control(*cmd, &mut payload)?;
+                // ⊘ Reuses `VerbReply::Control` deliberately: the reply IS the same thing —
+                // the payload as the host wrote it back — and a second reply variant
+                // carrying an identical field would be two names for one fact.
                 Ok(VerbReply::Control { payload })
             }
             VerbPlan::CeSplit { vas, subs } => {

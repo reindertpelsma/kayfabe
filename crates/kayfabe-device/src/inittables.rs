@@ -1028,6 +1028,30 @@ pub enum WantedTable {
     /// than clamped, and a buffer whose aperture this port cannot name is refused rather than
     /// folded into sysmem.
     PromoteFaultMethodBuffers,
+    /// ★★★★★ **The four the CUDA RUNTIME needs and the DRIVER API never asks for** — w349.
+    ///
+    /// `[measured 2026-08-20, real GA106 on 580.159.04]` Refusing any ONE of these on the
+    /// BARE-METAL host turns its own `cudaGetDeviceCount` from `0` into **3**
+    /// (`cudaErrorInitializationError`) — the guest's exact symptom, reproduced with no
+    /// guest, no emulator and no QEMU. See [`kayfabe_abi::cudartinit`] for the trace
+    /// method, the per-id bisection table and the negative controls.
+    ///
+    /// ⊘ Two further runtime-only ids (`0x2080a026`, `0x2080a084`) were measured **innocent**
+    /// and are deliberately NOT here: the served set is the measured set, not the observed one.
+    CudartWatchdogInfo,
+    /// `0x20809009` — GSS-legacy, unnamed in every open header. Hardware: `{0, 0xd}`.
+    CudartInit9009,
+    /// `0x20809001` — GSS-legacy, unnamed in every open header. Hardware: `{0x03fc007f, 0}`.
+    CudartInit9001,
+    /// `0x20809064` — GSS-legacy, 520 bytes, ten content words then a measured zero tail.
+    CudartInit9064,
+    /// `0x2080a001` — the FALLBACK. Reached only after `a084`/`a026` fail, which is exactly
+    /// where our guest is. See [`kayfabe_abi::cudartinit::CUDART_INIT_0XA001`].
+    CudartInit9A001,
+    /// `0x2080200b` `PERF_GET_LEVEL_INFO_V2` — the second member of the minimal fatal pair,
+    /// and the first SPLICED row (the request carries content, so a constant body would
+    /// clobber it). See [`kayfabe_abi::cudartinit::SPLICED`].
+    CudartPerfLevelInfoV2,
 }
 
 impl WantedTable {
@@ -1058,7 +1082,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 41] = [
+    pub const ALL: [WantedTable; 47] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1100,6 +1124,12 @@ impl WantedTable {
         Self::GssLegacy8162,
         Self::C2cInfo,
         Self::PromoteFaultMethodBuffers,
+        Self::CudartWatchdogInfo,
+        Self::CudartInit9009,
+        Self::CudartInit9001,
+        Self::CudartInit9064,
+        Self::CudartInit9A001,
+        Self::CudartPerfLevelInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1184,6 +1214,12 @@ impl WantedTable {
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162,
+            Self::CudartWatchdogInfo => kayfabe_abi::cudartinit::RC_GET_WATCHDOG_INFO,
+            Self::CudartInit9009 => kayfabe_abi::cudartinit::CUDART_INIT_0X9009,
+            Self::CudartInit9001 => kayfabe_abi::cudartinit::CUDART_INIT_0X9001,
+            Self::CudartInit9064 => kayfabe_abi::cudartinit::CUDART_INIT_0X9064,
+            Self::CudartInit9A001 => kayfabe_abi::cudartinit::CUDART_INIT_0XA001,
+            Self::CudartPerfLevelInfoV2 => kayfabe_abi::cudartinit::PERF_GET_LEVEL_INFO_V2,
             Self::C2cInfo => kayfabe_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1249,6 +1285,12 @@ impl WantedTable {
             Self::GspGetFeatures => kayfabe_abi::gspfeatures::GSP_GET_FEATURES_PARAMS_SIZE,
             Self::GssLegacy8159 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8159_PARAMS_SIZE,
             Self::GssLegacy8162 => kayfabe_abi::gsslegacy::GSS_LEGACY_0X8162_PARAMS_SIZE,
+            Self::CudartWatchdogInfo => 4,
+            Self::CudartInit9009 => 8,
+            Self::CudartInit9001 => 8,
+            Self::CudartInit9064 => 520,
+            Self::CudartInit9A001 => 16,
+            Self::CudartPerfLevelInfoV2 => 780,
             Self::C2cInfo => kayfabe_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kayfabe_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -1377,13 +1419,131 @@ impl CommandPolicy for InitTablePolicy {
         // even classify; leave it to the baseline rather than inventing a refusal for a
         // message that may not be one.
         let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+
+        // ★★★★★ w341 PROBE — the cudart init-gate cluster, and it is a PROBE, not the fix.
+        //
+        // `[measured 2026-08-20, real GA106]` `libcuda` answers every driver-API call
+        // correctly on the boot `libcudart` cannot initialise: `cuInit`=0,
+        // `cuDeviceGetCount`=1, `cuDeviceTotalMem`=12 540 182 528,
+        // `cuDevicePrimaryCtxRetain` returns a context, CC 8.6 — while
+        // `cudaGetDeviceCount` in the SAME process returns 3 = `cudaErrorInitializationError`.
+        // Every ioctl returns 0, and the guest kernel log is identical in count to a boot
+        // where cup8 is bit-exact.
+        //
+        // The C research artifact names the cause in its own source
+        // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`): libcudart issues `0x20809009`,
+        // `0x20809001` and `0x20809064` at the end of its lazy device enumeration; **the
+        // driver API never issues them**, which is exactly the asymmetry we measured. They
+        // are serviced entirely by GSP firmware — no kernel `#define`, absent from nvproxy —
+        // so the C's zero-echo *"returned all-zeros, so cudart read 0 where it expects real
+        // data and aborted with cudaErrorInitializationError(3) — silently (the reject is in
+        // the reply PAYLOAD, not an errno/dmesg line)"*.
+        //
+        // ⊘⊘ **This port refuses them today, and `kayfabe_abi::gsslegacy`'s module doc cites
+        // that same C site as its REASON to refuse.** It took half the C's lesson: *do not
+        // echo zeros*. But refusing fails cudart too — `0x56` is not an answer it can use.
+        // The C's actual remedy is the third option, and its PRIMARY is **forward to the
+        // host**, with a capture replay only as fallback.
+        //
+        // ⇒ **What this arm is for.** The host forward is a real build (isolate verb +
+        // handle translation + call site; `raw_control` already exists at
+        // `kayfabe-isolate-host/src/rm.rs:2041`). Before paying for it, one boot answers
+        // whether these three ids are the wall at all. This arm replays the C's captured
+        // GA106/580.159.04 bodies, **default OFF**, so an unset variable leaves every byte
+        // of every boot unchanged.
+        //
+        // ⚠ **Why it is not the fix, stated so nobody ships it.** (1) A replayed constant is
+        // not READ-NATIVE and would rot on the next driver or chip — the exact thing the
+        // owner's ruling forbids. (2) `0x20809064`'s capture is **incomplete**: the C records
+        // only *"520B, leading 10 u32s"*, so this arm zero-fills a 480-byte tail it has never
+        // measured — precisely the truncated-row hazard `kayfabe_abi::oracle` was written for.
+        // ⇒ A GREEN result justifies building the forward. A RED result on `…064` alone would
+        // point at that tail, not at the mechanism, and must not be read as refuting it.
+        // ★★ w343 CENSUS — size the GSS-legacy family before forwarding it.
+        //
+        // `[measured 2026-08-20, 2/2 boots]` serving the three cudart init-gate ids moves the
+        // guest ON: `0x20809009` leaves the unserviced ledger and FOUR NEW ids appear that no
+        // gate-off boot ever asks for — `0x2080a001`, `0x2080a026`, `0x2080a084`, `0x2080a097`.
+        // All four have **bit 15 set** and resolve in NO `ogkm` `ctrl2080` header, i.e. the same
+        // GSP-firmware-only family. cudart's init walks a CHAIN of them.
+        //
+        // ⊘ The unserviced ledger records the id and NOT the size, so the host forward has no
+        // way to know how big a buffer each one needs. This line is the only place the guest's
+        // own `paramsSize` for these is visible. Read-only: it changes no reply.
+        if req.cmd & kayfabe_abi::capability::RM_GSS_LEGACY_MASK != 0
+            && WantedTable::from_cmd(req.cmd).is_none()
+        {
+            eprintln!(
+                "W343GSSCENSUS cmd={:#010x} params_size={} params_at={} payload_len={}",
+                req.cmd,
+                req.params_size,
+                req.params_at,
+                cmd.payload.len()
+            );
+        }
+
+        if std::env::var("KAYFABE_CUDART_GATE").as_deref() == Ok("replay")
+            && matches!(req.cmd, 0x2080_9009 | 0x2080_9001 | 0x2080_9064)
+        {
+            // The guest's OWN declared size, never a constant of ours: the C reads the same
+            // field (`ps = ldl_le_p(resp + 96)`) rather than asserting a length, and these
+            // ids have no documented struct for us to check one against.
+            let ps = req.params_size as usize;
+            if ps == 0 || cmd.payload.len() < req.params_at + ps {
+                return refuse();
+            }
+            // `C: nvkvm_gpu_emul.c:3358-3363`, the native-host capture, verbatim.
+            let head: &[u32] = match req.cmd {
+                0x2080_9009 => &[0x0000_0000, 0x0000_000d], // 0x0d = 13 = CUDA major
+                0x2080_9001 => &[0x03fc_007f, 0x0000_0000], // capability mask
+                _ => &[0, 2, 1, 1, 1, 0x64, 4, 0x10, 1, 0x64],
+            };
+            let mut params = vec![0u8; ps];
+            let mut wrote = 0usize;
+            for (i, w) in head.iter().enumerate() {
+                let off = i * 4;
+                if off + 4 > ps {
+                    break;
+                }
+                params[off..off + 4].copy_from_slice(&w.to_le_bytes());
+                wrote += 4;
+            }
+            // ⚠ Say how much of the reply is MEASURED and how much is zero-fill, every time.
+            // A boot that reads "served" without that ratio cannot tell a complete capture
+            // from a 4-byte head on a 520-byte struct.
+            eprintln!(
+                "W341GSS cmd={:#010x} ps={ps} measured_bytes={wrote} zerofill_bytes={}                  src=C:nvkvm_gpu_emul.c:3358-3363 note=PROBE-replay-not-the-fix",
+                req.cmd,
+                ps - wrote
+            );
+            let mut body = cmd.payload.clone();
+            body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                .copy_from_slice(&NV_OK.to_le_bytes());
+            body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+            return Some(Reply {
+                rpc_result: NV_OK,
+                body,
+            });
+        }
+
         let want = WantedTable::from_cmd(req.cmd)?;
 
         // A FINN-serialized payload is not the flat struct these encoders produce. Neither
         // control appears serialized anywhere this port has looked — the C answers both
         // flat and a real driver accepted it — but that is an absence of observation, not
         // a guarantee, and an unchecked flat answer is the kind of wrong that never logs.
+        //
+        // ★★★ w349c — NAME THE REFUSAL. `refuse by name` is this tree's own rule and these
+        // two gates broke it: a control with a `WantedTable` row that gets refused here
+        // logs exactly what a control with NO row logs, which is why two boots were spent
+        // guessing which site was firing. A row exists ⇒ someone MEANT to serve it ⇒ a
+        // refusal is a fact worth a line.
         if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=finn-serialized rmapi_rpc_flags={:#x}",
+                req.cmd,
+                req.rmapi_rpc_flags
+            );
             return refuse();
         }
         // The guest's own declared size must be the size we encode, and its payload must
@@ -1391,6 +1551,14 @@ impl CommandPolicy for InitTablePolicy {
         if req.params_size as usize != want.params_size()
             || cmd.payload.len() < req.params_at + want.params_size()
         {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={}",
+                req.cmd,
+                req.params_size,
+                want.params_size(),
+                cmd.payload.len(),
+                req.params_at
+            );
             return refuse();
         }
 
@@ -2229,6 +2397,38 @@ impl CommandPolicy for InitTablePolicy {
             // ⊘ The bytes are copied through this arm rather than left to the tail's
             // `copy_from_slice` no-op on purpose: the identity is then something the code
             // SAYS, and `answer_gss_legacy` is where the id and the length are checked.
+            // ★★★★★ w349 — the four the CUDA RUNTIME needs. The body is a MEASURED
+            // constant, not a chip derivation, because three of the four are GSS-legacy and
+            // have no definition in any open header to derive from. `answer_cudart_init`
+            // refuses any size other than the measured one rather than padding to it, so a
+            // guest that asks a different shape gets a refusal and not an invention.
+            //
+            // ⚠ Forwarding to the host is the better answer and is BUILT
+            // (`VerbPlan::SubdeviceControl`), but it is gated off until an off-BQL execution
+            // site exists — a synchronous host verb from `respond` trips R1. This table is
+            // what makes the runtime work in the meantime, and it carries its own expiry
+            // conditions in `kayfabe_abi::cudartinit`.
+            WantedTable::CudartWatchdogInfo
+            | WantedTable::CudartInit9009
+            | WantedTable::CudartInit9001
+            | WantedTable::CudartInit9064
+            | WantedTable::CudartInit9A001 => {
+                match kayfabe_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
+                    Ok(p) => p,
+                    Err(_) => return refuse(),
+                }
+            }
+            // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
+            // a real GA106 overwrites. A constant body here would clobber content the guest
+            // sent — the `#203` zero-fill defect pointing the other way.
+            WantedTable::CudartPerfLevelInfoV2 => {
+                let at = req.params_at;
+                let mut p = cmd.payload[at..at + want.params_size()].to_vec();
+                if !kayfabe_abi::cudartinit::splice_cudart_init(req.cmd, &mut p) {
+                    return refuse();
+                }
+                p
+            }
             WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;
                 match kayfabe_abi::gsslegacy::answer_gss_legacy(
@@ -2309,12 +2509,38 @@ impl CommandPolicy for InitTablePolicy {
         // exactly that. So the obligation is named here and discharged there, and the one
         // served id records that its answer is safe to cache anyway: it is the identity on the
         // guest's own buffer, so a cache that replayed it would replay what the guest sent.
-        if is_gss_legacy(req.cmd)
-            && !matches!(
-                want,
-                WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162
-            )
-        {
+        //
+        // ⊘⊘⊘ **CORRECTED 2026-08-20 (w349b) — THIS WAS A SECOND HARDCODED LIST, AND IT COST
+        // A BOOT.** It used to read `!matches!(want, GssLegacy8159 | GssLegacy8162)`. w349
+        // added three served GSS-legacy ids with their cache argument written and their
+        // `init_tables.rs` gate updated — and this tripwire, which nothing pointed at,
+        // refused all three anyway: `[measured, boot w349bcud1]` `0x20809009 served=0
+        // refused=1` with the rows present and correct.
+        // ⇒ It now asks [`kayfabe_abi::gsslegacy::carries_cache_argument`], **the same
+        // predicate its test asks**, so the runtime and the gate cannot disagree again.
+        if is_gss_legacy(req.cmd) && !kayfabe_abi::gsslegacy::carries_cache_argument(req.cmd) {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=gss-legacy-without-cache-argument",
+                req.cmd
+            );
+            return refuse();
+        }
+
+        // ★★★ A SHORT ENCODER IS A SILENT SUBSTRUCT CORRUPTION, so refuse instead of serving.
+        //
+        // The entry guard above established `req.params_size == want.params_size()`. It says
+        // nothing about the ENCODER's output. The splice below writes `params.len()` bytes at
+        // `req.params_at`, so an encoder returning fewer bytes than the control declares leaves
+        // the tail of the guest's parameter struct holding whatever its own REQUEST buffer had
+        // there — and for a pure-out struct the guest zeroed, that decodes to zeros with no
+        // marker distinguishing it from a real value. That is the defect class of task #203
+        // (our empty reply body zero-filled the guest's `numEntries`) and of the C oracle's
+        // truncated rows (`dlen < psize`, `numDispChannels` read as 0 → NULL channel table).
+        //
+        // ⊘ Whether any encoder is short today is not the point: this converts an unmeasured,
+        // silent, guest-visible corruption into a named refusal that the per-control tests and
+        // the boot census can both see. `refuse()` is the same verdict an unknown id gets.
+        if params.len() != want.params_size() {
             return refuse();
         }
 

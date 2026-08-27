@@ -592,6 +592,25 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::AllocVaSpace)
     }
 
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let reply = self.call(Request::SubdeviceControl {
+            cmd: cmd.0,
+            payload: payload.to_vec(),
+        })?;
+        match self.lift(reply)? {
+            Reply::Payload(out) if out.len() == payload.len() => {
+                payload.copy_from_slice(&out);
+                Ok(())
+            }
+            // ★ Same length rule as [`RmBackend::control`], for the same reason: a
+            // half-updated parameter block that looks successful is the worst answer
+            // available, and this family's replies are exactly the ones the CUDA runtime
+            // reads as real data.
+            Reply::Payload(_) => Err(RmError::Wedged),
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         self.handle(Request::AllocSysmem { len })
     }

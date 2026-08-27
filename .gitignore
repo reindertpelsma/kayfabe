@@ -21,3 +21,10 @@ Cargo.lock.orig
 docs/design/*.pdf
 docs/design/*.png
 __pycache__/
+
+# LaTeX build artifacts for docs/whitepaper. build.sh deletes these on every run,
+# so a tracked copy churns on every build. They were added accidentally in w353.
+docs/whitepaper/*.aux
+docs/whitepaper/*.log
+docs/whitepaper/*.out
+docs/whitepaper/*.toc

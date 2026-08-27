@@ -796,6 +796,25 @@ pub trait ObjectModel: Send {
         payload: &mut [u8],
     ) -> Result<kayfabe_fwd::ChannelControlRelay, kayfabe_fwd::ChannelControlRelayFault>;
 
+    /// ★★★★★ **w346 — relay one control to the HOST'S OWN SUBDEVICE**, for the family
+    /// that asks the part about itself and twins no guest object.
+    ///
+    /// ⚠ **Relay, never synthesise** — the same rule as [`Self::relay_channel_control`] and
+    /// for a sharper reason here. `[measured 2026-08-20, real GA106]` these are the ids the
+    /// CUDA runtime reads as real data: the C research artifact answered them with an
+    /// all-zero echo under `NV_OK` and cudart died `cudaErrorInitializationError(3)` with
+    /// **no errno and no log line** (`C: nvkvm_gpu_emul.c:3334-3350`). `payload` must be
+    /// left **untouched** on every failure arm; a zero-filled success is the defect.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::SubdeviceControlFault`] — `NoHostPlane` for a model that does not
+    /// forward at all, `Fwd` for a plane that refused by name.
+    fn relay_subdevice_control(
+        &mut self,
+        cmd: kayfabe_arch::ids::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<(), kayfabe_fwd::SubdeviceControlFault>;
+
     /// ★★★★ §16.40 — **the live VA-space census, in the model's own locking discipline.**
     ///
     /// ⊘⊘ This is a trait method rather than a call through [`Self::as_gpu`], and the
@@ -910,6 +929,17 @@ impl ObjectModel for Gpu {
     /// an arm that refused here would make the differential's reference behaviour *"this is
     /// unimplemented"* — which is exactly the shape that lets a shell-only defect pass every
     /// test that composes a bare `Gpu`.
+    /// ⊘ The pure core model forwards nothing: it has procs and isolate *records*, but no
+    /// worker to issue on. Saying so by name is the whole point — a model that answered
+    /// this would be fabricating the reply the CUDA runtime trusts.
+    fn relay_subdevice_control(
+        &mut self,
+        _cmd: kayfabe_arch::ids::ControlCmd,
+        _payload: &mut [u8],
+    ) -> Result<(), kayfabe_fwd::SubdeviceControlFault> {
+        Err(kayfabe_fwd::SubdeviceControlFault::NoHostPlane)
+    }
+
     fn relay_channel_control(
         &mut self,
         client: kayfabe_arch::ids::HClient,
@@ -1772,6 +1802,44 @@ pub const OBJECT_VERBS: &[kayfabe_gsp::RpcFunction] = &[
 /// ⊘ So the claim is by **command id**, quantified over this list, and the list is public
 /// so a test asks the type rather than restating it (`gates_quantified_over_a_list`).
 pub const OBJECT_CONTROLS: &[u32] = &[
+    // ★★★★★ **w346 — THE cudart INIT-GATE FAMILY**, forwarded to the host's own subdevice.
+    //
+    // `[measured 2026-08-20, real GA106, 2/2 boots]` `libcuda` answers every driver-API call
+    // correctly on the boot `libcudart` cannot initialise — `cuInit`, `cuDeviceGetCount`,
+    // `cuDevicePrimaryCtxRetain`, CC 8.6, 12 540 182 528 bytes — while `cudaGetDeviceCount`
+    // in the SAME process returns **3 = cudaErrorInitializationError**. Serving the first
+    // three MOVED THE GUEST ON: `0x20809009` left the unserviced ledger and the next four
+    // appeared, which no gate-off boot ever asks for.
+    //
+    // ⊘ **None of these resolve in any `ogkm` header.** All have bit 15 set, so they reach
+    // physical RM under their own id without entering resserv, and are serviced entirely by
+    // GSP firmware — closed `libcuda`↔GSP controls with no documented struct. That is
+    // exactly why they are FORWARDED and not answered: there is nothing to encode.
+    // `C: src/qemu/nvkvm_gpu_emul.c:3334-3363` names the family and makes forwarding its
+    // PRIMARY, with a capture replay only as a fallback.
+    //
+    // ⚠ Guest-declared `paramsSize`, measured on the bench: 8, 8, 520, 16, 532, 4, 1168.
+    //
+    // ⊘⊘⊘ **CORRECTED 2026-08-20 (w349) — THREE IDS LEFT THIS LIST, AND CLAIMING THEM HERE
+    // WAS ACTIVELY SHADOWING THE FIX.** `0x20809009`, `0x20809001` and `0x20809064` are now
+    // ANSWERED from a measured table by `kayfabe_device::inittables` (see
+    // `kayfabe_abi::cudartinit`). While they sat in this list, `respond_control` claimed
+    // them, `respond_subdevice_control` refused them (the forward gate ships OFF), and the
+    // device chain's table never ran — `[measured, boot w349cud1]` `0x20809009 refused=1,
+    // served=0` with the `WantedTable` rows present and correct.
+    //
+    // ★★★ The general shape, and it is worth more than the three ids: **this list is a
+    // CLAIM, and a claim that ends in a refusal spends every later policy's turn.** An id
+    // belongs here only if this policy will DECIDE it — not merely if this policy has an
+    // opinion about it. `respond_control` returns `None` for anything absent, which is what
+    // lets a downstream table answer.
+    //
+    // ⚠ The four below stay: `0x2080a026` and `0x2080a084` were measured INNOCENT (refusing
+    // either alone leaves a bare-metal host's `cudaGetDeviceCount` at `0`), and `0x2080a001`
+    // / `0x2080a097` are unmeasured. All four remain forward-or-refuse.
+    0x2080_a026,
+    0x2080_a084,
+    0x2080_a097,
     kayfabe_abi::submit::NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
     // ★★★★ **§16.56 — the TSG form, `0xa06c0101`, and it is the wall `s44` measured.**
     //
@@ -2106,6 +2174,14 @@ impl ObjectPolicy {
             kayfabe_abi::submit::NV906F_CTRL_CMD_GET_MMU_FAULT_INFO => {
                 self.respond_get_mmu_fault_info(cmd, &req)
             }
+            // ⊘ w349: `0x20809009` / `0x9001` / `0x9064` deliberately ABSENT — they are
+            // answered downstream from a measured table, and claiming them here refused
+            // them before that table could run. See `OBJECT_CONTROLS`'s note.
+            // ⊘ w352: 0x2080a001 un-claimed — it is the measured FALLBACK and is now
+            //   answered downstream from a table. Claiming it here refused it.
+            0x2080_a026 | 0x2080_a084 | 0x2080_a097 => {
+                self.respond_subdevice_control(cmd, &req)
+            }
             kayfabe_abi::submit::NVA06C_CTRL_CMD_PREEMPT => self.respond_preempt(cmd, &req),
             // ★★★★★ w292 — the input-only group, dispatched by TABLE LOOKUP rather than by
             // four arms, so an id can never be claimed above and undecided here.
@@ -2377,6 +2453,20 @@ impl ObjectPolicy {
     /// still has to come from the execution plane.
     ///
     /// # ⊘⊘ What this arm deliberately does NOT do — and it is half the rung
+    ///
+    /// ⚠⚠ **THE DEFERRAL BELOW HAS A MEASURED COST THAT WAS NEVER PRICED — read
+    /// [`kayfabe_completion::CompletionQueue::observe`] before extending it.**
+    /// `[measured 2026-08-21]` The producer this decision leaves running has **23
+    /// production call sites**; the consumer it defers has **zero**, and so does every
+    /// other drain in that plane. `outstanding_len` is therefore monotonically
+    /// non-decreasing in production, and at 262 144 completions the queue refuses every
+    /// subsequent CE doorbell for that process, **permanently** — reached by any
+    /// long-lived process, i.e. by this project's own north-star workload.
+    /// ⇒ The two reasons below are sound and the decision may well still be right. What is
+    /// missing is the third line: *what the producer does while the consumer is deferred.*
+    /// **A deferral is a claim about consequences, not only about intent** — this is the
+    /// same shape as PC-D7 (`kayfabe-gsp/src/boot.rs`), which was reviewed on its mechanism,
+    /// accepted on an unmeasured rate, and made the GPU unusable after five `nvidia-smi`s.
     ///
     /// It does **not** drive [`kayfabe_completion::DeliveryPlane::on_poll`], although that
     /// is exactly the trigger the C hangs off this control (`C: nvkvm_gpu_emul.c:3041-3053`,
@@ -3021,6 +3111,83 @@ impl ObjectPolicy {
     /// zero-fills the params, no arm that invents an address, and no arm that answers
     /// `NV_OK` with a body we composed. ⊘ A fabricated fault record is worse than no answer,
     /// because it is shaped exactly like a pass.
+    /// ★★★★★ **w346 — forward one cudart init-gate control to the host's own subdevice.**
+    ///
+    /// The `GET_MMU_FAULT_INFO` shape (`Self::respond_get_mmu_fault_info`) with one
+    /// difference that is the whole reason it is a separate verb: **there is no guest object
+    /// to route through.** These ask the part about itself, so the target is the isolate's
+    /// own subdevice and the proc is chosen rather than derived — see
+    /// `kayfabe_rt::SharedDevice::route_subdevice_control` for why `SYSTEM_PROC`.
+    ///
+    /// ⚠ **Every failure arm returns `refuse()` and leaves the guest's payload untouched.**
+    /// That is not defensive style, it is the defect this verb exists to avoid: the C
+    /// answered this family with an all-zero echo under `NV_OK` and cudart read the zeros as
+    /// real data and died `cudaErrorInitializationError(3)` **silently** — the reject is in
+    /// the reply PAYLOAD, not an errno or a log line
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`). A refusal the guest can see beats a
+    /// success it cannot check.
+    fn respond_subdevice_control(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kayfabe_abi::view::RpcControlReq,
+    ) -> Option<Reply> {
+        // A refusal carries the envelope status and NO body, so the guest's own buffer is
+        // what it sees — untouched, which is the point.
+        let refuse = || {
+            Some(Reply {
+                rpc_result: kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+                body: Vec::new(),
+            })
+        };
+        let want = req.params_size as usize;
+        // The guest's own two assertions, both checked: a size, and a buffer that holds it.
+        if want == 0 || cmd.payload.len() < req.params_at + want {
+            return refuse();
+        }
+        // ⊘⊘ **GATED OFF BY DEFAULT AS OF w347, AND THE BOOT IS WHY.**
+        //
+        // `[measured 2026-08-20, real GA106, boot w347fwd1]` the forward reached the host-verb
+        // issue point on the FIRST control — `W343GSSCENSUS cmd=0x20809009` and then:
+        //
+        //   panicked at kayfabe-util/src/lockwitness.rs:152:
+        //   R1 no-blocking-under-lock violation (l1_concurrency.md §3.3): issuing a host RM
+        //   verb while holding rank(s) [0]
+        //
+        // ⇒ The wiring is CORRECT and COMPLETE; a synchronous host round-trip from a
+        // `CommandPolicy::respond` is not permissible under the current locking. That is not
+        // a defect of this verb — it is `blocking_and_completion_model.md:106` verbatim:
+        // *"The missing mechanism is not a completion transport. It is an off-BQL execution
+        // site for host verbs."* This is the first code to actually walk that path;
+        // `relay_channel_control`'s host call is a fault-info read these boots never trigger,
+        // so the template compiled and shipped without ever exercising it.
+        //
+        // ⚠ I read the guard wrong before booting: `trapwitness::at_a_host_verb` cannot panic
+        // and takes an honest branch, but the guard that fires here is
+        // `lockwitness::assert_lock_free`, which DOES panic. Two guards, similar roles,
+        // opposite failure modes — and only a boot told them apart.
+        //
+        // ⇒ Default OFF until the off-BQL site exists. `KAYFABE_SUBDEV_FWD=on` arms it for
+        // whoever builds that site, so the plumbing is one env var from being testable
+        // rather than needing to be rebuilt.
+        if std::env::var("KAYFABE_SUBDEV_FWD").as_deref() != Ok("on") {
+            return refuse();
+        }
+        let mut payload = cmd.payload[req.params_at..req.params_at + want].to_vec();
+        if self
+            .gpu
+            .relay_subdevice_control(kayfabe_arch::ids::ControlCmd(req.cmd), &mut payload)
+            .is_err()
+        {
+            return refuse();
+        }
+        let mut body = cmd.payload.clone();
+        body[req.params_at..req.params_at + want].copy_from_slice(&payload);
+        Some(Reply {
+            rpc_result: 0,
+            body,
+        })
+    }
+
     fn respond_get_mmu_fault_info(
         &mut self,
         cmd: &RpcCommand,

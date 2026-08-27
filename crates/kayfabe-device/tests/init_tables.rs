@@ -463,7 +463,7 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
     // reply is the guest's own facts re-encoded from what the decoder accepted; this port
     // states no number of its own anywhere in it. See `kayfabe_abi::fmbpromote`.
-    assert_eq!(WantedTable::ALL.len(), 41, "the served universe\'s size");
+    assert_eq!(WantedTable::ALL.len(), 47, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
@@ -527,16 +527,42 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
         .map(|w| w.cmd_id())
         .filter(|id| id & 0x0000_8000 != 0)
         .collect();
+    // ★★★★★ w349 — the argument-bearing set now spans TWO modules, and that is the point:
+    // an id earns a place here by having its cache argument WRITTEN somewhere, not by being
+    // convenient. `kayfabe_abi::cudartinit` carries the argument for its three, and it is a
+    // DIFFERENT argument from either of `gsslegacy`'s two — see the executable check below.
+    // ⊘ w349b: built from the SAME predicate the runtime tripwire asks
+    // (`carries_cache_argument`), not a second hand-rolled union. Rebuilding it here is
+    // exactly the drift that cost a boot.
+    let argument_bearing: std::collections::BTreeSet<u32> = gss_legacy_served
+        .iter()
+        .copied()
+        .filter(|id| kayfabe_abi::gsslegacy::carries_cache_argument(*id))
+        .collect();
     assert_eq!(
         gss_legacy_served,
-        kayfabe_abi::gsslegacy::SERVED
-            .iter()
-            .map(|(c, _)| *c)
-            .collect::<std::collections::BTreeSet<u32>>(),
+        argument_bearing,
         "the guest caches a GSS-legacy answer from OUR reply's flags \
          (`rmapiControlCacheSetUnchecked`), so every id here has to carry its own argument. \
          Adding one means writing that argument, not extending this set"
     );
+    // ★★★ THE THIRD ARGUMENT, restated as an executable check. `cudartinit`'s answers are
+    // CONSTANTS — a pure function of `(cmd, paramsSize)` with no device, guest or session
+    // state anywhere in them. That is what makes branch (b) safe for these three, and it is
+    // a STRONGER property than either neighbour: `…8159` is safe because it replays the
+    // guest's own bytes, `…8162` is safe only because `StickyAnswerGuard` stops the cache,
+    // and these are safe because a cached answer and a freshly computed one are the same
+    // bytes BY CONSTRUCTION. A future edit that makes any of them depend on state has to
+    // break this assertion to do it.
+    for (cmd, size, _) in kayfabe_abi::cudartinit::SERVED {
+        let a = kayfabe_abi::cudartinit::answer_cudart_init(*cmd, *size).expect("served");
+        let b = kayfabe_abi::cudartinit::answer_cudart_init(*cmd, *size).expect("served");
+        assert_eq!(
+            a, b,
+            "{cmd:#010x} must answer identically every time, or caching it is not safe"
+        );
+        assert_eq!(a.len(), *size, "{cmd:#010x} answers its measured length");
+    }
     // ⚠ And the argument for the one, restated as an executable check rather than a
     // sentence: its answer is the IDENTITY on the guest's own buffer, so even a cache that
     // did persist it would replay to the guest exactly what the guest sent. That is what

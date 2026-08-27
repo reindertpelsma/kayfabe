@@ -3797,6 +3797,136 @@ impl SharedDevice {
         .flatten()
     }
 
+    /// ★★★★★ **w363 — EVERY FRAMEBUFFER JOIN A *RETIRED* PROC STILL OWNS.**
+    ///
+    /// # The defect this exists for, measured
+    ///
+    /// `[measured w361/w362, 2026-08-20, real GA106]` the **first** CUDA process in a boot
+    /// gets its GR context framebuffer leaves joined and **8/8 completions**; **every later
+    /// one** gets `THE INSTALL REFUSED … already joined` on the same three frames
+    /// (`0x400000` `SET_VALID_SPAN_OVERFLOW_AREA`, `0x600000` `SET_TEX_HEADER_POOL`,
+    /// `0x800000` `SET_TEX_SAMPLER_POOL`), **zero** joins, and therefore **0/8** completions
+    /// — libcuda then spins forever. The effect is ORDINAL: the predecessor's *kind* is
+    /// irrelevant (a second `torch` with nothing between it and the first fails identically).
+    ///
+    /// # Why the existing takeover cannot reach it
+    ///
+    /// [`SharedDevice::supersede_joined_fb_leaf`] routes by the **caller's own** `(gpu, pdb)`
+    /// and searches only `p.vases[&(gpu, pdb)]`. A join left behind by a **different,
+    /// exited** process lives in a different VAS under a different PDB, so the takeover path
+    /// **cannot reach it by construction** — no amount of arming helps.
+    ///
+    /// # Why release-on-death and not a cross-process takeover
+    ///
+    /// Two guest processes do not have to trust each other, so reaching into a **live**
+    /// peer's table to steal its backing is exactly the cross-process leakage this design
+    /// forbids. A **dead** proc is different: nothing can still be reading through it, and
+    /// real RM does precisely this at `fd` close — which is why the Mode-1 sibling has no
+    /// analog of this bug. It **delegates** lifecycle to RM; Mode 2 **models** it, so Mode 2
+    /// owes the implicit free.
+    ///
+    /// ⊘ **Read-only, and that is sufficient.** The rows are not unbound here: the caller
+    /// runs this immediately before the reap that **drops** these procs, so their tables die
+    /// with them. What the caller must still do, in this order, is
+    /// [`kayfabe_device::plane::RegPlane::release_fb_join`] (the guest's view stops being
+    /// served out of the join) and *then*
+    /// [`SharedDevice::revoke_published_fb_leaf`] + [`SharedDevice::drain_pending_releases`]
+    /// (the host half). Guest view first is the same ordering the supersede path states.
+    #[must_use]
+    pub fn retired_fb_joins(&self) -> Vec<kayfabe_fwd::RevokedLeaf> {
+        self.retired_fb_join_census().1
+    }
+
+    /// ★★ The same sweep, but it also answers **how many corpses it looked at** — so a caller
+    /// can tell *"nothing was retired"* from *"retired procs held no join rows"*. A count that
+    /// conflates those two is the failure class this campaign has now paid for three times in
+    /// one day (a global print cap, an append-only watch list, and this).
+    #[must_use]
+    pub fn retired_fb_join_census(&self) -> (usize, Vec<kayfabe_fwd::RevokedLeaf>) {
+        self.with_retired(|corpses| {
+            let n = corpses.len();
+            let mut out = Vec::new();
+            for p in corpses {
+                for ((gpu, pdb), vas) in p.vases.iter() {
+                    for (va, len, b) in vas.table.iter() {
+                        let Some(h) = b.host() else { continue };
+                        if h.frees_object()
+                            && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow
+                        {
+                            out.push(kayfabe_fwd::RevokedLeaf {
+                                gpu: *gpu,
+                                pdb: *pdb,
+                                va: GpuVa(va),
+                                len,
+                                phys: b.phys(),
+                                host_va: h.host_va(),
+                                memory: h.memory(),
+                            });
+                        }
+                    }
+                }
+            }
+            (n, out)
+        })
+    }
+
+    /// ★★★★★ **w364 — WHO, IF ANYONE, STILL NAMES THIS FRAMEBUFFER FRAME?**
+    ///
+    /// Returns `(live_rows, retired_rows)`: how many `JoinsGuestWindow` rows across **live**
+    /// procs' address tables, and across **retired-but-unreaped** ones, name `phys`.
+    ///
+    /// # What it is for
+    ///
+    /// `[measured w361–w363, real GA106]` the framebuffer store can hold a join at `phys`
+    /// that **no table row names at all** — the owning proc exited, and
+    /// `drain_retired_budgeted` unbound its rows before anything gave the store's half back.
+    /// The next process's `install_join` then refuses `ALREADY_JOINED` forever
+    /// (`refused=48 joined=1` per frame, three frames, every boot), its GR context never gets
+    /// host backing, and its completions never land: `0/8` against the first proc's `8/8`.
+    ///
+    /// # Why this predicate and not a cross-process takeover
+    ///
+    /// `live_rows == 0` is the **proof of orphanhood**. A join nobody names cannot be read
+    /// through by anybody, so reclaiming it takes nothing from anyone — no trust argument
+    /// between mutually-untrusting guest processes is required, which is exactly what a
+    /// takeover that reached into a **live** peer's table would need and could not have.
+    /// ⊘ `live_rows > 0` is a genuine conflict between two living processes over one frame
+    /// and must stay refused **by name**; it is not this function's business to resolve.
+    ///
+    /// ⚠ **Both halves are returned because a single number cannot separate the two cases.**
+    /// `(0, 0)` is an orphan; `(0, n)` is a corpse whose rows are still standing and whose
+    /// join the retired sweep should take; `(n, _)` is live and must be refused. Collapsing
+    /// these into one count is the failure class this campaign paid for three times in one
+    /// day — most recently in the fix for it.
+    #[must_use]
+    pub fn fb_join_namers(&self, phys: u64) -> (usize, usize) {
+        let mut live = 0usize;
+        for pid in self.live_pids() {
+            self.with_proc(pid, |p| {
+                for vas in p.vases.values() {
+                    for (_va, _len, b) in vas.table.iter() {
+                        if b.phys() == phys
+                            && b.host().is_some_and(|h| {
+                                h.frees_object()
+                                    && h.bytes()
+                                        == kayfabe_mmu::BackingBytes::JoinsGuestWindow
+                            })
+                        {
+                            live += 1;
+                        }
+                    }
+                }
+            });
+        }
+        let retired = self
+            .retired_fb_join_census()
+            .1
+            .iter()
+            .filter(|r| r.phys == phys)
+            .count();
+        (live, retired)
+    }
+
     /// ★★★★★ **THE PARKED PROMOTE HALVES, BY IDENTITY** — every entry of
     /// [`kayfabe_core::gpu::Vas::promote_halves`] rendered with its `buffer_id`, which half
     /// arrived, and the address it carries.
@@ -4907,6 +5037,67 @@ impl SharedDevice {
             |_spine, proc, plan, reply| {
                 let mut buf = vec![0u8; payload.len()];
                 kayfabe_fwd::commit_control(proc, plan, reply, &mut buf)?;
+                Ok(buf)
+            },
+        )?;
+        payload.copy_from_slice(&out);
+        Ok(ControlRoute::Forwarded)
+    }
+
+    /// ★★★★★ **w346 — RELAY ONE CONTROL TO THE HOST'S OWN SUBDEVICE.**
+    ///
+    /// For the GSS-legacy family that asks **the part about itself** — a CUDA major
+    /// version, a capability mask — and so twins no guest object at all.
+    ///
+    /// # ⊘ Why `SYSTEM_PROC`, and why that is the SAFE choice rather than the lazy one
+    ///
+    /// Every other route in this port reaches a proc **through a GPU object**
+    /// (`by_pdb`, `by_chan`). A control that names no object has no such route, so the proc
+    /// must be chosen rather than derived — and the choice is load-bearing for isolation:
+    ///
+    /// - **the asking process's own isolate** — no route exists to find it from a bare
+    ///   `hClient`, and building one would be inventing an index for this one verb;
+    /// - **any live proc** — ⊘ **REFUSED.** That would answer one guest process's question
+    ///   inside **another tenant's** isolate. Two processes in one guest do not have to
+    ///   trust each other, and this is exactly the cross-process leakage that rules out;
+    /// - **`SYSTEM_PROC`** — the device's own client, which is the isolate whose subdevice
+    ///   this is. It is neither the asker's nor a peer's.
+    ///
+    /// ⚠ **The cost, named:** one isolate's health then gates this family for every guest
+    /// process. That is a real coupling and it is the price of not crossing tenants.
+    ///
+    /// ⊘ **No `classify_control` here.** The Case-1/Case-2 split asks whether a control's
+    /// host effect is already achieved; these have no local effect to have achieved, and
+    /// the caller has already decided this id is one to forward. Running the classifier
+    /// would let a Case-2 row silently turn a forward into an ack.
+    ///
+    /// # Errors
+    /// [`FwdFault`] by variant — a retired proc, a target with no isolate, or the host's
+    /// own refusal. ⚠ **`payload` is left untouched on every failure arm**: a zero-filled
+    /// `NV_OK` is precisely the answer the CUDA runtime reads as real data and dies on
+    /// (`C: nvkvm_gpu_emul.c:3334-3350`), which is the defect this whole verb exists to
+    /// avoid re-creating.
+    pub fn route_subdevice_control(
+        &self,
+        target_gpu: GpuId,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<ControlRoute, FwdFault> {
+        let pid = kayfabe_core::gpu::Gpu::SYSTEM_PROC;
+        let out: Vec<u8> = self.verb_op(
+            || {
+                self.route_act(
+                    |_| Ok((pid, ())),
+                    |_spine, proc, ()| {
+                        let planned =
+                            kayfabe_fwd::plan_subdevice_control(proc, target_gpu, cmd, payload)?;
+                        Staged::check_out(proc, target_gpu, planned)
+                    },
+                )?
+            },
+            |_spine, proc, plan, reply| {
+                let mut buf = vec![0u8; payload.len()];
+                kayfabe_fwd::commit_subdevice_control(proc, plan, reply, &mut buf)?;
                 Ok(buf)
             },
         )?;

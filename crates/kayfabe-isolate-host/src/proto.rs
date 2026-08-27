@@ -76,6 +76,15 @@ pub enum Request {
     },
     /// [`kayfabe_isolate::RmBackend::alloc_vaspace`].
     AllocVaSpace,
+    /// [`kayfabe_isolate::RmBackend::subdevice_control`] — one control on THIS isolate's
+    /// own subdevice, for the per-GPU family that twins no guest object. The child
+    /// resolves the subdevice itself, so no host handle crosses back to the port.
+    SubdeviceControl {
+        /// Command id.
+        cmd: u32,
+        /// In/out payload.
+        payload: Vec<u8>,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_sysmem`].
     AllocSysmem {
         /// Bytes requested.
@@ -682,6 +691,11 @@ impl Envelope {
                 put_blob(&mut out, params);
             }
             Request::AllocVaSpace => out.push(2),
+            Request::SubdeviceControl { cmd, payload } => {
+                out.push(22);
+                out.extend_from_slice(&cmd.to_le_bytes());
+                put_blob(&mut out, payload);
+            }
             Request::AllocSysmem { len } => {
                 out.push(3);
                 out.extend_from_slice(&len.to_le_bytes());
@@ -888,6 +902,10 @@ impl Envelope {
                 params: c.blob("alloc params")?,
             },
             2 => Request::AllocVaSpace,
+            22 => Request::SubdeviceControl {
+                cmd: c.u32("subdevice control cmd")?,
+                payload: c.blob("subdevice control payload")?,
+            },
             3 => Request::AllocSysmem {
                 len: c.u64("sysmem len")?,
             },
@@ -1293,6 +1311,10 @@ mod tests {
                 params: vec![1, 2, 3],
             },
             Request::AllocVaSpace,
+            Request::SubdeviceControl {
+                cmd: 0x2080_9009,
+                payload: vec![0u8; 8],
+            },
             Request::AllocSysmem { len: 0x4000 },
             Request::AllocVidmem { len: 0x20_0000 },
             Request::AllocChannel {
@@ -1469,6 +1491,7 @@ mod tests {
         match r {
             Request::Alloc { .. } => "Alloc",
             Request::AllocVaSpace => "AllocVaSpace",
+            Request::SubdeviceControl { .. } => "SubdeviceControl",
             Request::AllocSysmem { .. } => "AllocSysmem",
             Request::AllocVidmem { .. } => "AllocVidmem",
             Request::AllocChannel { .. } => "AllocChannel",
@@ -1517,6 +1540,7 @@ mod tests {
                 "MapGuestRam",
                 "RingDoorbell",
                 "Schedule",
+                "SubdeviceControl",
                 "UnmapGpuVa",
                 "UnmapGuestRam",
             ]

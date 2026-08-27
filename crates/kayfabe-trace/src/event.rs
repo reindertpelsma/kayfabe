@@ -378,6 +378,8 @@ pub enum VerbTag {
     EngineObject,
     /// One Case-1 control.
     Control,
+    /// ★ w346 — one control on the isolate's own subdevice; carries no handle.
+    SubdeviceControl,
     /// A copy-engine request partitioned by representability (`#102` stage C2).
     CeSplit,
     /// Dispose of host objects a refused commit could not adopt.
@@ -396,6 +398,7 @@ impl VerbTag {
             VerbPlan::Doorbell { .. } => VerbTag::Doorbell,
             VerbPlan::EngineObject { .. } => VerbTag::EngineObject,
             VerbPlan::Control { .. } => VerbTag::Control,
+            VerbPlan::SubdeviceControl { .. } => VerbTag::SubdeviceControl,
             VerbPlan::CeSplit { .. } => VerbTag::CeSplit,
             VerbPlan::Release { .. } => VerbTag::Release,
         }

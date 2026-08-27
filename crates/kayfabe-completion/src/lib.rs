@@ -125,6 +125,38 @@ impl CompletionQueue {
     /// [`MAX_OUTSTANDING_COMPLETIONS`] undrained completions (boundary-1: a hostile
     /// guest cannot grow this queue without bound). The queue is left unchanged on
     /// refusal.
+    ///
+    /// # ⊘⊘⊘ THIS QUEUE HAS NO PRODUCTION DRAIN, AND THE RATE IS MEASURED
+    ///
+    /// `[measured 2026-08-21, by census of the tree]` **The fill side of this plane is
+    /// wired and the delivery side is not.** `observe` has **23 production call sites**
+    /// (`kayfabe-fwd`, one per completion). [`CompletionQueue::ack`] — the *only* method
+    /// that removes anything — has **zero**; so do `compose_into`, `confirm`,
+    /// `take_unacked`, `has_outstanding` and `outstanding_len`. Every non-test `.ack(` in
+    /// the tree is an unrelated `cmd.ack(0)` in a rustdoc comment.
+    /// ⊘ `take_unacked` is **not** a drain — it moves `awaiting_ack` back to `pending`, and
+    /// [`CompletionQueue::outstanding_len`] is the **sum** of all three, so composition and
+    /// requeue move items between buckets without ever reducing the total.
+    ///
+    /// ⇒ In production `outstanding_len()` is **monotonically non-decreasing**, and at
+    /// [`MAX_OUTSTANDING_COMPLETIONS`] = 262 144 this function starts returning
+    /// [`CompletionError::QueueFull`] — which `?` turns into a forwarding fault that fails
+    /// the whole pushbuffer apply, i.e. **refuses every subsequent CE doorbell for that
+    /// process, permanently.** The queue is per-`Proc`, so a short-lived process never
+    /// reaches it and **a long-lived one always does**.
+    ///
+    /// ★★★ **The workload that reaches this is the project's own north star**: a sustained
+    /// inference loop. And the test written to model exactly that — `soak_llm_like.rs` —
+    /// **acks every token**, so the one test built to catch this structurally cannot.
+    ///
+    /// ⚠ **The deferral is deliberate and defensible; this note is its unpaid half.** Not
+    /// driving `DeliveryPlane::on_poll` is an explicit, argued decision with two measured
+    /// reasons (`kayfabe-rmrpc/src/policy.rs`, *"what this arm deliberately does NOT do —
+    /// and it is half the rung"*). What that decision did **not** cost is what happens when
+    /// the still-wired producer runs 262 144 times against a consumer that was deferred.
+    /// ⇒ Same shape as **PC-D7** (`kayfabe-gsp/src/boot.rs`): a hazard whose *mechanism* was
+    /// reviewed and whose *rate* was not, filed as accepted, and catastrophic in practice.
+    /// **A deferral is a claim about consequences, not only about intent.**
     pub fn observe(&mut self, ev: OsEventRef) -> Result<(), CompletionError> {
         if self.outstanding_len() >= MAX_OUTSTANDING_COMPLETIONS {
             return Err(CompletionError::QueueFull);

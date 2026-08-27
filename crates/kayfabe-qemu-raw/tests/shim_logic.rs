@@ -2750,8 +2750,15 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
 /// **correctness-relevant pass stop running** on a clean doorbell, and `VAS_PUBLISH` ablated
 /// **red** — a publication skipped that the engine then needs is a GPU fault, not a slow path.
 ///
-/// ⇒ ⊘ **Absent is `off`, an unknown value is an ERROR, and the runtime selector reads any
-/// error as `off`.** The safe direction for a flag that removes work is always to do the work.
+/// ⊘⊘ **CORRECTED 2026-08-20 — THIS TEST WAS RED AT `1c802610` AND SHIPPED THAT WAY.**
+/// w330 flipped the default to `on` (measured: doorbell median 8.5× / p90 19.4×, correctness
+/// identical on every arm) and did not update the assertion below, so the test asserted the
+/// old default against the new code. ⚠ Boots do not run unit tests, which is exactly why a
+/// flag flip verified on hardware can leave a red test behind for a day and nobody see it.
+///
+/// ⇒ **Absent is now `on`**; an unknown value is still an ERROR, and the runtime selector
+/// still reads any error as `off` — the safe direction for a flag that REMOVES work remains
+/// to do the work.
 #[test]
 fn the_w318_dirty_gate_is_on_by_default_and_refuses_an_unknown_value() {
     use kayfabe_qemu_raw::shim::dirty_gate_from;

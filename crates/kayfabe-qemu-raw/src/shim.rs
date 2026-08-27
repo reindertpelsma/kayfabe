@@ -3109,6 +3109,23 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
         self.0.relay_channel_control(client, object, cmd, payload)
     }
 
+    /// ★ w346 — the shell's seat for the subdevice-control forward. Routes to
+    /// `SYSTEM_PROC` inside [`kayfabe_rt::SharedDevice::route_subdevice_control`]; see
+    /// there for why that proc and not another.
+    fn relay_subdevice_control(
+        &mut self,
+        cmd: kayfabe_rt::ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<(), kayfabe_fwd::SubdeviceControlFault> {
+        // ⊘ GPU 0: this family names a PART, and the bench is single-GPU. A multi-GPU
+        // guest asking "which part?" needs the id routed per target, which this port
+        // cannot yet express — stated rather than silently answered for the wrong one.
+        self.0
+            .route_subdevice_control(kayfabe_rt::GpuId(0), cmd, payload)
+            .map(|_| ())
+            .map_err(kayfabe_fwd::SubdeviceControlFault::Fwd)
+    }
+
     /// ★★★★★ §16.80 — the shell's seat for the Case-1 engine-object forward, and **the
     /// place its outcome is named**.
     ///
@@ -3699,6 +3716,19 @@ struct CeShellState {
 /// runs on the forwarding fall-through and the three CE refusal sites, and
 /// `grep -c "GET=" run_w267_on_qemu.log` is **9** — eight `RING-PROJ` lines, every one `Ce`,
 /// plus the first-refusal summary. ⇒ This rung is a **call site**, not a capability.
+/// # ⊘⊘ THIS LIST IS APPEND-ONLY, AND A ROW IS NOT A STATEMENT THAT THE PROC IS ALIVE
+///
+/// `latch_gr_cursor` only ever INSERTS; nothing anywhere removes from `gr_cursors`. A
+/// channel latched at its first doorbell keeps being sampled for the life of the device,
+/// **including after its proc has exited and been reaped**. `[measured w361, 2026-08-20]`
+/// proc=2's eight channels were still printing `GR-CURSOR … GET=0 PUT=1` at `t=+288 s`,
+/// long after that guest process was gone, while a second process was running — and that
+/// reads as *"the predecessor's channels are never torn down"* to anyone who has not read
+/// this line. It is a fact about THIS VEC, not about proc liveness or about teardown.
+///
+/// ⇒ To ask whether a proc was reaped, read the `REAP` lines. To ask whether its host
+/// objects went back, read the disposal accounting. Never infer either from the continued
+/// presence of a cursor row.
 #[derive(Debug, Clone, Copy)]
 struct GrCursorWatch {
     /// The guest token this channel's doorbell carries — the join key to every other line.
@@ -3852,6 +3882,76 @@ fn observer_loop(
                 u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX)
                     >= RETIRED_DRAIN_BUDGET_US
             });
+            // ★★★★★ **w363 — A DEAD PROC'S FRAMEBUFFER JOINS DIE WITH IT.**
+            //
+            // `[measured w361/w362]` the FIRST CUDA process in a boot joins its GR context
+            // leaves and gets 8/8 completions; EVERY later one is refused on the same three
+            // frames with `already joined`, gets ZERO joins, and therefore 0/8 completions —
+            // libcuda spins forever. The stale join belongs to a proc that has already
+            // exited, and `supersede_joined_fb_leaf` cannot reach it: that path routes by the
+            // CALLER's `(gpu, pdb)` and searches only the caller's own VAS, so a predecessor's
+            // join in a different VAS is unreachable BY CONSTRUCTION.
+            //
+            // ⊘ Deliberately NOT a cross-process takeover. Two guest processes do not have to
+            // trust each other, so stealing a LIVE peer's backing is the cross-process leakage
+            // this design forbids. A DEAD proc is different — nothing can still be reading
+            // through it — and real RM does exactly this at `fd` close, which is why the
+            // Mode-1 sibling has no analog of this bug: it DELEGATES lifecycle to RM, while
+            // Mode 2 MODELS it and therefore owes the implicit free.
+            //
+            // ★ Ordering is the supersede path's ordering: the guest's VIEW goes first
+            // (`release_fb_join`), then the HOST half. A host object freed while the store
+            // still serves bytes out of it is a `SIGBUS` in the VMM.
+            //
+            // ⊘ Idempotent by construction: a proc held back for drain is visited again on
+            // the next tick, and `release_fb_join` answers `false` for a join already given
+            // back. The line prints only when something actually moved, so a quiet tick stays
+            // quiet and a release is never inferred from silence.
+            // ⊘⊘ THE CENSUS PRINTS EVEN WHEN IT FINDS NOTHING, and that is the whole point.
+            // `RETIRED-FB-RELEASE: 0` in w363 could not distinguish *"no proc was retired in
+            // this window"* from *"retired procs were visited and held no join rows"* — the
+            // same ambiguity as the print cap and the append-only cursor list this campaign
+            // already paid for twice today. A number that cannot separate those two is not a
+            // measurement. `corpses` and `rows` separate them.
+            let (corpses, stale) = device.retired_fb_join_census();
+            if corpses > 0 {
+                eprintln!(
+                    "kayfabe: RETIRED-FB-CENSUS corpses={corpses} join_rows={} ⊘ `join_rows=0` \
+                     with `corpses>0` means the retired procs WERE visited and held no \
+                     JoinsGuestWindow row — a statement about their tables, not about whether \
+                     this pass ran",
+                    stale.len()
+                );
+            }
+            if !stale.is_empty() {
+                let (mut released, mut already) = (0usize, 0usize);
+                for r in &stale {
+                    if plane.release_fb_join(r.phys) {
+                        device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                        released += 1;
+                    } else {
+                        already += 1;
+                    }
+                }
+                if released > 0 {
+                    let drained = device.drain_pending_releases();
+                    eprintln!(
+                        "kayfabe: RETIRED-FB-RELEASE ★★★★★ {released} join(s) of EXITED proc(s) \
+                         given back (already_free={already} rows_seen={} drained={drained}) — \
+                         the frames are installable again, so the NEXT process's GR context can \
+                         join them. ⊘ Guest view released BEFORE the host object, per the \
+                         supersede ordering",
+                        stale.len()
+                    );
+                    for r in &stale {
+                        eprintln!(
+                            "    RETIRED-FB-RELEASE fb_phys=0x{:x} va=0x{:x} len=0x{:x} \
+                             host_va=0x{:x} memory=0x{:x}",
+                            r.phys, r.va.0, r.len, r.host_va, r.memory.raw()
+                        );
+                    }
+                }
+            }
             let (reaped, _deferred) = device.reap_retired_held();
             // ⊘ `drain.disposed` ONLY — a per-call count. See the note above.
             (
@@ -4015,7 +4115,10 @@ impl GrCursorReader {
         eprintln!(
             "kayfabe: GR-CURSOR-READER stopped why={why} ticks={} channels={} rows_printed={} \
              elapsed={}ms ⊘ a row prints on FIRST SIGHT and on CHANGE only, so \
-             rows_printed == channels means NOT ONE CURSOR EVER MOVED",
+             rows_printed == channels means NOT ONE CURSOR EVER MOVED. ⊘⊘ And `channels` \
+             is CUMULATIVE over the whole boot: this list is APPEND-ONLY, so it still \
+             holds the channels of procs that have exited and been reaped — a late row \
+             for an old proc is NOT evidence that proc is alive (w361)",
             self.ticks,
             self.seen.len(),
             self.printed,
@@ -4295,7 +4398,18 @@ impl SemaPageReader {
                 || changed
                 || why != "tick"
                 || self.ticks.is_multiple_of(SEMA_PAGE_HEARTBEAT_TICKS);
-            if !due || (self.printed >= SEMA_PAGE_DUMPS_MAX && why != "final") {
+            // ★★★ `!first` IS LOAD-BEARING, AND IT WAS PAID FOR (w361, 2026-08-20).
+            // The cap is GLOBAL, not per-page. In a two-process boot the FIRST process
+            // exhausted all 128 dumps (`distinct page dumps = 128`, measured), so the SECOND
+            // process's semaphore page — a different `page_gpa` entirely — was never printed
+            // once: `grep -c 1fe85 <qemu.log>` → **0**. Its absence then reads as *"the slot
+            // machinery never ran for proc=5"*, which is a statement about the BUDGET and not
+            // about the GPU. ⊘ A newly-seen page is the highest-information event this dumper
+            // has; spending the budget on repeat views of a page already seen and then
+            // dropping the first view of a new one inverts the value ordering exactly.
+            // ⇒ first sight of a page ALWAYS prints, like `why == "final"`. Bounded: one page
+            // per process, not per tick.
+            if !due || (self.printed >= SEMA_PAGE_DUMPS_MAX && why != "final" && !first) {
                 if due {
                     self.suppressed += 1;
                 }
@@ -10626,14 +10740,35 @@ fn join_one_fb_leaf(
     // tens of entries while the address-table scan below is tens of thousands of rows, and on
     // the overwhelming majority of leaves there is no collision at all.
     if release.supersedes() && plane.fb_join_installed_at(leaf.phys) {
+        // ★★★★★ **w367 — THE CAP IS KEYED BY (FRAME, TAKER), NOT BY FRAME.**
+        //
+        // `[measured w366]` keyed by frame alone and never reset, this cap became the wall the
+        // moment the orphan reclaim let later processes run at all: eight frames each spent
+        // their 4 takeovers and then refused **293 times each**, and the refusal is not
+        // abstract — `0x1e00000` stayed *fabricated*, so the CE wrote to the VA that leaf
+        // backs and the host raised `Xid 31 FAULT_PDE ACCESS_TYPE_VIRT_WRITE @
+        // 0x7e59_c6000000`. Our own bound produced a hardware fault.
+        //
+        // ⊘ The hazard the cap exists for is REAL and is not what a lifetime-per-frame count
+        // measures. Its own words: *"the superseded row is re-proposed by the next settlement
+        // … an uncapped takeover is a ping-pong"* — that is **one pair of VAs fighting over
+        // one frame**. A genuinely NEW owner arriving later is not that, and a per-frame
+        // lifetime budget cannot tell the two apart: it spends the same four tickets on both.
+        //
+        // ⇒ Key it by `(phys, taking va)`. A ping-pong between two VAs still increments each
+        // side and is still bounded — at `2 × CAP` for that pair, not unbounded — while the
+        // Nth process to legitimately want a frame gets its own budget. The fix is a KEY, not
+        // an explanation, and not a bigger number (`the_key_was_the_va_not_the_extent`,
+        // `a_discrepancy_can_be_an_artefact_of_a_join`).
         let over = {
             let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
-            l.get(&leaf.phys).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
+            l.get(&(leaf.phys, leaf.va)).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
         };
         if over {
             eprintln!(
                 "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
-                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this frame. The old join stands and \
+                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this (frame, VA) pair. The old join \
+                 stands and \
                  this leaf stays fabricated. ⚠ The cap exists because the superseded row \
                  is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
                 leaf.va, leaf.phys
@@ -10653,7 +10788,7 @@ fn join_one_fb_leaf(
                 *supersede_ledger()
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
-                    .entry(r.phys)
+                    .entry((r.phys, leaf.va))
                     .or_insert(0) += 1;
                 eprintln!(
                     "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
@@ -10674,6 +10809,85 @@ fn join_one_fb_leaf(
                      store holds NO join at that offset. The row is unbound and the host \
                      object is ⊘ NOT freed",
                     r.phys, r.va.0
+                );
+            }
+        } else {
+            // ⊘⊘⊘ **THE FOURTH OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
+            //
+            // `supersede_joined_fb_leaf` returning `None` printed NOTHING, so a boot showing
+            // zero supersede lines read as *"the guard above was false"*. It was not: the
+            // guard was TRUE and the takeover simply found no row to take. `[measured
+            // w362/w363]` 48 refusals per frame on three GR frames with zero supersede lines,
+            // which I read as a disagreement between `fb_join_installed_at` (exact base) and
+            // `install_join` (any overlap). ⊘ That reading was WRONG — both predicates agree
+            // here; the store is per-DEVICE and keyed by phys, while the takeover is
+            // per-VAS and keyed by the CALLER's own pdb, so a join left by a different,
+            // exited process is unreachable to it BY CONSTRUCTION.
+            //
+            // ⇒ A branch whose failure case prints nothing is not a branch that "did not
+            // run" — and there is no way to tell those apart from the log. Same class as the
+            // global print cap and the append-only cursor list this campaign paid for today.
+            eprintln!(
+                "{head} {what} ⊘ SUPERSEDE NO-ROW fb_phys=0x{:x} va=0x{:x}: the store HOLDS a \
+                 join at this frame and THIS VAS has no row naming it — the owner is another \
+                 (probably exited) address space, which this takeover cannot reach. The guard \
+                 was TRUE; there was simply nothing here to take",
+                leaf.phys, leaf.va
+            );
+            // ★★★★★ **w366 — RECLAIM AN ORPHANED JOIN. This is the fix, and it belongs
+            // exactly here: the branch that was silent is the orphan case.**
+            //
+            // `[measured w365, real GA106]` on the three GR context frames that block every
+            // process after the first — `0x400000` `SET_VALID_SPAN_OVERFLOW_AREA`, `0x600000`
+            // `SET_TEX_HEADER_POOL`, `0x800000` `SET_TEX_SAMPLER_POOL` — the namer census
+            // answers **`live=0 retired=0`** on all 48 refusals of each, from TWO independent
+            // later processes. The store holds a join that **no address table anywhere
+            // names**. Refusing it refuses on behalf of nobody.
+            //
+            // ⊘ **RECOMPUTED HERE, NOT READ FROM THE DIAGNOSTIC CACHE.** The call site that
+            // PRINTS this at the refusal is memoised per frame for the device's life, which
+            // is fine for describing and wrong for deciding — a frame first seen while its
+            // owner lived would answer `live=1` forever. This is a decision, so it asks
+            // again, now.
+            //
+            // ⚠ **THE HOST OBJECT IS LEAKED, DELIBERATELY, AND COUNTED.** With no table row
+            // there is no `host_va`/`memory` to hand to `revoke_published_fb_leaf` — the row
+            // that would have carried them is what is missing. The `SUPERSEDE ABORTED` arm
+            // above already rules on this exact trade: *"a leak here is strictly better than
+            // freeing memory something may still be reading through"*. It is a bounded leak
+            // (one object per orphaned frame, and a frame can only be orphaned once) against
+            // an unbounded failure (every later process gets no GR backing at all). ⇒ A
+            // follow-up should plumb the backing out of `FbStore::release_join`, which
+            // already returns it, through `RegPlane::release_fb_join`, which discards it.
+            let (live_now, retired_now) = device.fb_join_namers(leaf.phys);
+            if live_now == 0 && retired_now == 0 {
+                if plane.release_fb_join(leaf.phys) {
+                    let drained = device.drain_pending_releases();
+                    eprintln!(
+                        "{head} {what} ★★★★★ ORPHAN-RECLAIMED fb_phys=0x{:x}: no LIVE and no \
+                         RETIRED address-table row named this frame, so the store's join was \
+                         owned by nobody and is given back. The install below can now \
+                         succeed. drained={drained} ⚠ host object LEAKED by design (no row \
+                         carried its handle); bounded at one per frame",
+                        leaf.phys
+                    );
+                } else {
+                    eprintln!(
+                        "{head} {what} ⊘ ORPHAN-RECLAIM NO-OP fb_phys=0x{:x}: the census said \
+                         nobody names this frame, but the store held no join at it either. \
+                         Nothing was reclaimed and nothing is wrong — the two are simply \
+                         consistent",
+                        leaf.phys
+                    );
+                }
+            } else {
+                eprintln!(
+                    "{head} {what} ⊘ NOT AN ORPHAN fb_phys=0x{:x} live={live_now} \
+                     retired={retired_now} — someone still names this frame, so the join is \
+                     NOT ours to take and the install stays refused BY NAME. ★ A live peer's \
+                     backing is never taken; that is the cross-process boundary, not an \
+                     obstacle to route around",
+                    leaf.phys
                 );
             }
         }
@@ -10815,11 +11029,68 @@ fn join_one_fb_leaf(
             })
         }
         Err(e) => {
+            // ★★★★★ **w364 — WHO STILL NAMES THIS FRAME? The refusal alone cannot say.**
+            //
+            // `[measured w361–w363]` this refusal fires 48× per frame on three GR context
+            // frames for every process after the first, and the supersede pre-check above
+            // printed NONE of its three outcomes for them — so the guard was false while this
+            // said `ALREADY_JOINED`. The census forks that three ways and each fork implies a
+            // DIFFERENT fix, which is why it is printed rather than assumed:
+            //
+            //   live=0 retired=0 → an ORPHAN: the store holds a join no table row names.
+            //                      Reclaiming it takes nothing from anyone.
+            //   live=0 retired>0 → a corpse whose rows still stand; the retired sweep should
+            //                      have taken it and did not — ask why it ran and skipped.
+            //   live>0           → the predecessor is STILL LIVE in our model. Then this is
+            //                      a MISSED TEARDOWN, not a stale join, and reclaiming would
+            //                      be theft from a running process. Refuse, and fix elsewhere.
+            // ⊘⊘⊘ **MEMOISED PER FRAME, AND THAT IS NOT AN OPTIMISATION — IT IS THE FIX FOR
+            // AN INSTRUMENT THAT CHANGED ITS OWN EXPERIMENT.**
+            //
+            // `[measured w364]` the unmemoised version ran `fb_join_namers` on **every**
+            // refusal — 2457 of them — and that call is O(live procs × VASes × table rows)
+            // against a 13 348-row table, i.e. ~33 M row visits on the refusal path. That
+            // boot **lost the GPU after the first process** (`nvidia-smi: No devices were
+            // found`, only ever ONE proc, A2 failing instantly instead of hanging), so the
+            // census answered a question about a run **it had altered**. The datum it
+            // produced (`live=1`) was real and useless: with one proc alive, the frame's only
+            // namer was that proc ITSELF — a self-collision, not the cross-process case the
+            // fork exists to resolve.
+            //
+            // ⇒ Compute once per frame and reuse. The first refusal for a frame pays for the
+            // scan and prints the verdict; every later one reads the cache. `a_probe_that_
+            // shares_the_allocator_is_not_an_observer`, and the campaign's own rule that a
+            // capture path must be **observationally neutral**.
+            let (live, retired) = {
+                let mut l = namer_census_cache()
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                match l.get(&leaf.phys) {
+                    Some(&v) => v,
+                    None => {
+                        // ⊘ Computed with the cache lock held, deliberately: two vCPUs racing
+                        // the same fresh frame would otherwise both pay the full scan.
+                        let v = device.fb_join_namers(leaf.phys);
+                        l.insert(leaf.phys, v);
+                        v
+                    }
+                }
+            };
             eprintln!(
                 "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} → ⚠ THE INSTALL REFUSED \
                  phys=0x{:x} len={} why=`{}` — this device still serves that range from its \
-                 own pages. ⊘ RELEASED and NOT bound",
-                leaf.va, leaf.phys, e.phys, e.len, e.why
+                 own pages. ⊘ RELEASED and NOT bound \
+                 FB-JOIN-NAMERS[live={live} retired={retired} ⇒ {}]",
+                leaf.va,
+                leaf.phys,
+                e.phys,
+                e.len,
+                e.why,
+                match (live, retired) {
+                    (0, 0) => "ORPHAN — named by nobody, live or dead",
+                    (0, _) => "CORPSE-ROWS — a retired proc still names it",
+                    _ => "LIVE — a running proc still names it; refusing is CORRECT",
+                }
             );
             device.release_unadopted_fb_leaf(
                 DOORBELL_TARGET_GPU,
@@ -15366,11 +15637,29 @@ fn selected_join_release() -> JoinReleaseArm {
 /// bounded and the boot says how often it was reached.
 const SUPERSEDE_CAP_PER_FRAME: usize = 4;
 
+/// ★★ **w364 — the per-frame `FB-JOIN-NAMERS` cache.** One scan per framebuffer frame for
+/// the life of the device, because the scan is O(procs × VASes × rows) and the refusal path
+/// it hangs off fires thousands of times per boot. Unmemoised it cost the GPU: see the block
+/// at the call site.
+///
+/// ⊘ Staleness is acceptable **for a diagnostic** and would not be for a decision: if this
+/// value is ever used to DECIDE a reclaim rather than to describe one, it must be recomputed
+/// at the decision point, not read from here.
+#[cfg(feature = "host-isolates")]
+fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u64, (usize, usize)>>
+{
+    static C: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<u64, (usize, usize)>>,
+    > = std::sync::OnceLock::new();
+    C.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
 /// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
 /// an unbounded loop. It is reset by nothing, which is correct — the bound is per device life.
-fn supersede_ledger() -> &'static std::sync::Mutex<std::collections::HashMap<u64, usize>> {
-    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, usize>>> =
+fn supersede_ledger()
+-> &'static std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>> {
+    static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>>> =
         std::sync::OnceLock::new();
     L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
