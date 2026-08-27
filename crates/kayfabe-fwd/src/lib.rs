@@ -2268,21 +2268,59 @@ pub fn commit_publish(
 /// shell arms exactly one and the type is what says so.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FbLeafBacking {
+    /// ### ⊘⊘⊘ CORRECTED 2026-08-27 — **"NO CPU VIEW" IS FALSE AS WRITTEN, AND THIS LINE
+    /// ### FORECLOSED THE PLACEMENT FIX FOR MONTHS.**
+    /// Vidmem **does** have a CPU view, and it is a *different mmap route* from sysmem's —
+    /// not an absent one. `NV_ESC_RM_MAP_MEMORY` (`0x4E`) registers an mmap **context**
+    /// against a caller-supplied descriptor, and the caller then `mmap`s *that descriptor*;
+    /// RM picks **the device node's state for an address inside a BAR** and the control
+    /// node's for system memory, refusing a descriptor of the other kind outright. All of
+    /// that is already specified, with `ogkm-580` citations, in
+    /// `kayfabe_abi::submit::NV_ESC_RM_MAP_MEMORY` — this crate simply never issued it.
+    /// ★ The sibling **`nvkvm-pv`** (shipped, host parity) implements exactly this route
+    /// end to end, *including through its isolate*
+    /// (`src/qemu/nvkvm_isolate_handlers.c:3618`, `src/guest/nvkvm_uvm_ext.c:585`).
+    ///
+    /// ⚠ What `w228`/R30 **actually measured** is narrower than the sentence below claimed:
+    /// that `kayfabe_isolate::ExportSource::HostDeviceMemory` *always* refuses, i.e. **one crossing
+    /// mechanism** cannot carry the isolate's mapping to the VMM. R30's own reason 1 *names*
+    /// the device-node route and objects only to handing that fd across the isolate/VMM
+    /// seam. Somewhere between the measurement and this summary, "this crossing refuses"
+    /// became "vidmem has no CPU view" — the exact doc-rot class `CLAUDE.md` warns about,
+    /// and it is load-bearing: sysmem placement is the **14.80×** factor in the large-kernel
+    /// perf gap, so this line has been silently pricing the data plane.
+    ///
+    /// ⊘ **STILL OPEN, do not read this correction as a green light:** *which process* holds
+    /// the BAR mapping, and whether the VMM holding one keeps "only the unprivileged isolate
+    /// touches the GPU" true. R30's reason 2 (NVIDIA's dma-buf gates CPU mapping on
+    /// `PDB_PROP_GPU_ZERO_FB`, an *integrated*-part property) does genuinely kill **dma-buf**
+    /// as the crossing descriptor on every discrete card we target. Reason 3
+    /// (`RawError::DeviceBackingNotPlaceable`) is **our own** refusal, not a hardware fact.
+    ///
     /// ⊘ **SUPERSEDED — `w228`'s chain.** Real host **vidmem** at the guest's own VA, with
-    /// **no CPU view**: the engine reads the card object and the guest reads the emulator's
-    /// fabricated one. Two memories, silent in both directions, no fault and no status.
+    /// no CPU view *joined to the guest's framebuffer range*: the engine reads the card
+    /// object and the guest reads the emulator's fabricated one. Two memories, silent in
+    /// both directions, no fault and no status.
     ///
     /// It is kept expressible because it is what a leaf *was* and because the difference
     /// between the two chains is the finding — ⊘ but it has no production caller: the shell
     /// arms [`FbLeafBacking::Joined`]. See `fb_cpu_view.md` §0.1 for the measurement that
-    /// settles why the card object cannot grow the missing view.
+    /// settles why the card object cannot grow the missing view **by that mechanism**.
     Vidmem,
     /// ★★★★★ **ONE memory.** A fabricated backing, mapped in the isolate, described to RM as
     /// an `OS_DESCRIPTOR` and placed at the leaf's VA — and handed up to the VMM, which maps
     /// the same pages as the guest's view of the leaf's framebuffer range.
     ///
     /// ⚠ The leaf becomes host **sysmem**; see [`kayfabe_isolate::FbLeafJoined`] for why that
-    /// divergence is named rather than silent, and why it is not optional.
+    /// divergence is named rather than silent.
+    ///
+    /// ⊘⊘ **CORRECTED 2026-08-27 — it was called "not optional", and that followed from
+    /// [`FbLeafBacking::Vidmem`]'s "no CPU view", which is false.** It is optional in
+    /// principle: the aperture the guest *declares* is decodable
+    /// (`kayfabe_abi::gvaspacepdes` maps `GMMU_APERTURE_VIDEO` → `Aperture::Vidmem`), and a
+    /// BAR-aperture CPU view of an RM object is a real route we do not issue. Read "the only
+    /// backing built today", **not** "the only backing possible" — the difference is the
+    /// PCIe-vs-VRAM operand placement cost.
     Joined,
 }
 

@@ -1,6 +1,30 @@
 # R30 — THE CPU VIEW: which object can carry it, and why the named mechanism cannot
 
-**STATUS: LIVE, 2026-08-11 — forward-ported from branch `fb-join` (`2fe5f39`) unchanged.**
+**STATUS: LIVE BUT RESCOPED, 2026-08-27.** Forward-ported from branch `fb-join` (`2fe5f39`)
+unchanged; the measurements below stand. ⊘⊘⊘ **What changed is the SCOPE OF THE TITLE.**
+
+> ### ⊘⊘⊘ RESCOPED 2026-08-27 — THIS DOC ANSWERS *"can `ExportBacking` carry it"*, NOT
+> ### *"does vidmem have a CPU view"*. The second reading is FALSE and it cost the placement fix.
+> The title asks *"which object can carry the CPU view"* and §0.1 answers for **one crossing
+> mechanism**: `ExportBacking`'s `HostDeviceMemory` source, which always refuses. That result
+> is real and re-verified. ⊘ But downstream it was compressed into
+> *"vidmem — with **no CPU view**"* on `FbLeafBacking::Vidmem`, and **that sentence is false**.
+> ★ Vidmem has a CPU view by a **different mmap route**: `NV_ESC_RM_MAP_MEMORY` (`0x4E`)
+> registers an mmap *context* against a caller-supplied descriptor and the caller `mmap`s
+> **that descriptor** — RM selecting **the device node for a BAR address** and the control
+> node for sysmem, and refusing the wrong kind outright. Cited, with `ogkm-580` line numbers,
+> in our own `kayfabe-abi/src/submit.rs:46-66` — we specified the route and never issued it.
+> ★ **`nvkvm-pv` ships it**, isolate included (`src/qemu/nvkvm_isolate_handlers.c:3618`,
+> `src/guest/nvkvm_uvm_ext.c:585`). §0.1's own **reason 1 names this route** and objects only
+> to handing the fd across the isolate/VMM seam — a statement about *crossing*, not existence.
+> ⚠ Load-bearing, not cosmetic: sysmem operand placement is the **14.80×** factor in the
+> large-kernel perf gap, so the compressed reading has been pricing the data plane.
+> ⊘ **Still open, and not licensed by this rescope:** which process holds the BAR mapping, and
+> whether a VMM holding one keeps *"only the unprivileged isolate touches the GPU"* true.
+> Reason 2 (dma-buf gated on `PDB_PROP_GPU_ZERO_FB`, an integrated-part property) still kills
+> **dma-buf** as the crossing descriptor on every discrete card we target; reason 3
+> (`DeviceBackingNotPlaceable`) is **our own** refusal, not a hardware fact.
+
 This is a **probe report**: what it measured on a real GA106 is not affected by the port, and
 its conclusion (which object can carry a guest-reachable CPU view) still stands.
 ⚠ Its successor `fb_join.md` §5.12 **has** changed — the bind moved after the install and now
