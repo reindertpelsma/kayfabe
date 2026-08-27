@@ -2334,6 +2334,91 @@ pub enum FbLeafBacking {
     Joined,
 }
 
+/// ★★★★★ **WHAT THE GUEST DECLARED FOR A LEAF**, as the backing decision needs it.
+///
+/// The guest's own page tables carry the aperture, and `kayfabe_abi::gvaspacepdes` decodes
+/// `GMMU_APERTURE_VIDEO`/`_PEER`/`_SYS_COH`/`_SYS_NONCOH` into [`kayfabe_arch::Aperture`].
+/// This type adds the two cases an `Aperture` cannot express: **managed** memory, and
+/// **nothing decodable**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeclaredPlacement {
+    /// The guest's PTEs name an aperture, and it is this one.
+    Aperture(kayfabe_arch::Aperture),
+    /// ⊘ **UVM — the sole exception to "the aperture is what the guest settled".**
+    ///
+    /// Under UVM **residency migrates**, so no single aperture is true for the lifetime of
+    /// the mapping and the guest's declaration is not an answer we can honour. Policy is
+    /// unchanged and predates this type (`mode2_uvm_residency.md`, DECIDED 2026-06-04): a
+    /// guest managed VA is backed by a host `cudaMallocManaged` allocation and **host UVM
+    /// owns residency**.
+    Managed,
+    /// Nothing decodable — no PTE reached, or an aperture this port does not model.
+    Undeclared,
+}
+
+/// ★★★★★ **THE APERTURE IS WHAT THE GUEST SETTLED** — the backing arm, decided from the
+/// guest's own declaration and from nothing else.
+///
+/// Owner ruling 2026-08-27, `docs/design/copy_placement_policy.md` §1. ⊘ **We never
+/// fabricate an aperture.** A leaf the guest declared vidmem is backed by vidmem; a leaf it
+/// declared sysmem stays sysmem.
+///
+/// ⚠ **This is a CONFORMANCE rule, not a tuning knob.** See [`honours_declaration`]: the
+/// count of leaves where declaration and backing disagree must read **zero**, and a nonzero
+/// reading is a defect with a name. An earlier framing treated that same number as *"the
+/// perf headroom"* — retired, because trading it off IS the fabricated aperture this rule
+/// forbids. ★ `#12`, the second-context hang that cost a campaign week, **was** an aperture
+/// mismatch.
+///
+/// # The arms, and why each is what it is
+///
+/// - `Aperture(Vidmem)` ⇒ [`FbLeafBacking::Vidmem`]. The guest's PTEs say device memory.
+/// - `Aperture(SysmemCoherent | SysmemNonCoherent)` ⇒ [`FbLeafBacking::Joined`]. Sysmem is
+///   what the joined chain already provides.
+/// - [`DeclaredPlacement::Managed`] ⇒ [`FbLeafBacking::Joined`]. The UVM exception: we do
+///   **not** assert an aperture, because residency is the host driver's to move.
+/// - [`DeclaredPlacement::Undeclared`] ⇒ [`FbLeafBacking::Joined`]. ⊘ Conservative **on
+///   purpose**: an undeclared leaf is one we could not read, and *"not found"* must never
+///   become *"assume device memory"* — that would be inventing the very declaration this
+///   function exists to honour.
+/// - `Aperture(Peer)` ⇒ [`FbLeafBacking::Joined`]. ⚠ **This arm is a placeholder and is
+///   known-wrong for a real peer mapping.** Peer memory lives on *another* GPU, and neither
+///   arm expresses that. It is routed to the joined chain because that is the one that
+///   cannot silently claim to be device-local, and because this port has never seen a peer
+///   leaf. A multi-GPU build must replace this arm rather than inherit it.
+#[must_use]
+pub fn backing_for(declared: DeclaredPlacement) -> FbLeafBacking {
+    match declared {
+        DeclaredPlacement::Aperture(kayfabe_arch::Aperture::Vidmem) => FbLeafBacking::Vidmem,
+        DeclaredPlacement::Aperture(_)
+        | DeclaredPlacement::Managed
+        | DeclaredPlacement::Undeclared => FbLeafBacking::Joined,
+    }
+}
+
+/// ★★★★★ **DOES THIS BACKING HONOUR WHAT THE GUEST DECLARED?** — the conformance predicate.
+///
+/// `false` is a **defect**, not a datum. A caller that finds one has published a leaf whose
+/// bytes live in an aperture the guest's own PTEs do not name, which is the `#12` class.
+///
+/// ⊘ **`Managed` and `Undeclared` are vacuously honoured, and that is not a loophole.**
+/// Neither carries a declaration to contradict: UVM's residency is the host driver's, and an
+/// undeclared leaf asserted nothing. ⚠ It does mean this predicate cannot distinguish
+/// *"correctly backed"* from *"we never read the declaration"* — so a census over it must
+/// report the `Undeclared` population separately, or a decoder that silently stopped
+/// decoding would read as **perfect conformance**.
+#[must_use]
+pub fn honours_declaration(declared: DeclaredPlacement, chosen: FbLeafBacking) -> bool {
+    match declared {
+        DeclaredPlacement::Aperture(kayfabe_arch::Aperture::Vidmem) => {
+            matches!(chosen, FbLeafBacking::Vidmem)
+        }
+        DeclaredPlacement::Aperture(kayfabe_arch::Aperture::Peer) => true,
+        DeclaredPlacement::Aperture(_) => matches!(chosen, FbLeafBacking::Joined),
+        DeclaredPlacement::Managed | DeclaredPlacement::Undeclared => true,
+    }
+}
+
 /// ★★★★★ **What backing ONE framebuffer leaf produced** — [`back_fb_leaf`]'s answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FbLeafBacked {
