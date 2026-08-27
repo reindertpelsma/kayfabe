@@ -1,0 +1,200 @@
+[38356.063130] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38356.063141] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38356.063147] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38356.615570] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38356.615581] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38356.615586] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.653535] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38356.653546] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38356.653551] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.691214] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38356.691226] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38356.691231] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.743430] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38356.743442] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38356.743447] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.789519] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38356.789531] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38356.789536] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.827362] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38356.827373] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38356.827378] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.864747] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38356.864759] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38356.864764] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38356.900851] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38356.900862] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38356.900867] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38585.523426] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38585.523437] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38585.523443] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38596.507969] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38596.507977] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38596.507981] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38598.378236] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38598.378242] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38598.378244] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38598.436553] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38598.436567] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38598.436574] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38598.486450] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38598.486460] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38598.486465] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38598.536334] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38598.536345] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38598.536350] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38599.142598] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38599.142610] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38599.142615] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.178374] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38599.178380] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38599.178381] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.210245] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38599.210251] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38599.210253] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.242962] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38599.242968] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38599.242969] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.286173] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38599.286184] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38599.286190] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.334417] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38599.334425] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38599.334427] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.370074] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38599.370081] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38599.370083] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38599.404529] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38599.404535] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38599.404537] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38803.342734] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38803.342740] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38803.342742] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38814.033370] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38814.033377] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38814.033380] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38815.940117] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38815.940127] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38815.940130] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38816.001295] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38816.001305] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38816.001310] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38816.054358] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.054369] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.054374] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38816.104374] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.104385] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.104390] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[38816.650034] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38816.650046] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38816.650051] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.686942] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38816.686953] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38816.686958] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.721220] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38816.721230] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38816.721236] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.756144] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[38816.756155] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[38816.756160] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.800229] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.800240] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.800245] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.834649] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.834659] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.834664] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.869957] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.869967] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.869972] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[38816.904434] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[38816.904445] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[38816.904449] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[42628.718057] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+[42685.409970] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[42691.359762] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+[42969.266386] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+[42993.190813] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[42999.203907] NVRM: memMap_IMPL: CPU mapping not supported for addressSpace: 0x1
+[44511.720306] KVM: debugfs: duplicate directory 215118-5
+[44511.935866] KVM: debugfs: duplicate directory 215317-12
+[56116.316131] loop3: detected capacity change from 0 to 102608
+[56116.719624] kauditd_printk_skb: 6 callbacks suppressed
+[56116.719628] audit: type=1400 audit(1786423882.522:58): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/snap/snapd/27591/usr/lib/snapd/snap-confine" pid=277090 comm="apparmor_parser"
+[56116.736421] audit: type=1400 audit(1786423882.539:59): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap-update-ns.lxd" pid=277092 comm="apparmor_parser"
+[56116.738765] audit: type=1400 audit(1786423882.542:60): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.benchmark" pid=277094 comm="apparmor_parser"
+[56116.742400] audit: type=1400 audit(1786423882.546:61): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.activate" pid=277093 comm="apparmor_parser"
+[56116.742631] audit: type=1400 audit(1786423882.546:62): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.buginfo" pid=277097 comm="apparmor_parser"
+[56116.744473] audit: type=1400 audit(1786423882.547:63): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.check-kernel" pid=277098 comm="apparmor_parser"
+[56116.749126] audit: type=1400 audit(1786423882.552:64): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.daemon" pid=277099 comm="apparmor_parser"
+[56116.750297] audit: type=1400 audit(1786423882.553:65): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.install" pid=277101 comm="apparmor_parser"
+[56116.750305] audit: type=1400 audit(1786423882.553:66): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.configure" pid=277100 comm="apparmor_parser"
+[56116.753567] audit: type=1400 audit(1786423882.557:67): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.remove" pid=277103 comm="apparmor_parser"
+[56121.272309] loop4: detected capacity change from 0 to 8
+[56121.769290] kauditd_printk_skb: 5 callbacks suppressed
+[56121.769295] audit: type=1400 audit(1786423887.571:73): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="/snap/snapd/27591/usr/lib/snapd/snap-confine" pid=277288 comm="apparmor_parser"
+[56121.793108] audit: type=1400 audit(1786423887.595:74): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap-update-ns.lxd" pid=277290 comm="apparmor_parser"
+[56121.916640] audit: type=1400 audit(1786423887.719:75): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.activate" pid=277291 comm="apparmor_parser"
+[56121.937647] audit: type=1400 audit(1786423887.740:76): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.buginfo" pid=277293 comm="apparmor_parser"
+[56121.942784] audit: type=1400 audit(1786423887.745:77): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.benchmark" pid=277292 comm="apparmor_parser"
+[56122.037135] audit: type=1400 audit(1786423887.839:78): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.check-kernel" pid=277294 comm="apparmor_parser"
+[56122.108952] audit: type=1400 audit(1786423887.911:79): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.daemon" pid=277295 comm="apparmor_parser"
+[56122.143910] audit: type=1400 audit(1786423887.946:80): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.configure" pid=277296 comm="apparmor_parser"
+[56122.170537] audit: type=1400 audit(1786423887.973:81): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.install" pid=277297 comm="apparmor_parser"
+[56122.237271] audit: type=1400 audit(1786423888.039:82): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.remove" pid=277298 comm="apparmor_parser"
+[63771.957493] kauditd_printk_skb: 20 callbacks suppressed
+[63771.957502] audit: type=1400 audit(1786431537.811:103): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="ubuntu_pro_apt_news" pid=278474 comm="apparmor_parser"
+[63772.546286] audit: type=1400 audit(1786431538.399:104): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="ubuntu_pro_esm_cache" pid=278477 comm="apparmor_parser"
+[63772.552299] audit: type=1400 audit(1786431538.406:105): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="ubuntu_pro_esm_cache//apt_methods" pid=278477 comm="apparmor_parser"
+[63772.553281] audit: type=1400 audit(1786431538.406:106): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="ubuntu_pro_esm_cache//apt_methods_gpgv" pid=278477 comm="apparmor_parser"
+[63772.554502] audit: type=1400 audit(1786431538.408:107): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="ubuntu_pro_esm_cache//cloud_id" pid=278477 comm="apparmor_parser"
+[63772.554977] audit: type=1400 audit(1786431538.408:108): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="ubuntu_pro_esm_cache//dpkg" pid=278477 comm="apparmor_parser"
+[63772.555856] audit: type=1400 audit(1786431538.409:109): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="ubuntu_pro_esm_cache//ps" pid=278477 comm="apparmor_parser"
+[63772.556401] audit: type=1400 audit(1786431538.410:110): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="ubuntu_pro_esm_cache//ubuntu_distro_info" pid=278477 comm="apparmor_parser"
+[63772.556898] audit: type=1400 audit(1786431538.410:111): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="ubuntu_pro_esm_cache_systemctl" pid=278477 comm="apparmor_parser"
+[63772.557484] audit: type=1400 audit(1786431538.411:112): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="ubuntu_pro_esm_cache_systemd_detect_virt" pid=278477 comm="apparmor_parser"
+[63785.191060] systemd[1]: systemd 249.11-0ubuntu3.22 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[63785.191238] systemd[1]: Detected virtualization kvm.
+[63785.191276] systemd[1]: Detected architecture x86-64.
+[63785.274402] systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+[63785.285852] systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+[63785.639713] systemd-journald[166]: Received SIGTERM from PID 1 (systemd).
+[63785.640115] systemd[1]: Stopping Journal Service...
+[63785.724710] systemd[1]: systemd-journald.service: Deactivated successfully.
+[63785.725089] systemd[1]: Stopped Journal Service.
+[63785.725136] systemd[1]: systemd-journald.service: Consumed 7.825s CPU time.
+[63785.740391] systemd[1]: Starting Journal Service...
+[63785.779515] systemd[1]: Started Journal Service.
+[63859.598393] systemd[1]: systemd 249.11-0ubuntu3.22 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY -P11KIT -QRENCODE +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[63859.598708] systemd[1]: Detected virtualization kvm.
+[63859.598731] systemd[1]: Detected architecture x86-64.
+[63859.676128] systemd[1]: Configuration file /run/systemd/system/netplan-ovs-cleanup.service is marked world-inaccessible. This has no effect as configuration data is accessible via APIs without restrictions. Proceeding anyway.
+[63859.688482] systemd[1]: /lib/systemd/system/snapd.service:23: Unknown key name 'RestartMode' in section 'Service', ignoring.
+[64755.738619] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+[65096.203644] audit: type=1400 audit(1786432862.073:113): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="/usr/lib/snapd/snap-confine" pid=412984 comm="apparmor_parser"
+[65101.172718] loop4: detected capacity change from 0 to 8
+[65104.795262] loop4: detected capacity change from 0 to 8
+[65105.649068] audit: type=1400 audit(1786432871.520:114): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap-update-ns.lxd" pid=413357 comm="apparmor_parser"
+[65105.652701] audit: type=1400 audit(1786432871.524:115): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.benchmark" pid=413359 comm="apparmor_parser"
+[65105.656503] audit: type=1400 audit(1786432871.527:116): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.buginfo" pid=413360 comm="apparmor_parser"
+[65105.656512] audit: type=1400 audit(1786432871.527:117): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="/snap/snapd/27591/usr/lib/snapd/snap-confine" pid=413356 comm="apparmor_parser"
+[65105.657926] audit: type=1400 audit(1786432871.529:118): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.activate" pid=413358 comm="apparmor_parser"
+[65105.659667] audit: type=1400 audit(1786432871.531:119): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.check-kernel" pid=413361 comm="apparmor_parser"
+[65105.665126] audit: type=1400 audit(1786432871.536:120): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.configure" pid=413363 comm="apparmor_parser"
+[65105.665136] audit: type=1400 audit(1786432871.536:121): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.daemon" pid=413362 comm="apparmor_parser"
+[65105.666184] audit: type=1400 audit(1786432871.537:122): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.remove" pid=413365 comm="apparmor_parser"
+[65105.666243] audit: type=1400 audit(1786432871.537:123): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.lxd.hook.install" pid=413364 comm="apparmor_parser"
+[70330.224837] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+[137708.861590] loop4: detected capacity change from 0 to 151512
+[137710.690278] loop5: detected capacity change from 0 to 130624
+[137718.011271] loop6: detected capacity change from 0 to 236048
+[137719.531533] kauditd_printk_skb: 7 callbacks suppressed
+[137719.531539] audit: type=1400 audit(1786505485.927:131): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="/snap/snapd/27591/usr/lib/snapd/snap-confine" pid=1039711 comm="apparmor_parser"
+[137719.755854] audit: type=1400 audit(1786505486.151:132): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.benchmark" pid=1039714 comm="apparmor_parser"
+[137719.759425] audit: type=1400 audit(1786505486.153:133): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.buginfo" pid=1039715 comm="apparmor_parser"
+[137719.759440] audit: type=1400 audit(1786505486.154:134): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.activate" pid=1039713 comm="apparmor_parser"
+[137719.888128] audit: type=1400 audit(1786505486.283:135): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.check-kernel" pid=1039716 comm="apparmor_parser"
+[137719.942738] audit: type=1400 audit(1786505486.338:136): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.configure" pid=1039718 comm="apparmor_parser"
+[137719.960725] audit: type=1400 audit(1786505486.356:137): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.daemon" pid=1039717 comm="apparmor_parser"
+[137720.033149] audit: type=1400 audit(1786505486.429:138): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.install" pid=1039719 comm="apparmor_parser"
+[137720.092462] audit: type=1400 audit(1786505486.488:139): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.hook.remove" pid=1039720 comm="apparmor_parser"
+[137720.107427] audit: type=1400 audit(1786505486.503:140): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.lxd.lxc" pid=1039721 comm="apparmor_parser"

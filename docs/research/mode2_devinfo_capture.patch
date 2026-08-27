@@ -1,0 +1,44 @@
+Mode-2 M5 capture instrumentation — apply to the HOST open driver
+/root/open-gpu-kernel-modules before running scripts/mode2_capture_host.sh.
+
+Target: src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c, function
+kfifoGetHostDeviceInfoTable_KERNEL, immediately AFTER the
+pRmApi->Control(... NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE ...) call
+returns NV_OK (around line 2066, before the numEntries>MAX check). Dumps the
+real per-page table so Mode-2's fake GSP can replay it.
+
+Insert:
+
+        // --- NVKVM_CAP capture (remove after capture) ---
+        {
+            NvU32 _i, _j;
+            NV_PRINTF(LEVEL_ERROR, "NVKVM_CAP DEVINFO base=%u num=%u bMore=%u\n",
+                      pParams->baseIndex, pParams->numEntries, pParams->bMore);
+            for (_i = 0; _i < pParams->numEntries; _i++)
+            {
+                NV2080_CTRL_FIFO_DEVICE_ENTRY *_e = &pParams->entries[_i];
+                for (_j = 0; _j < 16; _j += 4)
+                    NV_PRINTF(LEVEL_ERROR,
+                        "NVKVM_CAP e%u d%u %08x %08x %08x %08x\n",
+                        _i, _j, _e->engineData[_j], _e->engineData[_j+1],
+                        _e->engineData[_j+2], _e->engineData[_j+3]);
+                NV_PRINTF(LEVEL_ERROR,
+                    "NVKVM_CAP e%u pbdma %u,%u fault %u,%u np %u name %s\n",
+                    _i, _e->pbdmaIds[0], _e->pbdmaIds[1],
+                    _e->pbdmaFaultIds[0], _e->pbdmaFaultIds[1],
+                    _e->numPbdmas, _e->engineName);
+            }
+        }
+        // --- end NVKVM_CAP ---
+
+NOTE: A broader capture (every ROUTE_TO_PHYSICAL control) would instead hook
+rpcRmApiControl_GSP in src/nvidia/src/kernel/vgpu/rpc.c right after
+_issueRpcAndWait returns, dumping {cmd, rpc_params->status, paramsSize, and the
+first paramsSize bytes of rpc_params->params}. Start with the device-info-table
+(the current blocker); add the rpc.c hook if later controls also need real data.
+
+The engineData[] indices (ENGINE_INFO_TYPE_*) are defined in
+src/nvidia/inc/kernel/gpu/fifo/kernel_fifo.h: ENG_DESC, RM_ENGINE_TYPE, RUNLIST,
+RUNLIST_PRI_BASE, MMU_FAULT_ID, IS_HOST_DRIVEN_ENGINE, etc. — useful when baking
+the replay table into nvkvm_m3_service_cmdq (key on cmd 0x20801112, return the
+captured page for the requested baseIndex; flat copy, NOT FINN).

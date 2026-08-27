@@ -1,0 +1,2 @@
+[182273.136840] nvd_prog[1046304]: segfault at 7ff2cc600010 ip 00007ff2f6021688 sp 00007fffc3fb1598 error 6 in libcuda.so.580.159.04[7ff2f5f66000+f84000] likely on CPU 4 (core 0, socket 4)
+[182273.136854] Code: 48 83 e0 c0 48 8d 50 40 48 89 f8 48 8d 0c 16 0f 1f 00 0f 28 56 10 0f 28 4e 20 48 83 c6 40 48 83 c0 40 0f 28 46 f0 0f 28 66 c0 <0f> 2b 50 d0 0f 2b 60 c0 0f 2b 48 e0 0f 2b 40 f0 48 39 ce 75 d3 48

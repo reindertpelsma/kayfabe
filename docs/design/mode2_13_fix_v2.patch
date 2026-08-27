@@ -1,0 +1,457 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 2f3503a..7fd1d27 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -277,6 +277,13 @@ struct NvkvmGpuEmul {
+         uint32_t sweep_put;     /* M5.48c: GP_PUT as of the last working-set sweep — sweep
+                                  * again only when a channel's PUT ADVANCES (new submission =
+                                  * the guest just mapped+filled new working-set leaves) */
++        uint64_t ring_phys;     /* #13: the channel's TRUE GPFIFO ring FB page, captured from
++                                 * the M5.16 BAR1 resolution (chan_gpfifo_phys) after
++                                 * chan_execute — the VAS-walk page is stale for GSP-managed
++                                 * rings, so the ring-time CE parse must read entries HERE. */
++        uint64_t ring_pdb;      /* #13: the channel's content-validated VAS root (chan_pdb as
++                                 * pinned by M5.16's pushbuffer-content probe) — the ONLY root
++                                 * the ring-time parse may translate dst/src VAs under. */
+         bool     ce_route_logged; /* CE-fwd Step 0: one-shot NVKVM-CEFWD-ROUTE probe per channel */
+         /* M5.62 OPAQUE fast-path (user's plan): once a userspace channel's working set is fully
+          * resident (the dirty-sweep backs everything; the walk maps NOTHING new for K subs), skip
+@@ -2294,6 +2301,8 @@ static void nvkvm_m3_service_cmdq(NvkvmGpuEmul *s)
+                         s->chans[cslot].fin_fb      = 0;   /* #12: re-resolve on (re)alloc */
+                         s->chans[cslot].fin_sys     = false; /* #12 L3b: re-resolve aperture */
+                         s->chans[cslot].token_valid = false;
++                        s->chans[cslot].ring_phys   = 0;   /* #13: re-resolve on (re)alloc */
++                        s->chans[cslot].ring_pdb    = 0;
+                     }
+                 }
+                 qemu_log("nvkvm-gpu[%s] M5: channel alloc class=0x%04x gpFifoVA="
+@@ -3413,6 +3422,20 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+             { uint64_t t0cx = nvkvm_now_ns();
+               nvkvm_chan_execute(s);
+               nvkvm_t_chan_exec_ns += nvkvm_now_ns() - t0cx; nvkvm_t_chan_exec_calls++; }
++            /* #13: chan_execute resets chan_gpfifo_phys at entry, so a nonzero value here
++             * means M5.16 just resolved THIS channel's true ring page (BAR1-written, the
++             * VAS-walk page is stale for GSP-managed rings) and pinned its VAS root by
++             * pushbuffer content (chan_pdb).  Latch both per channel for the ring-time CE
++             * parse — the resolution is one-shot (M5.16 is gated on a pending window that
++             * exec_doorbell consumes once the channel has a token). */
++            if (s->chan_gpfifo_phys && !c->ring_phys) {
++                c->ring_phys = s->chan_gpfifo_phys;
++                c->ring_pdb  = s->chan_pdb;
++                qemu_log("nvkvm-gpu[%s] #13 ring latch ch[%d] client=0x%08x gpfifo=0x%llx "
++                         "ring_phys=0x%llx ring_pdb=0x%llx\n", s->chip->name, i, c->client,
++                         (unsigned long long)c->gpfifo_va, (unsigned long long)c->ring_phys,
++                         (unsigned long long)c->ring_pdb);
++            }
+             c->gp_get = s->chan_gp_get;          /* save consumed index */
+             if (c->gp_get == before) {
+                 continue;                        /* no new work on this channel */
+@@ -7501,6 +7524,395 @@ static void nvkvm_m2_probe_sem_pdb(NvkvmGpuEmul *s, uint32_t client, uint64_t ta
+     }
+ }
+ 
++/* ---------------------------------------------------------------------------
++ * #13 RING-TIME CE LEAF BACKING (2026-07-05).
++ *
++ * Root cause of #13 (cup8_iter N=1536 iter-2 hang, root-caused in 3d370d8): the guest queues
++ * an async CE op (cuMemsetD32 dst) on its GR-family COPY channel and then TEARS DOWN the UVM
++ * compute VAS before the HOST CE executes.  The deferred whole-VAS doorbell sweep
++ * (enum_gr_sysmem) never saw the FINAL 2 MiB leaf of the dst buffer while the VAS was alive,
++ * so the leaf was never backed into the persistent host GR VAS -> host CE FAULT_PDE
++ * VIRT_WRITE one 2 MiB page past the last-backed gpga (Xid 31) -> channel wedges -> the
++ * 16-slot completion-sema pool never fills -> libcuda busy-polls forever.  Sweep GATING is
++ * NOT fixable (by the time any sweep runs the VAS is already empty).
++ *
++ * Fix: back the leaves at SUBMISSION/RING time.  Before ringing a channel to the host,
++ * decode its pending GPFIFO pushbuffers' CE methods (subchannel-gated: COPY class only),
++ * translate each LAUNCH_DMA dst/src (+ SET_SEMAPHORE target) through the CHANNEL'S OWN VAS
++ * (still valid at submission — the guest cannot tear it down before the ring), and back any
++ * unbacked leaf via the SAME primitives the sweep uses (gpga_obj_ex for vidmem,
++ * back_and_map_sys_ex for sysmem).  gpga host-maps persist across the guest's later unmap,
++ * so the async host CE finds its mapping even after teardown.
++ *
++ * HOT-PATH discipline: runs per ring but only over the NEW [gp_get, gp_put) entries; the
++ * steady-state cost per already-backed chunk is one va_check (the same dedup the sweep
++ * uses).  PT walks + host allocs happen only for a genuinely unbacked chunk (rare: the
++ * alloc-churn window #13 lives in).  Idempotent with the sweep (shared va_seen keys +
++ * classify gate), so it cannot double-back what the sweep already owns.
++ * ------------------------------------------------------------------------- */
++struct nvkvm_ring_pb {
++    NvkvmGpuEmul *s;
++    struct nvkvm_chan_entry *c;
++    uint64_t own_pdb;                  /* channel's content-validated own VAS root (0 = none) */
++    bool     own_rs;                   /* its root aperture */
++    bool     own_probed;               /* probe done (once per parse) */
++    uint64_t pb;                       /* current pushbuffer base VA */
++    uint64_t cache_page;               /* VA of the cached 4 KiB pushbuffer page (~0 = none) */
++    uint32_t dbg_fed, dbg_launch;      /* #13 DIAG: methods fed / LAUNCH_DMAs seen this parse */
++    uint8_t  buf[4096];
++};
++
++/* Translate a GPU VA through the channel's OWN VAS at ring time. Order mirrors
++ * nvkvm_chan_translate but keyed on the ring channel (not the chan_* globals, which are
++ * stale in exec_doorbell): PROMOTE_CTX side-table (client-scoped) -> the channel's pinned
++ * own root (r->own_pdb: ring_pdb latched from M5.16's pushbuffer-content pin, or the
++ * per-parse pb-content probe).  NO blind foreign-VAS fallback — translating a dst under a
++ * foreign root and backing it would mirror the #12 sema-collapse class of bug. */
++static uint64_t nvkvm_m2_ring_xlate(NvkvmGpuEmul *s, struct nvkvm_ring_pb *r,
++                                    uint64_t va, bool *out_sys)
++{
++    for (int i = 0; i < s->va_map_n; i++) {
++        struct nvkvm_va_map *m = &s->va_map[i];
++        if (m->client == r->c->client && va >= m->va && va < m->va + m->size) {
++            *out_sys = m->sys;
++            return m->phys + (va - m->va);
++        }
++    }
++    if (r->own_pdb) {
++        uint64_t p = nvkvm_walk_pdb_root(s, r->own_pdb, va, r->own_rs, out_sys);
++        if (p != NVKVM_GMMU_FAULT) { return p; }
++    }
++    return NVKVM_GMMU_FAULT;
++}
++
++/* Read one pushbuffer method word, bulk-fetching a 4 KiB page at a time (one
++ * pci_dma_read / one uncached-BAR1 memcpy per page instead of per word). */
++static bool nvkvm_m2_ring_pb_rd32(struct nvkvm_ring_pb *r, uint32_t w, uint32_t *out)
++{
++    uint64_t va = r->pb + (uint64_t)w * 4;
++    uint64_t page = va & ~0xfffull;
++    if (page != r->cache_page) {
++        bool sy = false;
++        uint64_t p = nvkvm_m2_ring_xlate(r->s, r, page, &sy);
++        if (p == NVKVM_GMMU_FAULT) { return false; }
++        if (sy) {
++            if (pci_dma_read(&r->s->parent_obj, p, r->buf, 4096) != MEMTX_OK) {
++                return false;
++            }
++        } else {
++            uint8_t *hp = nvkvm_fb_host_ptr(r->s, p, false);
++            if (hp) { memcpy(r->buf, hp, 4096); } else { memset(r->buf, 0, 4096); }
++        }
++        r->cache_page = page;
++    }
++    *out = ldl_le_p(r->buf + (va & 0xfffull));
++    return true;
++}
++
++/* Back every unbacked 2 MiB chunk of [va, va+bytes) into the persistent host GR VAS,
++ * translating through the channel's own VAS (the guest hasn't torn it down yet).  Fast
++ * path per chunk = one va_check; classify gates chunks the sweep backed under another
++ * key.  clen shrinks (64 KiB steps) to the mapped phys-contiguous extent so a partially
++ * mapped tail chunk still backs what exists. */
++static void nvkvm_m2_ring_back_range(struct nvkvm_ring_pb *r, uint64_t va,
++                                     uint64_t bytes, const char *what)
++{
++    NvkvmGpuEmul *s = r->s;
++    uint32_t grc = s->m2_gr_client;
++    if (!grc || !va || !bytes) { return; }
++    uint64_t v0 = va & ~0x1fffffull;
++    uint64_t v1 = (va + bytes + 0x1fffffull) & ~0x1fffffull;
++    if (v1 <= v0 || v1 - v0 > (1ull << 30)) { return; }        /* 1 GiB sanity cap */
++    static uint32_t dbgr;                                      /* #13 DIAG budget */
++    for (uint64_t cva = v0; cva < v1; cva += 0x200000ull) {
++        if (nvkvm_m2_va_check(s, grc, cva)) { continue; }      /* already backed (hot path) */
++        bool sy = false;
++        uint64_t p = nvkvm_m2_ring_xlate(s, r, cva, &sy);
++        if (p == NVKVM_GMMU_FAULT) {
++            if (dbgr < 512) {
++                dbgr++;
++                qemu_log("nvkvm-gpu[%s] #13 rbr %s cva=0x%llx XLATE-FAULT (op va=0x%llx "
++                         "bytes=0x%llx)\n", s->chip->name, what, (unsigned long long)cva,
++                         (unsigned long long)va, (unsigned long long)bytes);
++            }
++            continue;                                          /* no PTE -> nothing to back */
++        }
++        if (!sy && nvkvm_dp_classify_fb(s, p) != 0) {
++            if (dbgr < 512) {
++                dbgr++;
++                qemu_log("nvkvm-gpu[%s] #13 rbr %s cva=0x%llx phys=0x%llx CLASSIFY-SKIP\n",
++                         s->chip->name, what, (unsigned long long)cva,
++                         (unsigned long long)p);
++            }
++            continue;                                          /* backed under another key */
++        }
++        /* Mapped phys-contiguous extent from cva, top-down in 64 KiB steps: a full 2 MiB
++         * leaf (the #13 case) resolves at the first probe. */
++        uint64_t clen = 0;
++        for (uint64_t t = 0x200000ull; t >= 0x10000ull; t -= 0x10000ull) {
++            bool esy = false;
++            uint64_t ep = nvkvm_m2_ring_xlate(s, r, cva + t - 0x1000, &esy);
++            if (ep != NVKVM_GMMU_FAULT && esy == sy && ep == p + t - 0x1000) {
++                clen = t;
++                break;
++            }
++        }
++        if (!clen) { continue; }
++        if (clen > 0x10000ull) {                    /* mid-point contiguity spot-check */
++            bool msy = false;
++            uint64_t mp = nvkvm_m2_ring_xlate(s, r, cva + clen / 2, &msy);
++            if (mp == NVKVM_GMMU_FAULT || msy != sy || mp != p + clen / 2) {
++                qemu_log("nvkvm-gpu[%s] #13 RING-BACK %s va=0x%llx NON-CONTIG mid "
++                         "(skip; sweep owns it)\n", s->chip->name, what,
++                         (unsigned long long)cva);
++                continue;
++            }
++        }
++        bool ok;
++        if (sy) {
++            uint32_t newh = 0;
++            ok = nvkvm_m2_back_and_map_sys_ex(s, grc, cva, p, clen, &newh);
++            if (ok) { nvkvm_m2_va_mark_gpa(s, grc, cva, p, newh); }
++        } else {
++            /* Same gpu_only request as the sweep's compute-client path (leaf_flush):
++             * gpga_obj_ex keeps it gpu_only only if the run is blank at walk time. */
++            ok = (nvkvm_m2_gpga_obj_ex(s, grc, cva, p, clen, s->m2cefwd) >= 0);
++            if (ok) { nvkvm_m2_va_mark(s, grc, cva); }
++        }
++        qemu_log("nvkvm-gpu[%s] #13 RING-BACK %s client=0x%08x va=0x%llx %s phys=0x%llx "
++                 "clen=0x%llx -> %s\n", s->chip->name, what, r->c->client,
++                 (unsigned long long)cva, sy ? "SYS" : "VID", (unsigned long long)p,
++                 (unsigned long long)clen, ok ? "BACKED" : "<-- back FAILED");
++    }
++}
++
++/* CE method state machine (mirrors chan_execute's decode of the same methods). */
++struct nvkvm_ring_ce_st { uint64_t off_in, off_out, sem_addr; uint32_t llen, lcount; };
++
++static void nvkvm_m2_ring_ce_method(struct nvkvm_ring_pb *r, struct nvkvm_ring_ce_st *st,
++                                    uint32_t m, uint32_t d)
++{
++    r->dbg_fed++;
++    switch (m) {
++    case 0x400: st->off_in  = (st->off_in  & 0xFFFFFFFFull) | ((uint64_t)d << 32); break;
++    case 0x404: st->off_in  = (st->off_in  & ~0xFFFFFFFFull) | d; break;
++    case 0x408: st->off_out = (st->off_out & 0xFFFFFFFFull) | ((uint64_t)d << 32); break;
++    case 0x40C: st->off_out = (st->off_out & ~0xFFFFFFFFull) | d; break;
++    case 0x418: st->llen   = d; break;
++    case 0x41C: st->lcount = d ? d : 1; break;
++    case 0x240: st->sem_addr = (st->sem_addr & 0xFFFFFFFFull) |
++                               ((uint64_t)(d & 0x01FFFFFFu) << 32); break;
++    case 0x244: st->sem_addr = (st->sem_addr & ~0xFFFFFFFFull) | d; break;
++    case 0x300: {                                                     /* LAUNCH_DMA */
++        bool remap    = (d >> 10) & 1;
++        bool mscrub   = (d >> 23) & 1;   /* MEMORY_SCRUB (kernel scrubber) — no data dst */
++        bool src_phys = (d >> 12) & 1;   /* PHYSICAL = guest-fb-phys, M5.60 owns that path */
++        bool dst_phys = (d >> 13) & 1;
++        uint32_t sem_type = (d >> 3) & 0x3;
++        uint64_t bytes = (uint64_t)st->llen * st->lcount;
++        r->dbg_launch++;
++        {
++            static uint32_t dbgl;
++            if (dbgl++ < 512) {
++                qemu_log("nvkvm-gpu[%s] #13 LAUNCH_DMA client=0x%08x d=0x%08x out=0x%llx "
++                         "in=0x%llx sem=0x%llx bytes=0x%llx\n", r->s->chip->name,
++                         r->c->client, d, (unsigned long long)st->off_out,
++                         (unsigned long long)st->off_in, (unsigned long long)st->sem_addr,
++                         (unsigned long long)bytes);
++            }
++        }
++        if (!mscrub && bytes) {
++            if (!dst_phys) { nvkvm_m2_ring_back_range(r, st->off_out, bytes, "dst"); }
++            if (!remap && !src_phys) { nvkvm_m2_ring_back_range(r, st->off_in, bytes, "src"); }
++        }
++        if (sem_type && st->sem_addr) { nvkvm_m2_ring_back_range(r, st->sem_addr, 8, "sem"); }
++        break;
++    }
++    default: break;
++    }
++}
++
++/* Parse the channel's pending [gp_get, gp_put) pushbuffers for CE ops and back their
++ * dst/src/sema leaves BEFORE the ring.  Subchannel-gated: only methods on a subchannel
++ * bound to a COPY class (SET_OBJECT class 0x..B5; default subch 4 = the CE convention)
++ * feed the CE state machine, so compute-class methods can't alias LAUNCH_DMA. */
++static void nvkvm_m2_ring_back_pending(NvkvmGpuEmul *s, struct nvkvm_chan_entry *c,
++                                       uint64_t gpf_phys, uint32_t gp_put)
++{
++    if (!s->m2exec || !s->m2_gr_client) { return; }
++    struct nvkvm_ring_pb r;
++    r.s = s; r.c = c;
++    r.own_pdb = 0; r.own_rs = false; r.own_probed = false;
++    r.pb = 0; r.cache_page = ~0ull;
++    static uint32_t dbgf;                        /* #13 DIAG: prove the hook runs */
++    if (dbgf < 64) {
++        dbgf++;
++        qemu_log("nvkvm-gpu[%s] #13 rbp ENTER client=0x%08x gpfifo=0x%llx get=%u put=%u "
++                 "ent=%u ring_phys=0x%llx ring_pdb=0x%llx\n", s->chip->name, c->client,
++                 (unsigned long long)c->gpfifo_va, c->gp_get, gp_put, c->gpfifo_ent,
++                 (unsigned long long)c->ring_phys, (unsigned long long)c->ring_pdb);
++    }
++    /* The channel's TRUE ring FB page.  Three sources, in order:
++     *   (1) M5.16-latched (c->ring_phys; CeUtils-style channels chan_execute resolved);
++     *   (2) derived from the channel-pool layout: libcuda's user channels pack each
++     *       channel buffer as [GPFIFO ring (gpfifo_ent*8) | USERD] — proven by this
++     *       boot's records (USERD guest-FB 0x4202000/0x4205000/... stride 0x3000, ring
++     *       VAs 0x200200000/0x200203000/... same stride, ent=1024 -> ring+0x2000=USERD).
++     *       c->userd IS the guest-FB USERD base (M5.4 memdesc), so ring = userd - ent*8.
++     *       VALIDATED before latching: the pending GP entry there must decode to a
++     *       plausible pushbuffer (and the parse below additionally content-pins the VAS
++     *       by that pushbuffer's first word before trusting any translation).
++     *   (3) the VAS-walk page (gpf_phys) — stale alias for GSP-managed rings, reads 0,
++     *       parse then finds nothing (safe no-op).  Never used for backing decisions
++     *       without the content pin. */
++    if (!c->ring_phys && !c->userd_sys && c->userd && c->gpfifo_ent &&
++        c->userd > (uint64_t)c->gpfifo_ent * 8) {
++        uint64_t cand = c->userd - (uint64_t)c->gpfifo_ent * 8;
++        uint64_t epa = cand + (uint64_t)c->gp_get * 8;
++        uint32_t e0 = (uint32_t)nvkvm_fb_read(s, epa, 4);
++        uint32_t e1 = (uint32_t)nvkvm_fb_read(s, epa + 4, 4);
++        uint64_t pb = (uint64_t)(e0 & 0xFFFFFFFCu) | ((uint64_t)(e1 & 0xFFu) << 32);
++        uint32_t pblen = (e1 >> 10) & 0x1FFFFFu;
++        if (pb && pblen && pblen <= 0x40000u) {
++            c->ring_phys = cand;
++            qemu_log("nvkvm-gpu[%s] #13 ring derive ch client=0x%08x gpfifo=0x%llx "
++                     "userd_fb=0x%llx -> ring_phys=0x%llx (entry[%u] pb=0x%llx len=%u)\n",
++                     s->chip->name, c->client, (unsigned long long)c->gpfifo_va,
++                     (unsigned long long)c->userd, (unsigned long long)cand,
++                     c->gp_get, (unsigned long long)pb, pblen);
++        }
++    }
++    uint64_t ring_base = c->ring_phys ? c->ring_phys : gpf_phys;
++    for (uint32_t idx = c->gp_get; idx < gp_put && idx < c->gpfifo_ent; idx++) {
++        uint64_t epa = ring_base + (uint64_t)idx * 8;
++        uint32_t e0 = (uint32_t)nvkvm_fb_read(s, epa, 4);
++        uint32_t e1 = (uint32_t)nvkvm_fb_read(s, epa + 4, 4);
++        uint64_t pb = (uint64_t)(e0 & 0xFFFFFFFCu) | ((uint64_t)(e1 & 0xFFu) << 32);
++        uint32_t pblen = (e1 >> 10) & 0x1FFFFFu;
++        if (!pb || !pblen) {
++            /* #13 DIAG: a pending entry the ring consumed but we read as empty — dump
++             * where the bytes ARE (overlay vs raw fb_page) to find the real ring home. */
++            static uint32_t dbgm;
++            if (c->ring_phys && dbgm < 64) {
++                dbgm++;
++                uint8_t *ov = nvkvm_fb_host_overlay(s, epa);
++                uint8_t *fp = nvkvm_fb_page(s, epa, false);
++                qemu_log("nvkvm-gpu[%s] #13 entry-miss ch client=0x%08x gpfifo=0x%llx "
++                         "idx=%u epa=0x%llx e0=0x%08x e1=0x%08x classify=%d ov=%p(%08x) "
++                         "fp=%p(%08x)\n", s->chip->name, c->client,
++                         (unsigned long long)c->gpfifo_va, idx, (unsigned long long)epa,
++                         e0, e1, nvkvm_dp_classify_fb(s, epa), ov,
++                         ov ? ldl_le_p(ov) : 0, fp, fp ? ldl_le_p(fp) : 0);
++            }
++            continue;
++        }
++        /* Pin the parse's translation root ONCE, content-validated: prefer the channel's
++         * M5.16-pinned root; else probe the snooped roots (same-client first) for one
++         * under which THIS pushbuffer's first word reads non-zero (mirrors M5.16's
++         * pb_pdb pick).  No root -> we cannot trust any translation -> skip. */
++        if (!r.own_pdb) {
++            if (c->ring_pdb) {
++                r.own_pdb = c->ring_pdb; r.own_rs = false;   /* M5.16 pins FB-rooted */
++            } else {
++                for (int pass = 0; pass < 2 && !r.own_pdb; pass++) {
++                    for (int i = 0; i < s->chan_vas_n; i++) {
++                        if (!s->chan_vas[i].pdb) { continue; }
++                        if (pass == 0 && s->chan_vas[i].client != c->client) { continue; }
++                        bool psy = false;
++                        uint64_t pp = nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, pb,
++                                                          s->chan_vas[i].root_sys, &psy);
++                        if (pp != NVKVM_GMMU_FAULT && nvkvm_phys_rd32(s, pp, psy) != 0) {
++                            r.own_pdb = s->chan_vas[i].pdb;
++                            r.own_rs  = s->chan_vas[i].root_sys;
++                            break;
++                        }
++                    }
++                }
++            }
++            if (!r.own_pdb) { continue; }
++        }
++        r.pb = pb; r.cache_page = ~0ull;
++        r.dbg_fed = 0; r.dbg_launch = 0;
++        struct nvkvm_ring_ce_st st;
++        memset(&st, 0, sizeof(st));
++        st.lcount = 1;
++        uint8_t ce_subch = 1u << 4;              /* default: subch 4 = COPY (CE convention) */
++        uint32_t w = 0, hdr0 = 0;
++        bool rd0 = nvkvm_m2_ring_pb_rd32(&r, 0, &hdr0);
++        for (; w < pblen; ) {
++            uint32_t hdr;
++            if (!nvkvm_m2_ring_pb_rd32(&r, w, &hdr)) { break; }
++            w++;
++            uint32_t secop = (hdr >> 29) & 0x7;
++            uint32_t subch = (hdr >> 13) & 0x7;
++            uint32_t maddr = (hdr & 0xFFFu) << 2;
++            uint32_t cnt   = (hdr >> 16) & 0x1FFFu;
++            if (secop == 4) {                    /* IMMD_DATA_METHOD: 13-bit inline data */
++                if (ce_subch & (1u << subch)) {
++                    nvkvm_m2_ring_ce_method(&r, &st, maddr, (hdr >> 16) & 0x1FFFu);
++                }
++                continue;
++            }
++            if (secop != 1 && secop != 3 && secop != 5) { continue; }
++            for (uint32_t j = 0; j < cnt && w < pblen; j++, w++) {
++                uint32_t d;
++                if (!nvkvm_m2_ring_pb_rd32(&r, w, &d)) { w = pblen; break; }
++                uint32_t m = (secop == 3) ? maddr : maddr + j * 4;   /* NON_INC holds */
++                if (m == 0x000) {                /* SET_OBJECT: (re)bind subch class */
++                    if ((d & 0xFFu) == 0xB5u) { ce_subch |= (1u << subch); }
++                    else                      { ce_subch &= ~(1u << subch); }
++                    continue;
++                }
++                if (ce_subch & (1u << subch)) {
++                    nvkvm_m2_ring_ce_method(&r, &st, m, d);
++                }
++            }
++        }
++        {                                        /* #13 DIAG: what did this parse see? */
++            static uint32_t dbge;
++            if (dbge++ < 512) {
++                qemu_log("nvkvm-gpu[%s] #13 parse ch client=0x%08x gpfifo=0x%llx idx=%u "
++                         "pb=0x%llx pblen=%u rd0=%d hdr0=0x%08x own_pdb=0x%llx stopped_w=%u "
++                         "fed=%u launch=%u\n", s->chip->name, c->client,
++                         (unsigned long long)c->gpfifo_va, idx, (unsigned long long)pb,
++                         pblen, rd0, hdr0, (unsigned long long)r.own_pdb, w,
++                         r.dbg_fed, r.dbg_launch);
++            }
++        }
++    }
++    /* #13 THE FIX: the per-CE-dst decode above resolves the channel's OWN live VAS root
++     * (r.own_pdb, content-validated by a pending pushbuffer) but only backs the leaves the
++     * decoded LAUNCH_DMAs name — which misses ops the parser doesn't model (e.g. a large
++     * cuMemset routed through a path it can't see) whose dst is the leaf the host CE later
++     * FAULT_PDEs on.  So, having the LIVE root in hand, do a FULL enum of it right here and
++     * back EVERY currently-mapped leaf into the persistent host GR VAS (keyed on grc, the
++     * exact bookkeeping the deferred sweep uses — idempotent, so re-walks back nothing).
++     *
++     * This is the deferred whole-VAS sweep, but run UNGATED at submission time, when the
++     * guest's compute VAS is still alive.  The deferred sweep walks the SAME pdb but is
++     * gated (m2_gr_vas_dirty / periodic); the doorbell where this submission maps its final
++     * leaf can be gated OFF, and by the next ungated sweep the guest has already torn the
++     * VAS down (runs=0) — so the final leaf is never backed and the async host CE faults
++     * (root cause of #13).  Walking it HERE, unconditionally, guarantees the leaf is host-
++     * resident before we ring.  Bounded budget; cheap in steady state (all leaves already
++     * va_seen => zero host ops), so no LLM/compute regression. */
++    if (r.own_pdb && s->m2_gr_client) {
++        int budget = 200000;
++        struct nvkvm_leaf_acc a; memset(&a, 0, sizeof(a));
++        a.s = s; a.client = s->m2_gr_client;
++        /* FB-rooted (false), matching the proven deferred enum_gr_sysmem walk of this same
++         * pdb — the UVM compute root resolves its leaves that way (backed>0 in the sweep). */
++        nvkvm_m2_pt_enum(s, r.own_pdb, false, 0, 0, &a, &budget);
++        nvkvm_m2_leaf_flush(&a);
++        if (a.backed) {
++            qemu_log("nvkvm-gpu[%s] #13 RING-SWEEP ch client=0x%08x own_pdb=0x%llx runs=%d "
++                     "backed=%d (sysB=0x%llx vidB=0x%llx budget_left=%d)\n", s->chip->name,
++                     c->client, (unsigned long long)r.own_pdb, a.runs, a.backed,
++                     (unsigned long long)a.sysbytes, (unsigned long long)a.vidbytes, budget);
++        }
++    }
++}
++
+ /* M5.9 EXECUTION FORWARD (per doorbell): map the GR channel's newly-submitted pushbuffers
+  * into the host GR VASpace (double-mmap + copy the guest's command bytes) so the host GPU's
+  * MMU resolves them, then RING the host doorbell (per-channel token, unconditional since M5.22)
+@@ -7636,6 +8048,12 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+         if (gp_put == c->gp_get || gp_put > c->gpfifo_ent || gp_put < c->gp_get) {
+             continue;                            /* no new (non-wrapping) work */
+         }
++        /* #13: back this submission's CE dst/src/sema leaves into the persistent host GR
++         * VAS NOW, through the channel's own (still-live) VAS — before the ring, because
++         * the host executes asynchronously and the guest may tear the VAS down first.
++         * Runs regardless of the OPAQUE skip-walk below (a resident channel can still
++         * reference a freshly-mapped leaf the deferred sweep will never see). */
++        nvkvm_m2_ring_back_pending(s, c, gpf_phys, gp_put);
+         int newmaps = 0;
+         /* M5.62 OPAQUE fast-path: a fully-resident userspace channel re-references only
+          * already-mapped pushbuffers (the dirty-sweep keeps the working set backed; newpushbufs has

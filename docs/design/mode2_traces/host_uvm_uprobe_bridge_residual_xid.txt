@@ -1,0 +1,23 @@
+Host residual during M8.14 no-LD_PRELOAD / no-NVUVM_SHADOW bridge pass,
+2026-06-07.
+
+The 4-byte CUDA round trip passed, but host dmesg still showed
+dmaAllocMapping_GM107 failures and Xid 32 from other high-UVM CE packets.  This
+is not production-clean and remains follow-up debt.
+
+Representative host dmesg tail from vh:
+
+```text
+[107053.710356] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107053.712808] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107053.713797] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107053.714766] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107053.728139] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107053.734813] NVRM: Xid (PCI:0000:00:07): 32, pid=162582, name=nvkvm_stub, channel 0x01000008 intr 00800000
+[107053.737960] NVRM: Xid (PCI:0000:00:07): 32, pid=162582, name=nvkvm_stub, channel 0x01000008 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 04002186
+[107053.744549] NVRM: Xid (PCI:0000:00:07): 32, pid=162582, name=nvkvm_stub, channel 0x00000004 intr0 00000000 intr1 80000000
+[107053.747630] NVRM: Xid (PCI:0000:00:07): 32, pid=162582, name=nvkvm_stub, channel 0x00000004 intr0 00000000 intr1 80000000
+[107059.582031] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107060.042730] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[107060.223104] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+```

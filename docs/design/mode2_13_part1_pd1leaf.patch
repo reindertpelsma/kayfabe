@@ -1,0 +1,32 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 2f3503a..9afcb89 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -4191,6 +4191,27 @@ static uint64_t nvkvm_walk_pdb_root(NvkvmGpuEmul *s, uint64_t pdb, uint64_t va,
+         uint32_t idx = (uint32_t)((va >> lvl[i].lo) &
+                                   ((1ull << (lvl[i].hi - lvl[i].lo + 1)) - 1));
+         uint64_t pde = nvkvm_pt_rd64(s, tbl + (uint64_t)idx * 8, tsys);
++        /* #13 FIX: on GA10x, a PD1 entry can itself be a 512 MiB LEAF PTE
++         * (kern_gmmu_fmt_ga10x.c: pLevels[2].bPageTable = NV_TRUE; bit0 =
++         * NV_MMU_VER2_PTE_VALID, aperture 2:1 with PTE encoding 0=VID,2/3=SYS).
++         * The guest kernel-RM's CeUtils channel (bUseVasForCeCopy,
++         * channel_utils.c) identity-maps the WHOLE FB heap into its own VAS at
++         * the largest page size — 512 MiB — and then issues its page-table
++         * writes as VIRTUAL-dst CE copies (dstAddr = fbPhys + fbAliasVA -
++         * startFbOffset = fbPhys).  Without this case the walker decoded the
++         * 512M vidmem PTE as PDE_APERTURE_INVALID -> FAULT, chan_execute
++         * silently DROPPED every such PT write, the compute VAS's rebuilt
++         * subtree never reached our FB shadow, its re-mapped buffers were
++         * never backed into the persistent host GR VAS, and the host CE
++         * FAULT_PDE'd one page past the last-backed leaf (#13, Xid 31). */
++        if ((pde & 1) && i == 2) {                   /* PD1-level 512 MiB leaf PTE */
++            uint32_t lap = (uint32_t)((pde >> 1) & 0x3);
++            uint64_t pg;
++            if (lap == 0) { pg = ((pde >> 8) & ((1ull << 25) - 1)) << 12; *out_sys = false; }
++            else if (lap == 2 || lap == 3) { pg = ((pde >> 8) & ((1ull << 46) - 1)) << 12; *out_sys = true; }
++            else { return NVKVM_GMMU_FAULT; }        /* PEER unsupported */
++            return pg + (va & 0x1FFFFFFFull);
++        }
+         uint32_t ap = (uint32_t)((pde >> 1) & 0x3);  /* PDE APERTURE: 1=VID,2/3=SYS */
+         if (ap == 1) { tbl = ((pde >> 8) & ((1ull << 25) - 1)) << 12; tsys = false; }
+         else if (ap == 2 || ap == 3) { tbl = ((pde >> 8) & ((1ull << 46) - 1)) << 12; tsys = true; }

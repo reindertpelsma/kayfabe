@@ -1,0 +1,36 @@
+# arm2_guest_comparison.txt — generated 2026-08-12T16:07:29Z
+# Arm 2 could NOT be run as briefed: the guest hangs INSIDE cuCtxCreate, so a
+# program that must first create a context can never reach a deliberate fault.
+# What follows is the equivalent measurement from ALREADY-COMMITTED artifacts in
+# /workspace/nvkvm-rs (a boot was in flight there; these are read-only reads).
+
+## 1. Xid IDENTITY per boot — graded by ENGINE + CLIENT, not by count
+  w248: ENGINE CE0 HUBCLIENT_CE1;ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0;
+  w263: ENGINE CE2_PBDMA0 HUBCLIENT_ESC;ENGINE CE3_PBDMA0 HUBCLIENT_ESC;
+  w264: ENGINE CE2_PBDMA0 HUBCLIENT_ESC;ENGINE CE3_PBDMA0 HUBCLIENT_ESC;
+  w265: ENGINE CE2 HUBCLIENT_CE0;ENGINE CE2_PBDMA0 HUBCLIENT_ESC;ENGINE CE3      HUBCLIENT_CE1;ENGINE CE3 HUBCLIENT_CE1;ENGINE CE3_PBDMA0 HUBCLIENT_ESC;
+  w266: ENGINE CE2 HUBCLIENT_CE0;ENGINE CE3 HUBCLIENT_CE1;
+  w267: ENGINE CE2 HUBCLIENT_CE0;ENGINE CE3 HUBCLIENT_CE1;
+  w268: ENGINE CE2 HUBCLIENT_CE0;
+  w269: ENGINE CE2 HUBCLIENT_CE0;
+  w270: ENGINE CE2 HUBCLIENT_CE0;
+  w271: ENGINE CE2 HUBCLIENT_CE0;ENGINE GRAPHICS HUBCLIENT_FE;
+  w274: ENGINE GRAPHICS HUBCLIENT_FE;
+  w274b: ENGINE GRAPHICS HUBCLIENT_FE;
+  w275: ENGINE GRAPHICS HUBCLIENT_FE;
+  w276: ENGINE GRAPHICS HUBCLIENT_FE;
+
+## 2. THE SAME BOOT, HOST vs GUEST (w275, the pinned arm)
+  host dmesg Xid lines      = 1
+  host Xid row              = Xid (PCI:0000:00:07): 31, pid=2262675, name=memfd:kayfabe-i, channel 0x00000009, intr 00000000. MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x7ec5_10e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+  guest dmesg total lines   = 34
+  guest dmesg NVRM lines    = 31   <- non-empty: the zero below is MEASURED, not missing
+  guest dmesg Xid/fault     = 0
+
+## 3. THE COMPARISON WITH THE DELIBERATE NATIVE FAULT (this repo, arm1_native)
+  native deliberate : ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0  FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+  guest current wall: ENGINE GRAPHICS HUBCLIENT_FE         FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+  => SAME engine, SAME fault type, SAME access type, DIFFERENT CLIENT.
+     GPCCLIENT_T1_0 is a shader making a data access; HUBCLIENT_FE is the graphics
+     FRONT END, i.e. the method/pushbuffer fetch path. A count of Xid lines cannot
+     see that substitution; only the client field can.

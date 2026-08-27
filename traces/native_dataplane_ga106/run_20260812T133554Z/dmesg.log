@@ -1,0 +1,200 @@
+[224965.416838] systemd[1]: Stopping Journal Service...
+[224965.448968] systemd[1]: systemd-journald.service: Deactivated successfully.
+[224965.450009] systemd[1]: Stopped Journal Service.
+[224965.450088] systemd[1]: systemd-journald.service: Consumed 1min 41.365s CPU time.
+[224965.481417] systemd[1]: Starting Journal Service...
+[224965.544136] systemd[1]: Started Journal Service.
+[225142.036230] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225142.036244] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225142.036248] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225158.372126] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225158.372141] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225158.372146] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225162.773716] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225162.773730] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225162.773735] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225162.863537] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225162.863549] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225162.863554] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225162.977588] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225162.977600] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225162.977605] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225163.076187] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225163.076198] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225163.076203] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225164.315129] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225164.315144] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225164.315150] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.376942] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225164.376953] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225164.376958] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.438453] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225164.438464] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225164.438469] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.498923] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225164.498934] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225164.498939] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.584161] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225164.584176] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225164.584181] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.647986] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225164.647997] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225164.648001] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.738704] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225164.738715] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225164.738720] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225164.812468] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225164.812479] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225164.812483] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225810.022043] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225810.022059] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225810.022064] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225826.339257] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225826.339272] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225826.339277] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.452397] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225830.452464] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225830.452470] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.540727] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225830.540741] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225830.540746] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.625446] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225830.625461] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225830.625466] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225830.707308] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225830.707321] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225830.707326] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[225832.029490] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.029506] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.029511] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.090774] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.090790] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.090794] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.150503] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.150517] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.150522] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.210417] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[225832.210430] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[225832.210435] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.291292] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.291306] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.291310] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.351969] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.351980] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.351985] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.411935] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.411946] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.411950] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[225832.471473] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[225832.471484] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[225832.471489] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[228113.493998] workqueue: psi_avgs_work hogged CPU for >10000us 8 times, consider switching to WQ_UNBOUND
+[230955.108756] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230955.108784] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230955.108799] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230971.621202] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230971.621217] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230971.621222] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230975.113032] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230975.113046] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230975.113051] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230975.178443] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230975.178453] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230975.178458] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230975.246838] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230975.246852] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230975.246859] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230975.309853] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230975.309865] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230975.309870] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+[230976.372233] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230976.372246] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230976.372249] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.432636] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230976.432653] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230976.432657] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.493807] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230976.493827] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230976.493831] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.552801] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x1 current: 0x0).
+[230976.552815] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+[230976.552818] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.633734] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230976.633754] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230976.633759] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.692528] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230976.692545] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230976.692549] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.752752] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230976.752771] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230976.752775] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[230976.812447] NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist incompatible with this engine (requested: 0x2 current: 0x0).
+[230976.812463] NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE3
+[230976.812467] NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x0000000c
+[315892.210360] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02c00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.217063] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.222770] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.228445] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.233940] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.239391] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02600000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.244686] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[315892.250396] NVRM: Xid (PCI:0000:00:07): 31, pid=2193541, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02a00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.520729] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02c00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.527740] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.533205] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.538714] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.581441] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.586751] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02600000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.592055] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318045.597435] NVRM: Xid (PCI:0000:00:07): 31, pid=2198829, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02a00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.820023] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02c00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.827275] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.832558] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.838408] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.870251] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.875718] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02600000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.881095] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[318294.886303] NVRM: Xid (PCI:0000:00:07): 31, pid=2199705, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02a00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.605025] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02c00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.612401] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02e00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.617863] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.623200] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_03200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.628719] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02400000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.633976] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02600000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.639650] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319720.644986] NVRM: Xid (PCI:0000:00:07): 31, pid=2204449, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_02a00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[319970.468738] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.489154] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.508885] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.527063] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.545696] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.564027] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.582342] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[319970.600706] NVRM: Xid (PCI:0000:00:07): 31, pid=2205548, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.147150] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.161529] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.174853] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.189014] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.202987] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.216610] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.230509] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[321991.244668] NVRM: Xid (PCI:0000:00:07): 31, pid=2209901, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.234363] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.255399] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.275316] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.294908] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.341534] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.361543] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x01000012, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.381950] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x01000013, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324095.403965] NVRM: Xid (PCI:0000:00:07): 31, pid=2216084, name=memfd:kayfabe-i, channel 0x01000014, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324344.765697] NVRM: Xid (PCI:0000:00:07): 31, pid=2217904, name=memfd:kayfabe-i, channel 0x02000015, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324344.784910] NVRM: Xid (PCI:0000:00:07): 31, pid=2217904, name=memfd:kayfabe-i, channel 0x02000016, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324344.803315] NVRM: Xid (PCI:0000:00:07): 31, pid=2217904, name=memfd:kayfabe-i, channel 0x02000017, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[324344.821351] NVRM: Xid (PCI:0000:00:07): 31, pid=2217904, name=memfd:kayfabe-i, channel 0x02000018, intr 00000000. MMU Fault: ENGINE CE3 HUBCLIENT_CE1 faulted @ 0x2_0440f000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[327119.293165] NVRM: Xid (PCI:0000:00:07): 31, pid=2226347, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[329098.634124] NVRM: Xid (PCI:0000:00:07): 31, pid=2233438, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[330176.857425] NVRM: Xid (PCI:0000:00:07): 31, pid=2238276, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[332137.789470] NVRM: Xid (PCI:0000:00:07): 31, pid=2244266, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[332393.095720] NVRM: Xid (PCI:0000:00:07): 31, pid=2246177, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04428000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[334330.361890] NVRM: Xid (PCI:0000:00:07): 31, pid=2250782, name=memfd:kayfabe-i, channel 0x01000011, intr 00000000. MMU Fault: ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x2_04420000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[334586.622257] NVRM: Xid (PCI:0000:00:07): 31, pid=2251707, name=memfd:kayfabe-i, channel 0x00000009, intr 00000000. MMU Fault: ENGINE GRAPHICS HUBCLIENT_FE faulted @ 0x75b2_aee00000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE

@@ -1,0 +1,42 @@
+STAGE faultgr
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d, 0)
+ok   cuDeviceGetName(nm, sizeof(nm), d)
+name=NVIDIA GeForce RTX 3060
+ok   cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, d)
+ok   cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, d)
+compute=8.6
+ok   cuDeviceTotalMem(&tot, d)
+totalMem=11909 MiB
+MARKFD 17
+ok   cuCtxCreate(&victim, 0, d)
+ok   cuCtxCreate(&byst, 0, d)
+ok   cuMemAlloc(&db, 4096)
+ok   cuCtxSetCurrent(victim)
+ok   cuMemAlloc(&da, 1 << 20)
+VICTIM da=0x7a662a400000  BYSTANDER db=0x7a662a200000
+-- PROVOKE: COMPUTE-CLASS global store to an UNMAPPED device VA --
+ok   cuModuleLoadData(&mod, k_ptx)
+ok   cuModuleGetFunction(&fn, mod, "wildwr")
+  wild VA = 0x7a762a400000 (da + 64GiB)
+  TRY G_launch               cuLaunchKernel(fn, 1, 1, 1, 1, 1, 1, 0, 0, args, 0) rc=0 no error
+  TRY G_sync                 cuCtxSynchronize()                 rc=700 an illegal memory access was encountered
+FAULT how=G_wild_global_store va=0x7a762a400000 first_op_rc=0(no error) sync_rc=700(an illegal memory access was encountered) delivered_on=A_LATER_SYNC
+-- POST-FAULT INTERROGATION (victim context) --
+  TRY q1_sync                cuCtxSynchronize()                 rc=700 an illegal memory access was encountered
+  TRY q2_dtoh                cuMemcpyDtoH(&rv, da, 4)           rc=700 an illegal memory access was encountered
+  TRY q3_alloc               cuMemAlloc(&tmp, 4096)             rc=700 an illegal memory access was encountered
+  TRY q4_htod                cuMemcpyHtoD(da, &hv, 4)           rc=700 an illegal memory access was encountered
+-- BYSTANDER, SAME PROCESS, SAME GPU, DIFFERENT CONTEXT --
+  TRY b1_setcurrent          cuCtxSetCurrent(bystander)         rc=0 no error
+  TRY b2_htod                cuMemcpyHtoD(db, &bv, 4)           rc=700 an illegal memory access was encountered
+  TRY b3_dtoh                cuMemcpyDtoH(&brv, db, 4)          rc=700 an illegal memory access was encountered
+  TRY b4_sync                cuCtxSynchronize()                 rc=700 an illegal memory access was encountered
+BYSTANDER_INPROC rc=0/700/700/700 value=0x0 want=0x1234abcd -> BROKEN
+  TRY b5_setcurrent_back     cuCtxSetCurrent(victim)            rc=0 no error
+  TRY q5_ctxdestroy          cuCtxDestroy(victim)               rc=0 no error
+VICTIM_STATE sync=700 dtoh=700 alloc=700 htod=700 destroy=0 -> POISONED
+VERDICT FAULT_PROVOKED how=G_wild_global_store
+DONE

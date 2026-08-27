@@ -1,0 +1,51 @@
+/workspace/nvdp/nvdp.c: In function ‘maps_reload’:
+/workspace/nvdp/nvdp.c:213:44: warning: ‘%s’ directive output may be truncated writing up to 299 bytes into a region of size 160 [-Wformat-truncation=]
+  213 |         snprintf(m->path, sizeof m->path, "%s", path[0] ? path : "");
+      |                                            ^~
+In file included from /usr/include/stdio.h:894,
+                 from /workspace/nvdp/nvdp.c:76:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 300 bytes into a destination of size 160
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~
+/workspace/nvdp/nvdp.c: In function ‘fd_is_nvidia’:
+/workspace/nvdp/nvdp.c:349:65: warning: ‘%s’ directive output may be truncated writing up to 250 bytes into a region of size 24 [-Wformat-truncation=]
+  349 |     } else { static __thread char t[24]; snprintf(t, sizeof t, "%s", path + 5); *name = t; }
+      |                                          ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~
+In file included from /usr/include/stdio.h:894,
+                 from /workspace/nvdp/nvdp.c:76:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 251 bytes into a destination of size 24
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~
+/workspace/nvdp/nvdp.c:347:54: warning: ‘%s’ directive output may be truncated writing up to 250 bytes into a region of size 24 [-Wformat-truncation=]
+  347 |         snprintf(g_fdname[fd], sizeof g_fdname[fd], "%s", path + 5);
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~
+In file included from /usr/include/stdio.h:894,
+                 from /workspace/nvdp/nvdp.c:76:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 251 bytes into a destination of size 24
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~
+/workspace/nvdp/nvdp.c: In function ‘main’:
+/workspace/nvdp/nvdp.c:995:50: warning: ‘%s’ directive output may be truncated writing up to 255 bytes into a region of size 64 [-Wformat-truncation=]
+  995 |             snprintf(g_pcidev, sizeof g_pcidev, "%s", e->d_name);
+      |                                                  ^~
+In file included from /usr/include/stdio.h:894,
+                 from /workspace/nvdp/nvdp.c:76:
+/usr/include/x86_64-linux-gnu/bits/stdio2.h:71:10: note: ‘__builtin_snprintf’ output between 1 and 256 bytes into a destination of size 64
+   71 |   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   72 |                                    __glibc_objsize (__s), __fmt,
+      |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   73 |                                    __va_arg_pack ());
+      |                                    ~~~~~~~~~~~~~~~~~

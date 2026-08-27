@@ -1,0 +1,30 @@
+DEBUG-ONLY guest-driver patch (confirms the cuCtxCreate=999 root cause).
+Production fix = populate pVSI->ceCaps via the GSP-client static-info RPC in the
+emulator (no guest patch); see memory mode2_cuctxcreate_999_diagnosis.
+
+After the SIGSEGV fix, cuCtxCreate returned CUDA error 999: libcuda bailed at the
+copy-engine object (0xc7b5) because NV2080_CTRL_CMD_CE_GET_ALL_CAPS (0x20802a0a)
+returned all-zero CE caps on the guest (host returns CE0/1=0x03e3, CE2/3=0x03e2;
+NV2080_CTRL_CE_CAPS_TBL_SIZE=2). The control is served guest-local from
+pVSI->ceCaps[] (VGPU_STATIC_INFO), which is zero in our setup.
+
+Apply to nvidia/nv.c, in nvidia_ioctl(), right after the rm_ioctl() call
+(default case): for NV_ESC_RM_CONTROL (NR 0x2a) with NVOS54.cmd==0x20802a0a,
+overwrite the user params with host CE caps:
+
+    rmStatus = rm_ioctl(sp, nv, &nvlfp->nvfp, arg_cmd, arg_copy, arg_size);
+    if (arg_cmd == 0x2a && arg_copy != NULL && arg_size >= 32 &&
+        *(NvU32 *)((char *)arg_copy + 8) == 0x20802a0a) {
+        void __user *_up = (void __user *)(*(NvU64 *)((char *)arg_copy + 16));
+        if (_up) {
+            NvU8 _c[136]; memset(_c, 0, sizeof(_c));
+            _c[0]=0xe3;_c[1]=0x03;_c[2]=0xe3;_c[3]=0x03;   /* capsTbl[0..1]=0x03e3 */
+            _c[4]=0xe2;_c[5]=0x03;_c[6]=0xe2;_c[7]=0x03;   /* capsTbl[2..3]=0x03e2 */
+            *(NvU64 *)(_c + 128) = 0x0fULL;                /* present mask CE0-3   */
+            copy_to_user(_up, _c, sizeof(_c));
+        }
+    }
+
+RESULT (2026-06-04, fresh boot, with the pAllocParms debug patch too):
+cuCtxCreate=999 -> gone; now HANGS on real GPU channel work (exit 124) -> the
+channel-execution / data-plane frontier. Confirms CE-caps-zero was the 999 cause.

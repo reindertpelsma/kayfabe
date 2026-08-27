@@ -1,0 +1,67 @@
+# P3 (PDB-key the data-plane tables) — BANKED 2026-07-19. No code diff; lands WITH P4-4a.
+
+Status: **not implemented standalone.** Tree is green at P1. This records the row-by-row
+re-keying spec and why it must land with P4-4a (its only real consumer), per the escape-hatch
+discipline.
+
+## Why standalone P3 is a no-op (and therefore banked)
+
+P3's acceptance behavior — *"one process reliably passes concurrently, single-process
+untouched"* — is **already satisfied by the committed P1 state**, measured over 5 fresh-boot
+2× `cup8` runs:
+
+| run | result |
+|-----|--------|
+| P1 first | A=0 B=0 (both pass) |
+| reliability 1 | A=124(hang) B=0 |
+| reliability 2 | A=0 B=0 |
+| instrumented | A=0 B=124(hang) |
+
+The **winner always completes rc=0 byte-exact**; only the *loser* flakily hangs. Single-process
+is byte-identical (ladder green every phase). So the P3 target behavior is met.
+
+The data plane **already separates by distinct-per-proc client** (v3 work): `m2_mapped_va` is
+`(client,va)`-keyed; `m2_cli_vas`/`va_map` are client-keyed; each client gets its own host VAS
+(`m2_cvas`/`grmapper`). P1 confirmed the two procs carry **distinct PDBs** (e.g. `0x3401000` vs
+`0x3402000`/`0x3405000`, varying per boot). Because the two procs already have distinct clients,
+converting the client key to the PDB key is a **no-op for both single-proc and the 2-proc
+winner** — the same guest VA in two procs is *already* disambiguated by client. Re-keying the hot
+#12/#13 backing/sema resolvers for zero behavioral change is exactly the speculative hot-path
+churn the "correctness/single-proc-safety over green-test-hacks" mandate forbids.
+
+## The loser hang is the P4 wall, not a P3 aliasing bug
+
+The loser sits in a busy `MC_SERVICE_INTERRUPTS` + backing re-sweep loop, its compute-aperture
+VAs `st=0x51 ALREADY-MAPPED`, never completing — i.e. its own `PD0[1]` leaf is never published
+into its PDB's FB shadow because its PT-writer push **starves** (plan §4 Findings 1–2). No amount
+of data-plane table re-keying fixes a *missing* binding; that is what **P4-4a (per-PDB PT
+capture, keyed by the CE-write's destination FB-address→owning-PDB)** produces. The per-VAS
+sub-tables P3 would build are the *storage* 4a writes into — dead code without 4a.
+
+## The row-by-row re-keying spec (to land WITH P4-4a)
+
+Move onto the per-`NvkvmProc` `vas[]` (PDB) sub-tables introduced in P1
+(`struct nvkvm_proc { pdbs[]; ... }` → extend each PDB slot with the tables below):
+
+| row | table (today) | key today | → new key | note |
+|----:|---------------|-----------|-----------|------|
+| 3 | `chan_vas[]` | client (partial) | PDB | already carries `pdb`; select by it |
+| 4 | `m2_cli_vas[]` | client | PDB | sema-resolve consults PDB directly |
+| 5 | `va_map[]` | client | PDB | PROMOTE_CTX side-table under the owning PDB |
+| 20 | `m2_cvas[]` | (client,tsg) | (PDB,tsg) | host VAS already per-client; formalize |
+| 25 | `m2_fbback[]` | fb_base (no owner!) | PDB | the one client-BLIND table — attribute at insert |
+| 27 | `m2_mapped_va[]` | (client,va) | (PDB,va) | dedup/staleness under PDB |
+| 31 | `m2_cpt[]` | pdb (already!) | PDB | formalize as the per-VAS capture home for 4a |
+
+Resolve every channel to its PDB via the v3 dup-chain (`nvkvm_chan_own_pdb_rs` /
+`nvkvm_m2_pdb_gr_owner`, already present) and select backing/mapping/sema by PDB. Single-process:
+one PDB per VAS → filter is a no-op → byte-identical. **Gate the switch behind `nvkvm_m2_multiproc()`
+during bring-up** (as v3 did for its divergences) so single-proc takes the identical client path
+until 4a is proven, then drop the gate (P5).
+
+Row 25 `m2_fbback` is the only one needing a real new field (an owning PDB, set at the
+`back_channel_userd` / data-plane insert from the backing client's proc PDB) so
+`nvkvm_fb_host_overlay` can prefer the *submitting* PDB's overlay when two procs' identical
+guest fb_base collide — but note #12's stale-overlay drop-on-free already covers the
+single-process and sequential-context cases, so this must be added *carefully* (it is on the
+hottest read path) and only under the multiproc gate.

@@ -1,0 +1,457 @@
+diff --git a/src/qemu/nvkvm_gpu_emul.c b/src/qemu/nvkvm_gpu_emul.c
+index 91bb8cf..2f3503a 100644
+--- a/src/qemu/nvkvm_gpu_emul.c
++++ b/src/qemu/nvkvm_gpu_emul.c
+@@ -554,6 +554,13 @@ struct NvkvmGpuEmul {
+     int      m2_cur_cvas;
+     uint32_t m2_gr_channel;     /* M5.8: the host GR channel handle (c56f under GR TSG) */
+     uint32_t m2_gr_tsg;         /* M5.8: the host GR TSG handle (a06c, channel's parent) */
++    uint32_t m2_gr_tsg_sched;   /* #12 cont.34: which GR TSG handle we last GPFIFO_SCHEDULE'd.
++                                 * doorbell_setup schedules the GR TSG once, but early-returns on
++                                 * m2_doorbell_ready (sticky), so a 2nd context's NEW GR TSG was
++                                 * never scheduled -> its 8 rl=0 GR channels rang but the host
++                                 * never consumed (gp_get stuck 0) -> 8/16 pool semas never
++                                 * advanced -> #12 residual. The ring loop schedules the GR TSG
++                                 * whenever it differs from this. */
+     /* M7 (cuCtxCreate fix): the HOST's real GR-object alloc reply params (NV_GR_ALLOCATION_
+      * PARAMETERS, 16B incl the GSP-filled `caps` output @+12). Captured by shadow_fwd after the
+      * forwarded 0xc7c0 alloc, then passed through into the GSP-RPC reply (resp+112) so the guest
+@@ -584,7 +591,18 @@ struct NvkvmGpuEmul {
+      * is NOT present in client B's VAS.  A va-only dedup wrongly skipped placing a
+      * shared pushbuffer (e.g. 0x120000000) into the CE-scrubber's VAS after another
+      * client claimed the slot first -> host GR0_PBDMA0 MMU FAULT_PTE -> channel halt. */
+-    struct { uint32_t client; uint64_t va; } m2_mapped_va[NVKVM_MAX_MAPPED_VA];
++    /* #12 cont.31: sysmem-backed entries also record the GUEST GPA the VA resolved to at
++     * back time + the host OS-descriptor handle pinning that page.  A later sweep that
++     * resolves the SAME {client,VA} to a DIFFERENT GPA means the guest tore down and
++     * re-created the mapping (2nd cuCtxCreate re-allocs channels/sema-pools at the same
++     * VAs but fresh pages) — the host GR-VAS then still targets the OLD page, so host
++     * completion-semaphore writes land in stale memory (libcuda's 16-sema pool at VA
++     * 0x20440f000 reads 0 forever = the #12 hang; the stale writes also corrupt whoever
++     * reuses the old page = the UVM MAX_JUMP asserts).  gpa==0 => legacy mark (no
++     * staleness semantics: vidmem chunks, pushbuffer marks).  reback counts re-backs
++     * (ping-pong guard). */
++    struct { uint32_t client; uint64_t va; uint64_t gpa; uint32_t hmem;
++             uint16_t reback; } m2_mapped_va[NVKVM_MAX_MAPPED_VA];
+     int      m2_mapped_va_n;
+     /* M6.0 (item-4 prereq): guest RAM as a shared memfd, so the STUB can mmap any guest GPA
+      * and OS_DESCRIPTOR-register it -> the host GPU can DMA into the guest's sysmem GR buffers
+@@ -1651,15 +1669,19 @@ static bool nvkvm_m2_bd_page_has(NvkvmGpuEmul *s, uint64_t page)
+     return false;
+ }
+ 
++static void nvkvm_m2_host_rmfree(NvkvmGpuEmul *s, uint32_t client, uint32_t parent,
++                                 uint32_t hobj); /* #12 cont.34 fwd-decl */
+ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t fObj)
+ {
+     bool root = (fClient == fObj);            /* client-root free: purge all of fClient */
+     int dropped = 0;
++    bool freed_compute_chan = false;          /* #12 cont.34: a compute-aperture chan was freed */
+     /* chans[]: match the freed channel handle, or any channel of the freed client. */
+     for (int i = 0; i < s->chan_n; ) {
+         bool hit = (root && s->chans[i].client == fClient) ||
+                    (s->chans[i].client == fClient && s->chans[i].hobject == fObj);
+         if (hit) {
++            if (s->chans[i].gpfifo_va >= 0x200000000ull) { freed_compute_chan = true; }
+             /* #12-L3c DIAG: a channel free is the (a)-vs-(b) hinge — log the freed
+              * channel's gpfifo VA + client so the bench timeline shows whether the
+              * 0x8a-climber's channel is FREED before the payload-9 writer appears
+@@ -1673,11 +1695,38 @@ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t f
+         }
+         i++;
+     }
+-    /* m2_chanbuf[]: the channel's host-USERD registration. */
++    /* m2_chanbuf[]: the channel's host-USERD registration.
++     * #12 cont.31 (proven via CE-INSTR pageA!=pageB): each chanbuf USERD also has a
++     * paired m2_fbback overlay entry (same fb_base, host_qva) that makes the guest's
++     * BAR1 GP_PUT write land in the host USERD object.  That overlay was NEVER removed
++     * on channel-free.  Because the guest RE-USES the SAME USERD FB addresses across a
++     * teardown (2nd cuCtxCreate), CTX2's fresh back_channel_userd APPENDS a new fbback
++     * at a HIGHER index while the STALE CTX1 fbback (same fb_base, dead host object)
++     * survives at a LOWER index.  nvkvm_fb_host_overlay scans fbback in order and hits
++     * the stale entry FIRST -> CTX2's guest GP_PUT is diverted into the dead object,
++     * while the real host USERD object (the fresh m2_chanbuf qva the host GPU reads)
++     * stays GP_PUT=0 -> the host never fetches the GPFIFO, never runs the CE
++     * SET_SEMAPHORE, and libcuda's wait-ALL on the 16 completion semaphores spins
++     * forever = the #12 hang.  Fix: when a chanbuf USERD is removed, remove its paired
++     * m2_fbback overlay (matched by fb_base) so CTX2's fresh registration is the ONLY
++     * overlay for that USERD page.  (The dead host USERD object itself is freed by the
++     * fn=10 FREE shadow-forward; this only drops our stale overlay bookkeeping.) */
+     for (int i = 0; i < s->m2_chanbuf_n; ) {
+         bool hit = (root && s->m2_chanbuf[i].client == fClient) ||
+                    (s->m2_chanbuf[i].client == fClient && s->m2_chanbuf[i].chan == fObj);
+         if (hit) {
++            uint64_t ufb = s->m2_chanbuf[i].fb_base;
++            for (int j = 0; ufb && j < s->m2_fbback_n; ) {
++                if (s->m2_fbback[j].fb_base == ufb) {
++                    qemu_log("nvkvm-gpu[%s] #12 drop stale USERD overlay fbback[%d] "
++                             "fb_base=0x%llx host_qva=%p (chan 0x%08x freed)\n",
++                             s->chip->name, j, (unsigned long long)ufb,
++                             s->m2_fbback[j].host_qva, s->m2_chanbuf[i].chan);
++                    s->m2_fbback[j] = s->m2_fbback[s->m2_fbback_n - 1];
++                    s->m2_fbback_n--; continue;
++                }
++                j++;
++            }
+             s->m2_chanbuf[i] = s->m2_chanbuf[s->m2_chanbuf_n - 1];
+             s->m2_chanbuf_n--; dropped++; continue;
+         }
+@@ -1698,7 +1747,13 @@ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t f
+         }
+         i++;
+     }
+-    /* m2_cvas[]: per-(client,tsg) fresh VAS state. */
++    /* m2_cvas[]: per-(client,tsg) fresh VAS state. Purge this client's entries so the next
++     * context mints a FRESH host VAS. #12 cont.34: minting fresh (vs reusing) is the correct
++     * choice — reusing the old fvas keeps the guest's re-allocated-at-same-VA/new-GPA sysmem
++     * colliding (st=0x51) with stale CTX1 maps and thrashes the STALE-SYS re-back (4000+
++     * host-rmfree/run, opening unmap windows the host GR channel faults into). A fresh empty
++     * VAS + the compute-aperture va_seen flush below (so the full working set re-backs cleanly
++     * with NO collision) is stable. */
+     for (int i = 0; i < s->m2_cvas_n; ) {
+         if (s->m2_cvas[i].client == fClient) {     /* root or specific: both scope to client */
+             s->m2_cvas[i] = s->m2_cvas[s->m2_cvas_n - 1];
+@@ -1706,6 +1761,41 @@ static void nvkvm_m2_ctx_free_drop(NvkvmGpuEmul *s, uint32_t fClient, uint32_t f
+         }
+         i++;
+     }
++    /* #12 cont.34: on a COMPUTE-aperture channel teardown (CTX1's cuCtxDestroy frees all
++     * 16 compute channels), FLUSH this client's compute-aperture (VA >= 0x2_0000_0000)
++     * SYSMEM host pins so the NEXT context re-backs its pushbuffer/pool working set CLEANLY
++     * into the REUSED cvas (see nvkvm_m2_cvas_get #12-cont34).  Without this, CTX2's fresh
++     * PT walk coalesces the same VAs at DIFFERENT run boundaries than CTX1 left mapped, so
++     * back_and_map_sys hits st=0x51 ALREADY-MAPPED against CTX1's stale pin — the host GR/CE
++     * channel then faults FAULT_PTE on its own pushbuffer (host Xid 31 @0x2_02400000) and
++     * never runs, so the 16 completion semaphores (pool VA 0x20440ff00..fff0) never advance
++     * and libcuda's wait-ALL spins forever.  Freeing the host pin makes RM cascade-unmap its
++     * FIXED map_dma from the cvas, vacating the VA for a clean re-place.  Scoped to the freed
++     * client + compute aperture + only when a compute channel was actually freed, so single-
++     * context paths (cup2/cup8/LLM: no mid-run compute-channel free) are untouched. */
++    if (freed_compute_chan) {
++        uint32_t fdev = 0;
++        for (int d = 0; d < s->m2_devvas_n; d++) {
++            if (s->m2_devvas[d].client == fClient) { fdev = s->m2_devvas[d].dev; break; }
++        }
++        int flushed = 0;
++        for (int i = 0; i < s->m2_mapped_va_n; ) {
++            if (s->m2_mapped_va[i].client == fClient &&
++                s->m2_mapped_va[i].va >= 0x200000000ull) {
++                if (s->m2_mapped_va[i].hmem && fdev) {
++                    nvkvm_m2_host_rmfree(s, fClient, fdev, s->m2_mapped_va[i].hmem);
++                }
++                s->m2_mapped_va[i] = s->m2_mapped_va[s->m2_mapped_va_n - 1];
++                s->m2_mapped_va_n--; flushed++; continue;
++            }
++            i++;
++        }
++        if (flushed) {
++            qemu_log("nvkvm-gpu[%s] #12 cont.34 compute-aperture flush: freed+forgot %d "
++                     "sysmem pins (client=0x%08x) for clean next-context re-back\n",
++                     s->chip->name, flushed, fClient);
++        }
++    }
+     /* chan_vas[] (no client key): drop the directly-freed VASpace handle, plus any whose
+      * handle was referenced by a just-removed devvas entry of this client. */
+     for (int i = 0; i < s->chan_vas_n; ) {
+@@ -3395,11 +3485,11 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+                  * unscheduled host TSG is idle and the ring is a no-op (GPU stays 0%).
+                  * Schedule once, per channel's parent TSG. NVA06C_CTRL_CMD_GPFIFO_SCHEDULE
+                  * (0xa06c0101), params {bEnable=1,bSkipSubmit,bSkipEnable}. */
+-                if (c->tsg && !c->scheduled && c->tsg != s->m2_gr_tsg) {
+-                    /* M5.33: the GR TSG is already GPFIFO_SCHEDULE'd once by M5.8
+-                     * doorbell_setup; re-scheduling it here (per-channel) re-binds it
+-                     * with the transient/freed init channels in the TSG -> st=0x57
+-                     * OBJECT_NOT_FOUND (8x noise). Skip the GR TSG. */
++                /* M5.33: the GR TSG is already GPFIFO_SCHEDULE'd (M5.8 in ctx1, or the
++                 * #12 cont.34 GR-TSG schedule in exec_doorbell for a 2nd context); re-
++                 * scheduling it here per-channel re-binds it with transient/freed init
++                 * channels -> st=0x57. Skip whichever GR TSG is already scheduled. */
++                if (c->tsg && !c->scheduled && c->tsg != s->m2_gr_tsg_sched) {
+                     uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;
+                     uint32_t sst = 0xffff;
+                     int src = nvkvm_m2_control1(s, c->client, c->tsg, 0xa06c0101u,
+@@ -3483,8 +3573,20 @@ static void nvkvm_bar0_write(void *opaque, hwaddr off, uint64_t val,
+              * memset over a BAR1-mapped vidmem buffer, an MMIO-write perf wall — NOT this).
+              * Re-gated behind m2trace (unvalidated for cup8/LLM as default-on); revisit if the
+              * completion is needed once the memset wall is fixed.  See mode2_2nd_context_hang.md. */
+-            if (s->m2_trace &&
+-                c->client != s->m2_gr_client &&
++            /* #12 cont.33 (2026-07-05): ENABLE by default for kernel CeUtils channels.
++             * This forge was previously m2_trace-gated ("unvalidated as default-on")
++             * because the tracking-sema-pool collapse (fixed above in nvkvm_chan_sem_wr32
++             * — CeUtils' tracking sema no longer lands on UVM's page) fired FIRST and
++             * masked it.  With that collapse gone, the CeUtils scrubberDestruct
++             * (ce_utils.c:349 "Timed out waiting for the scrub") is now the terminal #12
++             * block: it polls THIS channel's finishPayload (gpfifo_va+0x8004), which no
++             * parsed CE SEM_RELEASE ever advances (the finishPayload is the channel-HOST
++             * semaphore, not a CE method).  The scrub is a no-op on our sparse/pre-zeroed
++             * backing, so completing it now (forward-only monotonic submit count) is
++             * correct per the address-table rule.  SCOPE: kernel CeUtils only — user-CE
++             * and GR channels are excluded (the host executes + releases those for real),
++             * so cup8/LLM's compute round-trip is untouched. */
++            if (c->client != s->m2_gr_client &&
+                 !nvkvm_m2_is_user_ce(s, c->client)) {
+                 /* #12 cont.24: forge THIS kernel channel's finishPayload — the channel-HOST
+                  * semaphore at gpFifoVA + GPFIFO_SIZE(0x8000) + HOST_SEMA(4) = +0x8004 that
+@@ -4430,6 +4532,52 @@ static bool nvkvm_chan_sem_wr32(NvkvmGpuEmul *s, uint64_t va, uint32_t payload,
+     {
+         bool own_rs = false;
+         dbg_own = nvkvm_chan_own_pdb_rs(s, &own_rs);            /* probe for DIAG always */
++        /* #12 cont.33 (2026-07-05): resolve the completion-sema VA under the VAS that
++         * is CONTENT-VALIDATED to map THIS channel's gpfifo VA — NOT chan_translate's
++         * blind foreign-VAS fallback, and NOT nvkvm_chan_own_pdb_rs() (which short-
++         * circuits to the global s->chan_pdb before it reaches its own gpfifo probe).
++         *
++         * The bug (trace-proven): at the CeUtils scrubber's sema write (client
++         * 0xc1e00007, sema VA 0x121000010, gpfifo VA 0x120064000) the global chan_pdb
++         * held a FOREIGN root (0x3114000, client 0xc1d00001).  Both chan_translate and
++         * own_pdb's chan_pdb short-circuit therefore walked 0x121000010 under that
++         * foreign VAS and landed on phys ..3482a010 = UVM's PERSISTENT per-CE-channel
++         * tracking-sema page (guest CPU VA 0xffff..3482a010).  CeUtils' low completion
++         * payload (0x1b..) then overwrote UVM's live tracking value (0x72) → a 32-bit
++         * BACKWARD jump → uvm_gpu_semaphore.c:776 UVM_ASSERT_MSG_RELEASE MAX_JUMP → UVM
++         * global fatal → CTX2's CE channels aborted before they ran → 2nd cuCtxCreate
++         * hangs (#12).  The channel's OWN VAS (pdb 0x2efa6c000, which the gpfifo probe
++         * validates because it maps gpfifo 0x120064000) resolves 0x121000010 → phys
++         * ..1000010 = CeUtils' REAL, DISTINCT sema page — no collapse.
++         *
++         * So: when cli_vas missed, directly re-run the gpfifo content probe (pass 0 =
++         * same snooped client first, pass 1 = blind) to find the root that maps this
++         * channel's gpfifo, and walk the sema VA under it.  Confined to the sema write;
++         * the gpfifo/pushbuffer translation and the global chan_pdb are untouched
++         * (pinning a probed root globally regressed single-context init — L3b note). */
++        if (p == NVKVM_GMMU_FAULT && s->chan_gpfifo_va) {
++            for (int pass = 0; pass < 2 && p == NVKVM_GMMU_FAULT; pass++) {
++                for (int i = 0; i < s->chan_vas_n; i++) {
++                    if (!s->chan_vas[i].pdb) { continue; }
++                    if (pass == 0 && s->chan_vas[i].client != s->chan_client) {
++                        continue;   /* pass 0: same-client roots only */
++                    }
++                    bool gsy = false;
++                    if (nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, s->chan_gpfifo_va,
++                                            s->chan_vas[i].root_sys, &gsy)
++                            == NVKVM_GMMU_FAULT) {
++                        continue;   /* this root does not map our gpfifo */
++                    }
++                    /* content-validated: this root IS the channel's VAS */
++                    bool ssy = false;
++                    uint64_t sp = nvkvm_walk_pdb_root(s, s->chan_vas[i].pdb, va,
++                                                      s->chan_vas[i].root_sys, &ssy);
++                    if (sp != NVKVM_GMMU_FAULT) {
++                        p = sp; sy = ssy; dbg_res = "gpfifo-own"; break;
++                    }
++                }
++            }
++        }
+         if (p == NVKVM_GMMU_FAULT && s->chan_pdb == 0 && dbg_own) {
+             p = nvkvm_walk_pdb_root(s, dbg_own, va, own_rs, &sy);
+             if (p != NVKVM_GMMU_FAULT) { dbg_res = "own"; }
+@@ -6719,6 +6867,7 @@ static void nvkvm_m2_doorbell_setup(NvkvmGpuEmul *s, uint32_t client)
+         uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;   /* {bEnable=1,bSkipSubmit,bSkipEnable} */
+         uint32_t sst = 0xffff;
+         int src = nvkvm_m2_control1(s, client, s->m2_gr_tsg, 0xa06c0101u, sp, sizeof(sp), &sst);
++        if (src == 0 && sst == 0) { s->m2_gr_tsg_sched = s->m2_gr_tsg; }  /* #12 cont.34 */
+         qemu_log("nvkvm-gpu[%s] M5.8 doorbell: GPFIFO_SCHEDULE TSG=0x%08x rc=%d st=0x%x%s\n",
+                  s->chip->name, s->m2_gr_tsg, src, sst,
+                  (src == 0 && sst == 0) ? "  OK SCHEDULED" : "  <-- ERR");
+@@ -6756,6 +6905,9 @@ static bool nvkvm_m2_va_seen(NvkvmGpuEmul *s, uint32_t client, uint64_t va)
+     if (s->m2_mapped_va_n < NVKVM_MAX_MAPPED_VA) {
+         s->m2_mapped_va[s->m2_mapped_va_n].client = client;
+         s->m2_mapped_va[s->m2_mapped_va_n].va     = va;
++        s->m2_mapped_va[s->m2_mapped_va_n].gpa    = 0;
++        s->m2_mapped_va[s->m2_mapped_va_n].hmem   = 0;
++        s->m2_mapped_va[s->m2_mapped_va_n].reback = 0;
+         s->m2_mapped_va_n++;
+     }
+     return false;
+@@ -6783,18 +6935,75 @@ static void nvkvm_m2_va_mark(NvkvmGpuEmul *s, uint32_t client, uint64_t va)
+     if (s->m2_mapped_va_n < NVKVM_MAX_MAPPED_VA) {
+         s->m2_mapped_va[s->m2_mapped_va_n].client = client;
+         s->m2_mapped_va[s->m2_mapped_va_n].va     = va;
++        s->m2_mapped_va[s->m2_mapped_va_n].gpa    = 0;
++        s->m2_mapped_va[s->m2_mapped_va_n].hmem   = 0;
++        s->m2_mapped_va[s->m2_mapped_va_n].reback = 0;
+         s->m2_mapped_va_n++;
+     }
+ }
+ 
++/* #12 cont.31: GPA-aware find/mark for the SYSMEM backing path.  The table entry is the
++ * forward-populated VA->GPA truth for host-pinned guest sysmem: find returns the entry
++ * index (or -1), mark records the resolved GPA + the pinning OS-descriptor handle so a
++ * staleness re-back can free the old pin. */
++static int nvkvm_m2_va_find(NvkvmGpuEmul *s, uint32_t client, uint64_t va)
++{
++    nvkvm_t_vaseen_calls++;
++    for (int i = 0; i < s->m2_mapped_va_n; i++) {
++        nvkvm_t_vaseen_iters++;
++        if (s->m2_mapped_va[i].va == va && s->m2_mapped_va[i].client == client) {
++            return i;
++        }
++    }
++    return -1;
++}
++static void nvkvm_m2_va_mark_gpa(NvkvmGpuEmul *s, uint32_t client, uint64_t va,
++                                 uint64_t gpa, uint32_t hmem)
++{
++    int i = nvkvm_m2_va_find(s, client, va);
++    if (i < 0) {
++        if (s->m2_mapped_va_n >= NVKVM_MAX_MAPPED_VA) { return; }
++        i = s->m2_mapped_va_n++;
++        s->m2_mapped_va[i].client = client;
++        s->m2_mapped_va[i].va     = va;
++        s->m2_mapped_va[i].reback = 0;
++    }
++    s->m2_mapped_va[i].gpa  = gpa;
++    s->m2_mapped_va[i].hmem = hmem;
++}
++
++/* #12 cont.31: free a host RM object created for a Mode-2 backing (e.g. a stale
++ * OS-descriptor pin).  Mirrors the shadow_fwd fn=10 path.  RM cascades the free to the
++ * object's DMA mappings, so freeing the hMem also unmaps its FIXED map_dma from the GR
++ * VAS — the precondition for re-backing the same VA at a new GPA (else st=0x51). */
++static void nvkvm_m2_host_rmfree(NvkvmGpuEmul *s, uint32_t client, uint32_t parent,
++                                 uint32_t hobj)
++{
++    struct nvos00_parameters f;
++    memset(&f, 0, sizeof(f));
++    f.h_root = nvkvm_m2_client(s, client);
++    f.h_object_parent = nvkvm_m2_client_known(s, parent) ? nvkvm_m2_client(s, parent)
++                                                         : parent;
++    f.h_object_old = hobj;
++    unsigned int fc = (3u << 30) | ((unsigned int)sizeof(f) << 16) |
++                      ((unsigned int)'F' << 8) | NV_ESC_RM_FREE;
++    uint32_t fst = 0; uint64_t ff = 0;
++    int rc = nvkvm_isolate_ioctl(&s->m2_iso, s->m2_iso_id, s->m2_ctl_h, fc,
++                                 &f, sizeof(f), NULL, 0, 0, &fst, &ff);
++    qemu_log("nvkvm-gpu[%s] #12 host-rmfree client=0x%08x obj=0x%08x rc=%d st=0x%x\n",
++             s->chip->name, client, hobj, rc, f.status);
++}
++
+ /* M6.5 (item-4 DISCOVERY+backing): place a contiguous guest-RAM SYSMEM run at its GR VA in
+  * the host GR VASpace, so the host GPU can DMA into the guest's actual buffer. Reuses the
+  * M6.2/M6.3b primitive chain: gpa->stub VA (memfd, 1:1) -> OS_DESCRIPTOR (host RM pins guest
+  * RAM) -> per-client GR virtmem mapper -> FIXED map_dma at the guest VA. (st=0x51 = the VA is
+- * already host-resident, e.g. self-promoted GR ctx — treated as success, do not re-place.) */
+-static bool nvkvm_m2_back_and_map_sys(NvkvmGpuEmul *s, uint32_t client, uint64_t va,
+-                                      uint64_t gpa, uint64_t size)
++ * already host-resident, e.g. self-promoted GR ctx — treated as success, do not re-place.)
++ * out_hmem (optional): the OS-descriptor handle on PLACED success, 0 on ALREADY/failure. */
++static bool nvkvm_m2_back_and_map_sys_ex(NvkvmGpuEmul *s, uint32_t client, uint64_t va,
++                                         uint64_t gpa, uint64_t size, uint32_t *out_hmem)
+ {
++    if (out_hmem) { *out_hmem = 0; }
+     uint32_t hDev = 0;
+     for (int i = 0; i < s->m2_devvas_n; i++) {
+         if (s->m2_devvas[i].client == client) { hDev = s->m2_devvas[i].dev; break; }
+@@ -6817,8 +7026,14 @@ static bool nvkvm_m2_back_and_map_sys(NvkvmGpuEmul *s, uint32_t client, uint64_t
+              "os_st=0x%x map rc=%d st=0x%x %s\n", s->chip->name, (unsigned long long)va,
+              (unsigned long long)gpa, (unsigned long long)size, hMem, ost, mrc, mst,
+              ok ? "  PLACED" : already ? "  ALREADY-MAPPED" : "  <-- ERR");
++    if (out_hmem) { *out_hmem = ok ? hMem : 0; }
+     return ok || already;
+ }
++static bool nvkvm_m2_back_and_map_sys(NvkvmGpuEmul *s, uint32_t client, uint64_t va,
++                                      uint64_t gpa, uint64_t size)
++{
++    return nvkvm_m2_back_and_map_sys_ex(s, client, va, gpa, size, NULL);
++}
+ 
+ /* M7 R2: the unified gpu_memory_object backing primitive (replaces back_and_map's split
+  * FB-overlay-vs-map). Allocates ONE blank host vidmem object and double-mmaps it:
+@@ -6979,13 +7194,67 @@ static void nvkvm_m2_leaf_flush(struct nvkvm_leaf_acc *a)
+         if (a->len < 0x40000000ull) {
+             for (uint64_t off = 0; off < a->len; ) {
+                 uint64_t cva  = a->va0 + off;
++                uint64_t cgpa = a->gpa0 + off;
+                 uint64_t next = (cva + 0x200000ull) & ~0x1fffffull;
+                 uint64_t clen = (next - cva < a->len - off) ? next - cva : a->len - off;
+-                if (!nvkvm_m2_va_check(a->s, a->client, cva)) {
+-                    if (nvkvm_m2_back_and_map_sys(a->s, a->client, cva, a->gpa0 + off, clen)) {
+-                        nvkvm_m2_va_mark(a->s, a->client, cva);
++                int ei = nvkvm_m2_va_find(a->s, a->client, cva);
++                if (ei < 0) {
++                    uint32_t newh = 0;
++                    if (nvkvm_m2_back_and_map_sys_ex(a->s, a->client, cva, cgpa, clen,
++                                                     &newh)) {
++                        nvkvm_m2_va_mark_gpa(a->s, a->client, cva, cgpa, newh);
+                         a->backed++;
+                     }
++                } else if (a->s->m2_mapped_va[ei].gpa &&
++                           a->s->m2_mapped_va[ei].gpa != cgpa) {
++                    /* #12 cont.31 STALE MAPPING: this {client,VA} was backed when it
++                     * resolved to a DIFFERENT guest page — the guest tore the mapping
++                     * down and re-created it (2nd cuCtxCreate re-allocs channels and
++                     * the 16-slot completion-semaphore pool at the SAME VAs but fresh
++                     * pages).  The host GR VAS still targets the OLD page, so every
++                     * host completion write lands in stale memory: libcuda's wait-ALL
++                     * on the pool semaphores (VA 0x20440f000) spins forever = the #12
++                     * hang, and the stray writes corrupt whoever now owns the old page
++                     * (guest UVM MAX_JUMP "semaphore jumped backwards" asserts).
++                     * Fix per the address-table directive: the walk IS the forward-
++                     * populated truth — free the stale host pin (RM cascades the free
++                     * to its map_dma, vacating the VA) and re-back at the new GPA. */
++                    if (a->s->m2_mapped_va[ei].reback >= 64) {
++                        qemu_log("nvkvm-gpu[GA106] #12 STALE-SYS va=0x%llx reback cap "
++                                 "hit (ping-pong?) old_gpa=0x%llx new_gpa=0x%llx\n",
++                                 (unsigned long long)cva,
++                                 (unsigned long long)a->s->m2_mapped_va[ei].gpa,
++                                 (unsigned long long)cgpa);
++                    } else {
++                        uint64_t ogpa = a->s->m2_mapped_va[ei].gpa;
++                        if (a->s->m2_mapped_va[ei].hmem) {
++                            uint32_t fdev = 0;
++                            for (int d = 0; d < a->s->m2_devvas_n; d++) {
++                                if (a->s->m2_devvas[d].client == a->client) {
++                                    fdev = a->s->m2_devvas[d].dev; break;
++                                }
++                            }
++                            nvkvm_m2_host_rmfree(a->s, a->client, fdev,
++                                                 a->s->m2_mapped_va[ei].hmem);
++                            a->s->m2_mapped_va[ei].hmem = 0;
++                        }
++                        uint32_t newh = 0;
++                        bool ok = nvkvm_m2_back_and_map_sys_ex(a->s, a->client, cva,
++                                                               cgpa, clen, &newh);
++                        qemu_log("nvkvm-gpu[GA106] #12 STALE-SYS re-back client=0x%08x "
++                                 "va=0x%llx gpa 0x%llx -> 0x%llx len=0x%llx hMem=0x%08x "
++                                 "%s (reback=%u)\n", a->client,
++                                 (unsigned long long)cva, (unsigned long long)ogpa,
++                                 (unsigned long long)cgpa, (unsigned long long)clen,
++                                 newh, ok ? "OK" : "<-- ERR",
++                                 a->s->m2_mapped_va[ei].reback + 1);
++                        if (ok) {
++                            a->s->m2_mapped_va[ei].gpa  = cgpa;
++                            a->s->m2_mapped_va[ei].hmem = newh;
++                            a->s->m2_mapped_va[ei].reback++;
++                            a->backed++;
++                        }
++                    }
+                 }
+                 off += clen;
+             }
+@@ -7419,6 +7688,25 @@ static void nvkvm_m2_exec_doorbell(NvkvmGpuEmul *s)
+          * correctly. Advance gp_get ONLY on a real ring. */
+         bool is_gr = (c->hobject == s->m2_gr_channel);
+         bool can_ring = c->token_valid || (is_gr && s->m2_gr_token);
++        /* #12 cont.34: GPFIFO_SCHEDULE the GR TSG here if it is NOT the one M5.8 already
++         * scheduled.  A 2nd cuCtxCreate mints a FRESH GR TSG, but doorbell_setup early-
++         * returns on the sticky m2_doorbell_ready and never schedules it — so CTX2's 8
++         * rl=0 GR channels rang but the host never consumed (gp_get stuck 0), leaving 8
++         * of the 16 pool-completion semaphores at 0 and libcuda's wait-ALL spinning
++         * forever.  This is THE #12 residual.  Schedule the fresh GR TSG exactly once
++         * (tracked by m2_gr_tsg_sched); the M5.33 st=0x57 noise the old skip avoided was
++         * RE-scheduling an already-scheduled TSG, which this one-shot guard prevents. */
++        if (is_gr && s->m2_gr_tsg && s->m2_gr_tsg != s->m2_gr_tsg_sched) {
++            uint8_t sp[3]; memset(sp, 0, sizeof(sp)); sp[0] = 1;
++            uint32_t sst = 0xffff;
++            int src = nvkvm_m2_control1(s, c->client, s->m2_gr_tsg, 0xa06c0101u,
++                                        sp, sizeof(sp), &sst);
++            if (src == 0 && sst == 0) { s->m2_gr_tsg_sched = s->m2_gr_tsg; }
++            qemu_log("nvkvm-gpu[%s] #12 cont.34 GR-TSG GPFIFO_SCHEDULE TSG=0x%08x "
++                     "client=0x%08x -> rc=%d st=0x%x%s\n", s->chip->name, s->m2_gr_tsg,
++                     c->client, src, sst,
++                     (src == 0 && sst == 0) ? "  OK SCHEDULED" : "  <-- ERR");
++        }
+         if (!s->m2_usermode_qva || !can_ring) {
+             if (s->m2_usermode_qva) {
+                 qemu_log("nvkvm-gpu[%s] M5.46 DEFER ring ch[%d] hObj=0x%08x: no per-channel "
