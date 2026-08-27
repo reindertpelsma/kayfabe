@@ -579,13 +579,46 @@ fn every_served_control_leaves_the_port_non_cacheable() {
         .map(|w| w.cmd_id())
         .filter(|id| id & kayfabe_abi::capability::RM_GSS_LEGACY_MASK != 0)
         .collect();
+    // ★★★★★ **w337 MERGE, 2026-08-27 — TWO → SIX, AND THE PIN DID ITS JOB BY GOING RED.**
+    // `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]`
+    //
+    // The merge unioned two independently-grown served sets. This expectation described
+    // `master`'s half — *"exactly the GSS-legacy module's"* — and the four bit-15 ids the
+    // **w337-gpu-name-seam** side had grown were invisible to it, so the assertion went red
+    // with `left: {…, 545296385, 545296393, 545296484, 545300481}`. ⊘ That is the ratchet the
+    // note below asks for, firing exactly as written: *"a second served GSS-legacy id must
+    // show up as a test to edit, with its argument, rather than as a number that quietly went
+    // to 2"* — four did, and here they are.
+    //
+    // ★ The four, and where each came from (all on the w337-gpu-name-seam side):
+    //   `0x20809009`, `0x20809001`, `0x20809064` — `2d32e5ee` (w349, the cudart init-gate
+    //     cluster: refusing any ONE turns a bare-metal host's own `cudaGetDeviceCount` from
+    //     `0` into `3`);
+    //   `0x2080a001` — `0f577b15` (w352, the measured FALLBACK).
+    //
+    // ⊘⊘ **The expectation is WIDENED BY DERIVATION, not by hand.** The right-hand side is
+    // still *"exactly the ids the modules that own branch (b) declare"* — it simply now names
+    // BOTH such modules, because the merge created a second one
+    // (`kayfabe_abi::cudartinit`, whose own `is_gss_legacy` already unions the two at
+    // `gsslegacy.rs:231-232`). A hand-written literal here would have been the re-baseline
+    // this pin exists to prevent; a second derived source keeps the property intact and keeps
+    // the NEXT such id red.
+    //
+    // ⚠ And the argument the note below makes for `0x20808162` applies to all four with more
+    // force, not less: these carry real content this port composed from a measured table, so
+    // a cached entry would be a fabricated answer persisting in the guest forever — and for
+    // this family the C's measured failure mode was exactly that (an all-zero echo cudart
+    // read as data, `cudaErrorInitializationError(3)`, silent).
+    let branch_b_owners: BTreeSet<u32> = kayfabe_abi::gsslegacy::SERVED
+        .iter()
+        .map(|(c, _)| *c)
+        .chain(kayfabe_abi::cudartinit::SERVED.iter().map(|(c, _, _)| *c))
+        .filter(|id| id & kayfabe_abi::capability::RM_GSS_LEGACY_MASK != 0)
+        .collect();
     assert_eq!(
-        neutralisable,
-        kayfabe_abi::gsslegacy::SERVED
-            .iter()
-            .map(|(c, _)| *c)
-            .collect::<BTreeSet<u32>>(),
-        "the served controls that can reach branch (b) are exactly the GSS-legacy module's"
+        neutralisable, branch_b_owners,
+        "the served controls that can reach branch (b) are exactly those the two modules \
+         that own that plane declare — `gsslegacy` and, since the w337 merge, `cudartinit`"
     );
     // ⚠⚠ §14.37 took this from one to TWO, and the second is the one that makes the guard
     // indispensable rather than merely correct. `0x20808159`'s reply is the identity on the
@@ -593,7 +626,13 @@ fn every_served_control_leaves_the_port_non_cacheable() {
     // `0x20808162` writes a byte the guest did not send, so a kept entry would be a real
     // answer persisting. ⊘ The guard is what closes both, and only the second one would
     // have been WRONG without it.
-    assert_eq!(neutralisable.len(), 2);
+    // ⊘ **2 → 6 at the w337 merge, 2026-08-27** (`d3f80778`), and the count is the cheap half
+    // of that change — the set above is the load-bearing one. `[measured 2026-08-08]` 1;
+    // `[measured, §14.37]` 2; `[measured 2026-08-27, merge d3f80778]` 6, the four cudart
+    // init-gate ids the other lineage had grown. ⚠ Five of the six now write bytes the guest
+    // did not send, so the "only the second one would have been WRONG without the guard"
+    // sentence above is now an understatement, not an overstatement.
+    assert_eq!(neutralisable.len(), 6);
     assert_eq!(
         port.neutralised() as usize,
         neutralisable.len(),

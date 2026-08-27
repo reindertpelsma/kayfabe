@@ -252,10 +252,32 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
         "the same two named assumptions as cap1, and no third"
     );
     assert!(r.unobserved.is_empty(), "no read went unanswered");
+    // ★★★★ **1030 → 1032, 2026-08-27, and ⊘ THIS ONE IS *NOT* THE SERVED-SET UNION** — the
+    // other red in this file is, and reading the two as one cause would have been wrong.
+    //
+    // `[measured 2026-08-27, bisected in a worktree over the w337-gpu-name-seam lineage]`
+    // this assertion is GREEN at `147694ff^` (`6a1fe00d`) and RED at `147694ff` itself, with
+    // the coverage test below already red at both. ⇒ The +2 is `147694ff` — *"gsp: identify
+    // the msgq instance by the guest's own seqNum, not by the region's address"*, the PC-D7
+    // fix — and nothing else. It landed on the **w337-gpu-name-seam** side, `master`'s side
+    // never saw it, and the merge `d3f80778` brought a pin and a behaviour from two
+    // lineages together. ★ The pin DID ITS JOB: a change in what the replay reads showed up
+    // as a red assertion on the branch that made it, not as drift discovered later.
+    //
+    // ★ What the two extra reads ARE, so the number is understood rather than accepted:
+    // `publish()` now peeks the most recent COMMAND ELEMENT's `seqNum` to decide
+    // `same_instance`, because no sequence number crosses the shared region in any header
+    // (`ogkm-580: msgq_priv.h:49-65`) but the command element carries one
+    // (`message_queue_cpu.c:481`). This replay performs two publishes — the `GSP-PUBLISH …
+    // seq_last=Some(1) cmd_seq=0 ⇒ same_instance=false` lines in this test's own output — so
+    // exactly one extra observed read each. ⊘ Every other term is UNMOVED: the closure limit
+    // is still 1028, `Lookahead` still 2, both reconstructions still the same two named
+    // assumptions, and `unobserved` still empty. A wall that moved would have shown up in
+    // `closure_limit`, and it did not.
     assert_eq!(
         r.answers,
         vec![
-            (Answer::Observed, 1030),
+            (Answer::Observed, 1032),
             (Answer::Lookahead, 2),
             (Answer::Reconstructed(ReconKind::RegionPageTable), 1),
             (Answer::Reconstructed(ReconKind::PeerStatusReadPtr), 1),
@@ -496,6 +518,56 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // THIS policy's boundary — the call-site coverage `WantedTable::C2cInfo` was shipped
         // twice without. ⊘ The envelope is still absent and that cost is real.
         WantedTable::PromoteFaultMethodBuffers,
+        // ★★★★★ **w337 MERGE, 2026-08-27 — SIX AT ONCE, AND THE PIN DID ITS JOB BY GOING
+        // RED.** `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]`
+        //
+        // The merge unioned two independently-grown served sets. This test derives its
+        // universe from `WantedTable::ALL` **on purpose** — *"add a served control and this
+        // test demands the differential reach it; it cannot be satisfied by editing a literal
+        // here"* — so six rows grown on the **w337-gpu-name-seam** side arrived as a failing
+        // assertion the moment the two lineages met, naming every one of them. ⊘ That is the
+        // mechanism working exactly as its own docs promise, and nothing was re-baselined:
+        // the six are transcribed FROM the failure, and each is genuinely unreachable by this
+        // capture rather than merely unreached.
+        //
+        // ⚠⚠ **All six are `GpuInfoV2`'s kind — a different DEMANDER — and this is the SIXTH
+        // consecutive way that has happened**, which is itself the finding. `cap1b` is an
+        // `RmInitAdapter` capture driven by `nvidia-smi`; every one of these six is issued by
+        // **`libcudart`**, a process further from this capture than `libcuda` is: `[measured
+        // 2026-08-20, real GA106 on 580.159.04]` `libcuda` answers every driver-API call
+        // correctly on the very boot `libcudart` cannot initialise. ⊘ No closure limit reaches
+        // a process that never ran, and — unlike the six `cuInit`-path rows above — a
+        // `cuInit`-driven capture would NOT close these either. They need a `cudaGetDeviceCount`
+        // -driven one. ★ The exception set therefore now shrinks by SIX, not by twelve, the
+        // day the long-overdue capture exists; the honest number is stated rather than let
+        // slide.
+        //
+        // ★ Where each came from, and what stands in for the reply-plane coverage:
+        //   `CudartWatchdogInfo` (`0x20802209`), `CudartInit9009` (`0x20809009`),
+        //   `CudartInit9001` (`0x20809001`), `CudartInit9064` (`0x20809064`) — `2d32e5ee`
+        //     (w349). Their answers are pinned byte-for-byte to a real GA106 in
+        //     `kayfabe_abi::cudartinit`'s own tests, and the per-id BISECTION there is a
+        //     stronger oracle than a differential could be: refusing any one of them on the
+        //     bare-metal host turns its own `cudaGetDeviceCount` from `0` into `3`.
+        //   `CudartInit9A001` (`0x2080a001`) — `0f577b15` (w352). ⚠ The weakest-covered of
+        //     the six and it is named rather than elided: `[measured]` the only capture of it
+        //     covers 40 of 520 bytes, and it is reached only as the FALLBACK after
+        //     `a084`/`a026` fail — which is exactly where our guest is.
+        //   `CudartPerfLevelInfoV2` (`0x2080200b`) — `3887be37` (w353). The first SPLICED row
+        //     this port serves; its request carries content, so the differential's usual
+        //     "did the constant body come back" question is not even the right one.
+        //
+        // ⊘⊘ Two of the six ARE reachable by a different committed capture, and that is
+        // recorded here so this admission is not read as blanket: `0x20809009` (×2) and
+        // `0x20809064` (×8) are demanded by `traces/rpctrace_ga106_boot1.bin` and are judged
+        // against real GSP firmware in `tests/tests/replay_conformance.rs`. What they lack
+        // HERE is this file's kind of coverage — the envelope on `cap1b`'s own queue.
+        WantedTable::CudartWatchdogInfo,
+        WantedTable::CudartInit9009,
+        WantedTable::CudartInit9001,
+        WantedTable::CudartInit9064,
+        WantedTable::CudartInit9A001,
+        WantedTable::CudartPerfLevelInfoV2,
     ]
     .into_iter()
     .collect();
@@ -574,10 +646,22 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // `ce1442`]` the sole caller `kchangrpapiConstruct_IMPL` fails in `cup2`'s dmesg delta
     // and never in the same boot's `nvidia-smi` window. ★ A `cuInit`-driven capture would
     // close it.
-    assert_eq!(universe.len(), 41, "non-vacuity: the universe is not empty");
+    // ⊘⊘ **41 -> 47 and 22 -> 28 at the w337 merge, 2026-08-27** (`d3f80778`, *"Merge
+    // w337-gpu-name-seam"*), and BOTH numbers move by the same six because every one of them
+    // is unreachable by this capture. The six are `CudartWatchdogInfo`, `CudartInit9009`,
+    // `CudartInit9001`, `CudartInit9064`, `CudartInit9A001` and `CudartPerfLevelInfoV2`; the
+    // exception-set entry above carries the per-id provenance (`2d32e5ee` w349, `0f577b15`
+    // w352, `3887be37` w353 — all on the w337-gpu-name-seam side, none on `master`'s).
+    // ★ Attributed by measurement, not arithmetic: the failing assertion NAMED all six, and
+    // the two lists were updated from it. ⚠ It is the WEAKEST kind of addition this pair can
+    // see, six times over, and the ratio is now the honest headline — **28 of 47 served
+    // controls (59.6 %) are outside this differential's reach**, up from 22 of 41 (53.7 %).
+    // The note below still says the exception set is SMALL; it is no longer small, and the
+    // sentence is left standing with this correction above it rather than quietly softened.
+    assert_eq!(universe.len(), 47, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        22,
+        28,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

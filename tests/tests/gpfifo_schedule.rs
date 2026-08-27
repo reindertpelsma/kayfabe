@@ -534,6 +534,33 @@ fn the_control_claim_is_exactly_these_ids() {
     assert_eq!(
         OBJECT_CONTROLS,
         &[
+            // ★★★★★ **w337 MERGE, 2026-08-27 — THE CLAIM IS NOW A UNION OF TWO LINEAGES,
+            // AND THIS PIN DID ITS JOB BY GOING RED.**
+            //
+            // `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]` the two
+            // sides of that merge grew the served/claimed surface INDEPENDENTLY, and neither
+            // side's tree ever saw the other's rows. This list described `master`'s half, so
+            // the union arrived as a failing assertion rather than as a silent widening —
+            // which is exactly the event the membership pin exists to force
+            // (`gates_quantified_over_a_list`). ⊘ Nothing was re-baselined: the three ids
+            // below are transcribed FROM the failure and each carries its origin.
+            //
+            // ★ All three entered `OBJECT_CONTROLS` on the **w337-gpu-name-seam** side, in
+            // `9d154cb9` (w346, *"the host forward is wired end to end"*), as the cudart
+            // init-gate family's forward-or-refuse arm — the host's own subdevice, no guest
+            // object to route through. ⊘ They are the FOUR-minus-one survivors of w349b's
+            // un-claim (`8e5478ed`) and w352's (`0f577b15`): `0x20809009`/`0x9001`/`0x9064`
+            // and `0x2080a001` LEFT this list precisely because claiming them here refused
+            // them before `kayfabe_device::inittables`' measured table could answer them.
+            // These three stay because they have no table row — `0x2080a026`/`0x2080a084`
+            // were measured INNOCENT and `0x2080a097` is unmeasured, so forward-or-refuse is
+            // still the whole of this port's opinion about them.
+            //
+            // ⚠ Their refusal really is `0x56`, deliberately, and the split that says so
+            // lives in `bind_channel.rs`'s `every_claimed_control_is_decided_even_when_malformed`.
+            0x2080_a026,
+            0x2080_a084,
+            0x2080_a097,
             NVA06F_CTRL_CMD_GPFIFO_SCHEDULE,
             // ★★★★ §16.56 — the TSG form. See this function's docs for the assertion it
             // replaced and why that assertion was green and false.

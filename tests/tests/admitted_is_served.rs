@@ -650,6 +650,27 @@ fn the_admitted_controls_the_chain_answers_are_exactly_these() {
         "0x20801823", // InitTablePolicy
         "0x2080182a", // InitTablePolicy
         "0x2080182b", // InitTablePolicy
+        // ★★★★★ **w337 MERGE, 2026-08-27 — ONE id joined this set, and the pin DID ITS JOB
+        // by going red.** `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]`
+        //
+        // `0x20802209` `NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO` was ADMITTED all along — it is
+        // an `Origin::Nvproxy` row in `capability.rs` and has been since the allowlist was
+        // ported (`1b9de10c`). What the merge changed is the other half: it became **served**,
+        // as `WantedTable::CudartWatchdogInfo`, on the **w337-gpu-name-seam** side in
+        // `2d32e5ee` (w349, *"the LLM wall is four controls the CUDA runtime needs and the
+        // driver API never asks for"*). `master`'s side grew its own rows and never saw it,
+        // so the union arrived here as a failing assertion.
+        //
+        // ★ This is the direction the list welcomes — *"adding one is progress and belongs in
+        // this list"* — and it arrived ARGUED rather than silently, which is the whole point
+        // of pinning membership. `[measured 2026-08-20, real GA106 on 580.159.04]` refusing
+        // this id alone on a BARE-METAL host turns its own `cudaGetDeviceCount` from `0` into
+        // `3` (`cudaErrorInitializationError`), the guest's exact symptom reproduced with no
+        // guest and no emulator; see `kayfabe_abi::cudartinit`.
+        // ⊘ Its five siblings from the same lineage are NOT here and cannot be: `0x20809009`,
+        // `0x20809001`, `0x20809064`, `0x2080a001` and `0x2080200b` are served but not
+        // admitted, so they land in `SERVED_BUT_NOT_ADMITTED` below instead.
+        "0x20802209",
         "0x20802a02", // InitTablePolicy
         "0x20803601", // InitTablePolicy
         "0x20803801", // InitTablePolicy
@@ -717,8 +738,11 @@ fn the_chain_serves_controls_the_allowlist_does_not_admit() {
     );
 }
 
-/// ★★★★ **The measured inversion, pinned: 29 controls this port ANSWERS that its
-/// userspace-ioctl allowlist does not ADMIT.** `[measured 2026-08-10, rev 2fa5d84]`
+/// ★★★★ **The measured inversion, pinned: 34 controls this port ANSWERS that its
+/// userspace-ioctl allowlist does not ADMIT.**
+/// `[measured 2026-08-10, rev 2fa5d84]` 29.
+/// `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]` 34 — see the w337
+/// block below for the five and where each came from.
 ///
 /// ⊘ Two of these were named to me as the counter-examples and both check out:
 /// `0x20802a08` (`CE_GET_FAULT_METHOD_BUFFER_SIZE`) and `0xa06c010a`. The rest are the
@@ -726,6 +750,18 @@ fn the_chain_serves_controls_the_allowlist_does_not_admit() {
 /// never crosses a userspace ioctl boundary and so has no business on an `nvproxy`-derived
 /// allowlist. ⇒ The two surfaces are **not nested in either direction**, and that is a fact
 /// about the planes rather than a defect in either table.
+///
+/// ★★★★★ **w337 MERGE, 2026-08-27 — 29 → 34, and the pin DID ITS JOB by going red.** The
+/// merge unioned two independently-grown served sets; this list described `master`'s half
+/// only, so the five rows below arrived as a failing assertion rather than as a quiet
+/// widening. ⊘ Nothing was re-baselined — each is transcribed FROM the failure, each entered
+/// on the **w337-gpu-name-seam** side, and each carries its commit inline.
+///
+/// ★ They are also the cleanest possible illustration of what this test is *about*: all five
+/// are GSS-legacy or cudart-runtime-only ids that are **absent from nvproxy entirely**
+/// (`kayfabe_abi::cudartinit` §: of the six runtime-only ids, gVisor's allowlist carries
+/// only `0x20802209`). A gate built over `capability.rs` alone would report this port
+/// refusing five controls it answers.
 static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
     "0x208001b0",
     "0x20800a1c",
@@ -750,11 +786,30 @@ static SERVED_BUT_NOT_ADMITTED: &[&str] = &[
     "0x20800aac",
     "0x20800af3",
     "0x20801112",
+    // ⚠ w337's first — `NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2`, `WantedTable::CudartPerfLevelInfoV2`,
+    // landed on the w337-gpu-name-seam side in `3887be37` (w353, *"the minimal fatal set is a
+    // PAIR"*). ★ The first SPLICED row this port serves: the request carries content, so a
+    // constant body would clobber it. ⊘ Not on the nvproxy allowlist, hence this list.
+    "0x2080200b",
     "0x20802a07",
     "0x20802a08",
     "0x20802a0b",
     "0x20808159",
     "0x20808162",
+    // ⚠ w337's other four — the **GSS-legacy cudart init-gate cluster**, all bit-15 set, and
+    // all unnamed in every open header, which is exactly why nvproxy has no row for them and
+    // why they belong on THIS side of the inversion.
+    //   `0x20809001` / `0x20809009` / `0x20809064` — `WantedTable::CudartInit9001/9009/9064`,
+    //     landed on the w337-gpu-name-seam side in `2d32e5ee` (w349). ⊘ Note they were
+    //     briefly CLAIMED by `ObjectPolicy` too (w346, `9d154cb9`) and w349b `8e5478ed`
+    //     un-claimed them, because claiming them there refused them before the measured
+    //     table could answer — the served path is `kayfabe_device::inittables`, not the seat.
+    //   `0x2080a001` — `WantedTable::CudartInit9A001`, `0f577b15` (w352). The measured
+    //     FALLBACK, reached only after `a084`/`a026` fail, which is where our guest is.
+    "0x20809001",
+    "0x20809009",
+    "0x20809064",
+    "0x2080a001",
     "0xa06c010a",
 ];
 

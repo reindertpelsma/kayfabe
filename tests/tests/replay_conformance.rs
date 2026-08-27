@@ -1423,13 +1423,39 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // the unclaimed arm to the claimed one only because this function now sends the version
     // handshake — see the fn-1 block above. Without it the control is served-but-refusing,
     // which is what property 4 caught.
+    // ★★★★★ **96 -> 106 at the w337 MERGE, 2026-08-27, AND THE PIN DID ITS JOB BY GOING
+    // RED.** `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]`
+    //
+    // The merge unioned two independently-grown served sets: `WantedTable::ALL` gained six
+    // rows on the **w337-gpu-name-seam** side (`2d32e5ee` w349, `0f577b15` w352, `3887be37`
+    // w353) that `master`'s side never saw, and `claimed` here is derived from `ALL`, so ten
+    // recorded calls crossed from the unclaimed arm to the claimed one the moment the two
+    // lineages met. ⊘ Not a re-baseline and not apportioned by arithmetic — the same
+    // discipline the §14.29 note below insists on:
+    //
+    // ★ `[measured 2026-08-27, by printing `claimed_outcome` over this capture]` the whole
+    // +10 is **TWO** of the six, and the other four contribute ZERO:
+    //   `0x20809009` — demanded **2** times, served 2 / refused 0;
+    //   `0x20809064` — demanded **8** times, served 8 / refused 0;
+    //   `0x20802209`, `0x20809001`, `0x2080a001`, `0x2080200b` — **absent from this capture
+    //     entirely**, so they go straight into `unevidenced_by_this_capture` below.
+    // ⇒ 2 + 8 = 10 exactly, and 96 + 10 = 106, 214 - 10 = 204.
+    //
+    // ⚠ That both demanded ids are served on EVERY call is itself checked, and by property 4
+    // rather than by this line: neither appears in `refused_though_claimed`, so neither is a
+    // claim that ends in a refusal. ★ And their sizes were judged against real GA106 GSP
+    // firmware on this very run — the two are the only members of the merged six that any
+    // committed capture can evidence at all.
     assert_eq!(
         (n_claimed, n_unclaimed),
-        (96, 214),
+        (106, 204),
         "`[measured]` 2026-08-03: 87 of the 310 recorded control calls are ones this port \
          claims (84 before §14.28 added `0x20800102`, which the capture demands 3 times); \
          `[measured]` 2026-08-08: 95 after §14.29's `0x20800a4c`, demanded 8 times; \
-         `[measured]` 2026-08-09: 96 after §14.35's `0x20803601`, demanded once. The \
+         `[measured]` 2026-08-09: 96 after §14.35's `0x20803601`, demanded once; \
+         `[measured]` 2026-08-27: 106 after the w337 merge (d3f80778) unioned two \
+         independently-grown served sets — `0x20809009` demanded twice and `0x20809064` \
+         eight times, and the merge's other four ids are absent from this capture. The \
          served arm is not near-vacuous and the number is pinned so a silent collapse of it \
          is red"
     );
@@ -1620,6 +1646,55 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
         // same boot's `nvidia-smi` window, so no TSG is allocated on the `RmInitAdapter`
         // path this capture records.
         0xa06c_010a,
+        // ★★★★★ **w337 MERGE, 2026-08-27 — FOUR NEW EXEMPTIONS, and the gate DID ITS JOB by
+        // going red.** `[measured 2026-08-27, merge d3f80778 "Merge w337-gpu-name-seam"]`
+        //
+        // The merge unioned two independently-grown served sets; `claimed` is derived from
+        // `WantedTable::ALL`, so the six rows the **w337-gpu-name-seam** side had grown
+        // arrived here at once and this assertion named every one of them. ⊘ Two of the six
+        // needed NO exemption — `0x20809009` (demanded twice) and `0x20809064` (eight times)
+        // are in this capture and had their reply `paramsSize` judged against real GA106 GSP
+        // firmware, which is the direction this list wants. The four below are absent from
+        // the capture and are exempted with their reason, per the check's own instruction:
+        // *"say here why an unevidenced size is acceptable — do not delete the check"*.
+        //
+        // ⚠⚠ Their class is a NEW one on this list, and worth separating from the two already
+        // here. The `cuInit`-path rows above are absent because this capture is
+        // `nvidia-smi`-driven; the GSS-legacy rows are absent because no committed capture
+        // carries bit-15 traffic. These four are absent because their demander is
+        // **`libcudart`** — a process further out than `libcuda`: `[measured 2026-08-20, real
+        // GA106 on 580.159.04]` `libcuda` answers every driver-API call correctly on the very
+        // boot `libcudart` cannot initialise. ⊘ So a `cuInit`-driven GSP capture — the durable
+        // fix this file has promised six times — would NOT evidence these four either.
+        //
+        // ★ What DOES evidence their sizes, and it is a real oracle rather than a shrug:
+        // `kayfabe_abi::cudartinit` pins every row to a **bare-metal GA106** with a per-id
+        // BISECTION — refusing any one of `0x20802209` / `0x20809009` / `0x20809001` /
+        // `0x20809064` on the host itself turns the host's own `cudaGetDeviceCount` from `0`
+        // into `3` (`cudaErrorInitializationError`), the guest's exact symptom reproduced with
+        // no guest, no emulator and no QEMU. That is causal evidence a replay differential
+        // cannot produce. ⚠ And the two ids measured INNOCENT by the same method
+        // (`0x2080a026`, `0x2080a084`) are deliberately NOT served, which is what makes the
+        // bisection an instrument rather than a rationalisation.
+        //
+        // ⊘ The per-row cost, named rather than averaged:
+        //   `0x20802209` `RC_GET_WATCHDOG_INFO` (`2d32e5ee`, w349) — 4 bytes, bisected.
+        //   `0x20809001` (`2d32e5ee`, w349) — GSS-legacy, unnamed in every open header, so
+        //     there is no vendor arithmetic to cross-check the 8 bytes against; the hardware
+        //     capture is the ONLY source, exactly as for `0x20808159` above.
+        //   `0x2080a001` (`0f577b15`, w352) — ⚠ **the weakest-evidenced row on this whole
+        //     list, and it is stated plainly**: `[measured]` the only capture of it covers
+        //     **40 of 520 bytes**. It is served because it is the measured FALLBACK, reached
+        //     only after `a084`/`a026` fail, which is where our guest is — but a short capture
+        //     is an `unmeasured` tail, and `dlen >= psize` is the trustworthy bar this
+        //     repository already paid for. This row is a queue item, not a closed question.
+        //   `0x2080200b` `PERF_GET_LEVEL_INFO_V2` (`3887be37`, w353) — the first SPLICED row
+        //     this port serves: the request carries content, so the reply is the guest's own
+        //     bytes with measured words spliced in, and a constant body would clobber it.
+        0x2080_2209,
+        0x2080_9001,
+        0x2080_a001,
+        0x2080_200b,
     ]);
     assert!(
         unevidenced_by_this_capture.is_subset(&claimed),
@@ -1646,10 +1721,17 @@ fn the_recorded_demand_sequence_replays_and_every_answer_is_protocol_conformant(
     // `0x2080182b` are both claimed and neither is demanded by this capture, so the set of
     // sizes it can judge shrinks while the served universe grows. A number that only ever
     // rises would be measuring the wrong thing.
+    // ★ 27 -> 29 at the w337 merge, 2026-08-27 (`d3f80778`), and it goes UP, which is the
+    // rarer and better direction for this number: of the six served controls the merge
+    // brought in, `0x20809009` and `0x20809064` are actually DEMANDED by this capture (twice
+    // and eight times), so their reply sizes were judged against the real GA106 GSP rather
+    // than exempted from the check. ⊘ The other four went to `unevidenced_by_this_capture`
+    // above with their reasons. `[measured 2026-08-27, by printing `size_checked` over this
+    // capture]`.
     assert_eq!(
         size_checked.len(),
-        27,
-        "27 distinct controls had their reply paramsSize judged against a real GA106 GSP \
+        29,
+        "29 distinct controls had their reply paramsSize judged against a real GA106 GSP \
          on 580.159.04, and every one agreed"
     );
     // And refusal really is the majority answer, which is the honest shape of this port

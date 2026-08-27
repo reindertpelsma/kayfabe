@@ -536,6 +536,45 @@ fn every_claimed_control_is_decided_even_when_malformed() {
                 "{cmd_id:#010x}: this control's own header documents NV_ERR_NOT_SUPPORTED \
                  for a target that does not support preemption mode changes",
             );
+        } else if matches!(cmd_id, 0x2080_a026 | 0x2080_a084 | 0x2080_a097) {
+            // ★★★★★ **w337 MERGE, 2026-08-27 — A THIRD ARM IN THE SPLIT, AND THE PIN DID
+            // ITS JOB BY GOING RED.** `[measured 2026-08-27, merge d3f80778 "Merge
+            // w337-gpu-name-seam"]`
+            //
+            // The merge unioned two independently-grown served sets, and `OBJECT_CONTROLS`
+            // came out of it carrying `0x2080a026`, `0x2080a084` and `0x2080a097` — the
+            // cudart init-gate forward-or-refuse family, added on the **w337-gpu-name-seam**
+            // side in `9d154cb9` (w346) and never present on `master`'s. This gate is
+            // quantified over the whole list, so the new ids arrived as a RED assertion
+            // (`0x2080a026: … left: 86 right: 86`, i.e. `0x56`) rather than as an unnoticed
+            // widening. ⊘ That is the pin working, not the pin being wrong.
+            //
+            // ★★★ **The list was NOT shortened and the rule was NOT relaxed** — the
+            // expectation is split per id with its reason, exactly as `gates_quantified_over_a_list`
+            // and the two arms above require. The reason here is a THIRD one, different again
+            // from `GPU_PROMOTE_CTX`'s (a status chosen for its *effect*) and from
+            // `GR_SET_CTXSW_PREEMPTION_MODE`'s (a status the control's own header documents):
+            //
+            // `ObjectPolicy::respond_subdevice_control` refuses with `NV_ERR_NOT_SUPPORTED`
+            // **by design and at every failure arm**, because there is genuinely no guest
+            // object to route through and — as of w347 — the host forward ships GATED OFF
+            // (`KAYFABE_SUBDEV_FWD`), so *"this port does not support this"* is the true
+            // statement. ⚠ The alternative is the measured C defect the verb exists to avoid:
+            // the C answered this family `NV_OK` with an all-zero echo, cudart read the zeros
+            // as real data and died `cudaErrorInitializationError(3)` silently
+            // (`C: src/qemu/nvkvm_gpu_emul.c:3334-3350`). `refuse_by_name_means_the_NAME_IS_TRUE`.
+            //
+            // ⊘ The cost is stated rather than waved away, in the same coin §14.25 pays it:
+            // on the wire this refusal is indistinguishable from an unserviced id. What
+            // separates them is that a *claimed* id leaves the `UnservicedLedger`, which is a
+            // one-line diff on any boot log — and `admitted_is_served.rs` is the gate that
+            // holds the claim itself.
+            assert_eq!(
+                reply.rpc_result,
+                kayfabe_abi::NV_ERR_NOT_SUPPORTED,
+                "{cmd_id:#010x}: the subdevice forward refuses by name at every arm, and \
+                 with the forward gated off NV_ERR_NOT_SUPPORTED is the TRUE statement",
+            );
         } else {
             assert_ne!(
                 reply.rpc_result,
