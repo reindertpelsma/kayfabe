@@ -15,6 +15,42 @@
 > maintained, tested descendant of the research prototype archived here.
 
 
+## What actually works today
+
+Two different things, and conflating them is the easiest mistake to make here.
+
+### The archived C prototype — Mode 2 is demonstrated
+
+`archive/nvkvm/` is the research artifact this project is rewriting. On **bare metal**
+(RTX 3050 / GA106, non-nested, host NVIDIA open driver 595.71.05, 2026-06-16) a **stock,
+unmodified** guest driver ran real workloads against the emulated GPU + faked GSP:
+
+| workload | result |
+|---|---|
+| `cuCtxCreate → PTX JIT → cuLaunchKernel → matmul → DtoH` | **byte-exact** (`cup8` N=1024, `bad=0 maxerr=0`) |
+| llama.cpp inference (Qwen2 GGUF) | **49.9 tok/s** vs 47.5 tok/s host-native on the same card — ~zero forwarding overhead |
+| PyTorch 2.5.1, 50-step training loop | byte-correct, `rc=0`, incl. CUDA events and non-default streams |
+
+**The load-bearing caveat: single-process only.** The C runs exactly one CUDA process per
+QEMU lifetime, so it demonstrates nothing about multi-tenant Mode 2 — which is precisely
+the property this rewrite exists to make structural. Full detail:
+[`archive/nvkvm/docs/MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md).
+
+### Kayfabe itself — early, and not yet on hardware
+
+The Rust rewrite has **not run a workload**. `cup8` is the C's result, not kayfabe's.
+What it has reached:
+
+- **Step 1 of 3 on the ladder of un-fakeable events** (2026-07-29): a real RM ioctl to
+  `/dev/nvidiactl` on real hardware. Steps 2 (replay the C's recorded `cap1` against the
+  Rust GSP) and 3 (the full event) are **not** done.
+- `nvidia-smi` **enumerates** against the Rust stack with `SMI_RC=0` — but its process
+  table reads `No running processes found`, and that table is the actual milestone, so
+  this does **not** count as one.
+- A large mock-backed test suite, green in CI. Treat that as a floor, not evidence: these
+  are mocks, and the repo's own record is that making one double honest about a single
+  property killed 12 tests that had looked green.
+
 **kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
 forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
 **stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
