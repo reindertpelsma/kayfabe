@@ -15,6 +15,44 @@
 > maintained, tested descendant of the research prototype archived here.
 
 
+## What this is
+
+**kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
+forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
+**stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
+guest's *intent* from its own protocol (RM allocs, page-directory binds, doorbells,
+pushbuffer methods) and forward real compute to a host GPU through **unprivileged,
+per-guest-process host isolates**. The thesis is multi-tenant: several guest processes
+(and several guests, and several GPUs) share one host GPU with per-process blast-radius
+containment, which the C research artifact proved feasible and this rewrite makes
+structural.
+
+The C artifact is vendored here at **[`archive/nvkvm/`](archive/nvkvm/)** and stays the
+differential oracle + the source of every hard-won lesson (#11–#14, the address table,
+the forwarding model). This repo is the prod-track code: it implements the settled
+design docs, it does not re-derive architecture.
+
+`archive/nvkvm/` is a **frozen snapshot** of the original `nvkvm` C research prototype
+at commit `bac00b6`, imported as a single squashed commit rather than with its history.
+It is kept because kayfabe's design references its Mode-2 work directly. It is
+historical: **not built, not tested, not maintained, and not intended to run.** Its
+maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), which
+deliberately excludes Mode 2 as a research artifact.
+
+**Coming from [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)?** They are different
+designs solving different halves of the same problem, and neither replaces the other:
+
+| | nvkvm-pv | kayfabe |
+|---|---|---|
+| approach | **Mode 1** — forward the guest's ioctls to a real NVIDIA device | **Mode 2** — emulate the GPU + fake the GSP, recover intent from the guest's own protocol |
+| guest driver | stock, but the guest knows it is virtualised | stock, and **unmodified** — it believes it owns real hardware |
+| host requirement | matching NVIDIA driver on the host | matching NVIDIA driver on the host |
+| status | **works today**, tested, maintained | **research in progress** — see the table below |
+| language | C | Rust |
+
+If you want GPU forwarding that works now, use nvkvm-pv. Kayfabe is the bet that Mode 2
+buys multi-tenancy that Mode 1 cannot.
+
 ## What actually works today
 
 `archive/nvkvm/` is the **C research prototype**. This repo is the **Rust rewrite**.
@@ -47,27 +85,6 @@ exists to make structural, and the C cannot even oracle it — it runs exactly o
 process per QEMU lifetime. Kayfabe is understood to have reached it; that claim is left
 marked ◐ until the run is cited here, because everything above it is.
 
-**kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
-forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
-**stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
-guest's *intent* from its own protocol (RM allocs, page-directory binds, doorbells,
-pushbuffer methods) and forward real compute to a host GPU through **unprivileged,
-per-guest-process host isolates**. The thesis is multi-tenant: several guest processes
-(and several guests, and several GPUs) share one host GPU with per-process blast-radius
-containment, which the C research artifact proved feasible and this rewrite makes
-structural.
-
-The C artifact is vendored here at **[`archive/nvkvm/`](archive/nvkvm/)** and stays the
-differential oracle + the source of every hard-won lesson (#11–#14, the address table,
-the forwarding model). This repo is the prod-track code: it implements the settled
-design docs, it does not re-derive architecture.
-
-`archive/nvkvm/` is a **frozen snapshot** of the original `nvkvm` C research prototype
-at commit `bac00b6`, imported as a single squashed commit rather than with its history.
-It is kept because kayfabe's design references its Mode-2 work directly. It is
-historical: **not built, not tested, not maintained, and not intended to run.** Its
-maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), which
-deliberately excludes Mode 2 as a research artifact.
 
 ## The one defining constraint
 
