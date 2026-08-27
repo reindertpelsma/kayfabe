@@ -13,7 +13,12 @@ unchanged; the measurements below stand. ⊘⊘⊘ **What changed is the SCOPE O
 > registers an mmap *context* against a caller-supplied descriptor and the caller `mmap`s
 > **that descriptor** — RM selecting **the device node for a BAR address** and the control
 > node for sysmem, and refusing the wrong kind outright. Cited, with `ogkm-580` line numbers,
-> in our own `kayfabe-abi/src/submit.rs:46-66` — we specified the route and never issued it.
+> in our own `kayfabe-abi/src/submit.rs:46-66`.
+> ⊘⊘ **CORRECTED SAME DAY — an earlier revision of this block said we "never issued it". FALSE.**
+> `RmConnection::map_cpu_windowed_on` issues it (`kayfabe-isolate-host/src/rm.rs:2297`) and maps
+> `Backing::DeviceFile` (`:2325-2330`), `map_cpu` defaulting to `MapNode::Gpu` (`:2214`), across
+> **19 non-test call sites** (rings, USERD, doorbell, CE operands). The isolate already holds a
+> CPU view of host VRAM. ⇒ **The gap is the CROSSING to the VMM, not the escape.**
 > ★ **`nvkvm-pv` ships it**, isolate included (`src/qemu/nvkvm_isolate_handlers.c:3618`,
 > `src/guest/nvkvm_uvm_ext.c:585`). §0.1's own **reason 1 names this route** and objects only
 > to handing the fd across the isolate/VMM seam — a statement about *crossing*, not existence.

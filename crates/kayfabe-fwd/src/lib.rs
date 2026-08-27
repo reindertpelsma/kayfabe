@@ -2276,7 +2276,17 @@ pub enum FbLeafBacking {
     /// RM picks **the device node's state for an address inside a BAR** and the control
     /// node's for system memory, refusing a descriptor of the other kind outright. All of
     /// that is already specified, with `ogkm-580` citations, in
-    /// `kayfabe_abi::submit::NV_ESC_RM_MAP_MEMORY` — this crate simply never issued it.
+    /// `kayfabe_abi::submit::NV_ESC_RM_MAP_MEMORY`.
+    ///
+    /// ⊘⊘ **AND WE ALREADY ISSUE IT — corrected 2026-08-27, hours after the line above was
+    /// written, which claimed we never did.** `RmConnection::map_cpu_windowed_on`
+    /// (`kayfabe-isolate-host/src/rm.rs:2254`) issues the escape at `:2297` and then maps
+    /// `Backing::DeviceFile { fd: node.as_fd() }` at `:2325-2330`; `map_cpu` defaults to
+    /// `MapNode::Gpu` (`:2214`). **19 non-test call sites** — rings, USERD, doorbell, CE
+    /// operands. ⇒ The isolate has had a real CPU view of host VRAM all along.
+    /// ★ **So the gap was never the escape. It is the CROSSING**: the resulting
+    /// `VolatileRegion` stays in the isolate, and the only route out —
+    /// `export_backing` — refuses `HostDeviceMemory` unconditionally.
     /// ★ The sibling **`nvkvm-pv`** (shipped, host parity) implements exactly this route
     /// end to end, *including through its isolate*
     /// (`src/qemu/nvkvm_isolate_handlers.c:3618`, `src/guest/nvkvm_uvm_ext.c:585`).
