@@ -1,5 +1,20 @@
 # kayfabe — Mode-2 NVIDIA GPU forwarding, the Rust rewrite
 
+> ## ⚠️ Work in progress — do not run any of this yet
+>
+> Kayfabe is under **active development** and is published early, deliberately: so the
+> approach can be read and argued with, not because it is finished or usable.
+>
+> **Nothing in this repository is ready to run.** There is no supported build, no
+> install path and no stable entry point. Interfaces, crate layout, on-disk formats and
+> the design docs all change without notice, and the code is expected to be broken at
+> any given commit. Do not point it at hardware you care about.
+>
+> If you want NVIDIA GPU forwarding that actually works today, use
+> **[nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)** instead — that is the
+> maintained, tested descendant of the research prototype archived here.
+
+
 **kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
 forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
 **stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
@@ -10,10 +25,17 @@ per-guest-process host isolates**. The thesis is multi-tenant: several guest pro
 containment, which the C research artifact proved feasible and this rewrite makes
 structural.
 
-The C artifact lives in `../nvidia-gpu-passthrough` (branch `consolidation`) and stays
-the differential oracle + the source of every hard-won lesson (#11–#14, the address
-table, the forwarding model). This repo is the prod-track code: it implements the
-settled design docs, it does not re-derive architecture.
+The C artifact is vendored here at **[`archive/nvkvm/`](archive/nvkvm/)** and stays the
+differential oracle + the source of every hard-won lesson (#11–#14, the address table,
+the forwarding model). This repo is the prod-track code: it implements the settled
+design docs, it does not re-derive architecture.
+
+`archive/nvkvm/` is a **frozen snapshot** of the original `nvkvm` C research prototype
+at commit `bac00b6`, imported as a single squashed commit rather than with its history.
+It is kept because kayfabe's design references its Mode-2 work directly. It is
+historical: **not built, not tested, not maintained, and not intended to run.** Its
+maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), which
+deliberately excludes Mode 2 as a research artifact.
 
 ## The one defining constraint
 
