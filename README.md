@@ -10,6 +10,14 @@
 > the design docs all change without notice, and the code is expected to be broken at
 > any given commit. Do not point it at hardware you care about.
 >
+> **`cargo test --workspace` does not pass clean.** Measured at `06bbfd9e`:
+> **1554 pass, 1 fails** — `kayfabe-tests --test admitted_is_served`,
+> `every_unserviced_id_a_boot_recorded_is_classified`. It is a bookkeeping gap, not a
+> functional defect: control id `0x83de030c`
+> (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`) is listed in the ledger, but the
+> evidence was committed as an excerpt rather than as the boot log that carries the id.
+> Documented in `docs/design/w329_wiring_the_release.md`.
+>
 > If you want NVIDIA GPU forwarding that actually works today, use
 > **[nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)** instead — that is the
 > maintained, tested descendant of the research prototype archived here.
@@ -86,18 +94,33 @@ Mode-1 number appears here.
 | PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ❌ not run |
 | `nvidia-smi` enumerates (`SMI_RC=0`) | ✅ | ✅ |
 | `nvidia-smi` process table lists running processes | ❌ | ❌ `No running processes found` |
-| **Multi-process / multi-tenant Mode 2** | ❌ one CUDA process per QEMU lifetime | ◐ believed reached; not yet cited here |
+| Host isolate runs **unprivileged** | — | ✅ `CapEff/CapPrm/CapBnd = 0`, `NoNewPrivs: 1`, uid 65534 |
+| Portable across hypervisor versions | — | ✅ same overlay built into QEMU **9.2.0 and 10.2.4**, both booted |
+| **Concurrent multi-process** — bug #14's own shape | ❌ one CUDA process per QEMU lifetime | ✅ **branch only** — two guest CUDA processes both `=43`, incl. a staggered arm starting the 2nd *inside* the 1st's `cuCtxCreate` |
+| Sequential CUDA processes in one boot | — | ◐ **branch only** — 3 pass, the 4th fails |
 
 **Hardware.** C: bare metal, RTX 3050 (GA106), host open driver 595.71.05, 2026-06-16
 ([`MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md)). Kayfabe: GA106, driver 580.159.04,
 bench rebuilt 2026-08-19 ([`w330_the_bench_rebuild_and_three_flags.md`](docs/design/w330_the_bench_rebuild_and_three_flags.md),
 [`RESUME_HERE_2026_08_15.md`](docs/design/RESUME_HERE_2026_08_15.md)).
 
-**The row that matters most is the last one.** Multi-tenancy is the property this rewrite
-exists to make structural, and the C cannot even oracle it — it runs exactly one CUDA
-process per QEMU lifetime. Kayfabe is understood to have reached it; that claim is left
-marked ◐ until the run is cited here, because everything above it is.
+**⚠ The multi-process rows are on a branch, not on `master`.** Both were measured on
+`origin/w337-gpu-name-seam`: the concurrent result is **w299**, 2026-08-14, rev `f459cffa`
+(`docs/whitepaper/kayfabe_architecture.tex:2021`); the sequential one is 2026-08-20, rev
+`cca2eb4b`. Both on GA106. `master` carries neither, and **`master`'s own whitepaper still
+states the opposite** — that the multi-process property is unmeasured on hardware
+(`:2417`, `:2911`). Those lines predate w299 and were never updated. Believe the dated
+measurement, not the stale paragraph.
 
+The staggered arm is what makes the concurrent result bug #14's scenario rather than a
+lookalike: #14 was *two concurrent apps hang at `cuCtxCreate`*, and that arm deliberately
+starts the second process inside that exact window, gated on the first's own print rather
+than a timer.
+
+Two qualifiers that stand: the **4th** sequential process fails, and follow-up work found
+the ceiling is **device opens, not processes** — `nvidia-smi` ×8 with no CUDA anywhere
+fails from the 5th onward. "Two guests" and "two isolates" are **not recorded anywhere**
+and are not claimed here.
 
 ## The one defining constraint
 
