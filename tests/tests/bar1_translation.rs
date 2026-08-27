@@ -647,3 +647,60 @@ fn the_c_gp_put_witness_watches_the_offset_the_abi_names() {
     );
     assert_eq!((bar1_stride, gr_userd_stride), (0x20000, 0x3000));
 }
+
+/// ★★★★★ **THE BAR1 READ PATH HAS A KNOWN-POSITIVE — added 2026-08-27, and it was missing.**
+///
+/// Every other test in this file asserts a BAR1 **write** counter, or reads back a value
+/// through a *different* aperture on purpose (see
+/// [`the_submission_handshake_lands_where_the_walker_reads`], whose `⊘` note explains why a
+/// BAR1 read-back would be tautological *for value agreement*). Both choices are right. But
+/// they leave `bar1_reads` — the counter that says the read path **ran at all** — asserted by
+/// nothing, and the two questions are different:
+///
+/// - *"did the read return the right bytes?"* — covered, via the window.
+/// - *"did the read go through the GMMU walk, or somewhere else entirely?"* — **not covered.**
+///
+/// ⚠ Why this matters now: the framebuffer join is a candidate for a **read-native** overlay
+/// (`Vmm::map_read_native` — reads served from a memslot with no VMM op, writes still trapped).
+/// If that ever lands over a BAR1 range, guest reads stop reaching [`RegPlane`] entirely and
+/// `bar1_reads` silently goes to **zero** — the read path vanishing with every existing test
+/// still green, because they all assert on writes. That is the
+/// *"a census zero needs a known-positive"* shape this tree has paid for repeatedly: an
+/// absence reads as benign unless something asserts the presence.
+///
+/// ⊘ This test does **not** claim reads *should* always trap. It claims the counter is
+/// load-bearing: if the read path moves, this goes red and the move has to be argued for
+/// rather than discovered later from a perf number nobody can attribute.
+#[test]
+fn a_bar1_read_reaches_the_walker_and_the_counter_says_so() {
+    let p = plane();
+    let root = published_bar1_root();
+    assert_ne!(
+        root, 0,
+        "this chip row must publish a bar1PdeBase or the rung is untested"
+    );
+    build_bar1_tree(&p, root, GPFIFO_OFF, pte_vid(RING_PHYS));
+
+    // Seed through the BAR0 moving window — a different aperture, resolving by arithmetic
+    // rather than by a page walk, so agreement below is not a store agreeing with itself.
+    win_wr32(&p, RING_PHYS, 0xC0FF_EE00);
+
+    let before = p.counters().bar1_reads;
+
+    let r = p.read(BAR_FB, GPFIFO_OFF, 4);
+    assert_eq!(
+        r.value(),
+        0xC0FF_EE00,
+        "the BAR1 walk must resolve to the framebuffer page the PTE names"
+    );
+
+    let after = p.counters().bar1_reads;
+    assert_eq!(
+        after,
+        before + 1,
+        "★ the BAR1 READ path must be witnessed by its own counter. If this is 0, reads are \
+         being served somewhere other than the GMMU walk (a read-native overlay, a stale \
+         join, a store shortcut) — and every write-only assertion in this file would still \
+         be green while the read path had gone."
+    );
+}
