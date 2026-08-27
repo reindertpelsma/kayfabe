@@ -91,13 +91,16 @@ Mode-1 number appears here.
 | `cup3` — context create / launch | ✅ | ✅ `CUP3_VAL=43`, all 8 perf arms |
 | `cup8` — matmul, PTX JIT, closed-form check | ✅ N=1024 `bad=0 maxerr=0` | ✅ `N=2048 bad=0 maxerr=0 → PASS`, and N=3072 (36 MiB operands) × 12 iterations |
 | llama.cpp inference (Qwen2 GGUF) | ✅ 49.9 tok/s vs 47.5 host-native | ❌ not run |
-| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ❌ not run |
+| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ◐ CUDA runtime initialises and `torch.cuda.is_available()` is True, but the model does not run — `_cuda_init()` raises "CUDA unknown error", 0 tokens |
+| **Performance vs native** | ✅ ~zero forwarding overhead on bare metal | ❌ **22–81× off native** for large kernels; small ones dominated by our own doorbell handler |
 | `nvidia-smi` enumerates (`SMI_RC=0`) | ✅ | ✅ |
 | `nvidia-smi` process table lists running processes | ❌ | ❌ `No running processes found` |
 | Host isolate runs **unprivileged** | — | ✅ `CapEff/CapPrm/CapBnd = 0`, `NoNewPrivs: 1`, uid 65534 |
 | Portable across hypervisor versions | — | ✅ same overlay built into QEMU **9.2.0 and 10.2.4**, both booted |
 | **Concurrent multi-process** — bug #14's own shape | ❌ one CUDA process per QEMU lifetime | ✅ **branch only** — two guest CUDA processes both `=43`, incl. a staggered arm starting the 2nd *inside* the 1st's `cuCtxCreate` |
 | Sequential CUDA processes in one boot | — | ◐ **branch only** — 3 pass, the 4th fails |
+
+**The full account is the architecture paper** — [`docs/whitepaper/kayfabe_architecture.pdf`](docs/whitepaper/kayfabe_architecture.pdf), written to be attacked, with roughly half of it about what does not work, is not built, or is not known. It is the best thing to read next.
 
 **Hardware.** C: bare metal, RTX 3050 (GA106), host open driver 595.71.05, 2026-06-16
 ([`MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md)). Kayfabe: GA106, driver 580.159.04,
@@ -116,6 +119,12 @@ The staggered arm is what makes the concurrent result bug #14's scenario rather 
 lookalike: #14 was *two concurrent apps hang at `cuCtxCreate`*, and that arm deliberately
 starts the second process inside that exact window, gated on the first's own print rather
 than a timer.
+
+**None of this is a multi-tenancy claim.** There is **no tenant axis at all** — no
+`VmId`, `TenantId` or `GuestId` exists anywhere in `crates/`. Cross-VM separation is the
+incidental consequence of two host processes being separated by the host NVIDIA driver,
+whose own cross-client check is defeated by a shared euid. **No two-VM run has ever been
+attempted.** Multi-tenancy is the thesis; it is not yet a result.
 
 Two qualifiers that stand: the **4th** sequential process fails, and follow-up work found
 the ceiling is **device opens, not processes** — `nvidia-smi` ×8 with no CUDA anywhere
