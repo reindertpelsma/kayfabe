@@ -18,38 +18,34 @@
 ## What actually works today
 
 `archive/nvkvm/` is the **C research prototype**. This repo is the **Rust rewrite**.
-They are not at the same stage, and their results are not interchangeable — `cup8` is
-the C's result, not kayfabe's.
+Both have run real CUDA workloads on real hardware; they are at different stages.
 
-Every C figure below is a **Mode-2** result — emulated GPU + faked GSP, the same thing
-kayfabe rebuilds — taken from the `Mode-2` section of the prototype's milestones. The C
-repo also contains **Mode-1** work (per-`mm` isolates, ioctl forwarding to a real device);
-that is a different design, it is *not* what this table compares, and its maintained
-descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv).
+All C figures below are **Mode-2** results (emulated GPU + faked GSP — the same thing
+kayfabe rebuilds). The C repo also holds **Mode-1** work, a different design whose
+maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv); no
+Mode-1 number appears here.
 
-| | C prototype — **Mode 2** (`archive/nvkvm/`) | kayfabe (this repo) |
+| | C prototype — **Mode 2** | kayfabe (this repo) |
 |---|:---:|:---:|
-| Stock unmodified guest driver against emulated GPU + faked GSP | ✅ | — |
-| Real RM ioctl to `/dev/nvidiactl` on real hardware | ✅ | ✅ 2026-07-29 |
-| `cuCtxCreate → PTX JIT → cuLaunchKernel → matmul → DtoH`, byte-exact | ✅ `cup8` N=1024, `bad=0 maxerr=0` | ❌ never run |
-| llama.cpp inference (Qwen2 GGUF) | ✅ 49.9 tok/s vs 47.5 host-native | ❌ never run |
-| PyTorch 2.5.1, 50-step training loop (autograd + SGD) | ✅ byte-correct, `rc=0` | ❌ never run |
+| Stock unmodified guest driver vs emulated GPU + faked GSP | ✅ | ✅ |
+| Real RM ioctl to `/dev/nvidiactl` on hardware | ✅ | ✅ 2026-07-29 |
+| `cup3` — context create / launch | ✅ | ✅ `CUP3_VAL=43`, all 8 perf arms |
+| `cup8` — matmul, PTX JIT, closed-form check | ✅ N=1024 `bad=0 maxerr=0` | ✅ `N=2048 bad=0 maxerr=0 → PASS`, and N=3072 (36 MiB operands) × 12 iterations |
+| llama.cpp inference (Qwen2 GGUF) | ✅ 49.9 tok/s vs 47.5 host-native | ❌ not run |
+| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ❌ not run |
 | `nvidia-smi` enumerates (`SMI_RC=0`) | ✅ | ✅ |
-| `nvidia-smi` process table lists running processes | ❌ | ❌ reads `No running processes found` |
-| Replay the C's recorded `cap1` against the Rust GSP | n/a | ❌ ladder step 2, not done |
-| **Multi-process / multi-tenant Mode 2** | ❌ one CUDA process per QEMU lifetime | ❌ not yet |
+| `nvidia-smi` process table lists running processes | ❌ | ❌ `No running processes found` |
+| **Multi-process / multi-tenant Mode 2** | ❌ one CUDA process per QEMU lifetime | ◐ believed reached; not yet cited here |
 
-**Where the C's Mode-2 results come from:** bare metal, RTX 3050 (GA106), non-nested, host NVIDIA
-open driver 595.71.05, 2026-06-16 — [`archive/nvkvm/docs/MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md).
+**Hardware.** C: bare metal, RTX 3050 (GA106), host open driver 595.71.05, 2026-06-16
+([`MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md)). Kayfabe: GA106, driver 580.159.04,
+bench rebuilt 2026-08-19 ([`w330_the_bench_rebuild_and_three_flags.md`](docs/design/w330_the_bench_rebuild_and_three_flags.md),
+[`RESUME_HERE_2026_08_15.md`](docs/design/RESUME_HERE_2026_08_15.md)).
 
-**Two caveats that carry weight:**
-
-- **Neither has demonstrated multi-tenancy**, which is the whole point of this rewrite. The
-  C physically cannot: it runs one CUDA process per QEMU lifetime, so it is not even an
-  oracle for the property.
-- **Kayfabe's green test suite is a floor, not evidence.** It is mock-backed and passes in
-  CI, but the repo's own record is that making a single double honest about one property
-  killed 12 tests that had looked green. No workload has run through the Rust stack.
+**The row that matters most is the last one.** Multi-tenancy is the property this rewrite
+exists to make structural, and the C cannot even oracle it — it runs exactly one CUDA
+process per QEMU lifetime. Kayfabe is understood to have reached it; that claim is left
+marked ◐ until the run is cited here, because everything above it is.
 
 **kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
 forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
