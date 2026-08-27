@@ -1139,6 +1139,19 @@ impl FbStore for SparseFb {
         // `FbStore::read`, which would answer from the join the moment it is installed — and
         // performed BEFORE the range goes live. After this there is one memory and there is
         // never a merge.
+        // ★★★★★ **OWNER RULING 2026-08-27 — WHEN THIS BACKING BECOMES VIDMEM, THIS LOOP
+        // MUST BECOME A `ce_copy`.** See `docs/design/copy_placement_policy.md` §2.2.
+        //
+        // A leaf is at least one `FB_LEAF_GRANULE`, so the copy below is **bulk HtoD**. Today
+        // `region` is a `memfd` and this is HtoH — a memcpy, correct and fastest. The moment
+        // the leaf is backed by vidmem it becomes a bulk CPU write **across the BAR**, which
+        // the policy forbids: bulk DtoH, HtoD and DtoD all go to the copy engine
+        // (`kayfabe_isolate_host`'s `ce_copy`), and memcpy is for HtoH and small scalars only.
+        //
+        // ⊘ Do NOT reason *"write-combining is write-optimised, so a bulk write is fine"*.
+        // WC writes are **less bad** than WC reads, not good — still single-digit GB/s over
+        // PCIe against the engine writing device-local at full framebuffer bandwidth. That
+        // exact argument was made and corrected while this comment was being written.
         let mut region = region;
         let mut copied = 0u64;
         let mut nonzero = 0u64;
