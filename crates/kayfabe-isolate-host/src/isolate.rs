@@ -500,7 +500,12 @@ impl ProxyRmBackend {
         // process can `mmap` or `ioctl` it. This is the enforcement point for the property
         // the verb exists for, and it is deliberately independent of the child's own
         // refusal: a compromised isolate is inside the threat model.
-        let Ok(token) = self.exports.adopt(fd, self.isolate) else {
+        // ⊘ `RegularFile`: this crossing asked for FABRICATED memory, so a child answering
+        // with a device node is refused exactly as it was before `adopt` took a kind.
+        let Ok(token) = self
+            .exports
+            .adopt(fd, self.isolate, kayfabe_linux_raw::DescriptorKind::RegularFile)
+        else {
             return Err(RmError::Wedged);
         };
         Ok(ExportedBacking {
@@ -556,7 +561,12 @@ impl ProxyRmBackend {
         // ★★★ The kind check, unchanged and deliberately independent of the child's own
         // refusal: a compromised isolate is inside the threat model, and `adopt` takes the
         // descriptor by value so a character device is refused AND closed here.
-        let Ok(token) = self.exports.adopt(fd, self.isolate) else {
+        // ⊘ `RegularFile`: this crossing asked for FABRICATED memory, so a child answering
+        // with a device node is refused exactly as it was before `adopt` took a kind.
+        let Ok(token) = self
+            .exports
+            .adopt(fd, self.isolate, kayfabe_linux_raw::DescriptorKind::RegularFile)
+        else {
             return Err(RmError::Wedged);
         };
         Ok(FbLeafJoined {

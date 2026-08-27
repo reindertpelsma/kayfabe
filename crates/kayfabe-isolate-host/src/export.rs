@@ -26,16 +26,47 @@
 //! flight (`proto`'s module docs — *"no demux, no pending list, and no `txn_id` to
 //! confuse"*). There is nothing to correlate.
 //!
-//! ## ⊘ What is NOT here
+//! ## ⊘⊘ CORRECTED 2026-08-27 — A DEVICE DESCRIPTOR **CAN** NOW CROSS, AND ONLY ON THE
+//! ## VMM'S OWN SAY-SO. The paragraph below described the state until this date.
 //!
-//! No device descriptor, in either table. [`ChildExports::mint`] can only ever produce a
-//! `memfd`, and [`ExportRegistry::adopt`] refuses anything that is not a regular file
-//! **before** it is reachable. The class that cannot be exported is refused one layer up,
-//! in the backend, by name — see `kayfabe_isolate::RmError::NotExportableAsMemory`.
+//! ★ [`ChildExports::mint_armed_node`] adds a second kind of export: **a device node whose
+//! RM `mmap` context the isolate has already armed** with `NV_ESC_RM_MAP_MEMORY` (`0x4E`).
+//! That is not *"exporting device memory"* — it is exporting **an armed context**, which is
+//! precisely what the sibling `nvkvm-pv` passes to its VMM
+//! (`src/qemu/nvkvm_isolate_handlers.c:3618`).
+//!
+//! ★★★ **The property that makes it safe is structural, not policy.** The VMM never issues
+//! an RM *escape* on that descriptor — it only `mmap`s it, and `mmap` is not an escape, so
+//! `secInfo.privLevel` (recomputed from the caller on every escape,
+//! `ogkm-580: escape.c:304`) is never recomputed in a privileged VMM's favour. The
+//! privileged half stays in the unprivileged isolate.
+//!
+//! ★★ **And the peer is still not trusted.** [`ExportRegistry::adopt`] now takes the kind
+//! the **caller asked for** and still establishes the actual kind from the *kernel*. The
+//! child cannot widen it by claiming anything: a `CharDevice` crosses only when the VMM's
+//! own request was for one, and a child answering a fabricated-memory request with a device
+//! node is refused exactly as before.
+//!
+//! ⊘ Unchanged, deliberately: the isolate still names **no GPA**; `GuestWindow::place` still
+//! refuses `Backing::DeviceFile`, so none of this reaches a guest memslot; and
+//! `kayfabe_isolate::ExportSource::HostDeviceMemory` — *"export this RM object's pages"* —
+//! is still refused by name. Those are different requests from this one.
+//!
+//! ⚠ **The residual risk, named rather than buried:** the VMM now trusts the isolate about
+//! *what is behind* the fd. The bound is RM's own ownership check — an unprivileged isolate
+//! can only map objects its own client owns — so a compromised isolate can surface its own
+//! VRAM, never another tenant's. That bound is RM's, not ours.
+//!
+//! ## ⊘ What is NOT here (as of the correction above)
+//!
+//! No *unrequested* device descriptor. [`ChildExports::mint`] can only ever produce a
+//! `memfd`, and [`ExportRegistry::adopt`] refuses anything that is not the kind the caller
+//! named **before** it is reachable. The class that cannot be exported is refused one layer
+//! up, in the backend, by name — see `kayfabe_isolate::RmError::NotExportableAsMemory`.
 
 use crate::fdcross::{CrossedFd, FdOrigin};
 use kayfabe_isolate::IsolateId;
-use kayfabe_linux_raw::{DescriptorKind, RawError, SharedRam};
+use kayfabe_linux_raw::{CharDevice, DescriptorKind, RawError, SharedRam};
 use std::os::fd::OwnedFd;
 use std::sync::Mutex;
 
@@ -44,9 +75,27 @@ use std::sync::Mutex;
 /// One per child process, shared by every worker thread: a backing is an isolate-scoped
 /// resource, not a worker-scoped one, and a worker-scoped table would make the token's
 /// meaning depend on which pool slot happened to serve the request.
+/// ★★★ **What one child-side export IS** — and the two arms are not interchangeable.
+///
+/// The distinction is the whole of the 2026-08-27 correction in this module's docs: one arm
+/// is memory this isolate *fabricated* and can serve; the other is a **device node whose RM
+/// `mmap` context this isolate armed**, which the isolate does not author the bytes of.
+#[derive(Debug)]
+enum ChildBacking {
+    /// A sealed `memfd` — bytes the isolate wrote and can serve. See [`ChildExports::mint`].
+    Fabricated(SharedRam),
+    /// ★ A device node carrying a live `NV_ESC_RM_MAP_MEMORY` context. See
+    /// [`ChildExports::mint_armed_node`].
+    ///
+    /// ⚠ **The context is one-shot per `struct file`** — a second `0x4E` against a node that
+    /// already carries one is `NV_ERR_STATE_IN_USE` (`ogkm-580: nv-usermap.c:53-57`), so the
+    /// node stored here must be one freshly opened for this mapping and never reused.
+    ArmedNode(CharDevice),
+}
+
 #[derive(Debug, Default)]
 pub struct ChildExports {
-    backings: Mutex<Vec<SharedRam>>,
+    backings: Mutex<Vec<ChildBacking>>,
 }
 
 impl ChildExports {
@@ -74,8 +123,30 @@ impl ChildExports {
     pub fn mint(&self, len: u64) -> Result<u64, RawError> {
         let ram = SharedRam::create(len)?;
         let mut t = self.backings.lock().unwrap_or_else(|e| e.into_inner());
-        t.push(ram);
+        t.push(ChildBacking::Fabricated(ram));
         Ok(t.len() as u64 - 1)
+    }
+
+    /// ★★★★★ **Remember a device node whose RM `mmap` context is already armed**, so the
+    /// VMM can `mmap` the same object; returns the child-scoped token.
+    ///
+    /// This is the second export kind (see this module's 2026-08-27 correction). The caller
+    /// must have obtained `node` from `RmConnection::map_cpu*`, which issues
+    /// `NV_ESC_RM_MAP_MEMORY` against it — an unarmed node would hand the VMM an `mmap` that
+    /// fails rather than a mapping, and the failure would arrive nowhere near here.
+    ///
+    /// ⊘ **Takes the node by value on purpose.** The armed context lives on the `struct
+    /// file` and is released by `nv_free_file_private`, so the node must outlive every
+    /// mapping of it. A borrowed node would be closed by its owner while the VMM's mapping
+    /// was live.
+    ///
+    /// ⚠ It records **no length**. Length is the caller's, carried in the reply beside the
+    /// token, because the `mmap` the VMM performs must use the length RM registered — not a
+    /// number this table re-derived. `ogkm-580: nv-mmap.c:562-565` refuses any other.
+    pub fn mint_armed_node(&self, node: CharDevice) -> u64 {
+        let mut t = self.backings.lock().unwrap_or_else(|e| e.into_inner());
+        t.push(ChildBacking::ArmedNode(node));
+        t.len() as u64 - 1
     }
 
     /// A duplicate of `token`'s descriptor, for attaching to a reply.
@@ -89,11 +160,26 @@ impl ChildExports {
     /// refusal.
     pub fn lend(&self, token: u64) -> Result<OwnedFd, RawError> {
         let t = self.backings.lock().unwrap_or_else(|e| e.into_inner());
-        let ram = usize::try_from(token)
+        let backing = usize::try_from(token)
             .ok()
             .and_then(|i| t.get(i))
             .ok_or(RawError::UnknownExport { token })?;
-        ram.dup_for_export()
+        match backing {
+            ChildBacking::Fabricated(ram) => ram.dup_for_export(),
+            // ★ The armed node is duplicated, not surrendered: the child keeps its end for
+            // the same reason it keeps a fabricated backing's — and here there is a second
+            // reason, sharper. Closing the isolate's last reference would run
+            // `nv_free_file_private` and **tear down the very mmap context the VMM is about
+            // to consume**, turning a correct-looking export into a failing `mmap`.
+            ChildBacking::ArmedNode(node) => {
+                node.as_fd()
+                    .try_clone_to_owned()
+                    .map_err(|e| RawError::Syscall {
+                        call: "dup",
+                        errno: e.raw_os_error(),
+                    })
+            }
+        }
     }
 
     /// How many backings this isolate has minted. Diagnostics and tests only.
@@ -142,10 +228,25 @@ impl ExportRegistry {
     /// A compromised isolate is inside the threat model (`l1_os_shell.md` §11) and the two
     /// mechanisms are deliberately independent.
     ///
+    /// ★★★ **`want` is the kind the CALLER asked for — never the kind the child claims.**
+    /// Added 2026-08-27 with [`ChildExports::mint_armed_node`]; before it, this was hard-wired
+    /// to [`DescriptorKind::RegularFile`].
+    ///
+    /// The peer-trust property is unchanged and that is the point: the *actual* kind is still
+    /// established from the **kernel** inside [`CrossedFd::adopt`]. `want` only narrows what
+    /// this particular crossing will accept. A child answering a fabricated-memory request
+    /// with a device node is refused exactly as it was before this parameter existed, because
+    /// that caller passes `RegularFile`.
+    ///
     /// # Errors
-    /// `RawError::DescriptorKindRefused` when the descriptor is not a regular file.
-    pub fn adopt(&self, fd: OwnedFd, from: IsolateId) -> Result<u64, RawError> {
-        let crossed = CrossedFd::adopt(fd, FdOrigin::Isolate(from), DescriptorKind::RegularFile)?;
+    /// `RawError::DescriptorKindRefused` when the descriptor is not of kind `want`.
+    pub fn adopt(
+        &self,
+        fd: OwnedFd,
+        from: IsolateId,
+        want: DescriptorKind,
+    ) -> Result<u64, RawError> {
+        let crossed = CrossedFd::adopt(fd, FdOrigin::Isolate(from), want)?;
         let mut t = self.adopted.lock().unwrap_or_else(|e| e.into_inner());
         t.push(crossed);
         Ok(t.len() as u64 - 1)

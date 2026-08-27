@@ -473,7 +473,7 @@ fn a_backing_that_is_a_character_device_is_refused_and_closed() {
     );
 
     assert_eq!(
-        registry.adopt(fd, id),
+        registry.adopt(fd, id, kayfabe_linux_raw::DescriptorKind::RegularFile),
         Err(RawError::DescriptorKindRefused {
             expected: DescriptorKind::RegularFile,
             actual: DescriptorKind::CharDevice,
@@ -573,5 +573,61 @@ fn two_exports_get_two_tokens_and_two_distinct_backings() {
     assert_eq!(
         other, [0u8; 16],
         "★ the two backings alias — one export overwrote the other's bytes"
+    );
+}
+
+/// ★★★★★ **THE NEW CROSSING — a character device is adopted ONLY when the caller asked for
+/// one** (2026-08-27, with [`ChildExports::mint_armed_node`]).
+///
+/// The sibling above asserts the unchanged half: a device node answering a *fabricated*
+/// request is still refused by name. This asserts the half that is new, and it exists
+/// because *"we relaxed a refusal"* is exactly the sentence that needs a test rather than a
+/// comment.
+#[test]
+fn a_character_device_crosses_when_the_caller_asked_for_a_character_device() {
+    let _fd_table = serialized();
+    let registry = ExportRegistry::new();
+    let id = IsolateId::new(47, GpuId(0));
+    let fd = OwnedFd::from(std::fs::File::open("/dev/null").expect("/dev/null must exist"));
+
+    let token = registry
+        .adopt(fd, id, DescriptorKind::CharDevice)
+        .expect("★ a node the caller asked for must be adopted, not refused");
+    assert_eq!(
+        registry.kind(token),
+        Some(DescriptorKind::CharDevice),
+        "★★★ and the kind must come from the KERNEL, not from what anyone claimed — this is \
+         the property `want` was added without weakening"
+    );
+}
+
+/// ★★★★★ **`want` NARROWS IN BOTH DIRECTIONS — a regular file cannot masquerade as a node.**
+///
+/// ⊘ Without this, `adopt`'s new parameter would read as *"the caller may widen what is
+/// acceptable"*, and the obvious next defect is a fabricated `memfd` being adopted where an
+/// armed device node was required — a mapping of the wrong bytes, which
+/// `export.rs`'s module docs name as *"the single failure this whole design ranks worst"*.
+///
+/// ★ It is the negative control for the test above: that one alone would pass on an `adopt`
+/// that had simply stopped checking.
+#[test]
+fn a_regular_file_is_refused_when_the_caller_asked_for_a_character_device() {
+    let _fd_table = serialized();
+    let registry = ExportRegistry::new();
+    let id = IsolateId::new(48, GpuId(0));
+    let ram = kayfabe_linux_raw::SharedRam::create(4096).expect("memfd must mint");
+    let fd = ram.dup_for_export().expect("dup must take");
+
+    assert_eq!(
+        registry.adopt(fd, id, DescriptorKind::CharDevice),
+        Err(RawError::DescriptorKindRefused {
+            expected: DescriptorKind::CharDevice,
+            actual: DescriptorKind::RegularFile,
+        }),
+        "★★★ the kind parameter is a NARROWING, not a licence to accept anything"
+    );
+    assert!(
+        registry.is_empty(),
+        "a refused descriptor must not land in the registry"
     );
 }
