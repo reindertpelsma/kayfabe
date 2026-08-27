@@ -10,6 +10,14 @@
 > the design docs all change without notice, and the code is expected to be broken at
 > any given commit. Do not point it at hardware you care about.
 >
+> **`cargo test --workspace` does not pass clean.** Measured at `06bbfd9e`:
+> **1554 pass, 1 fails** — `kayfabe-tests --test admitted_is_served`,
+> `every_unserviced_id_a_boot_recorded_is_classified`. It is a bookkeeping gap, not a
+> functional defect: control id `0x83de030c`
+> (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`) is listed in the ledger, but the
+> evidence was committed as an excerpt rather than as the boot log that carries the id.
+> Documented in `docs/design/w329_wiring_the_release.md`.
+>
 > If you want NVIDIA GPU forwarding that actually works today, use
 > **[nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)** instead — that is the
 > maintained, tested descendant of the research prototype archived here.
@@ -17,41 +25,54 @@
 
 ## What this is
 
-**kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
-forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
-**stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
-guest's *intent* from its own protocol (RM allocs, page-directory binds, doorbells,
-pushbuffer methods) and forward real compute to a host GPU through **unprivileged,
-per-guest-process host isolates**. The thesis is multi-tenant: several guest processes
-(and several guests, and several GPUs) share one host GPU with per-process blast-radius
-containment, which the C research artifact proved feasible and this rewrite makes
-structural.
+Kayfabe **emulates an NVIDIA GPU inside QEMU**. The guest is handed what looks like real
+hardware — an emulated device plus a faked GSP — and runs the **real, unmodified NVIDIA
+driver** against it. Nothing in the guest is patched, shimmed or replaced; it does not
+know it is virtualised. We recover what the guest is actually trying to compute from its
+own protocol (RM allocations, page-directory binds, doorbells, pushbuffer methods) and
+forward that work to a real GPU on the host.
 
-The C artifact is vendored here at **[`archive/nvkvm/`](archive/nvkvm/)** and stays the
-differential oracle + the source of every hard-won lesson (#11–#14, the address table,
-the forwarding model). This repo is the prod-track code: it implements the settled
-design docs, it does not re-derive architecture.
+Two things follow, and they are the whole point:
 
-`archive/nvkvm/` is a **frozen snapshot** of the original `nvkvm` C research prototype
-at commit `bac00b6`, imported as a single squashed commit rather than with its history.
-It is kept because kayfabe's design references its Mode-2 work directly. It is
-historical: **not built, not tested, not maintained, and not intended to run.** Its
-maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), which
-deliberately excludes Mode 2 as a research artifact.
+- **Nothing in the guest has to be modified**, so the guest OS stops being a constraint.
+  Linux today; **Windows guests are the end goal** — you cannot ask a Windows guest to
+  load your custom kernel driver, but you can let it load NVIDIA's own.
+- **The guest's driver is decoupled from the host's.** Because the guest talks to an
+  emulated device rather than to the host driver, the two versions do not have to agree
+  and are free to drift.
 
-**Coming from [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)?** They are different
-designs solving different halves of the same problem, and neither replaces the other:
+The target is **parity performance** — the forwarding should cost approximately nothing
+against running on the host directly.
 
-| | nvkvm-pv | kayfabe |
+### Mode 1 and Mode 2
+
+The two designs this project has tried, and why the names appear everywhere:
+
+- **Mode 1** — forward the guest's ioctls to a real NVIDIA device on the host. The guest
+  runs a **custom kernel driver** that knows where to send them. Proven and shipping.
+- **Mode 2** — emulate the device itself, so the guest's **stock kernel driver** works
+  unmodified. Harder, and what this repo is.
+
+**kayfabe** is a clean-slate, **Mode-2-only** rewrite of the original `nvkvm` C prototype,
+in Rust: hypervisor-agnostic, multi-tenant, unprivileged per-guest-process host isolates.
+The thesis is multi-tenancy — several guest processes, several guests and several GPUs
+sharing one host GPU with per-process blast-radius containment, which the C artifact
+proved feasible and this rewrite is meant to make structural.
+
+**Coming from [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)?** It is the
+maintained Mode-1 stack. Different design, different trade:
+
+| | nvkvm-pv (Mode 1) | kayfabe (Mode 2) |
 |---|---|---|
-| approach | **Mode 1** — forward the guest's ioctls to a real NVIDIA device | **Mode 2** — emulate the GPU + fake the GSP, recover intent from the guest's own protocol |
-| guest driver | stock, but the guest knows it is virtualised | stock, and **unmodified** — it believes it owns real hardware |
-| host requirement | matching NVIDIA driver on the host | matching NVIDIA driver on the host |
-| status | **works today**, tested, maintained | **research in progress** — see the table below |
+| guest **kernel** driver | **custom** — a module you build and load in the guest | **stock NVIDIA**, unmodified |
+| guest **userspace** | stock NVIDIA libraries | stock NVIDIA libraries |
+| guest ↔ host driver versions | must **match** — guest userspace is installed to match the host | **decoupled by design**; free to drift |
+| guest OS | Linux — it needs the module | any, in principle; **Windows is the end goal** |
+| status | **works today**, tested, maintained | **research in progress** — see below |
 | language | C | Rust |
 
-If you want GPU forwarding that works now, use nvkvm-pv. Kayfabe is the bet that Mode 2
-buys multi-tenancy that Mode 1 cannot.
+If you want GPU forwarding that works today, use nvkvm-pv. Kayfabe is the bet that Mode 2
+buys the unmodified guest — and with it Windows, and multi-tenancy — that Mode 1 cannot.
 
 ## What actually works today
 
@@ -70,21 +91,45 @@ Mode-1 number appears here.
 | `cup3` — context create / launch | ✅ | ✅ `CUP3_VAL=43`, all 8 perf arms |
 | `cup8` — matmul, PTX JIT, closed-form check | ✅ N=1024 `bad=0 maxerr=0` | ✅ `N=2048 bad=0 maxerr=0 → PASS`, and N=3072 (36 MiB operands) × 12 iterations |
 | llama.cpp inference (Qwen2 GGUF) | ✅ 49.9 tok/s vs 47.5 host-native | ❌ not run |
-| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ❌ not run |
+| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ◐ CUDA runtime initialises and `torch.cuda.is_available()` is True, but the model does not run — `_cuda_init()` raises "CUDA unknown error", 0 tokens |
+| **Performance vs native** | ✅ ~zero forwarding overhead on bare metal | ❌ **22–81× off native** for large kernels; small ones dominated by our own doorbell handler |
 | `nvidia-smi` enumerates (`SMI_RC=0`) | ✅ | ✅ |
 | `nvidia-smi` process table lists running processes | ❌ | ❌ `No running processes found` |
-| **Multi-process / multi-tenant Mode 2** | ❌ one CUDA process per QEMU lifetime | ◐ believed reached; not yet cited here |
+| Host isolate runs **unprivileged** | — | ✅ `CapEff/CapPrm/CapBnd = 0`, `NoNewPrivs: 1`, uid 65534 |
+| Portable across hypervisor versions | — | ✅ same overlay built into QEMU **9.2.0 and 10.2.4**, both booted |
+| **Concurrent multi-process** — bug #14's own shape | ❌ one CUDA process per QEMU lifetime | ✅ **branch only** — two guest CUDA processes both `=43`, incl. a staggered arm starting the 2nd *inside* the 1st's `cuCtxCreate` |
+| Sequential CUDA processes in one boot | — | ◐ **branch only** — 3 pass, the 4th fails |
+
+**The full account is the architecture paper** — [`docs/whitepaper/kayfabe_architecture.pdf`](docs/whitepaper/kayfabe_architecture.pdf), written to be attacked, with roughly half of it about what does not work, is not built, or is not known. It is the best thing to read next.
 
 **Hardware.** C: bare metal, RTX 3050 (GA106), host open driver 595.71.05, 2026-06-16
 ([`MILESTONES.md`](archive/nvkvm/docs/MILESTONES.md)). Kayfabe: GA106, driver 580.159.04,
 bench rebuilt 2026-08-19 ([`w330_the_bench_rebuild_and_three_flags.md`](docs/design/w330_the_bench_rebuild_and_three_flags.md),
 [`RESUME_HERE_2026_08_15.md`](docs/design/RESUME_HERE_2026_08_15.md)).
 
-**The row that matters most is the last one.** Multi-tenancy is the property this rewrite
-exists to make structural, and the C cannot even oracle it — it runs exactly one CUDA
-process per QEMU lifetime. Kayfabe is understood to have reached it; that claim is left
-marked ◐ until the run is cited here, because everything above it is.
+**⚠ The multi-process rows are on a branch, not on `master`.** Both were measured on
+`origin/w337-gpu-name-seam`: the concurrent result is **w299**, 2026-08-14, rev `f459cffa`
+(`docs/whitepaper/kayfabe_architecture.tex:2021`); the sequential one is 2026-08-20, rev
+`cca2eb4b`. Both on GA106. `master` carries neither, and **`master`'s own whitepaper still
+states the opposite** — that the multi-process property is unmeasured on hardware
+(`:2417`, `:2911`). Those lines predate w299 and were never updated. Believe the dated
+measurement, not the stale paragraph.
 
+The staggered arm is what makes the concurrent result bug #14's scenario rather than a
+lookalike: #14 was *two concurrent apps hang at `cuCtxCreate`*, and that arm deliberately
+starts the second process inside that exact window, gated on the first's own print rather
+than a timer.
+
+**None of this is a multi-tenancy claim.** There is **no tenant axis at all** — no
+`VmId`, `TenantId` or `GuestId` exists anywhere in `crates/`. Cross-VM separation is the
+incidental consequence of two host processes being separated by the host NVIDIA driver,
+whose own cross-client check is defeated by a shared euid. **No two-VM run has ever been
+attempted.** Multi-tenancy is the thesis; it is not yet a result.
+
+Two qualifiers that stand: the **4th** sequential process fails, and follow-up work found
+the ceiling is **device opens, not processes** — `nvidia-smi` ×8 with no CUDA anywhere
+fails from the 5th onward. "Two guests" and "two isolates" are **not recorded anywhere**
+and are not claimed here.
 
 ## The one defining constraint
 
@@ -110,15 +155,27 @@ standing proof of that seam.
 `#![forbid(unsafe_code)]` is a workspace lint (zero unsafe blocks anywhere); every core
 type is compile-time-asserted `Send + Sync`.
 
-## Status: L0 complete; L1-M1 built; L1-M2 in progress
+## Status: L0–L2 built and running on hardware; L3 deliberately absent
 
-Built and hardened over six campaigns (scaffold + concurrency → security red-team +
-fuzz/determinism/mutation gates → C-bug regression matrix → completeness closures →
-GR seams → full multi-GPU), then paused for a consolidation review before descending to L1
-(`docs/design/core_state_and_consolidation.md` — read that for the reviewed per-crate
-state, the L1 hand-off contract, and the honest deferred list).
+The stack is layered L0 (pure logic core) → L1 (Linux OS layer / threaded shell) →
+L2 (QEMU / VMM adapter) → L3 (graphics pipeline).
 
-What is **really built** (mock-tested, mutation-gated):
+| layer | state |
+|---|---|
+| **L0** — pure logic core | complete |
+| **L1** — Linux OS layer / threaded shell | built |
+| **L2** — QEMU / VMM adapter | **built and run** — the same overlay compiled into QEMU **9.2.0 and 10.2.4** and booted on both (`docs/design/l2_qemu_adapter.md:1240`) |
+| **L3** — real Vulkan/GL pipeline | **deliberately absent**; the seams are done and typed (`docs/design/core_state_and_consolidation.md:204`) |
+
+It is **past mock-only**: a real RM ioctl landed 2026-07-29, and `cup3`/`cup8` are green on
+GA106 — see the table above for exactly what ran and where.
+
+⚠ Some in-repo material has not caught up with this. `docs/design/l1_architecture_diagram.py`
+still renders "L2 — QEMU / VMM adapter … NOT BUILT", and `master`'s whitepaper still calls
+the multi-process property unmeasured. Prefer dated measurements over prose; where they
+disagree, the measurement is newer.
+
+L0/L1 in detail — the core that the hardware work sits on, mock-tested and mutation-gated:
 
 - the `RmGraph` source of truth (refcounted RESOURCE/HANDLE split, DUP aliasing,
   order-tolerant parked facts, capacity-bounded) + pure projections (`Proc` grouping,
@@ -240,22 +297,57 @@ list of record. Found by the whitepaper's verification pass.)
 
 ## Crate map (details: `ARCHITECTURE.md`)
 
-| Crate | What it is | State |
-|---|---|---|
-| `kayfabe-util` | `IntervalMap`, virtual `Instant`, `assert_send_sync!` — zero GPU concepts | full |
-| `kayfabe-arch` | domain-identity newtypes + the Axis-B `Arch` trait set | full (traits; no real impl yet) |
-| `kayfabe-core` | ★ `RmGraph` → projections → `Gpu`/`Proc`/`Vas`/`Channel` + GPA arenas | full |
-| `kayfabe-mmu` | the per-VAS address table (MISS=FAULT) | full (table); walker = skeleton |
-| `kayfabe-completion` | per-proc queues + delivery policy + fence arms | full |
-| `kayfabe-fwd` | doorbell demux, publish/gate, pushbuffer parser, control split, present route | full (core slice) |
-| `kayfabe-vmm` | `Vmm`/`Device`/`Present` ports | traits only |
-| `kayfabe-isolate` | `RmBackend`/`Isolate`/`IsolateFactory` ports | traits only |
-| `kayfabe-mocks` | deterministic fakes for every seam (the only impls that exist) | full (test-only) |
-| `kayfabe-abi` | Axis-A codegen'd wire ABI: offline generator, generated structs, version-dispatch decode, oracle tests | full (Axis-A slice) — ★ corrected 2026-07-27, was "**stub**" |
-| `kayfabe-gsp` | faked GSP boot FSM + seqNum transport + RPC decode (8 modules, ~3,550 L) | ~~**stub**~~ **BUILT (S0–S5)** — ★ corrected 2026-07-28. Reboot/resume (S6–S8) is NOT built and is hardware-blocked. ★ It has **no production consumer**: `RpcCommand` has zero references outside the crate, so the `RpcCommand → RmEvent` bridge does not exist yet — that bridge, not the crate, is now the critical path |
-| `kayfabe-trace` | structured trace/replay + budget counters | vocabulary built; no plane call sites |
-| `kayfabe-rt` | the L1 threaded shell: ranked locks (R1/R3 asserted), `SharedDevice`, inbox, executor | full (L1-M1) |
-| `tests/` | the conformance suite (`tests/tests/`, plus per-crate suites under `crates/*/tests/`) + `Scenario` DSL | full |
+23 crates plus the conformance suite. Purposes are the crates' own `Cargo.toml`
+descriptions; per-layer state is in the status table above rather than repeated here.
+
+**The emulated GPU (L0 — pure logic core)**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-core` | composition root: the `RmGraph` source of truth and ownership spine |
+| `kayfabe-mmu` | address plane: per-VAS address table (guest TLB) and GMMU walk |
+| `kayfabe-completion` | per-process completion engine with pending sets and drain-gated batching |
+| `kayfabe-fwd` | intent recovery to host ops: doorbell demux, Vas materialization |
+| `kayfabe-gsp` | faked GSP with falcon boot FSM, message queues, RPC codec |
+| `kayfabe-rmrpc` | GSP-to-core bridge: decodes GSP RPC into `RmEvent`, stateless and pure |
+| `kayfabe-device` | emulated GPU device's chip table, register plane, and PCI routing |
+| `kayfabe-abi` | codegen'd NVIDIA ABI structs (NVOS, class IDs, alloc-params, GSP-RPC, registers) |
+| `kayfabe-arch` | abstract GPU vocabulary and `Arch` trait set for cross-generation abstraction |
+| `kayfabe-chips` | per-generation GPU architecture implementations (Ada, Hopper) |
+
+**Ports — the seams the outer layers implement**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-vmm` | hypervisor-adapter port: `Vmm` and `Device` traits |
+| `kayfabe-isolate` | per-process sandbox port (`Isolate`, `IsolateFactory`, `RmBackend`) |
+
+**L1 — the Linux OS layer**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-rt` | L1 threaded shell with ranked-lock discipline and executor inbox |
+| `kayfabe-shell` | L1 OS shell with reactor loop, descriptor registrar, and executor thread |
+| `kayfabe-linux-raw` | audited Linux-only raw-OS adapter with host mappings and bounded regions |
+| `kayfabe-isolate-host` | sandboxed child process: request/reply protocol and the real NVIDIA RM ioctls |
+
+**L2 — hypervisor adapters**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-vmm-qemu` | QEMU adapter logic: `Vmm` impl, guest-physical map, region classification |
+| `kayfabe-qemu-raw` | QEMU hypervisor FFI surface: `extern "C"` entry points and `QemuHost` |
+| `kayfabe-vmm-kvm` | KVM-direct adapter with real VM descriptors, memslots and mmap'd backings |
+
+**Support and testing**
+
+| crate | purpose |
+|---|---|
+| `kayfabe-trace` | structured trace events, budgets, and replay format for conformance |
+| `kayfabe-crec` | C↔Rust trace decoder and divergence classifier against the emulator |
+| `kayfabe-mocks` | in-process mock adapters for GPU-free testing (`Vmm`, `Arch`, `RmBackend`, `Isolate`) |
+| `kayfabe-util` | purely generic utilities, with no GPU concepts |
+| `tests/` | the conformance suite plus per-crate suites under `crates/*/tests/`, and the `Scenario` DSL |
 
 ## Design sources (settled — implement, don't improvise)
 
