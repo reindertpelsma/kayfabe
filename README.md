@@ -17,41 +17,54 @@
 
 ## What this is
 
-**kayfabe** is a clean-slate, **Mode-2-only** rewrite of `nvkvm`: WSL2-style NVIDIA GPU
-forwarding for KVM/QEMU guests on commodity hardware. An **unmodified guest** runs the
-**stock** NVIDIA kernel driver against an emulated GPU + faked GSP; we recover the
-guest's *intent* from its own protocol (RM allocs, page-directory binds, doorbells,
-pushbuffer methods) and forward real compute to a host GPU through **unprivileged,
-per-guest-process host isolates**. The thesis is multi-tenant: several guest processes
-(and several guests, and several GPUs) share one host GPU with per-process blast-radius
-containment, which the C research artifact proved feasible and this rewrite makes
-structural.
+Kayfabe **emulates an NVIDIA GPU inside QEMU**. The guest is handed what looks like real
+hardware — an emulated device plus a faked GSP — and runs the **real, unmodified NVIDIA
+driver** against it. Nothing in the guest is patched, shimmed or replaced; it does not
+know it is virtualised. We recover what the guest is actually trying to compute from its
+own protocol (RM allocations, page-directory binds, doorbells, pushbuffer methods) and
+forward that work to a real GPU on the host.
 
-The C artifact is vendored here at **[`archive/nvkvm/`](archive/nvkvm/)** and stays the
-differential oracle + the source of every hard-won lesson (#11–#14, the address table,
-the forwarding model). This repo is the prod-track code: it implements the settled
-design docs, it does not re-derive architecture.
+Two things follow, and they are the whole point:
 
-`archive/nvkvm/` is a **frozen snapshot** of the original `nvkvm` C research prototype
-at commit `bac00b6`, imported as a single squashed commit rather than with its history.
-It is kept because kayfabe's design references its Mode-2 work directly. It is
-historical: **not built, not tested, not maintained, and not intended to run.** Its
-maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), which
-deliberately excludes Mode 2 as a research artifact.
+- **Nothing in the guest has to be modified**, so the guest OS stops being a constraint.
+  Linux today; **Windows guests are the end goal** — you cannot ask a Windows guest to
+  load your custom kernel driver, but you can let it load NVIDIA's own.
+- **The guest's driver is decoupled from the host's.** Because the guest talks to an
+  emulated device rather than to the host driver, the two versions do not have to agree
+  and are free to drift.
 
-**Coming from [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)?** They are different
-designs solving different halves of the same problem, and neither replaces the other:
+The target is **parity performance** — the forwarding should cost approximately nothing
+against running on the host directly.
 
-| | nvkvm-pv | kayfabe |
+### Mode 1 and Mode 2
+
+The two designs this project has tried, and why the names appear everywhere:
+
+- **Mode 1** — forward the guest's ioctls to a real NVIDIA device on the host. The guest
+  runs a **custom kernel driver** that knows where to send them. Proven and shipping.
+- **Mode 2** — emulate the device itself, so the guest's **stock kernel driver** works
+  unmodified. Harder, and what this repo is.
+
+**kayfabe** is a clean-slate, **Mode-2-only** rewrite of the original `nvkvm` C prototype,
+in Rust: hypervisor-agnostic, multi-tenant, unprivileged per-guest-process host isolates.
+The thesis is multi-tenancy — several guest processes, several guests and several GPUs
+sharing one host GPU with per-process blast-radius containment, which the C artifact
+proved feasible and this rewrite is meant to make structural.
+
+**Coming from [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)?** It is the
+maintained Mode-1 stack. Different design, different trade:
+
+| | nvkvm-pv (Mode 1) | kayfabe (Mode 2) |
 |---|---|---|
-| approach | **Mode 1** — forward the guest's ioctls to a real NVIDIA device | **Mode 2** — emulate the GPU + fake the GSP, recover intent from the guest's own protocol |
-| guest driver | stock, but the guest knows it is virtualised | stock, and **unmodified** — it believes it owns real hardware |
-| host requirement | matching NVIDIA driver on the host | matching NVIDIA driver on the host |
-| status | **works today**, tested, maintained | **research in progress** — see the table below |
+| guest **kernel** driver | **custom** — a module you build and load in the guest | **stock NVIDIA**, unmodified |
+| guest **userspace** | stock NVIDIA libraries | stock NVIDIA libraries |
+| guest ↔ host driver versions | must **match** — guest userspace is installed to match the host | **decoupled by design**; free to drift |
+| guest OS | Linux — it needs the module | any, in principle; **Windows is the end goal** |
+| status | **works today**, tested, maintained | **research in progress** — see below |
 | language | C | Rust |
 
-If you want GPU forwarding that works now, use nvkvm-pv. Kayfabe is the bet that Mode 2
-buys multi-tenancy that Mode 1 cannot.
+If you want GPU forwarding that works today, use nvkvm-pv. Kayfabe is the bet that Mode 2
+buys the unmodified guest — and with it Windows, and multi-tenancy — that Mode 1 cannot.
 
 ## What actually works today
 
