@@ -146,15 +146,27 @@ standing proof of that seam.
 `#![forbid(unsafe_code)]` is a workspace lint (zero unsafe blocks anywhere); every core
 type is compile-time-asserted `Send + Sync`.
 
-## Status: L0 complete; L1-M1 built; L1-M2 in progress
+## Status: L0–L2 built and running on hardware; L3 deliberately absent
 
-Built and hardened over six campaigns (scaffold + concurrency → security red-team +
-fuzz/determinism/mutation gates → C-bug regression matrix → completeness closures →
-GR seams → full multi-GPU), then paused for a consolidation review before descending to L1
-(`docs/design/core_state_and_consolidation.md` — read that for the reviewed per-crate
-state, the L1 hand-off contract, and the honest deferred list).
+The stack is layered L0 (pure logic core) → L1 (Linux OS layer / threaded shell) →
+L2 (QEMU / VMM adapter) → L3 (graphics pipeline).
 
-What is **really built** (mock-tested, mutation-gated):
+| layer | state |
+|---|---|
+| **L0** — pure logic core | complete |
+| **L1** — Linux OS layer / threaded shell | built |
+| **L2** — QEMU / VMM adapter | **built and run** — the same overlay compiled into QEMU **9.2.0 and 10.2.4** and booted on both (`docs/design/l2_qemu_adapter.md:1240`) |
+| **L3** — real Vulkan/GL pipeline | **deliberately absent**; the seams are done and typed (`docs/design/core_state_and_consolidation.md:204`) |
+
+It is **past mock-only**: a real RM ioctl landed 2026-07-29, and `cup3`/`cup8` are green on
+GA106 — see the table above for exactly what ran and where.
+
+⚠ Some in-repo material has not caught up with this. `docs/design/l1_architecture_diagram.py`
+still renders "L2 — QEMU / VMM adapter … NOT BUILT", and `master`'s whitepaper still calls
+the multi-process property unmeasured. Prefer dated measurements over prose; where they
+disagree, the measurement is newer.
+
+L0/L1 in detail — the core that the hardware work sits on, mock-tested and mutation-gated:
 
 - the `RmGraph` source of truth (refcounted RESOURCE/HANDLE split, DUP aliasing,
   order-tolerant parked facts, capacity-bounded) + pure projections (`Proc` grouping,
