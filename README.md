@@ -54,10 +54,26 @@
 > (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`), documented in
 > `docs/design/w329_wiring_the_release.md`.
 >
-> ★ **The four doorbell/ring failures share one log line** — `DOORBELL-VERB … → calling
-> ring_doorbell`, `kind: Passthrough` — so the working hypothesis is **one cause, not four**:
-> the passthrough doorbell path bypasses the observer and residency checks. ⊘ Hypothesis,
-> not yet verified.
+> ★★★ **CONFIRMED, and it was already adjudicated.** The four doorbell/ring failures are
+> **one cause, not four**, and `da86fc26` (w296, 2026-08-14) named it three weeks before this
+> block was written: *"NOT FIXED, DELIBERATELY. Per the rung's own rule: a red that turns out
+> to be a real product decision gets NAMED and STOPPED at… These five need an owner ruling."*
+>
+> The cause is `8cca3502` (w287), which scoped ring-content forwarding **off** passthrough
+> channels — a change w296 judged *right on its own terms*. The resulting severance is proven
+> by construction rather than observed:
+>
+> > `Emulated` ⟺ anchor is `SYSTEM_ANCHOR` ⟺ routes to `SYSTEM_PROC` ⟹ §12.26 refuses all
+> > three `Binding::host` sites ⟹ no operand can be host-backed ⟹ `HostCe` unreachable ⟹
+> > `await_semaphore` unreachable.
+>
+> ⇒ **On the kind whose ring we read, no operand may be host-backed; on the kind whose
+> operands may be host-backed, we do not read the ring.**
+>
+> ⊘ So these are **not defects that slipped through** — they are a blocker that was found,
+> adjudicated and deliberately stopped at, and they are red *because the tests are doing
+> their job*. They must not be edited to pass. What they await is a design ruling, not a
+> repair.
 >
 > ⚠ **Why this correction is kept rather than quietly replaced:** explaining a failure away
 > is how a project loses an instrument. The question is never *"is my explanation
