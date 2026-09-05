@@ -24,11 +24,45 @@
 > truncation above — so it was most likely never a whole-suite measurement. Corrected rather
 > than quietly updated, because the number's *shape* is the more useful warning.
 >
-> The 9 are bookkeeping and coverage gaps, not functional defects — ledger pins and census
-> classifications whose evidence is committed as excerpts rather than as the boot logs that
-> carry the ids. The longest-standing is control `0x83de030c`
+> ### ⊘⊘⊘ AND THE EXPLANATION THAT USED TO STAND HERE WAS WRONG — corrected 2026-09-06.
+> This block said the failures were *"a bookkeeping gap, not a functional defect."* **They are
+> not.** That sentence was inherited across several rewrites and never re-checked against what
+> the tests actually assert. Read in full, **at least 6 of the 9 are functional, safety or
+> structural defects**, including two the project explicitly forbids:
+>
+> - `a_guest_doorbell_reaches_the_host_completion_observer` — *"**THE SEVERANCE.** … `Served`
+>   here means: we rang a doorbell on a host channel **into which the guest's methods were
+>   never copied**."*
+> - `the_observers_negative_verdict_refuses_the_guest_doorbell` — *"The engine never released
+>   the semaphore and the guest was told `Served` … a caller that discards the verdict
+>   **forges the completion**."* ⚠ **Completion forgery is the one thing this project rules
+>   out by name.**
+> - `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` — *"reads 4 KiB of zeros
+>   and reports SERVED."*
+> - `a_device_with_no_fb_source_refuses_the_vidmem_ring` — an unregistered device must refuse
+>   and does not.
+> - `the_logic_crates_carry_no_unnamed_guest_os_assumption` — a live guest-OS **axis**
+>   violation (`kayfabe-abi/src/submit.rs:5095`).
+> - `every_unranked_lock_a_vcpu_thread_can_hold_is_classified` — a **new unranked lock on the
+>   vCPU path**; *"a wait beneath this will pass every assertion and stall the register
+>   plane."*
+> - `the_audited_crate_list_matches_the_tree_and_is_used_by_all_three_sub_gates` — the
+>   **meta-gate**, reporting that another gate has gone slack: 91 declared relaxations against
+>   93 in the tree, *"a ratchet that has quietly become a comment."*
+>
+> The remaining 1–2 genuinely are ledger bookkeeping, including control `0x83de030c`
 > (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`), documented in
 > `docs/design/w329_wiring_the_release.md`.
+>
+> ★ **The four doorbell/ring failures share one log line** — `DOORBELL-VERB … → calling
+> ring_doorbell`, `kind: Passthrough` — so the working hypothesis is **one cause, not four**:
+> the passthrough doorbell path bypasses the observer and residency checks. ⊘ Hypothesis,
+> not yet verified.
+>
+> ⚠ **Why this correction is kept rather than quietly replaced:** explaining a failure away
+> is how a project loses an instrument. The question is never *"is my explanation
+> plausible"* — it is *"if I am wrong, what now goes unnoticed?"* Here the answer was: the
+> completion-forgery guard, the residency guard, and two axis gates.
 >
 > If you want NVIDIA GPU forwarding that actually works today, use
 > **[nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)** instead — that is the
