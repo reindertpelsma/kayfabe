@@ -10,13 +10,25 @@
 > the design docs all change without notice, and the code is expected to be broken at
 > any given commit. Do not point it at hardware you care about.
 >
-> **`cargo test --workspace` does not pass clean.** Measured at `06bbfd9e`:
-> **1554 pass, 1 fails** — `kayfabe-tests --test admitted_is_served`,
-> `every_unserviced_id_a_boot_recorded_is_classified`. It is a bookkeeping gap, not a
-> functional defect: control id `0x83de030c`
-> (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`) is listed in the ledger, but the
-> evidence was committed as an excerpt rather than as the boot log that carries the id.
-> Documented in `docs/design/w329_wiring_the_release.md`.
+> **`cargo test --workspace` does not pass clean.** Measured at `ee50148d`, 2026-09-06:
+> **2949 pass, 9 fail, across 258 test binaries.**
+>
+> ⚠ **Reproduce it with `--no-fail-fast`, or you will not get that number.** Plain
+> `cargo test --workspace` **stops at the first failing target**: measured the same day, it
+> ran **18** of the 258 binaries and reported **2** failures — a stopping point wearing the
+> costume of a result. Check `grep -c '^test result:'` on the output; if it is not ~258, the
+> run is void whatever it printed.
+>
+> ⊘ **This block previously read "1554 pass, 1 fails" at `06bbfd9e`.** That pass count is far
+> below a complete run's and pairs with exactly one failure, which is the signature of the
+> truncation above — so it was most likely never a whole-suite measurement. Corrected rather
+> than quietly updated, because the number's *shape* is the more useful warning.
+>
+> The 9 are bookkeeping and coverage gaps, not functional defects — ledger pins and census
+> classifications whose evidence is committed as excerpts rather than as the boot logs that
+> carry the ids. The longest-standing is control `0x83de030c`
+> (`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`), documented in
+> `docs/design/w329_wiring_the_release.md`.
 >
 > If you want NVIDIA GPU forwarding that actually works today, use
 > **[nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv)** instead — that is the
