@@ -1,7 +1,19 @@
 # ★★★★★ WHAT ONE DOORBELL COSTS THE SUBMITTING THREAD — a five-second gate for `w383-doorbell-async`
 
 **STATUS — 2026-09-06 — LIVE.** Adds one rung to the raw client (`--doorbell-latency`) and its
-differential harness. It does not supersede `w381_the_guest_servable_probe.md`; it is built on
+differential harness.
+
+> **THE THREE RESULTS, UP FRONT.**
+> 1. ★★★★★ **A guest channel dies at the submission that writes `GP_PUT = 0`** — the 64th on a
+>    64-entry GPFIFO. Reproducible to the index, 4 of 4 (box × device-revision) pairs, in a
+>    30-second run from an unprivileged raw client with no CUDA. §4.2.
+> 2. ★★★★★ **`w383-doorbell-async` changed nothing measurable on this path** — same box, two
+>    shims, 1.03× on the graded arm. §4.4.
+> 3. ⊘⊘⊘ **This document's own gate argument is refuted by its own control**: the native-relative
+>    ratio is **8.7× apart** on two GA106 boxes, so the gate is not portable. §4.4.1.
+>
+> ⚠ The *latency* the rung was commissioned to catch **would have passed the gate**. Only the
+> closing positive control turned a green into a `NOTRUN`, and finding (1) is downstream of that. It does not supersede `w381_the_guest_servable_probe.md`; it is built on
 that lane's `LAUNCH_DMA` primitive and inherits its scope caveats verbatim. Mechanism sections
 §1–§3 are read off this tree's own source and are checkable without a GPU. §4 carries the
 measurements; every number in it names the arm it came from.
@@ -228,10 +240,15 @@ driver, measured within an hour of each other:
 
 ⇒ **A factor of three, between two boxes of the same GPU and the same driver.** An absolute
 millisecond threshold picked on either one would have been 3× wrong on the other — silently, and
-in whichever direction nobody checked. ⊘ This is the §3 argument stopping being an argument: the
-floor is a property of the **host**, not of the design, so the only portable statement is a
-ratio. ★ It is also why the harness measures the floor **minutes before** the guest arm rather
-than reading a constant.
+in whichever direction nobody checked. ★ It is why the harness measures the floor **minutes
+before** the guest arm rather than reading a constant.
+
+> ⊘⊘⊘ **AND DO NOT READ THE NEXT SENTENCE OFF THIS TABLE, WHICH IS WHAT THIS DOCUMENT ORIGINALLY
+> DID.** *"The floor is a property of the host, so the only portable statement is a ratio"* is the
+> conclusion §3 was built on, and **§4.4.1 measures it FALSE**: the guest arm and the native arm
+> move in **opposite** directions between these two boxes, so the ratio is 8.7× apart on them.
+> A native-only comparison cannot see that — it takes the guest arm on both boxes, which is why
+> the refutation arrives four sections later and not here.
 
 ### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225×, AND THAT IS THE MOST USEFUL NUMBER HERE
 
