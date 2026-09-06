@@ -161,12 +161,23 @@ echo "==========================================================================
 echo "=== ★★★★★ THE DIFFERENTIAL — the deliverable"
 echo "================================================================================"
 printf '    %-10s %-9s %s\n' ARM VERDICT DISTRIBUTION
-nrow=$(grep -ah 'DBL_DIST arm=submit rep=POOLED' "$NLOG" | tail -1)
-grow=$(grep -ah 'DBL_DIST arm=submit rep=POOLED' "$GOUT" 2>/dev/null | tail -1)
-nver=$(grep -ah '^RUNG_doorbell_latency=' "$NLOG" | tail -1 | sed 's/.*=//')
-gver=$(grep -ah 'RUNG_doorbell_latency=' "$GOUT" 2>/dev/null | tail -1 | sed 's/.*=//')
-printf '    %-10s %-9s %s\n' native "${nver:-NONE}" "${nrow:-⊘ NO DISTRIBUTION}"
-printf '    %-10s %-9s %s\n' guest  "${gver:-NONE}" "${grow:-⊘ NO DISTRIBUTION}"
+# ⊘ EVERY run's row, not the last one. Each arm runs the binary three times and a `tail -1`
+#   would silently report whichever process happened to finish last — which is exactly how a
+#   bimodal result reads as a clean one. The counts below are the grade; the rows are evidence.
+nver=$(grep -ah '^RUNG_doorbell_latency=' "$NLOG" | sed 's/.*=//' | sort | uniq -c | tr -s ' ' | tr '\n' ' ')
+gver=$(grep -ah 'RUNG_doorbell_latency=' "$GOUT" 2>/dev/null | sed 's/.*=//' | sort | uniq -c | tr -s ' ' | tr '\n' ' ')
+printf '    %-10s %s\n' native "[${nver:-NONE}]"
+grep -ah 'DBL_DIST arm=submit rep=POOLED' "$NLOG" | sed 's/^/      /'
+printf '    %-10s %s\n' guest "[${gver:-NONE}]"
+grep -ah 'DBL_DIST arm=submit rep=POOLED' "$GOUT" 2>/dev/null | sed 's/^/      /'
+echo "    DBL_RATIO_X (guest, one per run): [$(grep -ah '^DBL_RATIO_X=' "$GOUT" 2>/dev/null | sed 's/.*=//' | tr '\n' ' ')]"
+# ★ The hook already reached a verdict over ALL of its runs and printed the letter. Re-deriving
+#   it here from a single line would be a SECOND source of truth beside a complete value.
+GOUTCOME=$(grep -ah 'W384_GUEST_OUTCOME=' "$GOUT" 2>/dev/null | tail -1 | sed 's/.*W384_GUEST_OUTCOME=//')
+echo "    guest hook's own verdict: ${GOUTCOME:-⊘ NONE — the hook never reached one}"
+# The pairing rule below needs one word per arm; take the MAJORITY outcome, and say so.
+nver1=$(grep -ah '^RUNG_doorbell_latency=' "$NLOG" | sed 's/.*=//' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+gver1=$(grep -ah 'RUNG_doorbell_latency=' "$GOUT" 2>/dev/null | sed 's/.*=//' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
 echo ""
 echo "=== ★ THE OTHER TWO ARMS — printed, UNGRADED, and they are what makes a green readable"
 for a in bare freshmap; do
@@ -176,7 +187,7 @@ done
 
 echo ""
 echo "=== ★★★ THE PAIRING RULE, applied"
-case "${nver:-NONE}/${gver:-NONE}" in
+case "${nver1:-NONE}/${gver1:-NONE}" in
   PASS/FAIL)
     echo "    W384_OUTCOME=(A) ★★★★★ THE INTENDED SHAPE — native PASS, guest FAIL, control passed"
     echo "        on both. This is a five-second gate for w383-doorbell-async." ;;
