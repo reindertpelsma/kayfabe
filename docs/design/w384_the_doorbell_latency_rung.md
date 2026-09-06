@@ -264,10 +264,101 @@ nothing emitted"*, inverted: here the name was emitted and **disagreed with the 
 found only because the negative control was run — the rung's own numbers on its own arm would
 never have reached that branch.
 
-### §4.2 GUEST
+### §4.2 ★★★★★ GUEST — THE GATE WOULD HAVE SAID PASS, AND THE CONTROL SAID THE CHANNEL IS DEAD
 
-*(the Mode-2 arm; see `scripts/bench/w384_doorbell_latency.sh`, which feeds the native floor to
-the guest arm as `--doorbell-latency-native-us`)*
+Same box, same boot's binary, `md5 6d2005aab792b9ad9ba4f9df19329e00` on both arms. Mode-2 guest,
+`KAYFABE_CE_EXECUTOR=local`, `KAYFABE_ISOLATES=real`, `KAYFABE_VAS_PUBLISH=drain`,
+`KAYFABE_GR_ROUTE=passthrough`, shim built at `8d5863fe` (= current master + this rung). **Three
+processes, and all three are identical to the submission index:**
+
+```
+info  R6 control (open)  = Landed
+DBL_DIST  arm=submit rep=0 n=64 min_us=616.887 p50_us=668.563 p90_us=697.328 max_us=736.922
+DBL_DRAIN rep=0 every=16 drains=4 timeouts=1 drain_ms=2000.2 stalled=true  first_stall_at=63
+DBL_DIST  arm=submit rep=1 n=16 p50_us=1111.995
+DBL_DRAIN rep=1 every=16 drains=1 timeouts=1 drain_ms=2000.2 stalled=true  first_stall_at=15
+DBL_DIST  arm=submit rep=2 n=16 p50_us=1113.137
+DBL_DRAIN rep=2 every=16 drains=1 timeouts=1 drain_ms=2000.2 stalled=true  first_stall_at=15
+DBL_STALL reps=3 stalled_reps=3 drains=6 timeouts=3 first_stall_at=63
+info  R6 control (close) = Lost { saw: 3735880580 }        ⊘ 0xDEAD0384 — the SENTINEL
+RUNGCTL_doorbell_latency=FAIL
+RUNG_doorbell_latency=NOTRUN
+```
+
+`saw: 3735880580` is `0xDEAD0384`, [`DBL_SENTINEL`] — **nothing wrote there at all.**
+
+#### ★★★ THE HEADLINE IS NOT THE LATENCY. THE LATENCY WOULD HAVE PASSED.
+
+| quantity | native | guest | ratio |
+|---|---|---|---|
+| `arm=submit` p50, **first 48 submissions** | 9.02 µs | **448 µs** | **50×** |
+| `arm=bare` p50 (the doorbell store alone) | 0.040 µs | **101–241 µs** | **≈2500–6000×** |
+| gate (`native_p50 × 1000`) | — | 9 310 µs | — |
+
+⇒ **The guest submission is 50–73× the native floor, which is 130× UNDER the gate.** Had the
+rung graded on its distribution it would have printed `PASS`, and that would have been a true
+statement about a channel that stops working after 64 submissions.
+
+★★★ **Only the CLOSING CONTROL caught it**, and it is the arm this rung was told to build:
+*"a positive control that must pass, or the result is UNINTERPRETABLE and prints as such."* The
+opening control passed on all three runs; the loop produced 96 clean samples with **zero
+refusals**; every printed latency number was real. **The verdict is `NOTRUN` — correctly — and
+the reason is a line of its own.**
+
+⚠ And note the shape of the near-miss: **the submissions that never execute are the CHEAP
+ones.** A rung that kept sampling past the stall would have pulled its own median DOWN. That is
+why the rep stops at the first drain timeout and why no gate is applied when the control fails.
+
+#### ★★★★★ IT DIES AT SUBMISSION 63, AND THE GPFIFO HAS 64 ENTRIES
+
+`first_stall_at=63`, **three runs out of three, to the index**. The drain windows end at
+submissions 15, 31, 47 and 63; the first three retire and the fourth never does.
+`PUSHBUFFER_SLOTS = 32` and the GPFIFO `entries = 64` (`kayfabe-isolate-host/src/rm.rs`), and
+`submit_entry` sets `GP_PUT = (slot.gp + 1) % entries` — so **submission index 63 is the first
+one whose `GP_PUT` is `0`.**
+
+The bracket, run in the same boot and needing no second guest:
+
+```
+--- n=48 (strictly inside one lap of the GPFIFO) ---
+DBL_DIST  arm=submit n=48 min_us=408.331 p50_us=448.493 p90_us=482.482 max_us=571.213
+DBL_DRAIN drains=3 timeouts=0 drain_ms=0.1 stalled=false first_stall_at=none
+info  R6 control (open)  = Landed
+info  R6 control (close) = Landed          ★ BOTH CONTROLS PASS
+```
+
+⇒ **`drain_ms=0.1` for three windows inside one lap; `drain_ms=2000.2` for the one window that
+crosses it.** It is a **cliff, not a slope** — the channel retires instantly right up to the
+boundary and then never again.
+
+⊘ **THAT IS A BRACKET, NOT A MECHANISM.** What is measured is that the failure tracks the lap
+boundary exactly and reproducibly; *why* `GP_PUT = 0` is not fetched is a device-side question,
+and every file that could answer it (`kayfabe-rt/`, `kayfabe-core/`, `kayfabe-qemu-raw/`) is
+outside this lane. ⚠ Naming the cause without opening those files would be the
+`shape_cannot_discriminate_origin` mistake.
+
+★ **And the native arm is the control that makes it attributable**: the **same binary** completes
+**512 submissions — eight full laps — with `drains=32 timeouts=0 drain_ms=8.4` and both controls
+landing.** So the wrap arithmetic in this crate is not the defect; w381's `RingSlot` fix holds.
+⇒ *"the probe is wrong"* is ruled out by the arm that exists to rule it out.
+
+#### ⊘⊘ HOW THIS WAS VERY NEARLY MISSED — a diagnostic gated on the failure
+
+The **first** guest run of this rung returned early on the failed closing control, so
+`arm=bare` and `arm=freshmap` **never ran on the one arm that had something to explain** — and
+the drain was an uninstrumented `sleep`-until-2s, so a stalled channel presented as *"the budget
+truncated the rep"* rather than as a stall. Both were fixed before the run quoted above, and the
+fix is what produced `first_stall_at`. ⚠ Same class as `a_diagnostic_gated_on_the_failure`, in a
+file written by someone who had read that lesson the same day.
+
+#### ⊘ A SIXTH DEVICE-OPEN PRINTED NOTHING, AND IT READ AS A SILENT RUNG
+
+The second boot's hook ran **six** GPU-touching processes. The fifth (`n=200`) printed **nothing
+at all** and the sixth (`missing_page`) printed only its return code, while the first four were
+clean. That is `the_harness_stopped_where_the_bug_starts` — *"the 5th DEVICE-OPEN wedges the
+GPU"* — reproducing from a raw client with no CUDA anywhere. ⇒ `w384_hook.sh` now computes and
+**prints** its device-open count and warns above four. ⚠ The failure mode is empty output, which
+reads as *"the rung printed nothing"* rather than as *"the device was wedged before it ran"*.
 
 ### §4.3 ★★ `missing_page`, RE-ASKED ON THE SAME BINARY (native), and it has NOT moved
 
