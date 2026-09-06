@@ -109,11 +109,66 @@ through an independent mapping. The channel's own retirement semaphore is expose
 
 ### §4.2 R4 — RPC-mixed allocations
 
-<!-- W381_R4 -->
+`--rpc-mixed-allocs`. Six `NV01_MEMORY_LOCAL_USER` (vidmem) and six `NV01_MEMORY_SYSTEM`
+(sysmem) objects, allocated **interleaved** with an `NV0080_CTRL_CMD_DMA_GET_PDE_INFO` after
+every one, each fixed-mapped at a VA 4 GiB from its neighbours. Then a distinct magic written
+into every object **by the engine**, every object read back **by the engine** into a poisoned
+vidmem scratch, and finally the entire sysmem family torn down and the vidmem family
+re-written.
+
+★ **Native, RTX 3060 / 580.159.04 open module, source `d7081ad1`:**
+
+```
+info  R4 census = allocated 12/12  placed exact 12/12  identity 12/12  CROSSTALK 0
+                  never-read 0  ordering 6/6  controls answered 12/12 (ungraded)
+★     R4 MIX IS INERT
+```
+
+⊘ **THE FIRST VERSION OF THIS RUNG DIED, AND THE WAY IT DIED IS THE FINDING.** It wrote its
+sentinel with `fill_words` — a CPU store through `NV_ESC_RM_MAP_MEMORY` — and **every one of
+the six sysmem objects refused the mapping**, six identical failures and
+`RUNGCTL_rpc_mixed=FAIL`. `RmBackend::alloc_sysmem` passes `NVOS02_FLAGS_MAPPING_NO_MAP`, and
+`HostRmBackend::alloc_probe_local`'s own docs had already recorded exactly this, measured
+2026-08-03: *"a published backing is opaque to the CPU in both directions, by design"*.
+⇒ **A rung that mixes apertures cannot grade both halves through a CPU load**, and one that
+quietly graded the half it *could* read would be *"every row verified"* over half the rows.
+Hence `submit_copy_va` and the scratch: the readback is the engine's, works in every aperture,
+and proves the engine can **read** each address under test as well as write it.
 
 ### §4.3 R5b — cross-client leakage
 
-<!-- W381_R5B -->
+`--cross-client-leak`. A **second** `RmConnection` — its own `/dev/nvidiactl` fd, its own
+`NV01_ROOT` — with its own VA space, its own channel, and an object mapped at **the same
+64-bit GPU VA** as client A's. The shared VA number is the whole rung: if the number alone
+were enough to reach memory, this is the arrangement in which it would show.
+
+★ **Native, same box and source:**
+
+```
+info  R5b hClient A/B      = 0xc1d00054 / 0xc1d00055
+info  R5b N1 B sees A's VA = Ok(Free) at 0x1c11000000 (A HAS IT MAPPED)
+ok    R5b A after B        = A still holds MAGIC_A 0xc5c000a1
+ok    R5b B after B        = B holds MAGIC_B 0xc5c000b1
+ok    R5b foreign handle   = B mapping A's raw object 0xcafe002e: refused Other(87)
+info  R5b census = controls A=true B=true  B-sees-A's-VA-free=true  leak A<-B=false
+                   leak B<-A=false  ordering=true  foreign handle refused=true
+★     R5b ISOLATED
+```
+
+#### ★★★ THE FOREIGN-HANDLE ARM REACHES RM — I ASSUMED IT COULD NOT
+
+This arm shipped **ungraded** in its first version, on the reading that
+`HostRmBackend::narrow` refuses a foreign `HostHandle` before any ioctl is issued, so the arm
+would only measure our own bookkeeping. ⊘ **That reading was false, and the source says so in
+three lines**: `narrow` is `u32::try_from(h.raw())` and nothing else — no isolate id, no table.
+So A's raw handle really does travel into `NV_ESC_RM_MAP_MEMORY_DMA` on **B's** descriptor, and
+RM answers **`0x57` = `NV_ERR_OBJECT_NOT_FOUND`**: the handle names live memory under A and
+does not exist under B. ⇒ **RM scopes object handles per client, at the driver**, and the rung
+now grades it.
+
+⚠ The lesson is the mistake, not the result. *Suspecting* the instrument sent the arm to
+`ungraded`; **reading** the instrument fixed it. `suspect_the_instrument_first` is a
+disposition, not a conclusion.
 
 ## §5 WHAT THIS STILL DOES NOT MEASURE — scope, stated up front
 
