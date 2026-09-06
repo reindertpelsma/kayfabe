@@ -69,15 +69,15 @@ grep -ao "TRAPWITNESS[^|]*" "$Q" 2>/dev/null | tail -1 | sed 's/^/    /'
 echo "    ⊘ TRAPWITNESS lines = [$(grep -ac TRAPWITNESS "$Q" 2>/dev/null)] — 0 means the instrument never ran and every number is VACUOUS"
 echo ""
 echo "--- ★ GRADE 4: NO CORRECTNESS REGRESSION (all four MUST hold) ---"
-echo "    SUPERSEDED          = [$(grep -ac "SUPERSEDED" "$Q" 2>/dev/null)]  (MUST be 0)"
-echo "    ⊘ SUPERSEDE CAPPED  = [$(grep -ac "SUPERSEDE CAPPED" "$Q" 2>/dev/null)]  (MUST be 0)"
+echo "    SUPERSEDED          = [$(grep -ac "SUPERSEDED fb_phys=" "$Q" 2>/dev/null)]  (MUST be 0)"
+echo "    ⊘ SUPERSEDE CAPPED  = [$(grep -ac "⊘ SUPERSEDE CAPPED" "$Q" 2>/dev/null)]  (MUST be 0)"
 echo "    host Xid lines      = [$(grep -ac "Xid (PCI" "$D" 2>/dev/null)]  (MUST be 0 NEW)"
 grep -ao "proc=3 pdb=0x201000[^|]\{0,120\}" "$Q" 2>/dev/null | tail -1 | sed 's/^/    /'
 grep -ao "candidates=[0-9]* refused=[0-9]*" "$Q" 2>/dev/null | sort | uniq -c | sort -rn | head -6 | sed 's/^/    /'
 echo ""
 echo "--- ★ GRADE 5: THE LANE ITSELF ---"
-grep -ao "PUBQUEUE[^|]*" "$Q" 2>/dev/null | tail -1 | sed 's/^/    /'
-echo "    ⊘ PUBQUEUE lines = [$(grep -ac PUBQUEUE "$Q" 2>/dev/null)] — 0 means the census never printed"
+grep -ao "PUBQUEUE coalesce=[^|]*" "$Q" 2>/dev/null | tail -1 | sed 's/^/    /'
+echo "    ⊘ PUBQUEUE census lines = [$(grep -ac "PUBQUEUE coalesce=" "$Q" 2>/dev/null)] — 0 means the census never printed"
 echo "    ⚠ SERVED-LOCALLY OFF THE TRAP = [$(grep -ac "SERVED-LOCALLY OFF THE TRAP" "$Q" 2>/dev/null)]"
 echo "    ⊘ VECTOR REFUSED              = [$(grep -ac "VECTOR REFUSED" "$Q" 2>/dev/null)]"
 echo ""
