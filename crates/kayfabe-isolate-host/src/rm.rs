@@ -6880,13 +6880,62 @@ impl HostRmBackend {
         {
             return Err(RmError::Other(BAD_ENCODE));
         }
+        self.submit_copy_va(
+            chan,
+            token,
+            parts.ring_va + src_ring_off,
+            dst_va,
+            len,
+            sem_payload,
+        )
+    }
+
+    /// ★★★★★ **w381 — the same probe with an ARBITRARY source GPU VA**, so a destination in
+    /// any aperture can be read back the way it was written: by the engine.
+    ///
+    /// # ⊘ Why this is not a convenience wrapper — it is what makes the rung aperture-blind
+    ///
+    /// [`HostRmBackend::read_words_independently`] can only see memory the **CPU** can map,
+    /// and `[measured 2026-08-03, this bench]` a `RmBackend::alloc_sysmem` object carries
+    /// `NVOS02_FLAGS_MAPPING_NO_MAP`, so `NV_ESC_RM_MAP_MEMORY` on it is refused
+    /// `NV_ERR_INVALID_ARGUMENT` — *"a published backing is opaque to the CPU in both
+    /// directions, by design"*, as [`HostRmBackend::alloc_probe_local`]'s own docs record.
+    /// ⇒ a rung that mixes vidmem and sysmem **cannot** grade both families through a CPU
+    /// mapping, and one that quietly graded only the half it could read would be *"every row
+    /// verified"* over half the rows.
+    ///
+    /// Copying `src_va -> scratch_va` and reading the **scratch** closes that: the readback
+    /// is the engine's, so it works in every aperture, and it is *stronger* evidence than a
+    /// CPU load — it proves the engine can **read** the address under test as well as write
+    /// it, which a write-only probe cannot say.
+    ///
+    /// ⚠ The caller must poison the scratch first. A copy that never ran leaves whatever was
+    /// there, and *"the scratch still holds the value we want"* would be indistinguishable
+    /// from a landed copy without a sentinel underneath it.
+    ///
+    /// # Errors
+    /// As [`HostRmBackend::submit_copy_at`].
+    pub fn submit_copy_va(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src_va: u64,
+        dst_va: u64,
+        len: u32,
+        sem_payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
         let slot = self.next_slot(raw)?;
         let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
         let words = ce_pushbuffer(CePush {
             class_id: self.conn.classes.ce_object(),
-            src: parts.ring_va + src_ring_off,
+            src: src_va,
             dst: dst_va,
             len,
             sem_va,

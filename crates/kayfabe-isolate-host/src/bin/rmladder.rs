@@ -4516,6 +4516,26 @@ impl W381Probe {
     }
 }
 
+/// ★★ **A scheduled channel and the work-submit token its doorbell needs**, as ONE value.
+///
+/// ⊘ Not a tidying. The two are minted together by
+/// [`HostRmBackend::alloc_channel_at`] and are meaningless apart: a token rung on the wrong
+/// channel's doorbell is a submission into somebody else's ring, and the rungs most exposed
+/// to that are exactly the ones that hold **two** channels live at once (R3's victim and
+/// bystander, R5b's two clients). Carrying them together makes the mispairing
+/// unexpressible-by-accident.
+///
+/// ⚠ It is also what keeps [`w379_release_through`] inside clippy's seven-argument bound
+/// after w381 added the probe selector — but that is the *occasion* for the type, not its
+/// reason. A bare `#[allow]` would have bought the same silence and none of the safety.
+#[derive(Debug, Clone, Copy)]
+struct W381Chan {
+    /// The channel object itself.
+    h: kayfabe_isolate::HostHandle,
+    /// The work-submit token `alloc_channel_at` returned **with** `h`, and only with it.
+    token: u64,
+}
+
 /// The payload the w381 copy probe releases on the channel's **own** semaphore, purely as a
 /// retirement **qualifier**.
 ///
@@ -4583,8 +4603,7 @@ fn w379_host_va(rm: &mut HostRmBackend, vas: kayfabe_isolate::HostHandle, va: u6
 fn w379_release_through(
     rm: &mut HostRmBackend,
     probe: W381Probe,
-    chan: kayfabe_isolate::HostHandle,
-    token: u64,
+    ch: W381Chan,
     mem: kayfabe_isolate::HostHandle,
     target_va: u64,
     byte_off: u64,
@@ -4600,18 +4619,18 @@ fn w379_release_through(
     // produce would be comparing two different questions.
     let submitted = match probe {
         W381Probe::SemRelease => rm
-            .submit_release_at(chan, token, target_va + byte_off, payload)
+            .submit_release_at(ch.h, ch.token, target_va + byte_off, payload)
             .is_ok(),
         W381Probe::LaunchDma => {
             let (src_off, _sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
             // ⊘ The magic goes into the channel's OWN ring first — a CPU store into memory
             // that is mapped before the doorbell by construction. A failure to place the
             // source is a refusal, never a `Lost`: the engine was never asked.
-            rm.ring_store_u32(chan, src_off, payload).is_ok()
+            rm.ring_store_u32(ch.h, src_off, payload).is_ok()
                 && rm
                     .submit_copy_at(
-                        chan,
-                        token,
+                        ch.h,
+                        ch.token,
                         src_off,
                         target_va + byte_off,
                         4,
@@ -4787,7 +4806,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
             host_a1.as_str()
         );
 
-        let a = w379_release_through(rm, probe, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
+        let a = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A,
+            MAGIC_A,
+        );
         println!("info  R1' release via A   = {a:?}");
         if !a.landed() {
             println!(
@@ -4825,7 +4852,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
             host_b2.as_str()
         );
 
-        let b = w379_release_through(rm, probe, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        let b = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_B,
+            MAGIC_B,
+        );
         println!("info  R1' release via B   = {b:?}");
         if !b.landed() {
             println!(
@@ -4841,7 +4876,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
         );
 
         // ── step 4 — VA_A AGAIN, now that VA_B exists ────────────────────────────────────
-        let a2 = w379_release_through(rm, probe, chan, token, mem, VA_A, W379_OFF_A2, MAGIC_A2);
+        let a2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A2,
+            MAGIC_A2,
+        );
         println!("info  R1' release via A#2 = {a2:?}");
         match a2 {
             W379Release::Landed => {
@@ -5013,8 +5056,24 @@ fn alias_unmap_observe(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bo
         println!("ALIAS_MARK=both_mapped va_a={VA_A:#018x} va_b={VA_B:#018x}");
 
         // ── the control: BOTH aliases live before anything is torn down ─────────────────
-        let a = w379_release_through(rm, probe, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
-        let b = w379_release_through(rm, probe, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        let a = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A,
+            MAGIC_A,
+        );
+        let b = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_B,
+            MAGIC_B,
+        );
         println!("info  R1\" control A/B     = {a:?} / {b:?}");
         if !a.landed() || !b.landed() {
             println!(
@@ -5049,7 +5108,15 @@ fn alias_unmap_observe(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bo
         println!("info  R1\" allocator says A = {free_a:?} (want Free — the VA is reusable again)");
 
         // ── the graded fact ─────────────────────────────────────────────────────────────
-        let b2 = w379_release_through(rm, probe, chan, token, mem, VA_B, W379_OFF_A2, MAGIC_B2);
+        let b2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_A2,
+            MAGIC_B2,
+        );
         println!("info  R1\" release via B#2 = {b2:?}");
         match b2 {
             W379Release::Landed => {
@@ -5362,8 +5429,18 @@ fn missing_page_fault(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> boo
             println!("??    R3 bystander map     = placed at {at:#018x}, not as asked");
             return None;
         }
-        let before =
-            w379_release_through(rm, probe, bchan, btok, bmem, BYST_TARGET, W379_OFF_A, MAGIC_LIVE);
+        let before = w379_release_through(
+            rm,
+            probe,
+            W381Chan {
+                h: bchan,
+                token: btok,
+            },
+            bmem,
+            BYST_TARGET,
+            W379_OFF_A,
+            MAGIC_LIVE,
+        );
         println!("info  R3 bystander before = {before:?}");
         if !before.landed() {
             println!(
@@ -5398,8 +5475,10 @@ fn missing_page_fault(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> boo
         let victim = w379_release_through(
             rm,
             probe,
-            vchan,
-            vtok,
+            W381Chan {
+                h: vchan,
+                token: vtok,
+            },
             vmem,
             VICT_NEVER_MAPPED,
             W379_OFF_A,
@@ -5453,8 +5532,18 @@ fn missing_page_fault(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> boo
         };
 
         // ── (a) CONTAINED ───────────────────────────────────────────────────────────────
-        let after =
-            w379_release_through(rm, probe, bchan, btok, bmem, BYST_TARGET, W379_OFF_A2, MAGIC_LIVE2);
+        let after = w379_release_through(
+            rm,
+            probe,
+            W381Chan {
+                h: bchan,
+                token: btok,
+            },
+            bmem,
+            BYST_TARGET,
+            W379_OFF_A2,
+            MAGIC_LIVE2,
+        );
         println!("info  R3 bystander after  = {after:?}");
         let contained = after.landed();
         if contained {
@@ -5675,7 +5764,15 @@ fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
                 // can never satisfy it.
                 let payload = 0x5715_0000u32 | ((cycle as u32) << 4) | (i as u32);
                 rel_tried += 1;
-                let out = w379_release_through(rm, probe, chan, token, *smem, *sva, W379_OFF_A, payload);
+                let out = w379_release_through(
+                    rm,
+                    probe,
+                    W381Chan { h: chan, token },
+                    *smem,
+                    *sva,
+                    W379_OFF_A,
+                    payload,
+                );
                 if out.landed() {
                     rel_landed += 1;
                     *last = payload;
@@ -5758,6 +5855,64 @@ fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     clean
 }
 
+/// ★★★ **w381 — WRITE one magic into `obj_va + off` WITH THE ENGINE**, by whichever probe
+/// this run selected.
+///
+/// ⊘ Split out of [`w379_release_through`] because that function's read-back is a **CPU**
+/// load through [`HostRmBackend::read_words_independently`], and half of R4's objects have no
+/// CPU view at all. The submit half is aperture-blind; only the observe half is not.
+///
+/// Returns whether the submission was **accepted**, never whether it landed. The landing is
+/// the caller's to observe, and conflating the two is how a refused submission comes to read
+/// as a dead mapping.
+fn w381_engine_write(
+    rm: &mut HostRmBackend,
+    probe: W381Probe,
+    chan: kayfabe_isolate::HostHandle,
+    token: u64,
+    obj_va: u64,
+    off: u64,
+    magic: u32,
+) -> bool {
+    match probe {
+        W381Probe::SemRelease => rm
+            .submit_release_at(chan, token, obj_va + off, magic)
+            .is_ok(),
+        W381Probe::LaunchDma => {
+            let (src_off, _) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+            rm.ring_store_u32(chan, src_off, magic).is_ok()
+                && rm
+                    .submit_copy_at(chan, token, src_off, obj_va + off, 4, W381_RETIRE_PAYLOAD)
+                    .is_ok()
+        }
+    }
+}
+
+/// ★★★★★ **w381 — READ one word back THROUGH THE ENGINE**, into a scratch object the CPU
+/// *can* see.
+///
+/// This is always a `LAUNCH_DMA`, on both probe arms: it is the only verb that can move bytes
+/// at all, and a `SemRelease` cannot read anything. ⚠ The scratch slot must be poisoned
+/// first — see [`HostRmBackend::submit_copy_va`].
+fn w381_engine_readback(
+    rm: &mut HostRmBackend,
+    chan: kayfabe_isolate::HostHandle,
+    token: u64,
+    src_va: u64,
+    scratch_va: u64,
+    slot: usize,
+) -> bool {
+    rm.submit_copy_va(
+        chan,
+        token,
+        src_va,
+        scratch_va + (slot as u64) * 4,
+        4,
+        W381_RETIRE_PAYLOAD,
+    )
+    .is_ok()
+}
+
 /// ★★★★★ **w381 R4 — RPC-MIXED ALLOCATIONS: does ORDERING and IDENTITY survive the mix?**
 ///
 /// Owner 2026-09-06, naming the gap the w379 lane left open by name: *"mixing rpc with
@@ -5766,13 +5921,30 @@ fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
 /// answer**.
 ///
 /// ```text
-///   0  one VIDMEM object and one SYSMEM object, each written and read back  [CONTROL ×2]
-///   1  N more of each, ALLOCATED INTERLEAVED with a device CONTROL between every pair
-///   2  a DISTINCT magic copied into every live object, then EVERY object read back
-///         -> each must hold ITS OWN magic and no other object's        [IDENTITY]
+///   1  N VIDMEM and N SYSMEM objects, ALLOCATED INTERLEAVED with a device CONTROL
+///      between every pair, each mapped at a VA this rung dictates
+///   2  a DISTINCT magic written into every one of them BY THE ENGINE, then every one of
+///      them read back BY THE ENGINE into a poisoned scratch the CPU can see
+///        -> each must hold ITS OWN magic and no other object's            [IDENTITY]
+///        -> object #0 of each family is that family's                     [CONTROL]
 ///   3  the whole SYSMEM family torn down; the VIDMEM family re-written and re-read
-///         -> every survivor must still land                            [ORDERING]
+///        -> every survivor must still land                                [ORDERING]
 /// ```
+///
+/// # ★★★★★ THE READ-BACK IS THE ENGINE'S, AND THAT IS FORCED — NOT A PREFERENCE
+///
+/// The obvious readback, [`HostRmBackend::read_words_independently`], is a **CPU** load, and
+/// `[measured 2026-09-06 on this bench, and predicted by `alloc_probe_local`'s own docs]`
+/// **every sysmem object in this rung refuses a CPU mapping**: `RmBackend::alloc_sysmem`
+/// passes `NVOS02_FLAGS_MAPPING_NO_MAP`, so `NV_ESC_RM_MAP_MEMORY` on the result is refused —
+/// *"a published backing is opaque to the CPU in both directions, by design"*. The first
+/// version of this rung wrote the sentinel with `fill_words` and died there, six times, with
+/// `RUNGCTL_rpc_mixed=FAIL`.
+///
+/// ⇒ Every object is written **and read** by the copy engine, and only a scratch VIDMEM
+/// object is ever touched by the CPU. ★ That is strictly **more** evidence than the CPU path
+/// would have been: it proves the engine can *read* each address under test as well as write
+/// it, which a write-only probe cannot say.
 ///
 /// # ⊘ WHAT "RPC-MIXED" MEANS HERE, STATED HONESTLY BECAUSE THE NAME OVERPROMISES
 ///
@@ -5785,15 +5957,15 @@ fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
 ///   **guest RAM**, reached through `CpuPlane::GuestRam`. ★ The two planes are *"two number
 ///   spaces that collide freely"* by `ceutils`'s own account, and serving one out of the
 ///   other's store is the silent-wrong-bytes failure the address plane exists to refuse.
-///   That is exactly what phase 2 is aimed at.
+///   That is exactly what the identity phase is aimed at.
 /// - `NV0080_CTRL_CMD_DMA_GET_PDE_INFO` — a device **control**, issued between every
-///   allocation pair, so no two allocations of the same family are ever adjacent.
+///   allocation, so no two allocations of the same family are ever adjacent.
 ///
 /// ⊘ **Which of those crosses to the emulated GSP is RM's routing decision, and this rung
 /// does NOT measure it.** Calling the mix "RPC-mixed" is a statement about the request
-/// families being different, not a claim that a particular one produced a `GSP_RM_ALLOC`.
-/// A rung that asserted the crossing would need an instrument inside the device, and one
-/// that *claimed* it without one would be the `pde_info` mistake in a new place.
+/// families being different, not a claim that a particular one produced a `GSP_RM_ALLOC`. A
+/// rung that asserted the crossing would need an instrument inside the device, and one that
+/// *claimed* it without one would be the `pde_info` mistake in a new place.
 ///
 /// ⊘ The interleaved control's **result is recorded and UNGRADED**, for the same reason R2
 /// does not grade `pde_info`: `GET_PDE_INFO` answers `PDE_COVERS` at addresses the run never
@@ -5803,15 +5975,16 @@ fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
 /// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
 ///
 /// - **both controls land, identity clean, ordering clean** ⇒ PASS. The mix is inert.
-/// - **a CROSSTALK** — an object holding *another object's* magic ⇒ ★★★★★ FAIL, and it is
-///   the strong red: two allocations resolved to one backing. Reported separately from
-///   *"never written"*, which is a dead mapping and a different defect.
+/// - **a CROSSTALK** — an object holding *another object's* magic ⇒ ★★★★★ FAIL, and it is the
+///   strong red: two allocations resolved to one backing. Reported separately from *"never
+///   written"*, which is a dead mapping and a different defect, and separately again from
+///   *"still the scratch poison"*, which is a readback that never ran.
 /// - **an ORDERING failure** — a surviving vidmem object stops answering once the sysmem
 ///   family is freed ⇒ FAIL. A teardown reached across families.
-/// - **either control fails** ⇒ ⊘ `NOTRUN`. A family that could not be written even once
-///   makes every statement about the mix uninterpretable. ⚠ Including the sysmem one: a
-///   rung that quietly graded on the vidmem half alone would be *"every row verified"* over
-///   half the rows.
+/// - **either family's object #0 fails** ⇒ ⊘ `NOTRUN`. A family that could not be written
+///   even once makes every statement about the mix uninterpretable. ⚠ Including the sysmem
+///   one: a rung that quietly graded on the vidmem half alone would be *"every row verified"*
+///   over half the rows.
 fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     /// Objects **per family**. Small enough that the whole census fits on one screen and
     /// every failure can be printed rather than sampled.
@@ -5822,26 +5995,33 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     const STRIDE: u64 = 0x0000_0001_0000_0000;
     const VA_VID_BASE: u64 = 0x0000_000C_1100_0000;
     const VA_SYS_BASE: u64 = 0x0000_0014_1100_0000;
+    /// The one object the CPU ever touches. Clear of both families' spans.
+    const VA_SCRATCH: u64 = 0x0000_001A_1100_0000;
+    /// How long the engine is given to retire a whole pass before the scratch is read.
+    const SETTLE: std::time::Duration = std::time::Duration::from_millis(400);
     /// How many failures are printed. A capped list is not a census, so the **count** is
     /// printed beside the cap on every run.
     const SHOW: usize = 8;
 
-    /// The magic for one object. Distinct per (family, index) **and** per pass, so a word
-    /// left over from an earlier phase can never satisfy a later one, and a word belonging
-    /// to a *different* object is recognisable as that object's rather than merely wrong.
+    /// The magic for one object. Distinct per (pass, family, index), so a word left over from
+    /// an earlier pass can never satisfy a later one, and a word belonging to a *different*
+    /// object is recognisable as that object's rather than merely wrong.
     fn magic(pass: u32, vid: bool, i: usize) -> u32 {
         0x8410_0000 | (pass << 12) | (u32::from(vid) << 8) | (i as u32)
+    }
+    fn fam(vid: bool) -> &'static str {
+        if vid { "VIDMEM" } else { "SYSMEM" }
     }
 
     println!(
         "info  R4 rpc-mixed        = GPU {gpu}, euid {} — {N} VIDMEM + {N} SYSMEM \
-         allocations, interleaved, with a device control between every pair",
+         allocations, interleaved, with a device control between every one",
         kayfabe_linux_raw::geteuid()
     );
     println!(
         "info  R4 the bar          = every object holds ITS OWN magic (identity), and \
          tearing down the whole SYSMEM family leaves every VIDMEM mapping still writable \
-         (ordering)"
+         (ordering). ⊘ Both halves are read BY THE ENGINE: a sysmem object has no CPU view"
     );
 
     let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
@@ -5860,6 +6040,7 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     // `(handle, va, is_vidmem, index)` for every object this rung has live.
     let mut live: Vec<(kayfabe_isolate::HostHandle, u64, bool, usize)> = Vec::new();
     let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut scratch_h: Option<kayfabe_isolate::HostHandle> = None;
     let mut control_vid = false;
     let mut control_sys = false;
     let mut failures: Vec<String> = Vec::new();
@@ -5870,6 +6051,7 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     let mut ident_ok = 0usize;
     let mut ident_tried = 0usize;
     let mut crosstalk = 0usize;
+    let mut never_read = 0usize;
     let mut order_ok = 0usize;
     let mut order_tried = 0usize;
     let mut ctrl_answered = 0usize;
@@ -5890,11 +6072,29 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
             return false;
         }
 
-        // ── phase 0/1 — ALLOCATE AND MAP, interleaved, control between every pair ────────
+        // ── the SCRATCH — the one object the CPU ever touches ───────────────────────────
+        let Ok(scratch) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R4 scratch          = device-local allocation refused");
+            return false;
+        };
+        scratch_h = Some(scratch);
+        match rm.map_local_at(vas, scratch, W379_BYTES, Some(VA_SCRATCH)) {
+            Ok(got) if got == VA_SCRATCH => {}
+            Ok(got) => {
+                println!("??    R4 scratch place    = asked {VA_SCRATCH:#018x}, got {got:#018x}");
+                return false;
+            }
+            Err(e) => {
+                println!("??    R4 scratch map      = refused {e:?}");
+                return false;
+            }
+        }
+
+        // ── ALLOCATE AND MAP, interleaved, a control after every allocation ─────────────
         //
-        // ⚠ Index 0 of each family is the CONTROL and is allocated first, in the same loop
-        // and by the same code, so a control that passes and a mixed object that fails
-        // cannot differ in how they were made.
+        // ⚠ Index 0 of each family is that family's CONTROL and is allocated first, in the
+        // same loop and by the same code, so a control that passes and a mixed object that
+        // fails cannot differ in how they were made.
         for i in 0..N {
             for vid in [true, false] {
                 let alloc = if vid {
@@ -5902,47 +6102,37 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
                 } else {
                     rm.alloc_sysmem(W379_BYTES)
                 };
-                let Ok(mem) = alloc else {
-                    failures.push(format!(
-                        "alloc {} #{i} refused ({:?})",
-                        if vid { "VIDMEM" } else { "SYSMEM" },
-                        alloc.err()
-                    ));
-                    continue;
-                };
-                alloc_ok += 1;
-                if rm.fill_words(mem, W379_BYTES, W379_SENTINEL, 0).is_err() {
-                    failures.push(format!(
-                        "{} #{i}: the sentinel could not be written — no CPU view",
-                        if vid { "VIDMEM" } else { "SYSMEM" }
-                    ));
-                    let _ = rm.free(mem);
-                    continue;
-                }
                 let want = if vid { VA_VID_BASE } else { VA_SYS_BASE } + (i as u64) * STRIDE;
-                placed_tried += 1;
-                match rm.map_local_at(vas, mem, W379_BYTES, Some(want)) {
-                    Ok(got) if got == want => {
-                        placed_exact += 1;
-                        live.push((mem, got, vid, i));
+                match alloc {
+                    Ok(mem) => {
+                        alloc_ok += 1;
+                        placed_tried += 1;
+                        match rm.map_local_at(vas, mem, W379_BYTES, Some(want)) {
+                            Ok(got) if got == want => {
+                                placed_exact += 1;
+                                live.push((mem, got, vid, i));
+                            }
+                            Ok(got) => {
+                                failures.push(format!(
+                                    "{} #{i}: PLACEMENT DRIFT — asked {want:#018x}, RM chose \
+                                     {got:#018x}",
+                                    fam(vid)
+                                ));
+                                live.push((mem, got, vid, i));
+                            }
+                            Err(e) => {
+                                failures.push(format!(
+                                    "{} #{i}: map at {want:#018x} refused {e:?}",
+                                    fam(vid)
+                                ));
+                                let _ = rm.free(mem);
+                            }
+                        }
                     }
-                    Ok(got) => {
-                        failures.push(format!(
-                            "{} #{i}: PLACEMENT DRIFT — asked {want:#018x}, RM chose {got:#018x}",
-                            if vid { "VIDMEM" } else { "SYSMEM" }
-                        ));
-                        live.push((mem, got, vid, i));
-                    }
-                    Err(e) => {
-                        failures.push(format!(
-                            "{} #{i}: map at {want:#018x} refused {e:?}",
-                            if vid { "VIDMEM" } else { "SYSMEM" }
-                        ));
-                        let _ = rm.free(mem);
-                    }
+                    Err(e) => failures.push(format!("alloc {} #{i} refused {e:?}", fam(vid))),
                 }
-                // ⊘ THE PERTURBATION, between every pair. Recorded, UNGRADED — see the
-                // rung's docs for why `GET_PDE_INFO` cannot be an oracle here.
+                // ⊘ THE PERTURBATION. Recorded, UNGRADED — see the rung's docs for why
+                // `GET_PDE_INFO` cannot be an oracle here.
                 ctrl_tried += 1;
                 if w379_host_va(rm, vas, want) != W379HostVa::Unmeasured {
                     ctrl_answered += 1;
@@ -5950,131 +6140,147 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
             }
         }
 
-        // ── the TWO CONTROLS — one per family, before anything is graded ────────────────
-        for vid in [true, false] {
-            let Some(&(mem, va, _, i)) = live.iter().find(|(_, _, v, i)| *v == vid && *i == 0)
-            else {
-                println!(
-                    "??    R4 CONTROL MISSING  = the {} family has no object #0 to control \
-                     on, so its half of the mix was never established",
-                    if vid { "VIDMEM" } else { "SYSMEM" }
-                );
-                continue;
-            };
-            let m = magic(0, vid, i);
-            let out = w379_release_through(rm, probe, chan, token, mem, va, W379_OFF_A, m);
-            println!(
-                "info  R4 control {:<7}  = {out:?} at {va:#018x}",
-                if vid { "VIDMEM" } else { "SYSMEM" }
-            );
-            if out.landed() {
-                if vid {
-                    control_vid = true;
-                } else {
-                    control_sys = true;
+        // ── IDENTITY. Write every object, then read EVERY object. ──────────────────────
+        //
+        // ★ The two loops are SEPARATE on purpose. Writing and immediately reading one object
+        // cannot see a later object landing on top of it, which is precisely the crosstalk
+        // this phase exists to find — the same reason `alias_two_vas`'s step 4 is the whole
+        // of that rung.
+        // ⊘ `failures` is a PARAMETER, not a capture: the caller records into the same list
+        // around every call, and a closure that captured it would own the borrow for its
+        // whole lifetime.
+        let identity = |pass: u32,
+                        objs: &[(kayfabe_isolate::HostHandle, u64, bool, usize)],
+                        rm: &mut HostRmBackend,
+                        failures: &mut Vec<String>|
+         -> Vec<Option<u32>> {
+            // ⚠ POISON FIRST. A readback that never ran leaves whatever was in the slot, and
+            // without a sentinel underneath it that is indistinguishable from a landed copy.
+            if rm
+                .fill_words(scratch, W379_BYTES, W379_SENTINEL, 0)
+                .is_err()
+            {
+                return vec![None; objs.len()];
+            }
+            for &(_, va, vid, i) in objs {
+                if !w381_engine_write(rm, probe, chan, token, va, W379_OFF_B, magic(pass, vid, i))
+                    && failures.len() < 64
+                {
+                    failures.push(format!(
+                        "pass {pass}: WRITE to {} #{i} at {va:#018x} was REFUSED, not lost",
+                        fam(vid)
+                    ));
+                }
+            }
+            for (slot, &(_, va, vid, i)) in objs.iter().enumerate() {
+                if !w381_engine_readback(rm, chan, token, va + W379_OFF_B, VA_SCRATCH, slot)
+                    && failures.len() < 64
+                {
+                    failures.push(format!(
+                        "pass {pass}: READBACK of {} #{i} at {va:#018x} was REFUSED",
+                        fam(vid)
+                    ));
+                }
+            }
+            std::thread::sleep(SETTLE);
+            let offs: Vec<u64> = (0..objs.len() as u64).map(|s| s * 4).collect();
+            match rm.read_words_independently(scratch, W379_BYTES, &offs) {
+                Ok(w) => w.into_iter().map(Some).collect(),
+                Err(_) => vec![None; objs.len()],
+            }
+        };
+
+        let seen = identity(1, &live, rm, &mut failures);
+        for (idx, &(_, va, vid, i)) in live.iter().enumerate() {
+            ident_tried += 1;
+            let want = magic(1, vid, i);
+            match seen.get(idx).copied().flatten() {
+                Some(v) if v == want => {
+                    ident_ok += 1;
+                    if i == 0 {
+                        if vid {
+                            control_vid = true;
+                        } else {
+                            control_sys = true;
+                        }
+                    }
+                }
+                Some(v) if v == W379_SENTINEL => {
+                    never_read += 1;
+                    if failures.len() < 64 {
+                        failures.push(format!(
+                            "{} #{i} at {va:#018x}: the scratch slot is STILL THE POISON — the \
+                             engine never wrote it back, so this says nothing about the object",
+                            fam(vid)
+                        ));
+                    }
+                }
+                Some(v) => {
+                    // ★★★★★ Is the word ANOTHER object's? That is a much stronger — and much
+                    // worse — finding than "nothing arrived", and the two must never be
+                    // reported as one number.
+                    let owner = live
+                        .iter()
+                        .find(|(_, _, ov, oj)| magic(1, *ov, *oj) == v)
+                        .map(|(_, ova, ov, oj)| format!("{} #{oj} at {ova:#018x}", fam(*ov)));
+                    if let Some(who) = owner {
+                        crosstalk += 1;
+                        if failures.len() < 64 {
+                            failures.push(format!(
+                                "★★★★★ CROSSTALK — {} #{i} at {va:#018x} holds {v:#010x}, which \
+                                 is {who}'s magic",
+                                fam(vid)
+                            ));
+                        }
+                    } else if failures.len() < 64 {
+                        failures.push(format!(
+                            "{} #{i} at {va:#018x}: holds {v:#010x}, want {want:#010x} (nobody's \
+                             magic — a dead mapping, not crosstalk)",
+                            fam(vid)
+                        ));
+                    }
+                }
+                None => {
+                    if failures.len() < 64 {
+                        failures.push(format!("{} #{i}: the scratch could not be read", fam(vid)));
+                    }
                 }
             }
         }
         if !(control_vid && control_sys) {
             println!(
-                "??    R4 CONTROL FAILED   = vidmem={control_vid} sysmem={control_sys}. ⊘ A \
-                 family that could not be written even ONCE makes every statement about the \
-                 MIX uninterpretable, and grading on the half that worked would be \"every \
-                 row verified\" over half the rows. Retirement qualifier: {}",
+                "??    R4 CONTROL FAILED   = vidmem #0={control_vid} sysmem #0={control_sys}. ⊘ \
+                 A family whose FIRST object could not be written and read back even once \
+                 makes every statement about the MIX uninterpretable, and grading on the half \
+                 that worked would be \"every row verified\" over half the rows. Retirement \
+                 qualifier: {}",
                 w381_retired(rm, chan)
             );
             return false;
         }
         println!(
-            "ok    R4 controls         = BOTH families are writable on their own — a later \
-             red is the MIX and not the harness"
+            "ok    R4 controls         = object #0 of BOTH families round-tripped through the \
+             engine — a later red is the MIX and not the harness"
         );
 
-        // ── phase 2 — IDENTITY. Write every object, then read EVERY object. ─────────────
-        //
-        // ★ The two loops are SEPARATE on purpose. Writing and immediately reading one
-        // object cannot see a later object landing on top of it, which is precisely the
-        // crosstalk this phase exists to find — the same reason `alias_two_vas`'s step 4 is
-        // the whole of that rung.
-        for &(mem, va, vid, i) in &live {
-            let m = magic(1, vid, i);
-            let out = w379_release_through(rm, probe, chan, token, mem, va, W379_OFF_B, m);
-            if !out.landed() && failures.len() < 64 {
-                failures.push(format!(
-                    "identity WRITE {} #{i} at {va:#018x}: {out:?}",
-                    if vid { "VIDMEM" } else { "SYSMEM" }
-                ));
-            }
-        }
-        for &(mem, va, vid, i) in &live {
-            ident_tried += 1;
-            let want = magic(1, vid, i);
-            match rm.read_words_independently(mem, W379_BYTES, &[W379_OFF_B]) {
-                Ok(w) if w[0] == want => ident_ok += 1,
-                Ok(w) => {
-                    // ★★★★★ Is the word ANOTHER object's? That is a much stronger — and
-                    // much worse — finding than "nothing arrived", and the two must never
-                    // be reported as one number.
-                    let owner = live
-                        .iter()
-                        .find(|(_, _, v, j)| magic(1, *v, *j) == w[0])
-                        .map(|(_, ova, v, j)| {
-                            format!(
-                                "{} #{j} at {ova:#018x}",
-                                if *v { "VIDMEM" } else { "SYSMEM" }
-                            )
-                        });
-                    if let Some(who) = owner {
-                        crosstalk += 1;
-                        if failures.len() < 64 {
-                            failures.push(format!(
-                                "★★★★★ CROSSTALK — {} #{i} at {va:#018x} holds {:#010x}, \
-                                 which is {who}'s magic",
-                                if vid { "VIDMEM" } else { "SYSMEM" },
-                                w[0]
-                            ));
-                        }
-                    } else if failures.len() < 64 {
-                        failures.push(format!(
-                            "identity READ {} #{i} at {va:#018x}: holds {:#010x}, want \
-                             {want:#010x} (nobody's magic — a dead mapping, not crosstalk)",
-                            if vid { "VIDMEM" } else { "SYSMEM" },
-                            w[0]
-                        ));
-                    }
-                }
-                Err(e) => {
-                    if failures.len() < 64 {
-                        failures.push(format!(
-                            "identity READ {} #{i}: refused {e:?}",
-                            if vid { "VIDMEM" } else { "SYSMEM" }
-                        ));
-                    }
-                }
-            }
-        }
-
-        // ── phase 3 — ORDERING. Tear down ONE family; the other must survive it. ────────
-        let sys: Vec<_> = live
-            .iter()
-            .filter(|(_, _, vid, _)| !*vid)
-            .copied()
-            .collect();
-        live.retain(|(_, _, vid, _)| *vid);
+        // ── ORDERING. Tear down ONE family; the other must survive it. ──────────────────
+        let sys: Vec<_> = live.iter().filter(|(_, _, v, _)| !*v).copied().collect();
+        live.retain(|(_, _, v, _)| *v);
         for (mem, va, _, _) in sys {
             let _ = rm.unmap_local(vas, va);
             let _ = rm.free(mem);
         }
-        for &(mem, va, vid, i) in &live {
+        let after = identity(2, &live, rm, &mut failures);
+        for (idx, &(_, va, vid, i)) in live.iter().enumerate() {
             order_tried += 1;
-            let m = magic(2, vid, i);
-            let out = w379_release_through(rm, probe, chan, token, mem, va, W379_OFF_A2, m);
-            if out.landed() {
+            let want = magic(2, vid, i);
+            if after.get(idx).copied().flatten() == Some(want) {
                 order_ok += 1;
             } else if failures.len() < 64 {
                 failures.push(format!(
-                    "ordering: VIDMEM #{i} at {va:#018x} stopped answering after the whole \
-                     SYSMEM family was freed ({out:?})"
+                    "ordering: VIDMEM #{i} at {va:#018x} stopped round-tripping after the whole \
+                     SYSMEM family was freed (saw {:?}, want {want:#010x})",
+                    after.get(idx).copied().flatten()
                 ));
             }
         }
@@ -6087,6 +6293,10 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
         let _ = rm.unmap_local(vas, *va);
         let _ = rm.free(*mem);
     }
+    if let Some(h) = scratch_h {
+        let _ = rm.unmap_local(vas, VA_SCRATCH);
+        let _ = rm.free(h);
+    }
     if let Some(h) = chan_h {
         let _ = rm.free(h);
     }
@@ -6095,8 +6305,8 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     println!(
         "info  R4 census           = allocated {alloc_ok}/{}  placed exact \
          {placed_exact}/{placed_tried}  identity {ident_ok}/{ident_tried}  CROSSTALK \
-         {crosstalk}  ordering {order_ok}/{order_tried}  controls answered \
-         {ctrl_answered}/{ctrl_tried} (ungraded)",
+         {crosstalk}  never-read {never_read}  ordering {order_ok}/{order_tried}  controls \
+         answered {ctrl_answered}/{ctrl_tried} (ungraded)",
         2 * N
     );
     if !failures.is_empty() {
@@ -6111,23 +6321,24 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     }
 
     let control_ok = control_vid && control_sys;
-    // ⊘ `ident_tried == 2 * N` is part of the bar, not an afterthought: a run that allocated
-    // four objects and verified all four would otherwise print a clean identity line while
-    // having measured a third of the mix.
+    // ⊘ `ident_tried == 2 * N` is part of the bar, not an afterthought: a run that mapped four
+    // objects and verified all four would otherwise print a clean identity line while having
+    // measured a third of the mix.
     let clean = ran
         && control_ok
         && alloc_ok == 2 * N
         && ident_tried == 2 * N
         && ident_ok == ident_tried
         && crosstalk == 0
+        && never_read == 0
         && placed_exact == placed_tried
         && order_tried == N
         && order_ok == order_tried;
     if clean {
         println!(
-            "★     R4 MIX IS INERT     = {ident_ok} objects across TWO request families, \
-             each holding its own magic, and every VIDMEM mapping still writable after the \
-             whole SYSMEM family was torn down"
+            "★     R4 MIX IS INERT     = {ident_ok} objects across TWO request families, each \
+             holding its own magic under an engine read-back, and every VIDMEM mapping still \
+             round-tripping after the whole SYSMEM family was torn down"
         );
     }
     println!(
@@ -6179,15 +6390,22 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
 /// *"identical handle, identical VA, different bytes"* in one run, which is the strongest
 /// form of the property. When they do not, the run says so rather than claiming it.
 ///
-/// # ⊘ ONE ARM IS DELIBERATELY NOT CLAIMED, AND IT IS NAMED
+/// # ★★★ THE FOREIGN-HANDLE ARM REACHES RM — I ASSUMED IT COULD NOT, AND I WAS WRONG
 ///
-/// *"Client B cannot map client A's object by passing A's handle"* is **not** tested at the
-/// driver here. This port's [`HostHandle`] carries its own isolate id and
-/// `HostRmBackend::narrow` refuses a foreign one **before any ioctl is issued**, so the arm
-/// would measure our own bookkeeping and print a refusal that says nothing about RM. It is
-/// attempted and its outcome recorded as `info`, explicitly **ungraded** — the alternative,
-/// letting a green there read as a statement about the driver, is exactly the shape
-/// `a_probes_private_constant_is_the_callers_trap` records.
+/// This rung was first written with the handle arm **ungraded**, on the reading that
+/// `HostRmBackend::narrow` refuses a foreign [`HostHandle`] before any ioctl is issued, so
+/// the arm would measure our own bookkeeping. ⊘ **That reading was false and the source says
+/// so in three lines**: `narrow` is `u32::try_from(h.raw())` and **nothing else** — it does
+/// not look at the isolate id and it does not consult any table. So `map_local_at` on a
+/// handle minted by the *other* client puts A's raw number into
+/// `NV_ESC_RM_MAP_MEMORY_DMA` on **B's** file descriptor, and RM answers.
+///
+/// `[measured 2026-09-06, RTX 3060, 580.159.04]` it answers **`0x57`
+/// (`NV_ERR_OBJECT_NOT_FOUND`)**: the handle does not exist *under B's client*, even though
+/// it names live memory under A's. ⇒ **RM scopes object handles per client**, and this rung
+/// now grades on it. ⚠ Recorded because the mistake is the interesting half: *suspecting* the
+/// instrument sent me the wrong way, and the fix was to read `narrow` rather than to reason
+/// about it.
 ///
 /// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
 ///
@@ -6288,6 +6506,7 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
     let mut leak_a_saw_b = false;
     let mut leak_b_saw_a = false;
     let mut ordering_ok = false;
+    let mut foreign_refused = false;
 
     let mut go = || -> bool {
         // ── A comes up FIRST and is written, so B is brought up into a world where A's
@@ -6324,7 +6543,15 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
                 return false;
             }
         }
-        let a1 = w379_release_through(rm, probe, ca, ta, ma, VA_SHARED, W379_OFF_A, MAGIC_A);
+        let a1 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: ca, token: ta },
+            ma,
+            VA_SHARED,
+            W379_OFF_A,
+            MAGIC_A,
+        );
         println!("info  R5b control A       = {a1:?}");
         if !a1.landed() {
             println!(
@@ -6395,7 +6622,15 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
                 " (distinct; the VA collision alone carries the rung)"
             }
         );
-        let b1 = w379_release_through(&mut rm_b, probe, cb, tb, mb, VA_SHARED, W379_OFF_A, MAGIC_B);
+        let b1 = w379_release_through(
+            &mut rm_b,
+            probe,
+            W381Chan { h: cb, token: tb },
+            mb,
+            VA_SHARED,
+            W379_OFF_A,
+            MAGIC_B,
+        );
         println!("info  R5b control B       = {b1:?}");
         if !b1.landed() {
             println!(
@@ -6450,7 +6685,15 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
         }
 
         // ── ORDERING — A writes again, with both clients live. ──────────────────────────
-        let a2 = w379_release_through(rm, probe, ca, ta, ma, VA_SHARED, W379_OFF_A2, MAGIC_A2);
+        let a2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: ca, token: ta },
+            ma,
+            VA_SHARED,
+            W379_OFF_A2,
+            MAGIC_A2,
+        );
         println!("info  R5b A writes again  = {a2:?}");
         let b_unmoved = matches!(
             rm_b.read_words_independently(mb, W379_BYTES, &[W379_OFF_A2]),
@@ -6464,18 +6707,27 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
             );
         }
 
-        // ⊘ UNGRADED, and the log says why on the line itself.
+        // ★★★ THE HANDLE ARM, AND IT IS GRADED — see the rung's docs for why the first
+        // version of this comment was wrong. `narrow` is a `u32::try_from` and nothing else,
+        // so A's raw number really does reach RM on B's descriptor.
         let forged = kayfabe_isolate::HostHandle::new(id_b, ma.raw());
         let foreign = rm_b.map_local_at(vas_b, forged, W379_BYTES, None);
+        foreign_refused = foreign.is_err();
         println!(
-            "info  R5b foreign handle  = client B mapping A's raw object {:#010x}: {} ⊘ \
-             UNGRADED — this port's `HostHandle` carries an isolate id and `narrow` refuses \
-             a foreign one BEFORE any ioctl, so this measures OUR bookkeeping and says \
-             nothing about RM",
+            "{}  R5b foreign handle  = client B mapping A's raw object {:#010x} into B's \
+             OWN address space: {}",
+            if foreign_refused { "ok   " } else { "FAIL " },
             ma.raw(),
             match &foreign {
-                Ok(va) => format!("MAPPED at {va:#018x} ⚠"),
-                Err(e) => format!("refused {e:?}"),
+                Ok(va) => format!(
+                    "★★★★★ MAPPED at {va:#018x} — RM let client B name an object minted by \
+                     client A. A handle is not scoped to its client"
+                ),
+                Err(e) => format!(
+                    "refused {e:?} ⇒ RM scopes object handles PER CLIENT. `Other(87)` is \
+                     `NV_ERR_OBJECT_NOT_FOUND` (`0x57`) — the handle names live memory under \
+                     A and does not exist under B"
+                ),
             }
         );
         if let Ok(va) = foreign {
@@ -6504,15 +6756,23 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
     let _ = rm_b.free(vas_b);
 
     let control_ok = control_a && control_b;
-    let clean = ran && control_ok && n1_free && !leak_a_saw_b && !leak_b_saw_a && ordering_ok;
+    let clean = ran
+        && control_ok
+        && n1_free
+        && !leak_a_saw_b
+        && !leak_b_saw_a
+        && ordering_ok
+        && foreign_refused;
     println!(
         "info  R5b census          = controls A={control_a} B={control_b}  B-sees-A's-VA-free\
-         ={n1_free}  leak A<-B={leak_a_saw_b}  leak B<-A={leak_b_saw_a}  ordering={ordering_ok}"
+         ={n1_free}  leak A<-B={leak_a_saw_b}  leak B<-A={leak_b_saw_a}  ordering={ordering_ok}\
+           foreign handle refused={foreign_refused}"
     );
     if clean {
         println!(
             "★     R5b ISOLATED        = two RM clients drove the SAME GPU VA in their own \
-             address spaces and neither ever held the other's magic"
+             address spaces, neither ever held the other's magic, and neither could name \
+             the other's object by its raw handle"
         );
     }
     println!(
