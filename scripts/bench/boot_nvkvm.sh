@@ -19,15 +19,24 @@ rm -f "${LOG}_serial.log" "${LOG}_qemu.log" "${LOG}.mon"
 # ⊘ It is deliberately NOT `memory-backend-file`: a file backing puts guest RAM at a
 # filesystem path, and the isolate boundary is supposed to be that the VMM hands DOWN a
 # descriptor, not that guest RAM is openable by anything with the path.
+# ★★ GUEST RAM IS A PARAMETER, and 2048 is not enough for every workload.
+# Measured 2026-09-06 (w376): the LLM workload was SIGKILLed by the guest's OOM killer --
+# `Killed`, no LLM_TOKENS line, so the harness correctly graded it (D) UNMEASURED rather than
+# a compute failure. Qwen2-0.5B in fp16 plus torch's own RSS does not fit in 2 GiB.
+# ⊘ It is NOT a bug in the emulator and must not be read as one: TORCH_CUDA_AVAILABLE was
+#   True and TORCH_DEV_COUNT was 1 in the same run, so libcuda had already seen the device.
+# ⚠ `-m` and the memfd backend's `size=` MUST match exactly, or QEMU refuses with
+#   "Machine memory size does not match memory backend size" -- so they derive from one var.
+NVKVM_RAM_MB=${NVKVM_RAM_MB:-2048}
 RAMARGS=()
 case "${NVKVM_RAM_BACKEND:-}" in
   memfd)
     # ⚠ `-m` is still required and must MATCH the backend size exactly, or QEMU refuses
     # with "Machine memory size does not match memory backend size".
-    RAMARGS=(-object "memory-backend-memfd,id=ram0,size=2048M,share=on"
-             -machine "q35,accel=kvm,memory-backend=ram0" -m 2048)
+    RAMARGS=(-object "memory-backend-memfd,id=ram0,size=${NVKVM_RAM_MB}M,share=on"
+             -machine "q35,accel=kvm,memory-backend=ram0" -m "$NVKVM_RAM_MB")
     ;;
-  ""|none) RAMARGS=(-machine "q35,accel=kvm" -m 2048) ;;
+  ""|none) RAMARGS=(-machine "q35,accel=kvm" -m "$NVKVM_RAM_MB") ;;
   *) echo "★ NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND} is not a backend I know" >&2; exit 2 ;;
 esac
 
