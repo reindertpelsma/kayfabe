@@ -415,10 +415,29 @@ lost. On `n=64` the window that spans the wrap is the one that times out.
 the submission that sets it to `0`.** That is a one-submission localisation from an unprivileged
 raw client, in a 30-second run, with no libcuda and no device-side instrumentation.
 
-⊘ **TWO HYPOTHESES REMAIN AND THIS RUNG CANNOT SEPARATE THEM**, because they coincide on a
-64-entry ring: *"`GP_PUT == 0` is not consumed"* and *"the 64th entry is not consumed"*. The
-experiment that separates them is a channel with a **different** `gp_fifo_entries` —
-`alloc_channel_at` does not expose it today, and adding that is the next step, not a guess.
+#### ★★★ SEPARATING THE TWO READINGS — `KAYFABE_LADDER_GPFIFO_ENTRIES`, PRE-REGISTERED
+
+Two readings fit everything above and **coincide exactly on a 64-entry ring**:
+
+- **(A) the WRAP** — *"a `GP_PUT` of `0` is not consumed"*, and
+- **(B) an ABSOLUTE index or offset** — *"entry 63 / the last 8 bytes of the region is not
+  consumed"*.
+
+They separate the moment the ring has a different number of entries, so the knob was built
+(`ladder_gpfifo_entries`, defaulting to the constant and printing on stderr whenever it does not).
+**Written down before the run:**
+
+| | (A) the wrap | (B) an absolute index |
+|---|---|---|
+| `entries=32`, `n=24` (`GP_PUT` never 0) | clean, both controls land | clean |
+| `entries=32`, `n=32` | ⊘ **stall, window at loop index 31** (loop `i=30` writes `GP_PUT=0`) | ★ **no stall — index 63 is never reached on a 32-entry ring** |
+| `entries=32`, `n=48` | ⊘ stall at loop index 31 | ★ no stall |
+
+★ **The knob's own native control, run first**: `entries=32`, `n=200` — six full laps —
+`drains=12 timeouts=0 drain_ms=3.2 stalled=false`, both controls land, p50 `8.746 µs`; the
+`entries=64` arm on the same box is `9.337 µs` with the same clean drain. ⇒ RM accepts the
+32-entry ring and this crate submits through it correctly, **so a guest-side stall at 32 is
+attributable to the device and not to the knob.**
 
 #### ⊘⊘ HOW THIS WAS VERY NEARLY MISSED — a diagnostic gated on the failure
 
