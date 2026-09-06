@@ -6974,7 +6974,9 @@ impl DblDist {
         // submission ever took, and every number this rung prints is meant to be one that
         // actually happened.
         let at = |q: f64| -> f64 {
-            let idx = ((q * n as f64).ceil() as usize).saturating_sub(1).min(n - 1);
+            let idx = ((q * n as f64).ceil() as usize)
+                .saturating_sub(1)
+                .min(n - 1);
             ns[idx] as f64 / 1e3
         };
         DblDist {
@@ -6996,8 +6998,14 @@ impl DblDist {
         println!(
             "DBL_DIST {tag} n={} min_us={:.1} p50_us={:.1} p90_us={:.1} max_us={:.1} \
              total_ms={:.1} truncated={} refused={}",
-            self.n, self.min_us, self.p50_us, self.p90_us, self.max_us, self.total_ms,
-            self.truncated, self.refused
+            self.n,
+            self.min_us,
+            self.p50_us,
+            self.p90_us,
+            self.max_us,
+            self.total_ms,
+            self.truncated,
+            self.refused
         );
     }
 }
@@ -7120,8 +7128,10 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
         cfg.budget.as_millis(),
         cfg.reps,
         cfg.gate_multiple,
-        cfg.native_p50_us
-            .map_or_else(|| "⊘none(this run is the CALIBRATION)".to_string(), |v| format!("{v:.2}")),
+        cfg.native_p50_us.map_or_else(
+            || "⊘none(this run is the CALIBRATION)".to_string(),
+            |v| format!("{v:.2}")
+        ),
     );
     println!(
         "DBL_REGION = exactly one `submit_copy_at` (narrow, parts lookup, one small Vec in \
@@ -7261,7 +7271,8 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
 
                 // ══ THE MEASURED REGION — one call, nothing else ══════════════════════
                 let t0 = std::time::Instant::now();
-                let r = rm.submit_copy_at(chan, token, src_off, DBL_TARGET_AT + OFF_LOOP, 4, payload);
+                let r =
+                    rm.submit_copy_at(chan, token, src_off, DBL_TARGET_AT + OFF_LOOP, 4, payload);
                 let dt = t0.elapsed();
                 // ══ END OF THE MEASURED REGION ════════════════════════════════════════
 
@@ -7437,12 +7448,47 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
         }
 
         // ── THE VERDICT ──────────────────────────────────────────────────────────────────
+        //
+        // ★★★★★ **THE SAMPLE FLOOR HAS AN ESCAPE HATCH, AND WITHOUT IT THE RUNG IS BACKWARDS
+        // ON EXACTLY THE CASE IT EXISTS FOR.** The wall budget is what makes this a
+        // five-second gate; the consequence is that the WORSE the arm is, the FEWER samples
+        // it produces. `[measured, LLM boot]` `worst_trap=1750538us` — at that price a 1.5 s
+        // repetition yields ONE sample, three repetitions yield three, and a rule of *"under
+        // fifty samples ⇒ UNMEASURED"* would report the most catastrophic possible result as
+        // *"we could not tell"*. ⇒ A catastrophically slow arm would be the one arm the rung
+        // could never grade.
+        //
+        // ⊘ The hatch is deliberately narrow and it is **sound rather than lenient**: it does
+        // not lower the bar, it uses a statistic that needs no sample size. If the FASTEST
+        // submission observed is already over the gate, then no median over any number of
+        // further samples could be under it — every sample is at least the minimum, by
+        // definition. So *"n is too small for a median"* and *"the answer is determinate
+        // anyway"* are simultaneously true, and the rung says both.
+        let floor_ref = cfg
+            .native_p50_us
+            .map_or(DBL_NATIVE_SANITY_CEILING_US, |b| b * cfg.gate_multiple);
         if s.n < DBL_MIN_SAMPLES {
+            if s.n > 0 && s.min_us > floor_ref {
+                println!(
+                    "FAIL  R6 VERDICT (n={})  = ★ DETERMINATE DESPITE THE SAMPLE COUNT. Only \
+                     {} submissions fit inside the wall budget — which is itself the symptom \
+                     — but the FASTEST of them took {:.1}us against a gate of {floor_ref:.1}us. \
+                     ⊘ No median over any number of further samples can be below a value \
+                     every sample already exceeds, so the small n does NOT make this \
+                     uninterpretable",
+                    s.n, s.n, s.min_us
+                );
+                println!("DBL_MEASURED_P50_US={:.2}", s.p50_us);
+                println!("DBL_GATE_US={floor_ref:.2}");
+                println!("DBL_ROLE=GRADED_ON_MIN");
+                return false;
+            }
             println!(
-                "??    R6 SAMPLES          = {} graded samples, floor is {DBL_MIN_SAMPLES}. \
-                 ⊘ A median over a handful is a number, not a measurement — UNMEASURED, and \
-                 NOT a failure value",
-                s.n
+                "??    R6 SAMPLES          = {} graded samples, floor is {DBL_MIN_SAMPLES}, and \
+                 the fastest ({:.1}us) is NOT above the gate ({floor_ref:.1}us) — so the \
+                 answer is not determinate either. ⊘ A median over a handful is a number, \
+                 not a measurement: UNMEASURED, and NOT a failure value",
+                s.n, s.min_us
             );
             return false;
         }
@@ -7742,9 +7788,10 @@ fn main() -> std::process::ExitCode {
                     // baked floor would expire as a box changed and nobody would notice,
                     // which is the shape `a_capture_derived_table_expires_as_a_vendor_
                     // regression` records.
-                    "--doorbell-latency-native-us" => {
-                        v.parse::<f64>().map(|u| cfg.native_p50_us = Some(u)).is_ok()
-                    }
+                    "--doorbell-latency-native-us" => v
+                        .parse::<f64>()
+                        .map(|u| cfg.native_p50_us = Some(u))
+                        .is_ok(),
                     _ => v.parse::<f64>().map(|k| cfg.gate_multiple = k).is_ok(),
                 };
                 if !ok {
@@ -8631,11 +8678,14 @@ fn main() -> std::process::ExitCode {
                 println!("FAIL  R10 checkout        = no worker");
                 return std::process::ExitCode::from(1);
             };
-            match w.execute(&kayfabe_isolate::VerbPlan::Publish {
-                host_vas: None,
-                len: LEN,
-                at: AT,
-            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+            match w.execute(
+                &kayfabe_isolate::VerbPlan::Publish {
+                    host_vas: None,
+                    len: LEN,
+                    at: AT,
+                },
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            ) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
                 }) => {
@@ -8686,7 +8736,10 @@ fn main() -> std::process::ExitCode {
                 None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
-                Ok(plan) => match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+                Ok(plan) => match w.execute(
+                    &plan,
+                    &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+                ) {
                     Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
                         "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
                          the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \
