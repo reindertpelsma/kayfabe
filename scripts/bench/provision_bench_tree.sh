@@ -117,7 +117,10 @@ UD
 
   # boot on the STOCK hypervisor with slirp; provisioning never uses the tap.
   say "B2: booting guest on stock qemu (slirp hostfwd 2222)"
-  qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -nographic \
+  # ⚠ `-nographic` and `-daemonize` are MUTUALLY EXCLUSIVE ("-nographic cannot be used with
+  #   -daemonize"). -nographic is a bundle that includes -serial stdio, which a daemonized
+  #   process has no stdio for. Use `-display none` and let -serial file: carry the console.
+  qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -display none \
     -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
     -drive if=virtio,file="$BENCH/seed.iso",format=raw \
     -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
@@ -133,13 +136,38 @@ UD
   done
   $GS true >/dev/null 2>&1 || { say "⊘ B2: guest never answered ssh"; tail -20 "$BENCH/provision_serial.log"; return 3; }
 
+  # ⚠⚠ SSH BEING UP IS NOT THE GUEST BEING READY, and the thing that breaks it is OUR OWN SEED.
+  # Measured 2026-09-06: sshd answers at ~20s, but cloud-init's runcmd then runs `netplan apply`
+  # -- which RESTARTS THE GUEST'S NETWORKING and drops every established session. The symptom is
+  #   Connection to 127.0.0.1 closed by remote host
+  #   kex_exchange_identification: Connection closed by remote host
+  # in the middle of `apt-get`, i.e. it looks like a flaky network or a dying guest. It is
+  # neither: it is the seed doing exactly what it was told, one step after we started using the
+  # connection. ⇒ WAIT FOR CLOUD-INIT TO FINISH before touching the guest at all.
+  say "B2: waiting for cloud-init to finish (it will bounce the network)"
+  for i in $(seq 1 60); do
+    st=$($GS "cloud-init status 2>/dev/null | head -1" 2>/dev/null | tr -d '\r')
+    case "$st" in *done*) say "B2: cloud-init done after $((i*10))s"; break ;; esac
+    sleep 10
+  done
+  $GS "test -f /var/lib/cloud/BENCH_SEED_OK" 2>/dev/null \
+    && say "B2: seed marker present" \
+    || { say "⊘ B2: BENCH_SEED_OK missing -- the seed's runcmd did not complete"; return 4; }
+
   say "B2: installing guest driver (kernel-open)"
   $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
   scp -i "$BENCH/guest_key" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/tmp/nv.run >/dev/null 2>&1
   $GS "sudo sh /tmp/nv.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j8" 2>&1 | tail -5
   # ⚠ verify on CONTENT, not the installer's exit code
-  say "B2: guest modinfo = $($GS 'modinfo nvidia 2>/dev/null | grep -E "^version|^license|^vermagic" | tr "\n" " "' 2>&1)"
+  MI=$($GS 'modinfo nvidia 2>/dev/null | grep -E "^version|^license|^vermagic" | tr "\n" " "' 2>&1)
+  say "B2: guest modinfo = $MI"
+  # ⊘ Do NOT power off over a failed install: a clean shutdown makes the failure look like a
+  #    completed phase, and the next step boots a guest with no driver in it.
+  case "$MI" in
+    *580.159.04*) say "B2: guest driver VERIFIED on content" ;;
+    *) say "⊘ B2: guest driver NOT verified -- leaving the guest UP for inspection"; return 5 ;;
+  esac
   $GS "sudo poweroff" >/dev/null 2>&1 &
   sleep 20
   say "B2: guest powered off (qemu alive? $(kill -0 $(cat $BENCH/prov.pid 2>/dev/null) 2>/dev/null && echo yes || echo no))"
