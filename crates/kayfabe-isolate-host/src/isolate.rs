@@ -853,7 +853,11 @@ impl RmBackend for ProxyRmBackend {
             at: at.0,
             phys,
         })?;
-        match reply {
+        // ⊘ `lift` FIRST, and it is not decoration: without it a `Reply::Failed` falls into
+        // the wildcard below and every refusal — including `FB_ALIAS_NO_JOIN`, the one that
+        // stops a caller ordering the verbs wrongly — arrives as `Wedged`. A named refusal
+        // that reaches its caller as *"the isolate died"* is a refusal nobody can act on.
+        match self.lift(reply)? {
             Reply::Aliased { memory, host_va } => Ok(FbLeafAliased {
                 // ★ Stamped with THIS connection's isolate, never taken from the wire.
                 memory: HostHandle::new(self.isolate, memory),
