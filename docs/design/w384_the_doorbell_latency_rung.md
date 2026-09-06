@@ -4,9 +4,11 @@
 differential harness.
 
 > **THE THREE RESULTS, UP FRONT.**
-> 1. ★★★★★ **A guest channel dies at the submission that writes `GP_PUT = 0`** — the 64th on a
->    64-entry GPFIFO. Reproducible to the index, 4 of 4 (box × device-revision) pairs, in a
->    30-second run from an unprivileged raw client with no CUDA. §4.2.
+> 1. ★★★★★ **A guest channel dies at the submission that writes `GP_PUT = 0`**, and the wedge
+>    **tracks the ring's own modulus** — 64 entries ⇒ dies at the 64th submission, 32 entries ⇒
+>    dies at the 32nd, while the same binary walks six laps of either on bare metal. Localised
+>    to one submission, by a pre-registered experiment whose alternative reading it falsified,
+>    in a 30-second run from an unprivileged raw client with no CUDA. §4.2.
 > 2. ★★★★★ **`w383-doorbell-async` changed nothing measurable on this path** — same box, two
 >    shims, 1.03× on the graded arm. §4.4.
 > 3. ⊘⊘⊘ **This document's own gate argument is refuted by its own control**: the native-relative
@@ -438,6 +440,39 @@ They separate the moment the ring has a different number of entries, so the knob
 `entries=64` arm on the same box is `9.337 µs` with the same clean drain. ⇒ RM accepts the
 32-entry ring and this crate submits through it correctly, **so a guest-side stall at 32 is
 attributable to the device and not to the knob.**
+
+#### ★★★★★ THE ANSWER: (A). THE WEDGE TRACKS THE RING'S OWN MODULUS.
+
+Mode-2 guest, `kb2`, `entries=32`, three invocations in one boot, verbatim:
+
+```
+--- n=24, entries=32 ---   (GP_PUT takes 2..25 — never 0)
+DBL_DRAIN drains=1 timeouts=0 drain_ms=0.1 stalled=false first_stall_at=none
+info  R6 control (open)  = Landed
+info  R6 control (close) = Landed                         ★ CLEAN
+
+--- n=32, entries=32 ---   (loop i=30 writes GP_PUT=0)
+DBL_DRAIN drains=2 timeouts=1 drain_ms=2000.1 stalled=true first_stall_at=31
+info  R6 control (close) = Lost { saw: 3735880580 }       ⊘ STALLED
+
+--- n=48, entries=32 ---
+DBL_DRAIN drains=2 timeouts=1 drain_ms=2000.3 stalled=true first_stall_at=31
+info  R6 control (close) = Lost { saw: 3735880580 }
+```
+
+⇒ **Entry index 63 is never touched on a 32-entry ring, and the channel dies anyway — at index
+31.** Reading **(B)** is **refuted**; reading **(A)** predicted `first_stall_at=31` and got it.
+
+★★★★★ **THE MECHANISM, NAMED: a `GP_PUT` of `0` is not consumed by the emulated device, and the
+channel never recovers from it.** The wedge is at the ring's own modulus, wherever that modulus
+is put — 64 entries ⇒ dies at submission 64, 32 entries ⇒ dies at submission 32 — and the same
+binary walks six laps of either ring on bare metal without a single stalled drain.
+
+⊘ **What is still NOT claimed.** *Where* in the device the value is dropped — the codec, the
+cursor comparison, the resume point — is a question for the files this lane does not own
+(`kayfabe-rt/`, `kayfabe-core/`, `kayfabe-qemu-raw/`). What is established is the **input** that
+triggers it, to one submission, with the alternative reading falsified by its own pre-registered
+prediction. ★ A device-side lane can now write a failing test from this paragraph alone.
 
 #### ⊘⊘ HOW THIS WAS VERY NEARLY MISSED — a diagnostic gated on the failure
 
