@@ -759,6 +759,53 @@ const PUSHBUFFER_SLOT_BYTES: u64 = 128;
 /// have scribbled on its own queue with no check anywhere.
 const PUSHBUFFER_SLOTS: u64 = (GPFIFO_OFFSET - PUSHBUFFER_OFFSET) / PUSHBUFFER_SLOT_BYTES;
 
+/// ★★★★★ **WHERE ONE SUBMISSION'S METHODS GO, AND WHICH GPFIFO ENTRY POINTS AT THEM** — two
+/// indices with **different moduli**, which is the entire reason this type exists.
+///
+/// # ⊘⊘ THE BUG THIS TYPE FIXES, MEASURED 2026-09-06 (w381), AND ITS OWN COMMENT PREDICTED IT
+///
+/// [`HostRmBackend::submit_entry`] used to take **one** index and use it for both: it wrote
+/// the GPFIFO entry at that index *and* set `GP_PUT = (index + 1) % entries`. But the index
+/// came from [`HostRmBackend::next_slot`], which is taken modulo
+/// [`PUSHBUFFER_SLOTS`] (**32**), while `entries` is **64**. ⇒ `GP_PUT` only ever took the
+/// values `1..=32`, and on the **33rd** submission it went **BACKWARDS**, from `32` to `1`.
+///
+/// `[measured, RTX 3060, two independent rungs, one boot each]` inside a Mode-2 guest the
+/// **33rd submission on a channel is the first that does not land, and none after it ever
+/// does**:
+/// - `--map-stress`: `releases 32/186`, first failure at cycle 9 slot 2 — the 33rd release,
+///   with `placements exact 48/48` and `VAs recovered 44/44` beside it, so the mapping plane
+///   was fine and the *submission* was not.
+/// - `--rpc-mixed-allocs`: `identity 12/12` (submissions 1–24) and `ordering 2/6` — the two
+///   read-backs that landed are submissions 31 and 32, and the four that did not are 33–36.
+///
+/// ⊘ **AND THE NATIVE ARM PASSED BOTH, 7/7.** Real hardware walks the GPFIFO from `GP_GET`
+/// to `GP_PUT` and treats the never-written zero entries in between as empty, so the backward
+/// `PUT` costs it a burst of no-ops and nothing else. Our emulated path stops at the first
+/// entry its codec cannot decode and refuses by name (`FwdFault::RingBroughtNoEntry`, which
+/// dominates that boot's refusals). ⇒ **The wall was the PROBE's arithmetic and hardware was
+/// hiding it** — precisely the reason a guest-only red is uninterpretable, arriving as a
+/// worked example rather than as advice.
+///
+/// ⚠ `submit_entry`'s own comment already said it: *"Latent rather than live at this rung —
+/// nothing here submits 64 times — which is exactly the kind of arithmetic that is wrong for
+/// a year and then wrong at scale."* It was right, and the w381 rungs are the first callers
+/// to submit more than 32 times on one channel.
+///
+/// ⊘ **Byte-identical for the first 32 submissions on any channel**: for `seq < 32` both
+/// fields equal `seq` and every previously committed arm is unchanged.
+#[derive(Debug, Clone, Copy)]
+struct RingSlot {
+    /// Index of the 128-byte pushbuffer slot the methods are written into, modulo
+    /// [`PUSHBUFFER_SLOTS`]. ⚠ Reusing one is only safe while no more than that many
+    /// submissions are in flight, which is the assumption this file has always made.
+    pb: u64,
+    /// Index of the GPFIFO entry that points at them, modulo the **ring's own** entry count.
+    /// This is the one `GP_PUT` is derived from, because `GP_PUT` is an index into the
+    /// GPFIFO and into nothing else.
+    gp: u64,
+}
+
 /// Offset of the semaphore word **hardware writes** within the ring object.
 ///
 /// ★ A whole page away from both the pushbuffer and the GPFIFO. It has to be somewhere,
@@ -6707,7 +6754,7 @@ impl HostRmBackend {
             .ok_or(RmError::BadHandle(chan))?;
         let slot = self.next_slot(raw)?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
 
         // The sentinel FIRST, so "the payload is there" cannot be satisfied by whatever
@@ -6784,7 +6831,7 @@ impl HostRmBackend {
             .channel_parts(raw)
             .ok_or(RmError::BadHandle(chan))?;
         let slot = self.next_slot(raw)?;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
 
         // The same five-method incrementing run `submit_semaphore_probe` uses, with the
@@ -6930,7 +6977,7 @@ impl HostRmBackend {
             .channel_parts(raw)
             .ok_or(RmError::BadHandle(chan))?;
         let slot = self.next_slot(raw)?;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
         let words = ce_pushbuffer(CePush {
@@ -7022,7 +7069,7 @@ impl HostRmBackend {
             .ok_or(RmError::BadHandle(chan))?;
         let slot = self.next_slot(raw)?;
         let fence_va = parts.ring_va + fence_off;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
 
         // ★ BOTH addresses, not just the fence. `SEM_ADDR_HI` is eight bits, so a VA above
@@ -7121,7 +7168,7 @@ impl HostRmBackend {
         chan: HostHandle,
         pb_va: u64,
         pb_len: u64,
-        slot: u64,
+        slot: RingSlot,
         token: u64,
     ) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
@@ -7140,7 +7187,7 @@ impl HostRmBackend {
         }
         let layout = parts.layout;
         let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
-        let at = GPFIFO_OFFSET + slot * GP_ENTRY_SIZE;
+        let at = GPFIFO_OFFSET + slot.gp * GP_ENTRY_SIZE;
         self.ring_store_u32(chan, at, entry as u32)?;
         self.ring_store_u32(chan, at + 4, (entry >> 32) as u32)?;
 
@@ -7157,7 +7204,11 @@ impl HostRmBackend {
         if layout.entries == 0 {
             return Err(RmError::Other(RING_ENTRIES_REFUSED));
         }
-        let put = u32::try_from((slot + 1) % u64::from(layout.entries))
+        // ⊘⊘ `slot.gp`, NOT `slot.pb`. `GP_PUT` is an index into the GPFIFO and into
+        // nothing else, and taking it from the pushbuffer index is the w381 defect
+        // [`RingSlot`] records: the two have different moduli, so `PUT` ran backwards on the
+        // 33rd submission and every submission after it was lost.
+        let put = u32::try_from((slot.gp + 1) % u64::from(layout.entries))
             .map_err(|_| RmError::Other(BAD_ENCODE))?;
         self.userd_store_u32(chan, USERD_GP_PUT, put)?;
         release_fence();
@@ -7239,7 +7290,7 @@ impl HostRmBackend {
             .ok_or(RmError::BadHandle(chan))?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
         let slot = self.next_slot(raw)?;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
 
         let words = ce_pushbuffer(CePush {
@@ -7348,7 +7399,7 @@ impl HostRmBackend {
     /// [`RmError::BadHandle`] if `chan` is not a channel of this connection —
     /// deliberately, rather than falling back to the constant, because the fallback would
     /// be a guess about a ring whose geometry we did not find.
-    fn next_slot(&mut self, chan: u32) -> Result<u64, RmError> {
+    fn next_slot(&mut self, chan: u32) -> Result<RingSlot, RmError> {
         let entries = self
             .conn
             .channel_parts(chan)
@@ -7359,16 +7410,25 @@ impl HostRmBackend {
             return Err(RmError::Other(RING_ENTRIES_REFUSED));
         }
         let n = self.slots.entry(chan).or_insert(0);
-        // ★★★ CLAMPED BY THE REGION, not by the entry count alone — see [`PUSHBUFFER_SLOTS`].
-        // A slot index that fits the ring's queue but not the ring's pushbuffer area writes
-        // methods over the GPFIFO that points at them, and the symptom is a submission that
-        // fetches garbage rather than an error anyone can attribute.
+        let seq = *n;
+        *n += 1;
+        // ★★★ TWO MODULI, and they are different numbers on every ring this file allocates.
+        // See [`RingSlot`] for the measurement that separated them and for why using one
+        // index for both made `GP_PUT` run BACKWARDS on the 33rd submission.
+        //
         // ⊘ `clamp(1, …)` and not `.min(…).max(1)`: identical here because
         // `PUSHBUFFER_SLOTS` is a non-zero const, and `clamp` would PANIC if that ever
         // stopped being true — which is the right failure for a divisor.
-        let slot = *n % u64::from(entries).clamp(1, PUSHBUFFER_SLOTS);
-        *n += 1;
-        Ok(slot)
+        Ok(RingSlot {
+            // CLAMPED BY THE REGION, not by the entry count alone — a pushbuffer slot that
+            // fits the ring's queue but not the ring's pushbuffer area writes methods over
+            // the GPFIFO that points at them, and the symptom is a submission that fetches
+            // garbage rather than an error anyone can attribute.
+            pb: seq % u64::from(entries).clamp(1, PUSHBUFFER_SLOTS),
+            // NOT clamped: this one indexes the GPFIFO, whose region runs from
+            // `GPFIFO_OFFSET` to `SEMAPHORE_OFFSET` and holds far more than `entries`.
+            gp: seq % u64::from(entries),
+        })
     }
 
     /// Store one 32-bit word into the channel's USERD.
@@ -7898,7 +7958,7 @@ impl HostRmBackend {
             .ok_or(RmError::BadHandle(chan))?;
         let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
         let slot = self.next_slot(raw)?;
-        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
         let pb_va = parts.ring_va + pb_off;
         let words = ce_pushbuffer(CePush {
             class_id: self.conn.classes.ce_object(),
