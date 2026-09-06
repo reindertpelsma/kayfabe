@@ -148,6 +148,20 @@ else
 fi
 
 echo ""
+echo "=== ★★ SECOND QUESTION, SAME BOOT — did \`missing_page\` move? ==="
+# ⊘ Asked as a MEASUREMENT rather than answered from the previous lane's table. w381 recorded
+#   host PASS / guest FAIL with `fired=false status=0x0000` and zero kernel Xid records: our
+#   emulated device CONTAINS a fault and never NAMES it. The fix is device-side
+#   (`kayfabe-core/src/fault.rs`, `kayfabe-qemu-raw/src/shim.rs`, `kayfabe-rt/src/device.rs`)
+#   and **all three files are owned by the w383-doorbell-async lane**, so this asks the
+#   question and does not touch the answer.
+# ⚠ It provokes a REAL `Xid 31` by design and kills its victim channel. It runs LAST, after
+#   every latency number is already on disk, so nothing above it is behind a fault.
+MPOUT=/tmp/w384mp.out
+$G "timeout 180 sudo /tmp/kayfabe-rm-ladder --missing-page-fault --probe-launch-dma > $MPOUT 2>&1; echo W384_MP_RC=\$? >> $MPOUT"
+$G "grep -aE 'R3 notifier|R3 NAMED|R3 SILENT|R3 CONTAINED|R3 NOT CONTAINED|^RUNG_missing_page=|^RUNGCTL_missing_page=|^W384_MP_RC=' $MPOUT" | sed 's/^/    /'
+
+echo ""
 echo "=== the guest driver's own word across the run (⊘ the HOST ring buffer does not carry it) ==="
 $G 'sudo dmesg 2>/dev/null | grep -iE "nvrm|xid" | tail -15 | sed "s/^/    /"'
 echo "=== ★★ HOOK SELF-CHECK — assert this block's own inputs exist ==="
