@@ -77,7 +77,62 @@ kayfabe-doorbell-publish worker
 mapping published after the ring has been rung is a mapping published after the engine has
 already faulted for it."*
 
-### ★★★★★ THE ORDERING GATE IS ON THE FORWARD, AND IT NEEDED NO NEW MACHINERY
+### ⊘⊘⊘ THE ORDERING GATE — **I ARGUED IT WAS REDUNDANT AND THE HARDWARE SAYS OTHERWISE**
+
+> ⚠ **This section is a correction of itself.** The paragraph below the rule was written
+> before the boots and is retained, because the refutation needs its subject. Read the
+> correction first.
+
+**What I wrote, and it is wrong:** *"publication and the forward are two adjacent statements
+of one function, so gating the forward on a per-VAS epoch would be redundant; and the
+`Passthrough` case the brief flagged does not arise, because there IS a forward and it is the
+statement after the publication."*
+
+**What the boots say** (§7, §9): deferral is safe for `cup3` — one process, one channel, few
+submissions — and **faults for the LLM**, with the *same two Xids on each of two consecutive
+python processes*: `CE2 … FAULT_PDE @ 0x724b_9ce00000` and `GR0_PBDMA0 … FAULT_PTE @
+0x2_0440f000`. Both are *"the mapping was not there when the engine ran"*, and neither is a
+coalescing artefact — the coalescing was already off.
+
+**⊘ THE PREMISE THAT IS FALSE: our forward is not the only thing that starts the engine.**
+The host channel is born **over the guest's own USERD page** — this tree's own comment, at
+`shim.rs`' `GrCursorWatch`: *"after leg B the host channel is born over this same page
+(`GR-BIRTH … userd=GUEST-USERD`), which is precisely why reading it answers a question about
+the **host** engine's progress."* And `exec.scheduled.insert(plan.chan)`
+(`kayfabe-fwd/src/lib.rs`) is **monotone**: a channel we schedule once stays on the host
+runlist.
+
+⇒ ★★★★★ **From the SECOND submission on a channel, the guest's own `GP_PUT` store into the
+adopted USERD is what starts the host PBDMA, and our doorbell trap is not in that path at
+all.** Inline publication was never *ordered* before the engine — it was merely **microseconds
+behind the guest's `GP_PUT`, with the guest halted**. Deferral turns those microseconds into
+the queue's latency, and the race becomes reachable.
+
+⇒ **The brief's warning was right and my dismissal of it was wrong**, and it was right for a
+sharper reason than either of us stated: it is not that `Passthrough` has *no forward to
+gate*; it is that **the forward is not the trigger**. `TrapContract::RingAndReturn` says
+exactly this in one word — the trap's whole content is a *ring*, because by then the engine is
+already the guest's to start.
+
+⇒ ★★★ **And it names the next rung, which is the owner's own preference ordering**
+(`publish_trigger_preference_ordering.md`, 2026-08-14): *"exact GPU boundary (TLB invalidate)
+> trap the PTE write, as little as possible > deferred publish on doorbell > work under the
+BQL"*. The doorbell is **third**. The first exists, is decoded, and has **no consumer**:
+`crate::mmuinval` (w326) decodes `NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` at BAR0
+`0x00B8_30B0`, the guest **blocks** on it by protocol, and `WriteOutcome::invalidate` is
+carried out of the plane with **nothing in the shim reading it**
+(`grep -rn '\.invalidate' crates/kayfabe-qemu-raw/src/` → one doc comment, no consumer). A
+publication driven from *there* precedes the guest's `GP_PUT` by construction, which is the
+property the doorbell can never have.
+
+⊘ **What would falsify the mechanism above:** a boot in which a channel's *first* submission
+faults the same way (the engine cannot be running before we schedule it), or one in which the
+fault survives with the deferral removed and everything else held. The second is exactly the
+`arm=off` control in §9; the first has not been run.
+
+---
+
+*The pre-boot argument, retained as the refutation's subject:*
 
 The brief that commissioned this asked for *"an epoch/generation per VAS"* to gate the
 forward on the VAS being current. **That gate would be redundant, and here is why rather than
@@ -85,19 +140,12 @@ an assertion:** publication and the forward are **two adjacent statements of one
 and the deferral moves the function, not the statement boundary. There is no path in this
 port that rings a host channel *before* the publication that precedes it in the same pass —
 `publish_vas_rows` returns, then `SharedDevice::doorbell` is called, on the same thread, with
-nothing between them. A per-VAS epoch would be a second encoding of an ordering the call
-graph already guarantees, and `a_second_source_of_truth_beside_a_complete_value.md` is this
-tree's own ruling on what that costs.
+nothing between them.
 
-⊘ **And the `Passthrough` case the brief flagged as unhandled does not arise for the same
-reason.** The concern was: *"in `Passthrough` the host engine reads the guest's ring directly,
-so there is no forward for us to gate."* Measured against the code: the arm that reaches the
-publication legs at all is exactly the arm `forwarding_plane_owns_ce` hands to
-`SharedDevice::doorbell` — i.e. **there IS a forward, and it is the statement after the
-publication.** What `RingAndReturn` licenses is a trap that only *rings*; what this port was
-doing was hanging a 24 ms publication under that name. The fix is that the trap no longer
-does either — it schedules, and the worker does both in order. **Both contract arms are
-discharged by one seam, because both arms went through one function.**
+⊘ And the `Passthrough` case the brief flagged as unhandled does not arise for the same
+reason: the arm that reaches the publication legs at all is exactly the arm
+`forwarding_plane_owns_ce` hands to `SharedDevice::doorbell` — i.e. **there IS a forward, and
+it is the statement after the publication.**
 
 ### ⊘ WHY A DEFERRED DOORBELL IS NOT A LATE DOORBELL
 
