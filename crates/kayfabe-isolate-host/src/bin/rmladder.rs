@@ -9789,14 +9789,11 @@ fn main() -> std::process::ExitCode {
                 println!("FAIL  R10 checkout        = no worker");
                 return std::process::ExitCode::from(1);
             };
-            match w.execute(
-                &kayfabe_isolate::VerbPlan::Publish {
-                    host_vas: None,
-                    len: LEN,
-                    at: AT,
-                },
-                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
-            ) {
+            match w.execute(&kayfabe_isolate::VerbPlan::Publish {
+                host_vas: None,
+                len: LEN,
+                at: AT,
+            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
                 }) => {
@@ -9847,10 +9844,7 @@ fn main() -> std::process::ExitCode {
                 None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
-                Ok(plan) => match w.execute(
-                    &plan,
-                    &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
-                ) {
+                Ok(plan) => match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
                     Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
                         "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
                          the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \
