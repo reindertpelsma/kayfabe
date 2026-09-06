@@ -782,3 +782,211 @@ fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
         "⊘ and nothing was signalled for the work that did not run"
     );
 }
+
+// =====================================================================================
+// ★★★★★ THE RING WRAPS — and the zero-scan stop condition expires exactly when it does
+// =====================================================================================
+//
+// The ring walk in `run_submission` decides *"how many entries are new"* by reading forward
+// until an entry decodes to nothing. That is sound for the ring's **first lap only**: RM
+// zero-initialises the buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`), so an unwritten slot is
+// zero and decodes to `None`. Once the guest has written **every** slot once, no zero slot
+// remains anywhere in the ring, ever again — the `break` stops firing and the walk runs to
+// `MAX_ENTRIES_PER_DOORBELL`, consuming **stale** entries from the previous lap.
+//
+// ⚠ It bites on the LAST doorbell of the first lap, not after it: at `idx == N-1` the very
+// next index is `0`, which lap 1 already wrote. `[measured 2026-08-13, w384, real GA106
+// Mode-2 guest, `KAYFABE_CE_EXECUTOR=local`]` a 64-entry ring stalled at
+// `first_stall_at=63` and a 32-entry ring at `first_stall_at=31`, both pre-registered
+// before the run — the wedge tracks the ring's own modulus, which is this arithmetic.
+
+/// A ring small enough to wrap inside one test. ⊘ Nothing below is 8-specific; 8 is chosen
+/// so the whole lap is legible, and the defect is keyed on the modulus, not on its value.
+const SMALL_RING: u32 = 8;
+
+/// The same channel the fixture already describes, with a ring that can be walked round.
+fn small_channel() -> CeUtilsChannel {
+    CeUtilsChannel {
+        client: CLIENT,
+        vaspace: VASPACE,
+        ring_va: RING_VA,
+        ring_entries: SMALL_RING,
+    }
+}
+
+/// ⊘ `ring_once_with`'s body, with the channel a parameter. Extracted rather than copied so
+/// the wrap tests drive **the same** commit-on-success discipline the acceptance above does.
+fn ring_once_on(
+    plane: &RegPlane,
+    vmm: &mut MockVmm,
+    cursor: &mut GpCursor,
+    state: &mut MethodState,
+    chan: CeUtilsChannel,
+) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
+    let pb = kayfabe_chips::Ga10xPushbuffer;
+    let out = plane
+        .ce_session(
+            CLIENT,
+            VASPACE,
+            kayfabe_device::ceresolve::Demand::from_doorbell(),
+            |ce| run_submission(ce, &pb, vmm, chan, *cursor, *state),
+        )
+        .expect("the publication is present");
+    if let Ok(run) = &out {
+        *cursor = run.cursor;
+        *state = run.state;
+    }
+    out
+}
+
+/// Doorbell `d`'s pushbuffer, destination, fill byte and payload — **all four distinct per
+/// doorbell**, so re-running a stale entry is distinguishable from running the new one by
+/// the bytes it moved *and* by the payload it released, not by a count alone.
+fn slot_push_va(d: u32) -> u64 {
+    PUSH_VA + u64::from(d % SMALL_RING) * 0x1000
+}
+fn doorbell_dst_va(d: u32) -> u64 {
+    DST_VA + u64::from(d) * 0x1000
+}
+fn doorbell_fill(d: u32) -> u8 {
+    0x40u8.wrapping_add(d as u8)
+}
+/// RM's `finishPayload` counts submissions and never repeats — `putIndex` monotonically
+/// increasing (`ogkm-580: channel_utils.c:406`). So payload `d + 1` is what the guest is
+/// polling for after doorbell `d`, and a *lower* value appearing there is a stale release.
+fn doorbell_payload(d: u32) -> u32 {
+    d + 1
+}
+
+/// The guest's producer step: write doorbell `d`'s method block, then the GPFIFO entry in
+/// slot `d % SMALL_RING` that names it — overwriting whatever the previous lap left there.
+fn publish_doorbell(vmm: &mut MockVmm, d: u32) {
+    let block = memset_block(
+        doorbell_dst_va(d),
+        0x40,
+        doorbell_fill(d),
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        doorbell_payload(d),
+    );
+    let va = slot_push_va(d);
+    vmm.gpa_write(phys_of(va), &block)
+        .expect("this doorbell's method block");
+    let e = submit::gp_entry(va, block.len() as u64).expect("representable");
+    vmm.gpa_write(
+        phys_of(RING_VA + 8 * u64::from(d % SMALL_RING)),
+        &e.to_le_bytes(),
+    )
+    .expect("this doorbell's ring entry");
+}
+
+/// Guest RAM with the two semaphore words in place and a ring that is **entirely zero** —
+/// the state RM leaves behind (`TRANSFER_FLAGS_SHADOW_INIT_MEM`).
+fn guest_ram_zero_ring() -> MockVmm {
+    let mut vmm = MockVmm::new();
+    vmm.gpa_write(
+        phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET),
+        &0u32.to_le_bytes(),
+    )
+    .expect("finishPayload");
+    vmm.gpa_write(
+        phys_of(PB_GPU_VA + SEMA_OFFSET),
+        &0xDEAD_BEEFu32.to_le_bytes(),
+    )
+    .expect("the host semaphore, poisoned");
+    vmm
+}
+
+/// ★★★ **THE KNOWN-POSITIVE CONTROL: lap one stops at the first unwritten entry.**
+///
+/// ⊘ This is the case the zero-scan was written for and the case that works today. It must
+/// pass **before and after** any change to the stop condition — a fix that breaks it has
+/// traded one wedge for another, on the path `cup3`'s `CUP3_VAL=43` and the eight GR
+/// completions actually run over.
+#[test]
+fn lap_one_stops_at_the_first_unwritten_entry() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    publish_doorbell(&mut vmm, 0);
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel())
+        .expect("the one written entry is servable");
+
+    assert_eq!(
+        run.entries, 1,
+        "the ring is zero past slot 0, so exactly one entry is new: {run:?}"
+    );
+    assert_eq!(run.launches, 1, "and exactly one launch ran: {run:?}");
+    assert_eq!(cursor.next, 1, "the cursor advanced past what it ran");
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        doorbell_payload(0).to_le_bytes(),
+        "the finishPayload carries THIS doorbell's payload"
+    );
+}
+
+/// ★★★★★ **THE RED ROW: every doorbell consumes exactly the one entry the guest wrote —
+/// across the wrap.**
+///
+/// Two full laps, one entry written per doorbell, which is what `channelFillGpFifo` does
+/// (`[src] ogkm-580: channel_utils.c:403-443` — RM submits **one** block per call). The
+/// assertion is per-doorbell and names its own ordinal, so the failure states *which*
+/// doorbell diverged rather than that the run ended wrong.
+///
+/// ⊘ Three separate assertions, because `entries` alone cannot tell the two consequences
+/// apart:
+/// 1. `entries == 1` — the cursor stays in step with the guest's producer.
+/// 2. the destination bytes are **this** doorbell's fill — a stale `LAUNCH_DMA` re-run
+///    would write a previous lap's value into a previous lap's page.
+/// 3. the finishPayload holds **this** doorbell's payload — a stale release puts a payload
+///    the guest already passed back over the word it is polling, which is the safety half:
+///    a completion is only honest if the state after it is the state the guest intended.
+#[test]
+fn every_doorbell_of_two_full_laps_consumes_exactly_the_entry_the_guest_wrote() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    for d in 0..(2 * SMALL_RING) {
+        publish_doorbell(&mut vmm, d);
+        let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel())
+            .unwrap_or_else(|e| panic!("doorbell {d} (slot {}) refused: {e:?}", d % SMALL_RING));
+
+        assert_eq!(
+            run.entries, 1,
+            "★★★★★ doorbell {d} (slot {}) consumed {} entries; the guest wrote ONE. \
+             Past the wrap no slot is zero any more, so a walk that stops at a zero entry \
+             never stops: {run:?}",
+            d % SMALL_RING,
+            run.entries
+        );
+        assert_eq!(
+            run.launches, 1,
+            "doorbell {d}: one entry is one LAUNCH_DMA: {run:?}"
+        );
+        assert_eq!(
+            vmm.ram_read(phys_of(doorbell_dst_va(d)), 0x40),
+            vec![doorbell_fill(d); 0x40],
+            "doorbell {d}: its own destination carries its own fill"
+        );
+        assert_eq!(
+            vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+            doorbell_payload(d).to_le_bytes(),
+            "★★★ doorbell {d}: the word the guest polls holds THIS doorbell's payload. A \
+             stale re-release puts an OLD payload here — a completion for work that did \
+             not happen on this doorbell"
+        );
+        assert_eq!(
+            cursor.next,
+            (d + 1) % SMALL_RING,
+            "doorbell {d}: the cursor is one past the entry it ran, modulo the ring"
+        );
+        assert_eq!(
+            vmm.ram_read(phys_of(PB_GPU_VA + SEMA_OFFSET), 4),
+            0xDEAD_BEEFu32.to_le_bytes(),
+            "⊘ doorbell {d}: the host semaphore four bytes lower stays untouched"
+        );
+    }
+}
