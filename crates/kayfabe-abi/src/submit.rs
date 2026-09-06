@@ -5092,8 +5092,11 @@ pub const CANCELLATION_VERBS: &[CancellationVerb] = &[
                    in NONE of them. ★ Known-positive that the function-level ledger can see \
                    a non-control RPC at all: 'unserviced fn 21' (DUP_OBJECT) does appear. \
                    And 0 native-libcuda uses: NV_ESC_RM_IDLE_CHANNELS is issued 0 times on \
-                   /dev/nvidiactl or /dev/nvidia0 across all six host_reference_ga106 \
-                   workloads. ⊘ I first read that census as 1-per-run by matching nr=65 \
+                   either Linux node (/dev/nvidiactl, /dev/nvidia0) across all six \
+                   host_reference_ga106 workloads. ⊘ Those node names are the PROVENANCE \
+                   of a Linux-host measurement, not an OS assumption this crate makes: the \
+                   claim is about an escape's arrival count, and a Windows guest would \
+                   change where it was measured, never what is claimed. ⊘ I first read that census as 1-per-run by matching nr=65 \
                    without the device: those records are dev=nvidia-uvm, i.e. UVM ioctl 0x41 \
                    (MAP_DYNAMIC_PARALLELISM_REGION), a DIFFERENT NAMESPACE sharing the \
                    number. A number is not an identity until the namespace is named.",

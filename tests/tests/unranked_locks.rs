@@ -102,6 +102,58 @@ use std::path::{Path, PathBuf};
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::HashMap<u64, (usize, usize)>>",
+        "★★★★★ FOUND BY THIS GATE, 2026-09-06, AND IT IS NOT A CLEAN BILL OF HEALTH — read \
+         the second paragraph before trusting this row. `namer_census_cache()` — the \
+         per-frame memo for `fb_join_namers`, so the first refusal on a frame pays for the \
+         scan and every later one reads the cache. Reached on the vCPU in the FB-join \
+         refusal path (`shim.rs:11065`). \
+         ⊘ **A BLOCKING CALL MAY NOT RUN BENEATH IT AND NONE DOES — BUT TWO OTHER LOCKS \
+         ARE TAKEN BENEATH IT, AND THAT ORDERING WAS WRITTEN DOWN NOWHERE.** The cache miss \
+         computes `device.fb_join_namers(leaf.phys)` **with this guard held**, which the \
+         site says is deliberate (two vCPUs racing one fresh frame would otherwise both pay \
+         the scan). What the site does NOT say is what that call does: \
+         `fb_join_namers` (`kayfabe-rt/src/device.rs:3902`) calls `live_pids()`, which takes \
+         `self.state.read()` (`:1381`), and then `with_proc` per pid (`:1345`), which routes \
+         through `route_act` into the per-proc locks. \
+         ⇒ The live order on this path is **unranked process-global cache → device state \
+         read → per-proc**. It is consistent today because nothing takes a proc lock and \
+         then wants this cache. \
+         ★★★ **THE EDIT THAT WOULD MAKE THIS ROW WRONG:** any path that holds a proc lock \
+         and then reaches the namer census — that closes the cycle, and because the outer \
+         lock is UNRANKED, `lockwitness::assert_lock_free` cannot see either half of it. \
+         ⚠ The memo is also why the exposure is bounded rather than absent: the scan runs \
+         **once per frame**, so the window is one cold miss, not every refusal. \
+         ⊘ Deliberately unranked, but note this is the one row in this list where that is a \
+         COST rather than a free choice: ranking it would let the witness see the order \
+         above.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::HashMap<(u64, u64), usize>>",
+        "★★★★ FOUND BY THIS GATE, 2026-09-06, and classified rather than listed. \
+         `supersede_ledger()` — the per-(frame, VA) takeover counter that bounds the \
+         supersede ping-pong. Process-global on purpose: it is a COUNTER, not a source of \
+         truth; nothing reads it to decide what a frame IS, only to stop an unbounded loop. \
+         It is reached on the vCPU inside the framebuffer-join settlement. \
+         ⊘ **NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES, and the scoping is STRUCTURAL \
+         rather than incidental.** Both uses hold the guard for exactly one map operation: \
+         the read is inside an explicit `let over = { … }` block whose value is a `bool` \
+         (`shim.rs:10763-10766`), and the write is a statement temporary dropped at its own \
+         semicolon (`:10788-10792`). Every `eprintln!` and every device or host call sits \
+         OUTSIDE both. \
+         ★★★ **THE EDIT THAT WOULD MAKE THIS ROW WRONG, named so it is greppable:** widening \
+         the `let over` block to enclose the `else if` branch beside it. That branch calls \
+         `supersede_joined_fb_leaf`, `release_fb_join`, `revoke_published_fb_leaf` and \
+         `drain_pending_releases` — the host plane, the store and the disposal queue — so a \
+         guard held across it would put a vCPU behind host work while every existing \
+         assertion stayed green. `lockwitness::assert_lock_free` CANNOT see it: it masks \
+         only ranked locks. \
+         ⊘ Deliberately unranked: a leaf no other trap path takes, holding no reference to \
+         anything that could take a second lock.",
+    ),
+    (
         "crates/kayfabe-device/src/mmuinval.rs",
         "Mutex<Inner>",
         "★★★★★ FOUND BY THIS GATE, 2026-08-14 (w326), beside `reclaimtick`'s — the gate caught \

@@ -1450,7 +1450,28 @@ jobs:
           # can only ever say "nothing yet". The layout has no single instant at which it
           # is both complete and live, which is why it is reported twice and why the second
           # report needs a caller the C already has: the exit notifier.
-          AUDITED="kayfabe-linux-raw:91 kayfabe-qemu-raw:49"
+          # ★★★ 91 -> 93 on 2026-09-06, AND THE TWO WERE REVIEWED RATHER THAN COUNTED.
+          # The gate went red at 93-vs-91 and was RIGHT: `c3c5d180` (w331, "huge-page the
+          # leaf memfd") added exactly two relaxations to `kayfabe-linux-raw` and never
+          # updated this line. Localised by counting the five forms at each commit since
+          # this number was last correct (`f7de7cfd`): 91 at f7de7cfd/7b0694f5/32f4f4fc/
+          # 7c637330/57107a0d, 93 from c3c5d180 onward.
+          #
+          # ⊘ **Bumping the number is the failure this gate exists to catch** — its own
+          # message calls it "a ratchet that has quietly become a comment". So both were
+          # read, in `mapping_unsafe.rs::request_huge_pages`:
+          #   1. `libc::madvise(base, len, MADV_HUGEPAGE)` — `base`/`len` are the mapping's
+          #      own extent, established by one `mmap` and never rewritten; `madvise` reads
+          #      no user memory and only advises.
+          #   2. a `read_volatile`/`write_volatile` fault-in loop — `off < len` so the
+          #      pointer stays inside the mapping, which is checked `PROT_WRITE` above and
+          #      outlives the loop; writing the byte back changes nothing observable and
+          #      forces the fault THP collapse keys on.
+          # Both carry those SAFETY comments in-tree. ★ Kept rather than deleted even though
+          # w331's huge-page result was a measured NULL: the function reports the bytes the
+          # kernel ACTUALLY gave rather than madvise's return, and that honesty is what
+          # produced the null (shmem THP ships `[never]`, so `rc=0` with `ShmemPmdMapped=0kB`).
+          AUDITED="kayfabe-linux-raw:93 kayfabe-qemu-raw:49"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
