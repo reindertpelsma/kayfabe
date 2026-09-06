@@ -240,4 +240,93 @@ is what this tree has paid for most often.
 
 ## §4 THE MEASUREMENTS
 
-See §4 of this file as amended by the run log committed beside it.
+RTX 3060 (GA106), host driver **580.159.04 open** kernel module, kernel `6.8.0-59-generic`,
+19-core vast box, source `b16dca06`. Native arm only — this is a host-side rung and the guest
+arm is a follow-on, not the deliverable.
+
+### §4.1 ★★★★★ THE FIRST THING IT FOUND WAS A DEFECT IN ITSELF — and that is the result
+
+At **T=32 / 4 cores**, seed `0x18d2cc842fe59937`: **66 `ALIAS_REVOKED` violations** — 22 in
+each of the three 32-thread arms, **zero** in the 4-thread `percore` arm. Both halves of the
+cause were ours, and both are the classes this tree has paid for before:
+
+1. **THE GEOMETRY.** `alloc_vaspace` asks `vaSize = 0`, i.e. RM's default `FERMI_VASPACE_A`
+   limit — **1 TiB** on this part. At the original 64 GiB per-lane stride, **lane 14's window
+   begins at exactly `0x100_0000_0000`**, one range past the end of the address space, so
+   every mapping in it was refused. The evidence was unambiguous in the log: every violation
+   came from **tids 28 and 29 only**, and every VA named was inside that one window
+   (`0x101…`–`0x106_0000_0000`). ⇒ Stride halved to 32 GiB (a window needs 28), and
+   `W385_MAX_LANE` now refuses a lane above the ceiling **by name**
+   (`WINDOW_ABOVE_VAS_LIMIT`), so the rung says *"you asked for more address space than
+   exists"* instead of *"the alias property broke"*.
+2. **THE GRADING.** Both `ALIAS_REVOKED` sites tested `!out.landed()`, which folds
+   `W379Release::Refused` — *"the submission was declined and the engine was never asked"* —
+   into *"the write was lost"*. ⊘ That is precisely what `W379Release`'s three-value shape
+   exists to prevent, and **the only thing distinguishing the 66 fakes from a real revoke was
+   the `(Refused)` printed inside their own message.** Both sites now match on `Lost`.
+
+★ **Confirmed by replaying the seed after the fix**: the same seed produced a **byte-identical
+program** — `ops=6400 engine_ops=1784 alias_ops=774` on every arm, unchanged — with
+`refused` **1200 → 0** and `violations` **66 → 0**. A red, root-caused, and closed by its own
+replay handle. ⚠ It was ours, not the system's; that is still the rung working, and it is
+worth more than the greens below.
+
+### §4.2 the ladder, after the fix — twelve arms, all graded on printed lines
+
+| arm | T | I | cores | verdict | ops | overlap |
+|---|---|---|---|---|---|---|
+| `t3i128c3`  | 3  | 128  | 3 | PASS | 3 072 | 8 256 |
+| `t3i512c3`  | 3  | 512  | 3 | PASS | 12 288 | 43 258 |
+| `t6i256c3`  | 6  | 256  | 3 | PASS | 6 912 | 23 157 |
+| `t12i128c3` | 12 | 128  | 3 | PASS | 4 992 | 28 829 |
+| `t8i256c1`  | 8  | 256  | 1 | **NOTRUN** | 6 400 | 18 954 |
+| `t16i256c2` | 16 | 256  | 2 | PASS | 12 800 | 95 444 |
+| `t3i5000c3` | 3  | 5000 | 3 | PASS | 120 000 | 97 083 |
+| `t24i300c3` | 24 | 300  | 3 | PASS | 22 500 | 299 868 |
+| `t32i200c4` | 32 | 200  | 4 | PASS | 20 000 | 351 817 |
+| `t48i200c4` | 48 | 200  | 4 | PASS | 29 600 | 615 195 |
+| `replay-a/b`| 8  | 96   | 3 | PASS ×2 | 5 568 | 17 842 |
+
+**Totals: 244 132 operations across 48 phases, of which 70 654 ran the engine and 21 418 were
+the full alias property; 1 599 703 measured cross-thread RM-verb overlaps; 0 refusals; 0
+invariant violations; 0 `Xid` in `dmesg` across every run.** Max width 48 threads on 4 cores.
+
+⚠ **THAT IS A BUDGET, NOT A PROOF**, and the rung's own `PASS` line says so. 1.6 million
+overlaps is 1.6 million *sampled* interleavings out of an unbounded space; absence of a red is
+not absence of a race.
+
+★ `t8i256c1` is `NOTRUN` **by design and it is the veto working**: at `cores = 1` the
+`percore` arm is `T = 1` by construction, so it samples zero overlap and cannot be graded —
+and the arm-level `NOTRUN` propagates rather than being averaged away by its three green
+siblings. ⊘ The `crowd` arm at `cores = 1` — eight workers on **one** core — did run and
+passed with 1 886 overlaps, which is the strongest preemption-inside-a-lock sample here.
+
+### §4.3 the instruments, each checked rather than asserted
+
+- **`W385_WATCHDOG=PASS`** on every ladder. Given a 5 s deadline against a 100 000-iteration
+  workload it fired, printed `RUNG_concurrent_fuzz=FAIL` with `FUZZ_REASON=DEADLOCK/WATCHDOG`,
+  dumped **8 worker rows** naming each one's last verb and iteration, and exited 3. ⇒ The
+  no-hang guarantee is measured, not claimed.
+- **`W385_REPLAY=SAME`** — two independent runs of seed `0x5EED0385` drew the **same verb
+  census in every one of the four arms**, character for character. ⇒ `--seed=N` really does
+  pin the decision sequence. ⊘ It does not pin the schedule: the two runs' overlap counts
+  differed (8 788 vs 9 054), which is exactly the honest distinction §2.1b states.
+- **Pinning is read back**, and the observed core sets are what the log prints:
+  `{"0", "1", "2"}` for `percore`, `{"0-2"}` for `crowd`, `{"0-18"}` for the unpinned control.
+  Every pinned arm reported `pinned=T/T`.
+- **The distribution, not a summary.** At 48 threads on 4 cores the per-op cost separates the
+  arms cleanly: `percore` (4 workers, 4 cores) `p50=548 µs p99=2 925 µs`, while `crowd`
+  (48 workers, 4 cores) is `p50=6 652 µs p99=57 010 µs max=110 446 µs` — a 20× median and a
+  94× tail, which is the over-subscription doing what it was asked to do.
+
+### §4.4 ⊘ WHAT THE GREENS DO **NOT** SAY
+
+- Nothing about `l1_concurrency.md` §3.3 R1 as a **live** check — see §1. Both asserts are on
+  the path of every ioctl and both are vacuous from a raw client.
+- Nothing about the Mode-2 guest path: this is the native arm. The guest arm needs
+  `--probe-launch-dma` (the rung already threads the selector through) and is a follow-on.
+- Nothing about the completion plane: the probe is the w379 `SEM_RELEASE` by default, and
+  `w381_the_guest_servable_probe.md` §3 already scopes what that can and cannot show.
+- `pairing` reported *"placement did not change the answer"* on **every** arm. ⊘ That is a
+  statement about these seeds and these widths, not a finding that pinning is unnecessary —
+  the pinned arms exist so that the day it *does* change the answer, the change is visible.
