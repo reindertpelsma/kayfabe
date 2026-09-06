@@ -177,6 +177,19 @@ pub enum CudartInitError {
     },
 }
 
+/// One `(word index, value)` patch spliced into an otherwise-captured reply body.
+///
+/// ⊘ The index is in **u32 words**, not bytes — a byte offset here silently patches the
+/// wrong field and the row still decodes.
+pub type SplicePatch = (usize, u32);
+
+/// One spliced row: `(control command, reply size in bytes, the patches to apply)`.
+///
+/// Named rather than spelled inline because the bare tuple is what `clippy::type_complexity`
+/// objects to, and because a reader cannot otherwise tell `usize` (a size) from `usize`
+/// (an index) inside it.
+pub type SplicedRow = (u32, usize, &'static [SplicePatch]);
+
 /// ★★★★★ **SPLICED rows — `(cmd, paramsSize, &[(word, value)])`.**
 ///
 /// A [`SERVED`] row replaces the whole body with a constant. That is right when the guest
@@ -195,7 +208,7 @@ pub enum CudartInitError {
 /// ⚠ The nine values decode as clock frequencies in kHz (≈465/930 MHz core, ≈7.5/7.3/9.0 GHz
 /// memory). They are a property of the GA106 SKU, not of this machine — but they are still
 /// **capture-derived and therefore expiring**, exactly like [`SERVED`].
-pub const SPLICED: &[(u32, usize, &[(usize, u32)])] = &[(
+pub const SPLICED: &[SplicedRow] = &[(
     PERF_GET_LEVEL_INFO_V2,
     780,
     &[
@@ -267,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn the_fallback_row_is_what_the_host_answered_in_the_SAME_failing_state() {
+    fn the_fallback_row_is_what_the_host_answered_in_the_same_failing_state() {
         // ⊘ Not "what a healthy host answers" — a healthy host never asks this. The bytes
         // come from a host DRIVEN INTO the guest's state by refusing a084+a026.
         assert_eq!(
