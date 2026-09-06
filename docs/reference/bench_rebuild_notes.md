@@ -603,6 +603,93 @@ used for hardware measurement and for bench boots, in parallel with it.
 
 ---
 
+## 2026-09-06 — REBUILD #5, a FIFTH machine (vast 50013922, `kb`). ★ The recipe is now SCRIPTS, and it found four new traps
+
+**Provenance.** vast instance 50013922, **2× RTX 3060 (GA106)**, 23 cores, 98 GB RAM, 202 GB
+free. Rented as 575.51.03 **closed** module on kernel 6.8.0-59; ended on 580.159.04 **open**
+module, kernel 6.8.0-138, with the Mode-2 guest booting and the real isolate plane live.
+Repo at `ba12ead`.
+
+### A. The recipe is executable now — four scripts, in order
+
+| # | script | what it refuses on |
+|---|---|---|
+| 0 | `host_preflight.sh` | exit 2 = HOST_FAULT (destroy, don't nurse), 3 = WRONG_BOX |
+| 1 | `provision_box.sh` | musl target; skips apt when every dep is already present |
+| 2 | `provision_host_driver.sh` | **exits 6 rather than running the installer over a failed purge** |
+| 3 | `provision_bench_tree.sh` | refuses to start unless `/proc/driver/nvidia/version` says "Open Kernel Module" |
+
+⇒ §1's table is still the authority on *what* happens; the scripts are that table with the
+traps encoded at the site rather than remembered.
+
+### B. ★★★★ NEW AND THE MOST EXPENSIVE — a fresh box UPGRADES ITS KERNEL UNDERNEATH YOU
+
+`unattended-upgrade` starts **at boot**. By the time you can ssh in it is already running, so
+masking `apt-daily*.timer` stops the *next* run and does nothing about the one in flight. It
+held the dpkg lock **20+ minutes** here and its upgrade set included
+`linux-generic-hwe-22.04` / `linux-image-*` / `linux-headers-*`.
+
+⚠ **The trap is not the delay.** Wait out the lock, install the NVIDIA driver, and DKMS builds
+against the **running** kernel. That module is genuinely correct — the version string, the
+`open()`s, every content check in §2 passes — and it **DISAPPEARS at the next reboot**, because
+the box comes up on the new kernel with nothing built for it. Confirmed live: after the reboot
+the pre-existing 575 module was simply gone, `nvidia-smi` reporting it "couldn't communicate
+with the NVIDIA driver".
+
+⇒ **Order on a fresh box: mask timers → WAIT for any in-flight run → REBOOT → install driver.**
+Do not kill the upgrade; a half-configured dpkg is worse than the wait.
+
+### C. ⊘ The §2 symptom has a THIRD cause — see the amendment folded into §2 above
+
+`apt-mark hold` is not the only thing that produces *"the installation was canceled due to …
+an alternate driver installation"*. **The dpkg lock does too**, and with it held both the
+`unhold` AND the purge fail, so §2's own fix appears applied and the symptom appears anyway.
+The discriminator is the **purge's exit status**, never the installer's message.
+
+### D. Three defects in the guest-disk track, all found by running it
+
+1. `-nographic` and `-daemonize` are **mutually exclusive**; QEMU refuses at argv parse and the
+   guest never starts. Use `-display none` + `-serial file:`.
+2. ★★ **ssh being up is not the guest being ready, and the thing that breaks it is the SEED.**
+   sshd answered at 20 s; cloud-init's `runcmd: netplan apply` then restarted the guest's
+   networking and dropped the session, mid-`apt-get`, as
+   `kex_exchange_identification: Connection closed by remote host`. Wait for
+   `cloud-init status` = done **and** the seed's own marker file.
+3. ⊘ It powered the guest off over a **failed** install — a clean shutdown makes a failed phase
+   look completed, and the next step boots a driverless disk. (2)+(3) compose into the worst
+   version: nothing installs, everything reports success.
+
+### E. `cuda.h` — §D item 2 of rebuild #4, and it is load-bearing for cup3/cup8
+
+Omitting it does **not** produce a red: `w297_cup3.sh` correctly reports **(D) UNMEASURED**
+with `CUP3_JIT_PRESENT` empty. ★ Verify by **content — `CUresult` x601** — never `test -f`:
+the guest ships three other `cuda.h` files and all three are the PowerMac ADB header.
+
+⊘ And the fetch has its own trap: `tar -tf archive | grep -m1 'cuda\.h$'` under
+`set -o pipefail` **reports failure over a successful match** — grep closes the pipe, tar dies
+of SIGPIPE (141), pipefail takes the 141. It said "no cuda.h in archive" about an archive
+containing it. List to a file and match with `awk`.
+
+### F. The flag surface, recovered the hard way — it is env vars behind CONSTANTS
+
+A boot with the plane off reports `isolate refusal [no-plane] this build has no forwarding
+plane`. Two separate gates:
+- **build**: `KAYFABE_SHIM_FEATURES=host-isolates` for `build_qom_shim.sh`
+  (`kayfabe-qemu-raw/Cargo.toml:113`, optional and **off by default**).
+- **runtime**: `KAYFABE_ISOLATES=real` (`stillborn` is the default and is *deliberately* not
+  defaulted-to-on, so a typo cannot silently select the refusing plane).
+
+⚠ `grep 'env::var("KAYFABE_'` finds **none of them** — they are read as `var_os(CONST)`. The
+full set is the `*_ENV` constants: `KAYFABE_ISOLATES`, `KAYFABE_FB_JOIN` (`shared`/`private`),
+`KAYFABE_OPERAND_JOIN` (`assert`/`join`), `KAYFABE_VAS_PUBLISH`
+(`assert`/`publish`/`pinrate`/`both`/`drain`), `KAYFABE_GUEST_RING` (`ring`), `KAYFABE_GR_ROUTE`,
+`KAYFABE_CE_EXECUTOR`, `KAYFABE_PT_SWEEP`. ★ Same class as the two-stamp-greps lesson: a search
+pattern that only matches string literals reports a clean absence over constants.
+
+★ With the plane armed: `isolates: 1 materialized, 1 live, **0 refusing**`.
+
+---
+
 ## 2026-08-10 — REBUILD #4, a FOURTH machine ("box3"/`vh2`). ★ The recipe held; ONE new trap, and it is in the recipe's own verification step
 
 **Why it happened.** A second bench was needed so the guest-RAM-crossing work (#233) could
