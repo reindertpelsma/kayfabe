@@ -37,8 +37,8 @@
 use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
-    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant,
-    GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
+    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined,
+    GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;

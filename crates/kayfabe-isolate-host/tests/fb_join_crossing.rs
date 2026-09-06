@@ -446,7 +446,11 @@ fn an_alias_maps_the_same_memory_and_hands_up_no_second_backing() {
         AT.0 + 0x0100_0000,
         "address identity holds for an alias exactly as for a join"
     );
-    assert_eq!(aliases[1].host_va, AT.0 + 0x0200_0000, "and for the third VA");
+    assert_eq!(
+        aliases[1].host_va,
+        AT.0 + 0x0200_0000,
+        "and for the third VA"
+    );
     assert_ne!(
         aliases[0].memory, aliases[1].memory,
         "★★★ each alias owns its OWN object, so releasing one takes nothing from the other — \

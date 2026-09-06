@@ -2749,11 +2749,7 @@ pub fn commit_back_fb_leaf(
             FbLeafBacking::Aliased,
             Some(VerbReply::FbLeafAliased {
                 host_vas,
-                aliased:
-                    kayfabe_isolate::FbLeafAliased {
-                        memory,
-                        host_va,
-                    },
+                aliased: kayfabe_isolate::FbLeafAliased { memory, host_va },
             }),
         ) => (host_vas, memory, host_va, None),
         _ => return wrong_reply("back_fb_leaf"),
@@ -2852,10 +2848,7 @@ pub fn commit_back_fb_leaf(
     // of a frame as for the first. ⊘ What differs is only that the alias's caller has nothing
     // to install — the view was installed with the join — so it reaches
     // `adopt_joined_fb_leaf` immediately rather than four steps later.
-    if matches!(
-        plan.how,
-        FbLeafBacking::Joined | FbLeafBacking::Aliased
-    ) {
+    if matches!(plan.how, FbLeafBacking::Joined | FbLeafBacking::Aliased) {
         return Ok(FbLeafBacked {
             host_va,
             memory,

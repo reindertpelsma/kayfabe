@@ -810,18 +810,15 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // distinction is load-bearing rather than tidy: routing it through `serve_one`'s
         // fd-carrying intercept would give its reply an allowance of one, and an allowance is
         // what the kernel checks instead of a `case`.
-        Request::AliasFbLeaf {
-            vas,
-            len,
-            at,
-            phys,
-        } => match rm.alias_fb_leaf(raw(vas), len, GpuVa(at), phys) {
-            Ok(a) => Reply::Aliased {
-                memory: a.memory.raw(),
-                host_va: a.host_va,
-            },
-            Err(e) => failed(e),
-        },
+        Request::AliasFbLeaf { vas, len, at, phys } => {
+            match rm.alias_fb_leaf(raw(vas), len, GpuVa(at), phys) {
+                Ok(a) => Reply::Aliased {
+                    memory: a.memory.raw(),
+                    host_va: a.host_va,
+                },
+                Err(e) => failed(e),
+            }
+        }
         // ★★★ The instrument. `len` arrives on the wire, so it is bounded HERE, before a
         // buffer exists — `FbRead`'s argument, and it applies for the same reason: the fact
         // that the peer is our own parent is not a reason to write code that trusts a length.

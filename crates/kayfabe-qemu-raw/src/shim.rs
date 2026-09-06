@@ -10823,94 +10823,94 @@ fn join_one_fb_leaf(
     //   a live peer does  → **REFUSE BY NAME**: another isolate's object is not ours to take.
     let mut how = kayfabe_rt::FbLeafBacking::Joined;
     if (release.aliases() || release.supersedes()) && plane.fb_join_installed_at(leaf.phys) {
-      // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
-      let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys);
-      if let (true, Some(other)) = (release.aliases(), sibling) {
-        // ★★★★★ **THE FIX (w380).** One memory, one more address. Nothing is unbound,
-        // nothing is released, and the row at `other` keeps its own host object — which is
-        // what makes `N` unbounded rather than capped: there is no ping-pong to bound.
-        how = kayfabe_rt::FbLeafBacking::Aliased;
-        eprintln!(
-            "{head} {what} ★★★★★ ALIASING fb_phys=0x{:x}: the guest describes this frame at \
-             va=0x{:x} AND at va=0x{:x}. The frame's pages are described to RM again and \
-             placed at the new VA; the old row is UNTOUCHED and keeps its backing. ⊘ No \
-             takeover, no cap, no victim — `w377` §9 measured that BOTH VAs are live",
-            leaf.phys, other, leaf.va
-        );
-      } else if release.supersedes() && sibling.is_some() {
-        // ★★★★★ **w367 — THE CAP IS KEYED BY (FRAME, TAKER), NOT BY FRAME.**
-        //
-        // `[measured w366]` keyed by frame alone and never reset, this cap became the wall the
-        // moment the orphan reclaim let later processes run at all: eight frames each spent
-        // their 4 takeovers and then refused **293 times each**, and the refusal is not
-        // abstract — `0x1e00000` stayed *fabricated*, so the CE wrote to the VA that leaf
-        // backs and the host raised `Xid 31 FAULT_PDE ACCESS_TYPE_VIRT_WRITE @
-        // 0x7e59_c6000000`. Our own bound produced a hardware fault.
-        //
-        // ⊘ The hazard the cap exists for is REAL and is not what a lifetime-per-frame count
-        // measures. Its own words: *"the superseded row is re-proposed by the next settlement
-        // … an uncapped takeover is a ping-pong"* — that is **one pair of VAs fighting over
-        // one frame**. A genuinely NEW owner arriving later is not that, and a per-frame
-        // lifetime budget cannot tell the two apart: it spends the same four tickets on both.
-        //
-        // ⇒ Key it by `(phys, taking va)`. A ping-pong between two VAs still increments each
-        // side and is still bounded — at `2 × CAP` for that pair, not unbounded — while the
-        // Nth process to legitimately want a frame gets its own budget. The fix is a KEY, not
-        // an explanation, and not a bigger number (`the_key_was_the_va_not_the_extent`,
-        // `a_discrepancy_can_be_an_artefact_of_a_join`).
-        let over = {
-            let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
-            l.get(&(leaf.phys, leaf.va)).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
-        };
-        if over {
+        // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
+        let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys);
+        if let (true, Some(other)) = (release.aliases(), sibling) {
+            // ★★★★★ **THE FIX (w380).** One memory, one more address. Nothing is unbound,
+            // nothing is released, and the row at `other` keeps its own host object — which is
+            // what makes `N` unbounded rather than capped: there is no ping-pong to bound.
+            how = kayfabe_rt::FbLeafBacking::Aliased;
             eprintln!(
-                "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
-                 {SUPERSEDE_CAP_PER_FRAME} takeovers for this (frame, VA) pair. The old join \
-                 stands and \
-                 this leaf stays fabricated. ⚠ The cap exists because the superseded row \
-                 is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
-                leaf.va, leaf.phys
+                "{head} {what} ★★★★★ ALIASING fb_phys=0x{:x}: the guest describes this frame at \
+                 va=0x{:x} AND at va=0x{:x}. The frame's pages are described to RM again and \
+                 placed at the new VA; the old row is UNTOUCHED and keeps its backing. ⊘ No \
+                 takeover, no cap, no victim — `w377` §9 measured that BOTH VAs are live",
+                leaf.phys, other, leaf.va
             );
-        } else if let Some(r) = device.supersede_joined_fb_leaf(
-            DOORBELL_TARGET_GPU,
-            pdb,
-            leaf.phys,
-            kayfabe_rt::GpuVa(leaf.va),
-        ) {
-            // ★★★ TABLE ROW GONE (above), STORE next, HOST last. The store must stop
-            // serving out of the region before the host mapping is torn down; the row must
-            // stop naming the object before either.
-            if plane.release_fb_join(r.phys) {
-                device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
-                let drained = device.drain_pending_releases();
-                *supersede_ledger()
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .entry((r.phys, leaf.va))
-                    .or_insert(0) += 1;
+        } else if release.supersedes() && sibling.is_some() {
+            // ★★★★★ **w367 — THE CAP IS KEYED BY (FRAME, TAKER), NOT BY FRAME.**
+            //
+            // `[measured w366]` keyed by frame alone and never reset, this cap became the wall the
+            // moment the orphan reclaim let later processes run at all: eight frames each spent
+            // their 4 takeovers and then refused **293 times each**, and the refusal is not
+            // abstract — `0x1e00000` stayed *fabricated*, so the CE wrote to the VA that leaf
+            // backs and the host raised `Xid 31 FAULT_PDE ACCESS_TYPE_VIRT_WRITE @
+            // 0x7e59_c6000000`. Our own bound produced a hardware fault.
+            //
+            // ⊘ The hazard the cap exists for is REAL and is not what a lifetime-per-frame count
+            // measures. Its own words: *"the superseded row is re-proposed by the next settlement
+            // … an uncapped takeover is a ping-pong"* — that is **one pair of VAs fighting over
+            // one frame**. A genuinely NEW owner arriving later is not that, and a per-frame
+            // lifetime budget cannot tell the two apart: it spends the same four tickets on both.
+            //
+            // ⇒ Key it by `(phys, taking va)`. A ping-pong between two VAs still increments each
+            // side and is still bounded — at `2 × CAP` for that pair, not unbounded — while the
+            // Nth process to legitimately want a frame gets its own budget. The fix is a KEY, not
+            // an explanation, and not a bigger number (`the_key_was_the_va_not_the_extent`,
+            // `a_discrepancy_can_be_an_artefact_of_a_join`).
+            let over = {
+                let l = supersede_ledger().lock().unwrap_or_else(|e| e.into_inner());
+                l.get(&(leaf.phys, leaf.va)).copied().unwrap_or(0) >= SUPERSEDE_CAP_PER_FRAME
+            };
+            if over {
                 eprintln!(
-                    "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
-                     this frame from va=0x{:x} (len=0x{:x}, host_va=0x{:x}) to va=0x{:x}. Old \
-                     row UNBOUND, join RELEASED, host object staged and drained={drained}. \
-                     ⊘ The old VA is still DESCRIBED by the guest and now resolves with \
-                     no host backing - an engine still pointed there takes a CONTAINED fault",
-                    r.phys, r.va.0, r.len, r.host_va, leaf.va
+                    "{head} {what} leaf va=0x{:x} fb_phys=0x{:x} -> ⊘ SUPERSEDE CAPPED at \
+                     {SUPERSEDE_CAP_PER_FRAME} takeovers for this (frame, VA) pair. The old join \
+                     stands and \
+                     this leaf stays fabricated. ⚠ The cap exists because the superseded row \
+                     is re-proposed by the next settlement, so an uncapped takeover is a ping-pong",
+                    leaf.va, leaf.phys
                 );
-            } else {
-                // ⊘ The table named a join this store does not hold. LOUD, and the object
-                // is NOT freed - a leak here is strictly better than freeing memory something
-                // may still be reading through. ⚠ The row is already unbound, so this
-                // orphans it; that is the conservative half of a disagreement we did not make.
-                eprintln!(
-                    "{head} {what} ⚠⚠ SUPERSEDE ABORTED fb_phys=0x{:x}: the address \
-                     table carried a JoinsGuestWindow row at va=0x{:x} and the framebuffer \
-                     store holds NO join at that offset. The row is unbound and the host \
-                     object is ⊘ NOT freed",
-                    r.phys, r.va.0
-                );
+            } else if let Some(r) = device.supersede_joined_fb_leaf(
+                DOORBELL_TARGET_GPU,
+                pdb,
+                leaf.phys,
+                kayfabe_rt::GpuVa(leaf.va),
+            ) {
+                // ★★★ TABLE ROW GONE (above), STORE next, HOST last. The store must stop
+                // serving out of the region before the host mapping is torn down; the row must
+                // stop naming the object before either.
+                if plane.release_fb_join(r.phys) {
+                    device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                    let drained = device.drain_pending_releases();
+                    *supersede_ledger()
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .entry((r.phys, leaf.va))
+                        .or_insert(0) += 1;
+                    eprintln!(
+                        "{head} {what} ★★★★★ SUPERSEDED fb_phys=0x{:x}: the guest re-pointed \
+                         this frame from va=0x{:x} (len=0x{:x}, host_va=0x{:x}) to va=0x{:x}. Old \
+                         row UNBOUND, join RELEASED, host object staged and drained={drained}. \
+                         ⊘ The old VA is still DESCRIBED by the guest and now resolves with \
+                         no host backing - an engine still pointed there takes a CONTAINED fault",
+                        r.phys, r.va.0, r.len, r.host_va, leaf.va
+                    );
+                } else {
+                    // ⊘ The table named a join this store does not hold. LOUD, and the object
+                    // is NOT freed - a leak here is strictly better than freeing memory something
+                    // may still be reading through. ⚠ The row is already unbound, so this
+                    // orphans it; that is the conservative half of a disagreement we did not make.
+                    eprintln!(
+                        "{head} {what} ⚠⚠ SUPERSEDE ABORTED fb_phys=0x{:x}: the address \
+                         table carried a JoinsGuestWindow row at va=0x{:x} and the framebuffer \
+                         store holds NO join at that offset. The row is unbound and the host \
+                         object is ⊘ NOT freed",
+                        r.phys, r.va.0
+                    );
+                }
             }
-        }
-      } else {
+        } else {
             // ⊘⊘⊘ **THE THIRD OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
             //
             // `supersede_joined_fb_leaf` returning `None` printed NOTHING, so a boot showing

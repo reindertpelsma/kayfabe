@@ -56,8 +56,8 @@ use kayfabe_arch::{
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
-    ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
-    Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle,
+    HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
 use kayfabe_vmm::{
@@ -3401,7 +3401,11 @@ impl RmBackend for MockRmBackend {
         let token = self.handle_hi() | n;
         let memory = self.mint();
         // ★★★ w380 — the frame now HAS bytes, and that is what makes a later alias legal.
-        self.ns.lock().expect("ns").joined_frames.insert((phys, len));
+        self.ns
+            .lock()
+            .expect("ns")
+            .joined_frames
+            .insert((phys, len));
         self.record(RmVerb::JoinFbLeaf {
             vas,
             len,

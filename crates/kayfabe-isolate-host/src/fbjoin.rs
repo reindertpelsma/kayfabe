@@ -380,6 +380,10 @@ mod tests {
         assert_eq!(t.token_for(0x1_1000, 0x1_0000), None, "shifted base");
         assert_eq!(t.token_for(0x1_0000, 0x8000), None, "half the frame");
         assert_eq!(t.token_for(0x1_0000, 0x2_0000), None, "two frames' worth");
-        assert_eq!(t.token_for(0x9_0000, 0x1_0000), None, "a frame nobody joined");
+        assert_eq!(
+            t.token_for(0x9_0000, 0x1_0000),
+            None,
+            "a frame nobody joined"
+        );
     }
 }

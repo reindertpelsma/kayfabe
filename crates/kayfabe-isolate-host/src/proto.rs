@@ -906,12 +906,7 @@ impl Envelope {
                 out.extend_from_slice(&phys.to_le_bytes());
                 out.push(*prot);
             }
-            Request::AliasFbLeaf {
-                vas,
-                len,
-                at,
-                phys,
-            } => {
+            Request::AliasFbLeaf { vas, len, at, phys } => {
                 // ⊘ **23, and 22 was TAKEN.** `Request::SubdeviceControl` already pushes 22
                 // (`w346`), and the tag list is not ordered, so the collision is invisible by
                 // reading: an alias encoded as 22 decodes as a subdevice control, consumes a
