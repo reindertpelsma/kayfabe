@@ -120,9 +120,14 @@ echo ""
 echo "=== ★★★★★ THE GUEST VERDICT — pre-registered, stated once"
 if [ "$seen" -eq 0 ]; then
   echo "    W384_GUEST_OUTCOME=(D) ⊘ UNMEASURED — not one RUNG_doorbell_latency line. NOT a failure value."
-elif [ "$ctlfail" -gt 0 ] && [ "$pass" -eq 0 ] && [ "$fail" -eq 0 ]; then
-  echo "    W384_GUEST_OUTCOME=(D) ⊘ UNINTERPRETABLE — the rung's positive control failed, so"
-  echo "        every number above is over submissions that carried no work. NOT a red."
+elif [ "$notrun" -gt 0 ] && [ "$pass" -eq 0 ] && [ "$fail" -eq 0 ]; then
+  # ⊘ `NOTRUN` covers TWO different ways of having nothing to say and the rung prints which:
+  #   the positive control did not pass (`RUNGCTL_...=FAIL`), or it did and the loop produced
+  #   no gradeable distribution (`R6 SAMPLES`). Neither is a failure value; both are (D).
+  echo "    W384_GUEST_OUTCOME=(D) ⊘ UNINTERPRETABLE — $notrun of $seen runs printed NOTRUN"
+  echo "        (control_failed_runs=$ctlfail). Either the positive control did not pass — so"
+  echo "        every number is over submissions that carried no work — or too few samples fit"
+  echo "        inside the wall budget to grade and the minimum was not determinate. NOT a red."
 elif [ -z "$FLOOR" ]; then
   echo "    W384_GUEST_OUTCOME=(G) ⊘ UNMEASURED_NO_FLOOR — the distribution is real and the"
   echo "        verdict is not: nothing measured the bare-metal floor this must be a multiple of."

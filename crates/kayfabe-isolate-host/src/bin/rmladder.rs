@@ -7173,6 +7173,14 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
     let mut fresh: Vec<(u64, kayfabe_isolate::HostHandle)> = Vec::new();
     let mut mapped_target = false;
     let mut control_ok = false;
+    // ★★★★★ **A THIRD STATE, AND ITS ABSENCE WAS A REAL DEFECT — caught by the grader's own
+    // negative control, 2026-09-06.** The sample-floor branch printed *"UNMEASURED, and NOT a
+    // failure value"* in prose and then returned `false`, which — with the positive control
+    // PASSING — reached the `else` arm and emitted `RUNG_doorbell_latency=FAIL`. ⇒ **the
+    // anchored machine-readable line said the OPPOSITE of the sentence above it**, and a
+    // grader reads the anchored line. `control_ok` alone cannot express this: the control DID
+    // pass, and there is still nothing to grade.
+    let mut unmeasured = false;
 
     // ⊘ A closure so every early return still reaches the teardown below it. The rung
     // allocates a channel, an object and up to `n` fresh objects; leaking them would make a
@@ -7490,6 +7498,9 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 println!("DBL_ROLE=GRADED_ON_MIN");
                 return false;
             }
+            // ⊘ NOT a red: too few samples AND not determinate on the minimum. See
+            // `unmeasured`'s declaration for the defect this flag exists because of.
+            unmeasured = true;
             println!(
                 "??    R6 SAMPLES          = {} graded samples, floor is {DBL_MIN_SAMPLES}, and \
                  the fastest ({:.1}us) is NOT above the gate ({floor_ref:.1}us) — so the \
@@ -7600,7 +7611,11 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
         "RUNGCTL_doorbell_latency={}",
         if control_ok { "PASS" } else { "FAIL" }
     );
-    if !control_ok {
+    // ⊘ THREE OUTCOMES AND THEY ARE NOT ORDERED BY SEVERITY. `NOTRUN` covers two different
+    // ways of having nothing to say — the control did not pass, or it did and the loop
+    // produced no gradeable distribution — and neither is a failure value. Folding either
+    // into `FAIL` reports a finding that was never measured.
+    if !control_ok || unmeasured {
         println!("RUNG_doorbell_latency=NOTRUN");
     } else if verdict {
         println!("RUNG_doorbell_latency=PASS");
