@@ -781,6 +781,20 @@ const SEMAPHORE_OFFSET: u64 = 0x2000;
 /// caller that guessed the number instead would be guessing at a layout this module owns.
 pub const RACE_FENCE_OFFSET: u64 = 0x3000;
 
+/// ★★★★★ **w381** — offset of the four-byte **source word** a `LAUNCH_DMA` liveness probe
+/// copies FROM, within the channel's own ring object.
+///
+/// ★ A whole page past [`RACE_FENCE_OFFSET`], for that constant's own reason: the fence,
+/// the hardware-written semaphore and this source are written by different parties at
+/// different times, and a length mistake that let one land in another's page would read as
+/// *"the copy never happened"* — which is also what a dead destination mapping looks like.
+/// [`HostRmBackend::copy_probe_offsets`] hands it out so no caller has to guess it.
+///
+/// ⊘ Inside [`RING_OBJECT_BYTES`] and checked against it at every use, because a source
+/// past the ring's end names memory the channel does not own and the copy would succeed
+/// while measuring somebody else's bytes.
+const W381_COPY_SRC_OFFSET: u64 = 0x4000;
+
 /// ★★★★★ **The guest's own ring, as the guest declared it** — the argument that turns
 /// [`HostRmBackend::alloc_channel_at`] from *"a channel with a ring of ours"* into *"a
 /// channel over the ring the guest is already pushing into"*.
@@ -4095,6 +4109,18 @@ impl HostRmBackend {
         Ok(self.stamp(raw))
     }
 
+    /// The `hClient` — the `NV01_ROOT` handle — this backend's connection is rooted at.
+    ///
+    /// ⊘ Exists for exactly one caller: a rung that opens a **second** [`RmConnection`] and
+    /// has to establish that the two are genuinely different clients before it says anything
+    /// about isolation between them. Two backends that turned out to share a root would make
+    /// every cross-client statement about them vacuous, and *"they must be different, we
+    /// opened them separately"* is an assumption, not a measurement.
+    #[must_use]
+    pub fn host_client(&self) -> u32 {
+        self.conn.client()
+    }
+
     /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp
     /// `first, first+step, first+2*step, …`, one word at a time, through a CPU mapping
     /// this call opens and drops.
@@ -6780,6 +6806,125 @@ impl HostRmBackend {
             self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
         }
         self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// ★★★★★ **w381 — THE GUEST-SERVABLE LIVENESS PRIMITIVE.** One `LAUNCH_DMA` that copies
+    /// `len` bytes from an offset inside the channel's **own ring object** to an arbitrary
+    /// GPU VA, and **does not wait**.
+    ///
+    /// # ⊘ Why this exists beside [`HostRmBackend::submit_release_at`], which already works
+    ///
+    /// `submit_release_at` emits the **host-FIFO** semaphore run (`SEM_ADDR_LO/HI/PAYLOAD/
+    /// EXECUTE`), which the chip codec decodes as `kayfabe_arch::PushMethod::SemRelease`.
+    /// The Mode-2 CPU copy-engine emulator decodes that variant and **deliberately does not
+    /// act on it** (`kayfabe-rt/src/ceutils.rs`, the `else` arm of the `CeLaunchDma` let:
+    /// *"a `SemRelease` is deliberately NOT acted on here"*, restated in
+    /// `release_targets_of`). ⇒ **every rung built on `submit_release_at` is unservable
+    /// inside a Mode-2 guest by design**, and its guest arm can never reach its own positive
+    /// control. That is a scope fact about the emulator, not a defect in the guest.
+    ///
+    /// `LAUNCH_DMA` is the one verb that path serves end to end: `run_submission` partitions
+    /// the operands, `cpu_ce::execute_ours_spans` **moves the bytes**, and only then
+    /// `write_resolved_completion` writes the launch's own `SET_SEMAPHORE_A/B/PAYLOAD`
+    /// release. So a copy INTO the address under test has the same falsifiability as a
+    /// release AT it — the bytes are either there or they are not — and it is servable on
+    /// both sides of the differential.
+    ///
+    /// # ★★★ THE SOURCE IS THE CHANNEL'S OWN RING, AND THAT IS THE POINT
+    ///
+    /// `src_ring_off` is an offset **inside the ring object**, exactly as
+    /// [`RACE_FENCE_OFFSET`] is: the ring is mapped in this channel's VA space **before the
+    /// doorbell, by construction**, so a copy that does not land cannot be blamed on the
+    /// source. The only address under test is `dst_va`. ⊘ A source the caller had to map
+    /// itself would put two mappings on the critical path and make a red unattributable —
+    /// which is the failure mode the whole w379 battery is built to avoid.
+    ///
+    /// # ⚠ IT DOES NOT WAIT, AND THE OBSERVABLES ARE ORDERED
+    ///
+    /// Unlike [`HostRmBackend::probe_guest_reachability`]'s internal copy, this returns as
+    /// soon as the doorbell is rung. The caller polls the **destination** — the primary
+    /// observable, *did the payload land* — and may read this channel's own semaphore at
+    /// [`SEMAPHORE_OFFSET`] through [`HostRmBackend::ring_load_u32`] afterwards as a
+    /// **qualifier only**. ⊘ Grading on the cursor instead is how `GP_GET` produced a
+    /// confident, plausible, always-wrong `NeverFetched` on an emulated device that has no
+    /// PBDMA to advance it.
+    ///
+    /// The semaphore word is zeroed before the methods are written, so `sem_payload` being
+    /// present afterwards means **this** submission retired and not a previous one.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; `BAD_ENCODE` if
+    /// the encoded push does not fit one [`PUSHBUFFER_SLOT_BYTES`] slot or an address is
+    /// past the 2^49 ceiling the CE operand fields enforce; whatever the ring stores and the
+    /// submission refuse with.
+    pub fn submit_copy_at(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src_ring_off: u64,
+        dst_va: u64,
+        len: u32,
+        sem_payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        // ⊘ The source must be inside the ring object, checked rather than trusted: an
+        // offset past its end names memory this channel does not own, and the copy would
+        // succeed while measuring somebody else's bytes.
+        if src_ring_off
+            .checked_add(u64::from(len))
+            .is_none_or(|end| end > RING_OBJECT_BYTES)
+        {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let words = ce_pushbuffer(CePush {
+            class_id: self.conn.classes.ce_object(),
+            src: parts.ring_va + src_ring_off,
+            dst: dst_va,
+            len,
+            sem_va,
+            payload: sem_payload,
+            // ⊘ `None` — this probe carries no guest-declared release. The only completion
+            // in it is the launch's own, which is what makes the retirement qualifier
+            // attributable to THIS submission.
+            guest_release: None,
+        })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name — the same trap `probe_copy` records.
+        // The numbers are printed so the next reader does not have to re-derive which of
+        // the two it was.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: w381 COPY-PROBE ⊘ REFUSED — the push is {} bytes and the \
+                 slot is {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an \
+                 encoding one; `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// The offset inside a channel's ring object this crate reserves for a w381 copy
+    /// probe's **source word**, and the semaphore offset its retirement lands on.
+    ///
+    /// ⊘ Exported as a pair because a caller that knew one and guessed the other would be
+    /// guessing at a layout this module owns — [`RACE_FENCE_OFFSET`]'s reason exactly. The
+    /// source sits a whole page past the fence at `0x3000`, so a length mistake in either
+    /// cannot land in the other.
+    #[must_use]
+    pub const fn copy_probe_offsets() -> (u64, u64) {
+        (W381_COPY_SRC_OFFSET, SEMAPHORE_OFFSET)
     }
 
     /// ★★★★★ **The late-map race primitive** — submit `[SEM_ACQUIRE(fence)]
