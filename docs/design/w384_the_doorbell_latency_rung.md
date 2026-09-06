@@ -419,6 +419,74 @@ GPU"* — reproducing from a raw client with no CUDA anywhere. ⇒ `w384_hook.sh
 **prints** its device-open count and warns above four. ⚠ The failure mode is empty output, which
 reads as *"the rung printed nothing"* rather than as *"the device was wedged before it ran"*.
 
+### §4.4 ★★★★★ BEFORE/AFTER `w383-doorbell-async`, ON ONE BOX — AND NOTHING MOVED
+
+The measurement §0's correction block promised: **the same rung and the same scripts over two
+shims**, one built from `30eb4627` (master **before** the async lane merged) and one from
+`758a5752` (**after**), on **the same box `kb2`, within twenty minutes of each other**, with the
+native calibration re-taken for each.
+
+The row to read is the **`n=48` single-lap arm**: it is the only guest arm whose channel is
+healthy from the opening control to the closing one, so it is the only one whose numbers are a
+latency and not a post-mortem.
+
+| | **pre-fix** shim `30eb4627` | **post-fix** shim `758a5752` | change |
+|---|---|---|---|
+| native `submit` p50 (worst of 3) | 3.66 µs | 2.77 µs | — |
+| guest `submit` p50, `n=48` | **1194.95 µs** | **1159.06 µs** | **1.03×** |
+| guest `bare` p50, `n=48` | **192.06 µs** | **183.99 µs** | **1.04×** |
+| guest `freshmap` p50 | 1102.99 µs | 1150.81 µs | 0.96× |
+| guest `drain_ms` over 3 windows | 0.2 | 0.2 | — |
+| `first_stall_at` (`n=64` arm) | **63** | **63** | unchanged |
+| `RUNG_missing_page` | FAIL | FAIL | unchanged |
+
+⇒ ★★★★★ **On the raw client's doorbell path, the async lane's merge changed NOTHING
+measurable — 3 % on the graded arm and 4 % on the bare doorbell, both inside this rung's own
+between-process spread.**
+
+⊘ **That is not a contradiction of `w383 §13`'s *"3.9× less publication wall"* and it must not be
+reported as one.** Those are different subjects: that lane measured the LLM workload's publication
+wall, this rung measures a doorbell rung by an ordinary unprivileged guest process on a channel it
+created itself. What this establishes is the **scope** of the gain — it is not visible here — and
+the scope is exactly the thing a five-second gate needs to state before anyone iterates against it.
+
+### §4.4.1 ⊘⊘⊘ AND IT REFUTES THIS DOCUMENT'S OWN §3 ARGUMENT — THE RATIO IS NOT PORTABLE
+
+§3 justifies the gate as `native_p50 × 1000` on the reasoning that *"any cost that is
+arm-independent divides out"*. **Measured, that is false**, and the two boxes say so directly —
+same GPU (GA106), same driver (580.159.04 open), same binary, same **post-fix** shim:
+
+| box | native `submit` p50 | guest `submit` p50 (`n=48`) | **ratio** |
+|---|---|---|---|
+| `kb` | 9.31 µs | 448.49 µs | **48×** |
+| `kb2` | 2.77 µs | 1159.06 µs | **418×** |
+
+⇒ **8.7× apart.** The two arms move in *opposite* directions between the boxes: `kb2` is **3.4×
+faster natively** and **2.6× slower in the guest**. Native cost is dominated by store latency to
+device memory; guest cost is dominated by VM exits and what the VMM does behind them; **those
+scale with different properties of the host, so they do not cancel.**
+
+⚠ **The consequence is concrete and it is a defect in the gate, not in the boxes.** At 1000× the
+gate has **2.4× of headroom on `kb2` and 21× on `kb`** — the same threshold is nearly tight on one
+machine and nearly meaningless on the other, and nothing in the run says which one you are on.
+
+⊘ **NOT FIXED HERE, DELIBERATELY.** Picking a new rule now would be choosing it from the two data
+points that embarrassed the old one, which is the same mistake in a new place. The options, stated
+for whoever takes it:
+1. a **guest-side** reference — calibrate against this rung's own `n=48` arm on a known-good build
+   of the same box, so both halves of the ratio are guest numbers;
+2. per-box absolute calibration, recorded with the box id;
+3. keep the native ratio but widen the band and stop claiming portability for it.
+★ What survives untouched is everything the gate was NOT load-bearing for: the controls, the
+stall bisection, and the before/after above — none of which consult the threshold at all.
+
+### §4.4.2 ★ THE WEDGE IS OLDER THAN THE ASYNC LANE
+
+`first_stall_at=63` and `n=48` clean / `n=64` wedged reproduce **identically on both shims and on
+both boxes** — four independent (box, device-revision) pairs. ⇒ the `GP_PUT = 0` wedge is **not a
+regression introduced by `w383-doorbell-async`**; it predates it and was simply never reached,
+because nothing in this tree had submitted 64 times on one guest channel before.
+
 ### §4.3 ★★ `missing_page`, RE-ASKED ON BOTH ARMS, and it has NOT moved
 
 ```
