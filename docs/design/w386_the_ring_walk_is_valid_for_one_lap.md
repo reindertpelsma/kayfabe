@@ -1,8 +1,10 @@
 # w386 — THE GPFIFO RING WALK IS VALID FOR EXACTLY ONE LAP
 
-**STATUS — 2026-09-06 — LIVE.** Fix merged to master at `65af51eb`, verified at the logic
-level. The **hardware arm is PRE-REGISTERED BELOW AND NOT YET RUN**; nothing here claims the
-guest bug is fixed.
+**STATUS — 2026-09-06 — LIVE. HARDWARE ARM RUN: OUTCOME (A), the pre-registered one.** The
+wrap is fixed on a real GA106 (§9). ⊘ **A SEPARATE AND UNRESOLVED QUESTION OPENED IN THE SAME
+RUN**: the LLM's output text is degenerate under *greedy* decoding while its token COUNT
+passes — see §10. That is **not** attributed to this fix, and §9's instrument argues against
+it, but it is not cleared either. Do not read §9 as "the LLM is fine".
 
 ## 1. The defect
 
@@ -181,3 +183,92 @@ rows (`entries != 1` **or** the walk wrapped) have separate budgets. A single ca
 hidden exactly the rows the defect produces — a 1024-entry ring wraps at doorbell 1023, a
 thousand ordinary rows after any budget is spent. Same class as the global cap that forged an
 absence in w383. `gp=7->7` while `entries=8` is the signature.
+
+## 9. ★★★★★ THE HARDWARE ARM — OUTCOME (A), MEASURED ON A REAL GA106
+
+Built at `95556ff1`, stamp checked in the binary (`kayfabe-rev:95556ff1…` == HEAD, so this is
+not the stale-binary trap). Lane `w386a`, `KAYFABE_CE_EXECUTOR=local` — the same configuration
+the failing run used.
+
+| | before (`5756322d`) | after (`95556ff1`) |
+|---|---|---|
+| `first_stall_at` | rep0 **63**, rep1 **15**, rep2 **15** | **`none`**, all 3 reps × 3 invocations |
+| `stalled_reps` / `timeouts` | 3 / 3 | **0 / 0** |
+| drains completed | 6 | **96** |
+| `R6 control (close)` | `Lost { saw: 0xDEAD0384 }` | **`Landed`** |
+| submissions graded | truncated at the wrap | **n=1536** |
+
+★ 1536 submissions on a 64-entry ring is **eight full laps**, where it previously died at the
+first. ★★ `RingProducerCursorUnknown` **did not fire** — §3.1's named risk stayed theoretical
+on this hardware.
+
+### 9.1 The new instrument, and what it independently establishes
+
+Every `CE-SERVED-LOCAL` row in the boot:
+
+```
+CE-SERVED-LOCAL #1 token=0x00010002 proc=0 chan=1 entries=1 gp=0->1 gp_put=1 ring_entries=4096
+CE-SERVED-LOCAL #2 token=0x00010002 proc=0 chan=1 entries=1 gp=1->2 gp_put=2 ring_entries=4096
+```
+
+**`entries=1` on every row, cursor tracking the producer exactly, and ZERO `⚠ODD` rows**
+(the budget that catches `entries != 1` or a wrapped walk). The pre-fix signature would have
+been `gp=7->7` with `entries=8`.
+
+⇒ The executor consumes exactly what the guest submitted, and **drops nothing** — which is the
+half of the fix that a stall-position measurement alone could not have shown.
+
+### 9.2 ⊘ What (A) does NOT buy
+
+**NOT a performance result.** `DBL_RATIO_X = 74.0 / 55.5 / 56.6`; guest doorbell p50 ~512–683 µs
+against a native ~9 µs floor, i.e. still **55–74× native**. It grades `PASS` only because that
+gate is set at 1000×. The launch floor is untouched by this rung and remains the binding
+constraint on throughput.
+
+## 10. ⊘⊘ OPEN — THE LLM'S TOKEN COUNT PASSES AND ITS TEXT DOES NOT
+
+Same boot revision, async lane off (the safe arm):
+
+```
+LLM_OK=1  LLM_TOKENS=16  LLM_MS=573799.8
+LLM_TEXT= ，ize'sus(,.- A的  :
+```
+
+against w383's, on the same probe:
+
+```
+LLM_TEXT= ______. A. Paris B. London C. New York D
+```
+
+★★★ **Decoding is GREEDY** — `model.generate(**ids, max_new_tokens=NTOK, do_sample=False)`
+(`scripts/bench/provision_guest_llm.sh:70`). At a fixed revision and prompt the text is
+therefore **required to be identical run to run**; it is not sampling noise.
+
+⚠ **`LLM_TOKENS=16` is a COUNT, and a count cannot see a substitution.** The rung's headline
+grade (`LLM_TOKENS_GRADE=16`) passes on a run whose output is degenerate. This is the same
+class as `a_count_cannot_see_a_substitution`, arriving at the grade layer rather than the
+counter layer.
+
+**What is simultaneously true and must not be waved away:**
+- `W382_MINMM_OK=1  W382_MINMM_SUM=64` — the un-forgeable minimal-matmul check **passes**.
+- `host Xid lines = [0]` — **zero new host Xids**. Nothing faulted.
+- §9.1's instrument shows the CE plane consuming exactly one entry per doorbell, dropping
+  nothing.
+- `LLM_MS` 722 820 → 573 800 and `inline_exceptions` 61 865 → 31 901: this boot was *faster*.
+
+⊘ **NOT ATTRIBUTED.** The LLM's matmuls run on **GR**, not on the CPU CE executor §9.1
+instruments, so §9.1 exonerates the CE plane and says nothing about the compute plane. And
+there is **n=1 on each side** — this tree's own `a_single_boot_43_has_a_20pc_false_negative_rate`
+says a single boot is not a grade. Candidate readings, none established:
+1. w386 changed which work executes on some path (⊘ argued against by 9.1, not excluded);
+2. the LLM text was **never stable** across boots and w383's coherent line was one draw;
+3. prompt/model state differs between the two trees.
+
+**The discriminator, running now:** repeat the LLM at this fixed revision (`w386llm2`,
+`w386llm3`). Under greedy decoding, identical text across repeats ⇒ reading 2 is dead and the
+difference is revision-linked; differing text across repeats at ONE revision ⇒ reading 2 is
+confirmed, the "LLM passes" milestone is weaker than recorded, and the grade needs a text
+assertion, not a count.
+
+⚠ **Whatever the answer, the grade is defective as it stands**: a workload whose output is
+garbage must not report `LLM_OK=1`. That is true independently of what caused this run.
