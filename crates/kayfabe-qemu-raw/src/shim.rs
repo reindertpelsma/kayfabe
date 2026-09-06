@@ -8633,6 +8633,27 @@ impl SharedDoorbell {
     /// address table holds) · `HOST-PUBLISHED` (what is actually backed in the host VAS) ·
     /// `PROMOTE-PARKED` (halves the promote control is holding).
     ///
+    /// # ★★★★★ w378 — **AND A FIFTH CLAUSE THAT IS A PREDICATE, NOT A PICTURE**
+    ///
+    /// The four rows above are **descriptions**, and `w377` §3 blocker (5) is that none of
+    /// them can decide *"is publication complete?"*. `HOST-PUBLISHED` reports
+    /// `host_rows=N of M` — a **cardinality**, and the owner's correction is that cardinality
+    /// is not the question: *"the only thing that matters is that the same ranges are mapped,
+    /// not the amount of exercised mmaps."* Beside it the sweep's `refused_vas` prints
+    /// `⚠⚠ CAPPED at 24 of 255 distinct`, a **sample**. A sample cannot certify a universal
+    /// and a count cannot distinguish two shapes of the same coverage, so a fix and a
+    /// coincidence read identically.
+    ///
+    /// ⇒ `COVERAGE` / `COVERAGE-VAS` carry [`kayfabe_rt::device::SharedDevice::vas_coverage`]:
+    /// `declared ⊆ published` as **one boolean per address space**, the residual
+    /// `declared \ published` as a merged interval list with an exact byte count, and the
+    /// excess `published \ declared` so legitimate over-cover is visible rather than silent.
+    ///
+    /// ★★★ **The cap moved.** [`PT_COVERAGE_INTERVAL_CAP`] truncates only the printed
+    /// interval lists; `COVERED=`, `residual_bytes=` and `residual_intervals=` are computed
+    /// over every element and are exact at any cap. The defect being replaced is that the cap
+    /// and the computation were the same loop.
+    ///
     /// # ⊘⊘⊘ CORRECTED 2026-08-14 (w313) — **THE SWEEP IS BACK. THE CENSUS SPLIT IS NOT.**
     ///
     /// The block below says `sweep_cpu_pt_tables` "is gone". It is not: it was **restored at
@@ -8674,11 +8695,16 @@ impl SharedDoorbell {
             Vec::<String>::new(),
             Vec::<String>::new(),
         );
+        // ★★★★★ **THE COVERAGE PREDICATE — see [`Self::vas_census`]' w378 block above.**
+        // Computed over EVERY row; `PT_COVERAGE_INTERVAL_CAP` reaches only the printed
+        // interval lists, never the counts or the boolean.
+        let mut cov: Vec<kayfabe_rt::device::VasCoverage> = Vec::new();
         for pid in &pids {
             reach.extend(self.device.vas_reachable_ranges(*pid, PT_SWEEP_RANGE_CAP));
             table.extend(self.device.vas_table_ranges(*pid, PT_SWEEP_RANGE_CAP));
             published.extend(self.device.vas_published_ranges(*pid, PT_SWEEP_RANGE_CAP));
             parked.extend(self.device.vas_promote_halves(*pid));
+            cov.extend(self.device.vas_coverage(*pid));
         }
         let none = |v: &Vec<String>, what: &str| {
             if v.is_empty() {
@@ -8687,14 +8713,20 @@ impl SharedDoorbell {
                 v.join(" ")
             }
         };
+        let verdicts: Vec<String> = cov
+            .iter()
+            .map(|c| c.render(PT_COVERAGE_INTERVAL_CAP))
+            .collect();
         format!(
             " | VAS-CENSUS procs={} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {} \
-             | HOST-PUBLISHED {} | PROMOTE-PARKED {}",
+             | HOST-PUBLISHED {} | PROMOTE-PARKED {} | COVERAGE {} | COVERAGE-VAS {}",
             pids.len(),
             none(&reach, "reachable"),
             none(&table, "in the table"),
             none(&published, "published"),
             none(&parked, "parked"),
+            kayfabe_rt::device::coverage_aggregate_line(&cov),
+            none(&verdicts, "covered"),
         )
     }
 
@@ -15313,6 +15345,21 @@ fn completion_pin_armed() -> bool {
 const VAS_PUBLISH_WALL_BUDGET: std::time::Duration = std::time::Duration::from_millis(2000);
 
 const PT_SWEEP_RANGE_CAP: usize = 48;
+
+/// ★★★ **HOW MANY RESIDUAL/EXCESS INTERVALS THE COVERAGE VERDICT PRINTS — a PRINT bound, and
+/// it is the only kind of bound in that line.**
+///
+/// ⊘⊘ Read this constant next to [`PT_SWEEP_REFUSAL_CAP`], which it deliberately does not
+/// resemble. That one caps a **list that IS the answer** — `refused_vas` has no count beside
+/// it that survives the truncation, which is why its own warning has to say *"an address
+/// ABSENT from this list is NOT thereby un-refused"*. This one caps a list that stands beside
+/// `COVERED=`, `residual_bytes=` and `residual_intervals=`, **all three computed over every
+/// element**. A reader may distrust the list here and still trust the verdict; there, the
+/// list was all there was.
+///
+/// ⇒ `w377` §3 blocker (5), and the rule it turns on: **a cap may truncate what is PRINTED,
+/// it must never truncate what is COMPUTED.**
+const PT_COVERAGE_INTERVAL_CAP: usize = 8;
 
 /// How many DISTINCT refused virtual addresses one sweep line may list. See the refusal block
 /// in [`SharedDoorbell::sweep_cpu_pt_tables`] — an address absent from a capped list is not
