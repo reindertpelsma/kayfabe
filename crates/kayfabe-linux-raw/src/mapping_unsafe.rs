@@ -499,7 +499,7 @@ impl MappedRegion {
     /// what the knob says — and that fact is derivable from the pointer alone, so it stays
     /// available on a host where `smaps` is not.
     /// `[measured 2026-08-19]` on this bench the kernel aligns every shmem mapping of
-    /// >= 2 MiB by itself, and 64 KiB / 512 KiB leaves came back **0 % even when forced to a
+    /// `>= 2 MiB` by itself, and 64 KiB / 512 KiB leaves came back **0 % even when forced to a
     /// 2 MiB-aligned base** — they are simply too short. ⇒ **a leaf under 2 MiB is out of
     /// scope for this call, and that is a property of the leaf, not a failure.**
     ///
@@ -532,7 +532,7 @@ impl MappedRegion {
         }
         Ok(HugePageReport {
             pmd_backed: pmd_mapped_bytes(base as usize, len),
-            base_2m_aligned: (base as usize) % (2 * 1024 * 1024) == 0,
+            base_2m_aligned: (base as usize).is_multiple_of(2 * 1024 * 1024),
             len: len as u64,
         })
     }
