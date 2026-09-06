@@ -319,6 +319,24 @@ passed with 1 886 overlaps, which is the strongest preemption-inside-a-lock samp
   (48 workers, 4 cores) is `p50=6 652 µs p99=57 010 µs max=110 446 µs` — a 20× median and a
   94× tail, which is the over-subscription doing what it was asked to do.
 
+### §4.3b ⚠ ONE HARNESS TRAP, MEASURED, BECAUSE IT READ EXACTLY LIKE A REGRESSION
+
+The first `cargo test --workspace --no-fail-fast` on the bench box returned **19 failing
+targets** against a documented baseline of **3**. Sixteen of the sixteen extra ones were
+`traces/`-dependent (`cap1_differential`, `real_ga106_bodies`, `truncated_row_reads`,
+`initctrl_census`, `replay_conformance`, …) and the cause was the **rsync that put the tree on
+the box**: it carried `--exclude traces`, so a 93 MB directory the suite reads as its oracle
+was simply not there. The failure message says so plainly once you look —
+*"trace …/rpc_bodies_real_ga106.txt unreadable: No such file or directory"* — but the
+**shape** of the result, a failure set that grew by 16 under a branch, reads as a regression
+and nothing about the count itself distinguishes the two.
+
+⇒ ★ **A test suite's failure set is a statement about the TREE it ran on, not only about the
+diff.** An incomplete checkout manufactures reds that are indistinguishable from real ones by
+count, and the number is the first thing anybody looks at. The re-run with `traces/` present
+is the one that means anything, and *which tree it ran on* is part of the citation exactly as
+`a_rulings_date_is_part_of_the_citation.md` says the date is.
+
 ### §4.4 ⊘ WHAT THE GREENS DO **NOT** SAY
 
 - Nothing about `l1_concurrency.md` §3.3 R1 as a **live** check — see §1. Both asserts are on
