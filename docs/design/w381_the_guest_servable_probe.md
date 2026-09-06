@@ -347,3 +347,22 @@ disposition, not a conclusion.
   request families known to take different paths inside RM and asserts the mix is inert.
   Asserting the crossing would need an instrument inside the device; claiming it without one
   would be the `pde_info` mistake in a new place.
+
+## §6 THE BRANCH'S OWN HEALTH — checked against a `HEAD~1` baseline, not asserted
+
+- **`cargo test --workspace --all-targets --features host-isolates --no-fail-fast`**, on the
+  bench, at `4a501a7f`: **234 test binaries ran**, and exactly **three targets fail** —
+  `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
+  `ring_out_of_our_own_framebuffer` (6 tests). That is **the same set master already fails,
+  not a superset**. ⚠ `--no-fail-fast` is not optional here: without it `cargo test` stops at
+  the first failing *target* and reports a stopping point rather than a result, and the binary
+  count is what makes "the list shrank" distinguishable from "the list was truncated".
+- **`rustfmt --check`**: 4 hunks in `rmladder.rs` and 1 in `rm.rs` — byte-for-byte the same
+  hunks the `16ba2738` baseline has, none of them in a range this branch touches.
+- **`cargo clippy -p kayfabe-isolate-host --all-targets`**: the only warnings are the
+  pre-existing ones (`rmladder.rs:324`, `rm.rs`'s two collapsible `if`s, `export.rs:97`'s
+  missing doc). ⊘ `--features host-isolates` does **not** exist on this package — it belongs
+  to `kayfabe-qemu-raw`, and passing it makes clippy fail with a *feature* error that reads
+  like a lint failure.
+- ⚠ **Nothing in `kayfabe-rt/src/ceutils.rs` was changed, and nothing needed to be.** The
+  emulator's `SemRelease` decision is correct as written; the probe was built to fit it.
