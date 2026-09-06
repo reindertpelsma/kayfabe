@@ -767,6 +767,20 @@ const PUSHBUFFER_SLOTS: u64 = (GPFIFO_OFFSET - PUSHBUFFER_OFFSET) / PUSHBUFFER_S
 /// a broken doorbell looks like.
 const SEMAPHORE_OFFSET: u64 = 0x2000;
 
+/// Offset of the **CPU-written fence** [`HostRmBackend::submit_fenced_release`] acquires
+/// on, within the ring object.
+///
+/// ★ A whole page past [`SEMAPHORE_OFFSET`], for that constant's own reason: the fence and
+/// the hardware-written semaphore are written by *different parties* — the CPU and the
+/// engine — and a length mistake that let one land in the other's page would read as
+/// "the acquire passed on its own", which is precisely the false pass the late-map race
+/// rung has to be unable to produce.
+///
+/// ⊘ Exported because the rung that opens the race window must store to this offset
+/// itself ([`HostRmBackend::ring_store_u32`]) between the doorbell and the release. A
+/// caller that guessed the number instead would be guessing at a layout this module owns.
+pub const RACE_FENCE_OFFSET: u64 = 0x3000;
+
 /// ★★★★★ **The guest's own ring, as the guest declared it** — the argument that turns
 /// [`HostRmBackend::alloc_channel_at`] from *"a channel with a ring of ours"* into *"a
 /// channel over the ring the guest is already pushing into"*.
@@ -6696,6 +6710,207 @@ impl HostRmBackend {
 
         self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)?;
         self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, timeout)
+    }
+
+    /// ★★★★★ **w379 — one `SEM_RELEASE` to a CALLER-CHOSEN GPU VA, with no acquire in
+    /// front of it.**
+    ///
+    /// [`Self::submit_semaphore_probe`] releases to the channel's **own ring** semaphore,
+    /// which is mapped by construction and therefore cannot ask a question about a mapping.
+    /// [`Self::submit_fenced_release`] does take a caller VA, but it emits a `SEM_ACQUIRE`
+    /// first — and an acquire is a second thing that can fail, in a way that looks exactly
+    /// like the first.
+    ///
+    /// This verb is the minimal probe for *"does this VA resolve for a real engine?"*: two
+    /// address words, a payload and one `SEM_EXECUTE`. If the payload appears at `target_va`
+    /// the address resolved; if it does not, either it did not resolve or the engine never
+    /// ran, and the caller's own controls are what separate those.
+    ///
+    /// ⊘ **It does not wait**, because the memory it writes is the caller's and this
+    /// backend has no mapping of it. [`Self::read_words_independently`] on the object the
+    /// caller mapped is the read side, and it is deliberately a *different* object handle
+    /// from anything this call touches.
+    ///
+    /// ⚠ **Measured limit, w379, and it decides where this verb can be used.** On the
+    /// Mode-2 emulated device the CPU copy-engine emulator **decodes** `PushMethod::
+    /// SemRelease` and deliberately does not act on it — *"a `SemRelease` is deliberately
+    /// NOT acted on here: it is the host semaphore … and advancing it would satisfy our own
+    /// counters while the guest spins on the word above it"*
+    /// (`kayfabe-rt/src/ceutils.rs:677-679`). ⇒ A probe built on this verb measures **real
+    /// hardware** and is structurally unservable inside a Mode-2 guest, on every
+    /// configuration. That is a statement about the emulator's deliberate scope, not a
+    /// defect, and a rung using it must say so rather than report the guest arm as a red.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; [`BAD_ENCODE`] if
+    /// `target_va` is at or above the 2^40 ceiling `SEM_ADDR_HI`'s eight bits enforce, or is
+    /// not dword-aligned; whatever the ring stores and the submission refuse with.
+    pub fn submit_release_at(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        target_va: u64,
+        payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // The same five-method incrementing run `submit_semaphore_probe` uses, with the
+        // address the caller named instead of our own ring's.
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        if target_va >= 1 << 40 || !target_va.is_multiple_of(4) {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let words = [
+            header,
+            (target_va & 0xFFFF_FFFC) as u32,
+            ((target_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// ★★★★★ **The late-map race primitive** — submit `[SEM_ACQUIRE(fence)]
+    /// [SEM_RELEASE(target)]` and **return the instant the doorbell is rung**, with the
+    /// channel stalled inside the acquire.
+    ///
+    /// The two methods separate the two events the doorbell normally fuses:
+    ///
+    /// - the **submission** (doorbell rung, entry fetched, engine running), and
+    /// - the **first touch of `target_va`** (gated on a semaphore only the CPU can satisfy).
+    ///
+    /// Between them the caller may do anything — map memory, allocate, publish — and then
+    /// release the fence with a plain store. That window is the experiment: work already
+    /// admitted to a running channel reaches an address that was **not mapped when the
+    /// doorbell was rung**, and no further doorbell is ever sent.
+    ///
+    /// ⚠ **This call deliberately does not wait, and that makes it the only verb here that
+    /// can leave hardware wedged.** An acquire whose fence is never written stalls the
+    /// channel indefinitely; RM's robust-channel timeout is what eventually reclaims it.
+    /// Every caller must either write the fence or free the channel, on **all** paths
+    /// including the error ones.
+    ///
+    /// `fence_off` is an offset **inside the channel's own ring object** — so the fence is
+    /// reachable by both the CPU ([`Self::ring_store_u32`]) and the engine, and is mapped
+    /// before the doorbell by construction. `target_va` is a raw GPU VA and is expressly
+    /// *not* required to be mapped at call time.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; [`BAD_ENCODE`]
+    /// if either address is at or above the 2^40 ceiling `SEM_ADDR_HI`'s eight bits
+    /// enforce, or is not dword-aligned; whatever the ring stores and the submission
+    /// refuse with.
+    pub fn submit_fenced_release(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        fence_off: u64,
+        fence_val: u32,
+        target_va: u64,
+        payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let fence_va = parts.ring_va + fence_off;
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // ★ BOTH addresses, not just the fence. `SEM_ADDR_HI` is eight bits, so a VA above
+        // 2^40 is silently truncated into someone else's page — and for `target_va`, which
+        // this rung deliberately leaves unmapped, a truncated address would fault at a
+        // location that has nothing to do with the experiment.
+        for va in [fence_va, target_va] {
+            if va >= 1 << 40 || !va.is_multiple_of(4) {
+                return Err(RmError::Other(BAD_ENCODE));
+            }
+        }
+
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        let words = [
+            // 1 — ACQUIRE. The channel stalls here until the fence word equals `fence_val`.
+            header,
+            (fence_va & 0xFFFF_FFFC) as u32,
+            ((fence_va >> 32) & 0xFF) as u32,
+            fence_val,
+            0,
+            fifo::SEM_EXECUTE_ACQUIRE_32BIT,
+            // 2 — RELEASE into `target_va`, which may not be mapped yet. If it still is not
+            // when the acquire passes, THIS is the method that faults, and it faults as a
+            // VIRT_WRITE — the same shape the LLM wall reports.
+            header,
+            (target_va & 0xFFFF_FFFC) as u32,
+            ((target_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        // ⊘ Two methods must still fit one slot; `PUSHBUFFER_SLOT_BYTES` is the region a
+        // slot owns and overrunning it writes into the next slot's methods.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+
+        // ⊘ No `await_semaphore`. The caller owns the window that opens here.
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// Map memory this isolate owns into one of its own VA spaces, optionally **at** a
+    /// dictated address.
+    ///
+    /// `at = Some(va)` sets `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`; `at = None` lets RM
+    /// choose. Either way the **returned VA is the one RM wrote back**, never the one that
+    /// was asked for — a caller that dictates an address must compare, because a silently
+    /// relocated mapping is what [`RmError::PlacementRefused`] exists to catch and this
+    /// thin verb deliberately does not judge for you.
+    ///
+    /// ⊘ [`RmConnection::raw_map_dma`] and **not** `map_dma_both`: this publishes into one
+    /// space only. Callers standing a buffer in for guest memory want exactly that; a
+    /// caller that also wants the isolate-facing view wants the other verb.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection never minted; whatever
+    /// `NV_ESC_RM_MAP_MEMORY_DMA` refuses with.
+    pub fn map_local_at(
+        &self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: Option<u64>,
+    ) -> Result<u64, RmError> {
+        let range = self.narrow(vas)?;
+        let obj = self.narrow(memory)?;
+        self.conn.raw_map_dma(range, obj, len, at)
+    }
+
+    /// Undo one [`Self::map_local_at`]. The VA must be the one RM **returned**, not the one
+    /// that was requested.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` this connection never minted; whatever
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` refuses with.
+    pub fn unmap_local(&self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
+        let range = self.narrow(vas)?;
+        self.conn.raw_unmap_dma(range, gpu_va)
     }
 
     /// Publish one GPFIFO entry and ring for it: entry → fence → `GP_PUT` → fence →
