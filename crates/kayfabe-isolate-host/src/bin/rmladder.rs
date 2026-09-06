@@ -5393,6 +5393,261 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
     }
 }
 
+/// ★★★★★ **w379 R5 — THE STRESS RUNG: many alloc/map/free cycles, INTERLEAVED, with a
+/// rolling window of live mappings.**
+///
+/// The owner's ask was a *"mean stress test"*, and the four things it has to be able to see
+/// are named up front so the rung can be checked against its own claims:
+///
+/// ```text
+///   handle recycling collisions  -> a recycled object must read as its OWN sentinel, never
+///                                   as the magic the previous tenant of that VA released
+///   extents drifting             -> every cycle maps the same length at the same VA and
+///                                   asserts the placement is EXACT, every time
+///   rows leaking after free      -> after each unmap the VA must probe Free again
+///   interference between live
+///   mappings                     -> every live slot is re-released EVERY cycle, so a
+///                                   mapping broken by a LATER one is caught at the cycle
+///                                   that broke it rather than at teardown
+/// ```
+///
+/// ★★ **The window is what makes this a stress rung rather than a loop.** Four slots are
+/// live at once and the allocations are recycled out from under each other, so allocate,
+/// map, free and unmap are **interleaved** instead of strictly nested. A strictly nested
+/// loop exercises one object at a time and cannot see any of the four failures above.
+///
+/// ⊘ **WHAT THIS RUNG DOES NOT COVER, STATED SO IT IS NOT READ AS COVERAGE.**
+/// **Cross-client leakage is NOT tested here.** *"Two guest processes must not see each
+/// other's mappings"* is a standing security requirement and it needs a **second RM client**
+/// — a second `HostRmBackend` over a second connection — which this binary builds exactly
+/// one of. A rung that ran one client and reported on two would be worse than no rung.
+/// ⚠ Named as the follow-up, not left implied.
+fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    /// Live mappings held at once. Four, so allocate/free interleave rather than nest.
+    const SLOTS: usize = 4;
+    /// Cycles. Each recycles ONE slot and re-releases through ALL of them.
+    const CYCLES: usize = 48;
+    const RING_AT: u64 = 0x0000_0006_9100_0000;
+    /// The slot VAs: 4 GiB apart, so no slot's mapping can be covered by a neighbour's big
+    /// PTE — the confound `alias_two_vas` avoids for the same reason.
+    const SLOT_BASE: u64 = 0x0000_000B_1100_0000;
+    const SLOT_STRIDE: u64 = 0x0000_0001_0000_0000;
+
+    println!(
+        "info  R5 stress           = GPU {gpu}, euid {} — {CYCLES} cycles over {SLOTS} \
+         interleaved live mappings, recycling one slot per cycle",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R5 the bar          = every release lands, every placement is EXACT, every \
+         freed VA probes Free again, and a recycled object reads as its OWN sentinel"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R5 engine           = COPY0 is not expressible");
+        println!("RUNGCTL_map_stress=FAIL");
+        println!("RUNG_map_stress=NOTRUN");
+        return false;
+    };
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R5 vaspace          = the rung needs its own address space");
+        println!("RUNGCTL_map_stress=FAIL");
+        println!("RUNG_map_stress=NOTRUN");
+        return false;
+    };
+    let space = vas.raw() as u32;
+
+    // ⊘ EXACT COUNTS over a fixed denominator, and the failure lists are CAPPED while the
+    // counts are not — a sample that hid the total would be the *"a capped list is not a
+    // census"* failure this repo has paid for.
+    const SHOW: usize = 5;
+    let mut cycles_run = 0usize;
+    let mut rel_tried = 0usize;
+    let mut rel_landed = 0usize;
+    let mut placed_exact = 0usize;
+    let mut placed_tried = 0usize;
+    let mut free_ok = 0usize;
+    let mut free_tried = 0usize;
+    let mut stale_reads = 0usize;
+    let mut first_failures: Vec<String> = Vec::new();
+    let mut control_ok = false;
+
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    // (object, va, the magic its last release wrote)
+    let mut slots: Vec<Option<(kayfabe_isolate::HostHandle, u64, u32)>> = vec![None; SLOTS];
+
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) else {
+            println!("??    R5 channel          = refused at {RING_AT:#018x}");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.schedule(chan).is_err() {
+            println!("??    R5 schedule         = refused");
+            return false;
+        }
+
+        for cycle in 0..CYCLES {
+            let s = cycle % SLOTS;
+            let va = SLOT_BASE + (s as u64) * SLOT_STRIDE;
+
+            // ── retire the slot's current tenant, and assert the VA comes back ───────────
+            if let Some((old_mem, old_va, _)) = slots[s].take() {
+                let un = rm.unmap_local(vas, old_va).is_ok();
+                let _ = rm.free(old_mem);
+                free_tried += 1;
+                let probe = rm.probe_va(space, old_va, W379_BYTES);
+                if un && matches!(probe, Ok(kayfabe_isolate_host::rm::VaProbe::Free)) {
+                    free_ok += 1;
+                } else if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle}: VA {old_va:#018x} did not come back after free \
+                         (unmap_ok={un}, probe={probe:?})"
+                    ));
+                }
+            }
+
+            // ── a fresh tenant, sentinel-filled BEFORE it is mapped ─────────────────────
+            let Ok(mem) = rm.alloc_probe_local(W379_BYTES) else {
+                if first_failures.len() < SHOW {
+                    first_failures.push(format!("cycle {cycle}: allocation refused"));
+                }
+                continue;
+            };
+            if rm.fill_words(mem, W379_BYTES, W379_SENTINEL, 0).is_err() {
+                let _ = rm.free(mem);
+                continue;
+            }
+            placed_tried += 1;
+            let got = match rm.map_local_at(vas, mem, W379_BYTES, Some(va)) {
+                Ok(g) => g,
+                Err(e) => {
+                    if first_failures.len() < SHOW {
+                        first_failures.push(format!("cycle {cycle}: map at {va:#018x} refused {e:?}"));
+                    }
+                    let _ = rm.free(mem);
+                    continue;
+                }
+            };
+            if got == va {
+                placed_exact += 1;
+            } else if first_failures.len() < SHOW {
+                first_failures.push(format!(
+                    "cycle {cycle}: EXTENT/PLACEMENT DRIFT — asked {va:#018x}, got {got:#018x}"
+                ));
+            }
+
+            // ★ HANDLE RECYCLING: the fresh object must read as its OWN sentinel. If RM
+            // handed back the previous tenant's storage, or if our mapping still names it,
+            // the word here is the magic that tenant released — a value this new object has
+            // no other way to hold.
+            if let Ok(w) = rm.read_words_independently(mem, W379_BYTES, &[W379_OFF_A])
+                && w[0] != W379_SENTINEL
+            {
+                stale_reads += 1;
+                if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle}: STALE READ at {va:#018x} — fresh object holds \
+                         {:#010x}, not the sentinel {W379_SENTINEL:#010x}",
+                        w[0]
+                    ));
+                }
+            }
+            slots[s] = Some((mem, got, 0));
+
+            // ── re-release through EVERY live slot, so a mapping broken by a LATER one is
+            //    caught at the cycle that broke it ────────────────────────────────────────
+            for (i, slot) in slots.iter_mut().enumerate() {
+                let Some((smem, sva, last)) = slot else {
+                    continue;
+                };
+                // A payload unique to (cycle, slot): a stale word from the previous release
+                // can never satisfy it.
+                let payload = 0x5715_0000u32 | ((cycle as u32) << 4) | (i as u32);
+                rel_tried += 1;
+                let out = w379_release_through(rm, chan, token, *smem, *sva, W379_OFF_A, payload);
+                if out.landed() {
+                    rel_landed += 1;
+                    *last = payload;
+                    if !control_ok {
+                        control_ok = true;
+                        println!(
+                            "ok    R5 control          = the first release of the first \
+                             cycle landed — the channel and the ring work, so a later red \
+                             is the mapping plane and not the harness"
+                        );
+                    }
+                } else if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle} slot {i}: release through {sva:#018x} did not land \
+                         ({out:?}, last good {last:#010x})"
+                    ));
+                }
+            }
+            cycles_run += 1;
+        }
+        true
+    };
+
+    let ran = go();
+
+    for slot in slots.iter().flatten() {
+        let _ = rm.unmap_local(vas, slot.1);
+        let _ = rm.free(slot.0);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "info  R5 census           = cycles {cycles_run}/{CYCLES}  releases \
+         {rel_landed}/{rel_tried}  placements exact {placed_exact}/{placed_tried}  \
+         VAs recovered {free_ok}/{free_tried}  stale reads {stale_reads}"
+    );
+    if !first_failures.is_empty() {
+        println!(
+            "⚠     R5 failures         = showing {} of {} recorded",
+            first_failures.len().min(SHOW),
+            first_failures.len()
+        );
+        for f in first_failures.iter().take(SHOW) {
+            println!("        {f}");
+        }
+    }
+
+    let clean = ran
+        && cycles_run == CYCLES
+        && rel_tried > 0
+        && rel_landed == rel_tried
+        && placed_exact == placed_tried
+        && free_ok == free_tried
+        && stale_reads == 0;
+    if clean {
+        println!(
+            "★     R5 STRESS CLEAN     = {rel_landed} releases over {cycles_run} \
+             interleaved cycles, every placement exact, every freed VA recovered, no stale \
+             read. ⊘ Single-client only — cross-client leakage is NOT covered here"
+        );
+    }
+
+    println!(
+        "RUNGCTL_map_stress={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_map_stress={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if clean {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    clean
+}
+
 /// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
 /// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
 fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
@@ -5451,6 +5706,7 @@ fn main() -> std::process::ExitCode {
     let mut want_alias_unmap = false;
     let mut want_map_propagation = false;
     let mut want_missing_page = false;
+    let mut want_map_stress = false;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -5517,6 +5773,9 @@ fn main() -> std::process::ExitCode {
             // ⚠ Provokes a real `Xid 31` and kills its victim channel. That is the
             // measurement, not a side effect — which is why it is opt-in.
             "--missing-page-fault" => want_missing_page = true,
+            // ★★★★★ w379 R5 — the stress rung: interleaved alloc/map/free over a rolling
+            // window. ⊘ Single-client; cross-client leakage is NOT covered by it.
+            "--map-stress" => want_map_stress = true,
             // The whole battery, in dependency order: R2 establishes that a dictated
             // mapping lands at all, R1′ asks whether TWO of them can, R1″ asks what an
             // unmap does to the survivor, R3 asks what a MISSING one does to a bystander.
@@ -5525,6 +5784,7 @@ fn main() -> std::process::ExitCode {
                 want_alias_two_vas = true;
                 want_alias_unmap = true;
                 want_missing_page = true;
+                want_map_stress = true;
             }
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
@@ -5830,7 +6090,12 @@ fn main() -> std::process::ExitCode {
     // every rung allocates its own `Vas`, its own channel and its own objects at addresses
     // no other rung uses, so an outcome is attributable to THIS rung's placements and to
     // nothing earlier in the ladder.
-    if want_map_propagation || want_alias_two_vas || want_alias_unmap || want_missing_page {
+    if want_map_propagation
+        || want_alias_two_vas
+        || want_alias_unmap
+        || want_missing_page
+        || want_map_stress
+    {
         println!(
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
@@ -5851,6 +6116,9 @@ fn main() -> std::process::ExitCode {
         if !want_missing_page {
             println!("RUNG_missing_page=NOTRUN");
         }
+        if !want_map_stress {
+            println!("RUNG_map_stress=NOTRUN");
+        }
         // ⚠ Each rung runs and its result is recorded; none short-circuits the next. A
         // battery that stopped at the first red would report a stopping point rather than a
         // result — the exact shape `cargo test --workspace` was caught doing.
@@ -5866,6 +6134,9 @@ fn main() -> std::process::ExitCode {
         }
         if want_missing_page {
             all &= missing_page_fault(&mut rm, gpu);
+        }
+        if want_map_stress {
+            all &= map_stress(&mut rm, gpu);
         }
         println!("done — w379 mapping-plane rungs only");
         return if all {

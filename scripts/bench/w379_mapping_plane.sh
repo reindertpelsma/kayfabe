@@ -12,6 +12,8 @@
 #                              SECOND is mapped. The FB-join aliasing hazard, executable.
 #   RUNG_alias_unmap      R1"  unmap one alias, assert the other survives. The DISCRIMINATOR.
 #   RUNG_missing_page     R3   an unmapped VA under work: CONTAINED, and NAMED.
+#   RUNG_map_stress       R5   interleaved alloc/map/free over a rolling window of four live
+#                              mappings. ⊘ SINGLE-CLIENT — cross-client leakage is NOT covered.
 #
 # ## ★★★ PRE-REGISTERED, BEFORE THE RUN — every outcome, so none reads as the favourable one
 #   (A) every selected rung PASS            => the mapping plane behaves as the driver does.
@@ -84,7 +86,7 @@ echo "==========================================================================
 # ★ The grader reads EXACTLY the lines the rungs print. w377's rung printed prose while its
 #   grader `sed`-ed for `RACEMAP_ARM_A=`, so a passing native run graded as UNMEASURED.
 fail=0; notrun=0; pass=0; seen=0
-for r in map_propagation alias_two_vas alias_unmap missing_page; do
+for r in map_propagation alias_two_vas alias_unmap missing_page map_stress; do
   v=$(sed -n "s/^RUNG_${r}=//p" "$LOG" | tail -1)
   c=$(sed -n "s/^RUNGCTL_${r}=//p" "$LOG" | tail -1)
   printf '    %-18s RUNG=%-8s CONTROL=%s\n' "$r" "${v:-NONE}" "${c:-NONE}"
@@ -97,7 +99,7 @@ for r in map_propagation alias_two_vas alias_unmap missing_page; do
 done
 # ⊘ EXACT COUNTS over a FIXED denominator — a capped list is not a census, and 4 is the
 #   whole vocabulary rather than a sample of it.
-echo "    counts: pass=$pass fail=$fail notrun=$notrun  of 4 rungs, $seen verdict lines seen"
+echo "    counts: pass=$pass fail=$fail notrun=$notrun  of 5 rungs, $seen verdict lines seen"
 
 echo ""
 echo "=== ★★★★★ THE VERDICT — pre-registered, stated once"
@@ -108,14 +110,18 @@ elif [ "$fail" -gt 0 ]; then
 elif [ "$notrun" -gt 0 ] && [ "$pass" -eq 0 ]; then
   echo "    W379_OUTCOME=(C) ⊘ UNINTERPRETABLE — every selected rung's control failed."
 else
-  echo "    W379_OUTCOME=(A) $pass of 4 rungs PASS, $notrun not selected, 0 red."
+  echo "    W379_OUTCOME=(A) $pass of 5 rungs PASS, $notrun not selected, 0 red."
   echo "        ⊘ On BARE METAL this is the CONTROL, not the milestone: it says the driver"
   echo "        permits what the guest does. It says nothing about our emulated path."
 fi
 echo "--- ★★ HARNESS SELF-CHECK — assert THIS block's own inputs exist ---"
 echo "    log bytes         = [$(wc -c < "$LOG" 2>/dev/null)]"
-echo "    RUNG_ lines       = [$(grep -ac '^RUNG_' "$LOG" 2>/dev/null)]  (MUST be 4)"
+echo "    RUNG_ lines       = [$(grep -ac '^RUNG_' "$LOG" 2>/dev/null)]  (MUST be 5)"
 echo "    RUNGCTL_ lines    = [$(grep -ac '^RUNGCTL_' "$LOG" 2>/dev/null)]"
-echo "    Xid lines         = [$(grep -ac 'Xid' "$LOG" 2>/dev/null)]  (R3 provokes exactly one)"
+# ⊘ `grep -c Xid` over the whole log counts the RUNG'"'"'S OWN PROSE too — the R3 pass line
+# contains the string `Xid 31`. Count the KERNEL'"'"'s format (`Xid (PCI:`) instead, so the
+# number means what the label says. [caught w379: the naive count read 2 and the label said
+# "exactly one", which is a self-check that would have hidden a second real fault.]
+echo "    kernel Xid records = [$(grep -ac 'Xid (PCI:' "$LOG" 2>/dev/null)]  (R3 provokes exactly 1)"
 echo "    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check."
 echo "=== W379 EXIT rc=$RC at $(date -Is) ==="
