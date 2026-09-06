@@ -1,0 +1,121 @@
+# ★★★★★ w379 — THE MAPPING-PLANE BATTERY ON A REAL GA106, 5 of 5 PASS
+#
+# BARE METAL. No QEMU, no guest, no emulated GPU. `kayfabe-rm-ladder --w379` against
+# /dev/nvidia*, driver 580.159.04, GeForce RTX 3060 (GA106), euid 0.
+# Source revision: d24f182 (printed in-band as REV_UNDER_TEST and by the harness).
+# ★ REPRODUCED at the branch tip 7d6bd3d — 5/5 PASS again, identical counts, 1 kernel Xid.
+#   Two runs, two revisions, same result. ⊘ n=2 is not a distribution; it is a check that
+#   the number did not follow the build.
+# Harness: scripts/bench/w379_mapping_plane.sh — committed BEFORE this run.
+#
+# ⊘ THIS IS THE CONTROL, NOT THE MILESTONE. It says the DRIVER permits what the guest
+#   does. It says nothing about our emulated path, and the same binary run inside a
+#   Mode-2 guest measures the CPU copy-engine emulator's declared scope rather than a
+#   defect (`kayfabe-rt/src/ceutils.rs:677-679` — `SemRelease` is decoded and deliberately
+#   not acted on).
+#
+# THE THREE HEADLINES:
+#   R1' ONE allocation IS live at TWO GPU VAs at once, and the aliasing is MEASURED, not
+#       asked for: a release through VA_B landed at offset 0x40 of the one object the rung
+#       allocated. A release through VA_A then landed AGAIN, after VA_B was mapped.
+#       ⇒ The guest's aliasing is legal and RM does not revoke on it.
+#   R1" Unmapping VA_A left VA_B live, and VA_A's address probed Free again.
+#       ⇒ RM tracks the two aliases INDEPENDENTLY. Any host-side store keyed by physical
+#         frame alone is weaker than the driver it stands in for.
+#   R2  ⚠ `pde_info` answered PDE_COVERS at a VA THIS RUN NEVER MAPPED (the N2 line).
+#       ⇒ `GET_PDE_INFO` is NOT a "is this VA published" oracle. It is left UNGRADED here
+#         for exactly that reason, and anything that grades on it is reading page-table
+#         granularity as a leaf fact.
+#
+# =============================== RUN LOG =====================================
+W379_START=2026-09-06T14:43:49+00:00 rungs=--w379
+info  RMLADDER ARGV     = [--w379]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d02e17
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=d24f182e1ba5cca4f406b6d8d7f0570666aea4ae
+info  R2 propagation      = GPU 0, euid 0 — map at a VA we dictate, then ask the HOST DRIVER whether it resolves
+info  R2 the bar          = an unmapped VA must probe FREE (negative control), the mapped one must NOT, and the VA must be FREE again after the unmap
+info  R2 N1 unmapped VA   = Ok(Free) at 0x0000000951000000
+info  R2 N2 pde(unmapped) = PDE_COVERS ⊘ recorded, UNGRADED
+ok    R2 control          = the unmapped VA probes Free — the instrument can say no
+ok    R2 P1 placed as asked = 0x0000000911000000
+info  R2 P2 mapped VA     = Ok(Occupied(NoMemory))
+ok    R2 P2               = the allocator refuses the mapped VA
+★     R2 P3 host tables   = PDE_COVERS at 0x0000000911000000
+info  R2 P4 after unmap   = Ok(Free)
+ok    R2 P4               = the VA is reusable again
+RUNGCTL_map_propagation=PASS
+RUNG_map_propagation=PASS
+info  R1' alias two VAs   = GPU 0, euid 0 — ONE object, TWO GPU VAs, and a release through the FIRST one AFTER the second is mapped
+info  R1' the bar         = A must land (control), then B, then A AGAIN. ⊘ Steps A and B pass even where the second map revokes the first; only the RE-release through VA_A can see a revoke
+info  R1' host says A     = PDE_COVERS at 0x0000000711000000 (after mapping A)
+info  R1' release via A   = Landed
+ok    R1' control         = MAGIC_A landed through the single mapping
+info  R1' host says A/B   = A PDE_COVERS / B PDE_COVERS (after mapping BOTH)
+info  R1' release via B   = Landed
+★     R1' ALIAS PROVED    = MAGIC_B landed at offset 0x40 of the ONE object this rung allocated — VA_A and VA_B name the same memory, measured rather than asked for
+info  R1' release via A#2 = Landed
+★     R1' BOTH VAs LIVE   = a release through VA_A landed AFTER VA_B was mapped over the same frame. ⇒ One allocation IS live at two GPU VAs at once. On bare metal this is the control. IN THE GUEST this REFUTES the FB-join aliasing diagnosis and must be said loudly
+RUNGCTL_alias_two_vas=PASS
+RUNG_alias_two_vas=PASS
+info  R1" unmap observe   = GPU 0, euid 0 — alias one object at two VAs, UNMAP the first, and ask whether the second survived
+info  R1" the bar         = both VAs live (control), then VA_A unmapped, then a release through VA_B must STILL land. ⊘ `pde_info` after an unmap is NOT graded — RM may leave the page table standing
+ALIAS_MARK=both_mapped va_a=0x0000000731000000 va_b=0x0000000831000000
+info  R1" control A/B     = Landed / Landed
+ok    R1" control         = both aliases landed before the unmap
+ALIAS_MARK=unmap_a_begin va=0x0000000731000000
+ALIAS_MARK=unmap_a_end ok=true
+info  R1" host after unmap = A PDE_COVERS / B PDE_COVERS ⊘ UNGRADED — PDE granularity cannot see a leaf go away
+info  R1" allocator says A = Ok(Free) (want Free — the VA is reusable again)
+info  R1" release via B#2 = Landed
+★     R1" SIBLING SURVIVED = unmapping VA_A left VA_B live. ⇒ RM tracks the two aliases INDEPENDENTLY, and any fix that keys host backing by frame alone is weaker than the driver it stands in for
+RUNGCTL_alias_unmap=PASS
+RUNG_alias_unmap=PASS
+info  R3 missing page     = GPU 0, euid 0 — fault a channel on a VA that was never mapped, with a BYSTANDER running in its own address space
+info  R3 the bar          = (a) CONTAINED: the bystander lands before AND after; (b) NAMED: the victim's error notifier fires with an exception type
+info  R3 bystander before = Landed
+ok    R3 control          = the bystander lands BEFORE the fault
+FAULT_MARK=victim_release va=0x0000000a11000000
+info  R3 victim           = Lost { saw: 3735880569 }
+info  R3 notifier         = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     R3 NAMED            = the driver wrote a robust-channel record. except_type 0x1f is what a host kernel log prints as `Xid 31`
+info  R3 bystander after  = Landed
+★     R3 CONTAINED        = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=PASS
+info  R5 stress           = GPU 0, euid 0 — 48 cycles over 4 interleaved live mappings, recycling one slot per cycle
+info  R5 the bar          = every release lands, every placement is EXACT, every freed VA probes Free again, and a recycled object reads as its OWN sentinel
+ok    R5 control          = the first release of the first cycle landed — the channel and the ring work, so a later red is the mapping plane and not the harness
+info  R5 census           = cycles 48/48  releases 186/186  placements exact 48/48  VAs recovered 44/44  stale reads 0
+★     R5 STRESS CLEAN     = 186 releases over 48 interleaved cycles, every placement exact, every freed VA recovered, no stale read. ⊘ Single-client only — cross-client leakage is NOT covered here
+RUNGCTL_map_stress=PASS
+RUNG_map_stress=PASS
+done — w379 mapping-plane rungs only
+W379_TERMINATOR=reached inner_rc=0
+--- host dmesg after the battery ---
+[47865.609370] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[47865.632449] NVRM: GPU at PCI:0000:00:08: GPU-dded0666-8fa8-c122-42d0-beab0498e398
+[47865.632466] NVRM: Xid (PCI:0000:00:08): 31, pid=143480, name=kayfabe-rm-ladd, channel 0x00000005, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+
+# ============================== GRADING ======================================
+=== ★★★★★ W379 GRADING — source d24f182  inner_rc=0  2026-09-06T14:43:54+00:00
+================================================================================
+    map_propagation    RUNG=PASS     CONTROL=PASS
+    alias_two_vas      RUNG=PASS     CONTROL=PASS
+    alias_unmap        RUNG=PASS     CONTROL=PASS
+    missing_page       RUNG=PASS     CONTROL=PASS
+    map_stress         RUNG=PASS     CONTROL=PASS
+    counts: pass=5 fail=0 notrun=0  of 5 rungs, 5 verdict lines seen
+
+=== ★★★★★ THE VERDICT — pre-registered, stated once
+    W379_OUTCOME=(A) 5 of 5 rungs PASS, 0 not selected, 0 red.
+        ⊘ On BARE METAL this is the CONTROL, not the milestone: it says the driver
+        permits what the guest does. It says nothing about our emulated path.
+--- ★★ HARNESS SELF-CHECK — assert THIS block's own inputs exist ---
+    log bytes         = [59120]
+    RUNG_ lines       = [5]  (MUST be 5)
+    RUNGCTL_ lines    = [5]
+    kernel Xid records = [1]  (R3 provokes exactly 1)
+    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check.
+=== W379 EXIT rc=0 at 2026-09-06T14:43:54+00:00 ===

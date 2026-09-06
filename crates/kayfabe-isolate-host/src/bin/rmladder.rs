@@ -22,7 +22,8 @@
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend, RmError};
 use kayfabe_isolate_host::rm::{
-    DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RmConnection, ViewCompare,
+    DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RACE_FENCE_OFFSET, RmConnection,
+    ViewCompare,
 };
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
@@ -2177,6 +2178,382 @@ impl TapFree for bool {
     }
 }
 
+/// The sentinel the race target holds before any engine runs. Neither `0` nor `1`: a zero
+/// would be indistinguishable from freshly-allocated memory, and the point of the sentinel
+/// is that "not MAGIC" must mean "nothing wrote here", not "we cannot tell".
+const RACE_SENTINEL: u32 = 0xDEAD_0000;
+/// The payload the `SEM_RELEASE` writes. Un-forgeable by anything else in this process.
+const RACE_MAGIC: u32 = 0x1DEA_0031;
+/// The value the CPU stores to let the acquire through. Not `1`, for `RACE_SENTINEL`'s
+/// reason — a fence that passes on a value some other writer could plausibly leave is not
+/// a fence.
+const RACE_FENCE_VAL: u32 = 0xFACE_0377;
+/// Bytes of the race target object.
+const RACE_TARGET_BYTES: u64 = 0x1000;
+
+/// What one arm of the late-map race actually did.
+///
+/// ⊘ Five outcomes and not a `bool`, because three of them are *"the experiment did not
+/// run"* rather than *"the experiment ran and failed"* — and collapsing those into `false`
+/// is exactly how a rung reports a finding it never measured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RaceOutcome {
+    /// ★ `MAGIC` landed: the release executed and reached the target.
+    Landed { gp_get: u32, gp_put: u32 },
+    /// ⊘ The target already held `MAGIC` before the fence was written — the acquire did
+    /// **not** block, so the window this rung exists to open was never open.
+    NeverBlocked,
+    /// ⊘ The entry was never fetched (`gp_get == 0`, `gp_put != 0`). USERD, the token or
+    /// the schedule — not a mapping question at all.
+    NeverFetched { gp_get: u32, gp_put: u32 },
+    /// The fence was written and `MAGIC` never arrived. **This is the interesting red**,
+    /// and it is still two hypotheses until the host Xid log is read.
+    Stalled {
+        gp_get: u32,
+        gp_put: u32,
+        fence: u32,
+        target: u32,
+    },
+}
+
+impl RaceOutcome {
+    /// Only [`RaceOutcome::Landed`] is a pass. Named so no caller has to remember which of
+    /// the four non-passes are "did not run".
+    fn landed(self) -> bool {
+        matches!(self, RaceOutcome::Landed { .. })
+    }
+}
+
+/// Run one arm of the late-map race and say what hardware did.
+///
+/// `map_before_doorbell` is the ONLY difference between the positive control (arm A) and
+/// the experiment (arm B). Everything else — the channel, the pushbuffer, the sentinel,
+/// the fence, the timeouts — is byte-identical, so a difference in outcome is attributable
+/// to the mapping's *timing* and to nothing else.
+fn late_map_arm(
+    rm: &mut HostRmBackend,
+    arm: &str,
+    ring_at: u64,
+    target_at: u64,
+    map_before_doorbell: bool,
+    engine_type: u32,
+) -> Result<RaceOutcome, RmError> {
+    let vas = rm.alloc_vaspace()?;
+    let mut cleanup_va: Option<u64> = None;
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+
+    let mut go = || -> Result<RaceOutcome, RmError> {
+        let (chan, token) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(ring_at)))?;
+        chan_h = Some(chan);
+        // Fact 1, from the connection's record of RM's [OUT] `dmaOffset`, not from the
+        // call's return value.
+        let got = rm.channel_ring_va(chan);
+        if got != Some(ring_at) {
+            return Err(RmError::PlacementRefused {
+                want: ring_at,
+                got: got.unwrap_or(0),
+            });
+        }
+        rm.schedule(chan)?;
+
+        // The target object, sentinel-filled through a CPU mapping that is dropped before
+        // anything is submitted.
+        let mem = rm.alloc_probe_local(RACE_TARGET_BYTES)?;
+        mem_h = Some(mem);
+        rm.fill_words(mem, RACE_TARGET_BYTES, RACE_SENTINEL, 0)?;
+
+        if map_before_doorbell {
+            let va = rm.map_local_at(vas, mem, RACE_TARGET_BYTES, Some(target_at))?;
+            cleanup_va = Some(va);
+            if va != target_at {
+                return Err(RmError::PlacementRefused {
+                    want: target_at,
+                    got: va,
+                });
+            }
+            println!("info  {arm} map            = BEFORE the doorbell, at {target_at:#018x}");
+        } else {
+            println!("info  {arm} map            = deferred until AFTER the doorbell");
+        }
+
+        // The fence starts closed. ⚠ From here until the fence is written the channel is
+        // stalled inside the acquire; every exit below must still reach the cleanup that
+        // frees it.
+        rm.ring_store_u32(chan, RACE_FENCE_OFFSET, 0)?;
+        rm.submit_fenced_release(
+            chan,
+            token,
+            RACE_FENCE_OFFSET,
+            RACE_FENCE_VAL,
+            target_at,
+            RACE_MAGIC,
+        )?;
+
+        // ★★★ THE CONTROL THAT MAKES ARM B MEAN ANYTHING. Give the engine time to fetch
+        // and reach the acquire, then prove it is PARKED there: the target must still hold
+        // the sentinel, and the entry must have been fetched.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let parked = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        let (gp_get, gp_put) = rm.userd_cursors(chan)?;
+        if parked == RACE_MAGIC {
+            return Ok(RaceOutcome::NeverBlocked);
+        }
+        // ⊘⊘⊘ CORRECTED 2026-09-06 (w379) — **THIS CHECK USED TO RETURN HERE, AND THAT
+        // ABORTED THE EXPERIMENT BEFORE IT RAN.**
+        //
+        // `GP_GET` is USERD dword 34, and **hardware is its only writer**. Measured w379,
+        // over the whole workspace: `USERD_GP_GET` appears at five sites and **every one is
+        // a read** — the single store to USERD anywhere in this tree is `USERD_GP_PUT`
+        // (`rm.rs`, `submit_entry`). On the Mode-2 emulated device there is no PBDMA and no
+        // code that stores that word, so `gp_get == 0` is the **only** value it can hold, on
+        // every configuration — whether the doorbell was served locally, forwarded, or
+        // refused.
+        //
+        // ⇒ Returning `NeverFetched` on that predicate made a guest run report a
+        // HARDWARE-ONLY diagnosis — *"USERD, the token or the schedule"* — about a cursor that
+        // structurally has no writer, and it did so **before the fence was written**, so
+        // arm A's positive control failed without the release ever being attempted. That is
+        // this repo's *"a probe's private constant is the caller's trap"* class, and the fix
+        // is ordering: **the primary observable decides; the cursor only explains a red.**
+        //
+        // ⚠ The predicate itself is kept, unchanged, below the poll. On real hardware it
+        // still separates *"the entry was never fetched"* from *"the release never ran"* — it
+        // simply may no longer pre-empt the measurement it exists to qualify.
+        if gp_get == 0 && gp_put != 0 {
+            println!(
+                "⚠     {arm} cursor         = GP_GET has not advanced. ⊘ On a device with no \
+                 PBDMA nothing ever writes that word, so this is NOT evidence about the \
+                 doorbell — the experiment continues and the TARGET decides"
+            );
+        }
+        println!(
+            "ok    {arm} parked         = target still {parked:#010x} (sentinel), \
+             GP_GET {gp_get} GP_PUT {gp_put} — the channel is STALLED IN THE ACQUIRE, \
+             which is what makes the window below real"
+        );
+
+        // 5 — the mapping, made while the channel is already running and after its only
+        // doorbell has been rung.
+        if !map_before_doorbell {
+            let va = rm.map_local_at(vas, mem, RACE_TARGET_BYTES, Some(target_at))?;
+            cleanup_va = Some(va);
+            if va != target_at {
+                return Err(RmError::PlacementRefused {
+                    want: target_at,
+                    got: va,
+                });
+            }
+            println!(
+                "ok    {arm} late map       = mapped at {target_at:#018x} AFTER the \
+                 doorbell, with the channel running. NO further doorbell is sent"
+            );
+        }
+
+        // 6 — open the fence with a plain CPU store. This is the ONLY thing that happens
+        // between the mapping and the engine's first touch of `target_at`.
+        rm.ring_store_u32(chan, RACE_FENCE_OFFSET, RACE_FENCE_VAL)?;
+
+        // 7 — poll.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let mut target = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        while target != RACE_MAGIC && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            target = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        }
+        let (gp_get, gp_put) = rm.userd_cursors(chan)?;
+        if target == RACE_MAGIC {
+            // ★ The payload landed. ⊘ A pass **whatever the cursors say**: a release that
+            // reached the target cannot have failed to be fetched, so a `gp_get` of 0 here
+            // indicts the cursor and never the run.
+            Ok(RaceOutcome::Landed { gp_get, gp_put })
+        } else if gp_get == 0 && gp_put != 0 {
+            // Reachable only now that the target is known NOT to hold the payload — which is
+            // what makes this a qualifier on a red rather than a verdict in its own right.
+            Ok(RaceOutcome::NeverFetched { gp_get, gp_put })
+        } else {
+            let fence = rm.ring_load_u32(chan, RACE_FENCE_OFFSET)?;
+            Ok(RaceOutcome::Stalled {
+                gp_get,
+                gp_put,
+                fence,
+                target,
+            })
+        }
+    };
+
+    let out = go();
+
+    // ⚠ Cleanup on EVERY path, error paths included: an acquire whose fence was never
+    // written leaves the channel stalled, and freeing it is what reclaims the engine.
+    if let Some(va) = cleanup_va {
+        let _ = rm.unmap_local(vas, va);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+    out
+}
+
+/// ★★★★★ **W377 — DOES A MAPPING MADE *AFTER* THE DOORBELL REACH AN ALREADY-RUNNING
+/// CHANNEL?**
+///
+/// The owner's scenario, made executable. A guest userspace client can queue work behind a
+/// fence, ring once, then map memory and open the fence with a plain store — at which point
+/// the engine touches an address that was **not mapped when the doorbell was rung**, and no
+/// second doorbell is ever sent. If a hypervisor's publication is triggered by the doorbell,
+/// it has already run and it ran too early.
+///
+/// This rung reproduces exactly that, from a raw client with no libcuda anywhere:
+///
+/// ```text
+/// pushbuffer = [ SEM_ACQUIRE(fence, FENCE_VAL) ][ SEM_RELEASE(target, MAGIC) ]
+/// ```
+///
+/// - **ARM A** maps the target BEFORE the doorbell. It is the positive control, it must
+///   pass, and if it does not then arm B is measuring the harness rather than the driver.
+/// - **ARM B** maps it AFTER. That is the question.
+///
+/// ⊘ **On bare metal arm B is expected to PASS**, and a pass is the useful answer: it is
+/// what says the real driver makes a late mapping live to a running channel with no
+/// submission-side signal, which is the property a doorbell-triggered publisher cannot
+/// have. A *failure* here would mean real CUDA cannot do this either — a much bigger claim,
+/// and one to distrust before believing.
+fn late_map_race(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // ★ Ring and target are ≥ 512 MiB apart, and the two arms use different regions again.
+    // A target adjacent to its own ring could be covered by a large PTE the ring's mapping
+    // already installed — which would make arm B pass for a reason that has nothing to do
+    // with the late map. Regions: A-ring 0x4_4…, A-target 0x5_4…, B-ring 0x4_6…,
+    // B-target 0x5_6…, all 64 KiB-aligned.
+    const A_RING_AT: u64 = 0x0000_0004_4100_0000;
+    const A_TARGET_AT: u64 = 0x0000_0005_4100_0000;
+    const B_RING_AT: u64 = 0x0000_0004_6100_0000;
+    const B_TARGET_AT: u64 = 0x0000_0005_6100_0000;
+
+    println!(
+        "info  W377 late-map race  = GPU {gpu}, euid {} — queue work behind a fence, ring \
+         ONCE, then map the memory it will touch",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B \
+         is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value"
+    );
+
+    // ⊘ Resolved ONCE, before either arm allocates anything: an engine the ABI cannot name
+    // is a refusal of the harness, not of the driver, and it must not be reported from
+    // inside an arm where it would read as that arm's outcome.
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  W377 engine         = COPY0 is not expressible");
+        return false;
+    };
+
+    let a = late_map_arm(rm, "W377-A", A_RING_AT, A_TARGET_AT, true, engine_type);
+    match &a {
+        Ok(o) => println!("info  W377-A outcome      = {o:?}"),
+        Err(e) => println!("FAIL  W377-A refused      = {e:?}"),
+    }
+    let a_ok = matches!(&a, Ok(o) if o.landed());
+    if a_ok {
+        println!(
+            "ok    W377-A control      = MAGIC landed with the target mapped BEFORE the \
+             doorbell — the channel, the fence and the release all work"
+        );
+    } else {
+        println!(
+            "??    W377-A CONTROL FAILED = the positive control did not land. ⊘ ARM B IS \
+             UNINTERPRETABLE: a red there would be this harness, not the driver. Read the \
+             outcome above — `NeverBlocked` means the acquire did not stall, \
+             `NeverFetched` means USERD/token/schedule, `Stalled` means the release never \
+             ran"
+        );
+    }
+
+    // ★★★ w379 — THE MACHINE-READABLE VERDICT, and it is not decoration.
+    // `scripts/bench/racemap_hook.sh` and `w377_racemap.sh` both grade by
+    // `sed -n 's/^RACEMAP_ARM_A=//p'`, and until now **this rung never printed that line**:
+    // a native run that passed 3/3 was graded `(E) UNMEASURED` because the verdict existed
+    // only as prose. ⊘ A grader and a probe that disagree about the vocabulary produce the
+    // *unmeasured* answer, which is the one that reads as nobody's fault.
+    println!("RACEMAP_ARM_A={}", if a_ok { "PASS" } else { "FAIL" });
+
+    let b = late_map_arm(rm, "W377-B", B_RING_AT, B_TARGET_AT, false, engine_type);
+    match &b {
+        Ok(o) => println!("info  W377-B outcome      = {o:?}"),
+        Err(e) => println!("FAIL  W377-B refused      = {e:?}"),
+    }
+
+    if !a_ok {
+        println!("??    W377 VERDICT        = UNINTERPRETABLE (positive control A failed)");
+        // ⊘ Printed even here, so *"no ARM_B line at all"* keeps meaning *"the rung never
+        // reached its own verdict"* rather than *"A failed"* — two states the grader's
+        // `(E) UNMEASURED` and `(D) UNINTERPRETABLE` arms are there to keep apart.
+        println!("RACEMAP_ARM_B=NOTRUN");
+        return false;
+    }
+
+    match b {
+        Ok(RaceOutcome::Landed { gp_get, gp_put }) => {
+            println!(
+                "★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with \
+                 the channel already running and NO second doorbell, was walked by the \
+                 engine (GP_GET {gp_get} GP_PUT {gp_put}, target {RACE_MAGIC:#010x}). ⇒ \
+                 The driver publishes it, and a doorbell-triggered publisher CANNOT see it"
+            );
+            println!("RACEMAP_ARM_B=PASS");
+            true
+        }
+        Ok(RaceOutcome::NeverBlocked) => {
+            println!(
+                "??    W377 RACE NOT RUN   = the target held MAGIC before the fence was \
+                 written, so the acquire never stalled and the window was never open. ⊘ \
+                 NOT a pass and NOT a finding — the SEM_ACQUIRE encoding is the first \
+                 suspect (`SEM_EXECUTE_ACQUIRE_32BIT` is an all-zero word, so an unwritten \
+                 pushbuffer slot decodes as one)"
+            );
+            println!("RACEMAP_ARM_B=NOTRUN");
+            false
+        }
+        Ok(RaceOutcome::NeverFetched { gp_get, gp_put }) => {
+            println!(
+                "??    W377 NEVER FETCHED  = GP_GET {gp_get} GP_PUT {gp_put} — the entry \
+                 was never read. ⊘ Not a mapping result: USERD, the token or the schedule"
+            );
+            println!("RACEMAP_ARM_B=FAIL");
+            false
+        }
+        Ok(RaceOutcome::Stalled {
+            gp_get,
+            gp_put,
+            fence,
+            target,
+        }) => {
+            println!(
+                "FAIL  W377 LATE MAP LOST  = fence {fence:#010x} (want \
+                 {RACE_FENCE_VAL:#010x}), target {target:#010x} (want {RACE_MAGIC:#010x}), \
+                 GP_GET {gp_get} GP_PUT {gp_put}"
+            );
+            println!(
+                "⚠     W377 TWO HYPOTHESES = a timeout is NOT a fault. If `fence` does not \
+                 hold the wanted value our own store failed and the acquire was never \
+                 satisfied. If it DOES, the release ran and could not reach the target — \
+                 and ONLY the host Xid log distinguishes them: look for `Xid 31 … \
+                 FAULT_PDE … ACCESS_TYPE_VIRT_WRITE` at {B_TARGET_AT:#018x}"
+            );
+            println!("RACEMAP_ARM_B=FAIL");
+            false
+        }
+        Err(_) => {
+            println!("RACEMAP_ARM_B=NOTRUN");
+            false
+        }
+    }
+}
+
 /// ★★★★★ R30 — **is the isolate's own completion semaphore NAMEABLE from the address
 /// space a guest channel is bound to?**
 ///
@@ -4000,6 +4377,1278 @@ fn timer_probe(conn: &RmConnection) -> bool {
     ok
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w379 — THE RAW CLIENT AS THE MAPPING PLANE'S TEST ARTIFACT
+//
+// Owner, 2026-09-06: *"raw clients can remain useful, to test the allocate propagations
+// and races about missing pages resulting in fault, mixing rpc with normal allocs, mean
+// stress test, to have a test artifact on purely open source components easier to debug."*
+//
+// Every rung below prints a machine-readable `RUNG_<name>=PASS|FAIL|NOTRUN` line and a
+// `RUNGCTL_<name>=PASS|FAIL` line for its positive control. ⊘ **`NOTRUN` is not a failure
+// value** — it is what a rung prints when its own control did not pass, and a grader that
+// folds it into `FAIL` reports a finding it never measured. That distinction is the whole
+// reason the w377 harness could tell *"the binary was named wrong"* from *"the system is
+// broken"*, and it is kept here deliberately.
+//
+// ## ⊘⊘⊘ SCOPE, MEASURED BEFORE ANY OF THESE WERE RUN — THE GUEST ARM CANNOT SERVE THEM
+//
+// These four rungs drive a real engine through a `SEM_RELEASE` at a caller-chosen GPU VA.
+// **That probe is structurally unservable inside a Mode-2 guest**, for two independent
+// reasons, both read out of this tree rather than inferred from a failure:
+//
+// 1. **The CPU copy-engine emulator decodes `SemRelease` and deliberately does not act on
+//    it** — *"a `SemRelease` is deliberately NOT acted on here: it is the host semaphore …
+//    and advancing it would satisfy our own counters while the guest spins on the word above
+//    it"* (`kayfabe-rt/src/ceutils.rs:677-679`; the same decision is restated at `:1080`).
+//    The only method it acts on is `LAUNCH_DMA`.
+// 2. **`GP_GET` has no writer anywhere in the workspace.** Five occurrences of
+//    `USERD_GP_GET`, every one a read; the sole USERD store in the tree is `USERD_GP_PUT`.
+//    There is no PBDMA on an emulated device, so any rung that grades on that cursor grades
+//    on a constant.
+//
+// ⇒ **These rungs are HOST-HARDWARE rungs.** Run natively they are real; run in the guest
+// they measure the emulator's deliberate scope and must not be reported as a red. ⚠ The
+// guest-side version of the same questions needs a `LAUNCH_DMA` probe, which is a different
+// primitive and is NOT built here — see the report, where it is named as the follow-up
+// rather than left implied.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Bytes of every object the w379 rungs alias, map and fault on: one `FB_LEAF_GRANULE`
+/// (`kayfabe-rt/src/device.rs`, `0x1_0000`).
+///
+/// ⊘ **Not 4 KiB, and the size is load-bearing.** RM maps device-local memory with 64 KiB
+/// big pages regardless of what is asked, so a 4 KiB object cannot be placed or probed
+/// independently of its neighbours — [`HostRmBackend::probe_va`]'s own docs record the
+/// measurement. A rung that asked at 4 KiB would be reading its own geometry back.
+const W379_BYTES: u64 = 0x1_0000;
+
+/// The value every w379 object holds before any engine runs. Neither `0` nor `1`: a zero is
+/// indistinguishable from freshly-allocated memory, and *"not the magic"* has to mean
+/// *"nothing wrote here"* rather than *"we cannot tell"*.
+const W379_SENTINEL: u32 = 0xDEAD_0379;
+
+/// How long a release is given to land before it is called lost.
+const W379_LAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Byte offsets inside a w379 object at which the three releases land. Distinct, so a
+/// release through one VA cannot be mistaken for a release through another — which is the
+/// entire content of the aliasing claim.
+const W379_OFF_A: u64 = 0x0000;
+/// See [`W379_OFF_A`].
+const W379_OFF_B: u64 = 0x0040;
+/// See [`W379_OFF_A`]. This is the offset the **re-release through VA_A after VA_B was
+/// mapped** writes to — the one that goes silent if mapping the second VA revoked the first.
+const W379_OFF_A2: u64 = 0x0080;
+
+/// What one `SEM_RELEASE` through one GPU VA did.
+///
+/// ⊘ Three values and not a `bool`, because [`W379Release::Refused`] is *"the experiment
+/// never ran"* rather than *"the experiment ran and failed"*, and folding it into `Lost`
+/// would report our own harness as the system's red.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W379Release {
+    /// ★ The payload arrived at the object offset it was aimed at.
+    Landed,
+    /// The payload never arrived. `saw` is what the word actually held — [`W379_SENTINEL`]
+    /// means nothing wrote there, anything else means something else did.
+    Lost {
+        /// The word the object actually held when the deadline expired.
+        saw: u32,
+    },
+    /// ⊘ The submission itself was refused, so the engine was never asked.
+    Refused,
+}
+
+impl W379Release {
+    /// Only [`W379Release::Landed`] is a pass.
+    fn landed(self) -> bool {
+        matches!(self, W379Release::Landed)
+    }
+}
+
+/// What the **host driver** — not our bookkeeping — says about one VA in one address space.
+///
+/// ⊘ The point of this type is that [`W379HostVa::Unmeasured`] is a first-class value.
+/// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` answers `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` on every
+/// release driver, and a rung that read that refusal as *"the VA does not resolve"* would
+/// manufacture the exact finding it is looking for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W379HostVa {
+    /// A page table covers the VA. ⚠ **PDE granularity**: this says a table exists, never
+    /// that the leaf PTE is valid. See [`HostRmBackend::pde_info`].
+    PdeCovers,
+    /// The control answered, and said no page table covers the VA.
+    PdeAbsent,
+    /// ⊘ The control refused. **Not an answer.**
+    Unmeasured,
+}
+
+impl W379HostVa {
+    /// The printed form, so a log line and a grader agree on the vocabulary.
+    fn as_str(self) -> &'static str {
+        match self {
+            W379HostVa::PdeCovers => "PDE_COVERS",
+            W379HostVa::PdeAbsent => "PDE_ABSENT",
+            W379HostVa::Unmeasured => "UNMEASURED",
+        }
+    }
+}
+
+/// Ask the host driver whether `va` resolves in `vas`, through `NV0080_CTRL_CMD_DMA_GET_
+/// PDE_INFO`.
+///
+/// ★ **The oracle deliberately does not share our allocator or our tables.** It is RM's own
+/// answer about RM's own page tables, which is what makes it usable to check a publication
+/// claim that our own census also makes — an instrument that shares the thing it measures
+/// is not an observer.
+fn w379_host_va(rm: &mut HostRmBackend, vas: kayfabe_isolate::HostHandle, va: u64) -> W379HostVa {
+    match rm.pde_info(vas, va) {
+        Ok((Some(_), _)) => W379HostVa::PdeCovers,
+        Ok((None, _)) => W379HostVa::PdeAbsent,
+        Err(_) => W379HostVa::Unmeasured,
+    }
+}
+
+/// Submit one `SEM_RELEASE(target_va + byte_off, payload)` on `chan` and wait for it to
+/// land at `byte_off` inside `mem`.
+///
+/// ⊘ **No fence and no `SEM_ACQUIRE`.** [`HostRmBackend::submit_release_at`] is used rather
+/// than `submit_fenced_release` because an acquire is a second thing that can fail in a way
+/// that looks exactly like the first — and the question every w379 rung asks is about **one**
+/// address resolving.
+///
+/// ⊘ The read-back is [`HostRmBackend::read_words_independently`]: a fresh device node, a
+/// fresh mapping, a kernel-chosen address. Reading through the mapping the sentinel was
+/// written through would prove the page is writable and nothing else.
+fn w379_release_through(
+    rm: &mut HostRmBackend,
+    chan: kayfabe_isolate::HostHandle,
+    token: u64,
+    mem: kayfabe_isolate::HostHandle,
+    target_va: u64,
+    byte_off: u64,
+    payload: u32,
+) -> W379Release {
+    if rm
+        .submit_release_at(chan, token, target_va + byte_off, payload)
+        .is_err()
+    {
+        return W379Release::Refused;
+    }
+    let deadline = std::time::Instant::now() + W379_LAND_TIMEOUT;
+    let mut saw;
+    loop {
+        match rm.read_words_independently(mem, W379_BYTES, &[byte_off]) {
+            Ok(w) => saw = w[0],
+            Err(_) => return W379Release::Refused,
+        }
+        if saw == payload {
+            return W379Release::Landed;
+        }
+        if std::time::Instant::now() >= deadline {
+            return W379Release::Lost { saw };
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
+/// ★★★★★ **w379 R1′ — CAN ONE ALLOCATION BE LIVE AT TWO GPU VAs AT THE SAME TIME?**
+///
+/// The w377 correction (2026-09-06) named the LLM wall as **FB-join aliasing**: the join
+/// store is keyed by physical frame alone (`install_join(phys, region)` /
+/// `release_join(phys)`), so one framebuffer frame can be host-backed at exactly **one** GPU
+/// VA. The guest holds 17 frames aliased at two VAs each, so publishing either VA revokes
+/// the other, and the `Xid 31` lands at a VA we un-published ourselves.
+///
+/// This rung is that hazard in fifteen lines of raw client, with no libcuda anywhere:
+///
+/// ```text
+///   1  allocate ONE device-local object
+///   2  map it at VA_A                          -> release through VA_A must land   [CONTROL]
+///   3  map the SAME object at VA_B             -> release through VA_B must land
+///   4  release through VA_A AGAIN              -> must STILL land                  [THE ASK]
+/// ```
+///
+/// ★★ **Step 4 is the whole rung.** Steps 2 and 3 pass even in a world where the second
+/// mapping revokes the first, because each is exercised immediately after it is made. Only
+/// coming back to VA_A *after* VA_B exists can see a revoke.
+///
+/// ★ **And the aliasing itself is proved, not assumed.** The three releases land at three
+/// distinct offsets of the **one object** the caller allocated, read back through an
+/// independent mapping. A release through VA_B that lands at `mem + 0x40` cannot have
+/// reached anything but the object we mapped once — so `Landed` at both offsets is a
+/// measurement that the two VAs name the same memory, not an inference from having asked
+/// for it.
+///
+/// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
+///
+/// - **all three land** ⇒ two VAs over one frame both stay live. On **bare metal** this is
+///   the expected answer and is the control for the guest arm. In the **guest** it would
+///   mean the aliasing diagnosis is wrong — and that must be said loudly rather than filed
+///   as a green.
+/// - **A lands, B lands, A2 lost** ⇒ ★★★★★ **THE REPRO.** Mapping the second VA revoked the
+///   first. This is the LLM's wall, deterministic, ours, no proprietary runtime in it.
+/// - **A lands, B lost** ⇒ the second mapping never took effect at all. A different defect
+///   from the revoke, and it must not be reported as one.
+/// - **A lost** ⇒ ⊘ **the control failed and the rung is UNINTERPRETABLE.** Prints `NOTRUN`.
+/// - **a map is refused / placed elsewhere** ⇒ ⊘ `NOTRUN`. RM declining a fixed placement is
+///   a statement about our address choice, not about aliasing.
+fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // Ring, VA_A and VA_B are ≥ 4 GiB apart. A VA_B adjacent to VA_A could be covered by a
+    // big PTE VA_A's mapping already installed, which would make step 4 pass for a reason
+    // that has nothing to do with aliasing.
+    const RING_AT: u64 = 0x0000_0006_1100_0000;
+    const VA_A: u64 = 0x0000_0007_1100_0000;
+    const VA_B: u64 = 0x0000_0008_1100_0000;
+    const MAGIC_A: u32 = 0xA11A_5A01;
+    const MAGIC_B: u32 = 0xA11A_5B01;
+    const MAGIC_A2: u32 = 0xA11A_5A02;
+
+    println!(
+        "info  R1' alias two VAs   = GPU {gpu}, euid {} — ONE object, TWO GPU VAs, and a \
+         release through the FIRST one AFTER the second is mapped",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R1' the bar         = A must land (control), then B, then A AGAIN. ⊘ Steps \
+         A and B pass even where the second map revokes the first; only the RE-release \
+         through VA_A can see a revoke"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R1' engine          = COPY0 is not expressible");
+        println!("RUNGCTL_alias_two_vas=FAIL");
+        println!("RUNG_alias_two_vas=NOTRUN");
+        return false;
+    };
+
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R1' vaspace         = the rung needs its own address space");
+        println!("RUNGCTL_alias_two_vas=FAIL");
+        println!("RUNG_alias_two_vas=NOTRUN");
+        return false;
+    };
+
+    let mut mapped: Vec<u64> = Vec::new();
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut control_ok = false;
+
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) else {
+            println!("??    R1' channel         = refused at {RING_AT:#018x} — NOT a result");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.channel_ring_va(chan) != Some(RING_AT) {
+            println!("??    R1' ring placement   = RM did not place the ring where asked");
+            return false;
+        }
+        if rm.schedule(chan).is_err() {
+            println!("??    R1' schedule         = refused");
+            return false;
+        }
+
+        let Ok(mem) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R1' object          = device-local allocation refused");
+            return false;
+        };
+        mem_h = Some(mem);
+        if rm.fill_words(mem, W379_BYTES, W379_SENTINEL, 0).is_err() {
+            println!("??    R1' sentinel        = could not be written");
+            return false;
+        }
+
+        // ── step 2 — VA_A ────────────────────────────────────────────────────────────────
+        match rm.map_local_at(vas, mem, W379_BYTES, Some(VA_A)) {
+            Ok(got) if got == VA_A => mapped.push(got),
+            Ok(got) => {
+                println!("??    R1' VA_A placement   = asked {VA_A:#018x}, RM chose {got:#018x}");
+                mapped.push(got);
+                return false;
+            }
+            Err(e) => {
+                println!("??    R1' VA_A map        = refused {e:?}");
+                return false;
+            }
+        }
+        let host_a1 = w379_host_va(rm, vas, VA_A);
+        println!(
+            "info  R1' host says A     = {} at {VA_A:#018x} (after mapping A)",
+            host_a1.as_str()
+        );
+
+        let a = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
+        println!("info  R1' release via A   = {a:?}");
+        if !a.landed() {
+            println!(
+                "??    R1' CONTROL FAILED  = a release through the ONLY mapping did not \
+                 land. ⊘ Everything below is UNINTERPRETABLE — this is the channel, the \
+                 ring or the release, not aliasing"
+            );
+            return false;
+        }
+        control_ok = true;
+        println!("ok    R1' control         = MAGIC_A landed through the single mapping");
+
+        // ── step 3 — VA_B over the SAME object ───────────────────────────────────────────
+        match rm.map_local_at(vas, mem, W379_BYTES, Some(VA_B)) {
+            Ok(got) if got == VA_B => mapped.push(got),
+            Ok(got) => {
+                println!("??    R1' VA_B placement   = asked {VA_B:#018x}, RM chose {got:#018x}");
+                mapped.push(got);
+                return false;
+            }
+            Err(e) => {
+                println!(
+                    "FAIL  R1' VA_B map        = refused {e:?}. ⊘ RM DECLINED to alias one \
+                     allocation at a second VA — if this is bare metal, the aliasing the \
+                     guest is claimed to do is not legal and the diagnosis needs revisiting"
+                );
+                return false;
+            }
+        }
+        let host_a2 = w379_host_va(rm, vas, VA_A);
+        let host_b2 = w379_host_va(rm, vas, VA_B);
+        println!(
+            "info  R1' host says A/B   = A {} / B {} (after mapping BOTH)",
+            host_a2.as_str(),
+            host_b2.as_str()
+        );
+
+        let b = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        println!("info  R1' release via B   = {b:?}");
+        if !b.landed() {
+            println!(
+                "FAIL  R1' SECOND VA DEAD  = the second mapping never became live. ⊘ This \
+                 is NOT the revoke: VA_A was never re-tested. A different defect"
+            );
+            return false;
+        }
+        println!(
+            "★     R1' ALIAS PROVED    = MAGIC_B landed at offset {W379_OFF_B:#x} of the \
+             ONE object this rung allocated — VA_A and VA_B name the same memory, measured \
+             rather than asked for"
+        );
+
+        // ── step 4 — VA_A AGAIN, now that VA_B exists ────────────────────────────────────
+        let a2 = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A2, MAGIC_A2);
+        println!("info  R1' release via A#2 = {a2:?}");
+        match a2 {
+            W379Release::Landed => {
+                println!(
+                    "★     R1' BOTH VAs LIVE   = a release through VA_A landed AFTER VA_B \
+                     was mapped over the same frame. ⇒ One allocation IS live at two GPU \
+                     VAs at once. On bare metal this is the control. IN THE GUEST this \
+                     REFUTES the FB-join aliasing diagnosis and must be said loudly"
+                );
+                true
+            }
+            W379Release::Lost { saw } => {
+                println!(
+                    "FAIL  R1' FIRST VA REVOKED = VA_A landed before VA_B was mapped and is \
+                     SILENT after ({saw:#010x}, want {MAGIC_A2:#010x}). ⇒ ★★★★★ THE REPRO — \
+                     mapping the second VA revoked the first. Look for `Xid 31 … FAULT_PDE` \
+                     at {VA_A:#018x} + {W379_OFF_A2:#x}"
+                );
+                false
+            }
+            W379Release::Refused => {
+                println!("??    R1' release via A#2  = the submission was refused, not lost");
+                false
+            }
+        }
+    };
+
+    let ok = go();
+
+    for va in mapped {
+        let _ = rm.unmap_local(vas, va);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "RUNGCTL_alias_two_vas={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_alias_two_vas={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if ok {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    ok
+}
+
+/// ★★★★★ **w379 R1″ — THE DISCRIMINATOR. Does unmapping ONE of two aliased VAs disturb the
+/// other, and does the unmap become observable at all?**
+///
+/// The w377 correction leaves two models alive, and they select **different fixes**:
+///
+/// - **(a)** the guest genuinely holds both VAs live ⇒ fix = allow N VAs per frame;
+/// - **(b)** one VA is stale in our decode and we never learned to drop it ⇒ fix = observe
+///   the unmap.
+///
+/// Both fit every number in the boot, because the compute path shows no TLB invalidates.
+/// ⚠ And the line our own log prints — *"The old VA is still DESCRIBED by the guest"* — is
+/// an **unconditional string literal**, not a check, so it cannot discriminate either.
+///
+/// This rung emits the sequence that does, and states the ground truth for it:
+///
+/// ```text
+///   map VA_A, map VA_B          -> both live (asserted, as in R1')
+///   UNMAP VA_A                  -> [ALIAS_MARK=unmap_a] on its own line
+///   ask the host driver about VA_A and VA_B
+///   release through VA_B        -> MUST still land   <- the property under test
+/// ```
+///
+/// ★★★ **The bar is `VA_B` surviving.** An unmap of one alias that takes the other down with
+/// it is the same bug as the publish-side revoke, seen from the other end — and it is the
+/// one an `(a)`-shaped fix (N VAs per frame) has to get right.
+///
+/// ## ⊘ WHAT THIS RUNG CANNOT DO, STATED SO NOBODY READS IT AS DOING IT
+///
+/// It cannot tell you whether **our device** noticed the unmap: that is a fact about the
+/// Mode-2 shim's decode, and this binary is a client of the driver, not of the shim. What it
+/// does is emit `ALIAS_MARK=` lines at unambiguous instants so a guest-side log can be
+/// **joined** to them, and establish natively that the unmap really happened — which is the
+/// precondition for reading any guest-side silence as *"we missed it"* rather than
+/// *"nothing to miss"*.
+///
+/// ## ⚠ THE ORACLE'S OWN LIMIT, PRE-REGISTERED
+///
+/// `pde_info` answers at **PDE** granularity. RM is free to leave a page *table* standing
+/// after the last leaf in it is unmapped, so `PDE_COVERS` at VA_A **after** the unmap is
+/// **not** evidence the mapping survived, and this rung does not grade on it. The graded
+/// facts are `probe_va` (RM's allocator saying the VA is free again) and the VA_B release.
+fn alias_unmap_observe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    const RING_AT: u64 = 0x0000_0006_3100_0000;
+    const VA_A: u64 = 0x0000_0007_3100_0000;
+    const VA_B: u64 = 0x0000_0008_3100_0000;
+    const MAGIC_A: u32 = 0xA11A_5A11;
+    const MAGIC_B: u32 = 0xA11A_5B11;
+    const MAGIC_B2: u32 = 0xA11A_5B12;
+
+    println!(
+        "info  R1\" unmap observe   = GPU {gpu}, euid {} — alias one object at two VAs, \
+         UNMAP the first, and ask whether the second survived",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R1\" the bar         = both VAs live (control), then VA_A unmapped, then a \
+         release through VA_B must STILL land. ⊘ `pde_info` after an unmap is NOT graded — \
+         RM may leave the page table standing"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R1\" engine          = COPY0 is not expressible");
+        println!("RUNGCTL_alias_unmap=FAIL");
+        println!("RUNG_alias_unmap=NOTRUN");
+        return false;
+    };
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R1\" vaspace         = the rung needs its own address space");
+        println!("RUNGCTL_alias_unmap=FAIL");
+        println!("RUNG_alias_unmap=NOTRUN");
+        return false;
+    };
+
+    let mut live: Vec<u64> = Vec::new();
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut control_ok = false;
+
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) else {
+            println!("??    R1\" channel         = refused at {RING_AT:#018x}");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.schedule(chan).is_err() {
+            println!("??    R1\" schedule         = refused");
+            return false;
+        }
+        let Ok(mem) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R1\" object          = device-local allocation refused");
+            return false;
+        };
+        mem_h = Some(mem);
+        if rm.fill_words(mem, W379_BYTES, W379_SENTINEL, 0).is_err() {
+            println!("??    R1\" sentinel        = could not be written");
+            return false;
+        }
+        for (name, at) in [("A", VA_A), ("B", VA_B)] {
+            match rm.map_local_at(vas, mem, W379_BYTES, Some(at)) {
+                Ok(got) if got == at => live.push(got),
+                Ok(got) => {
+                    println!("??    R1\" VA_{name} placement = asked {at:#018x}, got {got:#018x}");
+                    live.push(got);
+                    return false;
+                }
+                Err(e) => {
+                    println!("??    R1\" VA_{name} map      = refused {e:?}");
+                    return false;
+                }
+            }
+        }
+        println!("ALIAS_MARK=both_mapped va_a={VA_A:#018x} va_b={VA_B:#018x}");
+
+        // ── the control: BOTH aliases live before anything is torn down ─────────────────
+        let a = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
+        let b = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        println!("info  R1\" control A/B     = {a:?} / {b:?}");
+        if !a.landed() || !b.landed() {
+            println!(
+                "??    R1\" CONTROL FAILED  = the two aliases were not both live BEFORE the \
+                 unmap. ⊘ UNINTERPRETABLE — this is R1'`s question, not this rung's"
+            );
+            return false;
+        }
+        control_ok = true;
+        println!("ok    R1\" control         = both aliases landed before the unmap");
+
+        // ── the event ───────────────────────────────────────────────────────────────────
+        println!("ALIAS_MARK=unmap_a_begin va={VA_A:#018x}");
+        let unmapped = rm.unmap_local(vas, VA_A);
+        println!("ALIAS_MARK=unmap_a_end ok={}", unmapped.is_ok());
+        if unmapped.is_err() {
+            println!("??    R1\" unmap           = RM refused the unmap: {unmapped:?}");
+            return false;
+        }
+        live.retain(|v| *v != VA_A);
+
+        // ── what the host driver says, ungraded but recorded ────────────────────────────
+        let pde_a = w379_host_va(rm, vas, VA_A);
+        let pde_b = w379_host_va(rm, vas, VA_B);
+        println!(
+            "info  R1\" host after unmap = A {} / B {} ⊘ UNGRADED — PDE granularity cannot \
+             see a leaf go away",
+            pde_a.as_str(),
+            pde_b.as_str()
+        );
+        let free_a = rm.probe_va(vas.raw() as u32, VA_A, W379_BYTES);
+        println!("info  R1\" allocator says A = {free_a:?} (want Free — the VA is reusable again)");
+
+        // ── the graded fact ─────────────────────────────────────────────────────────────
+        let b2 = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_A2, MAGIC_B2);
+        println!("info  R1\" release via B#2 = {b2:?}");
+        match b2 {
+            W379Release::Landed => {
+                println!(
+                    "★     R1\" SIBLING SURVIVED = unmapping VA_A left VA_B live. ⇒ RM \
+                     tracks the two aliases INDEPENDENTLY, and any fix that keys host \
+                     backing by frame alone is weaker than the driver it stands in for"
+                );
+                true
+            }
+            W379Release::Lost { saw } => {
+                println!(
+                    "FAIL  R1\" SIBLING KILLED  = unmapping VA_A silenced VA_B \
+                     ({saw:#010x}, want {MAGIC_B2:#010x}). ⇒ the revoke is symmetric and \
+                     the unmap side needs the same (phys, va) key the publish side does"
+                );
+                false
+            }
+            W379Release::Refused => {
+                println!("??    R1\" release via B#2  = refused, not lost");
+                false
+            }
+        }
+    };
+
+    let ok = go();
+
+    for va in live {
+        let _ = rm.unmap_local(vas, va);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "RUNGCTL_alias_unmap={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_alias_unmap={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if ok {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    ok
+}
+
+/// ★★★★★ **w379 R2 — ALLOCATION PROPAGATION: does a mapping at a DICTATED VA actually land
+/// in the host's page tables?**
+///
+/// Allocate, map at a VA we chose, and then ask the **host driver** — not our own
+/// bookkeeping — whether that VA resolves. ★ The independence is the point: this repo's
+/// census has been wrong before, and *"a probe that shares the allocator is not an
+/// observer"* is one of its paid-for lessons.
+///
+/// Five arms, and the **negative** ones are what make the positive one mean anything:
+///
+/// ```text
+///   N1  a VA we never mapped        -> probe_va must say Free       [NEGATIVE CONTROL]
+///   N2  the same VA, via pde_info   -> recorded, ungraded
+///   P1  map at the dictated VA      -> RM must place it exactly there
+///   P2  probe_va at the mapped VA   -> must NOT say Free
+///   P3  pde_info at the mapped VA   -> PDE_COVERS, or UNMEASURED and said so
+///   P4  unmap, then probe_va again  -> must be Free once more
+/// ```
+///
+/// ⊘ **N1 is not decoration.** `probe_va` answers by trying to place a fresh object at the
+/// address; if it could never refuse, `Free` would be free and P2 would be vacuous. An arm
+/// whose refusing branch is unreachable proves nothing — the same shape `executor_vas_probe`
+/// already documents one object over.
+///
+/// ⊘ **P3 may be UNMEASURED and that is not a failure.**
+/// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` answers `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` on a
+/// release driver — [`HostRmBackend::pde_info`]'s docs record why the PDE sibling exists at
+/// all — so a refusal here is the driver declining to answer, never the VA failing to
+/// resolve. Grading it as a red would manufacture the finding.
+fn map_propagation(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    const VA_MAPPED: u64 = 0x0000_0009_1100_0000;
+    const VA_NEVER: u64 = 0x0000_0009_5100_0000;
+
+    println!(
+        "info  R2 propagation      = GPU {gpu}, euid {} — map at a VA we dictate, then ask \
+         the HOST DRIVER whether it resolves",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R2 the bar          = an unmapped VA must probe FREE (negative control), the \
+         mapped one must NOT, and the VA must be FREE again after the unmap"
+    );
+
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R2 vaspace          = the rung needs its own address space");
+        println!("RUNGCTL_map_propagation=FAIL");
+        println!("RUNG_map_propagation=NOTRUN");
+        return false;
+    };
+    let space = vas.raw() as u32;
+
+    // ── N1 — the negative control, FIRST, before anything is mapped ─────────────────────
+    let n1 = rm.probe_va(space, VA_NEVER, W379_BYTES);
+    let n1_free = matches!(n1, Ok(kayfabe_isolate_host::rm::VaProbe::Free));
+    println!("info  R2 N1 unmapped VA   = {n1:?} at {VA_NEVER:#018x}");
+    let n2 = w379_host_va(rm, vas, VA_NEVER);
+    println!(
+        "info  R2 N2 pde(unmapped) = {} ⊘ recorded, UNGRADED",
+        n2.as_str()
+    );
+    if !n1_free {
+        println!(
+            "??    R2 CONTROL FAILED   = a VA this rung never mapped did not probe Free. \
+             ⊘ The instrument cannot distinguish mapped from unmapped, so every arm below \
+             is UNINTERPRETABLE"
+        );
+        let _ = rm.free(vas);
+        println!("RUNGCTL_map_propagation=FAIL");
+        println!("RUNG_map_propagation=NOTRUN");
+        return false;
+    }
+    println!("ok    R2 control          = the unmapped VA probes Free — the instrument can say no");
+
+    let mut ok = true;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mapped_at: Option<u64> = None;
+
+    if let Ok(mem) = rm.alloc_probe_local(W379_BYTES) {
+        mem_h = Some(mem);
+        // ── P1 — the dictated placement ─────────────────────────────────────────────────
+        match rm.map_local_at(vas, mem, W379_BYTES, Some(VA_MAPPED)) {
+            Ok(got) if got == VA_MAPPED => {
+                mapped_at = Some(got);
+                println!("ok    R2 P1 placed as asked = {got:#018x}");
+            }
+            Ok(got) => {
+                mapped_at = Some(got);
+                ok = false;
+                println!(
+                    "FAIL  R2 P1 placement     = asked {VA_MAPPED:#018x}, RM chose {got:#018x}"
+                );
+            }
+            Err(e) => {
+                ok = false;
+                println!("FAIL  R2 P1 map           = refused {e:?}");
+            }
+        }
+
+        if mapped_at == Some(VA_MAPPED) {
+            // ── P2 — the allocator's answer ─────────────────────────────────────────────
+            let p2 = rm.probe_va(space, VA_MAPPED, W379_BYTES);
+            let p2_free = matches!(p2, Ok(kayfabe_isolate_host::rm::VaProbe::Free));
+            println!("info  R2 P2 mapped VA     = {p2:?}");
+            if p2_free {
+                ok = false;
+                println!(
+                    "FAIL  R2 P2               = the allocator says a VA WE JUST MAPPED is \
+                     free. The mapping did not land in the space we asked about"
+                );
+            } else {
+                println!("ok    R2 P2               = the allocator refuses the mapped VA");
+            }
+
+            // ── P3 — the page-table answer ──────────────────────────────────────────────
+            let p3 = w379_host_va(rm, vas, VA_MAPPED);
+            match p3 {
+                W379HostVa::PdeCovers => {
+                    println!("★     R2 P3 host tables   = PDE_COVERS at {VA_MAPPED:#018x}")
+                }
+                W379HostVa::PdeAbsent => {
+                    ok = false;
+                    println!(
+                        "FAIL  R2 P3 host tables   = PDE_ABSENT at a VA we mapped — the \
+                         publication did not reach the host page tables"
+                    );
+                }
+                W379HostVa::Unmeasured => println!(
+                    "⊘     R2 P3 host tables   = UNMEASURED (the control refused). NOT a \
+                     failure value: `GET_PDE_INFO`/`GET_PTE_INFO` are declined by release \
+                     drivers, and a refusal is not an absent mapping"
+                ),
+            }
+
+            // ── P4 — and the VA comes back ──────────────────────────────────────────────
+            if rm.unmap_local(vas, VA_MAPPED).is_ok() {
+                mapped_at = None;
+                let p4 = rm.probe_va(space, VA_MAPPED, W379_BYTES);
+                let p4_free = matches!(p4, Ok(kayfabe_isolate_host::rm::VaProbe::Free));
+                println!("info  R2 P4 after unmap   = {p4:?}");
+                if p4_free {
+                    println!("ok    R2 P4               = the VA is reusable again");
+                } else {
+                    ok = false;
+                    println!(
+                        "FAIL  R2 P4               = the VA did not come back after the \
+                         unmap — a leak that a stress rung would hit as exhaustion"
+                    );
+                }
+            } else {
+                ok = false;
+                println!("FAIL  R2 P4 unmap         = refused");
+            }
+        }
+    } else {
+        ok = false;
+        println!("FAIL  R2 object           = device-local allocation refused");
+    }
+
+    if let Some(at) = mapped_at {
+        let _ = rm.unmap_local(vas, at);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!("RUNGCTL_map_propagation=PASS");
+    println!("RUNG_map_propagation={}", if ok { "PASS" } else { "FAIL" });
+    ok
+}
+
+/// ★★★★★ **w379 R3 — A MISSING PAGE, ON PURPOSE: is the fault CONTAINED, and is it NAMED?**
+///
+/// Every fault this campaign has met, it met by accident. This rung makes one deliberately
+/// and asserts the two properties a fault has to have before anything can be built on top of
+/// it:
+///
+/// ```text
+///   1  a BYSTANDER channel, in its OWN address space, releases -> must land   [CONTROL]
+///   2  a VICTIM channel releases into a VA that was NEVER mapped -> must NOT land
+///   3  the victim's ERROR NOTIFIER must have fired, with a NAME
+///   4  the bystander releases AGAIN                            -> must STILL land
+/// ```
+///
+/// ★★ **Step 4 is containment**, and step 1 is what makes it readable: without a bystander
+/// that was already working, *"the bystander stopped"* and *"the bystander never worked"*
+/// are the same observation. The two channels live in **separate address spaces** so the
+/// fault cannot reach the bystander through shared page tables.
+///
+/// ★ **Step 3 is "named, not silent."** `ErrorNotifierRead::fired()` keys on `status`, the
+/// field RM writes last, and `except_type` carries `ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`
+/// (`0x1f`) — the same number a host kernel log prints as **`Xid 31`**. A fault that kills a
+/// channel without writing that record is a *silent* fault, and this rung fails on it even
+/// though containment held.
+///
+/// ⚠ **This rung deliberately provokes a real `Xid 31` and kills its victim channel.** That
+/// is the measurement, not a side effect.
+///
+/// ⊘ Pre-registered: a run where the victim's release **lands** means the VA resolved after
+/// all — the address was not as unmapped as we thought — and is reported as `NOTRUN`, not as
+/// a pass. An unmapped-address rung whose address turned out to be mapped measured nothing.
+fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    const BYST_RING_AT: u64 = 0x0000_0006_5100_0000;
+    const BYST_TARGET: u64 = 0x0000_0007_5100_0000;
+    const VICT_RING_AT: u64 = 0x0000_0006_7100_0000;
+    /// Never mapped by anything in this program, in a space that holds only the victim's
+    /// own ring — so a resolution here would be RM's, not ours.
+    const VICT_NEVER_MAPPED: u64 = 0x0000_000A_1100_0000;
+    const MAGIC_LIVE: u32 = 0xB0DE_0001;
+    const MAGIC_LIVE2: u32 = 0xB0DE_0002;
+    const MAGIC_DEAD: u32 = 0xDEAD_BEEF;
+
+    println!(
+        "info  R3 missing page     = GPU {gpu}, euid {} — fault a channel on a VA that was \
+         never mapped, with a BYSTANDER running in its own address space",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R3 the bar          = (a) CONTAINED: the bystander lands before AND after; \
+         (b) NAMED: the victim's error notifier fires with an exception type"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R3 engine           = COPY0 is not expressible");
+        println!("RUNGCTL_missing_page=FAIL");
+        println!("RUNG_missing_page=NOTRUN");
+        return false;
+    };
+    let (Ok(byst_vas), Ok(vict_vas)) = (rm.alloc_vaspace(), rm.alloc_vaspace()) else {
+        println!("FAIL  R3 vaspaces         = the rung needs TWO address spaces");
+        println!("RUNGCTL_missing_page=FAIL");
+        println!("RUNG_missing_page=NOTRUN");
+        return false;
+    };
+
+    let mut control_ok = false;
+    let mut byst_map: Option<u64> = None;
+    let mut handles: Vec<kayfabe_isolate::HostHandle> = Vec::new();
+
+    let mut go = || -> Option<bool> {
+        // ── the bystander ───────────────────────────────────────────────────────────────
+        let (bchan, btok) = rm
+            .alloc_channel_at(byst_vas, engine_type, Some(GpuVa(BYST_RING_AT)))
+            .ok()?;
+        handles.push(bchan);
+        rm.schedule(bchan).ok()?;
+        let bmem = rm.alloc_probe_local(W379_BYTES).ok()?;
+        handles.push(bmem);
+        rm.fill_words(bmem, W379_BYTES, W379_SENTINEL, 0).ok()?;
+        let at = rm
+            .map_local_at(byst_vas, bmem, W379_BYTES, Some(BYST_TARGET))
+            .ok()?;
+        byst_map = Some(at);
+        if at != BYST_TARGET {
+            println!("??    R3 bystander map     = placed at {at:#018x}, not as asked");
+            return None;
+        }
+        let before =
+            w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A, MAGIC_LIVE);
+        println!("info  R3 bystander before = {before:?}");
+        if !before.landed() {
+            println!(
+                "??    R3 CONTROL FAILED   = the bystander never worked, so *\"it kept \
+                 working\"* is unobservable. ⊘ UNINTERPRETABLE"
+            );
+            return None;
+        }
+        control_ok = true;
+        println!("ok    R3 control          = the bystander lands BEFORE the fault");
+
+        // ── the victim, with a notifier so the fault can be NAMED ────────────────────────
+        let notifier = rm.alloc_sysmem(0x1000).ok()?;
+        handles.push(notifier);
+        let (vchan, vtok) = rm
+            .alloc_channel_at_with_error_notifier(
+                vict_vas,
+                engine_type,
+                Some(GpuVa(VICT_RING_AT)),
+                notifier,
+            )
+            .ok()?;
+        handles.push(vchan);
+        rm.schedule(vchan).ok()?;
+        // A scratch object ONLY so the poll has something to read; it is deliberately NOT
+        // mapped at `VICT_NEVER_MAPPED`, so the sentinel it holds can never be overwritten.
+        let vmem = rm.alloc_probe_local(W379_BYTES).ok()?;
+        handles.push(vmem);
+        rm.fill_words(vmem, W379_BYTES, W379_SENTINEL, 0).ok()?;
+
+        println!("FAULT_MARK=victim_release va={VICT_NEVER_MAPPED:#018x}");
+        let victim = w379_release_through(
+            rm,
+            vchan,
+            vtok,
+            vmem,
+            VICT_NEVER_MAPPED,
+            W379_OFF_A,
+            MAGIC_DEAD,
+        );
+        println!("info  R3 victim           = {victim:?}");
+        if victim.landed() {
+            println!(
+                "??    R3 NOTHING FAULTED  = the release into a VA this rung never mapped \
+                 LANDED. ⊘ The address was not unmapped, so no fault was provoked and \
+                 nothing here is a result"
+            );
+            return None;
+        }
+
+        // ── (b) NAMED ───────────────────────────────────────────────────────────────────
+        let named = match rm
+            .read_error_notifier(notifier, kayfabe_isolate_host::rm::NotifierAperture::Sysmem)
+        {
+            Ok(n) => {
+                println!(
+                    "info  R3 notifier         = fired={} status={:#06x} except_type={:#x} \
+                     engine={:#06x}",
+                    n.fired(),
+                    n.status,
+                    n.except_type,
+                    n.engine_type
+                );
+                if n.fired() {
+                    println!(
+                        "★     R3 NAMED            = the driver wrote a robust-channel \
+                         record. except_type {:#x} is what a host kernel log prints as \
+                         `Xid {}`",
+                        n.except_type, n.except_type
+                    );
+                    true
+                } else {
+                    println!(
+                        "FAIL  R3 SILENT           = the channel stopped and the notifier is \
+                         quiet. ⊘ A fault nobody names cannot be handled, and `status == 0` \
+                         is also what an unwired notifier reads as — both are failures of \
+                         this bar"
+                    );
+                    false
+                }
+            }
+            Err(e) => {
+                println!("FAIL  R3 notifier         = unreadable {e:?}");
+                false
+            }
+        };
+
+        // ── (a) CONTAINED ───────────────────────────────────────────────────────────────
+        let after =
+            w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A2, MAGIC_LIVE2);
+        println!("info  R3 bystander after  = {after:?}");
+        let contained = after.landed();
+        if contained {
+            println!(
+                "★     R3 CONTAINED        = a channel in another address space kept \
+                 landing across the fault"
+            );
+        } else {
+            println!(
+                "FAIL  R3 NOT CONTAINED    = the bystander landed before the fault and is \
+                 silent after it. The fault took a channel it does not own"
+            );
+        }
+        Some(named && contained)
+    };
+
+    let out = go();
+
+    if let Some(at) = byst_map {
+        let _ = rm.unmap_local(byst_vas, at);
+    }
+    for h in handles.into_iter().rev() {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(byst_vas);
+    let _ = rm.free(vict_vas);
+
+    println!(
+        "RUNGCTL_missing_page={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    match out {
+        Some(true) => {
+            println!("RUNG_missing_page=PASS");
+            true
+        }
+        Some(false) => {
+            println!("RUNG_missing_page=FAIL");
+            false
+        }
+        None => {
+            println!("RUNG_missing_page=NOTRUN");
+            false
+        }
+    }
+}
+
+/// ★★★★★ **w379 R5 — THE STRESS RUNG: many alloc/map/free cycles, INTERLEAVED, with a
+/// rolling window of live mappings.**
+///
+/// The owner's ask was a *"mean stress test"*, and the four things it has to be able to see
+/// are named up front so the rung can be checked against its own claims:
+///
+/// ```text
+///   handle recycling collisions  -> a recycled object must read as its OWN sentinel, never
+///                                   as the magic the previous tenant of that VA released
+///   extents drifting             -> every cycle maps the same length at the same VA and
+///                                   asserts the placement is EXACT, every time
+///   rows leaking after free      -> after each unmap the VA must probe Free again
+///   interference between live
+///   mappings                     -> every live slot is re-released EVERY cycle, so a
+///                                   mapping broken by a LATER one is caught at the cycle
+///                                   that broke it rather than at teardown
+/// ```
+///
+/// ★★ **The window is what makes this a stress rung rather than a loop.** Four slots are
+/// live at once and the allocations are recycled out from under each other, so allocate,
+/// map, free and unmap are **interleaved** instead of strictly nested. A strictly nested
+/// loop exercises one object at a time and cannot see any of the four failures above.
+///
+/// ⊘ **WHAT THIS RUNG DOES NOT COVER, STATED SO IT IS NOT READ AS COVERAGE.**
+/// **Cross-client leakage is NOT tested here.** *"Two guest processes must not see each
+/// other's mappings"* is a standing security requirement and it needs a **second RM client**
+/// — a second `HostRmBackend` over a second connection — which this binary builds exactly
+/// one of. A rung that ran one client and reported on two would be worse than no rung.
+/// ⚠ Named as the follow-up, not left implied.
+fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    /// Live mappings held at once. Four, so allocate/free interleave rather than nest.
+    const SLOTS: usize = 4;
+    /// Cycles. Each recycles ONE slot and re-releases through ALL of them.
+    const CYCLES: usize = 48;
+    const RING_AT: u64 = 0x0000_0006_9100_0000;
+    /// The slot VAs: 4 GiB apart, so no slot's mapping can be covered by a neighbour's big
+    /// PTE — the confound `alias_two_vas` avoids for the same reason.
+    const SLOT_BASE: u64 = 0x0000_000B_1100_0000;
+    const SLOT_STRIDE: u64 = 0x0000_0001_0000_0000;
+
+    println!(
+        "info  R5 stress           = GPU {gpu}, euid {} — {CYCLES} cycles over {SLOTS} \
+         interleaved live mappings, recycling one slot per cycle",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R5 the bar          = every release lands, every placement is EXACT, every \
+         freed VA probes Free again, and a recycled object reads as its OWN sentinel"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R5 engine           = COPY0 is not expressible");
+        println!("RUNGCTL_map_stress=FAIL");
+        println!("RUNG_map_stress=NOTRUN");
+        return false;
+    };
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R5 vaspace          = the rung needs its own address space");
+        println!("RUNGCTL_map_stress=FAIL");
+        println!("RUNG_map_stress=NOTRUN");
+        return false;
+    };
+    let space = vas.raw() as u32;
+
+    // ⊘ EXACT COUNTS over a fixed denominator, and the failure lists are CAPPED while the
+    // counts are not — a sample that hid the total would be the *"a capped list is not a
+    // census"* failure this repo has paid for.
+    const SHOW: usize = 5;
+    let mut cycles_run = 0usize;
+    let mut rel_tried = 0usize;
+    let mut rel_landed = 0usize;
+    let mut placed_exact = 0usize;
+    let mut placed_tried = 0usize;
+    let mut free_ok = 0usize;
+    let mut free_tried = 0usize;
+    let mut stale_reads = 0usize;
+    let mut first_failures: Vec<String> = Vec::new();
+    let mut control_ok = false;
+
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    // (object, va, the magic its last release wrote)
+    let mut slots: Vec<Option<(kayfabe_isolate::HostHandle, u64, u32)>> = vec![None; SLOTS];
+
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) else {
+            println!("??    R5 channel          = refused at {RING_AT:#018x}");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.schedule(chan).is_err() {
+            println!("??    R5 schedule         = refused");
+            return false;
+        }
+
+        for cycle in 0..CYCLES {
+            let s = cycle % SLOTS;
+            let va = SLOT_BASE + (s as u64) * SLOT_STRIDE;
+
+            // ── retire the slot's current tenant, and assert the VA comes back ───────────
+            if let Some((old_mem, old_va, _)) = slots[s].take() {
+                let un = rm.unmap_local(vas, old_va).is_ok();
+                let _ = rm.free(old_mem);
+                free_tried += 1;
+                let probe = rm.probe_va(space, old_va, W379_BYTES);
+                if un && matches!(probe, Ok(kayfabe_isolate_host::rm::VaProbe::Free)) {
+                    free_ok += 1;
+                } else if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle}: VA {old_va:#018x} did not come back after free \
+                         (unmap_ok={un}, probe={probe:?})"
+                    ));
+                }
+            }
+
+            // ── a fresh tenant, sentinel-filled BEFORE it is mapped ─────────────────────
+            let Ok(mem) = rm.alloc_probe_local(W379_BYTES) else {
+                if first_failures.len() < SHOW {
+                    first_failures.push(format!("cycle {cycle}: allocation refused"));
+                }
+                continue;
+            };
+            if rm.fill_words(mem, W379_BYTES, W379_SENTINEL, 0).is_err() {
+                let _ = rm.free(mem);
+                continue;
+            }
+            placed_tried += 1;
+            let got = match rm.map_local_at(vas, mem, W379_BYTES, Some(va)) {
+                Ok(g) => g,
+                Err(e) => {
+                    if first_failures.len() < SHOW {
+                        first_failures
+                            .push(format!("cycle {cycle}: map at {va:#018x} refused {e:?}"));
+                    }
+                    let _ = rm.free(mem);
+                    continue;
+                }
+            };
+            if got == va {
+                placed_exact += 1;
+            } else if first_failures.len() < SHOW {
+                first_failures.push(format!(
+                    "cycle {cycle}: EXTENT/PLACEMENT DRIFT — asked {va:#018x}, got {got:#018x}"
+                ));
+            }
+
+            // ★ HANDLE RECYCLING: the fresh object must read as its OWN sentinel. If RM
+            // handed back the previous tenant's storage, or if our mapping still names it,
+            // the word here is the magic that tenant released — a value this new object has
+            // no other way to hold.
+            if let Ok(w) = rm.read_words_independently(mem, W379_BYTES, &[W379_OFF_A])
+                && w[0] != W379_SENTINEL
+            {
+                stale_reads += 1;
+                if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle}: STALE READ at {va:#018x} — fresh object holds \
+                         {:#010x}, not the sentinel {W379_SENTINEL:#010x}",
+                        w[0]
+                    ));
+                }
+            }
+            slots[s] = Some((mem, got, 0));
+
+            // ── re-release through EVERY live slot, so a mapping broken by a LATER one is
+            //    caught at the cycle that broke it ────────────────────────────────────────
+            for (i, slot) in slots.iter_mut().enumerate() {
+                let Some((smem, sva, last)) = slot else {
+                    continue;
+                };
+                // A payload unique to (cycle, slot): a stale word from the previous release
+                // can never satisfy it.
+                let payload = 0x5715_0000u32 | ((cycle as u32) << 4) | (i as u32);
+                rel_tried += 1;
+                let out = w379_release_through(rm, chan, token, *smem, *sva, W379_OFF_A, payload);
+                if out.landed() {
+                    rel_landed += 1;
+                    *last = payload;
+                    if !control_ok {
+                        control_ok = true;
+                        println!(
+                            "ok    R5 control          = the first release of the first \
+                             cycle landed — the channel and the ring work, so a later red \
+                             is the mapping plane and not the harness"
+                        );
+                    }
+                } else if first_failures.len() < SHOW {
+                    first_failures.push(format!(
+                        "cycle {cycle} slot {i}: release through {sva:#018x} did not land \
+                         ({out:?}, last good {last:#010x})"
+                    ));
+                }
+            }
+            cycles_run += 1;
+        }
+        true
+    };
+
+    let ran = go();
+
+    for slot in slots.iter().flatten() {
+        let _ = rm.unmap_local(vas, slot.1);
+        let _ = rm.free(slot.0);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "info  R5 census           = cycles {cycles_run}/{CYCLES}  releases \
+         {rel_landed}/{rel_tried}  placements exact {placed_exact}/{placed_tried}  \
+         VAs recovered {free_ok}/{free_tried}  stale reads {stale_reads}"
+    );
+    if !first_failures.is_empty() {
+        println!(
+            "⚠     R5 failures         = showing {} of {} recorded",
+            first_failures.len().min(SHOW),
+            first_failures.len()
+        );
+        for f in first_failures.iter().take(SHOW) {
+            println!("        {f}");
+        }
+    }
+
+    let clean = ran
+        && cycles_run == CYCLES
+        && rel_tried > 0
+        && rel_landed == rel_tried
+        && placed_exact == placed_tried
+        && free_ok == free_tried
+        && stale_reads == 0;
+    if clean {
+        println!(
+            "★     R5 STRESS CLEAN     = {rel_landed} releases over {cycles_run} \
+             interleaved cycles, every placement exact, every freed VA recovered, no stale \
+             read. ⊘ Single-client only — cross-client leakage is NOT covered here"
+        );
+    }
+
+    println!(
+        "RUNGCTL_map_stress={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_map_stress={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if clean {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    clean
+}
+
 /// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
 /// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
 fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
@@ -4049,6 +5698,16 @@ fn main() -> std::process::ExitCode {
     let mut want_fb_join: Option<OsDescSeed> = None;
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
+    let mut want_late_map_race = false;
+    // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
+    // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
+    // that runs a rung WITHOUT its positive control, because a rung whose control did not
+    // pass has no interpretable result to report.
+    let mut want_alias_two_vas = false;
+    let mut want_alias_unmap = false;
+    let mut want_map_propagation = false;
+    let mut want_missing_page = false;
+    let mut want_map_stress = false;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -4099,6 +5758,35 @@ fn main() -> std::process::ExitCode {
             "--dictated-ring" => want_dictated_ring = true,
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
+            // ★★★★★ W377. Runs BOTH arms (control + race) in one invocation, because the
+            // race arm is uninterpretable without the control and separating them into two
+            // flags would let someone run only the half that produces a headline.
+            "--late-map-race" => want_late_map_race = true,
+            // ★★★★★ w379 R1′ — one allocation, two GPU VAs, and a release through the
+            // FIRST one after the second is mapped.
+            "--alias-two-vas" => want_alias_two_vas = true,
+            // ★★★★★ w379 R1″ — the discriminator: unmap one alias, ask whether the other
+            // survived.
+            "--alias-unmap-observe" => want_alias_unmap = true,
+            // ★★★★★ w379 R2 — does a mapping at a dictated VA land in the HOST's tables?
+            "--map-propagation" => want_map_propagation = true,
+            // ★★★★★ w379 R3 — a missing page on purpose: contained, and named.
+            // ⚠ Provokes a real `Xid 31` and kills its victim channel. That is the
+            // measurement, not a side effect — which is why it is opt-in.
+            "--missing-page-fault" => want_missing_page = true,
+            // ★★★★★ w379 R5 — the stress rung: interleaved alloc/map/free over a rolling
+            // window. ⊘ Single-client; cross-client leakage is NOT covered by it.
+            "--map-stress" => want_map_stress = true,
+            // The whole battery, in dependency order: R2 establishes that a dictated
+            // mapping lands at all, R1′ asks whether TWO of them can, R1″ asks what an
+            // unmap does to the survivor, R3 asks what a MISSING one does to a bystander.
+            "--w379" => {
+                want_map_propagation = true;
+                want_alias_two_vas = true;
+                want_alias_unmap = true;
+                want_missing_page = true;
+                want_map_stress = true;
+            }
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
             "--executor-vas" => want_executor_vas = true,
@@ -4388,6 +6076,84 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_negative(&mut rm, gpu);
         println!("done — dictated-ring negative control only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ W377 runs here and RETURNS, for R26's reason exactly: each arm allocates its
+    // own `Vas`, its own channel and its own target at addresses no other rung uses, so an
+    // outcome is attributable to THIS rung's placements and to nothing earlier in the
+    // ladder.
+    // ★★★★★ w379 — the mapping-plane battery. It RETURNS, for the same reason W377 does:
+    // every rung allocates its own `Vas`, its own channel and its own objects at addresses
+    // no other rung uses, so an outcome is attributable to THIS rung's placements and to
+    // nothing earlier in the ladder.
+    if want_map_propagation
+        || want_alias_two_vas
+        || want_alias_unmap
+        || want_missing_page
+        || want_map_stress
+    {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ⊘ Every SELECTED rung's verdict line is printed by the rung itself; the ones NOT
+        // selected are printed here as `NOTRUN`, so a grader reading these lines always
+        // sees the full vocabulary and can never mistake *"this rung was not asked for"*
+        // for *"this rung was asked for and said nothing"*.
+        if !want_map_propagation {
+            println!("RUNG_map_propagation=NOTRUN");
+        }
+        if !want_alias_two_vas {
+            println!("RUNG_alias_two_vas=NOTRUN");
+        }
+        if !want_alias_unmap {
+            println!("RUNG_alias_unmap=NOTRUN");
+        }
+        if !want_missing_page {
+            println!("RUNG_missing_page=NOTRUN");
+        }
+        if !want_map_stress {
+            println!("RUNG_map_stress=NOTRUN");
+        }
+        // ⚠ Each rung runs and its result is recorded; none short-circuits the next. A
+        // battery that stopped at the first red would report a stopping point rather than a
+        // result — the exact shape `cargo test --workspace` was caught doing.
+        let mut all = true;
+        if want_map_propagation {
+            all &= map_propagation(&mut rm, gpu);
+        }
+        if want_alias_two_vas {
+            all &= alias_two_vas(&mut rm, gpu);
+        }
+        if want_alias_unmap {
+            all &= alias_unmap_observe(&mut rm, gpu);
+        }
+        if want_missing_page {
+            all &= missing_page_fault(&mut rm, gpu);
+        }
+        if want_map_stress {
+            all &= map_stress(&mut rm, gpu);
+        }
+        println!("done — w379 mapping-plane rungs only");
+        return if all {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    if want_late_map_race {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = late_map_race(&mut rm, gpu);
+        println!("done — late-map race only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
