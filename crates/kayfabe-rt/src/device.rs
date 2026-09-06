@@ -3929,7 +3929,70 @@ impl SharedDevice {
         .unwrap_or_default()
     }
 
+    /// ★★★★★ **w380 — WHICH VA OF *THIS* ADDRESS SPACE ALREADY HOLDS THIS FRAME'S JOIN?**
+    ///
+    /// Returns the guest VA of the one `JoinsGuestWindow` row in `(gpu, pdb)` that names
+    /// `phys`, or `None`. ⊘ Read-only: nothing is unbound, nothing is staged, nothing is
+    /// released.
+    ///
+    /// # Why the shell needs this BEFORE it asks for a backing
+    ///
+    /// The device's framebuffer store answers *"is this frame served out of joined pages"*
+    /// ([`kayfabe_device::plane::RegPlane::fb_join_installed_at`]) and that is a **per-device**
+    /// fact. It cannot distinguish the three cases the shell must act on differently:
+    ///
+    /// | this VAS names it | who owns the pages | what the shell must do |
+    /// |---|---|---|
+    /// | yes | us | **alias** — describe the same pages at this second VA |
+    /// | no, and nobody does | nobody | reclaim the orphan, then join fresh |
+    /// | no, and a live peer does | another proc | refuse by name; a peer's backing is not ours |
+    ///
+    /// ⇒ Asking the cheap per-VAS question first is also what keeps the expensive
+    /// device-wide census ([`SharedDevice::fb_join_namers`], O(procs × VASes × rows)) off the
+    /// common path — `w364` measured that census costing the GPU when it ran on every refusal.
+    ///
+    /// ⚠ **Returns the FIRST qualifying row.** A frame legitimately has several aliases in one
+    /// VAS once `w380` lands, and any of them answers the only question the caller asks —
+    /// *"do we already hold this frame's pages here"*. A caller that needed the whole set
+    /// would need a different verb, and none does.
+    #[must_use]
+    pub fn fb_join_va_in_vas(&self, gpu: GpuId, pdb: Pdb, phys: u64) -> Option<u64> {
+        let pid = self
+            .route_act(
+                |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                |_spine, proc, ()| proc.id,
+            )
+            .ok()?;
+        self.with_proc_mut(pid, |p| {
+            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            vas.table.iter().find_map(|(va, _len, b)| {
+                let h = b.host()?;
+                (b.phys() == phys
+                    && h.frees_object()
+                    && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow)
+                    .then_some(va)
+            })
+        })
+        .flatten()
+    }
+
     /// ★★★★★ **w329 leg 2 — SUPERSEDE the stale join of a recycled framebuffer frame.**
+    ///
+    /// > ### ⊘⊘⊘ RETIRED FROM THE DEFAULT PATH — w380, 2026-09-06.
+    /// > This verb's own argument names its cost — *"⚠ **What is NOT proven: that the old VA
+    /// > is dead.** The guest describes both"* — and `w377` §9 then **measured that the old VA
+    /// > is alive**: a supersede TARGET later becomes a SOURCE, repeatedly and stably, over 127
+    /// > events and 17 frames. Staleness is monotone, so only a guest that holds *both* VAs
+    /// > mapped can produce an alternating pair. ⇒ The premise *"the device can serve only one
+    /// > — one frame carries one join"* is what was wrong, and
+    /// > [`kayfabe_fwd::FbLeafBacking::Aliased`] removes it.
+    /// >
+    /// > ★ **Kept reachable by name, as the NEGATIVE CONTROL only** —
+    /// > `KAYFABE_JOIN_RELEASE=supersede`. That is the same discipline `off` already has: one
+    /// > binary reproduces `w377`'s `28 108 ⊘ SUPERSEDE CAPPED` and its `Xid 31`, which is how
+    /// > a boot on the fixed default is shown to have fixed something rather than to have
+    /// > changed the weather. ⊘ Nothing selects it implicitly and an unparseable value reads as
+    /// > the fixed default, never as the control.
     ///
     /// # ⊘⊘⊘ WHY THIS EXISTS: THE TRIGGER THE SOURCE NOMINATES IS NOT THE EVENT THAT OCCURS
     ///

@@ -321,6 +321,10 @@ fn assert_verb_in_namespace(iso: kayfabe_isolate::IsolateId, verb: &RmVerb) {
                 assert_eq!(token >> 32, ns, "a join token leaked across isolates");
             }
         }
+        // ★★★ w380 — an alias names the host VAS it places into and mints NO token. ⊘ The
+        // absent token is the assertion, not an omission: an alias that minted one would have
+        // minted a second memory for a frame that already has one.
+        RmVerb::AliasFbLeaf { vas, .. } => own(vas),
     }
 }
 

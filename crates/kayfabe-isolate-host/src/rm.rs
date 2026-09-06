@@ -136,8 +136,9 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafJoined,
-    GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased,
+    FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend,
+    RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -166,6 +167,15 @@ pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
 /// which would be correct on every one-worker test and wrong at the first boot whose second
 /// request landed on another pool slot. `0x4B4D` is `"KM"`.
 pub const FB_JOIN_NO_TABLE: u32 = 0x4B4D;
+
+/// ★★★★★ **w380 — the status [`RmBackend::alias_fb_leaf`] refuses a frame nobody has joined
+/// with.**
+///
+/// ⊘ Distinct from [`FB_JOIN_NO_TABLE`], which is *"this backend cannot join at all"*. This
+/// one says *"this backend joins, and this frame has no join to alias"* — a caller's ordering
+/// error, and the one refusal that must never be softened into a mint: fabricating pages here
+/// would give the frame a second memory the guest cannot see. `0x4B41` is `"KA"`.
+pub const FB_ALIAS_NO_JOIN: u32 = 0x4B41;
 
 /// The first handle this isolate mints for itself.
 ///
@@ -5256,12 +5266,108 @@ impl RmBackend for HostRmBackend {
         }
         // ⊘ Installed LAST, after the chain has succeeded: a table entry for a leaf whose
         // fixed map refused would answer the instrument about memory no engine can reach.
-        table.install(phys, len, at.0, region);
+        table.install(phys, len, at.0, backing.token, region);
         // ★★★★★ LEG A2 — and on the SAME success path as the install, never earlier: this
         // set is what a channel birth checks before it may name the object.
         table.remember_object(desc);
         Ok(FbLeafJoined {
             backing,
+            memory: self.stamp(desc),
+            host_va,
+        })
+    }
+
+    /// ★★★★★ **w380 — MAP AN ALREADY-JOINED FRAME AT A SECOND GPU VA.** The chain, and
+    /// every step of it is [`Self::join_fb_leaf`]'s with the minting removed.
+    ///
+    /// `token_for` (refuse if absent) → `lend` the **same** `memfd` → a fresh `mmap` of it →
+    /// `alloc_os_descriptor` → `map_dma_both` **at `at`** → placement check → remember.
+    ///
+    /// # ★★★ WHY A FRESH `mmap` OF THE SAME FILE, AND NOT THE JOIN'S OWN MAPPING
+    ///
+    /// Reusing the join's [`kayfabe_linux_raw::MappedRegion`] would mean two live
+    /// `OS_DESCRIPTOR`s pinning the identical user address range. RM would very likely accept
+    /// it — nothing in `os_lock_user_pages` forbids a second pin — but *"very likely"* is not
+    /// a property, and the failure mode if it is wrong is an allocation refusal at the exact
+    /// moment the guest needs its second alias. A second mapping of the same `memfd` is the
+    /// same **pages** by construction (that is what a shared file mapping *is*), costs one
+    /// `mmap`, and needs no assumption about RM's pinning at all.
+    ///
+    /// ⇒ **The bytes are the frame's own.** The guest writes through the emulated
+    /// framebuffer, the VMM's `mmap` and both aliases' mappings all land on the same page
+    /// cache pages of the one `memfd` the join minted.
+    ///
+    /// # ⊘ THE REFUSAL IS THE POINT
+    ///
+    /// A frame with no join has no pages to alias. Minting some would give the frame **two
+    /// memories** — the fabricated `SparseFb` pages the guest is still served out of, and a
+    /// blank host object the engine would read — which is precisely `w228`'s defect and is
+    /// self-concealing. So [`FB_ALIAS_NO_JOIN`] is returned and nothing is allocated.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] with [`FB_JOIN_NO_TABLE`] or [`FB_ALIAS_NO_JOIN`];
+    /// [`RmError::NoMemory`] if the mapping will not take; [`RmError::PlacementRefused`] when
+    /// RM did not place it at `at`; otherwise RM's own refusal.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError> {
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?,
+        );
+        // ★ Asked FIRST, before a range is narrowed or a descriptor is lent: the whole verb
+        // is *"the frame already has pages"*, and a chain that allocated anything before
+        // checking that would have something to unwind on the one path that matters.
+        let token = table
+            .token_for(phys, len)
+            .ok_or(RmError::Other(FB_ALIAS_NO_JOIN))?;
+        let range = self.narrow(vas)?;
+        let fd = self.exports.lend(token).map_err(|e| region_error(&e))?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        drop(fd);
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
+        // ⊘ `map_dma_both`, for `join_fb_leaf`'s reason verbatim: the engine runs in the
+        // isolate's own address space and the operands live in `vas`, and both must name this
+        // alias at the same address or the engine dereferences whatever else is there.
+        let host_va = match self.map_dma_both(range, desc, len, Some(at.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        if host_va != at.0 {
+            let _ = self.conn.raw_unmap_dma(range, host_va);
+            let _ = self.free(self.stamp(desc));
+            return Err(RmError::PlacementRefused {
+                want: at.0,
+                got: host_va,
+            });
+        }
+        table.install_alias(phys, len, at.0, token, region);
+        // ★★★★★ LEG A2 — an alias is a joined window at another address, so a channel may be
+        // born over it on exactly the same terms. Omitting this would make the SECOND VA of a
+        // frame refuse a ring birth the FIRST one allows, which is an ordering-dependent
+        // refusal with no principle behind it.
+        table.remember_object(desc);
+        Ok(FbLeafAliased {
             memory: self.stamp(desc),
             host_va,
         })

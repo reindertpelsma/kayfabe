@@ -37,7 +37,7 @@
 use crate::export::ChildExports;
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
-    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafJoined, GuestRamGrant,
+    CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant,
     GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
 use kayfabe_vmm::SurfaceHandle;
@@ -489,9 +489,54 @@ impl RmBackend for LoopbackRm {
         )
         .map_err(|_| RmError::NoMemory)?;
         drop(fd);
-        table.install(phys, len, at.0, region);
+        table.install(phys, len, at.0, backing.token, region);
         Ok(FbLeafJoined {
             backing,
+            memory: HostHandle::new(self.id, h),
+            host_va: at.0,
+        })
+    }
+
+    /// ★★★★★ **w380 — the alias, through the fixture.** Real: the second `mmap` of the SAME
+    /// `memfd`, so the two-views property is exercised end to end and a test can write through
+    /// one alias and read through another. ⊘ Modelled, exactly as above: `memory` is a fixture
+    /// handle and `host_va` is `at` by fiat — there is no GPU MMU here to refuse a placement.
+    ///
+    /// ★ The **refusal is real** and is the half worth having: aliasing a frame with no join
+    /// answers [`crate::rm::FB_ALIAS_NO_JOIN`] and allocates nothing, which is what stops a
+    /// caller ordering the two verbs the wrong way round from silently getting two memories.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError> {
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(crate::rm::FB_JOIN_NO_TABLE))?,
+        );
+        let token = table
+            .token_for(phys, len)
+            .ok_or(RmError::Other(crate::rm::FB_ALIAS_NO_JOIN))?;
+        self.known(vas)?;
+        let h = self.verb(false)?;
+        let fd = self.exports.lend(token).map_err(|_| RmError::NoMemory)?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            kayfabe_linux_raw::Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            kayfabe_linux_raw::CachePolicy::WriteBack,
+            kayfabe_linux_raw::HostPageSize::query(),
+        )
+        .map_err(|_| RmError::NoMemory)?;
+        drop(fd);
+        table.install_alias(phys, len, at.0, token, region);
+        Ok(FbLeafAliased {
             memory: HostHandle::new(self.id, h),
             host_va: at.0,
         })

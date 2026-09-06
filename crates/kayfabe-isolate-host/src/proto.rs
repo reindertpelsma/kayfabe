@@ -347,6 +347,24 @@ pub enum Request {
         /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
         prot: u8,
     },
+    /// ★★★★★ **w380** — [`kayfabe_isolate::RmBackend::alias_fb_leaf`], *"map an
+    /// already-joined frame at a second GPU VA"*.
+    ///
+    /// ⊘ **Its reply carries NO descriptor**, and that is the difference from
+    /// [`Request::JoinFbLeaf`] a reader should be able to see from the wire alone: the
+    /// frame's `memfd` crossed once, with the join. The fd allowance for this reply is
+    /// therefore **zero**, like every request but two.
+    AliasFbLeaf {
+        /// The host VAS to place the mapping in, raw.
+        vas: u64,
+        /// Bytes — must equal the joined frame's own length.
+        len: u64,
+        /// The guest VA the mapping must land at. Address identity.
+        at: u64,
+        /// The framebuffer-physical address of the frame to alias — the key the child looks
+        /// its existing join up by.
+        phys: u64,
+    },
     /// ★★★ [`kayfabe_isolate::RmBackend::fb_join_peek`] — the both-directions instrument.
     ///
     /// ⊘ `poke` is an `Option` on the port and two fields here, because a wire form cannot
@@ -432,6 +450,22 @@ pub enum Reply {
         len: u64,
         /// What the isolate actually granted: `0` = read-write, `1` = read-only.
         prot: u8,
+        /// The `OS_DESCRIPTOR` object, raw. Stamped with **this connection's** isolate by
+        /// the parent, never taken from the wire.
+        memory: u64,
+        /// Where RM actually placed it. ⊘ Carried rather than assumed equal to the request:
+        /// the parent's own placement check is the point.
+        host_va: u64,
+    },
+    /// ★★★★★ **w380** — the answer to a [`Request::AliasFbLeaf`]: the two RM facts and
+    /// **nothing else**.
+    ///
+    /// ⊘ Not [`Reply::JoinedBacking`] with an empty geometry, and not
+    /// [`Reply::HandleAndToken`]: the first would let a parent adopt a backing that does not
+    /// exist, and the second is a *channel's* pair of numbers. A reply shape confusable with
+    /// either would be confused at the one seam where being wrong means the VMM installs a
+    /// second view of one frame.
+    Aliased {
         /// The `OS_DESCRIPTOR` object, raw. Stamped with **this connection's** isolate by
         /// the parent, never taken from the wire.
         memory: u64,
@@ -872,6 +906,18 @@ impl Envelope {
                 out.extend_from_slice(&phys.to_le_bytes());
                 out.push(*prot);
             }
+            Request::AliasFbLeaf {
+                vas,
+                len,
+                at,
+                phys,
+            } => {
+                out.push(22);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+                out.extend_from_slice(&phys.to_le_bytes());
+            }
             Request::FbJoinPeek {
                 phys,
                 len,
@@ -1046,6 +1092,12 @@ impl Envelope {
                 phys: c.u64("join phys")?,
                 prot: c.u8("join prot")?,
             },
+            22 => Request::AliasFbLeaf {
+                vas: c.u64("alias vas")?,
+                len: c.u64("alias len")?,
+                at: c.u64("alias at")?,
+                phys: c.u64("alias phys")?,
+            },
             21 => Request::FbJoinPeek {
                 phys: c.u64("peek phys")?,
                 len: c.u64("peek len")?,
@@ -1114,6 +1166,11 @@ impl Reply {
                 out.extend_from_slice(&offset.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&host_va.to_le_bytes());
+            }
+            Reply::Aliased { memory, host_va } => {
+                out.push(11);
                 out.extend_from_slice(&memory.to_le_bytes());
                 out.extend_from_slice(&host_va.to_le_bytes());
             }
@@ -1188,6 +1245,10 @@ impl Reply {
                 prot: c.u8("joined prot")?,
                 memory: c.u64("joined memory")?,
                 host_va: c.u64("joined host va")?,
+            },
+            11 => Reply::Aliased {
+                memory: c.u64("aliased memory")?,
+                host_va: c.u64("aliased host va")?,
             },
             tag => return Err(ProtoError::UnknownTag { what: "reply", tag }),
         };
@@ -1462,6 +1523,15 @@ mod tests {
                 phys: 0,
                 prot: PROT_READ_ONLY,
             },
+            // ★★★ w380 — the alias, which carries NO prot byte and NO descriptor. A wire
+            // that copied `JoinFbLeaf`'s encoding would round-trip four of its five fields
+            // and silently shift `phys`.
+            Request::AliasFbLeaf {
+                vas: 7,
+                len: 0x1_0000,
+                at: 0x7480_ac00_0000,
+                phys: 0x1e0_0000,
+            },
             // ★ BOTH arms of the instrument: a bare read and a read-then-poke. A wire that
             // dropped `poke` would round-trip the read correctly and turn every poke into a
             // silent no-op — a control that reports the pattern it never wrote.
@@ -1510,6 +1580,7 @@ mod tests {
             Request::UnmapGuestRam { .. } => "UnmapGuestRam",
             Request::DescribeGuestRam { .. } => "DescribeGuestRam",
             Request::JoinFbLeaf { .. } => "JoinFbLeaf",
+            Request::AliasFbLeaf { .. } => "AliasFbLeaf",
             Request::FbJoinPeek { .. } => "FbJoinPeek",
         }
     }
@@ -1521,6 +1592,7 @@ mod tests {
         assert_eq!(
             seen,
             [
+                "AliasFbLeaf",
                 "Alloc",
                 "AllocChannel",
                 "AllocEngineObject",
@@ -1609,6 +1681,11 @@ mod tests {
                 prot: PROT_READ_WRITE,
                 memory: 0xC1D0_0021,
                 host_va: 0x2_0020_0000,
+            },
+            // ★★★ w380 — the alias reply: the two RM facts, no geometry, no descriptor.
+            Reply::Aliased {
+                memory: 0xC1D0_0022,
+                host_va: 0x7480_ac00_0000,
             },
         ];
         for r in replies {

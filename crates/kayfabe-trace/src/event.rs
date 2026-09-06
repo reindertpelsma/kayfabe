@@ -367,6 +367,12 @@ pub enum VerbTag {
     /// could not tell the two apart could not say whether the leaf the guest reads and the
     /// leaf the engine reads are the same bytes.
     JoinFbLeaf,
+    /// ★★★★★ **w380** — map an **already-joined** framebuffer frame at a SECOND GPU VA.
+    /// ⊘ A distinct tag from [`VerbTag::JoinFbLeaf`] for the fact a reader most needs off
+    /// this field: an alias mints no bytes, so a trace showing N aliases and one join over a
+    /// frame shows *one memory at N addresses*, while N joins would show N memories — and
+    /// those are opposite findings about the same count.
+    AliasFbLeaf,
     /// ★★★ Map + describe + publish the **guest's own** pages at the guest's own VA.
     /// ⊘ Deliberately a distinct tag from [`VerbTag::Publish`]: the two chains differ in
     /// whose bytes are underneath, which is the only fact a reader of a trace would want
@@ -394,6 +400,7 @@ impl VerbTag {
             VerbPlan::Publish { .. } => VerbTag::Publish,
             VerbPlan::PublishVidmem { .. } => VerbTag::PublishVidmem,
             VerbPlan::JoinFbLeaf { .. } => VerbTag::JoinFbLeaf,
+            VerbPlan::AliasFbLeaf { .. } => VerbTag::AliasFbLeaf,
             VerbPlan::PinGuestRam { .. } => VerbTag::PinGuestRam,
             VerbPlan::Doorbell { .. } => VerbTag::Doorbell,
             VerbPlan::EngineObject { .. } => VerbTag::EngineObject,

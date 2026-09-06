@@ -552,6 +552,31 @@ pub struct FbLeafJoined {
     pub host_va: u64,
 }
 
+/// ★★★★★ **What ALIASING one already-joined framebuffer frame produced** —
+/// [`RmBackend::alias_fb_leaf`]'s answer (`w380`).
+///
+/// # ⊘ Why this is a second answer shape and not [`FbLeafJoined`] with a `None`
+///
+/// An alias mints **no backing**. The pages are the ones the frame was already joined over,
+/// the VMM already holds its `mmap` of them and the emulated framebuffer is already served
+/// out of them — so there is nothing to hand up and nothing for the VMM to install. A
+/// variant that carried an `Option<ExportedBacking>` would let a caller install a second
+/// view of one frame, which is the *two lifetimes for one file* defect
+/// [`FbLeafJoined::backing`] is written against, wearing an `Option`.
+///
+/// ★★★ **One memory, N addresses.** The guest legitimately maps one framebuffer frame at
+/// several GPU VAs at once (`w377` §9: 17 frames, 2–3 VAs each, alternating). Each VA needs
+/// its own host-side placement; none of them needs its own *bytes*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbLeafAliased {
+    /// The RM object describing **this alias's** mapping of the frame's pages. ⊘ A distinct
+    /// `OS_DESCRIPTOR` from the joining VA's, over the *same* isolate mapping — see
+    /// [`RmBackend::alias_fb_leaf`] for why the descriptor is per-VA and the memory is not.
+    pub memory: HostHandle,
+    /// The host GPU VA it was mapped at.
+    pub host_va: u64,
+}
+
 /// One request to [`RmBackend::export_backing`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExportRequest {
@@ -1152,6 +1177,54 @@ pub trait RmBackend: Send + Sync {
         at: GpuVa,
         phys: u64,
     ) -> Result<FbLeafJoined, RmError>;
+
+    /// ★★★★★ **w380 — MAP AN ALREADY-JOINED FRAME AT A SECOND GPU VA.** The guest holds
+    /// one framebuffer frame at several virtual addresses; this is how the second and every
+    /// later one gets host backing without disturbing the first.
+    ///
+    /// # ⊘⊘ The defect this replaces, measured
+    ///
+    /// `[measured w376llmd, real GA106]` the join store was keyed by framebuffer frame alone,
+    /// so a frame could be host-backed at exactly **one** VA. Publishing either alias revoked
+    /// the other — **127 supersedes over 17 frames**, then **28 108 `⊘ SUPERSEDE CAPPED`**
+    /// once the per-pair cap froze the ping-pong, leaving one live VA of each pair permanently
+    /// unbacked. The `Xid 31 FAULT_PDE` landed at `0x7480_27604000`, a VA we had unpublished
+    /// ourselves. `w377` §9 settled that the guest holds **every** alias live (a supersede
+    /// TARGET later becomes a SOURCE, repeatedly — staleness is monotone and cannot do that),
+    /// so the answer is to support the aliasing rather than to arbitrate it.
+    ///
+    /// # ★★★ ONE MEMORY, N DESCRIPTORS — and the asymmetry is deliberate
+    ///
+    /// The **pages** are minted once, by [`RmBackend::join_fb_leaf`], and every alias is
+    /// described to RM over that same isolate mapping. So all aliases of a frame are the same
+    /// bytes — which is the whole property `BackingBytes::JoinsGuestWindow` asserts, and it
+    /// is preserved exactly.
+    ///
+    /// The **`OS_DESCRIPTOR`** is per-VA, and that is not an accident of implementation:
+    /// every reclaim path in this tree — `apply_settlement_as`'s `RevokeWholeJoins`, the
+    /// retired-proc sweep, the unadopted release — disposes of a host object *per address
+    /// table row*, unconditionally. One object shared by N rows would invert that: the first
+    /// row to go would free memory the surviving rows still name. ⊘ A per-VA descriptor makes
+    /// each row's release **local and complete**, so no refcount has to be right for the
+    /// tree to be safe. The frame's shared pages outlive every descriptor and are released
+    /// with the join itself.
+    ///
+    /// ⚠ **N is unbounded.** Nothing in the guest's behaviour caps how many VAs name a frame
+    /// — 8 of 17 already reach three — and a hard-coded 2 would be `SUPERSEDE_CAP_PER_FRAME`'s
+    /// mistake one level up: that cap did not stop the ping-pong, it *froze* it.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] when this backend holds no join for `phys` — ⊘ **refused by name,
+    /// never minted**: an alias over freshly-minted pages would be a *second memory* for the
+    /// frame, which is the exact state the join exists to end. [`RmError::PlacementRefused`]
+    /// when the fixed map did not land at `at`; otherwise whatever RM refused with.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError>;
 
     /// ★★★ **The both-directions instrument for a joined leaf** — read what the isolate's
     /// own mapping holds at `phys`, and (when `poke` is `Some`) leave a per-word pattern
@@ -1790,6 +1863,35 @@ pub enum VerbPlan {
         /// ([`RmBackend::fb_join_peek`]); ⊘ nothing below the VMM derives it.
         phys: u64,
     },
+    /// ★★★★★ **w380 — the SECOND and every later GPU VA of one already-joined frame.**
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → [`RmBackend::alias_fb_leaf`], with
+    /// [`VerbPlan::Publish`]'s own placement check applied unchanged on the way back.
+    ///
+    /// ⊘ **Not a mode of [`VerbPlan::JoinFbLeaf`].** The two differ in whether the frame's
+    /// *bytes* already exist, and getting that wrong is silent in both directions: a join
+    /// where an alias was wanted mints a **second memory** for the frame; an alias where a
+    /// join was wanted refuses by name against a frame nobody has joined. A `bool` on one
+    /// variant would make both of those one typo away — the argument
+    /// [`VerbPlan::PublishVidmem`] already makes one variant up.
+    ///
+    /// ⚠ Its reply carries **no backing**: the VMM's view of the frame was installed by the
+    /// join and is unchanged. See [`FbLeafAliased`].
+    AliasFbLeaf {
+        /// The `Vas`'s already-materialized host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The guest leaf's own length — and it must equal the joined frame's, or the
+        /// backend refuses: an alias over part of a frame is a mapping whose bytes are only
+        /// partly the ones the guest reaches.
+        len: u64,
+        /// ★★★ The guest VA this range must be addressable at. Address identity: the
+        /// mapping is placed HERE, or the verb fails.
+        at: GpuVa,
+        /// ★★ The **framebuffer-physical** address of the frame to alias. This is the key
+        /// the isolate looks its existing join up by; there is no other way to name the
+        /// pages, and re-deriving them from anything else would be a second source of truth.
+        phys: u64,
+    },
     /// ★★★★★ **THE GUEST'S OWN PAGES, published at the guest's own VA** — the chain
     /// [`VerbPlan::Publish`] is the *fabricated* counterpart of
     /// (`guest_ram_crossing.md` §5.8).
@@ -2178,6 +2280,7 @@ impl VerbPlan {
             VerbPlan::Publish { host_vas, .. }
             | VerbPlan::PublishVidmem { host_vas, .. }
             | VerbPlan::JoinFbLeaf { host_vas, .. }
+            | VerbPlan::AliasFbLeaf { host_vas, .. }
             | VerbPlan::PinGuestRam { host_vas, .. } => host_vas.iter().copied().collect(),
             VerbPlan::Doorbell {
                 host_vas, channel, ..
@@ -2244,6 +2347,15 @@ pub enum VerbReply {
         host_vas: Option<HostHandle>,
         /// The three facts the chain produced. See [`FbLeafJoined`].
         joined: FbLeafJoined,
+    },
+    /// ★★★★★ [`VerbPlan::AliasFbLeaf`]'s reply — **two facts, and deliberately no
+    /// backing**. The frame's pages crossed once, with the join; a reply that offered them
+    /// again would be a second lifetime for one file and a second view of one memory.
+    FbLeafAliased {
+        /// Freshly allocated host VAS, if the plan asked for one.
+        host_vas: Option<HostHandle>,
+        /// The two facts the chain produced. See [`FbLeafAliased`].
+        aliased: FbLeafAliased,
     },
     /// ★★★ [`VerbPlan::PinGuestRam`]'s reply — **and it carries the guest-RAM mapping
     /// as well as the RM object**, because releasing one does not release the other.
@@ -2980,6 +3092,49 @@ impl Worker {
                 Ok(VerbReply::FbLeafJoined {
                     host_vas: fresh_vas,
                     joined,
+                })
+            }
+            // ★★★★★ **w380 — THE SECOND ADDRESS OF ONE MEMORY.** Structurally
+            // `JoinFbLeaf`'s twin, and the difference is that nothing here mints pages: the
+            // backend refuses by name if no join for `phys` exists, rather than falling back
+            // to creating one. A fallback would give the frame two memories — silently, and
+            // in exactly the situation the alias exists to serve.
+            VerbPlan::AliasFbLeaf {
+                host_vas,
+                len,
+                at,
+                phys,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                let aliased = match rm.alias_fb_leaf(vas, *len, *at, *phys) {
+                    Ok(a) => a,
+                    Err(e) => return Err(unwind(rm, fresh_vas.into_iter().collect(), e)),
+                };
+                // ★★★ #102 — the SAME address-identity check, for the same reason and with
+                // the same unwind. An alias placed anywhere but `at` is a host mapping the
+                // guest's own page tables do not name.
+                if aliased.host_va != at.0 {
+                    let _ = rm.unmap_gpu_va(vas, aliased.host_va);
+                    let mut orphans = vec![aliased.memory];
+                    orphans.extend(fresh_vas);
+                    return Err(unwind(
+                        rm,
+                        orphans,
+                        RmError::PlacementRefused {
+                            want: at.0,
+                            got: aliased.host_va,
+                        },
+                    ));
+                }
+                Ok(VerbReply::FbLeafAliased {
+                    host_vas: fresh_vas,
+                    aliased,
                 })
             }
             // ★★★★★ **THE FIRST GUEST BYTE.** Structurally `Publish`'s twin, and every

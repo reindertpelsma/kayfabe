@@ -2332,6 +2332,28 @@ pub enum FbLeafBacking {
     /// backing built today", **not** "the only backing possible" — the difference is the
     /// PCIe-vs-VRAM operand placement cost.
     Joined,
+    /// ★★★★★ **w380 — ONE memory, at a SECOND (third, Nth) address.** The frame's pages
+    /// already exist because [`FbLeafBacking::Joined`] minted them for another VA of this same
+    /// address space; this chain describes those pages to RM again and places the result at
+    /// *this* leaf's VA.
+    ///
+    /// # ⊘⊘ Why the SHELL chooses this and not [`backing_for`]
+    ///
+    /// The fact that selects it is *"does the emulated framebuffer already serve this frame
+    /// out of joined pages"* — a property of the device's `FbStore`, which this crate cannot
+    /// see and must not model. The guest's **declaration** is identical for a first VA and a
+    /// fifth; nothing in a page-table entry says *"and I have this frame mapped elsewhere
+    /// too"*. So [`backing_for`] never returns this variant, and [`honours_declaration`]
+    /// accepts it wherever it accepts [`FbLeafBacking::Joined`].
+    ///
+    /// # ⚠ Choosing it wrongly is silent in ONE direction and loud in the other
+    ///
+    /// `Joined` where `Aliased` was wanted mints a **second memory** for one frame — `w228`,
+    /// self-concealing. `Aliased` where `Joined` was wanted is refused by name
+    /// (`kayfabe_isolate_host::rm::FB_ALIAS_NO_JOIN`) and allocates nothing. ⇒ The asymmetry
+    /// is deliberate: the mistake that cannot be seen is made unrepresentable, and the
+    /// mistake that is loud is left loud.
+    Aliased,
 }
 
 /// ★★★★★ **WHAT THE GUEST DECLARED FOR A LEAF**, as the backing decision needs it.
@@ -2414,7 +2436,12 @@ pub fn honours_declaration(declared: DeclaredPlacement, chosen: FbLeafBacking) -
             matches!(chosen, FbLeafBacking::Vidmem)
         }
         DeclaredPlacement::Aperture(kayfabe_arch::Aperture::Peer) => true,
-        DeclaredPlacement::Aperture(_) => matches!(chosen, FbLeafBacking::Joined),
+        // ★ w380 — `Aliased` honours exactly what `Joined` honours. It is the same bytes at
+        // another address, so a declaration it satisfies in one form it satisfies in the
+        // other; only the shell's store state distinguishes them.
+        DeclaredPlacement::Aperture(_) => {
+            matches!(chosen, FbLeafBacking::Joined | FbLeafBacking::Aliased)
+        }
         DeclaredPlacement::Managed | DeclaredPlacement::Undeclared => true,
     }
 }
@@ -2442,6 +2469,15 @@ pub struct FbLeafBacked {
     /// lifetime for one file, and a caller that installed it twice would map the same memory
     /// at the same framebuffer address twice. A replay's caller already has its view.
     pub backing: Option<kayfabe_isolate::ExportedBacking>,
+    /// ★★★★★ **w380 — was this an ALIAS of an already-joined frame?**
+    ///
+    /// ⊘ It exists because [`FbLeafBacked::backing`] `== None` is now **two different states**
+    /// and a caller must act differently on each. An idempotent replay (`already == true`) has
+    /// a row **and** a view already, so the caller must do nothing. An alias (`alias == true`)
+    /// has a view already and **no row**, so the caller must skip the install and go straight
+    /// to [`adopt_joined_fb_leaf`]. A caller that could not tell them apart would either bind
+    /// twice or never bind — and *never bind* reads exactly like success.
+    pub alias: bool,
 }
 
 /// The ID-shaped hints [`commit_back_fb_leaf`] re-validates against. Identities and the
@@ -2639,6 +2675,15 @@ pub fn plan_back_fb_leaf(
                     at: va,
                     phys,
                 },
+                // ★★★★★ w380 — the frame already has pages; this places them at one more
+                // address. ⊘ Nothing is minted, so there is nothing extra to unwind and no
+                // second `ExportedBacking` for the caller to install.
+                FbLeafBacking::Aliased => VerbPlan::AliasFbLeaf {
+                    host_vas,
+                    len,
+                    at: va,
+                    phys,
+                },
             })
         },
     })
@@ -2668,6 +2713,9 @@ pub fn commit_back_fb_leaf(
             already: true,
             // ⊘ `None`, and it is the replay's whole point — see the field's docs.
             backing: None,
+            // ⊘ `false`: a replay's row EXISTS. An alias's does not. See `FbLeafBacked::alias`
+            // for why those two must not arrive wearing the same `None`.
+            alias: false,
         });
     }
     // ★★★ The reply's shape is checked against the PLAN's chain, not merely against one
@@ -2695,6 +2743,19 @@ pub fn commit_back_fb_leaf(
                     },
             }),
         ) => (host_vas, memory, host_va, Some(backing)),
+        // ★★★★★ w380 — the alias's reply. ⊘ `backing: None` here is a *fact about the
+        // chain*, not a missing field: nothing was minted, so there is nothing to hand up.
+        (
+            FbLeafBacking::Aliased,
+            Some(VerbReply::FbLeafAliased {
+                host_vas,
+                aliased:
+                    kayfabe_isolate::FbLeafAliased {
+                        memory,
+                        host_va,
+                    },
+            }),
+        ) => (host_vas, memory, host_va, None),
         _ => return wrong_reply("back_fb_leaf"),
     };
     let orphans = |vas_used: HostHandle, with_vas: Option<HostHandle>| Orphans {
@@ -2785,12 +2846,22 @@ pub fn commit_back_fb_leaf(
     // with `0x51` — collision-or-exhaustion, which cannot be told apart. The caller closes
     // it by releasing on any failure (`SharedDevice::adopt_joined_fb_leaf` stages the
     // orphans), so a retry starts from nothing rather than from half a join.
-    if matches!(plan.how, FbLeafBacking::Joined) {
+    //
+    // ★★★ w380 — `Aliased` stops here for the SAME reason, and it is not a weaker one: the
+    // declaration `JoinsGuestWindow` is exactly as unprovable by a type for the tenth address
+    // of a frame as for the first. ⊘ What differs is only that the alias's caller has nothing
+    // to install — the view was installed with the join — so it reaches
+    // `adopt_joined_fb_leaf` immediately rather than four steps later.
+    if matches!(
+        plan.how,
+        FbLeafBacking::Joined | FbLeafBacking::Aliased
+    ) {
         return Ok(FbLeafBacked {
             host_va,
             memory,
             already: false,
             backing,
+            alias: matches!(plan.how, FbLeafBacking::Aliased),
         });
     }
     bind_backed_fb_leaf(vas, plan, host_va, memory, vas_used)?;
@@ -2798,6 +2869,7 @@ pub fn commit_back_fb_leaf(
         host_va,
         memory,
         already: false,
+        alias: false,
         backing,
     })
 }
@@ -3030,7 +3102,13 @@ fn bind_backed_fb_leaf(
     // plan carried precisely so the commit could not re-derive it from the reply's shape.
     let bytes = match plan.how {
         FbLeafBacking::Vidmem => kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
-        FbLeafBacking::Joined => kayfabe_mmu::BackingBytes::JoinsGuestWindow,
+        // ★★★ w380 — an alias declares `JoinsGuestWindow` and it is TRUE of it: the guest's
+        // window for the frame was re-pointed at these pages by the join, and an alias maps
+        // the very same pages. ⊘ There is no weaker word for "one memory at another address",
+        // because it is not a weaker fact.
+        FbLeafBacking::Joined | FbLeafBacking::Aliased => {
+            kayfabe_mmu::BackingBytes::JoinsGuestWindow
+        }
     };
     let binding = match kayfabe_mmu::Binding::real_gpu_memory(
         plan.phys,

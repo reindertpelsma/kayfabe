@@ -56,7 +56,7 @@ use kayfabe_arch::{
 };
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeSource, CeSubCopy, ExportRequest, ExportSource,
-    ExportedBacking, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
+    ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
     Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_util::Instant;
@@ -1488,6 +1488,25 @@ pub enum RmVerb {
         /// convention. This verb would have been the third.
         memory: Option<HostHandle>,
     },
+    /// ★★★★★ **w380 — one framebuffer frame mapped at a SECOND GPU VA**
+    /// ([`RmBackend::alias_fb_leaf`]).
+    ///
+    /// ⊘ A verb of its own rather than a second `JoinFbLeaf` row: a witness that could not
+    /// tell them apart could not check the property that matters — that N addresses cost
+    /// **one** mint of bytes and N mappings, not N mints.
+    AliasFbLeaf {
+        /// The host VAS it was placed in.
+        vas: HostHandle,
+        /// Bytes.
+        len: u64,
+        /// The guest VA asked for.
+        at: GpuVa,
+        /// The emulated framebuffer address of the frame being aliased.
+        phys: u64,
+        /// ★★ The `OS_DESCRIPTOR` the chain built, or `None` when it refused. ⊘ There is no
+        /// `token` field, and its absence is the assertion: an alias mints no backing.
+        memory: Option<HostHandle>,
+    },
     /// Object freed.
     Free {
         /// The handle.
@@ -1540,6 +1559,8 @@ pub enum VerbKind {
     ExportBacking,
     /// [`RmBackend::join_fb_leaf`].
     JoinFbLeaf,
+    /// [`RmBackend::alias_fb_leaf`].
+    AliasFbLeaf,
     /// [`RmBackend::fb_join_peek`].
     FbJoinPeek,
     /// [`RmBackend::map_guest_ram`].
@@ -2579,7 +2600,18 @@ impl RmRecorder {
             // saw it only there would conclude the mapping is untracked, which is the exact
             // half that would go unnoticed: an unfreed object is loud at teardown, an
             // un-unmapped GPU VA is not.
+            // ★★★ w380 — AN ALIAS IS THE SAME SHAPE: it mints an `OS_DESCRIPTOR` and
+            // places a fixed mapping in one verb, so it owes the ledger both halves exactly
+            // as a join does. ⊘ Folded into the same arm rather than given its own, because
+            // the *reason* the arm exists (acquisition-and-mapping in one) is identical, and
+            // two arms would be two readings of it that can drift.
             if let RmVerb::JoinFbLeaf {
+                vas,
+                at,
+                memory: Some(memory),
+                ..
+            }
+            | RmVerb::AliasFbLeaf {
                 vas,
                 at,
                 memory: Some(memory),
@@ -2675,6 +2707,15 @@ struct RmNamespace {
     /// caller's chosen one is free — and it is free or not *within one VAS*, which is
     /// the separation #14 actually rests on.
     maps: BTreeMap<HostHandle, BTreeMap<u64, u64>>,
+    /// ★★★★★ **w380 — every framebuffer frame this isolate has JOINED, as `(phys, len)`.**
+    ///
+    /// ⊘ The one fact [`MockRmBackend::alias_fb_leaf`] cannot fake and must not skip: an
+    /// alias over a frame with no join is a caller ordering error whose real-backend
+    /// consequence is **two memories**, and a double that answered `Ok` for it would let
+    /// exactly that mistake pass every test in this workspace. It lives on the *namespace*
+    /// and not on the backend because an isolate is a pool — the worker that joins need not
+    /// be the worker later asked to alias, which is the same reason `FbJoinTable` is shared.
+    joined_frames: BTreeSet<(u64, u64)>,
     retired: bool,
 }
 
@@ -2721,11 +2762,21 @@ pub struct MockRmBackend {
 /// [`MockRmBackend::check`] must honour.
 pub const HOST_RAW_MASK: u64 = 0x00ff_ffff;
 
+/// ★★★★★ **w380 — the status [`MockRmBackend::alias_fb_leaf`] refuses an unjoined frame
+/// with**, equal by value to `kayfabe_isolate_host::rm::FB_ALIAS_NO_JOIN`.
+///
+/// ⊘ Duplicated rather than imported, because `kayfabe-mocks` does not depend on
+/// `kayfabe-isolate-host` and must not start to. ★ The two are pinned together by
+/// `alias_refusal_status_matches_the_host_backend` in `tests/tests/fb_leaf_alias.rs`, which
+/// is the only thing that makes a duplicated constant safe.
+pub const MOCK_FB_ALIAS_NO_JOIN: u32 = 0x4B41;
+
 impl MockRmBackend {
     fn namespace(idlane: u64, gpu: GpuId) -> Arc<Mutex<RmNamespace>> {
         Arc::new(Mutex::new(RmNamespace {
             handles: BTreeSet::new(),
             next: 1,
+            joined_frames: BTreeSet::new(),
             // Namespaced fake host tokens: primary lane = idlane (so `>>20` still reads
             // ProcId+1); the target GPU is folded into a LOWER field, so two isolates of
             // ONE proc on DIFFERENT GPUs still mint provably-disjoint tokens (MG-5).
@@ -3349,6 +3400,8 @@ impl RmBackend for MockRmBackend {
         };
         let token = self.handle_hi() | n;
         let memory = self.mint();
+        // ★★★ w380 — the frame now HAS bytes, and that is what makes a later alias legal.
+        self.ns.lock().expect("ns").joined_frames.insert((phys, len));
         self.record(RmVerb::JoinFbLeaf {
             vas,
             len,
@@ -3364,6 +3417,51 @@ impl RmBackend for MockRmBackend {
                 len,
                 prot: kayfabe_vmm::Prot::ReadWrite,
             },
+            memory,
+            host_va: at.0,
+        })
+    }
+
+    /// ★★★★★ **w380 — the alias in the double.** It records the request, mints an
+    /// `OS_DESCRIPTOR` and answers `host_va == at`, exactly as the join does — and mints
+    /// **no token**, because an alias creates no bytes.
+    ///
+    /// ★ The **refusal is real**: a frame this isolate has not joined answers
+    /// `RmError::Other(FB_ALIAS_NO_JOIN)` and records the attempt with `memory: None`. That
+    /// is the one behaviour a double must not soften, because the real backend's alternative
+    /// to refusing is minting a second memory for the frame.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError> {
+        let _client = self.gate(VerbKind::AliasFbLeaf)?;
+        self.check(vas)?;
+        let joined = {
+            let ns = self.ns.lock().expect("ns");
+            ns.joined_frames.contains(&(phys, len))
+        };
+        if !joined {
+            self.record(RmVerb::AliasFbLeaf {
+                vas,
+                len,
+                at,
+                phys,
+                memory: None,
+            });
+            return Err(RmError::Other(MOCK_FB_ALIAS_NO_JOIN));
+        }
+        let memory = self.mint();
+        self.record(RmVerb::AliasFbLeaf {
+            vas,
+            len,
+            at,
+            phys,
+            memory: Some(memory),
+        });
+        Ok(FbLeafAliased {
             memory,
             host_va: at.0,
         })

@@ -737,6 +737,20 @@ impl kayfabe_isolate::RmBackend for Relocating {
         joined.host_va = at.0 + 0x1000;
         Ok(joined)
     }
+    /// ★★★ w380 — the alias relocates too, for [`Relocating`]'s own reason: an alias is a
+    /// fixed map at a guest VA, so it is subject to the identical silent downgrade and the
+    /// identical check must catch it.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: kayfabe_arch::ids::GpuVa,
+        phys: u64,
+    ) -> Result<kayfabe_isolate::FbLeafAliased, RmError> {
+        let mut aliased = self.0.alias_fb_leaf(vas, len, at, phys)?;
+        aliased.host_va = at.0 + 0x1000;
+        Ok(aliased)
+    }
     fn fb_join_peek(
         &mut self,
         phys: u64,

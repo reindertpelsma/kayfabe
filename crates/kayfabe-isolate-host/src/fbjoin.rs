@@ -48,6 +48,23 @@ struct Join {
     at: u64,
     /// The isolate's view of the backing. See the module docs for why it lives this long.
     region: MappedRegion,
+    /// ★★★★★ **w380 — the child-scoped export token of the `memfd` these pages live in.**
+    ///
+    /// ⊘ The token, not the descriptor. [`crate::export::ChildExports`] holds the
+    /// authoritative end of the file and the module docs say why a second owned copy here
+    /// would be a second lifetime for one file; a token is a *name*, and re-lending by name
+    /// is what lets a later alias map the **same** pages instead of minting new ones.
+    ///
+    /// ★ This is the field that makes *"one memory, N addresses"* representable at all. An
+    /// alias that could not find its way back to this file would have to create one, and a
+    /// frame with two files is the two-memories defect the join exists to end.
+    token: u64,
+    /// ⊘ `true` for the entry [`FbJoinTable::install`] created and `false` for every
+    /// [`FbJoinTable::install_alias`] over it. The instrument
+    /// ([`FbJoinTable::peek`]) must answer out of the **joining** entry: aliases map the
+    /// same bytes, so either would answer correctly today, and a census that could not tell
+    /// them apart would report `n` joins where there is one memory.
+    alias: bool,
 }
 
 /// ★★★ Every framebuffer leaf this isolate has joined.
@@ -88,14 +105,72 @@ impl FbJoinTable {
     /// ⊘ Called **after** the RM chain succeeds, never before: a table entry for a leaf whose
     /// `map_gpu_va` refused would answer the instrument about memory no engine can reach,
     /// which is a green line for a join that does not exist.
-    pub fn install(&self, phys: u64, len: u64, at: u64, region: MappedRegion) {
+    pub fn install(&self, phys: u64, len: u64, at: u64, token: u64, region: MappedRegion) {
         let mut t = self.joins.lock().unwrap_or_else(|e| e.into_inner());
         t.push(Join {
             phys,
             len,
             at,
             region,
+            token,
+            alias: false,
         });
+    }
+
+    /// ★★★★★ **w380 — record a SECOND (third, Nth) GPU address for a frame already joined.**
+    ///
+    /// The `region` is a **fresh mapping of the same `memfd`**, so the bytes are the frame's
+    /// own and not a copy. It is held here for [`Self::install`]'s reason exactly: RM pins
+    /// the pages behind the alias's `OS_DESCRIPTOR` and tearing the mapping out from under a
+    /// live descriptor leaves the GPU MMU pointed at pages this process no longer describes.
+    ///
+    /// ⊘ Marked `alias: true` so the instrument keeps answering out of the joining entry —
+    /// see [`Join::alias`].
+    pub fn install_alias(&self, phys: u64, len: u64, at: u64, token: u64, region: MappedRegion) {
+        let mut t = self.joins.lock().unwrap_or_else(|e| e.into_inner());
+        t.push(Join {
+            phys,
+            len,
+            at,
+            region,
+            token,
+            alias: true,
+        });
+    }
+
+    /// ★★★★★ **w380 — the export token of the join that covers exactly `[phys, phys+len)`**,
+    /// so an alias can map the very same `memfd`.
+    ///
+    /// ⊘ **Exact base and exact length**, never "covers". An alias over part of a frame, or
+    /// over a range spanning two, would place a host mapping whose bytes are only partly the
+    /// ones the guest reaches — and it would do so successfully, which is why the refusal is
+    /// here and not at a caller. `None` means *no frame was joined at this base with this
+    /// length*, and the caller must refuse by name rather than mint.
+    ///
+    /// ★ The **joining** entry is preferred over an alias entry when both match. They name
+    /// the same file, so either would work; preferring the join keeps the answer stable as
+    /// aliases come and go.
+    #[must_use]
+    pub fn token_for(&self, phys: u64, len: u64) -> Option<u64> {
+        let t = self.joins.lock().unwrap_or_else(|e| e.into_inner());
+        t.iter()
+            .find(|j| j.phys == phys && j.len == len && !j.alias)
+            .or_else(|| t.iter().find(|j| j.phys == phys && j.len == len))
+            .map(|j| j.token)
+    }
+
+    /// ★★ **w380 — how many entries are ALIASES**, beside [`Self::len`]'s total. ⊘ Two
+    /// numbers rather than one: `len()` counts *addresses* and `len() - aliases()` counts
+    /// *memories*, and a boot line that printed only the first would report seventeen frames
+    /// as fifty-one.
+    #[must_use]
+    pub fn aliases(&self) -> usize {
+        self.joins
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .filter(|j| j.alias)
+            .count()
     }
 
     /// ★★★★★ **LEG A2 — record that `obj` is an object this isolate minted by JOINING** a
@@ -170,7 +245,9 @@ impl FbJoinTable {
     pub fn peek(&self, phys: u64, buf: &mut [u8], poke: Option<u32>) -> Result<bool, RawError> {
         let t = self.joins.lock().unwrap_or_else(|e| e.into_inner());
         let want = buf.len() as u64;
-        let Some((j, off)) = t.iter().find_map(|j| {
+        // ⊘ Aliases are skipped: they map the same bytes, so including them would make the
+        // instrument's answer depend on insertion order for no gain. See [`Join::alias`].
+        let Some((j, off)) = t.iter().filter(|j| !j.alias).find_map(|j| {
             let end = phys.checked_add(want)?;
             let jend = j.phys.checked_add(j.len)?;
             (phys >= j.phys && end <= jend).then(|| (j, phys - j.phys))
@@ -211,7 +288,7 @@ mod tests {
         )
         .expect("map");
         let t = FbJoinTable::new();
-        t.install(phys, len, 0x2_0020_0000, region);
+        t.install(phys, len, 0x2_0020_0000, 7, region);
         // ⊘ `ram` is dropped here on purpose: the mapping outlives the descriptor, which is
         // the property the production path relies on and which a test that kept the fd
         // alive would never exercise.

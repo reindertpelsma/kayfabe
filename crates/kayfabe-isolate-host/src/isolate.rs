@@ -56,9 +56,9 @@ use crate::proto::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    ExportRequest, ExportSource, ExportedBacking, FbLeafJoined, GuestRamGrant, GuestRamMapped,
-    HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend, RmError, Txn, Worker,
-    WorkerId,
+    ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant,
+    GuestRamMapped, HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend,
+    RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -832,6 +832,35 @@ impl RmBackend for ProxyRmBackend {
             phys,
             prot: prot_code(kayfabe_vmm::Prot::ReadWrite),
         })
+    }
+
+    /// ★★★★★ **w380 — the alias, on the wire.** One request, one reply, **no descriptor**:
+    /// the frame's `memfd` crossed with the join and the VMM's view of it is unchanged.
+    ///
+    /// ⊘ Goes through [`ProxyRmBackend::call`] and not `call_for_joined`, so the fd allowance
+    /// is **zero** — a child that attached a descriptor here would have the frame refused by
+    /// the framing layer rather than by a `match`.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError> {
+        let reply = self.call(Request::AliasFbLeaf {
+            vas: vas.raw(),
+            len,
+            at: at.0,
+            phys,
+        })?;
+        match reply {
+            Reply::Aliased { memory, host_va } => Ok(FbLeafAliased {
+                // ★ Stamped with THIS connection's isolate, never taken from the wire.
+                memory: HostHandle::new(self.isolate, memory),
+                host_va,
+            }),
+            _ => Err(RmError::Wedged),
+        }
     }
 
     /// ★★★ The instrument, on the wire. Shares [`Reply::FbBytes`] with
