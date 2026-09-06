@@ -3925,19 +3925,35 @@ fn observer_loop(
             }
             if !stale.is_empty() {
                 let (mut released, mut already) = (0usize, 0usize);
+                // ★★★★★ **w380 — LAST VA OUT, here too, and it has to be computed OVER THIS
+                // LIST rather than asked per row.**
+                //
+                // ⊘⊘ The obvious spelling is wrong in a way that reads as caution. Asking
+                // `fb_join_namers(phys)` inside the loop counts **the corpse rows this very
+                // loop is draining** — nothing unbinds them here; they die with the procs the
+                // caller is about to reap — so for a frame with N retired aliases the answer is
+                // `retired == N` on *every* iteration, `> 1` is true on *every* iteration, and
+                // the store's join is **never** given back. That is the `w327` allocation
+                // failure re-created: the frame stays joined forever and the next process's GR
+                // context cannot have it.
+                //
+                // ⇒ The surviving-namer test on this path is **`live > 0`** — a running proc
+                // still names the frame — plus a once-per-frame guard so N corpse aliases of one
+                // frame give the store's join back exactly once. ⊘ The retired half of
+                // `fb_join_namers` is deliberately NOT consulted here: `stale` **is** the
+                // retired census, so every retired namer is in this very list and asking would
+                // be asking about ourselves.
+                let mut frames_given_back: std::collections::HashSet<u64> =
+                    std::collections::HashSet::new();
                 for r in &stale {
-                    // ★★★★★ w380 — LAST VA OUT, here too. A corpse may hold several aliases of
-                    // one frame, and the store's join must survive until the last of them is
-                    // reaped. ⊘ `retired` counts the rows of corpses NOT yet dropped, which
-                    // includes this one — so `> 1` (not `> 0`) is the surviving-sibling test on
-                    // this path, and getting that off by one would either strand every frame or
-                    // release each one N-1 times too early.
-                    let (live, retired) = device.fb_join_namers(r.phys);
-                    if live > 0 || retired > 1 {
-                        device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                    // The HOST half goes for every row, always: each alias owns its own
+                    // `OS_DESCRIPTOR`, so freeing one takes nothing from its siblings. Only the
+                    // STORE's join is last-out.
+                    device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                    let (live, _retired) = device.fb_join_namers(r.phys);
+                    if live > 0 || !frames_given_back.insert(r.phys) {
                         already += 1;
                     } else if plane.release_fb_join(r.phys) {
-                        device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                         released += 1;
                     } else {
                         already += 1;
@@ -8243,6 +8259,11 @@ impl SharedDoorbell {
             );
         }
         let (mut released, mut stranded) = (0usize, 0usize);
+        // ⊘ w380 — a settlement can revoke SEVERAL aliases of ONE frame. The second would ask
+        // the store for a join the first already gave back, get `false`, and be reported as
+        // `TABLE/STORE DISAGREE` with its object deliberately leaked — a loud, alarming line
+        // for a case that is simply the rule working. Freed frames are remembered.
+        let mut frames_given_back: std::collections::HashSet<u64> = std::collections::HashSet::new();
         // ★★★★★ **w380 — LAST VA OUT RELEASES THE STORE'S JOIN, NOT THE FIRST.**
         //
         // ⊘⊘ Before aliasing existed, a revoked row was necessarily the frame's only namer, so
@@ -8263,7 +8284,7 @@ impl SharedDoorbell {
             // ⊘ Asked AFTER the settlement unbound this row, so `r` is not its own namer. A
             // non-zero answer is a genuine surviving alias.
             let (live, retired) = self.device.fb_join_namers(r.phys);
-            if live > 0 || retired > 0 {
+            if live > 0 || retired > 0 || frames_given_back.contains(&r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                 kept_for_siblings += 1;
@@ -8278,6 +8299,7 @@ impl SharedDoorbell {
             } else if plane.release_fb_join(r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                frames_given_back.insert(r.phys);
                 released += 1;
                 if first.is_none() {
                     first = Some(format!(
