@@ -3620,12 +3620,6 @@ impl RegPlane {
         }
     }
 
-    /// ★★★ **E2** — hand one guest work-submit token to the installed port, count what
-    /// came back, and report it whole.
-    ///
-    /// Split out of [`RegPlane::write`] so the *"no plane lock is held here"* obligation is
-    /// visible in one place: nothing in this function takes [`RegPlane::state`], and the
-    /// only lock it holds across the port call is the port's own [`RwLock`] read guard.
     /// ★★★★★ **w383 — THE ACCOUNTING, LIFTED OUT OF THE TRAP so the deferred lane can
     /// reach it.**
     ///
@@ -3703,6 +3697,18 @@ impl RegPlane {
         }
     }
 
+    /// ★★★ **E2** — hand one guest work-submit token to the installed port, count what
+    /// came back, and report it whole.
+    ///
+    /// Split out of [`RegPlane::write`] so the *"no plane lock is held here"* obligation is
+    /// visible in one place: nothing in this function takes [`RegPlane::state`], and the
+    /// only lock it holds across the port call is the port's own [`RwLock`] read guard.
+    ///
+    /// ⊘ w383 — the counting half now lives in [`RegPlane::account_doorbell_report`],
+    /// because the deferred publication lane produces a report on a worker thread and a
+    /// second copy of that block is how two counters come to disagree about one event. What
+    /// stays here is the **raising** half, which is the trap's alone: delivery leaves through
+    /// [`WriteOutcome::raise_cpu_intr`] and a worker has no such wire.
     fn ring_doorbell(&self, token: u64) -> WriteOutcome {
         // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
         // the GUEST did and cannot be reduced by anything the core decides.
