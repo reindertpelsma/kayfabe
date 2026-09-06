@@ -26,7 +26,41 @@
 //! (already-rung, host-resident) GR channel into the new mapping"*. **The channel was
 //! already rung.**
 //!
-//! # 2. ★★★ WHY THERE IS NO OVERFLOW PROBLEM — a doorbell is a LEVEL, not an EDGE
+//! # 2. ⊘⊘⊘ REFUTED ON HARDWARE, 2026-09-06 (w383) — **COALESCING BREAKS THE GUEST.**
+//!
+//! Read this before §2 below, which is left in place because its *reasoning* is what the
+//! measurement contradicts and deleting it would hide what was tested.
+//!
+//! `[measured w383, real GA106, cup3, three boots, one variable]`:
+//!
+//! | arm | `CUP3_VAL` | host `Xid` |
+//! |---|---|---|
+//! | `off` — inline on the vCPU (the control) | **43** | 0 |
+//! | `on` — deferred **and coalescing** | **ABSENT**, `cuCtxCreate → unknown error (999)` | **2** (`Xid 31`: `CE2 … FAULT_PDE @ 0x7eca_d4e00000`, `GR0_PBDMA0 … FAULT_PTE @ 0x2_0440f000`) |
+//! | `nocoalesce` — deferred, **one execution per doorbell** | **43** | 0 |
+//!
+//! ⇒ ★★★★★ **DEFERRING IS FINE AND COALESCING IS NOT.** The two had been the same change
+//! and therefore the same red; the arm that separates them is
+//! `DoorbellAsyncArm::NoCoalesce`, and it settled it in one boot.
+//!
+//! ## ⊘ WHERE §2's ARGUMENT IS WRONG — the premise was checked in the wrong place
+//!
+//! §2 rests on *"the submission cursor is read at EXECUTION time, not latched at trap
+//! time"*. That is **true and verified** of `kayfabe_rt::ceutils::run_submission`, which
+//! reads forward from its `GpCursor` *while the entries decode* and therefore does consume
+//! everything a coalesced burst left. It was **asserted, never measured**, of the
+//! forwarding path — `SharedDevice::doorbell` → `kayfabe_fwd::read_gpfifo_ring` — and the
+//! forwarding path is the one the failing arm exercises. `[measured]` the same workload ran
+//! **229 publication passes on the control and 53 on the coalescing arm** for a comparable
+//! doorbell count: 200 doorbells' worth of forwarding was folded away, and the guest's
+//! engines faulted on ranges whose mappings the folded-away passes would have carried.
+//!
+//! ⚠ **The lesson is not "coalescing is impossible".** It is that *"N doorbells are one
+//! act"* is a claim about a **specific consumer**, and this module made it about all of
+//! them. A future coalescing arm must be justified per consumer, and the negative control
+//! must stay.
+//!
+//! # 2a. The original argument, RETAINED — what was believed and why
 //!
 //! The obvious design is a per-channel FIFO of pending doorbells, and then the brief's
 //! question *"what happens on overflow"* is real and unpleasant. It dissolves:

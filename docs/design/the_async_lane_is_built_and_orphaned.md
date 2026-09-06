@@ -1,8 +1,25 @@
 # The slow-op discipline audit — the async lane is built, correct, and has no driver
 
-**STATUS: LIVE, 2026-09-06.** Audit against `nvkvm-pv` as the fast/slow oracle, at the owner's
-suggestion. ⊘ Findings only; no remedy applied. Read with
+**STATUS: ANSWERED 2026-09-06 (w383) — the lane has a driver. `docs/design/w383_the_doorbell_is_a_schedule.md`.**
+Audit against `nvkvm-pv` as the fast/slow oracle, at the owner's suggestion. ⊘ Findings only;
+no remedy applied *in this document*. Read with
 `ownership_gpga_leases_and_the_two_channel_kinds.md` (the same night's ruling).
+
+> ### ✔ F1, F2 and F2b ARE CLOSED. F3, F4, F5, F6 ARE NOT.
+> `[measured w383, real GA106, cup3]` `TRAPWITNESS off_trap_claims=0 inline_exceptions=856`
+> on the control became **`off_trap_claims=2812 inline_exceptions=35`** with the lane armed,
+> on a boot that still returned `CUP3_VAL=43` with zero host Xids. §0's headline — *"we have
+> the right shape and nothing runs it"* — is no longer true: `pubqueue` has a producer
+> (`SharedDoorbell::ring`), a consumer (`doorbell_publish_loop`) and a thread
+> (`kayfabe-doorbell-publish`), started in `attach_ram` and joined in `detach_ram`.
+>
+> ⊘ **F6 got WORSE in one respect and it is named rather than left to be found**: there are
+> now **two** off-trap threads relying on the same unwritten RCU/`memory_region_ref` argument,
+> and still only two `TrapGuard::enter()` sites.
+>
+> ⊘⊘ And the audit's own §4 item 1 — *"the shape exists and is good"* — was **half right**.
+> The plan/execute/revalidate shape was fine; the queue's **coalescing** was not, and it took
+> a hardware boot to find out. See `publication_off_the_bql.md`'s STATUS block.
 
 ---
 

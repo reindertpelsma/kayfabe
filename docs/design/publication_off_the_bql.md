@@ -1,7 +1,34 @@
 # Publication off the BQL — the deferred map lane, the synchronous revoke floor, and `INLINE-SAFE` as a type
 
-> **STATUS: LIVE — 2026-08-14 (w323).** Design + mechanism built and tested offline; **the
-> wiring into `SharedDoorbell::ring` is NOT landed** (§9), and nothing here has met a GPU.
+> **STATUS: LIVE — 2026-08-14 (w323), WIRED AND MEASURED 2026-09-06 (w383).**
+>
+> ### ✔ THE WIRING IS LANDED. §9's *"Designed, NOT built"* list is discharged; see
+> ### `w383_the_doorbell_is_a_schedule.md`.
+>
+> ### ⊘⊘⊘ AND §3.3 IS **REFUTED ON HARDWARE** — read this before §3.
+>
+> `[measured w383, real GA106, cup3, three boots, one variable]` — `off` (inline, the
+> control) `CUP3_VAL=43`, 0 Xid; `on` (deferred **and coalescing**) `CUP3_VAL` **ABSENT**,
+> `cuCtxCreate → unknown error (999)`, **2 × `Xid 31`** (`CE2 FAULT_PDE @ 0x7eca_d4e00000`,
+> `GR0_PBDMA0 FAULT_PTE @ 0x2_0440f000`); `nocoalesce` (deferred, one execution per
+> doorbell) `CUP3_VAL=43`, 0 Xid.
+>
+> ⇒ ★★★★★ **DEFERRING IS FINE. COALESCING IS NOT.** §1's correction stands entirely — the
+> guest's doorbell store *is* fire-and-forget and the trap *may* return before the work
+> runs. What does not stand is §3.3's *"the problem dissolves"*: it rests on *"the
+> submission cursor is read at EXECUTION time"*, which is **true and verified of
+> `ceutils::run_submission`** and was **asserted, never measured, of the forwarding path**
+> (`SharedDevice::doorbell` → `read_gpfifo_ring`) — and the forwarding path is the one that
+> broke. `[measured]` the coalescing arm ran **53** publication passes where the control ran
+> **229** for a comparable doorbell count.
+>
+> ⚠ **This is exactly the shape §5.3 warned about and did not cover.** §5.3 named the torn
+> *read*; what bit was the folded *act*. Both come from the same root — *"what may we assume
+> about a consumer we did not measure"* — and only one of them had a control.
+>
+> ⇒ The shipping arm is **`nocoalesce`**, and `DoorbellAsyncArm::On` survives **by name
+> only**, as this rung's negative control. Do not re-enable coalescing without a per-consumer
+> justification and a boot.
 > Supersede in place; do not write a successor beside it.
 >
 > **Parents this folds into:** `blocking_and_completion_model.md` (§1's `INLINE-SAFE` gets its
@@ -128,6 +155,8 @@ to be: *"a mapping published after the ring has been rung is a mapping published
 engine has already faulted for it"* (`shim.rs:4970`, and the C's own *"fault-safe: a mapping
 is always backed before the engine that uses it runs"*, `C: nvkvm_gpu_emul.c:582`). **What
 moves is the whole block, not its internal order.**
+
+### 3.3 ⊘⊘⊘ REFUTED 2026-09-06 (w383) — the problem does NOT dissolve. See the STATUS block at the top of this file; the text below is what was believed and is retained so the refutation has a subject.
 
 ### 3.3 ★★★ Ordering between doorbells — the problem dissolves, it is not solved
 
