@@ -342,6 +342,48 @@ outside this lane. ⚠ Naming the cause without opening those files would be the
 landing.** So the wrap arithmetic in this crate is not the defect; w381's `RingSlot` fix holds.
 ⇒ *"the probe is wrong"* is ruled out by the arm that exists to rule it out.
 
+#### ★★★★★ AND THE BRACKET CLOSES TO ONE SUBMISSION — `n=63` vs `n=64`, same boot
+
+```
+--- n=63 ---  (loop indices 0..62)
+DBL_DIST  arm=submit n=63 min_us=467.546 p50_us=511.199 p90_us=547.607 max_us=620.012
+DBL_DRAIN drains=3 timeouts=0 drain_ms=0.1 stalled=false first_stall_at=none   ★ NO STALL
+info  R6 control (open)  = Landed
+info  R6 control (close) = Lost { saw: 3735880580 }                            ⊘ AND YET LOST
+
+--- n=64 ---  (loop indices 0..63)
+DBL_DRAIN drains=4 timeouts=1 drain_ms=2000.4 stalled=true first_stall_at=63
+info  R6 control (close) = Lost { saw: 3735880580 }
+```
+
+★ **`n=63` is the decisive row and it took a moment to read.** Its three drain windows (ending at
+loop indices 15, 31, 47) all retire in **0.1 ms total** — the channel is healthy throughout — and
+then the *closing control*, which is simply the next submission, is **Lost**. Count the
+submissions on the channel: the **opening control** is submission #1 and takes `slot.gp = 0`, so
+loop index `i` takes `slot.gp = i + 1`, and `submit_entry` writes
+`GP_PUT = (slot.gp + 1) % entries` with `entries = 64`:
+
+| submission | `slot.gp` | `GP_PUT` written | outcome |
+|---|---|---|---|
+| opening control | 0 | 1 | Landed |
+| loop `i` = 0 … 61 | 1 … 62 | 2 … 63 | all retire |
+| **loop `i` = 62** | **63** | **0** | ⊘ **the wrap** |
+| loop `i` = 63 | 0 | 1 | never retires |
+| closing control | 1 | 2 | **Lost** |
+
+⇒ On `n=48` the highest `GP_PUT` ever written is **50** and everything lands. On `n=63` the loop
+reaches the wrap at `i = 62`, no drain window falls after it, and the very next submission is
+lost. On `n=64` the window that spans the wrap is the one that times out.
+
+★★★★★ **The channel works for exactly as long as `GP_PUT` never takes the value `0`, and dies at
+the submission that sets it to `0`.** That is a one-submission localisation from an unprivileged
+raw client, in a 30-second run, with no libcuda and no device-side instrumentation.
+
+⊘ **TWO HYPOTHESES REMAIN AND THIS RUNG CANNOT SEPARATE THEM**, because they coincide on a
+64-entry ring: *"`GP_PUT == 0` is not consumed"* and *"the 64th entry is not consumed"*. The
+experiment that separates them is a channel with a **different** `gp_fifo_entries` —
+`alloc_channel_at` does not expose it today, and adding that is the next step, not a guess.
+
 #### ⊘⊘ HOW THIS WAS VERY NEARLY MISSED — a diagnostic gated on the failure
 
 The **first** guest run of this rung returned early on the failed closing control, so
