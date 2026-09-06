@@ -7,10 +7,17 @@ REPO=${KAYFABE_REPO:-/root/kayfabe}
 export KAYFABE_REPO="$REPO"
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w297}
 export KAYFABE_TAG=${KAYFABE_TAG:-w376llm}
-export POST_CAPTURE_HOOK="$REPO/scripts/bench/llm_hook.sh"
+# ⊘ **OVERRIDABLE since w380, and DEFAULTED to w376's own hook so every existing caller
+#   behaves byte-identically.** It was an unconditional `export`, so a caller that set
+#   POST_CAPTURE_HOOK in its environment got `llm_hook.sh` anyway — silently, with the run log
+#   faithfully recording the hook it actually ran. ⇒ Swapping the instrument was NOT
+#   EXPRESSIBLE from outside this file, which is the shape that makes an evidence run and its
+#   control indistinguishable at the call site (`w298`'s ruling, one script over).
+export POST_CAPTURE_HOOK=${POST_CAPTURE_HOOK:-$REPO/scripts/bench/llm_hook.sh}
 export GQ_TIMEOUT=${GQ_TIMEOUT:-1800}
 # ★ the LLM needs more than the 2 GiB default — w376 run 1 was OOM-killed at 2048.
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192}
+echo "=== ★ HOOK=[$POST_CAPTURE_HOOK] LLM_TIMEOUT=[${LLM_TIMEOUT:-<default 600>}] LLM_NTOK=[${LLM_NTOK:-<default 16>}] ==="
 "$REPO/scripts/bench/w290p_run.sh" "${W298_ARM:-drain}"
 BRC=$?
 OUT=/workspace/${KAYFABE_TAG}.log
