@@ -49,7 +49,11 @@ BIN=${W385_BIN:-$CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/kayfabe-rm-l
 OUTDIR=${W385_OUTDIR:-/workspace/bench}
 OUT=$OUTDIR/${TAG}_concurrent_fuzz.log
 # T:I — the ladder. Widths first, then depth, then the replay pair at the widest width.
-ARMS=${W385_ARMS:-"1:64 4:64 8:64 16:64 8:256 24:128"}
+# ⊘ `T:I` — T is the UNPINNED width and the per-core width; the rung derives its own
+# over-subscribed width (3 x cores) from `--fuzz-cores`. The default row is the bench guest's
+# `-smp 3`, because that is the topology the product presents.
+ARMS=${W385_ARMS:-"3:128 3:512 6:256 12:128"}
+CORES=${W385_CORES:-3}
 TMO=${W385_TIMEOUT:-1200}
 mkdir -p "$OUTDIR"
 
@@ -88,7 +92,7 @@ run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args
   echo "################ ARM $label — T=$t I=$i ${seed:+seed=$seed} $extra ################"
   # shellcheck disable=SC2086
   timeout -k 15 "$TMO" "$BIN" --gpu 0 --concurrent-fuzz \
-      --fuzz-threads "$t" --fuzz-iters "$i" "${seedarg[@]}" $extra > "$log" 2>&1
+      --fuzz-threads "$t" --fuzz-iters "$i" --fuzz-cores "$CORES" "${seedarg[@]}" $extra > "$log" 2>&1
   local rc=$?
   echo "    inner rc=$rc  (⊘ NOT the grade — the rung's watchdog exits 3 by design)"
   tail -40 "$log"
@@ -106,6 +110,9 @@ run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args
       "${ops:-⊘}" "${viol:-⊘}" "${reason:-⊘none} overlap=${overlap:-⊘}")")
   # every named invariant that fired, verbatim, with its arm
   sed -n 's/^FUZZ_VIOLATION=/    ★ '"$label"' fired: /p' "$log"
+  # ★ EVERY ARM'"'"'S OWN LINE, so "pinning changed the answer" is visible per run and not
+  #   only in the aggregate the rung prints for itself.
+  sed -n 's/^FUZZ_ARM=/    · '"$label"'/p' "$log"
 }
 
 for spec in $ARMS; do
@@ -119,6 +126,32 @@ done
 REPLAY_SEED=${W385_REPLAY_SEED:-0x5EED0385}
 run_arm "replay-a" 8 96 "$REPLAY_SEED" ""
 run_arm "replay-b" 8 96 "$REPLAY_SEED" ""
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# ★★★ THE WATCHDOG'"'"'S OWN NEGATIVE CONTROL — because a watchdog that has never fired is
+# not a watchdog, it is a comment. This arm gives the rung an IMPOSSIBLE deadline and asserts
+# it FAILS BY NAME rather than hanging: a `RUNG_concurrent_fuzz=FAIL` line, a
+# `FUZZ_REASON=DEADLOCK/WATCHDOG` line, and a per-worker dump.
+# ⊘ It is a control on the INSTRUMENT and is graded separately; it is not one of the arms
+#   above and must never be folded into their verdict.
+echo ""
+echo "################ CONTROL — the WATCHDOG, provoked on purpose ################"
+WLOG=$OUTDIR/run_${TAG}_watchdog.log
+timeout -k 15 180 "$BIN" --gpu 0 --concurrent-fuzz --fuzz-threads 8 --fuzz-iters 100000 \
+    --fuzz-cores "$CORES" --fuzz-deadline 5 --seed 0x385 > "$WLOG" 2>&1
+echo "    inner rc=$?  (⊘ 3 is what the watchdog exits with, by design)"
+WV=$(sed -n 's/^RUNG_concurrent_fuzz=//p' "$WLOG" | tail -1)
+WR=$(sed -n 's/^FUZZ_REASON=//p' "$WLOG" | tail -1)
+WD=$(grep -c "last op = " "$WLOG")
+if [ "$WV" = "FAIL" ] && [ "$WR" = "DEADLOCK/WATCHDOG" ] && [ "$WD" -gt 0 ]; then
+  echo "    W385_WATCHDOG=PASS — it fired, printed FAIL by name, and dumped $WD worker rows"
+else
+  echo "    W385_WATCHDOG=FAIL — ⊘ the watchdog did NOT fail by name."
+  echo "      verdict=[${WV:-none}] reason=[${WR:-none}] worker rows=[$WD]"
+  echo "      ⚠ Every green above is then held up by an instrument that has never been shown"
+  echo "        to work, and a hang would wedge instead of failing."
+fi
+grep -a "last op = " "$WLOG" | head -10
 
 echo ""
 echo "================================================================================"

@@ -267,6 +267,7 @@ compile_error!(
      OS costs a second adapter crate, never a `cfg` inside this one."
 );
 
+pub mod affinity;
 pub mod bounds;
 pub mod cache;
 pub mod census;
@@ -284,6 +285,7 @@ pub mod page_size;
 pub mod procfd;
 mod sandbox_unsafe;
 mod scm_unsafe;
+mod affinity_unsafe;
 mod signal_unsafe;
 mod spawn_unsafe;
 mod sysconf_unsafe;

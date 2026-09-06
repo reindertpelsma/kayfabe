@@ -76,7 +76,51 @@ fuzz driven through `kayfabe_isolate::Worker::with_rm`, which is what the existi
   A pure sleep parks the thread and stops contending; a race that only appears while two
   threads are genuinely on CPU together would never be sampled by one.
 
-### §2.1 ★★★ SEEDED, OR IT IS NOT AN INSTRUMENT — and the honest half
+### §2.1 ★★★★★ CPU PINNING — the owner's correction, and why it is not a detail
+
+Owner ruling, 2026-09-06: *"pinning to vcpu cores is very useful to test concurrency in
+kayfabe as each vcpu is a host thread."*
+
+In kayfabe **each guest vCPU IS a host thread**. So the concurrency the product must survive
+is *those* threads contending: a small, fixed set — the bench guest is `-smp 3`
+(`scripts/bench/boot_nvkvm.sh:44`) — preempting each other. ⊘ A fuzz whose threads land
+wherever the scheduler puts them samples a **different topology**: on the 19-core bench box
+they spread across idle cores, run *past* one another, and essentially never interleave
+**inside** a critical section. That is precisely where a lock-order bug hides, so an unpinned
+run can be green for the whole of it.
+
+⇒ The rung's default thread count is **3, the guest's `-smp`**, not a round number, and it
+runs **four arms as two pairs**:
+
+| arm | threads | placement | role |
+|---|---|---|---|
+| `unpinned`   | `--fuzz-threads` (3) | wherever | ⊘ the control for `percore` |
+| `percore`    | `--fuzz-cores` (3)   | one worker per core | ★ the guest's topology |
+| `crowd-free` | 3 × cores (9)        | wherever | ⊘ the control for `crowd` |
+| `crowd`      | 3 × cores (9)        | **all nine on cores 0–2** | ★★★ over-subscribed |
+
+★★★ **`crowd` is the arm that matters.** More runnable workers than cores forces the
+scheduler to preempt threads *while they hold a lock*, which un-pinned parallelism tends never
+to produce. ⚠ Pinning here **removes** parallelism on purpose; it is not a performance knob.
+
+⊘ **The unpinned arms are kept, at the same width, and are never replaced.** *"Pinning changed
+the answer"* has to be a measurement, so the rung evaluates the pairing itself and prints
+`FUZZ_PINNING_DELTA=<arm>` when a pinned arm reds while its same-width unpinned control is
+green — which would say the unpinned arm was never a test of that.
+
+★★ **And the placement is READ BACK, never assumed.** `pin_current_thread` returning `true` is
+the kernel *accepting* a mask; `current_cores()` afterwards is the kernel *describing* what it
+applied, and that is what the run prints (`observed core sets {"0", "1", "2"}` /
+`{"0-2"}` / `{"0-18"}`). A pinned arm whose masks were refused grades **`NOTRUN`, not
+`PASS`** — it would otherwise have run as the unpinned arm under a pinned arm's name and been
+read as *"pinning changed nothing"*. That is the same class as the dirty-gate default which
+had no caller for a month: **a default you never see exercised is a default you do not have.**
+
+The syscalls live in `crates/kayfabe-linux-raw/src/affinity_unsafe.rs` (two wrappers, nothing
+else), behind `kayfabe_linux_raw::affinity`. ⊘ Diagnostic-only: nothing in the shipped isolate
+or shim pins anything — the VMM owns vCPU placement.
+
+### §2.1b ★★★ SEEDED, OR IT IS NOT AN INSTRUMENT — and the honest half
 
 Every choice comes from one SplitMix64 stream seeded by `--seed`, printed as `FUZZ_SEED=` on
 **every** run including the ones that pass, and worker `t`'s stream is a pure function of
@@ -133,8 +177,22 @@ statement; `stop` is the phase's.
 
 ### §2.4 THE CONTROLS — the rung is these, not the loop
 
-- **A positive control runs FIRST**: the same verbs at `T=1` with **no jitter**, on one
-  client. If it reds the rung is broken, not the system, and the verdict is `NOTRUN`.
+- **A positive control runs FIRST**: the same verbs at `T=1` with **no jitter**, unpinned, on
+  one client. If it reds the rung is broken, not the system, and the verdict is `NOTRUN`.
+- **★★★ A COVERAGE VETO, and it was paid for during bring-up.** The first working version drew
+  a verb and a slot *independently*, so most draws landed on a slot in the wrong state:
+  measured at `I=12`, **`idle=85` of 108 ops, `write=0`, `alias_prop=0`, `map_b=0`** — three
+  arms reported `PASS` having **never run the engine at all**. Invariants 1, 3 and 4 are only
+  tested when the engine runs, so those greens were about nothing. The fix is two things: the
+  slot is now chosen from the ones that **admit** the drawn verb, and an arm with
+  `engine_ops == 0` grades **`NOTRUN`**. ⚠ The verb *weights* are part of the oracle too —
+  `alias_prop` drew **zero** times in 360 ops at the original table, so the one verb that
+  tests the w380 alias property end to end was absent from a passing run; it is now weighted
+  3/20 and counted separately as `alias_ops` on every arm line.
+- **★★ THE WATCHDOG HAS ITS OWN NEGATIVE CONTROL.** A watchdog that has never fired is a
+  comment. `w385_concurrent_fuzz.sh` runs one arm with an impossible deadline and asserts the
+  rung prints `RUNG_concurrent_fuzz=FAIL`, `FUZZ_REASON=DEADLOCK/WATCHDOG` and a per-worker
+  dump, rather than hanging.
 - **★★★ `FUZZ_OVERLAP_PAIRS` is a second control and it VETOES a green.** It counts pairs of
   RM-verb intervals *from different threads* that actually intersected. A fuzz run that
   sampled **zero** overlap sampled no concurrency at all, and grading it `PASS` would report

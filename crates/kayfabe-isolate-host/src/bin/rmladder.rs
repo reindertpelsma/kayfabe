@@ -6904,6 +6904,63 @@ const W385_SLOT_STRIDE: u64 = 0x0000_0001_0000_0000;
 /// through one alias cannot be mistaken for a write through another.
 const W385_OFFS: [u64; 3] = [0x0000, 0x0040, 0x0080];
 
+/// ★★★★★ **HOW A PHASE PLACES ITS WORKERS ON CORES — and why a stress rung has an opinion
+/// about that at all.**
+///
+/// Owner ruling, 2026-09-06: *"pinning to vcpu cores is very useful to test concurrency in
+/// kayfabe as each vcpu is a host thread."* In kayfabe **each guest vCPU IS a host thread**,
+/// so the concurrency the product must survive is *those* threads contending: a small, fixed
+/// set, preempting each other. A fuzz whose threads land wherever the scheduler puts them is
+/// sampling a **different topology** — on a 19-core box they spread across idle cores, run
+/// past one another, and essentially never interleave **inside** a critical section.
+///
+/// ⊘ That is exactly where a lock-order or ranked-lock bug hides, so an unpinned run can be
+/// green for the whole of it. ⚠ Pinning here **removes** parallelism on purpose; it is not a
+/// performance knob.
+///
+/// ★★★ The three modes exist as a **paired differential**, never as a replacement:
+/// `Unpinned` is kept as the control at the SAME width as each pinned arm, so *"pinning
+/// changed the answer"* is itself a measurement rather than an assumption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W385Pin {
+    /// ⊘ THE CONTROL. Threads land wherever the scheduler puts them — what every previous
+    /// version of this rung did, and what an ordinary `cargo test` does.
+    Unpinned,
+    /// ★ ONE WORKER PER CORE over the first `cores` cores — the guest's own topology, with
+    /// `cores` defaulting to the bench guest's `-smp`.
+    PerCore {
+        /// How many cores the arm spreads over.
+        cores: usize,
+    },
+    /// ★★★ **OVER-SUBSCRIBED**: more workers than cores, every one of them admitted to the
+    /// same `cores`-wide set. This is the arm that forces **preemption inside a held lock**,
+    /// which un-pinned parallelism tends never to produce.
+    Crowd {
+        /// The width of the shared set every worker is confined to.
+        cores: usize,
+    },
+}
+
+impl W385Pin {
+    /// The cores worker `tid` may run on, or `None` for the unpinned control.
+    fn cores_for(self, tid: usize) -> Option<Vec<usize>> {
+        match self {
+            W385Pin::Unpinned => None,
+            W385Pin::PerCore { cores } => Some(vec![tid % cores.max(1)]),
+            W385Pin::Crowd { cores } => Some((0..cores.max(1)).collect()),
+        }
+    }
+
+    /// The printed form, so a log line, a grader and a human agree on the vocabulary.
+    fn as_str(self) -> &'static str {
+        match self {
+            W385Pin::Unpinned => "unpinned",
+            W385Pin::PerCore { .. } => "percore",
+            W385Pin::Crowd { .. } => "crowd",
+        }
+    }
+}
+
 /// Live objects one worker juggles. Three, so allocate/map/free interleave rather than
 /// nest, and so a `Free` always has a live neighbour whose mapping it might disturb.
 const W385_SLOTS: usize = 3;
@@ -7001,7 +7058,12 @@ impl W385Op {
     /// free/recycle happen often enough that another thread is usually mid-allocation while
     /// one is mid-teardown.
     fn draw(rng: &mut W385Rng) -> W385Op {
-        const TABLE: [W385Op; 16] = [
+        // ⊘ The weights were REBALANCED after the first measured run, and the reason is on
+        // the record: at the original 16-entry table `alias_prop` drew **zero** times over
+        // 360 ops, so invariant 3 — the w380 alias property, the single most valuable thing
+        // this rung can check — was never exercised in an arm that reported PASS. A verb's
+        // weight is part of the oracle, not a taste.
+        const TABLE: [W385Op; 20] = [
             W385Op::Alloc,
             W385Op::Alloc,
             W385Op::Alloc,
@@ -7010,9 +7072,13 @@ impl W385Op {
             W385Op::MapA,
             W385Op::MapB,
             W385Op::MapB,
+            W385Op::MapB,
             W385Op::Write,
             W385Op::Write,
             W385Op::Write,
+            W385Op::Write,
+            W385Op::AliasProp,
+            W385Op::AliasProp,
             W385Op::AliasProp,
             W385Op::UnmapB,
             W385Op::Probe,
@@ -7055,6 +7121,42 @@ impl W385Op {
             _ => "(unknown)",
         }
     }
+
+    /// ★★★ Does slot `sl` admit this verb?
+    ///
+    /// ⊘ **This exists because the first version of the rung was nearly vacuous and said so
+    /// in its own census.** It drew a verb and a slot INDEPENDENTLY, so most draws landed on
+    /// a slot in the wrong state: measured at `I=12`, `idle=85` of 108 ops, `write=0`,
+    /// `alias_prop=0`, `map_b=0` — three arms went green having **never run the engine at
+    /// all**. A stress rung whose ops mostly do nothing is a timer, not a test.
+    ///
+    /// ⇒ Draw the VERB from the seeded stream, then choose uniformly among the slots that
+    /// can actually take it. The draw stays a pure function of the stream and the state, and
+    /// `Idle` now means *"no slot could take this verb"* rather than *"I picked badly"*.
+    fn admits(self, sl: Option<&W385Slot>) -> bool {
+        match (self, sl) {
+            (W385Op::Alloc, None) => true,
+            (W385Op::MapA, Some(s)) => s.va_a.is_none(),
+            (W385Op::MapB, Some(s)) => s.va_a.is_some() && s.va_b.is_none(),
+            (W385Op::Write, Some(s)) => s.va_a.is_some() || s.va_b.is_some(),
+            (W385Op::AliasProp, Some(s)) => s.va_a.is_some() && s.va_b.is_some(),
+            (W385Op::UnmapB, Some(s)) => s.va_b.is_some(),
+            (W385Op::Probe, Some(s)) => s.va_a.is_some(),
+            (W385Op::Free | W385Op::Recycle, Some(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// The verbs that make the **engine** run and are therefore what invariants 1, 3 and 4
+    /// are actually tested by. ★ An arm that drew none of them sampled nothing, however
+    /// many allocations it did — see the coverage veto in [`concurrent_fuzz`].
+    const ENGINE: [W385Op; 3] = [W385Op::Write, W385Op::AliasProp, W385Op::UnmapB];
+
+    /// ★★★ The one verb that tests **invariant 3 end to end** — write through A, through B,
+    /// then through A again with B still mapped. Counted separately in the arm line because
+    /// an arm that never drew it is green about the alias property specifically, and the
+    /// aggregate `engine_ops` would hide that.
+    const ALIAS: W385Op = W385Op::AliasProp;
 
     /// Every verb this rung can draw, for the per-op census.
     const ALL: [W385Op; 10] = [
@@ -7156,6 +7258,8 @@ struct W385Worker {
     jitter_us: u64,
     /// This worker's PRNG seed, derived from the run's one printed seed.
     seed: u64,
+    /// How this worker is placed on cores. See [`W385Pin`].
+    pin: W385Pin,
 }
 
 impl W385Worker {
@@ -7210,6 +7314,12 @@ struct W385Report {
     refused: u64,
     /// Whether the worker reached the end of its loop.
     finished: bool,
+    /// ★ Whether this worker's affinity call was ACCEPTED. ⊘ Not whether it was *asked for*:
+    /// a default you never see exercised is a default you do not have, and a pinned arm that
+    /// silently ran unpinned would be reported as *"pinning changed nothing"*.
+    pinned: bool,
+    /// The cores the kernel says this worker may run on, read back AFTER the call.
+    observed_cores: Vec<usize>,
 }
 
 impl W385Report {
@@ -7236,6 +7346,17 @@ fn w385_run_worker(
     beat: std::sync::Arc<W385Beat>,
 ) -> W385Report {
     let mut rep = W385Report::default();
+    // ★★★ PIN FIRST, BEFORE THE CHANNEL AND BEFORE THE FIRST VERB. Everything this worker
+    // does — including the RM ioctls whose locks are the point — must happen on the cores the
+    // arm claims, or the arm is measuring the previous placement.
+    // ⊘ The placement is READ BACK rather than assumed: `pin_current_thread` returning true
+    // is the kernel accepting the mask, and `current_cores` is the kernel describing what it
+    // then applied. A rung that printed the mask it ASKED for could report a pinned arm that
+    // ran unpinned.
+    if let Some(cores) = w.pin.cores_for(w.tid) {
+        rep.pinned = kayfabe_linux_raw::affinity::pin_current_thread(&cores);
+    }
+    rep.observed_cores = kayfabe_linux_raw::affinity::current_cores().unwrap_or_default();
     let id = IsolateId::new(w.client as u32, GpuId(0));
     let vas = kayfabe_isolate::HostHandle::new(id, vas_raw);
     let space = vas_raw as u32;
@@ -7296,7 +7417,16 @@ fn w385_run_worker(
     for it in 0..w.iters {
         jitter(&mut rng);
         let op = W385Op::draw(&mut rng);
-        let s = rng.below(W385_SLOTS as u64) as usize;
+        // ★ Choose among the slots that ADMIT the drawn verb — see [`W385Op::admits`] for
+        // the measurement that made this necessary.
+        let cand: Vec<usize> = (0..W385_SLOTS)
+            .filter(|&i| op.admits(slots[i].as_ref()))
+            .collect();
+        let (op, s) = if cand.is_empty() {
+            (W385Op::Idle, 0)
+        } else {
+            (op, cand[rng.below(cand.len() as u64) as usize])
+        };
         let start = origin.elapsed().as_nanos();
         beat.note(w.tid, op, it, origin.elapsed().as_millis() as u64);
 
@@ -7748,6 +7878,12 @@ struct W385Cfg {
     deadline_s: u64,
     /// A worker silent for this long is called wedged, even if the whole rung has time left.
     stall_s: u64,
+    /// How this phase places its workers on cores. See [`W385Pin`].
+    pin: W385Pin,
+    /// ★ How many cores the pinned arms use. Defaults to the **bench guest's `-smp`**
+    /// (`scripts/bench/boot_nvkvm.sh`), because the topology worth reproducing is the one
+    /// the product actually presents — not a round number.
+    cores: usize,
 }
 
 /// ★★ THE WATCHDOG. A deadlock must FAIL BY NAME, and it must fail *while* it is deadlocked
@@ -7807,6 +7943,15 @@ fn w385_watchdog(
 
 /// What one phase (the control, or the fuzz) measured.
 struct W385Phase {
+    /// How this phase placed its workers.
+    pin: W385Pin,
+    /// How many workers the kernel actually accepted a mask for. ⊘ `0` on an `Unpinned`
+    /// arm by construction; `< workers` on a pinned arm is an UNMEASURED pinning, not a
+    /// successful one.
+    pinned: usize,
+    /// The distinct core sets the workers observed, as printed strings — the attributable
+    /// record of where this arm actually ran.
+    core_sets: std::collections::BTreeSet<String>,
     violations: Vec<(&'static str, String)>,
     ops: [u64; 11],
     refused: u64,
@@ -7862,6 +8007,7 @@ fn w385_phase(
                 .seed
                 .wrapping_mul(0x2545_F491_4F6C_DD1D)
                 .wrapping_add((tid as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+            pin: cfg.pin,
         };
         let conn = std::sync::Arc::clone(&conns[client]);
         let vas_raw = vas_raws[client];
@@ -7872,6 +8018,9 @@ fn w385_phase(
     }
 
     let mut out = W385Phase {
+        pin: cfg.pin,
+        pinned: 0,
+        core_sets: std::collections::BTreeSet::new(),
         violations: Vec::new(),
         ops: [0; 11],
         refused: 0,
@@ -7890,6 +8039,10 @@ fn w385_phase(
                 if rep.finished {
                     out.finished += 1;
                 }
+                if rep.pinned {
+                    out.pinned += 1;
+                }
+                out.core_sets.insert(w385_cores_str(&rep.observed_cores));
                 out.refused += rep.refused;
                 for (i, n) in rep.ops.iter().enumerate() {
                     out.ops[i] += n;
@@ -7966,6 +8119,41 @@ fn w385_report(phase: &str, p: &W385Phase) {
          threads intersected, over {}/{} spans",
         p.overlap_pairs, p.spans_used, p.total_spans
     );
+    // ★ WHERE IT ACTUALLY RAN, not where it was asked to run.
+    println!(
+        "info  W385 {phase:<8} pinning = mode {} — {}/{} workers accepted a mask; observed \
+         core sets {:?}",
+        p.pin.as_str(),
+        p.pinned,
+        p.workers,
+        p.core_sets
+    );
+}
+
+/// A core set as a short printable string — `"3"`, `"0-2"`, `"0,4,9"`. Used only for the
+/// attributable pinning line, which is why it collapses runs rather than listing 19 numbers.
+fn w385_cores_str(cores: &[usize]) -> String {
+    if cores.is_empty() {
+        return "?".into();
+    }
+    let mut out = String::new();
+    let mut i = 0;
+    while i < cores.len() {
+        let mut j = i;
+        while j + 1 < cores.len() && cores[j + 1] == cores[j] + 1 {
+            j += 1;
+        }
+        if !out.is_empty() {
+            out.push(',');
+        }
+        if j > i {
+            out.push_str(&format!("{}-{}", cores[i], cores[j]));
+        } else {
+            out.push_str(&format!("{}", cores[i]));
+        }
+        i = j + 1;
+    }
+    out
 }
 
 /// ★★★★★ **w385 — THE RUNG.** Positive control first, then the fuzz, then the grade.
@@ -7985,6 +8173,25 @@ fn concurrent_fuzz(
         cfg.clients,
         cfg.jitter_us
     );
+    // ★★★ THE TOPOLOGY, PRINTED, because it is a claim about the machine and not about us.
+    // `available_parallelism` is what the scheduler will actually give an unpinned arm, and
+    // `cfg.cores` is the guest's `-smp` we are reproducing; a run where the box has FEWER
+    // cores than the guest claims is a run whose `unpinned` control is not a control.
+    let host_cores = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
+    println!(
+        "info  W385 topology       = host offers {host_cores} core(s); the pinned arms use \
+         {} — the bench guest's `-smp` (scripts/bench/boot_nvkvm.sh). ★ In kayfabe EACH \
+         GUEST vCPU IS A HOST THREAD, so this is the contention the product must survive",
+        cfg.cores
+    );
+    if host_cores > 0 && host_cores < cfg.cores {
+        println!(
+            "⚠     W385 topology       = the host has FEWER cores ({host_cores}) than the \
+             pinned arms ask for ({}). The `unpinned` arm is then over-subscribed too and \
+             is NOT a clean control for the pinned one",
+            cfg.cores
+        );
+    }
     // ★★★ THE SEED, FIRST AND UNCONDITIONALLY. A fuzz failure you cannot reproduce is an
     // anecdote, and a seed printed only on success is a seed you do not have when it reds.
     println!("FUZZ_SEED={:#018x}", cfg.seed);
@@ -8101,6 +8308,9 @@ fn concurrent_fuzz(
         clients: 1,
         jitter_us: 0,
         seed: cfg.seed ^ 0x385,
+        // ⊘ The control is UNPINNED on purpose: its job is to say the VERBS work, and a
+        // control that also changed the placement could not do that for either arm.
+        pin: W385Pin::Unpinned,
         ..cfg
     };
     let ctl = w385_phase(
@@ -8112,95 +8322,223 @@ fn concurrent_fuzz(
         "control",
     );
     w385_report("control", &ctl);
-    let control_ok = ctl.violations.is_empty() && ctl.finished == 1;
+    let ctl_engine: u64 = W385Op::ENGINE.iter().map(|o| ctl.ops[o.code() as usize]).sum();
+    // ⊘ The control passes only if it also RAN THE ENGINE. A control that allocated and
+    // never wrote proves the allocator works and says nothing about the plane every arm
+    // below it grades on.
+    let control_ok = ctl.violations.is_empty() && ctl.finished == 1 && ctl_engine > 0;
     if !control_ok {
         println!(
-            "⊘     W385 CONTROL FAILED = {} violation(s) with ONE thread and no jitter",
-            ctl.violations.len()
+            "⊘     W385 CONTROL FAILED = {} violation(s) with ONE thread and no jitter, \
+             {ctl_engine} engine ops, {}/1 workers finished",
+            ctl.violations.len(),
+            ctl.finished
         );
         for (name, detail) in ctl.violations.iter().take(W385_SHOW) {
             println!("        {name}: {detail}");
         }
     } else {
         println!(
-            "ok    W385 control        = {} single-threaded ops, zero violations — the \
-             verbs, the channel and the oracle all work",
+            "ok    W385 control        = {} single-threaded ops of which {ctl_engine} ran \
+             the ENGINE, zero violations — the verbs, the channel and the oracle all work",
             ctl.ops.iter().sum::<u64>()
         );
     }
 
-    // ── ★★★ THE FUZZ. ──────────────────────────────────────────────────────────────────
-    println!(
-        "\ninfo  W385 FUZZ           = {} threads across {} client(s), seeded jitter",
-        cfg.threads, cfg.clients
-    );
-    let fz = w385_phase(cfg, &conns, &vas_raws, engine_type, probe, "fuzz");
-    w385_report("fuzz", &fz);
+    // ── ★★★ THE FUZZ, AS A PAIRED DIFFERENTIAL OVER CPU PLACEMENT. ────────────────────
+    //
+    // Owner ruling, 2026-09-06: pin to vCPU cores, because in kayfabe **each guest vCPU IS a
+    // host thread**. ⊘ And do NOT silently replace the unpinned arm with a pinned one: run
+    // both, at the SAME width, so *"pinning changed the answer"* is a measurement.
+    //
+    //   unpinned   T = cfg.threads (default = the bench guest's `-smp`)   the control
+    //   percore    T = cfg.cores,  one worker per core                    the topology
+    //   crowd-free T = 3 x cores,  unpinned                               the crowd's control
+    //   crowd      T = 3 x cores,  ALL on the same `cores`-wide set       the over-subscribed arm
+    //
+    // ★★★ The last one is the one that matters most and the reason it exists is worth
+    // stating: un-pinned parallelism on a wide box tends to run threads PAST each other, so a
+    // critical section is entered and left before anybody else gets there. Forcing more
+    // runnable workers than cores makes the scheduler preempt **inside** a held lock, which
+    // is where a lock-order bug actually lives.
+    let crowd_t = (cfg.cores * 3).max(cfg.threads);
+    let arms: [(&'static str, W385Cfg); 4] = [
+        (
+            "unpinned",
+            W385Cfg {
+                pin: W385Pin::Unpinned,
+                ..cfg
+            },
+        ),
+        (
+            "percore",
+            W385Cfg {
+                threads: cfg.cores,
+                pin: W385Pin::PerCore { cores: cfg.cores },
+                ..cfg
+            },
+        ),
+        (
+            "crowd-free",
+            W385Cfg {
+                threads: crowd_t,
+                pin: W385Pin::Unpinned,
+                ..cfg
+            },
+        ),
+        (
+            "crowd",
+            W385Cfg {
+                threads: crowd_t,
+                pin: W385Pin::Crowd { cores: cfg.cores },
+                ..cfg
+            },
+        ),
+    ];
+
+    let mut results: Vec<(&'static str, W385Cfg, W385Phase, &'static str)> = Vec::new();
+    for (name, acfg) in arms {
+        println!(
+            "\ninfo  W385 ARM {name:<10} = {} threads across {} client(s), placement {}, \
+             seeded jitter <= {} us",
+            acfg.threads,
+            acfg.clients,
+            acfg.pin.as_str(),
+            acfg.jitter_us
+        );
+        let ph = w385_phase(acfg, &conns, &vas_raws, engine_type, probe, "fuzz");
+        w385_report(name, &ph);
+        for (n, d) in ph.violations.iter().take(W385_SHOW) {
+            println!("        {name}/{n}: {d}");
+        }
+        // ── the per-arm grade. ⊘ ZERO OVERLAP VETOES A GREEN: an arm in which no two
+        //    threads' RM verbs ever intersected sampled no concurrency at all, and calling
+        //    that PASS reports a finding never measured.
+        // ⊘ A PINNED arm whose masks were REFUSED is likewise UNMEASURED, not passed — it
+        //    ran as the unpinned arm under a pinned arm's name, which is worse than not
+        //    running: it would be read as "pinning changed nothing".
+        // ★★★ THE COVERAGE VETO, and it is not a nicety. Invariants 1, 3 and 4 are only
+        // tested when the ENGINE runs; an arm that allocated and mapped and never wrote is
+        // green about nothing. Measured before this existed: three arms at `I=12` reported
+        // PASS with `write=0`.
+        let engine: u64 = W385Op::ENGINE.iter().map(|o| ph.ops[o.code() as usize]).sum();
+        let v = if ph.finished != ph.workers {
+            "FAIL"
+        } else if acfg.pin != W385Pin::Unpinned && ph.pinned != ph.workers {
+            "NOTRUN"
+        } else if ph.overlap_pairs == 0 {
+            "NOTRUN"
+        } else if engine == 0 {
+            "NOTRUN"
+        } else if ph.violations.is_empty() {
+            "PASS"
+        } else {
+            "FAIL"
+        };
+        let ops: u64 = ph.ops.iter().sum();
+        println!(
+            "FUZZ_ARM={name} verdict={v} threads={} pin={} cores={} ops={ops} \
+             engine_ops={engine} alias_ops={} overlap={} viol={} pinned={}/{} finished={}/{}",
+            acfg.threads,
+            acfg.pin.as_str(),
+            cfg.cores,
+            ph.ops[W385Op::ALIAS.code() as usize],
+            ph.overlap_pairs,
+            ph.violations.len(),
+            ph.pinned,
+            ph.workers,
+            ph.finished,
+            ph.workers
+        );
+        if v == "NOTRUN" {
+            println!(
+                "⊘     W385 {name:<10} = UNMEASURED, and WHICH kind matters: \
+                 finished={}/{}  pinned={}/{}  overlap={}  engine_ops={engine}. The first \
+                 of those that is short IS the reason",
+                ph.finished, ph.workers, ph.pinned, ph.workers, ph.overlap_pairs
+            );
+        }
+        results.push((name, acfg, ph, v));
+    }
 
     // ── teardown of the shared address spaces. ─────────────────────────────────────────
     for (b, v) in backends.iter_mut().zip(vas_handles.iter()) {
         let _ = b.free(*v);
     }
 
-    // ── the census, by invariant name. ⊘ Counts uncapped, details capped. ───────────────
-    let mut by_name: std::collections::BTreeMap<&'static str, usize> =
+    // ── the census, by invariant name, ACROSS EVERY ARM. ⊘ Counts uncapped. ────────────
+    let mut by_name: std::collections::BTreeMap<(&'static str, &'static str), usize> =
         std::collections::BTreeMap::new();
-    for (n, _) in &fz.violations {
-        *by_name.entry(n).or_default() += 1;
+    for (name, _, ph, _) in &results {
+        for (n, _) in &ph.violations {
+            *by_name.entry((*name, n)).or_default() += 1;
+        }
     }
-    for (name, count) in &by_name {
-        println!("FUZZ_VIOLATION={name} n={count}");
+    for ((arm, name), count) in &by_name {
+        println!("FUZZ_VIOLATION={name} arm={arm} n={count}");
     }
-    if !fz.violations.is_empty() {
-        println!(
-            "⚠     W385 detail         = showing {} of {}",
-            fz.violations.len().min(W385_SHOW),
-            fz.violations.len()
-        );
-        for (name, detail) in fz.violations.iter().take(W385_SHOW) {
-            println!("        {name}: {detail}");
+
+    let ops: u64 = results.iter().map(|(_, _, p, _)| p.ops.iter().sum::<u64>()).sum();
+    let overlap: u64 = results.iter().map(|(_, _, p, _)| p.overlap_pairs).sum();
+    let viol: usize = results.iter().map(|(_, _, p, _)| p.violations.len()).sum();
+    println!("FUZZ_THREADS={}", cfg.threads);
+    println!("FUZZ_CORES={}", cfg.cores);
+    println!("FUZZ_ITERS={}", cfg.iters);
+    println!("FUZZ_CLIENTS={}", cfg.clients);
+    println!("FUZZ_ARMS={}", results.len());
+    println!("FUZZ_OPS={ops}");
+    println!("FUZZ_OVERLAP_PAIRS={overlap}");
+    println!("FUZZ_VIOLATIONS={viol}");
+    println!(
+        "FUZZ_REFUSED={}",
+        results.iter().map(|(_, _, p, _)| p.refused).sum::<u64>()
+    );
+
+    // ★★★ THE PAIRING RULE, EVALUATED HERE RATHER THAN LEFT TO THE READER. If a pinned arm
+    // reds while its same-width unpinned control is green, THAT IS THE FINDING, and it says
+    // the unpinned arm was never a test of this.
+    let grade = |n: &str| results.iter().find(|(a, _, _, _)| *a == n).map(|(_, _, _, v)| *v);
+    for (pinned, control) in [("percore", "unpinned"), ("crowd", "crowd-free")] {
+        match (grade(pinned), grade(control)) {
+            (Some("FAIL"), Some("PASS")) => println!(
+                "★★★★★ W385 PINNING FOUND IT = arm `{pinned}` RED while its same-width \
+                 unpinned control `{control}` is GREEN. ⇒ the unpinned arm was never a test \
+                 of this. FUZZ_PINNING_DELTA={pinned}"
+            ),
+            (Some(a), Some(b)) => println!(
+                "info  W385 pairing        = {pinned}={a} vs {control}={b} — placement did \
+                 not change the answer"
+            ),
+            _ => println!("info  W385 pairing        = {pinned} / {control} incomparable"),
         }
     }
 
-    let ops: u64 = fz.ops.iter().sum();
-    println!("FUZZ_THREADS={}", cfg.threads);
-    println!("FUZZ_ITERS={}", cfg.iters);
-    println!("FUZZ_CLIENTS={}", cfg.clients);
-    println!("FUZZ_OPS={ops}");
-    println!("FUZZ_OVERLAP_PAIRS={}", fz.overlap_pairs);
-    println!("FUZZ_VIOLATIONS={}", fz.violations.len());
-    println!("FUZZ_REFUSED={}", fz.refused);
-    println!("FUZZ_WORKERS_FINISHED={}/{}", fz.finished, fz.workers);
-
-    // ── ★★ THE GRADE. Three outcomes, all pre-registered. ──────────────────────────────
-    //
-    // ⊘ ZERO OVERLAP VETOES A GREEN. A fuzz run in which no two threads' RM verbs ever
-    // intersected sampled no concurrency, and calling that PASS reports a finding never
-    // measured — the exact failure the `dlen=0` rows taught this tree.
+    // ── ★★ THE OVERALL GRADE. Every outcome pre-registered. ───────────────────────────
     let verdict = if !control_ok {
         println!("FUZZ_REASON=CONTROL_FAILED");
         "NOTRUN"
-    } else if fz.finished != fz.workers {
-        println!("FUZZ_REASON=WORKER_DID_NOT_FINISH");
+    } else if results.iter().any(|(_, _, _, v)| *v == "FAIL") {
+        println!("FUZZ_REASON=INVARIANT_VIOLATED");
         "FAIL"
-    } else if fz.overlap_pairs == 0 {
-        println!("FUZZ_REASON=NO_CONCURRENCY_OBSERVED");
-        "NOTRUN"
-    } else if fz.violations.is_empty() {
+    } else if results.iter().all(|(_, _, _, v)| *v == "PASS") {
         println!("FUZZ_REASON=CLEAN");
         "PASS"
     } else {
-        println!("FUZZ_REASON=INVARIANT_VIOLATED");
-        "FAIL"
+        // ⊘ Some arm was UNMEASURED (no overlap sampled, or a pinned arm whose masks were
+        // refused). Not a pass and not a failure — the third value exists for exactly this.
+        println!("FUZZ_REASON=ARM_UNMEASURED");
+        "NOTRUN"
     };
 
     if verdict == "PASS" {
         println!(
-            "★     W385 FUZZ CLEAN     = {ops} operations over {} threads and {} client(s), \
-             {} measured cross-thread overlaps, zero invariant violations. ⚠ THAT IS A \
-             BUDGET, NOT A PROOF: absence of a red is not absence of a race, and this run \
-             sampled ONE schedule of one seed",
-            cfg.threads, cfg.clients, fz.overlap_pairs
+            "★     W385 FUZZ CLEAN     = {ops} operations over {} arms (up to {crowd_t} \
+             threads, {} client(s), {} cores), {overlap} measured cross-thread overlaps, \
+             zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red \
+             is not absence of a race, and every arm sampled ONE schedule of one seed",
+            results.len(),
+            cfg.clients,
+            cfg.cores
         );
     }
     println!(
@@ -8282,8 +8620,16 @@ fn main() -> std::process::ExitCode {
     // folded into `--w379`/`--w381`: every rung in those batteries is single-threaded and
     // sequential, and quietly adding a thread pool to a committed battery would make every
     // earlier arm incomparable to its own predecessors.
+    // ★★★ THE DEFAULT IS THE BENCH GUEST'S `-smp`, NOT A ROUND NUMBER. `boot_nvkvm.sh` boots
+    // the Mode-2 guest with `-smp 3`, and in kayfabe **each guest vCPU is a host thread** —
+    // so three contending threads IS the topology the product has to survive. A default of
+    // "8 because 8 is a nice number" would be testing a machine nobody runs.
+    // ⊘ If `boot_nvkvm.sh` changes its `-smp`, this number is stale and the run's own
+    // `W385 topology` line is where that shows up.
+    const W385_GUEST_SMP: usize = 3;
     let mut want_concurrent_fuzz = false;
-    let mut fuzz_threads: usize = 8;
+    let mut fuzz_threads: usize = W385_GUEST_SMP;
+    let mut fuzz_cores: usize = W385_GUEST_SMP;
     let mut fuzz_iters: u64 = 64;
     let mut fuzz_clients: usize = 2;
     let mut fuzz_jitter_us: u64 = 200;
@@ -8409,6 +8755,7 @@ fn main() -> std::process::ExitCode {
             s if s.starts_with("--fuzz-threads")
                 || s.starts_with("--fuzz-iters")
                 || s.starts_with("--fuzz-clients")
+                || s.starts_with("--fuzz-cores")
                 || s.starts_with("--fuzz-jitter-us")
                 || s.starts_with("--fuzz-deadline")
                 || s.starts_with("--fuzz-stall")
@@ -8437,6 +8784,7 @@ fn main() -> std::process::ExitCode {
                     "--fuzz-threads" => fuzz_threads = (n as usize).clamp(1, 64),
                     "--fuzz-iters" => fuzz_iters = n.max(1),
                     "--fuzz-clients" => fuzz_clients = (n as usize).clamp(1, 8),
+                    "--fuzz-cores" => fuzz_cores = (n as usize).clamp(1, 64),
                     "--fuzz-jitter-us" => fuzz_jitter_us = n,
                     "--fuzz-deadline" => fuzz_deadline_s = n.max(1),
                     "--fuzz-stall" => fuzz_stall_s = n.max(1),
@@ -8766,6 +9114,12 @@ fn main() -> std::process::ExitCode {
             seed,
             deadline_s: fuzz_deadline_s,
             stall_s: fuzz_stall_s,
+            // ⊘ The top-level placement is UNPINNED and is only the seed of the arm table:
+            // `concurrent_fuzz` runs `unpinned`, `percore`, `crowd-free` and `crowd` and
+            // sets each arm's placement EXPLICITLY, so no arm inherits a default nobody
+            // named. A default you never see exercised is a default you do not have.
+            pin: W385Pin::Unpinned,
+            cores: fuzz_cores,
         };
         let ok = concurrent_fuzz(&conn, probe, gpu, cfg);
         println!("done — w385 concurrent fuzz only");
