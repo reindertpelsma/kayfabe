@@ -8263,7 +8263,8 @@ impl SharedDoorbell {
         // the store for a join the first already gave back, get `false`, and be reported as
         // `TABLE/STORE DISAGREE` with its object deliberately leaked — a loud, alarming line
         // for a case that is simply the rule working. Freed frames are remembered.
-        let mut frames_given_back: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        let mut frames_given_back: std::collections::HashSet<u64> =
+            std::collections::HashSet::new();
         // ★★★★★ **w380 — LAST VA OUT RELEASES THE STORE'S JOIN, NOT THE FIRST.**
         //
         // ⊘⊘ Before aliasing existed, a revoked row was necessarily the frame's only namer, so
