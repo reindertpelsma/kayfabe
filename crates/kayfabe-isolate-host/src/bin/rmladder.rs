@@ -22,8 +22,8 @@
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend, RmError};
 use kayfabe_isolate_host::rm::{
-    DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RmConnection, ViewCompare,
-    RACE_FENCE_OFFSET,
+    DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RACE_FENCE_OFFSET, RmConnection,
+    ViewCompare,
 };
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
@@ -2236,6 +2236,7 @@ fn late_map_arm(
     ring_at: u64,
     target_at: u64,
     map_before_doorbell: bool,
+    engine_type: u32,
 ) -> Result<RaceOutcome, RmError> {
     let vas = rm.alloc_vaspace()?;
     let mut cleanup_va: Option<u64> = None;
@@ -2243,8 +2244,6 @@ fn late_map_arm(
     let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
 
     let mut go = || -> Result<RaceOutcome, RmError> {
-        let engine_type = kayfabe_abi::submit::engine_type_copy(0)
-            .ok_or_else(|| RmError::Other("COPY0 is not expressible"))?;
         let (chan, token) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(ring_at)))?;
         chan_h = Some(chan);
         // Fact 1, from the connection's record of RM's [OUT] `dmaOffset`, not from the
@@ -2413,7 +2412,15 @@ fn late_map_race(rm: &mut HostRmBackend, gpu: u32) -> bool {
          is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value"
     );
 
-    let a = late_map_arm(rm, "W377-A", A_RING_AT, A_TARGET_AT, true);
+    // ⊘ Resolved ONCE, before either arm allocates anything: an engine the ABI cannot name
+    // is a refusal of the harness, not of the driver, and it must not be reported from
+    // inside an arm where it would read as that arm's outcome.
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  W377 engine         = COPY0 is not expressible");
+        return false;
+    };
+
+    let a = late_map_arm(rm, "W377-A", A_RING_AT, A_TARGET_AT, true, engine_type);
     match &a {
         Ok(o) => println!("info  W377-A outcome      = {o:?}"),
         Err(e) => println!("FAIL  W377-A refused      = {e:?}"),
@@ -2434,7 +2441,7 @@ fn late_map_race(rm: &mut HostRmBackend, gpu: u32) -> bool {
         );
     }
 
-    let b = late_map_arm(rm, "W377-B", B_RING_AT, B_TARGET_AT, false);
+    let b = late_map_arm(rm, "W377-B", B_RING_AT, B_TARGET_AT, false, engine_type);
     match &b {
         Ok(o) => println!("info  W377-B outcome      = {o:?}"),
         Err(e) => println!("FAIL  W377-B refused      = {e:?}"),
