@@ -470,14 +470,17 @@ Knobs (each edits the config, so order does not matter and any one of them impli
 ## §6 THE BRANCH'S OWN HEALTH — checked against a baseline, not asserted
 
 - **`cargo test --workspace --all-targets --features host-isolates --no-fail-fast`**, on the
-  bench at `5d0d6695`: **235 test binaries ran**, and exactly **three targets fail** —
+  bench at `5452669c` (the branch tip, **after** the rebase onto master `758a5752`): **235 test
+  binaries ran**, and exactly **three targets fail** —
   `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
   `ring_out_of_our_own_framebuffer`. That is **the same set master already fails, not a
   superset**. ⚠ `--no-fail-fast` is not optional: without it `cargo test` stops at the first
   failing *target* and reports a stopping point rather than a result, and the binary count is
   what makes *"the list shrank"* distinguishable from *"the list was truncated"*.
   ⊘ w381 §6 recorded **234** binaries at `4a501a7f`; the count moved with master, the **set** did
-  not, and the set is the assertion.
+  not, and the set is the assertion. ⚠ It was run **twice** — once before the rebase and once at
+  the tip — because a rebase moves the code onto a different master and *"the tests passed"* on
+  the pre-rebase commit is a statement about a tree nobody will ever check out.
 - **`cargo fmt -p kayfabe-isolate-host -- --check`**: the remaining hunks are byte-for-byte the
   pre-existing ones (`rmladder.rs:58`, `:65`, `child.rs`, `isolate.rs` ×2, `rm.rs:5316`, four in
   `tests/`). ⊘ `rustfmt` wanted to reformat three of those as a side effect and they were
