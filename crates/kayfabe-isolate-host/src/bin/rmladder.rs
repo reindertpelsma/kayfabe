@@ -7510,6 +7510,12 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                     "DBL_NATIVE_P50_US={base:.2} DBL_GATE_MULTIPLE={:.0} DBL_GATE_US={gate:.2}",
                     cfg.gate_multiple
                 );
+                // ★★ THE CONTINUOUS NUMBER, beside the binary one. A pass/fail alone tells an
+                // iterating lane nothing about whether it moved: two builds can both be red
+                // and be a factor of forty apart. This is the quantity to graph — and it is
+                // deliberately printed for BOTH outcomes, because a lane that only records
+                // its ratio when it fails cannot tell a fix from a lucky boot.
+                println!("DBL_RATIO_X={:.1}", s.p50_us / base);
                 if s.p50_us <= gate {
                     println!(
                         "★     R6 VERDICT         = p50 {:.1}us <= gate {gate:.1}us \
