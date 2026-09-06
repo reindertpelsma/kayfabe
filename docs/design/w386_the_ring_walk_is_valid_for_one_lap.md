@@ -1,6 +1,7 @@
 # w386 — THE GPFIFO RING WALK IS VALID FOR EXACTLY ONE LAP
 
-**STATUS — 2026-09-06 — LIVE. HARDWARE ARM RUN: OUTCOME (A), the pre-registered one.** The
+**STATUS — 2026-09-06 — LIVE. HARDWARE ARM RUN: OUTCOME (A). §10's LLM QUESTION IS RESOLVED
+— OUTCOME (i), the fix is EXONERATED; see §11.** The
 wrap is fixed on a real GA106 (§9). ⊘ **A SEPARATE AND UNRESOLVED QUESTION OPENED IN THE SAME
 RUN**: the LLM's output text is degenerate under *greedy* decoding while its token COUNT
 passes — see §10. That is **not** attributed to this fix, and §9's instrument argues against
@@ -272,3 +273,48 @@ assertion, not a count.
 
 ⚠ **Whatever the answer, the grade is defective as it stands**: a workload whose output is
 garbage must not report `LLM_OK=1`. That is true independently of what caused this run.
+
+
+## 11. ★★★★★ §10 RESOLVED — IT WAS THE DISK, AND THE FIX IS EXONERATED
+
+Pre-registered outcome **(i)**: tokens with *coherent* text after the host's disk was
+reclaimed.
+
+| run | disk free at the time | `LLM_TEXT` | `LLM_MS` | `inline_exceptions` |
+|---|---|---|---|---|
+| w383 (earlier milestone) | healthy | ` ______. A. Paris B. London C. New York D` | 722 820 | 61 865 |
+| w386llm (§10's alarm) | **~71–100 G, starved** | ` ，ize'sus(,.- A的  :` | 573 800 | 31 901 |
+| w386llm2 / llm3 | starved | `ABSENT` (no tokens) | — | 54 115 / — |
+| **w386llm7 (post-reclaim)** | **178 G** | ` ______. A. Paris B. London C. New York D` | 675 794 | 26 993 |
+
+★★★ **The post-reclaim text is BYTE-IDENTICAL to w383's.** Decoding is greedy
+(`do_sample=False`), so identical output across revisions `w383 → 95556ff1` is exactly what
+a correct system must produce — and it does.
+
+⇒ **All three candidate readings in §10 are now settled:**
+1. *"w386 changed which work executes"* — **REFUTED.** The text is identical either side of
+   the fix. §9.1's instrument argued this and the measurement confirms it.
+2. *"the LLM text was never stable"* — **REFUTED.** It is stable, and reproducibly so.
+3. *"prompt/model state differed"* — **REFUTED.** Same probe, same output.
+
+★ And the fourth reading, which nobody registered because it did not look like a cause:
+**a starved host disk.** ⚠ Note its signature, because it is deceptive — the starved run was
+**FASTER** (573 s vs 676 s) and had **fewer** inline exceptions (31 901 vs 26 993 is the wrong
+direction, but 54 115 on the next one is not). *Less work, done wrong, looks like progress.*
+
+### 11.1 ⊘ WHAT DOES NOT CHANGE, AND IS THE ONLY THING HERE WORTH FIXING
+
+The grade is still defective, and this result makes it worse rather than better:
+
+**`LLM_TOKENS=16` and `LLM_OK=1` PASSED on the garbage run.** A count cannot see a
+substitution. The rung reported its headline success on a boot whose output was degenerate,
+and only a human reading the text caught it.
+
+⇒ **Phase 2 of the roadmap says CUDA applications "must pass" and inherits this definition of
+pass.** A bar built on a count cannot carry a phase that says *must pass*. The grade must
+assert the **text** — under greedy decoding that is cheap and exact: compare against the known
+string, or against the previous run's, and report a diff.
+
+⚠ Status of this section: run 7 is `n=1` post-reclaim; run 8 was still in flight when this was
+written. The identity with w383's string is the load-bearing fact and does not depend on
+run 8; run 8 tests reproducibility of the *repeat*, not of the identity.
