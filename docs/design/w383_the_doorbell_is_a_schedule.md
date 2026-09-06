@@ -1,6 +1,6 @@
 # ★★★★★ THE DOORBELL IS A SCHEDULE — the publication lane gets its worker
 
-**STATUS — 2026-09-06 — LIVE, SHIPPING DEFAULT-OFF.** Built at `w383`. This is the **wiring** that
+**STATUS — 2026-09-06 — LIVE. The doorbell lane ships DEFAULT-OFF; the dirty-gate fix ships ON.** Built at `w383`. This is the **wiring** that
 `publication_off_the_bql.md` §9 lists under *"Designed, NOT built"* and that
 `the_async_lane_is_built_and_orphaned.md` §0 names as the headline finding:
 *"we have the right shape and nothing runs it."* Both of those parents stay LIVE and are
@@ -17,9 +17,11 @@ has a producer, a consumer and a thread.
 >    says why: **the forward is not the trigger — the guest's own `GP_PUT` is.** The arm
 >    therefore ships `off`.
 >
-> ★ And the largest number this rung moved was not the thread's: **w330's dirty-gate default
-> has been unreachable since it was written** (§10), which is where the LLM's 360 s of
-> publication actually came from.
+> ★★★★★ **AND THE MILESTONE IS MET, by the OTHER half of this rung** (§14): `LLM_TOKENS=16`,
+> `LLM_TEXT=" ______. A. Paris B. London C. New York D"`, `MINMM_SUM=64`, **zero** new host
+> Xids. **w330's dirty-gate default had been unreachable since it was written** (§10) —
+> arming it took the publication wall from **508 904 ms to 6 576 ms (77×)** and the skip rate
+> from **0.0 % to 99.7 %**. ⊘ That is not the thread's number, and §14 says so.
 
 Read with: `publication_off_the_bql.md` (§1 the ordering correction, §3 the design, §4 the
 map/revoke asymmetry, §5.3 the obligation this does **not** discharge),
@@ -551,3 +553,55 @@ was invisible: the gate had **never been consulted**, and `skipped=0` looked lik
 
 ⊘ Same number of passes (229) — the gate does not skip the *pass*, it skips the per-VAS census
 and join inside it, which is where the time is.
+
+## §14 ★★★★★ **THE LLM PRODUCED TOKENS** — `w383llmgate`, real GA106, 2026-09-06
+
+**Pre-registered in `scripts/bench/w383_llm.sh` before the run.** Arm: doorbell **`off`** (the
+publication runs inline, on the vCPU, as it always has); dirty gates **`on`** — i.e. the
+*reachable* form of the default w330 wrote and §10 found unreachable. Everything else w290p
+default. `llm_hook2.sh`, `LLM_TIMEOUT=1500`.
+
+```
+LLM_OK=1
+LLM_TOKENS=16
+LLM_TEXT= ______. A. Paris B. London C. New York D
+LLM_MS=722820.0
+MINMM_OK=1  MINMM_SUM=64
+W382_XIDS=9/9/9   HOST_DMESG_XID=0
+```
+
+### The five graded numbers, verbatim
+
+| # | criterion | `w383llmctl` (gate off) | `w383llmgate` (gate on) |
+|---|---|---|---|
+| 1 | **`LLM_TOKENS`** | **ABSENT** (unmeasured at 1500 s) | ★★★★★ **16** |
+| 2 | `inline_exceptions` | 41 450 | 47 742 ⊘ see §8.1 — the doorbell arm is `off` here, so this is the *floor*, not a regression |
+| 3 | `worst_trap` | 2 842 906 µs | 2 960 022 µs ⊘ see §8.2 — established before the first doorbell on every arm |
+| 4 | `SUPERSEDED` / `⊘ SUPERSEDE CAPPED` / host `Xid` / coverage refusals | 0 / 0 / 0 / — | **0 / 0 / 0 / down** |
+| 5 | `PUBQUEUE refused` | n/a (lane disarmed) | n/a (lane disarmed) |
+
+And the number that produced it:
+
+| | gate off | gate on |
+|---|---|---|
+| `DIRTY-GATE publish` | `skipped=0` — **0.0 %** | `fired=254 skipped=90358` — **99.7 %** |
+| publication wall | **508 904 ms** over 16 890 passes | **6 576 ms** over 22 654 passes |
+| doorbells | 17 617 | **23 386** (further into the workload, not a different guest) |
+| rows refused per pass | 25 974 passes at `refused=18` | **none** at 18; the tail is ≤ 16 and rare |
+
+⇒ ★★★★★ **77× less publication wall, 99.7 % of the passes skipped, the known-positive
+(`MINMM_SUM=64`) intact, zero new host Xids, and the LLM generates.** 16 tokens in 722.8 s is
+**45 s/token** — the milestone, and an optimisation problem, which is a success with a number
+attached rather than a wall.
+
+### ⊘⊘ AND THE HONEST ATTRIBUTION: this is §10's number, not the thread's
+
+The rung was commissioned to move publication off the vCPU. It did that, and it is measured
+(§7, §8.1). **It is not what produced the tokens.** What produced them was noticing, while
+looking for where the 360 s went, that the gate which removes that work had been **switched
+off by an unreachable `match` arm for a month** — and that its own census printed the same
+`skipped=0` whether it was disarmed or merely busy.
+
+⚠ The two are not independent, and that is the part worth banking: **the thread hunt is what
+walked past the census.** A rung that had gone straight for the doorbell's latency would have
+moved 509 s of work to a worker and left 503 s of it unnecessary.
