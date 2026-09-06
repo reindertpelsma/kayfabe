@@ -1,0 +1,167 @@
+# ★★★★★ THE MULTI-THREADED RAW CLIENT — `--concurrent-fuzz`, seeded, with five named invariants
+
+**STATUS — 2026-09-06 — LIVE.** Adds a rung; supersedes nothing. It fills the gap
+`w381_the_guest_servable_probe.md` §3 states about its own R5: *"⊘ Single-client only;
+cross-client leakage is NOT covered by it"* — and the larger gap neither file named, which is
+that **every rung in `kayfabe-rm-ladder` is single-threaded and sequential.** §1–§3 are read
+off this tree's own source and are checkable without a GPU. §4 carries the measurements;
+every number names the arm it came from.
+
+---
+
+## §0 THE ONE-LINE PROBLEM
+
+`map_stress` (R5) does 186 releases and does them **one at a time**. `cross_client_leak`
+(R5b) holds two RM clients and **never lets them run at the same time**. So the whole
+battery's evidence is *"these verbs work when nothing else is happening"*, and four things
+have never been reached at all:
+
+- **`RmConnection`'s two host-side mutexes.** `objects` (the handle table and the monotonic
+  `mint()` counter) and `rings` (the CPU mappings of every channel's pushbuffer, GPFIFO and
+  semaphore). Their separation is a **stated discipline** — *"Two locks, each held for one
+  kind of thing, is the R3 lock-rank discipline rather than a convenience"* (`rm.rs`, the
+  `rings` field). ⊘ A discipline no two threads ever tested is a comment, not an invariant.
+- **The address table under concurrent map / unmap / probe into ONE address space.**
+- **Handle and VA recycling** with another thread allocating into the hole.
+- **Ordering assumptions that hold only because nothing else was running.**
+
+## §1 ⊘ WHAT THIS RUNG DOES **NOT** REACH, STATED FIRST
+
+★ The single most important scoping fact, and it would be easy to imply the opposite:
+**`kayfabe_util::lockwitness` is not used in `kayfabe-isolate-host` at all.** `grep` of the
+crate is empty. The `assert_lock_free("issuing a host RM verb")` call sites are in
+`kayfabe-isolate/src/lib.rs` (`:2942`, `:3589`) and the ranked-lock ranks are the device /
+proc / leaf triple that the **shim and the isolate** run under — not the raw client.
+
+⇒ **A raw-client fuzz cannot fire an R1 ranked-lock assert**, because the raw client never
+takes a ranked lock. What it *does* reach is:
+
+| plane | reached? | by what |
+|---|---|---|
+| `RmConnection::objects` / `rings` mutexes | **yes** | N threads, one `Arc<RmConnection>` |
+| `leafwitness` (the leaf-rank witness `mint`/`remember` enter, asserted inside `CharDevice::ioctl`) | **yes** | any concurrent verb |
+| RM's own per-client handle and VA allocators | **yes** | concurrent alloc/map/free |
+| our address table under concurrency | **yes** | one shared VAS per client |
+| `l1_concurrency.md` §3.3 R1 ranked-lock discipline | **NO** | isolate/shim only — a different binary |
+
+⚠ That last row is the one to keep saying out loud. This rung is the **host-side lock and
+address-table** instrument the owner asked for; it is **not** an R1 witness harness, and a
+green here says nothing about the ranked locks in `kayfabe-isolate`. Reaching those needs a
+fuzz driven through `kayfabe_isolate::Worker::with_rm`, which is what the existing
+`--concurrency` (R12) rung already touches and what a follow-on should widen.
+
+## §2 WHAT WAS BUILT
+
+`--concurrent-fuzz`: `T` worker threads × `I` iterations across `C` RM clients.
+
+- **One `HostRmBackend` per thread, one `Arc<RmConnection>` per client.** That shape is
+  forced and is also the point: `HostRmBackend`'s mutating verbs take `&mut self` and its
+  `slots` (GPFIFO cursor) map is **per-worker**, so a shared backend would be a harness bug;
+  the `RmConnection` underneath, with its two mutexes, is **shared**, and is the thing under
+  test. `HostRmBackend` is `Send + Sync` and this is statically enforced — `RmBackend: Send +
+  Sync` (`kayfabe-isolate/src/lib.rs:786`), no `unsafe impl` anywhere in `rm.rs`.
+- **One shared VAS per client, private VA windows per worker.** ★ Shared, deliberately: a
+  per-thread address space would leave RM's per-VAS page tables uncontended, which is the
+  plane the rung is named after. The private 64 GiB windows are what keep a violation
+  *attributable* rather than merely observed.
+- **The two clients name the SAME VA numbers.** The window is keyed on the worker's index
+  *within its client*, not on its global id — so client 0 lane 2 and client 1 lane 2 ask for
+  identical addresses. That is what makes invariant 4 an isolation statement instead of an
+  accident of layout, and it is `cross_client_leak`'s `VA_SHARED` idea taken concurrent.
+- **The verbs are the ones the existing rungs already do** — allocate, map at a chosen VA,
+  map a **second** VA over the same memory (the w380 alias case), write with the engine and
+  read back, unmap one alias, probe, free, and free-then-immediately-reallocate to force
+  handle/VA reuse. Nothing is invented; the fuzz is the *schedule*, not the vocabulary.
+- **Seeded jitter between and inside operations**, half as a `sleep` and half as a spin. ⊘
+  A pure sleep parks the thread and stops contending; a race that only appears while two
+  threads are genuinely on CPU together would never be sampled by one.
+
+### §2.1 ★★★ SEEDED, OR IT IS NOT AN INSTRUMENT — and the honest half
+
+Every choice comes from one SplitMix64 stream seeded by `--seed`, printed as `FUZZ_SEED=` on
+**every** run including the ones that pass, and worker `t`'s stream is a pure function of
+`(seed, t)`. So `--seed=N` replays the **decision sequence**.
+
+⊘ **It does not replay the OS schedule, and the rung says so in its own output.** A red names
+a reproducible *program*; the interleaving that made it red is not ours to reproduce. Stating
+this here rather than discovering it later matters, because *"reproducible fuzz"* over threads
+is a claim this tree cannot make and should not imply.
+
+### §2.2 THE ORACLE — five invariants, each refused BY NAME
+
+A stress test with no invariant only finds crashes. Every thread writes a **thread-unique,
+client-tagged magic** (`0xF5 | client | tid | seq`), so a word that arrives from elsewhere is
+*identifiable* rather than merely wrong.
+
+| # | invariant | refusal name(s) |
+|---|---|---|
+| 1 | no VA is ever bound to two different memories at once | `VA_DOUBLE_BOUND` |
+| 2 | a mapping is all-or-nothing, never observable half-installed | `MAP_NOT_ATOMIC` |
+| 3 | every value written through one alias is readable through the others; mapping or unmapping the second alias does not revoke the first | `ALIAS_MISMATCH`, `ALIAS_REVOKED` |
+| 4 | no client ever observes another client's magic | `CROSS_CLIENT_LEAK` |
+| 5 | every release is observed; a freed handle is not resolvable; a VA comes back; a recycled object reads as its OWN sentinel | `RELEASE_LOST`, `FREED_HANDLE_RESOLVES`, `VA_NOT_RECOVERED`, `STALE_READ` |
+
+Plus two structural ones: `WINDOW_ESCAPE` (a placement that drifted out of the asking
+worker's window) and `WORKER_PANIC` — ★ the loudest possible red, and the one a witness
+assert would produce, so it is caught at the `join` and named rather than swallowed.
+
+⊘ **`Relocated` is deliberately NOT graded.** RM treating a fixed ask as a hint is a
+statement about our address choice, not about the mapping plane, and folding it in would
+manufacture reds out of legal allocator behaviour. ⊘ **`pde_info` is not used as a publication
+oracle** (it answers at page-*table* granularity) and **`GP_GET` is never read** (it has no
+writer anywhere in this workspace).
+
+### §2.3 ★★ A DEADLOCK FAILS BY NAME, NEVER HANGS
+
+A watchdog thread runs over the whole rung, with a per-worker stall check beside the global
+deadline. On expiry it prints what **every** worker was last doing — verb, iteration, and how
+long since its last heartbeat — then `FUZZ_REASON=DEADLOCK/WATCHDOG`,
+`RUNG_concurrent_fuzz=FAIL`, and exits 3.
+
+⊘ It ends the process rather than unwinding. A worker wedged in an RM ioctl cannot be joined,
+cancelled or timed out, so the only honest choices are *"print what we know and die"* or
+*"hang"* — and this tree has three recorded nontermination shapes that wedged CI instead of
+failing, one of which held three binaries for 23 hours. The cost is stated rather than
+hidden: **a watchdog kill leaks the run's RM objects.**
+
+★ The watchdog needed one correction before it was sound, and it is worth recording because
+it is the same class as everything else here: it was first keyed on each worker's own `done`
+flag, and **a worker that returns early or panics never sets it** — so the watchdog would
+have kept counting and eventually killed a process whose workers had all been collected. The
+fix is a separate `stop` flag set by the **phase**, after the joins. `done` is the worker's
+statement; `stop` is the phase's.
+
+### §2.4 THE CONTROLS — the rung is these, not the loop
+
+- **A positive control runs FIRST**: the same verbs at `T=1` with **no jitter**, on one
+  client. If it reds the rung is broken, not the system, and the verdict is `NOTRUN`.
+- **★★★ `FUZZ_OVERLAP_PAIRS` is a second control and it VETOES a green.** It counts pairs of
+  RM-verb intervals *from different threads* that actually intersected. A fuzz run that
+  sampled **zero** overlap sampled no concurrency at all, and grading it `PASS` would report
+  a finding never measured — the `dlen=0` failure, in a new costume. Zero overlap prints
+  `NOTRUN` with `FUZZ_REASON=NO_CONCURRENCY_OBSERVED`.
+- Every outcome is pre-registered, including the three ways to be **unmeasured**: no binary,
+  no device, and a binary that ran and printed no verdict line are three distinguishable
+  verdicts in `scripts/bench/w385_concurrent_fuzz.sh`.
+- The rung reports a **distribution and `n`** (min/p50/p90/p99/max over every op, plus the
+  per-verb census), never a summary number.
+
+⚠ **A green proves less than it looks**, and the rung's own `PASS` line says so: it names the
+op count, the thread count and the measured overlap as *"a budget, not a proof"*.
+
+## §3 HOW TO RUN IT
+
+```text
+kayfabe-rm-ladder --gpu 0 --concurrent-fuzz \
+    [--fuzz-threads 8] [--fuzz-iters 64] [--fuzz-clients 2] \
+    [--fuzz-jitter-us 200] [--seed 0x...] [--fuzz-deadline 900] [--fuzz-stall 120]
+```
+
+`scripts/bench/w385_concurrent_fuzz.sh` walks a ladder of widths, grades each arm out of
+printed lines only, and runs the **same seed twice** at one width — because *"the seed
+replays"* is a claim the rung makes about itself, and an unchecked claim about an instrument
+is what this tree has paid for most often.
+
+## §4 THE MEASUREMENTS
+
+See §4 of this file as amended by the run log committed beside it.

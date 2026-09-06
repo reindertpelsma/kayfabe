@@ -7085,17 +7085,32 @@ struct W385Beat {
     iter: Vec<std::sync::atomic::AtomicU64>,
     /// Whether worker `i` finished its loop.
     done: Vec<std::sync::atomic::AtomicBool>,
+    /// ★★ Set by the phase once every worker has been **joined**.
+    ///
+    /// ⊘ Not redundant with `done`, and the difference is a bug this nearly shipped: a
+    /// worker that returns EARLY (no channel) or **panics** never sets its own `done`, so a
+    /// watchdog keyed on `done` alone would keep counting and eventually kill a process
+    /// whose workers had all been collected. `done` is the worker's statement; `stop` is
+    /// the phase's.
+    stop: std::sync::atomic::AtomicBool,
 }
 
 impl W385Beat {
     fn new(n: usize) -> Self {
         W385Beat {
-            last_ms: (0..n).map(|_| std::sync::atomic::AtomicU64::new(0)).collect(),
-            op: (0..n).map(|_| std::sync::atomic::AtomicU32::new(0)).collect(),
-            iter: (0..n).map(|_| std::sync::atomic::AtomicU64::new(0)).collect(),
+            last_ms: (0..n)
+                .map(|_| std::sync::atomic::AtomicU64::new(0))
+                .collect(),
+            op: (0..n)
+                .map(|_| std::sync::atomic::AtomicU32::new(0))
+                .collect(),
+            iter: (0..n)
+                .map(|_| std::sync::atomic::AtomicU64::new(0))
+                .collect(),
             done: (0..n)
                 .map(|_| std::sync::atomic::AtomicBool::new(false))
                 .collect(),
+            stop: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -7178,9 +7193,6 @@ struct W385Slot {
     mem: kayfabe_isolate::HostHandle,
     va_a: Option<u64>,
     va_b: Option<u64>,
-    /// The last magic this worker successfully landed in it, for the *"a stale word can
-    /// never satisfy the next check"* discipline.
-    last: u32,
 }
 
 /// What one worker brings back.
@@ -7237,8 +7249,7 @@ fn w385_run_worker(
     // The channel is this worker's alone: `submit_*` takes the next GPFIFO slot out of the
     // backend's OWN `slots` map, so two workers sharing one channel would overwrite each
     // other's entries and produce a red that is the harness's, not the system's.
-    let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(w.ring_at())))
-    else {
+    let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(w.ring_at()))) else {
         rep.violate(
             "WORKER_NO_CHANNEL",
             format!(
@@ -7247,6 +7258,7 @@ fn w385_run_worker(
                 w.ring_at()
             ),
         );
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
         return rep;
     };
     if rm.schedule(chan).is_err() {
@@ -7255,6 +7267,7 @@ fn w385_run_worker(
             format!("tid {} channel would not schedule", w.tid),
         );
         let _ = rm.free(chan);
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
         return rep;
     }
 
@@ -7265,7 +7278,7 @@ fn w385_run_worker(
     // ── the jitter, seeded. Both a sleep and a spin, chosen by the same stream: a pure
     //    sleep parks the thread and stops contending, and a race that only shows up while
     //    two threads are actually ON CPU together would never be sampled by one.
-    let mut jitter = |rng: &mut W385Rng| {
+    let jitter = |rng: &mut W385Rng| {
         if w.jitter_us == 0 {
             return;
         }
@@ -7308,7 +7321,6 @@ fn w385_run_worker(
                                     mem,
                                     va_a: None,
                                     va_b: None,
-                                    last: W385_SENTINEL,
                                 });
                             }
                         }
@@ -7372,19 +7384,13 @@ fn w385_run_worker(
                     let magic = w385_magic(w.client as u32, w.tid as u32, seq);
                     let mem = slots[s].as_ref().expect("slot").mem;
                     jitter(&mut rng);
-                    let out =
-                        w379_release_through(&mut rm, probe, ch, mem, va, off, magic);
+                    let out = w379_release_through(&mut rm, probe, ch, mem, va, off, magic);
                     w385_grade_write(&w, &mut rep, out, magic, va, off, it);
-                    if out.landed()
-                        && let Some(sl) = slots[s].as_mut()
-                    {
-                        sl.last = magic;
-                    }
                 }
             }
 
             // ── THE ALIAS PROPERTY, in one op: A, then B, then A AGAIN ──────────────────
-            W385Op::AliasProp => match (slots[s].as_ref().map(|sl| (sl.mem, sl.va_a, sl.va_b))) {
+            W385Op::AliasProp => match slots[s].as_ref().map(|sl| (sl.mem, sl.va_a, sl.va_b)) {
                 Some((mem, Some(va_a), Some(va_b))) => {
                     seq = seq.wrapping_add(1);
                     let m1 = w385_magic(w.client as u32, w.tid as u32, seq);
@@ -7393,39 +7399,15 @@ fn w385_run_worker(
                     seq = seq.wrapping_add(1);
                     let m3 = w385_magic(w.client as u32, w.tid as u32, seq);
 
-                    let a1 = w379_release_through(
-                        &mut rm,
-                        probe,
-                        ch,
-                        mem,
-                        va_a,
-                        W385_OFFS[0],
-                        m1,
-                    );
+                    let a1 = w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[0], m1);
                     w385_grade_write(&w, &mut rep, a1, m1, va_a, W385_OFFS[0], it);
                     jitter(&mut rng);
-                    let b1 = w379_release_through(
-                        &mut rm,
-                        probe,
-                        ch,
-                        mem,
-                        va_b,
-                        W385_OFFS[1],
-                        m2,
-                    );
+                    let b1 = w379_release_through(&mut rm, probe, ch, mem, va_b, W385_OFFS[1], m2);
                     w385_grade_write(&w, &mut rep, b1, m2, va_b, W385_OFFS[1], it);
                     jitter(&mut rng);
                     // ★★★ INVARIANT 3 — the whole op. A landed before B existed; it must
                     // still land now that B does. A `Lost` here IS the revoke.
-                    let a2 = w379_release_through(
-                        &mut rm,
-                        probe,
-                        ch,
-                        mem,
-                        va_a,
-                        W385_OFFS[2],
-                        m3,
-                    );
+                    let a2 = w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[2], m3);
                     if a1.landed() && b1.landed() && !a2.landed() {
                         rep.violate(
                             "ALIAS_REVOKED",
@@ -7538,7 +7520,6 @@ fn w385_run_worker(
                                     mem,
                                     va_a: None,
                                     va_b: None,
-                                    last: W385_SENTINEL,
                                 });
                             }
                         }
@@ -7622,28 +7603,24 @@ fn w385_check_installed(
     va: u64,
     it: u64,
 ) {
-    match rm.probe_va(space, va, W385_BYTES) {
-        Ok(kayfabe_isolate_host::rm::VaProbe::Free) => rep.violate(
+    if matches!(
+        rm.probe_va(space, va, W385_BYTES),
+        Ok(kayfabe_isolate_host::rm::VaProbe::Free)
+    ) {
+        rep.violate(
             "MAP_NOT_ATOMIC",
             format!(
                 "tid {} it {it}: {va:#018x} is mapped and RM's allocator answers Free — a \
                  mapping observable half-installed",
                 w.tid
             ),
-        ),
-        _ => {}
+        );
     }
 }
 
 /// Grade one placement. A drift is counted; a drift **out of this worker's window** is a red,
 /// because that is how one worker comes to scribble on another's invariant.
-fn w385_check_placement(
-    w: &W385Worker,
-    rep: &mut W385Report,
-    asked: u64,
-    got: u64,
-    it: u64,
-) {
+fn w385_check_placement(w: &W385Worker, rep: &mut W385Report, asked: u64, got: u64, it: u64) {
     if got != asked && !w.owns(got) {
         rep.violate(
             "WINDOW_ESCAPE",
@@ -7791,7 +7768,7 @@ fn w385_watchdog(
         std::thread::sleep(std::time::Duration::from_millis(250));
         let now = origin.elapsed();
         let now_ms = now.as_millis() as u64;
-        if beat.done.iter().all(|d| d.load(Relaxed)) {
+        if beat.stop.load(Relaxed) || beat.done.iter().all(|d| d.load(Relaxed)) {
             return;
         }
         let expired = now.as_secs() >= cfg.deadline_s;
@@ -7799,8 +7776,7 @@ fn w385_watchdog(
             .filter(|&t| {
                 !beat.done[t].load(Relaxed)
                     && beat.op[t].load(Relaxed) != 0
-                    && now_ms.saturating_sub(beat.last_ms[t].load(Relaxed))
-                        >= cfg.stall_s * 1000
+                    && now_ms.saturating_sub(beat.last_ms[t].load(Relaxed)) >= cfg.stall_s * 1000
             })
             .collect();
         if !expired && stalled.is_empty() {
@@ -7929,6 +7905,8 @@ fn w385_phase(
             )),
         }
     }
+    // ★ The watchdog is retired HERE, by the phase, not by the workers — see [`W385Beat`].
+    beat.stop.store(true, std::sync::atomic::Ordering::Relaxed);
     out.wall_ms = origin.elapsed().as_millis();
     out.total_spans = spans.len();
     for &(_, s, e) in &spans {
@@ -7993,7 +7971,6 @@ fn w385_report(phase: &str, p: &W385Phase) {
 /// ★★★★★ **w385 — THE RUNG.** Positive control first, then the fuzz, then the grade.
 #[allow(clippy::too_many_lines)]
 fn concurrent_fuzz(
-    rm: &mut HostRmBackend,
     conn: &std::sync::Arc<RmConnection>,
     probe: W381Probe,
     gpu: u32,
@@ -8112,8 +8089,6 @@ fn concurrent_fuzz(
             }
         }
     }
-    let _ = rm;
-
     // ── ★ THE POSITIVE CONTROL. Same operations, T=1, NO jitter, one client. If this does
     //    not come back clean the rung is broken and nothing after it is interpretable.
     println!(
@@ -8122,7 +8097,7 @@ fn concurrent_fuzz(
     );
     let ctl_cfg = W385Cfg {
         threads: 1,
-        iters: cfg.iters.max(24).min(96),
+        iters: cfg.iters.clamp(24, 96),
         clients: 1,
         jitter_us: 0,
         seed: cfg.seed ^ 0x385,
@@ -8792,7 +8767,7 @@ fn main() -> std::process::ExitCode {
             deadline_s: fuzz_deadline_s,
             stall_s: fuzz_stall_s,
         };
-        let ok = concurrent_fuzz(&mut rm, &conn, probe, gpu, cfg);
+        let ok = concurrent_fuzz(&conn, probe, gpu, cfg);
         println!("done — w385 concurrent fuzz only");
         return if ok {
             std::process::ExitCode::SUCCESS
@@ -9353,11 +9328,14 @@ fn main() -> std::process::ExitCode {
                 println!("FAIL  R10 checkout        = no worker");
                 return std::process::ExitCode::from(1);
             };
-            match w.execute(&kayfabe_isolate::VerbPlan::Publish {
-                host_vas: None,
-                len: LEN,
-                at: AT,
-            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+            match w.execute(
+                &kayfabe_isolate::VerbPlan::Publish {
+                    host_vas: None,
+                    len: LEN,
+                    at: AT,
+                },
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            ) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
                 }) => {
@@ -9408,7 +9386,10 @@ fn main() -> std::process::ExitCode {
                 None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
-                Ok(plan) => match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+                Ok(plan) => match w.execute(
+                    &plan,
+                    &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+                ) {
                     Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
                         "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
                          the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \
