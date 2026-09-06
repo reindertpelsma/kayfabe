@@ -239,3 +239,83 @@ never have reached that branch.
 
 *(the Mode-2 arm; see `scripts/bench/w384_doorbell_latency.sh`, which feeds the native floor to
 the guest arm as `--doorbell-latency-native-us`)*
+
+### §4.3 ★★ `missing_page`, RE-ASKED ON THE SAME BINARY (native), and it has NOT moved
+
+```
+XID_WATERMARK_BEFORE=9   ⊘ bracketed, never absolute — other lanes provoke Xid 31 too
+info  R3 notifier   = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     R3 NAMED      = ... except_type 0x1f is what a host kernel log prints as `Xid 31`
+★     R3 CONTAINED  = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=PASS
+XID_WATERMARK_AFTER=10  delta=1
+```
+
+⇒ the native half of w381 §4.1.2 reproduces exactly on this branch's binary. ⚠ The brief for
+this lane recorded the host Xid watermark as **5**; it was **9** an hour later. That is not drift
+in the measurement — it is why the rule is *bracket, never count absolutely*.
+
+⊘ **THE FIX IS NOT THIS LANE'S TO MAKE.** The guest-side half needs the device to author slot 0
+at the guest-physical address in `errorNotifierMem.base` and to send `RC_TRIGGERED` with the
+**guest's** ChID. Every file that would take that change —
+`kayfabe-core/src/fault.rs`, `kayfabe-qemu-raw/src/shim.rs`, `kayfabe-rt/src/device.rs` — is
+**owned by the live `w383-doorbell-async` lane**. So this lane asks the question in the same boot
+(`w384_hook.sh`) and does not touch the answer.
+
+★ **And the assertion the next lane needs is only half built.** `missing_page` grades **one** bit
+(`n.fired()`), while the mechanism has **two mandatory halves**: the notifier write *and* the
+`RC_TRIGGERED` event. A raw client can distinguish them — allocate an `NV01_EVENT` on the channel
+and poll it — and until it does, a guest red cannot say *which* half is missing. That is the
+sharpening to make before the fix, not after it.
+
+## §5 HOW TO USE IT
+
+```
+# the whole differential, native calibration then guest arm, one command
+KAYFABE_REPO=<tree> CARGO_TARGET_DIR=<dir> scripts/bench/w384_doorbell_latency.sh <tag>
+
+# just the number, on any box with a GPU (~1 s):
+kayfabe-rm-ladder --doorbell-latency
+
+# graded against a floor somebody else measured:
+kayfabe-rm-ladder --doorbell-latency --doorbell-latency-native-us 9.24
+```
+
+★ **The line to graph is `DBL_RATIO_X`**, printed on both outcomes. A pass/fail alone tells an
+iterating lane nothing about whether it moved: two builds can both be red and be a factor of
+forty apart. ⊘ A lane that only records its ratio when it fails cannot tell a fix from a lucky
+boot.
+
+Knobs (each edits the config, so order does not matter and any one of them implies the rung):
+`--doorbell-latency-n`, `--doorbell-latency-budget-ms`, `--doorbell-latency-reps`,
+`--doorbell-latency-native-us`, `--doorbell-latency-gate`.
+
+## §6 THE BRANCH'S OWN HEALTH — checked against a baseline, not asserted
+
+- **`cargo test --workspace --all-targets --features host-isolates --no-fail-fast`**, on the
+  bench at `5d0d6695`: **235 test binaries ran**, and exactly **three targets fail** —
+  `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
+  `ring_out_of_our_own_framebuffer`. That is **the same set master already fails, not a
+  superset**. ⚠ `--no-fail-fast` is not optional: without it `cargo test` stops at the first
+  failing *target* and reports a stopping point rather than a result, and the binary count is
+  what makes *"the list shrank"* distinguishable from *"the list was truncated"*.
+  ⊘ w381 §6 recorded **234** binaries at `4a501a7f`; the count moved with master, the **set** did
+  not, and the set is the assertion.
+- **`cargo fmt -p kayfabe-isolate-host -- --check`**: the remaining hunks are byte-for-byte the
+  pre-existing ones (`rmladder.rs:58`, `:65`, `child.rs`, `isolate.rs` ×2, `rm.rs:5316`, four in
+  `tests/`). ⊘ `rustfmt` wanted to reformat three of those as a side effect and they were
+  **reverted deliberately**: a formatting change outside the range this branch touches makes a
+  `HEAD~1` baseline comparison useless, which is the only thing that turns *"fmt is clean"* into
+  a checkable claim.
+- **`cargo clippy -p kayfabe-isolate-host --all-targets`**: no warning in any range this branch
+  touches. The ones that remain are the pre-existing set w381 §6 already names
+  (`rm.rs`'s two collapsible `if`s, `export.rs:97`'s missing doc, the `chunks_exact` family).
+  ⊘ `--features host-isolates` does **not** exist on this package — it belongs to
+  `kayfabe-qemu-raw`, and passing it makes clippy fail with a *feature* error that reads like a
+  lint failure.
+- ⚠ **Nothing in `kayfabe-rt/`, `kayfabe-core/` or `kayfabe-qemu-raw/` was changed.** Those are
+  the live `w383-doorbell-async` lane's, and this rung was built to measure them from outside
+  rather than to touch them. The only non-`bin` change is two additions to
+  `kayfabe-isolate-host/src/rm.rs` (`mute_doorbell_witness`, `ring_doorbell_only`), neither of
+  which alters an existing code path.
