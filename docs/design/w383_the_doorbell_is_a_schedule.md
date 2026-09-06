@@ -403,3 +403,24 @@ sufficient for `LLM_TOKENS > 0` is §11's boot; what is already established is t
 doorbell's latency problem had a cheaper cause than the one this rung was commissioned to
 fix**, and that neither would have been found without the other — the thread hunt is what
 walked past the census.
+
+## §11 ⊘⊘ A TEARDOWN-ONLY CENSUS IS UNREACHABLE ON THIS BENCH — measured, and it is not new
+
+`grep -c "COMPLETION-OBSERVER stopped"` over a whole boot returns **0**, and so does
+`grep -c "worker STOPPED and JOINED"`, while both *"started"* lines are present exactly once.
+`boot_capture.sh` **kills** QEMU; `Regs::detach_ram` is never reached.
+
+⇒ Every number that only prints at teardown — the observer's `declared/reads/verdicts`
+census **and**, as first written, this rung's `PUBQUEUE` census — has been **structurally
+unreachable on the bench since w326**, and its absence has read as *"nothing to report"*.
+⚠ The `stop`-then-**join** ordering that both threads document as *"not optional, because the
+loop reads guest RAM the hypervisor is about to release"* has, for the same reason, **never
+executed on this bench**. That is safe only because SIGKILL takes the reader with it.
+
+**Fixed for the lane**: the `PUBQUEUE` census now rides the `PT-DECODE` line every doorbell
+prints, which is also the only place it can answer the question a deferred lane actually
+raises — *"is the worker falling behind the guest?"* — since at teardown the queue is drained
+by construction and a final depth is always `0`.
+
+⊘ The observer's teardown census is left alone; naming it here is the whole remedy this rung
+owes it.
