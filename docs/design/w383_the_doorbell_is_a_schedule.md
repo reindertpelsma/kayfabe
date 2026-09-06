@@ -461,4 +461,43 @@ owes it.
 
 ## §9 THE LLM BOOTS — the arm that cup3 cannot see
 
-*(filled in from the runs; see the STATUS block for the summary)*
+All four on this branch, `llm_hook2.sh`, `LLM_TIMEOUT=1500` (2.5× w380's, so a kill at the
+deadline is not the first thing that happens), everything else w290p default.
+
+| boot | doorbell arm | `MINMM` | `LLM_TOKENS` | host `Xid` (new) | `TRAPWITNESS` |
+|---|---|---|---|---|---|
+| `w383llmctl` | **off** (the control) | `OK=1 SUM=64` | **ABSENT** | **0** | `off_trap_claims=0 inline_exceptions=41450 worst_trap=2842906us` |
+| `w383llmnc` | **nocoalesce** | `OK=0`, *"CUDA-capable device(s) is/are busy or unavailable"* | **ABSENT** | **4** | — |
+
+⇒ ⊘⊘⊘ **The deferral regresses the LLM and the control proves it is the deferral.** Same
+tree, same hook, same timeout, one word different. The `nc` boot took the **same two Xids
+twice, once per python process**:
+
+```
+Xid 31 … ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x724b_9ce00000 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+Xid 31 … ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_0440f000 … FAULT_PTE ACCESS_TYPE_VIRT_READ
+```
+
+— the identical pair the **coalescing** arm produced on `cup3`, with coalescing already off.
+⇒ coalescing was **a** defect and not **the** defect; §3's correction is the remaining one.
+
+⚠ **`cup3` cannot see this.** It is one process, one context, and its whole submission
+history fits in a queue that never runs deep. The LLM opens the device four times and runs
+three CUDA processes. **A single-process known-positive is not a licence for a
+multi-process change**, and this rung came within one boot of shipping on exactly that.
+
+## §9.1 ⊘ AND THE CONTROL'S OWN NUMBER IS THE ONE THAT MATTERS FOR THE MILESTONE
+
+`[measured w383llmctl, arm=off, 1500 s]`:
+
+```
+doorbells=17617
+publication wall = 508 904 ms over 16 890 passes   (30.1 ms mean, ON THE vCPU, under the BQL)
+DIRTY-GATE publish[fired=67556 skipped=0 0.0% skipped]
+LLM_TOKENS_GRADE=ABSENT
+```
+
+**509 s of a 1500 s run — 34 % — was the guest's vCPUs stopped inside our publication pass**,
+and the gate that exists to skip it was never consulted (§10). ⊘ `LLM_TOKENS` is still
+**ABSENT at 1500 s**, which is 2.5× the timeout that produced w380's ABSENT: *"it was killed
+too early"* is now refuted as the whole explanation.
