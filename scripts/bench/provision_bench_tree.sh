@@ -160,6 +160,33 @@ UD
       -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/tmp/nv.run >/dev/null 2>&1
   $GS "sudo sh /tmp/nv.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j8" 2>&1 | tail -5
   # ⚠ verify on CONTENT, not the installer's exit code
+  # ★★ cuda.h — bench_rebuild_notes.md §D item 2. cup3/cup8 compile against <cuda.h> IN THE
+  # GUEST; without it the workload never builds and w297 reports (D) UNMEASURED. Omitting this
+  # cost a full cup3 run on 2026-09-06.
+  # ⚠ VERIFY BY CONTENT — `CUresult` x601, NOT an existence test. The guest already ships
+  #   THREE other cuda.h files and all three are the PowerMac ADB header, so `test -f` passes
+  #   on the wrong file and the compile then fails for an unrelated-looking reason.
+  # ⊘ Do NOT write `tar -tf ... | grep -m1 ...` under `set -o pipefail`: grep matches, closes
+  #   the pipe, tar dies of SIGPIPE (141), and the pipeline reports FAILURE OVER A SUCCESSFUL
+  #   MATCH. Measured 2026-09-06 — cuda.h was in the archive and the script said it was not.
+  if [ ! -s "$BENCH/cuda.h" ]; then
+    curl -fsSL -o /tmp/cudart.tar.xz "${CUDART_URL:-https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-12.6.77-archive.tar.xz}"
+    tar -tf /tmp/cudart.tar.xz > /tmp/cudart.list
+    awk -F/ '$NF=="cuda.h"{print; exit}' /tmp/cudart.list > /tmp/cudah.path
+    if [ -s /tmp/cudah.path ]; then
+      tar -C /tmp -xf /tmp/cudart.tar.xz "$(cat /tmp/cudah.path)"
+      cp "/tmp/$(cat /tmp/cudah.path)" "$BENCH/cuda.h"
+    fi
+  fi
+  if [ -s "$BENCH/cuda.h" ] && [ "$(grep -c CUresult "$BENCH/cuda.h")" -ge 500 ]; then
+    scp -i "$BENCH/guest_key" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -o LogLevel=ERROR "$BENCH/cuda.h" ubuntu@127.0.0.1:/tmp/cuda.h >/dev/null 2>&1
+    $GS "sudo cp /tmp/cuda.h /usr/include/cuda.h && sudo chmod 644 /usr/include/cuda.h"
+    say "B2: guest cuda.h CUresult x$($GS 'grep -c CUresult /usr/include/cuda.h' 2>/dev/null | tr -d '\r')  ⇒ MUST be >= 500"
+  else
+    say "⊘ B2: no usable cuda.h -- cup3/cup8 will report (D) UNMEASURED, not a failure value"
+  fi
+
   MI=$($GS 'modinfo nvidia 2>/dev/null | grep -E "^version|^license|^vermagic" | tr "\n" " "' 2>&1)
   say "B2: guest modinfo = $MI"
   # ⊘ Do NOT power off over a failed install: a clean shutdown makes the failure look like a
