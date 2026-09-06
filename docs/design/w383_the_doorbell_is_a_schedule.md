@@ -217,6 +217,82 @@ was disarmed"* is a positive observation rather than an absence.
 Runner: `scripts/bench/w383_llm.sh`, one variable against `w380llm2`. Every other arm is
 w290p's default byte for byte.
 
-## §7 THE BOOT
+## §7 ★★★★★ THE MEASUREMENT THAT SPLIT THE RUNG IN TWO — cup3, three boots, one variable
 
-See §8 below — filled in from the run, not before it.
+**Pre-registered before the runs**: the arm is one word; everything else is w290p's default
+byte for byte; `cup3` is the known-positive (`^CUP3_VAL=43`, un-forgeable — a 4×4 of ones
+squared has every element 4, and `out = in*3+1` with `in = 14` has exactly one right answer).
+
+| arm | `^CUP3_VAL` | `CUP3_RC` | host `Xid` | `TRAPWITNESS` |
+|---|---|---|---|---|
+| `off` — inline on the vCPU (**the control**) | **43** | 0 | **0** | `off_trap_claims=0 inline_exceptions=856` |
+| `on` — deferred **and coalescing** | **ABSENT** | 1 | **2** | `off_trap_claims=3288 inline_exceptions=35` |
+| `nocoalesce` — deferred, one execution per doorbell | **43** | 0 | **0** | `off_trap_claims=2812 inline_exceptions=35` |
+
+The `on` arm died at `FAIL cuCtxCreate(&ctx,0,d) -> unknown error (999)` with two `Xid 31`
+MMU faults: `ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x7eca_d4e00000 … FAULT_PDE
+ACCESS_TYPE_VIRT_WRITE` and `ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x2_0440f000 …
+FAULT_PTE ACCESS_TYPE_VIRT_READ` — both *"the mapping was not there when the engine ran"*,
+and the second is the **GR report-semaphore page** this campaign has met before.
+
+⇒ ★★★★★ **DEFERRING IS FINE. COALESCING IS NOT.** The two arrived as one change and were
+therefore one red; `nocoalesce` is the variable that separates them, and it separated them in
+a single 90-second boot.
+
+### ⊘ WHERE `pubqueue` §2 IS WRONG — the premise was verified against the wrong consumer
+
+§2 rests on *"the submission cursor is read at EXECUTION time, not latched at trap time"*.
+That is **true and verified** of `kayfabe_rt::ceutils::run_submission`, which reads forward
+from its `GpCursor` *while the entries decode*. It was **asserted, never measured**, of the
+**forwarding** path — `SharedDevice::doorbell` → `kayfabe_fwd::read_gpfifo_ring` — and the
+forwarding path is the one the failing arm exercises.
+
+`[measured]` for a comparable doorbell count the control ran **229** publication passes and
+the coalescing arm ran **53**: 200 doorbells' worth of forwarding was folded away, and the
+engines faulted on ranges the folded-away passes would have carried.
+
+⚠ **The lesson is not "coalescing is impossible".** It is that *"N doorbells are one act"* is
+a claim about a **specific consumer**, and the queue made it about all of them.
+`DoorbellAsyncArm::On` survives **by name only**, as this rung's negative control; re-enabling
+it needs a per-consumer justification and a boot.
+
+★★★ **And note what nearly happened**: `on` was the only armed arm when the first boot ran.
+Without `nocoalesce` the result would have been *"deferring the doorbell breaks cup3"* — a
+true sentence about the boot and a false one about the mechanism, and it would have retired
+the owner's ruling on one measurement of a confounded pair.
+
+## §8 ⊘ TWO OF THE FOUR GRADED NUMBERS DO NOT MEASURE WHAT THE BRIEF EXPECTED
+
+Both are stated here rather than in a footnote, because in both cases the number moved
+correctly and the *target* was wrong.
+
+### 8.1 `inline_exceptions` — the doorbell's share went to **zero**, and 35 is somebody else's
+
+`[measured, cup3]` the **first** `TRAPWITNESS` line of the control boot already reads
+`inline_exceptions=35`, before the first doorbell, and the armed arms end the boot at
+**exactly 35**. ⇒ every one of the control's remaining 821 was the doorbell's, and the lane
+took all of them: **856 → 35, and the residual is entirely pre-doorbell.**
+
+⊘ **`inline_exceptions = 0` is not reachable by moving the doorbell, by design.** The witness
+counts host RM verbs issued under the BQL from *any* trap, and §4 of the parent rules that the
+**revocation** direction must stay synchronous. The census does not currently split
+*doorbell* from *not-doorbell*, which is why its printed target reads as unmet on a boot that
+met it completely. **Splitting it is the obvious follow-up.**
+
+### 8.2 `worst_trap` — it is not the doorbell's, and this rung cannot move it
+
+| arm | `worst_trap` |
+|---|---|
+| `off` | 1 745 862 µs |
+| `on` | 1 756 491 µs |
+| `nocoalesce` | 1 780 811 µs |
+
+⊘⊘ **Unchanged across all three arms, and — measured — already at its final value on the
+FIRST `TRAPWITNESS` line of the boot**, i.e. **before any doorbell has been rung**, never
+moving again. `grep -o 'worst_trap=[0-9]*us' | uniq` over a whole boot returns **one** value.
+
+⇒ The 1.75 s trap is a single early guest-driver-init MMIO write, and attributing it to
+publication — as the brief that commissioned this rung did, and as the number's position
+beside `inline_exceptions` invites — is wrong. `max_reap_us` tops out at **14 939 µs** and
+`DRAIN-DEFER` returns to zero, so it is not the disposal either. **It is unattributed, and
+attributing it needs `kftime` armed on the register path, not another doorbell rung.**
