@@ -390,13 +390,13 @@ fn the_frame_is_still_named_after_the_first_of_two_aliases_goes() {
 fn the_per_vas_lookup_finds_a_sibling_only_once_one_exists() {
     let (device, pid, _rec) = device();
     assert_eq!(
-        device.fb_join_va_in_vas(GPU, PDB, FRAME),
+        device.fb_join_va_in_vas(GPU, PDB, FRAME, 0),
         None,
         "⊘ nothing names the frame yet, so the first leaf must plan a JOIN"
     );
     join(&device, pid, VA_A);
     assert_eq!(
-        device.fb_join_va_in_vas(GPU, PDB, FRAME),
+        device.fb_join_va_in_vas(GPU, PDB, FRAME, 0),
         Some(VA_A.0),
         "★ now VA_A holds the frame's pages, so a second VA must plan an ALIAS"
     );
@@ -404,9 +404,19 @@ fn the_per_vas_lookup_finds_a_sibling_only_once_one_exists() {
     // alias. Asserting this is what stops the lookup from matching the very leaf being planned.
     guest_binds(&device, pid, VA_C);
     assert_eq!(
-        device.fb_join_va_in_vas(GPU, PDB, FRAME),
+        device.fb_join_va_in_vas(GPU, PDB, FRAME, 0),
         Some(VA_A.0),
         "an unbacked declaration of the same frame is not a sibling"
+    );
+    // ★★★ **AND THE ASKING LEAF IS NOT ITS OWN SIBLING** — `[measured w380llm]` without
+    // `except`, 47 of that boot's first 47 alias decisions announced *"the guest describes this
+    // frame at va=X AND at va=X"*: a re-ask of an already-backed leaf matches the predicate
+    // with its own row. Harmless to the chain (the plan replays) and a **false statement** in
+    // the log, which is the class this tree keeps paying for.
+    assert_eq!(
+        device.fb_join_va_in_vas(GPU, PDB, FRAME, VA_A.0),
+        None,
+        "⊘ excluding the asking leaf leaves no sibling — one VA must never be announced as two"
     );
 }
 

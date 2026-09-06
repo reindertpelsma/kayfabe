@@ -10824,7 +10824,10 @@ fn join_one_fb_leaf(
     let mut how = kayfabe_rt::FbLeafBacking::Joined;
     if (release.aliases() || release.supersedes()) && plane.fb_join_installed_at(leaf.phys) {
         // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
-        let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys);
+        // ⊘ `leaf.va` is EXCLUDED. A re-ask of a leaf we already backed matches the sibling
+        // predicate with its own row, and the alias sentence would then announce one VA as
+        // two — see `fb_join_va_in_vas`.
+        let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys, leaf.va);
         if let (true, Some(other)) = (release.aliases(), sibling) {
             // ★★★★★ **THE FIX (w380).** One memory, one more address. Nothing is unbound,
             // nothing is released, and the row at `other` keeps its own host object — which is

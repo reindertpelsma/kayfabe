@@ -3955,8 +3955,17 @@ impl SharedDevice {
     /// VAS once `w380` lands, and any of them answers the only question the caller asks —
     /// *"do we already hold this frame's pages here"*. A caller that needed the whole set
     /// would need a different verb, and none does.
+    ///
+    /// ⊘⊘ **`except` IS NOT A CONVENIENCE — measured `w380llm`, 2026-09-06.** Without it the
+    /// lookup answers with **the asking leaf's own VA**, because a re-ask of an
+    /// already-backed leaf is exactly a row that matches this predicate. The chain is
+    /// harmless (`plan_back_fb_leaf` finds the live backing and replays), but the log line is
+    /// not: 47 of that boot's first 47 alias decisions printed *"the guest describes this
+    /// frame at va=X AND at va=X"* — **one VA, announced as two**. An instrument that states
+    /// a false fact on the happy path is the class this tree has paid for repeatedly; the
+    /// caller passes the leaf's own VA and the sentence becomes true by construction.
     #[must_use]
-    pub fn fb_join_va_in_vas(&self, gpu: GpuId, pdb: Pdb, phys: u64) -> Option<u64> {
+    pub fn fb_join_va_in_vas(&self, gpu: GpuId, pdb: Pdb, phys: u64, except: u64) -> Option<u64> {
         let pid = self
             .route_act(
                 |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
@@ -3967,7 +3976,8 @@ impl SharedDevice {
             let vas = p.vases.get_mut(&(gpu, pdb))?;
             vas.table.iter().find_map(|(va, _len, b)| {
                 let h = b.host()?;
-                (b.phys() == phys
+                (va != except
+                    && b.phys() == phys
                     && h.frees_object()
                     && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow)
                     .then_some(va)
