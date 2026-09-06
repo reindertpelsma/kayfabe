@@ -25,30 +25,48 @@ have never been reached at all:
 - **Handle and VA recycling** with another thread allocating into the hole.
 - **Ordering assumptions that hold only because nothing else was running.**
 
-## §1 ⊘ WHAT THIS RUNG DOES **NOT** REACH, STATED FIRST
+## §1 ⊘ WHAT THIS RUNG REACHES AND WHAT IT ONLY *TOUCHES*
 
-★ The single most important scoping fact, and it would be easy to imply the opposite:
-**`kayfabe_util::lockwitness` is not used in `kayfabe-isolate-host` at all.** `grep` of the
-crate is empty. The `assert_lock_free("issuing a host RM verb")` call sites are in
-`kayfabe-isolate/src/lib.rs` (`:2942`, `:3589`) and the ranked-lock ranks are the device /
-proc / leaf triple that the **shim and the isolate** run under — not the raw client.
+⊘⊘ **CORRECTED DURING BRING-UP, 2026-09-06, and the first version of this section was wrong
+in the more embarrassing direction — it under-claimed.** It said *"a raw-client fuzz cannot
+fire an R1 ranked-lock assert, because `lockwitness` is not used in `kayfabe-isolate-host`"*.
+The premise is true (`grep` of that crate is empty) and the conclusion does not follow, because
+the assert is not in that crate — it is one layer down, on the syscall itself:
 
-⇒ **A raw-client fuzz cannot fire an R1 ranked-lock assert**, because the raw client never
-takes a ranked lock. What it *does* reach is:
+```rust
+// crates/kayfabe-linux-raw/src/chardev_unsafe.rs:439-440
+lockwitness::assert_lock_free("issuing an ioctl on a character device");
+leafwitness::assert_leaf_free("issuing an ioctl on a character device");
+```
+
+Every RM verb this rung issues goes through `CharDevice::ioctl`, so **both** halves of the R1
+discipline are on the path of **every single operation** — the ranked one and the adapter-leaf
+one, whose panic message names `l1_concurrency.md §3.3` by hand.
+
+★ **But armed is not the same as trippable, and that distinction is the honest scope.** Both
+asserts are **thread-local**: they ask *"does THIS thread hold a lock right now"*. The raw
+client's own path takes **no ranked lock at all**, so `assert_lock_free` passes trivially from
+this binary no matter how the threads interleave — it is a tripwire that is armed and cannot
+be triggered from here. `assert_leaf_free` is likewise decided by lexical scope inside
+`rm.rs` (`mint` / `remember` take the `objects` guard and drop it *before* the ioctl, by
+construction), so scheduling cannot make it fire either. ⇒ **Firing R1 as a live check needs a
+caller that actually takes ranked locks** — the isolate and the shim — which is a different
+binary and a follow-on, not this one.
+
+What this rung stresses **for real**, as opposed to merely traversing:
 
 | plane | reached? | by what |
 |---|---|---|
-| `RmConnection::objects` / `rings` mutexes | **yes** | N threads, one `Arc<RmConnection>` |
-| `leafwitness` (the leaf-rank witness `mint`/`remember` enter, asserted inside `CharDevice::ioctl`) | **yes** | any concurrent verb |
-| RM's own per-client handle and VA allocators | **yes** | concurrent alloc/map/free |
-| our address table under concurrency | **yes** | one shared VAS per client |
-| `l1_concurrency.md` §3.3 R1 ranked-lock discipline | **NO** | isolate/shim only — a different binary |
+| `RmConnection::objects` mutex — the handle table and the monotonic `mint()` | **yes, contended** | N threads, one `Arc<RmConnection>`; checked by `HANDLE_COLLISION` |
+| `RmConnection::rings` mutex — every channel's CPU-mapped ring | **yes, contended** | every `submit_*` and `ring_store_u32` |
+| RM's own per-client handle and VA allocators, inside `nvidia.ko` | **yes** | concurrent alloc / map / unmap / free |
+| our address table under concurrency | **yes** | one shared VAS per client, private windows per worker |
+| `lockwitness::assert_lock_free` (R1, ranked half) | **on the path, vacuous** | armed at every ioctl; the raw client holds no ranked lock |
+| `leafwitness::assert_leaf_free` (R1, adapter half) | **on the path, vacuous** | same, and decided lexically rather than by schedule |
 
-⚠ That last row is the one to keep saying out loud. This rung is the **host-side lock and
-address-table** instrument the owner asked for; it is **not** an R1 witness harness, and a
-green here says nothing about the ranked locks in `kayfabe-isolate`. Reaching those needs a
-fuzz driven through `kayfabe_isolate::Worker::with_rm`, which is what the existing
-`--concurrency` (R12) rung already touches and what a follow-on should widen.
+⚠ The two "vacuous" rows are the ones to keep saying out loud: a green here is **not**
+evidence about the ranked-lock discipline in `kayfabe-isolate`, and reporting it as such would
+be the exact over-claim this file was written to avoid.
 
 ## §2 WHAT WAS BUILT
 

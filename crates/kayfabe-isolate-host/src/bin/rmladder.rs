@@ -6892,8 +6892,18 @@ const W385_MAGIC_TAG: u32 = 0xF5;
 /// concurrent run cannot collide with one of them.
 const W385_VA_BASE: u64 = 0x0000_0020_0000_0000;
 
-/// One worker's private window: 64 GiB, which is 16 slots' worth of the stride below.
-const W385_WORKER_STRIDE: u64 = 0x0000_0010_0000_0000;
+/// One worker's private window: 32 GiB, which is 8 slots' worth of the stride below and
+/// therefore holds this rung's ring plus `2 * W385_SLOTS` mappable VAs with room to spare.
+///
+/// ⊘⊘ **IT WAS 64 GiB AND THAT WAS A DEFECT.** `alloc_vaspace` asks for `vaSize = 0`, which
+/// takes RM's default `FERMI_VASPACE_A` limit — **1 TiB** on this part. At 64 GiB per lane,
+/// lane 14's window begins at `0x100_0000_0000`, i.e. exactly one byte-range past the end of
+/// the address space, so every mapping in it was refused. Measured 2026-09-06 at 32 threads:
+/// 22 fabricated `ALIAS_REVOKED`s per phase, all of them from tids 28/29 and all of them at
+/// VAs in that one window. ⇒ Halving the stride buys twice the lanes inside the same limit,
+/// and [`W385_MAX_LANE`] refuses the rest **by name** instead of letting them look like a
+/// finding.
+const W385_WORKER_STRIDE: u64 = 0x0000_0008_0000_0000;
 
 /// Distance between two mappable VAs. 4 GiB, for the reason `alias_two_vas` names: an
 /// adjacent VA could be covered by a big PTE a neighbour's mapping already installed, and
@@ -6964,6 +6974,17 @@ impl W385Pin {
 /// Live objects one worker juggles. Three, so allocate/map/free interleave rather than
 /// nest, and so a `Free` always has a live neighbour whose mapping it might disturb.
 const W385_SLOTS: usize = 3;
+
+/// RM's default `FERMI_VASPACE_A` limit on this part — the ceiling every window must sit
+/// under. ⊘ A literal, and deliberately not derived from the geometry it bounds: a threshold
+/// computed from the thing it checks moves silently when that thing moves.
+const W385_VAS_LIMIT: u64 = 0x0000_0100_0000_0000;
+
+/// The highest lane whose whole window — ring, and `2 * W385_SLOTS` mappable VAs — fits under
+/// [`W385_VAS_LIMIT`]. ★ A worker above this is refused before it runs, by name.
+const W385_MAX_LANE: usize = (((W385_VAS_LIMIT - W385_VA_BASE)
+    - (2 * W385_SLOTS as u64 + 1) * W385_SLOT_STRIDE)
+    / W385_WORKER_STRIDE) as usize;
 
 /// How many violation details are printed. ⊘ The **counts** are never capped — a capped
 /// list beside an uncapped census is fine; a capped census is not a census.
@@ -7353,6 +7374,28 @@ fn w385_run_worker(
     beat: std::sync::Arc<W385Beat>,
 ) -> W385Report {
     let mut rep = W385Report::default();
+    // ⊘ THE GEOMETRY CHECK, BEFORE ANYTHING ELSE. A window past the end of the address space
+    // does not produce a subtle result — it produces a CONFIDENT one, because every mapping
+    // in it is refused and every downstream probe then reads as a revoke. Refuse it by its
+    // own name so the run says *"the rung asked for more address space than exists"* instead
+    // of *"the alias property broke"*.
+    if w.lane > W385_MAX_LANE {
+        rep.violate(
+            "WINDOW_ABOVE_VAS_LIMIT",
+            format!(
+                "tid {} lane {} would place a window at {:#018x}, past the address space's \
+                 {:#018x} limit. ⊘ HARNESS FAULT, not a system result: raise --fuzz-clients \
+                 or lower --fuzz-threads (max {} lanes per client)",
+                w.tid,
+                w.lane,
+                w.window(),
+                W385_VAS_LIMIT,
+                W385_MAX_LANE + 1
+            ),
+        );
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
+        return rep;
+    }
     // ★★★ PIN FIRST, BEFORE THE CHANNEL AND BEFORE THE FIRST VERB. Everything this worker
     // does — including the RM ioctls whose locks are the point — must happen on the cores the
     // arm claims, or the arm is measuring the previous placement.
@@ -7550,7 +7593,17 @@ fn w385_run_worker(
                     // ★★★ INVARIANT 3 — the whole op. A landed before B existed; it must
                     // still land now that B does. A `Lost` here IS the revoke.
                     let a2 = w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[2], m3);
-                    if a1.landed() && b1.landed() && !a2.landed() {
+                    // ⊘⊘ **`Lost`, NEVER `!landed()`.** `W379Release::Refused` means the
+                    // submission was declined and the engine was never asked — folding it in
+                    // here reports OUR OWN ask as the system's red. Measured 2026-09-06:
+                    // before this line said `Lost`, an arm whose VA windows ran past the
+                    // address space's 1 TiB limit produced **22 fabricated ALIAS_REVOKEDs**
+                    // per phase, and the only thing that distinguished them from a real
+                    // revoke was the `(Refused)` printed in their own message.
+                    if a1.landed()
+                        && b1.landed()
+                        && matches!(a2, W379Release::Lost { .. })
+                    {
                         rep.violate(
                             "ALIAS_REVOKED",
                             format!(
@@ -7612,7 +7665,8 @@ fn w385_run_worker(
                         let m = w385_magic(w.client as u32, w.tid as u32, seq);
                         let out =
                             w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[0], m);
-                        if !out.landed() {
+                        // ⊘ `Lost`, never `!landed()` — see the same note in `AliasProp`.
+                        if matches!(out, W379Release::Lost { .. }) {
                             rep.violate(
                                 "ALIAS_REVOKED",
                                 format!(
@@ -8489,13 +8543,15 @@ fn concurrent_fuzz(
         let ops: u64 = ph.ops.iter().sum();
         println!(
             "FUZZ_ARM={name} verdict={v} threads={} pin={} cores={} ops={ops} \
-             engine_ops={engine} alias_ops={} overlap={} viol={} pinned={}/{} finished={}/{}",
+             engine_ops={engine} alias_ops={} overlap={} viol={} refused={} pinned={}/{} \
+             finished={}/{}",
             acfg.threads,
             acfg.pin.as_str(),
             cfg.cores,
             ph.ops[W385Op::ALIAS.code() as usize],
             ph.overlap_pairs,
             ph.violations.len(),
+            ph.refused,
             ph.pinned,
             ph.workers,
             ph.finished,
