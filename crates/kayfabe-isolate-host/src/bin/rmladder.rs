@@ -6792,6 +6792,1887 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
     clean
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w385 — `--concurrent-fuzz`: THE MULTI-THREADED RAW CLIENT, WITH DELIBERATE FUZZY
+// INTERLEAVING.
+//
+// ## ⊘ THE CLASS THAT WAS UNCOVERED, STATED BEFORE THE CODE
+//
+// Every rung above this one is **single-threaded and sequential**. `map_stress` (R5) does
+// 186 releases and does them **one at a time**; `cross_client_leak` (R5b) holds two RM
+// clients and never lets them run **at the same time**. So nothing in this binary — and
+// nothing in the suite — has ever reached:
+//
+//   * `RmConnection`'s two host-side mutexes under real contention. They are `objects`
+//     (the handle table and the monotonic `mint()` counter) and `rings` (the CPU mappings
+//     of every channel's pushbuffer/GPFIFO/semaphore), and their separation is a **stated
+//     rank discipline** — *"Two locks, each held for one kind of thing, is the R3 lock-rank
+//     discipline rather than a convenience"* (`rm.rs`, the `rings` field). A discipline no
+//     two threads ever tested is a comment.
+//   * the address table under **concurrent** map / unmap / probe into ONE address space.
+//   * handle and VA **recycling** with another thread allocating into the hole.
+//   * ordering assumptions that hold only because nothing else was running.
+//
+// ## ★★★ SEEDED, OR IT IS NOT AN INSTRUMENT — and the honest half of that claim
+//
+// Every random choice comes from one `--seed`, printed on every run, and `--seed=N` replays
+// it. ⊘ **What replays is the DECISION SEQUENCE, not the SCHEDULE.** Thread `t`'s op at
+// iteration `i` is a pure function of `(seed, t, i)`, so a red names a reproducible
+// *program*; the OS interleaving that made it red is not ours to reproduce. That is stated
+// here rather than discovered later, because *"reproducible fuzz"* over threads is a claim
+// this tree cannot make and should not imply. In practice a red replays because the op
+// sequence and the jitter pattern are the same; it is a strong tendency, not a guarantee.
+//
+// ## THE ORACLE — five invariants, each refused BY NAME
+//
+// A stress test with no invariant only finds crashes. These are checked continuously, and
+// every violation carries the seed, the thread, the iteration and the address:
+//
+//   1. `VA_DOUBLE_BOUND`   — no VA is ever bound to two different memories at once. Every
+//                            thread writes a **thread-unique, client-tagged magic**
+//                            ([`w385_magic`]), so a word that arrives from somewhere else
+//                            is *identifiable* rather than merely wrong.
+//   2. `MAP_NOT_ATOMIC`    — a mapping is all-or-nothing. A VA that `probe_va` calls `Free`
+//                            immediately after a map RM said it accepted is a mapping that
+//                            was observable half-installed.
+//   3. `ALIAS_MISMATCH` / `ALIAS_REVOKED` — every value written through one alias is
+//                            readable through the others (w380's property), and mapping or
+//                            unmapping the second alias does not silently revoke the first.
+//   4. `CROSS_CLIENT_LEAK` — no client ever observes another client's magic. The two
+//                            clients deliberately name **the same VA numbers**, so this is
+//                            an isolation statement and not an accident of layout.
+//   5. `FREED_HANDLE_RESOLVES` / `VA_NOT_RECOVERED` / `STALE_READ` — every release is
+//                            eventually observed; a freed handle is not resolvable
+//                            afterwards; a VA comes back Free; a recycled object reads as
+//                            its OWN sentinel and never as its predecessor's magic.
+//
+// ## ★★ A DEADLOCK MUST FAIL BY NAME, NOT HANG
+//
+// This tree has wedged CI on nontermination more than once, and a hang once held three
+// binaries for 23 hours. There is a watchdog on the **whole rung** and a stall check on
+// **each worker**; on expiry it prints every worker's last op, prints
+// `RUNG_concurrent_fuzz=FAIL` with `FUZZ_REASON=DEADLOCK/WATCHDOG`, and exits non-zero.
+// ⊘ It exits via `std::process::exit`, so RM objects are NOT torn down — a watchdog kill
+// leaks the run's channels and that is the correct trade: the alternative is the hang.
+//
+// ## CONTROLS — the rung is these, not the loop
+//
+//   * **The positive control runs FIRST**: the same operations at `T=1` with **no jitter**.
+//     If that fails the rung is broken, not the system, and everything after it prints
+//     `NOTRUN`.
+//   * **`FUZZ_OVERLAP_PAIRS` is a second control, and it can veto a green.** It counts pairs
+//     of RM-verb intervals from *different threads* that actually intersected. A fuzz run
+//     that sampled **zero** overlap sampled no concurrency at all, and grading it PASS would
+//     be reporting a finding never measured — so zero overlap prints `NOTRUN`.
+//   * ⚠ **A green proves less than it looks.** The run states `FUZZ_OPS` and
+//     `FUZZ_OVERLAP_PAIRS` so the budget it exhausted is a number. Absence of a red is not
+//     absence of a race.
+//
+// ⊘ **`GP_GET` is never read here** — it has no writer anywhere in this workspace, so on an
+// emulated device it is a constant. ⊘ **`pde_info` is not used as a publication oracle**: it
+// answers at page-*table* granularity. The graded observables are `probe_va` and the
+// engine read-back through an independent CPU mapping, exactly as w381 established.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Bytes of every object the fuzz allocates — the same `FB_LEAF_GRANULE` the w379/w381
+/// rungs use, so a placement result here is comparable with theirs. See [`W379_BYTES`].
+const W385_BYTES: u64 = W379_BYTES;
+
+/// What every fresh object holds before any engine touches it. Distinct from
+/// [`W379_SENTINEL`] so a stale word can be attributed to the rung that wrote it, and its
+/// top byte is deliberately **not** [`W385_MAGIC_TAG`] so [`w385_owner`] cannot claim it.
+const W385_SENTINEL: u32 = 0xDEAD_0385;
+
+/// The top byte that marks a word as *"a fuzz worker wrote this"*. Everything below it is
+/// the writer's identity, which is what makes a cross-thread read **identifiable** rather
+/// than merely unexpected.
+const W385_MAGIC_TAG: u32 = 0xF5;
+
+/// Where the fuzz's address windows start. Far above every other rung's constants so a
+/// concurrent run cannot collide with one of them.
+const W385_VA_BASE: u64 = 0x0000_0020_0000_0000;
+
+/// One worker's private window: 32 GiB, which is 8 slots' worth of the stride below and
+/// therefore holds this rung's ring plus `2 * W385_SLOTS` mappable VAs with room to spare.
+///
+/// ⊘⊘ **IT WAS 64 GiB AND THAT WAS A DEFECT.** `alloc_vaspace` asks for `vaSize = 0`, which
+/// takes RM's default `FERMI_VASPACE_A` limit — **1 TiB** on this part. At 64 GiB per lane,
+/// lane 14's window begins at `0x100_0000_0000`, i.e. exactly one byte-range past the end of
+/// the address space, so every mapping in it was refused. Measured 2026-09-06 at 32 threads:
+/// 22 fabricated `ALIAS_REVOKED`s per phase, all of them from tids 28/29 and all of them at
+/// VAs in that one window. ⇒ Halving the stride buys twice the lanes inside the same limit,
+/// and [`W385_MAX_LANE`] refuses the rest **by name** instead of letting them look like a
+/// finding.
+const W385_WORKER_STRIDE: u64 = 0x0000_0008_0000_0000;
+
+/// Distance between two mappable VAs. 4 GiB, for the reason `alias_two_vas` names: an
+/// adjacent VA could be covered by a big PTE a neighbour's mapping already installed, and
+/// the rung would then pass for a reason that has nothing to do with what it asked.
+const W385_SLOT_STRIDE: u64 = 0x0000_0001_0000_0000;
+
+/// The three word offsets inside an object at which magics land. Distinct, so a write
+/// through one alias cannot be mistaken for a write through another.
+const W385_OFFS: [u64; 3] = [0x0000, 0x0040, 0x0080];
+
+/// ★★★★★ **HOW A PHASE PLACES ITS WORKERS ON CORES — and why a stress rung has an opinion
+/// about that at all.**
+///
+/// Owner ruling, 2026-09-06: *"pinning to vcpu cores is very useful to test concurrency in
+/// kayfabe as each vcpu is a host thread."* In kayfabe **each guest vCPU IS a host thread**,
+/// so the concurrency the product must survive is *those* threads contending: a small, fixed
+/// set, preempting each other. A fuzz whose threads land wherever the scheduler puts them is
+/// sampling a **different topology** — on a 19-core box they spread across idle cores, run
+/// past one another, and essentially never interleave **inside** a critical section.
+///
+/// ⊘ That is exactly where a lock-order or ranked-lock bug hides, so an unpinned run can be
+/// green for the whole of it. ⚠ Pinning here **removes** parallelism on purpose; it is not a
+/// performance knob.
+///
+/// ★★★ The three modes exist as a **paired differential**, never as a replacement:
+/// `Unpinned` is kept as the control at the SAME width as each pinned arm, so *"pinning
+/// changed the answer"* is itself a measurement rather than an assumption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W385Pin {
+    /// ⊘ THE CONTROL. Threads land wherever the scheduler puts them — what every previous
+    /// version of this rung did, and what an ordinary `cargo test` does.
+    Unpinned,
+    /// ★ ONE WORKER PER CORE over the first `cores` cores — the guest's own topology, with
+    /// `cores` defaulting to the bench guest's `-smp`.
+    PerCore {
+        /// How many cores the arm spreads over.
+        cores: usize,
+    },
+    /// ★★★ **OVER-SUBSCRIBED**: more workers than cores, every one of them admitted to the
+    /// same `cores`-wide set. This is the arm that forces **preemption inside a held lock**,
+    /// which un-pinned parallelism tends never to produce.
+    Crowd {
+        /// The width of the shared set every worker is confined to.
+        cores: usize,
+    },
+}
+
+impl W385Pin {
+    /// The cores worker `tid` may run on, or `None` for the unpinned control.
+    fn cores_for(self, tid: usize) -> Option<Vec<usize>> {
+        match self {
+            W385Pin::Unpinned => None,
+            W385Pin::PerCore { cores } => Some(vec![tid % cores.max(1)]),
+            W385Pin::Crowd { cores } => Some((0..cores.max(1)).collect()),
+        }
+    }
+
+    /// The printed form, so a log line, a grader and a human agree on the vocabulary.
+    fn as_str(self) -> &'static str {
+        match self {
+            W385Pin::Unpinned => "unpinned",
+            W385Pin::PerCore { .. } => "percore",
+            W385Pin::Crowd { .. } => "crowd",
+        }
+    }
+}
+
+/// Live objects one worker juggles. Three, so allocate/map/free interleave rather than
+/// nest, and so a `Free` always has a live neighbour whose mapping it might disturb.
+const W385_SLOTS: usize = 3;
+
+/// RM's default `FERMI_VASPACE_A` limit on this part — the ceiling every window must sit
+/// under. ⊘ A literal, and deliberately not derived from the geometry it bounds: a threshold
+/// computed from the thing it checks moves silently when that thing moves.
+const W385_VAS_LIMIT: u64 = 0x0000_0100_0000_0000;
+
+/// The highest lane whose whole window — ring, and `2 * W385_SLOTS` mappable VAs — fits under
+/// [`W385_VAS_LIMIT`]. ★ A worker above this is refused before it runs, by name.
+const W385_MAX_LANE: usize = (((W385_VAS_LIMIT - W385_VA_BASE)
+    - (2 * W385_SLOTS as u64 + 1) * W385_SLOT_STRIDE)
+    / W385_WORKER_STRIDE) as usize;
+
+/// How many violation details are printed. ⊘ The **counts** are never capped — a capped
+/// list beside an uncapped census is fine; a capped census is not a census.
+const W385_SHOW: usize = 12;
+
+/// A thread-unique, client-tagged word.
+///
+/// ★ The identity is IN the value. A read-back that returns someone else's magic tells you
+/// **whose** it is, which is the difference between *"invariant 1 fired"* and *"invariant 1
+/// fired, client 1 thread 3 wrote it, here is the seed"*.
+fn w385_magic(client: u32, tid: u32, seq: u32) -> u32 {
+    (W385_MAGIC_TAG << 24) | ((client & 0xF) << 20) | ((tid & 0xFF) << 12) | (seq & 0xFFF)
+}
+
+/// Who wrote a word, or `None` if no fuzz worker did.
+fn w385_owner(word: u32) -> Option<(u32, u32)> {
+    if (word >> 24) == W385_MAGIC_TAG {
+        Some(((word >> 20) & 0xF, (word >> 12) & 0xFF))
+    } else {
+        None
+    }
+}
+
+/// SplitMix64 — the seeded stream behind every choice this rung makes.
+///
+/// ⊘ Deliberately not a library RNG and deliberately not `SystemTime`-driven per draw: a
+/// `Math.random`-shaped jitter makes a red un-actionable, and this tree has burned days on
+/// non-reproducible failures. Every worker derives its own stream from the ONE printed seed.
+struct W385Rng(u64);
+
+impl W385Rng {
+    fn new(seed: u64) -> Self {
+        W385Rng(seed)
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    /// A value in `0..n`. `n == 0` answers `0` rather than dividing by zero.
+    fn below(&mut self, n: u64) -> u64 {
+        if n == 0 { 0 } else { self.next_u64() % n }
+    }
+}
+
+/// The verbs a worker draws from — the ones the existing rungs already do, nothing invented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W385Op {
+    /// Allocate a device-local object into a free slot and fill it with the sentinel.
+    Alloc,
+    /// Map a slot's object at its **first** VA.
+    MapA,
+    /// Map the SAME object at a **second** VA — the w380 alias case.
+    MapB,
+    /// Drive the engine to write this worker's magic at a live VA, and read it back.
+    Write,
+    /// Write through A, then through B, then through A **again** — the revoke detector.
+    AliasProp,
+    /// Unmap one alias and assert the other survived.
+    UnmapB,
+    /// Ask RM's allocator what it thinks of a VA we believe is mapped.
+    Probe,
+    /// Unmap everything, free the object, and assert the handle and the VA both went away.
+    Free,
+    /// Free **and immediately re-allocate** into the same slot, to force handle/VA reuse.
+    Recycle,
+    /// The slot state did not admit the drawn verb. Counted, never hidden.
+    Idle,
+}
+
+impl W385Op {
+    fn as_str(self) -> &'static str {
+        match self {
+            W385Op::Alloc => "alloc",
+            W385Op::MapA => "map_a",
+            W385Op::MapB => "map_b",
+            W385Op::Write => "write",
+            W385Op::AliasProp => "alias_prop",
+            W385Op::UnmapB => "unmap_b",
+            W385Op::Probe => "probe",
+            W385Op::Free => "free",
+            W385Op::Recycle => "recycle",
+            W385Op::Idle => "idle",
+        }
+    }
+
+    /// The draw. Weighted so the plane under test — mapping and writing — dominates, and so
+    /// free/recycle happen often enough that another thread is usually mid-allocation while
+    /// one is mid-teardown.
+    fn draw(rng: &mut W385Rng) -> W385Op {
+        // ⊘ The weights were REBALANCED after the first measured run, and the reason is on
+        // the record: at the original 16-entry table `alias_prop` drew **zero** times over
+        // 360 ops, so invariant 3 — the w380 alias property, the single most valuable thing
+        // this rung can check — was never exercised in an arm that reported PASS. A verb's
+        // weight is part of the oracle, not a taste.
+        const TABLE: [W385Op; 20] = [
+            W385Op::Alloc,
+            W385Op::Alloc,
+            W385Op::Alloc,
+            W385Op::MapA,
+            W385Op::MapA,
+            W385Op::MapA,
+            W385Op::MapB,
+            W385Op::MapB,
+            W385Op::MapB,
+            W385Op::Write,
+            W385Op::Write,
+            W385Op::Write,
+            W385Op::Write,
+            W385Op::AliasProp,
+            W385Op::AliasProp,
+            W385Op::AliasProp,
+            W385Op::UnmapB,
+            W385Op::Probe,
+            W385Op::Free,
+            W385Op::Recycle,
+        ];
+        TABLE[(rng.below(TABLE.len() as u64)) as usize]
+    }
+
+    /// The breadcrumb code the watchdog dumps. `u32` because it lives in an `AtomicU32`
+    /// that a wedged worker leaves behind.
+    fn code(self) -> u32 {
+        match self {
+            W385Op::Alloc => 1,
+            W385Op::MapA => 2,
+            W385Op::MapB => 3,
+            W385Op::Write => 4,
+            W385Op::AliasProp => 5,
+            W385Op::UnmapB => 6,
+            W385Op::Probe => 7,
+            W385Op::Free => 8,
+            W385Op::Recycle => 9,
+            W385Op::Idle => 10,
+        }
+    }
+
+    fn from_code(c: u32) -> &'static str {
+        match c {
+            0 => "(not started)",
+            1 => "alloc",
+            2 => "map_a",
+            3 => "map_b",
+            4 => "write",
+            5 => "alias_prop",
+            6 => "unmap_b",
+            7 => "probe",
+            8 => "free",
+            9 => "recycle",
+            10 => "idle",
+            _ => "(unknown)",
+        }
+    }
+
+    /// ★★★ Does slot `sl` admit this verb?
+    ///
+    /// ⊘ **This exists because the first version of the rung was nearly vacuous and said so
+    /// in its own census.** It drew a verb and a slot INDEPENDENTLY, so most draws landed on
+    /// a slot in the wrong state: measured at `I=12`, `idle=85` of 108 ops, `write=0`,
+    /// `alias_prop=0`, `map_b=0` — three arms went green having **never run the engine at
+    /// all**. A stress rung whose ops mostly do nothing is a timer, not a test.
+    ///
+    /// ⇒ Draw the VERB from the seeded stream, then choose uniformly among the slots that
+    /// can actually take it. The draw stays a pure function of the stream and the state, and
+    /// `Idle` now means *"no slot could take this verb"* rather than *"I picked badly"*.
+    fn admits(self, sl: Option<&W385Slot>) -> bool {
+        match (self, sl) {
+            (W385Op::Alloc, None) => true,
+            (W385Op::MapA, Some(s)) => s.va_a.is_none(),
+            (W385Op::MapB, Some(s)) => s.va_a.is_some() && s.va_b.is_none(),
+            (W385Op::Write, Some(s)) => s.va_a.is_some() || s.va_b.is_some(),
+            (W385Op::AliasProp, Some(s)) => s.va_a.is_some() && s.va_b.is_some(),
+            (W385Op::UnmapB, Some(s)) => s.va_b.is_some(),
+            (W385Op::Probe, Some(s)) => s.va_a.is_some(),
+            (W385Op::Free | W385Op::Recycle, Some(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// The verbs that make the **engine** run and are therefore what invariants 1, 3 and 4
+    /// are actually tested by. ★ An arm that drew none of them sampled nothing, however
+    /// many allocations it did — see the coverage veto in [`concurrent_fuzz`].
+    const ENGINE: [W385Op; 3] = [W385Op::Write, W385Op::AliasProp, W385Op::UnmapB];
+
+    /// ★★★ The one verb that tests **invariant 3 end to end** — write through A, through B,
+    /// then through A again with B still mapped. Counted separately in the arm line because
+    /// an arm that never drew it is green about the alias property specifically, and the
+    /// aggregate `engine_ops` would hide that.
+    const ALIAS: W385Op = W385Op::AliasProp;
+
+    /// Every verb this rung can draw, for the per-op census.
+    const ALL: [W385Op; 10] = [
+        W385Op::Alloc,
+        W385Op::MapA,
+        W385Op::MapB,
+        W385Op::Write,
+        W385Op::AliasProp,
+        W385Op::UnmapB,
+        W385Op::Probe,
+        W385Op::Free,
+        W385Op::Recycle,
+        W385Op::Idle,
+    ];
+}
+
+/// What every worker publishes so a watchdog can say **what it was doing** rather than
+/// merely that it stopped.
+///
+/// ⊘ Atomics rather than a mutex, deliberately: the watchdog must be readable while a worker
+/// is wedged, and a mutex the wedged worker holds is exactly the thing it cannot be.
+struct W385Beat {
+    /// Milliseconds since the rung's origin at which worker `i` last finished an op.
+    last_ms: Vec<std::sync::atomic::AtomicU64>,
+    /// [`W385Op::code`] of the verb worker `i` is inside.
+    op: Vec<std::sync::atomic::AtomicU32>,
+    /// Which iteration worker `i` is on.
+    iter: Vec<std::sync::atomic::AtomicU64>,
+    /// Whether worker `i` finished its loop.
+    done: Vec<std::sync::atomic::AtomicBool>,
+    /// ★★ Set by the phase once every worker has been **joined**.
+    ///
+    /// ⊘ Not redundant with `done`, and the difference is a bug this nearly shipped: a
+    /// worker that returns EARLY (no channel) or **panics** never sets its own `done`, so a
+    /// watchdog keyed on `done` alone would keep counting and eventually kill a process
+    /// whose workers had all been collected. `done` is the worker's statement; `stop` is
+    /// the phase's.
+    stop: std::sync::atomic::AtomicBool,
+}
+
+impl W385Beat {
+    fn new(n: usize) -> Self {
+        W385Beat {
+            last_ms: (0..n)
+                .map(|_| std::sync::atomic::AtomicU64::new(0))
+                .collect(),
+            op: (0..n)
+                .map(|_| std::sync::atomic::AtomicU32::new(0))
+                .collect(),
+            iter: (0..n)
+                .map(|_| std::sync::atomic::AtomicU64::new(0))
+                .collect(),
+            done: (0..n)
+                .map(|_| std::sync::atomic::AtomicBool::new(false))
+                .collect(),
+            stop: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    fn note(&self, t: usize, op: W385Op, iter: u64, ms: u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.op[t].store(op.code(), Relaxed);
+        self.iter[t].store(iter, Relaxed);
+        self.last_ms[t].store(ms, Relaxed);
+    }
+
+    /// The dump. Printed by the watchdog, and also on a clean finish when anything is odd.
+    fn dump(&self, now_ms: u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        for t in 0..self.op.len() {
+            println!(
+                "        worker {t:2}  last op = {:<12} iter {:<6} last beat {} ms ago  \
+                 done={}",
+                W385Op::from_code(self.op[t].load(Relaxed)),
+                self.iter[t].load(Relaxed),
+                now_ms.saturating_sub(self.last_ms[t].load(Relaxed)),
+                self.done[t].load(Relaxed)
+            );
+        }
+    }
+}
+
+/// One worker's tunables and identity, as ONE value — clippy's argument bound is the
+/// occasion, but the reason is that a worker mis-paired with another worker's lane would
+/// write into a window it does not own and manufacture invariant 1.
+#[derive(Debug, Clone, Copy)]
+struct W385Worker {
+    /// Global worker index — the `tid` inside every magic.
+    tid: usize,
+    /// Which RM client this worker belongs to.
+    client: usize,
+    /// Index **within the client**. ★ The VA window is keyed on this and NOT on `tid`, so
+    /// the two clients deliberately name **the same VA numbers** — which is what makes
+    /// invariant 4 an isolation statement instead of an accident of layout.
+    lane: usize,
+    /// Iterations to run.
+    iters: u64,
+    /// Upper bound on one jitter sleep, in microseconds. `0` = the positive control.
+    jitter_us: u64,
+    /// This worker's PRNG seed, derived from the run's one printed seed.
+    seed: u64,
+    /// How this worker is placed on cores. See [`W385Pin`].
+    pin: W385Pin,
+}
+
+impl W385Worker {
+    /// The base of this worker's private VA window.
+    fn window(&self) -> u64 {
+        W385_VA_BASE + (self.lane as u64) * W385_WORKER_STRIDE
+    }
+
+    /// Where this worker's channel ring lives.
+    fn ring_at(&self) -> u64 {
+        self.window()
+    }
+
+    /// The two VAs of slot `s`. `A` at odd multiples of the stride, `B` at even, so no
+    /// slot's alias can be covered by a neighbour's big PTE.
+    fn slot_vas(&self, s: usize) -> (u64, u64) {
+        let base = self.window();
+        (
+            base + (1 + 2 * s as u64) * W385_SLOT_STRIDE,
+            base + (2 + 2 * s as u64) * W385_SLOT_STRIDE,
+        )
+    }
+
+    /// Is `va` inside this worker's own window? A mapping that lands outside it is a
+    /// `WINDOW_ESCAPE` and is graded, because it is how one worker comes to scribble on
+    /// another's invariant.
+    fn owns(&self, va: u64) -> bool {
+        let b = self.window();
+        va >= b && va < b + W385_WORKER_STRIDE
+    }
+}
+
+/// One live object a worker is juggling.
+struct W385Slot {
+    mem: kayfabe_isolate::HostHandle,
+    va_a: Option<u64>,
+    va_b: Option<u64>,
+}
+
+/// What one worker brings back.
+#[derive(Default)]
+struct W385Report {
+    /// `(invariant name, the detail line)`. The names are the vocabulary; the details are
+    /// what makes a red actionable.
+    violations: Vec<(&'static str, String)>,
+    /// Per-verb attempt counts, indexed by [`W385Op::code`].
+    ops: [u64; 11],
+    /// Every RM-verb interval this worker occupied, `(tid, start_ns, end_ns)`.
+    spans: Vec<(usize, u128, u128)>,
+    /// Verbs whose *submission* RM refused. ⊘ Not a violation: a refusal is the system
+    /// saying no, and folding it into a red would report our own ask as the system's fault.
+    refused: u64,
+    /// Whether the worker reached the end of its loop.
+    finished: bool,
+    /// ★ Whether this worker's affinity call was ACCEPTED. ⊘ Not whether it was *asked for*:
+    /// a default you never see exercised is a default you do not have, and a pinned arm that
+    /// silently ran unpinned would be reported as *"pinning changed nothing"*.
+    pinned: bool,
+    /// The cores the kernel says this worker may run on, read back AFTER the call.
+    observed_cores: Vec<usize>,
+    /// ★★★ Every raw RM handle this worker's allocations came back with.
+    ///
+    /// `RmConnection::mint` is `let h = o.next; o.next += 1` under the `objects` mutex, and
+    /// two workers minting at once is the most direct thing this rung can aim at that lock.
+    /// ⊘ The uniqueness is checked by the PHASE, across workers — a per-worker check could
+    /// never see the collision, which is exactly the shape of the defect.
+    minted: Vec<u64>,
+}
+
+impl W385Report {
+    fn violate(&mut self, name: &'static str, detail: String) {
+        self.violations.push((name, detail));
+    }
+}
+
+/// ★★★ ONE WORKER. Everything above is scaffolding; this is the loop.
+///
+/// It builds its **own** [`HostRmBackend`] from the client's shared `Arc<RmConnection>`,
+/// which is the point: `HostRmBackend`'s mutating verbs take `&mut self` and its `slots`
+/// map is per-worker, so a per-thread backend is the only shape that is not itself a bug —
+/// while the `Arc<RmConnection>` underneath, with its `objects` and `rings` mutexes, is
+/// **shared**, and is the host-side lock this rung exists to hammer.
+#[allow(clippy::too_many_lines)]
+fn w385_run_worker(
+    w: W385Worker,
+    conn: std::sync::Arc<RmConnection>,
+    vas_raw: u64,
+    engine_type: u32,
+    probe: W381Probe,
+    origin: std::time::Instant,
+    beat: std::sync::Arc<W385Beat>,
+) -> W385Report {
+    let mut rep = W385Report::default();
+    // ⊘ THE GEOMETRY CHECK, BEFORE ANYTHING ELSE. A window past the end of the address space
+    // does not produce a subtle result — it produces a CONFIDENT one, because every mapping
+    // in it is refused and every downstream probe then reads as a revoke. Refuse it by its
+    // own name so the run says *"the rung asked for more address space than exists"* instead
+    // of *"the alias property broke"*.
+    if w.lane > W385_MAX_LANE {
+        rep.violate(
+            "WINDOW_ABOVE_VAS_LIMIT",
+            format!(
+                "tid {} lane {} would place a window at {:#018x}, past the address space's \
+                 {:#018x} limit. ⊘ HARNESS FAULT, not a system result: raise --fuzz-clients \
+                 or lower --fuzz-threads (max {} lanes per client)",
+                w.tid,
+                w.lane,
+                w.window(),
+                W385_VAS_LIMIT,
+                W385_MAX_LANE + 1
+            ),
+        );
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
+        return rep;
+    }
+    // ★★★ PIN FIRST, BEFORE THE CHANNEL AND BEFORE THE FIRST VERB. Everything this worker
+    // does — including the RM ioctls whose locks are the point — must happen on the cores the
+    // arm claims, or the arm is measuring the previous placement.
+    // ⊘ The placement is READ BACK rather than assumed: `pin_current_thread` returning true
+    // is the kernel accepting the mask, and `current_cores` is the kernel describing what it
+    // then applied. A rung that printed the mask it ASKED for could report a pinned arm that
+    // ran unpinned.
+    if let Some(cores) = w.pin.cores_for(w.tid) {
+        rep.pinned = kayfabe_linux_raw::affinity::pin_current_thread(&cores);
+    }
+    rep.observed_cores = kayfabe_linux_raw::affinity::current_cores().unwrap_or_default();
+    let id = IsolateId::new(w.client as u32, GpuId(0));
+    let vas = kayfabe_isolate::HostHandle::new(id, vas_raw);
+    let space = vas_raw as u32;
+    let mut rm = HostRmBackend::new(
+        id,
+        conn,
+        std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+    let mut rng = W385Rng::new(w.seed);
+
+    // The channel is this worker's alone: `submit_*` takes the next GPFIFO slot out of the
+    // backend's OWN `slots` map, so two workers sharing one channel would overwrite each
+    // other's entries and produce a red that is the harness's, not the system's.
+    let chan_res = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(w.ring_at())));
+    if let Ok((c, _)) = &chan_res {
+        rep.minted.push(c.raw());
+    }
+    let Ok((chan, token)) = chan_res else {
+        rep.violate(
+            "WORKER_NO_CHANNEL",
+            format!(
+                "tid {} could not place a channel ring at {:#018x}",
+                w.tid,
+                w.ring_at()
+            ),
+        );
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
+        return rep;
+    };
+    if rm.schedule(chan).is_err() {
+        rep.violate(
+            "WORKER_NO_SCHEDULE",
+            format!("tid {} channel would not schedule", w.tid),
+        );
+        let _ = rm.free(chan);
+        beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
+        return rep;
+    }
+
+    let mut slots: Vec<Option<W385Slot>> = (0..W385_SLOTS).map(|_| None).collect();
+    let mut seq: u32 = 0;
+    let ch = W381Chan { h: chan, token };
+
+    // ── the jitter, seeded. Both a sleep and a spin, chosen by the same stream: a pure
+    //    sleep parks the thread and stops contending, and a race that only shows up while
+    //    two threads are actually ON CPU together would never be sampled by one.
+    let jitter = |rng: &mut W385Rng| {
+        if w.jitter_us == 0 {
+            return;
+        }
+        let d = rng.below(w.jitter_us);
+        if rng.below(2) == 0 {
+            std::thread::sleep(std::time::Duration::from_micros(d));
+        } else {
+            let until = std::time::Instant::now() + std::time::Duration::from_micros(d);
+            while std::time::Instant::now() < until {
+                std::hint::spin_loop();
+            }
+        }
+    };
+
+    for it in 0..w.iters {
+        jitter(&mut rng);
+        let op = W385Op::draw(&mut rng);
+        // ★ Choose among the slots that ADMIT the drawn verb — see [`W385Op::admits`] for
+        // the measurement that made this necessary.
+        let cand: Vec<usize> = (0..W385_SLOTS)
+            .filter(|&i| op.admits(slots[i].as_ref()))
+            .collect();
+        let (op, s) = if cand.is_empty() {
+            (W385Op::Idle, 0)
+        } else {
+            (op, cand[rng.below(cand.len() as u64) as usize])
+        };
+        let start = origin.elapsed().as_nanos();
+        beat.note(w.tid, op, it, origin.elapsed().as_millis() as u64);
+
+        let mut did = op;
+        match op {
+            // ── ALLOCATE ────────────────────────────────────────────────────────────────
+            W385Op::Alloc => {
+                if slots[s].is_some() {
+                    did = W385Op::Idle;
+                } else {
+                    match rm.alloc_probe_local(W385_BYTES) {
+                        Ok(mem) => {
+                            rep.minted.push(mem.raw());
+                            if rm.fill_words(mem, W385_BYTES, W385_SENTINEL, 0).is_err() {
+                                let _ = rm.free(mem);
+                                rep.refused += 1;
+                            } else {
+                                // ★ INVARIANT 5, the recycling half: a FRESH object must
+                                // read as its own sentinel. If it holds a magic, RM handed
+                                // back storage somebody is still writing to.
+                                w385_check_fresh(&rm, &w, &mut rep, mem, it);
+                                slots[s] = Some(W385Slot {
+                                    mem,
+                                    va_a: None,
+                                    va_b: None,
+                                });
+                            }
+                        }
+                        Err(_) => rep.refused += 1,
+                    }
+                }
+            }
+
+            // ── MAP, first VA ───────────────────────────────────────────────────────────
+            W385Op::MapA => {
+                let (va_a, _) = w.slot_vas(s);
+                match slots[s].as_mut() {
+                    Some(sl) if sl.va_a.is_none() => {
+                        let mem = sl.mem;
+                        match rm.map_local_at(vas, mem, W385_BYTES, Some(va_a)) {
+                            Ok(got) => {
+                                w385_check_placement(&w, &mut rep, va_a, got, it);
+                                sl.va_a = Some(got);
+                                jitter(&mut rng);
+                                // ★ INVARIANT 2 — all-or-nothing. RM said it mapped; its
+                                // own allocator must not still call the VA free.
+                                w385_check_installed(&mut rm, &w, &mut rep, space, got, it);
+                            }
+                            Err(_) => rep.refused += 1,
+                        }
+                    }
+                    _ => did = W385Op::Idle,
+                }
+            }
+
+            // ── MAP, second VA over the SAME memory — the w380 alias case ───────────────
+            W385Op::MapB => {
+                let (_, va_b) = w.slot_vas(s);
+                match slots[s].as_mut() {
+                    Some(sl) if sl.va_a.is_some() && sl.va_b.is_none() => {
+                        let mem = sl.mem;
+                        match rm.map_local_at(vas, mem, W385_BYTES, Some(va_b)) {
+                            Ok(got) => {
+                                w385_check_placement(&w, &mut rep, va_b, got, it);
+                                sl.va_b = Some(got);
+                            }
+                            Err(_) => rep.refused += 1,
+                        }
+                    }
+                    _ => did = W385Op::Idle,
+                }
+            }
+
+            // ── WRITE one magic through one live VA, and read it back ───────────────────
+            W385Op::Write => {
+                let live: Vec<u64> = slots[s]
+                    .as_ref()
+                    .map(|sl| sl.va_a.iter().chain(sl.va_b.iter()).copied().collect())
+                    .unwrap_or_default();
+                if live.is_empty() {
+                    did = W385Op::Idle;
+                } else {
+                    let va = live[rng.below(live.len() as u64) as usize];
+                    let off = W385_OFFS[rng.below(W385_OFFS.len() as u64) as usize];
+                    seq = seq.wrapping_add(1);
+                    let magic = w385_magic(w.client as u32, w.tid as u32, seq);
+                    let mem = slots[s].as_ref().expect("slot").mem;
+                    jitter(&mut rng);
+                    let out = w379_release_through(&mut rm, probe, ch, mem, va, off, magic);
+                    w385_grade_write(&w, &mut rep, out, magic, va, off, it);
+                }
+            }
+
+            // ── THE ALIAS PROPERTY, in one op: A, then B, then A AGAIN ──────────────────
+            W385Op::AliasProp => match slots[s].as_ref().map(|sl| (sl.mem, sl.va_a, sl.va_b)) {
+                Some((mem, Some(va_a), Some(va_b))) => {
+                    seq = seq.wrapping_add(1);
+                    let m1 = w385_magic(w.client as u32, w.tid as u32, seq);
+                    seq = seq.wrapping_add(1);
+                    let m2 = w385_magic(w.client as u32, w.tid as u32, seq);
+                    seq = seq.wrapping_add(1);
+                    let m3 = w385_magic(w.client as u32, w.tid as u32, seq);
+
+                    let a1 = w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[0], m1);
+                    w385_grade_write(&w, &mut rep, a1, m1, va_a, W385_OFFS[0], it);
+                    jitter(&mut rng);
+                    let b1 = w379_release_through(&mut rm, probe, ch, mem, va_b, W385_OFFS[1], m2);
+                    w385_grade_write(&w, &mut rep, b1, m2, va_b, W385_OFFS[1], it);
+                    jitter(&mut rng);
+                    // ★★★ INVARIANT 3 — the whole op. A landed before B existed; it must
+                    // still land now that B does. A `Lost` here IS the revoke.
+                    let a2 = w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[2], m3);
+                    // ⊘⊘ **`Lost`, NEVER `!landed()`.** `W379Release::Refused` means the
+                    // submission was declined and the engine was never asked — folding it in
+                    // here reports OUR OWN ask as the system's red. Measured 2026-09-06:
+                    // before this line said `Lost`, an arm whose VA windows ran past the
+                    // address space's 1 TiB limit produced **22 fabricated ALIAS_REVOKEDs**
+                    // per phase, and the only thing that distinguished them from a real
+                    // revoke was the `(Refused)` printed in their own message.
+                    if a1.landed() && b1.landed() && matches!(a2, W379Release::Lost { .. }) {
+                        rep.violate(
+                            "ALIAS_REVOKED",
+                            format!(
+                                "tid {} it {it}: VA_A {va_a:#018x} landed before VA_B \
+                                 {va_b:#018x} was mapped and is SILENT after ({a2:?})",
+                                w.tid
+                            ),
+                        );
+                    } else {
+                        w385_grade_write(&w, &mut rep, a2, m3, va_a, W385_OFFS[2], it);
+                    }
+                    // ★ INVARIANT 3, the other half: what B wrote must be readable through
+                    // the ONE object both VAs name.
+                    if b1.landed()
+                        && let Ok(words) =
+                            rm.read_words_independently(mem, W385_BYTES, &[W385_OFFS[1]])
+                        && words[0] != m2
+                    {
+                        rep.violate(
+                            "ALIAS_MISMATCH",
+                            format!(
+                                "tid {} it {it}: wrote {m2:#010x} through VA_B \
+                                 {va_b:#018x}, the object reads {:#010x}",
+                                w.tid, words[0]
+                            ),
+                        );
+                    }
+                }
+                _ => did = W385Op::Idle,
+            },
+
+            // ── UNMAP the alias, and assert the survivor survived ───────────────────────
+            W385Op::UnmapB => match slots[s].as_ref().map(|sl| (sl.mem, sl.va_a, sl.va_b)) {
+                Some((mem, va_a, Some(va_b))) => {
+                    let un = rm.unmap_local(vas, va_b).is_ok();
+                    if let Some(sl) = slots[s].as_mut() {
+                        sl.va_b = None;
+                    }
+                    jitter(&mut rng);
+                    if un {
+                        // ★ INVARIANT 5 — the unmap must become observable.
+                        match rm.probe_va(space, va_b, W385_BYTES) {
+                            Ok(kayfabe_isolate_host::rm::VaProbe::Free) => {}
+                            other => rep.violate(
+                                "VA_NOT_RECOVERED",
+                                format!(
+                                    "tid {} it {it}: {va_b:#018x} did not come back after \
+                                     an unmap RM accepted (probe={other:?})",
+                                    w.tid
+                                ),
+                            ),
+                        }
+                    } else {
+                        rep.refused += 1;
+                    }
+                    // ★★★ INVARIANT 3 — unmapping one alias must not take the other down.
+                    if let Some(va_a) = va_a {
+                        seq = seq.wrapping_add(1);
+                        let m = w385_magic(w.client as u32, w.tid as u32, seq);
+                        let out =
+                            w379_release_through(&mut rm, probe, ch, mem, va_a, W385_OFFS[0], m);
+                        // ⊘ `Lost`, never `!landed()` — see the same note in `AliasProp`.
+                        if matches!(out, W379Release::Lost { .. }) {
+                            rep.violate(
+                                "ALIAS_REVOKED",
+                                format!(
+                                    "tid {} it {it}: unmapping the alias {va_b:#018x} \
+                                     silenced the survivor {va_a:#018x} ({out:?})",
+                                    w.tid
+                                ),
+                            );
+                        } else {
+                            w385_grade_write(&w, &mut rep, out, m, va_a, W385_OFFS[0], it);
+                        }
+                    }
+                }
+                _ => did = W385Op::Idle,
+            },
+
+            // ── ASK THE ALLOCATOR about a VA we believe is live ─────────────────────────
+            W385Op::Probe => match slots[s].as_ref().and_then(|sl| sl.va_a) {
+                Some(va) => {
+                    w385_check_installed(&mut rm, &w, &mut rep, space, va, it);
+                }
+                None => did = W385Op::Idle,
+            },
+
+            // ── FREE, and assert both the handle and the VA went away ───────────────────
+            W385Op::Free => match slots[s].take() {
+                Some(sl) => w385_retire(&mut rm, &w, &mut rep, vas, space, sl, it),
+                None => did = W385Op::Idle,
+            },
+
+            // ── RECYCLE — free and re-allocate into the SAME slot, immediately ──────────
+            W385Op::Recycle => match slots[s].take() {
+                Some(sl) => {
+                    w385_retire(&mut rm, &w, &mut rep, vas, space, sl, it);
+                    jitter(&mut rng);
+                    match rm.alloc_probe_local(W385_BYTES) {
+                        Ok(mem) => {
+                            rep.minted.push(mem.raw());
+                            // ★★ INVARIANT 5 — read the fresh object BEFORE writing the
+                            // sentinel over it. Filling first would erase the exact
+                            // evidence: a recycled handle still holding a magic.
+                            w385_check_fresh(&rm, &w, &mut rep, mem, it);
+                            if rm.fill_words(mem, W385_BYTES, W385_SENTINEL, 0).is_err() {
+                                let _ = rm.free(mem);
+                                rep.refused += 1;
+                            } else {
+                                slots[s] = Some(W385Slot {
+                                    mem,
+                                    va_a: None,
+                                    va_b: None,
+                                });
+                            }
+                        }
+                        Err(_) => rep.refused += 1,
+                    }
+                }
+                None => did = W385Op::Idle,
+            },
+
+            W385Op::Idle => {}
+        }
+
+        let end = origin.elapsed().as_nanos();
+        rep.ops[did.code() as usize] += 1;
+        if did != W385Op::Idle {
+            rep.spans.push((w.tid, start, end));
+        }
+        beat.note(w.tid, did, it, origin.elapsed().as_millis() as u64);
+    }
+
+    // ── teardown. Every object this worker made, disposed by this worker. ───────────────
+    for sl in slots.into_iter().flatten() {
+        if let Some(va) = sl.va_b {
+            let _ = rm.unmap_local(vas, va);
+        }
+        if let Some(va) = sl.va_a {
+            let _ = rm.unmap_local(vas, va);
+        }
+        let _ = rm.free(sl.mem);
+    }
+    let _ = rm.free(chan);
+    rep.finished = true;
+    beat.done[w.tid].store(true, std::sync::atomic::Ordering::Relaxed);
+    rep
+}
+
+/// ★ INVARIANT 5 — a **fresh** object must read as nothing, never as somebody's magic.
+///
+/// ⊘ A fresh object legitimately holds whatever the driver last left there, so the only
+/// value that is a *finding* is one this rung's writers produced: a word carrying
+/// [`W385_MAGIC_TAG`]. Anything else is uninitialised memory and is not graded.
+fn w385_check_fresh(
+    rm: &HostRmBackend,
+    w: &W385Worker,
+    rep: &mut W385Report,
+    mem: kayfabe_isolate::HostHandle,
+    it: u64,
+) {
+    let Ok(words) = rm.read_words_independently(mem, W385_BYTES, &W385_OFFS) else {
+        return;
+    };
+    for (i, &word) in words.iter().enumerate() {
+        if let Some((c, t)) = w385_owner(word) {
+            let name = if c == w.client as u32 {
+                "STALE_READ"
+            } else {
+                "CROSS_CLIENT_LEAK"
+            };
+            rep.violate(
+                name,
+                format!(
+                    "tid {} it {it}: a FRESH object reads {word:#010x} at +{:#x} — client \
+                     {c} thread {t} wrote it, so this storage is still somebody's",
+                    w.tid, W385_OFFS[i]
+                ),
+            );
+        }
+    }
+}
+
+/// ★ INVARIANT 2 — a VA RM said it mapped must not read as `Free` to RM's own allocator.
+///
+/// ⊘ `Relocated` is **not** graded as a violation here: RM treating a fixed ask as a hint is
+/// a statement about our address choice, and folding it in would manufacture reds out of a
+/// legal allocator behaviour. Only `Free` — *"nothing is there"* over a live mapping — is.
+fn w385_check_installed(
+    rm: &mut HostRmBackend,
+    w: &W385Worker,
+    rep: &mut W385Report,
+    space: u32,
+    va: u64,
+    it: u64,
+) {
+    if matches!(
+        rm.probe_va(space, va, W385_BYTES),
+        Ok(kayfabe_isolate_host::rm::VaProbe::Free)
+    ) {
+        rep.violate(
+            "MAP_NOT_ATOMIC",
+            format!(
+                "tid {} it {it}: {va:#018x} is mapped and RM's allocator answers Free — a \
+                 mapping observable half-installed",
+                w.tid
+            ),
+        );
+    }
+}
+
+/// Grade one placement. A drift is counted; a drift **out of this worker's window** is a red,
+/// because that is how one worker comes to scribble on another's invariant.
+fn w385_check_placement(w: &W385Worker, rep: &mut W385Report, asked: u64, got: u64, it: u64) {
+    if got != asked && !w.owns(got) {
+        rep.violate(
+            "WINDOW_ESCAPE",
+            format!(
+                "tid {} it {it}: asked {asked:#018x}, RM placed {got:#018x} — OUTSIDE this \
+                 worker's window {:#018x}..",
+                w.tid,
+                w.window()
+            ),
+        );
+    }
+}
+
+/// ★★★ INVARIANTS 1 and 4 — grade what actually arrived at an address this worker wrote.
+///
+/// The magic carries its writer's identity, so the three outcomes are distinguishable:
+/// our own magic (fine), **somebody else's** magic (the finding), or nothing (a lost write).
+fn w385_grade_write(
+    w: &W385Worker,
+    rep: &mut W385Report,
+    out: W379Release,
+    magic: u32,
+    va: u64,
+    off: u64,
+    it: u64,
+) {
+    match out {
+        W379Release::Landed => {}
+        W379Release::Refused => rep.refused += 1,
+        W379Release::Lost { saw } => match w385_owner(saw) {
+            Some((c, t)) if c != w.client as u32 => rep.violate(
+                "CROSS_CLIENT_LEAK",
+                format!(
+                    "tid {} it {it}: wrote {magic:#010x} at {va:#018x}+{off:#x}; the object \
+                     holds {saw:#010x}, written by CLIENT {c} thread {t}",
+                    w.tid
+                ),
+            ),
+            Some((c, t)) if t != w.tid as u32 => rep.violate(
+                "VA_DOUBLE_BOUND",
+                format!(
+                    "tid {} it {it}: wrote {magic:#010x} at {va:#018x}+{off:#x}; the object \
+                     holds {saw:#010x}, written by client {c} THREAD {t} — this VA or this \
+                     memory is bound twice",
+                    w.tid
+                ),
+            ),
+            _ => rep.violate(
+                "RELEASE_LOST",
+                format!(
+                    "tid {} it {it}: {magic:#010x} never reached {va:#018x}+{off:#x} \
+                     (object holds {saw:#010x})",
+                    w.tid
+                ),
+            ),
+        },
+    }
+}
+
+/// ★ INVARIANT 5 — retire one slot and assert both halves of *"it went away"*: the freed
+/// handle must stop resolving, and the VA must come back.
+///
+/// ⊘ The handle check is only sound because [`RmConnection::mint`] is a **monotonic**
+/// counter — no handle value is reissued inside one run — so a `map_cpu` that succeeds on a
+/// freed handle cannot be explained by reuse.
+fn w385_retire(
+    rm: &mut HostRmBackend,
+    w: &W385Worker,
+    rep: &mut W385Report,
+    vas: kayfabe_isolate::HostHandle,
+    space: u32,
+    sl: W385Slot,
+    it: u64,
+) {
+    let vas_had = (sl.va_a, sl.va_b);
+    if let Some(va) = sl.va_b {
+        let _ = rm.unmap_local(vas, va);
+    }
+    if let Some(va) = sl.va_a {
+        let _ = rm.unmap_local(vas, va);
+    }
+    let freed = rm.free(sl.mem).is_ok();
+    if !freed {
+        rep.refused += 1;
+        return;
+    }
+    if rm
+        .read_words_independently(sl.mem, W385_BYTES, &[0])
+        .is_ok()
+    {
+        rep.violate(
+            "FREED_HANDLE_RESOLVES",
+            format!(
+                "tid {} it {it}: handle {:#x} was freed and a fresh CPU mapping of it still \
+                 succeeded",
+                w.tid,
+                sl.mem.raw()
+            ),
+        );
+    }
+    for va in [vas_had.0, vas_had.1].into_iter().flatten() {
+        match rm.probe_va(space, va, W385_BYTES) {
+            Ok(kayfabe_isolate_host::rm::VaProbe::Free) => {}
+            other => rep.violate(
+                "VA_NOT_RECOVERED",
+                format!(
+                    "tid {} it {it}: {va:#018x} did not come back after its object was \
+                     freed (probe={other:?})",
+                    w.tid
+                ),
+            ),
+        }
+    }
+}
+
+/// The knobs, so the rung can be dialled up until it reds or the budget is stated.
+#[derive(Debug, Clone, Copy)]
+struct W385Cfg {
+    threads: usize,
+    iters: u64,
+    clients: usize,
+    jitter_us: u64,
+    seed: u64,
+    /// Whole-rung watchdog, seconds.
+    deadline_s: u64,
+    /// A worker silent for this long is called wedged, even if the whole rung has time left.
+    stall_s: u64,
+    /// How this phase places its workers on cores. See [`W385Pin`].
+    pin: W385Pin,
+    /// ★ How many cores the pinned arms use. Defaults to the **bench guest's `-smp`**
+    /// (`scripts/bench/boot_nvkvm.sh`), because the topology worth reproducing is the one
+    /// the product actually presents — not a round number.
+    cores: usize,
+}
+
+/// ★★ THE WATCHDOG. A deadlock must FAIL BY NAME, and it must fail *while* it is deadlocked
+/// — after the fact there is nothing to dump.
+///
+/// ⊘ It ends the process rather than unwinding, and that is deliberate: a worker wedged in
+/// an RM ioctl cannot be joined, cancelled or timed out from here, so the only honest
+/// choices are *"print what we know and die"* or *"hang"*. It prints the verdict line first,
+/// so a grader reading printed lines gets a `FAIL` and never a silence.
+fn w385_watchdog(
+    cfg: W385Cfg,
+    beat: std::sync::Arc<W385Beat>,
+    origin: std::time::Instant,
+    phase: &'static str,
+) {
+    use std::sync::atomic::Ordering::Relaxed;
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let now = origin.elapsed();
+        let now_ms = now.as_millis() as u64;
+        if beat.stop.load(Relaxed) || beat.done.iter().all(|d| d.load(Relaxed)) {
+            return;
+        }
+        let expired = now.as_secs() >= cfg.deadline_s;
+        let stalled: Vec<usize> = (0..beat.op.len())
+            .filter(|&t| {
+                !beat.done[t].load(Relaxed)
+                    && beat.op[t].load(Relaxed) != 0
+                    && now_ms.saturating_sub(beat.last_ms[t].load(Relaxed)) >= cfg.stall_s * 1000
+            })
+            .collect();
+        if !expired && stalled.is_empty() {
+            continue;
+        }
+        println!(
+            "FAIL  W385 WATCHDOG       = phase {phase}: {} after {}s. ⊘ A nontermination \
+             that WEDGED instead of failing is the shape this exists to refuse",
+            if expired {
+                format!("the {}s rung deadline expired", cfg.deadline_s)
+            } else {
+                format!("workers {stalled:?} silent for >= {}s", cfg.stall_s)
+            },
+            now.as_secs()
+        );
+        println!("⚠     W385 last known    = what each worker was doing when time ran out:");
+        beat.dump(now_ms);
+        println!("FUZZ_SEED={:#018x}", cfg.seed);
+        println!("FUZZ_REASON=DEADLOCK/WATCHDOG");
+        println!("RUNGCTL_concurrent_fuzz=FAIL");
+        println!("RUNG_concurrent_fuzz=FAIL");
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        // ⊘ Objects leak. That is the correct trade against a hang, and it is stated rather
+        // than hidden: this process is a diagnostic, and the run is over either way.
+        std::process::exit(3);
+    }
+}
+
+/// What one phase (the control, or the fuzz) measured.
+struct W385Phase {
+    /// How this phase placed its workers.
+    pin: W385Pin,
+    /// How many workers the kernel actually accepted a mask for. ⊘ `0` on an `Unpinned`
+    /// arm by construction; `< workers` on a pinned arm is an UNMEASURED pinning, not a
+    /// successful one.
+    pinned: usize,
+    /// The distinct core sets the workers observed, as printed strings — the attributable
+    /// record of where this arm actually ran.
+    core_sets: std::collections::BTreeSet<String>,
+    /// `(tid, raw handle)` for every allocation any worker made. See [`W385Report::minted`].
+    minted: Vec<(usize, u64)>,
+    violations: Vec<(&'static str, String)>,
+    ops: [u64; 11],
+    refused: u64,
+    finished: usize,
+    workers: usize,
+    /// Pairs of RM-verb intervals from **different** threads that actually intersected.
+    /// ★ This is the concurrency *control*: zero of it means nothing was sampled.
+    overlap_pairs: u64,
+    /// How many spans the overlap count was computed over — see [`W385_SPAN_CAP`].
+    spans_used: usize,
+    total_spans: usize,
+    /// Op durations in microseconds, sorted. Reported as a distribution, never a mean.
+    durations: Vec<u64>,
+    wall_ms: u128,
+}
+
+/// Spans the overlap census runs over. The census is O(n²) and the whole point is a
+/// **positive** count, so a cap is honest as long as it is reported — which it is.
+const W385_SPAN_CAP: usize = 6000;
+
+/// Run one phase: spawn `cfg.threads` workers across `cfg.clients` RM clients, join them,
+/// and fold their reports into one.
+fn w385_phase(
+    cfg: W385Cfg,
+    conns: &[std::sync::Arc<RmConnection>],
+    vas_raws: &[u64],
+    engine_type: u32,
+    probe: W381Probe,
+    phase: &'static str,
+) -> W385Phase {
+    let origin = std::time::Instant::now();
+    let beat = std::sync::Arc::new(W385Beat::new(cfg.threads));
+    let wd_beat = std::sync::Arc::clone(&beat);
+    std::thread::spawn(move || w385_watchdog(cfg, wd_beat, origin, phase));
+
+    let mut handles = Vec::new();
+    // Per-client lane counters, so lane N of client 0 and lane N of client 1 name the SAME
+    // VA window — the collision invariant 4 is about.
+    let mut lanes = vec![0usize; conns.len()];
+    for tid in 0..cfg.threads {
+        let client = tid % conns.len();
+        let lane = lanes[client];
+        lanes[client] += 1;
+        let w = W385Worker {
+            tid,
+            client,
+            lane,
+            iters: cfg.iters,
+            jitter_us: cfg.jitter_us,
+            // ★ Each stream is a pure function of the ONE printed seed and the worker's
+            // identity, so `--seed=N` reproduces every worker's decision sequence.
+            seed: cfg
+                .seed
+                .wrapping_mul(0x2545_F491_4F6C_DD1D)
+                .wrapping_add((tid as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+            pin: cfg.pin,
+        };
+        let conn = std::sync::Arc::clone(&conns[client]);
+        let vas_raw = vas_raws[client];
+        let beat = std::sync::Arc::clone(&beat);
+        handles.push(std::thread::spawn(move || {
+            w385_run_worker(w, conn, vas_raw, engine_type, probe, origin, beat)
+        }));
+    }
+
+    let mut out = W385Phase {
+        pin: cfg.pin,
+        pinned: 0,
+        core_sets: std::collections::BTreeSet::new(),
+        minted: Vec::new(),
+        violations: Vec::new(),
+        ops: [0; 11],
+        refused: 0,
+        finished: 0,
+        workers: cfg.threads,
+        overlap_pairs: 0,
+        spans_used: 0,
+        total_spans: 0,
+        durations: Vec::new(),
+        wall_ms: 0,
+    };
+    let mut spans: Vec<(usize, u128, u128)> = Vec::new();
+    for (tid, h) in handles.into_iter().enumerate() {
+        match h.join() {
+            Ok(rep) => {
+                if rep.finished {
+                    out.finished += 1;
+                }
+                if rep.pinned {
+                    out.pinned += 1;
+                }
+                out.core_sets.insert(w385_cores_str(&rep.observed_cores));
+                for h in rep.minted {
+                    out.minted.push((tid, h));
+                }
+                out.refused += rep.refused;
+                for (i, n) in rep.ops.iter().enumerate() {
+                    out.ops[i] += n;
+                }
+                out.violations.extend(rep.violations);
+                spans.extend(rep.spans);
+            }
+            // ★★★ A PANIC IN A WORKER IS A RESULT, and it is the one a lock-rank witness
+            // produces. Swallowing it would turn the loudest possible red into a missing row.
+            Err(_) => out.violations.push((
+                "WORKER_PANIC",
+                format!("tid {tid} panicked — a witness assert or an unwrap inside a verb"),
+            )),
+        }
+    }
+    // ★★★ HANDLE UNIQUENESS — checked HERE because it is cross-worker by nature.
+    //
+    // `mint()` is `o.next; o.next += 1` under the `objects` mutex. If that mutex ever failed
+    // to serialise, two workers would receive the SAME raw handle, and every downstream
+    // symptom — a free that takes somebody else's object, a map onto a stranger's memory —
+    // would be attributed to the mapping plane instead. ⊘ Within one connection the counter
+    // is monotonic so a repeat is unambiguous; ACROSS connections handles legitimately
+    // repeat, which is why the check is scoped to the workers of one client.
+    {
+        let mut seen: std::collections::HashMap<(usize, u64), usize> =
+            std::collections::HashMap::new();
+        for &(tid, h) in &out.minted {
+            let client = tid % cfg.clients.max(1);
+            if let Some(&prev) = seen.get(&(client, h)) {
+                out.violations.push((
+                    "HANDLE_COLLISION",
+                    format!(
+                        "client {client}: raw handle {h:#x} was minted for worker {prev} AND \
+                         worker {tid} — `RmConnection::mint` did not serialise"
+                    ),
+                ));
+            } else {
+                seen.insert((client, h), tid);
+            }
+        }
+    }
+    // ★ The watchdog is retired HERE, by the phase, not by the workers — see [`W385Beat`].
+    beat.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    out.wall_ms = origin.elapsed().as_millis();
+    out.total_spans = spans.len();
+    for &(_, s, e) in &spans {
+        out.durations.push((e.saturating_sub(s) / 1000) as u64);
+    }
+    out.durations.sort_unstable();
+    spans.sort_unstable_by_key(|s| s.1);
+    let used = spans.len().min(W385_SPAN_CAP);
+    out.spans_used = used;
+    for i in 0..used {
+        for j in (i + 1)..used {
+            // sorted by start, so once a later span starts after this one ends, none of the
+            // remaining ones can overlap it either.
+            if spans[j].1 >= spans[i].2 {
+                break;
+            }
+            if spans[j].0 != spans[i].0 {
+                out.overlap_pairs += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Print one phase's census: the **distribution and `n`**, never a summary number.
+fn w385_report(phase: &str, p: &W385Phase) {
+    let n = p.durations.len();
+    let pct = |q: f64| -> u64 {
+        if n == 0 {
+            0
+        } else {
+            p.durations[((n as f64 - 1.0) * q) as usize]
+        }
+    };
+    let total: u64 = p.ops.iter().sum();
+    println!(
+        "info  W385 {phase:<8} census = {total} ops over {} workers in {} ms, {} refused, \
+         {}/{} workers finished",
+        p.workers, p.wall_ms, p.refused, p.finished, p.workers
+    );
+    let mut line = String::new();
+    for op in W385Op::ALL {
+        line.push_str(&format!("{}={} ", op.as_str(), p.ops[op.code() as usize]));
+    }
+    println!("info  W385 {phase:<8} verbs  = {}", line.trim_end());
+    println!(
+        "info  W385 {phase:<8} op us   = n={n} min={} p50={} p90={} p99={} max={}  ⊘ a \
+         distribution, because one number is not a measurement",
+        p.durations.first().copied().unwrap_or(0),
+        pct(0.50),
+        pct(0.90),
+        pct(0.99),
+        p.durations.last().copied().unwrap_or(0)
+    );
+    println!(
+        "info  W385 {phase:<8} overlap = {} pairs of RM-verb intervals from DIFFERENT \
+         threads intersected, over {}/{} spans",
+        p.overlap_pairs, p.spans_used, p.total_spans
+    );
+    println!(
+        "info  W385 {phase:<8} handles = {} minted across {} worker(s), each checked for \
+         collision against every other worker OF THE SAME CLIENT",
+        p.minted.len(),
+        p.workers
+    );
+    // ★ WHERE IT ACTUALLY RAN, not where it was asked to run.
+    println!(
+        "info  W385 {phase:<8} pinning = mode {} — {}/{} workers accepted a mask; observed \
+         core sets {:?}",
+        p.pin.as_str(),
+        p.pinned,
+        p.workers,
+        p.core_sets
+    );
+}
+
+/// A core set as a short printable string — `"3"`, `"0-2"`, `"0,4,9"`. Used only for the
+/// attributable pinning line, which is why it collapses runs rather than listing 19 numbers.
+fn w385_cores_str(cores: &[usize]) -> String {
+    if cores.is_empty() {
+        return "?".into();
+    }
+    let mut out = String::new();
+    let mut i = 0;
+    while i < cores.len() {
+        let mut j = i;
+        while j + 1 < cores.len() && cores[j + 1] == cores[j] + 1 {
+            j += 1;
+        }
+        if !out.is_empty() {
+            out.push(',');
+        }
+        if j > i {
+            out.push_str(&format!("{}-{}", cores[i], cores[j]));
+        } else {
+            out.push_str(&format!("{}", cores[i]));
+        }
+        i = j + 1;
+    }
+    out
+}
+
+/// ★★★★★ **w385 — THE RUNG.** Positive control first, then the fuzz, then the grade.
+#[allow(clippy::too_many_lines)]
+fn concurrent_fuzz(
+    conn: &std::sync::Arc<RmConnection>,
+    probe: W381Probe,
+    gpu: u32,
+    cfg: W385Cfg,
+) -> bool {
+    println!(
+        "info  W385 fuzz           = GPU {gpu}, euid {} — {} threads x {} iterations over \
+         {} RM client(s), jitter <= {} us",
+        kayfabe_linux_raw::geteuid(),
+        cfg.threads,
+        cfg.iters,
+        cfg.clients,
+        cfg.jitter_us
+    );
+    // ★★★ THE TOPOLOGY, PRINTED, because it is a claim about the machine and not about us.
+    // `available_parallelism` is what the scheduler will actually give an unpinned arm, and
+    // `cfg.cores` is the guest's `-smp` we are reproducing; a run where the box has FEWER
+    // cores than the guest claims is a run whose `unpinned` control is not a control.
+    let host_cores = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
+    println!(
+        "info  W385 topology       = host offers {host_cores} core(s); the pinned arms use \
+         {} — the bench guest's `-smp` (scripts/bench/boot_nvkvm.sh). ★ In kayfabe EACH \
+         GUEST vCPU IS A HOST THREAD, so this is the contention the product must survive",
+        cfg.cores
+    );
+    if host_cores > 0 && host_cores < cfg.cores {
+        println!(
+            "⚠     W385 topology       = the host has FEWER cores ({host_cores}) than the \
+             pinned arms ask for ({}). The `unpinned` arm is then over-subscribed too and \
+             is NOT a clean control for the pinned one",
+            cfg.cores
+        );
+    }
+    // ★★★ THE SEED, FIRST AND UNCONDITIONALLY. A fuzz failure you cannot reproduce is an
+    // anecdote, and a seed printed only on success is a seed you do not have when it reds.
+    println!("FUZZ_SEED={:#018x}", cfg.seed);
+    println!(
+        "info  W385 replay         = --concurrent-fuzz --seed {} --fuzz-threads {} \
+         --fuzz-iters {} --fuzz-clients {}",
+        cfg.seed, cfg.threads, cfg.iters, cfg.clients
+    );
+    println!(
+        "info  W385 the bar        = five invariants, each refused BY NAME: \
+         VA_DOUBLE_BOUND, MAP_NOT_ATOMIC, ALIAS_MISMATCH/ALIAS_REVOKED, CROSS_CLIENT_LEAK, \
+         FREED_HANDLE_RESOLVES/VA_NOT_RECOVERED/STALE_READ"
+    );
+    println!(
+        "⊘     W385 seed scope     = the seed replays the DECISION SEQUENCE, not the OS \
+         SCHEDULE. A red names a reproducible program; the interleaving that made it red is \
+         not ours to reproduce"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  W385 engine         = COPY0 is not expressible");
+        println!("FUZZ_REASON=NO_ENGINE");
+        println!("RUNGCTL_concurrent_fuzz=FAIL");
+        println!("RUNG_concurrent_fuzz=NOTRUN");
+        return false;
+    };
+
+    // ── the clients. Client 0 is the caller's; every further one is a fresh root. ───────
+    let mut conns: Vec<std::sync::Arc<RmConnection>> = vec![std::sync::Arc::clone(conn)];
+    let dev = match DevDir::open(c"/dev") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("??    W385 second client  = open(/dev) refused: {e}");
+            println!("FUZZ_REASON=NO_DEVICE");
+            println!("RUNGCTL_concurrent_fuzz=FAIL");
+            println!("RUNG_concurrent_fuzz=NOTRUN");
+            return false;
+        }
+    };
+    for i in 1..cfg.clients {
+        match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+            Ok(c) => conns.push(std::sync::Arc::new(c)),
+            Err(e) => {
+                println!(
+                    "??    W385 client {i}        = a further RM client could not be opened: \
+                     {e}. ⊘ NOT an isolation result — the experiment never ran"
+                );
+                println!("FUZZ_REASON=NO_SECOND_CLIENT");
+                println!("RUNGCTL_concurrent_fuzz=FAIL");
+                println!("RUNG_concurrent_fuzz=NOTRUN");
+                return false;
+            }
+        }
+    }
+    let roots: Vec<u32> = conns.iter().map(|c| c.client()).collect();
+    println!(
+        "info  W385 hClients       = {:?} — {} distinct root(s)",
+        roots
+            .iter()
+            .map(|r| format!("{r:#010x}"))
+            .collect::<Vec<_>>(),
+        {
+            let mut u = roots.clone();
+            u.sort_unstable();
+            u.dedup();
+            u.len()
+        }
+    );
+
+    // ── one shared VAS per client. ★ SHARED, not per-thread: a per-thread address space
+    //    would leave RM's per-VAS page tables uncontended, which is the plane this rung is
+    //    named after. The per-worker VA WINDOWS are what keep a violation attributable.
+    let mut backends: Vec<HostRmBackend> = Vec::new();
+    let mut vas_raws: Vec<u64> = Vec::new();
+    let mut vas_handles: Vec<kayfabe_isolate::HostHandle> = Vec::new();
+    for (i, c) in conns.iter().enumerate() {
+        let mut b = if i == 0 {
+            HostRmBackend::new(
+                IsolateId::new(0, GpuId(gpu)),
+                std::sync::Arc::clone(c),
+                std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
+            )
+        } else {
+            HostRmBackend::new(
+                IsolateId::new(i as u32, GpuId(gpu)),
+                std::sync::Arc::clone(c),
+                std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
+            )
+        };
+        match b.alloc_vaspace() {
+            Ok(v) => {
+                vas_raws.push(v.raw());
+                vas_handles.push(v);
+                backends.push(b);
+            }
+            Err(e) => {
+                println!("FAIL  W385 vaspace {i}       = refused {e:?}");
+                println!("FUZZ_REASON=NO_VASPACE");
+                println!("RUNGCTL_concurrent_fuzz=FAIL");
+                println!("RUNG_concurrent_fuzz=NOTRUN");
+                return false;
+            }
+        }
+    }
+    // ── ★ THE POSITIVE CONTROL. Same operations, T=1, NO jitter, one client. If this does
+    //    not come back clean the rung is broken and nothing after it is interpretable.
+    println!(
+        "\ninfo  W385 CONTROL        = the SAME verbs at T=1 with NO jitter. ⊘ If this reds, \
+         the RUNG is broken, not the system, and everything below is UNINTERPRETABLE"
+    );
+    let ctl_cfg = W385Cfg {
+        threads: 1,
+        iters: cfg.iters.clamp(24, 96),
+        clients: 1,
+        jitter_us: 0,
+        seed: cfg.seed ^ 0x385,
+        // ⊘ The control is UNPINNED on purpose: its job is to say the VERBS work, and a
+        // control that also changed the placement could not do that for either arm.
+        pin: W385Pin::Unpinned,
+        ..cfg
+    };
+    let ctl = w385_phase(
+        ctl_cfg,
+        &conns[..1],
+        &vas_raws[..1],
+        engine_type,
+        probe,
+        "control",
+    );
+    w385_report("control", &ctl);
+    let ctl_engine: u64 = W385Op::ENGINE
+        .iter()
+        .map(|o| ctl.ops[o.code() as usize])
+        .sum();
+    // ⊘ The control passes only if it also RAN THE ENGINE. A control that allocated and
+    // never wrote proves the allocator works and says nothing about the plane every arm
+    // below it grades on.
+    let control_ok = ctl.violations.is_empty() && ctl.finished == 1 && ctl_engine > 0;
+    if !control_ok {
+        println!(
+            "⊘     W385 CONTROL FAILED = {} violation(s) with ONE thread and no jitter, \
+             {ctl_engine} engine ops, {}/1 workers finished",
+            ctl.violations.len(),
+            ctl.finished
+        );
+        for (name, detail) in ctl.violations.iter().take(W385_SHOW) {
+            println!("        {name}: {detail}");
+        }
+    } else {
+        println!(
+            "ok    W385 control        = {} single-threaded ops of which {ctl_engine} ran \
+             the ENGINE, zero violations — the verbs, the channel and the oracle all work",
+            ctl.ops.iter().sum::<u64>()
+        );
+    }
+
+    // ── ★★★ THE FUZZ, AS A PAIRED DIFFERENTIAL OVER CPU PLACEMENT. ────────────────────
+    //
+    // Owner ruling, 2026-09-06: pin to vCPU cores, because in kayfabe **each guest vCPU IS a
+    // host thread**. ⊘ And do NOT silently replace the unpinned arm with a pinned one: run
+    // both, at the SAME width, so *"pinning changed the answer"* is a measurement.
+    //
+    //   unpinned   T = cfg.threads (default = the bench guest's `-smp`)   the control
+    //   percore    T = cfg.cores,  one worker per core                    the topology
+    //   crowd-free T = 3 x cores,  unpinned                               the crowd's control
+    //   crowd      T = 3 x cores,  ALL on the same `cores`-wide set       the over-subscribed arm
+    //
+    // ★★★ The last one is the one that matters most and the reason it exists is worth
+    // stating: un-pinned parallelism on a wide box tends to run threads PAST each other, so a
+    // critical section is entered and left before anybody else gets there. Forcing more
+    // runnable workers than cores makes the scheduler preempt **inside** a held lock, which
+    // is where a lock-order bug actually lives.
+    let crowd_t = (cfg.cores * 3).max(cfg.threads);
+    let arms: [(&'static str, W385Cfg); 4] = [
+        (
+            "unpinned",
+            W385Cfg {
+                pin: W385Pin::Unpinned,
+                ..cfg
+            },
+        ),
+        (
+            "percore",
+            W385Cfg {
+                threads: cfg.cores,
+                pin: W385Pin::PerCore { cores: cfg.cores },
+                ..cfg
+            },
+        ),
+        (
+            "crowd-free",
+            W385Cfg {
+                threads: crowd_t,
+                pin: W385Pin::Unpinned,
+                ..cfg
+            },
+        ),
+        (
+            "crowd",
+            W385Cfg {
+                threads: crowd_t,
+                pin: W385Pin::Crowd { cores: cfg.cores },
+                ..cfg
+            },
+        ),
+    ];
+
+    let mut results: Vec<(&'static str, W385Cfg, W385Phase, &'static str)> = Vec::new();
+    for (name, acfg) in arms {
+        println!(
+            "\ninfo  W385 ARM {name:<10} = {} threads across {} client(s), placement {}, \
+             seeded jitter <= {} us",
+            acfg.threads,
+            acfg.clients,
+            acfg.pin.as_str(),
+            acfg.jitter_us
+        );
+        let ph = w385_phase(acfg, &conns, &vas_raws, engine_type, probe, "fuzz");
+        w385_report(name, &ph);
+        for (n, d) in ph.violations.iter().take(W385_SHOW) {
+            println!("        {name}/{n}: {d}");
+        }
+        // ── the per-arm grade. ⊘ ZERO OVERLAP VETOES A GREEN: an arm in which no two
+        //    threads' RM verbs ever intersected sampled no concurrency at all, and calling
+        //    that PASS reports a finding never measured.
+        // ⊘ A PINNED arm whose masks were REFUSED is likewise UNMEASURED, not passed — it
+        //    ran as the unpinned arm under a pinned arm's name, which is worse than not
+        //    running: it would be read as "pinning changed nothing".
+        // ★★★ THE COVERAGE VETO, and it is not a nicety. Invariants 1, 3 and 4 are only
+        // tested when the ENGINE runs; an arm that allocated and mapped and never wrote is
+        // green about nothing. Measured before this existed: three arms at `I=12` reported
+        // PASS with `write=0`.
+        let engine: u64 = W385Op::ENGINE
+            .iter()
+            .map(|o| ph.ops[o.code() as usize])
+            .sum();
+        // ⊘ EVERY BRANCH CARRIES ITS OWN REASON, and that is not cosmetic: three arms of
+        // this chain all answer `NOTRUN`, and *"the arm was unmeasured"* is useless without
+        // *"because its pin masks were refused"* / *"because it sampled no overlap"* /
+        // *"because it never ran the engine"*. Those are three different repairs. ★ It also
+        // happens to be what makes the blocks distinguishable to `clippy::if_same_then_else`,
+        // which flagged the collapsed version — the lint was right for the wrong reason.
+        let (v, why) = if ph.finished != ph.workers {
+            ("FAIL", "WORKER_DID_NOT_FINISH")
+        } else if acfg.pin != W385Pin::Unpinned && ph.pinned != ph.workers {
+            ("NOTRUN", "PIN_REFUSED")
+        } else if ph.overlap_pairs == 0 {
+            ("NOTRUN", "NO_CONCURRENCY_OBSERVED")
+        } else if engine == 0 {
+            ("NOTRUN", "NO_ENGINE_WORK_SAMPLED")
+        } else if ph.violations.is_empty() {
+            ("PASS", "CLEAN")
+        } else {
+            ("FAIL", "INVARIANT_VIOLATED")
+        };
+        let ops: u64 = ph.ops.iter().sum();
+        println!(
+            "FUZZ_ARM={name} verdict={v} why={why} threads={} pin={} cores={} ops={ops} \
+             engine_ops={engine} alias_ops={} overlap={} viol={} refused={} pinned={}/{} \
+             finished={}/{}",
+            acfg.threads,
+            acfg.pin.as_str(),
+            cfg.cores,
+            ph.ops[W385Op::ALIAS.code() as usize],
+            ph.overlap_pairs,
+            ph.violations.len(),
+            ph.refused,
+            ph.pinned,
+            ph.workers,
+            ph.finished,
+            ph.workers
+        );
+        if v == "NOTRUN" {
+            println!(
+                "⊘     W385 {name:<10} = UNMEASURED because {why}. finished={}/{}  \
+                 pinned={}/{}  overlap={}  engine_ops={engine} — ⊘ NOT a pass and NOT a \
+                 failure; the third value exists for exactly this",
+                ph.finished, ph.workers, ph.pinned, ph.workers, ph.overlap_pairs
+            );
+        }
+        results.push((name, acfg, ph, v));
+    }
+
+    // ── teardown of the shared address spaces. ─────────────────────────────────────────
+    for (b, v) in backends.iter_mut().zip(vas_handles.iter()) {
+        let _ = b.free(*v);
+    }
+
+    // ── the census, by invariant name, ACROSS EVERY ARM. ⊘ Counts uncapped. ────────────
+    let mut by_name: std::collections::BTreeMap<(&'static str, &'static str), usize> =
+        std::collections::BTreeMap::new();
+    for (name, _, ph, _) in &results {
+        for (n, _) in &ph.violations {
+            *by_name.entry((*name, n)).or_default() += 1;
+        }
+    }
+    for ((arm, name), count) in &by_name {
+        println!("FUZZ_VIOLATION={name} arm={arm} n={count}");
+    }
+
+    let ops: u64 = results
+        .iter()
+        .map(|(_, _, p, _)| p.ops.iter().sum::<u64>())
+        .sum();
+    let overlap: u64 = results.iter().map(|(_, _, p, _)| p.overlap_pairs).sum();
+    let viol: usize = results.iter().map(|(_, _, p, _)| p.violations.len()).sum();
+    println!("FUZZ_THREADS={}", cfg.threads);
+    println!("FUZZ_CORES={}", cfg.cores);
+    println!("FUZZ_ITERS={}", cfg.iters);
+    println!("FUZZ_CLIENTS={}", cfg.clients);
+    println!("FUZZ_ARMS={}", results.len());
+    println!("FUZZ_OPS={ops}");
+    println!("FUZZ_OVERLAP_PAIRS={overlap}");
+    println!("FUZZ_VIOLATIONS={viol}");
+    println!(
+        "FUZZ_REFUSED={}",
+        results.iter().map(|(_, _, p, _)| p.refused).sum::<u64>()
+    );
+
+    // ★★★ THE PAIRING RULE, EVALUATED HERE RATHER THAN LEFT TO THE READER. If a pinned arm
+    // reds while its same-width unpinned control is green, THAT IS THE FINDING, and it says
+    // the unpinned arm was never a test of this.
+    let grade = |n: &str| {
+        results
+            .iter()
+            .find(|(a, _, _, _)| *a == n)
+            .map(|(_, _, _, v)| *v)
+    };
+    for (pinned, control) in [("percore", "unpinned"), ("crowd", "crowd-free")] {
+        match (grade(pinned), grade(control)) {
+            (Some("FAIL"), Some("PASS")) => println!(
+                "★★★★★ W385 PINNING FOUND IT = arm `{pinned}` RED while its same-width \
+                 unpinned control `{control}` is GREEN. ⇒ the unpinned arm was never a test \
+                 of this. FUZZ_PINNING_DELTA={pinned}"
+            ),
+            (Some(a), Some(b)) => println!(
+                "info  W385 pairing        = {pinned}={a} vs {control}={b} — placement did \
+                 not change the answer"
+            ),
+            _ => println!("info  W385 pairing        = {pinned} / {control} incomparable"),
+        }
+    }
+
+    // ── ★★ THE OVERALL GRADE. Every outcome pre-registered. ───────────────────────────
+    let verdict = if !control_ok {
+        println!("FUZZ_REASON=CONTROL_FAILED");
+        "NOTRUN"
+    } else if results.iter().any(|(_, _, _, v)| *v == "FAIL") {
+        println!("FUZZ_REASON=INVARIANT_VIOLATED");
+        "FAIL"
+    } else if results.iter().all(|(_, _, _, v)| *v == "PASS") {
+        println!("FUZZ_REASON=CLEAN");
+        "PASS"
+    } else {
+        // ⊘ Some arm was UNMEASURED (no overlap sampled, or a pinned arm whose masks were
+        // refused). Not a pass and not a failure — the third value exists for exactly this.
+        println!("FUZZ_REASON=ARM_UNMEASURED");
+        "NOTRUN"
+    };
+
+    if verdict == "PASS" {
+        println!(
+            "★     W385 FUZZ CLEAN     = {ops} operations over {} arms (up to {crowd_t} \
+             threads, {} client(s), {} cores), {overlap} measured cross-thread overlaps, \
+             zero invariant violations. ⚠ THAT IS A BUDGET, NOT A PROOF: absence of a red \
+             is not absence of a race, and every arm sampled ONE schedule of one seed",
+            results.len(),
+            cfg.clients,
+            cfg.cores
+        );
+    }
+    println!(
+        "RUNGCTL_concurrent_fuzz={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!("RUNG_concurrent_fuzz={verdict}");
+    verdict == "PASS"
+}
+
 /// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
 /// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
 fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
@@ -7765,6 +9646,28 @@ fn main() -> std::process::ExitCode {
     // so the rung's absence and the rung's default arming are different states and a log can
     // tell them apart.
     let mut want_doorbell_latency: Option<DblCfg> = None;
+    // ★★★★★ w385 — `--concurrent-fuzz`. Its own flag block, its own defaults, and NOT
+    // folded into `--w379`/`--w381`: every rung in those batteries is single-threaded and
+    // sequential, and quietly adding a thread pool to a committed battery would make every
+    // earlier arm incomparable to its own predecessors.
+    // ★★★ THE DEFAULT IS THE BENCH GUEST'S `-smp`, NOT A ROUND NUMBER. `boot_nvkvm.sh` boots
+    // the Mode-2 guest with `-smp 3`, and in kayfabe **each guest vCPU is a host thread** —
+    // so three contending threads IS the topology the product has to survive. A default of
+    // "8 because 8 is a nice number" would be testing a machine nobody runs.
+    // ⊘ If `boot_nvkvm.sh` changes its `-smp`, this number is stale and the run's own
+    // `W385 topology` line is where that shows up.
+    const W385_GUEST_SMP: usize = 3;
+    let mut want_concurrent_fuzz = false;
+    let mut fuzz_threads: usize = W385_GUEST_SMP;
+    let mut fuzz_cores: usize = W385_GUEST_SMP;
+    let mut fuzz_iters: u64 = 64;
+    let mut fuzz_clients: usize = 2;
+    let mut fuzz_jitter_us: u64 = 200;
+    // ⊘ `None` means *"draw one and PRINT it"*, never *"do not seed"*. There is no unseeded
+    // mode: a fuzz failure you cannot replay is an anecdote.
+    let mut fuzz_seed: Option<u64> = None;
+    let mut fuzz_deadline_s: u64 = 900;
+    let mut fuzz_stall_s: u64 = 120;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -7874,6 +9777,49 @@ fn main() -> std::process::ExitCode {
                 want_rpc_mixed = true;
                 want_cross_client = true;
                 probe = W381Probe::LaunchDma;
+            }
+            // ★★★★★ w385 — THE MULTI-THREADED FUZZ. See [`concurrent_fuzz`].
+            "--concurrent-fuzz" => want_concurrent_fuzz = true,
+            // Every knob takes `--flag N` **and** `--flag=N`, because a harness that writes
+            // one and a human who types the other must not silently get the default.
+            s if s.starts_with("--fuzz-threads")
+                || s.starts_with("--fuzz-iters")
+                || s.starts_with("--fuzz-clients")
+                || s.starts_with("--fuzz-cores")
+                || s.starts_with("--fuzz-jitter-us")
+                || s.starts_with("--fuzz-deadline")
+                || s.starts_with("--fuzz-stall")
+                || s.starts_with("--seed") =>
+            {
+                let (name, inline) = match s.split_once('=') {
+                    Some((n, v)) => (n, Some(v.to_string())),
+                    None => (s, None),
+                };
+                let Some(v) = inline.or_else(|| args.next()) else {
+                    eprintln!("{name} needs a value");
+                    return std::process::ExitCode::from(64);
+                };
+                // ⊘ `0x`-prefixed seeds are accepted because that is how this rung PRINTS
+                // them; a seed you cannot paste back is not a replay handle.
+                let parsed = if let Some(h) = v.strip_prefix("0x") {
+                    u64::from_str_radix(h, 16)
+                } else {
+                    v.parse::<u64>()
+                };
+                let Ok(n) = parsed else {
+                    eprintln!("{name} {v} is not a number");
+                    return std::process::ExitCode::from(64);
+                };
+                match name {
+                    "--fuzz-threads" => fuzz_threads = (n as usize).clamp(1, 64),
+                    "--fuzz-iters" => fuzz_iters = n.max(1),
+                    "--fuzz-clients" => fuzz_clients = (n as usize).clamp(1, 8),
+                    "--fuzz-cores" => fuzz_cores = (n as usize).clamp(1, 64),
+                    "--fuzz-jitter-us" => fuzz_jitter_us = n,
+                    "--fuzz-deadline" => fuzz_deadline_s = n.max(1),
+                    "--fuzz-stall" => fuzz_stall_s = n.max(1),
+                    _ => fuzz_seed = Some(n),
+                }
             }
             // ★★★★★ w384 — WHAT ONE DOORBELL COSTS THE SUBMITTING THREAD. Its own flag and
             // its own dispatch block: it is a TIMING rung, and running it behind six other
@@ -8237,6 +10183,49 @@ fn main() -> std::process::ExitCode {
         );
         let ok = doorbell_latency(&mut rm, gpu, cfg);
         println!("done — w384 doorbell-latency rung only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ w385 — THE CONCURRENT FUZZ. It runs here and RETURNS, for the reason every
+    // rung below does: it allocates its own address spaces, its own channels and its own
+    // objects at addresses no other rung uses, so an outcome is attributable to THIS rung.
+    // ⊘ And it must not share a process with a rung that deliberately provokes an `Xid`.
+    if want_concurrent_fuzz {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        println!("W381_PROBE={}", probe.as_str());
+        // ⊘ A seed is DRAWN when none was given, and drawn seeds are printed exactly like
+        // given ones — so every run, without exception, carries its own replay handle.
+        let seed = fuzz_seed.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(0x385)
+                | 1
+        });
+        let cfg = W385Cfg {
+            threads: fuzz_threads,
+            iters: fuzz_iters,
+            clients: fuzz_clients,
+            jitter_us: fuzz_jitter_us,
+            seed,
+            deadline_s: fuzz_deadline_s,
+            stall_s: fuzz_stall_s,
+            // ⊘ The top-level placement is UNPINNED and is only the seed of the arm table:
+            // `concurrent_fuzz` runs `unpinned`, `percore`, `crowd-free` and `crowd` and
+            // sets each arm's placement EXPLICITLY, so no arm inherits a default nobody
+            // named. A default you never see exercised is a default you do not have.
+            pin: W385Pin::Unpinned,
+            cores: fuzz_cores,
+        };
+        let ok = concurrent_fuzz(&conn, probe, gpu, cfg);
+        println!("done — w385 concurrent fuzz only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

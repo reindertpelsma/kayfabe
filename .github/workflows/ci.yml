@@ -1471,7 +1471,30 @@ jobs:
           # w331's huge-page result was a measured NULL: the function reports the bytes the
           # kernel ACTUALLY gave rather than madvise's return, and that honesty is what
           # produced the null (shmem THP ships `[never]`, so `rc=0` with `ShmemPmdMapped=0kB`).
-          AUDITED="kayfabe-linux-raw:93 kayfabe-qemu-raw:49"
+          #
+          # ⊘⊘ **93 -> 99, w385, 2026-09-06.** `crates/kayfabe-linux-raw/src/affinity_unsafe.rs`
+          # adds SIX `unsafe {` blocks — the whole file — for `sched_getaffinity` /
+          # `sched_setaffinity` on the CALLING thread. They exist because the w385 concurrent
+          # fuzz has to reproduce the topology the product presents: in kayfabe **each guest
+          # vCPU is a host thread**, and an unpinned stress rung on a 19-core box spreads
+          # across idle cores and never interleaves inside a critical section.
+          # ★ The gate's rule is that the NUMBER may only move with each new relaxation read,
+          # so all six were, and every one is the same shape — an owned `cpu_set_t` on the
+          # function's own stack, unaliased, outliving the call, with the syscall told the
+          # object's exact `size_of` and writing through no other pointer:
+          #   1. `core::mem::zeroed()` for the `cpu_set_t` in `current_cores`;
+          #   2. `libc::sched_getaffinity(0, size_of, &raw mut set)` — `pid == 0` names the
+          #      calling thread; return value checked, no fallback on failure;
+          #   3. `libc::CPU_ISSET(c, &set)` — `c` bounded by the object's own bit width,
+          #      computed from `size_of` on the same type;
+          #   4. `core::mem::zeroed()` for the `cpu_set_t` in `pin_current_thread`;
+          #   5. `libc::CPU_SET(c, &mut set)` — `c < bits` checked immediately above, and an
+          #      empty `cores` is refused before the loop so the mask is never `EINVAL`;
+          #   6. `libc::sched_setaffinity(0, size_of, &raw const set)` — reads the object,
+          #      writes through no caller pointer at all.
+          # ⊘ DIAGNOSTIC-ONLY: nothing in the shipped isolate or shim pins anything; the VMM
+          # owns vCPU placement. See `docs/design/w385_the_concurrent_fuzz.md` §2.1.
+          AUDITED="kayfabe-linux-raw:99 kayfabe-qemu-raw:49"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
