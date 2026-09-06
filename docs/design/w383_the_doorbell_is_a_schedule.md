@@ -533,3 +533,21 @@ reboot: `uname -r = 6.8.0-138-generic`, `modprobe nvidia` OK, 5 nvidia modules l
 ⚠ **The harness cannot currently tell this apart from a device failure**, and it should: a
 `MODPROBE_RC != 0` is *"the boot did not reach the workload"* — **UNMEASURED**, not a result —
 and `boot_capture.sh` carries on to the hook regardless.
+
+## §13 ★★★★★ THE GATE, ARMED — `cup3`, one variable against §7's control
+
+`[measured w383cup3gate, real GA106, `KAYFABE_DOORBELL_ASYNC=off`, `KAYFABE_DIRTY_GATE_*=on`]`:
+
+| | ungated (§7's `off` control) | gated |
+|---|---|---|
+| `^CUP3_VAL` | **43** | **43** |
+| host `Xid` | 0 | **0** |
+| `DIRTY-GATE publish` | `fired=… skipped=0 **0.0 %**` | `fired=39 skipped=873 **95.7 % skipped**` |
+| publication wall | **1 488 ms** over 229 passes | **380 ms** over 229 passes |
+
+⇒ ★★★ **3.9× less publication wall, the known-positive intact, and zero Xids** — from making
+a default that was written a month ago actually reachable. The `95.7 %` is the number §10 says
+was invisible: the gate had **never been consulted**, and `skipped=0` looked like a busy guest.
+
+⊘ Same number of passes (229) — the gate does not skip the *pass*, it skips the per-VAS census
+and join inside it, which is where the time is.
