@@ -79,9 +79,123 @@ use kayfabe_isolate::{
     WorkerId,
 };
 use kayfabe_mmu::Binding;
-use kayfabe_util::Instant;
+use kayfabe_util::{Coverage, CoverageAggregate, Instant, IntervalSet, IntervalSetBuilder};
 
 use crate::lock::{BlockingSection, LockRank, RankedMutex, RankedRwLock};
+
+/// ★★★★★ **ONE ADDRESS SPACE'S COVERAGE VERDICT** — the output of
+/// [`SharedDevice::vas_coverage`], joinable against an `Xid` by `proc`/`gpu`/`pdb`.
+///
+/// ⊘ Every field is computed over the **whole** set. Nothing here is sampled, capped, or
+/// derived from a truncated list; see [`Self::render`] for the one place a cap is allowed in.
+#[derive(Debug, Clone)]
+pub struct VasCoverage {
+    /// Owning process.
+    pub proc_id: ProcId,
+    /// Owning GPU.
+    pub gpu: GpuId,
+    /// The address space's page-directory base — the join key an `Xid` prints.
+    pub pdb: Pdb,
+    /// **The actionable predicate**: `declared` = our address table (`TABLE-DESCRIBES`),
+    /// `published` = host-backed rows ∪ guest-RAM pins. Its `residual` is the number that
+    /// must go to zero.
+    pub table: Coverage,
+    /// The wider predicate: `declared` = what the guest's own page tables describe
+    /// (`GUEST-DESCRIBES`), which **includes rows we refused** and therefore still sees
+    /// `w377` blocker (1). ⚠ A large residual here is normal on a healthy boot — the guest
+    /// describes mappings we never publish. Read it as a trend, never as a gate.
+    pub reach: Coverage,
+    /// Rows in the address table. ⊘ A **cardinality**, kept only so a reader can join this
+    /// line against the older `host_rows=N of M` row. It is not coverage and must not be
+    /// read as coverage.
+    pub table_rows: usize,
+    /// Rows carrying a `Binding::host`. Same caveat as [`Self::table_rows`].
+    pub host_rows: usize,
+    /// Live guest-RAM pins — the second record of host-side mapping state.
+    pub pins: usize,
+    /// Table rows with `len == 0`. ⊘ They contribute nothing to `declared` and therefore can
+    /// never appear in a residual: **invisible to the predicate by construction**, which is
+    /// why they are counted out loud rather than left to be inferred from a mismatch.
+    pub zero_len_rows: usize,
+    /// Bytes published via `Binding::host`.
+    pub row_bytes: u128,
+    /// Bytes published via `Vas::guest_ram_pins`. ⊘ Kept apart from [`Self::row_bytes`]
+    /// because a sum would hide which record a range lives in — the two overlap freely (an
+    /// exact-extent pin upgrades its row and is counted in both).
+    pub pin_bytes: u128,
+}
+
+impl VasCoverage {
+    /// The one-line verdict.
+    ///
+    /// ★★★ `cap` bounds the printed residual/excess interval lists and **nothing else**.
+    /// `COVERED`, `residual_bytes` and `residual_intervals` on this line are exact at every
+    /// `cap`, including `0`.
+    #[must_use]
+    pub fn render(&self, cap: usize) -> String {
+        format!(
+            "[proc={} gpu={} pdb=0x{:x} rows={} host_rows={} pins={} zero_len_rows={} \
+             row_bytes={} pin_bytes={} TABLE⊆PUBLISHED {} | GUEST⊆PUBLISHED COVERED={}{} \
+             declared={}B residual_bytes={} residual_intervals={}]",
+            self.proc_id.0,
+            self.gpu.0,
+            self.pdb.0,
+            self.table_rows,
+            self.host_rows,
+            self.pins,
+            self.zero_len_rows,
+            self.row_bytes,
+            self.pin_bytes,
+            self.table.render(cap),
+            self.reach.covered(),
+            // ★★ **THE VACUOUS TRUE, LABELLED HERE TOO.** `[measured, w378 sample output]`
+            // this clause printed a bare `GUEST⊆PUBLISHED COVERED=true` on a fixture whose
+            // reach set was EMPTY — indistinguishable, at a glance, from *"everything the
+            // guest's tables describe is published"*, which is the strongest claim on the
+            // line. `Coverage::render` labels its own trivial case; this hand-rolled clause
+            // did not, and a reader scanning a column for `COVERED=true` would have found a
+            // green that meant nothing.
+            if self.reach.declared_is_empty() {
+                "(TRIVIAL: GUEST-DESCRIBES is EMPTY)"
+            } else {
+                ""
+            },
+            self.reach.declared_bytes(),
+            self.reach.residual_bytes(),
+            self.reach.residual_intervals(),
+        )
+    }
+}
+
+/// ★★★★★ **THE WHOLE-BOOT VERDICT** — fold every live address space's [`VasCoverage`] into
+/// one aggregate over the `TABLE-DESCRIBES` predicate, plus the guest-reach residual beside
+/// it, and render both as one line.
+///
+/// ⊘ Takes the rows already computed rather than re-reading the device, so the aggregate and
+/// the per-VAS lines beneath it can never describe different states.
+#[must_use]
+pub fn coverage_aggregate_line(rows: &[VasCoverage]) -> String {
+    let mut table = CoverageAggregate::default();
+    let mut guest = CoverageAggregate::default();
+    let mut zero_len_rows = 0usize;
+    for r in rows {
+        table.add(&r.table);
+        guest.add(&r.reach);
+        zero_len_rows += r.zero_len_rows;
+    }
+    format!(
+        "TABLE⊆PUBLISHED {} zero_len_rows={zero_len_rows} | GUEST⊆PUBLISHED COVERED={} \
+         declared={}B residual_bytes={} residual_intervals={} trivial_vases={}",
+        table.render(),
+        guest.covered(),
+        guest.declared_bytes,
+        guest.residual_bytes,
+        guest.residual_intervals,
+        // ⊘ Same reason as the per-VAS clause: a `COVERED=true` over address spaces whose
+        // reach set is empty is a fact about the DECODER, not about publication.
+        guest.trivial_vases,
+    )
+}
 
 /// `Y`/`N` for a report. ⊘ Two characters and not `true`/`false`: a census line packs a
 /// dozen predicates and a reader scanning a column wants them the same width.
@@ -3559,6 +3673,110 @@ impl SharedDevice {
                             ""
                         },
                     )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★★★ **THE COVERAGE PREDICATE — `declared ⊆ published`, computed over EVERY row of
+    /// EVERY address space, per `(proc, gpu, pdb)`.**
+    ///
+    /// # ⊘⊘ WHAT THIS REPLACES, AND WHY THE ROWS ABOVE COULD NOT DO IT
+    ///
+    /// [`Self::vas_published_ranges`] reports `host_rows=N of M` and a `cap`-truncated run
+    /// list. `[measured, boot w376llmd]` that pair — `host_rows=0 of 6254 runs=0` beside
+    /// `⚠⚠ CAPPED at 24 of 255 distinct` — **cannot decide whether publication is complete**:
+    ///
+    /// - `N of M` is a **cardinality**, and the owner's correction is that cardinality is not
+    ///   the question: *"the only thing that matters is that the same ranges are mapped, not
+    ///   the amount of exercised mmaps."* One 64 KiB row and sixteen 4 KiB rows are the same
+    ///   coverage and a different number.
+    /// - the list is a **sample**, and its own warning says an address absent from it is not
+    ///   thereby un-published. A sample cannot certify a universal.
+    ///
+    /// ⇒ `w377` §3 blocker (5). This function returns the predicate instead: the residual set
+    /// `declared \ published`, its exact byte count, and one boolean per address space.
+    ///
+    /// # ★★★ THE CAP LIVES IN [`VasCoverage::render`] AND NOWHERE ELSE
+    ///
+    /// This function takes **no `cap`**, deliberately — the defect it replaces is that the cap
+    /// and the computation were the same `.take(cap)` loop, so the verdict inherited the
+    /// truncation. Truncation is a *rendering* decision here and cannot reach the numbers.
+    /// `kayfabe_util::coverage`'s own
+    /// `the_print_cap_truncates_the_list_and_never_the_verdict` proves the property.
+    ///
+    /// # ★★★★★ `published` JOINS **BOTH** RECORDS OF HOST-SIDE MAPPING STATE
+    ///
+    /// `Binding::host` is not the host VAS. [`Self::vas_published_ranges`]' 2026-08-13
+    /// correction is that `commit_pin_guest_ram` maps guest RAM into the host VAS at the
+    /// guest's own VA, records it in [`kayfabe_core::gpu::Vas::guest_ram_pins`], and **never
+    /// sets `Binding::host`** — so a predicate reading one field would answer a confident
+    /// wrong `residual`, which is the exact class (`a_second_source_of_truth_beside_a_complete
+    /// _value`) that made `host_rows=4` wrong. ⇒ `published` is the **union** of the two, and
+    /// [`VasCoverage::row_bytes`]/[`VasCoverage::pin_bytes`] keep the contributions legible.
+    ///
+    /// # ⊘ TWO `declared` SOURCES, BOTH ANSWERED, BECAUSE THE QUESTION IS AMBIGUOUS
+    ///
+    /// *"What the guest asked for"* has two records in this tree and they are not the same
+    /// set: `TABLE-DESCRIBES` (our address table — what we accepted) and `GUEST-DESCRIBES`
+    /// (`Vas::reach` — what the guest's own page tables describe, including everything we
+    /// **refused**). Reporting only the first would make blocker (1) invisible: a refused row
+    /// is absent from our table, so it can never appear in a residual computed against it.
+    /// ⇒ [`VasCoverage::table`] is the actionable predicate and [`VasCoverage::reach`] is the
+    /// one that still sees the refusals. ⚠ `reach`'s residual is expected to be large on a
+    /// healthy boot (the guest's tables describe kernel mappings we never publish); it is a
+    /// **trend**, not a gate.
+    ///
+    /// ⊘ Cost: one extra `reachable_ranges()` traversal per address space beyond what
+    /// [`Self::vas_reachable_ranges`] already does unconditionally. The census is not the
+    /// doorbell trap's cost centre (`w315`: 91.5 % is page-table + publication), but this is
+    /// stated rather than assumed.
+    #[must_use]
+    pub fn vas_coverage(&self, pid: ProcId) -> Vec<VasCoverage> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let table_rows = vas.table.iter().count();
+                    let mut declared = IntervalSetBuilder::with_capacity(table_rows);
+                    let mut rows = IntervalSetBuilder::new();
+                    let mut host_rows = 0usize;
+                    for (va, len, b) in vas.table.iter() {
+                        declared.push_len(va, len);
+                        if b.host().is_some() {
+                            host_rows += 1;
+                            rows.push_len(va, len);
+                        }
+                    }
+                    let zero_len_rows = declared.zero_len();
+                    let declared = declared.build();
+                    let rows = rows.build();
+                    let mut pins = IntervalSetBuilder::with_capacity(vas.guest_ram_pins.len());
+                    for (va, pin) in &vas.guest_ram_pins {
+                        pins.push_len(*va, pin.len);
+                    }
+                    let pins = pins.build();
+                    let mut published =
+                        IntervalSetBuilder::with_capacity(rows.count() + pins.count());
+                    for iv in rows.intervals().iter().chain(pins.intervals()) {
+                        published.push(*iv);
+                    }
+                    let published = published.build();
+                    let reachable: IntervalSet = vas.reach.reachable_ranges().into_iter().collect();
+                    VasCoverage {
+                        proc_id: pid,
+                        gpu,
+                        pdb,
+                        table: Coverage::new(&declared, &published),
+                        reach: Coverage::new(&reachable, &published),
+                        table_rows,
+                        host_rows,
+                        pins: vas.guest_ram_pins.len(),
+                        zero_len_rows,
+                        row_bytes: rows.bytes(),
+                        pin_bytes: pins.bytes(),
+                    }
                 })
                 .collect()
         })

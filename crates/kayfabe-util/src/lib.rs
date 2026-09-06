@@ -6,6 +6,10 @@
 //! `std::fs`/`std::net`/`std::time::Instant`).
 //!
 //! Contents:
+//! - [`coverage`] — the **coverage predicate**: `declared ⊆ published` over whole sets, with
+//!   the residual that must reach zero. Pure interval algebra; the rule it enforces is
+//!   *a cap may truncate what is PRINTED, never what is COMPUTED*
+//!   (`docs/design/w377_the_llm_wall_is_our_own_refusal.md` §3 blocker (5)).
 //! - [`IntervalMap`] — the non-overlapping range map used by the per-VAS address table
 //!   (`mode2_rust_rewrite_architecture.md` §4.3.1 `Vas::bindings`,
 //!   `mode2_address_table.md`: one forward-populated table, MISS=FAULT).
@@ -25,6 +29,7 @@
 //!   port's host-verb door — two crates, one thread-local. Purely generic: small
 //!   integer ranks, no notion of what a device or a proc is.
 
+pub mod coverage;
 pub mod interval_map;
 pub mod leafwitness;
 pub mod lock;
@@ -34,6 +39,7 @@ pub mod trapwitness;
 
 /// Re-export of the pure, OS-free duration type (from `core::time`).
 pub use core::time::Duration;
+pub use coverage::{Coverage, CoverageAggregate, Interval, IntervalSet, IntervalSetBuilder};
 pub use interval_map::{IntervalError, IntervalMap};
 pub use time::Instant;
 
@@ -82,4 +88,13 @@ macro_rules! assert_send {
 }
 
 // The contract applies to this crate's own types first.
-crate::assert_send_sync!(Instant, IntervalMap<()>, IntervalError);
+crate::assert_send_sync!(
+    Instant,
+    IntervalMap<()>,
+    IntervalError,
+    Interval,
+    IntervalSet,
+    IntervalSetBuilder,
+    Coverage,
+    CoverageAggregate,
+);
