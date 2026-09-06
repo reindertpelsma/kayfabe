@@ -6994,9 +6994,16 @@ impl DblDist {
     /// One machine-readable line. ⊘ `key=value` throughout and never a table, because the
     /// grader that reads this runs in `bash` and a column layout is a format a `sed` has to
     /// guess at.
+    ///
+    /// ⚠ **Three decimals, not one, and that is a measured decision.** `[measured 2026-09-06,
+    /// bench kb]` the bare-doorbell arm's whole distribution renders as `0.0` at one decimal —
+    /// a native doorbell store is well under 100 ns — and `0.0` reads as *"nothing was
+    /// measured"* rather than as *"this is genuinely sub-microsecond"*. A format that cannot
+    /// distinguish a real small number from an absent one is the same defect as an empty
+    /// capture decoding to zeros.
     fn print(self, tag: &str) {
         println!(
-            "DBL_DIST {tag} n={} min_us={:.1} p50_us={:.1} p90_us={:.1} max_us={:.1} \
+            "DBL_DIST {tag} n={} min_us={:.3} p50_us={:.3} p90_us={:.3} max_us={:.3} \
              total_ms={:.1} truncated={} refused={}",
             self.n,
             self.min_us,
