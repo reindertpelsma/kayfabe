@@ -15459,11 +15459,14 @@ pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 /// ★★★★★ **w318 — arm the DIRTY GATE on the publication pass.** See [`DirtyGate`] for the
 /// measurement, the C's precedent and the correctness argument.
 ///
-/// ⊘ **Off by default**, for the same reason `KAYFABE_PT_SWEEP` is: the ungated boot is this
-/// rung's negative control and must remain byte-comparable, and a typo must not be able to
-/// make a *correctness-relevant* pass stop running. ⚠ This one is the more dangerous
-/// direction of the two — arming it makes work **not happen** — which is exactly why it is
-/// opt-in and why an unparseable value reads as `off`.
+/// ⊘⊘ **ON by default since w330 — and, until w383, ONLY IN THE ENUM.** This comment used to
+/// read *"Off by default"*; [`dirty_gate_from`]'s `None` arm has read `Ok(true)` since w330
+/// and [`selected_dirty_gate`] short-circuited `None` to `false`, so the shipped behaviour
+/// was `off` and **two statements of one default sat four screens apart in this file, both
+/// looking authoritative.** See [`selected_dirty_gate`] for the measurement that was lost to
+/// it. ⚠ An unparseable value still reads as `off`, because this flag's armed direction makes
+/// work **not happen** and a typo must not be able to skip a publication nobody decided to
+/// skip.
 pub const DIRTY_GATE_PUBLISH_ENV: &str = "KAYFABE_DIRTY_GATE_PUBLISH";
 
 /// ★★★★★ **w318 — arm the DIRTY GATE on the executor page-table witness.** Same defaults and
@@ -15501,16 +15504,37 @@ pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, (Status, &'static st
 
 /// Whether `var` arms its dirty gate.
 ///
-/// ⊘ A value naming neither state reads as **disarmed**. For a flag that *adds* an
-/// observation the safe direction is off because an instrument must not fire unasked; for
-/// this flag it is off because the armed direction **removes** work, and the safe default
-/// for that is always to do the work.
+/// ⊘ A value naming neither state reads as **disarmed**: an unparseable value must not be
+/// able to make a correctness-relevant pass stop running.
+///
+/// # ⊘⊘⊘ w383 — **THE `None` ARM WAS SHORT-CIRCUITED HERE AND w330's DEFAULT NEVER TOOK
+/// EFFECT.** This function used to read `None => false`, so it **never called
+/// [`dirty_gate_from`] with `None`** — and `dirty_gate_from`'s `None` arm is precisely where
+/// w330 recorded *"DEFAULT MOVED off → ON, on measurement"* (median 18 741 → 2 197 µs, 8.5×;
+/// p90 86 104 → 4 431 µs, 19.4×; `^CUP3_VAL=43` held on every armed boot).
+///
+/// ⇒ **every boot since w330 ran with the publication gate OFF**, while the enum that owns
+/// the decision said `on` and nothing anywhere disagreed out loud. `[measured w380llm2, the
+/// LLM boot this campaign is about]` `DIRTY-GATE publish[fired=60800 skipped=0 0.0% skipped]`
+/// — a 0 % skip rate that reads as *"every VAS was dirty every time"* and is actually
+/// *"the gate was never consulted"*, over a boot that spent **359 759 ms** in the pass the
+/// gate exists to skip.
+///
+/// ★★★ **This is the tree's own most expensive recurring class, in one function**: two
+/// statements of one default, in one file, with the caller silently winning. The doc comment
+/// on [`DIRTY_GATE_PUBLISH_ENV`] still said *"Off by default"* while
+/// [`dirty_gate_from`] said `on`; only running it distinguishes them, and the census it
+/// printed was satisfied either way.
+///
+/// ⇒ the pure function is now the **only** statement of the default, and the caller does
+/// nothing but supply the environment.
 #[must_use]
 fn selected_dirty_gate(var: &str) -> bool {
-    match std::env::var_os(var) {
-        None => false,
-        Some(v) => dirty_gate_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
-    }
+    let raw = std::env::var_os(var);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    dirty_gate_from(value).unwrap_or(false)
 }
 
 /// How many coalesced VA runs one address space may print. See
