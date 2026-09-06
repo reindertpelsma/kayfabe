@@ -149,6 +149,7 @@ KAYFABE_W384_FLOOR_US="$FLOOR" \
 KAYFABE_W384_RUNS="${W384_GUEST_RUNS:-3}" \
 KAYFABE_W384_BISECT="${W384_BISECT:-}" \
 KAYFABE_W384_MISSING_PAGE="${W384_MISSING_PAGE:-1}" \
+KAYFABE_W384_ENTRIES="${W384_ENTRIES:-}" \
 POST_CAPTURE_HOOK="$REPO/scripts/bench/w384_hook.sh" \
   bash "$REPO/scripts/bench/w290p_run.sh" drain
 echo "=== guest arm inner rc=$? (⊘ NOT the grade — see the header) ==="

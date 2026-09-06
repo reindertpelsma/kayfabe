@@ -736,6 +736,60 @@ const GPFIFO_OFFSET: u64 = 0x1000;
 /// the isolate's own submissions, not the guest's.
 const GPFIFO_ENTRIES: u32 = 64;
 
+/// The environment variable that overrides [`GPFIFO_ENTRIES`] for a channel this crate
+/// allocates itself. See [`ladder_gpfifo_entries`].
+const LADDER_GPFIFO_ENTRIES_ENV: &str = "KAYFABE_LADDER_GPFIFO_ENTRIES";
+
+/// ★★★★★ **w384 — THE ONE KNOB THAT SEPARATES TWO HYPOTHESES A 64-ENTRY RING CANNOT.**
+///
+/// `[measured 2026-09-06, Mode-2 guest, four (box x device-revision) pairs]` a guest channel
+/// stops retiring at **the submission that writes `GP_PUT = 0`** — the 64th on this ring, and
+/// `entries` is 64. Two readings fit that observation exactly and a single ring size can
+/// never tell them apart:
+///
+/// - *"the value `0` is not consumed"* — a wrap-arithmetic defect, and
+/// - *"the 64th entry is not consumed"* — an off-by-one at the end of the region.
+///
+/// ⇒ **Change the entry count and they predict different answers.** At 32 entries the wrap
+/// moves to the 32nd submission under the first reading and stays at the 64th under the
+/// second. That is the whole reason this exists; it is not a tuning knob.
+///
+/// ⊘ **REFUSED rather than clamped, in both directions that matter.** A value that is not a
+/// power of two is not a legal `gpFifoEntries` and RM would refuse it later, far from here;
+/// a value **larger** than [`GPFIFO_ENTRIES`] would push the GPFIFO region past
+/// [`USERD_OFFSET_IN_RING`] and silently overwrite USERD — which the crate's own unit test
+/// asserts against for the constant and cannot assert against for a runtime value. Either
+/// one falls back to the default **and says so on stderr**: a knob that quietly did nothing
+/// would make an experiment report the control's answer under the arm's name.
+fn ladder_gpfifo_entries() -> u32 {
+    let Some(v) = std::env::var_os(LADDER_GPFIFO_ENTRIES_ENV) else {
+        return GPFIFO_ENTRIES;
+    };
+    let want: Option<u32> = v.to_str().and_then(|t| t.trim().parse().ok());
+    match want {
+        Some(n) if n.is_power_of_two() && n >= 2 && n <= GPFIFO_ENTRIES => {
+            if n != GPFIFO_ENTRIES {
+                eprintln!(
+                    "kayfabe-isolate: ★ {LADDER_GPFIFO_ENTRIES_ENV}={n} — this channel's \
+                     GPFIFO is {n} entries, NOT the default {GPFIFO_ENTRIES}. Both the \
+                     `gpFifoEntries` declared to RM and the `GP_PUT` modulus follow it."
+                );
+            }
+            n
+        }
+        other => {
+            eprintln!(
+                "kayfabe-isolate: ⊘ {LADDER_GPFIFO_ENTRIES_ENV}={:?} REFUSED (must be a power \
+                 of two in 2..={GPFIFO_ENTRIES}; larger would push the GPFIFO past USERD). \
+                 Falling back to {GPFIFO_ENTRIES} — ⊘ this run is the DEFAULT arm, whatever \
+                 was asked for",
+                other
+            );
+            GPFIFO_ENTRIES
+        }
+    }
+}
+
 /// ★★★★★ **w287 — WHERE USERD LIVES INSIDE OUR OWN RING OBJECT, and it is the whole of the
 /// blocker w284 measured.**
 ///
@@ -6406,7 +6460,10 @@ impl HostRmBackend {
                     va,
                     RingLayout {
                         gp_fifo_va: va + GPFIFO_OFFSET,
-                        entries: GPFIFO_ENTRIES,
+                        // ⊘ Not the constant directly — see `ladder_gpfifo_entries`. It IS
+                        // the constant unless an experiment overrode it, and it says so on
+                        // stderr when it is not.
+                        entries: ladder_gpfifo_entries(),
                     },
                 )
             }

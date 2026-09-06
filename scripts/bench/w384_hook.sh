@@ -69,6 +69,12 @@ RUNS=${KAYFABE_W384_RUNS:-3}
 #   "the rung printed nothing" rather than as "the device was wedged before it ran".
 BISECT=${KAYFABE_W384_BISECT:-}
 WANT_MP=${KAYFABE_W384_MISSING_PAGE:-1}
+# ★★★★★ **THE SEPARATING KNOB.** Empty ⇒ the default 64-entry GPFIFO, byte-identical to every
+# committed arm. Set (a power of two, ≤64) ⇒ the bisection runs against a ring of that many
+# entries, which is the ONLY way to tell *"`GP_PUT == 0` is not consumed"* from *"the 64th
+# entry is not consumed"* — the two readings of the stall coincide on a 64-entry ring and
+# predict different submission indices on a 32-entry one.
+ENTRIES=${KAYFABE_W384_ENTRIES:-}
 OUT=/tmp/w384guest.out
 
 die() { echo "★★★ w384 hook FAILED: $*"; echo "W384_GUEST_OUTCOME=(F) ⊘ UNMEASURED_NO_GUEST — $*"; exit 2; }
@@ -176,8 +182,8 @@ echo "=== ★★★★★ THE WRAP BISECTION — same boot, two extra invocation
 #   "the wrap is the mechanism". Naming the mechanism needs the device side, which this lane
 #   does not own.
 for N in $BISECT; do
-  echo "--- wrap bisection n=$N reps=1 ---"
-  $G "timeout 120 sudo /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency='" | sed 's/^/    /'
+  echo "--- wrap bisection n=$N reps=1 entries=${ENTRIES:-default} ---"
+  $G "timeout 120 sudo env ${ENTRIES:+KAYFABE_LADDER_GPFIFO_ENTRIES=$ENTRIES} /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency=|LADDER_GPFIFO_ENTRIES'" | sed 's/^/    /'
 done
 
 echo ""
