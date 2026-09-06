@@ -31,8 +31,10 @@ Works today, measured on real hardware (GA106, host driver 580.159.04):
 
 Does not work today:
 
-- **LLM and PyTorch workloads do not run.** `torch.cuda.is_available()` is True and the CUDA
-  runtime initialises, but the model does not execute.
+- **LLM and PyTorch workloads do not produce correct output.** The CUDA runtime initialises
+  and `torch.cuda.is_available()` is True. One Qwen2 run has since emitted 16 tokens, but the
+  text was garbage and the harness grades the token *count*, not the text — so treat this as
+  not working until the grade checks the output.
 - **Performance is far off native** — 22–81× for large kernels; small kernels are dominated
   by kayfabe's own doorbell handler.
 - Multi-process results (two concurrent guest CUDA processes; three sequential ones) exist
@@ -44,9 +46,40 @@ Does not work today:
   are red because a design ruling is outstanding, and they must not be edited to pass.
 
 The detail behind every line above, with dates and revisions, is in
-[`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md). If you want NVIDIA GPU forwarding that
-works today, use [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv), the maintained
-Mode-1 stack; [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) explains the difference.
+[`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md), and
+[`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) covers how the three projects relate.
+
+## How it compares
+
+Three related things exist. They are not competitors — the first is what to use, the second is
+where the idea was proven, the third is this repo.
+
+| | [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) | nvkvm Mode 2 (archive) | kayfabe (this repo) |
+|---|---|---|---|
+| What it is | Shipped Mode-1 stack: a guest module forwards the driver's own API to the host | C research prototype that proved the emulated-GPU idea | Clean-slate Rust rewrite of that prototype |
+| Guest kernel driver | Custom module you build and load | **Stock NVIDIA, unmodified** | **Stock NVIDIA, unmodified** |
+| Guest OS | Linux only | Linux | Linux tested; Windows is the point of the design |
+| Guest/host driver versions | Must match | Decoupled | Decoupled by design |
+| GPUs covered | Turing → Blackwell, six architectures, drivers 535–610 | One (GA106) | One (GA106) |
+| CUDA compute | Yes | Yes — matmul N=1024, bit-exact | Yes — matmul N=2048, bit-exact |
+| LLM inference | Yes — 32B via vLLM at 0.99–1.00× host, token-identical at temperature 0 | Yes — llama.cpp at 49.9 tok/s vs 47.5 host-native | Not correct yet (see above) |
+| Graphics / Vulkan / display | Yes | No | No |
+| Several CUDA processes in one guest | Yes | One per VM lifetime | Branch only; the 4th sequential one fails |
+| Performance vs host | 98–100% on most workloads; three shapes cost more | Comparable on its one workload | 22–81× off |
+| Multi-tenant isolation | Explicitly not a security boundary yet | No isolation vocabulary at all | The reason the rewrite exists — designed for, not yet demonstrated |
+| Status | Works today, maintained | Archived, superseded by this | Research |
+
+Two caveats worth stating plainly, because the numbers above are easy to misread:
+
+- The archive's tok/s looks like parity, and in a sense it was — but its data plane copied
+  through the CPU rather than the GPU's copy engines. It is a fair measure of that prototype
+  and not a forwarding baseline.
+- The archive had no notion of refusing anything, and no distinction between channels it may
+  inspect and channels it may not. That is precisely the boundary this rewrite is built
+  around, and it is why "rewrite" rather than "port".
+
+If you want NVIDIA GPU forwarding that works today, use nvkvm-pv. Kayfabe is the bet that you
+can do it without asking the guest to load your module at all.
 
 ## Requirements
 

@@ -10,7 +10,7 @@ graphics and before the full application matrix** — not after.
 |---|---|---|
 | 1 | **Compute works** | a real workload produces correct output on a stock guest driver — and is *graded on its output*, not on a count of outputs |
 | 2 | **CUDA applications pass** | a set of real CUDA apps run and **must pass**; not a demo, a bar |
-| 3 | **Driver + architecture support** | the support matrix broadened, **the way `nvkvm-pv` did it** |
+| 3 | **Driver + architecture support** | the support matrix broadened to **the same BREADTH `nvkvm-pv` reached** — Turing and newer |
 | 4 | **Graphics, and the full application matrix** | — |
 
 ⊘ **Phase 3 before phase 4 is the whole point of the ruling.** The tempting order is the
@@ -18,11 +18,30 @@ reverse — graphics is more visible and more fun. It is also the order that mak
 graphics feature something you must then re-validate across the matrix. Doing breadth first
 means phase 4 is built once, against a base that is already general.
 
-## Why "like `nvkvm-pv`" is a specific instruction, not a vague one
+## "Like `nvkvm-pv`" means its BREADTH, not its architecture
 
-`nvkvm-pv` is the shipped Mode-1 sibling (`/workspace/nvkvm-pv`, read-only, owned by another
-agent). It already went through phase 3 and **paid for the failure modes**, and they are all
-failure modes *of breadth*, not of depth:
+⊘ **CLARIFIED BY THE OWNER, 2026-09-06, and this file said it wrong first.** The instruction
+is **not** to copy nvkvm-pv's design — it is Mode 1, a guest module forwarding the driver's
+own API, and kayfabe is deliberately a different thing. What must be matched is its
+**coverage**: **Turing and newer**, across the architecture and driver range it actually
+tests.
+
+Its published matrix, as the target to hit:
+
+| GPUs | architecture | driver versions |
+|---|---|---|
+| GTX 1660 SUPER/Ti, RTX 2080 Ti | Turing | 535, 575 |
+| RTX 3060 → 3090, 3050 Laptop | Ampere GA10x | 545 → 610 |
+| RTX 4060 → 4090, RTX 4000 Ada | Ada AD10x | 575 → 595 |
+| RTX 5070, RTX 5090 | Blackwell | 580 |
+| A100 80GB, H100 PCIe | GA100 / Hopper | 550 → 580 |
+
+Six architectures; Turing+ is the floor. **kayfabe covers one of these rows today (GA106).**
+
+## And the failure modes that breadth brings, which nvkvm-pv already paid for
+
+It already went through this phase, and its scars are all failure modes *of breadth*, not of
+depth:
 
 - ★★★★★ **A capture-derived table expires as a vendor regression.** The defect tracked
   **driver version**, with two controlled comparisons. Any table we derived from a capture of
