@@ -8,6 +8,35 @@ measurements; every number in it names the arm it came from.
 
 ---
 
+> ### ⊘⊘⊘ THE GROUND MOVED WHILE THIS LANE WAS BUILDING — read this before §0
+> ### 2026-09-06, and it changes what a guest PASS means, not what the rung does.
+>
+> This lane was briefed against master **`30eb4627`**, with `w383-doorbell-async` described as
+> **live and in flight**. It is not: master is now **`758a5752`**, *"Merge branch
+> 'w383-doorbell-async'"*, and that lane's own commits say
+> **`w383 §13: the gate armed — 95.7 percent skipped, 3.9x less publication wall, CUP3_VAL=43
+> held`** and **`w383 §14: ★★★★★ LLM_TOKENS=16 — the LLM generates`**.
+>
+> ⇒ **The 60–71 ms this rung was built to catch has already been worked on, and the branch that
+> did it has landed.** So:
+> - ⊘ **A guest PASS is no longer automatically the finding §3 pre-registers it as.** On
+>   `30eb4627` a pass would have meant *"the cost is not on the raw client's doorbell path"*. On
+>   `758a5752` it may simply mean **the fix works**. The two readings are not distinguishable
+>   from one arm, and this doc must not let one be read as the other.
+> - ★★★ **Hence the deliberate two-arm design that replaced the single guest arm**: the same
+>   rung, same binary shape, on **`30eb4627` + this rung** (`w384-prefix-baseline`, pushed) and
+>   on **`758a5752` + this rung** (`w384-doorbell-latency`, rebased onto current master). A
+>   controlled before/after is the only thing that can say whether the rung DISCRIMINATES, and
+>   it is strictly stronger evidence than the red it was commissioned to produce.
+> - ⚠ **Nothing about the rung, the gate or the controls was changed in response.** The
+>   multiple stays at 1000×, argued from the two orders of magnitude in §3 and not fitted to
+>   whatever the guest turns out to cost. Tuning a threshold after seeing the arm it grades is
+>   how a gate stops being one.
+>
+> ⚠ Same class as `a_blocker_i_declared_was_already_fixed` and `a_rulings_date_is_part_of_the_
+> citation`: **the brief's `master` SHA was three hours stale, and every consequence of that was
+> in how the RESULT reads, not in whether the work was worth doing.**
+
 ## §0 THE ONE-LINE PROBLEM
 
 `[measured, LLM boot, w383 lane]` publication runs **60–71 ms per doorbell, inline on the vCPU
