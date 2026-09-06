@@ -216,6 +216,23 @@ wearing the guest's name), so **gate = 9.24 ms**.
 `p90` is **1.2 %**; across three processes the medians span **1.09×**. That tightness is what
 makes a three-decade gate meaningful — the number this rung reports is not a lottery.
 
+### §4.1.0 ★★★ TWO GA106 BOXES DISAGREE BY 3×, WHICH IS WHY THE GATE IS A MULTIPLE
+
+The same binary's native calibration, on two rented RTX 3060 (GA106) hosts running the same
+driver, measured within an hour of each other:
+
+| box | native `arm=submit` p50 |
+|---|---|
+| `kb` (50013922, 23 cores) | **8.75 – 9.31 µs** |
+| `kb2` (50080571, 19 cores) | **2.62 – 3.66 µs** |
+
+⇒ **A factor of three, between two boxes of the same GPU and the same driver.** An absolute
+millisecond threshold picked on either one would have been 3× wrong on the other — silently, and
+in whichever direction nobody checked. ⊘ This is the §3 argument stopping being an argument: the
+floor is a property of the **host**, not of the design, so the only portable statement is a
+ratio. ★ It is also why the harness measures the floor **minutes before** the guest arm rather
+than reading a constant.
+
 ### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225×, AND THAT IS THE MOST USEFUL NUMBER HERE
 
 | arm | native p50 | what it contains |
