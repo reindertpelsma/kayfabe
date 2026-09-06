@@ -83,3 +83,45 @@ corrected inside this lane.
 
 The guest's own bulk `cudaMemcpy` in either direction is issued as methods in **its own
 pushbuffer**, which we forward to the host engine. That path is already CE and needs no change.
+
+---
+
+## 3. ★★★★★ MEASURED 2026-09-06 — ON THE FB-LEAF PATH THE MISMATCH IS 100%, BY CONSTRUCTION
+
+⊘ **And the aperture separation the policy asks for is ALREADY ENFORCED there.** This was
+checked rather than assumed, because the question *"are we putting sysmem-declared allocations
+in GPGA?"* deserved a measurement and the answer is **no**.
+
+`kayfabe-rt/src/device.rs:3692` — the FB-leaf **candidate filter**, quoted:
+
+```rust
+} else if b.aperture() != kayfabe_arch::Aperture::Vidmem {
+    c.not_vidmem += 1;
+}
+```
+
+⇒ A range the guest declared **sysmem never becomes an FB leaf at all**. It is excluded and
+counted into `not_vidmem`, which is the existing instrument proving the filter runs. Guest-RAM
+ranges are split off one branch earlier (`b.is_guest_ram()`, `:3690`).
+
+★★★ **THE CONSEQUENCE, which is stronger than a mismatch count.** Every candidate that reaches
+the join is **`Vidmem`-declared by construction**, and every one is then backed by a sysmem
+`memfd` — `FbLeafBacking::Joined` is passed as a **literal** at both production call sites
+(`kayfabe-rt/src/device.rs:4490`, `kayfabe-qemu-raw/src/shim.rs:10902`).
+
+⇒ On this path the declaration-vs-backing disagreement is **not a number to measure. It is
+every leaf, always.** `backing_for` (`kayfabe-fwd`) reduces to the constant
+`FbLeafBacking::Vidmem` here, and the remedy is a **substitution**, not a decision.
+
+⚠ **What this does NOT say**, kept explicit so the scope is not widened by a later reader:
+- It is a statement about the **FB-leaf path only**. Other allocation paths were not measured.
+- It does not mean the leaves are *wrongly chosen* — the filter is right. It means the leaves
+  are **rightly chosen and wrongly backed**.
+- `FbLeaf` (`kayfabe-rt/src/completion_watch.rs:408`) carries `va`, `len`, `phys` and **no
+  aperture**, so the aperture is decoded at the filter and dropped before the join. That does
+  **not** need plumbing for this path — the filter already guarantees the answer — but it will
+  need plumbing for any path where both apertures can reach one join site.
+
+⇒ **This is the measurement that makes the vidmem lane a substitution rather than a design
+question**, and it is why the remaining work is `alloc_device_local` + `map_cpu` + the
+`ce_copy` conversion of §2.2, with no new decision required.
