@@ -605,3 +605,33 @@ off by an unreachable `match` arm for a month** — and that its own census prin
 ⚠ The two are not independent, and that is the part worth banking: **the thread hunt is what
 walked past the census.** A rung that had gone straight for the doorbell's latency would have
 moved 509 s of work to a worker and left 503 s of it unnecessary.
+
+## §15 THE TEST SET — identical to master, and the gate that caught this rung
+
+`cargo test --workspace --no-fail-fast`, same box, same toolchain, same target profile:
+
+| | binaries | failing targets | failing names |
+|---|---|---|---|
+| `master` @ `667b84a3` | **256** | 3 | **6** |
+| `w383-doorbell-async` | **256** | 3 | **6** — the *same six* |
+
+⊘ The binary count is asserted because `cargo test --workspace` **stops at the first failing
+target** without `--no-fail-fast`, and a shrinking failure list is truncation and repair
+wearing the same face.
+
+★★★ **The first run of the branch was 7 names across 4 targets**, and the extra one is worth
+recording rather than just fixing: `every_unranked_lock_a_vcpu_thread_can_hold_is_classified`
+went red on `Mutex<Option<DoorbellPublishThread>>` — **the worker's own lifetime slot, caught
+by the w300 census on the day it was added, for the third time** (after `pubqueue`'s at w323
+and `reclaimtick`'s at w326). It is now classified with the property that makes it safe stated
+as a falsifier: *"`stop_doorbell_publish_worker` takes the value out and DROPS THE GUARD
+BEFORE `queue.stop()` and before `join()` — if a future edit moves the `join()` inside the
+guard, THIS ROW IS THE THING THAT WAS WRONG."*
+
+⊘ The six that remain red are master's, and two of them —
+`a_guest_doorbell_reaches_the_host_completion_observer` and
+`a_second_doorbell_over_an_unchanged_ring_forwards_nothing` — are the pair
+`publication_off_the_bql.md` §10 names as **part of the wall this design would change**: they
+assert that a host verb is recorded *synchronously after `dev.doorbell(..)` returns*. They are
+red for their own reasons today; when the lane is defaulted on they must be given
+`PublicationQueue::completed()` as a barrier rather than relaxed.
