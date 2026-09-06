@@ -8530,22 +8530,28 @@ fn concurrent_fuzz(
             .iter()
             .map(|o| ph.ops[o.code() as usize])
             .sum();
-        let v = if ph.finished != ph.workers {
-            "FAIL"
+        // ⊘ EVERY BRANCH CARRIES ITS OWN REASON, and that is not cosmetic: three arms of
+        // this chain all answer `NOTRUN`, and *"the arm was unmeasured"* is useless without
+        // *"because its pin masks were refused"* / *"because it sampled no overlap"* /
+        // *"because it never ran the engine"*. Those are three different repairs. ★ It also
+        // happens to be what makes the blocks distinguishable to `clippy::if_same_then_else`,
+        // which flagged the collapsed version — the lint was right for the wrong reason.
+        let (v, why) = if ph.finished != ph.workers {
+            ("FAIL", "WORKER_DID_NOT_FINISH")
         } else if acfg.pin != W385Pin::Unpinned && ph.pinned != ph.workers {
-            "NOTRUN"
+            ("NOTRUN", "PIN_REFUSED")
         } else if ph.overlap_pairs == 0 {
-            "NOTRUN"
+            ("NOTRUN", "NO_CONCURRENCY_OBSERVED")
         } else if engine == 0 {
-            "NOTRUN"
+            ("NOTRUN", "NO_ENGINE_WORK_SAMPLED")
         } else if ph.violations.is_empty() {
-            "PASS"
+            ("PASS", "CLEAN")
         } else {
-            "FAIL"
+            ("FAIL", "INVARIANT_VIOLATED")
         };
         let ops: u64 = ph.ops.iter().sum();
         println!(
-            "FUZZ_ARM={name} verdict={v} threads={} pin={} cores={} ops={ops} \
+            "FUZZ_ARM={name} verdict={v} why={why} threads={} pin={} cores={} ops={ops} \
              engine_ops={engine} alias_ops={} overlap={} viol={} refused={} pinned={}/{} \
              finished={}/{}",
             acfg.threads,
@@ -8562,9 +8568,9 @@ fn concurrent_fuzz(
         );
         if v == "NOTRUN" {
             println!(
-                "⊘     W385 {name:<10} = UNMEASURED, and WHICH kind matters: \
-                 finished={}/{}  pinned={}/{}  overlap={}  engine_ops={engine}. The first \
-                 of those that is short IS the reason",
+                "⊘     W385 {name:<10} = UNMEASURED because {why}. finished={}/{}  \
+                 pinned={}/{}  overlap={}  engine_ops={engine} — ⊘ NOT a pass and NOT a \
+                 failure; the third value exists for exactly this",
                 ph.finished, ph.workers, ph.pinned, ph.workers, ph.overlap_pairs
             );
         }

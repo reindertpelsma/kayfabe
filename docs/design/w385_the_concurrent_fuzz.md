@@ -337,6 +337,34 @@ count, and the number is the first thing anybody looks at. The re-run with `trac
 is the one that means anything, and *which tree it ran on* is part of the citation exactly as
 `a_rulings_date_is_part_of_the_citation.md` says the date is.
 
+### §4.3c ★★★★★ THE LANE TRIPPED THE META-GATE, AND THAT IS THE MOST VALUABLE RED IT CAUGHT
+
+`crates/kayfabe-vmm-qemu/tests/gate_scope.rs` went **red on this branch and green on
+`758a5752`**, with a message that says exactly what happened:
+
+> *"★ kayfabe-linux-raw declares **93** relaxation(s) in ci.yml and the tree has **99**. A
+> hand-maintained constant that stops matching the tree is a ratchet that has quietly become
+> a comment"*
+
+The six are the whole of `affinity_unsafe.rs`. ⊘ **This is the gate MEMORY.md names as the one
+whose redness voids every other gate's coverage claim**, and the only reason it was seen is
+that the suite was run at all — the diff itself compiles, formats and passes clippy without a
+word about it.
+
+★ **The number was bumped the way the gate demands, not the way that silences it.** `ci.yml`'s
+own comment on the previous bump says *"bumping the number is the failure this gate exists to
+catch"*, so all six new relaxations are read and recorded inline at the `AUDITED=` line: same
+shape every time — an owned `cpu_set_t` on the function's own stack, unaliased, outliving the
+call, with the syscall told the object's exact `size_of` and writing through no other pointer.
+
+⚠ And the surrounding measurement needed a control of its own. My branch's failing set was
+**7** targets and the brief's stated baseline was **3**, which reads as *"this branch broke
+four things"*. Running the same targets on **pristine `758a5752`** showed **6 of the 7 already
+red there** — the brief's `3` predates the `w383-doorbell-async` merge — leaving exactly one,
+`gate_scope`, that was genuinely mine. ⇒ **A failure-set delta is only a delta against a
+baseline measured on the same tree at the same commit**, and the number in a brief is a
+citation with a date.
+
 ### §4.4 ⊘ WHAT THE GREENS DO **NOT** SAY
 
 - Nothing about `l1_concurrency.md` §3.3 R1 as a **live** check — see §1. Both asserts are on
