@@ -113,8 +113,16 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.map_dma_both(",
-        8,
-        "★★★ **7 → 8 at `2533adf6` (w282b), ADMITTED HERE 2026-08-14 (w296) — and the row \
+        9,
+        "★★★★★ **8 → 9 at w380 (2026-09-06), ADMITTED HERE IN THE SAME COMMIT.** The ninth \
+         is `alias_fb_leaf`'s `OS_DESCRIPTOR` — the SECOND and every later GPU VA of one \
+         already-joined framebuffer frame. It must land in both spaces for the eighth's \
+         reason verbatim, and the reason is not weaker for an alias: the isolate's own copy \
+         engine resolves the frame's pages at whichever VA the guest chose, and a mapping \
+         that reached only the guest-facing space would fault on a later copy nowhere near \
+         the omission. ⊘ `join_fb_leaf` mints the pages; `alias_fb_leaf` describes the SAME \
+         `memfd` again and places it at another VA — one memory, N descriptors, N publishes. \
+         ★★★ **7 → 8 at `2533adf6` (w282b), ADMITTED HERE 2026-08-14 (w296) — and the row \
          had been RED for every rung in between.** The eighth is `join_fb_leaf`'s \
          `OS_DESCRIPTOR` (`src/rm.rs:5057`), which w282b moved off `raw_map_dma` because \
          `[measured 2026-08-13, boot `w282_client`]` leg 7 joined both CE \

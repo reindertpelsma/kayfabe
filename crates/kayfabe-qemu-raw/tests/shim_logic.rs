@@ -2799,12 +2799,24 @@ fn the_w330_flips_keep_their_defaults_and_their_old_arms_reachable_by_name() {
     use kayfabe_qemu_raw::shim::{JoinReleaseArm, join_release_from};
     assert_eq!(
         join_release_from(None),
-        Ok(JoinReleaseArm::Supersede),
-        "absent is SUPERSEDE since w330 — the arm 28,31 passes on"
+        Ok(JoinReleaseArm::Alias),
+        "★★★★★ absent is ALIAS since w380. ⊘⊘ It was `Supersede` from w330, and w377 §9 \
+         measured why that has to move: a supersede TARGET later becomes a SOURCE, \
+         repeatedly — the guest holds EVERY alias live, so the takeover had no stale half to \
+         take. `[w376llmd]` 127 takeovers over 17 frames, then 28 108 `SUPERSEDE CAPPED`, \
+         and the `Xid 31 FAULT_PDE` at a VA we had unpublished ourselves"
+    );
+    assert_eq!(
+        join_release_from(Some("alias")),
+        Ok(JoinReleaseArm::Alias),
+        "and it is reachable by its own name, not only as the default"
     );
     assert_eq!(
         join_release_from(Some("supersede")),
-        Ok(JoinReleaseArm::Supersede)
+        Ok(JoinReleaseArm::Supersede),
+        "⊘ `supersede` is the PREVIOUS default and must stay reachable BY NAME: it is now \
+         w380's NEGATIVE CONTROL, and one binary running both arms is the only way a green \
+         boot on the new default is shown to have fixed something"
     );
     assert_eq!(
         join_release_from(Some("on")),

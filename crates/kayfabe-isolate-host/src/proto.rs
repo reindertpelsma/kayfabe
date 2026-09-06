@@ -912,7 +912,14 @@ impl Envelope {
                 at,
                 phys,
             } => {
-                out.push(22);
+                // ⊘ **23, and 22 was TAKEN.** `Request::SubdeviceControl` already pushes 22
+                // (`w346`), and the tag list is not ordered, so the collision is invisible by
+                // reading: an alias encoded as 22 decodes as a subdevice control, consumes a
+                // different number of bytes and answers `TrailingBytes`. It cost one test
+                // cycle and `RmError::Wedged` on a verb whose body was perfectly correct.
+                // ★ `every_request_round_trips_with_its_txn` is what caught it, which is why
+                // the sample list is a hand-written set with a coverage gate over it.
+                out.push(23);
                 out.extend_from_slice(&vas.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
                 out.extend_from_slice(&at.to_le_bytes());
@@ -1092,7 +1099,7 @@ impl Envelope {
                 phys: c.u64("join phys")?,
                 prot: c.u8("join prot")?,
             },
-            22 => Request::AliasFbLeaf {
+            23 => Request::AliasFbLeaf {
                 vas: c.u64("alias vas")?,
                 len: c.u64("alias len")?,
                 at: c.u64("alias at")?,

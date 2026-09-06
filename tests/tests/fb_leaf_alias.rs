@@ -181,6 +181,28 @@ fn alias(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) {
         .expect("the adopt binds the alias");
 }
 
+/// Unbind the row at `va` and give its host half back — what `apply_settlement_as`'s
+/// `RevokeWholeJoins` plus the shell's `release_revoked_joins` do, minus the `RegPlane` this
+/// suite does not have.
+///
+/// ⊘ The host object goes **whichever way the store's join goes**, and that asymmetry is the
+/// driver's own: `w379` measured *"unmapping VA_A left VA_B live"* on real hardware. What the
+/// last-VA rule governs is the STORE's join, not this.
+fn revoke(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) {
+    let h = backing_at(device, pid, va).expect("the row is backed");
+    device
+        .with_proc_mut(pid, |p| {
+            p.vases
+                .get_mut(&(GPU, PDB))
+                .expect("the compute VAS")
+                .table
+                .unbind(va);
+        })
+        .expect("the proc is live");
+    device.revoke_published_fb_leaf(GPU, PDB, h.host_va(), h.memory());
+    device.drain_pending_releases();
+}
+
 /// How many times each verb kind touched [`FRAME`] — `(joins, aliases)`.
 fn frame_verbs(rec: &SharedRecorder) -> (usize, usize) {
     let log = rec.lock().expect("recorder");
@@ -332,16 +354,11 @@ fn the_frame_is_still_named_after_the_first_of_two_aliases_goes() {
         "two live rows name the frame"
     );
 
-    // The guest unmaps VA_A. The settlement unbinds the row; the shell then asks who is left.
-    device
-        .with_proc_mut(pid, |p| {
-            p.vases
-                .get_mut(&(GPU, PDB))
-                .expect("the compute VAS")
-                .table
-                .unbind(VA_A);
-        })
-        .expect("the proc is live");
+    // The guest unmaps VA_A. The settlement unbinds the row and hands the host half back; the
+    // shell then asks who is left. ⊘ The release is performed, not skipped: this suite's
+    // teardown audit refuses a host object nothing can name, and *that* is the discipline the
+    // production path owes too — `revoke_published_fb_leaf` is exactly what the shell calls.
+    revoke(&device, pid, VA_A);
 
     assert_eq!(
         device.fb_join_namers(FRAME),
@@ -350,15 +367,7 @@ fn the_frame_is_still_named_after_the_first_of_two_aliases_goes() {
          two-memories bug wearing a correct-looking reclaim"
     );
 
-    device
-        .with_proc_mut(pid, |p| {
-            p.vases
-                .get_mut(&(GPU, PDB))
-                .expect("the compute VAS")
-                .table
-                .unbind(VA_B);
-        })
-        .expect("the proc is live");
+    revoke(&device, pid, VA_B);
 
     assert_eq!(
         device.fb_join_namers(FRAME),

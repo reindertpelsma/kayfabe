@@ -4768,7 +4768,16 @@ impl SharedDevice {
             // core function. Carried only because the plan type has it.
             host_vas: None,
             existing: None,
-            how: kayfabe_fwd::FbLeafBacking::Joined,
+            // ★★★ w380 — carried from the ANSWER, not hard-coded. Both arms derive the same
+            // `BackingBytes::JoinsGuestWindow` today, so this is not load-bearing yet; it is
+            // written this way because a hard-coded `Joined` here is a second source of truth
+            // for which chain ran, and the first time the two arms differ it would be silently
+            // wrong. `a_second_source_of_truth_beside_a_complete_value`.
+            how: if backed.alias {
+                kayfabe_fwd::FbLeafBacking::Aliased
+            } else {
+                kayfabe_fwd::FbLeafBacking::Joined
+            },
         };
         let adopted = self.route_act(
             |_| Ok((pid, ())),
