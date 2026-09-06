@@ -1943,6 +1943,26 @@ pub mod fifo {
     /// `NVC56F_SEM_EXECUTE_OPERATION_RELEASE` = 1
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:217`).
     pub const SEM_EXECUTE_OPERATION_RELEASE: u32 = 1;
+    /// `NVC56F_SEM_EXECUTE_OPERATION_ACQUIRE` = 0 — field `2:0`
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:216`).
+    ///
+    /// ★ The **equality** acquire: the engine stalls the channel until the semaphore word
+    /// holds exactly `SEM_PAYLOAD_LO`. Six of the eight operations are acquires and the
+    /// other five are inequalities (`ACQ_STRICT_GEQ` `:218`, `ACQ_CIRC_GEQ` `:219`,
+    /// `ACQ_AND` `:220`, `ACQ_NOR` `:221`); a probe that wants *"blocked until the CPU says
+    /// so"* wants this one, because a `GEQ` acquire passes on any leftover value greater
+    /// than the fence and would never block at all.
+    pub const SEM_EXECUTE_OPERATION_ACQUIRE: u32 = 0;
+    /// The whole `SEM_EXECUTE` method word for a 32-bit equality **acquire**.
+    ///
+    /// ⊘ **It is zero, and that is a hazard worth naming rather than inlining.** Every
+    /// field this method needs is `_DIS`/`_32BIT`/`ACQUIRE`, all of which encode as 0
+    /// (`OPERATION` `2:0` = 0 `:216`, `ACQUIRE_SWITCH_TSG` `12:12` = `_DIS` `:223`,
+    /// `PAYLOAD_SIZE` `24:24` = `_32BIT` `:230`), so a reader who sees a literal `0` in a
+    /// pushbuffer cannot tell a deliberate acquire from an unwritten word — which is
+    /// exactly the confusion a *stalled* channel and a *never-submitted* one produce
+    /// together. Spelled out so the intent survives in the source.
+    pub const SEM_EXECUTE_ACQUIRE_32BIT: u32 = 0;
     /// `NVC56F_SEM_EXECUTE_PAYLOAD_SIZE` is `24:24`, `_64BIT` = 1
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:229-231`). With `_32BIT`
     /// (0) the engine writes four bytes and `SEM_PAYLOAD_HI` is **not** part of the
@@ -3852,6 +3872,54 @@ mod tests {
         // (`C: src/qemu/nvkvm_gpu_emul.c:8598`.)
         let h = method_header_inc(0, fifo::SEM_ADDR_LO, 5).expect("encodable");
         assert_eq!(h, (1 << 29) | (5 << 16) | (0x5C >> 2));
+    }
+
+    /// ★★★ An **acquire** and a **release** must not encode alike, because the whole
+    /// late-map race rung turns on one method stalling the channel and the next one
+    /// writing. `ACQUIRE` is `0` and `RELEASE` is `1` (`clc56f.h:216-217`), and both live
+    /// in `OPERATION` `2:0` — so the mask has to select them and they have to differ.
+    ///
+    /// ⊘ The `!= 0` assertion on `RELEASE` is the one that earns its keep: `ACQUIRE`
+    /// encoding as an all-zero word means a pushbuffer slot nobody wrote decodes as a
+    /// valid acquire, and the failure that produces — a channel stalled forever on a
+    /// semaphore no one will ever release — is indistinguishable from a submission that
+    /// never happened unless the two values are known to be distinct.
+    #[test]
+    fn a_semaphore_acquire_and_release_do_not_encode_alike() {
+        assert_eq!(fifo::SEM_EXECUTE_OPERATION_ACQUIRE, 0);
+        assert_eq!(fifo::SEM_EXECUTE_OPERATION_RELEASE, 1);
+        assert_ne!(
+            fifo::SEM_EXECUTE_OPERATION_ACQUIRE,
+            fifo::SEM_EXECUTE_OPERATION_RELEASE,
+            "an acquire decoded as a release reports a completion that never happened"
+        );
+        // Both operations are inside the field the reader masks with.
+        for op in [
+            fifo::SEM_EXECUTE_OPERATION_ACQUIRE,
+            fifo::SEM_EXECUTE_OPERATION_RELEASE,
+        ] {
+            assert_eq!(op & fifo::SEM_EXECUTE_OPERATION_MASK, op);
+        }
+        // The whole-word forms: every other field is its zero default, so the acquire word
+        // IS its operation and the release word IS its operation.
+        assert_eq!(
+            fifo::SEM_EXECUTE_ACQUIRE_32BIT,
+            fifo::SEM_EXECUTE_OPERATION_ACQUIRE
+        );
+        assert_eq!(
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+            fifo::SEM_EXECUTE_OPERATION_RELEASE
+        );
+        // ⊘ Neither carries a 64-bit payload; a 64-bit acquire would compare eight bytes
+        // against a four-byte fence word and never match.
+        assert_eq!(
+            fifo::SEM_EXECUTE_ACQUIRE_32BIT & fifo::SEM_EXECUTE_PAYLOAD_SIZE_64BIT,
+            0
+        );
+        assert_eq!(
+            fifo::SEM_EXECUTE_RELEASE_32BIT & fifo::SEM_EXECUTE_PAYLOAD_SIZE_64BIT,
+            0
+        );
     }
 
     /// ★ The copy engine's four address methods are consecutive too, so the copy's

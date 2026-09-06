@@ -23,6 +23,7 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_isolate::{IsolateId, RmBackend, RmError};
 use kayfabe_isolate_host::rm::{
     DeviceExportOutcome, FbViewJoin, HostRmBackend, OsDescSeed, RmConnection, ViewCompare,
+    RACE_FENCE_OFFSET,
 };
 use kayfabe_linux_raw::DevDir;
 use std::sync::Arc;
@@ -2177,6 +2178,324 @@ impl TapFree for bool {
     }
 }
 
+/// The sentinel the race target holds before any engine runs. Neither `0` nor `1`: a zero
+/// would be indistinguishable from freshly-allocated memory, and the point of the sentinel
+/// is that "not MAGIC" must mean "nothing wrote here", not "we cannot tell".
+const RACE_SENTINEL: u32 = 0xDEAD_0000;
+/// The payload the `SEM_RELEASE` writes. Un-forgeable by anything else in this process.
+const RACE_MAGIC: u32 = 0x1DEA_0031;
+/// The value the CPU stores to let the acquire through. Not `1`, for `RACE_SENTINEL`'s
+/// reason — a fence that passes on a value some other writer could plausibly leave is not
+/// a fence.
+const RACE_FENCE_VAL: u32 = 0xFACE_0377;
+/// Bytes of the race target object.
+const RACE_TARGET_BYTES: u64 = 0x1000;
+
+/// What one arm of the late-map race actually did.
+///
+/// ⊘ Five outcomes and not a `bool`, because three of them are *"the experiment did not
+/// run"* rather than *"the experiment ran and failed"* — and collapsing those into `false`
+/// is exactly how a rung reports a finding it never measured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RaceOutcome {
+    /// ★ `MAGIC` landed: the release executed and reached the target.
+    Landed { gp_get: u32, gp_put: u32 },
+    /// ⊘ The target already held `MAGIC` before the fence was written — the acquire did
+    /// **not** block, so the window this rung exists to open was never open.
+    NeverBlocked,
+    /// ⊘ The entry was never fetched (`gp_get == 0`, `gp_put != 0`). USERD, the token or
+    /// the schedule — not a mapping question at all.
+    NeverFetched { gp_get: u32, gp_put: u32 },
+    /// The fence was written and `MAGIC` never arrived. **This is the interesting red**,
+    /// and it is still two hypotheses until the host Xid log is read.
+    Stalled {
+        gp_get: u32,
+        gp_put: u32,
+        fence: u32,
+        target: u32,
+    },
+}
+
+impl RaceOutcome {
+    /// Only [`RaceOutcome::Landed`] is a pass. Named so no caller has to remember which of
+    /// the four non-passes are "did not run".
+    fn landed(self) -> bool {
+        matches!(self, RaceOutcome::Landed { .. })
+    }
+}
+
+/// Run one arm of the late-map race and say what hardware did.
+///
+/// `map_before_doorbell` is the ONLY difference between the positive control (arm A) and
+/// the experiment (arm B). Everything else — the channel, the pushbuffer, the sentinel,
+/// the fence, the timeouts — is byte-identical, so a difference in outcome is attributable
+/// to the mapping's *timing* and to nothing else.
+fn late_map_arm(
+    rm: &mut HostRmBackend,
+    arm: &str,
+    ring_at: u64,
+    target_at: u64,
+    map_before_doorbell: bool,
+) -> Result<RaceOutcome, RmError> {
+    let vas = rm.alloc_vaspace()?;
+    let mut cleanup_va: Option<u64> = None;
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+
+    let mut go = || -> Result<RaceOutcome, RmError> {
+        let engine_type = kayfabe_abi::submit::engine_type_copy(0)
+            .ok_or_else(|| RmError::Other("COPY0 is not expressible"))?;
+        let (chan, token) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(ring_at)))?;
+        chan_h = Some(chan);
+        // Fact 1, from the connection's record of RM's [OUT] `dmaOffset`, not from the
+        // call's return value.
+        let got = rm.channel_ring_va(chan);
+        if got != Some(ring_at) {
+            return Err(RmError::PlacementRefused {
+                want: ring_at,
+                got: got.unwrap_or(0),
+            });
+        }
+        rm.schedule(chan)?;
+
+        // The target object, sentinel-filled through a CPU mapping that is dropped before
+        // anything is submitted.
+        let mem = rm.alloc_probe_local(RACE_TARGET_BYTES)?;
+        mem_h = Some(mem);
+        rm.fill_words(mem, RACE_TARGET_BYTES, RACE_SENTINEL, 0)?;
+
+        if map_before_doorbell {
+            let va = rm.map_local_at(vas, mem, RACE_TARGET_BYTES, Some(target_at))?;
+            cleanup_va = Some(va);
+            if va != target_at {
+                return Err(RmError::PlacementRefused {
+                    want: target_at,
+                    got: va,
+                });
+            }
+            println!("info  {arm} map            = BEFORE the doorbell, at {target_at:#018x}");
+        } else {
+            println!("info  {arm} map            = deferred until AFTER the doorbell");
+        }
+
+        // The fence starts closed. ⚠ From here until the fence is written the channel is
+        // stalled inside the acquire; every exit below must still reach the cleanup that
+        // frees it.
+        rm.ring_store_u32(chan, RACE_FENCE_OFFSET, 0)?;
+        rm.submit_fenced_release(
+            chan,
+            token,
+            RACE_FENCE_OFFSET,
+            RACE_FENCE_VAL,
+            target_at,
+            RACE_MAGIC,
+        )?;
+
+        // ★★★ THE CONTROL THAT MAKES ARM B MEAN ANYTHING. Give the engine time to fetch
+        // and reach the acquire, then prove it is PARKED there: the target must still hold
+        // the sentinel, and the entry must have been fetched.
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let parked = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        let (gp_get, gp_put) = rm.userd_cursors(chan)?;
+        if parked == RACE_MAGIC {
+            return Ok(RaceOutcome::NeverBlocked);
+        }
+        if gp_get == 0 && gp_put != 0 {
+            return Ok(RaceOutcome::NeverFetched { gp_get, gp_put });
+        }
+        println!(
+            "ok    {arm} parked         = target still {parked:#010x} (sentinel), \
+             GP_GET {gp_get} GP_PUT {gp_put} — the channel is STALLED IN THE ACQUIRE, \
+             which is what makes the window below real"
+        );
+
+        // 5 — the mapping, made while the channel is already running and after its only
+        // doorbell has been rung.
+        if !map_before_doorbell {
+            let va = rm.map_local_at(vas, mem, RACE_TARGET_BYTES, Some(target_at))?;
+            cleanup_va = Some(va);
+            if va != target_at {
+                return Err(RmError::PlacementRefused {
+                    want: target_at,
+                    got: va,
+                });
+            }
+            println!(
+                "ok    {arm} late map       = mapped at {target_at:#018x} AFTER the \
+                 doorbell, with the channel running. NO further doorbell is sent"
+            );
+        }
+
+        // 6 — open the fence with a plain CPU store. This is the ONLY thing that happens
+        // between the mapping and the engine's first touch of `target_at`.
+        rm.ring_store_u32(chan, RACE_FENCE_OFFSET, RACE_FENCE_VAL)?;
+
+        // 7 — poll.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        let mut target = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        while target != RACE_MAGIC && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            target = rm.read_words_independently(mem, RACE_TARGET_BYTES, &[0])?[0];
+        }
+        let (gp_get, gp_put) = rm.userd_cursors(chan)?;
+        if target == RACE_MAGIC {
+            Ok(RaceOutcome::Landed { gp_get, gp_put })
+        } else {
+            let fence = rm.ring_load_u32(chan, RACE_FENCE_OFFSET)?;
+            Ok(RaceOutcome::Stalled {
+                gp_get,
+                gp_put,
+                fence,
+                target,
+            })
+        }
+    };
+
+    let out = go();
+
+    // ⚠ Cleanup on EVERY path, error paths included: an acquire whose fence was never
+    // written leaves the channel stalled, and freeing it is what reclaims the engine.
+    if let Some(va) = cleanup_va {
+        let _ = rm.unmap_local(vas, va);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+    out
+}
+
+/// ★★★★★ **W377 — DOES A MAPPING MADE *AFTER* THE DOORBELL REACH AN ALREADY-RUNNING
+/// CHANNEL?**
+///
+/// The owner's scenario, made executable. A guest userspace client can queue work behind a
+/// fence, ring once, then map memory and open the fence with a plain store — at which point
+/// the engine touches an address that was **not mapped when the doorbell was rung**, and no
+/// second doorbell is ever sent. If a hypervisor's publication is triggered by the doorbell,
+/// it has already run and it ran too early.
+///
+/// This rung reproduces exactly that, from a raw client with no libcuda anywhere:
+///
+/// ```text
+/// pushbuffer = [ SEM_ACQUIRE(fence, FENCE_VAL) ][ SEM_RELEASE(target, MAGIC) ]
+/// ```
+///
+/// - **ARM A** maps the target BEFORE the doorbell. It is the positive control, it must
+///   pass, and if it does not then arm B is measuring the harness rather than the driver.
+/// - **ARM B** maps it AFTER. That is the question.
+///
+/// ⊘ **On bare metal arm B is expected to PASS**, and a pass is the useful answer: it is
+/// what says the real driver makes a late mapping live to a running channel with no
+/// submission-side signal, which is the property a doorbell-triggered publisher cannot
+/// have. A *failure* here would mean real CUDA cannot do this either — a much bigger claim,
+/// and one to distrust before believing.
+fn late_map_race(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // ★ Ring and target are ≥ 512 MiB apart, and the two arms use different regions again.
+    // A target adjacent to its own ring could be covered by a large PTE the ring's mapping
+    // already installed — which would make arm B pass for a reason that has nothing to do
+    // with the late map. Regions: A-ring 0x4_4…, A-target 0x5_4…, B-ring 0x4_6…,
+    // B-target 0x5_6…, all 64 KiB-aligned.
+    const A_RING_AT: u64 = 0x0000_0004_4100_0000;
+    const A_TARGET_AT: u64 = 0x0000_0005_4100_0000;
+    const B_RING_AT: u64 = 0x0000_0004_6100_0000;
+    const B_TARGET_AT: u64 = 0x0000_0005_6100_0000;
+
+    println!(
+        "info  W377 late-map race  = GPU {gpu}, euid {} — queue work behind a fence, ring \
+         ONCE, then map the memory it will touch",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B \
+         is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value"
+    );
+
+    let a = late_map_arm(rm, "W377-A", A_RING_AT, A_TARGET_AT, true);
+    match &a {
+        Ok(o) => println!("info  W377-A outcome      = {o:?}"),
+        Err(e) => println!("FAIL  W377-A refused      = {e:?}"),
+    }
+    let a_ok = matches!(&a, Ok(o) if o.landed());
+    if a_ok {
+        println!(
+            "ok    W377-A control      = MAGIC landed with the target mapped BEFORE the \
+             doorbell — the channel, the fence and the release all work"
+        );
+    } else {
+        println!(
+            "??    W377-A CONTROL FAILED = the positive control did not land. ⊘ ARM B IS \
+             UNINTERPRETABLE: a red there would be this harness, not the driver. Read the \
+             outcome above — `NeverBlocked` means the acquire did not stall, \
+             `NeverFetched` means USERD/token/schedule, `Stalled` means the release never \
+             ran"
+        );
+    }
+
+    let b = late_map_arm(rm, "W377-B", B_RING_AT, B_TARGET_AT, false);
+    match &b {
+        Ok(o) => println!("info  W377-B outcome      = {o:?}"),
+        Err(e) => println!("FAIL  W377-B refused      = {e:?}"),
+    }
+
+    if !a_ok {
+        println!("??    W377 VERDICT        = UNINTERPRETABLE (positive control A failed)");
+        return false;
+    }
+
+    match b {
+        Ok(RaceOutcome::Landed { gp_get, gp_put }) => {
+            println!(
+                "★     W377 LATE MAP LANDED = a mapping created AFTER the doorbell, with \
+                 the channel already running and NO second doorbell, was walked by the \
+                 engine (GP_GET {gp_get} GP_PUT {gp_put}, target {RACE_MAGIC:#010x}). ⇒ \
+                 The driver publishes it, and a doorbell-triggered publisher CANNOT see it"
+            );
+            true
+        }
+        Ok(RaceOutcome::NeverBlocked) => {
+            println!(
+                "??    W377 RACE NOT RUN   = the target held MAGIC before the fence was \
+                 written, so the acquire never stalled and the window was never open. ⊘ \
+                 NOT a pass and NOT a finding — the SEM_ACQUIRE encoding is the first \
+                 suspect (`SEM_EXECUTE_ACQUIRE_32BIT` is an all-zero word, so an unwritten \
+                 pushbuffer slot decodes as one)"
+            );
+            false
+        }
+        Ok(RaceOutcome::NeverFetched { gp_get, gp_put }) => {
+            println!(
+                "??    W377 NEVER FETCHED  = GP_GET {gp_get} GP_PUT {gp_put} — the entry \
+                 was never read. ⊘ Not a mapping result: USERD, the token or the schedule"
+            );
+            false
+        }
+        Ok(RaceOutcome::Stalled {
+            gp_get,
+            gp_put,
+            fence,
+            target,
+        }) => {
+            println!(
+                "FAIL  W377 LATE MAP LOST  = fence {fence:#010x} (want \
+                 {RACE_FENCE_VAL:#010x}), target {target:#010x} (want {RACE_MAGIC:#010x}), \
+                 GP_GET {gp_get} GP_PUT {gp_put}"
+            );
+            println!(
+                "⚠     W377 TWO HYPOTHESES = a timeout is NOT a fault. If `fence` does not \
+                 hold the wanted value our own store failed and the acquire was never \
+                 satisfied. If it DOES, the release ran and could not reach the target — \
+                 and ONLY the host Xid log distinguishes them: look for `Xid 31 … \
+                 FAULT_PDE … ACCESS_TYPE_VIRT_WRITE` at {B_TARGET_AT:#018x}"
+            );
+            false
+        }
+        Err(_) => false,
+    }
+}
+
 /// ★★★★★ R30 — **is the isolate's own completion semaphore NAMEABLE from the address
 /// space a guest channel is bound to?**
 ///
@@ -4049,6 +4368,7 @@ fn main() -> std::process::ExitCode {
     let mut want_fb_join: Option<OsDescSeed> = None;
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
+    let mut want_late_map_race = false;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -4099,6 +4419,10 @@ fn main() -> std::process::ExitCode {
             "--dictated-ring" => want_dictated_ring = true,
             // ⊘ The negative control. Same address, occupied first, inverted verdict.
             "--dictated-ring-negative" => want_dictated_neg = true,
+            // ★★★★★ W377. Runs BOTH arms (control + race) in one invocation, because the
+            // race arm is uninterpretable without the control and separating them into two
+            // flags would let someone run only the half that produces a headline.
+            "--late-map-race" => want_late_map_race = true,
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
             "--executor-vas" => want_executor_vas = true,
@@ -4388,6 +4712,24 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_negative(&mut rm, gpu);
         println!("done — dictated-ring negative control only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ W377 runs here and RETURNS, for R26's reason exactly: each arm allocates its
+    // own `Vas`, its own channel and its own target at addresses no other rung uses, so an
+    // outcome is attributable to THIS rung's placements and to nothing earlier in the
+    // ladder.
+    if want_late_map_race {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = late_map_race(&mut rm, gpu);
+        println!("done — late-map race only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
