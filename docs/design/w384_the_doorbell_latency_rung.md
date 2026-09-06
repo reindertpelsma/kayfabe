@@ -158,4 +158,55 @@ minimum, by definition. The rung prints `DBL_ROLE=GRADED_ON_MIN` and says both f
 
 ## §4 THE MEASUREMENTS
 
-*(filled in by the run; see `scripts/bench/w384_doorbell_latency.sh`)*
+### §4.1 NATIVE — the calibration, RTX 3060 (GA106), host driver 580.159.04 open
+
+Bench `kb`, source `261aa977`, binary md5 `7216822ca5744245c3109c9a19ce05aa`, **three separate
+processes**, verbatim:
+
+```
+--- run 1 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.926 p50_us=9.016 p90_us=9.067 max_us=27.952 total_ms=39.6 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.636 total_ms=0.2
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.107 p50_us=9.317 p90_us=9.467 max_us=25.456 total_ms=23.2
+--- run 2 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.895 p50_us=8.986 p90_us=9.017 max_us=22.172 total_ms=40.1 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.296
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.107 p50_us=9.286 p90_us=9.387 max_us=9.607
+--- run 3 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=9.236 p50_us=9.267 p90_us=9.278 max_us=34.463 total_ms=40.7 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=11.370
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.507 p50_us=9.598 p90_us=9.697 max_us=25.467
+```
+
+`DBL_CALIBRATION_NATIVE_P50_US = 9.02 / 8.99 / 9.27`. ⇒ **floor `9.27 us`** (the harness takes
+the **worst** of the three, never the best: a floor picked from the fastest run makes the gate
+tighter than the host can reliably deliver, and the first thing that reddens is host jitter
+wearing the guest's name), so **gate = 9.27 ms**.
+
+★ **The native distribution is extraordinarily tight** — `min 8.93, p50 9.02, p90 9.07` over 1536
+samples, and 1.03x spread across three processes. Whatever else this rung is, its instrument is
+not noisy, and that is what makes a three-decade gap meaningful.
+
+### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225x, AND THAT IS THE MOST USEFUL NUMBER HERE
+
+| arm | native p50 | what it contains |
+|---|---|---|
+| `bare` | **0.040 us** | one `release_fence` + one 32-bit store into the mapped usermode window |
+| `submit` | **9.02 us** | the above **plus** ~12 ring stores, 2 GPFIFO words, the `GP_PUT` store |
+| `freshmap` | **9.32 us** | `submit`, with a fresh 64 KiB object mapped at a fresh VA first |
+
+⇒ **On bare metal the doorbell store is 40 ns and is 0.4 % of a submission.** The other 99.6 % is
+stores into device memory. ⚠ **This is load-bearing for reading the guest arm**, and it is not
+what one would guess: the graded number is a *submission* number, not a *doorbell* number, and
+the two arms are what separate them. If the guest's `bare` is large, the cost is **the trap**; if
+`bare` is small and `submit` is large, it is in the ring stores or in what the VMM does behind
+them.
+
+⇒ And **`freshmap` ≈ `submit` natively (9.32 vs 9.02)**: mapping a fresh page before every ring
+costs the submission 0.3 us on hardware. That is the control that makes a guest-side gap between
+those two arms attributable to **publication** rather than to the arm's own extra work.
+
+### §4.2 GUEST
+
+*(the Mode-2 arm; see `scripts/bench/w384_doorbell_latency.sh`, which feeds the native floor to
+the guest arm as `--doorbell-latency-native-us`)*
