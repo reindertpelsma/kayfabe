@@ -66,6 +66,34 @@ serial.
 
 ### 2. ★★ The host-driver trap the C recipe does not have — apt HOLDS
 
+> ### ⊘⊘ AMENDED 2026-09-06 (rebuild #5, vast 50013922) — **THIS SYMPTOM HAS THREE CAUSES,
+> ### AND THE INSTALLER'S MESSAGE CANNOT TELL THEM APART.**
+> Everything below is correct and still the recipe. What it does not say is that the error
+> string it uses as the trap's signature —
+> *"The installation was canceled due to the availability or presence of an alternate driver
+> installation"* — is **also** printed for two other reasons:
+>
+> | # | cause | who documented it |
+> |---|---|---|
+> | 1 | a genuine apt-installed alternate driver | the C's notes |
+> | 2 | the `nvidia-*-575` packages being `apt-mark hold`-ed | §2, below |
+> | 3 | **the dpkg lock held by `unattended-upgrade`** | ★ new, measured 2026-09-06 |
+>
+> **[measured]** On a box freshly rented that night, `unattended-upgrade` (pid 7603) held
+> `/var/lib/dpkg/lock-frontend` for **15+ minutes**. With the lock held, **both** the
+> `apt-mark unhold` *and* the purge fail — each exits **100** having changed nothing — and the
+> `.run` then prints the string above. ⚠ So the §2 fix *appears to have been applied* and the
+> documented symptom appears anyway.
+>
+> ⇒ **The discriminator is the purge's own exit status, not the installer's message.** Check
+> it and refuse to continue: `scripts/bench/provision_host_driver.sh` now waits for the lock
+> (naming the holder), asserts `apt-mark showhold` is empty afterwards, and **exits 6 rather
+> than running the installer over a failed purge**.
+>
+> ★ Also mask `apt-daily.timer` and `apt-daily-upgrade.timer` on any bench box. The lock is
+> the visible cost; the invisible one is an unattended upgrade pulling a **new kernel** out
+> from under a DKMS module and a pinned guest kernel, mid-campaign.
+
 The C file records that the 580 `.run` *"REFUSED to install because the vast box ships the 575
 driver via apt/dpkg"*, and prescribes purging the apt set first. On this template that purge
 **fails**, and it fails in a way that looks like it worked:
