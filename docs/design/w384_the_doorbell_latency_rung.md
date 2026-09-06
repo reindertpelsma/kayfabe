@@ -160,51 +160,80 @@ minimum, by definition. The rung prints `DBL_ROLE=GRADED_ON_MIN` and says both f
 
 ### §4.1 NATIVE — the calibration, RTX 3060 (GA106), host driver 580.159.04 open
 
-Bench `kb`, source `261aa977`, binary md5 `7216822ca5744245c3109c9a19ce05aa`, **three separate
+Bench `kb`, source `5d0d6695`, binary md5 `06477aa0ae12145529af970d50916216`, **three separate
 processes**, verbatim:
 
 ```
 --- run 1 ---
-DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.926 p50_us=9.016 p90_us=9.067 max_us=27.952 total_ms=39.6 truncated=false refused=0
-DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.636 total_ms=0.2
-DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.107 p50_us=9.317 p90_us=9.467 max_us=25.456 total_ms=23.2
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.925 p50_us=8.966 p90_us=9.037 max_us=28.473 total_ms=40.1 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.040 p50_us=0.040 p90_us=0.050 max_us=3.326  total_ms=0.3
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.137 p50_us=9.268 p90_us=9.427 max_us=18.233 total_ms=22.9
 --- run 2 ---
-DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.895 p50_us=8.986 p90_us=9.017 max_us=22.172 total_ms=40.1 truncated=false refused=0
-DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.296
-DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.107 p50_us=9.286 p90_us=9.387 max_us=9.607
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=9.137 p50_us=9.236 p90_us=9.278 max_us=30.517 total_ms=40.4 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.040 p50_us=0.040 p90_us=0.040 max_us=3.176
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.297 p50_us=9.498 p90_us=9.678 max_us=25.537
 --- run 3 ---
-DBL_DIST arm=submit   rep=POOLED n=1536 min_us=9.236 p50_us=9.267 p90_us=9.278 max_us=34.463 total_ms=40.7 truncated=false refused=0
-DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=11.370
-DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.507 p50_us=9.598 p90_us=9.697 max_us=25.467
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.426 p50_us=8.514 p90_us=8.556 max_us=21.430 total_ms=39.1 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.357
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=8.565 p50_us=8.826 p90_us=8.976 max_us=23.804
 ```
 
-`DBL_CALIBRATION_NATIVE_P50_US = 9.02 / 8.99 / 9.27`. ⇒ **floor `9.27 us`** (the harness takes
+`DBL_CALIBRATION_NATIVE_P50_US = 8.97 / 9.24 / 8.51`. ⇒ **floor `9.24 us`** (the harness takes
 the **worst** of the three, never the best: a floor picked from the fastest run makes the gate
 tighter than the host can reliably deliver, and the first thing that reddens is host jitter
-wearing the guest's name), so **gate = 9.27 ms**.
+wearing the guest's name), so **gate = 9.24 ms**.
 
-★ **The native distribution is extraordinarily tight** — `min 8.93, p50 9.02, p90 9.07` over 1536
-samples, and 1.03x spread across three processes. Whatever else this rung is, its instrument is
-not noisy, and that is what makes a three-decade gap meaningful.
+★ **The instrument is not noisy.** Over 1536 samples in one process the spread from `min` to
+`p90` is **1.2 %**; across three processes the medians span **1.09×**. That tightness is what
+makes a three-decade gate meaningful — the number this rung reports is not a lottery.
 
-### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225x, AND THAT IS THE MOST USEFUL NUMBER HERE
+### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225×, AND THAT IS THE MOST USEFUL NUMBER HERE
 
 | arm | native p50 | what it contains |
 |---|---|---|
-| `bare` | **0.040 us** | one `release_fence` + one 32-bit store into the mapped usermode window |
-| `submit` | **9.02 us** | the above **plus** ~12 ring stores, 2 GPFIFO words, the `GP_PUT` store |
-| `freshmap` | **9.32 us** | `submit`, with a fresh 64 KiB object mapped at a fresh VA first |
+| `bare` | **0.040 µs** | one `release_fence` + one 32-bit store into the mapped usermode window |
+| `submit` | **8.97 µs** | the above **plus** ~12 ring stores, 2 GPFIFO words, the `GP_PUT` store |
+| `freshmap` | **9.27 µs** | `submit`, with a fresh 64 KiB object mapped at a fresh VA first |
 
 ⇒ **On bare metal the doorbell store is 40 ns and is 0.4 % of a submission.** The other 99.6 % is
-stores into device memory. ⚠ **This is load-bearing for reading the guest arm**, and it is not
-what one would guess: the graded number is a *submission* number, not a *doorbell* number, and
-the two arms are what separate them. If the guest's `bare` is large, the cost is **the trap**; if
-`bare` is small and `submit` is large, it is in the ring stores or in what the VMM does behind
-them.
+stores into device memory. ⚠ **This is load-bearing for reading the guest arm** and it is not
+what one would guess from the name of the rung: the graded number is a **submission** number, not
+a **doorbell** number, and the two arms are what separate them. If the guest's `bare` is large,
+the cost is **the trap**; if `bare` is small and `submit` is large, it is in the ring stores or
+in what the VMM does behind them.
 
-⇒ And **`freshmap` ≈ `submit` natively (9.32 vs 9.02)**: mapping a fresh page before every ring
-costs the submission 0.3 us on hardware. That is the control that makes a guest-side gap between
-those two arms attributable to **publication** rather than to the arm's own extra work.
+⇒ And **`freshmap` ≈ `submit` natively (9.27 vs 8.97 µs)**: mapping a fresh page before every
+ring costs a submission 0.3 µs on hardware. That is the control that makes any guest-side gap
+between those two arms attributable to **publication** rather than to the arm's own extra work.
+
+### §4.1.2 ★★★ THE VERDICT VOCABULARY, EXERCISED IN ALL FOUR STATES — with no guest at all
+
+⊘ *"A refusal needs a negative control."* A gate whose red is unreachable is not a gate, and the
+only way to know is to make it fire. Every state below was produced on bare metal by feeding the
+rung a floor or a sample count, on the committed binary:
+
+| how | `DBL_ROLE` | verdict |
+|---|---|---|
+| default | `CALIBRATION` | `PASS` (and the line says in words that this is *not* "native met a gate") |
+| `--doorbell-latency-native-us 9.27` | `GRADED`, `DBL_RATIO_X=0.9` | `PASS` |
+| `--doorbell-latency-native-us 0.001` | `GRADED`, `DBL_RATIO_X=8446.0` | **`FAIL`** — the red is reachable |
+| `-n 5 --doorbell-latency-native-us 0.001` | `GRADED_ON_MIN` | **`FAIL`**, determinate on 5 samples |
+| `-n 5` (no floor) | — | **`NOTRUN`** |
+| `-n 100000 --budget-ms 100` | — | `truncated=true n=3792`, the budget binds |
+
+#### ⊘⊘ AND THE FOURTH ROW WAS A REAL DEFECT THAT THIS EXERCISE CAUGHT
+
+The `-n 5` case printed, in prose, *"UNMEASURED, and NOT a failure value"* — and then emitted
+**`RUNG_doorbell_latency=FAIL`**. The closure returned `false`, the positive control had
+**passed**, so `false` fell through to the failure arm. ⇒ **the anchored machine-readable line
+said the opposite of the sentence directly above it, and a grader reads the anchored line.**
+
+★ `control_ok` alone could not express it: the control *did* pass and there was still nothing to
+grade. The fix is a third state (`unmeasured`) and three outcomes that are **not ordered by
+severity**. ⚠ This is the same class as *"w377 printed prose while its grader looked for a name
+nothing emitted"*, inverted: here the name was emitted and **disagreed with the prose**. It was
+found only because the negative control was run — the rung's own numbers on its own arm would
+never have reached that branch.
 
 ### §4.2 GUEST
 
