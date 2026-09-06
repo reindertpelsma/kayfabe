@@ -458,3 +458,7 @@ by construction and a final depth is always `0`.
 
 ⊘ The observer's teardown census is left alone; naming it here is the whole remedy this rung
 owes it.
+
+## §9 THE LLM BOOTS — the arm that cup3 cannot see
+
+*(filled in from the runs; see the STATUS block for the summary)*
