@@ -661,13 +661,18 @@ compared to anything. It exists for §4.2's separating experiment and nothing el
   `HEAD~1` baseline comparison useless, which is the only thing that turns *"fmt is clean"* into
   a checkable claim.
 - **`cargo clippy -p kayfabe-isolate-host --all-targets`**: no warning in any range this branch
-  touches. The ones that remain are the pre-existing set w381 §6 already names
+  touches. ⚠ It caught one on the way — `manual_range_contains` inside `ladder_gpfifo_entries`,
+  which is exactly the kind of thing that gets waved through as *"it is only an experiment's
+  knob"* and then lives in `rm.rs` forever; it was fixed rather than allowed. The ones that remain are the pre-existing set w381 §6 already names
   (`rm.rs`'s two collapsible `if`s, `export.rs:97`'s missing doc, the `chunks_exact` family).
   ⊘ `--features host-isolates` does **not** exist on this package — it belongs to
   `kayfabe-qemu-raw`, and passing it makes clippy fail with a *feature* error that reads like a
   lint failure.
-- ⚠ **Nothing in `kayfabe-rt/`, `kayfabe-core/` or `kayfabe-qemu-raw/` was changed.** Those are
-  the live `w383-doorbell-async` lane's, and this rung was built to measure them from outside
-  rather than to touch them. The only non-`bin` change is two additions to
-  `kayfabe-isolate-host/src/rm.rs` (`mute_doorbell_witness`, `ring_doorbell_only`), neither of
-  which alters an existing code path.
+- ⚠ **Nothing in `kayfabe-rt/`, `kayfabe-core/` or `kayfabe-qemu-raw/` was changed.** Those were
+  the `w383-doorbell-async` lane's, and this rung was built to measure them from outside rather
+  than to touch them. The non-`bin` changes are three additions to
+  `kayfabe-isolate-host/src/rm.rs` — `mute_doorbell_witness`, `ring_doorbell_only` and
+  `ladder_gpfifo_entries` — of which the first two add no caller to any existing path and the
+  third replaces one use of a constant with a function that **returns that constant unless an
+  environment variable overrides it, and prints on stderr when it does**. ⇒ every previously
+  committed arm is byte-identical.
