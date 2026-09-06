@@ -71,6 +71,34 @@ explanation.
 > `OS_DESCRIPTOR` over the frame, mapped at every VA the guest describes. **The aliasing is
 > the guest's and it is legal.**
 >
+> ### ★★★★★ THE DISCRIMINATOR'S NATIVE HALF IS MEASURED — w379, 2026-09-06, real GA106
+> `traces/real_ga106/w379_mapping_plane_real_ga106.txt`, `kayfabe-rm-ladder --w379`, bare
+> metal, 5 of 5 rungs PASS, source `d24f182`. Three facts the fix rests on, none of them
+> inferred:
+> - ★ **One allocation IS live at two GPU VAs at once** (`--alias-two-vas`). A release
+>   through `VA_B` landed at offset `0x40` of the **one object** the rung allocated, so the
+>   aliasing is *measured* rather than asked for; a release through `VA_A` then landed
+>   **again**, after `VA_B` was mapped. **RM does not revoke on the second map.**
+>   ⇒ *"The aliasing is the guest's and it is legal"* is now a measurement, not a reading.
+> - ★ **Unmapping one alias leaves the other live** (`--alias-unmap-observe`), and the
+>   unmapped VA probes `Free` again. **RM tracks the two aliases independently.** ⇒ a host
+>   store keyed by **physical frame alone** is strictly weaker than the driver it stands in
+>   for, which is the `(a)` side of the fix — *allow N VAs per frame* — with the driver's
+>   own behaviour behind it. ⊘ It does **not** settle whether *our decode* holds a stale VA;
+>   that half is guest-side and is still open.
+> - ⚠ **`pde_info` is NOT a publication oracle, and it answered `PDE_COVERS` at a VA the run
+>   NEVER MAPPED.** `NV0080_CTRL_CMD_DMA_GET_PDE_INFO` reports whether a page *table* covers
+>   the address, so it says `PDE_COVERS` for any VA inside a live table — including
+>   unmapped ones, and including one whose leaf was just torn down. The w379 rungs record it
+>   and **grade on `probe_va` and on hardware instead**. Anything that reads `PDE_COVERS` as
+>   *"this VA is published"* is reading page-table granularity as a leaf fact.
+>
+> ⊘ **Scope.** Bare metal only, and deliberately so: the same probe cannot run in the guest,
+> because the Mode-2 CPU copy-engine emulator decodes `PushMethod::SemRelease` and
+> **deliberately does not act on it** (`kayfabe-rt/src/ceutils.rs:677-679`, restated
+> `:1080`) — only `LAUNCH_DMA` is served. The guest-side version of these questions needs a
+> `LAUNCH_DMA` probe and is **not built**.
+>
 > ⚠ **Run the discriminator first.** *"The old VA is still DESCRIBED by the guest"* is an
 > **unconditional string literal** (`shim.rs:10766-10769`), not a check — suspect the
 > instrument. Either the guest genuinely holds both VAs live (⇒ allow N VAs), or one is stale
