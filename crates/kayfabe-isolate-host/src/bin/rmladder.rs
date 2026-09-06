@@ -7320,6 +7320,13 @@ struct W385Report {
     pinned: bool,
     /// The cores the kernel says this worker may run on, read back AFTER the call.
     observed_cores: Vec<usize>,
+    /// ★★★ Every raw RM handle this worker's allocations came back with.
+    ///
+    /// `RmConnection::mint` is `let h = o.next; o.next += 1` under the `objects` mutex, and
+    /// two workers minting at once is the most direct thing this rung can aim at that lock.
+    /// ⊘ The uniqueness is checked by the PHASE, across workers — a per-worker check could
+    /// never see the collision, which is exactly the shape of the defect.
+    minted: Vec<u64>,
 }
 
 impl W385Report {
@@ -7370,7 +7377,11 @@ fn w385_run_worker(
     // The channel is this worker's alone: `submit_*` takes the next GPFIFO slot out of the
     // backend's OWN `slots` map, so two workers sharing one channel would overwrite each
     // other's entries and produce a red that is the harness's, not the system's.
-    let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(w.ring_at()))) else {
+    let chan_res = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(w.ring_at())));
+    if let Ok((c, _)) = &chan_res {
+        rep.minted.push(c.raw());
+    }
+    let Ok((chan, token)) = chan_res else {
         rep.violate(
             "WORKER_NO_CHANNEL",
             format!(
@@ -7439,6 +7450,7 @@ fn w385_run_worker(
                 } else {
                     match rm.alloc_probe_local(W385_BYTES) {
                         Ok(mem) => {
+                            rep.minted.push(mem.raw());
                             if rm.fill_words(mem, W385_BYTES, W385_SENTINEL, 0).is_err() {
                                 let _ = rm.free(mem);
                                 rep.refused += 1;
@@ -7638,6 +7650,7 @@ fn w385_run_worker(
                     jitter(&mut rng);
                     match rm.alloc_probe_local(W385_BYTES) {
                         Ok(mem) => {
+                            rep.minted.push(mem.raw());
                             // ★★ INVARIANT 5 — read the fresh object BEFORE writing the
                             // sentinel over it. Filling first would erase the exact
                             // evidence: a recycled handle still holding a magic.
@@ -7952,6 +7965,8 @@ struct W385Phase {
     /// The distinct core sets the workers observed, as printed strings — the attributable
     /// record of where this arm actually ran.
     core_sets: std::collections::BTreeSet<String>,
+    /// `(tid, raw handle)` for every allocation any worker made. See [`W385Report::minted`].
+    minted: Vec<(usize, u64)>,
     violations: Vec<(&'static str, String)>,
     ops: [u64; 11],
     refused: u64,
@@ -8021,6 +8036,7 @@ fn w385_phase(
         pin: cfg.pin,
         pinned: 0,
         core_sets: std::collections::BTreeSet::new(),
+        minted: Vec::new(),
         violations: Vec::new(),
         ops: [0; 11],
         refused: 0,
@@ -8043,6 +8059,9 @@ fn w385_phase(
                     out.pinned += 1;
                 }
                 out.core_sets.insert(w385_cores_str(&rep.observed_cores));
+                for h in rep.minted {
+                    out.minted.push((tid, h));
+                }
                 out.refused += rep.refused;
                 for (i, n) in rep.ops.iter().enumerate() {
                     out.ops[i] += n;
@@ -8056,6 +8075,32 @@ fn w385_phase(
                 "WORKER_PANIC",
                 format!("tid {tid} panicked — a witness assert or an unwrap inside a verb"),
             )),
+        }
+    }
+    // ★★★ HANDLE UNIQUENESS — checked HERE because it is cross-worker by nature.
+    //
+    // `mint()` is `o.next; o.next += 1` under the `objects` mutex. If that mutex ever failed
+    // to serialise, two workers would receive the SAME raw handle, and every downstream
+    // symptom — a free that takes somebody else's object, a map onto a stranger's memory —
+    // would be attributed to the mapping plane instead. ⊘ Within one connection the counter
+    // is monotonic so a repeat is unambiguous; ACROSS connections handles legitimately
+    // repeat, which is why the check is scoped to the workers of one client.
+    {
+        let mut seen: std::collections::HashMap<(usize, u64), usize> =
+            std::collections::HashMap::new();
+        for &(tid, h) in &out.minted {
+            let client = tid % cfg.clients.max(1);
+            if let Some(&prev) = seen.get(&(client, h)) {
+                out.violations.push((
+                    "HANDLE_COLLISION",
+                    format!(
+                        "client {client}: raw handle {h:#x} was minted for worker {prev} AND \
+                         worker {tid} — `RmConnection::mint` did not serialise"
+                    ),
+                ));
+            } else {
+                seen.insert((client, h), tid);
+            }
         }
     }
     // ★ The watchdog is retired HERE, by the phase, not by the workers — see [`W385Beat`].
@@ -8118,6 +8163,12 @@ fn w385_report(phase: &str, p: &W385Phase) {
         "info  W385 {phase:<8} overlap = {} pairs of RM-verb intervals from DIFFERENT \
          threads intersected, over {}/{} spans",
         p.overlap_pairs, p.spans_used, p.total_spans
+    );
+    println!(
+        "info  W385 {phase:<8} handles = {} minted across {} worker(s), each checked for \
+         collision against every other worker OF THE SAME CLIENT",
+        p.minted.len(),
+        p.workers
     );
     // ★ WHERE IT ACTUALLY RAN, not where it was asked to run.
     println!(

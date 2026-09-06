@@ -52,8 +52,10 @@ OUT=$OUTDIR/${TAG}_concurrent_fuzz.log
 # ⊘ `T:I` — T is the UNPINNED width and the per-core width; the rung derives its own
 # over-subscribed width (3 x cores) from `--fuzz-cores`. The default row is the bench guest's
 # `-smp 3`, because that is the topology the product presents.
-ARMS=${W385_ARMS:-"3:128 3:512 6:256 12:128"}
-CORES=${W385_CORES:-3}
+# `T:I:C` — threads : iterations : CORES for the pinned arms. ★ `C=1` puts every worker of
+# the `crowd` arm on ONE core, which is the strongest preemption-inside-a-lock probe this
+# rung can produce; `C=3` is the bench guest's own `-smp`.
+ARMS=${W385_ARMS:-"3:128:3 3:512:3 6:256:3 12:128:3 8:256:1 16:256:2"}
 TMO=${W385_TIMEOUT:-1200}
 mkdir -p "$OUTDIR"
 
@@ -83,8 +85,8 @@ echo "=== BIN=$BIN md5=$(md5sum < "$BIN" | cut -d' ' -f1) $(stat -c %s "$BIN") b
 # ⊘ Every arm gets its own log, so a wedged arm's evidence is not the next arm's problem and
 #   a per-arm grade is readable without splitting one file.
 declare -a ROWS=()
-run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args
-  local label=$1 t=$2 i=$3 seed=$4 extra=$5
+run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args, $6 cores
+  local label=$1 t=$2 i=$3 seed=$4 extra=$5 CORES=${6:-3}
   local log=$OUTDIR/run_${TAG}_${label}.log
   local seedarg=()
   [ -n "$seed" ] && seedarg=(--seed "$seed")
@@ -105,7 +107,7 @@ run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args
   overlap=$(sed -n 's/^FUZZ_OVERLAP_PAIRS=//p' "$log" | tail -1)
   viol=$(sed -n 's/^FUZZ_VIOLATIONS=//p'      "$log" | tail -1)
   useed=$(sed -n 's/^FUZZ_SEED=//p'           "$log" | tail -1)
-  ROWS+=("$(printf '%-10s %-4s %-5s %-20s %-8s %-10s %-10s %-6s %s' \
+  ROWS+=("$(printf '%-12s %-4s %-5s %-20s %-8s %-10s %-10s %-6s %s' \
       "$label" "$t" "$i" "${useed:-⊘none}" "${v:-⊘NONE}" "${ctl:-⊘NONE}" \
       "${ops:-⊘}" "${viol:-⊘}" "${reason:-⊘none} overlap=${overlap:-⊘}")")
   # every named invariant that fired, verbatim, with its arm
@@ -116,16 +118,16 @@ run_arm() {   # $1 label, $2 threads, $3 iters, $4 seed-or-empty, $5 extra args
 }
 
 for spec in $ARMS; do
-  t=${spec%%:*}; i=${spec##*:}
-  run_arm "t${t}i${i}" "$t" "$i" "${W385_SEED:-}" ""
+  IFS=: read -r t i c <<<"$spec"
+  run_arm "t${t}i${i}c${c}" "$t" "$i" "${W385_SEED:-}" "" "$c"
 done
 
 # ★★★ THE REPLAY PAIR. The rung claims `--seed` replays its decision sequence; that claim is
 # checked here rather than believed. ⊘ It checks the DECISIONS, not the schedule: the two
 # runs must agree on the per-verb census, and are NOT required to agree on timing.
 REPLAY_SEED=${W385_REPLAY_SEED:-0x5EED0385}
-run_arm "replay-a" 8 96 "$REPLAY_SEED" ""
-run_arm "replay-b" 8 96 "$REPLAY_SEED" ""
+run_arm "replay-a" 8 96 "$REPLAY_SEED" "" 3
+run_arm "replay-b" 8 96 "$REPLAY_SEED" "" 3
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # ★★★ THE WATCHDOG'"'"'S OWN NEGATIVE CONTROL — because a watchdog that has never fired is
@@ -138,7 +140,7 @@ echo ""
 echo "################ CONTROL — the WATCHDOG, provoked on purpose ################"
 WLOG=$OUTDIR/run_${TAG}_watchdog.log
 timeout -k 15 180 "$BIN" --gpu 0 --concurrent-fuzz --fuzz-threads 8 --fuzz-iters 100000 \
-    --fuzz-cores "$CORES" --fuzz-deadline 5 --seed 0x385 > "$WLOG" 2>&1
+    --fuzz-cores 3 --fuzz-deadline 5 --seed 0x385 > "$WLOG" 2>&1
 echo "    inner rc=$?  (⊘ 3 is what the watchdog exits with, by design)"
 WV=$(sed -n 's/^RUNG_concurrent_fuzz=//p' "$WLOG" | tail -1)
 WR=$(sed -n 's/^FUZZ_REASON=//p' "$WLOG" | tail -1)
@@ -157,24 +159,29 @@ echo ""
 echo "================================================================================"
 echo "=== ★★★★★ THE W385 TABLE — one row per arm, graded on printed lines"
 echo "================================================================================"
-printf '    %-10s %-4s %-5s %-20s %-8s %-10s %-10s %-6s %s\n' \
+printf '    %-12s %-4s %-5s %-20s %-8s %-10s %-10s %-6s %s\n' \
     ARM T I SEED VERDICT CONTROL OPS VIOL REASON
 for r in "${ROWS[@]}"; do echo "    $r"; done
 
 echo ""
 echo "=== ★★ THE REPLAY CHECK — same seed, same decisions?"
 A=$OUTDIR/run_${TAG}_replay-a.log; B=$OUTDIR/run_${TAG}_replay-b.log
-verbs_of() { grep -a 'W385 fuzz' "$1" 2>/dev/null | grep -a 'verbs' | sed 's/.*verbs  *= *//' | tail -1; }
+# ⊘ CORRECTED: the phase name is the ARM name (`unpinned`/`percore`/...), not the literal
+#   `fuzz`, so the first version of this grep matched nothing and reported the replay check
+#   as UNMEASURED over two runs that had both printed a full census. ★ Compare EVERY arm's
+#   verb line, not one — a seed that pins three arms and not the fourth is a partial replay
+#   and must not read as SAME.
+verbs_of() { grep -a 'W385 .* verbs  *=' "$1" 2>/dev/null | sed 's/.*verbs  *= *//'; }
 VA=$(verbs_of "$A")
 VB=$(verbs_of "$B")
 if [ -z "$VA" ] || [ -z "$VB" ]; then
   echo "    W385_REPLAY=⊘ UNMEASURED — one of the replay arms printed no verb census"
 elif [ "$VA" = "$VB" ]; then
-  echo "    W385_REPLAY=SAME — both arms drew the same verbs: [$VA]"
+  echo "    W385_REPLAY=SAME — both runs drew the same verbs in every arm:"
+  echo "$VA" | sed "s/^/      /"
 else
   echo "    W385_REPLAY=DIFFERENT — ⊘ the seed does NOT pin the verb census."
-  echo "      a: [$VA]"
-  echo "      b: [$VB]"
+  diff <(echo "$VA") <(echo "$VB") | sed 's/^/      /' | head -20
   echo "      ⚠ Expected when a verb is SKIPPED because slot state differed, which timing can"
   echo "        change. The DECISION STREAM is still pinned; the CENSUS is a weaker check and"
   echo "        a difference here is not by itself a defect."
