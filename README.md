@@ -168,7 +168,5 @@ prototype), `fuzz/` (its own workspace — the only place unsafe dependencies ar
 
 ## Licence
 
-The workspace manifest declares `license = "Proprietary"`. There is no `LICENSE` file at the
-repository root and no contribution policy has been established. The frozen C prototype
-under `archive/nvkvm/` carries its own Apache-2.0 `LICENSE` and applies only to that
-directory.
+Apache License 2.0. See [`LICENSE`](LICENSE) at the repository root; it applies to the whole
+repository, including the frozen C prototype under `archive/nvkvm/`.
