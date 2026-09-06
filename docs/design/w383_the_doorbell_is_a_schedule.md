@@ -344,3 +344,62 @@ publication — as the brief that commissioned this rung did, and as the number'
 beside `inline_exceptions` invites — is wrong. `max_reap_us` tops out at **14 939 µs** and
 `DRAIN-DEFER` returns to zero, so it is not the disposal either. **It is unattributed, and
 attributing it needs `kftime` armed on the register path, not another doorbell rung.**
+
+## §10 ★★★★★ THE LATENCY WAS NEVER THE THREAD — **w330's DIRTY-GATE DEFAULT WAS UNREACHABLE**
+
+Found while looking for why the LLM boot spends 360 s in publication, and it is a bigger
+number than anything this rung moves.
+
+`[measured w380llm2, the LLM boot this whole campaign is about]`:
+
+```
+DIRTY-GATE publish[fired=60800 skipped=0 0.0% skipped]
+```
+
+**A 0 % skip rate reads as *"every VAS was dirty every time"*. It is actually *"the gate was
+never consulted."***
+
+```rust
+// crates/kayfabe-qemu-raw/src/shim.rs — BEFORE w383
+pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, ..> {
+    // ★★★★★ w330 — DEFAULT MOVED off → ON, on measurement.
+    None | Some("on") => Ok(true),
+    ...
+}
+
+fn selected_dirty_gate(var: &str) -> bool {
+    match std::env::var_os(var) {
+        None => false,                      // ⊘⊘⊘ the None arm above is NEVER REACHED
+        Some(v) => dirty_gate_from(Some(..)).unwrap_or(false),
+    }
+}
+```
+
+⇒ ⊘⊘⊘ **`dirty_gate_from(None)` has no caller.** w330's measured default change — *"median
+18 741 → 2 197 µs (8.5×), p90 86 104 → 4 431 µs (19.4×), `^CUP3_VAL=43` held on every armed
+boot"* — has **affected nothing since it was made**, and `KAYFABE_DIRTY_GATE_PUBLISH` appears
+nowhere in `scripts/bench/w290p_run.sh`, so no boot this harness ever ran set it either.
+
+★★★ **Two statements of one default, four screens apart in one file, and the caller silently
+won.** The doc comment on `DIRTY_GATE_PUBLISH_ENV` still read *"Off by default"* while the
+enum beneath it read `on`. Nothing was inconsistent enough to fail a build, a test, or a
+census — and the census the gate prints is satisfied identically either way, because
+`skipped=0` is what a disarmed gate and a permanently-dirty world both produce.
+
+⚠ **This is the exact class the parent repo's `CLAUDE.md` opens with**: *"a correct document
+that stopped being true and did not say so"*, here in code rather than prose, and
+`a_blocker_i_declared_was_already_fixed.md`'s *"the recurring defect is CURRENCY, not
+wrongness"* one layer down. It also fired the way that class always fires: **the instrument
+that would have caught it printed a number that was true of both worlds.**
+
+**Fixed at w383, in the direction the code already stated**: `selected_dirty_gate` now does
+nothing but hand the environment to `dirty_gate_from`, which becomes the only statement of the
+default; and `w290p_run.sh` exports both gates (defaulted `on`, overridable, echoed in the
+arming record) so an ablation is expressible from the caller.
+
+⇒ ★★★ **The LLM's 360 s of publication was paid with the switch that removes it in the OFF
+position, and the switch had been recorded as ON for a month.** Whether arming it is
+sufficient for `LLM_TOKENS > 0` is §11's boot; what is already established is that **the
+doorbell's latency problem had a cheaper cause than the one this rung was commissioned to
+fix**, and that neither would have been found without the other — the thread hunt is what
+walked past the census.
