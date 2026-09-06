@@ -5298,9 +5298,15 @@ impl SharedDoorbell {
         // absent measurement and an instantaneous one are different facts and this tree has
         // paid for reading one as the other.
         eprintln!(
-            "kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus} | {} | {}",
+            "kayfabe: PT-DECODE token={token:#010x}{pt_witness}{pt_decode}{pt_sweep}{pt_vascensus} | {} | {} | {}",
             self.dirty.census(),
             kayfabe_util::trapwitness::census(),
+            // ★★★★★ w383 — THE LANE'S DEPTH, ON THE LINE EVERY DOORBELL PRINTS. A queue
+            // whose depth is only readable at teardown cannot answer *"is the worker
+            // falling behind the guest?"*, which is the one question a deferred lane's
+            // latency turns on and the one a final census provably cannot reach: at
+            // teardown the queue is drained by construction.
+            self.pubqueue.census(),
         );
         kft.mark("log_ptdecode");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
@@ -12187,8 +12193,9 @@ impl Regs {
                 DoorbellAsyncArm::NoCoalesce =>
                     "VALIDATES, ENQUEUES and RETURNS, and EVERY DOORBELL GETS ITS OWN \
                      EXECUTION — ★ the NEGATIVE CONTROL for `pubqueue` §2. One variable \
-                     against `on`. ⊘ Expected reading: `PUBQUEUE coalesce=false coalesced=0` \
-                     and a `taken=` equal to the doorbell count",
+                     against `on`. ⊘ Expected reading: the census below reports coalescing \
+                     OFF, a coalesced count of zero, and a taken count equal to the doorbell \
+                     count",
                 DoorbellAsyncArm::On =>
                     "VALIDATES, ENQUEUES and RETURNS — ★★★★★ the owner's 2026-09-06 ruling \
                      and `TrapContract::ScheduleAndReturn`, enforced rather than reported. A \
