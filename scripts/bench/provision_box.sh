@@ -33,15 +33,36 @@ wait_for_dpkg() {
   done
   echo "dpkg lock free after ${waited}s"
 }
-wait_for_dpkg
-apt-get update -qq
-apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3
+# ★ ASK BEFORE WAITING. Measured on the same box: `unattended-upgrade` held the lock for
+# over nine minutes, while EVERY package below was already installed -- the image ships
+# them. Waiting for a lock to run an install that would be a no-op is pure dead time, and
+# on a 600s ceiling it can fail the run outright. So probe first and only touch apt if
+# something is genuinely missing.
+NEED=""
+for b in gcc pkg-config git curl clang lld python3; do
+  command -v "$b" >/dev/null 2>&1 || NEED="$NEED $b"
+done
+[ -e /usr/include/openssl/ssl.h ] || NEED="$NEED libssl-dev"
+if [ -n "$NEED" ]; then
+  echo "apt needed for:$NEED"
+  wait_for_dpkg
+  apt-get update -qq
+  apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3
+else
+  echo "apt SKIPPED - every dependency already present"
+fi
 
 if ! command -v cargo >/dev/null 2>&1; then
   curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
 fi
 . "$HOME/.cargo/env"
-rustup target add x86_64-unknown-linux-musl   # ⚠ see the header — not optional
+# ⚠ see the header -- not optional. Idempotent, so unconditional is fine, but report it:
+# a silent success here and a silent no-op look identical in the log.
+if rustup target list --installed | grep -qx x86_64-unknown-linux-musl; then
+  echo "musl target already installed"
+else
+  rustup target add x86_64-unknown-linux-musl && echo "musl target ADDED"
+fi
 
 [ -d ~/kayfabe ] || git clone -q https://github.com/reindertpelsma/kayfabe.git ~/kayfabe
 cd ~/kayfabe

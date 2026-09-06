@@ -5005,6 +5005,43 @@ impl RmBackend for HostRmBackend {
     /// emulated device puts in it are different questions, and only the second one is
     /// blocked.
     ///
+    /// ### ⊘⊘⊘ CORRECTED 2026-09-06 — **"THREE SHUT DOORS, NONE OF THEM OURS TO OPEN" IS
+    /// ### WRONG ABOUT ONE DOOR, AND THAT DOOR IS OURS.** Read this before the count below.
+    ///
+    /// The three reasons are **not** three of a kind, and this tree already says so in the
+    /// other direction — `kayfabe_fwd`'s `FbLeafBacking` doc states plainly that reason 3
+    /// *"is **our own** refusal, not a hardware fact"* (`kayfabe-fwd/src/lib.rs:2308`).
+    /// ⚠ **Two docs in this tree, opposite answers, on the question that gates the fix.**
+    /// Adjudicated from the source:
+    ///
+    /// - **Reason 2 (dma-buf) STANDS.** `PDB_PROP_GPU_ZERO_FB` is an integrated-part
+    ///   property; on a discrete card the CPU mapping is refused by NVIDIA's own code. This
+    ///   one is genuinely not ours. ⊘ It is also **moot**, because it rules out a crossing
+    ///   we do not use.
+    /// - **Reason 3 IS OURS.** `Backing::DeviceFile { .. } => return
+    ///   Err(RawError::DeviceBackingNotPlaceable)` is one match arm in **our own crate**, at
+    ///   `kayfabe-linux-raw/src/window_unsafe.rs:213`. Calling it a shut door alongside two
+    ///   NVIDIA refusals reads as *"the platform forbids this"* when what it says is
+    ///   *"we have not written it."*
+    /// - **Reason 1 is a POLICY argument that [`ChildExports::mint_armed_node`] was built to
+    ///   answer**, and it postdates this comment (`export.rs:146`, added 2026-08-27). The
+    ///   hazard named here is that `secInfo.privLevel` is recomputed **per escape** from the
+    ///   caller (`escape.c:304`) — so it bites only a process that **issues escapes**. In the
+    ///   armed-node shape the isolate opens the node and performs the `0x4E` registration
+    ///   itself; the VMM receives the fd and **only ever `mmap`s it**, issuing no `ioctl` at
+    ///   all. ⇒ The privilege recomputation never happens in the VMM's favour because the VMM
+    ///   never reaches the escape path. ★ This is not speculative: it is the shape
+    ///   `nvkvm-pv` ships in production.
+    ///
+    /// ⇒ **The refusal below is still LIVE as code and this comment does not relax it.** What
+    /// changes is its standing: it is **one real door, one of our own making, and one that
+    /// guards a route we do not take** — not three independent walls. Lifting it is a
+    /// **policy decision for the owner** (decision (b)'s scope), not a hardware fact to
+    /// discover. ⚠ Do not cite this comment as evidence that the crossing is impossible.
+    ///
+    /// ⊘ Unchanged and still correct: do **not** "fix" this by copying device pages into a
+    /// `memfd`. A copy is not a mapping.
+    ///
     /// ## ⊘ The arm that refuses, and why it is a RESULT rather than a gap
     ///
     /// [`ExportSource::HostDeviceMemory`] is always
@@ -5028,7 +5065,8 @@ impl RmBackend for HostRmBackend {
     ///
     /// ★ And the memory plane refuses the result independently anyway:
     /// `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
-    /// `RawError::DeviceBackingNotPlaceable`. Three shut doors, none of them ours to open.
+    /// `RawError::DeviceBackingNotPlaceable`. ⊘ **Three shut doors — but see the CORRECTION
+    /// at the top of this comment: door 3 is OURS, and door 1 is answered by `mint_armed_node`.**
     ///
     /// ⊘ Do not "fix" this by copying the device pages into a `memfd`. A copy is not a
     /// mapping: the guest would read a snapshot of a live aperture, which is the forged-
