@@ -1,11 +1,25 @@
 # ★★★★★ THE DOORBELL IS A SCHEDULE — the publication lane gets its worker
 
-**STATUS — 2026-09-06 — LIVE.** Built at `w383`. This is the **wiring** that
+**STATUS — 2026-09-06 — LIVE, SHIPPING DEFAULT-OFF.** Built at `w383`. This is the **wiring** that
 `publication_off_the_bql.md` §9 lists under *"Designed, NOT built"* and that
 `the_async_lane_is_built_and_orphaned.md` §0 names as the headline finding:
 *"we have the right shape and nothing runs it."* Both of those parents stay LIVE and are
 **not** superseded — the mechanism they describe is unchanged; what changed is that it now
 has a producer, a consumer and a thread.
+
+> ### ⊘⊘ READ THIS BEFORE THE MECHANISM — the rung's own result, in three lines
+> 1. **The lane works and is measured**: `TRAPWITNESS off_trap_claims 0 → 2812`, the
+>    doorbell's `inline_exceptions` share **821 → 0**, on a boot that still returns
+>    `^CUP3_VAL=43` with **zero** host Xids (§7, §8.1).
+> 2. ⊘ **Coalescing is REFUTED on hardware** and `pubqueue` §2 is wrong about the forwarding
+>    path (§7).
+> 3. ⊘⊘⊘ **Deferring is not yet safe for the multi-process LLM** (§9), and §3's correction
+>    says why: **the forward is not the trigger — the guest's own `GP_PUT` is.** The arm
+>    therefore ships `off`.
+>
+> ★ And the largest number this rung moved was not the thread's: **w330's dirty-gate default
+> has been unreachable since it was written** (§10), which is where the LLM's 360 s of
+> publication actually came from.
 
 Read with: `publication_off_the_bql.md` (§1 the ordering correction, §3 the design, §4 the
 map/revoke asymmetry, §5.3 the obligation this does **not** discharge),
@@ -264,6 +278,14 @@ was disarmed"* is a positive observation rather than an absence.
 
 Runner: `scripts/bench/w383_llm.sh`, one variable against `w380llm2`. Every other arm is
 w290p's default byte for byte.
+
+## §6.5 ⚠ THE SHIPPING DEFAULT IS `off`, AND THE REASON IS §9, NOT CAUTION
+
+`cup3` is green on the deferred arm and the **LLM is not** (§9). Until the trigger moves off
+the doorbell (§3's correction), `KAYFABE_DOORBELL_ASYNC` stays `off` by default and this rung
+ships as **a mechanism, a measurement and a refutation** rather than as a behaviour change.
+⊘ Stated here rather than at the bottom, because a reader who stops after §2 must not come
+away thinking the lane is on.
 
 ## §7 ★★★★★ THE MEASUREMENT THAT SPLIT THE RUNG IN TWO — cup3, three boots, one variable
 
