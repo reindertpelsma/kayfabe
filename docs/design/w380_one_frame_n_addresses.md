@@ -154,6 +154,34 @@ a context the `Xid 31` had already poisoned.** The fix removes the Xid, so it co
 ⊘ `PROP_name` is empty — the known `GPU_GET_NAME_STRING` zero-bytes defect, unrelated and not
 what cuBLASLt selects on.
 
+⊘⊘ **`LLM_TOKENS_GRADE=0` in that boot's probe log is the INSTRUMENT, not the measurement.**
+`llm_hook2.sh` printed `${TOKENS:-0}`, so *"the runner produced no `LLM_TOKENS=` line"* rendered
+as the failure value `0` — the exact conflation `llm_hook.sh`'s own pre-registration forbids in
+words (*"(D) ⊘ THE MEASUREMENT DID NOT HAPPEN. It is NOT 0."*). Corrected to `ABSENT` in the
+same commit as this section. **The true reading of both boots is UNMEASURED.**
+
+## §6.1 ★★★ AND THE FANOUT IS FIVE, NOT TWO — `w380llm2`, 18 frames
+
+`traces/guest_boots/w380llm2_3cacd43_alias_fanout.log`:
+
+```
+0x1e00000 … 0x2800000   -> 4 distinct alias VAs each   (six frames)
+0x2a00000, 0x2c00000    -> 2 each
+0x3400000 … 0x4600000   -> 1 each                      (ten frames)
+38 placements, placed_as_asked=true on 38 of 38, 38 distinct host objects
+SUPERSEDED=0  SUPERSEDE_CAPPED=0  INSTALL_REFUSED=0  ALIAS_BIND_REFUSED=0
+FRAME_NOT_OURS=198  ORPHAN_RECLAIMED=107   (the cross-process paths, still by name)
+```
+
+⇒ **Six frames reached FIVE simultaneous GPU addresses** (one join + four aliases). ⚠ A
+hard-coded `N = 2` would have refused **18 of the 38** placements — the brief's insistence that
+`N` be unbounded was not caution, it was the measurement waiting to happen. `w377` §9's *"2 or
+3, never more"* was a bound on **one boot's** observation, not on the guest.
+
+⊘ `FRAME-NOT-OURS=198` and `ORPHAN-RECLAIMED=107` are the *other two* branches of §4's table
+firing on a boot with several GPU-touching processes: a live peer's join is refused by name and
+a join nobody names is reclaimed. Neither is an alias and neither was regressed.
+
 ## §7 ⚠ THE RESIDUAL THIS OPENS, NAMED
 
 `PT-DECODE` refusals went **255 → 271**, and the sixteen new ones are `RepointsPublished: 8`

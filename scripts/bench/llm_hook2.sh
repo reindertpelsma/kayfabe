@@ -85,7 +85,12 @@ TOKENS=$(echo "$OUT" | sed -n 's/^LLM_TOKENS=//p' | tail -1)
 echo ""
 echo "W382_MINMM_OK=${MINOK:-NONE}  W382_MINMM_SUM=${MINSUM:-NONE}"
 echo "W382_XIDS=${XID_BEFORE}/${XID_AFTER_MIN}/${XID_END} (before/after-minmm/after-llm)"
-echo "LLM_TOKENS_GRADE=${TOKENS:-0}"
+# ⊘⊘ **`ABSENT`, NOT `0` — corrected at w380, and it is this file's own rule.** `${TOKENS:-0}`
+# prints `0` when the runner produced NO `LLM_TOKENS=` line at all, which is exactly the
+# conflation `llm_hook.sh`'s pre-registration forbids in words: *"(D) ⊘ THE MEASUREMENT DID NOT
+# HAPPEN. It is NOT 0."* `[measured w380llm2]` the LLM was killed by its own `timeout` with no
+# token line and this printed `LLM_TOKENS_GRADE=0` — a failure value for an unmeasured one.
+echo "LLM_TOKENS_GRADE=${TOKENS:-ABSENT}"
 echo "=== ★★★★★ THE VERDICT — pre-registered, stated once"
 if [ -z "$MINOK" ]; then
   echo "    W382_OUTCOME=(E) ⊘ UNMEASURED — the minimal matmul printed no MINMM_OK line at all."
