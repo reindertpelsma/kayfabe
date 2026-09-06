@@ -148,6 +148,23 @@ else
 fi
 
 echo ""
+echo "=== ★★★★★ THE WRAP BISECTION — same boot, two extra invocations, no second guest ==="
+# `[measured 2026-09-06, this box]` the first guest run of this rung stalled with its drain
+# windows at submissions 15, 31 and 47 RETIRING and the one at 63 NOT. The isolate's GPFIFO
+# has **64 entries** (`PUSHBUFFER_SLOTS = 32`, `entries = 64`, `rm.rs`), so `GP_PUT` wraps
+# 63 -> 0 at exactly that point. ⇒ two runs bracket it, and neither needs a second boot:
+#   n=48  — stays strictly inside one lap of the GPFIFO. BOTH controls must land.
+#   n=200 — crosses the wrap three times. `DBL_STALL first_stall_at=` names where it dies.
+# ⊘ These are BRACKETS, not a proof of cause: they say the failure tracks the lap boundary,
+#   which is a much stronger claim than "it stopped somewhere" and a much weaker one than
+#   "the wrap is the mechanism". Naming the mechanism needs the device side, which this lane
+#   does not own.
+for N in 48 200; do
+  echo "--- wrap bisection n=$N reps=1 ---"
+  $G "timeout 120 sudo /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency='" | sed 's/^/    /'
+done
+
+echo ""
 echo "=== ★★ SECOND QUESTION, SAME BOOT — did \`missing_page\` move? ==="
 # ⊘ Asked as a MEASUREMENT rather than answered from the previous lane's table. w381 recorded
 #   host PASS / guest FAIL with `fired=false status=0x0000` and zero kernel Xid records: our

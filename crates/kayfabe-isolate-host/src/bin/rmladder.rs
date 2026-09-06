@@ -6924,6 +6924,16 @@ const DBL_MIN_SAMPLES: usize = 50;
 /// rather than left to be discovered: the region is exactly one `submit_copy_at`.
 const DBL_DRAIN_EVERY: usize = 16;
 
+/// How long one drain window waits for the last submission in it to retire.
+///
+/// ⊘ **It is an OBSERVABLE, not a timeout to be tuned away.** `[measured 2026-09-06, Mode-2
+/// guest]` the drain is where this rung found its result: three runs out of three, the
+/// windows ending at submissions 15, 31 and 47 retired and the one ending at **63** did not.
+/// A shorter timeout would have produced more samples and hidden the fact; a longer one
+/// would have burnt the wall budget. What makes it evidence rather than a confound is that
+/// the rung **counts the timeouts and names the submission the first one happened at**.
+const DBL_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(2000);
+
 /// A latency distribution, in **microseconds**, with the count it was built from.
 ///
 /// ⊘ **Five order statistics and a total, never a mean.** The failure this rung gates on is
@@ -7260,6 +7270,10 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
         let mut pooled_wall = std::time::Duration::ZERO;
         let mut pooled_trunc = false;
         let mut rep_p50: Vec<f64> = Vec::with_capacity(cfg.reps);
+        let mut stalled_reps = 0usize;
+        let mut pooled_drains = 0usize;
+        let mut pooled_drain_timeouts = 0usize;
+        let mut pooled_first_stall: Option<usize> = None;
 
         for rep in 0..cfg.reps {
             // ⚠ Capacity taken UP FRONT: a `Vec` growing inside the loop would reallocate
@@ -7269,6 +7283,13 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             let mut refused = 0usize;
             let started = std::time::Instant::now();
             let mut truncated = false;
+            // ★★★ THE DRAIN, INSTRUMENTED. Before this it was a silent 2 s per window that
+            // ate the wall budget and made a STALLED channel look merely like a short
+            // sample — the confound and the finding wearing one face.
+            let mut drains = 0usize;
+            let mut drain_timeouts = 0usize;
+            let mut drain_wall = std::time::Duration::ZERO;
+            let mut first_stall: Option<usize> = None;
             for i in 0..cfg.n_max {
                 if started.elapsed() >= cfg.budget {
                     truncated = true;
@@ -7311,11 +7332,30 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 // every window, and the two seconds it burns would be charged to nothing —
                 // a refused channel would read as a slow one rather than as a refused one.
                 if submitted && (i + 1).is_multiple_of(DBL_DRAIN_EVERY) {
-                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-                    while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload)
-                        && std::time::Instant::now() < deadline
-                    {
+                    let d0 = std::time::Instant::now();
+                    let deadline = d0 + DBL_DRAIN_TIMEOUT;
+                    let mut retired = false;
+                    loop {
+                        if matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload) {
+                            retired = true;
+                            break;
+                        }
+                        if std::time::Instant::now() >= deadline {
+                            break;
+                        }
                         std::thread::sleep(std::time::Duration::from_micros(200));
+                    }
+                    drains += 1;
+                    drain_wall += d0.elapsed();
+                    if !retired {
+                        drain_timeouts += 1;
+                        first_stall = Some(i);
+                        // ⊘⊘ STOP THE REPETITION HERE, and this is not an optimisation.
+                        // Submissions issued after the channel has stopped retiring are a
+                        // DIFFERENT quantity — the cost of composing a push into a ring
+                        // nothing is draining — and pooling them with the others under one
+                        // name is how a bimodal number gets reported as one median.
+                        break;
                     }
                 }
             }
@@ -7323,6 +7363,21 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             pooled.extend_from_slice(&ns);
             let d = DblDist::of(ns, truncated, refused, wall);
             d.print(&format!("arm=submit rep={rep}"));
+            println!(
+                "DBL_DRAIN rep={rep} every={DBL_DRAIN_EVERY} drains={drains} \
+                 timeouts={drain_timeouts} drain_ms={:.1} stalled={} first_stall_at={}",
+                drain_wall.as_secs_f64() * 1e3,
+                first_stall.is_some(),
+                first_stall.map_or_else(|| "none".to_string(), |i| i.to_string()),
+            );
+            if first_stall.is_some() {
+                stalled_reps += 1;
+                if pooled_first_stall.is_none() {
+                    pooled_first_stall = first_stall;
+                }
+            }
+            pooled_drains += drains;
+            pooled_drain_timeouts += drain_timeouts;
             if d.n > 0 {
                 rep_p50.push(d.p50_us);
             }
@@ -7343,6 +7398,16 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
+        // ★★★★★ **THE POOLED STALL LINE — this is where the guest result actually lives.**
+        // A channel that stops retiring is not slow, it is BROKEN, and the two are reported
+        // by completely different numbers. `first_stall_at` is the submission index whose
+        // drain window failed to retire, and it is the bisection answer WITHOUT a second boot.
+        println!(
+            "DBL_STALL reps={} stalled_reps={stalled_reps} drains={pooled_drains} \
+             timeouts={pooled_drain_timeouts} first_stall_at={}",
+            cfg.reps,
+            pooled_first_stall.map_or_else(|| "none".to_string(), |i| i.to_string()),
+        );
 
         // ── THE CLOSING CONTROL ──────────────────────────────────────────────────────────
         //
@@ -7360,16 +7425,28 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             DBL_MAGIC_POST,
         );
         println!("info  R6 control (close)  = {post:?}");
-        if !post.landed() {
+        if post.landed() {
+            println!("ok    R6 control (close)  = the channel still carried work at the end");
+        } else {
             control_ok = false;
             println!(
                 "??    R6 CONTROL FAILED    = the channel no longer carries work AFTER the \
                  timed loop. ⊘ The distribution above is over submissions whose fate is \
                  unknown — NOTRUN, not a red"
             );
-            return false;
+            // ⊘⊘⊘ **AND IT DOES NOT RETURN HERE, WHICH IT USED TO.** The two ungraded arms
+            // below are DIAGNOSIS, and diagnosis is most needed exactly when something has
+            // failed. Returning early skipped them on the one arm that had a result to
+            // explain — *"a diagnostic gated on the failure"*, in this file, on its first
+            // guest run. They are cheap, bounded by the same wall budget, and a `bare`
+            // doorbell that still succeeds against a channel whose copies have stopped is a
+            // fact worth having.
+            println!(
+                "⊘     R6 POST-MORTEM      = the two ungraded arms below run ANYWAY, against \
+                 a channel now known to have stopped retiring. Read them as diagnosis of \
+                 that state, never as a latency measurement"
+            );
         }
-        println!("ok    R6 control (close)  = the channel still carried work at the end");
 
         // ── ARM D — the bare doorbell, PRINTED AND UNGRADED ──────────────────────────────
         //
@@ -7460,6 +7537,19 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             }
             let wall = started.elapsed();
             DblDist::of(ns, truncated, refused, wall).print("arm=freshmap rep=0 ⊘UNGRADED");
+        }
+
+        // ⊘ NO GATE IS APPLIED WHEN THE CLOSING CONTROL FAILED. A `PASS` or a `FAIL`
+        // computed over submissions into a channel that stopped retiring would be a
+        // confident number about a broken thing — and `PASS` is the one it would usually
+        // be, because the submissions that never executed are the CHEAP ones.
+        if !control_ok {
+            println!(
+                "⊘     R6 NO VERDICT       = the closing control failed, so the distribution \
+                 above is NOT graded. See `DBL_STALL` for what actually happened; the \
+                 machine-readable verdict is NOTRUN"
+            );
+            return false;
         }
 
         // ── THE VERDICT ──────────────────────────────────────────────────────────────────
