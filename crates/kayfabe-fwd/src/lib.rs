@@ -688,6 +688,53 @@ pub enum FwdFault {
         /// How many entries the channel declared the ring holds.
         entries: u32,
     },
+    /// ★★★★★ **w386 — THE CHANNEL'S PRODUCER CURSOR (`USERD GP_PUT`) COULD NOT BE READ, so
+    /// there is no honest answer to *"how many entries are new"* and the walk refuses.**
+    ///
+    /// # ⊘ Why this is a refusal and not a fallback to reading forward until an entry is zero
+    ///
+    /// The zero-scan it replaces is sound for the ring's **first lap only**: RM
+    /// zero-initialises the GPFIFO buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`,
+    /// `[src] ogkm-580: channel_utils.c:471-476`), so an unwritten slot decodes to nothing
+    /// and the walk stops. Once the guest has written **every** slot once, no zero slot
+    /// remains anywhere in the ring, ever again — and there is no local signal that
+    /// separates *"eight new entries"* from *"one new entry and seven from the previous
+    /// lap"*. Only `GP_PUT` carries that fact.
+    ///
+    /// ⇒ falling back to the zero-scan would not degrade gracefully; it would **silently
+    /// re-execute retired `LAUNCH_DMA`s and re-release their semaphore payloads** over the
+    /// word the guest is polling. That is a completion for work that did not happen on this
+    /// doorbell — §14.8's one prohibition — so *"we cannot tell"* is refused out loud.
+    ///
+    /// ★ `[measured, committed boot logs w267 (8 CE channels) / w269 / w274b / w279 / w281 /
+    /// w283 / w287]` every copy-engine channel that reaches this walk declared its USERD in
+    /// the **framebuffer** (`phys=fb:0x…/0x200`) and its cursors read live and correct
+    /// (`fbuserd@0x… GET=0 PUT=1`, and `GET=1 PUT=1` after the engine fetched). So this
+    /// refusal is not expected to fire on any channel that works today — and if it does, it
+    /// says so rather than guessing.
+    RingProducerCursorUnknown {
+        /// The ring's base GPU virtual address, as the channel declared it.
+        ring_va: GpuVa,
+        /// The entry index our own read cursor was at.
+        index: u32,
+        /// How many entries the channel declared the ring holds.
+        entries: u32,
+    },
+    /// ★★★★ **w386 — the producer cursor was read and it is not an index into this ring.**
+    ///
+    /// ⊘ A different fact from [`FwdFault::RingProducerCursorUnknown`] and it must stay one:
+    /// that variant is *"we could not read it"*, this is *"we read it and the two numbers
+    /// disagree"*. The second says one of `GP_PUT`'s source and `gpFifoEntries`' source is
+    /// describing a different channel — which is a join defect on our side, not a guest
+    /// error — and collapsing it into the first would send a reader to the wrong file.
+    RingProducerCursorOutOfRange {
+        /// The ring's base GPU virtual address, as the channel declared it.
+        ring_va: GpuVa,
+        /// The value read out of the channel's USERD `GP_PUT`.
+        gp_put: u32,
+        /// How many entries the channel declared the ring holds.
+        entries: u32,
+    },
     /// ★★★★ **The submission was READ and DECODED, and not one method in it was a launch
     /// or a release** — so the doorbell moved no bytes and released no semaphore.
     ///

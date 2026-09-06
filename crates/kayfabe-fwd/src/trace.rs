@@ -90,6 +90,12 @@ impl Faulted for FwdFault {
                 }
             },
             FwdFault::RingBroughtNoEntry { .. } => FaultTag("FwdFault::RingBroughtNoEntry"),
+            FwdFault::RingProducerCursorUnknown { .. } => {
+                FaultTag("FwdFault::RingProducerCursorUnknown")
+            }
+            FwdFault::RingProducerCursorOutOfRange { .. } => {
+                FaultTag("FwdFault::RingProducerCursorOutOfRange")
+            }
             FwdFault::SubmissionDecodedNoWork { .. } => {
                 FaultTag("FwdFault::SubmissionDecodedNoWork")
             }

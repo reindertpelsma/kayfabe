@@ -3598,6 +3598,30 @@ impl kayfabe_device::FbJoined for MappedFb {
 /// a counter and cannot fill a disk.
 const GR_PUSHBUFFER_DUMPS_MAX: u32 = 2;
 
+/// ★★★ **w386 — how many ORDINARY locally-served doorbells each channel prints.**
+///
+/// "Ordinary" = one entry consumed and no wrap. `[measured w384, boot
+/// `run_w384c_guest_probe`]` the boot log carried **16** `SERVED-LOCAL` lines in total, from
+/// a global cap in the QEMU device, and not one of them said how many GPFIFO entries the
+/// walk consumed — the quantity the wrap defect corrupts. So the number is printed here, per
+/// channel, where the walk actually happened.
+const CE_SERVED_LOCAL_LOG_MAX: u32 = 32;
+
+/// ★★★★★ **w386 — the budget for the rows that are NOT ordinary, and it is separate on
+/// purpose.**
+///
+/// A row is remarkable when the walk consumed anything other than one entry, or when it
+/// **wrapped** past the end of the ring. Those are exactly the rows the wrap defect produces,
+/// and a single shared cap would hide them: a channel with a 1024-entry ring reaches its wrap
+/// at doorbell 1023, a thousand ordinary rows after any per-channel budget is spent. ⇒ the
+/// interesting rows have their own budget, so *"we never saw it"* cannot be an artefact of
+/// the ordinary traffic in front of it.
+///
+/// ⚠ This tree has been bitten by a global print cap forging an absence (`w383`: proc 1 ate
+/// all 128 dumps, so proc 2's page printed **zero** times and read as *"the machinery never
+/// ran"*). Both budgets here are **per channel** for that reason.
+const CE_SERVED_LOCAL_ODD_LOG_MAX: u32 = 32;
+
 /// How many method words each dump prints. Enough to carry a `SET_OBJECT`, a context-buffer
 /// setup run and a report semaphore; the dump says how many it did not show.
 const GR_PUSHBUFFER_METHODS_MAX: usize = 256;
@@ -3621,6 +3645,19 @@ struct CeShellState {
         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>,
     /// ★★★★ **§16.65 — THE PER-ENGINE DOORBELL CENSUS.** See [`DoorbellCensus`].
     census: std::sync::Mutex<DoorbellCensus>,
+    /// ★★★★★ **w386 — PER-CHANNEL print budgets for the locally-served doorbell line**,
+    /// as `(ordinary, remarkable)`, keyed exactly like [`CeShellState::cursors`].
+    ///
+    /// ⊘ **The line it bounds is the only witness of `CeUtilsRun::entries` a boot has.** The
+    /// QEMU device's own `SERVED-LOCAL` line carries a `&'static str` kind and no numbers
+    /// (`qemu/hw/misc/nvkvm/nvkvm.c`), and the per-run detail went only to the teardown
+    /// report — so `[measured w384]` the wrap defect had to be inferred from *stall
+    /// positions* across boots when `entries=8` was sitting in the walk the whole time.
+    ///
+    /// ⚠ Taken in its own block and **dropped before anything prints** — `gr_dumps`' shape,
+    /// and the one `unranked_locks.rs` classifies as safe. `l1_concurrency.md` §3.3 R1: no
+    /// potentially-blocking syscall beneath any lock, and `eprintln!` is one.
+    served_logged: std::sync::Mutex<std::collections::BTreeMap<(u32, u32), (u32, u32)>>,
     /// ★★★ §16.79 — how many route-refused (GR) pushbuffers have been dumped this device
     /// life. Bounded by [`GR_PUSHBUFFER_DUMPS_MAX`]: `cuCtxCreate` rings one GR channel 86
     /// times and the first submissions are the ones that decide the question.
@@ -5821,6 +5858,11 @@ impl SharedDoorbell {
             vaspace,
             ring_va,
             ring_entries: facts.ring_entries,
+            // ⊘ Read for the BOUND, never for a decision: this reader executes nothing and
+            // releases nothing, so it narrows the walk when the guest's cursor is available
+            // and reads the ring the old way when it is not. See `read_submission_methods`
+            // for why that is deliberately the OPPOSITE policy to the executor's.
+            gp_put: fb_userd_gp_put(&plane, facts.userd),
         };
         // ⊘ The channel's OWN cursor, read and not written — the dump must not move a
         // submission the port is about to refuse.
@@ -6000,6 +6042,11 @@ impl SharedDoorbell {
             vaspace,
             ring_va,
             ring_entries: facts.ring_entries,
+            // ⊘ Read for the BOUND, never for a decision: this reader executes nothing and
+            // releases nothing, so it narrows the walk when the guest's cursor is available
+            // and reads the ring the old way when it is not. See `read_submission_methods`
+            // for why that is deliberately the OPPOSITE policy to the executor's.
+            gp_put: fb_userd_gp_put(&plane, facts.userd),
         };
         // ⊘ The channel's OWN cursor, read and NOT written — this must not move a submission
         // the port is about to refuse.
@@ -6801,6 +6848,13 @@ impl SharedDoorbell {
             vaspace,
             ring_va,
             ring_entries: facts.ring_entries,
+            // ★★★★★ w386 — THE GUEST'S OWN PRODUCER CURSOR, read HERE and not inside the
+            // session: `fb_userd_gp_put` takes the plane's state mutex and
+            // `ce_session_with_root` below holds that same non-reentrant lock across its
+            // whole closure. ⊘ `None` is REFUSED by `run_submission`, by name — never fallen
+            // back onto the ring's zero-terminator, which is only sound for the ring's
+            // first lap.
+            gp_put: fb_userd_gp_put(&plane, facts.userd),
         };
         let key = (facts.proc.0, facts.chan.0);
         let cursor = *self
@@ -6917,6 +6971,52 @@ impl SharedDoorbell {
         };
         Some(match outcome {
             Ok(run) => {
+                // ★★★★★ **w386 — WHAT THE WALK ACTUALLY CONSUMED, in the boot log.**
+                //
+                // `[measured w384, boot `run_w384c_guest_probe`, rev 5756322d]` the whole
+                // boot carried 16 `SERVED-LOCAL` lines and **none of them named
+                // `CeUtilsRun::entries`** — the one quantity the ring-wrap defect corrupts
+                // (1 expected, 8 after the wrap). The defect was therefore inferred from
+                // stall positions across boots, when the number was sitting right here.
+                //
+                // ⊘ The cursor is printed on BOTH sides. A cursor that goes 7 -> 7 while
+                // eight entries were consumed is the wrap defect's exact signature, and no
+                // single number shows it.
+                let wrapped = run.cursor.next <= cursor.next && run.entries > 0;
+                let odd = run.entries != 1 || wrapped;
+                // ⚠ Its own block, dropped before the print — `l1_concurrency.md` §3.3 R1
+                // (no potentially-blocking syscall beneath any lock) and `gr_dumps`' shape.
+                let budget = {
+                    let mut m = self
+                        .ce
+                        .served_logged
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    let e = m.entry(key).or_insert((0, 0));
+                    if odd {
+                        e.1 += 1;
+                        (e.1 <= CE_SERVED_LOCAL_ODD_LOG_MAX).then_some(e.1)
+                    } else {
+                        e.0 += 1;
+                        (e.0 <= CE_SERVED_LOCAL_LOG_MAX).then_some(e.0)
+                    }
+                };
+                if let Some(n) = budget {
+                    eprintln!(
+                        "kayfabe: CE-SERVED-LOCAL{} #{n} token={token:#010x} proc={} chan={} \
+                         entries={} gp={}->{} gp_put={} ring_entries={} — {}",
+                        if odd { " ⚠ODD" } else { "" },
+                        facts.proc.0,
+                        facts.chan.0,
+                        run.entries,
+                        cursor.next,
+                        run.cursor.next,
+                        chan.gp_put
+                            .map_or_else(|| "NONE".to_string(), |p| p.to_string()),
+                        chan.ring_entries,
+                        run.describe(),
+                    );
+                }
                 self.ce
                     .cursors
                     .lock()
@@ -7726,6 +7826,11 @@ impl SharedDoorbell {
             vaspace,
             ring_va,
             ring_entries: f.ring_entries,
+            // ⊘ Read for the BOUND, never for a decision: this reader executes nothing and
+            // releases nothing, so it narrows the walk when the guest's cursor is available
+            // and reads the ring the old way when it is not. See `read_submission_methods`
+            // for why that is deliberately the OPPOSITE policy to the executor's.
+            gp_put: fb_userd_gp_put(&plane, f.userd),
         };
         // ⊘ The channel's OWN cursor and OWN accumulator, both read and NEITHER written back —
         // `ce_release_pages`' discipline, for its reasons.
@@ -16699,19 +16804,12 @@ fn fb_userd_cursors(
     plane: &kayfabe_device::plane::RegPlane,
     userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
 ) -> String {
-    // ⊘ Only the framebuffer arm has an address this store can serve. A `Sysmem` USERD is a
-    // real and legal case whose bytes live in guest RAM, and reading its guest-physical
-    // address out of the framebuffer would produce a confident wrong number.
-    let Some(base) = userd.and_then(|u| u.framebuffer_base()) else {
+    let Some(UserdSlot { at, cursors }) = fb_userd_slot(plane, userd) else {
         return String::new();
     };
-    // `GP_GET` and `GP_PUT` are one dword apart at the head of the 512-byte slot; eight bytes
-    // is the whole read. ⊘ The offsets are `kayfabe_abi::submit`'s, never spelled here.
-    let mut w = [0u8; 8];
-    let at = base + kayfabe_abi::submit::USERD_GP_GET;
-    match plane.fb_peek(at, &mut w) {
+    match cursors {
         Err(why) => format!(" fbuserd@0x{at:x}=REFUSED({why})"),
-        Ok(()) => {
+        Ok((get, put)) => {
             // ⊘⊘ **THE JOIN IS CHECKED FIRST, AND FINDING THAT OUT BEFORE THE BOOT IS THE
             // POINT.** `SparseFb::install_join` **removes the local pages** for a joined
             // range — that is what makes the join one memory rather than two — so
@@ -16738,12 +16836,86 @@ fn fb_userd_cursors(
             // fourth caller cannot re-acquire the defect. ★ A correction implemented at ONE
             // call site is not a correction; it is a local escape from a shared defect.
             let res = plane.fb_page_standing(at).tag();
-            format!(
-                " fbuserd@0x{at:x} GET={} PUT={} {res}",
-                u32::from_le_bytes([w[0], w[1], w[2], w[3]]),
-                u32::from_le_bytes([w[4], w[5], w[6], w[7]]),
-            )
+            format!(" fbuserd@0x{at:x} GET={get} PUT={put} {res}")
         }
+    }
+}
+
+/// ★★★★★ **w386 — the channel's USERD `(GP_GET, GP_PUT)` AS NUMBERS**, with the framebuffer
+/// address they were read from.
+///
+/// `None` = this channel has no framebuffer USERD address at all: an unreadable descriptor,
+/// an `Undeclared` one, or a **`Sysmem`** one — whose `base` is a *guest-physical* address
+/// that reading out of the framebuffer would turn into a confident wrong number
+/// (`kayfabe_core::rmgraph::DeclaredUserd::framebuffer_base`, and `kayfabe_arch::Aperture`'s
+/// *"vidmem offset X and sysmem offset X are different bytes on different devices"*).
+/// `Some((_, Err(_)))` = there is an address and the store refused it.
+///
+/// ⊘ **Extracted so [`fb_userd_cursors`] and [`fb_userd_gp_put`] cannot come to disagree.**
+/// The log line and the number a doorbell walk now STOPS AT are two renderings of one read;
+/// two copies of this offset arithmetic would agree until the day one of them was corrected.
+///
+/// ⚠⚠ **THE LOCK: this takes `RegPlane`'s state mutex** (`plane.rs`' `fb_peek`), which is the
+/// **same non-reentrant `RankedMutex`** `ce_session_with_root` holds for the whole of its
+/// closure. ⇒ every caller must read the cursor **before** opening a CE session, never from
+/// inside one. Every call site below does, and that ordering is load-bearing rather than
+/// incidental.
+fn fb_userd_slot(
+    plane: &kayfabe_device::plane::RegPlane,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> Option<UserdSlot> {
+    // ⊘ `framebuffer_base` already folds in `userdOffset[0]` — adding it again here would be
+    // a bug, and a silent one (`DeclaredUserd::offset`'s docs name a non-zero offset as a
+    // documented SILENT-STALL mechanism).
+    let base = userd.and_then(|u| u.framebuffer_base())?;
+    // `GP_GET` and `GP_PUT` are one dword apart at the head of the 512-byte slot; eight bytes
+    // is the whole read. ⊘ The offsets are `kayfabe_abi::submit`'s, never spelled here.
+    let at = base + kayfabe_abi::submit::USERD_GP_GET;
+    let mut w = [0u8; 8];
+    let cursors = match plane.fb_peek(at, &mut w) {
+        Err(why) => Err(why.to_string()),
+        Ok(()) => Ok((
+            u32::from_le_bytes([w[0], w[1], w[2], w[3]]),
+            u32::from_le_bytes([w[4], w[5], w[6], w[7]]),
+        )),
+    };
+    Some(UserdSlot { at, cursors })
+}
+
+/// ★★★ One read of a channel's USERD cursor slot — see [`fb_userd_slot`], the only
+/// constructor.
+///
+/// ⊘ A named struct rather than the tuple it was drafted as: the two fields are a *place* and
+/// a *result about that place*, and a positional pair of them reads identically whichever way
+/// round it is written.
+struct UserdSlot {
+    /// The framebuffer address `GP_GET` was read from — carried even on the refusing arm, so
+    /// a log line can say **which address** the store declined.
+    at: u64,
+    /// `(GP_GET, GP_PUT)`, or the store's own refusal for [`Self::at`].
+    cursors: Result<(u32, u32), String>,
+}
+
+/// ★★★★★ **w386 — THE GUEST'S PRODUCER CURSOR, for the ring walk that must stop at it.**
+///
+/// [`fb_userd_slot`]'s `GP_PUT` half and nothing else. It feeds
+/// [`kayfabe_rt::ceutils::CeUtilsChannel::gp_put`], where `None` is **refused by name**
+/// (`kayfabe_fwd::FwdFault::RingProducerCursorUnknown`) on the executing path rather than
+/// fallen back on — see that variant for why falling back to the ring's zero-terminator is
+/// unsafe past the ring's first lap.
+///
+/// ⊘ **It is the FIRST consumer these bytes have ever had.** [`fb_userd_cursors`]' docs say
+/// *"it reads and it decides nothing"*, and that stays true **of the string**; this is where
+/// the same read started deciding something, and the two must therefore not drift apart.
+fn fb_userd_gp_put(
+    plane: &kayfabe_device::plane::RegPlane,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> Option<u32> {
+    match fb_userd_slot(plane, userd)?.cursors {
+        Ok((_get, put)) => Some(put),
+        // ⊘ A refused read is `None` here — *"we have no producer cursor"* — and that is the
+        // right collapse for THIS consumer, whose caller refuses either way by name.
+        Err(_) => None,
     }
 }
 
