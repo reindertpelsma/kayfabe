@@ -103,6 +103,13 @@ export KAYFABE_OPERAND_JOIN=${KAYFABE_OPERAND_JOIN:-join} # ⊘ RELAXATION 2 (re
 # ⚠ VAS_PUBLISH stays POSITIONAL — it is the rung's own parameter and is already expressible
 #   by the caller. Overriding it by env as well would give one arm two sources of truth.
 export KAYFABE_VAS_PUBLISH=$ARM     # ★★★★★ THE RUNG
+# ★★★★★ **w383 — THE w318/w330 DIRTY GATES, NOW EXPRESSIBLE FROM THE CALLER.** They were
+#   never in this list, so no boot this harness ever ran set them, and `selected_dirty_gate`
+#   short-circuited the unset case to `off` — which is how w330's measured `off → on` default
+#   change came to affect nothing. ⊘ Defaulted to the value the code now states (`on`), and
+#   overridable so the ungated arm — w318's own negative control — stays reachable.
+export KAYFABE_DIRTY_GATE_PUBLISH=${KAYFABE_DIRTY_GATE_PUBLISH:-on}
+export KAYFABE_DIRTY_GATE_WITNESS=${KAYFABE_DIRTY_GATE_WITNESS:-on}
 unset KAYFABE_RING_VIDMEM
 
 # ⊘⊘ w297 DEFECT FIX — **THE RELAXATION REPORT WAS VACUOUS AND LOOKED COMPLETE.** These are
@@ -119,8 +126,13 @@ echo "=== ★ THE ARMING AS THIS SCRIPT SET IT (a record of intent, not of execu
 for v in KAYFABE_ISOLATES KAYFABE_CE_EXECUTOR NVKVM_RAM_BACKEND KAYFABE_GUEST_RAM \
          KAYFABE_FB_JOIN KAYFABE_GUEST_RING KAYFABE_PT_WITNESS_EXEC \
          KAYFABE_GR_ROUTE KAYFABE_PT_SWEEP KAYFABE_OPERAND_JOIN KAYFABE_VAS_PUBLISH \
-         GQ_TIMEOUT BOOT_TIMEOUT; do
-  echo "    $v=${!v}"
+         KAYFABE_DOORBELL_ASYNC KAYFABE_DIRTY_GATE_PUBLISH KAYFABE_DIRTY_GATE_WITNESS \
+         GQ_TIMEOUT BOOT_TIMEOUT CAPTURE_TIMEOUT; do
+  # ⊘ `:-<unset>` — w383. Under `set -u` an indirect expansion of a variable no caller
+  #   exported ABORTS THE WHOLE RUN, and the two new names here are legitimately absent for
+  #   every pre-w383 caller. An arming report that can kill the boot it is reporting on is
+  #   worse than no report.
+  echo "    $v=${!v:-<unset>}"
 done
 echo "    KAYFABE_RING_VIDMEM=<unset>"
 
@@ -130,7 +142,13 @@ echo "    KAYFABE_RING_VIDMEM=<unset>"
 #   not happen, and it must never read as 0.
 export POST_CAPTURE_HOOK=${POST_CAPTURE_HOOK:-$REPO/scripts/bench/cup2_hook_gdbspin.sh}
 echo "=== BOOT $TAG START $(date -Is)  HOOK=[$(basename "$POST_CAPTURE_HOOK")] ==="
-timeout 1800 "$REPO/scripts/bench/boot_capture.sh" "$TAG"
+# ⊘ **w383 — OVERRIDABLE, DEFAULTED to the 1800 every caller before this got.** It was a
+#   hardcoded literal, so a workload that legitimately needs longer than 30 minutes could not
+#   be expressed from the caller at all: the boot was killed mid-run and the probe log ended
+#   with no verdict line, which reads as "the workload failed" and is actually "the harness
+#   stopped". ⚠ Same class as the LLM_TOKENS conflation one script over — an absent
+#   measurement wearing a failure's face.
+timeout "${CAPTURE_TIMEOUT:-1800}" "$REPO/scripts/bench/boot_capture.sh" "$TAG"
 echo "=== BOOT $TAG RC=$? $(date -Is) ==="
 Q=/workspace/bench/run_${TAG}_qemu.log
 P=/workspace/bench/run_${TAG}_probe.log

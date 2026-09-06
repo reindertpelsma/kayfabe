@@ -352,6 +352,12 @@ typedef struct KayfabeRegWrite {
 #define KAYFABE_DOORBELL_NONE    0
 #define KAYFABE_DOORBELL_SERVED  1
 #define KAYFABE_DOORBELL_REFUSED 2
+/* ★★★★★ w383 — the trap ACCEPTED the token and returned; the deferred publication lane's
+ * worker runs the publication and the host ring afterwards.  `doorbell_kind` carries
+ * "Pubqueue::Scheduled" or "Pubqueue::Coalesced".  ⊘ Its own value rather than SERVED: a
+ * shell that could not tell a scheduled ring from a served one would report a queue depth
+ * as throughput. */
+#define KAYFABE_DOORBELL_SCHEDULED 4
 /* ★★★ E10e — the SHELL served it, on the CPU, with no host ring involved: a GSP-managed
  * copy-engine channel (RM's CeUtils) whose operands live in the emulated framebuffer and in
  * guest RAM, neither of which a real engine can be pointed at.  `doorbell_kind` carries the

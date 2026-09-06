@@ -173,6 +173,29 @@ pub const DOORBELL_REFUSED: i32 = 2;
 /// reason the refusal's sentence does — a `format!`ed string has no `'static` address.
 pub const DOORBELL_SERVED_LOCAL: i32 = 3;
 
+/// ★★★★★ **w383 — the trap ACCEPTED it and returned; a worker will run it.** The value the
+/// deferred publication lane's [`kayfabe_device::DoorbellReport::Scheduled`] projects to.
+///
+/// ⊘ Its own constant rather than [`DOORBELL_SERVED`], for the same reason
+/// [`DOORBELL_SERVED_LOCAL`] is its own: *"counted as a doorbell, went nowhere, looked
+/// fine"* must be unrepresentable on **this** wire too, and a shell that could not tell a
+/// scheduled ring from a served one would report a queue depth as throughput.
+///
+/// ⚠ **A new VALUE for an existing field, not a new field** — `KayfabeRegWrite`'s layout is
+/// unchanged, so no ABI bump. An older C shim would fall into its `else` and print
+/// `SERVED`, which is why the C side is updated in the same commit.
+pub const DOORBELL_SCHEDULED: i32 = 4;
+
+/// The `doorbell_kind` a [`DOORBELL_SCHEDULED`] write carries — a `&'static str` in this
+/// archive's read-only data, so it may cross the wire as a pointer.
+const SCHEDULED_KIND: &str = "Pubqueue::Scheduled";
+
+/// The `doorbell_kind` a [`DOORBELL_SCHEDULED`] write carries when the offer **coalesced**
+/// into one already pending for the same token. ⊘ A different constant and not a flag: both
+/// are acceptance, only one is a new unit of work, and a shell that printed one word for
+/// both would read a coalescing burst as a queue that grew.
+const COALESCED_KIND: &str = "Pubqueue::Coalesced";
+
 /// The `doorbell_kind` a [`DOORBELL_SERVED_LOCAL`] write carries. A constant, because there
 /// is exactly one way to be served locally; the variation is in the audit's sentence.
 const SERVED_LOCAL_KIND: &str = "CpuCe::ServedLocally";
@@ -207,6 +230,20 @@ impl KayfabeRegWrite {
                 *token,
                 SERVED_LOCAL_KIND.as_ptr(),
                 SERVED_LOCAL_KIND.len() as u64,
+            ),
+            Some(kayfabe_device::DoorbellReport::Scheduled { token, queued }) => (
+                DOORBELL_SCHEDULED,
+                *token,
+                if *queued {
+                    SCHEDULED_KIND.as_ptr()
+                } else {
+                    COALESCED_KIND.as_ptr()
+                },
+                if *queued {
+                    SCHEDULED_KIND.len() as u64
+                } else {
+                    COALESCED_KIND.len() as u64
+                },
             ),
             Some(kayfabe_device::DoorbellReport::Refused { token, refusal }) => (
                 DOORBELL_REFUSED,
