@@ -4467,6 +4467,85 @@ impl W379Release {
     }
 }
 
+/// ★★★★★ **w381 — WHICH PUSHBUFFER VERB EVERY RUNG USES TO PROVE A VA IS LIVE.**
+///
+/// The w379 battery had exactly one liveness primitive, and it is **unservable inside a
+/// Mode-2 guest by design**: `submit_release_at` emits the host-FIFO semaphore run, the CPU
+/// copy-engine emulator decodes it as `PushMethod::SemRelease` and *deliberately does not
+/// act on it* (`kayfabe-rt/src/ceutils.rs`, the `else` arm of the `CeLaunchDma` `let`;
+/// restated in `release_targets_of`). ⇒ **the guest arm could never reach its own positive
+/// control**, so the whole battery was a native-only control and not an iteration handle.
+///
+/// ⊘ **The two arms are NOT interchangeable and must never be silently substituted.** They
+/// exercise different engine machinery, and a run that does not say which one it used
+/// cannot be compared to any other run — which is why [`W381Probe::as_str`] is printed on
+/// every invocation before a single rung starts.
+///
+/// # ★ WHAT MAKES THE SUBSTITUTION HONEST
+///
+/// Both arms answer the same question — *does an address written through this GPU VA
+/// receive our magic?* — read back through an **independent** CPU mapping of the object
+/// ([`HostRmBackend::read_words_independently`]). The bytes are either there or they are
+/// not. What changes is only which engine verb carries them:
+///
+/// | arm | pushbuffer methods | served by the Mode-2 emulator? |
+/// |---|---|---|
+/// | [`W381Probe::SemRelease`] | `SEM_ADDR_LO/HI/PAYLOAD/EXECUTE` (host FIFO) | **no**, by design |
+/// | [`W381Probe::LaunchDma`] | `SET_OBJECT`, `OFFSET_IN/OUT`, `LINE_*`, `SET_SEMAPHORE_A/B/PAYLOAD`, `LAUNCH_DMA` | **yes** — `execute_ours_spans` moves the bytes |
+///
+/// ⚠ The `LaunchDma` arm writes **four bytes copied from the channel's own ring**, not a
+/// literal the engine synthesises. That is strictly more evidence than a release: a copy
+/// that lands proves the destination VA resolved *and* that a source VA resolved *and*
+/// that the engine ran, where a release proves only the first and the third.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum W381Probe {
+    /// The w379 primitive. **Native only** — see the type's own docs.
+    SemRelease,
+    /// ★★★★★ The w381 primitive: a four-byte `LAUNCH_DMA` into the address under test.
+    /// Servable on **both** sides of the differential.
+    LaunchDma,
+}
+
+impl W381Probe {
+    /// The printed form, so a log line, a grader and a human agree on the vocabulary.
+    fn as_str(self) -> &'static str {
+        match self {
+            W381Probe::SemRelease => "sem-release",
+            W381Probe::LaunchDma => "launch-dma",
+        }
+    }
+}
+
+/// ★★ **A scheduled channel and the work-submit token its doorbell needs**, as ONE value.
+///
+/// ⊘ Not a tidying. The two are minted together by
+/// [`HostRmBackend::alloc_channel_at`] and are meaningless apart: a token rung on the wrong
+/// channel's doorbell is a submission into somebody else's ring, and the rungs most exposed
+/// to that are exactly the ones that hold **two** channels live at once (R3's victim and
+/// bystander, R5b's two clients). Carrying them together makes the mispairing
+/// unexpressible-by-accident.
+///
+/// ⚠ It is also what keeps [`w379_release_through`] inside clippy's seven-argument bound
+/// after w381 added the probe selector — but that is the *occasion* for the type, not its
+/// reason. A bare `#[allow]` would have bought the same silence and none of the safety.
+#[derive(Debug, Clone, Copy)]
+struct W381Chan {
+    /// The channel object itself.
+    h: kayfabe_isolate::HostHandle,
+    /// The work-submit token `alloc_channel_at` returned **with** `h`, and only with it.
+    token: u64,
+}
+
+/// The payload the w381 copy probe releases on the channel's **own** semaphore, purely as a
+/// retirement **qualifier**.
+///
+/// ⊘⊘ **IT IS NOT THE VERDICT AND MUST NEVER BECOME ONE.** The primary observable is the
+/// destination word; this one only ever qualifies a red. `GP_GET` has no writer anywhere in
+/// this workspace and an emulated device has no PBDMA, so a rung that graded on a cursor
+/// produced a confident, plausible, always-wrong `NeverFetched` — and a channel semaphore
+/// is the same class of secondary evidence.
+const W381_RETIRE_PAYLOAD: u32 = 0x8138_1381;
+
 /// What the **host driver** — not our bookkeeping — says about one VA in one address space.
 ///
 /// ⊘ The point of this type is that [`W379HostVa::Unmeasured`] is a first-class value.
@@ -4523,19 +4602,47 @@ fn w379_host_va(rm: &mut HostRmBackend, vas: kayfabe_isolate::HostHandle, va: u6
 /// written through would prove the page is writable and nothing else.
 fn w379_release_through(
     rm: &mut HostRmBackend,
-    chan: kayfabe_isolate::HostHandle,
-    token: u64,
+    probe: W381Probe,
+    ch: W381Chan,
     mem: kayfabe_isolate::HostHandle,
     target_va: u64,
     byte_off: u64,
     payload: u32,
 ) -> W379Release {
-    if rm
-        .submit_release_at(chan, token, target_va + byte_off, payload)
-        .is_err()
-    {
+    // ── SUBMIT, by whichever verb this run selected. ─────────────────────────────────────
+    //
+    // ★★★ w381 — the two arms differ HERE and nowhere else. Everything below this block is
+    // byte-identical for both, deliberately: the read-back, the deadline and the three
+    // verdicts are the rung's, not the primitive's, so a `LaunchDma` result and a
+    // `SemRelease` result are the same measurement of the same address and can be put side
+    // by side. ⊘ If the arms diverged in how they GRADE, the differential this exists to
+    // produce would be comparing two different questions.
+    let submitted = match probe {
+        W381Probe::SemRelease => rm
+            .submit_release_at(ch.h, ch.token, target_va + byte_off, payload)
+            .is_ok(),
+        W381Probe::LaunchDma => {
+            let (src_off, _sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+            // ⊘ The magic goes into the channel's OWN ring first — a CPU store into memory
+            // that is mapped before the doorbell by construction. A failure to place the
+            // source is a refusal, never a `Lost`: the engine was never asked.
+            rm.ring_store_u32(ch.h, src_off, payload).is_ok()
+                && rm
+                    .submit_copy_at(
+                        ch.h,
+                        ch.token,
+                        src_off,
+                        target_va + byte_off,
+                        4,
+                        W381_RETIRE_PAYLOAD,
+                    )
+                    .is_ok()
+        }
+    };
+    if !submitted {
         return W379Release::Refused;
     }
+    // ── OBSERVE. The PRIMARY observable, and it is the only one that decides. ────────────
     let deadline = std::time::Instant::now() + W379_LAND_TIMEOUT;
     let mut saw;
     loop {
@@ -4550,6 +4657,26 @@ fn w379_release_through(
             return W379Release::Lost { saw };
         }
         std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
+/// ★★ The **qualifier** for a w381 copy probe: did the channel's own semaphore retire?
+///
+/// ⊘⊘ **ORDER THE OBSERVABLES.** This is read only when the primary one is already a red,
+/// and it may only ever say *which kind* of red — never turn one into a green or a green
+/// into one. `GP_GET` produced a confident, plausible, always-wrong `NeverFetched` because
+/// a rung graded on a cursor that no writer in this workspace ever advances; a channel
+/// semaphore is the same class of evidence and gets the same treatment.
+///
+/// Returns the printed form directly, because a caller that got a `u32` back would have to
+/// re-derive the comparison and could get it wrong in a second place.
+fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'static str {
+    let (_src_off, sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+    match rm.ring_load_u32(chan, sem_off) {
+        Ok(v) if v == W381_RETIRE_PAYLOAD => "RETIRED",
+        Ok(0) => "NOT-RETIRED(sem still 0)",
+        Ok(_) => "NOT-RETIRED(sem holds something else)",
+        Err(_) => "UNMEASURED(ring read refused)",
     }
 }
 
@@ -4594,7 +4721,7 @@ fn w379_release_through(
 /// - **A lost** ⇒ ⊘ **the control failed and the rung is UNINTERPRETABLE.** Prints `NOTRUN`.
 /// - **a map is refused / placed elsewhere** ⇒ ⊘ `NOTRUN`. RM declining a fixed placement is
 ///   a statement about our address choice, not about aliasing.
-fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
+fn alias_two_vas(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     // Ring, VA_A and VA_B are ≥ 4 GiB apart. A VA_B adjacent to VA_A could be covered by a
     // big PTE VA_A's mapping already installed, which would make step 4 pass for a reason
     // that has nothing to do with aliasing.
@@ -4679,7 +4806,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
             host_a1.as_str()
         );
 
-        let a = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
+        let a = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A,
+            MAGIC_A,
+        );
         println!("info  R1' release via A   = {a:?}");
         if !a.landed() {
             println!(
@@ -4717,7 +4852,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
             host_b2.as_str()
         );
 
-        let b = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        let b = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_B,
+            MAGIC_B,
+        );
         println!("info  R1' release via B   = {b:?}");
         if !b.landed() {
             println!(
@@ -4733,7 +4876,15 @@ fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
         );
 
         // ── step 4 — VA_A AGAIN, now that VA_B exists ────────────────────────────────────
-        let a2 = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A2, MAGIC_A2);
+        let a2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A2,
+            MAGIC_A2,
+        );
         println!("info  R1' release via A#2 = {a2:?}");
         match a2 {
             W379Release::Landed => {
@@ -4832,7 +4983,7 @@ fn alias_two_vas(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// after the last leaf in it is unmapped, so `PDE_COVERS` at VA_A **after** the unmap is
 /// **not** evidence the mapping survived, and this rung does not grade on it. The graded
 /// facts are `probe_va` (RM's allocator saying the VA is free again) and the VA_B release.
-fn alias_unmap_observe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+fn alias_unmap_observe(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     const RING_AT: u64 = 0x0000_0006_3100_0000;
     const VA_A: u64 = 0x0000_0007_3100_0000;
     const VA_B: u64 = 0x0000_0008_3100_0000;
@@ -4905,8 +5056,24 @@ fn alias_unmap_observe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         println!("ALIAS_MARK=both_mapped va_a={VA_A:#018x} va_b={VA_B:#018x}");
 
         // ── the control: BOTH aliases live before anything is torn down ─────────────────
-        let a = w379_release_through(rm, chan, token, mem, VA_A, W379_OFF_A, MAGIC_A);
-        let b = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_B, MAGIC_B);
+        let a = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_A,
+            W379_OFF_A,
+            MAGIC_A,
+        );
+        let b = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_B,
+            MAGIC_B,
+        );
         println!("info  R1\" control A/B     = {a:?} / {b:?}");
         if !a.landed() || !b.landed() {
             println!(
@@ -4941,7 +5108,15 @@ fn alias_unmap_observe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         println!("info  R1\" allocator says A = {free_a:?} (want Free — the VA is reusable again)");
 
         // ── the graded fact ─────────────────────────────────────────────────────────────
-        let b2 = w379_release_through(rm, chan, token, mem, VA_B, W379_OFF_A2, MAGIC_B2);
+        let b2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: chan, token },
+            mem,
+            VA_B,
+            W379_OFF_A2,
+            MAGIC_B2,
+        );
         println!("info  R1\" release via B#2 = {b2:?}");
         match b2 {
             W379Release::Landed => {
@@ -5198,7 +5373,7 @@ fn map_propagation(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// ⊘ Pre-registered: a run where the victim's release **lands** means the VA resolved after
 /// all — the address was not as unmapped as we thought — and is reported as `NOTRUN`, not as
 /// a pass. An unmapped-address rung whose address turned out to be mapped measured nothing.
-fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
+fn missing_page_fault(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     const BYST_RING_AT: u64 = 0x0000_0006_5100_0000;
     const BYST_TARGET: u64 = 0x0000_0007_5100_0000;
     const VICT_RING_AT: u64 = 0x0000_0006_7100_0000;
@@ -5254,8 +5429,18 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
             println!("??    R3 bystander map     = placed at {at:#018x}, not as asked");
             return None;
         }
-        let before =
-            w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A, MAGIC_LIVE);
+        let before = w379_release_through(
+            rm,
+            probe,
+            W381Chan {
+                h: bchan,
+                token: btok,
+            },
+            bmem,
+            BYST_TARGET,
+            W379_OFF_A,
+            MAGIC_LIVE,
+        );
         println!("info  R3 bystander before = {before:?}");
         if !before.landed() {
             println!(
@@ -5289,8 +5474,11 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
         println!("FAULT_MARK=victim_release va={VICT_NEVER_MAPPED:#018x}");
         let victim = w379_release_through(
             rm,
-            vchan,
-            vtok,
+            probe,
+            W381Chan {
+                h: vchan,
+                token: vtok,
+            },
             vmem,
             VICT_NEVER_MAPPED,
             W379_OFF_A,
@@ -5344,8 +5532,18 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
         };
 
         // ── (a) CONTAINED ───────────────────────────────────────────────────────────────
-        let after =
-            w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A2, MAGIC_LIVE2);
+        let after = w379_release_through(
+            rm,
+            probe,
+            W381Chan {
+                h: bchan,
+                token: btok,
+            },
+            bmem,
+            BYST_TARGET,
+            W379_OFF_A2,
+            MAGIC_LIVE2,
+        );
         println!("info  R3 bystander after  = {after:?}");
         let contained = after.landed();
         if contained {
@@ -5422,7 +5620,7 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// — a second `HostRmBackend` over a second connection — which this binary builds exactly
 /// one of. A rung that ran one client and reported on two would be worse than no rung.
 /// ⚠ Named as the follow-up, not left implied.
-fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
+fn map_stress(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     /// Live mappings held at once. Four, so allocate/free interleave rather than nest.
     const SLOTS: usize = 4;
     /// Cycles. Each recycles ONE slot and re-releases through ALL of them.
@@ -5566,7 +5764,15 @@ fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
                 // can never satisfy it.
                 let payload = 0x5715_0000u32 | ((cycle as u32) << 4) | (i as u32);
                 rel_tried += 1;
-                let out = w379_release_through(rm, chan, token, *smem, *sva, W379_OFF_A, payload);
+                let out = w379_release_through(
+                    rm,
+                    probe,
+                    W381Chan { h: chan, token },
+                    *smem,
+                    *sva,
+                    W379_OFF_A,
+                    payload,
+                );
                 if out.landed() {
                     rel_landed += 1;
                     *last = payload;
@@ -5649,6 +5855,943 @@ fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
     clean
 }
 
+/// ★★★ **w381 — WRITE one magic into `obj_va + off` WITH THE ENGINE**, by whichever probe
+/// this run selected.
+///
+/// ⊘ Split out of [`w379_release_through`] because that function's read-back is a **CPU**
+/// load through [`HostRmBackend::read_words_independently`], and half of R4's objects have no
+/// CPU view at all. The submit half is aperture-blind; only the observe half is not.
+///
+/// Returns whether the submission was **accepted**, never whether it landed. The landing is
+/// the caller's to observe, and conflating the two is how a refused submission comes to read
+/// as a dead mapping.
+fn w381_engine_write(
+    rm: &mut HostRmBackend,
+    probe: W381Probe,
+    chan: kayfabe_isolate::HostHandle,
+    token: u64,
+    obj_va: u64,
+    off: u64,
+    magic: u32,
+) -> bool {
+    match probe {
+        W381Probe::SemRelease => rm
+            .submit_release_at(chan, token, obj_va + off, magic)
+            .is_ok(),
+        W381Probe::LaunchDma => {
+            let (src_off, _) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+            rm.ring_store_u32(chan, src_off, magic).is_ok()
+                && rm
+                    .submit_copy_at(chan, token, src_off, obj_va + off, 4, W381_RETIRE_PAYLOAD)
+                    .is_ok()
+        }
+    }
+}
+
+/// ★★★★★ **w381 — READ one word back THROUGH THE ENGINE**, into a scratch object the CPU
+/// *can* see.
+///
+/// This is always a `LAUNCH_DMA`, on both probe arms: it is the only verb that can move bytes
+/// at all, and a `SemRelease` cannot read anything. ⚠ The scratch slot must be poisoned
+/// first — see [`HostRmBackend::submit_copy_va`].
+fn w381_engine_readback(
+    rm: &mut HostRmBackend,
+    chan: kayfabe_isolate::HostHandle,
+    token: u64,
+    src_va: u64,
+    scratch_va: u64,
+    slot: usize,
+) -> bool {
+    rm.submit_copy_va(
+        chan,
+        token,
+        src_va,
+        scratch_va + (slot as u64) * 4,
+        4,
+        W381_RETIRE_PAYLOAD,
+    )
+    .is_ok()
+}
+
+/// ★★★★★ **w381 R4 — RPC-MIXED ALLOCATIONS: does ORDERING and IDENTITY survive the mix?**
+///
+/// Owner 2026-09-06, naming the gap the w379 lane left open by name: *"mixing rpc with
+/// normal allocs"*. Nothing in this tree tested it, and the shape of the defect it looks for
+/// is the one this campaign has met most often — **two objects that come to share one
+/// answer**.
+///
+/// ```text
+///   1  N VIDMEM and N SYSMEM objects, ALLOCATED INTERLEAVED with a device CONTROL
+///      between every pair, each mapped at a VA this rung dictates
+///   2  a DISTINCT magic written into every one of them BY THE ENGINE, then every one of
+///      them read back BY THE ENGINE into a poisoned scratch the CPU can see
+///        -> each must hold ITS OWN magic and no other object's            [IDENTITY]
+///        -> object #0 of each family is that family's                     [CONTROL]
+///   3  the whole SYSMEM family torn down; the VIDMEM family re-written and re-read
+///        -> every survivor must still land                                [ORDERING]
+/// ```
+///
+/// # ★★★★★ THE READ-BACK IS THE ENGINE'S, AND THAT IS FORCED — NOT A PREFERENCE
+///
+/// The obvious readback, [`HostRmBackend::read_words_independently`], is a **CPU** load, and
+/// `[measured 2026-09-06 on this bench, and predicted by `alloc_probe_local`'s own docs]`
+/// **every sysmem object in this rung refuses a CPU mapping**: `RmBackend::alloc_sysmem`
+/// passes `NVOS02_FLAGS_MAPPING_NO_MAP`, so `NV_ESC_RM_MAP_MEMORY` on the result is refused —
+/// *"a published backing is opaque to the CPU in both directions, by design"*. The first
+/// version of this rung wrote the sentinel with `fill_words` and died there, six times, with
+/// `RUNGCTL_rpc_mixed=FAIL`.
+///
+/// ⇒ Every object is written **and read** by the copy engine, and only a scratch VIDMEM
+/// object is ever touched by the CPU. ★ That is strictly **more** evidence than the CPU path
+/// would have been: it proves the engine can *read* each address under test as well as write
+/// it, which a write-only probe cannot say.
+///
+/// # ⊘ WHAT "RPC-MIXED" MEANS HERE, STATED HONESTLY BECAUSE THE NAME OVERPROMISES
+///
+/// This rung interleaves **three** request families that are known to take different paths
+/// inside RM:
+///
+/// - `NV01_MEMORY_LOCAL_USER` — device-local vidmem. Under Mode 2 its storage is the
+///   **emulated framebuffer**, and `cpu_ce`'s router reaches it through `CpuPlane::Fb`.
+/// - `NV01_MEMORY_SYSTEM` — pages RM pins out of system memory. Under Mode 2 its storage is
+///   **guest RAM**, reached through `CpuPlane::GuestRam`. ★ The two planes are *"two number
+///   spaces that collide freely"* by `ceutils`'s own account, and serving one out of the
+///   other's store is the silent-wrong-bytes failure the address plane exists to refuse.
+///   That is exactly what the identity phase is aimed at.
+/// - `NV0080_CTRL_CMD_DMA_GET_PDE_INFO` — a device **control**, issued between every
+///   allocation, so no two allocations of the same family are ever adjacent.
+///
+/// ⊘ **Which of those crosses to the emulated GSP is RM's routing decision, and this rung
+/// does NOT measure it.** Calling the mix "RPC-mixed" is a statement about the request
+/// families being different, not a claim that a particular one produced a `GSP_RM_ALLOC`. A
+/// rung that asserted the crossing would need an instrument inside the device, and one that
+/// *claimed* it without one would be the `pde_info` mistake in a new place.
+///
+/// ⊘ The interleaved control's **result is recorded and UNGRADED**, for the same reason R2
+/// does not grade `pde_info`: `GET_PDE_INFO` answers `PDE_COVERS` at addresses the run never
+/// mapped, and a refusal is not an absent mapping. It is here as a **perturbation**, not as
+/// an oracle.
+///
+/// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
+///
+/// - **both controls land, identity clean, ordering clean** ⇒ PASS. The mix is inert.
+/// - **a CROSSTALK** — an object holding *another object's* magic ⇒ ★★★★★ FAIL, and it is the
+///   strong red: two allocations resolved to one backing. Reported separately from *"never
+///   written"*, which is a dead mapping and a different defect, and separately again from
+///   *"still the scratch poison"*, which is a readback that never ran.
+/// - **an ORDERING failure** — a surviving vidmem object stops answering once the sysmem
+///   family is freed ⇒ FAIL. A teardown reached across families.
+/// - **either family's object #0 fails** ⇒ ⊘ `NOTRUN`. A family that could not be written
+///   even once makes every statement about the mix uninterpretable. ⚠ Including the sysmem
+///   one: a rung that quietly graded on the vidmem half alone would be *"every row verified"*
+///   over half the rows.
+fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
+    /// Objects **per family**. Small enough that the whole census fits on one screen and
+    /// every failure can be printed rather than sampled.
+    const N: usize = 6;
+    const RING_AT: u64 = 0x0000_0006_9100_0000;
+    /// 4 GiB apart, so no object's mapping can be covered by a neighbour's big PTE — the
+    /// confound `alias_two_vas` and `map_stress` both avoid for the same reason.
+    const STRIDE: u64 = 0x0000_0001_0000_0000;
+    const VA_VID_BASE: u64 = 0x0000_000C_1100_0000;
+    const VA_SYS_BASE: u64 = 0x0000_0014_1100_0000;
+    /// The one object the CPU ever touches. Clear of both families' spans.
+    const VA_SCRATCH: u64 = 0x0000_001A_1100_0000;
+    /// How long the engine is given to retire a whole pass before the scratch is read.
+    const SETTLE: std::time::Duration = std::time::Duration::from_millis(400);
+    /// How many failures are printed. A capped list is not a census, so the **count** is
+    /// printed beside the cap on every run.
+    const SHOW: usize = 8;
+
+    /// The magic for one object. Distinct per (pass, family, index), so a word left over from
+    /// an earlier pass can never satisfy a later one, and a word belonging to a *different*
+    /// object is recognisable as that object's rather than merely wrong.
+    fn magic(pass: u32, vid: bool, i: usize) -> u32 {
+        0x8410_0000 | (pass << 12) | (u32::from(vid) << 8) | (i as u32)
+    }
+    fn fam(vid: bool) -> &'static str {
+        if vid { "VIDMEM" } else { "SYSMEM" }
+    }
+
+    println!(
+        "info  R4 rpc-mixed        = GPU {gpu}, euid {} — {N} VIDMEM + {N} SYSMEM \
+         allocations, interleaved, with a device control between every one",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R4 the bar          = every object holds ITS OWN magic (identity), and \
+         tearing down the whole SYSMEM family leaves every VIDMEM mapping still writable \
+         (ordering). ⊘ Both halves are read BY THE ENGINE: a sysmem object has no CPU view"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R4 engine           = COPY0 is not expressible");
+        println!("RUNGCTL_rpc_mixed=FAIL");
+        println!("RUNG_rpc_mixed=NOTRUN");
+        return false;
+    };
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("FAIL  R4 vaspace          = the rung needs its own address space");
+        println!("RUNGCTL_rpc_mixed=FAIL");
+        println!("RUNG_rpc_mixed=NOTRUN");
+        return false;
+    };
+
+    // `(handle, va, is_vidmem, index)` for every object this rung has live.
+    let mut live: Vec<(kayfabe_isolate::HostHandle, u64, bool, usize)> = Vec::new();
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut scratch_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut control_vid = false;
+    let mut control_sys = false;
+    let mut failures: Vec<String> = Vec::new();
+    // Exact counts over fixed denominators. ⊘ Never a sample.
+    let mut alloc_ok = 0usize;
+    let mut placed_exact = 0usize;
+    let mut placed_tried = 0usize;
+    let mut ident_ok = 0usize;
+    let mut ident_tried = 0usize;
+    let mut crosstalk = 0usize;
+    let mut never_read = 0usize;
+    let mut order_ok = 0usize;
+    let mut order_tried = 0usize;
+    let mut ctrl_answered = 0usize;
+    let mut ctrl_tried = 0usize;
+
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(RING_AT))) else {
+            println!("??    R4 channel          = refused at {RING_AT:#018x} — NOT a result");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.channel_ring_va(chan) != Some(RING_AT) {
+            println!("??    R4 ring placement   = RM did not place the ring where asked");
+            return false;
+        }
+        if rm.schedule(chan).is_err() {
+            println!("??    R4 schedule         = refused");
+            return false;
+        }
+
+        // ── the SCRATCH — the one object the CPU ever touches ───────────────────────────
+        let Ok(scratch) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R4 scratch          = device-local allocation refused");
+            return false;
+        };
+        scratch_h = Some(scratch);
+        match rm.map_local_at(vas, scratch, W379_BYTES, Some(VA_SCRATCH)) {
+            Ok(got) if got == VA_SCRATCH => {}
+            Ok(got) => {
+                println!("??    R4 scratch place    = asked {VA_SCRATCH:#018x}, got {got:#018x}");
+                return false;
+            }
+            Err(e) => {
+                println!("??    R4 scratch map      = refused {e:?}");
+                return false;
+            }
+        }
+
+        // ── ALLOCATE AND MAP, interleaved, a control after every allocation ─────────────
+        //
+        // ⚠ Index 0 of each family is that family's CONTROL and is allocated first, in the
+        // same loop and by the same code, so a control that passes and a mixed object that
+        // fails cannot differ in how they were made.
+        for i in 0..N {
+            for vid in [true, false] {
+                let alloc = if vid {
+                    rm.alloc_probe_local(W379_BYTES)
+                } else {
+                    rm.alloc_sysmem(W379_BYTES)
+                };
+                let want = if vid { VA_VID_BASE } else { VA_SYS_BASE } + (i as u64) * STRIDE;
+                match alloc {
+                    Ok(mem) => {
+                        alloc_ok += 1;
+                        placed_tried += 1;
+                        match rm.map_local_at(vas, mem, W379_BYTES, Some(want)) {
+                            Ok(got) if got == want => {
+                                placed_exact += 1;
+                                live.push((mem, got, vid, i));
+                            }
+                            Ok(got) => {
+                                failures.push(format!(
+                                    "{} #{i}: PLACEMENT DRIFT — asked {want:#018x}, RM chose \
+                                     {got:#018x}",
+                                    fam(vid)
+                                ));
+                                live.push((mem, got, vid, i));
+                            }
+                            Err(e) => {
+                                failures.push(format!(
+                                    "{} #{i}: map at {want:#018x} refused {e:?}",
+                                    fam(vid)
+                                ));
+                                let _ = rm.free(mem);
+                            }
+                        }
+                    }
+                    Err(e) => failures.push(format!("alloc {} #{i} refused {e:?}", fam(vid))),
+                }
+                // ⊘ THE PERTURBATION. Recorded, UNGRADED — see the rung's docs for why
+                // `GET_PDE_INFO` cannot be an oracle here.
+                ctrl_tried += 1;
+                if w379_host_va(rm, vas, want) != W379HostVa::Unmeasured {
+                    ctrl_answered += 1;
+                }
+            }
+        }
+
+        // ── IDENTITY. Write every object, then read EVERY object. ──────────────────────
+        //
+        // ★ The two loops are SEPARATE on purpose. Writing and immediately reading one object
+        // cannot see a later object landing on top of it, which is precisely the crosstalk
+        // this phase exists to find — the same reason `alias_two_vas`'s step 4 is the whole
+        // of that rung.
+        // ⊘ `failures` is a PARAMETER, not a capture: the caller records into the same list
+        // around every call, and a closure that captured it would own the borrow for its
+        // whole lifetime.
+        let identity = |pass: u32,
+                        objs: &[(kayfabe_isolate::HostHandle, u64, bool, usize)],
+                        rm: &mut HostRmBackend,
+                        failures: &mut Vec<String>|
+         -> Vec<Option<u32>> {
+            // ⚠ POISON FIRST. A readback that never ran leaves whatever was in the slot, and
+            // without a sentinel underneath it that is indistinguishable from a landed copy.
+            if rm
+                .fill_words(scratch, W379_BYTES, W379_SENTINEL, 0)
+                .is_err()
+            {
+                return vec![None; objs.len()];
+            }
+            for &(_, va, vid, i) in objs {
+                if !w381_engine_write(rm, probe, chan, token, va, W379_OFF_B, magic(pass, vid, i))
+                    && failures.len() < 64
+                {
+                    failures.push(format!(
+                        "pass {pass}: WRITE to {} #{i} at {va:#018x} was REFUSED, not lost",
+                        fam(vid)
+                    ));
+                }
+            }
+            for (slot, &(_, va, vid, i)) in objs.iter().enumerate() {
+                if !w381_engine_readback(rm, chan, token, va + W379_OFF_B, VA_SCRATCH, slot)
+                    && failures.len() < 64
+                {
+                    failures.push(format!(
+                        "pass {pass}: READBACK of {} #{i} at {va:#018x} was REFUSED",
+                        fam(vid)
+                    ));
+                }
+            }
+            std::thread::sleep(SETTLE);
+            let offs: Vec<u64> = (0..objs.len() as u64).map(|s| s * 4).collect();
+            match rm.read_words_independently(scratch, W379_BYTES, &offs) {
+                Ok(w) => w.into_iter().map(Some).collect(),
+                Err(_) => vec![None; objs.len()],
+            }
+        };
+
+        let seen = identity(1, &live, rm, &mut failures);
+        for (idx, &(_, va, vid, i)) in live.iter().enumerate() {
+            ident_tried += 1;
+            let want = magic(1, vid, i);
+            match seen.get(idx).copied().flatten() {
+                Some(v) if v == want => {
+                    ident_ok += 1;
+                    if i == 0 {
+                        if vid {
+                            control_vid = true;
+                        } else {
+                            control_sys = true;
+                        }
+                    }
+                }
+                Some(v) if v == W379_SENTINEL => {
+                    never_read += 1;
+                    if failures.len() < 64 {
+                        failures.push(format!(
+                            "{} #{i} at {va:#018x}: the scratch slot is STILL THE POISON — the \
+                             engine never wrote it back, so this says nothing about the object",
+                            fam(vid)
+                        ));
+                    }
+                }
+                Some(v) => {
+                    // ★★★★★ Is the word ANOTHER object's? That is a much stronger — and much
+                    // worse — finding than "nothing arrived", and the two must never be
+                    // reported as one number.
+                    let owner = live
+                        .iter()
+                        .find(|(_, _, ov, oj)| magic(1, *ov, *oj) == v)
+                        .map(|(_, ova, ov, oj)| format!("{} #{oj} at {ova:#018x}", fam(*ov)));
+                    if let Some(who) = owner {
+                        crosstalk += 1;
+                        if failures.len() < 64 {
+                            failures.push(format!(
+                                "★★★★★ CROSSTALK — {} #{i} at {va:#018x} holds {v:#010x}, which \
+                                 is {who}'s magic",
+                                fam(vid)
+                            ));
+                        }
+                    } else if failures.len() < 64 {
+                        failures.push(format!(
+                            "{} #{i} at {va:#018x}: holds {v:#010x}, want {want:#010x} (nobody's \
+                             magic — a dead mapping, not crosstalk)",
+                            fam(vid)
+                        ));
+                    }
+                }
+                None => {
+                    if failures.len() < 64 {
+                        failures.push(format!("{} #{i}: the scratch could not be read", fam(vid)));
+                    }
+                }
+            }
+        }
+        if !(control_vid && control_sys) {
+            println!(
+                "??    R4 CONTROL FAILED   = vidmem #0={control_vid} sysmem #0={control_sys}. ⊘ \
+                 A family whose FIRST object could not be written and read back even once \
+                 makes every statement about the MIX uninterpretable, and grading on the half \
+                 that worked would be \"every row verified\" over half the rows. Retirement \
+                 qualifier: {}",
+                w381_retired(rm, chan)
+            );
+            return false;
+        }
+        println!(
+            "ok    R4 controls         = object #0 of BOTH families round-tripped through the \
+             engine — a later red is the MIX and not the harness"
+        );
+
+        // ── ORDERING. Tear down ONE family; the other must survive it. ──────────────────
+        let sys: Vec<_> = live.iter().filter(|(_, _, v, _)| !*v).copied().collect();
+        live.retain(|(_, _, v, _)| *v);
+        for (mem, va, _, _) in sys {
+            let _ = rm.unmap_local(vas, va);
+            let _ = rm.free(mem);
+        }
+        let after = identity(2, &live, rm, &mut failures);
+        for (idx, &(_, va, vid, i)) in live.iter().enumerate() {
+            order_tried += 1;
+            let want = magic(2, vid, i);
+            if after.get(idx).copied().flatten() == Some(want) {
+                order_ok += 1;
+            } else if failures.len() < 64 {
+                failures.push(format!(
+                    "ordering: VIDMEM #{i} at {va:#018x} stopped round-tripping after the whole \
+                     SYSMEM family was freed (saw {:?}, want {want:#010x})",
+                    after.get(idx).copied().flatten()
+                ));
+            }
+        }
+        true
+    };
+
+    let ran = go();
+
+    for (mem, va, _, _) in &live {
+        let _ = rm.unmap_local(vas, *va);
+        let _ = rm.free(*mem);
+    }
+    if let Some(h) = scratch_h {
+        let _ = rm.unmap_local(vas, VA_SCRATCH);
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "info  R4 census           = allocated {alloc_ok}/{}  placed exact \
+         {placed_exact}/{placed_tried}  identity {ident_ok}/{ident_tried}  CROSSTALK \
+         {crosstalk}  never-read {never_read}  ordering {order_ok}/{order_tried}  controls \
+         answered {ctrl_answered}/{ctrl_tried} (ungraded)",
+        2 * N
+    );
+    if !failures.is_empty() {
+        println!(
+            "⚠     R4 failures         = showing {} of {} recorded",
+            failures.len().min(SHOW),
+            failures.len()
+        );
+        for f in failures.iter().take(SHOW) {
+            println!("        {f}");
+        }
+    }
+
+    let control_ok = control_vid && control_sys;
+    // ⊘ `ident_tried == 2 * N` is part of the bar, not an afterthought: a run that mapped four
+    // objects and verified all four would otherwise print a clean identity line while having
+    // measured a third of the mix.
+    let clean = ran
+        && control_ok
+        && alloc_ok == 2 * N
+        && ident_tried == 2 * N
+        && ident_ok == ident_tried
+        && crosstalk == 0
+        && never_read == 0
+        && placed_exact == placed_tried
+        && order_tried == N
+        && order_ok == order_tried;
+    if clean {
+        println!(
+            "★     R4 MIX IS INERT     = {ident_ok} objects across TWO request families, each \
+             holding its own magic under an engine read-back, and every VIDMEM mapping still \
+             round-tripping after the whole SYSMEM family was torn down"
+        );
+    }
+    println!(
+        "RUNGCTL_rpc_mixed={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_rpc_mixed={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if clean {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    clean
+}
+
+/// ★★★★★ **w381 R5b — CROSS-CLIENT LEAKAGE. Two RM clients must not see each other's
+/// memory.**
+///
+/// `map_stress` builds **one** RM client and its own docs say so: *"single-client only —
+/// cross-client leakage is NOT covered here"*. That gap is not a nice-to-have. **Two guest
+/// processes must not see each other's memory** is a standing requirement of this project,
+/// and until this rung existed nothing in the tree tested it at all.
+///
+/// ```text
+///   0  client A: own root, own VAS, own channel, object MA at VA_SHARED, magic  [CONTROL]
+///      client B: a SECOND /dev/nvidiactl fd and a SECOND NV01_ROOT, own VAS, own
+///                channel, object MB at THE SAME VA NUMBER, its own magic        [CONTROL]
+///   1  before B maps: B's allocator must say VA_SHARED is FREE, while A holds it   [N1]
+///   2  after both are live and both were written: A must still read A's magic     [LEAK]
+///                                                  B must still read B's magic
+///   3  A writes AGAIN through VA_SHARED; it must land, and B must not see it   [ORDERING]
+///   4  the two clients' raw handle numbers are printed and compared             [IDENTITY]
+/// ```
+///
+/// # ★★★ WHY THE SHARED VA NUMBER IS THE WHOLE RUNG
+///
+/// A GPU VA means nothing outside the address space it is resolved in. Two clients naming
+/// the identical 64-bit number is therefore the sharpest available test of that claim: if
+/// the number alone were enough to reach memory, this is the arrangement in which it would
+/// show, and it would show as A reading **B's** magic — a value A has no other way to hold.
+///
+/// ★ **And the handle comparison in step 4 is not decoration.** Both connections mint object
+/// handles from their own counters, so the two clients very often end up holding the *same
+/// raw handle number* for different memory. When they do, this rung has measured
+/// *"identical handle, identical VA, different bytes"* in one run, which is the strongest
+/// form of the property. When they do not, the run says so rather than claiming it.
+///
+/// # ★★★ THE FOREIGN-HANDLE ARM REACHES RM — I ASSUMED IT COULD NOT, AND I WAS WRONG
+///
+/// This rung was first written with the handle arm **ungraded**, on the reading that
+/// `HostRmBackend::narrow` refuses a foreign [`HostHandle`] before any ioctl is issued, so
+/// the arm would measure our own bookkeeping. ⊘ **That reading was false and the source says
+/// so in three lines**: `narrow` is `u32::try_from(h.raw())` and **nothing else** — it does
+/// not look at the isolate id and it does not consult any table. So `map_local_at` on a
+/// handle minted by the *other* client puts A's raw number into
+/// `NV_ESC_RM_MAP_MEMORY_DMA` on **B's** file descriptor, and RM answers.
+///
+/// `[measured 2026-09-06, RTX 3060, 580.159.04]` it answers **`0x57`
+/// (`NV_ERR_OBJECT_NOT_FOUND`)**: the handle does not exist *under B's client*, even though
+/// it names live memory under A's. ⇒ **RM scopes object handles per client**, and this rung
+/// now grades on it. ⚠ Recorded because the mistake is the interesting half: *suspecting* the
+/// instrument sent me the wrong way, and the fix was to read `narrow` rather than to reason
+/// about it.
+///
+/// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
+///
+/// - **both controls land, no leak, ordering holds** ⇒ PASS. Clients are isolated.
+/// - **A reads B's magic (or B reads A's)** ⇒ ★★★★★ FAIL, and it is a security result, not a
+///   correctness one. Print which direction.
+/// - **B's allocator says VA_SHARED is OCCUPIED before B ever mapped it** ⇒ FAIL: one
+///   client's mapping is visible in another's address space.
+/// - **either client cannot be brought up** ⇒ ⊘ `NOTRUN`. A second client that never opened
+///   measured nothing, and must not read as isolation.
+fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
+    const RING_A: u64 = 0x0000_0006_D100_0000;
+    const RING_B: u64 = 0x0000_0006_F100_0000;
+    /// ★ **The same number in both address spaces.** See the rung's docs.
+    const VA_SHARED: u64 = 0x0000_001C_1100_0000;
+    const MAGIC_A: u32 = 0xC5C0_00A1;
+    const MAGIC_B: u32 = 0xC5C0_00B1;
+    const MAGIC_A2: u32 = 0xC5C0_00A2;
+
+    println!(
+        "info  R5b cross-client    = GPU {gpu}, euid {} — TWO RM clients, each with its own \
+         root, its own address space and its own channel, both naming {VA_SHARED:#018x}",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R5b the bar         = neither client's object ever holds the OTHER's magic, \
+         and B's allocator does not see A's mapping"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  R5b engine          = COPY0 is not expressible");
+        println!("RUNGCTL_cross_client=FAIL");
+        println!("RUNG_cross_client=NOTRUN");
+        return false;
+    };
+
+    // ── CLIENT B — a second connection, from scratch. ───────────────────────────────────
+    //
+    // ⊘ `DevDir::open` again rather than a clone of A's: the point is a second *client*, and
+    // a second `NV01_ROOT` is what `RmConnection::open` mints. Sharing A's directory handle
+    // would still be two roots, but it would also be one fewer difference than a real second
+    // process has, and this rung stands in for two guest processes.
+    let dev = match DevDir::open(c"/dev") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("??    R5b client B        = open(/dev) refused: {e}");
+            println!("RUNGCTL_cross_client=FAIL");
+            println!("RUNG_cross_client=NOTRUN");
+            return false;
+        }
+    };
+    let conn_b = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        Ok(c) => c,
+        Err(e) => {
+            println!(
+                "??    R5b client B        = a SECOND RM client could not be opened: {e}. ⊘ \
+                 NOT an isolation result — the experiment never ran"
+            );
+            println!("RUNGCTL_cross_client=FAIL");
+            println!("RUNG_cross_client=NOTRUN");
+            return false;
+        }
+    };
+    let client_a_root = rm.host_client();
+    let client_b_root = conn_b.client();
+    println!("info  R5b hClient A/B     = {client_a_root:#010x} / {client_b_root:#010x}");
+    if client_a_root == client_b_root {
+        println!(
+            "??    R5b SAME ROOT       = the two connections returned the SAME hClient, so \
+             they are not two clients and nothing below would be a cross-client statement"
+        );
+        println!("RUNGCTL_cross_client=FAIL");
+        println!("RUNG_cross_client=NOTRUN");
+        return false;
+    }
+    let id_b = IsolateId::new(1, GpuId(gpu));
+    let mut rm_b = HostRmBackend::new(
+        id_b,
+        Arc::new(conn_b),
+        Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+
+    let (Ok(vas_a), Ok(vas_b)) = (rm.alloc_vaspace(), rm_b.alloc_vaspace()) else {
+        println!("FAIL  R5b vaspaces        = the rung needs one address space per client");
+        println!("RUNGCTL_cross_client=FAIL");
+        println!("RUNG_cross_client=NOTRUN");
+        return false;
+    };
+    let space_b = vas_b.raw() as u32;
+
+    let mut a_chan: Option<kayfabe_isolate::HostHandle> = None;
+    let mut b_chan: Option<kayfabe_isolate::HostHandle> = None;
+    let mut a_mem: Option<(kayfabe_isolate::HostHandle, u64)> = None;
+    let mut b_mem: Option<(kayfabe_isolate::HostHandle, u64)> = None;
+    let mut control_a = false;
+    let mut control_b = false;
+    let mut n1_free = false;
+    let mut leak_a_saw_b = false;
+    let mut leak_b_saw_a = false;
+    let mut ordering_ok = false;
+    let mut foreign_refused = false;
+
+    let mut go = || -> bool {
+        // ── A comes up FIRST and is written, so B is brought up into a world where A's
+        //    mapping already exists. The reverse order could not see a leak caused by the
+        //    second mapping, which is `alias_two_vas`'s step-4 lesson applied across clients.
+        let Ok((ca, ta)) = rm.alloc_channel_at(vas_a, engine_type, Some(GpuVa(RING_A))) else {
+            println!("??    R5b A channel       = refused at {RING_A:#018x} — NOT a result");
+            return false;
+        };
+        a_chan = Some(ca);
+        if rm.schedule(ca).is_err() {
+            println!("??    R5b A schedule      = refused");
+            return false;
+        }
+        let Ok(ma) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R5b A object        = device-local allocation refused");
+            return false;
+        };
+        if rm.fill_words(ma, W379_BYTES, W379_SENTINEL, 0).is_err() {
+            println!("??    R5b A sentinel      = could not be written");
+            let _ = rm.free(ma);
+            return false;
+        }
+        match rm.map_local_at(vas_a, ma, W379_BYTES, Some(VA_SHARED)) {
+            Ok(got) if got == VA_SHARED => a_mem = Some((ma, got)),
+            Ok(got) => {
+                println!("??    R5b A placement     = asked {VA_SHARED:#018x}, got {got:#018x}");
+                a_mem = Some((ma, got));
+                return false;
+            }
+            Err(e) => {
+                println!("??    R5b A map           = refused {e:?}");
+                let _ = rm.free(ma);
+                return false;
+            }
+        }
+        let a1 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: ca, token: ta },
+            ma,
+            VA_SHARED,
+            W379_OFF_A,
+            MAGIC_A,
+        );
+        println!("info  R5b control A       = {a1:?}");
+        if !a1.landed() {
+            println!(
+                "??    R5b CONTROL A FAILED = client A could not write its own object. ⊘ \
+                 Everything below is UNINTERPRETABLE. Retirement qualifier: {}",
+                w381_retired(rm, ca)
+            );
+            return false;
+        }
+        control_a = true;
+
+        // ── N1 — B's allocator, BEFORE B maps anything, at the VA A is holding ──────────
+        //
+        // ★ `probe_va` allocates and fixed-maps a throwaway object to ask the question, so
+        // the answer is RM's [OUT] `dmaOffset` and not our argument echoed back. It is
+        // already calibrated on this hardware by `dictated_ring_negative`.
+        let n1 = rm_b.probe_va(space_b, VA_SHARED, W379_BYTES);
+        n1_free = matches!(n1, Ok(kayfabe_isolate_host::rm::VaProbe::Free));
+        println!(
+            "info  R5b N1 B sees A's VA = {n1:?} at {VA_SHARED:#018x} (A HAS IT MAPPED). \
+             Free ⇒ the two address spaces are separate"
+        );
+
+        // ── B comes up, at the same VA number, in its own space ────────────────────────
+        let Ok((cb, tb)) = rm_b.alloc_channel_at(vas_b, engine_type, Some(GpuVa(RING_B))) else {
+            println!("??    R5b B channel       = refused at {RING_B:#018x} — NOT a result");
+            return false;
+        };
+        b_chan = Some(cb);
+        if rm_b.schedule(cb).is_err() {
+            println!("??    R5b B schedule      = refused");
+            return false;
+        }
+        let Ok(mb) = rm_b.alloc_probe_local(W379_BYTES) else {
+            println!("??    R5b B object        = device-local allocation refused");
+            return false;
+        };
+        if rm_b.fill_words(mb, W379_BYTES, W379_SENTINEL, 0).is_err() {
+            println!("??    R5b B sentinel      = could not be written");
+            let _ = rm_b.free(mb);
+            return false;
+        }
+        match rm_b.map_local_at(vas_b, mb, W379_BYTES, Some(VA_SHARED)) {
+            Ok(got) if got == VA_SHARED => b_mem = Some((mb, got)),
+            Ok(got) => {
+                println!("??    R5b B placement     = asked {VA_SHARED:#018x}, got {got:#018x}");
+                b_mem = Some((mb, got));
+                return false;
+            }
+            Err(e) => {
+                println!(
+                    "??    R5b B map           = refused {e:?}. ⊘ If RM declined the SAME VA \
+                     to a second client, that is itself a finding — but it is not the leak \
+                     test, which needs both mappings live"
+                );
+                let _ = rm_b.free(mb);
+                return false;
+            }
+        }
+        // ★ IDENTITY, step 4 — printed whether or not they collide.
+        println!(
+            "info  R5b raw handles     = A object {:#010x}, B object {:#010x}{}",
+            ma.raw(),
+            mb.raw(),
+            if ma.raw() == mb.raw() {
+                " ★ IDENTICAL — this run measures \"same handle, same VA, different bytes\""
+            } else {
+                " (distinct; the VA collision alone carries the rung)"
+            }
+        );
+        let b1 = w379_release_through(
+            &mut rm_b,
+            probe,
+            W381Chan { h: cb, token: tb },
+            mb,
+            VA_SHARED,
+            W379_OFF_A,
+            MAGIC_B,
+        );
+        println!("info  R5b control B       = {b1:?}");
+        if !b1.landed() {
+            println!(
+                "??    R5b CONTROL B FAILED = client B could not write its own object. ⊘ \
+                 Everything below is UNINTERPRETABLE. Retirement qualifier: {}",
+                w381_retired(&rm_b, cb)
+            );
+            return false;
+        }
+        control_b = true;
+        println!(
+            "ok    R5b controls        = BOTH clients wrote their OWN object through the \
+             SAME VA number — so a later red is leakage and not a dead channel"
+        );
+
+        // ── LEAK — read both objects back, each through its own independent mapping ─────
+        match rm.read_words_independently(ma, W379_BYTES, &[W379_OFF_A]) {
+            Ok(w) if w[0] == MAGIC_A => {
+                println!("ok    R5b A after B       = A still holds MAGIC_A {MAGIC_A:#010x}")
+            }
+            Ok(w) if w[0] == MAGIC_B => {
+                leak_a_saw_b = true;
+                println!(
+                    "FAIL  R5b ★★★★★ LEAK A<-B = client A's object holds client B's magic \
+                     {MAGIC_B:#010x}. B's write through ITS {VA_SHARED:#018x} reached A's \
+                     memory — a value A has no other way to hold"
+                );
+            }
+            Ok(w) => println!(
+                "FAIL  R5b A after B       = A holds {:#010x}, neither magic — A's own \
+                 mapping died while B was brought up",
+                w[0]
+            ),
+            Err(e) => println!("??    R5b A after B       = read refused {e:?}"),
+        }
+        match rm_b.read_words_independently(mb, W379_BYTES, &[W379_OFF_A]) {
+            Ok(w) if w[0] == MAGIC_B => {
+                println!("ok    R5b B after B       = B holds MAGIC_B {MAGIC_B:#010x}")
+            }
+            Ok(w) if w[0] == MAGIC_A => {
+                leak_b_saw_a = true;
+                println!(
+                    "FAIL  R5b ★★★★★ LEAK B<-A = client B's object holds client A's magic \
+                     {MAGIC_A:#010x}"
+                );
+            }
+            Ok(w) => println!(
+                "FAIL  R5b B after B       = B holds {:#010x}, neither magic",
+                w[0]
+            ),
+            Err(e) => println!("??    R5b B after B       = read refused {e:?}"),
+        }
+
+        // ── ORDERING — A writes again, with both clients live. ──────────────────────────
+        let a2 = w379_release_through(
+            rm,
+            probe,
+            W381Chan { h: ca, token: ta },
+            ma,
+            VA_SHARED,
+            W379_OFF_A2,
+            MAGIC_A2,
+        );
+        println!("info  R5b A writes again  = {a2:?}");
+        let b_unmoved = matches!(
+            rm_b.read_words_independently(mb, W379_BYTES, &[W379_OFF_A2]),
+            Ok(w) if w[0] == W379_SENTINEL
+        );
+        ordering_ok = a2.landed() && b_unmoved;
+        if !b_unmoved {
+            println!(
+                "FAIL  R5b B saw A's 2nd   = offset {W379_OFF_A2:#x} of B's object is no \
+                 longer the sentinel after A wrote through ITS OWN {VA_SHARED:#018x}"
+            );
+        }
+
+        // ★★★ THE HANDLE ARM, AND IT IS GRADED — see the rung's docs for why the first
+        // version of this comment was wrong. `narrow` is a `u32::try_from` and nothing else,
+        // so A's raw number really does reach RM on B's descriptor.
+        let forged = kayfabe_isolate::HostHandle::new(id_b, ma.raw());
+        let foreign = rm_b.map_local_at(vas_b, forged, W379_BYTES, None);
+        foreign_refused = foreign.is_err();
+        println!(
+            "{:<5} R5b foreign handle  = client B mapping A's raw object {:#010x} into \
+             B's OWN address space: {}",
+            if foreign_refused { "ok" } else { "FAIL" },
+            ma.raw(),
+            match &foreign {
+                Ok(va) => format!(
+                    "★★★★★ MAPPED at {va:#018x} — RM let client B name an object minted by \
+                     client A. A handle is not scoped to its client"
+                ),
+                Err(e) => format!(
+                    "refused {e:?} ⇒ RM scopes object handles PER CLIENT. `Other(87)` is \
+                     `NV_ERR_OBJECT_NOT_FOUND` (`0x57`) — the handle names live memory under \
+                     A and does not exist under B"
+                ),
+            }
+        );
+        if let Ok(va) = foreign {
+            let _ = rm_b.unmap_local(vas_b, va);
+        }
+        true
+    };
+
+    let ran = go();
+
+    if let Some((mem, va)) = a_mem {
+        let _ = rm.unmap_local(vas_a, va);
+        let _ = rm.free(mem);
+    }
+    if let Some((mem, va)) = b_mem {
+        let _ = rm_b.unmap_local(vas_b, va);
+        let _ = rm_b.free(mem);
+    }
+    if let Some(h) = a_chan {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = b_chan {
+        let _ = rm_b.free(h);
+    }
+    let _ = rm.free(vas_a);
+    let _ = rm_b.free(vas_b);
+
+    let control_ok = control_a && control_b;
+    let clean = ran
+        && control_ok
+        && n1_free
+        && !leak_a_saw_b
+        && !leak_b_saw_a
+        && ordering_ok
+        && foreign_refused;
+    println!(
+        "info  R5b census          = controls A={control_a} B={control_b}  \
+         B-sees-A's-VA-free={n1_free}  leak A<-B={leak_a_saw_b}  leak B<-A={leak_b_saw_a}  \
+         ordering={ordering_ok}  foreign handle refused={foreign_refused}"
+    );
+    if clean {
+        println!(
+            "★     R5b ISOLATED        = two RM clients drove the SAME GPU VA in their own \
+             address spaces, neither ever held the other's magic, and neither could name \
+             the other's object by its raw handle"
+        );
+    }
+    println!(
+        "RUNGCTL_cross_client={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "RUNG_cross_client={}",
+        if !control_ok {
+            "NOTRUN"
+        } else if clean {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    clean
+}
+
 /// `cmd[:size]` pairs, comma-separated. Size defaults to 4 — the width of the control
 /// that motivated the rung — and is capped so a typo cannot ask RM to fill a huge buffer.
 fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
@@ -5708,6 +6851,14 @@ fn main() -> std::process::ExitCode {
     let mut want_map_propagation = false;
     let mut want_missing_page = false;
     let mut want_map_stress = false;
+    // ★★★★★ w381 — R4 and the cross-client rung, and THE PROBE SELECTOR.
+    let mut want_rpc_mixed = false;
+    let mut want_cross_client = false;
+    // ⊘ The DEFAULT IS THE w379 PRIMITIVE, so every committed w379 arm stays byte-comparable
+    // to its own predecessors. `--probe-launch-dma` is the only way to change it and the
+    // choice is printed before any rung runs — a run that does not say which primitive it
+    // used cannot be compared to any other run.
+    let mut probe = W381Probe::SemRelease;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -5786,6 +6937,37 @@ fn main() -> std::process::ExitCode {
                 want_alias_unmap = true;
                 want_missing_page = true;
                 want_map_stress = true;
+            }
+            // ★★★★★ w381 — SWITCH THE LIVENESS PRIMITIVE to the one the Mode-2 CPU
+            // copy-engine emulator actually serves. See [`W381Probe`] for why the w379
+            // primitive cannot run in a guest at all, and why this is a substitution rather
+            // than a weakening.
+            "--probe-launch-dma" => probe = W381Probe::LaunchDma,
+            // ⊘ The explicit spelling of the default. It exists so a harness can state the
+            // arm it wants instead of relying on absence, which is how two runs come to
+            // differ in a way neither log records.
+            "--probe-sem-release" => probe = W381Probe::SemRelease,
+            // ★★★★★ w381 R4 — allocations that cross to the emulated GSP interleaved with
+            // ones served locally: does ORDERING and IDENTITY survive the mix?
+            "--rpc-mixed-allocs" => want_rpc_mixed = true,
+            // ★★★★★ w381 R5b — a SECOND RM client, and the standing requirement that two
+            // guest processes must not see each other's memory.
+            "--cross-client-leak" => want_cross_client = true,
+            // ★★★★★ THE GUEST-SERVABLE BATTERY. Everything `--w379` selects, plus R4 and the
+            // cross-client rung, on the `LAUNCH_DMA` primitive — i.e. the exact invocation
+            // that is meant to run identically on bare metal AND inside a Mode-2 guest.
+            // ⊘ It is ONE flag on purpose: the differential is only a differential if both
+            // halves ran the same selection with the same primitive, and two harnesses
+            // assembling that selection out of six flags each is how they come to differ.
+            "--w381" => {
+                want_map_propagation = true;
+                want_alias_two_vas = true;
+                want_alias_unmap = true;
+                want_missing_page = true;
+                want_map_stress = true;
+                want_rpc_mixed = true;
+                want_cross_client = true;
+                probe = W381Probe::LaunchDma;
             }
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
@@ -6096,10 +7278,27 @@ fn main() -> std::process::ExitCode {
         || want_alias_unmap
         || want_missing_page
         || want_map_stress
+        || want_rpc_mixed
+        || want_cross_client
     {
         println!(
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ★★★★★ w381 — PRINTED BEFORE ANY RUNG RUNS, on every invocation. A battery whose
+        // liveness primitive is not on its own log cannot be compared to the other half of
+        // its differential, and *"we must have used the copy probe"* is exactly the kind of
+        // reconstruction this repo has paid for. ⊘ It is also the ONE line that says whether
+        // a guest arm could have reached its positive control at all.
+        println!(
+            "W381_PROBE={} — {}",
+            probe.as_str(),
+            match probe {
+                W381Probe::SemRelease =>
+                    "the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red",
+                W381Probe::LaunchDma =>
+                    "a four-byte `LAUNCH_DMA` copied out of the channel's own ring. ★ This is                      the verb the Mode-2 emulator serves end to end (`run_submission` ->                      `execute_ours_spans` MOVES THE BYTES -> `write_resolved_completion`), so                      these rungs are servable on BOTH sides of the differential",
+            }
         );
         // ⊘ Every SELECTED rung's verdict line is printed by the rung itself; the ones NOT
         // selected are printed here as `NOTRUN`, so a grader reading these lines always
@@ -6120,6 +7319,12 @@ fn main() -> std::process::ExitCode {
         if !want_map_stress {
             println!("RUNG_map_stress=NOTRUN");
         }
+        if !want_rpc_mixed {
+            println!("RUNG_rpc_mixed=NOTRUN");
+        }
+        if !want_cross_client {
+            println!("RUNG_cross_client=NOTRUN");
+        }
         // ⚠ Each rung runs and its result is recorded; none short-circuits the next. A
         // battery that stopped at the first red would report a stopping point rather than a
         // result — the exact shape `cargo test --workspace` was caught doing.
@@ -6128,18 +7333,28 @@ fn main() -> std::process::ExitCode {
             all &= map_propagation(&mut rm, gpu);
         }
         if want_alias_two_vas {
-            all &= alias_two_vas(&mut rm, gpu);
+            all &= alias_two_vas(&mut rm, probe, gpu);
         }
         if want_alias_unmap {
-            all &= alias_unmap_observe(&mut rm, gpu);
+            all &= alias_unmap_observe(&mut rm, probe, gpu);
         }
+        if want_rpc_mixed {
+            all &= rpc_mixed_allocs(&mut rm, probe, gpu);
+        }
+        if want_cross_client {
+            all &= cross_client_leak(&mut rm, probe, gpu);
+        }
+        // ⚠ R3 is LAST of the fault-free rungs' neighbours on purpose: it provokes a real
+        // `Xid 31` and kills its victim channel, and anything after it would be running
+        // behind a fault it did not cause. R5's rolling window follows it only because its
+        // own bystander arm is what proves the fault took nothing else with it.
         if want_missing_page {
-            all &= missing_page_fault(&mut rm, gpu);
+            all &= missing_page_fault(&mut rm, probe, gpu);
         }
         if want_map_stress {
-            all &= map_stress(&mut rm, gpu);
+            all &= map_stress(&mut rm, probe, gpu);
         }
-        println!("done — w379 mapping-plane rungs only");
+        println!("done — w379/w381 mapping-plane rungs only");
         return if all {
             std::process::ExitCode::SUCCESS
         } else {

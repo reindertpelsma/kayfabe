@@ -101,6 +101,16 @@ explanation.
 >   and **grade on `probe_va` and on hardware instead**. Anything that reads `PDE_COVERS` as
 >   *"this VA is published"* is reading page-table granularity as a leaf fact.
 >
+> ### ⊘⊘ SUPERSEDED 2026-09-06 (w381) — **THE GUEST-SIDE PROBE IS BUILT AND THE RUNGS RUN
+> ### IN THE GUEST.** See `w381_the_guest_servable_probe.md`. The paragraph below is right
+> about *why* the w379 primitive cannot run there — it is quoted in that file's §1 — and
+> wrong only in its last sentence. `HostRmBackend::submit_copy_at` is the `LAUNCH_DMA` probe;
+> `--probe-launch-dma` selects it for every rung and `--w381` runs the whole battery on it.
+> ★ And the substitution was **verified from this tree's own source before it was built**,
+> rather than assumed: `WalkOperands` reports every run `Representability::Fabricated`
+> (⇒ `CeExecutor::Ours`, never `HostCe`), `cpu_ce::execute_ours` does a real plane-to-plane
+> copy, and `write_resolved_completion` runs only after the spans. The bytes genuinely move.
+>
 > ⊘ **Scope.** Bare metal only, and deliberately so: the same probe cannot run in the guest,
 > because the Mode-2 CPU copy-engine emulator decodes `PushMethod::SemRelease` and
 > **deliberately does not act on it** (`kayfabe-rt/src/ceutils.rs:677-679`, restated
