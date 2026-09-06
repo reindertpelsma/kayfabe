@@ -501,3 +501,35 @@ LLM_TOKENS_GRADE=ABSENT
 and the gate that exists to skip it was never consulted (§10). ⊘ `LLM_TOKENS` is still
 **ABSENT at 1500 s**, which is 2.5× the timeout that produced w380's ABSENT: *"it was killed
 too early"* is now refuted as the whole explanation.
+
+## §12 ⚠ THE BENCH TRAP THIS RUNG PAID FOR — the guest upgraded its own kernel mid-campaign
+
+`[measured 2026-09-06, between two boots forty minutes apart]` a boot that had answered
+`WAS_LOADED / MODPROBE_RC=0` all evening answered:
+
+```
+WAS_COLD
+modprobe: FATAL: Module nvidia not found in directory /lib/modules/6.8.0-139-generic
+MODPROBE_RC=1
+SMI_RC=9
+```
+
+The guest's own `unattended-upgrades` installed **6.8.0-139** during a 25-minute LLM boot, the
+image is persistent, and the next boot took the new kernel by default — where the `.run`-built
+NVIDIA module does not exist. ⇒ **every GPU number from that boot is UNMEASURED, and the boot
+looks like a device failure.**
+
+★ It is the parent repo's own banked trap, hit exactly as written:
+*"CORRECT NOW IS NOT CORRECT AFTER REBOOT — a fresh box's `unattended-upgrade` pulls a NEW
+KERNEL; a driver installed before the reboot passes every check and vanishes after it."*
+What made it costly here is that the reboot was **ours**, mid-campaign, between two arms of
+one comparison.
+
+**Repaired, and pinned so it cannot recur on this box**: `GRUB_DEFAULT="Advanced options for
+Ubuntu>Ubuntu, with Linux 6.8.0-138-generic"`, `update-grub`, and
+`systemctl mask unattended-upgrades apt-daily{,-upgrade}.{service,timer}`. Verified after the
+reboot: `uname -r = 6.8.0-138-generic`, `modprobe nvidia` OK, 5 nvidia modules loaded.
+
+⚠ **The harness cannot currently tell this apart from a device failure**, and it should: a
+`MODPROBE_RC != 0` is *"the boot did not reach the workload"* — **UNMEASURED**, not a result —
+and `boot_capture.sh` carries on to the hook regardless.
