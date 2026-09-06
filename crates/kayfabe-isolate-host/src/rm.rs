@@ -767,7 +767,7 @@ fn ladder_gpfifo_entries() -> u32 {
     };
     let want: Option<u32> = v.to_str().and_then(|t| t.trim().parse().ok());
     match want {
-        Some(n) if n.is_power_of_two() && n >= 2 && n <= GPFIFO_ENTRIES => {
+        Some(n) if n.is_power_of_two() && (2..=GPFIFO_ENTRIES).contains(&n) => {
             if n != GPFIFO_ENTRIES {
                 eprintln!(
                     "kayfabe-isolate: ★ {LADDER_GPFIFO_ENTRIES_ENV}={n} — this channel's \
