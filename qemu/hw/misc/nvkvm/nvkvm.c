@@ -572,6 +572,16 @@ static void nvkvm_trap_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
                             " REFUSED [%.*s]",
                             w.doorbell_token, (uint64_t)addr,
                             (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
+            } else if (w.doorbell == KAYFABE_DOORBELL_SCHEDULED) {
+                /* ★★★★★ w383.  ACCEPTED, NOT YET ACTED ON — the trap offered the token to
+                 * the deferred publication lane and returned to VM entry.  ⊘ This line must
+                 * never say SERVED: what the work did is reported by the worker, into the
+                 * archive's own log, and folding the two here would make a queue depth read
+                 * as throughput. */
+                info_report("nvkvm: DOORBELL token 0x%08" PRIx64 " at +0x%" PRIx64
+                            " SCHEDULED [%.*s]",
+                            w.doorbell_token, (uint64_t)addr,
+                            (int)w.doorbell_kind_len, (const char *)w.doorbell_kind);
             } else if (w.doorbell == KAYFABE_DOORBELL_SERVED_LOCAL) {
                 /* ★★★ E10e.  The shell's own CPU copy-engine executor did this one; the
                  * per-run detail is in the teardown report, so this line is only the

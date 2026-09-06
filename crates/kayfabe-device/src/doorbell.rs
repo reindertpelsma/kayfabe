@@ -117,6 +117,35 @@ pub enum DoorbellReport {
         /// built from it cannot claim more than the work did.
         note: String,
     },
+    /// ★★★★★ **w383 — ACCEPTED, NOT YET ACTED ON.** The trap validated the token, put it
+    /// on the deferred publication lane and returned to VM entry; the publication and the
+    /// host ring happen on a worker thread, in the same order, afterwards.
+    ///
+    /// ⊘ **A fourth arm rather than a `Served` with a flag**, for exactly the reason
+    /// [`DoorbellReport::ServedLocally`] is a third one: *"counted as a doorbell, went
+    /// nowhere, looked fine"* must stay unrepresentable, and a `Served` that has not
+    /// served anything yet is that shape wearing a boolean. This arm claims **nothing
+    /// about the work** — only that the queue accepted it.
+    ///
+    /// ★ Why deferral is legal at all: the ordering requirement is **publish → OUR host
+    /// ring**, not *publish → the guest's MMIO store*. The guest's doorbell write is
+    /// fire-and-forget by the GPFIFO contract — it reads nothing back and cannot observe
+    /// when we act — so both ends of the real constraint are ours.
+    /// See `docs/design/publication_off_the_bql.md` §1 and `crate::pubqueue`.
+    ///
+    /// ⚠ `is_served()` is **false** here and that is deliberate: this report is not
+    /// evidence that a submission happened. What happened to it is on the worker's own
+    /// census (`crate::pubqueue::PublicationQueue::census`), never folded into
+    /// `Counters::doorbells_served`.
+    Scheduled {
+        /// The guest's token — see [`DoorbellReport::Served::token`].
+        token: u64,
+        /// ★ `true` when this offer created a queue entry, `false` when it **coalesced**
+        /// into one already pending for the same token. Both are acceptance; only one is
+        /// a new unit of work, and a reader that could not tell them apart would read a
+        /// coalescing burst as a queue that grew.
+        queued: bool,
+    },
     /// The core **refused** it, by name.
     ///
     /// ★ A `kind` and a sentence, which is increment **E1**'s standard applied one seam
@@ -151,10 +180,16 @@ impl DoorbellReport {
     /// submission happen"* must not have to enumerate the ways it could have.
     #[must_use]
     pub fn is_served(&self) -> bool {
-        matches!(
-            self,
-            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. }
-        )
+        // ⊘ An exhaustive `match`, not a `matches!`. w383 added a fourth arm, and a
+        // `matches!` would have absorbed it into `false` **silently** — which happens to
+        // be the right answer for `Scheduled` and would have been the wrong one for any
+        // future serving arm. The rule this file already applies to the counter split one
+        // crate over: a new variant must fail the build, not vanish into a default.
+        match self {
+            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => true,
+            // ★ NOT served: the queue accepted the token and nothing has run yet.
+            DoorbellReport::Scheduled { .. } | DoorbellReport::Refused { .. } => false,
+        }
     }
 
     /// The refusal, if this is one.
@@ -162,7 +197,9 @@ impl DoorbellReport {
     pub fn refusal(&self) -> Option<&DoorbellRefused> {
         match self {
             DoorbellReport::Refused { refusal, .. } => Some(refusal),
-            DoorbellReport::Served { .. } | DoorbellReport::ServedLocally { .. } => None,
+            DoorbellReport::Served { .. }
+            | DoorbellReport::ServedLocally { .. }
+            | DoorbellReport::Scheduled { .. } => None,
         }
     }
 
@@ -172,6 +209,7 @@ impl DoorbellReport {
         match self {
             DoorbellReport::Served { token, .. }
             | DoorbellReport::ServedLocally { token, .. }
+            | DoorbellReport::Scheduled { token, .. }
             | DoorbellReport::Refused { token, .. } => *token,
         }
     }

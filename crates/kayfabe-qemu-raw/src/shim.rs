@@ -3235,6 +3235,14 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
 /// - **The target GPU is [`GpuId::ZERO`]**, because this device is one GPU — the same id
 ///   `Gpu::realize` carves the system proc's arena for. The day a shim realizes two, this
 ///   comes from the device instance and not from a constant.
+///
+/// ★★★★★ **w383 — `Clone`, and that is what makes the worker possible.** Every field is
+/// `Arc`, `Weak`, `Clone`-of-`Arc` or `Copy`, so this is a **handle bundle, not a copy of
+/// any state** (the same sentence [`PublishContext`] already carries). A clone handed to
+/// the deferred-publication thread therefore addresses the *same* device, the *same*
+/// plane, the *same* CE shell state and the *same* dirty gate — there is no second
+/// anything for the two to disagree about.
+#[derive(Clone)]
 struct SharedDoorbell {
     device: Arc<kayfabe_rt::device::SharedDevice>,
     /// ★★★ The register plane this port is installed in — **weak**, because the plane owns
@@ -3366,6 +3374,19 @@ struct SharedDoorbell {
     vas_publish: VasPublishArm,
     /// ★★★★★ **w318 — THE DIRTY GATE'S STATE.** See [`DirtyGate`] for the whole argument.
     dirty: Arc<DirtyGate>,
+    /// ★★★★★ **w383 — THE DEFERRED PUBLICATION LANE.** Shared with the worker thread and
+    /// with [`Regs`], which owns the thread's lifetime. See
+    /// [`kayfabe_device::pubqueue::PublicationQueue`] and `publication_off_the_bql.md`.
+    ///
+    /// ⊘ Present on **both** arms. The queue is inert when [`Self::doorbell_async`] is
+    /// `Off` — nothing offers to it and nothing takes from it — and its census still
+    /// prints, so *"the lane was disarmed"* and *"the lane was armed and never used"* are
+    /// distinguishable in a boot log rather than both reading as silence.
+    pubqueue: Arc<kayfabe_device::pubqueue::PublicationQueue>,
+    /// ★★★★★ **w383 — the eighth selector: does the doorbell trap RUN the publication, or
+    /// SCHEDULE it?** Read once at the composition root and carried, for `vas_publish`'s
+    /// reason exactly.
+    doorbell_async: DoorbellAsyncArm,
 }
 
 /// ★★★★★ **w318 — THE DIRTY GATE: what the last doorbell already did, so this one need not
@@ -4681,6 +4702,104 @@ struct ObserverThread {
     join: Option<std::thread::JoinHandle<()>>,
 }
 
+/// ★★★★★ **w383 — THE DEFERRED-PUBLICATION WORKER'S HANDLE.**
+///
+/// The second off-trap thread in this tree, and it is deliberately shaped like the first
+/// ([`ObserverThread`]): a stop flag that is **ours**, and a `JoinHandle` that is **joined**
+/// rather than detached. The join is not optional for the same reason it is not optional
+/// there — this thread reads guest RAM through its own `QemuVmm` handle, and the
+/// hypervisor releases the regions behind that handle once `detach_ram` returns.
+///
+/// ⊘ There is no reactor and no poller here: the wake is the queue's own `Condvar`, which
+/// [`kayfabe_device::pubqueue::PublicationQueue::take_blocking`] already owns and which
+/// [`kayfabe_device::pubqueue::PublicationQueue::stop`] already notifies. Building a
+/// second wake-up mechanism beside a correct one is how two of them come to disagree
+/// about whether the queue is empty.
+#[derive(Debug)]
+struct DoorbellPublishThread {
+    /// The lane, so `stop` can wake the worker out of its `Condvar` wait.
+    queue: std::sync::Arc<kayfabe_device::pubqueue::PublicationQueue>,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+/// ★★★★★ **w383 — THE WORKER LOOP: take a token, run the doorbell body, account it.**
+///
+/// # ★★★ What makes this the *same* act the trap performed, and not a re-implementation
+///
+/// It calls [`SharedDoorbell::ring_inline`] — **the identical function** the disarmed arm
+/// runs on the vCPU, with the identical legs in the identical order. Nothing about the
+/// doorbell's semantics lives here. What lives here is the three things the *plane* did
+/// after `port.ring(..)` returned and which a worker must now do for itself: the counter
+/// accounting, the locally-served completion, and the vector delivery.
+///
+/// # ⊘ The `OffTrap` is minted BENEATH this, not here, and that is the point
+///
+/// `kayfabe_rt::SharedDevice::verb_op` mints one at every host verb through
+/// `OffTrap::at_a_host_verb`, which takes the **honest** branch off a trap thread
+/// (`claim`) and the **counted** branch on one (`inline_under_bql`). This thread installs
+/// no `TrapGuard`, so every verb it issues moves from `inline_exceptions` to
+/// `off_trap_claims` **by construction** — the census measures the move rather than being
+/// told about it.
+///
+/// # ⚠ The vector, and why the worker may raise one at all
+///
+/// `Vmm::raise_irq(IrqSpec::Msix(0))` reaches `nvkvm_op_signal_msix` →
+/// `nvkvm_deliver_vector`, whose `BQL_LOCK_GUARD()` is the **conditional** form: it locks
+/// when the caller does not already hold the lock and is a no-op when it does
+/// (`qemu/hw/misc/nvkvm/nvkvm.c:415-431`). So this is legal from here and would be legal
+/// from a vCPU. ⊘ It is the one BQL acquisition on this thread's path and it happens at
+/// most once per **locally served** doorbell — `[measured w380llm2]` 16 of 15 928.
+#[allow(clippy::needless_pass_by_value)]
+fn doorbell_publish_loop(
+    port: SharedDoorbell,
+    queue: &std::sync::Arc<kayfabe_device::pubqueue::PublicationQueue>,
+    mut vmm: kayfabe_vmm_qemu::QemuVmm,
+) {
+    while let Some(job) = queue.take_blocking() {
+        let token = job.token();
+        let report = port.ring_inline(token);
+        // ★ The plane's own accounting, called from here so `doorbells_served` /
+        // `doorbells_refused` keep meaning what they meant. ⊘ A second set of counters on
+        // this side would make every existing grading grep silently stop seeing the
+        // forwarded arm the moment the lane was armed.
+        if let Some(plane) = port.plane.upgrade() {
+            plane.account_doorbell_report(token, &report);
+            // ★★★★★ **THE LOCALLY-SERVED ARM, AND IT IS NOT DEAD CODE — it is a guard.**
+            //
+            // `[measured w380llm2]` the deferred population is the forwarding path, whose
+            // only reports are `Served` and `Refused`, and the plane raises nothing for
+            // either. But *"it cannot happen"* and *"it is handled"* are different
+            // states, and this tree has paid repeatedly for the first wearing the second's
+            // face. If `try_ce_submission` ever claims a doorbell on this thread, the
+            // completion it owes the guest goes out here rather than being silently
+            // dropped — and the line says so, once, so a boot can tell.
+            if let kayfabe_device::DoorbellReport::ServedLocally { engine, .. } = &report {
+                let owed = plane.announce_deferred_local_completion(*engine);
+                eprintln!(
+                    "kayfabe: DOORBELL-ASYNC ⚠ SERVED-LOCALLY OFF THE TRAP token={token:#010x} \
+                     engine={engine:?} vector_owed={owed} — the CE shell executor claimed a \
+                     DEFERRED doorbell. Legal, and delivered below; recorded because the \
+                     deferred population is supposed to be the FORWARDING path, whose \
+                     reports announce nothing."
+                );
+                if owed {
+                    if let Err(e) =
+                        kayfabe_vmm::Vmm::raise_irq(&mut vmm, kayfabe_vmm::IrqSpec::Msix(0))
+                    {
+                        eprintln!(
+                            "kayfabe: DOORBELL-ASYNC ⊘ VECTOR REFUSED token={token:#010x}: \
+                             {e:?} — the completion was announced into the interrupt tree \
+                             and no message went out. The guest will find it on its next \
+                             poll or not at all."
+                        );
+                    }
+                }
+            }
+        }
+        queue.note_completed();
+    }
+}
+
 /// ★★★★ **§16.65 — how the arriving doorbells PARTITION by the engine of the channel they
 /// routed to.** The instrument this rung's routing change is read against.
 ///
@@ -4900,7 +5019,89 @@ fn refused(
 }
 
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
+    /// ★★★★★ **w383 — THE FRONT DOOR: validate, enqueue, return.**
+    ///
+    /// > Owner, 2026-09-06: *"Never do a blocking call during a doorbell write, quickly
+    /// > re-enter the VM. … There is no guarantee that a real GPU gives either — the
+    /// > doorbell runs immediately in-line, it's a schedule."*
+    ///
+    /// # ⊘ WHAT THIS FUNCTION IS ALLOWED TO DO, AND WHY THAT IS EXACTLY ENOUGH
+    ///
+    /// On the armed arm it does three things: it takes the queue's leaf mutex, inserts a
+    /// `u64` and notifies. No host verb, no isolate IPC, no plane lock, no guest-RAM read.
+    /// That is `INLINE-SAFE` (a), (b) and (c) at once
+    /// (`blocking_and_completion_model.md` §1), and it is what the two `TrapContract`s
+    /// have been asking for since 2026-08-11 with nothing to enforce them.
+    ///
+    /// # ★★★ THE ORDERING THAT MATTERS IS NOT THE ONE THIS GIVES UP
+    ///
+    /// The requirement is **publish → OUR host ring**, not *publish → the guest's MMIO
+    /// store*. The guest's doorbell write is fire-and-forget by the GPFIFO contract: it
+    /// reads nothing back, polls no status, and has no register whose value depends on our
+    /// having acted (`publication_off_the_bql.md` §5.2 checks every read arm rather than
+    /// asserting it). **Both ends of the real constraint are ours**, and the worker keeps
+    /// them in the same order the trap did — publication legs, then the forward, as the
+    /// last statement of the same pass.
+    ///
+    /// ⇒ the gate is on the **forward**, not on the trap. That is the whole safety
+    /// argument, and it is why `Passthrough` needs no separate treatment: this port has no
+    /// path that rings a host channel *before* the publication that precedes it in the
+    /// same function.
+    ///
+    /// # ⚠ THE ONE THING DEFERRAL COSTS, STATED RATHER THAN DISCOVERED LATER
+    ///
+    /// The worker reads the guest's ring **while the guest is running**, where the trap
+    /// read it with the guest halted. A guest that rewrites a GPFIFO entry between
+    /// advancing `GP_PUT` and the engine consuming it now races us. ⊘ That is already
+    /// illegal against real hardware — the GPU DMA-reads the pushbuffer asynchronously —
+    /// so the deferral is *more* faithful, not less. What it is **not** is identical, and
+    /// our decoder's behaviour on a mid-flight rewrite is **UNMEASURED, not safe**
+    /// (`publication_off_the_bql.md` §5.3). That obligation is the ring reader's and this
+    /// rung does not discharge it.
+    ///
+    /// # ⊘ THE REFUSAL ARM DEGRADES TO THE STATUS QUO, NEVER TO A DROP
+    ///
+    /// `Offered::Full` runs the body inline — i.e. exactly what the disarmed arm does — and
+    /// the queue counts it, so a boot can never mistake *"the lane was saturated"* for
+    /// *"the lane was fine"*. A dropped doorbell would be a lost submission; there is no
+    /// arm here that produces one.
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
+        if !self.doorbell_async.defers() {
+            return self.ring_inline(token);
+        }
+        match self
+            .pubqueue
+            .offer(kayfabe_device::pubqueue::MapPublication::for_doorbell(token))
+        {
+            kayfabe_device::pubqueue::Offered::Queued => {
+                kayfabe_device::DoorbellReport::Scheduled {
+                    token,
+                    queued: true,
+                }
+            }
+            // ★ A coalesce, not a drop. The pending execution reads the newest `GP_PUT`
+            // out of guest memory when it runs, so N doorbells on one token and one
+            // doorbell after the last advance are the SAME ACT (`pubqueue` §2).
+            kayfabe_device::pubqueue::Offered::Coalesced => {
+                kayfabe_device::DoorbellReport::Scheduled {
+                    token,
+                    queued: false,
+                }
+            }
+            // ⊘ Saturated. Run it here — today's behaviour, never worse than the status
+            // quo — and let `PUBQUEUE refused=N` say so.
+            kayfabe_device::pubqueue::Offered::Full => self.ring_inline(token),
+        }
+    }
+}
+
+impl SharedDoorbell {
+    /// ★★★★★ **The doorbell body — every leg, in the order that has always been
+    /// load-bearing.** Reached from the vCPU trap on the disarmed arm and from the
+    /// `kayfabe-doorbell-publish` worker on the armed one. ⊘ **Nothing inside it changed
+    /// with w383**, deliberately: a rung that moved the work AND reordered it would make
+    /// the outcome unattributable.
+    fn ring_inline(&self, token: u64) -> kayfabe_device::DoorbellReport {
         // ★★★★ §16.64 — ⊘ **THIS COMMENT ASSERTED THE OPPOSITE OF THE CODE**, and it is the
         // first sentence a reader of the doorbell path meets.
         //
@@ -11405,6 +11606,24 @@ pub struct Regs {
     /// budget having **moved** the cost rather than removed it — and it is unreadable from
     /// any single sample, which is why the line prints every transition.
     last_deferred_for_drain: std::sync::atomic::AtomicUsize,
+    /// ★★★★★ **w383 — THE DEFERRED PUBLICATION LANE**, shared with the installed
+    /// [`SharedDoorbell`]. This handle exists so the census can be printed at teardown and
+    /// so the worker can be stopped; the offers come from the port, never from here.
+    pubqueue: std::sync::Arc<kayfabe_device::pubqueue::PublicationQueue>,
+    /// ★★★★★ **w383 — a CLONE of the installed doorbell port**, for the worker to run.
+    ///
+    /// ⊘ Not a second port and not a second anything: every field is `Arc`/`Weak`/`Copy`,
+    /// so this addresses the same device, plane, CE shell state, dirty gate and queue the
+    /// plane's copy does. The plane owns a `Box<dyn DoorbellPort>` and hands nothing back
+    /// out (`RegPlane::doorbell` is `RwLock<Box<..>>`), which is the whole reason the
+    /// worker needs its own handle rather than reaching through the plane.
+    doorbell_port: SharedDoorbell,
+    /// ★★★★★ **w383 — the worker's lifetime.** `None` before `attach_ram` and after
+    /// `detach_ram`; see [`DoorbellPublishThread`] for why the join is not optional.
+    doorbell_worker: std::sync::Mutex<Option<DoorbellPublishThread>>,
+    /// ★★★★★ **w383 — which arm this boot runs.** Read ONCE at the composition root and
+    /// carried; the port carries the same value, from the same read.
+    doorbell_async: DoorbellAsyncArm,
 }
 
 /// ★★★★★ **w317 — THE BUDGET, and what it is a fraction OF.**
@@ -11649,6 +11868,10 @@ impl Regs {
         // announces itself when enabled makes the control's log indistinguishable from an
         // older binary's.
         let vas_publish = selected_vas_publish()?;
+        // ★★★★★ w383 — the eighth selector: WHERE the doorbell body runs. Parsed here,
+        // once, beside the other seven, and carried by value into both the port and `Regs`
+        // so no consumer can re-read the environment and get a different answer.
+        let doorbell_async = selected_doorbell_async()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -11913,7 +12136,15 @@ impl Regs {
             allow(clippy::let_unit_value, clippy::clone_on_copy)
         )]
         let exports_for_regs = exports.clone();
-        plane.set_doorbell(Box::new(SharedDoorbell {
+        // ★★★★★ **w383 — THE LANE, MINTED ONCE.** One queue, two holders: the port offers
+        // to it from the vCPU trap and the worker takes from it. ⊘ A second
+        // `PublicationQueue::new()` anywhere would be a lane nobody drains, which is
+        // indistinguishable at every call site from a lane that is merely idle.
+        let pubqueue = Arc::new(kayfabe_device::pubqueue::PublicationQueue::new());
+        // ⊘ The port is BUILT, then CLONED, then installed — rather than built twice. Every
+        // field is a handle, so the clone is the same port; building it twice would be two
+        // ports that happen to agree today.
+        let doorbell_port = SharedDoorbell {
             device: Arc::clone(&device),
             plane: Arc::downgrade(&plane),
             ce: Arc::clone(&ce),
@@ -11932,7 +12163,33 @@ impl Regs {
             // ★ w318 — empty. The gate's first consultation on any key always ARMS, so a
             // fresh port cannot skip work it has never done.
             dirty: Arc::new(DirtyGate::default()),
-        }));
+            pubqueue: Arc::clone(&pubqueue),
+            doorbell_async,
+        };
+        plane.set_doorbell(Box::new(doorbell_port.clone()));
+        // ★★★★★ **w383 — THE ARM, ECHOED, on both arms and unconditionally.** A selector
+        // that prints only when it is on makes *"the lane was disarmed"* and *"the build
+        // does not have the lane"* the same log — the exact shape every other arm in this
+        // file echoes to avoid.
+        eprintln!(
+            "kayfabe: DOORBELL-ASYNC arm={} ⇒ the doorbell trap {}",
+            doorbell_async.as_str(),
+            match doorbell_async {
+                DoorbellAsyncArm::Off =>
+                    "RUNS the publication legs and the host forward INLINE, on the vCPU, \
+                     under the BQL — the CONTROL, byte-identical to every boot before w383. \
+                     ⊘ Expected reading: `TRAPWITNESS inline_exceptions=` large and \
+                     `off_trap_claims=0`, and a `PUBQUEUE` census of all zeros",
+                DoorbellAsyncArm::On =>
+                    "VALIDATES, ENQUEUES and RETURNS — ★★★★★ the owner's 2026-09-06 ruling \
+                     and `TrapContract::ScheduleAndReturn`, enforced rather than reported. A \
+                     `kayfabe-doorbell-publish` worker runs the identical body in the \
+                     identical order, and the forward is still the LAST statement of the \
+                     pass, so publication still completes before the engine executes. ⊘ What \
+                     is given up is only `publication completes before the TRAP RETURNS`, \
+                     which was never the requirement",
+            },
+        );
         Ok(Regs {
             plane,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
@@ -11953,6 +12210,10 @@ impl Regs {
             max_reap_us: std::sync::atomic::AtomicU64::new(0),
             max_drain_us: std::sync::atomic::AtomicU64::new(0),
             last_deferred_for_drain: std::sync::atomic::AtomicUsize::new(0),
+            pubqueue,
+            doorbell_port,
+            doorbell_worker: std::sync::Mutex::new(None),
+            doorbell_async,
         })
     }
 
@@ -12033,6 +12294,109 @@ impl Regs {
         // for the same reason the memory plane is attached here: before this instant there
         // is no guest memory to observe an address in.
         self.start_completion_observer(shim.machine().vmm());
+        // ★★★★★ w383 — and the deferred-publication worker, for the identical reason: it
+        // reads the guest's page tables and the guest's GPFIFO ring, and before this
+        // instant there is neither.
+        self.start_doorbell_publish_worker(shim.machine().vmm());
+    }
+
+    /// ★★★★★ **w383 — start the deferred-publication worker.** See
+    /// [`DoorbellPublishThread`] and [`doorbell_publish_loop`].
+    ///
+    /// ⊘ Idempotent and quiet on a second attach; **loud** on every other outcome. A
+    /// worker that failed to start and printed nothing would leave the port offering to a
+    /// queue nobody drains — the guest's every doorbell accepted and none of them ever
+    /// executed, with a `PUBQUEUE` census that looks like a healthy backlog. That is the
+    /// single worst failure this rung can have, so it is the one that must be impossible
+    /// to read as benign.
+    fn start_doorbell_publish_worker(&self, vmm: kayfabe_vmm_qemu::QemuVmm) {
+        if !self.doorbell_async.defers() {
+            // ⊘ Said out loud on the control too: *"no worker, because the arm is off"* and
+            // *"no worker, because the spawn failed"* are different facts and only one of
+            // them is a configuration.
+            eprintln!(
+                "kayfabe: DOORBELL-ASYNC ⊘ NO WORKER — arm={} (the control). Every doorbell \
+                 runs its publication and its forward on the vCPU that trapped it.",
+                self.doorbell_async.as_str(),
+            );
+            return;
+        }
+        let mut slot = self
+            .doorbell_worker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return;
+        }
+        // ⊘ CLONED out of the port, not borrowed from it: the worker outlives this call and
+        // the port lives inside the plane's `RwLock<Box<dyn DoorbellPort>>`, which hands
+        // nothing back out.
+        let port = self.doorbell_port.clone();
+        let queue = std::sync::Arc::clone(&self.pubqueue);
+        let queue_for_thread = std::sync::Arc::clone(&queue);
+        match std::thread::Builder::new()
+            .name("kayfabe-doorbell-publish".into())
+            .spawn(move || doorbell_publish_loop(port, &queue_for_thread, vmm))
+        {
+            Ok(join) => {
+                eprintln!(
+                    "kayfabe: DOORBELL-ASYNC worker STARTED — one thread, one coalescing \
+                     lane, cap={}. ⊘ The trap now offers and returns; the publication legs \
+                     and the host forward run here, in the same order, and the forward is \
+                     still the last statement of the pass.",
+                    kayfabe_device::pubqueue::PublicationQueue::DEFAULT_CAP,
+                );
+                *slot = Some(DoorbellPublishThread {
+                    queue,
+                    join: Some(join),
+                });
+            }
+            // ⚠ FAIL CLOSED. With no worker the lane would swallow every doorbell, so the
+            // arm is torn down rather than left half-armed: `doorbell_async` on the PORT is
+            // a `Copy` field that cannot be reached from here, so the honest recovery is to
+            // say so at maximum volume and let the boot be read as unmeasured.
+            Err(why) => eprintln!(
+                "kayfabe: DOORBELL-ASYNC ⊘⊘⊘ WORKER FAILED TO START: {why}. The port is \
+                 ARMED and there is NOTHING DRAINING THE LANE — every doorbell from here on \
+                 is accepted and never executed. ⚠ THIS BOOT IS UNMEASURABLE; do not read \
+                 its PUBQUEUE depth as a backlog.",
+            ),
+        }
+    }
+
+    /// ★★★★★ **w383 — stop the worker and JOIN it**, before `detach_ram` releases the
+    /// guest-RAM regions the loop reads through its own `QemuVmm`. The join is not
+    /// optional, for [`Regs::stop_completion_observer`]'s reason exactly.
+    ///
+    /// ⊘ The census prints on **both** arms, including all-zeros on the control, so a boot
+    /// log always answers *"was the lane armed, and did it carry anything"* rather than
+    /// leaving an absence to be interpreted.
+    fn stop_doorbell_publish_worker(&self) {
+        let taken = self
+            .doorbell_worker
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(mut w) = taken {
+            // ⊘ `stop` FIRST, then the join: `take_blocking` returns `None` only once the
+            // queue is both empty and stopping, so this drains what is outstanding rather
+            // than abandoning it — and a loop woken before the flag was set would go round
+            // once more and read guest RAM we are about to release.
+            w.queue.stop();
+            if let Some(j) = w.join.take() {
+                let _ = j.join();
+            }
+        }
+        eprintln!(
+            "kayfabe: DOORBELL-ASYNC arm={} {} | {}",
+            self.doorbell_async.as_str(),
+            if self.doorbell_async.defers() {
+                "worker STOPPED and JOINED"
+            } else {
+                "⊘ no worker ran (the control)"
+            },
+            self.pubqueue.census(),
+        );
     }
 
     /// ★★★★★ **Start the completion observer's reactor loop.** See [`ObserverThread`].
@@ -12342,6 +12706,10 @@ impl Regs {
         // through its own handle, and the hypervisor releases the regions behind that
         // handle once this returns. Stop and JOIN before anything else is torn down.
         self.stop_completion_observer();
+        // ★★★★★ w383 — and the publication worker, for the identical reason and BEFORE the
+        // RAM port is refused: it holds its own `QemuVmm` and is in the middle of reading
+        // guest page tables.
+        self.stop_doorbell_publish_worker();
         self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
         // The teardown half, and not optional for the same reason: a copy-engine
         // submission arriving after the machine released its slots must be refused by
@@ -14532,6 +14900,26 @@ pub const OPERAND_JOIN_ENV: &str = "KAYFABE_OPERAND_JOIN";
 ///   see the pass's own doc — but there is no per-leaf release short of it.
 pub const VAS_PUBLISH_ENV: &str = "KAYFABE_VAS_PUBLISH";
 
+/// ★★★★★ **w383 — DOES THE DOORBELL TRAP RUN THE PUBLICATION, OR SCHEDULE IT?**
+///
+/// > Owner, 2026-09-06: *"Never do a blocking call during a doorbell write, quickly re-enter
+/// > the VM. Instead if you need to do mappings, run the doorbell asynchronously. There is no
+/// > guarantee that a real GPU gives either — the doorbell runs immediately in-line, it's a
+/// > schedule."*
+///
+/// The tree already states this as a **type**: `GuestChannelKind::Emulated` declares
+/// `TrapContract::ScheduleAndReturn`, whose own doc says *"the handler must not run on the
+/// vCPU thread"*, and `may_run_on_the_vcpu_thread()` is the predicate. Until this arm the
+/// contract was **read and reported as violated in the same breath**
+/// (`SharedDoorbell::try_ce_submission`'s `CE-SYSPROC-KEPT` line). This is the seam that
+/// discharges it.
+///
+/// ⊘ **Not a boolean field on some other selector, and not defaulted to `on`.** The whole
+/// value of the rung is a measured before/after on one workload, and an arm that cannot be
+/// disarmed from the caller makes an evidence run and its control indistinguishable
+/// (`w298`'s ruling). `off` is byte-identical to every boot before w383.
+pub const DOORBELL_ASYNC_ENV: &str = "KAYFABE_DOORBELL_ASYNC";
+
 /// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
 ///
 /// # ⊘⊘ WHY THERE ARE THREE ARMS AND NOT TWO — a defect this rung's OWN control found
@@ -14806,6 +15194,82 @@ pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &
              the VAS this doorbell is about is drained to empty before the ring is rung, while \
              every OTHER address space keeps the same bounded sample `both` gives it.",
         )),
+    }
+}
+
+/// ★★★★★ **w383 — where the doorbell's publication and forward RUN.** See
+/// [`DOORBELL_ASYNC_ENV`].
+///
+/// ⊘ Two arms and not three. There is no *"assert"* control here because the disarmed arm
+/// **is** the control: `off` runs exactly the code every boot before w383 ran, on exactly
+/// the thread it ran on, and the `PUBQUEUE` census still prints (all zeros), so *"the lane
+/// was disarmed"* is a positive observation rather than an absence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoorbellAsyncArm {
+    /// ★ THE CONTROL. The trap runs `try_ce_submission`, the publication legs and the host
+    /// forward inline, on the vCPU, under the BQL — byte-identical to every boot before
+    /// w383.
+    Off,
+    /// ★★★★★ The trap **validates, enqueues and returns**. A dedicated
+    /// `kayfabe-doorbell-publish` thread takes the token and runs the identical body, in
+    /// the identical order.
+    ///
+    /// ⊘ What moves is the **whole block, not its internal order**: publication must still
+    /// complete before the engine executes, and it does, because the forward is the last
+    /// statement of the same worker pass. What is given up is only *"publication completes
+    /// before the trap RETURNS"* — which was never the requirement, because the guest's
+    /// doorbell store is fire-and-forget and it reads nothing back.
+    On,
+}
+
+impl DoorbellAsyncArm {
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DoorbellAsyncArm::Off => "off",
+            DoorbellAsyncArm::On => "on",
+        }
+    }
+
+    /// Whether the trap schedules instead of running.
+    #[must_use]
+    pub const fn defers(self) -> bool {
+        matches!(self, DoorbellAsyncArm::On)
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_doorbell_async`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`DoorbellAsyncArm::Off`].
+pub fn doorbell_async_from(value: Option<&str>) -> Result<DoorbellAsyncArm, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(DoorbellAsyncArm::Off),
+        Some("on") => Ok(DoorbellAsyncArm::On),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_DOORBELL_ASYNC does not name an arm: the only values are `off` (the \
+             CONTROL — the trap runs the publication legs and the host forward inline on the \
+             vCPU under the BQL, byte-identical to every boot before w383) and `on` (the trap \
+             validates, offers the token to the coalescing publication lane and returns; a \
+             worker thread runs the identical body in the identical order). ⊘ `1`/`true`/`yes` \
+             are not accepted, for the same reason no other selector in this file accepts \
+             them: a spelling a typo can reach silently disarms the experiment.",
+        )),
+    }
+}
+
+/// Which arm [`DOORBELL_ASYNC_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)> {
+    match std::env::var_os(DOORBELL_ASYNC_ENV) {
+        None => Ok(DoorbellAsyncArm::Off),
+        Some(v) => doorbell_async_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 

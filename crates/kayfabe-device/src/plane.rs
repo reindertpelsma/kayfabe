@@ -3626,19 +3626,35 @@ impl RegPlane {
     /// Split out of [`RegPlane::write`] so the *"no plane lock is held here"* obligation is
     /// visible in one place: nothing in this function takes [`RegPlane::state`], and the
     /// only lock it holds across the port call is the port's own [`RwLock`] read guard.
-    fn ring_doorbell(&self, token: u64) -> WriteOutcome {
-        // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
-        // the GUEST did and cannot be reduced by anything the core decides.
-        self.c.doorbells.fetch_add(1, Ordering::Relaxed);
-        // ★★ w326 — the invalidate-per-doorbell ratio is the number the trigger-vs-doorbell
-        // decision turns on, so BOTH its terms are taken by one observer over one interval.
-        // Two logs correlated afterwards is how a ratio comes to describe two boots.
-        self.mmu_inval.note_doorbell();
-        let report = {
-            let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
-            port.ring(token)
-        };
-        match &report {
+    /// ★★★★★ **w383 — THE ACCOUNTING, LIFTED OUT OF THE TRAP so the deferred lane can
+    /// reach it.**
+    ///
+    /// Every counter and every log field a doorbell report owns, in one place. It was
+    /// inline in [`RegPlane::ring_doorbell`] until the publication lane got a worker; the
+    /// worker produces a report at an instant the trap has already returned from, and a
+    /// second copy of this block on that side is how two counters come to disagree about
+    /// one event.
+    ///
+    /// ⊘ **It raises nothing and takes no plane lock.** The interrupt half stays in
+    /// `ring_doorbell`, because delivery is the trap's to report through
+    /// [`WriteOutcome::raise_cpu_intr`] and the worker has no wire for it. That is safe
+    /// **by construction, not by luck**: the deferred arm is the forwarding path, whose
+    /// only reports are [`DoorbellReport::Served`] and [`DoorbellReport::Refused`], and
+    /// both of those already answer `false` to every raise below. See the
+    /// `⊘ A DEFERRED SERVED-LOCALLY` guard at the worker's call site.
+    ///
+    /// # ⚠ What the deferred lane does to `Counters::doorbells`' invariant, stated
+    ///
+    /// `doorbells == doorbells_served + doorbells_refused` holds **exactly** while the lane
+    /// is disarmed, and becomes `doorbells >= served + refused` while it is armed. The
+    /// difference is not a leak: it is precisely *(coalesced offers) + (entries in flight)*,
+    /// and both terms are on `pubqueue::PublicationQueue::census`. ⊘ A
+    /// [`DoorbellReport::Scheduled`] is deliberately counted in **neither** bucket — it
+    /// claims nothing about the work, and folding it into `served` would be the exact
+    /// "counted as a doorbell, went nowhere, looked fine" this crate's doorbell doctrine
+    /// forbids.
+    pub fn account_doorbell_report(&self, token: u64, report: &DoorbellReport) {
+        match report {
             // ★ Both servings count as served — `doorbells == served + refused` is the
             // invariant [`Counters::doorbells`] states, and a third arm that counted as
             // neither would break it silently. Which serving it was is in the report.
@@ -3648,7 +3664,7 @@ impl RegPlane {
                 // above deliberately keeps both together so `served + refused == doorbells`
                 // cannot be broken; this one says what `served` is made of, so a boot can
                 // never report progress without saying whose progress it was.
-                match &report {
+                match report {
                     DoorbellReport::ServedLocally { .. } => {
                         self.c
                             .doorbells_served_locally
@@ -3661,25 +3677,45 @@ impl RegPlane {
                     }
                     // ⊘ Unreachable under the outer arm; named rather than `_` so a new
                     // report variant fails this build instead of vanishing from the split.
-                    DoorbellReport::Refused { .. } => {}
+                    DoorbellReport::Refused { .. } | DoorbellReport::Scheduled { .. } => {}
                 }
             }
             DoorbellReport::Refused { .. } => {
                 self.c.doorbells_refused.fetch_add(1, Ordering::Relaxed);
             }
+            // ★★★★★ w383 — ACCEPTED, AND COUNTED NOWHERE HERE. The work has not run; the
+            // report that says what it did will come back through this same function from
+            // the worker. Counting it as `served` would make the queue's depth read as
+            // progress.
+            DoorbellReport::Scheduled { .. } => {}
         }
         {
             let mut log = self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner());
             log.last_token = Some(token);
             if log.first_refusal.is_none()
-                && let DoorbellReport::Refused { refusal, .. } = &report
+                && let DoorbellReport::Refused { refusal, .. } = report
             {
                 log.first_refusal = Some(refusal.clone());
             }
-            if let DoorbellReport::ServedLocally { note, .. } = &report {
+            if let DoorbellReport::ServedLocally { note, .. } = report {
                 log.last_local_serving = Some(note.clone());
             }
         }
+    }
+
+    fn ring_doorbell(&self, token: u64) -> WriteOutcome {
+        // ★ Counted BEFORE the port is consulted, so `doorbells` is a statement about what
+        // the GUEST did and cannot be reduced by anything the core decides.
+        self.c.doorbells.fetch_add(1, Ordering::Relaxed);
+        // ★★ w326 — the invalidate-per-doorbell ratio is the number the trigger-vs-doorbell
+        // decision turns on, so BOTH its terms are taken by one observer over one interval.
+        // Two logs correlated afterwards is how a ratio comes to describe two boots.
+        self.mmu_inval.note_doorbell();
+        let report = {
+            let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
+            port.ring(token)
+        };
+        self.account_doorbell_report(token, &report);
         // ★★★ **§14.18 — THE COMPLETION IS ANNOUNCED**, and only a completion is.
         let raise_cpu_intr = match &report {
             DoorbellReport::ServedLocally { engine, .. } => self.announce_completion(*engine),
@@ -3688,7 +3724,11 @@ impl RegPlane {
             // `kayfabe_completion`'s. Announcing here would be a notification for work whose
             // end we did not witness — the doorbell doctrine's own prohibition, one field
             // over. ⊘ And not `Refused`, which is the same claim with the sign flipped.
-            DoorbellReport::Served { .. } | DoorbellReport::Refused { .. } => false,
+            // ⊘ And not `Scheduled`: nothing has happened yet. The worker that runs it
+            // produces `Served`/`Refused`, neither of which announces anything either.
+            DoorbellReport::Served { .. }
+            | DoorbellReport::Refused { .. }
+            | DoorbellReport::Scheduled { .. } => false,
         };
         // ★★★★★ **§16.77.1 — THE OS-EVENT WAKEUP, ON THE C's OWN TRIGGER.**
         //
@@ -3730,6 +3770,38 @@ impl RegPlane {
             raise_cpu_intr,
             ..WriteOutcome::nothing()
         }
+    }
+
+    /// ★★★★★ **w383 — THE LOCALLY-SERVED COMPLETION, ANNOUNCED FROM OFF THE TRAP.**
+    ///
+    /// The two guest-visible acts a [`DoorbellReport::ServedLocally`] owes — the non-stall
+    /// completion announcement and the os-event wakeup — in the order and under the
+    /// preconditions [`RegPlane::ring_doorbell`] performs them, so the deferred lane cannot
+    /// come to differ from the trap about what a local serving means. Returns whether a
+    /// message-signalled vector is owed.
+    ///
+    /// ⊘ **It does not raise anything.** On the trap the raise leaves through
+    /// [`WriteOutcome::raise_cpu_intr`]; a worker has no such wire and must go through its
+    /// own `Vmm::raise_irq`. Keeping the *decision* here and the *delivery* at the caller
+    /// is what stops the two paths from acquiring two different opinions about when a
+    /// vector goes out — the same split `announce_completion` already makes one layer down.
+    ///
+    /// ⚠ **The precondition is the report's, not this function's**: call it only for a
+    /// `ServedLocally`, i.e. only after this device witnessed the bytes move and the
+    /// finishPayload advance. A `Served` (forwarded) doorbell finishes on a host engine we
+    /// are not standing at, and announcing for one would be a notification for work whose
+    /// end we did not witness.
+    #[must_use]
+    pub fn announce_deferred_local_completion(&self, engine: Option<u32>) -> bool {
+        let raise_cpu_intr = self.announce_completion(engine);
+        let raise_os_event = {
+            let mut s = self.state.lock();
+            let PlaneState {
+                fsm, ram, cpu_intr, ..
+            } = &mut *s;
+            self.deliver_os_events(fsm, ram.as_mut(), cpu_intr)
+        };
+        raise_cpu_intr || raise_os_event
     }
 
     /// ★★★★★ §16.76 — **the os-event wakeup, delivered**: gate, post the batch, latch the
