@@ -109,12 +109,24 @@ python processes*: `CE2 … FAULT_PDE @ 0x724b_9ce00000` and `GR0_PBDMA0 … FAU
 coalescing artefact — the coalescing was already off.
 
 **⊘ THE PREMISE THAT IS FALSE: our forward is not the only thing that starts the engine.**
-The host channel is born **over the guest's own USERD page** — this tree's own comment, at
-`shim.rs`' `GrCursorWatch`: *"after leg B the host channel is born over this same page
-(`GR-BIRTH … userd=GUEST-USERD`), which is precisely why reading it answers a question about
-the **host** engine's progress."* And `exec.scheduled.insert(plan.chan)`
-(`kayfabe-fwd/src/lib.rs`) is **monotone**: a channel we schedule once stays on the host
-runlist.
+The host channel is born **over the guest's own ring and the guest's own USERD page**. That is
+not an inference from a comment — it is counted in this rung's own boot logs:
+
+```
+$ grep -ao 'adopt=[A-Z-]*' run_w383cup3nc_qemu.log | sort | uniq -c
+      9 adopt=DECLINED
+     17 adopt=GUEST-RING
+$ grep -ao 'userd=[A-Z-]*' run_w383cup3nc_qemu.log | sort | uniq -c
+      8 userd=DECLINED
+     17 userd=GUEST-USERD
+```
+
+**Seventeen host channels in one `cup3` boot declare the guest's ring and the guest's USERD.**
+The tree says what that means at `shim.rs`' `GrCursorWatch`: *"after leg B the host channel is
+born over this same page (`GR-BIRTH … userd=GUEST-USERD`), which is precisely why reading it
+answers a question about the **host** engine's progress."* And
+`exec.scheduled.insert(plan.chan)` (`kayfabe-fwd/src/lib.rs`) is **monotone**: a channel we
+schedule once stays on the host runlist.
 
 ⇒ ★★★★★ **From the SECOND submission on a channel, the guest's own `GP_PUT` store into the
 adopted USERD is what starts the host PBDMA, and our doorbell trap is not in that path at
