@@ -105,7 +105,136 @@ through an independent mapping. The channel's own retirement semaphore is expose
 
 ### §4.1 the differential table
 
-<!-- W381_TABLE -->
+One binary, `md5 abb359d5859d97d46dcd97ab6742bc0e`, **printed on both arms** — so *"the same
+program"* is a measurement and not an assumption. RTX 3060 (GA106), host driver 580.159.04
+**open** module, guest kernel `6.8.0-138-generic`, guest driver 580.159.04, source
+`d7081ad1`. Guest arm: `KAYFABE_CE_EXECUTOR=local`, `KAYFABE_ISOLATES=real`,
+`KAYFABE_VAS_PUBLISH=drain`, `KAYFABE_GR_ROUTE=passthrough`.
+
+| rung | native / launch-dma | native / sem-release | **guest / launch-dma** | guest CONTROL |
+|---|---|---|---|---|
+| `map_propagation` (R2) | PASS | PASS | **PASS** | PASS |
+| `alias_two_vas` (R1′)  | PASS | PASS | **PASS** | PASS |
+| `alias_unmap` (R1″)    | PASS | PASS | **PASS** | PASS |
+| `rpc_mixed` (R4)       | PASS | PASS | **FAIL** | PASS |
+| `cross_client` (R5b)   | PASS | PASS | **PASS** | PASS |
+| `missing_page` (R3)    | PASS | PASS | **FAIL** | PASS |
+| `map_stress` (R5)      | PASS | PASS | <!-- W381_R5GUEST --> | <!-- W381_R5GUESTCTL --> |
+
+```
+W381_TABLE_ROW arm=native probe=launch-dma  pass=7 fail=0 notrun=0 seen=7 of=7
+W381_TABLE_ROW arm=native probe=sem-release pass=7 fail=0 notrun=0 seen=7 of=7
+W381_TABLE_ROW arm=guest  probe=launch-dma  pass=4 fail=2 notrun=0 seen=6 of=7
+```
+
+★★★★★ **THE BLOCKER IS CLOSED.** Before this lane every one of those guest cells would have
+read `NOTRUN` behind a failed control, and the battery's verdict would have been
+`(C) UNINTERPRETABLE`. **Every guest control passed**, so every guest cell is an
+attributable statement about the emulated path.
+
+★ **And the substitution is validated by its own control**: the two native columns are
+identical, seven for seven. A copy probe that had measured something different from the
+release probe on bare metal would have made the guest column meaningless.
+
+⊘ `map_stress` needed a second boot: at ~3.4 s per lost probe it did not fit the first run's
+420 s inner deadline and the harness recorded `W381_RC=124` with **no verdict line** —
+correctly reported as `seen=6 of=7` rather than as a pass or a fail.
+
+### §4.1.1 ⚠ THE INSTRUMENT TRAP THIS RUN WALKED INTO — a capped sample read as a census
+
+The guest boot's QEMU log carries **16 `SERVED-LOCAL` and 24 `REFUSED`** doorbell lines, and
+every one of the 16 belongs to the guest driver's own kernel CeUtils channels
+(`token 0x00010001/2`) while every ladder doorbell (`token 0x3/0x4`) that appears is a
+**refusal**. Read literally that says *the ladder's submissions were never served* — which
+would contradict four rungs that measured landed copies.
+
+⊘ **It is a CAP, not a census.** `nvkvm.c` gates that line on
+`s->doorbells_logged < NVKVM_DOORBELL_LOG_MAX`, and the dedicated refusal line has its own
+separate budget. The **teardown census** is the real number:
+
+```
+doorbells=324   by engine: GrCompute=0 GrGraphics=0 Ce=324 NvEnc=0 NvDec=0 Other=0 unrouted=0
+```
+
+⇒ 324 CE doorbells arrived, all routed to CE, none unrouted; the log shows the first ~40.
+★ Same class as `a_global_print_cap_forges_an_absence`, and it nearly produced the confident
+wrong sentence *"the guest's copies were all refused"* in this very document. **The rungs'
+own verdicts are the primary evidence; the doorbell log is a sample.**
+
+### §4.1.2 ★★★ RED 1 — R3: the emulated device CONTAINS a fault and never NAMES it
+
+Identical rung, identical binary, opposite halves:
+
+| | native | guest |
+|---|---|---|
+| bystander before | Landed | Landed |
+| victim (never-mapped VA) | Lost | Lost |
+| **error notifier** | `fired=true status=0xffff except_type=0x1f engine=0x0001` | **`fired=false status=0x0000 except_type=0x0`** |
+| bystander after | Landed | Landed |
+| host kernel `Xid (PCI:` records | **1** | **0** |
+
+★ **Containment holds on both arms** — a channel in another address space kept landing across
+the fault. What the guest does not do is **write the robust-channel record**. `except_type
+0x1f` is `ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`, the number a host kernel log prints as
+`Xid 31`.
+
+⇒ **A guest driver whose channel dies on a bad VA cannot learn that it died.** It sees a
+semaphore that never advances and has no way to distinguish that from slow work. ⚠ And
+`status == 0` is *also* what an unwired notifier reads as, so the rung fails this bar on
+either reading — both are failures of *"named, not silent"*.
+
+### §4.1.3 ★★★ RED 2 — R4: freeing one family broke four of six mappings in the other
+
+```
+guest:  allocated 12/12  placed exact 12/12  identity 12/12  CROSSTALK 0  never-read 0
+        ordering 2/6   controls answered 12/12
+native: allocated 12/12  placed exact 12/12  identity 12/12  CROSSTALK 0  never-read 0
+        ordering 6/6   controls answered 12/12
+```
+
+★ **The identity half is perfect in the guest.** Twelve objects across two apertures, each
+holding its own magic under an engine read-back, **zero crosstalk** — the aperture router
+(`CpuPlane::Fb` vs `CpuPlane::GuestRam`) does not confuse the two number spaces.
+
+⊘ **The ordering half is not.** After the whole sysmem family was unmapped and freed,
+**VIDMEM #2, #3, #4 and #5 stopped round-tripping** while #0 and #1 kept working:
+
+```
+ordering: VIDMEM #2 at 0x0000000e11000000 stopped round-tripping after the whole SYSMEM
+          family was freed (saw Some(3735880569), want 0x84102102)
+… #3 at 0x0000000f11000000, #4 at 0x0000001011000000, #5 at 0x0000001111000000
+```
+
+`3735880569` = `0xDEAD0379` = the scratch **poison**, so the read-back copy did not land at
+all — those VAs stopped being reachable by the engine, not merely stale. ⚠ **Two of six
+survived**, so it is not an all-or-nothing channel death; something degraded partway through
+the pass.
+
+⊘ **NOT ROOT-CAUSED, and deliberately not guessed at.** One correlated observation is
+recorded because the next lane will want it: the guest's own `dmesg` carries
+
+```
+NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: … hClass=0x00000070 … status=0x00000056
+NVRM: rpcRmApiFree_GSP:  GspRmFree  failed: … status=0x00000056
+NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || … @ mem.c:180
+```
+
+`0x70` is `NV01_MEMORY_VIRTUAL` and `0x56` is `NV_ERR_NOT_SUPPORTED`: **our emulated GSP
+refuses both the allocation and the free of the VA-space range object**, and the guest's RM
+asserts on the free path. Every rung here allocates its own VA space, so this fires
+throughout. ⚠ **Correlation only** — nothing here shows it is the cause of the four dead
+mappings, and saying so would be the `pde_info` mistake in a new place.
+
+### §4.1.4 ⊘ WHAT `alias_two_vas = PASS` IN THE GUEST DOES **NOT** SETTLE
+
+The w377 correction named the LLM wall as **FB-join aliasing**: `install_join(phys, region)`
+is keyed by physical frame alone, so one framebuffer frame can be host-backed at exactly one
+GPU VA. R1′ passing in the guest is *not* a refutation of that, for a reason that is
+structural rather than statistical: this arm ran `KAYFABE_CE_EXECUTOR=local`, so **the CPU
+executor served every copy out of the emulated framebuffer and no host backing was needed for
+any of these VAs**. The FB-join store was never on the path. ⇒ R1′ under
+`KAYFABE_CE_EXECUTOR=host`, where the operands must be host-backed, is a **different
+measurement and is the one that would bear on the w377 diagnosis.** It is not run here.
 
 ### §4.2 R4 — RPC-mixed allocations
 
