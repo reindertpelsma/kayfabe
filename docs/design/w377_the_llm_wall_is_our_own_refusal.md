@@ -277,3 +277,58 @@ doorbell**, is walked by the engine. `traces/real_ga106/w377_late_map_race_real_
 ⊘ This bounds the **hardware**, not ogkm. The probe issued the map at a moment of its own
 choosing, deliberately bypassing whatever ordering discipline ogkm imposes. It says the GPU
 will not save us if ogkm ever produces that ordering; it does not say ogkm does.
+
+---
+
+# ★★★★★ §9 THE DISCRIMINATOR IS ANSWERED — the guest genuinely holds every alias LIVE
+
+**STATUS — 2026-09-06 — MEASURED** from `run_w376llmd_qemu.log`, 127 parsed supersede events.
+This settles which fix to build; §"THE FIX" above named it as the open question.
+
+## The measurement
+
+Parsed every `SUPERSEDED fb_phys=… from va=… to va=…` into `(frame, from, to)` triples:
+
+- **127 events over exactly 17 distinct frames.**
+- Each frame occupies **2 or 3 distinct VAs, never more** — 9 frames at 2, 8 at 3. Bounded.
+- **`from == to` on 0 of 127.** No self-supersede; the earlier `X->X` appearance was an
+  artefact of truncating VAs to their low 6 hex digits, not a second defect.
+
+Frame `0x1e00000`, in order:
+
+```
+0x7480b0000000 -> 0x7480ac000000
+0x7480ac000000 -> 0x748037200000
+0x748037200000 -> 0x7480ac000000     <- the TARGET has become the SOURCE
+0x7480ac000000 -> 0x748037200000
+0x748037200000 -> 0x7480ac000000
+0x7480ac000000 -> 0x748037200000
+0x748037200000 -> 0x7480ac000000
+0x7480ac000000 -> 0x748037200000
+```
+
+Frame `0x2000000`: `0x7480b0200000 ↔ 0x7480ac200000` alternating **eight** times, then away to
+`0x748037600000`.
+
+## ★★★ THE INFERENCE, AND WHY IT IS TIGHT
+
+**A supersede TARGET later becomes a supersede SOURCE.** After we move a frame to VA_B, the
+guest **re-declares it at VA_A**, so we move it back — repeatedly, in a stable alternation.
+
+⇒ **A stale row we merely failed to drop can never be re-declared.** Staleness is monotone: a
+row we forgot to remove stays forgotten, it does not come back as fresh guest intent. Only a
+guest that genuinely holds *both* VAs mapped can produce an alternating source/target pair.
+
+⇒ **MODEL (a) CONFIRMED: the guest holds every alias live. MODEL (b) (stale in our decode) is
+REFUTED** for these 17 frames.
+
+⇒ **THE FIX IS "ALLOW N VAs PER FRAME", NOT "OBSERVE THE UNMAP".** Key the FB join by
+`(phys, va)`; one host `OS_DESCRIPTOR` over the frame, mapped at every VA the guest describes.
+⚠ **N must be unbounded, not 2.** Eight of seventeen frames already reach three VAs, and
+nothing in the guest's behaviour caps it — a hard-coded 2 would be the `SUPERSEDE_CAP_PER_FRAME`
+mistake again one level up.
+
+⊘ **Scope.** This is our decode of the guest's page tables, so it is not an independent
+observer of guest intent. What makes it hold is the *shape* — alternation — not the source.
+The raw-client alias rung (w379 R1′) is the independent confirmation: map one allocation at
+two VAs, assert both resolve host-side, run work through each.
