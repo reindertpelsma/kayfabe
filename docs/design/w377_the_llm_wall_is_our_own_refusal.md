@@ -1,9 +1,93 @@
 # ★★★★★ THE LLM WALL IS OUR OWN REFUSAL PREDICATE — not a missing mapping signal
 
-**STATUS — 2026-09-06 — LIVE.** Diagnosis from the `w376llmd` boot's own census, plus a
+**STATUS — 2026-09-06 — ⊘ PARTIALLY SUPERSEDED THE SAME DAY.** §1/§3 refuted; see the correction block below. §5–§8 LIVE. Diagnosis from the `w376llmd` boot's own census, plus a
 census of the committed bare-metal reference trace. Blockers (1)/(3)/(4)/(5) are named and
 localized; **(2) is named and NOT root-caused** — do not read this doc as a complete
 explanation.
+
+> # ⊘⊘⊘ CORRECTED 2026-09-06, HOURS LATER — **§1 IS WRONG ON THE MECHANISM, AND IT
+> # CONTRADICTS AN EARLIER RULING IN THIS TREE THAT IT DOES NOT CITE.**
+> Read this block before anything below it. The title of this file is **retained deliberately
+> as a tombstone** — the wall *is* ours, but it is not the refusal predicate.
+>
+> ## ★★★★★ THE ACTUAL CAUSE: THE FB-JOIN STORE IS KEYED BY PHYSICAL FRAME ALONE
+>
+> `install_join(phys, region)` / `release_join(phys)` / `fb_join_installed_at(phys)`
+> (`kayfabe-device/src/plane.rs:1685,1704`; `kayfabe-device/src/fbwin.rs:401,461,1111,1203`).
+> **One framebuffer frame can be host-backed at exactly ONE GPU VA.** The guest holds **17
+> frames aliased at two VAs each**, so publishing either VA *revokes the other*.
+>
+> ⇒ **The Xid 31 is at a range WE UN-PUBLISHED OURSELVES, and our own log predicted it
+> verbatim** (`shim.rs:10742-10771`, `kayfabe-rt/src/device.rs:3751-3798`):
+> *"the guest re-pointed this frame from `va=0x748027600000` to `va=0x7480ae000000`. Old row
+> UNBOUND, join RELEASED. ⊘ The old VA is still DESCRIBED by the guest and now resolves with
+> no host backing — an engine still pointed there takes a CONTAINED fault."*
+> The fault is at **`0x7480_27604000`** = that VA + `0x4000`.
+>
+> Measured this boot: **127 supersedes over 17 frames** in symmetric A→B/B→A pairs of 4
+> (`SUPERSEDE_CAP_PER_FRAME = 4`), then **28 108 `⊘ SUPERSEDE CAPPED`** across 14 (frame,VA)
+> pairs. The code's own comment already named it — *"an uncapped takeover is a ping-pong"*
+> (`shim.rs:10770`). ⚠ **The cap does not stop the ping-pong; it FREEZES it**, leaving one VA
+> of each pair permanently unbacked while the guest still describes it.
+>
+> ## ⊘ EVERY LOAD-BEARING CLAIM IN §1 AND §3 IS REFUTED
+>
+> - ⊘ **`runs=0` carries NO information.** `rows += 1` and `runs.push(..)` are the *same
+>   iteration* (`kayfabe-rt/src/device.rs:3483-3496`), so `rows == 0 ⟹ runs == 0` by
+>   construction. It is not a second model and cannot discriminate *"never ran"* from
+>   *"published nothing"*. **This field is what sent the whole diagnosis to proc 0.**
+> - ⊘ **`proc=0` is `SYSTEM_PROC`, and skipping it is deliberate.** The pass DID run and took
+>   a full census; it prints its own reason:
+>   `⊘SYSTEM-PROC:NEVER-ATTEMPTED(§12.26 …) total=6254 … candidates=6144 published=0
+>   refused=0 sum_ok=true` (`shim.rs:9522-9548`, `gpu.rs:5114`). Not a defect.
+> - ⊘ **The FAULTING VAS IS 99.93 % COVERED** — `proc=3 pdb=0x201000 total=18539
+>   already_host=1226 already_pinned=17300 candidates=7 refused=6`. **Under-publication is
+>   not the wall.** §1's `host_rows=1226 of 18539` reading ignored `already_pinned`.
+> - ⊘ **`StraddlesLiveBinding` is SKIPPED, not rejected.** `populate` returns
+>   `PopulateOutcome`, not `Result` (`kayfabe-mmu/src/walker.rs:1029,1082-1097`); **no branch
+>   anywhere reads it and changes control flow.** `InsideLarger`+`SameMemory` means the memory
+>   *is already covered by the row we kept* — 254 of 255 are benign.
+> - ⊘ **Relaxing it would publish nothing.** 240 of the rows are 4 KiB and die one gate later
+>   on 64 KiB granularity (`FB_LEAF_GRANULE = 0x1_0000`, `kayfabe-rt/src/device.rs:3694`);
+>   the covering rows fail too (`0xea000` = 14.625 granules, `0x8600` not even 4 KiB-aligned).
+>   And `refusals=255` is **constant across the entire boot** — it does not grow with the
+>   workload.
+> - ⊘⊘ **THIS WAS ALREADY RULED, AND I DID NOT CITE IT.** Commit `ff58c961` (w277):
+>   *"the live extents are `0x4000 / 0x8600 / 0x80000 / 0xea000` — NOT ONE is a page size …
+>   The refusal is CORRECT. Relaxing it would have shredded 255 correct rows and bought
+>   nothing."* ⚠ Exactly the failure this repo's doc-hygiene rules exist to prevent: a
+>   confident new doc re-deriving a settled question in the opposite direction.
+> - ⊘ **The 9 parked promotes were refuted at w290** (`traces/boots/w290/RESULT.md`,
+>   `5768e956`). They are structurally unresolvable — we park on `size == 0` and the UVM
+>   promote never carries a physical half — **and they would publish nothing if resolved**,
+>   since `apply_promote_ctx` binds with `host: None` (`promote.rs:1183`).
+> - ⊘ **`pub0` over-read.** It means *"carries no `HostBacking` record"*; a row covered by a
+>   live guest-RAM pin IS mapped host-side with `Binding::host == None`
+>   (`kayfabe-rt/src/device.rs:3684-3689`). `pub0` does not prove unmapped.
+>
+> ## ★ THE FIX, AND THE DISCRIMINATOR THAT MUST PRECEDE IT
+>
+> **Fix:** key the FB join by **`(phys, va)`**, or allow N VAs per frame — one host
+> `OS_DESCRIPTOR` over the frame, mapped at every VA the guest describes. **The aliasing is
+> the guest's and it is legal.**
+>
+> ⚠ **Run the discriminator first.** *"The old VA is still DESCRIBED by the guest"* is an
+> **unconditional string literal** (`shim.rs:10766-10769`), not a check — suspect the
+> instrument. Either the guest genuinely holds both VAs live (⇒ allow N VAs), or one is stale
+> in our decode and we never learned to drop it (⇒ observe the unmap). Since we see no TLB
+> invalidates on the compute path, **both models fit the data**, and they select different
+> fixes.
+>
+> ## ⚠ TWO INSTRUMENTS ARE ACTIVELY MISLEADING — fix in the same cycle
+> - **`runs`** is redundant with `host_rows` and reads as a pass counter. It is not one.
+> - **`DIRTY-GATE publish[fired=15996 skipped=0]`** counts **VASes visited**, not gate
+>   firings — `gate_fired += 1` is unconditional per visited VAS (`shim.rs:9520`), and
+>   `gate=off` on every pass this boot.
+>
+> ## ✔ WHAT SURVIVES FROM BELOW
+> §5 (198 static map events, zero migrations, no managed memory), §6 (the five banked ogkm
+> corrections), §7 (the invalidate hook and its measured scope) and §8 (the bare-metal
+> late-map result) are **unaffected** — they rest on their own measurements, not on §1.
 
 ## §1 THE HEADLINE
 
