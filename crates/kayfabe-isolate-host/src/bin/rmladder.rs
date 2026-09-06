@@ -5523,7 +5523,8 @@ fn map_stress(rm: &mut HostRmBackend, gpu: u32) -> bool {
                 Ok(g) => g,
                 Err(e) => {
                     if first_failures.len() < SHOW {
-                        first_failures.push(format!("cycle {cycle}: map at {va:#018x} refused {e:?}"));
+                        first_failures
+                            .push(format!("cycle {cycle}: map at {va:#018x} refused {e:?}"));
                     }
                     let _ = rm.free(mem);
                     continue;
