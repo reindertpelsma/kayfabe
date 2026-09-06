@@ -402,7 +402,7 @@ GPU"* — reproducing from a raw client with no CUDA anywhere. ⇒ `w384_hook.sh
 **prints** its device-open count and warns above four. ⚠ The failure mode is empty output, which
 reads as *"the rung printed nothing"* rather than as *"the device was wedged before it ran"*.
 
-### §4.3 ★★ `missing_page`, RE-ASKED ON THE SAME BINARY (native), and it has NOT moved
+### §4.3 ★★ `missing_page`, RE-ASKED ON BOTH ARMS, and it has NOT moved
 
 ```
 XID_WATERMARK_BEFORE=9   ⊘ bracketed, never absolute — other lanes provoke Xid 31 too
@@ -417,6 +417,20 @@ XID_WATERMARK_AFTER=10  delta=1
 ⇒ the native half of w381 §4.1.2 reproduces exactly on this branch's binary. ⚠ The brief for
 this lane recorded the host Xid watermark as **5**; it was **9** an hour later. That is not drift
 in the measurement — it is why the rule is *bracket, never count absolutely*.
+
+**And in the guest, on current master's shim, in the same boot as the latency rung:**
+
+```
+info  R3 notifier   = fired=false status=0x0000 except_type=0x0 engine=0x0000
+FAIL  R3 SILENT     = the channel stopped and the notifier is quiet
+★     R3 CONTAINED  = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=FAIL
+```
+
+⇒ **Identical to w381 §4.1.2, digit for digit, after `w383-doorbell-async` merged.** Containment
+holds; the fault is still never named. `missing_page` **has not moved**, and this is a
+measurement of that rather than an inference from the previous lane's table.
 
 ⊘ **THE FIX IS NOT THIS LANE'S TO MAKE.** The guest-side half needs the device to author slot 0
 at the guest-physical address in `errorNotifierMem.base` and to send `RC_TRIGGERED` with the
