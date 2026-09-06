@@ -93,6 +93,12 @@ else
 fi
 echo "$VER" | grep -q "580\." && echo "VERSION_580=yes" || echo "VERSION_580=no ⚠ unexpected version"
 
+# ⚠ ORDERING, measured 2026-09-06: the device nodes are created LAZILY, by `nvidia-modprobe`
+# on the first privileged open. Immediately after a fresh install they DO NOT EXIST, so an
+# open() test here reports ENOENT on all three and reads as a failed install. That is a FALSE
+# NEGATIVE -- the mirror of the false greens elsewhere in this file, and just as misleading.
+# Poke the driver first so the nodes exist, THEN test them.
+nvidia-modprobe -c 0 -u >/dev/null 2>&1 || nvidia-smi >/dev/null 2>&1
 # ★ node existence is not the property that matters -- open() them. EIO here means the GPU
 #   never completed GFW boot, which is a hardware state, not a build error.
 python3 - <<'PY'
