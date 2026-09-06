@@ -5085,7 +5085,9 @@ fn map_propagation(rm: &mut HostRmBackend, gpu: u32) -> bool {
             Ok(got) => {
                 mapped_at = Some(got);
                 ok = false;
-                println!("FAIL  R2 P1 placement     = asked {VA_MAPPED:#018x}, RM chose {got:#018x}");
+                println!(
+                    "FAIL  R2 P1 placement     = asked {VA_MAPPED:#018x}, RM chose {got:#018x}"
+                );
             }
             Err(e) => {
                 ok = false;
@@ -5162,10 +5164,7 @@ fn map_propagation(rm: &mut HostRmBackend, gpu: u32) -> bool {
     let _ = rm.free(vas);
 
     println!("RUNGCTL_map_propagation=PASS");
-    println!(
-        "RUNG_map_propagation={}",
-        if ok { "PASS" } else { "FAIL" }
-    );
+    println!("RUNG_map_propagation={}", if ok { "PASS" } else { "FAIL" });
     ok
 }
 
@@ -5255,7 +5254,8 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
             println!("??    R3 bystander map     = placed at {at:#018x}, not as asked");
             return None;
         }
-        let before = w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A, MAGIC_LIVE);
+        let before =
+            w379_release_through(rm, bchan, btok, bmem, BYST_TARGET, W379_OFF_A, MAGIC_LIVE);
         println!("info  R3 bystander before = {before:?}");
         if !before.landed() {
             println!(
@@ -5307,7 +5307,9 @@ fn missing_page_fault(rm: &mut HostRmBackend, gpu: u32) -> bool {
         }
 
         // ── (b) NAMED ───────────────────────────────────────────────────────────────────
-        let named = match rm.read_error_notifier(notifier, kayfabe_isolate_host::rm::NotifierAperture::Sysmem) {
+        let named = match rm
+            .read_error_notifier(notifier, kayfabe_isolate_host::rm::NotifierAperture::Sysmem)
+        {
             Ok(n) => {
                 println!(
                     "info  R3 notifier         = fired={} status={:#06x} except_type={:#x} \
