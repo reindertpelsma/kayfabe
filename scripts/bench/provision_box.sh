@@ -16,6 +16,24 @@ set -euo pipefail
 echo "PROVISION_START $(date -Is)"
 
 export DEBIAN_FRONTEND=noninteractive
+
+# ⚠ A FRESH CLOUD BOX RUNS `unattended-upgrades` AT BOOT and it holds the dpkg lock.
+# Measured on vast instance 50013922, 2026-09-06: provisioning launched ~7 minutes after
+# first boot and died instantly with
+#   E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 7603
+# `apt-get` exits 100 without installing anything. ⇒ The failure is a RACE WITH THE BOX,
+# not with our code, and retrying by hand a minute later "fixes" it — which is exactly why
+# it never gets written down and bites the next person instead. Wait for the lock.
+wait_for_dpkg() {
+  local waited=0
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    [ "$waited" -ge 600 ] && { echo "DPKG_LOCK_TIMEOUT after ${waited}s"; return 1; }
+    [ $((waited % 60)) -eq 0 ] && echo "waiting for dpkg lock (${waited}s)"
+    sleep 10; waited=$((waited + 10))
+  done
+  echo "dpkg lock free after ${waited}s"
+}
+wait_for_dpkg
 apt-get update -qq
 apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3
 
