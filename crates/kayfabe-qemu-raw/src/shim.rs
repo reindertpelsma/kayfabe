@@ -4749,6 +4749,18 @@ struct DoorbellPublishThread {
 /// (`qemu/hw/misc/nvkvm/nvkvm.c:415-431`). So this is legal from here and would be legal
 /// from a vCPU. ⊘ It is the one BQL acquisition on this thread's path and it happens at
 /// most once per **locally served** doorbell — `[measured w380llm2]` 16 of 15 928.
+/// How many `DEFERRED-LOCAL` lines the worker prints before it counts silently.
+///
+/// ⊘ A cap and not a suppression: the running total is on every line it does print, so the
+/// last one states the population even though the middle of it is not enumerated. `[measured
+/// w383]` the uncapped form emitted 431 lines in one boot.
+const DEFERRED_LOCAL_LOG_MAX: u64 = 8;
+
+/// Every deferred doorbell the CE shell executor claimed, process-wide. See
+/// [`DEFERRED_LOCAL_LOG_MAX`].
+static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 #[allow(clippy::needless_pass_by_value)]
 fn doorbell_publish_loop(
     port: SharedDoorbell,
@@ -4775,13 +4787,26 @@ fn doorbell_publish_loop(
             // dropped — and the line says so, once, so a boot can tell.
             if let kayfabe_device::DoorbellReport::ServedLocally { engine, .. } = &report {
                 let owed = plane.announce_deferred_local_completion(*engine);
-                eprintln!(
-                    "kayfabe: DOORBELL-ASYNC ⚠ SERVED-LOCALLY OFF THE TRAP token={token:#010x} \
-                     engine={engine:?} vector_owed={owed} — the CE shell executor claimed a \
-                     DEFERRED doorbell. Legal, and delivered below; recorded because the \
-                     deferred population is supposed to be the FORWARDING path, whose \
-                     reports announce nothing."
-                );
+                // ⊘⊘ **CAPPED, and the cap is a correction of this line's own comment.** It
+                // said *"the line says so, once"* on the belief that a deferred
+                // `ServedLocally` was impossible. `[measured w383, one LLM boot]` it fired
+                // **431 times**: the CE shell executor claims a large minority of the
+                // deferred population, and an uncapped `eprintln!` on that path is a flood
+                // that costs the thing it is measuring. The **total** is what matters and it
+                // rides `DEFERRED-LOCAL total=` below.
+                let n = DEFERRED_LOCAL_SERVINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+                if n <= DEFERRED_LOCAL_LOG_MAX {
+                    eprintln!(
+                        "kayfabe: DOORBELL-ASYNC ⚠ SERVED-LOCALLY OFF THE TRAP \
+                         #{n} token={token:#010x} engine={engine:?} vector_owed={owed} — the \
+                         CE shell executor claimed a DEFERRED doorbell. Legal, and delivered \
+                         below. ⊘ It is NOT rare: the deferred population was expected to be \
+                         the FORWARDING path alone, whose reports announce nothing. \
+                         DEFERRED-LOCAL total={n} (printing the first \
+                         {DEFERRED_LOCAL_LOG_MAX})"
+                    );
+                }
                 if owed {
                     if let Err(e) =
                         kayfabe_vmm::Vmm::raise_irq(&mut vmm, kayfabe_vmm::IrqSpec::Msix(0))
@@ -5306,7 +5331,11 @@ impl SharedDoorbell {
             // falling behind the guest?"*, which is the one question a deferred lane's
             // latency turns on and the one a final census provably cannot reach: at
             // teardown the queue is drained by construction.
-            self.pubqueue.census(),
+            format!(
+                "{} deferred_local={}",
+                self.pubqueue.census(),
+                DEFERRED_LOCAL_SERVINGS.load(std::sync::atomic::Ordering::Relaxed),
+            ),
         );
         kft.mark("log_ptdecode");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
