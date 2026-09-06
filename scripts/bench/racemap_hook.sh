@@ -45,9 +45,9 @@ fi
 # --- ship the raw client in ------------------------------------------------------------
 # ⚠ Located, never assumed: a missing binary must attribute to the BUILD, not to the GPU.
 if [ -z "$BIN" ]; then
-  for c in "${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w297}"/x86_64-unknown-linux-musl/release/rmladder \
-           "${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w297}"/release/rmladder \
-           "${KAYFABE_REPO:-/root/kayfabe}"/target/x86_64-unknown-linux-musl/release/rmladder; do
+  for c in "${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w297}"/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder \
+           "${CARGO_TARGET_DIR:-/workspace/bench/cargo-target-w297}"/release/kayfabe-rm-ladder \
+           "${KAYFABE_REPO:-/root/kayfabe}"/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder; do
     [ -x "$c" ] && BIN="$c" && break
   done
 fi

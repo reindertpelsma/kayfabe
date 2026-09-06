@@ -28,8 +28,8 @@ STAMP=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
 #   INVALIDATION` has no in-tree caller, so only hardware can answer.
 echo "=== ★ w377 ARM 1/2 — NATIVE (bare metal, source $STAMP)  $(date -Is) ==="
 BIN=""
-for c in "$CARGO_TARGET_DIR"/x86_64-unknown-linux-musl/release/rmladder \
-         "$CARGO_TARGET_DIR"/release/rmladder "$REPO"/target/release/rmladder; do
+for c in "$CARGO_TARGET_DIR"/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder \
+         "$CARGO_TARGET_DIR"/release/kayfabe-rm-ladder "$REPO"/target/release/kayfabe-rm-ladder; do
   [ -x "$c" ] && BIN="$c" && break
 done
 if [ -z "$BIN" ]; then
