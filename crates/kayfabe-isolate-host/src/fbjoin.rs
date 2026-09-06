@@ -273,10 +273,9 @@ mod tests {
     use super::*;
     use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, SharedRam};
 
-    fn joined(phys: u64, len: u64) -> FbJoinTable {
-        let ram = SharedRam::create(len).expect("memfd");
+    fn map_of(ram: &SharedRam, len: u64) -> MappedRegion {
         let fd = ram.dup_for_export().expect("dup");
-        let region = MappedRegion::map(
+        MappedRegion::map(
             Backing::SharedFile {
                 fd: std::os::fd::AsFd::as_fd(&fd),
                 offset: 0,
@@ -286,7 +285,12 @@ mod tests {
             CachePolicy::WriteBack,
             HostPageSize::query(),
         )
-        .expect("map");
+        .expect("map")
+    }
+
+    fn joined(phys: u64, len: u64) -> FbJoinTable {
+        let ram = SharedRam::create(len).expect("memfd");
+        let region = map_of(&ram, len);
         let t = FbJoinTable::new();
         t.install(phys, len, 0x2_0020_0000, 7, region);
         // ⊘ `ram` is dropped here on purpose: the mapping outlives the descriptor, which is
@@ -327,5 +331,55 @@ mod tests {
             u32::from_le_bytes(second[4..8].try_into().unwrap()),
             0xa19a_5a5c
         );
+    }
+
+    /// ★★★★★ **w380 — AN ALIAS IS ANOTHER ADDRESS FOR THE SAME BYTES, NOT ANOTHER MEMORY.**
+    ///
+    /// Two entries, one `memfd`. A pattern written through the alias's own mapping is read
+    /// through the JOIN's — which is the property that separates this fix from `w228`, where
+    /// two mappings of two different files both resolved, both looked green, and the engine
+    /// read a blank object while the guest read its own bytes.
+    #[test]
+    fn an_alias_holds_the_same_bytes_as_the_join_it_aliases() {
+        const LEN: u64 = 0x1_0000;
+        let ram = SharedRam::create(LEN).expect("memfd");
+        let t = FbJoinTable::new();
+        t.install(0x1e0_0000, LEN, 0x7480_b000_0000, 7, map_of(&ram, LEN));
+        // ★ The alias re-maps the SAME file, by the token the join recorded. A fresh
+        // `SharedRam::create` here would be the two-memories defect, and every assertion
+        // except the last would still pass.
+        let token = t
+            .token_for(0x1e0_0000, LEN)
+            .expect("the frame's export token is recoverable — the alias has no other way back");
+        assert_eq!(token, 7);
+        let alias = map_of(&ram, LEN);
+        alias
+            .write_from(HostOffset::new(0x40), &0xdead_beefu32.to_le_bytes())
+            .expect("the alias writes");
+        t.install_alias(0x1e0_0000, LEN, 0x7480_ac00_0000, token, alias);
+
+        assert_eq!(t.len(), 2, "two ADDRESSES");
+        assert_eq!(t.aliases(), 1, "one of which is an alias — so ONE memory");
+
+        let mut got = [0u8; 4];
+        assert_eq!(t.peek(0x1e0_0000 + 0x40, &mut got, None), Ok(true));
+        assert_eq!(
+            u32::from_le_bytes(got),
+            0xdead_beef,
+            "★★★★★ what the ALIAS wrote is what the JOIN's mapping reads. Two `memfd`s would              have answered zero here and looked exactly as healthy everywhere else"
+        );
+    }
+
+    /// ⊘ **`token_for` is EXACT in base and length.** An alias over part of a frame, or over a
+    /// range spanning two, would place a host mapping whose bytes are only partly the ones the
+    /// guest reaches — and would do so successfully, which is why the refusal is here.
+    #[test]
+    fn the_token_lookup_refuses_a_partial_or_shifted_frame() {
+        let t = joined(0x1_0000, 0x1_0000);
+        assert_eq!(t.token_for(0x1_0000, 0x1_0000), Some(7), "the frame itself");
+        assert_eq!(t.token_for(0x1_1000, 0x1_0000), None, "shifted base");
+        assert_eq!(t.token_for(0x1_0000, 0x8000), None, "half the frame");
+        assert_eq!(t.token_for(0x1_0000, 0x2_0000), None, "two frames' worth");
+        assert_eq!(t.token_for(0x9_0000, 0x1_0000), None, "a frame nobody joined");
     }
 }

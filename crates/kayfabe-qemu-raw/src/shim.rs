@@ -3926,7 +3926,17 @@ fn observer_loop(
             if !stale.is_empty() {
                 let (mut released, mut already) = (0usize, 0usize);
                 for r in &stale {
-                    if plane.release_fb_join(r.phys) {
+                    // ★★★★★ w380 — LAST VA OUT, here too. A corpse may hold several aliases of
+                    // one frame, and the store's join must survive until the last of them is
+                    // reaped. ⊘ `retired` counts the rows of corpses NOT yet dropped, which
+                    // includes this one — so `> 1` (not `> 0`) is the surviving-sibling test on
+                    // this path, and getting that off by one would either strand every frame or
+                    // release each one N-1 times too early.
+                    let (live, retired) = device.fb_join_namers(r.phys);
+                    if live > 0 || retired > 1 {
+                        device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                        already += 1;
+                    } else if plane.release_fb_join(r.phys) {
                         device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                         released += 1;
                     } else {
@@ -8233,9 +8243,39 @@ impl SharedDoorbell {
             );
         }
         let (mut released, mut stranded) = (0usize, 0usize);
+        // ★★★★★ **w380 — LAST VA OUT RELEASES THE STORE'S JOIN, NOT THE FIRST.**
+        //
+        // ⊘⊘ Before aliasing existed, a revoked row was necessarily the frame's only namer, so
+        // *"this row is going"* and *"this frame is finished"* were the same fact. They are
+        // **not** the same fact any more, and reading them as one is a two-memories bug wearing
+        // a correct-looking release: give the store's join back while a sibling alias still maps
+        // those pages host-side, and the guest's framebuffer reverts to `SparseFb` pages while
+        // the engine goes on reading the `memfd`. Silent in both directions — `w228` exactly.
+        //
+        // ★ The host half is released either way. Each alias owns its **own** `OS_DESCRIPTOR`
+        // (`RmBackend::alias_fb_leaf`), so unmapping and freeing this row's object takes nothing
+        // from its siblings — which is the behaviour the driver itself has:
+        // `traces/real_ga106/w379_mapping_plane_real_ga106.txt` measured *"unmapping VA_A left
+        // VA_B live"* on real hardware, 5/5.
+        let mut kept_for_siblings = 0usize;
         let mut first: Option<String> = None;
         for r in revoked {
-            if plane.release_fb_join(r.phys) {
+            // ⊘ Asked AFTER the settlement unbound this row, so `r` is not its own namer. A
+            // non-zero answer is a genuine surviving alias.
+            let (live, retired) = self.device.fb_join_namers(r.phys);
+            if live > 0 || retired > 0 {
+                self.device
+                    .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                kept_for_siblings += 1;
+                eprintln!(
+                    "kayfabe: JOIN-RELEASE ★ ALIAS SURVIVES va=0x{:x} fb_phys=0x{:x} \
+                     live={live} retired={retired} — this row's host object is unmapped and \
+                     freed, and the STORE'S JOIN IS KEPT because another VA still maps these \
+                     pages. ⊘ Releasing it here would put the guest's window back on fabricated \
+                     pages while the engine still reads the real ones",
+                    r.va.0, r.phys
+                );
+            } else if plane.release_fb_join(r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                 released += 1;
@@ -8261,7 +8301,8 @@ impl SharedDoorbell {
         // ★★★ SYNCHRONOUS, per the direction ruling. See step 3 above.
         let drained = self.device.drain_pending_releases();
         format!(
-            " revoked={} released={released} stranded={stranded} drained={drained} \
+            " revoked={} released={released} kept_for_siblings={kept_for_siblings} \
+             stranded={stranded} drained={drained} \
              joined_ranges={} still_desired={still_desired} remaps_refused={remaps_refused} \
              first=[{}]",
             revoked.len(),
@@ -10756,22 +10797,47 @@ fn join_one_fb_leaf(
     leaf: kayfabe_rt::completion_watch::FbLeaf,
 ) -> Option<JoinedLeaf> {
     let release = selected_join_release();
-    // ---- 0. ★★★★★ **w329 LEG 2 - TAKE OVER A STALE JOIN OF THIS FRAME, BEFORE
-    // anything is minted.**
+    // ---- 0. ★★★★★ **w380 — DOES THIS FRAME ALREADY HAVE PAGES, AND WHOSE ARE THEY?**
     //
-    // Ordered FIRST, and that ordering is the whole reason it is cheap: doing it at the
+    // Ordered FIRST, and that ordering is the whole reason it is cheap: deciding at the
     // `ALREADY_JOINED` refusal would mean a host object had already been allocated and mapped
     // for a join that then had to be re-attempted, and `RegPlane::join_fb` consumes the
-    // region on refusal so the retry would need a second `mmap` too. Asked here, the ordinary
-    // four-step join below runs ONCE and installs cleanly.
+    // region on refusal so the retry would need a second `mmap` too. Asked here, exactly one
+    // chain runs below and it installs cleanly.
     //
-    // ⊘ This can only fire for a candidate row, which by construction has NO host
-    // object of its own - so a join already installed at this frame is necessarily owned by a
-    // DIFFERENT VA. See `SharedDevice::supersede_joined_fb_leaf` for what is and is not proven.
-    // ★ The store is asked FIRST, and it is the cheap question: `joined_ranges` is
-    // tens of entries while the address-table scan below is tens of thousands of rows, and on
-    // the overwhelming majority of leaves there is no collision at all.
-    if release.supersedes() && plane.fb_join_installed_at(leaf.phys) {
+    // ⊘ This can only fire for a candidate row, which by construction has NO host object of
+    // its own — so a join already installed at this frame is necessarily owned by a DIFFERENT
+    // VA, in this address space or in another.
+    // ★ The store is asked FIRST, and it is the cheap question: `joined_ranges` is tens of
+    // entries while the address-table scan below is tens of thousands of rows, and on the
+    // overwhelming majority of leaves there is no collision at all.
+    //
+    // ★★★★★ **AND THE THREE CASES NEED THREE DIFFERENT ACTIONS.** `w377` §9 measured that the
+    // guest holds every alias LIVE, so *"a second VA wants this frame"* is not a conflict to
+    // arbitrate — it is an aliasing the driver itself supports
+    // (`traces/real_ga106/w379_mapping_plane_real_ga106.txt`: one allocation, two VAs, both
+    // live, and unmapping one leaves the other).
+    //
+    //   this VAS names it → **ALIAS**: describe the same pages again at this VA. No victim.
+    //   nobody names it   → **ORPHAN**: reclaim the store's join, then join fresh.
+    //   a live peer does  → **REFUSE BY NAME**: another isolate's object is not ours to take.
+    let mut how = kayfabe_rt::FbLeafBacking::Joined;
+    if (release.aliases() || release.supersedes()) && plane.fb_join_installed_at(leaf.phys) {
+      // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
+      let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys);
+      if let (true, Some(other)) = (release.aliases(), sibling) {
+        // ★★★★★ **THE FIX (w380).** One memory, one more address. Nothing is unbound,
+        // nothing is released, and the row at `other` keeps its own host object — which is
+        // what makes `N` unbounded rather than capped: there is no ping-pong to bound.
+        how = kayfabe_rt::FbLeafBacking::Aliased;
+        eprintln!(
+            "{head} {what} ★★★★★ ALIASING fb_phys=0x{:x}: the guest describes this frame at \
+             va=0x{:x} AND at va=0x{:x}. The frame's pages are described to RM again and \
+             placed at the new VA; the old row is UNTOUCHED and keeps its backing. ⊘ No \
+             takeover, no cap, no victim — `w377` §9 measured that BOTH VAs are live",
+            leaf.phys, other, leaf.va
+        );
+      } else if release.supersedes() && sibling.is_some() {
         // ★★★★★ **w367 — THE CAP IS KEYED BY (FRAME, TAKER), NOT BY FRAME.**
         //
         // `[measured w366]` keyed by frame alone and never reset, this cap became the wall the
@@ -10843,8 +10909,9 @@ fn join_one_fb_leaf(
                     r.phys, r.va.0
                 );
             }
-        } else {
-            // ⊘⊘⊘ **THE FOURTH OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
+        }
+      } else {
+            // ⊘⊘⊘ **THE THIRD OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
             //
             // `supersede_joined_fb_leaf` returning `None` printed NOTHING, so a boot showing
             // zero supersede lines read as *"the guard above was false"*. It was not: the
@@ -10860,10 +10927,11 @@ fn join_one_fb_leaf(
             // run" — and there is no way to tell those apart from the log. Same class as the
             // global print cap and the append-only cursor list this campaign paid for today.
             eprintln!(
-                "{head} {what} ⊘ SUPERSEDE NO-ROW fb_phys=0x{:x} va=0x{:x}: the store HOLDS a \
+                "{head} {what} ⊘ FRAME-NOT-OURS fb_phys=0x{:x} va=0x{:x}: the store HOLDS a \
                  join at this frame and THIS VAS has no row naming it — the owner is another \
-                 (probably exited) address space, which this takeover cannot reach. The guard \
-                 was TRUE; there was simply nothing here to take",
+                 (probably exited) address space. ⊘ So there is nothing to ALIAS: the pages \
+                 belong to a different isolate and describing them here is not ours to do. \
+                 The guard was TRUE; there was simply nothing here that is ours",
                 leaf.phys, leaf.va
             );
             // ★★★★★ **w366 — RECLAIM AN ORPHANED JOIN. This is the fix, and it belongs
@@ -10924,14 +10992,16 @@ fn join_one_fb_leaf(
             }
         }
     }
-    // ---- 1. THE JOIN. No plane lock held: this is a round trip to another process.
+    // ---- 1. THE JOIN, or the ALIAS. No plane lock held: this is a round trip to another
+    // process. ⊘ `how` was decided in step 0 from the STORE's state, which is the only
+    // authority on whether this frame already has pages; see `FbLeafBacking::Aliased`.
     let backed = match device.back_fb_leaf(
         DOORBELL_TARGET_GPU,
         pdb,
         kayfabe_rt::GpuVa(leaf.va),
         leaf.len,
         leaf.phys,
-        kayfabe_rt::FbLeafBacking::Joined,
+        how,
     ) {
         Ok(b) => b,
         Err(e) => {
@@ -10945,6 +11015,59 @@ fn join_one_fb_leaf(
             return None;
         }
     };
+    // ---- 1b. ★★★★★ **w380 — AN ALIAS HAS NO VIEW TO INSTALL, AND MUST STILL BE BOUND.**
+    //
+    // ⊘⊘ This branch is why `FbLeafBacked::alias` exists at all. Both an alias and a replay
+    // answer `backing: None`, and the two need OPPOSITE actions: a replay already has its
+    // address-table row and must do nothing; an alias has **no row** and must be bound, or the
+    // second VA stays `Miss` and nothing points an engine there — which reads exactly like
+    // success in every log line the join path prints.
+    //
+    // ★ Steps 2 and 3 are skipped because they are already done for this frame: the descriptor
+    // crossed with the join, the VMM's `mmap` is live, and `SparseFb` is already serving the
+    // range out of it. Doing them again would be a second lifetime for one file and a second
+    // establishment copy over bytes the guest has since written.
+    if backed.alias {
+        if let Err(e) = device.adopt_joined_fb_leaf(
+            DOORBELL_TARGET_GPU,
+            pdb,
+            kayfabe_rt::FbLeafRange {
+                va: kayfabe_rt::GpuVa(leaf.va),
+                len: leaf.len,
+                phys: leaf.phys,
+            },
+            &backed,
+        ) {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⚠ THE ALIAS IS PLACED AND THE BIND REFUSED \
+                 `{e:?}` — the frame's pages are mapped at this VA host-side and the address \
+                 table does not say so. ⊘ The host mapping is released; the FIRST VA's join is \
+                 untouched and still correct",
+                leaf.va
+            );
+            return None;
+        }
+        eprintln!(
+            "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ★★★★★ ALIASED memory={:#x} \
+             host_va=0x{:x} placed_as_asked={} — ★ ONE memory, one more address. ⊘ No backing \
+             crossed, no establishment copy: the guest's window for this frame was re-pointed \
+             at these very pages by the join that came first",
+            leaf.va,
+            leaf.len,
+            leaf.phys,
+            backed.memory.raw(),
+            backed.host_va,
+            backed.host_va == leaf.va,
+        );
+        return Some(JoinedLeaf {
+            host_va: backed.host_va,
+            memory: backed.memory.raw(),
+            // ★ `Some(len)`: the guest's framebuffer window DOES point at these pages — it has
+            // since the join. ⊘ `None` here would say "the view is not live", which is false
+            // and would make a reader conclude this leaf is two memories.
+            installed: Some(leaf.len),
+        });
+    }
     let Some(backing) = backed.backing else {
         // A replay. The view was installed by the call that did the work; a second
         // descriptor would be a second lifetime for one file.
@@ -15591,12 +15714,32 @@ pub enum JoinReleaseArm {
     /// [`kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins`]. This is the trigger
     /// `join_operand_fb_leaves`' cleanup table nominates.
     Unmap,
-    /// ★★★ Leg 1 **and** leg 2 — also supersede a join whose frame the guest has
-    /// re-pointed into a different VA of the same address space. `[measured, w329a1]` leg 1
-    /// alone fires 8 times in a whole `28,31` run and the failure survives, because CUDA's
-    /// suballocator does not unmap on `cuMemFree`. See
-    /// [`kayfabe_rt::device::SharedDevice::supersede_joined_fb_leaf`].
+    /// ⊘⊘ **RETIRED FROM THE DEFAULT AT w380 — the NEGATIVE CONTROL.** Leg 1 **and** leg 2:
+    /// also supersede a join whose frame the guest has re-pointed into a different VA of the
+    /// same address space. `[measured, w329a1]` leg 1 alone fires 8 times in a whole `28,31`
+    /// run and the failure survives, because CUDA's suballocator does not unmap on
+    /// `cuMemFree`.
+    ///
+    /// ⚠ `[measured w376llmd]` it then produces **127 supersedes over 17 frames** and
+    /// **28 108 `⊘ SUPERSEDE CAPPED`**, and the `Xid 31 FAULT_PDE` lands at a VA we
+    /// unpublished ourselves. `w377` §9 settled why: the guest holds **every** alias live, so
+    /// there is no stale half to take. See
+    /// [`kayfabe_rt::device::SharedDevice::supersede_joined_fb_leaf`]'s retirement block.
     Supersede,
+    /// ★★★★★ **w380, THE DEFAULT — one frame, N addresses.** Leg 1, plus: a frame the guest
+    /// describes at a second VA of the same address space is **aliased**, not taken over. The
+    /// pages are described to RM again and placed at the new VA; the old row keeps its own
+    /// backing and is not touched.
+    ///
+    /// ⇒ There is no victim, so there is no ping-pong, so there is nothing for a cap to
+    /// freeze. ⚠ N is **unbounded** by construction: nothing counts aliases and nothing
+    /// refuses the *k*-th one. `[measured w376llmd]` 8 of 17 frames already reach three VAs.
+    ///
+    /// ★ Confirmed against the driver on bare metal before it was built
+    /// (`traces/real_ga106/w379_mapping_plane_real_ga106.txt`, 5/5, two revisions): RM maps ONE
+    /// allocation at TWO GPU VAs, both stay live, and unmapping one leaves the other. ⇒ keying
+    /// host backing by frame alone was **strictly weaker than the driver we stand in for**.
+    Alias,
 }
 
 impl JoinReleaseArm {
@@ -15605,16 +15748,27 @@ impl JoinReleaseArm {
     pub fn policy(self) -> kayfabe_mmu::reach::PublishedUnbind {
         match self {
             JoinReleaseArm::Off => kayfabe_mmu::reach::PublishedUnbind::Refuse,
-            JoinReleaseArm::Unmap | JoinReleaseArm::Supersede => {
+            JoinReleaseArm::Unmap | JoinReleaseArm::Supersede | JoinReleaseArm::Alias => {
                 kayfabe_mmu::reach::PublishedUnbind::RevokeWholeJoins
             }
         }
     }
 
-    /// Whether a collision with an existing join may take it over.
+    /// Whether a collision with an existing join may take it over. ⊘ True on **one** arm, and
+    /// that arm is now the negative control.
     #[must_use]
     pub fn supersedes(self) -> bool {
         matches!(self, JoinReleaseArm::Supersede)
+    }
+
+    /// ★★★★★ **w380** — whether a second VA over an already-joined frame is **aliased**.
+    ///
+    /// ⊘ Deliberately not `!self.supersedes()`: `off` and `on` do neither, and a predicate
+    /// defined as the negation of the other would have silently armed the fix on the negative
+    /// control the day someone added a fourth arm.
+    #[must_use]
+    pub fn aliases(self) -> bool {
+        matches!(self, JoinReleaseArm::Alias)
     }
 
     /// The word a boot's log prints, so a reader never has to infer the arm.
@@ -15624,6 +15778,7 @@ impl JoinReleaseArm {
             JoinReleaseArm::Off => "off",
             JoinReleaseArm::Unmap => "on",
             JoinReleaseArm::Supersede => "supersede",
+            JoinReleaseArm::Alias => "alias",
         }
     }
 }
@@ -15643,16 +15798,27 @@ pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status,
         // address inside the row's own `in_ptr`. With `supersede`: 7 rows, 0 refusals,
         // 0 Xid, 279 takeovers.
         // ⊘ `on` is KEPT as its own word so the old arm stays reachable BY NAME.
-        None | Some("supersede") => Ok(JoinReleaseArm::Supersede),
+        // ★★★★★ w380 — DEFAULT MOVED `Supersede` → `Alias`, on measurement.
+        // `[w376llmd, real GA106]` `supersede` produced 127 takeovers over 17 frames and then
+        // **28 108 `⊘ SUPERSEDE CAPPED`**, and `w377` §9 measured that the guest holds every
+        // alias LIVE — a supersede TARGET later becomes a SOURCE, repeatedly. So the takeover
+        // had no stale half to take, and its cap froze one live VA of each pair permanently
+        // unbacked, which is where the `Xid 31 FAULT_PDE` came from.
+        // ⊘ `supersede` is KEPT as its own word so the failing arm stays reachable BY NAME and
+        // one binary can run both.
+        None | Some("alias") => Ok(JoinReleaseArm::Alias),
+        Some("supersede") => Ok(JoinReleaseArm::Supersede),
         Some("on") => Ok(JoinReleaseArm::Unmap),
         Some("off") => Ok(JoinReleaseArm::Off),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_JOIN_RELEASE does not name an arm: the values are `on` (the default — a \
-             joined framebuffer leaf the guest UNMAPS is released), `supersede` (also take \
-             over a join whose frame the guest re-pointed into another VA), and `off` (w327's \
-             negative control, in which a join is kept forever and the guest's next allocation \
-             over a recycled frame dies rc=719).",
+            "KAYFABE_JOIN_RELEASE does not name an arm: the values are `alias` (the \
+             default — a joined framebuffer leaf the guest UNMAPS is released, and a frame the \
+             guest describes at a SECOND VA is mapped there too rather than taken away from \
+             the first), `supersede` (w329's arm and now the NEGATIVE CONTROL: the second VA \
+             takes the join and the first is left unbacked), `on` (release-on-unmap only), and \
+             `off` (w327's negative control, in which a join is kept forever and the guest's \
+             next allocation over a recycled frame dies rc=719).",
         )),
     }
 }
@@ -15669,9 +15835,9 @@ pub fn join_release_from(value: Option<&str>) -> Result<JoinReleaseArm, (Status,
 fn selected_join_release() -> JoinReleaseArm {
     static ARM: std::sync::OnceLock<JoinReleaseArm> = std::sync::OnceLock::new();
     *ARM.get_or_init(|| match std::env::var_os(JOIN_RELEASE_ENV) {
-        None => JoinReleaseArm::Supersede,
+        None => JoinReleaseArm::Alias,
         Some(v) => join_release_from(Some(v.to_str().unwrap_or("\u{fffd}invalid")))
-            .unwrap_or(JoinReleaseArm::Supersede),
+            .unwrap_or(JoinReleaseArm::Alias),
     })
 }
 

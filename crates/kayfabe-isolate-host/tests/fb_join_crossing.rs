@@ -390,3 +390,121 @@ fn a_backend_with_no_shared_join_table_refuses_by_name() {
          looked and found nothing"
     );
 }
+
+// =====================================================================================
+// 5 — ★★★★★ w380: ONE FRAME, N GPU ADDRESSES — the alias, through a real isolate
+// =====================================================================================
+
+/// ★ The alias chain on `w`, exactly as the core emits it.
+fn alias_on(w: &mut Worker, at: GpuVa) -> kayfabe_isolate::FbLeafAliased {
+    match w.execute(
+        &VerbPlan::AliasFbLeaf {
+            host_vas: None,
+            len: LEN,
+            at,
+            phys: PHYS,
+        },
+        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+    ) {
+        Ok(VerbReply::FbLeafAliased { aliased, .. }) => aliased,
+        other => panic!("the alias chain must answer FbLeafAliased, got {other:?}"),
+    }
+}
+
+/// ★★★★★ **THE ALIAS IS THE SAME MEMORY.** A pattern written through the VMM's ONE view of
+/// the frame is read back through the isolate on every worker after a second and a third GPU
+/// address have been placed over it — and the alias minted **no** second backing to install.
+///
+/// # ⊘ Why this is the test and not "both aliases resolve"
+///
+/// Resolving is cheap to fake: two mappings of two different `memfd`s both resolve, both look
+/// green, and the engine reads a blank object while the guest reads its own bytes — `w228`,
+/// silent in both directions. The property that separates the fix from that defect is that the
+/// **bytes are shared**, which is what a pattern round trip measures and a placement check
+/// cannot.
+///
+/// ⊘ It bounds the loopback backend, which models RM and does not call it. Whether the real
+/// driver accepts a second `OS_DESCRIPTOR` over the same pages is
+/// `traces/real_ga106/w379_mapping_plane_real_ga106.txt` (bare metal, 5/5) and a boot.
+#[test]
+fn an_alias_maps_the_same_memory_and_hands_up_no_second_backing() {
+    let _fd_table = serialized();
+    let mut iso = isolate(IsolateId::new(73, GpuId(0)));
+
+    let (joined, aliases) = with_all_workers(&mut iso, |ws| {
+        // The join on worker 0, then TWO aliases on OTHER slots — the pool property again: a
+        // per-worker join table would refuse the alias by name here, and a one-worker test
+        // could never see it.
+        let joined = join_on(&mut ws[0]);
+        let a1 = alias_on(&mut ws[1], GpuVa(AT.0 + 0x0100_0000));
+        let a2 = alias_on(&mut ws[2], GpuVa(AT.0 + 0x0200_0000));
+        (joined, [a1, a2])
+    });
+
+    assert_eq!(
+        aliases[0].host_va,
+        AT.0 + 0x0100_0000,
+        "address identity holds for an alias exactly as for a join"
+    );
+    assert_eq!(aliases[1].host_va, AT.0 + 0x0200_0000, "and for the third VA");
+    assert_ne!(
+        aliases[0].memory, aliases[1].memory,
+        "★★★ each alias owns its OWN object, so releasing one takes nothing from the other — \
+         which is what RM itself does (`w379`: unmapping VA_A left VA_B live)"
+    );
+    assert_ne!(
+        aliases[0].memory, joined.memory,
+        "and neither is the join's object"
+    );
+
+    // ★★★★★ ONE MEMORY. The VMM still has exactly one view — the join's — and what it writes
+    // there is what the isolate holds for the frame after three addresses exist over it.
+    let view = vmm_view(&iso, joined.backing.token, true);
+    let pattern = image(0x5eed_0001, 4096);
+    view.write_from(HostOffset::new(0), &pattern)
+        .expect("the VMM writes through its one view");
+
+    let mut got = vec![0u8; 4096];
+    let covered = with_all_workers(&mut iso, |ws| {
+        ws[3]
+            .fb_join_peek(PHYS, &mut got, None)
+            .expect("the peek is served")
+    });
+    assert!(covered, "the frame is still held on every worker");
+    assert_eq!(
+        got, pattern,
+        "★★★★★ the aliases did not fork the memory: the frame's bytes are still the ONE \
+         `memfd` the join minted, which is the whole property `JoinsGuestWindow` asserts"
+    );
+}
+
+/// ⊘ **ALIASING A FRAME THIS ISOLATE HAS NOT JOINED IS REFUSED BY NAME.**
+///
+/// The two mistakes are not symmetric. `Joined` where `Aliased` was wanted mints a second
+/// memory for one frame and is **silent**; `Aliased` where `Joined` was wanted is loud. This
+/// asserts the loud one stays loud — and specifically that it does **not** fall back to
+/// minting, which would convert the loud mistake into the silent one.
+#[test]
+fn aliasing_a_frame_with_no_join_is_refused_by_name() {
+    let _fd_table = serialized();
+    let mut iso = isolate(IsolateId::new(74, GpuId(0)));
+    let err = with_all_workers(&mut iso, |ws| {
+        ws[0]
+            .execute(
+                &VerbPlan::AliasFbLeaf {
+                    host_vas: None,
+                    len: LEN,
+                    at: AT,
+                    phys: PHYS,
+                },
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            )
+            .expect_err("a frame with no pages has nothing to alias")
+    });
+    assert_eq!(
+        err.err,
+        kayfabe_isolate::RmError::Other(kayfabe_isolate_host::rm::FB_ALIAS_NO_JOIN),
+        "⊘ refused with the ALIAS-specific status, not a generic NoMemory — 0x51 is \
+         collision-or-exhaustion and cannot be told apart"
+    );
+}
