@@ -7600,10 +7600,7 @@ fn w385_run_worker(
                     // address space's 1 TiB limit produced **22 fabricated ALIAS_REVOKEDs**
                     // per phase, and the only thing that distinguished them from a real
                     // revoke was the `(Refused)` printed in their own message.
-                    if a1.landed()
-                        && b1.landed()
-                        && matches!(a2, W379Release::Lost { .. })
-                    {
+                    if a1.landed() && b1.landed() && matches!(a2, W379Release::Lost { .. }) {
                         rep.violate(
                             "ALIAS_REVOKED",
                             format!(
@@ -8427,7 +8424,10 @@ fn concurrent_fuzz(
         "control",
     );
     w385_report("control", &ctl);
-    let ctl_engine: u64 = W385Op::ENGINE.iter().map(|o| ctl.ops[o.code() as usize]).sum();
+    let ctl_engine: u64 = W385Op::ENGINE
+        .iter()
+        .map(|o| ctl.ops[o.code() as usize])
+        .sum();
     // ⊘ The control passes only if it also RAN THE ENGINE. A control that allocated and
     // never wrote proves the allocator works and says nothing about the plane every arm
     // below it grades on.
@@ -8526,7 +8526,10 @@ fn concurrent_fuzz(
         // tested when the ENGINE runs; an arm that allocated and mapped and never wrote is
         // green about nothing. Measured before this existed: three arms at `I=12` reported
         // PASS with `write=0`.
-        let engine: u64 = W385Op::ENGINE.iter().map(|o| ph.ops[o.code() as usize]).sum();
+        let engine: u64 = W385Op::ENGINE
+            .iter()
+            .map(|o| ph.ops[o.code() as usize])
+            .sum();
         let v = if ph.finished != ph.workers {
             "FAIL"
         } else if acfg.pin != W385Pin::Unpinned && ph.pinned != ph.workers {
@@ -8585,7 +8588,10 @@ fn concurrent_fuzz(
         println!("FUZZ_VIOLATION={name} arm={arm} n={count}");
     }
 
-    let ops: u64 = results.iter().map(|(_, _, p, _)| p.ops.iter().sum::<u64>()).sum();
+    let ops: u64 = results
+        .iter()
+        .map(|(_, _, p, _)| p.ops.iter().sum::<u64>())
+        .sum();
     let overlap: u64 = results.iter().map(|(_, _, p, _)| p.overlap_pairs).sum();
     let viol: usize = results.iter().map(|(_, _, p, _)| p.violations.len()).sum();
     println!("FUZZ_THREADS={}", cfg.threads);
@@ -8604,7 +8610,12 @@ fn concurrent_fuzz(
     // ★★★ THE PAIRING RULE, EVALUATED HERE RATHER THAN LEFT TO THE READER. If a pinned arm
     // reds while its same-width unpinned control is green, THAT IS THE FINDING, and it says
     // the unpinned arm was never a test of this.
-    let grade = |n: &str| results.iter().find(|(a, _, _, _)| *a == n).map(|(_, _, _, v)| *v);
+    let grade = |n: &str| {
+        results
+            .iter()
+            .find(|(a, _, _, _)| *a == n)
+            .map(|(_, _, _, v)| *v)
+    };
     for (pinned, control) in [("percore", "unpinned"), ("crowd", "crowd-free")] {
         match (grade(pinned), grade(control)) {
             (Some("FAIL"), Some("PASS")) => println!(
