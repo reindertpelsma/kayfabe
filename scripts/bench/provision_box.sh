@@ -17,6 +17,30 @@ echo "PROVISION_START $(date -Is)"
 
 export DEBIAN_FRONTEND=noninteractive
 
+# ★★★★ DO THIS FIRST, BEFORE ANYTHING ELSE, AND UNDERSTAND WHY IT IS USUALLY TOO LATE.
+# A freshly rented box starts `unattended-upgrade` AT BOOT. By the time you can ssh in, it
+# is already running -- so masking the timers (below) prevents the NEXT run and does nothing
+# about the one in flight. Measured 2026-09-06 on vast 50013922: it held the dpkg lock for
+# 20+ minutes and its upgrade set included
+#     linux-generic-hwe-22.04  linux-image-generic-hwe-22.04  linux-headers-generic-hwe-22.04
+# i.e. A NEW KERNEL (6.8.0-59 running, 6.8.0-138 installed underneath it).
+#
+# ⚠ THE LATENT FAILURE THIS CAUSES, which is much worse than the delay:
+# if you wait out the lock and then install the NVIDIA driver, DKMS builds against the
+# RUNNING kernel. That module is correct, `/proc/driver/nvidia/version` reads right, every
+# check passes -- and it DISAPPEARS at the next reboot, because the box comes up on the new
+# kernel with no module built for it. The failure surfaces hours later, detached from its
+# cause, as "the driver is just gone".
+# ⇒ On a fresh box: mask the timers, WAIT for any in-flight run, REBOOT onto the new kernel,
+#   and only then install the driver. `reboot_chain` in the bench notes does this.
+systemctl mask --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 && \
+  echo "apt timers masked (prevents the NEXT run; see header re: the one already running)"
+if pgrep -x unattended-upgr >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+  echo "⚠ an unattended upgrade is ALREADY IN FLIGHT -- check whether it upgrades the kernel:"
+  grep -oE "linux-(image|headers|generic)[a-z0-9.-]*" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | sort -u | head
+  echo "  if it does, you must REBOOT before installing the NVIDIA driver."
+fi
+
 # ⚠ A FRESH CLOUD BOX RUNS `unattended-upgrades` AT BOOT and it holds the dpkg lock.
 # Measured on vast instance 50013922, 2026-09-06: provisioning launched ~7 minutes after
 # first boot and died instantly with
