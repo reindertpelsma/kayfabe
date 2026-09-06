@@ -134,6 +134,14 @@ sudo dmesg 2>/dev/null | tail -n "+$((DMESG_MARK+1))" | grep -iE "xid|nvrm" | ta
 
 grep -aE '^(info|ok|★|⊘|⚠|\?\?|FAIL|ALIAS_MARK|FAULT_MARK|RUNG|W381)' "$LOG" | sed 's/^/    /'
 
+# ⊘⊘ THE GRADING BLOCK IS `tee`d INTO THE ARM'S OWN LOG, AND THAT IS NOT COSMETIC.
+#
+# It printed to stdout only in the first version, so `w381_differential.sh` — which builds its
+# table by grepping `W381_TABLE_ROW` out of each arm's log FILE — found nothing and printed
+# `⊘ NO TABLE ROW` for all three arms over three runs that had all passed. ★ Caught by
+# dry-running the table block against real logs before shipping it, which is the only reason
+# it is not the w377 defect again: a grader looking for a line its producer never wrote.
+{
 echo ""
 echo "================================================================================"
 echo "=== ★★★★★ W381 GRADING — arm=$ARM  source $STAMP  inner_rc=$RC  $(date -Is)"
@@ -194,3 +202,4 @@ echo "    RUNGCTL_ lines     = [$(grep -ac '^RUNGCTL_' "$LOG" 2>/dev/null)]"
 echo "    kernel Xid records = [$(grep -ac 'Xid (PCI:' "$LOG" 2>/dev/null)]  (R3 provokes exactly 1)"
 echo "    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check."
 echo "=== W381 EXIT rc=$RC arm=$ARM at $(date -Is) ==="
+} 2>&1 | tee -a "$LOG"

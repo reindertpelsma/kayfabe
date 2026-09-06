@@ -74,7 +74,11 @@ KAYFABE_W381_ARGS="--w381" \
 POST_CAPTURE_HOOK="$REPO/scripts/bench/w381_hook.sh" \
   bash "$REPO/scripts/bench/w290p_run.sh" drain
 echo "=== guest arm inner rc=$? ==="
-GOUT=/workspace/${TAG}_guest.log
+# ⊘ The GUEST row lives in `boot_capture.sh`'s PROBE log, because that is where a
+#   POST_CAPTURE_HOOK's output is written — NOT in `w290p_run.sh`'s own `/workspace/<tag>.log`.
+#   Reading the wrong one of those two is how this table printed `⊘ NO TABLE ROW` over a
+#   guest arm that had graded 6/7.
+GOUT=/workspace/bench/run_${TAG}_guest_probe.log
 
 echo ""
 echo "================================================================================"
