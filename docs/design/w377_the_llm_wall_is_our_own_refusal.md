@@ -152,7 +152,27 @@ load-bearing. The fix is extent *reconciliation*, not imported rounding.
    61 865 across one boot; `worst_trap=1750538us` against the instrument's own
    `(target: inline_exceptions=0)`. The budget that keeps the guest alive is what truncates
    publication.
-5. **The census cannot certify coverage.** `⚠⚠ CAPPED at 24 of 255 distinct`,
+5. ✔ **CLOSED 2026-09-06 — SUPERSEDED-BY `docs/design/w378_the_coverage_predicate.md`.**
+   `kayfabe-util::coverage` computes `declared ⊆ published` with an **exact** residual; the
+   print cap now truncates the *list* and never the *verdict*, pinned by a test that feeds
+   200 intervals at `cap=3`.
+   ★★ **And building it corrected two things I had wrong, one of which is the mechanism
+   behind my own misreading above:**
+   - ⊘ **`declared` is TWO different sets, not one.** `GUEST-DESCRIBES` is the guest's page
+     tables (`Vas::reach`); `TABLE-DESCRIBES` is *our* address table. **A REFUSED row is
+     absent from our table**, so a `TABLE⊆PUBLISHED` verdict can read **`true` with 255
+     refusals outstanding**. Only the `GUEST⊆PUBLISHED` clause can see them. Both are
+     computed; reading only the first would be a green predicate over the wrong set.
+   - ⊘⊘ **`published` is a UNION of two records, and it is a union, not a sum.**
+     `commit_pin_guest_ram` maps guest RAM into the host VAS and sets `Binding::host`
+     **never**. So published = `Binding::host` rows **∪** `Vas::guest_ram_pins`, and an
+     exact-extent pin appears in *both* — adding them double-counts. ★ **This is exactly the
+     error in the retracted §1**: I read `host_rows=1226 of 18539` as 6.6 % coverage while
+     `already_pinned=17300` sat in the same line, and the true figure was 99.93 %.
+   ⊘ Residual limit, stated in that doc's §5: the predicate compares **ranges**, so it cannot
+   see a range that is mapped to the *wrong* memory. Coverage is necessary, not sufficient.
+
+   ~~The census cannot certify coverage.~~ *(original text below, retained)* `⚠⚠ CAPPED at 24 of 255 distinct`,
    `CAPPED at 48 of 69 runs`. A capped list cannot distinguish a fix from a coincidence.
    Needs a predicate (`declared ⊆ published` + residual), not a longer list.
 
