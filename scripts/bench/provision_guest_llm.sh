@@ -16,7 +16,16 @@ say "GUEST_LLM_START model=$MODEL"
 
 pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — the bench is serialized, refusing"; exit 2; }
 
-qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -display none \
+# ⚠ `-cpu host` IS REQUIRED, and its absence is silent until something needs x86-64-v2.
+# Measured 2026-09-06: without it QEMU picks `qemu64`, which lacks the v2 baseline, and the
+# guest's NumPy dies with
+#     RuntimeError: NumPy was built with baseline optimizations: (X86_V2)
+#                   but your machine doesn't support: (X86_V2)
+# ⊘ Nothing earlier fails -- apt, pip and the driver install are all fine on qemu64 -- so the
+# defect surfaces only at the first numeric import, far from its cause. `boot_nvkvm.sh` has
+# always used `-cpu host`; the PROVISIONING boots did not, so the guest was built on one CPU
+# model and benched on another.
+qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none \
   -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
   -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/llmprov_serial.log" -daemonize -pidfile "$BENCH/llmprov.pid"

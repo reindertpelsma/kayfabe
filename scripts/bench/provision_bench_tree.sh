@@ -120,7 +120,16 @@ UD
   # ⚠ `-nographic` and `-daemonize` are MUTUALLY EXCLUSIVE ("-nographic cannot be used with
   #   -daemonize"). -nographic is a bundle that includes -serial stdio, which a daemonized
   #   process has no stdio for. Use `-display none` and let -serial file: carry the console.
-  qemu-system-x86_64 -enable-kvm -m 8G -smp 8 -display none \
+  # ⚠ `-cpu host` IS REQUIRED, and its absence is silent until something needs x86-64-v2.
+  # Measured 2026-09-06: without it QEMU picks `qemu64`, which lacks the v2 baseline, and the
+  # guest's NumPy dies with
+  #     RuntimeError: NumPy was built with baseline optimizations: (X86_V2)
+  #                   but your machine doesn't support: (X86_V2)
+  # ⊘ Nothing earlier fails -- apt, pip and the driver install are all fine on qemu64 -- so the
+  # defect surfaces only at the first numeric import, far from its cause. `boot_nvkvm.sh` has
+  # always used `-cpu host`; the PROVISIONING boots did not, so the guest was built on one CPU
+  # model and benched on another.
+  qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 8 -display none \
     -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
     -drive if=virtio,file="$BENCH/seed.iso",format=raw \
     -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
