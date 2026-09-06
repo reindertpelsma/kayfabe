@@ -3,6 +3,9 @@
 # BARE METAL. No QEMU, no guest, no emulated GPU. `kayfabe-rm-ladder --w379` against
 # /dev/nvidia*, driver 580.159.04, GeForce RTX 3060 (GA106), euid 0.
 # Source revision: d24f182 (printed in-band as REV_UNDER_TEST and by the harness).
+# ★ REPRODUCED at the branch tip 7d6bd3d — 5/5 PASS again, identical counts, 1 kernel Xid.
+#   Two runs, two revisions, same result. ⊘ n=2 is not a distribution; it is a check that
+#   the number did not follow the build.
 # Harness: scripts/bench/w379_mapping_plane.sh — committed BEFORE this run.
 #
 # ⊘ THIS IS THE CONTROL, NOT THE MILESTONE. It says the DRIVER permits what the guest
