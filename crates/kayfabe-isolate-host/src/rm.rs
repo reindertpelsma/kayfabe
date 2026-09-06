@@ -345,6 +345,36 @@ const DOORBELL_WITNESS_MAX: usize = 512;
 /// the bound being defended is the LOG's size, which is process-wide too.
 static DOORBELL_WITNESS_N: AtomicUsize = AtomicUsize::new(0);
 
+/// ★★ **Exhaust the per-store doorbell witness for the rest of this process**, and report
+/// how many stores it had already counted.
+///
+/// # ⚠ THIS EXISTS FOR MEASUREMENT, NOT FOR TIDINESS
+///
+/// [`RmConnection::doorbell`] prints **two** `eprintln!` lines for each of the first
+/// [`DOORBELL_WITNESS_MAX`] stores, and those lines are *inside* any region that times a
+/// submission. On bare metal a doorbell is a store measured in **microseconds**, so a
+/// formatted write to stderr is not a rounding error on it — it is a large fraction of the
+/// number, and a rung that left the witness armed would be reporting **the cost of its own
+/// printer** as the native floor of a differential. ⊘ That floor is what every guest-side
+/// gate is a multiple of, so inflating it does not merely add noise: it makes the gate
+/// quietly, uniformly too loose.
+///
+/// # ★ It EXHAUSTS the witness; it does not disable it
+///
+/// The counter is advanced past the cap, so `doorbell`'s existing logic takes over
+/// unchanged: the periodic tally still prints (one line per [`DOORBELL_WITNESS_MAX`]
+/// stores, and it still says how many it suppressed), and **every refusal still prints in
+/// full** — refusals are rare by hypothesis and suppressing the rare event to save room for
+/// the common one inverts the witness's purpose, which is the argument `doorbell` itself
+/// gives.
+///
+/// ⚠ **A caller MUST print that it called this.** A quiet log a reader takes for a complete
+/// one is a failure class this tree has already paid for; the muting is only honest if the
+/// run says it happened.
+pub fn mute_doorbell_witness() -> usize {
+    DOORBELL_WITNESS_N.fetch_max(DOORBELL_WITNESS_MAX, Ordering::Relaxed)
+}
+
 /// The shared RM connection: **one per isolate, shared by its whole worker pool**.
 ///
 /// That sharing is the fact `host_execution_plane.md` §0 is about. RM serialises every
@@ -7127,6 +7157,42 @@ impl HostRmBackend {
     #[must_use]
     pub const fn copy_probe_offsets() -> (u64, u64) {
         (W381_COPY_SRC_OFFSET, SEMAPHORE_OFFSET)
+    }
+
+    /// ★★★ **w384 — ring a channel's doorbell with NO NEW WORK behind it**: the smallest
+    /// act this crate can perform against the device, and nothing else.
+    ///
+    /// # Why a verb for something that submits nothing
+    ///
+    /// [`HostRmBackend::submit_copy_at`] composes twelve-odd stores into the ring, two
+    /// GPFIFO words and a `GP_PUT` update *before* it rings. That is the smallest **real**
+    /// submission, and it is the right thing to time when the question is *"what does one
+    /// submission cost"*. It is the wrong thing to time when the question is *"what does the
+    /// **ring itself** cost"*, because on a Mode-2 guest the ring stores and the doorbell go
+    /// to different places — the ring is memory, the doorbell is a trapped MMIO store — and
+    /// a single number over both cannot say which one is expensive.
+    ///
+    /// This is that second measurement: one `release_fence` and one 32-bit store into the
+    /// mapped usermode window, via the same [`RmBackend::ring_doorbell`] every real
+    /// submission ends in. No ring store, no `GP_PUT` advance, no new GPFIFO entry.
+    ///
+    /// # ⊘ WHAT A RESULT FROM THIS MAY AND MAY NOT BE USED FOR
+    ///
+    /// ⊘ **It must not be graded on.** A device is entitled to notice that `GP_PUT` has not
+    /// moved and do nothing at all, and *"a no-op is fast"* is not a finding about the
+    /// doorbell path — it is a finding about the no-op. Grading on it would be the `GP_GET`
+    /// mistake in a new place: a plausible number that is a property of the instrument.
+    /// ★ What it IS good for is **attribution of a red already measured elsewhere**: if a
+    /// real submission is expensive and this is cheap, the cost is in the ring stores or the
+    /// planning; if this is expensive too, the cost is in the trap.
+    ///
+    /// # Errors
+    /// As [`RmBackend::ring_doorbell`]: [`RmError::Other`] carrying `NOT_A_WORK_TOKEN` for a
+    /// value too wide to be a token this connection handed out, or whatever the usermode
+    /// window refused with — including the case where the window was never mapped, which
+    /// `doorbell` prints in full and never suppresses.
+    pub fn ring_doorbell_only(&mut self, token: u64) -> Result<(), RmError> {
+        <Self as RmBackend>::ring_doorbell(self, token)
     }
 
     /// ★★★★★ **The late-map race primitive** — submit `[SEM_ACQUIRE(fence)]

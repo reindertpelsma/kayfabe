@@ -6813,6 +6813,908 @@ fn parse_ctrl_specs(s: &str) -> Result<Vec<(u32, usize)>, String> {
     Ok(out)
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w384 — WHAT ONE DOORBELL COSTS THE SUBMITTING THREAD
+//
+// Owner, 2026-09-06: *"the most valuable raw client is one that passes on host and fails in
+// guest, then its just iterate unless there is a blocker."* All seven w379/w381 rungs pass
+// natively and six of seven pass in the guest, so by that criterion they discriminate very
+// little. This rung is built to have the valuable shape.
+//
+// ## THE DEFECT IT EXISTS TO GATE
+//
+// `[measured, LLM boot, w383 lane]` publication runs **60–71 ms per doorbell, INLINE on the
+// vCPU thread**:
+//
+//     TRAPWITNESS off_trap_claims=0 inline_exceptions=61865 worst_trap=1750538us
+//                 (target: inline_exceptions=0)
+//
+// Thousands of doorbells at that price is why the LLM rung is killed by a harness timeout
+// with doorbells still being served. Nothing in this tree measured it in under twenty
+// minutes, and `LLM_TOKENS` — the only feedback the async lane had — needs a full boot plus
+// a model load and can come back UNMEASURED for reasons that have nothing to do with the
+// change under test.
+//
+// ## ⊘ WHAT THIS RUNG IS NOT
+//
+// It is **not a performance target and not a benchmark**. It is a DISCRIMINATOR: it exists
+// to answer one binary question — *is per-doorbell cost on the submitting thread within a
+// stated multiple of what bare metal charges for the same act by the same binary?* Passing
+// it is not a claim that anything is fast.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Where this rung puts its channel ring. Distinct from every other rung's, so a run that
+/// selects more than one cannot have its placements collide.
+const DBL_RING_AT: u64 = 0x0000_000B_1000_0000;
+/// Where the destination object is mapped. See [`DBL_RING_AT`].
+const DBL_TARGET_AT: u64 = 0x0000_000B_5000_0000;
+/// The base of the fresh-map arm's VAs. Each iteration takes the next 4 GiB stride, so no
+/// two of them can share a page table leaf and be mistaken for one publication.
+const DBL_FRESH_BASE: u64 = 0x0000_000C_0000_0000;
+/// See [`DBL_FRESH_BASE`].
+const DBL_FRESH_STRIDE: u64 = 0x1_0000_0000;
+
+/// What the destination holds before the engine runs. Neither `0` nor `1`: a zero cannot be
+/// told from freshly-allocated memory, and *"the magic is not there"* has to mean *"nothing
+/// wrote here"* rather than *"we cannot tell"*.
+const DBL_SENTINEL: u32 = 0xDEAD_0384;
+/// The payload the **opening** control copies, at offset `0x00`.
+const DBL_MAGIC_PRE: u32 = 0x0384_5EED;
+/// The payload the **closing** control copies, at offset `0x40`.
+const DBL_MAGIC_POST: u32 = 0x0384_C105;
+
+/// ★★★ **THE GATE, AND WHY IT IS A MULTIPLE OF A MEASUREMENT RATHER THAN A NUMBER.**
+///
+/// ⊘ A hard-coded millisecond figure would be a standard nobody agreed to, on a box nobody
+/// characterised. The floor here is whatever **bare metal** charges for the identical act —
+/// same binary (md5 printed on both arms), same box, same week — and the gate is
+/// `native_p50 × DBL_GATE_MULTIPLE`.
+///
+/// **`1000` is chosen because it is the only decade that separates the two things this rung
+/// must tell apart**, and both sides of that band are measured rather than assumed:
+///
+/// - **The floor a CORRECT emulation cannot go below.** A doorbell inside a Mode-2 guest is
+///   a trapped MMIO store: one VM exit, one dispatch through the VMM, one return. That is
+///   tens of microseconds on this class of hardware, against a native path this rung
+///   measures in single-digit microseconds — order **10–100×**, and an async design that
+///   moves publication off the vCPU thread still pays it.
+/// - **The DEFECT.** 60–71 ms per doorbell inline on the vCPU thread, against that same
+///   single-digit-microsecond native path — order **10⁴×**.
+///
+/// ⇒ 1000× sits a decade **above** the most expensive honest emulation cost and a decade
+/// **below** the defect. A gate outside that band either reddens a working async design or
+/// greens the thing it exists to catch, so the multiple is not a taste.
+///
+/// ⚠ It is a *discrimination* threshold. A run that passes has not been shown to be fast; it
+/// has been shown not to be paying the inline-publication price.
+const DBL_GATE_MULTIPLE: f64 = 1000.0;
+
+/// ★★ **The NATIVE arm's own bar** — because a calibration run cannot fail a gate derived
+/// from itself, and a rung with no reachable red on one arm is a rung that arm cannot use.
+///
+/// On bare metal a doorbell is `release_fence()` plus one 32-bit store into a mapped
+/// write-combining window, wrapped in a handful of stores into device memory. **Nothing in
+/// that sequence can legitimately median above a millisecond.** If it does, the box is
+/// contended, the window is not mapped where we think, or something else is on the path —
+/// and in every one of those cases the number is not usable as the floor a guest gate is
+/// multiplied out of. ⇒ a native median above this is a **red**, printed as one.
+///
+/// ⊘ Deliberately loose (three decades above the expected single-digit microseconds): its
+/// job is to catch *"this calibration is not a calibration"*, not to police host jitter.
+const DBL_NATIVE_SANITY_CEILING_US: f64 = 1000.0;
+
+/// The fewest samples a distribution may be built from before this rung will grade on it.
+///
+/// ⊘ **`UNMEASURED`, not `FAIL`, below this.** A median over a dozen samples is a number,
+/// not a measurement, and this tree has already paid for *"a count and a total cannot
+/// recover a distribution"*. Fifty is enough for a stable median and a meaningful p90, and
+/// is reached inside the wall budget even at 70 ms per doorbell (5 s ⇒ ~71 samples) — so the
+/// **broken** case still produces a graded red rather than an `UNMEASURED`.
+const DBL_MIN_SAMPLES: usize = 50;
+
+/// How many submissions are outstanding before the loop drains the channel.
+///
+/// ⊘ **Not a tuning knob — a correctness bound.** The GPFIFO this crate allocates has 64
+/// entries and the pushbuffer 32 slots, and nothing here waits for retirement inside the
+/// timed region. Submitting past the smaller of those without draining would overwrite a
+/// slot the engine has not read yet, and the copies the controls check would be landing out
+/// of a ring that had been rewritten underneath them. 16 is half the pushbuffer.
+///
+/// ★ **The drain is OUTSIDE the measured region**, and that is stated in the printed header
+/// rather than left to be discovered: the region is exactly one `submit_copy_at`.
+const DBL_DRAIN_EVERY: usize = 16;
+
+/// How long one drain window waits for the last submission in it to retire.
+///
+/// ⊘ **It is an OBSERVABLE, not a timeout to be tuned away.** `[measured 2026-09-06, Mode-2
+/// guest]` the drain is where this rung found its result: three runs out of three, the
+/// windows ending at submissions 15, 31 and 47 retired and the one ending at **63** did not.
+/// A shorter timeout would have produced more samples and hidden the fact; a longer one
+/// would have burnt the wall budget. What makes it evidence rather than a confound is that
+/// the rung **counts the timeouts and names the submission the first one happened at**.
+const DBL_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(2000);
+
+/// A latency distribution, in **microseconds**, with the count it was built from.
+///
+/// ⊘ **Five order statistics and a total, never a mean.** The failure this rung gates on is
+/// a tail that dominates an aggregate; a mean is exactly the summary that hides it, and this
+/// tree has a recorded instance of a count plus a total being read as a distribution when it
+/// cannot recover one.
+#[derive(Debug, Clone, Copy, Default)]
+struct DblDist {
+    /// How many submissions the numbers below are over.
+    n: usize,
+    /// The fastest sample.
+    min_us: f64,
+    /// The **median**, and the statistic the verdict is taken on. See [`dbl_verdict_note`].
+    p50_us: f64,
+    /// The 90th percentile — reported so a tail regression is visible without being the
+    /// verdict.
+    p90_us: f64,
+    /// The slowest sample. ⊘ Never graded: one scheduler preemption would redden a healthy
+    /// run, and a rung that flakes is a rung people stop reading.
+    max_us: f64,
+    /// What the whole loop cost, so *"n × p50"* can be checked against the wall clock.
+    total_ms: f64,
+    /// ★ Whether the wall budget ended the loop before `n_max` was reached. A truncated run
+    /// is still a valid distribution; a run that does not SAY it was truncated is not.
+    truncated: bool,
+    /// How many submissions in the loop were **refused**. ⊘ A refusal is not a fast
+    /// submission and is excluded from the samples, so its count has to be printed beside
+    /// them or a channel that died halfway would read as a healthy, quick one.
+    refused: usize,
+}
+
+impl DblDist {
+    /// Build the distribution from raw nanosecond samples. `us` is taken by value because
+    /// it is sorted in place, and sorting the caller's vector behind its back is the kind of
+    /// surprise that makes a second use of the same samples silently different.
+    fn of(mut ns: Vec<u64>, truncated: bool, refused: usize, wall: std::time::Duration) -> Self {
+        ns.sort_unstable();
+        let n = ns.len();
+        if n == 0 {
+            return DblDist {
+                truncated,
+                refused,
+                total_ms: wall.as_secs_f64() * 1e3,
+                ..DblDist::default()
+            };
+        }
+        // ⊘ Nearest-rank, not interpolated: an interpolated quantile invents a value no
+        // submission ever took, and every number this rung prints is meant to be one that
+        // actually happened.
+        let at = |q: f64| -> f64 {
+            let idx = ((q * n as f64).ceil() as usize)
+                .saturating_sub(1)
+                .min(n - 1);
+            ns[idx] as f64 / 1e3
+        };
+        DblDist {
+            n,
+            min_us: ns[0] as f64 / 1e3,
+            p50_us: at(0.50),
+            p90_us: at(0.90),
+            max_us: ns[n - 1] as f64 / 1e3,
+            total_ms: wall.as_secs_f64() * 1e3,
+            truncated,
+            refused,
+        }
+    }
+
+    /// One machine-readable line. ⊘ `key=value` throughout and never a table, because the
+    /// grader that reads this runs in `bash` and a column layout is a format a `sed` has to
+    /// guess at.
+    ///
+    /// ⚠ **Three decimals, not one, and that is a measured decision.** `[measured 2026-09-06,
+    /// bench kb]` the bare-doorbell arm's whole distribution renders as `0.0` at one decimal —
+    /// a native doorbell store is well under 100 ns — and `0.0` reads as *"nothing was
+    /// measured"* rather than as *"this is genuinely sub-microsecond"*. A format that cannot
+    /// distinguish a real small number from an absent one is the same defect as an empty
+    /// capture decoding to zeros.
+    fn print(self, tag: &str) {
+        println!(
+            "DBL_DIST {tag} n={} min_us={:.3} p50_us={:.3} p90_us={:.3} max_us={:.3} \
+             total_ms={:.1} truncated={} refused={}",
+            self.n,
+            self.min_us,
+            self.p50_us,
+            self.p90_us,
+            self.max_us,
+            self.total_ms,
+            self.truncated,
+            self.refused
+        );
+    }
+}
+
+/// How this rung was configured, so the header can print it and a grader can check that the
+/// run it is reading is the run it asked for.
+#[derive(Debug, Clone, Copy)]
+struct DblCfg {
+    /// Samples per repetition, before the budget is consulted.
+    n_max: usize,
+    /// The wall budget per repetition. ⊘ Its purpose is that a **broken** arm still returns
+    /// in seconds: at 70 ms a doorbell, `n_max` would take minutes and the gate this rung
+    /// exists to be would be as slow as the LLM boot it replaces.
+    budget: std::time::Duration,
+    /// How many independent repetitions the process runs.
+    ///
+    /// ⊘ **Within-process repetitions cannot see a per-boot lottery** — `submit_ms` has been
+    /// measured at 9.1× across three consecutive boots of ONE build — so these are here for
+    /// within-run stability only, and the SCRIPT runs the whole binary more than once. Both
+    /// are needed and neither substitutes for the other.
+    reps: usize,
+    /// ★ The native median this arm is graded against, in microseconds, if the caller gave
+    /// one. `None` ⇒ this run is the **calibration** and says so.
+    native_p50_us: Option<f64>,
+    /// See [`DBL_GATE_MULTIPLE`]. Overridable so a lane can widen or tighten the band with
+    /// the number on its own log rather than in a rebuild.
+    gate_multiple: f64,
+}
+
+impl Default for DblCfg {
+    fn default() -> Self {
+        DblCfg {
+            n_max: 512,
+            budget: std::time::Duration::from_millis(1500),
+            reps: 3,
+            native_p50_us: None,
+            gate_multiple: DBL_GATE_MULTIPLE,
+        }
+    }
+}
+
+/// The one sentence that says which statistic decides, printed with the verdict so nobody
+/// has to reconstruct it from the numbers.
+fn dbl_verdict_note() -> &'static str {
+    "⊘ THE VERDICT IS TAKEN ON THE MEDIAN. The failure being gated is an AGGREGATE — \
+     thousands of doorbells at the typical price — and the median is the statistic that \
+     aggregate is made of. `max` is printed and never graded (one scheduler preemption \
+     would redden a healthy run); `p90` is printed so a tail regression is visible without \
+     being the verdict"
+}
+
+/// ★★★★★ **w384 — THE DOORBELL-LATENCY RUNG.**
+///
+/// ```text
+///   allocate a VAS, a channel at a dictated ring VA, schedule it
+///   allocate one device-local object, poison it, map it at a dictated VA
+///   CONTROL (open)  — one 4-byte LAUNCH_DMA into it must LAND        [POSITIVE CONTROL]
+///   ARM S           — N x (submit_copy_at of 4 bytes), each one TIMED     [GRADED]
+///   CONTROL (close) — another 4-byte LAUNCH_DMA must LAND            [POSITIVE CONTROL]
+///   ARM D           — N x (bare doorbell, no new entry), TIMED         [PRINTED, UNGRADED]
+///   ARM F           — N x (map a FRESH page, then one timed submit)    [PRINTED, UNGRADED]
+/// ```
+///
+/// # ★★★ THE MEASURED REGION, STATED EXACTLY — because timing your own instrument is the
+/// # standing trap here
+///
+/// For arm S the region is **exactly one `HostRmBackend::submit_copy_at` call** and nothing
+/// else. Inside it: a handle narrow, one `HashMap` lookup for the channel's parts, the
+/// pushbuffer encode (which allocates one small `Vec`), twelve-odd stores into the ring
+/// object, two GPFIFO words, the `GP_PUT` store, two release fences and the doorbell store.
+/// Outside it: the payload store that seeds the source word, the periodic drain, every
+/// `println!`, and all statistics.
+///
+/// ★ **The `Vec` and the lookup are inside the region on BOTH arms, so they cancel in the
+/// ratio the gate is taken on.** That is the reason the gate is a *multiple of a measured
+/// native median* and not an absolute number: any cost that is arm-independent divides out.
+///
+/// ⚠ **`RmConnection::doorbell` prints two lines per store for its first 512 stores**, and
+/// those lines are inside the region. This rung calls
+/// [`kayfabe_isolate_host::rm::mute_doorbell_witness`] before the first sample and **prints
+/// that it did**; without it the native floor would be the cost of a formatted write to
+/// stderr, and every gate multiplied out of that floor would be uniformly too loose.
+///
+/// # ★★★ PRE-REGISTERED, BEFORE THE RUN — every outcome, so none reads as the favourable one
+///
+/// - **native**, controls pass, median under [`DBL_NATIVE_SANITY_CEILING_US`] ⇒ `PASS`, and
+///   the run is the **calibration**: it prints `DBL_CALIBRATION_NATIVE_P50_US` for the guest
+///   arm to be graded against. ⊘ A native `PASS` is NOT "native met a gate" — it cannot, the
+///   gate would be derived from itself — and the printed verdict says so in words.
+/// - **guest**, controls pass, `p50 <= native_p50 × multiple` ⇒ `PASS`. ★★★★★ **AND THAT
+///   WOULD BE A FINDING, NOT A GREEN.** It would mean the 60–71 ms inline publication is not
+///   on the raw client's doorbell path and the LLM's cost has been mis-attributed. The rung
+///   prints that in full rather than filing it as a pass.
+/// - **guest**, controls pass, `p50 > gate` ⇒ `FAIL`. The intended shape, and the handle the
+///   async lane iterates against.
+/// - **either control fails** ⇒ `NOTRUN`. The timed submissions went into a channel that was
+///   not carrying work, and a distribution over refused or dead submissions is a number
+///   about nothing. ⊘ NOT a failure value.
+/// - **fewer than [`DBL_MIN_SAMPLES`] samples** ⇒ `NOTRUN`, for the same reason.
+/// - **no native reference and this is not being read as a calibration** ⇒ the gate is
+///   printed as `⊘ none` and the verdict falls back to the sanity ceiling, labelled.
+fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
+    const OFF_PRE: u64 = 0x00;
+    const OFF_POST: u64 = 0x40;
+    const OFF_LOOP: u64 = 0x80;
+
+    println!(
+        "info  R6 doorbell latency = GPU {gpu}, euid {} — what ONE doorbell costs the \
+         SUBMITTING THREAD",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  R6 the bar          = the median cost of one `submit_copy_at`, against the \
+         SAME act measured on bare metal by the SAME binary. ⊘ Not a benchmark: a \
+         discriminator"
+    );
+    println!(
+        "DBL_CFG n_max={} budget_ms={} reps={} gate_multiple={:.0} native_p50_us={}",
+        cfg.n_max,
+        cfg.budget.as_millis(),
+        cfg.reps,
+        cfg.gate_multiple,
+        cfg.native_p50_us.map_or_else(
+            || "⊘none(this run is the CALIBRATION)".to_string(),
+            |v| format!("{v:.2}")
+        ),
+    );
+    println!(
+        "DBL_REGION = exactly one `submit_copy_at` (narrow, parts lookup, one small Vec in \
+         the encoder, ~12 ring stores, 2 GPFIFO words, GP_PUT, 2 fences, the doorbell \
+         store). OUTSIDE it: the source seed store, the every-{DBL_DRAIN_EVERY} drain, all \
+         printing, all statistics"
+    );
+    // ⚠ Printed, never silent — see the function docs. A muted witness that a reader takes
+    // for an unmuted one is the failure this line exists against.
+    let already = kayfabe_isolate_host::rm::mute_doorbell_witness();
+    println!(
+        "DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted {already} stores; \
+         its per-store lines are INSIDE the measured region and would BE the native floor. \
+         ⊘ Refusals and the periodic tally still print)"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("??    R6 engine type      = COPY0 has no engine type on this ABI");
+        println!("RUNGCTL_doorbell_latency=FAIL");
+        println!("RUNG_doorbell_latency=NOTRUN");
+        return false;
+    };
+    let Ok(vas) = rm.alloc_vaspace() else {
+        println!("??    R6 vaspace          = the rung needs its own address space");
+        println!("RUNGCTL_doorbell_latency=FAIL");
+        println!("RUNG_doorbell_latency=NOTRUN");
+        return false;
+    };
+
+    let mut chan_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut mem_h: Option<kayfabe_isolate::HostHandle> = None;
+    let mut fresh: Vec<(u64, kayfabe_isolate::HostHandle)> = Vec::new();
+    let mut mapped_target = false;
+    let mut control_ok = false;
+    // ★★★★★ **A THIRD STATE, AND ITS ABSENCE WAS A REAL DEFECT — caught by the grader's own
+    // negative control, 2026-09-06.** The sample-floor branch printed *"UNMEASURED, and NOT a
+    // failure value"* in prose and then returned `false`, which — with the positive control
+    // PASSING — reached the `else` arm and emitted `RUNG_doorbell_latency=FAIL`. ⇒ **the
+    // anchored machine-readable line said the OPPOSITE of the sentence above it**, and a
+    // grader reads the anchored line. `control_ok` alone cannot express this: the control DID
+    // pass, and there is still nothing to grade.
+    let mut unmeasured = false;
+
+    // ⊘ A closure so every early return still reaches the teardown below it. The rung
+    // allocates a channel, an object and up to `n` fresh objects; leaking them would make a
+    // LATER rung in the same process fail for this rung's reason.
+    let mut go = || -> bool {
+        let Ok((chan, token)) = rm.alloc_channel_at(vas, engine_type, Some(GpuVa(DBL_RING_AT)))
+        else {
+            println!("??    R6 channel          = refused at {DBL_RING_AT:#018x} — NOT a result");
+            return false;
+        };
+        chan_h = Some(chan);
+        if rm.channel_ring_va(chan) != Some(DBL_RING_AT) {
+            println!("??    R6 ring placement    = RM did not place the ring where asked");
+            return false;
+        }
+        if rm.schedule(chan).is_err() {
+            println!("??    R6 schedule          = refused");
+            return false;
+        }
+        let Ok(mem) = rm.alloc_probe_local(W379_BYTES) else {
+            println!("??    R6 object           = device-local allocation refused");
+            return false;
+        };
+        mem_h = Some(mem);
+        if rm.fill_words(mem, W379_BYTES, DBL_SENTINEL, 0).is_err() {
+            println!("??    R6 sentinel         = could not be written");
+            return false;
+        }
+        match rm.map_local_at(vas, mem, W379_BYTES, Some(DBL_TARGET_AT)) {
+            Ok(got) if got == DBL_TARGET_AT => mapped_target = true,
+            Ok(got) => {
+                mapped_target = true;
+                println!(
+                    "??    R6 placement        = asked {DBL_TARGET_AT:#018x}, RM chose \
+                     {got:#018x} — the rung's addresses are not the ones it grades on"
+                );
+                return false;
+            }
+            Err(e) => {
+                println!("??    R6 map             = refused {e:?}");
+                return false;
+            }
+        }
+
+        // ── THE OPENING CONTROL ──────────────────────────────────────────────────────────
+        //
+        // ⊘ Before a single sample is taken. A distribution over submissions that were never
+        // carrying work is a number about nothing, and *"the loop was fast"* is exactly what
+        // a dead channel looks like.
+        let ch = W381Chan { h: chan, token };
+        let pre = w379_release_through(
+            rm,
+            W381Probe::LaunchDma,
+            ch,
+            mem,
+            DBL_TARGET_AT,
+            OFF_PRE,
+            DBL_MAGIC_PRE,
+        );
+        println!("info  R6 control (open)   = {pre:?}");
+        if !pre.landed() {
+            println!(
+                "??    R6 CONTROL FAILED    = a four-byte LAUNCH_DMA into the rung's own \
+                 mapped object did not land. ⊘ Every number below would be the cost of \
+                 submitting into a channel that carries nothing — UNINTERPRETABLE, and \
+                 reported as NOTRUN rather than as a red"
+            );
+            return false;
+        }
+        control_ok = true;
+        println!("ok    R6 control (open)   = the channel carries work; the loop can be believed");
+
+        // ── ARM S — THE GRADED LOOP ──────────────────────────────────────────────────────
+        let (src_off, sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+        let mut pooled: Vec<u64> = Vec::with_capacity(cfg.n_max * cfg.reps);
+        let mut pooled_refused = 0usize;
+        let mut pooled_wall = std::time::Duration::ZERO;
+        let mut pooled_trunc = false;
+        let mut rep_p50: Vec<f64> = Vec::with_capacity(cfg.reps);
+        let mut stalled_reps = 0usize;
+        let mut pooled_drains = 0usize;
+        let mut pooled_drain_timeouts = 0usize;
+        let mut pooled_first_stall: Option<usize> = None;
+
+        for rep in 0..cfg.reps {
+            // ⚠ Capacity taken UP FRONT: a `Vec` growing inside the loop would reallocate
+            // between two samples and put a `memcpy` of the samples so far inside one of
+            // them. The push itself stays outside the timed region regardless.
+            let mut ns: Vec<u64> = Vec::with_capacity(cfg.n_max);
+            let mut refused = 0usize;
+            let started = std::time::Instant::now();
+            let mut truncated = false;
+            // ★★★ THE DRAIN, INSTRUMENTED. Before this it was a silent 2 s per window that
+            // ate the wall budget and made a STALLED channel look merely like a short
+            // sample — the confound and the finding wearing one face.
+            let mut drains = 0usize;
+            let mut drain_timeouts = 0usize;
+            let mut drain_wall = std::time::Duration::ZERO;
+            let mut first_stall: Option<usize> = None;
+            for i in 0..cfg.n_max {
+                if started.elapsed() >= cfg.budget {
+                    truncated = true;
+                    break;
+                }
+                // OUTSIDE the region: seed the source word this submission copies. A
+                // distinct value per iteration so a landed copy names ITS OWN submission.
+                let payload = 0x8400_0000u32
+                    .wrapping_add((rep as u32) << 16)
+                    .wrapping_add(i as u32);
+                if rm.ring_store_u32(chan, src_off, payload).is_err() {
+                    refused += 1;
+                    continue;
+                }
+
+                // ══ THE MEASURED REGION — one call, nothing else ══════════════════════
+                let t0 = std::time::Instant::now();
+                let r =
+                    rm.submit_copy_at(chan, token, src_off, DBL_TARGET_AT + OFF_LOOP, 4, payload);
+                let dt = t0.elapsed();
+                // ══ END OF THE MEASURED REGION ════════════════════════════════════════
+
+                let submitted = r.is_ok();
+                if submitted {
+                    ns.push(dt.as_nanos() as u64);
+                } else {
+                    // ⊘ A refusal is NOT a fast submission. It is excluded from the samples
+                    // and counted separately, so a channel that dies halfway cannot read as
+                    // a healthy quick one.
+                    refused += 1;
+                }
+
+                // OUTSIDE the region, and it is a CORRECTNESS bound, not a courtesy — see
+                // `DBL_DRAIN_EVERY`. The ring has 32 pushbuffer slots and nothing here waits
+                // for retirement; submitting past that without draining would rewrite a slot
+                // the engine has not read.
+                //
+                // ⊘ Gated on `submitted`, and that is not tidiness: waiting for a semaphore
+                // to reach a payload whose submission was REFUSED spins the whole deadline
+                // every window, and the two seconds it burns would be charged to nothing —
+                // a refused channel would read as a slow one rather than as a refused one.
+                if submitted && (i + 1).is_multiple_of(DBL_DRAIN_EVERY) {
+                    let d0 = std::time::Instant::now();
+                    let deadline = d0 + DBL_DRAIN_TIMEOUT;
+                    let mut retired = false;
+                    loop {
+                        if matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload) {
+                            retired = true;
+                            break;
+                        }
+                        if std::time::Instant::now() >= deadline {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_micros(200));
+                    }
+                    drains += 1;
+                    drain_wall += d0.elapsed();
+                    if !retired {
+                        drain_timeouts += 1;
+                        first_stall = Some(i);
+                        // ⊘⊘ STOP THE REPETITION HERE, and this is not an optimisation.
+                        // Submissions issued after the channel has stopped retiring are a
+                        // DIFFERENT quantity — the cost of composing a push into a ring
+                        // nothing is draining — and pooling them with the others under one
+                        // name is how a bimodal number gets reported as one median.
+                        break;
+                    }
+                }
+            }
+            let wall = started.elapsed();
+            pooled.extend_from_slice(&ns);
+            let d = DblDist::of(ns, truncated, refused, wall);
+            d.print(&format!("arm=submit rep={rep}"));
+            println!(
+                "DBL_DRAIN rep={rep} every={DBL_DRAIN_EVERY} drains={drains} \
+                 timeouts={drain_timeouts} drain_ms={:.1} stalled={} first_stall_at={}",
+                drain_wall.as_secs_f64() * 1e3,
+                first_stall.is_some(),
+                first_stall.map_or_else(|| "none".to_string(), |i| i.to_string()),
+            );
+            if first_stall.is_some() {
+                stalled_reps += 1;
+                if pooled_first_stall.is_none() {
+                    pooled_first_stall = first_stall;
+                }
+            }
+            pooled_drains += drains;
+            pooled_drain_timeouts += drain_timeouts;
+            if d.n > 0 {
+                rep_p50.push(d.p50_us);
+            }
+            pooled_refused += refused;
+            pooled_wall += wall;
+            pooled_trunc |= truncated;
+        }
+
+        let s = DblDist::of(pooled, pooled_trunc, pooled_refused, pooled_wall);
+        s.print("arm=submit rep=POOLED");
+        println!(
+            "DBL_REP_MEDIANS us=[{}]  ⊘ within-process reps CANNOT see a per-boot lottery \
+             (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they \
+             show within-run stability only, and the SCRIPT runs this binary more than once",
+            rep_p50
+                .iter()
+                .map(|v| format!("{v:.1}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        // ★★★★★ **THE POOLED STALL LINE — this is where the guest result actually lives.**
+        // A channel that stops retiring is not slow, it is BROKEN, and the two are reported
+        // by completely different numbers. `first_stall_at` is the submission index whose
+        // drain window failed to retire, and it is the bisection answer WITHOUT a second boot.
+        println!(
+            "DBL_STALL reps={} stalled_reps={stalled_reps} drains={pooled_drains} \
+             timeouts={pooled_drain_timeouts} first_stall_at={}",
+            cfg.reps,
+            pooled_first_stall.map_or_else(|| "none".to_string(), |i| i.to_string()),
+        );
+
+        // ── THE CLOSING CONTROL ──────────────────────────────────────────────────────────
+        //
+        // ★ It is the half that makes the loop attributable: the opening control proves the
+        // channel worked BEFORE the loop, and only this one proves it still did AFTER it.
+        // A loop that killed its own channel on submission 3 and then measured 500 cheap
+        // refusals would pass the opening control alone.
+        let post = w379_release_through(
+            rm,
+            W381Probe::LaunchDma,
+            ch,
+            mem,
+            DBL_TARGET_AT,
+            OFF_POST,
+            DBL_MAGIC_POST,
+        );
+        println!("info  R6 control (close)  = {post:?}");
+        if post.landed() {
+            println!("ok    R6 control (close)  = the channel still carried work at the end");
+        } else {
+            control_ok = false;
+            println!(
+                "??    R6 CONTROL FAILED    = the channel no longer carries work AFTER the \
+                 timed loop. ⊘ The distribution above is over submissions whose fate is \
+                 unknown — NOTRUN, not a red"
+            );
+            // ⊘⊘⊘ **AND IT DOES NOT RETURN HERE, WHICH IT USED TO.** The two ungraded arms
+            // below are DIAGNOSIS, and diagnosis is most needed exactly when something has
+            // failed. Returning early skipped them on the one arm that had a result to
+            // explain — *"a diagnostic gated on the failure"*, in this file, on its first
+            // guest run. They are cheap, bounded by the same wall budget, and a `bare`
+            // doorbell that still succeeds against a channel whose copies have stopped is a
+            // fact worth having.
+            println!(
+                "⊘     R6 POST-MORTEM      = the two ungraded arms below run ANYWAY, against \
+                 a channel now known to have stopped retiring. Read them as diagnosis of \
+                 that state, never as a latency measurement"
+            );
+        }
+
+        // ── ARM D — the bare doorbell, PRINTED AND UNGRADED ──────────────────────────────
+        //
+        // ⊘ Ungraded on purpose: a device is entitled to see that `GP_PUT` has not moved and
+        // do nothing, and *"a no-op is fast"* is a finding about the no-op. What it IS for is
+        // ATTRIBUTION of a red already measured on arm S — if a real submission is expensive
+        // and this is cheap, the cost is in the ring stores or the planning; if this is
+        // expensive too, the cost is in the trap.
+        {
+            let mut ns: Vec<u64> = Vec::with_capacity(cfg.n_max);
+            let mut refused = 0usize;
+            let started = std::time::Instant::now();
+            let mut truncated = false;
+            for _ in 0..cfg.n_max {
+                if started.elapsed() >= cfg.budget {
+                    truncated = true;
+                    break;
+                }
+                let t0 = std::time::Instant::now();
+                let r = rm.ring_doorbell_only(token);
+                let dt = t0.elapsed();
+                if r.is_ok() {
+                    ns.push(dt.as_nanos() as u64);
+                } else {
+                    refused += 1;
+                }
+            }
+            let wall = started.elapsed();
+            DblDist::of(ns, truncated, refused, wall).print("arm=bare rep=0 ⊘UNGRADED");
+        }
+
+        // ── ARM F — a FRESH mapping behind every ring, PRINTED AND UNGRADED ──────────────
+        //
+        // ★★★ **This arm exists to make a green on arm S interpretable.** If publication is
+        // incremental, a loop that rings the same channel at the same address N times may pay
+        // the price once and be cheap for the rest — and would then pass while a real
+        // workload, which maps as it goes, does not. Here every ring is preceded by a FRESH
+        // 64 KiB object at a FRESH VA, so there is always something unpublished behind it.
+        //
+        // ⊘ Ungraded, because its cost legitimately includes an RM allocation and a map per
+        // iteration on BOTH arms and the ratio between arms is not the same quantity arm S's
+        // gate is about. It is DIAGNOSIS, printed beside the verdict, never part of it.
+        {
+            // ⚠ A tenth of arm S's count: each iteration is an alloc plus a map, and the
+            // budget is spent on RM rather than on the doorbell.
+            let n_fresh = (cfg.n_max / 8).max(8);
+            let mut ns: Vec<u64> = Vec::with_capacity(n_fresh);
+            let mut refused = 0usize;
+            let started = std::time::Instant::now();
+            let mut truncated = false;
+            for i in 0..n_fresh {
+                if started.elapsed() >= cfg.budget {
+                    truncated = true;
+                    break;
+                }
+                let at = DBL_FRESH_BASE + (i as u64) * DBL_FRESH_STRIDE;
+                let Ok(obj) = rm.alloc_probe_local(W379_BYTES) else {
+                    refused += 1;
+                    continue;
+                };
+                if !matches!(rm.map_local_at(vas, obj, W379_BYTES, Some(at)), Ok(g) if g == at) {
+                    refused += 1;
+                    let _ = rm.free(obj);
+                    continue;
+                }
+                fresh.push((at, obj));
+                let payload = 0x8401_0000u32.wrapping_add(i as u32);
+                if rm.ring_store_u32(chan, src_off, payload).is_err() {
+                    refused += 1;
+                    continue;
+                }
+                // ══ THE MEASURED REGION — the same one call as arm S ══════════════════
+                let t0 = std::time::Instant::now();
+                let r = rm.submit_copy_at(chan, token, src_off, at, 4, payload);
+                let dt = t0.elapsed();
+                // ══ END ═══════════════════════════════════════════════════════════════
+                if r.is_ok() {
+                    ns.push(dt.as_nanos() as u64);
+                } else {
+                    refused += 1;
+                }
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload)
+                    && std::time::Instant::now() < deadline
+                {
+                    std::thread::sleep(std::time::Duration::from_micros(200));
+                }
+            }
+            let wall = started.elapsed();
+            DblDist::of(ns, truncated, refused, wall).print("arm=freshmap rep=0 ⊘UNGRADED");
+        }
+
+        // ⊘ NO GATE IS APPLIED WHEN THE CLOSING CONTROL FAILED. A `PASS` or a `FAIL`
+        // computed over submissions into a channel that stopped retiring would be a
+        // confident number about a broken thing — and `PASS` is the one it would usually
+        // be, because the submissions that never executed are the CHEAP ones.
+        if !control_ok {
+            println!(
+                "⊘     R6 NO VERDICT       = the closing control failed, so the distribution \
+                 above is NOT graded. See `DBL_STALL` for what actually happened; the \
+                 machine-readable verdict is NOTRUN"
+            );
+            return false;
+        }
+
+        // ── THE VERDICT ──────────────────────────────────────────────────────────────────
+        //
+        // ★★★★★ **THE SAMPLE FLOOR HAS AN ESCAPE HATCH, AND WITHOUT IT THE RUNG IS BACKWARDS
+        // ON EXACTLY THE CASE IT EXISTS FOR.** The wall budget is what makes this a
+        // five-second gate; the consequence is that the WORSE the arm is, the FEWER samples
+        // it produces. `[measured, LLM boot]` `worst_trap=1750538us` — at that price a 1.5 s
+        // repetition yields ONE sample, three repetitions yield three, and a rule of *"under
+        // fifty samples ⇒ UNMEASURED"* would report the most catastrophic possible result as
+        // *"we could not tell"*. ⇒ A catastrophically slow arm would be the one arm the rung
+        // could never grade.
+        //
+        // ⊘ The hatch is deliberately narrow and it is **sound rather than lenient**: it does
+        // not lower the bar, it uses a statistic that needs no sample size. If the FASTEST
+        // submission observed is already over the gate, then no median over any number of
+        // further samples could be under it — every sample is at least the minimum, by
+        // definition. So *"n is too small for a median"* and *"the answer is determinate
+        // anyway"* are simultaneously true, and the rung says both.
+        let floor_ref = cfg
+            .native_p50_us
+            .map_or(DBL_NATIVE_SANITY_CEILING_US, |b| b * cfg.gate_multiple);
+        if s.n < DBL_MIN_SAMPLES {
+            if s.n > 0 && s.min_us > floor_ref {
+                println!(
+                    "FAIL  R6 VERDICT (n={})  = ★ DETERMINATE DESPITE THE SAMPLE COUNT. Only \
+                     {} submissions fit inside the wall budget — which is itself the symptom \
+                     — but the FASTEST of them took {:.1}us against a gate of {floor_ref:.1}us. \
+                     ⊘ No median over any number of further samples can be below a value \
+                     every sample already exceeds, so the small n does NOT make this \
+                     uninterpretable",
+                    s.n, s.n, s.min_us
+                );
+                println!("DBL_MEASURED_P50_US={:.2}", s.p50_us);
+                println!("DBL_GATE_US={floor_ref:.2}");
+                println!("DBL_ROLE=GRADED_ON_MIN");
+                return false;
+            }
+            // ⊘ NOT a red: too few samples AND not determinate on the minimum. See
+            // `unmeasured`'s declaration for the defect this flag exists because of.
+            unmeasured = true;
+            println!(
+                "??    R6 SAMPLES          = {} graded samples, floor is {DBL_MIN_SAMPLES}, and \
+                 the fastest ({:.1}us) is NOT above the gate ({floor_ref:.1}us) — so the \
+                 answer is not determinate either. ⊘ A median over a handful is a number, \
+                 not a measurement: UNMEASURED, and NOT a failure value",
+                s.n, s.min_us
+            );
+            return false;
+        }
+        println!("DBL_MEASURED_P50_US={:.2}", s.p50_us);
+        println!("{}", dbl_verdict_note());
+
+        match cfg.native_p50_us {
+            Some(base) => {
+                let gate = base * cfg.gate_multiple;
+                println!("DBL_ROLE=GRADED");
+                println!(
+                    "DBL_NATIVE_P50_US={base:.2} DBL_GATE_MULTIPLE={:.0} DBL_GATE_US={gate:.2}",
+                    cfg.gate_multiple
+                );
+                // ★★ THE CONTINUOUS NUMBER, beside the binary one. A pass/fail alone tells an
+                // iterating lane nothing about whether it moved: two builds can both be red
+                // and be a factor of forty apart. This is the quantity to graph — and it is
+                // deliberately printed for BOTH outcomes, because a lane that only records
+                // its ratio when it fails cannot tell a fix from a lucky boot.
+                println!("DBL_RATIO_X={:.1}", s.p50_us / base);
+                if s.p50_us <= gate {
+                    println!(
+                        "★     R6 VERDICT         = p50 {:.1}us <= gate {gate:.1}us \
+                         ({:.1}x the native floor).",
+                        s.p50_us,
+                        s.p50_us / base
+                    );
+                    println!(
+                        "⚠     R6 READ THIS       = ★★★★★ IF THIS IS THE GUEST ARM, A PASS IS \
+                         A FINDING AND NOT A GREEN. It would mean the 60-71ms inline \
+                         publication measured on the LLM boot is NOT on the raw client's \
+                         doorbell path, and the LLM's cost has been mis-attributed. Compare \
+                         `arm=freshmap` against `arm=submit` before concluding anything: if \
+                         freshmap is the expensive one, the cost is in PUBLISHING NEW ROWS \
+                         and this loop simply had nothing left to publish"
+                    );
+                    true
+                } else {
+                    println!(
+                        "FAIL  R6 VERDICT         = p50 {:.1}us > gate {gate:.1}us — {:.0}x \
+                         the native floor for the SAME act by the SAME binary",
+                        s.p50_us,
+                        s.p50_us / base
+                    );
+                    false
+                }
+            }
+            None => {
+                // ⊘ No external floor ⇒ this run cannot be graded against one, and saying
+                // otherwise would be grading against a number derived from itself.
+                println!("DBL_ROLE=CALIBRATION");
+                println!("DBL_CALIBRATION_NATIVE_P50_US={:.2}", s.p50_us);
+                println!(
+                    "DBL_GATE_FOR_THE_OTHER_ARM_US={:.2} (= p50 x {:.0})",
+                    s.p50_us * cfg.gate_multiple,
+                    cfg.gate_multiple
+                );
+                if s.p50_us <= DBL_NATIVE_SANITY_CEILING_US {
+                    println!(
+                        "★     R6 VERDICT         = PASS as a CALIBRATION: the controls held \
+                         and p50 {:.1}us is under the {DBL_NATIVE_SANITY_CEILING_US:.0}us \
+                         sanity ceiling, so this number is usable as the other arm's floor. \
+                         ⊘ THIS IS NOT \"NATIVE MET A GATE\" — a calibration cannot fail a \
+                         gate derived from itself, and this rung does not pretend it can",
+                        s.p50_us
+                    );
+                    true
+                } else {
+                    println!(
+                        "FAIL  R6 VERDICT         = p50 {:.1}us is ABOVE the \
+                         {DBL_NATIVE_SANITY_CEILING_US:.0}us sanity ceiling. Nothing in a \
+                         fence plus a store into a mapped window legitimately medians that \
+                         high, so the box is contended or the path is not what we think — \
+                         and this number MUST NOT be used as anyone's floor",
+                        s.p50_us
+                    );
+                    false
+                }
+            }
+        }
+    };
+
+    let verdict = go();
+
+    // ── teardown, on every path ─────────────────────────────────────────────────────────
+    for (at, obj) in fresh.drain(..) {
+        let _ = rm.unmap_local(vas, at);
+        let _ = rm.free(obj);
+    }
+    if mapped_target {
+        let _ = rm.unmap_local(vas, DBL_TARGET_AT);
+    }
+    if let Some(h) = mem_h {
+        let _ = rm.free(h);
+    }
+    if let Some(h) = chan_h {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+
+    println!(
+        "RUNGCTL_doorbell_latency={}",
+        if control_ok { "PASS" } else { "FAIL" }
+    );
+    // ⊘ THREE OUTCOMES AND THEY ARE NOT ORDERED BY SEVERITY. `NOTRUN` covers two different
+    // ways of having nothing to say — the control did not pass, or it did and the loop
+    // produced no gradeable distribution — and neither is a failure value. Folding either
+    // into `FAIL` reports a finding that was never measured.
+    if !control_ok || unmeasured {
+        println!("RUNG_doorbell_latency=NOTRUN");
+    } else if verdict {
+        println!("RUNG_doorbell_latency=PASS");
+    } else {
+        println!("RUNG_doorbell_latency=FAIL");
+    }
+    verdict
+}
+
 fn main() -> std::process::ExitCode {
     // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
     //
@@ -6859,6 +7761,10 @@ fn main() -> std::process::ExitCode {
     // choice is printed before any rung runs — a run that does not say which primitive it
     // used cannot be compared to any other run.
     let mut probe = W381Probe::SemRelease;
+    // ★★★★★ w384 — the doorbell-latency rung and its configuration. `None` ⇒ not selected,
+    // so the rung's absence and the rung's default arming are different states and a log can
+    // tell them apart.
+    let mut want_doorbell_latency: Option<DblCfg> = None;
     let mut want_guest_pin = false;
     let mut want_guest_ring = false;
     let mut want_executor_vas = false;
@@ -6968,6 +7874,49 @@ fn main() -> std::process::ExitCode {
                 want_rpc_mixed = true;
                 want_cross_client = true;
                 probe = W381Probe::LaunchDma;
+            }
+            // ★★★★★ w384 — WHAT ONE DOORBELL COSTS THE SUBMITTING THREAD. Its own flag and
+            // its own dispatch block: it is a TIMING rung, and running it behind six other
+            // rungs would time a process whose allocator, page tables and RM client are in a
+            // state those rungs put them in. ⊘ It is deliberately NOT in `--w381`.
+            "--doorbell-latency" => want_doorbell_latency = Some(DblCfg::default()),
+            // ⚠ Each knob EDITS the config rather than replacing it, so the flags may be
+            // given in any order and `--doorbell-latency-n 64` alone still implies the rung.
+            // A flag whose meaning depended on its position is a harness defect waiting for
+            // a script to be reordered.
+            "--doorbell-latency-n"
+            | "--doorbell-latency-budget-ms"
+            | "--doorbell-latency-reps"
+            | "--doorbell-latency-native-us"
+            | "--doorbell-latency-gate" => {
+                let Some(v) = args.next() else {
+                    eprintln!("{flag} needs a value");
+                    return std::process::ExitCode::from(64);
+                };
+                let mut cfg = want_doorbell_latency.unwrap_or_default();
+                let ok = match flag.as_str() {
+                    "--doorbell-latency-n" => v.parse::<usize>().map(|n| cfg.n_max = n).is_ok(),
+                    "--doorbell-latency-budget-ms" => v
+                        .parse::<u64>()
+                        .map(|m| cfg.budget = std::time::Duration::from_millis(m))
+                        .is_ok(),
+                    "--doorbell-latency-reps" => v.parse::<usize>().map(|r| cfg.reps = r).is_ok(),
+                    // ★★★ THE FLOOR THE GUEST ARM IS GRADED AGAINST, fed in by the script from
+                    // the native arm it just ran — never a constant baked into the binary. A
+                    // baked floor would expire as a box changed and nobody would notice,
+                    // which is the shape `a_capture_derived_table_expires_as_a_vendor_
+                    // regression` records.
+                    "--doorbell-latency-native-us" => v
+                        .parse::<f64>()
+                        .map(|u| cfg.native_p50_us = Some(u))
+                        .is_ok(),
+                    _ => v.parse::<f64>().map(|k| cfg.gate_multiple = k).is_ok(),
+                };
+                if !ok {
+                    eprintln!("{flag} {v} is not a number");
+                    return std::process::ExitCode::from(64);
+                }
+                want_doorbell_latency = Some(cfg);
             }
             "--guest-ram-pin" => want_guest_pin = true,
             "--guest-ring-channel" => want_guest_ring = true,
@@ -7258,6 +8207,36 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_negative(&mut rm, gpu);
         println!("done — dictated-ring negative control only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ w384 — THE DOORBELL-LATENCY RUNG runs here and RETURNS, and the isolation is
+    // the point rather than a convention: it is the only rung in this file whose result is a
+    // TIME, so anything that ran before it in the same process — RM allocations, page tables,
+    // a heap the earlier rungs grew, a channel some other rung left scheduled — is a
+    // confound it cannot control for and cannot see. ⊘ It is deliberately absent from
+    // `--w379` and `--w381` for the same reason.
+    if let Some(cfg) = want_doorbell_latency {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ⊘ The probe selector is NOT honoured here and the line says so rather than being
+        // silently absent: this rung's submission is a `LAUNCH_DMA` unconditionally, because
+        // the host-FIFO `SEM_RELEASE` the other arm uses is not served by the Mode-2
+        // emulator at all — so a `sem-release` run would produce a guest distribution over
+        // submissions nothing ever executed.
+        println!(
+            "W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: \
+             the Mode-2 emulator does not act on `SemRelease`, and timing submissions that \
+             are never executed would be a distribution about nothing"
+        );
+        let ok = doorbell_latency(&mut rm, gpu, cfg);
+        println!("done — w384 doorbell-latency rung only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
@@ -7817,11 +8796,14 @@ fn main() -> std::process::ExitCode {
                 println!("FAIL  R10 checkout        = no worker");
                 return std::process::ExitCode::from(1);
             };
-            match w.execute(&kayfabe_isolate::VerbPlan::Publish {
-                host_vas: None,
-                len: LEN,
-                at: AT,
-            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+            match w.execute(
+                &kayfabe_isolate::VerbPlan::Publish {
+                    host_vas: None,
+                    len: LEN,
+                    at: AT,
+                },
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            ) {
                 Ok(kayfabe_isolate::VerbReply::Published {
                     host_va, memory, ..
                 }) => {
@@ -7872,7 +8854,10 @@ fn main() -> std::process::ExitCode {
                 None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
-                Ok(plan) => match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+                Ok(plan) => match w.execute(
+                    &plan,
+                    &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+                ) {
                     Ok(kayfabe_isolate::VerbReply::Doorbell { channel, .. }) => println!(
                         "★     R16 sandboxed doorbell = the capability-less isolate CPU-mapped \
                          the ring, USERD and the usermode BAR0 window, and rang channel {:#010x} \

@@ -1,0 +1,350 @@
+# ★★★★★ WHAT ONE DOORBELL COSTS THE SUBMITTING THREAD — a five-second gate for `w383-doorbell-async`
+
+**STATUS — 2026-09-06 — LIVE.** Adds one rung to the raw client (`--doorbell-latency`) and its
+differential harness. It does not supersede `w381_the_guest_servable_probe.md`; it is built on
+that lane's `LAUNCH_DMA` primitive and inherits its scope caveats verbatim. Mechanism sections
+§1–§3 are read off this tree's own source and are checkable without a GPU. §4 carries the
+measurements; every number in it names the arm it came from.
+
+---
+
+> ### ⊘⊘⊘ THE GROUND MOVED WHILE THIS LANE WAS BUILDING — read this before §0
+> ### 2026-09-06, and it changes what a guest PASS means, not what the rung does.
+>
+> This lane was briefed against master **`30eb4627`**, with `w383-doorbell-async` described as
+> **live and in flight**. It is not: master is now **`758a5752`**, *"Merge branch
+> 'w383-doorbell-async'"*, and that lane's own commits say
+> **`w383 §13: the gate armed — 95.7 percent skipped, 3.9x less publication wall, CUP3_VAL=43
+> held`** and **`w383 §14: ★★★★★ LLM_TOKENS=16 — the LLM generates`**.
+>
+> ⇒ **The 60–71 ms this rung was built to catch has already been worked on, and the branch that
+> did it has landed.** So:
+> - ⊘ **A guest PASS is no longer automatically the finding §3 pre-registers it as.** On
+>   `30eb4627` a pass would have meant *"the cost is not on the raw client's doorbell path"*. On
+>   `758a5752` it may simply mean **the fix works**. The two readings are not distinguishable
+>   from one arm, and this doc must not let one be read as the other.
+> - ★★★ **Hence the deliberate two-arm design that replaced the single guest arm**: the same
+>   rung, same binary shape, on **`30eb4627` + this rung** (`w384-prefix-baseline`, pushed) and
+>   on **`758a5752` + this rung** (`w384-doorbell-latency`, rebased onto current master). A
+>   controlled before/after is the only thing that can say whether the rung DISCRIMINATES, and
+>   it is strictly stronger evidence than the red it was commissioned to produce.
+> - ⚠ **Nothing about the rung, the gate or the controls was changed in response.** The
+>   multiple stays at 1000×, argued from the two orders of magnitude in §3 and not fitted to
+>   whatever the guest turns out to cost. Tuning a threshold after seeing the arm it grades is
+>   how a gate stops being one.
+>
+> ⚠ Same class as `a_blocker_i_declared_was_already_fixed` and `a_rulings_date_is_part_of_the_
+> citation`: **the brief's `master` SHA was three hours stale, and every consequence of that was
+> in how the RESULT reads, not in whether the work was worth doing.**
+
+## §0 THE ONE-LINE PROBLEM
+
+`[measured, LLM boot, w383 lane]` publication runs **60–71 ms per doorbell, inline on the vCPU
+thread**:
+
+```
+TRAPWITNESS off_trap_claims=0 inline_exceptions=61865 worst_trap=1750538us
+            (target: inline_exceptions=0)
+```
+
+Thousands of doorbells at that price is why the LLM rung is killed by a harness timeout with
+doorbells still being served — and **nothing in this tree measured it in under twenty minutes.**
+`LLM_TOKENS`, the async lane's only feedback, needs a full boot plus a model load and can come
+back `UNMEASURED` for reasons that have nothing to do with the change under test. A lane whose
+only instrument costs twenty minutes and can answer *"no result"* is a lane iterating blind.
+
+## §1 WHY A NEW RUNG AND NOT ONE OF THE SEVEN
+
+Owner, 2026-09-06: *"the most valuable raw client is one that passes on host and fails in guest,
+then its just iterate unless there is a blocker."*
+
+All seven w379/w381 rungs pass natively; six of seven pass in the guest (`w381` §4.1). By that
+criterion they discriminate almost nothing. `missing_page` is the one with the valuable shape,
+and it is about the **error notifier** — not about anything on the critical path the async lane
+is moving. So the shape had to be built, not found.
+
+## §2 THE MEASURED REGION, STATED EXACTLY
+
+For the graded arm the region is **one `HostRmBackend::submit_copy_at` call and nothing else**.
+
+| inside the region | outside it |
+|---|---|
+| handle narrow; one `HashMap` lookup for the channel's parts | the store that seeds the source word |
+| the pushbuffer encode (**allocates one small `Vec`**) | the every-16 drain |
+| ~12 stores into the ring object; 2 GPFIFO words; the `GP_PUT` store | every `println!` |
+| two release fences and **the doorbell store** | all statistics |
+
+★ **The `Vec` and the lookup are inside the region on BOTH arms, so they cancel in the ratio the
+gate is taken on.** That is the reason the gate is a *multiple of a measured native median* and
+not an absolute number: any cost that is arm-independent divides out.
+
+### ★★★ THE INSTRUMENT THAT WOULD HAVE BEEN THE MEASUREMENT
+
+`RmConnection::doorbell` prints **two `eprintln!` lines per store for its first 512 stores**
+(`DOORBELL_WITNESS_MAX`), and those lines are *inside* the region. On bare metal a doorbell is
+microseconds, so a formatted write to stderr is not a rounding error on it — it is a large
+fraction of the number. ⇒ every gate multiplied out of that floor would have been **uniformly,
+quietly too loose**.
+
+`kayfabe_isolate_host::rm::mute_doorbell_witness()` **exhausts** the witness (advances its
+counter past the cap) rather than disabling it: the periodic tally still prints, and **every
+refusal still prints in full**, by `doorbell`'s own argument that suppressing the rare event to
+make room for the common one inverts the witness's purpose. The rung **prints that it muted**,
+because a quiet log a reader takes for a complete one is a failure class this tree has paid for.
+
+## §3 THE GATE — a multiple of a measurement, and the multiple is argued
+
+⊘ A hard-coded millisecond figure would be a standard nobody agreed to, on a box nobody
+characterised, and it would expire as the box changed with no one noticing — the shape
+`a_capture_derived_table_expires_as_a_vendor_regression` records. So:
+
+```
+gate = native_p50 × DBL_GATE_MULTIPLE          DBL_GATE_MULTIPLE = 1000
+```
+
+`native_p50` is measured **minutes earlier, on the same box, by the same binary** (md5 printed on
+both arms) and is fed to the guest arm by the harness as `--doorbell-latency-native-us`. Nothing
+is baked into the binary.
+
+**1000× is the only decade that separates the two things the rung must tell apart**, and both
+sides of the band are measured rather than assumed:
+
+| | what it is | order |
+|---|---|---|
+| the **floor a correct emulation cannot go below** | a doorbell in a Mode-2 guest is a trapped MMIO store: one VM exit, one VMM dispatch, one return — a cost an async design still pays | **10–100×** |
+| the **defect** | 60–71 ms inline on the vCPU thread | **~10⁴×** |
+
+⇒ 1000× sits a decade **above** the most expensive honest emulation cost and a decade **below**
+the defect. A gate outside that band either reddens a working async design or greens the thing it
+exists to catch. ⚠ It is a **discrimination threshold, not a performance target**: passing it is
+not a claim that anything is fast.
+
+### ★★ AND THE NATIVE ARM HAS ITS OWN BAR, because a calibration cannot fail a gate derived from itself
+
+`DBL_NATIVE_SANITY_CEILING_US = 1000`. Nothing in `release_fence()` plus a store into a mapped
+write-combining window legitimately medians above a millisecond; if it does, the box is
+contended or the path is not what we think, and **the number must not be used as anyone's
+floor**. A native run above it is a red, printed as one. The native verdict says in words that
+it is *not* "native met a gate".
+
+### ★★★★★ THE SAMPLE FLOOR HAS AN ESCAPE HATCH, and without it the rung is backwards on exactly the case it exists for
+
+The wall budget is what makes this a five-second gate, and its consequence is that **the worse
+the arm is, the fewer samples it produces**. At `worst_trap=1750538us` a 1.5 s repetition yields
+**one** sample. A flat rule of *"under 50 samples ⇒ UNMEASURED"* would report the most
+catastrophic possible result as *"we could not tell"* — the one arm the rung could never grade
+would be the broken one.
+
+The hatch is narrow and **sound rather than lenient**: it does not lower the bar, it uses a
+statistic that needs no sample size. If the **fastest** submission observed is already over the
+gate, no median over any number of further samples can be under it — every sample is at least the
+minimum, by definition. The rung prints `DBL_ROLE=GRADED_ON_MIN` and says both facts.
+
+## §3.1 THE CONTROLS — the rung is these, not the timing loop
+
+- **Two positive controls, one before the loop and one after.** Each is a four-byte `LAUNCH_DMA`
+  into the rung's own mapped object, read back through an **independent** CPU mapping. ★ The
+  closing one is what makes the loop attributable: the opening control alone would be passed by a
+  loop that killed its own channel on submission 3 and then timed 500 cheap refusals. Either
+  control failing ⇒ `RUNG_doorbell_latency=NOTRUN`, ⊘ **not** a red.
+- **Refusals are excluded from the samples and counted separately** (`refused=` on every
+  distribution line). A refusal is not a fast submission.
+- **`truncated=`** is printed on every distribution. A truncated run is still a valid
+  distribution; a run that does not *say* it was truncated is not.
+- **Five order statistics and a total, never a mean.** The failure being gated is a tail that
+  dominates an aggregate, and a mean is exactly the summary that hides it.
+- ⊘ **`GP_GET` is not read anywhere in this rung.** It has no writer in the workspace and an
+  emulated device has no PBDMA, so `gp_get == 0` is the only value it can hold on every
+  configuration. The ring itself is measured instead.
+
+### §3.2 TWO UNGRADED ARMS, and they are what make a green readable
+
+- **`arm=bare`** — `ring_doorbell_only`: one fence and one store, no ring stores, no `GP_PUT`
+  advance, no new entry. ⊘ **Ungraded**: a device is entitled to notice `GP_PUT` has not moved
+  and do nothing, and *"a no-op is fast"* is a finding about the no-op. ★ What it is for is
+  **attribution** — if a real submission is expensive and this is cheap, the cost is in the ring
+  stores or the planning; if this is expensive too, the cost is in the trap.
+- **`arm=freshmap`** — a **fresh** 64 KiB object at a **fresh** VA before every ring, so there is
+  always something unpublished behind it. ★★★ This exists so that a **green on the graded arm is
+  interpretable**: if publication is incremental, a loop that rings the same channel at the same
+  address N times may pay once and be cheap thereafter, and would pass while a real workload —
+  which maps as it goes — does not.
+
+## §3.3 WHAT THIS DOES NOT MEASURE — scope, stated up front
+
+- ⊘ **The ladder builds its OWN `FERMI_VASPACE_A` and its own CE channel inside the guest.** The
+  claim it supports is *"a doorbell rung by an unprivileged guest process costs N"* — the
+  quantity the async lane is moving. It is **not** *"the LLM's per-doorbell cost is N"*, and a
+  reader who takes it for that has this campaign's recorded failure shape: a probe in the wrong
+  address space.
+- ⊘ **The guest arm runs `KAYFABE_CE_EXECUTOR=local`**, so it measures the CPU copy-engine
+  emulator's doorbell path. `=host` is a different measurement and needs its own row.
+- ⊘ **Within-process repetitions cannot see a per-boot lottery.** `submit_ms` has been measured
+  at **9.1× across three consecutive boots of one build**. The rung repeats three times inside
+  one process (within-run stability) and the harness runs the whole binary three times on each
+  arm (between-process). Neither substitutes for the other, and **neither sees a per-boot
+  effect**, because all three guest processes share a boot.
+
+## §4 THE MEASUREMENTS
+
+### §4.1 NATIVE — the calibration, RTX 3060 (GA106), host driver 580.159.04 open
+
+Bench `kb`, source `5d0d6695`, binary md5 `06477aa0ae12145529af970d50916216`, **three separate
+processes**, verbatim:
+
+```
+--- run 1 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.925 p50_us=8.966 p90_us=9.037 max_us=28.473 total_ms=40.1 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.040 p50_us=0.040 p90_us=0.050 max_us=3.326  total_ms=0.3
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.137 p50_us=9.268 p90_us=9.427 max_us=18.233 total_ms=22.9
+--- run 2 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=9.137 p50_us=9.236 p90_us=9.278 max_us=30.517 total_ms=40.4 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.040 p50_us=0.040 p90_us=0.040 max_us=3.176
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=9.297 p50_us=9.498 p90_us=9.678 max_us=25.537
+--- run 3 ---
+DBL_DIST arm=submit   rep=POOLED n=1536 min_us=8.426 p50_us=8.514 p90_us=8.556 max_us=21.430 total_ms=39.1 truncated=false refused=0
+DBL_DIST arm=bare     rep=0 ⊘UNGRADED n=512 min_us=0.039 p50_us=0.040 p90_us=0.040 max_us=3.357
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64  min_us=8.565 p50_us=8.826 p90_us=8.976 max_us=23.804
+```
+
+`DBL_CALIBRATION_NATIVE_P50_US = 8.97 / 9.24 / 8.51`. ⇒ **floor `9.24 us`** (the harness takes
+the **worst** of the three, never the best: a floor picked from the fastest run makes the gate
+tighter than the host can reliably deliver, and the first thing that reddens is host jitter
+wearing the guest's name), so **gate = 9.24 ms**.
+
+★ **The instrument is not noisy.** Over 1536 samples in one process the spread from `min` to
+`p90` is **1.2 %**; across three processes the medians span **1.09×**. That tightness is what
+makes a three-decade gate meaningful — the number this rung reports is not a lottery.
+
+### §4.1.1 ★★★ THE NATIVE ARMS DISAGREE BY 225×, AND THAT IS THE MOST USEFUL NUMBER HERE
+
+| arm | native p50 | what it contains |
+|---|---|---|
+| `bare` | **0.040 µs** | one `release_fence` + one 32-bit store into the mapped usermode window |
+| `submit` | **8.97 µs** | the above **plus** ~12 ring stores, 2 GPFIFO words, the `GP_PUT` store |
+| `freshmap` | **9.27 µs** | `submit`, with a fresh 64 KiB object mapped at a fresh VA first |
+
+⇒ **On bare metal the doorbell store is 40 ns and is 0.4 % of a submission.** The other 99.6 % is
+stores into device memory. ⚠ **This is load-bearing for reading the guest arm** and it is not
+what one would guess from the name of the rung: the graded number is a **submission** number, not
+a **doorbell** number, and the two arms are what separate them. If the guest's `bare` is large,
+the cost is **the trap**; if `bare` is small and `submit` is large, it is in the ring stores or
+in what the VMM does behind them.
+
+⇒ And **`freshmap` ≈ `submit` natively (9.27 vs 8.97 µs)**: mapping a fresh page before every
+ring costs a submission 0.3 µs on hardware. That is the control that makes any guest-side gap
+between those two arms attributable to **publication** rather than to the arm's own extra work.
+
+### §4.1.2 ★★★ THE VERDICT VOCABULARY, EXERCISED IN ALL FOUR STATES — with no guest at all
+
+⊘ *"A refusal needs a negative control."* A gate whose red is unreachable is not a gate, and the
+only way to know is to make it fire. Every state below was produced on bare metal by feeding the
+rung a floor or a sample count, on the committed binary:
+
+| how | `DBL_ROLE` | verdict |
+|---|---|---|
+| default | `CALIBRATION` | `PASS` (and the line says in words that this is *not* "native met a gate") |
+| `--doorbell-latency-native-us 9.27` | `GRADED`, `DBL_RATIO_X=0.9` | `PASS` |
+| `--doorbell-latency-native-us 0.001` | `GRADED`, `DBL_RATIO_X=8446.0` | **`FAIL`** — the red is reachable |
+| `-n 5 --doorbell-latency-native-us 0.001` | `GRADED_ON_MIN` | **`FAIL`**, determinate on 5 samples |
+| `-n 5` (no floor) | — | **`NOTRUN`** |
+| `-n 100000 --budget-ms 100` | — | `truncated=true n=3792`, the budget binds |
+
+#### ⊘⊘ AND THE FOURTH ROW WAS A REAL DEFECT THAT THIS EXERCISE CAUGHT
+
+The `-n 5` case printed, in prose, *"UNMEASURED, and NOT a failure value"* — and then emitted
+**`RUNG_doorbell_latency=FAIL`**. The closure returned `false`, the positive control had
+**passed**, so `false` fell through to the failure arm. ⇒ **the anchored machine-readable line
+said the opposite of the sentence directly above it, and a grader reads the anchored line.**
+
+★ `control_ok` alone could not express it: the control *did* pass and there was still nothing to
+grade. The fix is a third state (`unmeasured`) and three outcomes that are **not ordered by
+severity**. ⚠ This is the same class as *"w377 printed prose while its grader looked for a name
+nothing emitted"*, inverted: here the name was emitted and **disagreed with the prose**. It was
+found only because the negative control was run — the rung's own numbers on its own arm would
+never have reached that branch.
+
+### §4.2 GUEST
+
+*(the Mode-2 arm; see `scripts/bench/w384_doorbell_latency.sh`, which feeds the native floor to
+the guest arm as `--doorbell-latency-native-us`)*
+
+### §4.3 ★★ `missing_page`, RE-ASKED ON THE SAME BINARY (native), and it has NOT moved
+
+```
+XID_WATERMARK_BEFORE=9   ⊘ bracketed, never absolute — other lanes provoke Xid 31 too
+info  R3 notifier   = fired=true status=0xffff except_type=0x1f engine=0x0001
+★     R3 NAMED      = ... except_type 0x1f is what a host kernel log prints as `Xid 31`
+★     R3 CONTAINED  = a channel in another address space kept landing across the fault
+RUNGCTL_missing_page=PASS
+RUNG_missing_page=PASS
+XID_WATERMARK_AFTER=10  delta=1
+```
+
+⇒ the native half of w381 §4.1.2 reproduces exactly on this branch's binary. ⚠ The brief for
+this lane recorded the host Xid watermark as **5**; it was **9** an hour later. That is not drift
+in the measurement — it is why the rule is *bracket, never count absolutely*.
+
+⊘ **THE FIX IS NOT THIS LANE'S TO MAKE.** The guest-side half needs the device to author slot 0
+at the guest-physical address in `errorNotifierMem.base` and to send `RC_TRIGGERED` with the
+**guest's** ChID. Every file that would take that change —
+`kayfabe-core/src/fault.rs`, `kayfabe-qemu-raw/src/shim.rs`, `kayfabe-rt/src/device.rs` — is
+**owned by the live `w383-doorbell-async` lane**. So this lane asks the question in the same boot
+(`w384_hook.sh`) and does not touch the answer.
+
+★ **And the assertion the next lane needs is only half built.** `missing_page` grades **one** bit
+(`n.fired()`), while the mechanism has **two mandatory halves**: the notifier write *and* the
+`RC_TRIGGERED` event. A raw client can distinguish them — allocate an `NV01_EVENT` on the channel
+and poll it — and until it does, a guest red cannot say *which* half is missing. That is the
+sharpening to make before the fix, not after it.
+
+## §5 HOW TO USE IT
+
+```
+# the whole differential, native calibration then guest arm, one command
+KAYFABE_REPO=<tree> CARGO_TARGET_DIR=<dir> scripts/bench/w384_doorbell_latency.sh <tag>
+
+# just the number, on any box with a GPU (~1 s):
+kayfabe-rm-ladder --doorbell-latency
+
+# graded against a floor somebody else measured:
+kayfabe-rm-ladder --doorbell-latency --doorbell-latency-native-us 9.24
+```
+
+★ **The line to graph is `DBL_RATIO_X`**, printed on both outcomes. A pass/fail alone tells an
+iterating lane nothing about whether it moved: two builds can both be red and be a factor of
+forty apart. ⊘ A lane that only records its ratio when it fails cannot tell a fix from a lucky
+boot.
+
+Knobs (each edits the config, so order does not matter and any one of them implies the rung):
+`--doorbell-latency-n`, `--doorbell-latency-budget-ms`, `--doorbell-latency-reps`,
+`--doorbell-latency-native-us`, `--doorbell-latency-gate`.
+
+## §6 THE BRANCH'S OWN HEALTH — checked against a baseline, not asserted
+
+- **`cargo test --workspace --all-targets --features host-isolates --no-fail-fast`**, on the
+  bench at `5d0d6695`: **235 test binaries ran**, and exactly **three targets fail** —
+  `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
+  `ring_out_of_our_own_framebuffer`. That is **the same set master already fails, not a
+  superset**. ⚠ `--no-fail-fast` is not optional: without it `cargo test` stops at the first
+  failing *target* and reports a stopping point rather than a result, and the binary count is
+  what makes *"the list shrank"* distinguishable from *"the list was truncated"*.
+  ⊘ w381 §6 recorded **234** binaries at `4a501a7f`; the count moved with master, the **set** did
+  not, and the set is the assertion.
+- **`cargo fmt -p kayfabe-isolate-host -- --check`**: the remaining hunks are byte-for-byte the
+  pre-existing ones (`rmladder.rs:58`, `:65`, `child.rs`, `isolate.rs` ×2, `rm.rs:5316`, four in
+  `tests/`). ⊘ `rustfmt` wanted to reformat three of those as a side effect and they were
+  **reverted deliberately**: a formatting change outside the range this branch touches makes a
+  `HEAD~1` baseline comparison useless, which is the only thing that turns *"fmt is clean"* into
+  a checkable claim.
+- **`cargo clippy -p kayfabe-isolate-host --all-targets`**: no warning in any range this branch
+  touches. The ones that remain are the pre-existing set w381 §6 already names
+  (`rm.rs`'s two collapsible `if`s, `export.rs:97`'s missing doc, the `chunks_exact` family).
+  ⊘ `--features host-isolates` does **not** exist on this package — it belongs to
+  `kayfabe-qemu-raw`, and passing it makes clippy fail with a *feature* error that reads like a
+  lint failure.
+- ⚠ **Nothing in `kayfabe-rt/`, `kayfabe-core/` or `kayfabe-qemu-raw/` was changed.** Those are
+  the live `w383-doorbell-async` lane's, and this rung was built to measure them from outside
+  rather than to touch them. The only non-`bin` change is two additions to
+  `kayfabe-isolate-host/src/rm.rs` (`mute_doorbell_witness`, `ring_doorbell_only`), neither of
+  which alters an existing code path.
