@@ -315,6 +315,11 @@ pass.** A bar built on a count cannot carry a phase that says *must pass*. The g
 assert the **text** — under greedy decoding that is cheap and exact: compare against the known
 string, or against the previous run's, and report a diff.
 
-⚠ Status of this section: run 7 is `n=1` post-reclaim; run 8 was still in flight when this was
-written. The identity with w383's string is the load-bearing fact and does not depend on
-run 8; run 8 tests reproducibility of the *repeat*, not of the identity.
+### 11.2 CLOSED at n=2
+
+Run 8, same revision, same clean host: **`LLM_TEXT= ______. A. Paris B. London C. New York D`**
+again, `LLM_MS=681 398` against run 7's `675 794` — **0.8 % apart**.
+
+⇒ Post-reclaim the result is **reproducible in both text and time**, and identical to the
+milestone run recorded weeks earlier. §10 is closed. The only open item it leaves behind is
+§11.1's grade defect, which is a harness change and not a device one.
