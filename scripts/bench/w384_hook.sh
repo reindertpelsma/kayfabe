@@ -56,6 +56,19 @@ TMO=${KAYFABE_W384_TIMEOUT:-300}
 #   so they still cannot see a per-BOOT lottery — they bound within-boot variation only, and
 #   that limit is stated rather than papered over.
 RUNS=${KAYFABE_W384_RUNS:-3}
+# ★★★★★ **THE DEVICE-OPEN BUDGET — measured, and it bit this hook on its second boot.**
+# `[measured 2026-09-06, this hook]` a boot that ran **six** GPU-touching processes produced
+# **no output at all** from the fifth and the sixth: the `n=200` bisection printed nothing and
+# `missing_page` printed only its return code, with every earlier process fine. That is
+# `the_harness_stopped_where_the_bug_starts` reproducing exactly — *"the 5th DEVICE-OPEN
+# wedges the GPU"*, with `nvidia-smi` alone and no CUDA anywhere.
+# ⇒ **Keep the total number of processes that open `/dev/nvidia*` in one boot at or below
+#   FOUR.** `RUNS` + one per `BISECT` entry + one for `missing_page` is that total, and this
+#   hook prints it before it starts so a silent fifth is never mistaken for a silent result.
+# ⊘ A run that exceeds it does not fail loudly — it produces EMPTY OUTPUT, which reads as
+#   "the rung printed nothing" rather than as "the device was wedged before it ran".
+BISECT=${KAYFABE_W384_BISECT:-}
+WANT_MP=${KAYFABE_W384_MISSING_PAGE:-1}
 OUT=/tmp/w384guest.out
 
 die() { echo "★★★ w384 hook FAILED: $*"; echo "W384_GUEST_OUTCOME=(F) ⊘ UNMEASURED_NO_GUEST — $*"; exit 2; }
@@ -64,6 +77,9 @@ echo "=== ★★★★★ w384 — THE DOORBELL-LATENCY RUNG, IN THE GUEST  tag=
 echo "W384_CE_EXECUTOR=[${KAYFABE_CE_EXECUTOR:-⊘unset ⇒ local ⇒ the SHELL CPU copy engine serves every CE doorbell}]"
 echo "W384_ISOLATES=[${KAYFABE_ISOLATES:-⊘unset}]  W384_GR_ROUTE=[${KAYFABE_GR_ROUTE:-⊘unset}]"
 echo "W384_NATIVE_FLOOR_US=[${FLOOR:-⊘NONE}]"
+NPROCS=$((RUNS + $(echo $BISECT | wc -w) + WANT_MP))
+echo "W384_DEVICE_OPENS=$NPROCS  (runs=$RUNS bisect=[$BISECT] missing_page=$WANT_MP)"
+[ "$NPROCS" -gt 4 ] && echo "⚠⚠ W384_DEVICE_OPEN_BUDGET_EXCEEDED — more than FOUR processes will open /dev/nvidia* in this boot. \`the_harness_stopped_where_the_bug_starts\`: the 5th wedges the GPU and later processes print NOTHING, which reads as a silent rung rather than a wedged device."
 [ -x "$G" ]   || die "no gssh_nv at $G"
 [ -f "$BIN" ] || { echo "W384_GUEST_OUTCOME=(E) ⊘ UNMEASURED_NO_BINARY — no binary at $BIN"; exit 2; }
 
@@ -159,7 +175,7 @@ echo "=== ★★★★★ THE WRAP BISECTION — same boot, two extra invocation
 #   which is a much stronger claim than "it stopped somewhere" and a much weaker one than
 #   "the wrap is the mechanism". Naming the mechanism needs the device side, which this lane
 #   does not own.
-for N in 48 200; do
+for N in $BISECT; do
   echo "--- wrap bisection n=$N reps=1 ---"
   $G "timeout 120 sudo /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency='" | sed 's/^/    /'
 done
@@ -175,8 +191,13 @@ echo "=== ★★ SECOND QUESTION, SAME BOOT — did \`missing_page\` move? ==="
 # ⚠ It provokes a REAL `Xid 31` by design and kills its victim channel. It runs LAST, after
 #   every latency number is already on disk, so nothing above it is behind a fault.
 MPOUT=/tmp/w384mp.out
+if [ "$WANT_MP" != "1" ]; then
+  echo "    ⊘ SKIPPED by KAYFABE_W384_MISSING_PAGE=0 — the device-open budget was spent above."
+  echo "    ⊘ This is a SKIP, not a pass and not a failure."
+else
 $G "timeout 180 sudo /tmp/kayfabe-rm-ladder --missing-page-fault --probe-launch-dma > $MPOUT 2>&1; echo W384_MP_RC=\$? >> $MPOUT"
 $G "grep -aE 'R3 notifier|R3 NAMED|R3 SILENT|R3 CONTAINED|R3 NOT CONTAINED|^RUNG_missing_page=|^RUNGCTL_missing_page=|^W384_MP_RC=' $MPOUT" | sed 's/^/    /'
+fi
 
 echo ""
 echo "=== the guest driver's own word across the run (⊘ the HOST ring buffer does not carry it) ==="
