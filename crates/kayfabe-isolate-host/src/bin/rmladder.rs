@@ -6862,8 +6862,6 @@ const DBL_SENTINEL: u32 = 0xDEAD_0384;
 const DBL_MAGIC_PRE: u32 = 0x0384_5EED;
 /// The payload the **closing** control copies, at offset `0x40`.
 const DBL_MAGIC_POST: u32 = 0x0384_C105;
-/// How long either control is given to land before the rung declares itself uninterpretable.
-const DBL_CONTROL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// ★★★ **THE GATE, AND WHY IT IS A MULTIPLE OF A MEASUREMENT RATHER THAN A NUMBER.**
 ///
@@ -7246,7 +7244,11 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             let mut refused = 0usize;
             let started = std::time::Instant::now();
             let mut truncated = false;
-            let mut last_payload = 0u32;
+            // ⊘ `Option`, not a zero. A drain that compared against a payload no submission
+            // had used yet would spin the full deadline on the first window and charge that
+            // wait to nothing at all — and `0` is a value the semaphore genuinely holds
+            // between submissions, so it is exactly the wrong sentinel.
+            let mut last_payload: Option<u32> = None;
             for i in 0..cfg.n_max {
                 if started.elapsed() >= cfg.budget {
                     truncated = true;
@@ -7261,7 +7263,7 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                     refused += 1;
                     continue;
                 }
-                last_payload = payload;
+                last_payload = Some(payload);
 
                 // ══ THE MEASURED REGION — one call, nothing else ══════════════════════
                 let t0 = std::time::Instant::now();
@@ -7282,9 +7284,11 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 // `DBL_DRAIN_EVERY`. The ring has 32 pushbuffer slots and nothing here waits
                 // for retirement; submitting past that without draining would rewrite a slot
                 // the engine has not read.
-                if (i + 1).is_multiple_of(DBL_DRAIN_EVERY) {
+                if let Some(want) = last_payload
+                    && (i + 1).is_multiple_of(DBL_DRAIN_EVERY)
+                {
                     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-                    while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == last_payload)
+                    while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == want)
                         && std::time::Instant::now() < deadline
                     {
                         std::thread::sleep(std::time::Duration::from_micros(200));
