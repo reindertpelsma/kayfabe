@@ -205,6 +205,31 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
          both are refused correctly here, and a `lock()` would have deadlocked on the second.",
     ),
     (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<Option<DoorbellPublishThread>>",
+        "★★★★★ FOUND BY THIS GATE, 2026-09-06, the day w383 added it — the THIRD new \
+         vCPU-path lock this instrument has caught on the day it appeared, after \
+         `pubqueue`'s and `reclaimtick`'s. It is the deferred-publication worker's LIFETIME \
+         SLOT (`w383_the_doorbell_is_a_schedule.md` §3.4): `Regs::doorbell_worker`, holding \
+         the `JoinHandle` and the queue handle between `attach_ram` and `detach_ram`. \
+         ⊘ **THE SCANNER IS RIGHT THAT A vCPU CAN REACH IT AND WRONG ABOUT NOTHING** — \
+         `attach_ram` and `detach_ram` are QEMU memory-listener callbacks, and the scanner \
+         cannot tell those from an MMIO trap. It is therefore classified rather than \
+         excluded. \
+         ⊘ **NOTHING BLOCKS BENEATH IT ON EITHER SIDE.** `start_doorbell_publish_worker` \
+         holds it across a `thread::Builder::spawn` and an `eprintln!`; \
+         `stop_doorbell_publish_worker` **`take()`s the value out and DROPS THE GUARD BEFORE \
+         `queue.stop()` and before `join()`** — deliberately, because the join waits on the \
+         worker and the worker must never need this lock to finish. ⇒ **if a future edit \
+         moves the `join()` inside the guard, THIS ROW IS THE THING THAT WAS WRONG**: a \
+         teardown would then hold a vCPU-reachable mutex across an unbounded wait on a thread \
+         that is mid-publication. \
+         ⊘ It is NOT on the doorbell path at all — `SharedDoorbell::ring` never touches it; \
+         the trap's only lock is `pubqueue`'s, classified immediately below. \
+         ⊘ Deliberately unranked, and shaped after `CeShellState::observer`, which is the \
+         same slot for the completion-observer thread and predates this one.",
+    ),
+    (
         "crates/kayfabe-device/src/pubqueue.rs",
         "Mutex<Inner>",
         "★★★★★ FOUND BY THIS GATE, 2026-08-14, the day w323 added it — and this is the \
