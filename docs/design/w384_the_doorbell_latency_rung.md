@@ -13,10 +13,12 @@ differential harness.
 >    ratio is **8.7× apart** on two GA106 boxes, so the gate is not portable. §4.4.1.
 >
 > ⚠ The *latency* the rung was commissioned to catch **would have passed the gate**. Only the
-> closing positive control turned a green into a `NOTRUN`, and finding (1) is downstream of that. It does not supersede `w381_the_guest_servable_probe.md`; it is built on
-that lane's `LAUNCH_DMA` primitive and inherits its scope caveats verbatim. Mechanism sections
-§1–§3 are read off this tree's own source and are checkable without a GPU. §4 carries the
-measurements; every number in it names the arm it came from.
+> closing positive control turned a green into a `NOTRUN`, and finding (1) is downstream of that.
+
+It does not supersede `w381_the_guest_servable_probe.md`; it is built on that lane's `LAUNCH_DMA`
+primitive and inherits its scope caveats verbatim. Mechanism sections §1–§3 are read off this
+tree's own source and are checkable without a GPU. §4 carries the measurements; every number in
+it names the arm it came from.
 
 ---
 
@@ -36,7 +38,7 @@ measurements; every number in it names the arm it came from.
 >   `758a5752` it may simply mean **the fix works**. The two readings are not distinguishable
 >   from one arm, and this doc must not let one be read as the other.
 > - ★★★ **Hence the deliberate two-arm design that replaced the single guest arm**: the same
->   rung, same binary shape, on **`30eb4627` + this rung** (`w384-prefix-baseline`, pushed) and
+>   rung, same binary shape, on **`30eb4627` + this rung** (`w384-prefix-device`, pushed) and
 >   on **`758a5752` + this rung** (`w384-doorbell-latency`, rebased onto current master). A
 >   controlled before/after is the only thing that can say whether the rung DISCRIMINATES, and
 >   it is strictly stronger evidence than the red it was commissioned to produce.
