@@ -625,6 +625,21 @@ Knobs (each edits the config, so order does not matter and any one of them impli
 `--doorbell-latency-n`, `--doorbell-latency-budget-ms`, `--doorbell-latency-reps`,
 `--doorbell-latency-native-us`, `--doorbell-latency-gate`.
 
+And one **environment** knob, deliberately not a flag because it changes the CHANNEL rather than
+the measurement: `KAYFABE_LADDER_GPFIFO_ENTRIES=<power of two ≤64>` gives the ladder's own
+channel a smaller GPFIFO. ⊘ Unset ⇒ the committed 64, byte-identical to every other arm; set ⇒
+it prints on stderr, every time, because an experiment whose arm is not on its own log cannot be
+compared to anything. It exists for §4.2's separating experiment and nothing else.
+
+★★★ **The harness lines a grader should read, in order of what they can say:**
+1. `RUNGCTL_doorbell_latency=` — did the channel carry work **before and after** the loop. If
+   `FAIL`, stop: nothing below is a latency.
+2. `DBL_STALL … first_stall_at=` — the submission index whose drain window never retired.
+3. `DBL_DIST arm=submit rep=POOLED` — the distribution, five order statistics and a total.
+4. `DBL_RATIO_X` — the continuous number to graph.
+5. `RUNG_doorbell_latency=` — the gate. ⚠ **Last**, because §4.4.1 measures the gate itself to be
+   the least portable thing this rung prints.
+
 ## §6 THE BRANCH'S OWN HEALTH — checked against a baseline, not asserted
 
 - **`cargo test --workspace --all-targets --features host-isolates --no-fail-fast`**, on the
