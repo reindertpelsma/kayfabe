@@ -67,6 +67,14 @@ explanation.
 >
 > ## ★ THE FIX, AND THE DISCRIMINATOR THAT MUST PRECEDE IT
 >
+> ### ✔ BUILT AND BOOTED — `w380`, 2026-09-06. See `w380_one_frame_n_addresses.md`.
+> The discriminator below was answered by §9 (the guest holds every alias live) and again,
+> independently, by `w379` on bare metal (RM maps one allocation at two VAs; unmapping one
+> leaves the other). ⇒ *"allow N VAs per frame"* was built as `RmBackend::alias_fb_leaf`.
+> `[measured w380llm, real GA106]` **`SUPERSEDED` 127 → 0, `⊘ SUPERSEDE CAPPED` 28 108 → 0,
+> host `Xid` 1 → 0**, and eight frames aliased at a second VA with `placed_as_asked=true`.
+> ⊘ `LLM_TOKENS` is still **UNMEASURED**, not `0` — see that doc's §5.
+>
 > **Fix:** key the FB join by **`(phys, va)`**, or allow N VAs per frame — one host
 > `OS_DESCRIPTOR` over the frame, mapped at every VA the guest describes. **The aliasing is
 > the guest's and it is legal.**
