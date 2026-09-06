@@ -7244,11 +7244,6 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
             let mut refused = 0usize;
             let started = std::time::Instant::now();
             let mut truncated = false;
-            // ⊘ `Option`, not a zero. A drain that compared against a payload no submission
-            // had used yet would spin the full deadline on the first window and charge that
-            // wait to nothing at all — and `0` is a value the semaphore genuinely holds
-            // between submissions, so it is exactly the wrong sentinel.
-            let mut last_payload: Option<u32> = None;
             for i in 0..cfg.n_max {
                 if started.elapsed() >= cfg.budget {
                     truncated = true;
@@ -7263,7 +7258,6 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                     refused += 1;
                     continue;
                 }
-                last_payload = Some(payload);
 
                 // ══ THE MEASURED REGION — one call, nothing else ══════════════════════
                 let t0 = std::time::Instant::now();
@@ -7271,7 +7265,8 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 let dt = t0.elapsed();
                 // ══ END OF THE MEASURED REGION ════════════════════════════════════════
 
-                if r.is_ok() {
+                let submitted = r.is_ok();
+                if submitted {
                     ns.push(dt.as_nanos() as u64);
                 } else {
                     // ⊘ A refusal is NOT a fast submission. It is excluded from the samples
@@ -7284,11 +7279,14 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
                 // `DBL_DRAIN_EVERY`. The ring has 32 pushbuffer slots and nothing here waits
                 // for retirement; submitting past that without draining would rewrite a slot
                 // the engine has not read.
-                if let Some(want) = last_payload
-                    && (i + 1).is_multiple_of(DBL_DRAIN_EVERY)
-                {
+                //
+                // ⊘ Gated on `submitted`, and that is not tidiness: waiting for a semaphore
+                // to reach a payload whose submission was REFUSED spins the whole deadline
+                // every window, and the two seconds it burns would be charged to nothing —
+                // a refused channel would read as a slow one rather than as a refused one.
+                if submitted && (i + 1).is_multiple_of(DBL_DRAIN_EVERY) {
                     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-                    while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == want)
+                    while !matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload)
                         && std::time::Instant::now() < deadline
                     {
                         std::thread::sleep(std::time::Duration::from_micros(200));
