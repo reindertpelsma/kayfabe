@@ -75,6 +75,47 @@ const MAX_ENTRIES_PER_DOORBELL: u32 = 8;
 
 /// The GPFIFO ring size a CeUtils channel declares, in entries — used only to wrap the
 /// cursor. `[src]` `ogkm-580: ce_utils_sizes.h:27` (`NUM_COPY_BLOCKS`).
+///
+/// # ⚠ w386 — WHAT THIS SUBSTITUTION ACTUALLY IS, AND WHY IT IS STILL HERE
+///
+/// **Investigated 2026-08-14, not changed** — the finding is recorded because the constant's
+/// name reads like a convenience and it is not one.
+///
+/// ★ **It is a divide-by-zero guard first and a modulus second.** `entries` is the divisor in
+/// `cursor.next % entries` three lines into both walks; with `ring_entries == 0` that is an
+/// integer division by zero — a **panic on a vCPU thread beneath the BQL**, which is a worse
+/// outcome than any wrong index. So it cannot simply be deleted.
+///
+/// ⊘ **Can it fire?** The decode is all-or-nothing: `decode_channel_alloc_facts` refuses a
+/// short buffer with `AbiError::Truncated` rather than zero-extending, so a failed decode
+/// yields no `gp_fifo_ring` at all — and the shim's `facts.ring_va?` then returns before
+/// [`run_submission`] is reached. ⇒ reaching this line requires the guest to have declared
+/// `gpFifoEntries == 0` **verbatim**, on a channel that also declared a ring VA and routed to
+/// `Ce`. That shape is **not present in any boot in `traces/`**; the one documented
+/// zero-ring channel (the driver's golden context, `[src] ogkm-580:
+/// kernel_graphics.c:2420-2424`) is **GR**, which `shell_disposition` refuses or hands to the
+/// core before the CE walk. ⚠ It is nonetheless **guest-reachable in principle** — the value
+/// is copied verbatim out of the guest's alloc params and nothing on the shell path validates
+/// it — and the observer walk below has the wider exposure, because it *does* run on the GR
+/// paths where the zero-ring channel lives.
+///
+/// ★ **What it would take to make it a named refusal.** Very little, and it has a precedent:
+/// the isolate already refuses `gp_fifo_entries == 0` **by name** at channel birth
+/// (`RING_ENTRIES_REFUSED`, `kayfabe-isolate-host/src/rm.rs`), *"because it is the ONE number
+/// in the guest's declaration this file cannot pass through: it is the modulus of
+/// `submit_entry`'s wrap"* — the identical argument, one plane over. The shell needs a
+/// `FwdFault::RingEntriesUndeclared` raised where this substitution stands, before any `%`.
+/// ⊘ **Not done here** because it is a second behaviour change on the same walk in the same
+/// rung, and it cannot be graded by the hardware arm this branch is written for: it would fire
+/// on channels this campaign has never observed, so a boot cannot tell a correct refusal from
+/// one that newly wedged something. It wants its own rung and its own falsifier.
+///
+/// ⚠ And note the failure mode if `ring_entries` is merely **wrong** rather than zero — the
+/// substitution cannot help there at all. The modulus is wrong, reads land at indices the
+/// guest never uses, and `RingBroughtNoEntry` then reports the **substituted** `entries`
+/// rather than the declared one. w386's `RingProducerCursorOutOfRange` now catches the
+/// sub-case where `GP_PUT` and this number disagree, which is the first check of any kind this
+/// value has ever had.
 const RING_ENTRIES_FALLBACK: u32 = 4096;
 
 /// One GPFIFO entry's stride in bytes, from the crate that owns NVIDIA's wire facts.
@@ -86,20 +127,45 @@ const GP_ENTRY_SIZE: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
 /// cursor, owned by the adapter, passed in **by value** and handed back only on success
 /// (see [`CeUtilsRun::cursor`]).
 ///
-/// # ⊘ Why a cursor rather than a read of `GP_PUT`
+/// # ⊘⊘⊘ CORRECTED 2026-08-14 (w386) — THIS BLOCK USED TO SAY "A CURSOR RATHER THAN A READ
+/// # OF `GP_PUT`", AND BOTH HALVES OF THAT ANSWER WERE WRONG BY THE TIME IT WAS WRITTEN.
 ///
-/// The honest source of *"how many entries are new"* is the channel's USERD `GPPut`
-/// (`[src] ogkm-580: channel_utils.c:523`, `MEM_WR32(&pControlGPFifo->GPPut, putIndex)`),
-/// and this port does not know where this channel's USERD lives. So the cursor answers the
-/// **other** half of the question — *"which entries have we already run"* — and the ring's
-/// own encoding answers the first: an unwritten entry is zero, and
-/// `kayfabe_abi::submit::gp_entry_decode` returns `None` for a zero-length entry
-/// (`submit.rs:1257`), because RM zero-initialises the channel buffer
-/// (`TRANSFER_FLAGS_SHADOW_INIT_MEM`, `[src] channel_utils.c:471-476`).
+/// It said the port *"does not know where this channel's USERD lives"* and therefore let the
+/// **ring's own encoding** answer *"how many entries are new"* — an unwritten entry is zero
+/// and `kayfabe_abi::submit::gp_entry_decode` returns `None` for it (`submit.rs:1257`),
+/// because RM zero-initialises the channel buffer (`TRANSFER_FLAGS_SHADOW_INIT_MEM`,
+/// `[src] ogkm-580: channel_utils.c:471-476`).
 ///
-/// ⊘ **The cursor is what makes re-execution impossible**, and that matters more than it
-/// looks: a memset re-run is idempotent, but a *completion* re-released for a copy that
-/// already retired is a signal for work that did not happen on this doorbell.
+/// ⊘ **The premise expired.** `kayfabe_core::rmgraph::DeclaredUserd` carries the physical
+/// placement the guest's own CPU-RM resolved *before the RPC*, and the shim reads this
+/// channel's `USERD GP_PUT` out of it. The producer cursor is available and is now passed in
+/// as [`CeUtilsChannel::gp_put`].
+///
+/// ⊘⊘ **And the reasoning was unsound even on its own terms.** The zero-terminator holds for
+/// the ring's **FIRST LAP ONLY**. Once the guest has written every slot once, no zero slot
+/// remains anywhere in the ring, ever again — the walk's stop condition never fires, and it
+/// runs to [`MAX_ENTRIES_PER_DOORBELL`] over **stale** entries from the previous lap.
+///
+/// ⚠ It bites at slot `N-1`, not after the lap: slot `N-1`'s forward neighbour is slot `0`,
+/// which lap 1 already wrote. `[measured 2026-08-13, w384, real GA106 Mode-2 guest,
+/// `KAYFABE_CE_EXECUTOR=local`]` a 64-entry ring wedged at `first_stall_at=63` and a
+/// 32-entry ring at `first_stall_at=31`, both pre-registered before the run — the wedge
+/// tracks the ring's own modulus, which is exactly this arithmetic. Reproduced with no GPU
+/// at `tests/tests/e10e_ceutils_doorbell.rs`,
+/// `every_doorbell_of_two_full_laps_consumes_exactly_the_entry_the_guest_wrote`.
+///
+/// ⊘⊘⊘ **AND THE LINE BELOW WAS FLATLY FALSE, WHICH IS WHY IT IS QUOTED RATHER THAN
+/// DELETED:** *"the cursor is what makes re-execution impossible"*. Past the wrap the cursor
+/// makes re-execution **certain**: the measured 8-entry reproduction consumed all 8 slots,
+/// re-ran seven retired `LAUNCH_DMA`s, wrote **eight** completions, and came back to the
+/// index it started from — so every later doorbell re-walks the whole ring forever. A memset
+/// re-run is idempotent; a *completion* re-released for a copy that already retired is a
+/// signal for work that did not happen on this doorbell, and a **stale payload** landing on
+/// the word the guest polls is the owner's standing rule violated outright: a completion may
+/// only be sent if the state observable after it is the state the guest intended.
+///
+/// ⇒ The cursor now answers only what it can honestly answer — *"which entries have we
+/// already run"* — and the guest's own `GP_PUT` answers *"where does new work end"*.
 ///
 /// ★ `[measured 2026-08-08, boot run_p35_84d857d]` corroborates the arithmetic from the
 /// other side: RM writes the entry at `lastSubmittedEntry` (0 on a fresh channel) pointing
@@ -130,6 +196,20 @@ pub struct CeUtilsChannel {
     pub ring_va: u64,
     /// How many entries the ring declares.
     pub ring_entries: u32,
+    /// ★★★★★ **w386 — THE GUEST'S OWN PRODUCER CURSOR: `USERD GP_PUT`**, the index one past
+    /// the last GPFIFO entry the guest wrote (`[src] ogkm-580: channel_utils.c:523`,
+    /// `MEM_WR32(&pControlGPFifo->GPPut, putIndex)`, with `putIndex = lastSubmittedEntry + 1`
+    /// at `:406`).
+    ///
+    /// ⊘ **`None` is refused, not fallen back on** — see
+    /// [`kayfabe_fwd::FwdFault::RingProducerCursorUnknown`] for the whole argument and for
+    /// the boot logs that say it should not fire. The one-line version: without this number
+    /// there is no local signal separating *"eight new entries"* from *"one new and seven
+    /// retired"*, and guessing wrong re-releases a stale semaphore payload.
+    ///
+    /// ⚠ It is a **declared** fact like every other field here: the guest wrote it, we read
+    /// it. It is not a claim that any engine fetched anything.
+    pub gp_put: Option<u32>,
 }
 
 /// What one served submission did. Every number is something that **happened**, so a report
@@ -499,10 +579,51 @@ pub fn run_submission(
     // cursor. Carried into every refusal below so a reader is never left to assume entry 0.
     let start_index = cursor.next % entries;
 
-    // ---- 1. THE RING. Read forward from our cursor while the entries decode. -----------
+    // ---- 0. THE PRODUCER CURSOR — the guest's own `USERD GP_PUT`. ----------------------
+    //
+    // ⊘⊘ **REFUSED WHEN ABSENT, NEVER FALLEN BACK ON.** See this function's `GpCursor` docs
+    // and `FwdFault::RingProducerCursorUnknown` for the whole argument: the zero-terminator
+    // this replaced is sound for the ring's first lap only, and "degrading" to it past the
+    // wrap re-executes retired launches and re-releases their payloads. `[measured w386]`
+    // an 8-entry ring at slot 7 consumed all 8 and wrote 8 completions.
+    let Some(gp_put) = chan.gp_put else {
+        return Err(CeUtilsRefusal::plain(FwdFault::RingProducerCursorUnknown {
+            ring_va: GpuVa(chan.ring_va),
+            index: start_index,
+            entries,
+        }));
+    };
+    // ⊘ A cursor outside the ring is a JOIN defect of ours, reported as its own fact — see
+    // the variant. ⚠ Never wrapped into range: `gp_put % entries` would turn a disagreement
+    // between two of our own projections into a plausible index, which is the shape this
+    // campaign names "an absence wearing a number's clothes".
+    if gp_put >= entries {
+        return Err(CeUtilsRefusal::plain(
+            FwdFault::RingProducerCursorOutOfRange {
+                ring_va: GpuVa(chan.ring_va),
+                gp_put,
+                entries,
+            },
+        ));
+    }
+
+    // ---- 1. THE RING. Read from our cursor UP TO the guest's producer cursor. ----------
+    //
+    // ★★★ **The walk is modular, so it is the two-segment wrapped walk without being written
+    // as two loops.** Consumer at 7, producer at 2, ring of 8 ⇒ `7, 0, 1`, stop. ⊘ The stop
+    // test is at the TOP of the body, so `idx == gp_put` on entry means *nothing is new* and
+    // the loop gathers nothing — which falls through to `RingBroughtNoEntry` below, exactly
+    // as the zero entry used to.
+    //
+    // ⚠ `MAX_ENTRIES_PER_DOORBELL` is still here and still means what it meant (see the
+    // constant): it is the **hostile-ring cap**, not the stop condition. A guest that
+    // advanced `GP_PUT` by more than the cap leaves the remainder for its next doorbell.
     let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
     for _ in 0..MAX_ENTRIES_PER_DOORBELL {
         let idx = run.cursor.next % entries;
+        if idx == gp_put {
+            break;
+        }
         let at = chan
             .ring_va
             .wrapping_add(u64::from(idx) * GP_ENTRY_SIZE as u64);
@@ -517,9 +638,13 @@ pub fn run_submission(
         // the entry's *stride* comes from `kayfabe_abi`, because indexing the ring needs a
         // byte offset and no `PushbufferAbi` method hands one out.
         //
-        // An unwritten entry is zero and decodes to nothing — that is the ring saying "no
-        // more work", not a malformed entry, because RM zero-initialises this buffer
-        // (`TRANSFER_FLAGS_SHADOW_INIT_MEM`).
+        // ⊘ This `break` is NO LONGER THE STOP CONDITION and its meaning has changed with
+        // it. `GP_PUT` said there is an entry here; it decoded to nothing. That is a
+        // disagreement between the guest's own two writes, not "the ring is empty". It stays
+        // a `break` rather than a new refusal because the walk is now strictly narrower than
+        // the one that shipped, and nothing gathered still lands on `RingBroughtNoEntry`
+        // below — a widening here would be the only way to make this change able to serve
+        // something the old code refused.
         let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
             break;
         };
@@ -831,9 +956,21 @@ fn read_submission_methods(
     let mut next = cursor.next;
 
     // ---- 1. THE RING — the same read, the same arch decoder, as `run_submission`. -------
+    //
+    // ★★ **w386 — bounded by `GP_PUT` when the channel has one, and NOT refused when it does
+    // not.** This is deliberately the opposite policy to [`run_submission`]'s, and the
+    // asymmetry is the point rather than an oversight: that function **releases semaphores**,
+    // so a stale entry there is a completion for work that did not happen; this one reads
+    // bytes into a report and acts on nothing, so a stale entry here is at worst a wrong line
+    // in a log — and refusing would blind the observer on exactly the channels whose failure
+    // it exists to describe. ⊘ The bound is still applied when available, because a narrower
+    // observation is a better one.
     let mut ranges: Vec<kayfabe_arch::PushRange> = Vec::new();
     for _ in 0..MAX_ENTRIES_PER_DOORBELL {
         let idx = next % entries;
+        if chan.gp_put.is_some_and(|p| p < entries && p == idx) {
+            break;
+        }
         let at = chan
             .ring_va
             .wrapping_add(u64::from(idx) * GP_ENTRY_SIZE as u64);

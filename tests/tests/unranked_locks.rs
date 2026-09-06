@@ -282,6 +282,23 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::BTreeMap<(u32, u32), (u32, u32)>>",
+        "★★ w386, 2026-08-14: `CeShellState::served_logged`, the PER-CHANNEL print budget for \
+         the `CE-SERVED-LOCAL` line — the only witness a boot has of how many GPFIFO entries \
+         `ceutils::run_submission` consumed. Taken on the vCPU inside the doorbell trap, and \
+         SAFE by the same construction `gr_dumps` two rows up is: it is acquired in its own \
+         block, the only thing beneath it is a `BTreeMap` entry lookup and one integer \
+         increment, and the guard is DROPPED before the `eprintln!` — which is the blocking \
+         call, and which also builds a `String` for `gp_put` and calls `run.describe()`. ⊘ \
+         Both of those are outside the scope on purpose: `DirtyGate::published` below was a \
+         REAL inversion created by exactly the argument-evaluation-under-the-receiver's-lock \
+         shape, so the value is computed first and the lock does nothing but count. ⚠ It is a \
+         BTreeMap rather than an atomic because the budget is per `(proc, chan)` — a single \
+         global counter is the shape `w383` measured forging an absence, where one proc ate \
+         all 128 dumps and another's rows read as `the machinery never ran`.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
         "Mutex< std::collections::HashMap< (kayfabe_core::ProcId, kayfabe_rt::GpuId, kayfabe_rt::Pdb), PublishStamp, >, >",
         "★★★ FOUND BY THIS GATE, w318, 2026-08-14, AND IT WAS A REAL INVERSION — not a \
          classification. `DirtyGate::published`, the per-VAS stamp the publication gate skips \

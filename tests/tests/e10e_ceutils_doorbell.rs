@@ -241,12 +241,20 @@ fn guest_ram(block: &[u8]) -> MockVmm {
     vmm
 }
 
-fn channel() -> CeUtilsChannel {
+/// The channel, with the guest's producer cursor `GP_PUT` **stated by the caller**.
+///
+/// ★★★ w386 — `GP_PUT` is *"one past the last GPFIFO entry the guest wrote"*
+/// (`ogkm-580: channel_utils.c:406, :523`), so a fixture that has published entry `[0]`
+/// passes `1`, and one that has also published `[1]` passes `2`. ⊘ It is a **parameter** and
+/// not derived from the ring's contents on purpose: deriving it would make the fixture agree
+/// with the walk by construction, which is precisely the property under test.
+fn channel_at(gp_put: u32) -> CeUtilsChannel {
     CeUtilsChannel {
         client: CLIENT,
         vaspace: VASPACE,
         ring_va: RING_VA,
         ring_entries: 4096,
+        gp_put: Some(gp_put),
     }
 }
 
@@ -255,9 +263,10 @@ fn ring_once(
     plane: &RegPlane,
     vmm: &mut MockVmm,
     cursor: &mut GpCursor,
+    gp_put: u32,
 ) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
     let mut state = MethodState::new();
-    ring_once_with(plane, vmm, cursor, &mut state)
+    ring_once_with(plane, vmm, cursor, &mut state, gp_put)
 }
 
 /// ★★★★ The same doorbell, driven against a **channel** accumulator the caller keeps —
@@ -269,24 +278,13 @@ fn ring_once_with(
     vmm: &mut MockVmm,
     cursor: &mut GpCursor,
     state: &mut MethodState,
+    gp_put: u32,
 ) -> Result<kayfabe_rt::ceutils::CeUtilsRun, kayfabe_rt::ceutils::CeUtilsRefusal> {
-    let pb = kayfabe_chips::Ga10xPushbuffer;
-    let out = plane
-        .ce_session(
-            CLIENT,
-            VASPACE,
-            kayfabe_device::ceresolve::Demand::from_doorbell(),
-            |ce| run_submission(ce, &pb, vmm, channel(), *cursor, *state),
-        )
-        .expect("the publication is present");
-    // ★ The adapter's own discipline, reproduced: commit the advanced cursor AND the
-    // accumulator ONLY on success. A refusal hands neither back, which is what makes both
-    // the skipped entry and the half-applied engine state impossible.
-    if let Ok(run) = &out {
-        *cursor = run.cursor;
-        *state = run.state;
-    }
-    out
+    // ⊘ Delegates to `ring_once_on` rather than repeating the session + commit dance. The
+    // adapter's own discipline — commit the advanced cursor AND the accumulator only on
+    // success — lives there, in one copy, so the wrap arms and the acceptance arms cannot
+    // drift into testing two different disciplines.
+    ring_once_on(plane, vmm, cursor, state, channel_at(gp_put))
 }
 
 // =====================================================================================
@@ -312,7 +310,7 @@ fn a_ceutils_memset_on_a_vas_less_channel_fills_the_resolved_page_and_releases_t
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
 
-    let run = ring_once(&plane, &mut vmm, &mut cursor).expect("the submission is servable");
+    let run = ring_once(&plane, &mut vmm, &mut cursor, 1).expect("the submission is servable");
 
     assert_eq!(
         run.entries, 1,
@@ -377,10 +375,10 @@ fn a_doorbell_that_brings_no_new_entry_is_refused_and_signals_nothing() {
     let block = memset_block(DST_VA, 0x100, 0x5A, PB_GPU_VA + FINISH_PAYLOAD_OFFSET, 1);
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
-    ring_once(&plane, &mut vmm, &mut cursor).expect("the first submission runs");
+    ring_once(&plane, &mut vmm, &mut cursor, 1).expect("the first submission runs");
     let irqs_after_first = vmm.irqs.len();
 
-    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("no second entry exists");
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("no second entry exists");
     // ★★★ Named for WHAT HAPPENED. This asserted `PushTooFragmented` — a bound of ours on
     // how many address-table spans one range may cut into — for a ring that produced no
     // range at all, and `[measured 2026-08-09, boots `uvm2_d0fbac0` / `scan1_00865a7` /
@@ -422,7 +420,7 @@ fn an_unmapped_fill_destination_faults_by_name_and_writes_no_completion() {
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
 
-    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("the destination is unmapped");
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("the destination is unmapped");
     assert!(
         matches!(
             err.fault,
@@ -464,7 +462,7 @@ fn a_channel_with_no_published_root_opens_no_session() {
         CLIENT,
         VASPACE + 1, // a VA space this client never published
         kayfabe_device::ceresolve::Demand::from_doorbell(),
-        |ce| run_submission(ce, &pb, &mut vmm, channel(), cursor, MethodState::new()),
+        |ce| run_submission(ce, &pb, &mut vmm, channel_at(1), cursor, MethodState::new()),
     );
     assert!(
         opened.is_none(),
@@ -524,7 +522,7 @@ fn a_submission_that_launches_nothing_reports_the_class_its_set_object_declared(
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
 
-    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("nothing in it can run");
     let FwdFault::SubmissionDecodedNoWork {
         entries,
         index,
@@ -575,7 +573,7 @@ fn a_submission_with_no_set_object_reports_none_and_not_class_zero() {
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
 
-    let err = ring_once(&plane, &mut vmm, &mut cursor).expect_err("nothing in it can run");
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("nothing in it can run");
     let FwdFault::SubmissionDecodedNoWork {
         methods,
         opaque,
@@ -698,12 +696,12 @@ fn the_second_doorbell_runs_on_the_class_the_first_one_bound() {
 
     let mut cursor = GpCursor::default();
     let mut state = MethodState::new();
-    let run1 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state)
+    let run1 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state, 1)
         .expect("the first push binds and runs");
     assert_eq!(run1.launches, 1, "the binding push ran");
     publish_second(&mut vmm, &second);
 
-    let run2 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state)
+    let run2 = ring_once_with(&plane, &mut vmm, &mut cursor, &mut state, 2)
         .expect("★★★★ the second push runs on the STILL-BOUND class");
     assert_eq!(run2.launches, 1, "the `LAUNCH_DMA` in its bytes FIRED");
     assert_eq!(
@@ -746,11 +744,11 @@ fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
     let mut vmm = guest_ram(&first);
 
     let mut cursor = GpCursor::default();
-    ring_once(&plane, &mut vmm, &mut cursor).expect("the first push still runs — it binds");
+    ring_once(&plane, &mut vmm, &mut cursor, 1).expect("the first push still runs — it binds");
     publish_second(&mut vmm, &second);
     let before = vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4);
 
-    let err = ring_once(&plane, &mut vmm, &mut cursor)
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 2)
         .expect_err("★ the amnesia is the whole defect: no binding, no launch");
     let FwdFault::SubmissionDecodedNoWork {
         methods,
@@ -805,12 +803,20 @@ fn with_a_per_doorbell_accumulator_the_same_second_push_decodes_to_nothing() {
 const SMALL_RING: u32 = 8;
 
 /// The same channel the fixture already describes, with a ring that can be walked round.
-fn small_channel() -> CeUtilsChannel {
+/// ★ The guest's producer cursor after doorbell `d`: one past the slot it just wrote,
+/// modulo the ring. ⊘ Written out rather than folded into `small_channel` so the wrap in the
+/// PRODUCER is visible beside the wrap in the consumer.
+fn gp_put_after(d: u32) -> u32 {
+    (d + 1) % SMALL_RING
+}
+
+fn small_channel(gp_put: u32) -> CeUtilsChannel {
     CeUtilsChannel {
         client: CLIENT,
         vaspace: VASPACE,
         ring_va: RING_VA,
         ring_entries: SMALL_RING,
+        gp_put: Some(gp_put),
     }
 }
 
@@ -910,8 +916,14 @@ fn lap_one_stops_at_the_first_unwritten_entry() {
     let mut cursor = GpCursor::default();
     let mut state = MethodState::new();
 
-    let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel())
-        .expect("the one written entry is servable");
+    let run = ring_once_on(
+        &plane,
+        &mut vmm,
+        &mut cursor,
+        &mut state,
+        small_channel(gp_put_after(0)),
+    )
+    .expect("the one written entry is servable");
 
     assert_eq!(
         run.entries, 1,
@@ -951,11 +963,18 @@ fn every_doorbell_of_two_full_laps_consumes_exactly_the_entry_the_guest_wrote() 
 
     for d in 0..(2 * SMALL_RING) {
         publish_doorbell(&mut vmm, d);
-        let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel())
-            .unwrap_or_else(|e| panic!("doorbell {d} (slot {}) refused: {e:?}", d % SMALL_RING));
+        let run = ring_once_on(
+            &plane,
+            &mut vmm,
+            &mut cursor,
+            &mut state,
+            small_channel(gp_put_after(d)),
+        )
+        .unwrap_or_else(|e| panic!("doorbell {d} (slot {}) refused: {e:?}", d % SMALL_RING));
 
         assert_eq!(
-            run.entries, 1,
+            run.entries,
+            1,
             "★★★★★ doorbell {d} (slot {}) consumed {} entries; the guest wrote ONE. \
              Past the wrap no slot is zero any more, so a walk that stops at a zero entry \
              never stops: {run:?}",
@@ -989,4 +1008,166 @@ fn every_doorbell_of_two_full_laps_consumes_exactly_the_entry_the_guest_wrote() 
             "⊘ doorbell {d}: the host semaphore four bytes lower stays untouched"
         );
     }
+}
+
+/// ★★★★★ **THE NON-VACUITY ROW: a walk that consumes SEVERAL entries ACROSS the wrap.**
+///
+/// ⊘ **BREAK THE ROUTE, NOT THE ASSERTION.** Every arm above asserts `entries == 1`, and a
+/// "fix" that simply clamped the walk to one entry per doorbell would pass all of them while
+/// silently dropping every batched submission. This one is the falsifier: the guest writes
+/// **four** entries — slots 6, 7, 0, 1 — and rings **once**. The consumer starts at 6 and the
+/// producer is at 2, so the honest answer spans the wrap and is four.
+///
+/// ★ This is also the shape the two-segment walk exists for. `[6, 7]` then `[0, 1]` is one
+/// modular loop here rather than two written-out segments, and this row is what says the
+/// modular form is right.
+#[test]
+fn a_batch_that_straddles_the_wrap_is_consumed_whole() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    // Bring the ring to a state in which every slot has been written once and the consumer
+    // sits at 6 — i.e. past the wrap, where the old zero-terminator is already useless.
+    for d in 0..6 {
+        publish_doorbell(&mut vmm, d);
+        ring_once_on(
+            &plane,
+            &mut vmm,
+            &mut cursor,
+            &mut state,
+            small_channel(gp_put_after(d)),
+        )
+        .unwrap_or_else(|e| panic!("warm-up doorbell {d}: {e:?}"));
+    }
+    assert_eq!(cursor.next, 6, "the consumer is at slot 6");
+
+    // The guest now writes FOUR entries — slots 6, 7, 0, 1 — before ringing once.
+    for d in 6..10 {
+        publish_doorbell(&mut vmm, d);
+    }
+    let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel(2))
+        .expect("four new entries are servable");
+
+    assert_eq!(
+        run.entries, 4,
+        "★★★★★ the walk spans the wrap: slots 6, 7, 0, 1 — a clamp-to-one 'fix' reports 1 \
+         here and drops three submissions: {run:?}"
+    );
+    assert_eq!(run.launches, 4, "and every one of them ran: {run:?}");
+    assert_eq!(cursor.next, 2, "the cursor lands exactly on the producer");
+    for d in 6..10 {
+        assert_eq!(
+            vmm.ram_read(phys_of(doorbell_dst_va(d)), 0x40),
+            vec![doorbell_fill(d); 0x40],
+            "doorbell {d}'s own destination carries its own fill"
+        );
+    }
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        doorbell_payload(9).to_le_bytes(),
+        "★ and the LAST entry's payload is the one left on the polled word — the releases \
+         ran in ring order, not hoisted"
+    );
+}
+
+/// ★★★★★ **THE REFUSAL, BY NAME: no producer cursor ⇒ no walk.**
+///
+/// ⊘ This is the arm that makes the fix a *decision* rather than a silent preference. When
+/// the channel's `USERD GP_PUT` cannot be read — an unreadable descriptor, an `Undeclared`
+/// one, or a **`Sysmem`** one whose base is a guest-physical address the framebuffer store
+/// must not be asked about — there is no honest answer to *"how many entries are new"*, and
+/// the walk says so instead of falling back to the ring's zero-terminator.
+///
+/// ⚠ **The fallback is what is being refused, and it is not a mild one.** Past the ring's
+/// first lap the zero-terminator never fires, so falling back would re-execute retired
+/// `LAUNCH_DMA`s and re-release their payloads over the word the guest polls — a completion
+/// for work that did not happen on this doorbell.
+///
+/// ★ `[measured, committed boot logs w267 (8 CE channels) / w269 / w274b / w279 / w281 /
+/// w283 / w287]` every copy-engine channel that reaches this walk declared its USERD in the
+/// framebuffer (`phys=fb:0x…/0x200`) and its cursors read live (`fbuserd@0x… GET=0 PUT=1`,
+/// and `GET=1 PUT=1` once the engine had fetched). So this refusal is not expected to fire on
+/// any channel that works today — and if it does, the boot names it rather than guessing.
+#[test]
+fn a_channel_with_no_producer_cursor_is_refused_by_name_and_signals_nothing() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    publish_doorbell(&mut vmm, 0);
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+    let blind = CeUtilsChannel {
+        gp_put: None,
+        ..small_channel(1)
+    };
+
+    let err = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, blind)
+        .expect_err("without GP_PUT there is no honest count of new entries");
+
+    assert!(
+        matches!(
+            err.fault,
+            FwdFault::RingProducerCursorUnknown {
+                index: 0,
+                entries: SMALL_RING,
+                ..
+            }
+        ),
+        "⊘ named for the thing that is missing — not RingBroughtNoEntry, which would say \
+         the guest wrote nothing when it wrote an entry we can see: {err:?}"
+    );
+    assert_eq!(
+        cursor.next, 0,
+        "⊘ the cursor did not advance through a refusal"
+    );
+    assert!(vmm.irqs.is_empty(), "⊘ and nothing was signalled");
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        0u32.to_le_bytes(),
+        "⊘ and the polled word is untouched"
+    );
+}
+
+/// ★★★★ **A producer cursor outside the ring is ITS OWN refusal, and not the one above.**
+///
+/// ⊘ *"We could not read it"* and *"we read it and it is not an index into this ring"* are
+/// different diagnoses pointing at different files: the first is about the USERD descriptor,
+/// the second says one of `GP_PUT`'s source and `gpFifoEntries`' source is describing a
+/// different channel — a join defect on our side. Collapsing them would send a reader to the
+/// wrong one, which is this tree's most-paid-for error class.
+///
+/// ⚠ And it is refused rather than wrapped: `gp_put % entries` would turn a disagreement
+/// between two of our own projections into a perfectly plausible index.
+#[test]
+fn a_producer_cursor_outside_the_ring_is_refused_as_its_own_fact() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    publish_doorbell(&mut vmm, 0);
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    let err = ring_once_on(
+        &plane,
+        &mut vmm,
+        &mut cursor,
+        &mut state,
+        small_channel(SMALL_RING + 3),
+    )
+    .expect_err("11 is not an index into an 8-entry ring");
+
+    assert!(
+        matches!(
+            err.fault,
+            FwdFault::RingProducerCursorOutOfRange {
+                gp_put: 11,
+                entries: SMALL_RING,
+                ..
+            }
+        ),
+        "⊘ the two numbers that disagree are BOTH carried, so the report names the join \
+         rather than an index: {err:?}"
+    );
+    assert_eq!(cursor.next, 0, "⊘ nothing advanced");
+    assert!(vmm.irqs.is_empty());
 }
