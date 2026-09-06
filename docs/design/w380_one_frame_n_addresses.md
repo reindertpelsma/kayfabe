@@ -108,6 +108,60 @@ The cheap per-VAS question (`SharedDevice::fb_join_va_in_vas`) is asked **before
 device-wide namer census, which is O(procs × VASes × rows) and which `w364` measured costing
 the GPU when it ran on every refusal.
 
-## §5 THE BOOT
+## §5 THE BOOT — `w380llm`, real GA106, 2026-09-06, HEAD `e01603f`, arm `alias`
 
-*(filled in below by the run itself)*
+**Pre-registered before the run**, in the brief that commissioned it: `SUPERSEDED → 0`,
+`⊘ SUPERSEDE CAPPED → 0`, `Xid 31 → 0`, coverage for `proc=3 pdb=0x201000` not regressed, and
+`LLM_TOKENS` reported whatever it is.
+
+| | `w376llmd` (supersede) | `w380llm` (alias) |
+|---|---|---|
+| `SUPERSEDED` | **127** | **0** |
+| `⊘ SUPERSEDE CAPPED` | **28 108** | **0** |
+| host `Xid` (any) | **1** (`31 FAULT_PDE @ 0x7480_27604000`) | **0** — watermark 4 → 4, **zero new host dmesg lines** |
+| `proc=3 pdb=0x201000` | `total=18539 already_host=1226 already_pinned=17300 candidates=7 refused=6` | `total=17436 already_host=9185 already_pinned=8245 candidates=0 refused=0` |
+| `LLM_TOKENS` | `0`, outcome **(B)**, `LLM_EXC=CUBLAS_STATUS_NOT_SUPPORTED` | **ABSENT**, outcome **(D) ⊘ UNMEASURED** |
+
+★ **The fix fired on the real workload.** Eight frames — `0x1e00000`, `0x2000000`, `0x2200000`,
+`0x2400000`, `0x2600000`, `0x2800000`, `0x2a00000`, `0x2c00000`, the same set `w377` §9 named —
+were each aliased at a second VA, all eight `placed_as_asked=true`, each with **its own**
+`OS_DESCRIPTOR` (`0xcafe22ac … 0xcafe22b3`) over **one** `memfd`. `THE INSTALL REFUSED` = 0,
+`FRAME-NOT-OURS` = 0, `ALIAS BIND REFUSED` = 0. Distilled evidence:
+`traces/guest_boots/w380llm_e01603f_alias_evidence.log`.
+
+⊘ **`LLM_TOKENS` is UNMEASURED and that is not a failure value.** The runner loaded 290/290
+shards, reported `TORCH_CUDA_AVAILABLE=True TORCH_DEV_COUNT=1`, and was killed by the hook's own
+`timeout 600` with no `LLM_TOKENS=` line. Doorbells were still being served **at 15:21:21**,
+seconds before the kill, so it was grinding rather than wedged. ⚠ The `CUBLAS_STATUS_NOT_SUPPORTED`
+that ended `w376llmd` **did not occur**.
+
+## §6 ★★★★★ THE cuBLAS ERROR WAS A POISONED CONTEXT — `w380llm2`, the discriminator
+
+`w382`'s hook runs a **4×4 fp32 matmul before the model loads**, with the host Xid count read
+either side of it:
+
+```
+HOST_XID_BEFORE=1        (the pre-existing w379 rmladder Xid, not this boot's)
+PROP_CAPABILITY=8.6  PROP_multi_processor_count=28  PROP_L2_cache_size=2359296
+MINMM_OK=1  MINMM_SUM=64
+HOST_XID_AFTER_MINMM=1
+```
+
+`64` is un-forgeable — a 4×4 of ones squared has every element 4. ⇒ **(S): cuBLAS works, the
+device properties are right, and `w376`'s `CUBLAS_STATUS_NOT_SUPPORTED` was the sticky error of
+a context the `Xid 31` had already poisoned.** The fix removes the Xid, so it covers that.
+
+⊘ `PROP_name` is empty — the known `GPU_GET_NAME_STRING` zero-bytes defect, unrelated and not
+what cuBLASLt selects on.
+
+## §7 ⚠ THE RESIDUAL THIS OPENS, NAMED
+
+`PT-DECODE` refusals went **255 → 271**, and the sixteen new ones are `RepointsPublished: 8`
+and `UnbindsPublished: 8` — exactly the eight aliased frames. They are the *consequence* of the
+fix, not a regression in it: a row that keeps its host backing is a row `populate` will refuse
+to re-point, and the supersede arm used to dissolve that case by deleting the row.
+
+⇒ **The next question is what to do when the guest re-points an ALIASED VA to a different
+frame.** `apply_settlement_as` deliberately refuses a remap of a published row (`w329b1`: doing
+it revoked a live translation and broke the bandwidth workload), so the answer is not simply to
+relax it. ⊘ Not measured against a fault, and it did not produce one on this boot.
