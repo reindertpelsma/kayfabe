@@ -6712,6 +6712,76 @@ impl HostRmBackend {
         self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, timeout)
     }
 
+    /// ★★★★★ **w379 — one `SEM_RELEASE` to a CALLER-CHOSEN GPU VA, with no acquire in
+    /// front of it.**
+    ///
+    /// [`Self::submit_semaphore_probe`] releases to the channel's **own ring** semaphore,
+    /// which is mapped by construction and therefore cannot ask a question about a mapping.
+    /// [`Self::submit_fenced_release`] does take a caller VA, but it emits a `SEM_ACQUIRE`
+    /// first — and an acquire is a second thing that can fail, in a way that looks exactly
+    /// like the first.
+    ///
+    /// This verb is the minimal probe for *"does this VA resolve for a real engine?"*: two
+    /// address words, a payload and one `SEM_EXECUTE`. If the payload appears at `target_va`
+    /// the address resolved; if it does not, either it did not resolve or the engine never
+    /// ran, and the caller's own controls are what separate those.
+    ///
+    /// ⊘ **It does not wait**, because the memory it writes is the caller's and this
+    /// backend has no mapping of it. [`Self::read_words_independently`] on the object the
+    /// caller mapped is the read side, and it is deliberately a *different* object handle
+    /// from anything this call touches.
+    ///
+    /// ⚠ **Measured limit, w379, and it decides where this verb can be used.** On the
+    /// Mode-2 emulated device the CPU copy-engine emulator **decodes** `PushMethod::
+    /// SemRelease` and deliberately does not act on it — *"a `SemRelease` is deliberately
+    /// NOT acted on here: it is the host semaphore … and advancing it would satisfy our own
+    /// counters while the guest spins on the word above it"*
+    /// (`kayfabe-rt/src/ceutils.rs:677-679`). ⇒ A probe built on this verb measures **real
+    /// hardware** and is structurally unservable inside a Mode-2 guest, on every
+    /// configuration. That is a statement about the emulator's deliberate scope, not a
+    /// defect, and a rung using it must say so rather than report the guest arm as a red.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; [`BAD_ENCODE`] if
+    /// `target_va` is at or above the 2^40 ceiling `SEM_ADDR_HI`'s eight bits enforce, or is
+    /// not dword-aligned; whatever the ring stores and the submission refuse with.
+    pub fn submit_release_at(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        target_va: u64,
+        payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // The same five-method incrementing run `submit_semaphore_probe` uses, with the
+        // address the caller named instead of our own ring's.
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        if target_va >= 1 << 40 || !target_va.is_multiple_of(4) {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let words = [
+            header,
+            (target_va & 0xFFFF_FFFC) as u32,
+            ((target_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
     /// ★★★★★ **The late-map race primitive** — submit `[SEM_ACQUIRE(fence)]
     /// [SEM_RELEASE(target)]` and **return the instant the doorbell is rung**, with the
     /// channel stalled inside the acquire.
