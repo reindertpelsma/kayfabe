@@ -12140,7 +12140,11 @@ impl Regs {
         // to it from the vCPU trap and the worker takes from it. ⊘ A second
         // `PublicationQueue::new()` anywhere would be a lane nobody drains, which is
         // indistinguishable at every call site from a lane that is merely idle.
-        let pubqueue = Arc::new(kayfabe_device::pubqueue::PublicationQueue::new());
+        let pubqueue = Arc::new(if doorbell_async.coalesces() {
+            kayfabe_device::pubqueue::PublicationQueue::new()
+        } else {
+            kayfabe_device::pubqueue::PublicationQueue::uncoalescing()
+        });
         // ⊘ The port is BUILT, then CLONED, then installed — rather than built twice. Every
         // field is a handle, so the clone is the same port; building it twice would be two
         // ports that happen to agree today.
@@ -12180,6 +12184,11 @@ impl Regs {
                      under the BQL — the CONTROL, byte-identical to every boot before w383. \
                      ⊘ Expected reading: `TRAPWITNESS inline_exceptions=` large and \
                      `off_trap_claims=0`, and a `PUBQUEUE` census of all zeros",
+                DoorbellAsyncArm::NoCoalesce =>
+                    "VALIDATES, ENQUEUES and RETURNS, and EVERY DOORBELL GETS ITS OWN \
+                     EXECUTION — ★ the NEGATIVE CONTROL for `pubqueue` §2. One variable \
+                     against `on`. ⊘ Expected reading: `PUBQUEUE coalesce=false coalesced=0` \
+                     and a `taken=` equal to the doorbell count",
                 DoorbellAsyncArm::On =>
                     "VALIDATES, ENQUEUES and RETURNS — ★★★★★ the owner's 2026-09-06 ruling \
                      and `TrapContract::ScheduleAndReturn`, enforced rather than reported. A \
@@ -15212,7 +15221,7 @@ pub enum DoorbellAsyncArm {
     Off,
     /// ★★★★★ The trap **validates, enqueues and returns**. A dedicated
     /// `kayfabe-doorbell-publish` thread takes the token and runs the identical body, in
-    /// the identical order.
+    /// the identical order. Repeat offers for one token **coalesce**, per `pubqueue` §2.
     ///
     /// ⊘ What moves is the **whole block, not its internal order**: publication must still
     /// complete before the engine executes, and it does, because the forward is the last
@@ -15220,6 +15229,16 @@ pub enum DoorbellAsyncArm {
     /// before the trap RETURNS"* — which was never the requirement, because the guest's
     /// doorbell store is fire-and-forget and it reads nothing back.
     On,
+    /// ★★★★★ **THE NEGATIVE CONTROL FOR COALESCING** — everything [`Self::On`] does, and
+    /// every doorbell gets **its own execution**.
+    ///
+    /// `pubqueue` §2 argues that N doorbells on one token and one doorbell after the last
+    /// `GP_PUT` advance are the same act, *because the submission cursor is read at
+    /// execution time*. ⊘ That is **measured** of `ceutils::run_submission` and **asserted**
+    /// of `kayfabe_fwd::read_gpfifo_ring`. This arm is the one variable that separates
+    /// *"deferring is wrong"* from *"coalescing is wrong"*, and until a boot has run it the
+    /// two are the same red.
+    NoCoalesce,
 }
 
 impl DoorbellAsyncArm {
@@ -15229,12 +15248,19 @@ impl DoorbellAsyncArm {
         match self {
             DoorbellAsyncArm::Off => "off",
             DoorbellAsyncArm::On => "on",
+            DoorbellAsyncArm::NoCoalesce => "nocoalesce",
         }
     }
 
     /// Whether the trap schedules instead of running.
     #[must_use]
     pub const fn defers(self) -> bool {
+        matches!(self, DoorbellAsyncArm::On | DoorbellAsyncArm::NoCoalesce)
+    }
+
+    /// Whether repeat offers for one token fold into a pending entry.
+    #[must_use]
+    pub const fn coalesces(self) -> bool {
         matches!(self, DoorbellAsyncArm::On)
     }
 }
@@ -15248,13 +15274,17 @@ pub fn doorbell_async_from(value: Option<&str>) -> Result<DoorbellAsyncArm, (Sta
     match value {
         None | Some("off") => Ok(DoorbellAsyncArm::Off),
         Some("on") => Ok(DoorbellAsyncArm::On),
+        Some("nocoalesce") => Ok(DoorbellAsyncArm::NoCoalesce),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_DOORBELL_ASYNC does not name an arm: the only values are `off` (the \
              CONTROL — the trap runs the publication legs and the host forward inline on the \
              vCPU under the BQL, byte-identical to every boot before w383) and `on` (the trap \
              validates, offers the token to the coalescing publication lane and returns; a \
-             worker thread runs the identical body in the identical order). ⊘ `1`/`true`/`yes` \
+             worker thread runs the identical body in the identical order) and `nocoalesce` \
+             (everything `on` does, with repeat offers for one token queued rather than \
+             folded — the NEGATIVE CONTROL for `pubqueue` §2, which is measured of the CE \
+             executor's cursor and asserted of the ring reader's). ⊘ `1`/`true`/`yes` \
              are not accepted, for the same reason no other selector in this file accepts \
              them: a spelling a typo can reach silently disarms the experiment.",
         )),

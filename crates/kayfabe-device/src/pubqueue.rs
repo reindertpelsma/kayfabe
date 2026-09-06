@@ -226,6 +226,20 @@ pub struct PublicationQueue {
     inner: Mutex<Inner>,
     wake: Condvar,
     cap: usize,
+    /// ★★★★★ **w383 — whether an offer for an already-pending token COALESCES or QUEUES.**
+    ///
+    /// ⊘⊘ **This exists because §2's argument is a HYPOTHESIS about our ring reader, and
+    /// this rung is the first thing that could test it.** §2 says N doorbells on one token
+    /// and one doorbell after the last `GP_PUT` advance are the same act, *because the
+    /// cursor is read at execution time*. That is true of `ceutils::run_submission` (it
+    /// reads forward from its cursor while the entries decode) and it is **asserted, not
+    /// measured**, of `kayfabe_fwd::read_gpfifo_ring` and everything downstream of it.
+    ///
+    /// ⇒ the flag is the **negative control** for §2: same thread, same deferral, same
+    /// worker, one variable. A boot that is red with `coalesce` and green without it has
+    /// refuted §2 and localized the defect to the ring reader — which no amount of reading
+    /// the code was going to settle.
+    coalesce: bool,
 }
 
 impl PublicationQueue {
@@ -252,7 +266,30 @@ impl PublicationQueue {
             inner: Mutex::new(Inner::default()),
             wake: Condvar::new(),
             cap,
+            coalesce: true,
         }
+    }
+
+    /// ★★★★★ **w383 — a queue that NEVER coalesces**: every offer becomes its own entry, so
+    /// every doorbell gets its own execution. See [`Self::coalesce`] for why this exists.
+    ///
+    /// ⊘ The cap still applies, and it now bounds *offers in flight* rather than *distinct
+    /// live channels* — a materially weaker bound, and the reason this is a control rather
+    /// than the default. A guest **can** grow this queue by ringing faster, which is exactly
+    /// the property §2 was written to avoid; on refusal the caller runs inline, so the
+    /// consequence is bounded latency rather than unbounded memory.
+    #[must_use]
+    pub fn uncoalescing() -> Self {
+        Self {
+            coalesce: false,
+            ..Self::new()
+        }
+    }
+
+    /// Whether this queue coalesces repeat offers for one token.
+    #[must_use]
+    pub const fn coalesces(&self) -> bool {
+        self.coalesce
     }
 
     /// ★★★★★ **THE BQL-SIDE CALL, and the whole point: it does no host I/O.**
@@ -267,7 +304,10 @@ impl PublicationQueue {
     pub fn offer(&self, job: MapPublication) -> Offered {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let token = job.token();
-        if g.pending.contains(&token) {
+        // ⊘ `self.coalesce &&` — w383's negative control. With it off, a repeat offer takes
+        // the ordinary queue path below and `pending` stops being consulted at all (it is
+        // still maintained, so the two modes differ in exactly one branch).
+        if self.coalesce && g.pending.contains(&token) {
             g.stats.coalesced += 1;
             return Offered::Coalesced;
         }
@@ -372,8 +412,9 @@ impl PublicationQueue {
     pub fn census(&self) -> String {
         let s = self.stats();
         format!(
-            "PUBQUEUE queued={} coalesced={} refused={} taken={} completed={} depth={} \
-             high_water={} cap={}{}",
+            "PUBQUEUE coalesce={} queued={} coalesced={} refused={} taken={} completed={} \
+             depth={} high_water={} cap={}{}",
+            self.coalesce,
             s.queued,
             s.coalesced,
             s.refused,
