@@ -6714,9 +6714,9 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
         let foreign = rm_b.map_local_at(vas_b, forged, W379_BYTES, None);
         foreign_refused = foreign.is_err();
         println!(
-            "{}  R5b foreign handle  = client B mapping A's raw object {:#010x} into B's \
-             OWN address space: {}",
-            if foreign_refused { "ok   " } else { "FAIL " },
+            "{:<5} R5b foreign handle  = client B mapping A's raw object {:#010x} into \
+             B's OWN address space: {}",
+            if foreign_refused { "ok" } else { "FAIL" },
             ma.raw(),
             match &foreign {
                 Ok(va) => format!(
@@ -6764,9 +6764,9 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
         && ordering_ok
         && foreign_refused;
     println!(
-        "info  R5b census          = controls A={control_a} B={control_b}  B-sees-A's-VA-free\
-         ={n1_free}  leak A<-B={leak_a_saw_b}  leak B<-A={leak_b_saw_a}  ordering={ordering_ok}\
-           foreign handle refused={foreign_refused}"
+        "info  R5b census          = controls A={control_a} B={control_b}  \
+         B-sees-A's-VA-free={n1_free}  leak A<-B={leak_a_saw_b}  leak B<-A={leak_b_saw_a}  \
+         ordering={ordering_ok}  foreign handle refused={foreign_refused}"
     );
     if clean {
         println!(
