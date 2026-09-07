@@ -1,0 +1,288 @@
+=== boot_capture tag=w386a_guest at 2026-09-06T19:11:29+00:00 ===
+=== source revision: 95556ff ===
+=== qemu binary: -rwxr-xr-x 1 root root 88700640 Sep  6 19:11 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:95556ff1660bf4cc05ebe1e3a9cd7247ea1a7f6b 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=b16b5a22da708e68
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Sep  6 19:11:41 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep  6 19:11 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep  6 19:11 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep  6 19:11 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep  6 19:11 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep  6 19:11 .
+drwxr-xr-x 18 root root   4000 Sep  6 19:11 ..
+cr--------  1 root root 240, 1 Sep  6 19:11 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep  6 19:11 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/w384_hook.sh at 2026-09-06T19:11:44+00:00 ===
+=== ★★★★★ w384 — THE DOORBELL-LATENCY RUNG, IN THE GUEST  tag=w386a_guest  2026-09-06T19:11:44+00:00 ===
+W384_CE_EXECUTOR=[local]
+W384_ISOLATES=[real]  W384_GR_ROUTE=[passthrough]
+W384_NATIVE_FLOOR_US=[9.24]
+W384_DEVICE_OPENS=4  (runs=3 bisect=[] missing_page=1)
+--- the binary under test (⊘ the native arm MUST carry the same md5):
+    /workspace/bench/cargo-target-w386/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder   2370480 bytes
+    W384_BIN_MD5=9a5eef3b93239a7c880cc09181bd9049
+    ★ STATIC — it will run in the guest's userland
+=== guest preconditions (⊘ each is a DIFFERENT failure from 'the rung did not work') ===
+GUEST_UNAME=6.8.0-138-generic
+GUEST_NVIDIA_DEVS=[/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 ]
+GUEST_NVRM_LOADED=1
+GUEST_NPROC=3
+=== push the binary into the guest ===
+GUEST_MD5=9a5eef3b93239a7c880cc09181bd9049
+W384_GUEST_ARGS=--doorbell-latency --doorbell-latency-native-us 9.24
+=== run it x3, under its OWN deadline, with a START marker and an RC terminator ===
+--- the rung's own output, verbatim ---
+--- guest run 1/3 ---
+info  RMLADDER ARGV     = [--doorbell-latency --doorbell-latency-native-us 9.24]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00013
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=95556ff1660bf4cc05ebe1e3a9cd7247ea1a7f6b
+W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the Mode-2 emulator does not act on `SemRelease`, and timing submissions that are never executed would be a distribution about nothing
+info  R6 doorbell latency = GPU 0, euid 0 — what ONE doorbell costs the SUBMITTING THREAD
+info  R6 the bar          = the median cost of one `submit_copy_at`, against the SAME act measured on bare metal by the SAME binary. ⊘ Not a benchmark: a discriminator
+DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+DBL_REGION = exactly one `submit_copy_at` (narrow, parts lookup, one small Vec in the encoder, ~12 ring stores, 2 GPFIFO words, GP_PUT, 2 fences, the doorbell store). OUTSIDE it: the source seed store, the every-16 drain, all printing, all statistics
+DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+info  R6 control (open)   = Landed
+ok    R6 control (open)   = the channel carries work; the loop can be believed
+kayfabe-isolate: DOORBELL-STORE tally: 1024 stores attempted; the last 512 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=0 n=512 min_us=623.459 p50_us=685.134 p90_us=726.411 max_us=926.086 total_ms=365.6 truncated=false refused=0
+DBL_DRAIN rep=0 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=1 n=512 min_us=623.519 p50_us=682.539 p90_us=707.116 max_us=944.110 total_ms=361.3 truncated=false refused=0
+DBL_DRAIN rep=1 every=16 drains=32 timeouts=0 drain_ms=0.8 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 2048 stores attempted; the last 1536 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=2 n=512 min_us=624.061 p50_us=683.611 p90_us=708.168 max_us=975.419 total_ms=362.7 truncated=false refused=0
+DBL_DRAIN rep=2 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+DBL_DIST arm=submit rep=POOLED n=1536 min_us=623.459 p50_us=683.661 p90_us=716.282 max_us=975.419 total_ms=1089.6 truncated=false refused=0
+DBL_REP_MEDIANS us=[685.1, 682.5, 683.6]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+DBL_STALL reps=3 stalled_reps=0 drains=96 timeouts=0 first_stall_at=none
+info  R6 control (close)  = Landed
+ok    R6 control (close)  = the channel still carried work at the end
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=105.197 p50_us=107.602 p90_us=137.989 max_us=195.487 total_ms=59.9 truncated=false refused=0
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=482.504 p50_us=652.755 p90_us=715.602 max_us=1240.897 total_ms=995.1 truncated=false refused=0
+DBL_MEASURED_P50_US=683.66
+⊘ THE VERDICT IS TAKEN ON THE MEDIAN. The failure being gated is an AGGREGATE — thousands of doorbells at the typical price — and the median is the statistic that aggregate is made of. `max` is printed and never graded (one scheduler preemption would redden a healthy run); `p90` is printed so a tail regression is visible without being the verdict
+DBL_ROLE=GRADED
+DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+DBL_RATIO_X=74.0
+★     R6 VERDICT         = p50 683.7us <= gate 9240.0us (74.0x the native floor).
+⚠     R6 READ THIS       = ★★★★★ IF THIS IS THE GUEST ARM, A PASS IS A FINDING AND NOT A GREEN. It would mean the 60-71ms inline publication measured on the LLM boot is NOT on the raw client's doorbell path, and the LLM's cost has been mis-attributed. Compare `arm=freshmap` against `arm=submit` before concluding anything: if freshmap is the expensive one, the cost is in PUBLISHING NEW ROWS and this loop simply had nothing left to publish
+RUNGCTL_doorbell_latency=PASS
+RUNG_doorbell_latency=PASS
+done — w384 doorbell-latency rung only
+W384_RC=0
+--- guest run 2/3 ---
+info  RMLADDER ARGV     = [--doorbell-latency --doorbell-latency-native-us 9.24]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0001c
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=95556ff1660bf4cc05ebe1e3a9cd7247ea1a7f6b
+W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the Mode-2 emulator does not act on `SemRelease`, and timing submissions that are never executed would be a distribution about nothing
+info  R6 doorbell latency = GPU 0, euid 0 — what ONE doorbell costs the SUBMITTING THREAD
+info  R6 the bar          = the median cost of one `submit_copy_at`, against the SAME act measured on bare metal by the SAME binary. ⊘ Not a benchmark: a discriminator
+DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+DBL_REGION = exactly one `submit_copy_at` (narrow, parts lookup, one small Vec in the encoder, ~12 ring stores, 2 GPFIFO words, GP_PUT, 2 fences, the doorbell store). OUTSIDE it: the source seed store, the every-16 drain, all printing, all statistics
+DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+info  R6 control (open)   = Landed
+ok    R6 control (open)   = the channel carries work; the loop can be believed
+kayfabe-isolate: DOORBELL-STORE tally: 1024 stores attempted; the last 512 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=0 n=512 min_us=472.656 p50_us=512.851 p90_us=553.158 max_us=621.967 total_ms=279.8 truncated=false refused=0
+DBL_DRAIN rep=0 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=1 n=512 min_us=476.233 p50_us=513.113 p90_us=542.747 max_us=775.214 total_ms=279.2 truncated=false refused=0
+DBL_DRAIN rep=1 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 2048 stores attempted; the last 1536 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=2 n=512 min_us=476.254 p50_us=512.702 p90_us=538.690 max_us=619.773 total_ms=278.5 truncated=false refused=0
+DBL_DRAIN rep=2 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+DBL_DIST arm=submit rep=POOLED n=1536 min_us=472.656 p50_us=512.912 p90_us=544.361 max_us=775.214 total_ms=837.4 truncated=false refused=0
+DBL_REP_MEDIANS us=[512.9, 513.1, 512.7]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+DBL_STALL reps=3 stalled_reps=0 drains=96 timeouts=0 first_stall_at=none
+info  R6 control (close)  = Landed
+ok    R6 control (close)  = the channel still carried work at the end
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=106.689 p50_us=109.605 p90_us=138.509 max_us=280.497 total_ms=59.9 truncated=false refused=0
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=479.801 p50_us=518.121 p90_us=542.397 max_us=591.730 total_ms=945.1 truncated=false refused=0
+DBL_MEASURED_P50_US=512.91
+⊘ THE VERDICT IS TAKEN ON THE MEDIAN. The failure being gated is an AGGREGATE — thousands of doorbells at the typical price — and the median is the statistic that aggregate is made of. `max` is printed and never graded (one scheduler preemption would redden a healthy run); `p90` is printed so a tail regression is visible without being the verdict
+DBL_ROLE=GRADED
+DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+DBL_RATIO_X=55.5
+★     R6 VERDICT         = p50 512.9us <= gate 9240.0us (55.5x the native floor).
+⚠     R6 READ THIS       = ★★★★★ IF THIS IS THE GUEST ARM, A PASS IS A FINDING AND NOT A GREEN. It would mean the 60-71ms inline publication measured on the LLM boot is NOT on the raw client's doorbell path, and the LLM's cost has been mis-attributed. Compare `arm=freshmap` against `arm=submit` before concluding anything: if freshmap is the expensive one, the cost is in PUBLISHING NEW ROWS and this loop simply had nothing left to publish
+RUNGCTL_doorbell_latency=PASS
+RUNG_doorbell_latency=PASS
+done — w384 doorbell-latency rung only
+W384_RC=0
+--- guest run 3/3 ---
+info  RMLADDER ARGV     = [--doorbell-latency --doorbell-latency-native-us 9.24]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00025
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=95556ff1660bf4cc05ebe1e3a9cd7247ea1a7f6b
+W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the Mode-2 emulator does not act on `SemRelease`, and timing submissions that are never executed would be a distribution about nothing
+info  R6 doorbell latency = GPU 0, euid 0 — what ONE doorbell costs the SUBMITTING THREAD
+info  R6 the bar          = the median cost of one `submit_copy_at`, against the SAME act measured on bare metal by the SAME binary. ⊘ Not a benchmark: a discriminator
+DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+DBL_REGION = exactly one `submit_copy_at` (narrow, parts lookup, one small Vec in the encoder, ~12 ring stores, 2 GPFIFO words, GP_PUT, 2 fences, the doorbell store). OUTSIDE it: the source seed store, the every-16 drain, all printing, all statistics
+DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+info  R6 control (open)   = Landed
+ok    R6 control (open)   = the channel carries work; the loop can be believed
+kayfabe-isolate: DOORBELL-STORE tally: 1024 stores attempted; the last 512 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=0 n=512 min_us=482.333 p50_us=525.601 p90_us=566.079 max_us=640.093 total_ms=287.2 truncated=false refused=0
+DBL_DRAIN rep=0 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 1536 stores attempted; the last 1024 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=1 n=512 min_us=485.019 p50_us=522.467 p90_us=557.225 max_us=790.655 total_ms=284.5 truncated=false refused=0
+DBL_DRAIN rep=1 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+kayfabe-isolate: DOORBELL-STORE tally: 2048 stores attempted; the last 1536 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=submit rep=2 n=512 min_us=485.121 p50_us=522.356 p90_us=557.337 max_us=637.165 total_ms=284.6 truncated=false refused=0
+DBL_DRAIN rep=2 every=16 drains=32 timeouts=0 drain_ms=0.9 stalled=false first_stall_at=none
+DBL_DIST arm=submit rep=POOLED n=1536 min_us=482.333 p50_us=523.170 p90_us=559.644 max_us=790.655 total_ms=856.3 truncated=false refused=0
+DBL_REP_MEDIANS us=[525.6, 522.5, 522.4]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+DBL_STALL reps=3 stalled_reps=0 drains=96 timeouts=0 first_stall_at=none
+info  R6 control (close)  = Landed
+ok    R6 control (close)  = the channel still carried work at the end
+kayfabe-isolate: DOORBELL-STORE tally: 2560 stores attempted; the last 2048 were NOT printed individually (cap 512) — ⊘ this is a statement about the log, not about the stores
+DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=109.786 p50_us=112.262 p90_us=142.751 max_us=238.455 total_ms=61.6 truncated=false refused=0
+DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=488.668 p50_us=550.041 p90_us=1191.831 max_us=1745.736 total_ms=1131.8 truncated=false refused=0
+DBL_MEASURED_P50_US=523.17
+⊘ THE VERDICT IS TAKEN ON THE MEDIAN. The failure being gated is an AGGREGATE — thousands of doorbells at the typical price — and the median is the statistic that aggregate is made of. `max` is printed and never graded (one scheduler preemption would redden a healthy run); `p90` is printed so a tail regression is visible without being the verdict
+DBL_ROLE=GRADED
+DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+DBL_RATIO_X=56.6
+★     R6 VERDICT         = p50 523.2us <= gate 9240.0us (56.6x the native floor).
+⚠     R6 READ THIS       = ★★★★★ IF THIS IS THE GUEST ARM, A PASS IS A FINDING AND NOT A GREEN. It would mean the 60-71ms inline publication measured on the LLM boot is NOT on the raw client's doorbell path, and the LLM's cost has been mis-attributed. Compare `arm=freshmap` against `arm=submit` before concluding anything: if freshmap is the expensive one, the cost is in PUBLISHING NEW ROWS and this loop simply had nothing left to publish
+RUNGCTL_doorbell_latency=PASS
+RUNG_doorbell_latency=PASS
+done — w384 doorbell-latency rung only
+W384_RC=0
+--- end of the rung's output ---
+
+=== ★★★★★ THE GUEST GRADE — anchored on the rung's own verdict lines ===
+    DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+    DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+    DBL_DIST arm=submit rep=0 n=512 min_us=623.459 p50_us=685.134 p90_us=726.411 max_us=926.086 total_ms=365.6 truncated=false refused=0
+    DBL_DIST arm=submit rep=1 n=512 min_us=623.519 p50_us=682.539 p90_us=707.116 max_us=944.110 total_ms=361.3 truncated=false refused=0
+    DBL_DIST arm=submit rep=2 n=512 min_us=624.061 p50_us=683.611 p90_us=708.168 max_us=975.419 total_ms=362.7 truncated=false refused=0
+    DBL_DIST arm=submit rep=POOLED n=1536 min_us=623.459 p50_us=683.661 p90_us=716.282 max_us=975.419 total_ms=1089.6 truncated=false refused=0
+    DBL_REP_MEDIANS us=[685.1, 682.5, 683.6]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+    DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=105.197 p50_us=107.602 p90_us=137.989 max_us=195.487 total_ms=59.9 truncated=false refused=0
+    DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=482.504 p50_us=652.755 p90_us=715.602 max_us=1240.897 total_ms=995.1 truncated=false refused=0
+    DBL_MEASURED_P50_US=683.66
+    DBL_ROLE=GRADED
+    DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+    DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+    DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+    DBL_DIST arm=submit rep=0 n=512 min_us=472.656 p50_us=512.851 p90_us=553.158 max_us=621.967 total_ms=279.8 truncated=false refused=0
+    DBL_DIST arm=submit rep=1 n=512 min_us=476.233 p50_us=513.113 p90_us=542.747 max_us=775.214 total_ms=279.2 truncated=false refused=0
+    DBL_DIST arm=submit rep=2 n=512 min_us=476.254 p50_us=512.702 p90_us=538.690 max_us=619.773 total_ms=278.5 truncated=false refused=0
+    DBL_DIST arm=submit rep=POOLED n=1536 min_us=472.656 p50_us=512.912 p90_us=544.361 max_us=775.214 total_ms=837.4 truncated=false refused=0
+    DBL_REP_MEDIANS us=[512.9, 513.1, 512.7]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+    DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=106.689 p50_us=109.605 p90_us=138.509 max_us=280.497 total_ms=59.9 truncated=false refused=0
+    DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=479.801 p50_us=518.121 p90_us=542.397 max_us=591.730 total_ms=945.1 truncated=false refused=0
+    DBL_MEASURED_P50_US=512.91
+    DBL_ROLE=GRADED
+    DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+    DBL_CFG n_max=512 budget_ms=1500 reps=3 gate_multiple=1000 native_p50_us=9.24
+    DBL_WITNESS_MUTED=yes (the per-store doorbell witness had counted 0 stores; its per-store lines are INSIDE the measured region and would BE the native floor. ⊘ Refusals and the periodic tally still print)
+    DBL_DIST arm=submit rep=0 n=512 min_us=482.333 p50_us=525.601 p90_us=566.079 max_us=640.093 total_ms=287.2 truncated=false refused=0
+    DBL_DIST arm=submit rep=1 n=512 min_us=485.019 p50_us=522.467 p90_us=557.225 max_us=790.655 total_ms=284.5 truncated=false refused=0
+    DBL_DIST arm=submit rep=2 n=512 min_us=485.121 p50_us=522.356 p90_us=557.337 max_us=637.165 total_ms=284.6 truncated=false refused=0
+    DBL_DIST arm=submit rep=POOLED n=1536 min_us=482.333 p50_us=523.170 p90_us=559.644 max_us=790.655 total_ms=856.3 truncated=false refused=0
+    DBL_REP_MEDIANS us=[525.6, 522.5, 522.4]  ⊘ within-process reps CANNOT see a per-boot lottery (`submit_ms` measured 9.1x across three consecutive boots of ONE build); they show within-run stability only, and the SCRIPT runs this binary more than once
+    DBL_DIST arm=bare rep=0 ⊘UNGRADED n=512 min_us=109.786 p50_us=112.262 p90_us=142.751 max_us=238.455 total_ms=61.6 truncated=false refused=0
+    DBL_DIST arm=freshmap rep=0 ⊘UNGRADED n=64 min_us=488.668 p50_us=550.041 p90_us=1191.831 max_us=1745.736 total_ms=1131.8 truncated=false refused=0
+    DBL_MEASURED_P50_US=523.17
+    DBL_ROLE=GRADED
+    DBL_NATIVE_P50_US=9.24 DBL_GATE_MULTIPLE=1000 DBL_GATE_US=9240.00
+    W384_GUEST_ROW runs=3 seen=3 pass=3 fail=0 notrun=0 ctl_failed=0
+    W384_GUEST_RC=[W384_RC=0 W384_RC=0 W384_RC=0 ]
+    ⊘ 124 = the work ran out of time INSIDE the guest; 143 = something killed it; an
+      ABSENT line = no terminator was written at all. Three different facts.
+
+=== ★★★★★ THE GUEST VERDICT — pre-registered, stated once
+    W384_GUEST_OUTCOME=(B) ⚠⚠ GREEN, all 3 of 3 runs — A FINDING, NOT A GREEN.
+        It would mean the 60-71 ms inline publication is NOT on the raw client's
+        doorbell path and the LLM's cost has been mis-attributed. Read `arm=freshmap`
+        against `arm=submit` above before concluding anything, and DO NOT tune the
+        rung until it goes red.
+
+=== ★★★★★ THE WRAP BISECTION — same boot, two extra invocations, no second guest ===
+
+=== ★★ SECOND QUESTION, SAME BOOT — did `missing_page` move? ===
+    info  R3 notifier         = fired=false status=0x0000 except_type=0x0 engine=0x0000
+    FAIL  R3 SILENT           = the channel stopped and the notifier is quiet. ⊘ A fault nobody names cannot be handled, and `status == 0` is also what an unwired notifier reads as — both are failures of this bar
+    ★     R3 CONTAINED        = a channel in another address space kept landing across the fault
+    RUNGCTL_missing_page=PASS
+    RUNG_missing_page=FAIL
+    W384_MP_RC=1
+
+=== the guest driver's own word across the run (⊘ the HOST ring buffer does not carry it) ===
+    [   55.850072] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0002c; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+    [   55.850079] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   55.854064] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0002d; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+    [   55.912386] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0002e; hParent=0xcafe0001; hObject=0xcafe0005; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+    [   55.950701] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0002e; hParent=0xcafe0001; hObject=0xcafe0007; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+    [   59.788106] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0002e; hObject=0xcafe0005; paramsStatus=0x00000000; status=0x00000056
+    [   59.788118] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   59.789044] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0002e; hObject=0xcafe0007; paramsStatus=0x00000000; status=0x00000056
+    [   59.789050] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   60.146661] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d0002d; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+    [   60.146668] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+    [   60.146702] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+    [   60.146815] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+    [   60.147455] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+    [   60.521443] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+=== ★★ HOOK SELF-CHECK — assert this block's own inputs exist ===
+    guest output bytes = [14366]
+    DBL_DIST lines     = [18]  (⊘ zero means the
+                          rung never reached its loop, whatever else printed)
+    ⊘ zero bytes is not 'not yet'; it is a state that needs its own check.
+=== w384 guest hook done 2026-09-06T19:12:12+00:00 ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 34 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=145
+GUEST_DMESG_AFTER_NVRM=142
+GUEST_DMESG_WORKLOAD_DELTA=111
+=== HOST dmesg delta for this boot (watermark 41 → 41) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

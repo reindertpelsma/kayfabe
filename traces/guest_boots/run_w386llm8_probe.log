@@ -1,0 +1,102 @@
+=== boot_capture tag=w386llm8 at 2026-09-06T20:36:17+00:00 ===
+=== source revision: 95556ff ===
+=== qemu binary: -rwxr-xr-x 1 root root 88700640 Sep  6 20:35 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:95556ff1660bf4cc05ebe1e3a9cd7247ea1a7f6b 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=b16b5a22da708e68
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Sep  6 20:36:28 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep  6 20:36 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep  6 20:36 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep  6 20:36 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep  6 20:36 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep  6 20:36 .
+drwxr-xr-x 18 root root   4000 Sep  6 20:36 ..
+cr--------  1 root root 240, 1 Sep  6 20:36 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep  6 20:36 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/llm_hook2.sh at 2026-09-06T20:36:31+00:00 ===
+=== ★★★★★ w382 CUBLAS DISCRIMINATOR + LLM ===
+HOST_XID_BEFORE=10
+--- device properties as the guest sees them ---
+    PROP_name=
+    PROP_major=8
+    PROP_minor=6
+    PROP_total_memory=12540182528
+    PROP_multi_processor_count=28
+    PROP_max_threads_per_multi_processor=1536
+    PROP_warp_size=32
+    PROP_L2_cache_size=2359296
+    PROP_is_integrated=0
+    PROP_is_multi_gpu_board=0
+    PROP_regs_per_multiprocessor=65536
+    PROP_shared_memory_per_block=(absent)
+    PROP_shared_memory_per_multiprocessor=(absent)
+    PROP_CAPABILITY=8.6
+--- MINIMAL 4x4 matmul (before the model, before any large allocation) ---
+    MINMM_OK=1
+    MINMM_SUM=64
+HOST_XID_AFTER_MINMM=10
+--- the LLM itself (unchanged from llm_hook.sh) ---
+    LLM_DEVICE=cuda
+    TORCH_CUDA_AVAILABLE=True
+    TORCH_DEV_COUNT=1
+    Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+    [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+    Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:18<1:27:13, 18.11s/it]Loading weights:  63%|██████▎   | 183/290 [00:18<00:07, 14.27it/s]Loading weights: 100%|██████████| 290/290 [00:24<00:00, 11.90it/s]
+    LLM_TEXT= ______. A. Paris B. London C. New York D
+    LLM_OK=1
+    LLM_TOKENS=16
+    LLM_MS=681398.6
+    LLM_RC=0
+HOST_XID_AFTER_LLM=10
+
+W382_MINMM_OK=1  W382_MINMM_SUM=64
+W382_XIDS=10/10/10 (before/after-minmm/after-llm)
+LLM_TOKENS_GRADE=16
+=== ★★★★★ THE VERDICT — pre-registered, stated once
+    W382_OUTCOME=(S) cuBLAS WORKS on a fresh context (4x4 sum=64, un-forgeable).
+        ⇒ the w376 CUBLAS_STATUS_NOT_SUPPORTED was a SYMPTOM of the poisoned context,
+        not a properties wall. The fb-join fix is the whole answer for it.
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 34 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=173
+GUEST_DMESG_AFTER_NVRM=170
+GUEST_DMESG_WORKLOAD_DELTA=139
+=== HOST dmesg delta for this boot (watermark 42 → 42) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

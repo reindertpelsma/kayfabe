@@ -1,0 +1,112 @@
+=== boot_capture tag=w377race at 2026-09-06T13:00:35+00:00 ===
+=== source revision: d319ee6 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88574072 Sep  6 13:00 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:d319ee6a87bf8fb0bcdd1072b1315b36630dfa42 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=b16b5a22da708e68
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Sep  6 13:00:46 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  12288MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep  6 13:00 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep  6 13:00 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep  6 13:00 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep  6 13:00 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep  6 13:00 .
+drwxr-xr-x 18 root root   4000 Sep  6 13:00 ..
+cr--------  1 root root 240, 1 Sep  6 13:00 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep  6 13:00 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/racemap_hook.sh at 2026-09-06T13:00:49+00:00 ===
+=== ★★★★★ w377 LATE-MAP RACE — RAW CLIENT, PASSTHROUGH CHANNEL, NO libcuda ===
+RACEMAP_BIN_FOUND=yes (/workspace/bench/cargo-target-w297/release/kayfabe-rm-ladder, 2025104 bytes)
+--- guest preconditions ---
+GUEST_NVIDIA_NODES=/dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+GUEST_DRIVER=NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+--- rmladder --late-map-race (in guest) ---
+    info  RMLADDER ARGV     = [--late-map-race]
+    ok    R2 version         = "580.159.04"
+    ok    R4 hClient         = 0xc1d00013
+    ok    R6 hSubdevice      = 0xcafe0002
+    REV_UNDER_TEST=554c664a54794c1ad825948bf601fbe9e0e1678e
+    info  W377 late-map race  = GPU 0, euid 1000 — queue work behind a fence, ring ONCE, then map the memory it will touch
+    info  W377 the bar        = ARM A (map before the doorbell) must PASS, or ARM B is uninterpretable. ⊘ Neither arm's verdict is the ioctl's return value
+    info  W377-A map            = BEFORE the doorbell, at 0x0000000541000000
+    kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+    kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+    info  W377-A outcome      = NeverFetched { gp_get: 0, gp_put: 1 }
+    ??    W377-A CONTROL FAILED = the positive control did not land. ⊘ ARM B IS UNINTERPRETABLE: a red there would be this harness, not the driver. Read the outcome above — `NeverBlocked` means the acquire did not stall, `NeverFetched` means USERD/token/schedule, `Stalled` means the release never ran
+    info  W377-B map            = deferred until AFTER the doorbell
+    kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000003 runlist=0 chid=3 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+    kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000003 ★★★ WROTE — the store instruction executed
+    ok    W377-B parked         = target still 0xdead0000 (sentinel), GP_GET 0 GP_PUT 0 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+    ok    W377-B late map       = mapped at 0x0000000561000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+    info  W377-B outcome      = Stalled { gp_get: 0, gp_put: 0, fence: 4207805303, target: 3735879680 }
+    ??    W377 VERDICT        = UNINTERPRETABLE (positive control A failed)
+    done — late-map race only
+--- guest dmesg (a GUEST-visible fault lands here, not in the host log) ---
+    [   36.772128] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00011; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+    [   36.780326] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   36.780331] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   36.780334] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   36.780336] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   36.781216] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00011; hObject=0x3141590f; paramsStatus=0x00000000; status=0x00000056
+    [   36.781222] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   36.785077] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00012; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000000; status=0x00000056
+    [   36.845538] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0xcafe0001; hObject=0xcafe0005; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+    [   37.171639] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0xcafe0005; paramsStatus=0x00000000; status=0x00000056
+    [   37.171657] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   37.247420] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0xcafe0001; hObject=0xcafe000b; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; status=0x00000056
+    [   40.579243] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00013; hObject=0xcafe000b; paramsStatus=0x00000000; status=0x00000056
+    [   40.579254] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ mem.c:180
+    [   40.982885] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00012; hObject=0xcaf00002; paramsStatus=0x00000000; status=0x00000056
+    [   40.982893] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_client.c:844
+    [   40.982929] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:259
+    [   40.982958] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ rs_server.c:1375
+    [   40.983674] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+    [   41.360024] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+
+GUEST_ARM_A=NONE
+GUEST_ARM_B=NONE
+=== ★★★★★ THE GUEST VERDICT, stated once, in the pre-registered vocabulary
+    RACEMAP_OUTCOME=(E) ⊘ UNMEASURED — no RACEMAP_ARM_ line at all. NOT a failure value.
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 34 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=30
+GUEST_DMESG_AFTER_NVRM=30
+GUEST_DMESG_WORKLOAD_DELTA=-4
+=== HOST dmesg delta for this boot (watermark 0 → 0) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0
