@@ -13458,7 +13458,22 @@ impl Regs {
             // double-counts makes `publications / armed` — the ratio C1 is graded on — wrong
             // by a factor nobody would question, because 754 is a plausible number.
             if let Some(line) = self.doorbell_port.publish_ctx().publish_vas_rows(val, None) {
-                eprintln!("kayfabe: MMUINVAL-PUBLISH {line}");
+                // ⊘⊘ **FLATTEN, DO NOT PRINT VERBATIM — measured 2026-09-08, boot w390c3.**
+                // `publish_vas_rows` splices `"\nkayfabe: "` between its pin clause and its
+                // publish summary, so a naive `eprintln!("… MMUINVAL-PUBLISH {line}")` tags
+                // ONLY THE FIRST OF THE TWO LINES. The summary — the half carrying
+                // `published=`, `refused=` and `over N VAS row(s)` — came out untagged and
+                // therefore INDISTINGUISHABLE from the doorbell's own publishes in the same
+                // log. `[measured]` `grep MMUINVAL-PUBLISH | grep published=` returned **0**
+                // over a boot in which the pass ran 377 times, and the row histogram mixed
+                // both producers into one pile of 1212.
+                // ⇒ One physical line per invocation, so every clause is attributable to the
+                // trigger that caused it. ⚠ Same class as `a_count_cannot_see_a_substitution`:
+                // the log looked complete and was silently reporting someone else's numbers.
+                eprintln!(
+                    "kayfabe: MMUINVAL-PUBLISH {}",
+                    line.replace("\nkayfabe: ", "  ⏎  ")
+                );
             }
         }
         // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
