@@ -719,7 +719,12 @@ pub fn commit_pt_sweep(
     proc: &mut Proc,
     results: &[PtDecodeResult],
 ) -> PtDecodeOutcome {
-    commit_pt_sweep_inner(fmt, proc, results, kayfabe_mmu::reach::PublishedUnbind::Refuse)
+    commit_pt_sweep_inner(
+        fmt,
+        proc,
+        results,
+        kayfabe_mmu::reach::PublishedUnbind::Refuse,
+    )
 }
 
 fn commit_pt_sweep_inner(

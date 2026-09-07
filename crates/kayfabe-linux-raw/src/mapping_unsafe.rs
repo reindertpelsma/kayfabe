@@ -677,7 +677,11 @@ fn pmd_mapped_bytes(base: usize, len: usize) -> Option<u64> {
         }
         if in_vma {
             // A new header line (hex-hex perms) ends this VMA's block.
-            if line.split(' ').next().is_some_and(|f| f.contains('-') && !line.contains("kB")) {
+            if line
+                .split(' ')
+                .next()
+                .is_some_and(|f| f.contains('-') && !line.contains("kB"))
+            {
                 break;
             }
             for key in ["ShmemPmdMapped:", "FilePmdMapped:", "AnonHugePages:"] {
@@ -1220,11 +1224,16 @@ mod tests {
         // pages depends on `shmem_enabled`/THP config, which is a property of the host this
         // test happens to run on. Asserting it would make a correct build red on a correctly
         // configured host — and asserting `== 0` would make it red on the hosts we WANT.
-        let _pmd = r.request_huge_pages().expect("madvise is accepted on a private mapping");
+        let _pmd = r
+            .request_huge_pages()
+            .expect("madvise is accepted on a private mapping");
 
         let mut got = vec![0u8; len as usize];
         r.read_into(HostOffset::ZERO, &mut got).expect("read back");
-        assert_eq!(got, want, "the fault-in changed bytes it was only supposed to touch");
+        assert_eq!(
+            got, want,
+            "the fault-in changed bytes it was only supposed to touch"
+        );
     }
 
     fn page() -> HostPageSize {

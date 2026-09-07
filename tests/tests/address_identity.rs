@@ -233,7 +233,13 @@ fn the_same_va_twice_in_one_vas_is_a_loud_overlap_with_no_host_work() {
             .expect("materialized isolate")
             .checkout()
             .expect("a free worker");
-        assert_eq!(w.execute(&orphans.release_plan(), &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")), Ok(VerbReply::Released));
+        assert_eq!(
+            w.execute(
+                &orphans.release_plan(),
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+            ),
+            Ok(VerbReply::Released)
+        );
         proc.isolate_mut(GPU).expect("isolate").checkin(w);
     }
     let again = publish_backing(
@@ -334,11 +340,14 @@ fn the_worker_itself_refuses_a_drifted_placement() {
     // Baseline: with no drift the same plan succeeds AND lands where asked. Without this
     // the negative case below could be passing for any reason at all.
     let ok = w
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: SHARED_VA,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: SHARED_VA,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("the honest chain runs");
     let VerbReply::Published { host_va, .. } = ok else {
         panic!("wrong reply: {ok:?}")
@@ -347,11 +356,14 @@ fn the_worker_itself_refuses_a_drifted_placement() {
 
     rec.lock().expect("recorder").placement_drift = Some(0x20_0000);
     let failure = w
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: GpuVa(SHARED_VA.0 + 0x100_0000),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: GpuVa(SHARED_VA.0 + 0x100_0000),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect_err("a drifted placement is refused at the seam");
     assert_eq!(
         failure.err,

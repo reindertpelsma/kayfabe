@@ -58,11 +58,19 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
             handles.push(std::thread::spawn(move || {
                 for _ in 0..verbs {
                     let start = origin.elapsed().as_nanos();
-                    let h = w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace());
+                    let h = w.with_rm(
+                        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+                        |rm| rm.alloc_vaspace(),
+                    );
                     let end = origin.elapsed().as_nanos();
                     spans.lock().expect("spans").push((t, start, end));
                     if let Ok(h) = h {
-                        let _ = w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.free(h));
+                        let _ = w.with_rm(
+                            &kayfabe_util::trapwitness::OffTrap::claim(
+                                "a test / adapter host verb",
+                            ),
+                            |rm| rm.free(h),
+                        );
                     }
                 }
                 w

@@ -113,11 +113,14 @@ fn a_real_isolate_serves_a_verb_chain_through_the_port() {
     assert!(!isolate.is_quiesced(), "a checked-out worker is in flight");
 
     let reply = w
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("the child served it");
     match reply {
         VerbReply::Published {
@@ -159,7 +162,13 @@ fn every_verb_shape_survives_the_round_trip() {
         None,
     )
     .expect("the gate passes an all-published working set");
-    match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")).expect("doorbell") {
+    match w
+        .execute(
+            &plan,
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
+        .expect("doorbell")
+    {
         VerbReply::Doorbell {
             host_vas: Some(_),
             channel: Some((chan, token)),
@@ -173,25 +182,37 @@ fn every_verb_shape_survives_the_round_trip() {
 
     // A control, payload in and out by value.
     let obj = w
-        .with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace())
+        .with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.alloc_vaspace(),
+        )
         .expect("a control target");
     let plan = VerbPlan::Control {
         obj,
         cmd: kayfabe_isolate::ControlCmd(0x801813),
         payload: vec![0xAB; 32],
     };
-    match w.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")).expect("control") {
+    match w
+        .execute(
+            &plan,
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
+        .expect("control")
+    {
         VerbReply::Control { payload } => assert_eq!(payload, vec![0xAB; 32]),
         other => panic!("expected a control reply, got {other:?}"),
     }
 
     // And the disposal path.
     assert_eq!(
-        w.execute(&VerbPlan::Release {
-            unmap: Vec::new(),
-            free: vec![obj],
-            guest_ram: Vec::new(),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")),
+        w.execute(
+            &VerbPlan::Release {
+                unmap: Vec::new(),
+                free: vec![obj],
+                guest_ram: Vec::new(),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+        ),
         Ok(VerbReply::Released)
     );
     isolate.checkin(w);
@@ -206,11 +227,14 @@ fn an_unknown_handle_is_a_bad_handle_and_not_a_wedge() {
     let mut w = isolate.checkout().expect("worker");
     let bogus = HostHandle::new(iso(3), 0xDEAD_BEEF);
     let failure = w
-        .execute(&VerbPlan::Release {
-            unmap: Vec::new(),
-            free: vec![bogus],
-            guest_ram: Vec::new(),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Release {
+                unmap: Vec::new(),
+                free: vec![bogus],
+                guest_ram: Vec::new(),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect_err("an unknown handle must be refused");
     assert_eq!(failure.err, RmError::BadHandle(bogus));
     // The disposal path reports what it could not dispose of, rather than swallowing it.
@@ -232,8 +256,18 @@ fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
     let mut wa = a.checkout().expect("worker a");
     let mut wb = b.checkout().expect("worker b");
 
-    let ha = wa.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace()).expect("a's vas");
-    let hb = wb.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.alloc_vaspace()).expect("b's vas");
+    let ha = wa
+        .with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.alloc_vaspace(),
+        )
+        .expect("a's vas");
+    let hb = wb
+        .with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.alloc_vaspace(),
+        )
+        .expect("b's vas");
 
     assert_eq!(
         ha.raw(),
@@ -247,11 +281,14 @@ fn two_real_isolates_mint_colliding_values_and_the_gate_is_what_refuses_them() {
 
     // Present a's handle on b's connection through the port. Refused before any verb runs.
     let failure = wb
-        .execute(&VerbPlan::Publish {
-            host_vas: Some(ha),
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: Some(ha),
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect_err("a foreign handle must be refused");
     assert_eq!(
         failure.err,
@@ -284,7 +321,10 @@ fn spawn_verb(
 ) -> (mpsc::Receiver<VerbOutcome>, std::thread::JoinHandle<()>) {
     let (tx, rx) = mpsc::channel();
     let h = std::thread::spawn(move || {
-        let r = worker.execute(&plan, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
+        let r = worker.execute(
+            &plan,
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        );
         let _ = tx.send((worker, r));
     });
     (rx, h)
@@ -320,11 +360,14 @@ fn parallelism_comes_from_isolates_and_a_parked_client_does_not_stall_its_peers(
     // lucky interleaving.
     let mut wb = b.checkout().expect("b's worker");
     for round in 0..8 {
-        let reply = wb.execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
+        let reply = wb.execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        );
         assert!(
             reply.is_ok(),
             "round {round}: a peer isolate stalled behind a parked one: {reply:?}"
@@ -440,11 +483,14 @@ fn the_pool_does_not_buy_wire_concurrency_on_one_client() {
         let mut sibling_won = false;
         for round in 0..8 {
             assert!(
-                wp.execute(&VerbPlan::Publish {
-                    host_vas: None,
-                    len: 0x1000,
-                    at: AT,
-                }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+                wp.execute(
+                    &VerbPlan::Publish {
+                        host_vas: None,
+                        len: 0x1000,
+                        at: AT,
+                    },
+                    &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+                )
                 .is_ok(),
                 "round {round}: the peer isolate must keep running"
             );
@@ -517,11 +563,14 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
         .cancel_handle(kayfabe_isolate::WorkerId(0))
         .expect("armed while checked out");
     assert!(
-        w.execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        w.execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+        )
         .is_ok()
     );
     isolate.checkin(w);
@@ -534,11 +583,14 @@ fn a_cancel_for_a_finished_transaction_is_dropped() {
     // …and the NEXT checkout is unharmed, which is the property the txn id exists for.
     let mut w = isolate.checkout().expect("worker again");
     assert!(
-        w.execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        w.execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+        )
         .is_ok(),
         "a stale cancel landed on an innocent later operation"
     );
@@ -662,11 +714,14 @@ fn a_retired_isolate_refuses_new_checkouts() {
     // …and the worker that was already out still completes.
     let mut w = w;
     assert!(
-        w.execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        w.execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")
+        )
         .is_ok()
     );
     isolate.checkin(w);
@@ -772,11 +827,14 @@ fn a_verb_under_a_ranked_lock_panics_naming_r1() {
     let mut w = isolate.checkout().expect("worker");
     kayfabe_util::lockwitness::note_acquired(1);
     let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = w.execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: AT,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
+        let _ = w.execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: AT,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        );
     }));
     kayfabe_util::lockwitness::note_released(1);
     let payload = caught.expect_err("R1 must fire");
@@ -876,11 +934,14 @@ fn an_environment_variable_can_no_longer_redirect_the_isolate() {
         );
         let mut w = isolate.checkout().expect("worker");
         let reply = w
-            .execute(&VerbPlan::Publish {
-                host_vas: None,
-                len: 0x1000,
-                at: AT,
-            }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+            .execute(
+                &VerbPlan::Publish {
+                    host_vas: None,
+                    len: 0x1000,
+                    at: AT,
+                },
+                &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            )
             .expect("the EMBEDDED isolate served the verb");
         assert!(
             matches!(reply, VerbReply::Published { .. }),

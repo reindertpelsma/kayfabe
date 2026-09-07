@@ -226,7 +226,10 @@ fn the_scanner_catches_every_spelling_a_mint_has() {
 #[test]
 fn every_declared_mint_site_states_why_it_is_still_inline() {
     for (file, n, why) in DECLARED_MINT_SITES {
-        assert!(*n > 0, "{file}: a declared row with count 0 declares nothing");
+        assert!(
+            *n > 0,
+            "{file}: a declared row with count 0 declares nothing"
+        );
         assert!(
             why.len() > 80,
             "{file}: the reason is too short to be a reason ({} chars)",

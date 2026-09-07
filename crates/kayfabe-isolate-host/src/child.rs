@@ -362,7 +362,8 @@ fn control_loop(control: &UnixDatagram, slots: &[Mutex<SlotState>]) {
 /// the only ones the drain issues 13 313 times. A per-variant table would report thirty
 /// zeros beside the three numbers that matter.
 const W321_BUCKETS: usize = 4;
-const W321_NAMES: [&str; W321_BUCKETS] = ["map_guest_ram", "describe_guest_ram", "map_gpu_va", "other"];
+const W321_NAMES: [&str; W321_BUCKETS] =
+    ["map_guest_ram", "describe_guest_ram", "map_gpu_va", "other"];
 
 fn w321_bucket(r: &Request) -> usize {
     match r {

@@ -105,8 +105,8 @@
 //! this tree's existing 1 % convention as the ceiling: [`INVALIDATE_HOLD_BUDGET_US`].
 
 use std::collections::BTreeSet;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// `DRF_BASE(NV_VIRTUAL_FUNCTION)` — how far the advertised usermode window sits above the
 /// `PRIV` block both live in. See the module docs §2.
@@ -545,7 +545,10 @@ mod tests {
     #[test]
     fn the_offsets_are_the_ones_the_vendor_headers_name() {
         let regs = invalidate_regs(&crate::ga10x::GA106).expect("GA106 advertises USERMODE");
-        assert_eq!(regs.trigger, 0x00B8_30B0, "NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE");
+        assert_eq!(
+            regs.trigger, 0x00B8_30B0,
+            "NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE"
+        );
         assert_eq!(regs.pdb, 0x00B8_30A0, "…_MMU_INVALIDATE_PDB");
         assert_eq!(regs.upper_pdb, 0x00B8_30A4, "…_MMU_INVALIDATE_UPPER_PDB");
     }
@@ -570,8 +573,14 @@ mod tests {
         // MmioWr bar0 0xb830a0 = 0x02efba50 ; 0xb830a4 = 0x0 ; 0xb830b0 = 0x80010001
         let inv = Invalidate::decode(0x8001_0001, 0x02ef_ba50, 0x0);
         assert!(inv.trigger, "bit 31");
-        assert!(inv.all_va, "ALL_VA — the C recorded ALL_VA=1 on every one of 308");
-        assert!(!inv.all_pdb, "ALL_PDB=0 on every one of 308 — it always names ONE pdb");
+        assert!(
+            inv.all_va,
+            "ALL_VA — the C recorded ALL_VA=1 on every one of 308"
+        );
+        assert!(
+            !inv.all_pdb,
+            "ALL_PDB=0 on every one of 308 — it always names ONE pdb"
+        );
         assert!(!inv.hubtlb_only, "a GPU VA space, not a BAR one");
         assert_eq!(inv.inval_scope, 2, "NON_LINK_TLBS");
         assert_eq!(inv.replay, 0, "CPU-RM never writes REPLAY_START");
@@ -623,7 +632,11 @@ mod tests {
         log.note_trigger(0x8000_0001, 0);
         log.complete(5_000);
         log.complete(9_999_999);
-        assert_eq!(log.snapshot().worst_hold_us, 5_000, "the second call is a no-op");
+        assert_eq!(
+            log.snapshot().worst_hold_us,
+            5_000,
+            "the second call is a no-op"
+        );
         assert!(!log.pending());
     }
 
@@ -635,7 +648,11 @@ mod tests {
         for _ in 0..8 {
             let (_, act) = log.note_trigger(0x8001_0001, 0);
             assert_eq!(act, TriggerAction::Observed);
-            assert_eq!(log.read_trigger(), 0, "⊘ a disarmed plane can never hang a guest");
+            assert_eq!(
+                log.read_trigger(),
+                0,
+                "⊘ a disarmed plane can never hang a guest"
+            );
         }
         let s = log.snapshot();
         assert_eq!(s.triggers, 8, "…and it still MEASURES");
@@ -664,7 +681,10 @@ mod tests {
         let s = log.snapshot();
         assert_eq!(s.triggers, 3);
         assert_eq!(s.doorbells, 2);
-        assert_eq!(s.triggers_at_first_doorbell, 2, "two arrived before any submission");
+        assert_eq!(
+            s.triggers_at_first_doorbell, 2,
+            "two arrived before any submission"
+        );
         assert!(log.census().contains("triggers_per_doorbell=1.5000"));
     }
 
@@ -683,12 +703,20 @@ mod tests {
     fn an_all_pdb_invalidate_names_no_single_pdb() {
         let log = MmuInvalidateLog::new();
         log.note_pdb_write(
-            InvalidateRegs { trigger: 0xB830B0, pdb: 0xB830A0, upper_pdb: 0xB830A4 },
+            InvalidateRegs {
+                trigger: 0xB830B0,
+                pdb: 0xB830A0,
+                upper_pdb: 0xB830A4,
+            },
             0xB830A0,
             0x02ef_ba50,
         );
         let (inv, _) = log.note_trigger(0x8000_0003, 0);
         assert!(inv.all_pdb);
-        assert_eq!(log.snapshot().distinct_pdbs, 0, "⊘ a stale latch is not a target");
+        assert_eq!(
+            log.snapshot().distinct_pdbs,
+            0,
+            "⊘ a stale latch is not a target"
+        );
     }
 }

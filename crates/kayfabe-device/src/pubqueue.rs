@@ -425,10 +425,7 @@ impl PublicationQueue {
     /// This queue's numbers.
     #[must_use]
     pub fn stats(&self) -> QueueStats {
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .stats
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).stats
     }
 
     /// Tell the worker to finish the queue and exit.
@@ -546,7 +543,11 @@ mod tests {
         assert_eq!(q.offer(MapPublication::for_doorbell(1)), Offered::Queued);
         assert_eq!(q.offer(MapPublication::for_doorbell(2)), Offered::Full);
         assert_eq!(q.stats().refused, 1);
-        assert!(q.census().contains("ran INLINE under the BQL"), "{}", q.census());
+        assert!(
+            q.census().contains("ran INLINE under the BQL"),
+            "{}",
+            q.census()
+        );
         // …and the control: below the cap, no refusal and no warning.
         let ok = PublicationQueue::with_cap(4);
         ok.offer(MapPublication::for_doorbell(1));
@@ -563,7 +564,11 @@ mod tests {
             q.offer(MapPublication::for_doorbell(t));
         }
         assert_eq!(q.depth(), 1000);
-        assert_eq!(q.completed(), 0, "nothing has executed, and the offer did not wait");
+        assert_eq!(
+            q.completed(),
+            0,
+            "nothing has executed, and the offer did not wait"
+        );
     }
 
     /// The worker end: blocks, wakes on an offer, and exits on `stop` rather than parking

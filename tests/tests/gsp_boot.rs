@@ -3479,8 +3479,7 @@ fn a_fresh_guest_on_a_recycled_region_resets_the_sequence() {
     w.guest.send(&mut w.ram, FN_RM_CONTROL, 2, &[1; 8]).unwrap();
 
     w.wr(GspReg::GspFalconCpuctl, m.startcpu()).unwrap(); // E1
-    w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF)
-        .unwrap();
+    w.wr(GspReg::GspFalconMailbox0, gpa & 0xFFFF_FFFF).unwrap();
     let r = w.wr(GspReg::GspFalconMailbox1, gpa >> 32).unwrap();
     assert!(r.transitions.contains(&Transition::E6), "the queue rebinds");
 

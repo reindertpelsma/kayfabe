@@ -123,7 +123,12 @@ impl Arm {
     /// environment. ⊘ Split out from [`arm`] precisely so it is testable: an arming parser
     /// that can only be exercised by setting a process-global is a parser with no test.
     #[must_use]
-    pub fn parse(mode: Option<&str>, inject_us: Option<&str>, seg: Option<&str>, every: Option<&str>) -> Self {
+    pub fn parse(
+        mode: Option<&str>,
+        inject_us: Option<&str>,
+        seg: Option<&str>,
+        every: Option<&str>,
+    ) -> Self {
         let on;
         let per_event;
         match mode.unwrap_or("").trim() {
@@ -140,7 +145,9 @@ impl Arm {
                 per_event = true;
             }
         }
-        let inject_us = inject_us.and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(0);
+        let inject_us = inject_us
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0);
         // ⊘ `&'static str` because the census keys on segment names by pointer-free equality
         // and the names in the code are literals. An injected name that matches no segment is
         // NOT an error here — it is reported by the census showing zero injected microseconds
@@ -149,7 +156,9 @@ impl Arm {
             "" => "",
             s => Box::leak(s.to_owned().into_boxed_str()),
         };
-        let census_every = every.and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(200);
+        let census_every = every
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(200);
         Self {
             on,
             per_event,
@@ -182,7 +191,12 @@ pub fn arm() -> Arm {
         let ius = std::env::var(KFTIME_INJECT_US_ENV).ok();
         let seg = std::env::var(KFTIME_INJECT_SEG_ENV).ok();
         let every = std::env::var(KFTIME_CENSUS_EVERY_ENV).ok();
-        let a = Arm::parse(mode.as_deref(), ius.as_deref(), seg.as_deref(), every.as_deref());
+        let a = Arm::parse(
+            mode.as_deref(),
+            ius.as_deref(),
+            seg.as_deref(),
+            every.as_deref(),
+        );
         if a.on {
             eprintln!(
                 "kayfabe: KFTIME ARMED per_event={} inject_us={} inject_seg={} census_every={} \
@@ -192,7 +206,11 @@ pub fn arm() -> Arm {
                  is NESTING (the guest is stopped for the whole trap).{}",
                 a.per_event,
                 a.inject_us,
-                if a.inject_seg.is_empty() { "<none>" } else { a.inject_seg },
+                if a.inject_seg.is_empty() {
+                    "<none>"
+                } else {
+                    a.inject_seg
+                },
                 a.census_every,
                 if a.inject_us > 0 {
                     " ⚠⚠ A DELAY IS BEING INJECTED — this boot is the KNOWN-POSITIVE and its \
@@ -882,15 +900,26 @@ mod tests {
         let mut base = Census::default();
         let mut hot = Census::default();
         for _ in 0..5 {
-            base.record(&segs_of(&[("cheap", 100), ("victim", 200), ("other", 300)], 600));
+            base.record(&segs_of(
+                &[("cheap", 100), ("victim", 200), ("other", 300)],
+                600,
+            ));
             hot.record(&segs_of(
                 &[("cheap", 100), ("victim", 200 + INJECT_US), ("other", 300)],
                 600 + INJECT_US,
             ));
         }
         let find = |c: &Census, n: &str| c.segs.iter().find(|r| r.0 == n).expect("seg").2;
-        assert_eq!(find(&hot, "cheap"), find(&base, "cheap"), "an innocent segment moved");
-        assert_eq!(find(&hot, "other"), find(&base, "other"), "an innocent segment moved");
+        assert_eq!(
+            find(&hot, "cheap"),
+            find(&base, "cheap"),
+            "an innocent segment moved"
+        );
+        assert_eq!(
+            find(&hot, "other"),
+            find(&base, "other"),
+            "an innocent segment moved"
+        );
         assert_eq!(
             find(&hot, "victim") - find(&base, "victim"),
             5 * INJECT_US,
@@ -928,11 +957,33 @@ mod tests {
     #[test]
     fn every_hooked_segment_has_a_shape_and_the_two_kinds_are_distinguished() {
         for n in [
-            "plane", "plane_read", "materialize", "ring_adopt", "err_grants", "fwd_drain",
-            "reap", "ce_try", "ce_terminal", "ringproj", "pt_witness", "pt_decode",
-            "pt_sweep", "pt_vascensus", "bindcensus", "pin_ring", "operand_join",
-            "vas_publish", "err_notifier", "vmm_lock", "vmm_unlock", "core", "core_rm_ipc",
-            "log_ptdecode", "log_pin_ring", "log_operand_join", "log_vas_publish",
+            "plane",
+            "plane_read",
+            "materialize",
+            "ring_adopt",
+            "err_grants",
+            "fwd_drain",
+            "reap",
+            "ce_try",
+            "ce_terminal",
+            "ringproj",
+            "pt_witness",
+            "pt_decode",
+            "pt_sweep",
+            "pt_vascensus",
+            "bindcensus",
+            "pin_ring",
+            "operand_join",
+            "vas_publish",
+            "err_notifier",
+            "vmm_lock",
+            "vmm_unlock",
+            "core",
+            "core_rm_ipc",
+            "log_ptdecode",
+            "log_pin_ring",
+            "log_operand_join",
+            "log_vas_publish",
         ] {
             let sh = segment_shape(n);
             assert!(matches!(sh, "work" | "host" | "log"), "{n} -> {sh}");
@@ -971,7 +1022,10 @@ mod tests {
             h2.record(0, i * 4, 1);
         }
         let r2 = h2.report("mmio_read", "test");
-        assert!(r2.contains("OVERFLOW"), "a capped census must SAY it capped: {r2}");
+        assert!(
+            r2.contains("OVERFLOW"),
+            "a capped census must SAY it capped: {r2}"
+        );
         assert!(r2.contains("the answer may be among them"), "{r2}");
     }
 

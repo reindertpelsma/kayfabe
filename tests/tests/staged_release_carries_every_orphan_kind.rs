@@ -45,9 +45,9 @@
 //! lane must collect is named in `docs/design/publication_off_the_bql.md` §8.
 
 use kayfabe_arch::ids::{GpuId, HClient, HObject, Pdb, VChid};
+use kayfabe_core::ProcId;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::{Gpu, Proc};
-use kayfabe_core::ProcId;
 use kayfabe_isolate::{GuestRamMapped, HostHandle, IsolateId, Orphans};
 use kayfabe_mocks::{MockArch, MockIsolateFactory};
 use kayfabe_tests::{Scenario, identical_handles};
@@ -192,7 +192,10 @@ fn an_empty_residue_creates_no_queue_entry() {
 #[test]
 fn a_budgeted_split_still_issues_every_unmap_before_any_munmap() {
     let mut q = Orphans {
-        unmap: vec![(HostHandle::new(ISO, 1), 0x1000), (HostHandle::new(ISO, 1), 0x2000)],
+        unmap: vec![
+            (HostHandle::new(ISO, 1), 0x1000),
+            (HostHandle::new(ISO, 1), 0x2000),
+        ],
         free: vec![HostHandle::new(ISO, 2)],
         guest_ram: vec![GuestRamMapped {
             region: HostHandle::new(ISO, 3),
@@ -201,8 +204,22 @@ fn a_budgeted_split_still_issues_every_unmap_before_any_munmap() {
     };
     // A budget that lands *inside* the queue: the first batch may not reach `guest_ram`.
     let first = q.split_off_budget(2);
-    assert_eq!((first.unmap.len(), first.free.len(), first.guest_ram.len()), (2, 0, 0));
+    assert_eq!(
+        (first.unmap.len(), first.free.len(), first.guest_ram.len()),
+        (2, 0, 0)
+    );
     let second = q.split_off_budget(2);
-    assert_eq!((second.unmap.len(), second.free.len(), second.guest_ram.len()), (0, 1, 1));
-    assert_eq!(q.len(), 0, "nothing may be discarded or duplicated by a split");
+    assert_eq!(
+        (
+            second.unmap.len(),
+            second.free.len(),
+            second.guest_ram.len()
+        ),
+        (0, 1, 1)
+    );
+    assert_eq!(
+        q.len(),
+        0,
+        "nothing may be discarded or duplicated by a split"
+    );
 }

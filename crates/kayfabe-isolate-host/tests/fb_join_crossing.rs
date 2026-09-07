@@ -97,12 +97,15 @@ fn with_all_workers<T>(iso: &mut HostIsolate, f: impl FnOnce(&mut [Worker]) -> T
 /// path no boot takes. `host_vas: None` lets the chain allocate its own VAS, which is the
 /// arm a first join on a fresh address space takes.
 fn join_on(w: &mut Worker) -> FbLeafJoined {
-    match w.execute(&VerbPlan::JoinFbLeaf {
-        host_vas: None,
-        len: LEN,
-        at: AT,
-        phys: PHYS,
-    }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb")) {
+    match w.execute(
+        &VerbPlan::JoinFbLeaf {
+            host_vas: None,
+            len: LEN,
+            at: AT,
+            phys: PHYS,
+        },
+        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+    ) {
         Ok(VerbReply::FbLeafJoined { joined, .. }) => joined,
         other => panic!("the join chain must answer FbLeafJoined, got {other:?}"),
     }

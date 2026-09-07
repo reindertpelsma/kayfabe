@@ -366,11 +366,14 @@ fn the_device_class_is_refused_by_name_and_nothing_crosses() {
     // A real object in this isolate's namespace, so the refusal cannot be a `BadHandle`
     // wearing another error's clothes.
     let memory = with_worker(&mut iso, |w| {
-        w.execute(&kayfabe_isolate::VerbPlan::Publish {
-            host_vas: None,
-            len: 4096,
-            at: kayfabe_arch::ids::GpuVa(0x2_0000_0000),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        w.execute(
+            &kayfabe_isolate::VerbPlan::Publish {
+                host_vas: None,
+                len: 4096,
+                at: kayfabe_arch::ids::GpuVa(0x2_0000_0000),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
     })
     .expect("a publish must succeed against the fixture");
     let kayfabe_isolate::VerbReply::Published { memory, .. } = memory else {

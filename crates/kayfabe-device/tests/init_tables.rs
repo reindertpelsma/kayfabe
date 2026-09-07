@@ -540,8 +540,7 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
         .filter(|id| kayfabe_abi::gsslegacy::carries_cache_argument(*id))
         .collect();
     assert_eq!(
-        gss_legacy_served,
-        argument_bearing,
+        gss_legacy_served, argument_bearing,
         "the guest caches a GSS-legacy answer from OUR reply's flags \
          (`rmapiControlCacheSetUnchecked`), so every id here has to carry its own argument. \
          Adding one means writing that argument, not extending this set"

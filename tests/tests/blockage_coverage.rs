@@ -430,3 +430,139 @@ fn a_corrupted_kind_is_caught_and_named_rather_than_recomputed() {
         "the offending channel must be named, not merely counted: {line}"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w390 — THE TLB-INVALIDATE BLOCKAGE POINT'S TWO WIRES
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//
+// `MmuInvalidateLog` has been complete since w326 and DEAD since w326: `arm` had no caller
+// and `WriteOutcome::publish_before_completing` had no consumer, so `note_trigger` answered
+// `Observed` on every boot and the halt spent nothing. w390 wires both. These tests assert
+// the property the wiring turns on — not that the code exists.
+//
+// ⊘ THEY ARE WRITTEN TO GO RED IF EITHER WIRE IS PULLED, and each says which:
+//   - unwire `arm`            ⇒ `armed_trigger_demands_a_publication` fails (it gets
+//                               `Observed` and the guest is never held).
+//   - unwire the consumer     ⇒ `a_publication_that_panics_still_clears` cannot even be
+//                               written against the shell, so it is asserted here against
+//                               the type's own contract, which is where the guarantee lives.
+mod w390_invalidate_blockage {
+    use kayfabe_device::mmuinval::{MmuInvalidateLog, TriggerAction};
+
+    /// The raw value of a write that sets `TRIGGER` and nothing else.
+    ///
+    /// ⊘ **Bit 31, taken from `Invalidate::decode`'s own `raw & (1 << 31)`** — not from the
+    /// name. The first draft of this file used `1`, which is `ALL_VA`, and every armed
+    /// assertion came back `Observed`: a scope bit read as a commit. ★ That the tests went
+    /// RED rather than green is the point — a constant guessed from a doc comment is exactly
+    /// what a suite asserting only "the code ran" would have missed.
+    const TRIGGER: u32 = 1 << 31;
+
+    /// ⊘ **THE CONTROL, and it must come first.** Disarmed is byte-identical to every boot
+    /// before w390: the trigger is counted and answered immediately. A test suite that only
+    /// checked the armed arm could not tell "the arm works" from "the arm is always on",
+    /// and always-on is a guest hang on every boot.
+    #[test]
+    fn disarmed_answers_immediately_and_still_counts() {
+        let log = MmuInvalidateLog::new();
+        let (_, act) = log.note_trigger(TRIGGER, 0);
+        assert_eq!(
+            act,
+            TriggerAction::Observed,
+            "a DISARMED log must answer the guest immediately — this is the pre-w390 \
+             behaviour and the byte-comparable control"
+        );
+        assert!(
+            !log.pending(),
+            "nothing may be outstanding on the control arm, or the guest spins on a boot \
+             that never asked for this lane"
+        );
+        assert_eq!(
+            log.read_trigger(),
+            0,
+            "the guest's poll must read TRIGGER clear while disarmed"
+        );
+        assert_eq!(
+            log.snapshot().triggers,
+            1,
+            "★ the CENSUS still counts on the control arm — that is what makes the control \
+             a measurement rather than a silence"
+        );
+    }
+
+    /// ★ **The wire w390 adds.** An armed trigger demands a publication and holds the guest
+    /// until one is reported. ⊘ If `arm`'s caller is removed this fails on the first assert.
+    #[test]
+    fn armed_trigger_demands_a_publication_and_holds_the_guest() {
+        let log = MmuInvalidateLog::new();
+        log.arm();
+        let (_, act) = log.note_trigger(TRIGGER, 1_000);
+        assert_eq!(
+            act,
+            TriggerAction::Publish,
+            "★ an ARMED trigger must tell the caller to publish — this is the blockage \
+             point spending something, and it is the whole of w390"
+        );
+        assert!(log.pending(), "a publication must be outstanding");
+        assert_ne!(
+            log.read_trigger(),
+            0,
+            "★★★ THE GUEST MUST SEE TRIGGER SET while the publication is outstanding — \
+             this is what makes `kgmmuCheckPendingInvalidates_TU102` spin, i.e. what makes \
+             this a blockage point at all rather than a place we happen to run code"
+        );
+        log.complete(1_500);
+        assert!(!log.pending(), "completion must clear the outstanding flag");
+        assert_eq!(
+            log.read_trigger(),
+            0,
+            "and the guest's next poll must return"
+        );
+        assert_eq!(
+            log.snapshot().worst_hold_us,
+            500,
+            "the hold is measured from the caller's own clock — 1500 - 1000. ⚠ Every \
+             microsecond of it is a microsecond the guest spun"
+        );
+    }
+
+    /// ⊘⊘ **THE LIVENESS OBLIGATION, asserted rather than commented.** The shell completes
+    /// in a `Drop` guard precisely so a publication that panics or returns early still
+    /// clears. This asserts the type supports that: `complete` is idempotent, so a guard
+    /// that fires alongside an explicit call costs nothing the second time — which is what
+    /// lets the guard be unconditional.
+    #[test]
+    fn completion_is_idempotent_so_the_drop_guard_can_be_unconditional() {
+        let log = MmuInvalidateLog::new();
+        log.arm();
+        log.note_trigger(TRIGGER, 0);
+        log.complete(100);
+        let after_first = log.snapshot().worst_hold_us;
+        log.complete(9_999_999);
+        assert!(!log.pending());
+        assert_eq!(
+            log.snapshot().worst_hold_us,
+            after_first,
+            "⊘ a second completion must not re-stamp the hold — otherwise the Drop guard \
+             firing after an explicit complete would report a hold that never happened, and \
+             the over-budget count would be measuring the guard rather than the guest"
+        );
+    }
+
+    /// ⊘ A write that does NOT set `TRIGGER` is scope bits being latched, not a commit.
+    /// Publishing on it would publish BEFORE the guest said its tables were ready — the one
+    /// ordering this whole plane exists to respect.
+    #[test]
+    fn a_non_trigger_write_never_publishes_even_when_armed() {
+        let log = MmuInvalidateLog::new();
+        log.arm();
+        let (_, act) = log.note_trigger(0, 0);
+        assert_eq!(
+            act,
+            TriggerAction::Observed,
+            "★★★ scope bits without TRIGGER are a LATCH. Publishing here would publish \
+             before the guest committed its page tables"
+        );
+        assert!(!log.pending(), "and the guest must not be held for a latch");
+    }
+}

@@ -502,10 +502,11 @@ impl ProxyRmBackend {
         // refusal: a compromised isolate is inside the threat model.
         // ⊘ `RegularFile`: this crossing asked for FABRICATED memory, so a child answering
         // with a device node is refused exactly as it was before `adopt` took a kind.
-        let Ok(token) = self
-            .exports
-            .adopt(fd, self.isolate, kayfabe_linux_raw::DescriptorKind::RegularFile)
-        else {
+        let Ok(token) = self.exports.adopt(
+            fd,
+            self.isolate,
+            kayfabe_linux_raw::DescriptorKind::RegularFile,
+        ) else {
             return Err(RmError::Wedged);
         };
         Ok(ExportedBacking {
@@ -563,10 +564,11 @@ impl ProxyRmBackend {
         // descriptor by value so a character device is refused AND closed here.
         // ⊘ `RegularFile`: this crossing asked for FABRICATED memory, so a child answering
         // with a device node is refused exactly as it was before `adopt` took a kind.
-        let Ok(token) = self
-            .exports
-            .adopt(fd, self.isolate, kayfabe_linux_raw::DescriptorKind::RegularFile)
-        else {
+        let Ok(token) = self.exports.adopt(
+            fd,
+            self.isolate,
+            kayfabe_linux_raw::DescriptorKind::RegularFile,
+        ) else {
             return Err(RmError::Wedged);
         };
         Ok(FbLeafJoined {

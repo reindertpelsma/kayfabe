@@ -505,8 +505,12 @@ fn the_write_counter_sees_rewrites_and_joins_and_keeps_the_writers_apart() {
     );
 
     // ⊘ A different writer must not arm this one's gate.
-    fb.write_tagged(0x2000, &[3u8; 8], FbWriter::Window(kayfabe_device::FbWindow::InstanceWindow))
-        .expect("in range");
+    fb.write_tagged(
+        0x2000,
+        &[3u8; 8],
+        FbWriter::Window(kayfabe_device::FbWindow::InstanceWindow),
+    )
+    .expect("in range");
     assert_eq!(
         fb.writes_by(FbWriter::Executor),
         Some(2),
@@ -546,7 +550,9 @@ fn a_released_join_gives_the_range_back_and_the_same_range_can_be_joined_again()
         .expect("the join installs");
     assert_eq!(fb.joined_ranges(), vec![(AT, LEN)]);
 
-    let back = fb.release_join(AT).expect("a join was installed at exactly AT");
+    let back = fb
+        .release_join(AT)
+        .expect("a join was installed at exactly AT");
     assert_eq!(back.len(), LEN, "the caller gets the backing whole");
     assert!(
         fb.joined_ranges().is_empty(),
@@ -608,8 +614,7 @@ fn a_released_range_reads_as_never_written_and_holds_no_resident_page() {
     let mut buf = [0xffu8; 8];
     fb.read(AT, &mut buf).expect("inside the framebuffer");
     assert_eq!(
-        buf,
-        [0u8; 8],
+        buf, [0u8; 8],
         "an unallocated frame reads zero — the same answer a never-written one gives"
     );
     assert_eq!(

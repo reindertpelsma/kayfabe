@@ -879,11 +879,14 @@ fn aperture_worker() -> (MockIsolateFactory, SharedRecorder) {
 
 fn fresh_host_vas(worker: &mut Worker) -> HostHandle {
     match worker
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: GpuVa(0x4000_0000),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: GpuVa(0x4000_0000),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("a host VAS")
     {
         VerbReply::Published { host_vas, .. } => host_vas.expect("freshly allocated"),
@@ -900,16 +903,19 @@ fn write_fabricated(
 ) {
     rec.lock().expect("recorder").ce_seed(STAGE, bytes);
     worker
-        .execute(&VerbPlan::CeSplit {
-            vas,
-            subs: vec![CeSubCopy {
-                dst: phys,
-                src: CeSource::Address(STAGE),
-                len: bytes.len() as u64,
-                by: CeExecutor::Ours,
-                guest_release: None,
-            }],
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::CeSplit {
+                vas,
+                subs: vec![CeSubCopy {
+                    dst: phys,
+                    src: CeSource::Address(STAGE),
+                    len: bytes.len() as u64,
+                    by: CeExecutor::Ours,
+                    guest_release: None,
+                }],
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("an unrepresentable copy is ours to perform");
 }
 
@@ -1128,7 +1134,12 @@ fn published_row_then_torn_down(
     arch: &MockArch,
     backing: HostBacking,
     aperture: Aperture,
-) -> (AddressTable, ReachShadow, GpuVa, kayfabe_mmu::reach::Settlement) {
+) -> (
+    AddressTable,
+    ReachShadow,
+    GpuVa,
+    kayfabe_mmu::reach::Settlement,
+) {
     let fmt = arch.mmu();
     let mut fb = Fb::default();
     let mut s = shadow();
@@ -1151,8 +1162,7 @@ fn published_row_then_torn_down(
             A_PDB,
             va,
             len,
-            Binding::real_gpu_memory(0x3000_0000, aperture, backing)
-                .expect("a host-backed row"),
+            Binding::real_gpu_memory(0x3000_0000, aperture, backing).expect("a host-backed row"),
         )
         .expect("a published binding at its own VA");
 
@@ -1243,8 +1253,7 @@ fn an_arena_slice_row_is_still_refused_because_freeing_it_would_be_a_double_free
         kayfabe_mmu::HostSlice::new(0, 0x1000).expect("a slice"),
         kayfabe_mmu::BackingBytes::JoinsGuestWindow,
     );
-    let (mut table, mut s, va, down) =
-        published_row_then_torn_down(&arch, slice, Aperture::Vidmem);
+    let (mut table, mut s, va, down) = published_row_then_torn_down(&arch, slice, Aperture::Vidmem);
     let applied = kayfabe_mmu::reach::apply_settlement_as(
         fmt,
         &mut table,

@@ -389,7 +389,10 @@ mod tests {
             let _inner = TrapGuard::enter();
             assert_eq!(trap_depth(), 2);
         }
-        assert!(in_trap(), "an inner guard's Drop must not un-mark the outer trap");
+        assert!(
+            in_trap(),
+            "an inner guard's Drop must not un-mark the outer trap"
+        );
         drop(outer);
         assert!(!in_trap());
     }
@@ -457,6 +460,9 @@ mod tests {
         assert!(line.contains("target: inline_exceptions=0"), "{line}");
         // Close a guard so the worst-hold is measured, then check the other arm.
         drop(TrapGuard::enter());
-        assert!(!census().contains("UNMEASURED"), "a closed guard must publish a hold");
+        assert!(
+            !census().contains("UNMEASURED"),
+            "a closed guard must publish a hold"
+        );
     }
 }

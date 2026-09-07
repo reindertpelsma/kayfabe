@@ -5401,7 +5401,11 @@ impl RmBackend for HostRmBackend {
                     // leaves while a plain process on the same host measured 100 %.
                     None => "UNMEASURABLE(no /proc/self/smaps in this sandbox)".to_owned(),
                 };
-                let eligible = if r.len >= 2 * 1024 * 1024 { "yes" } else { "no(<2MiB)" };
+                let eligible = if r.len >= 2 * 1024 * 1024 {
+                    "yes"
+                } else {
+                    "no(<2MiB)"
+                };
                 println!(
                     "kayfabe-isolate: LEAF-HUGE len={len} pmd_backed={backed} \
                      base_2m_aligned={} eligible={eligible}",

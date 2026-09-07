@@ -178,11 +178,14 @@ fn r1_is_asserted_at_the_host_verb_itself_not_at_a_wrapper() {
     let proc_lock = RankedMutex::new(LockRank::Proc, ());
 
     let _guard = proc_lock.lock(); // a locked act phase, exactly as stage 2 had it
-    let _ = worker.execute(&VerbPlan::Publish {
-        host_vas: None,
-        len: 0x1000,
-        at: VA,
-    }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"));
+    let _ = worker.execute(
+        &VerbPlan::Publish {
+            host_vas: None,
+            len: 0x1000,
+            at: VA,
+        },
+        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+    );
 }
 
 /// R1's success polarity, and the *ownership* half of the enforcement: a worker is
@@ -197,11 +200,14 @@ fn r1_legal_path_checked_out_worker_with_no_guards_runs() {
     assert_eq!(kayfabe_rt::lock::held_depth(), 0, "no guard is alive here");
 
     let reply = worker
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: VA,
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: VA,
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("the chain runs");
     match reply {
         kayfabe_isolate::VerbReply::Published { host_vas, .. } => {

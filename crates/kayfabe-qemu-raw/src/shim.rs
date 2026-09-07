@@ -4031,7 +4031,11 @@ fn observer_loop(
                         eprintln!(
                             "    RETIRED-FB-RELEASE fb_phys=0x{:x} va=0x{:x} len=0x{:x} \
                              host_va=0x{:x} memory=0x{:x}",
-                            r.phys, r.va.0, r.len, r.host_va, r.memory.raw()
+                            r.phys,
+                            r.va.0,
+                            r.len,
+                            r.host_va,
+                            r.memory.raw()
                         );
                     }
                 }
@@ -4795,8 +4799,7 @@ const DEFERRED_LOCAL_LOG_MAX: u64 = 8;
 
 /// Every deferred doorbell the CE shell executor claimed, process-wide. See
 /// [`DEFERRED_LOCAL_LOG_MAX`].
-static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[allow(clippy::needless_pass_by_value)]
 fn doorbell_publish_loop(
@@ -4831,8 +4834,8 @@ fn doorbell_publish_loop(
                 // deferred population, and an uncapped `eprintln!` on that path is a flood
                 // that costs the thing it is measuring. The **total** is what matters and it
                 // rides `DEFERRED-LOCAL total=` below.
-                let n = DEFERRED_LOCAL_SERVINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    + 1;
+                let n =
+                    DEFERRED_LOCAL_SERVINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 if n <= DEFERRED_LOCAL_LOG_MAX {
                     eprintln!(
                         "kayfabe: DOORBELL-ASYNC ⚠ SERVED-LOCALLY OFF THE TRAP \
@@ -5133,8 +5136,9 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         }
         match self
             .pubqueue
-            .offer(kayfabe_device::pubqueue::MapPublication::for_doorbell(token))
-        {
+            .offer(kayfabe_device::pubqueue::MapPublication::for_doorbell(
+                token,
+            )) {
             kayfabe_device::pubqueue::Offered::Queued => {
                 kayfabe_device::DoorbellReport::Scheduled {
                     token,
@@ -5595,7 +5599,11 @@ impl SharedDoorbell {
             // beside it so the two can be subtracted. It must never be added to the
             // marked sum, or `core` would be counted twice — which is why it goes on the
             // line as its own field rather than through `mark`.
-            kft.note_nested("core_rm_ipc", ipc1.1.saturating_sub(ipc0.1), ipc1.0.saturating_sub(ipc0.0));
+            kft.note_nested(
+                "core_rm_ipc",
+                ipc1.1.saturating_sub(ipc0.1),
+                ipc1.0.saturating_sub(ipc0.0),
+            );
         }
         drop(held);
         kft.mark("vmm_unlock");
@@ -8771,10 +8779,12 @@ impl SharedDoorbell {
                 // ★★★ w329 - the policy is read ONCE per pass and carried, never re-read
                 // per proc: a variable that could change under a pass would make one boot's
                 // arms differ from each other rather than from the control.
-                let Some(out) =
-                    self.device
-                        .decode_pt_writes_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
-                else {
+                let Some(out) = self.device.decode_pt_writes_revoking(
+                    pid,
+                    &fmt,
+                    &mut fb,
+                    revoke_policy.policy(),
+                ) else {
                     continue;
                 };
                 // ★★★★★ THE OBLIGATION, accumulated whole and discharged ONCE below. Per
@@ -9811,7 +9821,6 @@ struct PublishContext {
 }
 
 impl PublishContext {
-
     /// ★★★★★ **LEG 8 — PUBLISH THE GUEST'S DECLARED ROWS INTO THE HOST VAS** (w290).
     ///
     /// # The measurement that commissioned it
@@ -10226,14 +10235,16 @@ impl PublishContext {
              other_vases={pub_other_vases} other_us={pub_other_us} \
              other_published={pub_other_published} other_refused={pub_other_refused} \
              breadth_share={}",
-            scope_target.map_or("⊘NONE (no channel facts ⇒ FULL BREADTH, by design)".to_string(), |(p, d)| format!(
-                "proc={} pdb=0x{:x}",
-                p.0, d.0
-            )),
-            (pub_other_us * 100).checked_div(pub_target_us + pub_other_us).map_or_else(
-                || "⊘UNMEASURED (this pass spent no time in any VAS)".to_string(),
-                |p| format!("{p}%"),
+            scope_target.map_or(
+                "⊘NONE (no channel facts ⇒ FULL BREADTH, by design)".to_string(),
+                |(p, d)| format!("proc={} pdb=0x{:x}", p.0, d.0)
             ),
+            (pub_other_us * 100)
+                .checked_div(pub_target_us + pub_other_us)
+                .map_or_else(
+                    || "⊘UNMEASURED (this pass spent no time in any VAS)".to_string(),
+                    |p| format!("{p}%"),
+                ),
         );
         Some(format!(
             "{}{head} W328SCOPE[{w328}] gate={} this_doorbell[fired={gate_fired} \
@@ -10381,10 +10392,12 @@ impl PublishContext {
             let mut skipped = 0usize;
             let mut named: Vec<String> = Vec::new();
             match drain_target {
-                None => sema_clause = "⊘ ARMED BUT NO TARGET — this doorbell named no VAS, so \
+                None => {
+                    sema_clause = "⊘ ARMED BUT NO TARGET — this doorbell named no VAS, so \
                                        there is no address space to pin into. ⊘ UNREACHED, \
                                        not `nothing to do`"
-                    .to_string(),
+                        .to_string()
+                }
                 Some((pid, _pdb)) if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC => {
                     sema_clause = "⊘ ARMED BUT TARGET IS SYSTEM_PROC — refused by name, \
                                    §12.26, exactly as the drain refuses it"
@@ -10415,7 +10428,8 @@ impl PublishContext {
                         let len = SharedDoorbell::RING_PIN_BYTES;
                         let resolved = {
                             let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                            held.as_ref().map(|vmm| vmm.resolve_guest_ram(backing, *gpa, len))
+                            held.as_ref()
+                                .map(|vmm| vmm.resolve_guest_ram(backing, *gpa, len))
                         };
                         let Some(Ok(run)) = resolved else {
                             named.push(format!("[va=0x{va:x} ⊘UNRESOLVED-BY-VMM]"));
@@ -10663,8 +10677,7 @@ impl PublishContext {
                                 let (r_ok, r_no, chains, us_sum) = self.pin_rows_one_by_one(
                                     backing,
                                     pdb,
-                                    &candidates
-                                        [chunk.first_row..chunk.first_row + chunk.rows],
+                                    &candidates[chunk.first_row..chunk.first_row + chunk.rows],
                                     &mut named,
                                 );
                                 rows_pinned += r_ok;
@@ -10682,8 +10695,7 @@ impl PublishContext {
                                 vas_refused += 1;
                                 rows_refused += 1;
                                 if named.len() < 8 {
-                                    named
-                                        .push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
+                                    named.push(format!("[va=0x{va:x} ⊘REFUSED `{e:?}` {us}us]"));
                                 }
                             }
                         }
@@ -10755,7 +10767,11 @@ impl PublishContext {
                             u128::from(us) / c,
                             u128::from(us) / r,
                             own.saturating_sub(u128::from(us)),
-                            if own == 0 { 0 } else { u128::from(us) * 100 / own },
+                            if own == 0 {
+                                0
+                            } else {
+                                u128::from(us) * 100 / own
+                            },
                         )
                     };
                 } else {
@@ -10778,7 +10794,11 @@ impl PublishContext {
                         "SAMPLED(bounded — an unpinned row here is UNREACHED, not refused)"
                     },
                     candidates.len(),
-                    if doorbelled { rows_pinned } else { each_us.len() },
+                    if doorbelled {
+                        rows_pinned
+                    } else {
+                        each_us.len()
+                    },
                     vas_refused,
                     last_va.map_or("⊘NONE".to_string(), |v| format!("0x{v:x}")),
                     if budget_hit {
@@ -10949,7 +10969,6 @@ impl PublishContext {
         ))
     }
 }
-
 
 /// ★★★★ **THE FORWARD SEARCH FOR THE RING** — §16.16, and it is the one measurement in
 /// this file that never consults the walker.
@@ -11735,6 +11754,9 @@ fn join_one_fb_leaf(
 /// none — see [`SharedObjectModel`].
 pub struct Regs {
     plane: Arc<RegPlane>,
+    /// ★★★★★ **w390** — which arm of the TLB-invalidate blockage point this boot runs.
+    /// Read ONCE at the composition root; see [`MMU_INVAL_ENV`].
+    mmu_inval: MmuInvalArm,
     /// ★★★★★ **w326 — the revocation drain's OWN driver** (`crate::reclaimtick`).
     ///
     /// `w323` measured that the drain's only production caller is `Regs::write`, i.e. a
@@ -12444,8 +12466,35 @@ impl Regs {
                      which was never the requirement",
             },
         );
+        // ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT.** See [`MMU_INVAL_ENV`] for why
+        // arming and the publish-consumer had to land in one commit.
+        //
+        // ⊘ Echoed on BOTH arms and unconditionally, for [`DOORBELL_ASYNC_ENV`]'s reason
+        // exactly: a selector that prints only when it is on makes *"the lane was disarmed"*
+        // and *"this build does not have the lane"* the same log.
+        let mmu_inval = selected_mmu_inval()?;
+        if mmu_inval.publishes() {
+            plane.mmu_inval().arm();
+        }
+        eprintln!(
+            "kayfabe: MMUINVAL-ARM arm={} armed={} ⇒ a guest MMU_INVALIDATE trigger {}",
+            mmu_inval.as_str(),
+            plane.mmu_inval().is_armed(),
+            if mmu_inval.publishes() {
+                "HOLDS the guest (TRIGGER reads TRUE), runs the whole-VAS publication under \
+                 that halt, and completes in a Drop guard. ★ R1.1's third blockage point, \
+                 spending something for the first time. ⚠ Read `worst_hold_us` and \
+                 `over_budget` on the MMUINVAL census line — every microsecond here is a \
+                 microsecond the guest spins"
+            } else {
+                "is RECORDED and answered 0 immediately — the CONTROL, byte-identical to \
+                 every boot before w390. ⊘ `by=[… tlb-invalidate=0 …]` on this arm is the \
+                 arm being off, NOT a measured zero"
+            },
+        );
         Ok(Regs {
             plane,
+            mmu_inval,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
             //   is a boot that can change its mind halfway through.
             reclaim: Arc::new(crate::reclaimtick::ReclaimTick::from_env()),
@@ -13345,6 +13394,45 @@ impl Regs {
                 kayfabe_mmu::blockage::BlockagePoint::TlbInvalidate,
             )
         });
+        // ★★★★★ **w390 — AND HERE IS THE HALT SPENDING SOMETHING.**
+        //
+        // `publish_before_completing` is `true` only when the plane's trigger arm decided
+        // [`kayfabe_device::mmuinval::TriggerAction::Publish`], which it can only do while
+        // [`kayfabe_device::mmuinval::MmuInvalidateLog::is_armed`] — i.e. only under
+        // [`MMU_INVAL_ENV`] `= on`. On the control this whole block is `if false`.
+        //
+        // ⊘ **THE COMPLETION IS A `Drop` GUARD, NOT A STATEMENT AFTER THE PUBLICATION.**
+        // From `note_trigger` to `complete` the guest reads `TRIGGER = TRUE` and spins in
+        // `kgmmuCheckPendingInvalidates_TU102`. If the publication panicked, took an early
+        // return, or the `?` of some future edit skipped past a bare `complete()` call, the
+        // guest would spin **forever** — a hang whose cause is one of our own errors. The
+        // guard makes clearing unconditional on any exit from this scope, which is
+        // `MmuInvalidateLog::arm`'s own documented leg 1.
+        //
+        // ⚠ `seen` is `None` and that is the CORRECT breadth, not a shortcut. An invalidate
+        // names a PDB (or `ALL_PDB`), never a channel, so there are no `CeChannelFacts` to
+        // scope by — and `publish_vas_rows`'s `scope_target` fallback is explicitly *"no
+        // target ⇒ full breadth"*, which its own doc calls a safety property rather than an
+        // optimisation. w328 measured the whole-VAS sweep at **0.0084 % of the worst trap**,
+        // so the breadth is affordable here for the same reason it was there.
+        //
+        // ⊘ The token is the trigger's raw value, so a publication line can be joined to the
+        // invalidate that caused it. It is NOT a doorbell token and must not be read as one.
+        if out.publish_before_completing {
+            struct PublishGuard<'a>(&'a RegPlane);
+            impl Drop for PublishGuard<'_> {
+                fn drop(&mut self) {
+                    self.0.mmu_inval().complete(self.0.clock_now_us());
+                }
+            }
+            let _complete = PublishGuard(self.plane.as_ref());
+            let _b = kayfabe_mmu::blockage::BlockageGuard::enter(
+                kayfabe_mmu::blockage::BlockagePoint::TlbInvalidate,
+            );
+            if let Some(line) = self.doorbell_port.publish_ctx().publish_vas_rows(val, None) {
+                eprintln!("kayfabe: MMUINVAL-PUBLISH {line}");
+            }
+        }
         // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
         //
         // `RegPlane::write` has returned, so the plane's rank-0 guard is a dropped local and
@@ -13478,134 +13566,134 @@ impl Regs {
         // EVERY trap. An early return would drop the skipped traps out of the timing census
         // entirely, so the arm that skips more would look like the arm with fewer traps.
         if let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap() {
-        let pins = self.device.pin_reclaim_gone();
-        let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
-        if total
-            != self
-                .last_pin_reclaim
-                .swap(total, std::sync::atomic::Ordering::Relaxed)
-        {
-            eprintln!(
-                "kayfabe: PIN-RELEASE released={} refused_no_host_vas={} rows_deduped={} \
+            let pins = self.device.pin_reclaim_gone();
+            let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
+            if total
+                != self
+                    .last_pin_reclaim
+                    .swap(total, std::sync::atomic::Ordering::Relaxed)
+            {
+                eprintln!(
+                    "kayfabe: PIN-RELEASE released={} refused_no_host_vas={} rows_deduped={} \
                  ⇒ that many guest-RAM `OS_DESCRIPTOR`s freed, GPU VAs unmapped and isolate \
                  `mmap` windows `munmap`ed at VAS death, instead of held until QEMU exits",
-                pins.released, pins.refused_no_host_vas, pins.rows_deduped,
-            );
-        }
-        // ★★★★★ **w317 — THE BUDGETED DRAIN, AND IT MUST BE THE LINE ABOVE THE REAP.**
-        //
-        // Ordering, not preference. The reap holds a proc back while it still has drainable
-        // staged work (`Spine::reap_retired`'s w317 gate), so this line is what eventually
-        // lets the reap below take anything at all. Reversed, the first trap after a proc
-        // vacates would reap it with a full queue and `Proc::drop` would issue the whole
-        // thing — the 2.65–3.70 s stall w314 measured, unchanged.
-        //
-        // ⊘ **This is not a new call site in the `INLINE-SAFE` sense.** The verbs it issues
-        // are the same verbs `Proc::drop` issued from this same frame at master; what is new
-        // is that a bounded number of them run per trap instead of all of them. It holds no
-        // ranked lock while executing (R1, asserted inside `Worker::execute`), for the same
-        // reason and by the same construction as the reap below.
-        //
-        // ⚠ The deadline is read BETWEEN turns, so the bound delivered is
-        // `RETIRED_DRAIN_BUDGET_US` + one chunk — see both constants' docs.
-        let drain_t0 = std::time::Instant::now();
-        let drain = self.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
-            u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
-                >= RETIRED_DRAIN_BUDGET_US
-        });
-        let drain_us = u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
-        if drain.turns > 0
-            && drain_us
-                > self
-                    .max_drain_us
-                    .fetch_max(drain_us, std::sync::atomic::Ordering::Relaxed)
-        {
-            // ★ Printed on a NEW MAXIMUM only — the density rule the two lines above already
-            // carry. `budget_hit` is on the line because "we stopped early and the rest rides
-            // to the next trap" is the mechanism working, and a reader must be able to tell
-            // it from "there was nothing left".
-            eprintln!(
-                "kayfabe: DRAIN-TIMING max_drain_us={drain_us} disposed={} residue={} \
+                    pins.released, pins.refused_no_host_vas, pins.rows_deduped,
+                );
+            }
+            // ★★★★★ **w317 — THE BUDGETED DRAIN, AND IT MUST BE THE LINE ABOVE THE REAP.**
+            //
+            // Ordering, not preference. The reap holds a proc back while it still has drainable
+            // staged work (`Spine::reap_retired`'s w317 gate), so this line is what eventually
+            // lets the reap below take anything at all. Reversed, the first trap after a proc
+            // vacates would reap it with a full queue and `Proc::drop` would issue the whole
+            // thing — the 2.65–3.70 s stall w314 measured, unchanged.
+            //
+            // ⊘ **This is not a new call site in the `INLINE-SAFE` sense.** The verbs it issues
+            // are the same verbs `Proc::drop` issued from this same frame at master; what is new
+            // is that a bounded number of them run per trap instead of all of them. It holds no
+            // ranked lock while executing (R1, asserted inside `Worker::execute`), for the same
+            // reason and by the same construction as the reap below.
+            //
+            // ⚠ The deadline is read BETWEEN turns, so the bound delivered is
+            // `RETIRED_DRAIN_BUDGET_US` + one chunk — see both constants' docs.
+            let drain_t0 = std::time::Instant::now();
+            let drain = self.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
+                u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+                    >= RETIRED_DRAIN_BUDGET_US
+            });
+            let drain_us = u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+            if drain.turns > 0
+                && drain_us
+                    > self
+                        .max_drain_us
+                        .fetch_max(drain_us, std::sync::atomic::Ordering::Relaxed)
+            {
+                // ★ Printed on a NEW MAXIMUM only — the density rule the two lines above already
+                // carry. `budget_hit` is on the line because "we stopped early and the rest rides
+                // to the next trap" is the mechanism working, and a reader must be able to tell
+                // it from "there was nothing left".
+                eprintln!(
+                    "kayfabe: DRAIN-TIMING max_drain_us={drain_us} disposed={} residue={} \
                  turns={} budget_hit={} ⇒ the longest BUDGETED disposal yet inside \
                  Regs::write, with the BQL held. Budget: {RETIRED_DRAIN_BUDGET_US} us \
                  (1% of scrubberDestruct's 4000000 us) + one {RETIRED_DRAIN_CHUNK}-disposal \
                  chunk of overshoot.",
-                drain.disposed, drain.residue, drain.turns, drain.budget_hit,
-            );
-        }
-        // ★★★ **w314 — TIME THE DISPOSAL.** See [`Regs::max_reap_us`]. This wraps the call
-        // and changes nothing about it: two `Instant`s and a `fetch_max`.
-        let reap_t0 = std::time::Instant::now();
-        // ⊘ MERGE NOTE — THREE lanes converged on this one call, and none of the conflicts
-        // was semantic:
-        //   w314 times the disposal against the 4 s `scrubberDestruct` budget (`max_reap_us`),
-        //   w315 closes the `reap` segment of the per-doorbell breakdown (`kft.mark`),
-        //   w317 REPLACES the call itself — `reap_retired_held` holds a proc back until its
-        //        queue empties, which is what took the worst hold from 3.70 s to 54.8 ms.
-        // w317's call wins because it is the behaviour change; both instruments are kept
-        // because they measure different things and w317 is the reason they now read small.
-        // ★ The ORDER is load-bearing and is the only thing the merge had to decide: read
-        // the elapsed time and close the segment FIRST, then print. Printing before either
-        // would charge w314's `eprintln!` to w315's `reap` segment AND to w314's own
-        // `max_reap_us` — an instrument billing itself to the thing it measures, which is the
-        // failure class this tree has now paid for several times over.
-        // ⚠ And per w317: `max_reap_us` NO LONGER MEANS THE DISPOSAL. What is left here is the
-        // isolate child's `waitpid` + namespace teardown (47–54 ms), a floor no budget touches.
-        // Read it beside `max_drain_us`, never added to it — they occur on different traps.
-        let (reaped, deferred_for_drain) = self.device.reap_retired_held();
-        let reap_us = u64::try_from(reap_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
-        kft.mark("reap");
-        if reap_us
-            > self
-                .max_reap_us
-                .fetch_max(reap_us, std::sync::atomic::Ordering::Relaxed)
-        {
-            eprintln!(
-                "kayfabe: REAP-TIMING max_reap_us={reap_us} reaped={reaped} \
+                    drain.disposed, drain.residue, drain.turns, drain.budget_hit,
+                );
+            }
+            // ★★★ **w314 — TIME THE DISPOSAL.** See [`Regs::max_reap_us`]. This wraps the call
+            // and changes nothing about it: two `Instant`s and a `fetch_max`.
+            let reap_t0 = std::time::Instant::now();
+            // ⊘ MERGE NOTE — THREE lanes converged on this one call, and none of the conflicts
+            // was semantic:
+            //   w314 times the disposal against the 4 s `scrubberDestruct` budget (`max_reap_us`),
+            //   w315 closes the `reap` segment of the per-doorbell breakdown (`kft.mark`),
+            //   w317 REPLACES the call itself — `reap_retired_held` holds a proc back until its
+            //        queue empties, which is what took the worst hold from 3.70 s to 54.8 ms.
+            // w317's call wins because it is the behaviour change; both instruments are kept
+            // because they measure different things and w317 is the reason they now read small.
+            // ★ The ORDER is load-bearing and is the only thing the merge had to decide: read
+            // the elapsed time and close the segment FIRST, then print. Printing before either
+            // would charge w314's `eprintln!` to w315's `reap` segment AND to w314's own
+            // `max_reap_us` — an instrument billing itself to the thing it measures, which is the
+            // failure class this tree has now paid for several times over.
+            // ⚠ And per w317: `max_reap_us` NO LONGER MEANS THE DISPOSAL. What is left here is the
+            // isolate child's `waitpid` + namespace teardown (47–54 ms), a floor no budget touches.
+            // Read it beside `max_drain_us`, never added to it — they occur on different traps.
+            let (reaped, deferred_for_drain) = self.device.reap_retired_held();
+            let reap_us = u64::try_from(reap_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+            kft.mark("reap");
+            if reap_us
+                > self
+                    .max_reap_us
+                    .fetch_max(reap_us, std::sync::atomic::Ordering::Relaxed)
+            {
+                eprintln!(
+                    "kayfabe: REAP-TIMING max_reap_us={reap_us} reaped={reaped} \
                  ⇒ the longest BLOCKING disposal yet inside Regs::write, with the BQL held \
                  and every vCPU halted. Budget: scrubberDestruct = 4000000 us."
-            );
-        }
-        if reaped > 0 {
-            // ★ Visible in the boot log, because "the reap ran" is a claim this tree has
-            // twice mistaken for "the reap exists". A zero prints nothing; a non-zero says
-            // so once per reap, with what is still outstanding beside it.
-            eprintln!(
-                "kayfabe: REAP reaped={reaped} still_retired={} deferred_for_drain=\
+                );
+            }
+            if reaped > 0 {
+                // ★ Visible in the boot log, because "the reap ran" is a claim this tree has
+                // twice mistaken for "the reap exists". A zero prints nothing; a non-zero says
+                // so once per reap, with what is still outstanding beside it.
+                eprintln!(
+                    "kayfabe: REAP reaped={reaped} still_retired={} deferred_for_drain=\
                  {deferred_for_drain} ⇒ each reaped proc's staged host `Release` verbs went \
                  out and its isolate child was reaped; `deferred_for_drain` are procs held \
                  back because w317's budgeted drain has not emptied their queue yet",
-                self.device.retired_len(),
-            );
-        }
-        // ★★★★★ **w317 — THE TRAJECTORY, and it prints on every TRANSITION.**
-        //
-        // A bound that defers indefinitely is a leak with extra steps. `Spine::reap_retired`'s
-        // termination argument (the queue of a retired proc is CLOSED and monotonically
-        // decreasing) says this must return to 0; this line is what makes that argument
-        // **checkable on a live boot** rather than a paragraph. ⚠ Absent = UNMEASURED: a boot
-        // where no proc ever vacated prints nothing, and that is a different fact from
-        // "nothing was ever deferred".
-        if deferred_for_drain
-            != self
-                .last_deferred_for_drain
-                .swap(deferred_for_drain, std::sync::atomic::Ordering::Relaxed)
-        {
-            eprintln!(
-                "kayfabe: DRAIN-DEFER deferred_for_drain={deferred_for_drain} \
+                    self.device.retired_len(),
+                );
+            }
+            // ★★★★★ **w317 — THE TRAJECTORY, and it prints on every TRANSITION.**
+            //
+            // A bound that defers indefinitely is a leak with extra steps. `Spine::reap_retired`'s
+            // termination argument (the queue of a retired proc is CLOSED and monotonically
+            // decreasing) says this must return to 0; this line is what makes that argument
+            // **checkable on a live boot** rather than a paragraph. ⚠ Absent = UNMEASURED: a boot
+            // where no proc ever vacated prints nothing, and that is a different fact from
+            // "nothing was ever deferred".
+            if deferred_for_drain
+                != self
+                    .last_deferred_for_drain
+                    .swap(deferred_for_drain, std::sync::atomic::Ordering::Relaxed)
+            {
+                eprintln!(
+                    "kayfabe: DRAIN-DEFER deferred_for_drain={deferred_for_drain} \
                  still_retired={} ⇒ procs the reap is holding back because their staged \
                  disposal queue is not empty yet. MUST return to 0: the queue of a retired \
                  proc is closed and strictly decreasing, so a value that never falls is the \
                  budget having moved the cost rather than removed it",
-                self.device.retired_len(),
-            );
-        }
-        // ⊘ Two kinds, deliberately. A doorbell write and an ordinary register write live in
-        // the same census only as `mmio_all`; splitting them means *"the trap is slow"* and
-        // *"the doorbell is slow"* are separate readings, and w311's floor is compatible with
-        // either. `doorbell` is decided by the plane, so it is read off the outcome rather
-        // than re-derived from the offset — two projections of one fact that disagree is this
-        // campaign's most expensive failure class.
+                    self.device.retired_len(),
+                );
+            }
+            // ⊘ Two kinds, deliberately. A doorbell write and an ordinary register write live in
+            // the same census only as `mmio_all`; splitting them means *"the trap is slow"* and
+            // *"the doorbell is slow"* are separate readings, and w311's floor is compatible with
+            // either. `doorbell` is decided by the plane, so it is read off the outcome rather
+            // than re-derived from the offset — two projections of one fact that disagree is this
+            // campaign's most expensive failure class.
         }
         crate::kftime::record_hot(
             if out.doorbell.is_some() {
@@ -13883,7 +13971,22 @@ impl Regs {
         // ⊘ Printed unconditionally, armed or not, and every number anchored: an absent
         // line is UNMEASURED and a present line with `triggers=0` is a measured zero.
         // Those are different facts and this tree has paid for confusing them.
-        eprintln!("kayfabe: {}", self.plane.mmu_inval().census());
+        // ★★★★★ **w390 — THE ARM IS ON THE SAME LINE AS THE NUMBERS IT EXPLAINS.**
+        // `armed=false triggers=377` and `armed=true triggers=377 publications=0` are
+        // opposite findings — one is the lane switched off, the other is the lane on and
+        // delivering nothing — and reading them apart is the whole point of printing the
+        // selector beside the census rather than only at the composition root, where a
+        // grader tailing the last N lines never sees it. See [`MMU_INVAL_ENV`].
+        eprintln!(
+            "kayfabe: {} arm={} ⊘{}",
+            self.plane.mmu_inval().census(),
+            self.mmu_inval.as_str(),
+            if self.mmu_inval.publishes() {
+                " a `publications=0` here is a MEASURED ZERO — the lane was armed"
+            } else {
+                " a zero here is the ARM BEING OFF, not a measured zero"
+            },
+        );
         // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
         // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
         // all** still prints a line, and that line reads `⊘NEVER-ARMED` — an absence stated
@@ -15218,6 +15321,106 @@ pub const VAS_PUBLISH_ENV: &str = "KAYFABE_VAS_PUBLISH";
 /// (`w298`'s ruling). `off` is byte-identical to every boot before w383.
 pub const DOORBELL_ASYNC_ENV: &str = "KAYFABE_DOORBELL_ASYNC";
 
+/// ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT, WIRED.**
+///
+/// `REQUIREMENTS_TARGET.md` R1.1's third blockage point. The mechanism has existed complete
+/// since w326 — [`kayfabe_device::mmuinval::MmuInvalidateLog`] decodes the trigger, holds
+/// `TRIGGER` set while a publication is outstanding, and the read path already answers from
+/// it (`kayfabe-device/src/plane.rs:2921`). **Two wires were missing and this arm is both**:
+/// `MmuInvalidateLog::arm` had no caller anywhere in the workspace, and
+/// [`kayfabe_device::WriteOutcome::publish_before_completing`] was produced at the plane's
+/// trigger arm and consumed nowhere. ⇒ every boot to date printed `MMUINVAL armed=false`
+/// beside `triggers=377`: the halt was entered and spent nothing.
+///
+/// # ⊘ WHY THE TWO WIRES HAD TO LAND TOGETHER, AND WHY NEITHER IS SAFE ALONE
+///
+/// `arm()` alone is a **guest hang by construction**: from the first trigger the register
+/// reads `TRIGGER = TRUE` forever and `kgmmuCheckPendingInvalidates_TU102`
+/// (`ogkm-580: kern_gmmu_tu102.c:59-84`) spins on it. The consumer alone is dead code —
+/// `note_trigger` returns `Observed` while disarmed, so `publish_before_completing` is never
+/// `true`. That is why `arm` sat callerless rather than half-wired, and it is why this arm
+/// is one selector rather than two.
+///
+/// # ★★★ WHAT IT BUYS, STATED AS THE THING THAT CAN GO RED
+///
+/// The publication currently runs on the **doorbell**, which the owner's 2026-09-06 ruling
+/// forbids (*"never do a blocking call during a doorbell write"*) and which
+/// [`DOORBELL_ASYNC_ENV`] moves off the vCPU without moving it off the doorbell. This moves
+/// the *trigger*: the guest has said its page tables are committed, is **already stopped**
+/// spinning on our answer, and anything published under that halt is published inside a
+/// window the guest itself opened. ⇒ `on` should read `by=[… tlb-invalidate=N …]` with
+/// `N > 0`; a boot that arms and still publishes zero here is a **measured** gap, not an
+/// argument (`a_census_zero_needs_a_known_positive`).
+///
+/// # ⚠ AND THE HOLD IS A LIVENESS OBLIGATION, NOT A COST
+///
+/// Every microsecond between `note_trigger` and `complete` is a microsecond the guest spins.
+/// [`kayfabe_device::mmuinval::INVALIDATE_HOLD_BUDGET_US`] bounds it and
+/// `worst_hold_us`/`over_budget` report it, so the boot measures its own damage. ⊘ The
+/// completion is taken in a `Drop` guard, never on the success path: a publication that
+/// panics, returns early or is refused **still clears**, because a guest hang must not be
+/// the punishment for one of our own errors.
+pub const MMU_INVAL_ENV: &str = "KAYFABE_MMU_INVAL";
+
+/// Which arm [`MMU_INVAL_ENV`] names.
+///
+/// ⊘ `off` is the default and is **byte-identical to every boot before w390**: disarmed,
+/// `note_trigger` answers `Observed`, and the census still counts. A value that names no arm
+/// is **refused**, not defaulted, for [`FB_JOIN_ENV`]'s reason — a typo that silently selects
+/// the control makes an evidence run and its control indistinguishable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MmuInvalArm {
+    /// The control. `MmuInvalidateLog` records and answers `0`; nothing publishes here.
+    Off,
+    /// ★ Armed. A `TRIGGER` write holds the guest, publishes, and completes in a `Drop`.
+    On,
+}
+
+impl MmuInvalArm {
+    /// The name this arm was selected by, for the boot echo.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+        }
+    }
+
+    /// Does this arm hold the guest and publish?
+    #[must_use]
+    pub fn publishes(self) -> bool {
+        matches!(self, Self::On)
+    }
+}
+
+/// Parse one [`MMU_INVAL_ENV`] value.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm.
+fn mmu_inval_from(v: Option<&str>) -> Result<MmuInvalArm, (Status, &'static str)> {
+    match v {
+        None | Some("off") => Ok(MmuInvalArm::Off),
+        Some("on") => Ok(MmuInvalArm::On),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_MMU_INVAL names no arm — it is `off` or `on`, and a value that names \
+             neither is REFUSED rather than defaulted to the control",
+        )),
+    }
+}
+
+/// Which arm [`MMU_INVAL_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_mmu_inval() -> Result<MmuInvalArm, (Status, &'static str)> {
+    match std::env::var_os(MMU_INVAL_ENV) {
+        None => Ok(MmuInvalArm::Off),
+        Some(v) => mmu_inval_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
 /// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
 ///
 /// # ⊘⊘ WHY THERE ARE THREE ARMS AND NOT TWO — a defect this rung's OWN control found
@@ -15559,7 +15762,9 @@ impl DoorbellAsyncArm {
 /// # Errors
 /// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
 /// [`DoorbellAsyncArm::Off`].
-pub fn doorbell_async_from(value: Option<&str>) -> Result<DoorbellAsyncArm, (Status, &'static str)> {
+pub fn doorbell_async_from(
+    value: Option<&str>,
+) -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match value {
         None | Some("off") => Ok(DoorbellAsyncArm::Off),
         Some("on") => Ok(DoorbellAsyncArm::On),
@@ -16715,8 +16920,7 @@ fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
 /// COUNTER and not a source of truth: nothing reads it to decide what a frame IS, only to stop
 /// an unbounded loop. It is reset by nothing, which is correct — the bound is per device life.
-fn supersede_ledger()
--> &'static std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>> {
+fn supersede_ledger() -> &'static std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>> {
     static L: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<(u64, u64), usize>>> =
         std::sync::OnceLock::new();
     L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
@@ -17173,7 +17377,11 @@ mod w321_coalesce_tests {
             (0x2_0000_9000, 0x1_0000_1000, 0x1000),
         ];
         let c = coalesce(&rows);
-        assert_eq!(c.len(), 2, "a merged chunk would map a VA the guest never bound: {c:?}");
+        assert_eq!(
+            c.len(),
+            2,
+            "a merged chunk would map a VA the guest never bound: {c:?}"
+        );
         assert_covers(&rows);
     }
 
@@ -17187,7 +17395,12 @@ mod w321_coalesce_tests {
             })
             .collect();
         let c = coalesce(&rows);
-        assert_eq!(c.len(), 2, "4 MiB at a 2 MiB bound is two chunks: {}", c.len());
+        assert_eq!(
+            c.len(),
+            2,
+            "4 MiB at a 2 MiB bound is two chunks: {}",
+            c.len()
+        );
         assert!(c.iter().all(|k| k.len <= DRAIN_CHUNK_MAX));
         assert_covers(&rows);
     }

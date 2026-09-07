@@ -53,8 +53,8 @@
 //! and is called only from the observer thread.** If a future caller reaches [`Self::spend`]
 //! from a trap, that sentence is the thing that was wrong.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// How the tick is armed. ⊘ Off by default: this is a behaviour change on the teardown path
 /// and the disarmed arm must be byte-comparable to master.
@@ -249,7 +249,10 @@ mod tests {
         );
         release.wait();
         h.join().unwrap();
-        assert!(t.try_claim_on_trap().is_some(), "and it is available again after");
+        assert!(
+            t.try_claim_on_trap().is_some(),
+            "and it is available again after"
+        );
         let c = t.census();
         assert!(c.contains("vcpu_skipped=1"), "{c}");
         assert!(c.contains("working_ticks=1"), "{c}");

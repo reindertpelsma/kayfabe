@@ -4099,7 +4099,9 @@ impl SharedDevice {
     #[must_use]
     pub fn vas_publish_epoch(&self, pid: ProcId, gpu: GpuId, pdb: Pdb) -> Option<(u64, usize)> {
         self.with_proc_mut(pid, |p| {
-            p.vases.get(&(gpu, pdb)).map(kayfabe_core::gpu::Vas::publish_epoch)
+            p.vases
+                .get(&(gpu, pdb))
+                .map(kayfabe_core::gpu::Vas::publish_epoch)
         })
         .flatten()
     }
@@ -4452,8 +4454,7 @@ impl SharedDevice {
                         if b.phys() == phys
                             && b.host().is_some_and(|h| {
                                 h.frees_object()
-                                    && h.bytes()
-                                        == kayfabe_mmu::BackingBytes::JoinsGuestWindow
+                                    && h.bytes() == kayfabe_mmu::BackingBytes::JoinsGuestWindow
                             })
                         {
                             live += 1;

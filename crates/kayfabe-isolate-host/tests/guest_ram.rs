@@ -462,8 +462,13 @@ fn a_live_mapping_can_be_described_across_the_sandbox_and_a_released_one_cannot(
     })
     .expect("the grant is honoured");
 
-    let memory = with_worker(&mut iso, |w| w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.describe_guest_ram(mapped)))
-        .expect("the mapping is described");
+    let memory = with_worker(&mut iso, |w| {
+        w.with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.describe_guest_ram(mapped),
+        )
+    })
+    .expect("the mapping is described");
     assert_eq!(
         memory.isolate(),
         id,
@@ -485,7 +490,12 @@ fn a_live_mapping_can_be_described_across_the_sandbox_and_a_released_one_cannot(
     // ★ Give the mapping back, then ask again. A handle minted over pages nobody is holding
     // would be an RM object pinning memory with no name on this side.
     with_worker(&mut iso, |w| w.unmap_guest_ram(mapped)).expect("released");
-    let after = with_worker(&mut iso, |w| w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.describe_guest_ram(mapped)));
+    let after = with_worker(&mut iso, |w| {
+        w.with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.describe_guest_ram(mapped),
+        )
+    });
     assert!(
         after.is_err(),
         "★ describing a mapping that is no longer live is a REFUSAL, not a fresh object"
@@ -505,8 +515,13 @@ fn an_isolate_with_no_guest_ram_cannot_describe_any() {
         region: kayfabe_isolate::HostHandle::new(IsolateId::new(10, GpuId(0)), 1 << 62 | 1),
         len: HostPageSize::query().bytes(),
     };
-    let e = with_worker(&mut iso, |w| w.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.describe_guest_ram(bogus)))
-        .expect_err("refused");
+    let e = with_worker(&mut iso, |w| {
+        w.with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.describe_guest_ram(bogus),
+        )
+    })
+    .expect_err("refused");
     assert_eq!(
         e,
         kayfabe_isolate::RmError::GuestRamUnavailable,

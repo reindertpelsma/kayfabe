@@ -135,7 +135,10 @@ pub const SERVED: &[(u32, usize, &[u32])] = &[
 /// evidence of nothing, and decoding one to zeros is how this tree produced a NULL channel
 /// table once already.
 pub fn params_size(cmd: u32) -> Option<usize> {
-    SERVED.iter().find(|(c, _, _)| *c == cmd).map(|(_, n, _)| *n)
+    SERVED
+        .iter()
+        .find(|(c, _, _)| *c == cmd)
+        .map(|(_, n, _)| *n)
 }
 
 /// Build the measured reply body for `cmd`.
@@ -259,7 +262,10 @@ mod tests {
         // The bytes below are transcribed from the captured `ppost` of
         // `traces`-equivalent nvdiff records; keeping them as literals here makes the
         // transcription checkable rather than trusted.
-        assert_eq!(answer_cudart_init(0x2080_2209, 4).unwrap(), vec![5, 0, 0, 0]);
+        assert_eq!(
+            answer_cudart_init(0x2080_2209, 4).unwrap(),
+            vec![5, 0, 0, 0]
+        );
         assert_eq!(
             answer_cudart_init(0x2080_9009, 8).unwrap(),
             vec![0, 0, 0, 0, 0x0d, 0, 0, 0]
@@ -270,10 +276,13 @@ mod tests {
         );
         let b = answer_cudart_init(0x2080_9064, 520).unwrap();
         assert_eq!(b.len(), 520);
-        assert_eq!(&b[..40], &[
-            0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
-            0x64, 0, 0, 0, 4, 0, 0, 0, 0x10, 0, 0, 0, 1, 0, 0, 0, 0x64, 0, 0, 0,
-        ]);
+        assert_eq!(
+            &b[..40],
+            &[
+                0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0x64, 0, 0, 0, 4, 0, 0,
+                0, 0x10, 0, 0, 0, 1, 0, 0, 0, 0x64, 0, 0, 0,
+            ]
+        );
         // ★ The tail is measured zero, not defaulted zero — assert it so a future edit that
         // changes the padding rule has to say so.
         assert!(b[40..].iter().all(|&x| x == 0), "measured tail is all zero");

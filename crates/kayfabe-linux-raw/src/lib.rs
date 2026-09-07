@@ -268,6 +268,7 @@ compile_error!(
 );
 
 pub mod affinity;
+mod affinity_unsafe;
 pub mod bounds;
 pub mod cache;
 pub mod census;
@@ -285,7 +286,6 @@ pub mod page_size;
 pub mod procfd;
 mod sandbox_unsafe;
 mod scm_unsafe;
-mod affinity_unsafe;
 mod signal_unsafe;
 mod spawn_unsafe;
 mod sysconf_unsafe;
@@ -316,7 +316,8 @@ pub use error::RawError;
 pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
-    Backing, HostProt, HugePageReport, MappedRegion, PlacementId, Reservation, VolatileRegion, release_fence,
+    Backing, HostProt, HugePageReport, MappedRegion, PlacementId, Reservation, VolatileRegion,
+    release_fence,
 };
 pub use page_size::HostPageSize;
 pub use procfd::{MemfdCandidate, MemfdCensus, MemfdRefusal};

@@ -1888,6 +1888,20 @@ impl RegPlane {
         &self.mmu_inval
     }
 
+    /// ★★★ **The plane's OWN clock, in microseconds** — the stamp
+    /// [`crate::mmuinval::MmuInvalidateLog::note_trigger`] and
+    /// [`crate::mmuinval::MmuInvalidateLog::complete`] must share.
+    ///
+    /// ⊘ It exists so the *completer* cannot supply a different time source from the
+    /// *armer*. `note_trigger` is called from `RegPlane::write`, which reads `self.clock`;
+    /// a caller outside this crate completing with `Instant::now` would compute a hold
+    /// against two unrelated clocks and produce a **plausible wrong number** rather than an
+    /// error — the same hazard [`RegPlane::now_ns`]'s CE sibling names one screen up.
+    #[must_use]
+    pub fn clock_now_us(&self) -> u64 {
+        self.clock.now_ns() / 1_000
+    }
+
     /// What the guest has published about the bus apertures' page-table roots.
     ///
     /// ⊘ The only channel: the guest ignores this command's status
@@ -3436,9 +3450,7 @@ impl RegPlane {
             }
             if off == regs.trigger {
                 let now_us = self.clock.now_ns() / 1_000;
-                let (inv, act) = self
-                    .mmu_inval
-                    .note_trigger(mask(val, size) as u32, now_us);
+                let (inv, act) = self.mmu_inval.note_trigger(mask(val, size) as u32, now_us);
                 return WriteOutcome {
                     claimed: true,
                     invalidate: Some(inv),

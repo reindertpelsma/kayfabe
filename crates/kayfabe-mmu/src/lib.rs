@@ -1590,12 +1590,23 @@ mod tests {
         assert_eq!(t.generation(), after_bind, "a refused bind is not a change");
 
         // ⊘ Same for a foreign PDB: refused at the identity gate, above the map.
-        assert!(t.bind(Pdb(0xdead_000), GpuVa(0x3_0000_0000), 0x1000, b).is_err());
-        assert_eq!(t.generation(), after_bind, "a refused identity is not a change");
+        assert!(
+            t.bind(Pdb(0xdead_000), GpuVa(0x3_0000_0000), 0x1000, b)
+                .is_err()
+        );
+        assert_eq!(
+            t.generation(),
+            after_bind,
+            "a refused identity is not a change"
+        );
 
         // ⊘ And an unbind of a VA nothing was bound at is a no-op, not a change.
         assert!(t.unbind(GpuVa(0x9_0000_0000)).is_none());
-        assert_eq!(t.generation(), after_bind, "an empty unbind is not a change");
+        assert_eq!(
+            t.generation(),
+            after_bind,
+            "an empty unbind is not a change"
+        );
 
         assert!(t.unbind(GpuVa(0x2_0020_0000)).is_some());
         assert_eq!(t.generation(), after_bind + 1, "a removal IS a change");

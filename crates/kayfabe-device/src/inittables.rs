@@ -1517,8 +1517,7 @@ impl CommandPolicy for InitTablePolicy {
                 ps - wrote
             );
             let mut body = cmd.payload.clone();
-            body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
-                .copy_from_slice(&NV_OK.to_le_bytes());
+            body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
             body[req.params_at..req.params_at + ps].copy_from_slice(&params);
             return Some(Reply {
                 rpc_result: NV_OK,
@@ -1541,8 +1540,7 @@ impl CommandPolicy for InitTablePolicy {
         if kayfabe_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
             eprintln!(
                 "W349REFUSE cmd={:#010x} why=finn-serialized rmapi_rpc_flags={:#x}",
-                req.cmd,
-                req.rmapi_rpc_flags
+                req.cmd, req.rmapi_rpc_flags
             );
             return refuse();
         }

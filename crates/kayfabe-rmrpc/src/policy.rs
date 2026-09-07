@@ -2191,9 +2191,7 @@ impl ObjectPolicy {
             // them before that table could run. See `OBJECT_CONTROLS`'s note.
             // ⊘ w352: 0x2080a001 un-claimed — it is the measured FALLBACK and is now
             //   answered downstream from a table. Claiming it here refused it.
-            0x2080_a026 | 0x2080_a084 | 0x2080_a097 => {
-                self.respond_subdevice_control(cmd, &req)
-            }
+            0x2080_a026 | 0x2080_a084 | 0x2080_a097 => self.respond_subdevice_control(cmd, &req),
             kayfabe_abi::submit::NVA06C_CTRL_CMD_PREEMPT => self.respond_preempt(cmd, &req),
             // ★★★★★ w292 — the input-only group, dispatched by TABLE LOOKUP rather than by
             // four arms, so an id can never be claimed above and undecided here.

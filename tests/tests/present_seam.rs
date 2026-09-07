@@ -122,15 +122,18 @@ fn render_target_exports_to_surface_presents_and_vblanks() {
         .unwrap()
         .checkout()
         .expect("the isolate's pool has an idle worker");
-    let (target, surface) = worker.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| {
-        let target = rm
-            .alloc(HostHandle::NULL, mc::MEMORY, &[])
-            .expect("render-target memory allocs");
-        let surface = rm
-            .export_surface(target)
-            .expect("render target exports to a surface");
-        (target, surface)
-    });
+    let (target, surface) = worker.with_rm(
+        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        |rm| {
+            let target = rm
+                .alloc(HostHandle::NULL, mc::MEMORY, &[])
+                .expect("render-target memory allocs");
+            let surface = rm
+                .export_surface(target)
+                .expect("render target exports to a surface");
+            (target, surface)
+        },
+    );
     {
         let log = recorder.lock().unwrap();
         assert!(
@@ -186,7 +189,10 @@ fn exporting_an_unknown_render_target_is_a_loud_fault() {
         .expect("the isolate's pool has an idle worker");
     let bogus = HostHandle::new(kayfabe_isolate::IsolateId::new(0, GpuId::ZERO), 0xdead_beef);
     assert_eq!(
-        worker.with_rm(&kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"), |rm| rm.export_surface(bogus)),
+        worker.with_rm(
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+            |rm| rm.export_surface(bogus)
+        ),
         Err(RmError::BadHandle(bogus))
     );
 }

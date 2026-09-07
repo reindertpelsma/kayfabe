@@ -111,11 +111,14 @@ fn aperture_worker() -> (MockIsolateFactory, SharedRecorder) {
 /// Allocate a host VAS on `worker` (the mock's `Publish` chain is the only minting path).
 fn fresh_host_vas(worker: &mut Worker) -> HostHandle {
     match worker
-        .execute(&VerbPlan::Publish {
-            host_vas: None,
-            len: 0x1000,
-            at: GpuVa(0x4000_0000),
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::Publish {
+                host_vas: None,
+                len: 0x1000,
+                at: GpuVa(0x4000_0000),
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("a host VAS")
     {
         VerbReply::Published { host_vas, .. } => host_vas.expect("freshly allocated"),
@@ -139,16 +142,19 @@ fn write_fabricated(
 ) {
     rec.lock().expect("recorder").ce_seed(STAGE, bytes);
     worker
-        .execute(&VerbPlan::CeSplit {
-            vas,
-            subs: vec![CeSubCopy {
-                dst: phys,
-                src: CeSource::Address(STAGE),
-                len: bytes.len() as u64,
-                by: CeExecutor::Ours,
-                guest_release: None,
-            }],
-        }, &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"))
+        .execute(
+            &VerbPlan::CeSplit {
+                vas,
+                subs: vec![CeSubCopy {
+                    dst: phys,
+                    src: CeSource::Address(STAGE),
+                    len: bytes.len() as u64,
+                    by: CeExecutor::Ours,
+                    guest_release: None,
+                }],
+            },
+            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
+        )
         .expect("an unrepresentable copy is ours to perform");
 }
 

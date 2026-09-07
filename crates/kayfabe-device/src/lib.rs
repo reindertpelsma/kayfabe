@@ -1195,7 +1195,9 @@ pub fn served_chain(
         Box::new(inittables::InitTablePolicy::with_probe_arm(
             chip, driver, probe_arm,
         )),
-        Box::new(gpu_name_from_seam(staticinfo::StaticInfoPolicy::new(chip, driver))),
+        Box::new(gpu_name_from_seam(staticinfo::StaticInfoPolicy::new(
+            chip, driver,
+        ))),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         // ★★★ `#149`. Position: among the ANSWERING links, before the recorders, and
         // before `InertPolicy` would have a chance to grow an arm for it. It answers
