@@ -728,3 +728,170 @@ on **our own** window VMA, which needs no cooperation from any"* — which is a 
 from write-protecting **guest RAM**. Per `a_rulings_date_is_part_of_the_citation`: ask *why* it
 decided that, and whether the why survives today's use. **Here it does not obviously survive, so
 it should be re-decided rather than inherited.**
+
+---
+
+## 15. ⊘⊘⊘ TWO CORRECTIONS THAT CHANGE THE THREAT MODEL — the silent path is (a) NOT on the CUDA path, and (b) NOT DEMONSTRATED
+
+**2026-09-07, same rung, both prompted by the owner.** §4 established the silent conjunction is
+*reachable*. It said nothing about whether **anything takes it**, or whether taking it **works**.
+Both questions have now been asked and both cut against this document's own framing.
+
+### 15.1 ★★★★★ libcuda NEVER ISSUES `MAP_MEMORY_DMA` — measured, from committed data
+
+> Owner: *"even if the silent path is possible, it also depends on if libcuda does it."*
+
+`[measured 2026-09-07 from `traces/host_reference_ga106/`, committed 2026-08-10]` — real GA106
+(RTX 3060), **unvirtualised host**, open driver **580.173.02**, CUDA 12.6.2,
+`libcuda.so.580.173.02`, captures untruncated at `NVDIFF_MAXBUF=65536`:
+
+| stage | `NV_ESC_RM_MAP_MEMORY_DMA` (0x57) | `UNMAP` (0x58) | UVM ioctls |
+|---|---|---|---|
+| `init` ×2 | **0** | 0 | 5 |
+| `dev` ×2 | **0** | 0 | 5 |
+| `ctx` ×2 | **0** | 0 | 131 |
+| `alloc` ×2 | **0** | 0 | 134 |
+| `ce` ×2 | **0** | 0 | 134 |
+| `launch` ×2 | **0** | 0 | 134 |
+
+⇒ **ZERO across all twelve traces, every stage, both replicates.**
+
+★ **And this is not an empty-capture artefact — there is a positive control.** The same recorder
+logs **131–134 UVM ioctls per trace** in exactly the stages that map memory. The instrument is
+demonstrably seeing the mapping traffic; it simply is not `MAP_MEMORY_DMA`.
+(`a_census_zero_needs_a_known_positive`, satisfied.)
+
+⇒ ★★★★★ **`NVOS46_FLAGS_DEFER_TLB_INVALIDATION` IS A FLAG ON AN IOCTL CUDA NEVER ISSUES.**
+
+**This re-scopes the whole rung:**
+- The **DEFER + sysmem silent map** is a **hostile-guest / raw-client** concern. It does **not**
+  gate phase 1 (*compute works*) or phase 2 (*CUDA apps must pass*). It matters for
+  `hostile_guest_isolation_is_the_value_proposition`, which is real but is not the roadmap's
+  current gate.
+- **The path CUDA actually uses is UVM** — §9 residual 1, listed all night and never opened.
+  UVM manages its own page tables, writes PTEs by CPU store or CE copy, and invalidates as
+  **pushbuffer methods**. It is uncovered for *entirely different reasons* than everything in
+  §1–§14.
+
+⇒ **The priority inverts.** This rung characterised the path that does not block the roadmap; the
+one that does was carried as a residual.
+
+⚠ **Scope of the claim, stated rather than buried:** one workload (`nvd_prog.c`, the `cup2`/`cup3`
+shape), one driver version, one arch. Graphics, NVENC, or a broader CUDA surface could still reach
+`MAP_MEMORY_DMA`. The honest claim is **"not on this workload's path"**, NOT *"libcuda never does
+it"*. Widening it is a cheap `nvdiff` re-run against a richer program.
+
+### 15.2 ⊘⊘ AND (A) WAS NEVER ESTABLISHED — this document asserted it
+
+> Owner: *"so we know confirmed a cache miss is a walk on real gpu?"*
+
+**No.** §9 residual 2 marks negative caching as *inferred*; but §4 and §12 then reason throughout
+as if the silent map **works**. That is (A) treated as fact. **The correct status is UNDECIDED,
+and the driver's own behaviour models (B).**
+
+**The fork, restated:**
+- **(A)** a TLB miss walks and picks up a freshly-written PTE ⇒ silent path real, w387 stands.
+- **(B)** a fresh PTE is not live without an invalidate ⇒ DEFER is a **batching contract**: the
+  client must still invalidate before use. Then **either the invalidate arrives (we see it) or the
+  mapping never works (the guest has only broken itself)** — and the silent path stops being a
+  correctness hole for us at all.
+
+**Q1 — the contract, and it leans (A).** `nvos.h:2144-2148`, immediately above the flag:
+> *"This flag must be used with caution. Improper use can leave **stale entries in the TLB**, and
+> allow access to memory no longer owned by the RM client or cause page faults."*
+
+Read precisely: the documented hazard is **stale positives** — a revoked or remapped page still
+reachable. It does **not** say a freshly-inserted valid PTE fails to take effect. The control-side
+prose confirms batching-with-obligation: `NV2080/NV0080_CTRL_CMD_DMA_INVALIDATE_TLB` are
+*"intended to be used by RM clients that manage their own TLB consistency … or with
+DEFER_TLB_INVALIDATION options"* (`ctrl2080dma.h:37-42`, `ctrl0080dma.h:456-461`), the 2080 form
+usable with class `0x5080`.
+
+★ **And a fact this document should have had: NO in-tree RM or UVM code sets `DEFER = TRUE`.**
+Grepped all of `src/` — the only consumer is the passthrough of the *client's* flag at
+`virt_mem_allocator_gm107.c:417`. So **no in-tree caller's behaviour defines the contract by
+example**; deferral is a pure client-facing accommodation, and **nothing asserts or times out if
+the deferred invalidate never arrives.** The client is trusted and unchecked.
+
+**Q2 — the hardware, and every driver path models (B).** No hardware statement found (searched
+`dev_mmu.h`, `dev_fault.h` across ampere/turing/… for `prefetch`, `cache`, `negative`, `speculat`,
+`invalid.*cache` — the published headers do not document TLB fill policy on a miss). But:
+
+- **RM always invalidates on a fresh valid map.** `PTE_UPGRADE` still drives `kgmmuInvalidateTlb`
+  → the `0xB830B0` write; the only thing skipped for upgrade-vs-downgrade is the extra
+  **sysmembar** (`kern_gmmu_gm107.c:222-224`), **not the invalidate**. RM never relies on *"the
+  walk will pick it up."*
+- ★★★ **UVM's own comment is the sharpest evidence in either direction.**
+  `uvm_mmu.c:805-808`: *"Upgrades don't have to flush out accesses, so **no membar** is needed on
+  the TLB invalidate"* — **and it still issues `tlb_invalidate_all`.** If the MMU never cached the
+  non-present result, that invalidate on a pure upgrade would be **dead work**, and authors who
+  hand-tune every membar and pipeline flag two lines above would have omitted it. **They keep it.**
+- UVM's ATS-deinit comment (`uvm_mmu.c:1194-1201`) distinguishes already-invalidated GMMU entries
+  from stale ATS entries needing eviction — the authors reason concretely about what is cached,
+  and still invalidate defensively.
+
+**Synthesis, stated carefully because (B) is the convenient answer:**
+- a VA/PDE range **never walked since becoming invalid** ⇒ first touch misses, walks, reads the
+  current PTE ⇒ **(A)**, silent. Unrefuted, and supported by nvos.h's stale-only hazard framing.
+- a range **previously walked while invalid or sparse** ⇒ a cached negative exists and the
+  invalidate is **required** ⇒ **(B)**.
+
+⇒ ⊘ **Do not build on (A) as measured.** The silent hole is *plausible* for genuinely fresh VAs
+and is *not demonstrated by any code path*, while the entire NVIDIA stack — RM and UVM both —
+treats a fresh map as requiring an invalidate.
+
+### 15.3 ★★ THE DECIDING EXPERIMENT — and the PRIMING STEP is the whole point
+
+Owner: *"we can first test it on bare metal by doing the exact silent path using raw
+ioctls/client."* One real GA106, host-side, raw RM client, **no guest, no UVM**.
+
+**Setup:** `NV01_ROOT` → `NV01_DEVICE_0` → `NV20_SUBDEVICE_0`; a **fresh** `FERMI_VASPACE_A` (own
+PDB, no unrelated cached state); one 2 MiB `NV01_MEMORY_LOCAL_USER` data page + one semaphore
+page; a `*_DMA_COPY_A` CE channel bound to that VAS.
+
+1. Reserve VA range `V` in the space, left **sparse/invalid**. ⚠ **All** page-level
+   instantiation must happen here — see confounder 2.
+2. ★ **PRIME THE NEGATIVE CACHE:** CE-copy *from* `V`. It faults (non-replayable), the channel
+   RCs — but the MMU has now **walked `V` and may have cached the non-present result**. Re-create
+   the channel for step 5; the VAS/TLB state persists.
+3. Map the data page at `V` via `NV04_MAP_MEMORY_DMA` with **`DEFER_TLB_INVALIDATION = TRUE`**.
+4. **Issue no invalidate by any transport.**
+5. CE-copy from `V` to a known buffer; poll the semaphore.
+
+| step 5 result | means | verdict |
+|---|---|---|
+| **faults / stale** | the primed non-present entry survived the DEFER map | **(B)** — DEFER is a batching contract we are protected by |
+| **completes correctly** | a cached non-present entry did not block the fresh PTE | **(A)** — the silent path is real, w387 stands |
+
+**Negative control (must PASS, else the rig is broken):** identical 1–3, then **do** issue
+`NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` before step 5.
+
+⚠ **Confounders, named because two of them make a naive run worthless:**
+1. ★★★ **WITHOUT STEP 2 THE EXPERIMENT PROVES NOTHING.** A pass would then mean *"no entry was
+   ever cached for `V`"* — **physically identical** to *"fresh VA, the walk picks it up."* It
+   cannot distinguish (A) from (B). The priming touch is what makes step 5 test **eviction**
+   rather than **first-fill**.
+2. **RM must not sneak an invalidate in between 3 and 5.** The DEFER map itself provably skips it
+   (`:2612`), but **VA setup does not**: `gvaspaceIncAllocRefCnt`/sparsify calls
+   `gvaspaceInvalidateTlb` (`gpu_vaspace.c:1608`). So all page-level instantiation belongs in
+   step 1, and step 3 must write **only a leaf PTE**. Verify with `GET_PTE_INFO` that step 3
+   changed only the leaf.
+3. **Any global invalidate anywhere on the GPU** — another tenant, another VAS — clears the primed
+   state. Run on an otherwise-idle GPU.
+4. **Scope:** this tests the **leaf** level on **GA10x**. It does not settle PDE-level behaviour
+   (where the UVM evidence already leans (B)) nor other arches.
+
+⇒ ★ And note the experiment's urgency changed with §15.1: it is now an **isolation** question, not
+a **correctness-for-real-apps** one. Same recipe, different priority.
+
+### 15.4 WHERE THIS LEAVES w387
+
+| claim | status after §15 |
+|---|---|
+| the silent conjunction is **reachable** | ✔ measured (§4) — unchanged |
+| anything **takes** it | ⊘ **not on the CUDA path** (§15.1) — hostile-guest scope only |
+| taking it **works** | ⊘ **UNDECIDED** (§15.2) — driver behaviour models (B) |
+| **UVM** is uncovered | ✔ unchanged — and it is the path CUDA **actually uses** |
+
+⇒ **The next rung is UVM, not this.** §1–§14 characterised a path no application takes, and may
+not even function. The path that gates the roadmap was residual 1 the whole time.
