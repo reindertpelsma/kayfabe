@@ -10265,7 +10265,31 @@ impl PublishContext {
                 String::new()
             },
             rows.len(),
-            rows.join(" "),
+            if rows.is_empty() {
+                // ★★★★★ **w390 — `over 0 VAS row(s)` IS AMBIGUOUS AND IT COST A RUNG.**
+                //
+                // `[measured 2026-09-08, boot w390c2]` the invalidate blockage point ran the
+                // whole pass **377 times** and every line ended `over 0 VAS row(s)`. That
+                // reads as *"it looked and found nothing publishable"* — but the loop body
+                // never executed at all, and the two have completely different fixes. ⊘ The
+                // counts below distinguish them, and they are the FIRST thing to read on any
+                // pass that publishes zero:
+                //   `live_pids=0`                  ⇒ no proc exists at this trigger point.
+                //   `live_pids>0 vas_keys=0`       ⇒ procs exist, none has a VAS yet.
+                //   `vas_keys>0` with 0 rows       ⇒ IMPOSSIBLE, every key pushes a row ⇒
+                //                                    the loop was skipped and this line is
+                //                                    the bug, not the boot.
+                let pids: Vec<_> = self.device.live_pids();
+                let keys: usize = pids.iter().map(|p| self.device.vas_keys(*p).len()).sum();
+                format!(
+                    "⊘ THE LOOP BODY NEVER RAN — live_pids={} vas_keys={} ⇒ this is \
+                     UNMEASURED, NOT `nothing was publishable`",
+                    pids.len(),
+                    keys,
+                )
+            } else {
+                rows.join(" ")
+            },
         ))
     }
 
@@ -13426,9 +13450,13 @@ impl Regs {
                 }
             }
             let _complete = PublishGuard(self.plane.as_ref());
-            let _b = kayfabe_mmu::blockage::BlockageGuard::enter(
-                kayfabe_mmu::blockage::BlockagePoint::TlbInvalidate,
-            );
+            // ⊘⊘ **NO SECOND `BlockageGuard` HERE — the first draft had one and it was a
+            // DEFECT, caught by its own census.** `[measured 2026-09-08, boot w390c2]` the
+            // `armed=[… tlb-invalidate=N …]` count read **754** against `triggers=377`:
+            // exactly 2×, because the guard above (gated on `out.invalidate`) already covers
+            // this scope and a nested one re-entered the same halt. ⇒ An arming count that
+            // double-counts makes `publications / armed` — the ratio C1 is graded on — wrong
+            // by a factor nobody would question, because 754 is a plausible number.
             if let Some(line) = self.doorbell_port.publish_ctx().publish_vas_rows(val, None) {
                 eprintln!("kayfabe: MMUINVAL-PUBLISH {line}");
             }
