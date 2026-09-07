@@ -1645,6 +1645,18 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// side arranging it, which is worth saying because it means a change to *either*
     /// breaks a guest silently.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★★★★ **R1 / C1 — THE GSP-RPC BLOCKAGE POINT.** Same declaration and same
+        // argument as `ObjectPolicy::respond`'s; see there for the whole of it. It is
+        // repeated rather than factored because a `CommandPolicy` is the *unit* that answers
+        // a blocked guest, and a helper that both impls called would be one refactor away
+        // from a third impl that forgot to call it — the enumeration §4 of
+        // `kayfabe_mmu::blockage` refuses. ⚠ `[measured 2026-09-07]` this impl has no
+        // production constructor today (`GraphPolicy::new`'s only callers are in
+        // `tests/gss_legacy_answer.rs`); it is guarded anyway, because *"which impl is
+        // production"* is exactly the fact that changes without anything going red.
+        let _blockage = kayfabe_mmu::blockage::BlockageGuard::enter(
+            kayfabe_mmu::blockage::BlockagePoint::GspRpc,
+        );
         match self.deliver(cmd) {
             // ★ Explicit, not `None`. See this method's docs: `None` is a refusal now.
             Ok(_) => Some(Reply {
@@ -3310,6 +3322,30 @@ impl CommandPolicy for ObjectPolicy {
     /// (`kayfabe_gsp::GspFsm::answer`). Both are correct answers for a verb this port does
     /// not model; an `NV_OK` would not be.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★★★★ **R1 / C1 — THE GSP-RPC BLOCKAGE POINT.**
+        //
+        // `docs/design/REQUIREMENTS_TARGET.md` R1: the guest issued this command through
+        // `_issueRpcAndWait` (`ogkm-580: rpc.c:1821`) and is **spinning on our reply**. It cannot
+        // observe anything, cannot submit anything and cannot advance a cursor until this
+        // function returns — so every mapping this command declares (`GPU_PROMOTE_CTX`'s ranges,
+        // an RM-side map) is published at a point where the guest is already stopped. That is
+        // the definition of coverage under the blockage model, and it is why the owner ruled
+        // *"we can let those hang until the map completes"*.
+        //
+        // ⊘ **The halt has a BUDGET and it is not ours to spend freely.** `osGetTimeoutParams`
+        // gives 4 s (GRAPHICS) / 30 s (COMPUTE); overrunning it is an Xid and a device reset, not
+        // a slow path. The guard declares that the guest is stopped — it does not license
+        // unbounded work here, and `l1_concurrency.md` R1 still applies underneath it.
+        //
+        // ⊘ **It is entered for EVERY command this policy answers, not only the mapping ones.**
+        // A guard that tried to name in advance which verbs carry a mapping would be
+        // `a_census_over_transports_is_as_complete_as_its_list` in a new coat — the list would be
+        // right on the day it was written. The counter that separates *"this point was armed"*
+        // from *"this point published something"* is `blockage::global_entries` beside
+        // `BlockageCounts::binds`, and both are on the boot line.
+        let _blockage = kayfabe_mmu::blockage::BlockageGuard::enter(
+            kayfabe_mmu::blockage::BlockagePoint::GspRpc,
+        );
         if cmd.function == kayfabe_gsp::RpcFunction::RmControl {
             // ★★★ #177 — the narrow control claim. `None` for every control not in
             // `OBJECT_CONTROLS`, so the chain and the unserviced ledger are untouched.

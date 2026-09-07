@@ -25,6 +25,14 @@ kayfabe-gsp.workspace = true
 # `kayfabe-fwd` has no `kayfabe-rmrpc` dependency and must not gain one.
 kayfabe-fwd.workspace = true
 kayfabe-core.workspace = true
+# ★★★★★ R1 / C1 — `blockage::BlockageGuard`. This crate is where a guest RPC is ANSWERED,
+# i.e. where the guest is blocked in `_issueRpcAndWait`, so it is where the GSP-RPC blockage
+# point has to be declared (`docs/design/REQUIREMENTS_TARGET.md` R1.1).
+#
+# ⊘ No new layer and no cycle: `kayfabe-mmu` sits BELOW `kayfabe-core`, which this crate
+# already depends on, and this crate already reaches `AddressTable::bind` through
+# `Gpu::promote_ctx`. The edge makes visible a dependency that was already real.
+kayfabe-mmu.workspace = true
 # `impl Faulted for BridgeRefusal` — the compiler-checked bridge that makes every refusal
 # countable in the trace (`gsp_core_bridge.md` §4.2 item 2).
 kayfabe-trace.workspace = true

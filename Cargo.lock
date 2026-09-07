@@ -297,6 +297,7 @@ dependencies = [
  "kayfabe-core",
  "kayfabe-fwd",
  "kayfabe-gsp",
+ "kayfabe-mmu",
  "kayfabe-mocks",
  "kayfabe-trace",
  "kayfabe-util",

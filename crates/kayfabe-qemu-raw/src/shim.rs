@@ -5332,6 +5332,40 @@ impl SharedDoorbell {
         // the `eprintln!` that consumes them. The print happens on the vCPU under the BQL and
         // is the instrument's own cost as much as the plane's; folding it into `ptdecode`
         // would charge the guest's latency to a page-table pass that may not have run.
+        // ★★★★★ **R1 / C1 — THE BLOCKAGE POINT, DECLARED FOR THE WHOLE PUBLICATION REGION.**
+        //
+        // `docs/design/REQUIREMENTS_TARGET.md` R1: coverage is not visibility of a write, it
+        // is the existence of a point at which **the guest is already stopped** before the
+        // mapping can be consumed. A guest-kernel channel's doorbell is such a point — the
+        // store is an MMIO vmexit, the vCPU is inside this function for the whole of it, and
+        // `GuestChannelKind::Emulated` is what says the software on the other side is the
+        // guest's kernel (`TrapContract::ScheduleAndReturn`).
+        //
+        // ⊘ **Gated on the DECLARED kind, and a `Passthrough` doorbell deliberately gets
+        // NOTHING.** R1's table gives the passthrough plane *"⊘ none, by design"*: it carries
+        // work, not mappings, and libcuda has no reason to ring for a map. So a row published
+        // during a passthrough doorbell is attributed `None` and lands in `USES_UNCOVERED` —
+        // which is the honest answer and is exactly the signal C1 exists to surface. Making
+        // this arm unconditional would launder every such row into a coverage it does not
+        // have, and the falsifier would become unfalsifiable.
+        //
+        // ⊘ It brackets from HERE — above the page-table decode and sweep, which bind through
+        // `kayfabe_mmu::walker` — and not from the top of the function, because everything
+        // above it is projection and printing. Extending it upward would attribute nothing
+        // extra and would overstate what the halt is being spent on.
+        //
+        // ⚠ **The guard is a thread-local store and a counter.** It is not work, it schedules
+        // no work, and it takes no lock — R1.2's anti-requirement is about the BAR1/BAR2/DRAM
+        // paths and this is none of them, but the cost is stated rather than assumed because
+        // `l1_concurrency.md` R1 counts an `eprintln!` as a blocking site.
+        let _blockage = seen
+            .as_ref()
+            .filter(|f| f.kind == kayfabe_core::channel_kind::GuestChannelKind::Emulated)
+            .map(|_| {
+                kayfabe_mmu::blockage::BlockageGuard::enter(
+                    kayfabe_mmu::blockage::BlockagePoint::EmulatedDoorbell,
+                )
+            });
         let pt_witness = self.witness_executor_fb_pages();
         kft.mark("pt_witness");
         let pt_decode = self.decode_cpu_pt_writes();
@@ -5375,6 +5409,22 @@ impl SharedDoorbell {
             ),
         );
         kft.mark("log_ptdecode");
+        // ★★★★★ **R1's C1 + C3, ON EVERY DOORBELL.** See [`Self::blockage_census`].
+        //
+        // ⊘ **Its OWN line, not folded into `PT-DECODE` above.** A grader for C1 greps
+        // `BLOCKAGE-COVERAGE` and a grader for C3 greps `CHANNEL-KIND`; burying them inside a
+        // line that already carries four other censuses would make both greps depend on the
+        // shape of an unrelated instrument.
+        //
+        // ⊘ **HERE and not at teardown, and the reason is C3's whole content.** The
+        // channel-kind census is `⊘VACUOUS` once the CUDA process has exited, because the
+        // `Passthrough` population is gone — the same trap `format_vas_census`'
+        // `NO-LIVE-CHANNELS` arm carries, and the trap that made six rung claims
+        // unevidenceable. A doorbell is by definition an instant at which a channel is live.
+        // ⚠ The teardown copy is printed as well, and is the *last* state, not the *live*
+        // one; do not grade C3 on it.
+        eprintln!("kayfabe: {} token={token:#010x}", self.blockage_census());
+        kft.mark("log_blockage");
         // ★★★★★ **§16.82 — WHY the ring's VA is not bound, asked of the VAS that would have
         // to bind it, on the same doorbell and joined by `proc`/`pdb`/`va`.**
         //
@@ -9132,6 +9182,60 @@ impl SharedDoorbell {
             none(&parked, "parked"),
             kayfabe_rt::device::coverage_aggregate_line(&cov),
             none(&verdicts, "covered"),
+        )
+    }
+
+    /// ★★★★★ **R1's TWO CORRECTNESS CLAUSES, AS ONE LINE — C1 and C3.**
+    ///
+    /// `docs/design/REQUIREMENTS_TARGET.md` R1.4:
+    /// - **C1** — *"any mapping used by a channel with no prior blockage point — count must
+    ///   be 0, with a known-positive denominator"*. That is the `BLOCKAGE-COVERAGE` clause.
+    /// - **C3** — *"guest-kernel/UVM channels do not classify `Emulated` on a live boot —
+    ///   asserted by **count**, not by rule"*. That is the `CHANNEL-KIND` clause.
+    ///
+    /// # ⊘ Why the two ride ONE line and not two
+    ///
+    /// C1's verdict is only interpretable beside C3's. `BLOCKAGE-COVERAGE COVERED` means
+    /// *"every mapping arrived at a halt"*, and the **first** of the three halts is *"a
+    /// channel classified `Emulated` rang its doorbell"*. If the classifier were wrong — if a
+    /// guest-kernel channel landed `Passthrough` — the doorbell guard would never be entered,
+    /// the publications would be attributed `None`, and C1 would go red for a reason that has
+    /// nothing to do with publication timing. ⇒ pairing them is what makes a red *readable*,
+    /// and it is `the_wall_is_a_three_legged_stool` applied to an instrument instead of to a
+    /// bug.
+    ///
+    /// # ★★★ Both halves print their ARMING STATE and their DENOMINATOR, always
+    ///
+    /// `armed=[…]` is [`kayfabe_mmu::blockage::global_entries`] — how many times each halt
+    /// was actually entered on this boot — and `publications=` is the denominator. A zero
+    /// beside `armed=[0 0 0]` is an **unmeasured** zero and the line says the words; a zero
+    /// beside a live arming count is a measured one. `every_row_verified_over_zero_rows` is
+    /// what happens when a grader cannot tell those apart.
+    ///
+    /// ⚠ **The arming array is read ONCE and passed in**, so a line's counts and its arming
+    /// state are from the same instant. Reading it inside the renderer would let a
+    /// concurrent vCPU move one and not the other, and the pair would describe no state that
+    /// ever existed.
+    ///
+    /// ⊘ **Cost, stated rather than assumed.** One extra pass over each live VAS's rows —
+    /// the same order as [`Self::vas_census`]'s `vas_coverage`, which already runs on every
+    /// doorbell — plus one walk of the live channel set. It resolves nothing, so calling it
+    /// cannot move the numbers it reports (`a_probe_that_shares_the_allocator_is_not_an_
+    /// observer`). ⚠ It is nonetheless work on the vCPU path, and R2's P1 is red at 29.4 ms;
+    /// if this census ever shows up in a `kftime` attribution it should move to the drain,
+    /// not be deleted.
+    fn blockage_census(&self) -> String {
+        let entries = kayfabe_mmu::blockage::global_entries();
+        let mut rows: Vec<kayfabe_rt::device::VasBlockage> = Vec::new();
+        for pid in self.device.live_pids() {
+            rows.extend(self.device.vas_blockage(pid, BLOCKAGE_VA_CAP));
+        }
+        format!(
+            "{} | {}",
+            kayfabe_rt::device::blockage_aggregate_line(&rows, entries, BLOCKAGE_VA_CAP),
+            self.device
+                .channel_kind_census()
+                .render(CHANNEL_KIND_OFFENDER_CAP),
         )
     }
 
@@ -13207,6 +13311,40 @@ impl Regs {
         let mut kft = crate::kftime::Segs::start();
         let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
         kft.mark("plane");
+        // ★★★★★ **R1 / C1 — THE TLB-INVALIDATE BLOCKAGE POINT.**
+        //
+        // `docs/design/REQUIREMENTS_TARGET.md` R1.1's third row. The guest wrote BAR0
+        // `0x00B8_30B0` and `kgmmuCheckPendingInvalidates_TU102`
+        // (`ogkm-580: kern_gmmu_tu102.c:59-84`) now **spin-polls `TRIGGER` until it reads
+        // false** — so from here to the completion the guest's whole VM is stopped, and
+        // anything published under it is published for free. `[measured w326]` `polls = 754 =
+        // 2 × 377` exactly, the protocol floor, which is what proves the guest really spins.
+        //
+        // ⊘ **AND HERE IS WHAT THIS INSTRUMENT IS EXPECTED TO SHOW, PRE-REGISTERED.**
+        // `[measured 2026-09-07, workspace grep]` `WriteOutcome::publish_before_completing`
+        // is produced at `kayfabe_device::plane`'s trigger arm and consumed **nowhere**;
+        // `MmuInvalidateLog::arm` has no caller in this crate, and every recorded boot prints
+        // `MMUINVAL armed=false` beside `triggers=377`. ⇒ this halt is **entered and spends
+        // nothing**: the boot line should read `armed=[… tlb-invalidate=N …]` with `N > 0`
+        // and `by=[… tlb-invalidate=0 …]`.
+        //
+        // ★ That pair is the deliverable, not a defect being hidden by one. A blockage point
+        // that is armed and publishes zero is a **measured** gap with a known-positive
+        // (`a_census_zero_needs_a_known_positive`); the same gap with no guard here would be
+        // an argument. ⚠ Do **not** read `tlb-invalidate=0` as *"the guest emits no
+        // invalidate"* — that is the exact misreading `kayfabe_device::mmuinval` §1 was
+        // written to retire.
+        //
+        // ⊘ Gated on `out.invalidate`, so the point is armed by the invalidate register and
+        // by no other MMIO write. An unconditional guard here would attribute every doorbell,
+        // every GSP poke and every ROM read to a halt none of them is, and the arming
+        // evidence — the one number that separates a measured zero from an unmeasured one —
+        // would become meaningless.
+        let _blockage = out.invalidate.as_ref().map(|_| {
+            kayfabe_mmu::blockage::BlockageGuard::enter(
+                kayfabe_mmu::blockage::BlockagePoint::TlbInvalidate,
+            )
+        });
         // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
         //
         // `RegPlane::write` has returned, so the plane's rank-0 guard is a dropped local and
@@ -13746,6 +13884,16 @@ impl Regs {
         // line is UNMEASURED and a present line with `triggers=0` is a measured zero.
         // Those are different facts and this tree has paid for confusing them.
         eprintln!("kayfabe: {}", self.plane.mmu_inval().census());
+        // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
+        // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
+        // all** still prints a line, and that line reads `⊘NEVER-ARMED` — an absence stated
+        // rather than a log with nothing in it.
+        // ⚠ Its `CHANNEL-KIND` half is expected to read `⊘VACUOUS` on a normal boot — the
+        // CUDA process is gone by teardown. **C3 is graded on the per-doorbell lines.**
+        eprintln!(
+            "kayfabe: {} AT=teardown",
+            self.doorbell_port.blockage_census()
+        );
         // ★★★★★ w326 — did the revocation drain get a driver that is not the guest?
         eprintln!("kayfabe: {}", self.reclaim.census());
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
@@ -16168,6 +16316,18 @@ const PT_SWEEP_RANGE_CAP: usize = 48;
 /// ⇒ `w377` §3 blocker (5), and the rule it turns on: **a cap may truncate what is PRINTED,
 /// it must never truncate what is COMPUTED.**
 const PT_COVERAGE_INTERVAL_CAP: usize = 8;
+
+/// ★★★★★ **R1 / C1 — how many UNCOVERED virtual addresses one `BLOCKAGE-COVERAGE` line may
+/// list.** A mapping published under no blockage point is the thing C1 forbids, so a red here
+/// has to be chaseable — the count and the total are exact at every cap, and the line says
+/// `⚠SHOWING k of N` whenever it truncates. ⊘ 24 and not 8: on a healthy boot the list is
+/// EMPTY, so this cap only ever costs anything on the boot that is already failing, and that
+/// is exactly the boot that wants addresses.
+const BLOCKAGE_VA_CAP: usize = 24;
+
+/// ★ How many misclassified channels one `CHANNEL-KIND` line may name. Same argument, and
+/// the same expected length: zero.
+const CHANNEL_KIND_OFFENDER_CAP: usize = 12;
 
 /// How many DISTINCT refused virtual addresses one sweep line may list. See the refusal block
 /// in [`SharedDoorbell::sweep_cpu_pt_tables`] — an address absent from a capped list is not

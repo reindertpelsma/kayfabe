@@ -197,6 +197,213 @@ pub fn coverage_aggregate_line(rows: &[VasCoverage]) -> String {
     )
 }
 
+/// ★★★★★ **R1 / C1 — ONE ADDRESS SPACE'S BLOCKAGE-POINT ATTRIBUTION**, joinable against a
+/// [`VasCoverage`] and against an `Xid` by `proc`/`gpu`/`pdb`.
+///
+/// ⊘ It is a **second, orthogonal predicate** beside [`VasCoverage`] and neither one implies
+/// the other, which is why they are two lines and not one:
+///
+/// | question | answered by |
+/// |---|---|
+/// | *is every declared range host-published?* — **space** | [`VasCoverage::table`] |
+/// | *did every mapping arrive at a point where the guest was already stopped?* — **time** | this |
+///
+/// A boot can be `COVERED` on one and `⊘UNCOVERED` on the other in either direction, and
+/// collapsing them into a single word would make exactly one of the two failures invisible.
+#[derive(Debug, Clone)]
+pub struct VasBlockage {
+    /// Owning process.
+    pub proc_id: ProcId,
+    /// Owning GPU.
+    pub gpu: GpuId,
+    /// The address space's page-directory base — the join key an `Xid` prints.
+    pub pdb: Pdb,
+    /// The counts. Exact; only [`kayfabe_mmu::blockage::BlockageCounts::uncovered_vas`] is a
+    /// sample, and it carries its own total.
+    pub counts: kayfabe_mmu::blockage::BlockageCounts,
+}
+
+/// ★★★★★ **THE WHOLE-BOOT C1 LINE** — fold every live address space's [`VasBlockage`] into
+/// one verdict, printed beside the arming state it must be read with.
+///
+/// `entries` is [`kayfabe_mmu::blockage::global_entries`]. ⚠ **It is a parameter and not read
+/// inside**, so the caller cannot print a line whose arming state came from a different
+/// instant than its counts — the pairing that `a_measurement_that_fits_two_models` is about.
+///
+/// ★★★ `cap` bounds the printed VA list and the collected sample, and **nothing else**:
+/// `publications`, `USES_UNCOVERED` and `uncovered_rows` are exact at every `cap`.
+#[must_use]
+pub fn blockage_aggregate_line(rows: &[VasBlockage], entries: [u64; 3], cap: usize) -> String {
+    let mut agg = kayfabe_mmu::blockage::BlockageCounts::default();
+    for r in rows {
+        agg.add(&r.counts, cap);
+    }
+    format!("{} vases={}", agg.render(entries, cap), rows.len())
+}
+
+/// ★★★★★ **R1 / C3 — THE CHANNEL-KIND CENSUS, COUNTED ON A LIVE BOOT.**
+///
+/// # ⊘ Why this exists when `channel_kind_declaration.rs` already asserts the biconditional
+///
+/// That test asserts it over a **scripted mock fixture**: hand-written `RmEvent`s, a
+/// `MockArch`, no guest. It proves the projection *computes* the rule. It cannot prove the
+/// rule *held on the boot that ran*, and this tree's standing lesson is that *"by rule"* and
+/// *"in this boot"* have diverged — which is precisely why R1's C3 is phrased *"asserted by
+/// **count**, not by rule"*.
+///
+/// `[measured 2026-09-07, workspace grep]` before this type there was **no aggregate count of
+/// channel kinds anywhere**: the kind was printed per channel inside `format_vas_census`'s
+/// `census[…]` clause, grouped by `(VasRoutes, has_pdb)` — a grouping that does not even
+/// imply the counts — and `CeShellState::sysproc_kept` counts *doorbells kept for emulated
+/// channels*, never channels, and never reaches teardown.
+///
+/// # ★★ Both directions AND the non-vacuity, because either alone passes for the wrong reason
+///
+/// A boot with **zero** guest-kernel channels satisfies *"every system channel is
+/// `Emulated`"* vacuously, and that is the shape `a_census_zero_needs_a_known_positive`
+/// names. [`Self::verdict`] therefore refuses to say `Agrees` unless **both** populations are
+/// non-empty.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChannelKindCensus {
+    /// Channels declared [`kayfabe_core::channel_kind::GuestChannelKind::Emulated`].
+    pub emulated: usize,
+    /// Channels declared [`kayfabe_core::channel_kind::GuestChannelKind::Passthrough`].
+    pub passthrough: usize,
+    /// Channels routed to the reserved system component — the guest kernel's, UVM's.
+    pub system_proc_channels: usize,
+    /// Channels routed to a user component — a guest CUDA process's.
+    pub user_proc_channels: usize,
+    /// ⊘ **MUST BE EMPTY.** System-component channels that did **not** land `Emulated` —
+    /// C3's red, with the `(proc, chan)` of each so a boot log names them rather than
+    /// reporting a count nobody can chase.
+    pub system_not_emulated: Vec<(u32, u32)>,
+    /// ⊘ **MUST BE EMPTY.** User-component channels that did not land `Passthrough`. The
+    /// mirror image, and it is checked because a classifier that answered `Emulated` for
+    /// **everything** would satisfy the clause above and be catastrophically wrong: it would
+    /// route a guest process's ring into the inspecting path.
+    pub user_not_passthrough: Vec<(u32, u32)>,
+}
+
+/// The reading of a [`ChannelKindCensus`]. ⊘ Three-valued for
+/// [`kayfabe_mmu::blockage::BlockageVerdict`]'s reason: a `bool` cannot separate *"it
+/// agrees"* from *"there was nothing to disagree with"*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelKindVerdict {
+    /// ★ Both populations are live and every channel in each landed the kind its component
+    /// implies. This is C3 passing.
+    Agrees,
+    /// ⊘ At least one channel landed the wrong kind. C3 failing; the rows are named.
+    Disagrees,
+    /// ⊘ **Not a pass.** One of the two populations is empty, so the biconditional is
+    /// vacuous on that side. Which side is on the line.
+    Vacuous,
+}
+
+impl ChannelKindVerdict {
+    /// The name a diagnostic prints.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            ChannelKindVerdict::Agrees => "AGREES",
+            ChannelKindVerdict::Disagrees => "⊘DISAGREES",
+            ChannelKindVerdict::Vacuous => "⊘VACUOUS",
+        }
+    }
+}
+
+impl ChannelKindCensus {
+    /// Build the census from every live channel row.
+    ///
+    /// ⊘ **Reads [`ChannelVasRow::kind`], never re-derives it from `proc`.** The whole point
+    /// of the declared field is that `proc == SYSTEM_PROC` is *the input* to the
+    /// classification; a census that recomputed the answer from the input would be checking
+    /// its own arithmetic and would pass on any boot at all.
+    #[must_use]
+    pub fn of(rows: &[ChannelVasRow]) -> Self {
+        use kayfabe_core::channel_kind::GuestChannelKind;
+        let mut c = ChannelKindCensus::default();
+        for r in rows {
+            match r.kind {
+                GuestChannelKind::Emulated => c.emulated += 1,
+                GuestChannelKind::Passthrough => c.passthrough += 1,
+            }
+            if r.proc == Gpu::SYSTEM_PROC {
+                c.system_proc_channels += 1;
+                if r.kind != GuestChannelKind::Emulated {
+                    c.system_not_emulated.push((r.proc.0, r.chan.0));
+                }
+            } else {
+                c.user_proc_channels += 1;
+                if r.kind != GuestChannelKind::Passthrough {
+                    c.user_not_passthrough.push((r.proc.0, r.chan.0));
+                }
+            }
+        }
+        c
+    }
+
+    /// The three-valued reading. See [`ChannelKindVerdict`].
+    #[must_use]
+    pub fn verdict(&self) -> ChannelKindVerdict {
+        if !self.system_not_emulated.is_empty() || !self.user_not_passthrough.is_empty() {
+            return ChannelKindVerdict::Disagrees;
+        }
+        if self.system_proc_channels == 0 || self.user_proc_channels == 0 {
+            return ChannelKindVerdict::Vacuous;
+        }
+        ChannelKindVerdict::Agrees
+    }
+
+    /// The one-line verdict a grader greps. Every number is exact; `cap` bounds only the
+    /// printed offender lists, which state their own totals.
+    #[must_use]
+    pub fn render(&self, cap: usize) -> String {
+        let v = self.verdict();
+        let list = |rows: &[(u32, u32)]| -> String {
+            let shown: Vec<String> = rows
+                .iter()
+                .take(cap)
+                .map(|(p, c)| format!("p{p}/c{c}"))
+                .collect();
+            if rows.len() > shown.len() {
+                format!("[{} …{} of {}]", shown.join(" "), shown.len(), rows.len())
+            } else {
+                format!("[{}]", shown.join(" "))
+            }
+        };
+        format!(
+            "CHANNEL-KIND {} emulated={} passthrough={} system_proc_channels={} \
+             user_proc_channels={} system_not_emulated={}{} user_not_passthrough={}{}{}",
+            v.name(),
+            self.emulated,
+            self.passthrough,
+            self.system_proc_channels,
+            self.user_proc_channels,
+            self.system_not_emulated.len(),
+            list(&self.system_not_emulated),
+            self.user_not_passthrough.len(),
+            list(&self.user_not_passthrough),
+            // ⊘ The vacuous arm SAYS which side is empty. `AGREES` over zero guest-kernel
+            // channels and `AGREES` over zero user channels are different findings, and both
+            // are different from a boot that actually exercised the split.
+            match (
+                v,
+                self.system_proc_channels == 0,
+                self.user_proc_channels == 0
+            ) {
+                (ChannelKindVerdict::Vacuous, true, true) =>
+                    " ⊘ NO LIVE CHANNELS AT ALL — this is an UNMEASURED verdict, not a clean one",
+                (ChannelKindVerdict::Vacuous, true, false) =>
+                    " ⊘ NO GUEST-KERNEL CHANNEL WAS LIVE — the `Emulated` half is vacuous \
+                     (sampled too late? the census must be taken while a CUDA process is up)",
+                (ChannelKindVerdict::Vacuous, false, true) =>
+                    " ⊘ NO USER CHANNEL WAS LIVE — the `Passthrough` half is vacuous",
+                _ => "",
+            }
+        )
+    }
+}
+
 /// `Y`/`N` for a report. ⊘ Two characters and not `true`/`false`: a census line packs a
 /// dozen predicates and a reader scanning a column wants them the same width.
 fn yn(b: bool) -> &'static str {
@@ -3781,6 +3988,52 @@ impl SharedDevice {
                 .collect()
         })
         .unwrap_or_default()
+    }
+
+    /// ★★★★★ **R1 / C1 — THIS PROCESS'S ADDRESS SPACES' BLOCKAGE ATTRIBUTION.**
+    ///
+    /// One [`VasBlockage`] per live VAS: which halt each mapping was published under, how
+    /// many uses hit a mapping no halt covered, and the VAs of the live rows that are
+    /// uncovered.
+    ///
+    /// ★★★ `cap` bounds the **collected VA sample** and nothing else — every count is
+    /// computed over the whole table at every `cap`, including `0`. The rule is
+    /// `kayfabe_util::coverage`'s and it is restated at each producer rather than inherited
+    /// by proximity.
+    ///
+    /// ⊘ **Read-only and allocation-bounded.** It takes the same rank-1 proc lock
+    /// [`Self::vas_coverage`] takes and does one pass over each table's rows; it resolves
+    /// nothing, so calling it cannot move the numbers it reports.
+    #[must_use]
+    pub fn vas_blockage(&self, pid: ProcId, cap: usize) -> Vec<VasBlockage> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| VasBlockage {
+                    proc_id: pid,
+                    gpu,
+                    pdb,
+                    counts: vas.table.blockage_counts(cap),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+    }
+
+    /// ★★★★★ **R1 / C3 — THE LIVE CHANNEL-KIND CENSUS.**
+    ///
+    /// Built from [`Self::channel_vas_census`], so it walks the live set one rank-1 lock at a
+    /// time (R3) and reads each channel's **declared** kind rather than re-deriving it. See
+    /// [`ChannelKindCensus`] for why a mock-fixture test does not answer this and why the
+    /// verdict is three-valued.
+    ///
+    /// ⚠ **When it is sampled decides what it can say.** Taken at teardown, after the CUDA
+    /// process has exited, the user population is empty and the verdict is `⊘VACUOUS` — the
+    /// same trap `format_vas_census`' `NO-LIVE-CHANNELS` arm carries. Sample it while work is
+    /// in flight (the doorbell path) if the answer is to mean anything.
+    #[must_use]
+    pub fn channel_kind_census(&self) -> ChannelKindCensus {
+        ChannelKindCensus::of(&self.channel_vas_census())
     }
 
     /// ★★★ **w291 — the GUEST-RAM rows a bounded pin-rate measurement would take**, as

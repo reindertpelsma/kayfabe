@@ -41,10 +41,12 @@
 //! safe), bind/unbind are `&mut self` (caller-exclusive). `Send + Sync`
 //! compile-time-asserted below; full contract in `kayfabe-core`'s crate docs.
 
+pub mod blockage;
 pub mod gpga;
 pub mod reach;
 pub mod walker;
 
+use blockage::{BlockageCensus, BlockageCounts, Publication};
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuVa, Pdb};
 use kayfabe_isolate::{HostHandle, IsolateId};
@@ -919,14 +921,54 @@ pub enum AddressFault {
     },
 }
 
+/// ★★★ **ONE ROW of the address table** — the binding, and the halt it arrived under.
+///
+/// ⊘ **The provenance is IN the value, not beside it.** A parallel `BTreeMap<va, Publication>`
+/// would be a second record of one row's existence, kept in step by a convention rather than
+/// by a type — `a_second_source_of_truth_beside_a_complete_value`, which this tree has paid
+/// for. Here *"the row exists but its provenance does not"* is unrepresentable.
+///
+/// ⊘ It is deliberately **not** a field on [`Binding`]. `Binding` derives `PartialEq` and is
+/// compared by value in ~20 assertions and in the populate path's *"is what is already here
+/// the same as what I am about to write"* check; folding a provenance stamp into it would
+/// make two identical mappings published at two different halts compare **unequal**, and
+/// would silently change what `populate` calls a contradiction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Row {
+    binding: Binding,
+    publication: Publication,
+}
+
+#[cfg(test)]
+impl Row {
+    /// ⊘ **TEST ONLY — a row that bypassed [`AddressTable::bind`].** Two whole-table-walk
+    /// tests exist precisely to prove the laws hold about rows the entrance never saw, so
+    /// they write the private map directly. They need a `Row`, and constructing one by hand
+    /// at each site would spell the provenance three ways. It is named `bypassing` so the
+    /// bypass is stated at the call site rather than inferred from a struct literal.
+    fn bypassing(binding: Binding) -> Self {
+        Row {
+            binding,
+            publication: Publication {
+                point: None,
+                at_generation: 0,
+            },
+        }
+    }
+}
+
 /// The forward-populated VA→backing table of ONE VAS (identified by its PDB).
 ///
 /// This *is* the guest's GMMU TLB from the emulator's point of view: populated at
 /// the guest's own publication points, invalidated by the guest's own invalidate
 /// discipline, faulting where real hardware would fault.
+///
+/// ★★★★★ **And each row remembers WHICH HALT it was published under** — R1's blockage-point
+/// model (`crate::blockage`). That is what makes *"a mapping was used that no blockage point
+/// covered"* a number ([`AddressTable::blockage_counts`]) rather than an argument.
 #[derive(Debug, Default)]
 pub struct AddressTable {
-    map: IntervalMap<Binding>,
+    map: IntervalMap<Row>,
     /// ★★★★★ **WHOSE TABLE THIS IS — the owner's *"not denied, simply not found"* made
     /// CHECKED rather than structural-by-convention** (owner ruling, 2026-08-12).
     ///
@@ -978,6 +1020,11 @@ pub struct AddressTable {
     /// ⊘ Deliberately `u64` and never reset: a wrapping counter would make two different
     /// states compare equal, which is the one failure a dirty gate may not have.
     generation: u64,
+    /// ★★★★★ **R1's C1 COUNTERS, for this address space** — which halt each row was
+    /// published under, and how many uses hit a row no halt covered. See
+    /// [`crate::blockage`] for the whole model and for why the counters live here rather
+    /// than in a global.
+    blockage: BlockageCensus,
 }
 
 impl AddressTable {
@@ -995,6 +1042,7 @@ impl AddressTable {
             map: IntervalMap::default(),
             owner: Some(pdb),
             generation: 0,
+            blockage: BlockageCensus::default(),
         }
     }
 
@@ -1068,7 +1116,25 @@ impl AddressTable {
                 slice_len: s.len(),
             });
         }
-        self.map.insert(va.0, len, binding).map_err(|e| match e {
+        // ★★★★★ **R1 / C1 — THE HALT THIS ROW ARRIVES UNDER, TAKEN AT THE TABLE'S ONLY
+        // ENTRANCE.** Read here and nowhere else: `arm_the_gate_at_the_sink_not_at_an_
+        // enumeration`. A census hung off the four call sites that bind today would be
+        // complete on the day it was written and silently partial the day a fifth arrived —
+        // and *"silently partial"* on this axis means a mapping that reached the guest with
+        // no halt behind it, counted as covered.
+        //
+        // ⊘ `None` is not an error and is not refused. Refusing an unblocked publication
+        // would turn a MEASUREMENT into a POLICY on the same rung, and R1's first job is to
+        // find out whether the number is zero — see `crate::blockage` §5.
+        let publication = Publication {
+            point: blockage::current(),
+            at_generation: self.generation,
+        };
+        let row = Row {
+            binding,
+            publication,
+        };
+        self.map.insert(va.0, len, row).map_err(|e| match e {
             kayfabe_util::IntervalError::Overlap { .. } => AddressFault::Overlap { pdb, va },
             // Zero-length / u64-wrapping range from hostile guest input: loud, not a panic.
             kayfabe_util::IntervalError::Empty | kayfabe_util::IntervalError::Wraps => {
@@ -1076,8 +1142,11 @@ impl AddressTable {
             }
         })?;
         // ⊘ AFTER the insert and only on the success path: a refused bind changed nothing,
-        // and bumping on it would arm every consumer on the guest's malformed input.
+        // and bumping on it would arm every consumer on the guest's malformed input. The
+        // blockage census is bumped on exactly the same edge and for exactly the same
+        // reason — a publication that did not happen is not a publication.
         self.generation = self.generation.saturating_add(1);
+        self.blockage.note_bind(publication.point);
         Ok(())
     }
 
@@ -1088,7 +1157,7 @@ impl AddressTable {
     /// backing" an executable sentence rather than an aspiration — it names both the
     /// mapping to undo and the object to free.
     pub fn unbind(&mut self, va: GpuVa) -> Option<(u64, Binding)> {
-        let out = self.map.remove_at(va.0);
+        let out = self.map.remove_at(va.0).map(|(l, r)| (l, r.binding));
         // ⊘ Only when a row actually left. An `unbind` of a VA nothing was bound at is a
         // no-op, and arming a dirty gate on a no-op is how a gate ends up firing every
         // doorbell while reporting itself as working (w318 outcome (B)).
@@ -1109,14 +1178,33 @@ impl AddressTable {
     pub fn resolve(&self, pdb: Pdb, va: GpuVa) -> Result<(Binding, u64), AddressFault> {
         self.owns(pdb, va)?;
         match self.map.lookup(va.0) {
-            Some((start, _len, b)) => Ok((*b, va.0 - start)),
-            None => Err(AddressFault::Miss { pdb, va }),
+            Some((start, _len, r)) => {
+                // ★★★★★ **R1 / C1 — THE USE SIDE, at the only point query.** *"Was the
+                // mapping this address resolves through published at a halt?"* is answerable
+                // exactly here, because this is the one place a VA becomes a backing.
+                //
+                // ⊘ **A `use` here is OUR resolve, not the GPU's walk.** The engine walks the
+                // HOST page tables and this census can never see that. It answers *"did we
+                // hand out a translation whose row no halt covered"*, which is C1, and it
+                // does not answer whether the host side then materialised — that is
+                // `SharedDevice::vas_coverage`'s predicate, a different question with its own
+                // line.
+                self.blockage.note_use(r.publication.point);
+                Ok((r.binding, va.0 - start))
+            }
+            None => {
+                // ⊘ Counted, so `uses=0` can be told apart from *"nothing ever asked this
+                // table anything"*. A table with misses was consulted; a table with neither
+                // was not, and those are different findings.
+                self.blockage.note_use_miss();
+                Err(AddressFault::Miss { pdb, va })
+            }
         }
     }
 
     /// Iterate bindings as `(va, len, &binding)` in ascending VA order.
     pub fn iter(&self) -> impl Iterator<Item = (u64, u64, &Binding)> {
-        self.map.iter()
+        self.map.iter().map(|(s, l, r)| (s, l, &r.binding))
     }
 
     /// The binding covering `va`, **with the range it occupies** — `(start, len,
@@ -1131,7 +1219,7 @@ impl AddressTable {
     /// one of them must not be tempted by a fault vocabulary it has no use for.
     #[must_use]
     pub fn binding_at(&self, va: GpuVa) -> Option<(u64, u64, Binding)> {
-        self.map.lookup(va.0).map(|(s, l, b)| (s, l, *b))
+        self.map.lookup(va.0).map(|(s, l, r)| (s, l, r.binding))
     }
 
     /// ★★★ **Which of the owner's four kinds the region at `va` is** — `None` is **kind 1,
@@ -1143,7 +1231,7 @@ impl AddressTable {
     /// [`RegionKind`].
     #[must_use]
     pub fn kind_at(&self, va: GpuVa) -> Option<RegionKind> {
-        self.map.lookup(va.0).map(|(_, _, b)| b.kind())
+        self.map.lookup(va.0).map(|(_, _, r)| r.binding.kind())
     }
 
     /// ★★★ **The range algebra's one primitive** (`#102` stage C2,
@@ -1192,8 +1280,52 @@ impl AddressTable {
         self.map
             .spans(va.0, len)
             .into_iter()
-            .map(|(s, l, b)| (s, l, b.map(|(v, off)| (*v, off))))
+            .map(|(s, l, b)| (s, l, b.map(|(r, off)| (r.binding, off))))
             .collect()
+    }
+
+    /// ★★★★★ **UNDER WHICH HALT THE ROW COVERING `va` WAS PUBLISHED** — `None` when no row
+    /// covers it at all.
+    ///
+    /// ⊘ Distinct from [`AddressTable::resolve`] and deliberately **not** counted as a use:
+    /// this is a diagnostic asking about the table, not a translation handed to anything.
+    /// Folding it into `resolve` would make every census read inflate the very denominator
+    /// the census reports (`a_probe_that_shares_the_allocator_is_not_an_observer`).
+    #[must_use]
+    pub fn publication_at(&self, va: GpuVa) -> Option<Publication> {
+        self.map.lookup(va.0).map(|(_, _, r)| r.publication)
+    }
+
+    /// ★★★★★ **THIS ADDRESS SPACE'S C1 CENSUS** — the counts, plus the VAs of every row
+    /// published under **no** declared halt.
+    ///
+    /// ★★★ `cap` bounds the **collected VA sample** and nothing else:
+    /// [`BlockageCounts::uncovered_vas_total`] is computed over the whole table at every
+    /// `cap`, including `0`. That is the same rule [`kayfabe_util::coverage`] enforces, and
+    /// it is restated at each producer rather than inherited by proximity — the census this
+    /// replaces had its cap and its computation in one loop, and the verdict inherited the
+    /// truncation.
+    ///
+    /// ⊘ **Two different populations are reported and neither substitutes for the other:**
+    /// `binds_uncovered` counts publications that *arrived* with no halt behind them (a
+    /// whole-boot flow), while `uncovered_vas_total` counts rows that are *still live* and
+    /// uncovered (a snapshot). A row bound uncovered and later unbound shows in the first
+    /// and not the second.
+    #[must_use]
+    pub fn blockage_counts(&self, cap: usize) -> BlockageCounts {
+        let mut out = self.blockage.snapshot();
+        for (va, _len, r) in self.map.iter() {
+            if r.publication.covered() {
+                continue;
+            }
+            // ⊘ The TOTAL is bumped before the cap is consulted, so a truncated sample can
+            // never make the population look smaller than it is.
+            out.uncovered_vas_total = out.uncovered_vas_total.saturating_add(1);
+            if out.uncovered_vas.len() < cap {
+                out.uncovered_vas.push(va);
+            }
+        }
+        out
     }
 
     /// ★★★ #102 — the identity law as a **whole-table walk**: the first host-backed
@@ -1216,8 +1348,8 @@ impl AddressTable {
     /// [`AddressFault::HostVaMismatch`] or [`AddressFault::SliceLenMismatch`] naming the
     /// offending range.
     pub fn audit_identity(&self, pdb: Pdb) -> Result<(), AddressFault> {
-        for (va, len, b) in self.map.iter() {
-            let Some(h) = b.host else { continue };
+        for (va, len, r) in self.map.iter() {
+            let Some(h) = r.binding.host else { continue };
             if h.host_va() != va {
                 return Err(AddressFault::HostVaMismatch {
                     pdb,
@@ -1268,6 +1400,166 @@ mod tests {
     use super::*;
 
     const PDB: Pdb = Pdb(0x340_1000);
+
+    /// ★★★★★ **R1 / C1 — A BIND UNDER A HALT IS ATTRIBUTED TO IT, AND A BIND WITH NO HALT
+    /// IS NOT LAUNDERED INTO ONE.**
+    ///
+    /// The whole census rests on `bind` reading [`blockage::current`] at the moment of
+    /// insertion. Both directions are in one test because they are opposite failures and
+    /// either alone passes vacuously for the other: an attribution that always answered a
+    /// point would report `uncovered=0` on a boot with no guards at all, and one that never
+    /// answered a point would report every mapping as a red.
+    #[test]
+    fn taddr_a_bind_records_the_halt_it_arrived_under() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+
+        let under = GpuVa(0x1_0000_0000);
+        {
+            let _g = blockage::BlockageGuard::enter(blockage::BlockagePoint::GspRpc);
+            t.bind(PDB, under, 0x1000, b).expect("bind");
+        }
+        let outside = GpuVa(0x2_0000_0000);
+        t.bind(PDB, outside, 0x1000, b).expect("bind");
+
+        assert_eq!(
+            t.publication_at(under).expect("row").point,
+            Some(blockage::BlockagePoint::GspRpc),
+        );
+        assert_eq!(
+            t.publication_at(outside).expect("row").point,
+            None,
+            "★ a bind outside every guard is UNCOVERED, and it must stay uncovered: the \
+             whole of C1 is that this number is zero on a healthy boot, so a bind that \
+             quietly inherited the last point seen would make the falsifier unfalsifiable"
+        );
+
+        let c = t.blockage_counts(8);
+        assert_eq!(c.binds[blockage::BlockagePoint::GspRpc.index()], 1);
+        assert_eq!(c.binds_uncovered, 1);
+        assert_eq!(c.publications(), 2, "the denominator counts BOTH");
+        assert_eq!(c.uncovered_vas_total, 1, "one live row is uncovered");
+        assert_eq!(
+            c.uncovered_vas,
+            vec![outside.0],
+            "and the line names its VA"
+        );
+    }
+
+    /// ★★★★★ **THE C1 NUMBER IS A USE COUNT, AND IT IS NON-VACUOUS.**
+    ///
+    /// A resolve through the covered row must NOT move `uses_uncovered`, and a resolve
+    /// through the uncovered one must. Written as a pair because *"the counter never moves"*
+    /// and *"the counter always moves"* both satisfy a one-sided assertion, and this tree has
+    /// shipped both shapes (`a_count_cannot_see_a_substitution`).
+    #[test]
+    fn taddr_a_use_of_an_unblocked_row_is_the_number_c1_grades() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        let covered = GpuVa(0x1_0000_0000);
+        let uncovered = GpuVa(0x2_0000_0000);
+        {
+            let _g = blockage::BlockageGuard::enter(blockage::BlockagePoint::EmulatedDoorbell);
+            t.bind(PDB, covered, 0x1000, b).expect("bind");
+        }
+        t.bind(PDB, uncovered, 0x1000, b).expect("bind");
+
+        // Three resolves through the covered row, one through the other, and one miss.
+        for _ in 0..3 {
+            t.resolve(PDB, covered).expect("bound");
+        }
+        t.resolve(PDB, uncovered).expect("bound");
+        t.resolve(PDB, GpuVa(0x9_0000_0000)).expect_err("unbound");
+
+        let c = t.blockage_counts(8);
+        assert_eq!(c.uses[blockage::BlockagePoint::EmulatedDoorbell.index()], 3);
+        assert_eq!(c.uses_uncovered, 1, "★ THE C1 NUMBER");
+        assert_eq!(c.uses_total(), 4, "and its denominator");
+        assert_eq!(
+            c.use_misses, 1,
+            "⊘ a miss is counted separately: `uses=0` with `use_misses=0` means nobody ever \
+             asked this table anything, which is a different finding from a clean boot"
+        );
+        assert_eq!(
+            c.verdict([1, 0, 0]),
+            blockage::BlockageVerdict::Uncovered,
+            "the verdict follows the number, not the other way round"
+        );
+    }
+
+    /// ⊘ **A DIAGNOSTIC READ IS NOT A USE.** [`AddressTable::publication_at`] and
+    /// [`AddressTable::blockage_counts`] are how the census is *reported*; if either counted
+    /// as a use, printing the line would move the number the line reports — which is
+    /// `a_probe_that_shares_the_allocator_is_not_an_observer`, wrong three times in this
+    /// tree and inverted once.
+    #[test]
+    fn taddr_reading_the_census_does_not_move_the_census() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        let va = GpuVa(0x1_0000_0000);
+        t.bind(PDB, va, 0x1000, b).expect("bind");
+
+        let before = t.blockage_counts(8);
+        let _ = t.publication_at(va);
+        let _ = t.blockage_counts(8);
+        let _ = t.binding_at(va);
+        let _ = t.kind_at(va);
+        let _ = t.spans(va, 0x1000);
+        let after = t.blockage_counts(8);
+        assert_eq!(before.uses_total(), after.uses_total());
+        assert_eq!(before.use_misses, after.use_misses);
+        assert_eq!(before.uses_uncovered, after.uses_uncovered);
+    }
+
+    /// ★★★ **THE SAMPLE IS CAPPED AND THE TOTAL IS NOT** — asserted here on the real
+    /// producer and not only on the plain-data aggregate, because they are two pieces of
+    /// code and only one of them walks a table. ⊘ The census this replaces had its cap and
+    /// its computation in one loop, so its verdict inherited the truncation
+    /// (`docs/design/w377_the_llm_wall_is_our_own_refusal.md` §3 blocker (5)).
+    #[test]
+    fn taddr_the_uncovered_va_cap_truncates_the_list_and_never_the_total() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        for i in 0..40u64 {
+            t.bind(PDB, GpuVa(0x1_0000_0000 + i * 0x1000), 0x1000, b)
+                .expect("bind");
+        }
+        for cap in [0usize, 3, 40, 100] {
+            let c = t.blockage_counts(cap);
+            assert_eq!(
+                c.uncovered_vas_total, 40,
+                "the population is exact at every cap, including {cap}"
+            );
+            assert_eq!(c.uncovered_vas.len(), cap.min(40));
+            assert_eq!(c.binds_uncovered, 40);
+        }
+    }
+
+    /// ⊘ **AN UNBOUND ROW LEAVES THE SNAPSHOT AND STAYS IN THE FLOW.** The two uncovered
+    /// numbers answer different questions and neither substitutes for the other — a mapping
+    /// that was published with no halt behind it and then torn down still *happened*, and a
+    /// census that forgot it would report a clean boot for a boot that was not.
+    #[test]
+    fn taddr_unbinding_an_uncovered_row_clears_the_snapshot_not_the_flow() {
+        let mut t = AddressTable::owned_by(PDB);
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        let va = GpuVa(0x1_0000_0000);
+        t.bind(PDB, va, 0x1000, b).expect("bind");
+        assert_eq!(t.blockage_counts(8).uncovered_vas_total, 1);
+        t.unbind(va).expect("row leaves");
+        let c = t.blockage_counts(8);
+        assert_eq!(c.uncovered_vas_total, 0, "the live snapshot is clean");
+        assert_eq!(
+            c.binds_uncovered, 1,
+            "★ and the flow remembers: the publication happened, and unbinding it is not a \
+             retraction of the fact that it was never covered"
+        );
+    }
 
     /// ★★★★★ **w318 — the generation moves on a CHANGE and on nothing else.**
     ///
@@ -1402,7 +1694,7 @@ mod tests {
             .insert(
                 rogue_va,
                 0x1000,
-                Binding {
+                Row::bypassing(Binding {
                     // ⊘ A literal, not a constructor, and that is the premise: this row
                     // bypasses BOTH entrances. `Binding::real_gpu_memory` would refuse the
                     // `Vidmem` aperture (ruling 3) and `bind` would refuse the host VA.
@@ -1417,7 +1709,7 @@ mod tests {
                         rogue_va + 0x1000,
                         BackingBytes::SoleBacking,
                     )),
-                },
+                }),
             )
             .expect("the private map takes it — that is the whole premise");
         assert_eq!(
@@ -1545,7 +1837,7 @@ mod tests {
             .insert(
                 va,
                 0x1000,
-                Binding {
+                Row::bypassing(Binding {
                     // ⊘ A literal for the same reason as the `#102` arm above: the row must
                     // bypass the entrance, and both entrances now refuse it.
                     kind: RegionKind::RealGpuMemory,
@@ -1557,7 +1849,7 @@ mod tests {
                         HostSlice::new(0, 0x2000).expect("real"),
                         BackingBytes::SoleBacking,
                     )),
-                },
+                }),
             )
             .expect("the private map takes it — that is the whole premise");
         assert_eq!(

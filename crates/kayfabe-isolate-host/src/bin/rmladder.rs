@@ -2554,6 +2554,172 @@ fn late_map_race(rm: &mut HostRmBackend, gpu: u32) -> bool {
     }
 }
 
+/// ★★★★★ **T1 — THE BLOCKAGE-COVERAGE PROBE (`REQUIREMENTS_TARGET.md` R1, falsifier C1).**
+///
+/// > Owner, 2026-09-07: *"anything thats async blockage gives coverage. so kernel emulated
+/// > channels, rpc, tlb invalidate. … what we can't block is passthrough channels."*
+///
+/// # 0. ⊘ WHAT THIS RUNG MEASURES, AND — SAY IT FIRST — WHAT IT CANNOT
+///
+/// **The guest half is a driver, not a verdict.** C1 is a statement about the *device's*
+/// counters: *"how many mappings were used with no prior blockage point"*. Those counters
+/// live in `kayfabe_mmu::blockage` and are printed by the shim as
+/// `kayfabe: BLOCKAGE-COVERAGE … token=…` on every doorbell. This program cannot read them —
+/// it is inside the guest and they are on the host.
+///
+/// ⇒ What it does is **drive the two populations the counter must separate**, and **bracket
+/// them with markers** (`BLOCKAGE_PROBE_BEGIN` / `_END`) so a host-side grader can attribute
+/// the device lines to a phase instead of to a whole boot. A rung that printed a
+/// coverage verdict from in here would be inventing one.
+///
+/// # 1. The two phases, and why the second one is the point
+///
+/// | phase | what it does | what the device counter should show |
+/// |---|---|---|
+/// | **A — COVERED** | map the target, *then* ring the doorbell, then let the engine touch it | every use of that row attributed to a blockage point |
+/// | **B — THE KNOWN-POSITIVE** | ring first, map *after*, open a CPU fence — the R1.3 residual | ★ `USES_UNCOVERED` **> 0** |
+///
+/// ★★★★★ **Phase B is not a bug being reproduced; it is the counter's known-positive.**
+/// `a_census_zero_needs_a_known_positive` is this tree's most-repeated lesson: a
+/// `USES_UNCOVERED=0` on a boot that never contained an uncoverable mapping is evidence of
+/// nothing. Phase B is the one construction the blockage model *admits* it cannot cover
+/// (R1.3), so it is the only thing in the workload that can make the counter move — and if
+/// it does not move, **the instrument is broken, not the model proven**.
+///
+/// ⊘ That is why the two phases are one flag and not two. A run that could take only phase A
+/// would produce the favourable half of a differential with nothing to compare it to.
+///
+/// # 2. ⊘ Which blockage points this exercises, honestly enumerated
+///
+/// Both phases are a **guest userspace** RM client, so `project.rs:311` classifies their
+/// channels `Passthrough` and their **doorbells are not a blockage point at all** (R1.1's
+/// fourth row: *"⊘ none, by design"*). What the phases *do* cross is:
+///
+/// - **GSP RPC** — every `NV_ESC_RM_ALLOC` / `NV_ESC_RM_MAP_MEMORY_DMA` this issues is served
+///   by the emulated GSP while the guest blocks in `_issueRpcAndWait`. ⚠ Not all of them:
+///   `w387` §2 measured `bSplitVasManagementServerClientRm` defaulting true, so a map can be
+///   entirely local to the guest's own CPU-RM and never cross. **That is precisely the hole
+///   C1 exists to size**, and this rung does not assume either way.
+/// - **TLB invalidate** — the guest's CPU-RM writes BAR0 `0x00B8_30B0` after a map unless
+///   `DEFER_TLB_INVALIDATION` was set, which this rung never sets.
+/// - ⊘ **Emulated doorbell** — **NOT** exercised here, by construction. It needs a
+///   guest-*kernel* channel (UVM's), which a raw client cannot allocate. A boot line whose
+///   `armed=[emulated-doorbell=0 …]` on a `--blockage-coverage`-only run is therefore
+///   **correct and expected**, not a red. Run it beside a CUDA workload to arm that one.
+///
+/// # 3. ★★ PRE-REGISTERED OUTCOMES — every one, so none reads as the favourable one
+///
+/// ```text
+/// (P) A=PASS B=PASS  => both phases ran. The device line is interpretable, and B is the
+///                       known-positive: `USES_UNCOVERED` MUST be > 0 or the counter is
+///                       blind. ⇒ THE MEASURABLE OUTCOME.
+/// (Q) A=PASS B=FAIL  => B faulted instead of completing. Still a valid known-positive for
+///                       the FAULT side (R1.3's backstop), and it bounds the exposure —
+///                       but the device counter may legitimately read 0, because the engine
+///                       never got to use the row. Say which; do not grade it as (P).
+/// (R) A=FAIL         => ⊘ UNINTERPRETABLE. The positive control did not complete, so the
+///                       submit path is broken and B measures that, not coverage.
+/// (S) no verdict     => ⊘ UNMEASURED. NOT a failure value. Say where it stopped.
+/// ```
+///
+/// ⚠ **`(Q)` is not a defeat and `(P)` is not a pass.** Neither says anything about C1 on its
+/// own: C1 is graded on the device's `USES_UNCOVERED` for phase A's rows. This rung's job is
+/// to make that number *attributable*.
+fn blockage_coverage(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    // ⊘ Distinct regions from `--late-map-race`'s four, so the two rungs can run in one
+    // invocation without either one's target being covered by the other's large PTE — the
+    // same reason that rung separates its own arms by ≥ 512 MiB.
+    const A_RING_AT: u64 = 0x0000_0006_4100_0000;
+    const A_TARGET_AT: u64 = 0x0000_0007_4100_0000;
+    const B_RING_AT: u64 = 0x0000_0006_6100_0000;
+    const B_TARGET_AT: u64 = 0x0000_0007_6100_0000;
+
+    // ★★★★★ THE BRACKET. Everything the device prints between these two markers is this
+    // rung's; outside them it is the boot's. ⊘ Printed on stdout by the guest and correlated
+    // by the harness against the HOST log, which is why they carry a timestamp-free, unique
+    // string rather than a counter: the two logs have different clocks and no shared
+    // sequence (`a_recorder_that_prints_at_teardown` — order survives, interval does not).
+    println!(
+        "BLOCKAGE_PROBE_BEGIN gpu={gpu} euid={} — R1/C1. Phase A maps BEFORE the doorbell \
+         (the covered population); phase B maps AFTER, with the channel already running \
+         (R1.3's residual, and this counter's KNOWN-POSITIVE)",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  T1 the bar          = the VERDICT IS ON THE HOST. This program drives two \
+         populations and brackets them; `kayfabe: BLOCKAGE-COVERAGE …` on the host log is \
+         what C1 is graded on. ⊘ A green line here is not a green C1"
+    );
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  T1 engine           = COPY0 is not expressible");
+        println!("BLOCKAGE_PROBE_A=NOTRUN");
+        println!("BLOCKAGE_PROBE_B=NOTRUN");
+        println!("BLOCKAGE_PROBE_END outcome=(S)");
+        return false;
+    };
+
+    // --- phase A: the covered population, and the positive control -----------------------
+    println!("--- T1 phase A: MAP, THEN RING. Every mapping exists before the engine runs ---");
+    let a = late_map_arm(rm, "T1-A", A_RING_AT, A_TARGET_AT, true, engine_type);
+    match &a {
+        Ok(o) => println!("info  T1-A outcome        = {o:?}"),
+        Err(e) => println!("FAIL  T1-A refused        = {e:?}"),
+    }
+    let a_ok = matches!(&a, Ok(o) if o.landed());
+    println!("BLOCKAGE_PROBE_A={}", if a_ok { "PASS" } else { "FAIL" });
+    if !a_ok {
+        println!(
+            "??    T1 VERDICT          = UNINTERPRETABLE — the positive control did not \
+             complete, so phase B would measure the submit path and not coverage"
+        );
+        println!("BLOCKAGE_PROBE_B=NOTRUN");
+        println!("BLOCKAGE_PROBE_END outcome=(R)");
+        return false;
+    }
+    println!(
+        "ok    T1-A control        = the payload landed with the target mapped BEFORE the \
+         doorbell. ⇒ every row this phase used was published before the channel could use \
+         it, BY CONSTRUCTION of the workload — the device line says whether we SAW that"
+    );
+
+    // --- phase B: the residual, and the counter's known-positive -------------------------
+    println!(
+        "--- T1 phase B: RING, THEN MAP. No second doorbell — R1.3, the one case the \
+         blockage points structurally cannot cover ---"
+    );
+    let b = late_map_arm(rm, "T1-B", B_RING_AT, B_TARGET_AT, false, engine_type);
+    match &b {
+        Ok(o) => println!("info  T1-B outcome        = {o:?}"),
+        Err(e) => println!("FAIL  T1-B refused        = {e:?}"),
+    }
+    let b_landed = matches!(&b, Ok(o) if o.landed());
+    if b_landed {
+        println!("BLOCKAGE_PROBE_B=PASS");
+        println!(
+            "★     T1-B KNOWN-POSITIVE = a mapping created AFTER the doorbell, with the \
+             channel already running and NO second doorbell, was reached by the engine. ⇒ \
+             the device's `USES_UNCOVERED` MUST be > 0 for this phase. If it reads 0, the \
+             COUNTER is blind — that is not evidence of coverage"
+        );
+        println!("BLOCKAGE_PROBE_END outcome=(P)");
+    } else {
+        println!("BLOCKAGE_PROBE_B=FAIL");
+        println!(
+            "⚠     T1-B FAULTED        = the late mapping did NOT reach the engine. That is \
+             R1.3's backstop case and it BOUNDS the exposure — but it is a WEAKER \
+             known-positive: the engine never used the row, so the device's \
+             `USES_UNCOVERED` may legitimately read 0 for this phase. ⊘ Do not grade this \
+             as outcome (P)"
+        );
+        println!("BLOCKAGE_PROBE_END outcome=(Q)");
+    }
+    // ⊘ The rung's own boolean is phase A's and phase A's only. Phase B has no failing
+    // value — both of its arms are informative — so folding it into the return would make a
+    // legitimate `(Q)` read as a broken rung.
+    a_ok
+}
+
 /// ★★★★★ R30 — **is the isolate's own completion semaphore NAMEABLE from the address
 /// space a guest channel is bound to?**
 ///
@@ -10864,6 +11030,11 @@ fn main() -> std::process::ExitCode {
     let mut want_dictated_ring = false;
     let mut want_dictated_neg = false;
     let mut want_late_map_race = false;
+    // ★★★★★ T1 — `--blockage-coverage` (`REQUIREMENTS_TARGET.md` R1, falsifier C1). Its OWN
+    // flag and NOT folded into any battery: it is the only rung whose result lives in the
+    // HOST's log rather than in its own stdout, so it needs a bracket nobody else's output
+    // is inside. See [`blockage_coverage`].
+    let mut want_blockage_coverage = false;
     // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
     // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
     // that runs a rung WITHOUT its positive control, because a rung whose control did not
@@ -10966,6 +11137,11 @@ fn main() -> std::process::ExitCode {
             // race arm is uninterpretable without the control and separating them into two
             // flags would let someone run only the half that produces a headline.
             "--late-map-race" => want_late_map_race = true,
+            // ★★★★★ T1. Runs BOTH phases in one invocation, for `--late-map-race`'s reason
+            // and one more: phase B is phase A's *known-positive*, so a flag that could run
+            // only phase A would produce the favourable half of a differential with nothing
+            // to compare it to.
+            "--blockage-coverage" => want_blockage_coverage = true,
             // ★★★★★ w379 R1′ — one allocation, two GPU VAs, and a release through the
             // FIRST one after the second is mapped.
             "--alias-two-vas" => want_alias_two_vas = true,
@@ -11615,6 +11791,24 @@ fn main() -> std::process::ExitCode {
         );
         let ok = late_map_race(&mut rm, gpu);
         println!("done — late-map race only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ T1 — R1/C1. ⊘ Placed AFTER `--late-map-race` and before every other rung so a
+    // run that names both gets the race's four regions and this rung's four in a fixed
+    // order; the two use disjoint regions, so either order is correct and only ONE of them
+    // is comparable across boots.
+    if want_blockage_coverage {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = blockage_coverage(&mut rm, gpu);
+        println!("done — blockage-coverage probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
