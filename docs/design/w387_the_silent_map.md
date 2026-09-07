@@ -422,3 +422,157 @@ item is task #272.
   bodies. Detection built on either would have been built on nothing.
 - ★★★ **An instrument that wraps the whole call cannot attribute anything inside it.**
   `kft.mark("plane")` made `plane share=100 %` a tautology and I reported it as a finding.
+
+---
+
+## 12. ★★★★★ THE SOLUTION SPACE — five candidates, measured, and only two survive
+
+**Added 2026-09-07, same rung.** §6 proposed write-protection as *the* route. The owner asked
+*"are there more solutions to get the coverage?"* — there are, the space is wider than
+*observation*, and enumerating it killed three candidates and left a real fork.
+
+⚠ **Framing correction that produced the extra candidates:** every earlier attempt asked *how do
+we observe the write*. Three of the five below do not observe anything — they make the silent
+path **not exist**, make a missing mapping **safe**, or make our **blindness detectable**. The
+observation framing was itself the narrowing.
+
+| # | candidate | verdict |
+|---|---|---|
+| **S1** | **fault-driven** — let it fault, service, replay | ⊘ **DEAD**, three independent fatal links |
+| **S2** | **externally-owned VAS** — give the host GPU the guest's tables | ◐ **CONDITIONAL** on identity FB |
+| **S3** | more **forcings** below Hopper | ⊘ **DEAD** — setter list enumerated and closed |
+| **S4** | **blindness detection** → named refusal | ★ **VIABLE, cheap, arch-stable — take it regardless** |
+| **CC** | the **CC-bit forcing** (§11) | ◐ **VIABLE, costs GA10x** |
+
+### 12.1 ⊘ S1 IS DEAD — and the owner called it before the evidence
+
+> Owner: *"but we can't resume a fault from userspace right"*
+
+Correct, and RM closes it deliberately — the guard even carries a bug number:
+
+```c
+// 1766112: Prevent channels in fault-capable VAS from running unless bound
+//  User-mode clients can allocate a fault-capable VAS and schedule it
+//  without registering it with the UVM driver ... This will cause what
+//  looks like a hang on the GPU
+NV_CHECK_OR_RETURN(LEVEL_WARNING,
+    !((flags & VASPACE_FLAGS_ENABLE_FAULTING) &&
+      !(flags & VASPACE_FLAGS_IS_EXTERNALLY_OWNED)),
+    NV_ERR_INVALID_ARGUMENT);            // vaspace_api.c:686-691
+```
+
+**Three independent links, any one fatal:**
+
+1. ★ **The fault buffer is KERNEL-privileged.** `MMU_FAULT_BUFFER` (class `c369`) carries
+   `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h:975-983`), enforced at
+   `alloc_free.c:661-668`. `RS_PRIV_LEVEL_KERNEL` is **above** `USER_ROOT` — an unprivileged
+   client *or even root* is rejected. Only an in-kernel client (UVM) clears it. Identical in 610.
+2. ★★★ **The regime is GPU-GLOBAL, not per-VAS.** Enable state is one register,
+   `NV_PFB_PRI_MMU_FAULT_BUFFER_SIZE._ENABLE`, **per GFID** (`kern_gmmu_gv100.c:1490`), keyed
+   `mmuFaultBuffer[gfid].hwFaultBuffers[index]`. ⇒ **a single host GPU cannot mix fatal and
+   replayable regimes across tenants.** This kills S1 on multi-tenancy grounds *independently of
+   privilege*, and it is the finding with reach beyond this question.
+3. **Base RM does not replay at all** — it *cancels*:
+   `// Replayable Faults - These faults will be cancelled as RM doesn't support replaying such
+   faults. Cancelling these faults will bring them back as non-replayable faults.`
+   (`kern_gmmu_gv100.c:2539-2542`, → `_kgmmuHandleReplayablePrivFault_GV100` cancel at `:2555`).
+   Replay servicing lives in the **UVM kernel driver**, not on the RMAPI surface.
+
+⊘ **AND A PRIOR RESULT MUST NOT BE MISCITED HERE.** `w288 Q2` (2026-08-13, C tree, commit
+`c896ed4`) measured that an unprivileged isolate **can learn of a fault by OS event** — path
+`NV_ESC_ALLOC_OS_EVENT` → `NV01_EVENT_OS_EVENT` on a Subdevice →
+`NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION(event=37, REPEAT)` → `poll()` →
+`NV_ESC_RM_GET_EVENT_DATA`, every gate NON_PRIVILEGED, `info32 = exceptType`.
+★ **But event 37 is `NV2080_NOTIFIERS_RC_ERROR` — Robust Channel, the FATAL recovery path.**
+That is notification that a channel **already died**: a tombstone, not a resumable state. It says
+nothing about replayable faults. ⇒ **Do not cite w288 Q2 as evidence that faults can be
+serviced.** Same class as this file's §4 provenance note — a true result, one inferential step
+past what it measured.
+
+⇒ **S1 does not dissolve the problem; it RELOCATES it into S2**, because the only door to
+fault-driven operation is the externally-owned VAS.
+
+### 12.2 ◐ S2 — real, unprivileged-reachable, and it reduces to publication unless FB is identity
+
+The mechanism exists and RM genuinely stands down:
+- `gvaspaceReserveVA` → `NV_ERR_NOT_SUPPORTED`, *"Cannot reserve VA on an externally owned
+  VASPACE"* (`gpu_vaspace.c:1419-1425`).
+- The PDB becomes the client's: `gvaspaceGetPDB` returns `pGVAS->pExternalPDB`
+  (`:2084-2086`), set via `gvaspaceSetExternalPDB` (`:4813-4816`), reached through
+  `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` (`0x801813`) → `gvaspaceExternalRootDirCommit`
+  (`:3024`). ★ **We already serve `0x801813`.**
+- ★ **Unprivileged**: `NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED` at
+  `vaspace_api.c:617-621` has **no `bKernelClient` check** — unlike the ATS flag immediately
+  above it (`:672-679`), which does. The contrast is the evidence.
+
+⊘ **THE BLOCKER HOLDS.** PTE address fields are filled by
+`gmmuFieldSetAddress(pIter->pAddrField, kgmmuEncodePhysAddr(..., pIter->aperture,
+pIter->physAddr, ...))` (`virt_mem_allocator_gm107.c:2012-2016`) — a **raw GPU physical
+address**, aperture chosen per entry, **no indirection layer between PTE and FB**. So guest
+tables are directly host-usable **only if guest GPU-physical == host GPU-physical for every page
+they name.** Sysmem can get that identity from an IOMMU; **vidmem has no translation stage at
+all.** Relocate or partition FB and every vidmem PTE must be rewritten — **which is publication
+wearing a different hat.**
+
+⚠ **AND THE TENSION THAT DECIDES IT IS NOT TECHNICAL.** Identity FB means **one guest owns the
+whole GPU**. `hostile_guest_isolation_is_the_value_proposition` and the owner's standing
+per-process-isolation constraint point the other way. **S2 may buy correctness at the cost of the
+product's premise** — an owner call, not an engineering one.
+
+### 12.3 ★ S4 — TAKE THIS REGARDLESS. It is not coverage; it is knowing when we lack it.
+
+The PDE aperture is a **hardware field** with an explicit four-state encoding:
+
+```
+NV_MMU_PDE_APERTURE_BIG_INVALID                     0x00000000
+NV_MMU_PDE_APERTURE_BIG_VIDEO_MEMORY                0x00000001
+NV_MMU_PDE_APERTURE_BIG_SYSTEM_COHERENT_MEMORY      0x00000002
+NV_MMU_PDE_APERTURE_BIG_SYSTEM_NON_COHERENT_MEMORY  0x00000003
+```
+
+`turing/tu102/dev_mmu.h:26-30` (`_SMALL` at `:38-42`), **identical back to
+`maxwell/gm107/dev_mmu.h:26-30`** ⇒ arch-stable, on the chip seam, not a GA10x special case. RM
+reads it the same way we would: `gmmuFieldGetAperture(&pFmt->pPde->fldAperture, entry.v8)`, field
+wired at `kern_gmmu_fmt_gm10x.c:98,107`.
+
+⇒ Walk from the PDB we already learn at bind / promote / `SET_PAGE_DIRECTORY`. **Any PDE reading
+`SYSTEM_*` means that VAS has page-table storage we cannot see** ⇒ **refuse the channel by
+name** instead of running it wrong. That converts the campaign's actual danger — *silent
+corruption* — into a **named refusal**, which is the owner's *"not found, not denied"* discipline
+applied to our own blindness.
+
+⚠ **Two limits, and they scope it rather than sink it:**
+- **Point-in-time.** A level allocated in sysmem *later* appears with no signal. ⇒ re-walk at
+  every event we DO observe, and treat *"vidmem-only"* as **provisional, never permanent**.
+- **The walk races the guest's own writes.** ★ But the error is **asymmetric**: a false *"blind"*
+  is safe (we refuse work that would have been fine); only a false *"clear"* is dangerous. Bounded
+  by re-walking at bind.
+
+### 12.4 ⊘ S3 — no pre-Hopper forcing exists. Complete enumeration.
+
+Every writer of `pGpu->instLocOverrides`:
+1. `gpu_registry.c:258-261` — the CC/NVLE branch. **Device-read but Hopper+ only** (pre-Hopper
+   binds the stub `gpuIsCCEnabledInHw_3dd2c9 { return NV_FALSE; }`, `g_gpu_nvoc.h:5197-5199`).
+2. `gpu_registry.c:273-276` — `osReadRegistryDword` of `NV_REG_STR_RM_INST_LOC{,_2,_3,_4}`.
+   **Host module param only, never device-supplied.**
+3. `_gpuInitGlobalSurfaceOverride` (`:382-420`) — gated on `bInstLoc47bitPaWar`, applies
+   `GP100_BYPASS_47BIT_PA_WAR`. **Declines to act when any override is already non-zero**
+   (`:387-397`) and does not set PDE/PTE to `_VID`. Not a lever.
+
+No GSP-static-info, VBIOS or InfoROM field constrains page-table placement. ⚠ **Unfound, not
+proven absent** — but `bAllowSysmem`'s only inputs are `instLocOverrides` plus the
+`VASPACE_FLAGS_BAR`/`_PMU` checks (`gmmu_walk.c:172-176, 255-257, 266-268`), and all three trace
+to the setters above.
+
+### 12.5 WHERE THIS LEAVES THE DECISION
+
+- **S4 now, unconditionally.** Cheap, arch-stable, unprivileged, composes with every other
+  option, and it is the only one that improves the *failure mode* rather than the coverage.
+- **The coverage fork is S2 vs CC**, and both have a non-technical price:
+  **S2 keeps GA10x and costs multi-tenancy; CC is clean and costs everything below Hopper.**
+- **§6's write-protection remains the third path** — it keeps both GA10x *and* multi-tenancy, and
+  pays in per-page uffd traps. It is the only survivor that costs no architecture.
+
+⚠ **Two items still open and NOT cleared:** `_confComputeInitRegistryOverrides`
+(`conf_compute.c:127`) decides whether the CC bit alone suffices without a guest regkey; and the
+host-side replayable-fault notification path, which only becomes live again if S2 is chosen.
