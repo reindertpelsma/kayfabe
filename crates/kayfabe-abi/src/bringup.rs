@@ -548,6 +548,47 @@ pub const NVOS02_FLAGS_COHERENCY_CACHED: u32 = 1 << 12;
 /// (`Xid 31 FAULT_PDE`).
 pub const NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE: u32 = 1 << 15;
 
+/// ★★★★★ `NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE` — field `31:31`, value 1
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2149-2151`), i.e. `0x8000_0000`.
+///
+/// **The flag that lets a client map memory and skip the TLB invalidate.** With it set,
+/// `dmaAllocMapping_GM107` takes `DMA_DEFER_TLB_INVALIDATE` instead of `DMA_TLB_INVALIDATE`
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/virt_mem_allocator_gm107.c:417`)
+/// and the gate at the function's `done:` label — `kbusFlush_HAL` +
+/// `gvaspaceInvalidateTlb` (`:2610-2615`) — is not taken. The PTE is written; nothing is
+/// told about it.
+///
+/// # ⊘ WHAT THE HEADER CLAIMS, AND WHY IT IS NOT AN ANSWER
+///
+/// The SDK's own warning (`:2144-2148`) names only one hazard: *"Improper use can leave
+/// **stale entries** in the TLB, and allow access to memory no longer owned by the RM
+/// client or cause page faults."* Stale entries are an **unmap** hazard. Read literally
+/// that leans toward *"a fresh PTE goes live on the next walk"* — but RM and UVM both
+/// invalidate on a fresh **upgrade** anyway, and `uvm_mmu.c:805-808` says in as many words
+/// that an upgrade needs no membar and then still issues `tlb_invalidate_all`, which would
+/// be dead work if a walk always picked the new entry up.
+///
+/// ⇒ **Source does not settle it.** This constant exists so `kayfabe-rm-ladder`'s
+/// `--defer-liveness` rung can ask hardware instead, against a VA whose non-present result
+/// was already walked and cached. Nothing in the forwarding plane sets it.
+pub const NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1 << 31;
+
+/// ★★ `NVOS46_FLAGS_PAGE_SIZE_4KB` — field `11:8`, value 1
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2036-2038`), i.e. `0x0000_0100`.
+///
+/// Pins a mapping to the **small-page** table rather than letting `_dmaGetPageSize` pick.
+/// ⊘ Not a performance knob and not a default anything should acquire: it exists so a
+/// diagnostic can state *which page-table level it is talking about* and have two mappings
+/// provably land in the same leaf table. `PAGE_SIZE_DEFAULT` (0) lets RM choose, and a
+/// large enough vidmem object at a large enough alignment can be given a huge PTE that
+/// lives at the directory level instead — which would silently move a leaf-level question
+/// to a different level and answer it there.
+///
+/// ⚠ It also decides `pageSizeLockMask` on the VA reservation the map path performs
+/// (`virt_mem_allocator_gm107.c:988-996`), so two mappings that name the same value pin the
+/// same page table and the second cannot be the one that instantiates it.
+pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
+
 /// Bounds-checked field write, shared by every `encode_into` above.
 fn put(
     bytes: &mut [u8],

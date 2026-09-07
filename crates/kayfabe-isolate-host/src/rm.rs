@@ -93,9 +93,9 @@ use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
-    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
-    Nv2080AllocParameters, NvMemoryVirtualAllocationParams, NvVaspaceAllocationParameters,
-    Nvos02ParametersWithFd, RegisterFd,
+    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
+    NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 // ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
 // (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
@@ -2283,6 +2283,36 @@ impl RmConnection {
         len: u64,
         at: Option<u64>,
     ) -> Result<u64, RmError> {
+        self.raw_map_dma_flags(h_dma, h_memory, len, at, 0)
+    }
+
+    /// ★★★ [`RmConnection::raw_map_dma`] with **extra `NVOS46_PARAMETERS::flags` bits
+    /// OR-ed in** — every caller of the plain verb is byte-identical to what it sent
+    /// before, because `extra == 0` is the only value it passes.
+    ///
+    /// # ⊘ Why the extra bits are a parameter rather than four more `bool`s
+    ///
+    /// The flag word is a bag of unrelated bit-fields (`ogkm-580:
+    /// src/common/sdk/nvidia/inc/nvos.h:2030-2152`) and this crate deliberately understands
+    /// exactly two of them. A `bool` per field would be a claim that the port has an opinion
+    /// on each; a raw word says what is true — the **caller** names bits it has read the
+    /// header for, and everything else stays zero.
+    ///
+    /// ⚠ `DMA_OFFSET_FIXED` is still owned HERE and is not expressible through `extra`: it
+    /// is derived from `at` so that *"which address"* and *"is the address binding"* cannot
+    /// disagree. A caller that OR-ed the bit in by hand with `at = None` would be asking RM
+    /// to place a mapping at offset zero.
+    ///
+    /// # Errors
+    /// As [`RmConnection::raw_map_dma`].
+    fn raw_map_dma_flags(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        len: u64,
+        at: Option<u64>,
+        extra: u32,
+    ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         Nvos46Parameters {
             h_client: self.client.raw(),
@@ -2291,11 +2321,12 @@ impl RmConnection {
             h_memory,
             offset: 0,
             length: len,
-            flags: if at.is_some() {
-                NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
-            } else {
-                0
-            },
+            flags: extra
+                | if at.is_some() {
+                    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
+                } else {
+                    0
+                },
             flags2: 0,
             kind_override: 0,
             dma_offset: at.unwrap_or(0),
@@ -7381,6 +7412,127 @@ impl HostRmBackend {
     pub fn unmap_local(&self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
         let range = self.narrow(vas)?;
         self.conn.raw_unmap_dma(range, gpu_va)
+    }
+
+    /// ★★★★★ **w289 — [`Self::map_local_at`] WITH THE DEFERRED-INVALIDATE FLAG**, and the
+    /// only caller is the `--defer-liveness` rung.
+    ///
+    /// `defer == true` OR-s [`NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE`] into the map
+    /// request, so RM writes the leaf PTE and **does not** invalidate
+    /// (`ogkm-580: virt_mem_allocator_gm107.c:417` selects `DMA_DEFER_TLB_INVALIDATE`; the
+    /// `done:` gate at `:2610-2615` is then not taken). `page_size_4kb == true` OR-s
+    /// [`NVOS46_FLAGS_PAGE_SIZE_4KB`], pinning the mapping — and the VA reservation the map
+    /// path performs on the way — to the **small-page table**.
+    ///
+    /// # ⊘ WHY THIS IS NOT A PORT VERB AND MUST NOT BECOME ONE
+    ///
+    /// Deferring the invalidate is a promise the *client* makes to keep the TLB consistent
+    /// itself, and this port makes no such promise: nothing in the forwarding plane knows
+    /// when the guest's next access happens, so a deferred map here would be a mapping whose
+    /// liveness is nobody's. It is `pub` for [`Self::map_local_at`]'s single reason — the
+    /// `kayfabe-rm-ladder` diagnostic is the only thing that can ask hardware whether the
+    /// deferral is even observable — and for nothing else.
+    ///
+    /// ⚠ Returns the address RM **reported**, exactly as `map_local_at` does. A caller that
+    /// asked for `at` and got something else has had its placement declined, and reading the
+    /// returned value as the requested one is how a deferred-map experiment ends up testing
+    /// an address nothing was ever mapped at.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` or `memory` this connection did not mint;
+    /// otherwise whatever `NV_ESC_RM_MAP_MEMORY_DMA` refused with, carrying RM's own status.
+    pub fn map_local_at_with_flags(
+        &self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: Option<u64>,
+        defer: bool,
+        page_size_4kb: bool,
+    ) -> Result<u64, RmError> {
+        let range = self.narrow(vas)?;
+        let obj = self.narrow(memory)?;
+        let mut extra = 0u32;
+        if defer {
+            extra |= NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE;
+        }
+        if page_size_4kb {
+            extra |= kayfabe_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_4KB;
+        }
+        self.conn.raw_map_dma_flags(range, obj, len, at, extra)
+    }
+
+    /// ★★★★★ **w289 — `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`0x20802502`) on the SUBDEVICE**,
+    /// naming `vas`'s address space explicitly.
+    ///
+    /// The transport the deferred map is deferring *to*. RM's own header says so: *"This
+    /// command invalidates the GPU TLB. This is intended to be used by RM clients that manage
+    /// their own TLB consistency when updating page tables on their own, **or with
+    /// DEFER_TLB_INVALIDATION options to other RM APIs**"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080dma.h:38-56`).
+    ///
+    /// # ★ Why it is callable at all, from source rather than by trying it
+    ///
+    /// `subdeviceCtrlCmdDmaInvalidateTLB`'s nvoc flags are **`0x10008`**
+    /// (`ogkm-580: src/nvidia/generated/g_subdevice_nvoc.c:7466-7477`) — the same word
+    /// `GET_PDE_INFO` carries, i.e. `NON_PRIVILEGED` **without** the `0x00100000`
+    /// test-only bit that makes [`Self::pte_info`] refuse on a release driver. So this is
+    /// not the sibling-refusal trap in a new place.
+    ///
+    /// # ⊘⊘ `hVASpace` IS THE SPACE, NOT THE RANGE — the same two-objects hazard
+    ///
+    /// The handler resolves the field through `vaspaceGetByHandleOrDeviceDefault`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:875-877`), exactly as
+    /// `GET_PDE_INFO` does, so it wants the `FERMI_VASPACE_A` companion and **not** the
+    /// `NV01_MEMORY_VIRTUAL` range. See [`Self::pde_info`] for what handing it the wrong one
+    /// of the two costs. ⊘ [`RmConnection::space_of`] is the **peeking** accessor; the
+    /// removing twin would un-pair the address space as a side effect of invalidating it.
+    /// ⊘ A missing companion is refused by name rather than falling back to the range: a
+    /// fallback would invalidate a well-formed wrong object and report `NV_OK`.
+    ///
+    /// ★ **Zero is not a legal shorthand here either.** `hVASpace == 0` resolves to the
+    /// *device's default* address space — a real space, a real invalidate, and an answer to
+    /// a question nobody asked. The other three fields are marked `Deprecated` in the header
+    /// and are sent zeroed.
+    ///
+    /// ⚠ What RM does with it is `vaspaceInvalidateTlb(pVAS, pGpu, PTE_DOWNGRADE)`
+    /// (`dma.c:897`) — the **strong** form, chosen by RM and not by us, because its own
+    /// comment says it cannot tell what the caller changed. So a rung that uses this as its
+    /// known-positive is testing the strongest invalidate available, which is the right way
+    /// round: if this does not make a mapping live, nothing weaker would have.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` this connection did not mint; [`RmError::Other`]
+    /// carrying [`NOT_ON_THIS_RUNG`] if the range has no paired address space; otherwise
+    /// whatever RM refused, carrying its own status out of the parameter struct.
+    pub fn invalidate_tlb(&mut self, vas: HostHandle) -> Result<(), RmError> {
+        /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` —
+        /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080dma.h:58`.
+        const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
+        // `NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS` (`ctrl2080dma.h:62-67`): four `NvU32`s —
+        // `hClient`, `hDevice`, `engine`, `hVASpace`. The first three are marked
+        // `Deprecated` in the header and are sent as zeros; the fourth is the join key.
+        // ⊘ Encoded here rather than as a `kayfabe-abi` struct because it has exactly one
+        // caller and no version axis: a transcription in the ABI crate would be a fifth
+        // place to keep a four-field layout in sync for a diagnostic-only control.
+        const H_VASPACE_OFF: usize = 12;
+        let range = self.narrow(vas)?;
+        let space = self
+            .conn
+            .space_of(range)
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut buf = [0u8; 16];
+        buf[H_VASPACE_OFF..H_VASPACE_OFF + 4].copy_from_slice(&space.to_le_bytes());
+        // ⊘ On the SUBDEVICE. `deviceCtrlCmdDmaInvalidateTLB` exists too
+        // (`ogkm-580: dma.c:963`) under a DIFFERENT id in the `NV0080` family, and sending
+        // this id to the device object would be refused rather than silently mis-routed —
+        // but only because the ids differ, which is luck and not a design, so the receiver
+        // is stated.
+        self.conn.raw_control(
+            self.conn.subdevice,
+            NV2080_CTRL_CMD_DMA_INVALIDATE_TLB,
+            &mut buf,
+        )
     }
 
     /// Publish one GPFIFO entry and ring for it: entry → fence → `GP_PUT` → fence →

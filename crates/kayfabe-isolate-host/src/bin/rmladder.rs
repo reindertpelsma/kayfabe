@@ -9596,6 +9596,1245 @@ fn doorbell_latency(rm: &mut HostRmBackend, gpu: u32, cfg: DblCfg) -> bool {
     verdict
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// w289 — `--defer-liveness`: DOES A FRESHLY-WRITTEN PTE GO LIVE WITHOUT AN INVALIDATE?
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Where this rung's channel rings live — 320 GiB, an octave away from every other rung's
+/// addresses so nothing here can be covered by a mapping some earlier rung left behind.
+const DL_RING_BASE: u64 = 0x0000_0050_0000_0000;
+/// Where the address under test lives — 384 GiB.
+const DL_VA_BASE: u64 = 0x0000_0060_0000_0000;
+/// Per-arm stride, 8 GiB. Each arm gets its own address space *and* its own addresses, so
+/// an arm can never inherit a page table, a reservation or a cached translation from the
+/// arm before it.
+const DL_ARM_STRIDE: u64 = 0x0000_0002_0000_0000;
+/// Per-channel ring stride, 1 GiB. Three channels per arm, none of them sharing a page
+/// directory with the address under test.
+const DL_CHAN_STRIDE: u64 = 0x0000_0000_4000_0000;
+/// Where the copy destination sits, relative to an arm's base: 4 GiB above it, i.e. under a
+/// different page directory entirely. ⊘ Deliberately NOT inside the span under test — a
+/// destination in the same leaf table would be a second reason the leaf table exists, and
+/// the whole point of the guard below is that there is exactly one.
+const DL_SCRATCH_OFF: u64 = 0x0000_0001_0000_0000;
+
+/// The VA span one page-directory-0 entry covers on this MMU regime: 2 MiB.
+///
+/// `crates/kayfabe-chips/src/ga10x.rs:542` — *"`PD0`, bits 28:21 — a 16-byte dual entry, and
+/// also a 2 MiB leaf"*. Bits 28:21 is `2^21` of VA per entry. The guard mapping and the
+/// address under test are placed inside ONE of these, which is what makes them share a leaf
+/// page table by construction rather than by hope.
+///
+/// ⚠ That same line names the hazard this rung has to avoid: PD0 is **also** a 2 MiB leaf,
+/// so a 2 MiB mapping at a 2 MiB-aligned VA can become a single huge PTE at the directory
+/// level. [`DL_MAP_BYTES`] and [`kayfabe_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_4KB`] are what
+/// keep the entry under test an entry in a leaf table.
+const DL_PDE0_SPAN: u64 = 0x0020_0000;
+/// The data page — 2 MiB of device-local memory.
+const DL_DATA_BYTES: u64 = 0x0020_0000;
+/// How much of it is mapped at the address under test: 64 KiB.
+///
+/// ⊘ **Not the whole object, and the difference is load-bearing.** A 2 MiB mapping at a
+/// 2 MiB-aligned VA is exactly what `_dmaGetPageSize` is entitled to promote to a single
+/// huge PTE, which lives at the DIRECTORY level — so a run that mapped the whole object
+/// could answer a leaf-level question at a level that is not the leaf, and would look
+/// identical on the log.
+const DL_MAP_BYTES: u64 = 0x0001_0000;
+/// The guard mapping's length, 64 KiB. Same size and same aperture as the data mapping so
+/// RM has no reason to choose a different page size for the two.
+const DL_GUARD_BYTES: u64 = 0x0001_0000;
+/// The copy destination's length, 64 KiB.
+const DL_SCRATCH_BYTES: u64 = 0x0001_0000;
+/// One page of notifier per channel.
+const DL_NOTIFIER_BYTES: u64 = 0x1000;
+
+/// The first word of the data page. A copy that lands moves exactly this.
+const DL_DATA_MAGIC: u32 = 0x0DEF_0289;
+/// The first word of the guard page — the channel control's payload. Distinct from
+/// [`DL_DATA_MAGIC`], so *"the control landed"* and *"the test landed"* can never be read
+/// off the same word.
+const DL_GUARD_MAGIC: u32 = 0x6A2D_0289;
+/// What the destination holds before every copy. Neither 0 nor 1: *"not the magic"* has to
+/// mean *"nothing wrote here"* rather than *"we cannot tell"*.
+const DL_SENTINEL: u32 = 0xDEAD_0289;
+/// The payload each copy releases on its own channel semaphore — a retirement **qualifier**
+/// only, read exclusively to say which KIND of red a red is. ⊘ It never turns a red green.
+const DL_RETIRE: u32 = 0x8928_9289;
+/// How long a copy is given to land before it is called lost.
+const DL_LAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Which of the three arms is running.
+///
+/// ⊘ Three, not two. The DEFER arm on its own cannot distinguish *"the deferred PTE is not
+/// live"* from *"nothing in this rig maps anything at all"*, and the invalidate arm on its
+/// own cannot distinguish *"the invalidate made it live"* from *"the map would have worked
+/// anyway"*. Each arm is the other's control and all three run in one invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferArm {
+    /// ★ **THE RIG CONTROL.** An ordinary map — RM invalidates for itself at the `done:`
+    /// gate — followed by the same copy. It must be `Live`. If it is not, the prime's fault
+    /// took the test channel with it, or the addresses are wrong, or the copy verb is
+    /// broken, and neither of the other two arms says anything.
+    Plain,
+    /// ★★★★★ **THE QUESTION.** `DEFER_TLB_INVALIDATION = TRUE`, and no invalidate by any
+    /// transport afterwards.
+    Defer,
+    /// ★★★ **THE KNOWN-POSITIVE.** Identical to [`DeferArm::Defer`] up to and including the
+    /// map, then `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` before the copy. It must be `Live`.
+    DeferThenInvalidate,
+}
+
+impl DeferArm {
+    /// The printed form, so a log line, a grader and a human agree on the vocabulary.
+    fn as_str(self) -> &'static str {
+        match self {
+            DeferArm::Plain => "PLAIN(rig-control)",
+            DeferArm::Defer => "DEFER(the-question)",
+            DeferArm::DeferThenInvalidate => "DEFER+INVALIDATE(known-positive)",
+        }
+    }
+
+    /// Whether the map carries `NVOS46_FLAGS_DEFER_TLB_INVALIDATION`.
+    fn defers(self) -> bool {
+        !matches!(self, DeferArm::Plain)
+    }
+
+    /// Whether this arm issues an explicit invalidate between the map and the copy.
+    fn invalidates(self) -> bool {
+        matches!(self, DeferArm::DeferThenInvalidate)
+    }
+}
+
+/// What a copy through the address under test did.
+///
+/// ⊘ [`DeferLive::NotRun`] is a first-class value and is never folded into `Dead`. *"The
+/// experiment did not run"* and *"the experiment ran and the address did not resolve"* are
+/// the difference between a broken rig and a finding, and a rung that reported the first as
+/// the second would manufacture exactly the answer it is looking for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferLive {
+    /// ★ The data word arrived at the destination.
+    Live,
+    /// The data word never arrived. `saw` is what the destination actually held.
+    Dead {
+        /// The word the destination held when the deadline expired.
+        saw: u32,
+    },
+    /// ⊘ Never asked. The string says why, and it is printed rather than swallowed.
+    NotRun(&'static str),
+}
+
+impl DeferLive {
+    /// The printed form.
+    fn as_str(self) -> &'static str {
+        match self {
+            DeferLive::Live => "LIVE",
+            DeferLive::Dead { .. } => "DEAD",
+            DeferLive::NotRun(_) => "NOTRUN",
+        }
+    }
+}
+
+/// What the host driver says about the leaf PTE at the address under test, after the map.
+///
+/// ⊘ Four values because [`DeferPte::Unmeasured`] is not [`DeferPte::Absent`].
+/// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` carries `RMCTRL_FLAGS_RM_TEST_ONLY_CODE` in its nvoc
+/// flags (`0x100008`, `ogkm-580: src/nvidia/generated/g_device_nvoc.c:733-745`) and a
+/// release driver refuses it with `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` (`0x7E`) for every
+/// address, including known-mapped ones — see
+/// [`kayfabe_abi::submit::NV0080_CTRL_CMD_DMA_GET_PDE_INFO`]. Reading that refusal as
+/// *"there is no PTE"* would attribute a later fault to a map that in fact succeeded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DeferPte {
+    /// ★ RM holds a valid PTE at this VA, at `page_size` bytes.
+    Valid {
+        /// The page size RM reports for the entry.
+        page_size: u64,
+    },
+    /// The control answered and said no valid PTE covers the VA.
+    Absent,
+    /// ⊘ The control refused. **Not an answer.** Carries RM's status.
+    Unmeasured(String),
+}
+
+impl DeferPte {
+    /// The printed form. ⚠ `UNMEASURED` prints the status it was refused with, because
+    /// *"refused"* without the number is the shape that makes a test-only refusal
+    /// indistinguishable from a wrong handle.
+    fn as_str(&self) -> String {
+        match self {
+            DeferPte::Valid { page_size } => format!("PTE_VALID(page_size={page_size:#x})"),
+            DeferPte::Absent => "PTE_ABSENT".to_string(),
+            DeferPte::Unmeasured(why) => format!("PTE_UNMEASURED({why})"),
+        }
+    }
+}
+
+/// Everything one arm established, so the grader reads a value rather than re-deriving it
+/// from the log.
+#[derive(Debug)]
+struct DeferReport {
+    /// Which arm this is.
+    arm: DeferArm,
+    /// ★★★ Did the prime provoke a fault? `None` means the notifier could not be read at
+    /// all, which is a third state and not a `false`.
+    prime_faulted: Option<bool>,
+    /// The `ROBUST_CHANNEL_*` exception type the prime's notifier carried, if it fired.
+    prime_except: Option<u32>,
+    /// Did the test channel still work *after* the prime's fault, witnessed by a copy through
+    /// the guard VA? If this is false, nothing later in the arm is interpretable.
+    chan_survived: bool,
+    /// Whether the map path was pinned to the small page size, or fell back to RM's choice.
+    /// ⚠ Printed and carried rather than assumed: if RM refused `PAGE_SIZE_4KB` the level
+    /// under test is RM's pick, and *"this is about the leaf"* stops being a statement this
+    /// rung can make.
+    page_size_4kb: bool,
+    /// What the page-directory oracle said about the address under test **before the guard
+    /// mapping existed**. ★ Expected `PdeAbsent`: it is what makes the guard, and nothing
+    /// else, the thing that instantiated the leaf table.
+    pde_before_guard: W379HostVa,
+    /// Whether a page table already covered the address under test **before** the map — the
+    /// assertion that the map could not have allocated a page level, and therefore could not
+    /// have reached `gvaspaceAlloc`'s sparse branch or any other invalidate.
+    pde_before_map: W379HostVa,
+    /// What RM says about the leaf PTE after the map.
+    pte_after_map: DeferPte,
+    /// The address RM reported the mapping at, and whether it is the one that was asked for.
+    placed: Option<u64>,
+    /// The invalidate's own status, when the arm issued one.
+    invalidate: Option<Result<(), String>>,
+    /// The verdict: did the copy through the address under test move the data word?
+    live: DeferLive,
+    /// ★★★ For the DEFER arm only, and only when it came back `Dead`: invalidate, then try
+    /// again on a third channel. A `Live` here says the PTE was in memory all along and the
+    /// only missing thing was the invalidate — which is what makes a `Dead` attributable.
+    rescue: Option<DeferLive>,
+}
+
+/// Render an [`RmError`] as the thing the owner's rule demands on every refusal: **RM's own
+/// status**, not our variant name.
+///
+/// ⊘ `ioctl(2)` returning `0` is not *"nothing refused"* — RM puts its status **inside the
+/// parameter struct**, and `status_check` is what turns it into an error here. So every
+/// refusal this rung prints carries the number RM sent, and the two statuses this port
+/// deliberately folds together say so rather than picking one.
+fn dl_why(e: &RmError) -> String {
+    match e {
+        RmError::Other(s) => format!("rmStatus={s:#06x}"),
+        RmError::InsufficientPermissions => {
+            "rmStatus=0x1b NV_ERR_INSUFFICIENT_PERMISSIONS".to_string()
+        }
+        RmError::NoMemory => "rmStatus=0x1a-or-0x51 ⊘ this port folds NV_ERR_INSUFFICIENT_\
+             RESOURCES and NV_ERR_NO_MEMORY into ONE variant, so which of the two RM sent is \
+             not recoverable here. ⚠ On a FIXED map 0x51 is RM saying the VA is ALREADY \
+             mapped, which is a success in the C's reading and a failure in ours"
+            .to_string(),
+        other => format!("{other:?} — a port-side refusal, not an RM status"),
+    }
+}
+
+/// Copy four bytes `src_va -> dst_va` on `ch` and wait for [`DL_DATA_MAGIC`]-class `want` to
+/// arrive at word 0 of `dst`, read back through an **independent** CPU mapping.
+///
+/// ⊘ The destination is re-poisoned with [`DL_SENTINEL`] **before** every submission, so
+/// *"the word we want is still there"* can never be a leftover from the previous copy. The
+/// poison is a CPU store into an object nothing on the GPU is touching, so it introduces no
+/// page-table work and no invalidate of its own.
+///
+/// ⊘ And the read-back is [`HostRmBackend::read_words_independently`] — a fresh device node
+/// and a fresh mapping — for `w379_release_through`'s reason: reading through the mapping
+/// the sentinel was written through proves a page is writable and nothing else.
+fn dl_copy(
+    rm: &mut HostRmBackend,
+    ch: W381Chan,
+    dst: kayfabe_isolate::HostHandle,
+    src_va: u64,
+    dst_va: u64,
+    want: u32,
+) -> DeferLive {
+    if rm
+        .fill_words(dst, DL_SCRATCH_BYTES, DL_SENTINEL, 0)
+        .is_err()
+    {
+        return DeferLive::NotRun("the destination could not be poisoned");
+    }
+    if rm
+        .submit_copy_va(ch.h, ch.token, src_va, dst_va, 4, DL_RETIRE)
+        .is_err()
+    {
+        // ⊘ A refused SUBMISSION is not a dead address: the engine was never asked.
+        return DeferLive::NotRun("the copy submission was refused");
+    }
+    let deadline = std::time::Instant::now() + DL_LAND_TIMEOUT;
+    loop {
+        let saw = match rm.read_words_independently(dst, DL_SCRATCH_BYTES, &[0]) {
+            Ok(w) => w[0],
+            Err(_) => return DeferLive::NotRun("the destination could not be read back"),
+        };
+        if saw == want {
+            return DeferLive::Live;
+        }
+        if std::time::Instant::now() >= deadline {
+            return DeferLive::Dead { saw };
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+
+/// The retirement **qualifier** for one of this rung's copies: did the channel's own
+/// semaphore take [`DL_RETIRE`]?
+///
+/// ⊘⊘ **ORDER THE OBSERVABLES.** Read only when the primary observable — the word in the
+/// destination — is already a red, and only ever to say WHICH KIND of red it is. It may
+/// never turn a red green.
+///
+/// ⚠ **Deliberately not [`w381_retired`], and this is not a style choice.** That helper
+/// compares the semaphore against [`W381_RETIRE_PAYLOAD`], which is a different constant
+/// from the one this rung's copies release, so it would answer
+/// `NOT-RETIRED(sem holds something else)` for every copy here that retired perfectly — a
+/// confident, plausible, always-wrong qualifier of exactly the kind its own doc-comment
+/// warns about, arriving through reuse rather than through a typo.
+fn dl_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'static str {
+    let (_src_off, sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+    match rm.ring_load_u32(chan, sem_off) {
+        Ok(v) if v == DL_RETIRE => "RETIRED",
+        Ok(0) => "NOT-RETIRED(sem still 0)",
+        Ok(_) => "NOT-RETIRED(sem holds something else)",
+        Err(_) => "UNMEASURED(ring read refused)",
+    }
+}
+
+/// Ask RM about the **leaf PTE** at `va`, and report the refusal as a refusal.
+fn dl_pte(rm: &mut HostRmBackend, vas: kayfabe_isolate::HostHandle, va: u64) -> DeferPte {
+    match rm.pte_info(vas, va) {
+        Ok(Some(b)) => DeferPte::Valid {
+            page_size: b.page_size,
+        },
+        Ok(None) => DeferPte::Absent,
+        Err(e) => DeferPte::Unmeasured(dl_why(&e)),
+    }
+}
+
+/// ★★ **CONFOUNDER 3, AS A CHECK RATHER THAN AS A SENTENCE IN A REPORT.**
+///
+/// Any global invalidate anywhere on this GPU — issued by *any* process, for *any* reason —
+/// clears the primed state this whole rung rests on. So the box must be otherwise idle, and
+/// *"it probably was"* is not a thing a later reader can check.
+///
+/// This walks `/proc/*/fd` and reports every **other** process holding a `/dev/nvidia*`
+/// descriptor open. ⊘ It returns a `Result`, not a `Vec`: on a kernel or a container where
+/// `/proc` cannot be walked the honest answer is *"not measured"*, and a silent empty list
+/// would read as *"the box is idle"* — which is the `dlen=0` failure in a new place.
+fn dl_gpu_users() -> Result<Vec<u32>, String> {
+    let me = std::process::id();
+    let dir = std::fs::read_dir("/proc").map_err(|e| format!("/proc unreadable: {e}"))?;
+    let mut out = Vec::new();
+    for entry in dir.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Ok(pid) = name.parse::<u32>() else {
+            continue;
+        };
+        if pid == me {
+            continue;
+        }
+        // ⊘ A pid whose `fd` directory cannot be read is SKIPPED, not counted as clean:
+        // that is a process we could not see into, and the summary line says how many.
+        let Ok(fds) = std::fs::read_dir(format!("/proc/{pid}/fd")) else {
+            continue;
+        };
+        for fd in fds.flatten() {
+            // ⊘ An fd we cannot resolve is SKIPPED rather than counted either way: it is a
+            // descriptor we could not see, and pretending it is not a GPU node would be the
+            // same manufactured quiet as an unreadable `/proc`.
+            let Ok(target) = std::fs::read_link(fd.path()) else {
+                continue;
+            };
+            if target.to_string_lossy().starts_with("/dev/nvidia") {
+                out.push(pid);
+                break;
+            }
+        }
+    }
+    out.sort_unstable();
+    Ok(out)
+}
+
+/// One arm's addresses, derived once from its slot so no call site does the arithmetic
+/// twice. ⊘ The guard and the address under test are computed from ONE base and are
+/// asserted to sit inside one [`DL_PDE0_SPAN`] — the property the whole rung rests on, as a
+/// value rather than as a comment.
+#[derive(Debug, Clone, Copy)]
+struct DlPlan {
+    /// The 2 MiB-aligned base of the span under test. The **guard** mapping goes here.
+    vbase: u64,
+    /// ★★★★★ **THE ADDRESS UNDER TEST.** Inside the same [`DL_PDE0_SPAN`] as `vbase`, so
+    /// the guard's page table is the table this address's leaf entry lives in.
+    v: u64,
+    /// Where the copy destination is mapped — 4 GiB away, under a different page directory.
+    scratch_at: u64,
+    /// The three channel rings: prime, test, rescue.
+    rings: [u64; 3],
+}
+
+impl DlPlan {
+    /// Derive an arm's addresses from its slot.
+    fn for_slot(slot: u64) -> DlPlan {
+        let vbase = DL_VA_BASE + slot * DL_ARM_STRIDE;
+        DlPlan {
+            vbase,
+            // ⊘ `+ DL_GUARD_BYTES`, i.e. immediately past the guard and still 2 MiB - 128 KiB
+            // short of the span's end. Adjacent-but-disjoint is what puts the two mappings in
+            // one leaf table without letting either cover the other.
+            v: vbase + DL_GUARD_BYTES,
+            scratch_at: vbase + DL_SCRATCH_OFF,
+            rings: [
+                DL_RING_BASE + slot * DL_ARM_STRIDE,
+                DL_RING_BASE + slot * DL_ARM_STRIDE + DL_CHAN_STRIDE,
+                DL_RING_BASE + slot * DL_ARM_STRIDE + 2 * DL_CHAN_STRIDE,
+            ],
+        }
+    }
+
+    /// Whether the guard and the address under test really are inside one page-directory
+    /// entry's span. Checked rather than trusted: the constants above make it true, and a
+    /// future edit to any one of them makes it false silently.
+    fn one_leaf_table(&self) -> bool {
+        self.vbase.is_multiple_of(DL_PDE0_SPAN)
+            && self.v >= self.vbase
+            && self.v + DL_MAP_BYTES <= self.vbase + DL_PDE0_SPAN
+    }
+
+    /// Whether every address this arm names sits under RM's default `FERMI_VASPACE_A` limit
+    /// ([`W385_VAS_LIMIT`]).
+    ///
+    /// ⊘ Checked rather than assumed, and refused **by its own name**: an address past the
+    /// ceiling comes back as a refused fixed map, which reads as *"RM would not place our
+    /// mapping"* — a statement about the deferral, made by a rung that asked for an address
+    /// that does not exist. The same failure w385 gives `WINDOW_ABOVE_VAS_LIMIT` its own
+    /// violation for.
+    fn fits_the_vaspace(&self) -> bool {
+        [
+            self.vbase + DL_PDE0_SPAN,
+            self.v + DL_MAP_BYTES,
+            self.scratch_at + DL_SCRATCH_BYTES,
+            self.rings[2] + DL_CHAN_STRIDE,
+        ]
+        .iter()
+        .all(|&hi| hi <= W385_VAS_LIMIT)
+    }
+}
+
+/// One arm, end to end. Everything it establishes goes into `rep`; everything it allocates
+/// goes into `handles` so the caller can dispose of it whatever happens here.
+///
+/// Returns `None` the moment the arm stops being interpretable — and prints why, on the
+/// same line, every time.
+fn dl_arm_body(
+    rm: &mut HostRmBackend,
+    vas: kayfabe_isolate::HostHandle,
+    arm: DeferArm,
+    plan: &DlPlan,
+    rep: &mut DeferReport,
+    handles: &mut Vec<kayfabe_isolate::HostHandle>,
+) -> Option<()> {
+    use kayfabe_isolate_host::rm::NotifierAperture;
+
+    let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+        println!("FAIL  DL engine          = COPY0 is not expressible");
+        return None;
+    };
+
+    // ── the objects. None of them is mapped yet; the fills are CPU stores. ──────────────
+    let (Ok(guard), Ok(data), Ok(scratch)) = (
+        rm.alloc_probe_local(DL_GUARD_BYTES),
+        rm.alloc_probe_local(DL_DATA_BYTES),
+        rm.alloc_probe_local(DL_SCRATCH_BYTES),
+    ) else {
+        println!("FAIL  DL objects         = the arm needs a guard, a data page and a destination");
+        return None;
+    };
+    handles.push(guard);
+    handles.push(data);
+    handles.push(scratch);
+    if rm
+        .fill_words(guard, DL_GUARD_BYTES, DL_GUARD_MAGIC, 0)
+        .is_err()
+        || rm
+            .fill_words(data, DL_DATA_BYTES, DL_DATA_MAGIC, 0)
+            .is_err()
+        || rm
+            .fill_words(scratch, DL_SCRATCH_BYTES, DL_SENTINEL, 0)
+            .is_err()
+    {
+        println!("FAIL  DL fill            = an object could not be seeded through the CPU");
+        return None;
+    }
+    println!(
+        "ok    DL objects         = guard {DL_GUARD_BYTES:#x} @ {:#018x} magic {DL_GUARD_MAGIC:#010x}, \
+         data {DL_DATA_BYTES:#x} (mapping {DL_MAP_BYTES:#x}) magic {DL_DATA_MAGIC:#010x}, \
+         dst {DL_SCRATCH_BYTES:#x} @ {:#018x} sentinel {DL_SENTINEL:#010x}",
+        plan.vbase, plan.scratch_at
+    );
+
+    // ── THREE CHANNELS, ALL BUILT BEFORE THE PRIME, AND THAT ORDER IS THE EXPERIMENT ────
+    //
+    // ★★★ Creating a channel maps its ring, its USERD and RM's own context buffers into
+    // THIS address space, and every one of those maps ends at the `done:` gate that
+    // invalidates (`ogkm-580: virt_mem_allocator_gm107.c:2610-2615`). A channel created
+    // between the prime and the copy would therefore erase the primed state and the rung
+    // would measure a first-fill — the exact thing the prime exists to rule out. So the
+    // prime channel (which the fault kills), the test channel and the rescue channel are
+    // all minted here, before anything is primed.
+    //
+    // ⊘ Each gets its OWN notifier object. Sharing one would make a second channel's RC
+    // record overwrite the first's, and *"the notifier fired"* would stop naming who faulted.
+    let mut chans: Vec<(W381Chan, kayfabe_isolate::HostHandle)> = Vec::new();
+    for (i, ring_at) in plan.rings.iter().enumerate() {
+        let Ok(notifier) = rm.alloc_sysmem(DL_NOTIFIER_BYTES) else {
+            println!("FAIL  DL notifier {i}      = refused");
+            return None;
+        };
+        handles.push(notifier);
+        let (h, token) = match rm.alloc_channel_at_with_error_notifier(
+            vas,
+            engine_type,
+            Some(GpuVa(*ring_at)),
+            notifier,
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                println!(
+                    "FAIL  DL channel {i}       = refused at ring {ring_at:#018x} — {}",
+                    dl_why(&e)
+                );
+                return None;
+            }
+        };
+        handles.push(h);
+        if let Err(e) = rm.schedule(h) {
+            println!("FAIL  DL schedule {i}      = {}", dl_why(&e));
+            return None;
+        }
+        chans.push((W381Chan { h, token }, notifier));
+    }
+    println!(
+        "ok    DL channels        = 3 built BEFORE the prime (prime/test/rescue), rings at \
+         {:#018x} {:#018x} {:#018x} — ⊘ none is created after it, because a channel's own \
+         ctx-buffer maps each end in an invalidate",
+        plan.rings[0], plan.rings[1], plan.rings[2]
+    );
+
+    // ── STEP 4 — ALL PAGE-LEVEL INSTANTIATION HAPPENS HERE, AND IT IS ASSERTED ──────────
+    //
+    // ★★ The **guard** mapping is the instantiator. It covers the low 64 KiB of the same
+    // 2 MiB span the address under test sits in, so it forces the whole level chain down to
+    // the leaf page table into existence and then HOLDS it — it is never unmapped inside the
+    // arm, so `_gvaspaceReleaseUnreservedPTEs` cannot take the table away again.
+    //
+    // ⊘ Why not `NVOS46_FLAGS_DMA_UNICAST_REUSE_ALLOC` and a pre-reserved VA range, which
+    // would be the textbook way to make step 6 write nothing but a leaf PTE? Because
+    // `NV01_MEMORY_VIRTUAL` **reserves no VA at all** — `virtmemConstruct_IMPL` returns
+    // early for that class before any allocation (`ogkm-580:
+    // src/nvidia/src/kernel/mem_mgr/virtual_mem.c:350-352`), so its `offset`/`limit` bound
+    // where RM may place a mapping and reserve nothing. A real reservation needs
+    // `NV50_MEMORY_VIRTUAL` and `NV_MEMORY_ALLOCATION_PARAMS`, which this client does not
+    // speak. The guard buys the same property and, unlike the reservation, it is CHECKED
+    // below by an oracle that is not ours.
+    //
+    // ⊘⊘ And the confounder as originally stated is narrower than it looks, from source:
+    // the VA allocation the map path performs (`vaspaceAlloc`, reached because
+    // `DMA_UNICAST_REUSE_ALLOC` is FALSE by default, `virt_mem_allocator_gm107.c:419,1028`)
+    // lands in `gvaspaceAlloc`'s *"Pin page tables upfront"* branch — `mmuWalkReserveEntries`
+    // and **no invalidate anywhere in it** (`ogkm-580: gpu_vaspace.c:1639-1682`). The branch
+    // that DOES invalidate is the **sparse** one (`:1581-1608`), which needs `flags.bSparse`,
+    // which nothing on the map path sets. `gvaspaceIncAllocRefCnt` only bumps a refcount
+    // (`:1945-1961`). ⇒ The residual hazard is a *page-directory write* the prime's walk
+    // could have cached above the leaf, and that is what the guard removes.
+    let pde_virgin = w379_host_va(rm, vas, plan.v);
+    rep.pde_before_guard = pde_virgin;
+    println!(
+        "info  DL PDE before guard= {} @ {:#018x} — ★ expect PDE_ABSENT: it is what makes the \
+         guard, and not something else, the thing that instantiated the leaf table",
+        pde_virgin.as_str(),
+        plan.v
+    );
+
+    // ★ The page-size flag is CALIBRATED on the guard map and then used for every map in the
+    // arm. Pinning the small page size is what keeps this a question about the LEAF; if RM
+    // refuses it we fall back and say so, rather than silently answering a different
+    // question at a different level.
+    let mut ps4k = true;
+    let guard_va =
+        match rm.map_local_at_with_flags(vas, guard, DL_GUARD_BYTES, Some(plan.vbase), false, true)
+        {
+            Ok(v) => v,
+            Err(e) => {
+                println!(
+                    "??    DL guard 4KB        = refused — {} ⇒ retrying with PAGE_SIZE_DEFAULT. \
+                 ⚠ The level under test is then RM's choice, not ours",
+                    dl_why(&e)
+                );
+                ps4k = false;
+                match rm.map_local_at_with_flags(
+                    vas,
+                    guard,
+                    DL_GUARD_BYTES,
+                    Some(plan.vbase),
+                    false,
+                    false,
+                ) {
+                    Ok(v) => v,
+                    Err(e2) => {
+                        println!("FAIL  DL guard map       = {}", dl_why(&e2));
+                        return None;
+                    }
+                }
+            }
+        };
+    rep.page_size_4kb = ps4k;
+    if guard_va != plan.vbase {
+        println!(
+            "??    DL guard placement  = asked {:#018x}, RM reported {guard_va:#018x}. ⊘ The \
+             guard is not covering the span under test, so it instantiates the wrong table",
+            plan.vbase
+        );
+        return None;
+    }
+    println!(
+        "ok    DL guard map       = {DL_GUARD_BYTES:#x} @ {guard_va:#018x}, page-size flag {} \
+         — HELD for the whole arm",
+        if ps4k { "4KB" } else { "DEFAULT" }
+    );
+
+    let scratch_va = match rm.map_local_at_with_flags(
+        vas,
+        scratch,
+        DL_SCRATCH_BYTES,
+        Some(plan.scratch_at),
+        false,
+        ps4k,
+    ) {
+        Ok(v) if v == plan.scratch_at => v,
+        Ok(v) => {
+            println!(
+                "??    DL dst placement    = asked {:#018x}, got {v:#018x}",
+                plan.scratch_at
+            );
+            return None;
+        }
+        Err(e) => {
+            println!("FAIL  DL dst map         = {}", dl_why(&e));
+            return None;
+        }
+    };
+    println!("ok    DL dst map         = {DL_SCRATCH_BYTES:#x} @ {scratch_va:#018x}");
+
+    // ★★★ THE ASSERTION CONFOUNDER 2 ASKS FOR. A page table covers the address under test
+    // BEFORE the map, so the map cannot be the thing that allocates one.
+    rep.pde_before_map = w379_host_va(rm, vas, plan.v);
+    match rep.pde_before_map {
+        W379HostVa::PdeCovers => println!(
+            "★     DL PDE before map  = PDE_COVERS @ {:#018x} — the leaf table EXISTS, so step \
+             6 writes a leaf PTE and allocates no level",
+            plan.v
+        ),
+        W379HostVa::PdeAbsent => {
+            println!(
+                "FAIL  DL PDE before map  = PDE_ABSENT @ {:#018x} — the guard did NOT instantiate \
+                 the table covering the address under test, so step 6 would allocate a page \
+                 level and this arm cannot exclude an invalidate it did not ask for",
+                plan.v
+            );
+            return None;
+        }
+        W379HostVa::Unmeasured => println!(
+            "⊘     DL PDE before map  = UNMEASURED — the page-directory oracle refused, so \
+             CONFOUNDER-2 IS UNASSERTED for this arm. ⚠ Note the asymmetry, which the grader \
+             uses: an un-excluded level allocation could only have caused an EXTRA invalidate, \
+             so it can manufacture verdict A and can never manufacture verdict B"
+        ),
+    }
+
+    // ── STEP 5 — ★★★★★ THE PRIME. THIS IS THE WHOLE EXPERIMENT. ────────────────────────
+    //
+    // A run that maps with DEFER, touches, and works proves nothing: *"no entry was ever
+    // cached for this VA"* and *"a fresh walk picks the new entry up"* are physically the
+    // same state. So the MMU is made to walk the address under test **while it is invalid**,
+    // FIRST. What the final copy then tests is eviction of a cached non-present result, not
+    // a first fill.
+    //
+    // ⚠ The fault is non-replayable, so the channel that issued it is killed by the host RC
+    // path. That is expected and is why this is a channel of its own.
+    println!(
+        "FAULT_MARK=defer_liveness_prime arm={} va={:#018x} ⚠ THE HOST dmesg WILL CARRY AN Xid \
+         31 FOR THIS CHANNEL AND IT IS THE POINT",
+        arm.as_str(),
+        plan.v
+    );
+    let primed = dl_copy(rm, chans[0].0, scratch, plan.v, scratch_va, DL_DATA_MAGIC);
+    println!("info  DL prime copy      = {primed:?}");
+    if matches!(primed, DeferLive::Live) {
+        println!(
+            "??    DL PRIME LANDED    = a copy out of {:#018x} SUCCEEDED before anything was \
+             mapped there. ⊘ The address was not invalid, so nothing was primed and this arm \
+             is UNINTERPRETABLE",
+            plan.v
+        );
+        return None;
+    }
+    match rm.read_error_notifier(chans[0].1, NotifierAperture::Sysmem) {
+        Ok(n) => {
+            rep.prime_faulted = Some(n.fired());
+            rep.prime_except = Some(n.except_type);
+            println!(
+                "info  DL prime notifier  = fired={} status={:#06x} except_type={:#x} engine={:#06x}",
+                n.fired(),
+                n.status,
+                n.except_type,
+                n.engine_type
+            );
+        }
+        Err(e) => {
+            // ⊘ THIRD STATE. "We could not read the notifier" is not "it did not fire", and
+            // collapsing them would let an unreadable instrument pass as a fault.
+            rep.prime_faulted = None;
+            println!(
+                "⊘     DL prime notifier  = UNREADABLE — {} ⇒ whether the walk faulted is \
+                 UNMEASURED",
+                dl_why(&e)
+            );
+        }
+    }
+    if rep.prime_faulted != Some(true) {
+        println!(
+            "PRIME_DID_NOT_FAULT arm={} va={:#018x} retire={} — ⊘ the MMU is not known to have \
+             walked the address under test, so the final copy would be testing FIRST FILL and \
+             not eviction. NO VERDICT IS REPORTED FOR THIS ARM",
+            arm.as_str(),
+            plan.v,
+            dl_retired(rm, chans[0].0.h)
+        );
+        return None;
+    }
+    println!(
+        "★     DL PRIME           = FAULTED. The MMU walked {:#018x} and the entry it found \
+         was non-present",
+        plan.v
+    );
+
+    // ── THE CHANNEL CONTROL — both surviving channels, before anything is mapped at V ───
+    //
+    // ★★★ Without this, *"the copy at step 9 did not land"* is indistinguishable from *"the
+    // prime's engine reset took the other channels with it"*, and the second is a broken rig
+    // reported as a finding. Each channel copies out of the **guard** VA — mapped, known
+    // good, and holding a different magic — so a landing here says the channel works and
+    // says nothing about the address under test.
+    //
+    // ⚠ It is a walk in the primed address space, so it does put the guard's translation in
+    // the TLB. That is a constant across all three arms and cannot produce a differential;
+    // an uncontrolled dead channel can, and does, and has.
+    let ctl_test = dl_copy(
+        rm,
+        chans[1].0,
+        scratch,
+        guard_va,
+        scratch_va,
+        DL_GUARD_MAGIC,
+    );
+    let ctl_rescue = dl_copy(
+        rm,
+        chans[2].0,
+        scratch,
+        guard_va,
+        scratch_va,
+        DL_GUARD_MAGIC,
+    );
+    rep.chan_survived =
+        matches!(ctl_test, DeferLive::Live) && matches!(ctl_rescue, DeferLive::Live);
+    println!("info  DL channel control = test {ctl_test:?}, rescue {ctl_rescue:?}");
+    if !rep.chan_survived {
+        println!(
+            "??    DL CONTROL FAILED  = a channel that never faulted cannot land a copy through \
+             a mapping that has been live since before the prime. ⊘ The prime's recovery took \
+             more than its own channel; NOTHING BELOW WOULD BE ATTRIBUTABLE and the arm stops \
+             here"
+        );
+        return None;
+    }
+    println!("ok    DL channel control = both surviving channels still land after the prime");
+
+    // ── STEP 6 — THE MAP ───────────────────────────────────────────────────────────────
+    match rm.map_local_at_with_flags(vas, data, DL_MAP_BYTES, Some(plan.v), arm.defers(), ps4k) {
+        Ok(got) => {
+            rep.placed = Some(got);
+            println!(
+                "ok    DL map             = {DL_MAP_BYTES:#x} @ {got:#018x} asked {:#018x} \
+                 DEFER={} PAGE_SIZE={}",
+                plan.v,
+                arm.defers(),
+                if ps4k { "4KB" } else { "DEFAULT" }
+            );
+            if got != plan.v {
+                println!(
+                    "??    DL map placement   = RM placed the mapping elsewhere, so the primed \
+                     address and the mapped address are different addresses"
+                );
+                return None;
+            }
+        }
+        Err(e) => {
+            println!(
+                "FAIL  DL map             = refused with DEFER={} — {}",
+                arm.defers(),
+                dl_why(&e)
+            );
+            return None;
+        }
+    }
+
+    // ── STEP 7 — CONFIRM THE PTE IS VALID IN MEMORY ────────────────────────────────────
+    //
+    // ⊘ Never skipped, and its refusal is never silent: if we cannot establish that the map
+    // actually wrote a valid entry, a dead copy at step 9 is unattributable — it could be a
+    // TLB that was never told, or a map that never happened.
+    rep.pte_after_map = dl_pte(rm, vas, plan.v);
+    let pde_after = w379_host_va(rm, vas, plan.v);
+    println!(
+        "info  DL PTE after map   = {} ; PDE after map = {}",
+        rep.pte_after_map.as_str(),
+        pde_after.as_str()
+    );
+    match &rep.pte_after_map {
+        DeferPte::Valid { .. } => println!(
+            "★     DL PTE            = VALID IN MEMORY. A dead copy below is therefore about \
+             the TLB and not about the map"
+        ),
+        DeferPte::Absent => {
+            println!(
+                "??    DL PTE            = RM reports NO valid PTE at {:#018x} after a map it \
+                 accepted. ⊘ Nothing below would be attributable to the deferral",
+                plan.v
+            );
+            return None;
+        }
+        DeferPte::Unmeasured(why) => println!(
+            "⊘     DL PTE            = UNMEASURED ({why}) — expected on a release driver: \
+             GET_PTE_INFO carries RMCTRL_FLAGS_RM_TEST_ONLY_CODE. ⚠ FALLBACK IN FORCE: the \
+             PDE answer above is PAGE-TABLE granularity and does NOT say the leaf is valid, \
+             so the attribution moves to the RESCUE at step 10 — invalidate, retry, and a \
+             landing there proves the PTE was in memory all along"
+        ),
+    }
+
+    // ── STEP 8 — THE INVALIDATE, OR DELIBERATELY NOTHING AT ALL ────────────────────────
+    if arm.invalidates() {
+        let out = rm.invalidate_tlb(vas);
+        match &out {
+            Ok(()) => println!(
+                "ok    DL invalidate      = NV2080_CTRL_CMD_DMA_INVALIDATE_TLB issued on the \
+                 subdevice, hVASpace = this arm's space, rmStatus=0x0000"
+            ),
+            Err(e) => println!("FAIL  DL invalidate      = {}", dl_why(e)),
+        }
+        rep.invalidate = Some(out.map_err(|e| dl_why(&e)));
+        if rep.invalidate.as_ref().is_some_and(Result::is_err) {
+            println!(
+                "??    DL KNOWN-POSITIVE  = the invalidate transport itself was refused, so this \
+                 arm cannot serve as the control"
+            );
+            return None;
+        }
+    } else {
+        println!(
+            "info  DL invalidate      = NONE ISSUED BY ANY TRANSPORT — no control, no \
+             pushbuffer MEM_OP, nothing. This is the arm's defining property"
+        );
+    }
+
+    // ── STEP 9 — THE COPY THROUGH THE FRESHLY-WRITTEN PTE ──────────────────────────────
+    rep.live = dl_copy(rm, chans[1].0, scratch, plan.v, scratch_va, DL_DATA_MAGIC);
+    println!(
+        "info  DL test copy       = {:?} retire={} ",
+        rep.live,
+        dl_retired(rm, chans[1].0.h)
+    );
+    if let Ok(n) = rm.read_error_notifier(chans[1].1, NotifierAperture::Sysmem) {
+        println!(
+            "info  DL test notifier   = fired={} status={:#06x} except_type={:#x}",
+            n.fired(),
+            n.status,
+            n.except_type
+        );
+    }
+
+    // ── STEP 10 — THE RESCUE. Only for the arm that withheld the invalidate, and only ──
+    // when it came back dead.
+    //
+    // ★★★★★ This is what turns a red into an attributed red, and it is stronger than the
+    // PTE oracle that a release driver refuses: invalidate, then copy again on a channel
+    // that has never faulted. A landing says the entry was in the page table the whole time
+    // and the ONLY thing missing was the invalidate — which is verdict B with its mechanism
+    // named. A second dead copy says the deferred map produced no usable entry at all, and
+    // then this arm is a statement about our own map and not about the hardware's TLB.
+    if arm == DeferArm::Defer && matches!(rep.live, DeferLive::Dead { .. }) {
+        println!(
+            "info  DL rescue          = the deferred copy was DEAD; issuing the invalidate now \
+             and retrying on the third channel, to say WHICH red this is"
+        );
+        match rm.invalidate_tlb(vas) {
+            Ok(()) => println!("ok    DL rescue invalidate = issued, rmStatus=0x0000"),
+            Err(e) => {
+                println!("FAIL  DL rescue invalidate = {}", dl_why(&e));
+                rep.rescue = Some(DeferLive::NotRun("the rescue invalidate was refused"));
+                return Some(());
+            }
+        }
+        // ⊘ The rescue channel is re-controlled HERE, not only before the prime: the test
+        // copy above may itself have faulted, and an engine reset between then and now would
+        // make a dead rescue read as "the PTE was never written".
+        let ctl2 = dl_copy(
+            rm,
+            chans[2].0,
+            scratch,
+            guard_va,
+            scratch_va,
+            DL_GUARD_MAGIC,
+        );
+        if !matches!(ctl2, DeferLive::Live) {
+            println!(
+                "??    DL rescue control  = {ctl2:?} — the rescue channel did not survive the \
+                 test copy, so the rescue would measure the channel and not the PTE"
+            );
+            rep.rescue = Some(DeferLive::NotRun("the rescue channel did not survive"));
+            return Some(());
+        }
+        let out = dl_copy(rm, chans[2].0, scratch, plan.v, scratch_va, DL_DATA_MAGIC);
+        println!(
+            "info  DL rescue copy     = {out:?} retire={}",
+            dl_retired(rm, chans[2].0.h)
+        );
+        rep.rescue = Some(out);
+    }
+    Some(())
+}
+
+impl DeferReport {
+    /// An arm that has established nothing yet. ⊘ Every "did it happen" field starts in the
+    /// state that means *"we did not get that far"*, never in the state that means *"no"*.
+    fn new(arm: DeferArm) -> DeferReport {
+        DeferReport {
+            arm,
+            prime_faulted: None,
+            prime_except: None,
+            chan_survived: false,
+            page_size_4kb: false,
+            pde_before_guard: W379HostVa::Unmeasured,
+            pde_before_map: W379HostVa::Unmeasured,
+            pte_after_map: DeferPte::Unmeasured("the arm never reached the map".to_string()),
+            placed: None,
+            invalidate: None,
+            live: DeferLive::NotRun("the arm never reached the copy"),
+            rescue: None,
+        }
+    }
+}
+
+/// Run one arm in a **fresh** address space, then dispose of everything it built.
+///
+/// ★ The address space is per-arm and not per-rung. A `FERMI_VASPACE_A` that an earlier arm
+/// mapped into, faulted in, and invalidated carries state no later arm can account for —
+/// and the whole rung is a statement about cached translations, so *"nothing unrelated is
+/// cached in here"* has to be true by construction rather than by argument.
+fn defer_arm(rm: &mut HostRmBackend, arm: DeferArm, slot: u64) -> DeferReport {
+    let plan = DlPlan::for_slot(slot);
+    let mut rep = DeferReport::new(arm);
+    println!();
+    println!("═══ DL ARM {} (slot {slot}) ═══", arm.as_str());
+    println!(
+        "info  DL plan            = guard {:#018x}  V {:#018x}  dst {:#018x}  rings \
+         {:#018x}/{:#018x}/{:#018x}",
+        plan.vbase, plan.v, plan.scratch_at, plan.rings[0], plan.rings[1], plan.rings[2]
+    );
+    if !plan.one_leaf_table() {
+        println!(
+            "FAIL  DL geometry        = the guard and the address under test are NOT inside one \
+             {DL_PDE0_SPAN:#x} span, so they would not share a leaf page table and the guard \
+             would instantiate the wrong one"
+        );
+        return rep;
+    }
+    if !plan.fits_the_vaspace() {
+        println!(
+            "FAIL  DL geometry        = an address this arm names is past {W385_VAS_LIMIT:#018x}, \
+             RM's default address-space limit. ⊘ Refused by name: a fixed map RM declines \
+             because the address does not exist would otherwise read as a statement about the \
+             deferral"
+        );
+        return rep;
+    }
+    println!(
+        "ok    DL geometry        = guard and V share ONE {DL_PDE0_SPAN:#x} directory span (so \
+         they share a leaf page table by construction), and every address is under \
+         {W385_VAS_LIMIT:#018x}"
+    );
+    let vas = match rm.alloc_vaspace() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("FAIL  DL vaspace         = {}", dl_why(&e));
+            return rep;
+        }
+    };
+    println!("ok    DL vaspace         = a FRESH address space for this arm alone");
+
+    let mut handles: Vec<kayfabe_isolate::HostHandle> = Vec::new();
+    let _ = dl_arm_body(rm, vas, arm, &plan, &mut rep, &mut handles);
+
+    // ⊘ Teardown runs whatever the body decided, and the three addresses are unmapped by
+    // NAME rather than from a list the body kept: a list the body appends to is a list an
+    // early return can leave short, and an unmap of something that was never mapped is a
+    // refusal we can ignore.
+    for va in [plan.vbase, plan.v, plan.scratch_at] {
+        let _ = rm.unmap_local(vas, va);
+    }
+    for h in handles.into_iter().rev() {
+        let _ = rm.free(h);
+    }
+    let _ = rm.free(vas);
+    rep
+}
+
+/// ★★★★★ **w289 — DOES A FRESHLY-WRITTEN PTE BECOME LIVE WITHOUT A TLB INVALIDATE?**
+///
+/// `NVOS46_FLAGS_DEFER_TLB_INVALIDATION` (bit 31, `ogkm-580:
+/// src/common/sdk/nvidia/inc/nvos.h:2149-2151`) lets a client map memory and skip the
+/// invalidate: with it set, `dmaAllocMapping_GM107` selects `DMA_DEFER_TLB_INVALIDATE`
+/// (`virt_mem_allocator_gm107.c:417`) and the `kbusFlush_HAL` + `gvaspaceInvalidateTlb` at
+/// the function's `done:` label (`:2610-2615`) is not taken. Two worlds follow, and they
+/// select between two very different designs for this port:
+///
+/// ```text
+///   (A)  a TLB miss walks and picks the fresh PTE up
+///        => the deferred map WORKS
+///        => a mapping can go live with NOTHING OBSERVABLE to a hypervisor
+///
+///   (B)  the fresh PTE is not live until an invalidate
+///        => DEFER is a BATCHING contract
+///        => either the invalidate arrives (observable) or the guest's own access faults
+/// ```
+///
+/// # ⊘ SOURCE DOES NOT DECIDE IT, AND HERE IS BOTH HALVES
+///
+/// The SDK header documents the hazard as **stale entries** only (`nvos.h:2144-2148`) — an
+/// unmap hazard — which leans (A). Against that, **both** RM and UVM invalidate on a fresh
+/// upgrade anyway: `uvm_mmu.c:805-808` says *"Upgrades don't have to flush out accesses, so
+/// no membar is needed on the TLB invalidate"* and then still issues `tlb_invalidate_all`,
+/// which is dead work under (A). ⇒ It has to be asked of hardware.
+///
+/// # ★★★ THE PRIMING STEP IS THE WHOLE EXPERIMENT
+///
+/// The naive version — map with DEFER, touch, see if it works — **cannot distinguish A from
+/// B**. If it passes, that means *"no entry was ever cached for this VA"*, which is
+/// physically identical to *"fresh VA, the walk picks it up"*. So the address is **primed**:
+/// a copy engine is pointed at it while it is invalid, it faults, and the MMU has now walked
+/// it and may have cached the non-present result. The final copy then tests **eviction**,
+/// not first fill. A prime that does not fault invalidates the arm, by name and out loud.
+///
+/// # The sequence, per arm
+///
+/// ```text
+///   1  a FRESH FERMI_VASPACE_A, so no unrelated cached state exists in it
+///   2  a 2 MiB device-local data page, a guard page, a destination, three notifiers
+///   3  THREE copy-engine channels bound to that space, ALL created before the prime
+///   4  the guard mapped at the base of the span  -> ALL page-level instantiation, here
+///      + assert a page table now covers the address under test (PDE oracle)
+///   5  PRIME: copy FROM the address under test -> faults, channel RCs, notifier names it
+///      + a channel control: the other two channels still land through the guard VA
+///   6  map the data page at the address under test, with DEFER (or without, arm 1)
+///   7  confirm the leaf PTE is valid in memory  (GET_PTE_INFO; refusal handled, see below)
+///   8  issue no invalidate at all (arm 2) / issue one (arm 3) / RM issued its own (arm 1)
+///   9  copy FROM the address under test into the destination and poll
+///  10  arm 2 only, and only if 9 was dead: invalidate, then retry on the third channel
+/// ```
+///
+/// ⇒ **completes correctly = (A); faults or returns stale = (B).**
+///
+/// # ⊘ THE PTE ORACLE IS EXPECTED TO REFUSE, AND STEP 10 IS WHY THAT IS SURVIVABLE
+///
+/// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` carries `RMCTRL_FLAGS_RM_TEST_ONLY_CODE` in its nvoc
+/// flags (`0x100008`, `ogkm-580: src/nvidia/generated/g_device_nvoc.c:733-745`) and a
+/// release driver refuses it for **every** address. This rung asks anyway and prints the
+/// refusal with RM's status, because *"we could not confirm the PTE"* and *"there is no
+/// PTE"* are the difference between a finding and an unattributable fault. The fallback is
+/// **step 10**, and it is stronger than the oracle it replaces: invalidating and retrying
+/// turns *"dead"* into *"dead, and the entry was in the page table the whole time"*.
+///
+/// # ⚠ SCOPE, so this cannot be read as a general result
+///
+/// It tests the **leaf** level, through the small-page table, on ONE board of the GA10x MMU
+/// regime, for a **read** access, with one copy engine, at one moment. It says nothing about
+/// big or huge pages, about page-directory entries, about write accesses, about other
+/// engines, or about any other MMU generation.
+///
+/// ⚠ And it needs the box to be otherwise idle: any global invalidate anywhere on this GPU
+/// clears the primed state. The rung reports which other processes hold `/dev/nvidia*` open
+/// rather than asserting the box was quiet.
+fn defer_liveness(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    println!(
+        "info  DL defer-liveness  = GPU {gpu}, euid {} — does a PTE written with \
+         NVOS46_FLAGS_DEFER_TLB_INVALIDATION become live with NO invalidate on any transport?",
+        kayfabe_linux_raw::geteuid()
+    );
+    println!(
+        "info  DL the two worlds  = (A) the walk picks the fresh PTE up ⇒ a mapping can go \
+         live with nothing observable to a hypervisor; (B) it is not live until an \
+         invalidate ⇒ DEFER is a BATCHING contract and the boundary stays observable"
+    );
+    println!(
+        "DEFER_SCOPE=leaf-PTE, small-page table, GA10x MMU regime, ONE board, VIRT_READ, one \
+         copy engine — ⊘ NOT a statement about big/huge pages, about page-directory entries, \
+         about writes, or about any other MMU generation"
+    );
+
+    // ★★ CONFOUNDER 3, reported rather than assumed. A global invalidate raised by ANY
+    // process on this GPU clears the primed state, and a run that shared the board with a
+    // CUDA job cannot tell verdict A from a neighbour's invalidate.
+    match dl_gpu_users() {
+        Ok(pids) if pids.is_empty() => println!(
+            "ok    DL idle check      = no other process holds a /dev/nvidia* descriptor open"
+        ),
+        Ok(pids) => println!(
+            "??    DL IDLE CHECK      = {} OTHER process(es) hold /dev/nvidia* open: {pids:?}. \
+             ⚠ ANY global invalidate they raise clears the primed state, which can only \
+             manufacture verdict A. Re-run on an idle box before believing an A",
+            pids.len()
+        ),
+        Err(why) => println!(
+            "⊘     DL idle check      = UNMEASURED ({why}) — ⚠ this is NOT 'the box is idle'"
+        ),
+    }
+
+    // ⊘ The order is the reading order and each arm is independent: its own address space,
+    // its own addresses, its own channels. Every arm provokes an Xid in its own prime, so no
+    // ordering makes an arm fault-free and none is 'protected' by running first.
+    let plain = defer_arm(rm, DeferArm::Plain, 0);
+    let defer = defer_arm(rm, DeferArm::Defer, 1);
+    let inval = defer_arm(rm, DeferArm::DeferThenInvalidate, 2);
+
+    println!();
+    println!("═══ DL SUMMARY ═══");
+    for r in [&plain, &defer, &inval] {
+        println!(
+            "info  DL {:32} prime_faulted={:?} except={:?} chan_survived={} pde_before_map={} \
+             pte={} placed={:?} copy={} rescue={:?}",
+            r.arm.as_str(),
+            r.prime_faulted,
+            r.prime_except.map(|e| format!("{e:#x}")),
+            r.chan_survived,
+            r.pde_before_map.as_str(),
+            r.pte_after_map.as_str(),
+            r.placed.map(|v| format!("{v:#018x}")),
+            r.live.as_str(),
+            r.rescue.map(|v| v.as_str()),
+        );
+    }
+
+    // ── THE GRADE. Ordered so a broken instrument can never reach the verdict line. ─────
+    let primes_ok = [&plain, &defer, &inval]
+        .iter()
+        .all(|r| r.prime_faulted == Some(true));
+    println!(
+        "DEFER_PRIME_FAULTS={}/3",
+        [&plain, &defer, &inval]
+            .iter()
+            .filter(|r| r.prime_faulted == Some(true))
+            .count()
+    );
+    println!(
+        "DEFER_RIGCTL={}",
+        match plain.live {
+            DeferLive::Live => "PASS",
+            DeferLive::Dead { .. } => "FAIL",
+            DeferLive::NotRun(_) => "NOTRUN",
+        }
+    );
+    println!(
+        "DEFER_NEGCTL={}",
+        match inval.live {
+            DeferLive::Live => "PASS",
+            DeferLive::Dead { .. } => "FAIL",
+            DeferLive::NotRun(_) => "NOTRUN",
+        }
+    );
+
+    let verdict: String = if !primes_ok {
+        // ⚠ The literal token, so a grep for it finds this line and the per-arm one alike.
+        "INVALID PRIME_DID_NOT_FAULT — at least one arm never made the MMU walk the address \
+         under test while it was invalid, so its final copy would test FIRST FILL"
+            .to_string()
+    } else if !matches!(plain.live, DeferLive::Live) {
+        "INVALID RIG_CONTROL_FAILED — an ORDINARY map, with RM's own invalidate, did not make \
+         the address readable. Nothing about the deferred arms is interpretable"
+            .to_string()
+    } else if !matches!(inval.live, DeferLive::Live) {
+        "INVALID NEGATIVE_CONTROL_FAILED — DEFER followed by an explicit \
+         NV2080_CTRL_CMD_DMA_INVALIDATE_TLB did NOT make the address readable. The rig is \
+         broken and a (B) reading off the DEFER arm would be worthless"
+            .to_string()
+    } else {
+        match (defer.live, defer.rescue) {
+            (DeferLive::Live, _) if defer.pde_before_map == W379HostVa::Unmeasured => {
+                // ★ The asymmetry, applied. An unexcluded page-level allocation could only
+                // have caused an EXTRA invalidate, so it can fake A and can never fake B.
+                "INVALID CONFOUNDER_2_UNASSERTED — the deferred copy LANDED, but the \
+                 page-directory oracle refused before the map, so 'RM allocated no page level \
+                 and therefore invalidated nothing' is unmeasured. That confound manufactures \
+                 exactly this answer"
+                    .to_string()
+            }
+            (DeferLive::Live, _) => "A".to_string(),
+            (DeferLive::Dead { .. }, Some(DeferLive::Live)) => "B".to_string(),
+            (DeferLive::Dead { .. }, Some(DeferLive::Dead { .. })) => {
+                "INVALID DEFERRED_MAP_WROTE_NO_USABLE_PTE — the copy was dead BEFORE and AFTER \
+                 an invalidate, so the deferred map produced no entry at all and this arm is a \
+                 statement about our own map rather than about the hardware's TLB"
+                    .to_string()
+            }
+            (DeferLive::Dead { .. }, _)
+                if matches!(defer.pte_after_map, DeferPte::Valid { .. }) =>
+            {
+                // The rescue could not run, but RM itself confirmed the leaf PTE, so the
+                // attribution stands on the oracle instead.
+                "B".to_string()
+            }
+            (DeferLive::Dead { saw }, r) => format!(
+                "INVALID DEAD_BUT_UNATTRIBUTED — the deferred copy left {saw:#010x} in the \
+                 destination, the PTE oracle did not answer, and the rescue did not run \
+                 ({r:?}). 'Not live' and 'never written' are not separated"
+            ),
+            (DeferLive::NotRun(why), _) => format!("INVALID DEFER_ARM_DID_NOT_RUN — {why}"),
+        }
+    };
+    println!("DEFER_LIVENESS={verdict}");
+    let decided = verdict == "A" || verdict == "B";
+    println!(
+        "RUNGCTL_defer_liveness={}",
+        if matches!(plain.live, DeferLive::Live) && matches!(inval.live, DeferLive::Live) {
+            "PASS"
+        } else {
+            "FAIL"
+        }
+    );
+    // ⊘ PASS means DECIDED, not "A". Both worlds are legitimate answers and a rung that
+    // preferred one of them would be grading on the outcome it hoped for; the only failure
+    // this rung has is not being able to tell them apart.
+    println!(
+        "RUNG_defer_liveness={}",
+        if decided { "PASS" } else { "NOTRUN" }
+    );
+    decided
+}
+
 fn main() -> std::process::ExitCode {
     // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
     //
@@ -9637,6 +10876,11 @@ fn main() -> std::process::ExitCode {
     // ★★★★★ w381 — R4 and the cross-client rung, and THE PROBE SELECTOR.
     let mut want_rpc_mixed = false;
     let mut want_cross_client = false;
+    // ★★★★★ w289 — `--defer-liveness`. Its OWN flag and deliberately NOT part of
+    // `--w379`/`--w381`: it provokes three Xids of its own, it is the only rung in this
+    // file whose result depends on what is CACHED in an MMU, and folding it into a
+    // battery would put two other rungs' invalidates between its prime and its copy.
+    let mut want_defer_liveness = false;
     // ⊘ The DEFAULT IS THE w379 PRIMITIVE, so every committed w379 arm stays byte-comparable
     // to its own predecessors. `--probe-launch-dma` is the only way to change it and the
     // choice is printed before any rung runs — a run that does not say which primitive it
@@ -9780,6 +11024,10 @@ fn main() -> std::process::ExitCode {
             }
             // ★★★★★ w385 — THE MULTI-THREADED FUZZ. See [`concurrent_fuzz`].
             "--concurrent-fuzz" => want_concurrent_fuzz = true,
+            // ★★★★★ w289 — see `defer_liveness`. One flag, no knobs: every arm of this
+            // rung is a control for another one, so there is no configuration in which
+            // it runs a subset and still means anything.
+            "--defer-liveness" => want_defer_liveness = true,
             // Every knob takes `--flag N` **and** `--flag=N`, because a harness that writes
             // one and a human who types the other must not silently get the default.
             s if s.starts_with("--fuzz-threads")
@@ -10153,6 +11401,36 @@ fn main() -> std::process::ExitCode {
         );
         let ok = dictated_ring_negative(&mut rm, gpu);
         println!("done — dictated-ring negative control only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ w289 — THE DEFERRED-INVALIDATE LIVENESS RUNG runs here and RETURNS, and the
+    // isolation is the whole instrument rather than a convention: its result is a statement
+    // about what a hardware MMU has CACHED, so anything else in this process that maps,
+    // unmaps, frees a channel or reserves a VA range raises an invalidate this rung cannot
+    // see and cannot control for. ⊘ It is deliberately absent from `--w379`, `--w381` and
+    // every other battery, for exactly that reason.
+    if want_defer_liveness {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ⊘ The probe selector is NOT honoured here and the line says so rather than being
+        // silently absent: every submission in this rung is a `LAUNCH_DMA` out of the address
+        // under test, because the question is whether a **read translation** resolves. A
+        // `SEM_RELEASE` writes an address and proves the write path only, and the Mode-2
+        // emulator does not act on it at all.
+        println!(
+            "W381_PROBE=launch-dma — ⊘ FIXED for this rung, whatever `--probe-*` asked for: the \
+             question is whether a READ through a freshly-written PTE resolves, and a semaphore \
+             release cannot ask it"
+        );
+        let ok = defer_liveness(&mut rm, gpu);
+        println!("done — w289 defer-liveness rung only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
