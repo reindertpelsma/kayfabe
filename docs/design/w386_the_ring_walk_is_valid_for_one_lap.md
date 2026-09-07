@@ -1,7 +1,9 @@
 # w386 — THE GPFIFO RING WALK IS VALID FOR EXACTLY ONE LAP
 
-**STATUS — 2026-09-06 — LIVE. HARDWARE ARM RUN: OUTCOME (A). §10's LLM QUESTION IS RESOLVED
-— OUTCOME (i), the fix is EXONERATED; see §11.** The
+**STATUS — 2026-09-07 — LIVE. §9's OUTCOME (A) STANDS. ⊘⊘⊘ §11 IS REFUTED BY MY OWN NEXT
+RUN — SEE §12.** The garbage text is **NOT** the disk. It reappeared on a host with 177 G
+free, with the profiler as the only changed variable. It is **CORRUPTION**, and it is
+timing-sensitive. Read §12 before §11. The
 wrap is fixed on a real GA106 (§9). ⊘ **A SEPARATE AND UNRESOLVED QUESTION OPENED IN THE SAME
 RUN**: the LLM's output text is degenerate under *greedy* decoding while its token COUNT
 passes — see §10. That is **not** attributed to this fix, and §9's instrument argues against
@@ -323,3 +325,58 @@ again, `LLM_MS=681 398` against run 7's `675 794` — **0.8 % apart**.
 ⇒ Post-reclaim the result is **reproducible in both text and time**, and identical to the
 milestone run recorded weeks earlier. §10 is closed. The only open item it leaves behind is
 §11.1's grade defect, which is a harness change and not a device one.
+
+
+## 12. ⊘⊘⊘ §11 IS WRONG — IT IS NOT THE DISK, IT IS CORRUPTION
+
+**Measured 2026-09-07, `w387prof`, same revision `95556ff1`, 177 G free.** The only variable
+changed from runs 7/8 was `KAYFABE_KFTIME=census`.
+
+```
+LLM_TEXT= ，ize'sus(,.- A的  :        ← the degenerate string, back
+LLM_MS=634895.5
+```
+
+⇒ **§11's conclusion "it was the disk" is REFUTED.** The disk was *a* trigger, not *the*
+cause. I concluded at n=2 having varied one axis and not the other, which is the same
+too-early-closure this campaign keeps paying for.
+
+### 12.1 The pattern across every run at this revision
+
+| run | perturbation | text | `LLM_MS` |
+|---|---|---|---|
+| w383 | none | **coherent** | 722 820 |
+| w386llm | disk starved | garbage | 573 800 |
+| w386llm2 / 3 | disk starved | ABSENT | — |
+| w386llm7 / 8 | none | **coherent** | 675 794 / 681 398 |
+| **w387prof** | **profiler armed** | **garbage** | 634 895 |
+
+★★★ **Coherent ⇔ unperturbed. Garbage ⇔ perturbed, by EITHER a starved disk or an armed
+profiler.** Two unrelated perturbations, same corruption. And **every garbage run is FASTER
+than every coherent one** — less work, done wrong.
+
+### 12.2 It is corruption, not instability
+
+⊘ Decoding is greedy. Wrong tokens mean **wrong values**, i.e. the model's tensors are being
+corrupted. Simultaneously: `W382_MINMM_SUM=64` passes (small, fast, does not run long enough
+to hit it) and there are **zero host Xids** — nothing faults. We compute wrong numbers
+silently.
+
+⇒ **This is a timing-sensitive correctness defect in the compute path**, and it is a far more
+serious finding than the wrap bug this document was opened for.
+
+### 12.3 ★★★ The leading candidate is the SAME defect, still live on the other ring path
+
+§6 recorded it and this run promotes it from residual to prime suspect:
+`crates/kayfabe-rt/../device.rs:2890-2900` — the `Emulated` forward-ring walk — has the
+**identical one-lap bug** this rung fixed for the CE executor: a monotonic cursor, a
+`ring[at..]` linear slice, and a zero-terminated scan. Its own doc comment admits it
+(`gpu.rs:761-764`): *"nothing here handles a guest that fills its ring and wraps to index 0."*
+
+The mechanism §1 established for the CE path applies unchanged: past the wrap it re-executes
+stale entries and **re-releases retired semaphore payloads**. That is a corruption mechanism,
+not merely a hang — and an LLM laps its rings constantly, where the raw client barely did.
+
+⚠ **NOT ESTABLISHED.** Stated as the candidate that fits, with its own refutation: if the
+corruption survives with that path disabled, it is elsewhere. This must be measured, not
+argued — §11 is what happens when I argue.
