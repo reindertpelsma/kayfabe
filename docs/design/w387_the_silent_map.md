@@ -576,3 +576,155 @@ to the setters above.
 ⚠ **Two items still open and NOT cleared:** `_confComputeInitRegistryOverrides`
 (`conf_compute.c:127`) decides whether the CC bit alone suffices without a guest regkey; and the
 host-side replayable-fault notification path, which only becomes live again if S2 is chosen.
+
+---
+
+## 13. ⊘⊘ CORRECTION TO §11 — THE CC BIT'S TWO EFFECTS ARE ONE WIN WITH TWO NECESSARY PARTS
+
+**2026-09-07, same rung, found by re-reading `memmgrGetMemTransferType` in full.** §11 presents the
+CC bit as **two independent forcings** — *"(1) it kills every sysmem page-table route … (2) it
+turns the remaining PTE writes into an RPC we serve."* ⊘ **That framing is wrong, and it was
+relayed to the owner before being checked.**
+
+`memmgrGetMemTransferType` (`mem_utils.c:60-125`) **short-circuits on sysmem in its FIRST branch,
+before `kbusIsBarAccessBlocked` is ever tested.** ⇒ `TRANSFER_TYPE_GSP_DMA` only ever covers
+**FB-resident** page tables. **A sysmem page table is still written by a direct CPU store even
+with BAR access blocked.**
+
+⇒ ★ **Forcing (2) is only complete BECAUSE forcing (1) removed sysmem.** Neither half alone gives
+coverage. They are not two wins; they are one win that needs both parts. ⚠ Same class as this
+file's §4 provenance note and §12.1's `RC_ERROR` miscitation — **the third time this rung a true
+finding was carried one inferential step past what it measured.**
+
+### 13.1 ★ THE FALLBACK IS REAL — and it is a fallback we cannot trigger
+
+Owner's hypothesis: *"unless the gpu chooses a fallback path"* — i.e. if a failed sysmem
+page-table allocation falls back to vidmem, then making it fail is a **forcing**, not a refusal,
+and the app keeps running. **Confirmed at source.** `gmmu_walk.c:323-361`:
+
+```c
+while (memPoolList[j] != ADDR_UNKNOWN) {
+    memdescSetAddressSpace(pMemDescTemp, memPoolList[j]);
+    switch (memPoolList[j]) {
+        case ADDR_FBMEM:  ... rmMemPoolAllocate(...);              break;
+        case ADDR_SYSMEM: memdescTagAlloc(status, ..., pMemDescTemp); break;
+    }
+    if (NV_OK == status) { ...; break; }   // success -> stop
+    j++;                                    // FAILURE -> TRY THE NEXT APERTURE
+}
+```
+
+★ **And `bPreferSysmemPageTables` is NOT terminal.** The non-root list is
+`[SYSMEM, FBMEM, (SYSMEM if RETRY), UNKNOWN]` (`gmmu_walk.c:270-285`) — sysmem is placed *first*,
+but `ADDR_FBMEM` is still appended after it. A failed sysmem allocation falls straight through to
+vidmem, the level is created in FB, and **the application keeps running with page tables we can
+see over BAR2.**
+
+★★ **Corollary that makes §12.3's switch cheap:** for the **root/PDB** the order is REVERSED —
+`[FBMEM (default), SYSMEM (fallback)]` (`gmmu_walk.c:176-182`) — so the root is in sysmem only if
+vidmem allocation *failed*. **The root is therefore almost always FB-resident and readable**,
+which is exactly what a detector needs to bootstrap from.
+
+⊘ **BUT WE HAVE NO LEVER.** `memdescTagAlloc` → `_memdescAllocInternal` →
+`case ADDR_SYSMEM: osAllocPages(pMemDesc)` — ordinary **guest-kernel** page allocation. As the
+emulated GPU we are not on that path. Searched for a device-reported constraint on page-level
+sysmem allocation (`kgmmuGetPDEAperture/Attr`, `kgmmuGetPTEAperture/Attr`,
+`kgmmuGetPDBAllocSize_HAL`, `bAllowSysmem`) — none. `dma_dev->addressable_range`
+(`kernel-open/nvidia/nv-dma.c:53-54`) does constrain sysmem DMA but is host-driver/IOMMU state,
+and narrowing it would fail **all** sysmem users nondeterministically — which breaks apps, and the
+owner has ruled that out.
+
+⇒ **A fallback we cannot trigger.** ★ It is still worth recording, because it means **any**
+mechanism that makes sysmem PT allocation fail is *automatically safe* — if a lever is ever
+found, no further design work is needed.
+
+### 13.2 ⊘ NO OTHER ROUTE TO A BLOCKING CALL — complete enumeration
+
+Every value `memmgrGetMemTransferType` can return:
+
+| return | condition | lever? |
+|---|---|---|
+| `PROCESSOR` | **first branch** — dst/src both sysmem, `!RMCFG_FEATURE_PLATFORM_GSP` | ⊘ the silent default |
+| `CE` | needs the caller's `TRANSFER_FLAGS_PREFER_CE` **and** `pCeUtils != NULL` | ⊘ caller-supplied only |
+| `BAR0` | `IS_SIMULATION(pGpu) && pSrc != NULL`, *inside* the PREFER_CE branch | ⊘ **DEAD CODE** |
+| `GSP_DMA` | `kbusIsBarAccessBlocked(pKernelBus)` | CC only |
+| `PROCESSOR` | fallthrough default | — |
+
+- **`bBarAccessBlocked` has exactly two assignments in the whole tree**: `kern_bus_gm107.c:392`
+  (TRUE, under `IS_GSP_CLIENT && gpuIsCCFeatureEnabled && !bForceBarAccessOnHcc`) and `:398`
+  (FALSE). ⇒ **CC is the only route. Confirmed complete.**
+- **CE is unreachable for page tables**: the walker passes only
+  `TRANSFER_FLAGS_SHADOW_ALLOC | TRANSFER_FLAGS_SHADOW_INIT_MEM`
+  (`virt_mem_allocator_gm107.c:2063-2074`); nothing adds `PREFER_CE` on its behalf.
+- ★ **`BAR0` is dead code, and this is the compiled-out trap again**: it needs
+  `pGpu->bIsSimulation`, **declared at `g_gpu_nvoc.h:1419` and never assigned anywhere in `src/`**.
+  Permanently zero. A design built on that branch would have been built on nothing.
+
+### 13.3 ⊘ THE REGISTRY IS MODULE-PARAMETERS ONLY — the device cannot inject a key
+
+Traced in the Linux open module rather than assumed: `osReadRegistryDword` →
+`osReadRegistryDwordBase` (`os.c:1857`) → `RmReadRegistryDword` (`registry.c:239`) →
+`regFindRegistryEntry` over an in-memory list, populated in **exactly one** initializer,
+`os_registry_init` (`kernel-open/nvidia/os-registry.c:309-357`), from four module-parameter
+sources: `NVreg_RmNvlinkBandwidth`, `NVreg_RmMsg`,
+`rm_parse_option_string(NVreg_RegistryDwords)`, and the `nv_parms[]` table.
+
+- **Per-device keys exist but are host-supplied**: `NVreg_RegistryDwordsPerDevice`
+  (`os-registry.c:193`, documented `nv-reg.h:225-254`) is keyed by PCI BDF, but the BDF *and* the
+  values come from the host admin's parameter string. **The device supplies nothing.**
+- **RM writes registry keys at runtime, but never this one.** Every `osWriteRegistryDword` caller
+  enumerated (`gpu.c:5281,6234`, `gpu_registry.c:125`,
+  `subdevice_ctrl_gpu_kernel.c:2095,3751,3756`, `subdevice_ctrl_vgpu.c:98`, `kernel_gsp.c:3920`,
+  `objvgpu.c:186,201`) — **none targets `NV_REG_STR_RM_INST_LOC*`**.
+- No VBIOS / InfoROM / GSP-static-info path into the registry found.
+
+⚠ Search stated so it is auditable: `osReadRegistryDword`, `osReadRegistryDwordBase`,
+`RmReadRegistryDword`, `regFindRegistryEntry`, `regCreateNewRegistryKey`, `RmInitRegistry`,
+`os_registry_init`, `NVreg_RegistryDwords`, `NVreg_RegistryDwordsPerDevice`, `nv_parms`, all
+`osWriteRegistryDword` callers, `NV_REG_STR_RM_INST_LOC` writers — across
+`src/nvidia/arch/nvalloc/unix/`, `kernel-open/nvidia/`, `src/nvidia/src/kernel/`.
+
+---
+
+## 14. ★★★ THE MECHANISM QUESTION — uffd IS NOT ACCEPTABLE, AND KVM DIRTY LOGGING MAY BE
+
+> Owner, 2026-09-07: *"uffd is not recommended if it requires privileges."*
+
+★ **He is right, and it is worse than a preference — it is a deployment requirement imposed on
+every host.** `userfaultfd(2)` needs `CAP_SYS_PTRACE` unless `vm.unprivileged_userfaultfd = 1`
+(**Ubuntu ships 0**) or `/dev/userfaultfd` exists with a permissive udev rule (Linux 6.1+).
+⚠ This tree already knew: `kvm_unsafe.rs:119` and `:645` name *"§6.8.1's `/dev/userfaultfd` udev
+rule: **no type and no CI grep can observe it**"* — a known-unobservable deployment dependency.
+
+⊘ **Nothing is committed either way**: `UFFDIO_WRITEPROTECT` and `DIRTY_LOG` both have **zero**
+occurrences in the tree; the only `KVM_CAP` we probe is `KVM_CAP_NR_MEMSLOTS`
+(`kvm_unsafe.rs:58-59`).
+
+★ **The privilege-free alternative: `KVM_CAP_MANUAL_DIRTY_LOG_PROTECT2`.** Enable dirty tracking
+*without* auto write-protect, then `KVM_CLEAR_DIRTY_LOG` over exactly the page-table pages to
+protect precisely those. A guest write takes an EPT violation, KVM sets the bitmap bit and
+unprotects **entirely in-kernel**, guest continues; we read the bitmap at the consumption point
+(doorbell / bind). Better than uffd on four axes:
+- **no privilege** — the VM fd we already hold, no sysctl, no udev rule, no capability;
+- **no vCPU stall into our process** — uffd parks the faulting thread until *our* handler answers,
+  a synchronous round-trip on the critical path and exactly the class of thing that has quietly
+  grown before here;
+- **well-trodden** — it is QEMU's live-migration mechanism, not novel plumbing;
+- **arm64 works**, keeping that axis green.
+
+⊘ It is a **poll, not a trap** — we learn *"this page changed"* when we look. For us that is the
+right shape: the requirement is *before work runs*, and the consumption points already exist.
+
+⚠ **THREE THINGS UNVERIFIED — this section is API recollection, not a source check:**
+1. Whether `KVM_CLEAR_DIRTY_LOG` genuinely **re-protects** a named sub-range or merely clears
+   bits. **If it only clears, the mechanism does not work as described and §14 collapses.**
+2. Reaching it through **both** VMM backends — direct ioctls on the KVM adapter, the memory API
+   on QEMU — through a neutral seam per the *"no QEMU-only mechanism"* directive.
+3. Bitmap granularity against how guest RAM is sliced into memslots today.
+
+⇒ ★ **AND #48 GOES BACK ON THE TABLE.** The *"uffd everywhere"* ruling (owner, 2026-07-27) was
+made for the **isolate's own window VMA** — `kayfabe-vmm/src/lib.rs:617,744`, *"`UFFDIO_REGISTER`
+on **our own** window VMA, which needs no cooperation from any"* — which is a different problem
+from write-protecting **guest RAM**. Per `a_rulings_date_is_part_of_the_citation`: ask *why* it
+decided that, and whether the why survives today's use. **Here it does not obviously survive, so
+it should be re-decided rather than inherited.**
