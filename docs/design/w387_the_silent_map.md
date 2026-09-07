@@ -776,6 +776,41 @@ demonstrably seeing the mapping traffic; it simply is not `MAP_MEMORY_DMA`.
 ⇒ **The priority inverts.** This rung characterised the path that does not block the roadmap; the
 one that does was carried as a residual.
 
+> ### ⊘⊘⊘ CORRECTED WITHIN THE HOUR (owner, 2026-09-07) — **THE SCOPING BELOW IS OVER-CLAIMED,
+> ### AND THE CAVEAT WAS DOING ALL THE WORK.**
+> Owner: *"the only library issuing ogkm ioctl calls on bare metal is libcuda, so if the ioctl
+> exists, there is probably a path in cuda to invoke it/trigger it."*
+> ★ **The prior is right and it is the correct one**: RM serves `MAP_MEMORY_DMA` fully, with a
+> documented **client-facing** flag on it. Maintained code with no caller is the exception.
+> ⊘ **The precise error:** §15.1 has a positive control for the **RECORDER** (UVM ioctls were
+> captured, so the instrument works) and **NONE for the WORKLOAD**. `nvd_prog.c` is the
+> `cup2`/`cup3` shape — context, plain `cuMemAlloc`, one CE copy, one launch. **Zero-for-this-
+> program is not zero-for-libcuda**, and letting a census over one workload stand as a claim
+> about a library is `a_census_over_transports_is_as_complete_as_its_list` in a new coat.
+> ⇒ **The verdict "hostile-guest scope only" is WITHDRAWN pending the widening below.** What
+> survives is narrower and still useful: *the `cup2`/`cup3` compute shape does not take this
+> path.*
+>
+> ★★ **AND THE SURFACE IS WIDER THAN "libcuda" ANYWAY.** On a bare-metal box, RM ioctls are also
+> issued by **NVML** (which is how `nvidia-smi` works — one of our own milestones),
+> **libGL/libEGL**, **NVENC/NVDEC**, and **nvidia-modeset**. Graphics and video do **not** go
+> through UVM; they are the classic RM DMA-mapping clients, which is plausibly *why*
+> `MAP_MEMORY_DMA` exists and is maintained.
+>
+> ★★★ **THE WIDENING EXPERIMENT — cheap, bare metal, no guest, no new instrument.** Extend the
+> probe program and re-run the existing `nvdiff` `LD_PRELOAD` shim, counting `0x57` **per API**:
+> - the **CUDA VMM API** — `cuMemAddressReserve` / `cuMemCreate` / `cuMemMap` / `cuMemSetAccess`
+>   ⇐ ★ rank 1: its entire purpose is client-managed explicit mapping, which is exactly what
+>   `NV04_MAP_MEMORY_DMA` provides
+> - `cuMemHostRegister` (pinned host memory)
+> - `cuIpcGetMemHandle` / `cuIpcOpenMemHandle`
+> - peer access across two GPUs
+> - graphics interop
+>
+> **If any lights up, §15.1's conclusion INVERTS and the DEFER path is back on the application
+> path.** Until then treat §15.1 as *"unmeasured outside the compute shape"*, not as a scoping
+> ruling.
+
 ⚠ **Scope of the claim, stated rather than buried:** one workload (`nvd_prog.c`, the `cup2`/`cup3`
 shape), one driver version, one arch. Graphics, NVENC, or a broader CUDA surface could still reach
 `MAP_MEMORY_DMA`. The honest claim is **"not on this workload's path"**, NOT *"libcuda never does
@@ -889,7 +924,7 @@ a **correctness-for-real-apps** one. Same recipe, different priority.
 | claim | status after §15 |
 |---|---|
 | the silent conjunction is **reachable** | ✔ measured (§4) — unchanged |
-| anything **takes** it | ⊘ **not on the CUDA path** (§15.1) — hostile-guest scope only |
+| anything **takes** it | ◐ **not on the `cup2`/`cup3` compute shape** (§15.1) — ⊘ the broader *"not on the CUDA path"* reading is **WITHDRAWN**; widening experiment specified |
 | taking it **works** | ⊘ **UNDECIDED** (§15.2) — driver behaviour models (B) |
 | **UVM** is uncovered | ✔ unchanged — and it is the path CUDA **actually uses** |
 
