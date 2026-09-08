@@ -1940,6 +1940,23 @@ impl RmConnection {
         self.client.raw()
     }
 
+    /// ★★★ **The CONTROL node's fd number — what `UVM_REGISTER_GPU.rmCtrlFd` wants.**
+    ///
+    /// nvidia-uvm does not open its own RM connection. `UVM_REGISTER_GPU` /
+    /// `UVM_REGISTER_GPU_VASPACE` take an **already-open RM control fd plus that fd's
+    /// client handle**, and UVM dups the session out of them
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_ioctl.h:536`, `rmCtrlFd` / `hClient`). So the
+    /// only way a raw client can make UVM build its kernel channel manager is to hand over
+    /// the connection it already holds.
+    ///
+    /// ⊘ This is a **borrow, not a transfer**: the fd stays owned by this connection and is
+    /// valid only while it lives. UVM must be unregistered before the connection drops, or
+    /// the kernel holds a reference to a session whose owner is gone.
+    #[must_use]
+    pub fn ctl_fd(&self) -> i32 {
+        self.ctl.fd_number()
+    }
+
     /// The subdevice handle — the parent of most per-GPU controls.
     #[must_use]
     pub fn subdevice(&self) -> u32 {
@@ -4291,6 +4308,14 @@ impl HostRmBackend {
     #[must_use]
     pub fn host_client(&self) -> u32 {
         self.conn.client()
+    }
+
+    /// ★★★ w392c — the control fd this backend's connection holds, for
+    /// `UVM_REGISTER_GPU.rmCtrlFd`. See [`RmConnection::ctl_fd`] for why UVM needs it and
+    /// why it is a borrow.
+    #[must_use]
+    pub fn host_ctl_fd(&self) -> i32 {
+        self.conn.ctl_fd()
     }
 
     /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp

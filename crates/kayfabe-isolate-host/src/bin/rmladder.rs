@@ -11043,6 +11043,7 @@ fn main() -> std::process::ExitCode {
     // HOST's log rather than in its own stdout, so it needs a bracket nobody else's output
     // is inside. See [`blockage_coverage`].
     let mut want_blockage_coverage = false;
+    let mut want_uvm = false;
     // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
     // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
     // that runs a rung WITHOUT its positive control, because a rung whose control did not
@@ -11150,6 +11151,7 @@ fn main() -> std::process::ExitCode {
             // only phase A would produce the favourable half of a differential with nothing
             // to compare it to.
             "--blockage-coverage" => want_blockage_coverage = true,
+            "--uvm-invalidate" => want_uvm = true,
             // ★★★★★ w379 R1′ — one allocation, two GPU VAs, and a release through the
             // FIRST one after the second is mapped.
             "--alias-two-vas" => want_alias_two_vas = true,
@@ -11810,6 +11812,22 @@ fn main() -> std::process::ExitCode {
     // run that names both gets the race's four regions and this rung's four in a fixed
     // order; the two use disjoint regions, so either order is correct and only ONE of them
     // is comparable across boots.
+    // ★★★★★ w392c — POINT 2's known-positive. Runs BEFORE `--blockage-coverage` so a single
+    // invocation can arm all three coverage points in one process, with the RM connection
+    // this arm borrows still open underneath it.
+    if want_uvm {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = uvm_raw::drive(gpu, rm.host_ctl_fd(), rm.host_client(), 0);
+        println!("done — uvm-invalidate probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::FAILURE
+        };
+    }
     if want_blockage_coverage {
         println!(
             "REV_UNDER_TEST={}",
@@ -12363,4 +12381,296 @@ fn main() -> std::process::ExitCode {
     }
     println!("done");
     std::process::ExitCode::SUCCESS
+}
+
+// =========================================================================================
+// ★★★★★ w392c — THE UVM RAW CLIENT: POINT 2's ONLY POSSIBLE KNOWN-POSITIVE
+// =========================================================================================
+
+/// ⊘⊘ **THE CLAIM THIS ARM EXISTS TO REFUTE, quoted from this file's own
+/// [`blockage_coverage`]:**
+///
+/// > ⊘ **Emulated doorbell** — **NOT** exercised here, by construction. It needs a
+/// > guest-*kernel* channel (UVM's), **which a raw client cannot allocate.**
+///
+/// That is true and misleading. A raw client cannot *allocate* a kernel channel — and it
+/// does not need to. It needs to make **nvidia-uvm allocate one**, which is what
+/// `/dev/nvidia-uvm` is for. `UVM_REGISTER_GPU` builds UVM's channel manager, whose
+/// `UVM_CHANNEL_TYPE_MEMOPS` pool is where every `MEM_OP`/`MMU_TLB_INVALIDATE` on this
+/// chip is pushed (`ogkm-580: kernel-open/nvidia-uvm/uvm_ampere_host.c:255`,
+/// `uvm_mmu.c:62`, `:722`).
+///
+/// ⇒ The sentence turned *"not built"* into *"cannot be done"*, and the one coverage point
+/// with no raw-client arm is the one the tree recorded as unreachable.
+///
+/// # ★★★ WHY IT MUST PASS ON BARE METAL FIRST — the owner's gate, and it is the whole design
+///
+/// A raw client that fails *inside the guest* is *uninterpretable*: "our device is missing
+/// something" and "the client is wrong" produce the identical log. So this arm is written
+/// to be run **twice**:
+///
+/// 1. **on the host, bare metal, against the real driver and a real GPU** — it MUST pass.
+///    That run is the client's own known-positive, and it is the only thing that makes a
+///    guest-side failure attributable to us.
+/// 2. **in the Mode-2 guest** — where every refusal is now ours to explain.
+///
+/// ⊘ A run that has only ever happened in the guest proves nothing about either side.
+///
+/// # ⚠ THE `_IOC_SIZE` TRAP, WHICH BITES HERE FOR REAL
+///
+/// `CharDevice::ioctl` refuses when `_IOC_SIZE(request) > buffer.len()`, because for an
+/// `_IOC`-encoded number that is exactly how many bytes the driver may copy. **UVM's
+/// numbers are not `_IOC`-encoded** — `UVM_IOCTL_BASE(i) = i` on Linux
+/// (`uvm_ioctl.h:40`) — so `UVM_REGISTER_GPU` is the plain integer `37` and decodes to
+/// `_IOC_SIZE = 0`, which passes trivially.
+///
+/// `UVM_INITIALIZE` is the exception and it is the recorded one: `0x3000_0001` decodes to
+/// **`_IOC_SIZE = 12288`** against a **16-byte** struct. Our guard would refuse it. The fix
+/// is to hand it a 12 288-byte buffer with the params at offset 0 — the driver copies its
+/// own `sizeof` and ignores the rest. ⊘ Padding is not a workaround here, it is the
+/// *correct* reading of the guard's contract: for a request number that carries no size
+/// field we cannot know what the driver will copy, so we must not under-provide.
+mod uvm_raw {
+    use kayfabe_linux_raw::CharDevice;
+
+    /// `uvm_linux_ioctl.h:32`.
+    const UVM_INITIALIZE: u64 = 0x3000_0001;
+    /// `uvm_ioctl.h:532`, `UVM_IOCTL_BASE(37)` = `37` on Linux.
+    const UVM_REGISTER_GPU: u64 = 37;
+    /// `uvm_ioctl.h:400`, `UVM_IOCTL_BASE(25)`.
+    const UVM_REGISTER_GPU_VASPACE: u64 = 25;
+    /// `uvm_ioctl.h:538` — `UVM_UNREGISTER_GPU`, so the arm leaves no session behind.
+    const UVM_UNREGISTER_GPU: u64 = 38;
+    /// What `_IOC_SIZE(UVM_INITIALIZE)` decodes to. See the module docs.
+    const INITIALIZE_DECODED_SIZE: usize = 12288;
+
+    // ★★★ THE ABI, AS OFFSETS. Each constant cites the struct it encodes, and the layout
+    // rule that produced it. `#[repr(C)]` alignment: a field of width W starts at the next
+    // multiple of W.
+    //
+    // `UVM_INITIALIZE_PARAMS` (`uvm_linux_ioctl.h:34-38`): { u64 flags; NV_STATUS rmStatus; }
+    const INIT_FLAGS: usize = 0;
+    const INIT_STATUS: usize = 8;
+    const INIT_LEN: usize = 16;
+
+    // `UVM_REGISTER_GPU_PARAMS` (`uvm_ioctl.h:534-543`):
+    //   { NvProcessorUuid gpu_uuid;   // 16 bytes at 0
+    //     NvBool numaEnabled;         // 1 byte at 16
+    //     ⚠ THREE PADDING BYTES at 17..20 — NvS32 must start 4-aligned
+    //     NvS32 numaNodeId;  NvS32 rmCtrlFd;  NvHandle hClient;
+    //     NvHandle hSmcPartRef;  NV_STATUS rmStatus; }
+    const REG_UUID: usize = 0;
+    const REG_NUMA_ENABLED: usize = 16;
+    const REG_NUMA_NODE: usize = 20;
+    const REG_CTL_FD: usize = 24;
+    const REG_HCLIENT: usize = 28;
+    const REG_HSMC: usize = 32;
+    const REG_STATUS: usize = 36;
+    const REG_LEN: usize = 40;
+
+    // `UVM_REGISTER_GPU_VASPACE_PARAMS` (`uvm_ioctl.h:402-409`): uuid, then four 4-byte
+    // fields with no padding anywhere (16 is already 4-aligned).
+    const VAS_UUID: usize = 0;
+    const VAS_CTL_FD: usize = 16;
+    const VAS_HCLIENT: usize = 20;
+    const VAS_HVASPACE: usize = 24;
+    const VAS_STATUS: usize = 28;
+    const VAS_LEN: usize = 32;
+
+    // `UVM_UNREGISTER_GPU_PARAMS` (`uvm_ioctl.h:550-554`): uuid then status.
+    const UNREG_STATUS: usize = 16;
+    const UNREG_LEN: usize = 20;
+
+    /// ★★★ **A HAND-WRITTEN ENCODER, and the crate's `#![forbid(unsafe_code)]` is why —
+    /// but it is also the better instrument.**
+    ///
+    /// The obvious version is `copy_nonoverlapping` off a `#[repr(C)]` struct. This crate
+    /// forbids `unsafe`, so that is not available; and the replacement is *more* checkable,
+    /// not less. Writing each field at an explicit offset makes the ABI layout — including
+    /// **the three padding bytes** C inserts between `NvBool numaEnabled` and
+    /// `NvS32 numaNodeId` — a fact stated in our source and testable against
+    /// `uvm_ioctl.h`, instead of one silently inherited from whatever the compiler chose.
+    ///
+    /// ⊘ A wrong offset here would place `rmCtrlFd` where the kernel reads `numaNodeId`,
+    /// and UVM would fail with a *plausible* status rather than a loud one. That is exactly
+    /// the class of defect this project keeps paying for, so the offsets are named.
+    struct Enc(Vec<u8>);
+
+    impl Enc {
+        /// `len` is the struct's size; `pad_to` satisfies the `_IOC_SIZE` guard.
+        fn new(len: usize, pad_to: usize) -> Self {
+            Self(vec![0u8; len.max(pad_to)])
+        }
+        fn u8_at(&mut self, off: usize, v: u8) {
+            self.0[off] = v;
+        }
+        fn u32_at(&mut self, off: usize, v: u32) {
+            self.0[off..off + 4].copy_from_slice(&v.to_ne_bytes());
+        }
+        fn i32_at(&mut self, off: usize, v: i32) {
+            self.0[off..off + 4].copy_from_slice(&v.to_ne_bytes());
+        }
+        fn u64_at(&mut self, off: usize, v: u64) {
+            self.0[off..off + 8].copy_from_slice(&v.to_ne_bytes());
+        }
+        fn bytes_at(&mut self, off: usize, v: &[u8]) {
+            self.0[off..off + v.len()].copy_from_slice(v);
+        }
+    }
+
+    /// Read the 16 raw UUID bytes back out of an ioctl reply buffer.
+    fn status_of(buf: &[u8], off: usize) -> u32 {
+        u32::from_ne_bytes([buf[off], buf[off + 1], buf[off + 2], buf[off + 3]])
+    }
+
+    /// ★ **The GPU's UUID, from the driver's own `/proc` node.**
+    ///
+    /// ⊘ Deliberately NOT synthesised and NOT guessed: `UVM_REGISTER_GPU` matches on it, and
+    /// a wrong UUID fails **loudly** (`NV_ERR_GPU_INVALID_DEVICE`) rather than silently
+    /// registering the wrong device — which is why parsing the text form is safe here even
+    /// though the byte order is a convention rather than something we control.
+    fn gpu_uuid(gpu_index: u32) -> Option<([u8; 16], String)> {
+        let dir = std::fs::read_dir("/proc/driver/nvidia/gpus").ok()?;
+        let mut entries: Vec<_> = dir.filter_map(Result::ok).map(|e| e.path()).collect();
+        entries.sort();
+        let path = entries.get(gpu_index as usize)?.join("information");
+        let text = std::fs::read_to_string(&path).ok()?;
+        let line = text.lines().find(|l| l.contains("GPU UUID"))?;
+        let tag = line.split(':').nth(1)?.trim().to_owned();
+        let hex: String = tag.trim_start_matches("GPU-").chars().filter(char::is_ascii_hexdigit).collect();
+        if hex.len() != 32 {
+            return None;
+        }
+        let mut out = [0u8; 16];
+        for (i, b) in out.iter_mut().enumerate() {
+            *b = u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).ok()?;
+        }
+        Some((out, tag))
+    }
+
+    /// Drive `/dev/nvidia-uvm` far enough that nvidia-uvm builds its **channel manager** —
+    /// the kernel-client channel pool whose `MEMOPS` type carries every
+    /// `MMU_TLB_INVALIDATE`. Returns `true` if every step RM/UVM owed us succeeded.
+    ///
+    /// `rm_ctrl_fd` / `h_client` must come from an RM connection that stays **open for the
+    /// whole call** — UVM dups the session out of them and does not take ownership.
+    #[allow(clippy::too_many_lines)]
+    pub fn drive(gpu_index: u32, rm_ctrl_fd: i32, h_client: u32, h_va_space: u32) -> bool {
+        println!("--- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---");
+
+        let Some((uuid, uuid_text)) = gpu_uuid(gpu_index) else {
+            println!("FAIL  W392C uuid          = ⊘ could not read GPU UUID from /proc — NOT a UVM result");
+            return false;
+        };
+        println!("ok    W392C uuid          = {uuid_text}");
+
+        // ⊘ `CharDevice::openat` needs a held `DevDir`, which is the sandbox capability the
+        //   isolate carries and this probe does not. `adopt` is the documented other door:
+        //   open through `std`, hand the `OwnedFd` over. No `unsafe`, and the fd's lifetime
+        //   is still the `CharDevice`'s.
+        let dev = match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/nvidia-uvm")
+        {
+            Ok(f) => CharDevice::adopt(std::os::fd::OwnedFd::from(f)),
+            Err(e) => {
+                println!("FAIL  W392C open          = /dev/nvidia-uvm: {e}");
+                println!("      ⊘ the node is absent or unopenable. This is NOT a statement about UVM.");
+                return false;
+            }
+        };
+        println!("ok    W392C open          = /dev/nvidia-uvm");
+
+        // 1. UVM_INITIALIZE — must be the first op on the fd (`uvm_linux_ioctl.h:28-31`).
+        //    ⚠ padded to 12288: see the module's `_IOC_SIZE` note.
+        let mut enc = Enc::new(INIT_LEN, INITIALIZE_DECODED_SIZE);
+        enc.u64_at(INIT_FLAGS, 0);
+        let mut buf = enc.0;
+        match dev.ioctl(UVM_INITIALIZE, &mut buf, &mut []) {
+            Ok(_) => {
+                let st = status_of(&buf, INIT_STATUS);
+                println!("{} W392C INITIALIZE    = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                if st != 0 {
+                    return false;
+                }
+            }
+            Err(e) => {
+                println!("FAIL  W392C INITIALIZE    = ioctl refused: {e:?}");
+                return false;
+            }
+        }
+
+        // 2. UVM_REGISTER_GPU — ★ THIS is the step that builds the channel manager, and
+        //    therefore the step that makes point 2's transport exist at all.
+        let mut enc = Enc::new(REG_LEN, 0);
+        enc.bytes_at(REG_UUID, &uuid);
+        enc.u8_at(REG_NUMA_ENABLED, 0);
+        enc.i32_at(REG_NUMA_NODE, -1);
+        enc.i32_at(REG_CTL_FD, rm_ctrl_fd);
+        enc.u32_at(REG_HCLIENT, h_client);
+        enc.u32_at(REG_HSMC, 0);
+        let mut buf = enc.0;
+        let registered = match dev.ioctl(UVM_REGISTER_GPU, &mut buf, &mut []) {
+            Ok(_) => {
+                let st = status_of(&buf, REG_STATUS);
+                println!("{} W392C REGISTER_GPU  = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                st == 0
+            }
+            Err(e) => {
+                println!("FAIL  W392C REGISTER_GPU  = ioctl refused: {e:?}");
+                false
+            }
+        };
+        if !registered {
+            println!("      ⊘ no channel manager was built, so a MEMOP census reading zero after this");
+            println!("        says nothing about our device.");
+            return false;
+        }
+
+        // 3. UVM_REGISTER_GPU_VASPACE — grows UVM's page tree, which is where
+        //    `uvm_mmu.c:722`'s `tlb_invalidate_all` is pushed.
+        let mut enc = Enc::new(VAS_LEN, 0);
+        enc.bytes_at(VAS_UUID, &uuid);
+        enc.i32_at(VAS_CTL_FD, rm_ctrl_fd);
+        enc.u32_at(VAS_HCLIENT, h_client);
+        enc.u32_at(VAS_HVASPACE, h_va_space);
+        let mut buf = enc.0;
+        let vas_ok = match dev.ioctl(UVM_REGISTER_GPU_VASPACE, &mut buf, &mut []) {
+            Ok(_) => {
+                let st = status_of(&buf, VAS_STATUS);
+                println!("{} W392C REGISTER_VAS  = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                st == 0
+            }
+            Err(e) => {
+                println!("FAIL  W392C REGISTER_VAS  = ioctl refused: {e:?}");
+                false
+            }
+        };
+
+        // 4. Unregister, so the arm leaves no session pointing at an fd we are about to drop.
+        let mut enc = Enc::new(UNREG_LEN, 0);
+        enc.bytes_at(REG_UUID, &uuid);
+        let mut buf = enc.0;
+        if dev.ioctl(UVM_UNREGISTER_GPU, &mut buf, &mut []).is_ok() {
+            println!(
+                "ok    W392C UNREGISTER     = rmStatus {:#x}",
+                status_of(&buf, UNREG_STATUS)
+            );
+        }
+
+        println!("=== ★★ W392C VERDICT — pre-registered ===");
+        if vas_ok {
+            println!("    W392C_OUTCOME=(P) ★★★★★ THE CLIENT WORKS. UVM registered the GPU and a VA");
+            println!("        space against a RAW RM connection — so nvidia-uvm built its channel");
+            println!("        manager, and point 2's transport EXISTS on this run.");
+            println!("        ⇒ On BARE METAL this is the client's known-positive.");
+            println!("        ⇒ In the GUEST, a MEMOP-CENSUS of zero after this is OURS to explain.");
+        } else {
+            println!("    W392C_OUTCOME=(V) REGISTER_GPU passed, REGISTER_GPU_VASPACE did not.");
+            println!("        ⊘ Half a session. The channel manager may exist; the page tree does");
+            println!("        not. Do NOT read a later census either way from this.");
+        }
+        vas_ok
+    }
 }
