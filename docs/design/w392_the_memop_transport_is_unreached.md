@@ -148,6 +148,33 @@ mapping loses compute, which is the owner's own sequencing concern.
 
 ---
 
+## §5b — ★★★★★ THE UVM RAW CLIENT PASSES ON BARE METAL (2026-09-08, host of box 50260029)
+
+`--uvm-invalidate`, real GA106, open 580.159.04, source `7311e312`:
+
+```
+ok W392C uuid          = GPU-b448b62a-2cac-58c2-46ff-4ecd1e67fc4b
+ok W392C INITIALIZE    = rmStatus 0x0
+ok W392C MM_INITIALIZE = rmStatus 0x0
+ok W392C REGISTER_GPU  = rmStatus 0x0
+ok W392C REGISTER_VAS  = rmStatus 0x0
+W392C_OUTCOME=(P) THE CLIENT WORKS
+```
+
+★ **This refutes a sentence in our own source.** `blockage_coverage`'s doc says the
+emulated-doorbell point *"needs a guest-KERNEL channel (UVM's), which a raw client cannot
+allocate."* `REGISTER_GPU` returned `0x0` for a client that allocated **no channel at
+all** — a raw client does not *allocate* the kernel channel, it makes **nvidia-uvm**
+allocate one. The claim turned *"not built"* into *"cannot be done"*, and the one coverage
+point with no raw-client arm was the one recorded as unreachable.
+
+⊘ **The gate caught THREE defects in the client**, and the `NV_STATUS` *name* misdirected
+two of the fixes: `0x5d` is `NV_ERR_PAGE_TABLE_NOT_AVAIL`, but `uvm.h:368` documents its
+actual meaning for this ioctl as *"the UVM file descriptor [must] be associated with a
+single process"*. The missing call was `UVM_MM_INITIALIZE`, not anything about page tables.
+⇒ when a status code sends you at a mechanism twice and misses, read the header's **prose**
+for that call, not the shared error-code table.
+
 ## §6 — RESIDUE
 
 - ⊘ The `RING-GATE` instrumentation is written and compiled but **its output has not been
@@ -157,3 +184,12 @@ mapping loses compute, which is the owner's own sequencing concern.
 - ⊘ The raw UVM-ioctl client (owner-requested) is **not yet written**. Its job is to force
   a UVM page-tree grow deterministically, so the known-positive does not depend on what a
   CUDA program happens to do.
+- ⊘ **The client checks STATUSES, not CONTENT** — owner, same session: *"also needs to test
+  for corruption of old mappings, and test that the contents is right."* A status-only
+  client would have scored the w392 corrupted LLM run (16 tokens, garbage text, every
+  `rmStatus` clean) as a pass. The extension is: write a pattern, churn other mappings,
+  read the original back and compare. **Not built yet.**
+- ◐ **The scale discriminator is CROSS-BOOT, not same-boot.** `MINMM_SUM=64` (w392b) and the
+  16 garbage tokens (w392llm2) come from different boots, because w392b was cut before its
+  LLM arm finished. The inference — *the defect scales with allocation count/size, not with
+  the arithmetic path* — is sound but weaker than a single boot carrying both.
