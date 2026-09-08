@@ -92,7 +92,7 @@ echo "W392D_GUEST_RC=${GRC:-ABSENT}"
 
 echo "W392D_GUEST_LEDGER:"; echo "$OUT" | grep -aE "✔ VERIFIED|⊘ UNEXERCISED|CONTENT MISMATCH|REFUSED at|THREADS |MEAN_FALSIFIER" | sed 's/^/    /'
 echo "=== ★★★★★ THE VERDICT — pre-registered, stated once ==="
-if [ -z "${INIT:-}" ]; then
+if ! echo "$OUT" | grep -q "W392D config"; then
   echo "    W392D_GUEST_OUTCOME=(E) ⊘ UNMEASURED — no W392D line at all. The client did not"
   echo "        reach its first ioctl. Read the transcript above; this is NOT a refusal."
 elif echo "$OUT" | grep -q "W392D_OUTCOME=(P)"; then

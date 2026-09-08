@@ -235,3 +235,43 @@ touch — and re-run. Only then does a `seen=0` say something about the transpor
   16 garbage tokens (w392llm2) come from different boots, because w392b was cut before its
   LLM arm finished. The inference — *the defect scales with allocation count/size, not with
   the arithmetic path* — is sound but weaker than a single boot carrying both.
+
+## §5d — ★★★★★ THE MEAN CLIENT IN THE GUEST: A DIFFERENT WALL, AND IT IS ONE LEVEL EARLIER
+
+`[measured, boot w392dguest, Mode-2 guest, source b7fb876b]`
+
+The client that passes **all five rows** on bare metal (`W392D_OUTCOME=(P)`,
+`MEAN_FALSIFIER=PASS`) runs to completion in the guest and every row is **REFUSED** — with
+one identical cause:
+
+```
+P1         → ⊘ REFUSED at engine read @P1 VA: the copy from 0x80_80000000 NEVER RETIRED
+STALE RACE → ⊘ REFUSED at engine read @VA_X: the copy from 0x80_c0000000 NEVER RETIRED
+P2         → ⊘ REFUSED at engine read @P2 VA: the copy from 0x90_80000000 NEVER RETIRED
+P3         → ⊘ UNEXERCISED — P2 did not verify, and P3's readback IS P2's copy engine
+```
+
+★ **The client's design is what makes this readable.** It **refused** rather than reporting
+a value, and P3 declined to run at all rather than report its reader's failure as the RPC
+bind's. A status-only client would have said "all ioctls fine".
+
+### ⊘⊘ AND THE DISCRIMINATION IS CLEAN — IT IS **NOT** A MAPPING FAULT
+
+| signal | value | reading |
+|---|---|---|
+| host `Xid` during the run | **0** (0-line hostdmesg) | the host engine did **not** fault on any guest VA |
+| `DOORBELL-VERB engine=Ce` | **12** | we **did** translate and forward every doorbell |
+| `RING-GATE … kind=Passthrough` | **12** | every channel is Passthrough, so no ring is parsed — as designed |
+| `MEMOP-CENSUS` | `seen=0` | consistent: nothing was parsed, so nothing could be counted |
+
+Doorbells forwarded, **no fault**, **no completion**. Under the passthrough data plane the
+host engine is supposed to read the guest's ring at identical VAs; a *missing* mapping would
+fault and raise an Xid. **Zero Xids with zero completions means the host engine never
+executed the work at all** — not that it executed against a bad translation.
+
+⇒ **This is the recorded "the plane RINGS but does not COMPLETE" wall, reached by a raw
+client for the first time.** It sits **one level before** every question the mean client was
+built to ask: mappings cannot be graded in the guest until a submitted copy can retire.
+
+⚠ It also means the guest arm of point 2 is blocked on a **different subsystem** — the
+completion plane — and not on address-plane coverage.
