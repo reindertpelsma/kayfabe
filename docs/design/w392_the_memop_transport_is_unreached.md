@@ -388,3 +388,43 @@ which I re-ran today. ★ **A census over verbs is only as complete as its verb 
 you did not think to list is the one holding the answer.** The discrimination
 *"refused vs never attempted"* is only sound if the refusal vocabulary is enumerated from the
 **code**, not guessed from the log.
+
+### ⊘⊘⊘ §5h — "VIDMEM CANNOT BE EXPORTED" IS FALSE. THIRD CORRECTION, AND THE POPULATION WAS WRONG TOO.
+
+The owner asked *"a vidmem-backed ring cannot be exported at all today — why not?"*. It can. I
+asserted an impossibility from **one path's honest refusal message**, without reading the code.
+
+**1 — the vidmem crossing EXISTS and is built.** `SparseFb::joined` (`fbwin.rs:843`):
+*"Framebuffer ranges served from memory a **second party also maps** … A joined range's pages are
+`mmap`ed by the isolate too, so **the guest's write through this window and the engine's read
+through the GPU MMU are the same byte.**"* Installed by `SparseFb::install_join`.
+
+**2 — an APERTURE IS NOT A BACKING.** `kayfabe-fwd/src/lib.rs:3274`: the scratchpad carve-out
+*"goes through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over host pages, and it **does** present a
+`Vidmem` aperture here, **because the region's aperture is the guest's declaration and not the
+object's class**."* ⇒ `Aperture::Vidmem` means *the guest said vidmem*, **not** *unexportable*.
+`GUEST-RAM PIN`'s refusal is correct **about the guest-RAM path only** — it needs a GPA/file
+offset, which exists only for sysmem. I generalised one path's refusal into a universal law.
+
+**3 — and it IS joined, in the line I quoted without reading:**
+`RING-PROJ … GET=0 PUT=2 JOINED-one-memory … ring=0x8000001000` (line 127).
+
+★★★★★ **4 — AND I HAD THE WRONG POPULATION OF CHANNELS ALL ALONG.** The births split in two,
+and only one kind says what I reported:
+| isolate | n | adopt | reason |
+|---|---|---|---|
+| `iso0` | 9 | `DECLINED` | *"the armed path WAS consulted — and the address table held no joined binding at this channel's ring VA"* |
+| `iso2` | 7 | `NOT-ASKED` | *"a doorbell materialization: **this birth path offers no ring at all**, so nothing was consulted"* |
+
+**The mean client is `proc=2`, its ring VAS is `0xcafe0004`, and
+`grep -c "GR-BIRTH.*cafe0004"` = 0.** Every `iso0` birth is on `0xcafe0005/000c/0012/0019/001f`.
+⇒ **The `adopt=DECLINED` lines I built three sections on belong to OTHER VASes.** The client's own
+channel VAS never has a host channel born for it at all — it is not declined, it is **absent from
+the birth population**.
+
+⚠ **STOPPING HERE RATHER THAN NAMING A FOURTH ROOT CAUSE.** Open, and not to be guessed: why no
+birth carries `0xcafe0004`, and whether `NOT-ASKED` (a birth path that offers no ring by
+construction) is the client's actual path. Three successive readings — *"never learned"*,
+*"absence not refusal"*, *"vidmem cannot be exported"* — were each produced by inferring a
+mechanism from log prose and each was refuted by reading the source the log was printed from.
+★ **The instrument that broke all three was the owner asking one short question.**
