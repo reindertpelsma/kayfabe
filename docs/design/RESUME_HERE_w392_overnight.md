@@ -51,7 +51,23 @@ host_isolates=true`, `FB-JOIN arm=shared`, `GR-ROUTE arm=passthrough`, `VAS-PUBL
    (`GuestPhysDma` + `SoleBacking`)**, still refusing `RealGpuMemory + SoleBacking` (our scratchpad
    — adopting that would be a shadow under another name).
 
-## THE CURRENT WALL — fb-join aliasing
+## ★★★★★ THE CAUSE OF THE REMAINING FAILURE — I CAUSED IT, AND MEMORY HAD THE ANSWER
+**w392j adopted the guest's RING *and its USERD* on a doorbell birth. The USERD half is a measured
+data-corruption hazard.** `rm_takes_a_guest_userd_and_zeroes_it` (w233, real GA106, `ad6bb9f`,
+host Xid 0/0): host RM **accepts** a caller-supplied USERD through
+`NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and then **ZEROES all 512 bytes**, alloc still returning
+`NV_OK`. Its own words: *"a doorbell birth is by definition AFTER the guest has written `GP_PUT`
+⇒ adopt the guest's USERD at first doorbell and you destroy the cursor that caused the doorbell."*
+
+**The trace fits exactly:** doorbell 1 rang with `GP_PUT=1` and the engine ran **nothing**;
+doorbell 2 set `PUT=2` and the engine then executed entry 0 — **40 ms after the guest had already
+moved that entry's source frame**. That is where all five `Xid 31` come from.
+⇒ **`w392o` (`4f64dc44`) adopts the RING and passes `userd: None`.** UNTESTED as of writing —
+build + boot it first thing.
+⚠ The memory's real conclusion is stronger: **adoption must happen at CHANNEL CREATION, never
+lazily.** Ring-late is safe; cursor-late is not. Moving the birth is the proper fix.
+
+## THE EARLIER WALL — fb-join aliasing (FIXED in `001e2e4a`, untested)
 ```
 va=0x8080000000 : Vidmem@0x50000   va=0x80c0000000 : Vidmem@0x50000    ← ONE page, TWO VAs
 va=0x8480000000 : Vidmem@0x110000  va=0x84c0000000 : Vidmem@0x110000
