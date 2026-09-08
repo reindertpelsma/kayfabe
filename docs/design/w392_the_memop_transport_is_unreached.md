@@ -658,3 +658,35 @@ faults. `ALIAS` fired 3×, `remaps_refused=0`. ⇒ Same class as
 [[the_llm_wall_is_our_own_refusal_predicate]] (*"one frame host-backed at ONE VA, guest aliases 17
 at TWO"*). `FbLeafBacking::Aliased` (w380) exists for exactly this — **the mechanism is built and is
 not being applied to every alias of a joined leaf.**
+
+### ★★★★★ §11 — IT IS A **RELEASE** DEFECT, NOT A BIND ONE: `kept_for_siblings=0` WHILE `still_desired=2`
+
+⊘ §10 called this "fb-join aliasing — the join binds one VA of a pair". **Half right, and the
+wrong half was the actionable one.** The bind is fine. Measured w392k, same channel, same VAS:
+```
+line 391: OPERAND-JOIN token=0x4 proc=2 chan=2 pdb=0x0 → va=0x8480000000 : ALREADY-JOINED
+line 461: OPERAND-JOIN token=0x4 proc=2 chan=2 pdb=0x0 → va=0x8480000000 : Miss{pdb:Pdb(0)}
+```
+**Same proc, same chan, same pdb, same VA — joined, then GONE.** Not two address spaces, not two
+VAs: a binding that existed and was removed. And the pass that removed it names itself:
+```
+PT-DECODE token=0x5 | JOIN-RELEASE arm=alias revoked=4 released=4 kept_for_siblings=0
+  stranded=0 drained=8 joined_ranges=10 still_desired=2 remaps_refused=0
+  first=[va=0x8280000000 len=0x10000 fb_phys=0x140000 host_va=0x8280000000]
+  → bound=2 unbound=4 learned=2 published=2/0 retired=6
+```
+★★★ **`kept_for_siblings=0` WHILE `still_desired=2`.** `fb_phys=0x140000` is the page mapped at
+**three** VAs (`0x8280000000`, `0x82c0000000`, `0x9080000000`). The release revoked its joined leaf
+**without keeping it alive for the siblings that alias the same framebuffer page** — there is a
+counter named for exactly that obligation and it reads zero.
+
+⇒ **The fix is in the RELEASE path, not the join path.** A joined leaf is keyed by `leaf.phys` and
+may be reachable from several guest VAs; releasing it because *one* VA stopped desiring it strands
+every other VA pointing at the same page. The engine then reads through a sibling and takes
+`FAULT_PDE` — measured, five of them on an exact `0x2_00000000` stride.
+
+⚠ **Why the earlier reading was wrong, and it is an instrument lesson:** I read `revoked=0
+released=0` off a *different* `JOIN-RELEASE` line in the same boot and concluded nothing was ever
+released. **Five of the six passes print zeros; one prints 4.** A `sort | uniq -c` over the field
+would have shown `1 revoked=4` beside `5 revoked=0` immediately — reading one instance of a
+repeated instrument is the same class as counting one call site and calling it a census.
