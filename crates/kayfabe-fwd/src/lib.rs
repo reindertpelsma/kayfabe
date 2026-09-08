@@ -152,19 +152,37 @@ pub mod memop_census {
     /// Detail lines emitted. Bounds log volume ONLY; divergence from [`SEEN`] is itself
     /// the signal that the cap bound something.
     static PRINTED: AtomicU64 = AtomicU64::new(0);
+    /// ⊘ **PER-GPU, because the first version of this census was NOT and that was a
+    /// multi-GPU defect in the instrument.** `GpuId` is an axis of the core
+    /// (`kayfabe_core::gpu`), and a process-global total silently aggregates two devices
+    /// into one number the moment a second one exists — so a boot with GPU 0 healthy and
+    /// GPU 1 dead reads as "half as many invalidates", which is not a fact about either.
+    /// ⚠ The cap is a LOG-VOLUME bound, not a claim about how many GPUs exist: anything
+    /// past it lands in [`OVER_GPU_CAP`] and is REPORTED rather than dropped, so the census
+    /// can never silently under-count by having too few slots.
+    static PER_GPU: [AtomicU64; GPU_SLOTS] = [const { AtomicU64::new(0) }; GPU_SLOTS];
+    /// Invalidates whose `GpuId` was past [`GPU_SLOTS`] — counted, never discarded.
+    static OVER_GPU_CAP: AtomicU64 = AtomicU64::new(0);
+    /// How many GPUs get their own slot before the overflow counter takes over.
+    const GPU_SLOTS: usize = 16;
     /// How many detail lines to print before falling silent. Counting continues.
     const DETAIL_CAP: u64 = 96;
 
     /// Record one decoded invalidate. Every one that reaches here is **PDB-targeted** —
     /// see [`memop_census`]'s blind-spot note for the `PDB_ALL` form, which the decoder
     /// drops before this point.
-    pub fn note(pid: u32, cid: u32, pdb: u64, membar: bool) {
+    pub fn note(gpu: kayfabe_arch::ids::GpuId, pid: u32, cid: u32, pdb: u64, membar: bool) {
         let n = SEEN.fetch_add(1, Ordering::Relaxed) + 1;
         TARGETED.fetch_add(1, Ordering::Relaxed);
+        if let Some(slot) = PER_GPU.get(gpu.0 as usize) {
+            slot.fetch_add(1, Ordering::Relaxed);
+        } else {
+            OVER_GPU_CAP.fetch_add(1, Ordering::Relaxed);
+        }
         let p = PRINTED.fetch_add(1, Ordering::Relaxed);
         if p < DETAIL_CAP {
             eprintln!(
-                "kayfabe: MEMOP-INVAL #{n} proc={pid} chan={cid} pdb=0x{pdb:x} \
+                "kayfabe: MEMOP-INVAL #{n} gpu={gpu:?} proc={pid} chan={cid} pdb=0x{pdb:x} \
                  membar={membar} (PDB-targeted — names a VAS)"
             );
         } else if p == DETAIL_CAP {
@@ -199,10 +217,19 @@ pub mod memop_census {
              genuinely never invalidates on this workload."
                 .to_owned()
         } else {
+            let per_gpu: Vec<String> = PER_GPU
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (i, c.load(Ordering::Relaxed)))
+                .filter(|&(_, v)| v != 0)
+                .map(|(i, v)| format!("gpu{i}={v}"))
+                .collect();
             format!(
-                "MEMOP-CENSUS seen={s} targeted={t} printed={} \
+                "MEMOP-CENSUS seen={s} targeted={t} by_gpu=[{}] over_gpu_cap={} printed={} \
                  (every one names a VAS; ⊘ PDB_ALL forms are invisible here by \
                  construction — see the blind-spot note)",
+                per_gpu.join(" "),
+                OVER_GPU_CAP.load(Ordering::Relaxed),
                 PRINTED.load(Ordering::Relaxed).min(DETAIL_CAP),
             )
         }
@@ -7415,7 +7442,7 @@ pub fn apply_pushbuffer(
                 // measured this transport at ZERO on the compute path, and a zero with no
                 // known-positive cannot tell "the guest never invalidates" from "this arm
                 // never runs". Count first, then wire the drain onto an arm proved live.
-                memop_census::note(proc.id.0, cid.0, pdb.0, membar);
+                memop_census::note(cgpu, proc.id.0, cid.0, pdb.0, membar);
                 // A membar is a hard barrier: the interpreter honors it before
                 // advancing (recorded here; the real transport blocks on refresh).
             }

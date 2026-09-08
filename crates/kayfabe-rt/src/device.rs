@@ -2915,8 +2915,14 @@ impl SharedDevice {
         // ([`kayfabe_fwd::memop_census`]) can only ever read zero, so *"nothing was
         // parsed"* has to arrive as a reason rather than as an absence.
         let forwardable = ring_content_is_forwardable(out.engine, out.kind);
+        // ⊘ **`gpu=` IS NOT COSMETIC — it was missing and the omission was a multi-GPU bug
+        // in the instrument.** `target_gpu` has been a parameter of this very function all
+        // along; printing engine/kind/route without it produces a line that cannot be
+        // attributed the moment a second GPU exists, and the aggregate then reads as one
+        // device's behaviour. Same correction as [`kayfabe_fwd::memop_census`]'s.
         eprintln!(
-            "kayfabe: RING-GATE engine={:?} kind={:?} route={:?} vmm={} forwardable={} {}",
+            "kayfabe: RING-GATE gpu={:?} engine={:?} kind={:?} route={:?} vmm={} forwardable={} {}",
+            target_gpu,
             out.engine,
             out.kind,
             route_of_engine(out.engine),
