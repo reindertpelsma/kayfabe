@@ -1,0 +1,15 @@
+E_START 2026-09-08T00:07:38+00:00 pid=86966
+HEAD=6c6bc0bf
+=== RUNG w390e1 posarm=assert env=[KAYFABE_MMU_INVAL=off] START 2026-09-08T00:07:38+00:00 ===
+=== RUNG w390e1 EXIT rc=0 2026-09-08T00:09:33+00:00 ===
+    w390e1 arm IN FORCE = [     16 arm=assert ]
+    w390e1 CUP3_VAL = [CUP3_VAL=NO_KERNEL_LINE]
+    w390e1 doorbell published= = [    192 published=0      16 published=8388608      16 published=2097152 ]
+    w390e1 host Xid = [16] (MUST be 0)
+=== RUNG w390e2 posarm=assert env=[KAYFABE_MMU_INVAL=on] START 2026-09-08T00:09:33+00:00 ===
+=== RUNG w390e2 EXIT rc=0 2026-09-08T00:11:27+00:00 ===
+    w390e2 arm IN FORCE = [     16 arm=assert     379 arm=publish ]
+    w390e2 CUP3_VAL = [CUP3_VAL=NO_KERNEL_LINE]
+    w390e2 doorbell published= = [   1907 published=0      16 published=8912896      16 published=2621440 ]
+    w390e2 host Xid = [16] (MUST be 0)
+E_EXIT rc=0 2026-09-08T00:11:27+00:00

@@ -1,0 +1,15 @@
+D_START 2026-09-08T00:00:19+00:00 pid=85042
+HEAD=6c6bc0bf
+=== RUNG w390d1 env=[KAYFABE_VAS_PUBLISH=assert KAYFABE_MMU_INVAL=off] START 2026-09-08T00:00:20+00:00 ===
+=== RUNG w390d1 EXIT rc=0 2026-09-08T00:04:03+00:00 ===
+    w390d1 CUP3_VAL = [CUP3_VAL=43]
+    w390d1 published-by-invalidate = [0]
+    w390d1 HOST-PUBLISHED(doorbell) = [230]
+    w390d1 host Xid = [0] (MUST be 0)
+=== RUNG w390d2 env=[KAYFABE_VAS_PUBLISH=assert KAYFABE_MMU_INVAL=on] START 2026-09-08T00:04:03+00:00 ===
+=== RUNG w390d2 EXIT rc=0 2026-09-08T00:06:10+00:00 ===
+    w390d2 CUP3_VAL = [CUP3_VAL=43]
+    w390d2 published-by-invalidate = [1]
+    w390d2 HOST-PUBLISHED(doorbell) = [230]
+    w390d2 host Xid = [0] (MUST be 0)
+D_EXIT rc=0 2026-09-08T00:06:10+00:00
