@@ -576,3 +576,49 @@ files"*), **not** on the experiment; the workload ran start to finish.
 instrument, different boot, different VA. The tempting story *"present later, absent at birth ⇒
 ordering"* is **unmeasured**, and pairing a census from one boot with a birth from another is the
 join error that produced #222.
+
+### ★★★★★ §9 — MEASURED (w392h, FULLY ARMED): THE CLIENT'S CHANNELS ARE BORN BY A PATH THAT NEVER ASKS FOR THE RING
+
+**The arming is now verified correct** — banners identical to w392d: `FB-JOIN arm=shared
+exports_directory=true`, `GUEST-RING arm=ring host_isolates=true`, `GR-ROUTE arm=passthrough`,
+`OPERAND-JOIN arm=join`, `PT-SWEEP arm=on`, `VAS-PUBLISH arm=drain`, `GR-RING-JOIN arm=ring
+host_isolates=yes`. Archive built with `KAYFABE_SHIM_FEATURES=host-isolates` (asserted, `=1`).
+
+⊘ **w392e AND w392f WERE BOTH VOID**, for two independent reasons I introduced: (1) a fresh
+`boot_capture.sh` invocation inherited **no arming** — it ran the negative control; (2) the archive
+was built with `KAYFABE_SHIM_FEATURES` **empty** (the deliberate default), so `KAYFABE_ISOLATES=real`
+is refused at startup and the isolate plane cannot exist. ★ **All three startup refusals named
+themselves and prescribed the fix**, one adding *"a run that quietly granted nothing would be
+indistinguishable from its own negative control"* — the exact error I had just made.
+
+★★★★★ **THE FINDING — `10 × GR-RING-JOIN proc=0`, and the client is `proc=2`. ZERO.**
+The mean client's channels **never reach the ring-adoption path at all.** Its births say why:
+```
+GR-BIRTH iso2/gpu0 #1 engine=Ce adopt=NOT-ASKED
+  ⊘ a doorbell materialization: this birth path offers no ring at all, so nothing was consulted
+  userd=NOT-ASKED ⊘ … offers no USERD at all → RingSource::Ours(None)
+```
+**There are TWO birth paths and only one adopts:**
+| path | when | adopt | who took it here |
+|---|---|---|---|
+| `VerbPlan::EngineObject` | engine-object latch (alloc/RPC) | `adopted_guest_ring(..)`, consulted **unconditionally** | `proc=0`, 10 channels |
+| `VerbPlan::Doorbell` | doorbell materialization | literal `alloc_channel(vas, engine, **None, None**, ..)` | **the client, 7 channels** |
+
+⇒ the client's host channel is born on `RingSource::Ours(None)` — **our own empty ring — by
+construction, without adoption ever being asked.** This accounts for every symptom exactly:
+doorbell forwarded ✔, engine reads an empty ring, **no work, no completion, and no fault**,
+`Xid 0`, every row `NEVER RETIRED`.
+
+★★★ **AND THE CODE STATES ITS OWN REASON** (`kayfabe-isolate/src/lib.rs:3247-3252`): a ring adopted
+on the doorbell path *"would be adopted **without the leaf having been joined**"*. The join runs at
+the engine-object latch (`adopt_pending_channel_rings`, `shim.rs:13574`, in the **register-write**
+tail); the doorbell handler (`ring()`, `shim.rs:5376`) **never runs it.** ⇒ The gap is an
+**ordering** one, and the fix is to join the doorbelled channel's ring leaf *before* materializing,
+exactly as the latch path already does — not to adopt an unjoined leaf.
+
+**The other declines are correct-by-design and must not be "fixed":** `SYSTEM_PROC` is refused by
+name at `plan_back_fb_leaf` (`lib.rs:2788`), so kernel channels can never join; `GuestRam` rings
+(`0x420064000`) belong to the guest-RAM pin, not this source; `ring_va=0` is the golden-context
+channel. ⚠ One genuine second defect surfaced: **2 × `FbLeafGranularity`** — a ring that IS in the
+framebuffer, refused because its PTEs are 4 KiB and the join demands a 64 KiB granule
+(`FB_LEAF_GRANULE`, `lib.rs:2796`). Separate rung; `proc=0` only in this boot.
