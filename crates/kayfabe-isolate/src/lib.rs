@@ -1970,6 +1970,31 @@ pub enum VerbPlan {
         /// ([`GuestRamGrant::originated_by_the_vmm`]), which is the same rule
         /// [`VerbPlan::PinGuestRam`] states and the same `-m 8G` bug it exists to refuse.
         err_notifier: Option<GuestRamGrant>,
+        /// ★★★★★ **w392j — THE GUEST'S OWN RING, ON THE DOORBELL BIRTH TOO.**
+        ///
+        /// **Owner, 2026-09-09:** *"in passthrough you should not have a `RingSource::Ours`
+        /// … the guest directly reads the hardware GPU ring. In Emulated channels and RPC
+        /// calls we have our own fake ring we drive."* ⇒ `Ours` is CORRECT for `Emulated`
+        /// and ILLEGAL for `Passthrough`, and this arm used to pass a literal `None`
+        /// **regardless of kind** — so every passthrough channel born here got our empty
+        /// ring by construction (measured w392h/w392i: 7 births, all `Passthrough`,
+        /// `adopt=NOT-ASKED` → `RingSource::Ours(None)`, engine fetches nothing, **no
+        /// completion and no fault**, `Xid 0`).
+        ///
+        /// ⊘ **The old comment here said a ring adopted on this path *"would be adopted
+        /// without the leaf having been joined"*. That is refuted by our own
+        /// `guest_ring_adoption.md` §3.3, sourced AND measured:** the open driver forwards
+        /// `gpFifoOffset` to GSP without resolving it, RM itself allocates channels with
+        /// `gpFifoOffset = 0` on purpose, and R31 arm C had a channel alloc at an address
+        /// nothing was ever mapped at **accepted**. ⇒ *"A host channel does not need its
+        /// ring bound in order to be born."* The binding is needed when hardware
+        /// **fetches**, which is after this — the surviving constraint is
+        /// **pin-before-doorbell**, and the pin is already there.
+        ///
+        /// ⊘ Read **only** on the `channel == None` arm, for the same reason
+        /// [`VerbPlan::EngineObject`]'s `adopt` is: re-declaring the ring of a channel that
+        /// already exists would be a second, silent opinion about a fact RM already holds.
+        adopt: Option<AdoptedGuestRing>,
     },
     /// The Case-1 engine-object chain: (optionally) host VAS → (optionally) host
     /// channel → engine-object alloc.
@@ -2254,6 +2279,7 @@ impl VerbPlan {
         engine: EngineKind,
         schedule: bool,
         err_notifier: Option<GuestRamGrant>,
+        adopt: Option<AdoptedGuestRing>,
     ) -> Result<VerbPlan, UngatedVa> {
         if let Some(&va) = working_set.iter().find(|&&va| !vas.is_host_published(va)) {
             return Err(UngatedVa(va));
@@ -2264,6 +2290,7 @@ impl VerbPlan {
             engine,
             schedule,
             err_notifier,
+            adopt,
         })
     }
 
@@ -3211,6 +3238,7 @@ impl Worker {
                 engine,
                 schedule,
                 err_notifier,
+                adopt,
             } => {
                 let (chan, fresh_vas, fresh_chan) = match *channel {
                     Some(c) => (c, None, None),
@@ -3244,17 +3272,34 @@ impl Worker {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
                             }
                         };
-                        // ⊘ `None`: a doorbell materialization hosts no object, so
-                        // there is no declaration to refine the engine with (§16.106).
-                        // ⊘ `None` on BOTH refinements. The doorbell path materializes a
-                        // channel with no engine object to read and no ring the core looked
-                        // up — see `plan_doorbell`. A ring adopted here would be adopted
-                        // without the leaf having been joined.
+                        // ⊘ `hosting: None` still: a doorbell materialization hosts no
+                        // engine object, so there is no declaration to refine the engine
+                        // with (§16.106). That half is unchanged.
+                        //
+                        // ★★★★★ **w392j — `adopt` IS NO LONGER A LITERAL `None`.** It used
+                        // to be, *regardless of channel kind*, which meant every
+                        // **passthrough** channel born here got `RingSource::Ours(None)` —
+                        // our own empty ring — by construction. Measured w392h/w392i: 7
+                        // births, all `kind=Passthrough`, `adopt=NOT-ASKED`; the doorbell
+                        // was forwarded, the engine fetched from a ring nothing had written,
+                        // and there was **no completion and no fault** (`Xid 0`).
+                        //
+                        // ⊘ The old comment here justified the literal with *"a ring adopted
+                        // here would be adopted without the leaf having been joined"*.
+                        // **Refuted by `guest_ring_adoption.md` §3.3, sourced and measured:**
+                        // RM allocates channels with `gpFifoOffset = 0` deliberately, and a
+                        // channel alloc at a never-mapped address was ACCEPTED (R31 arm C).
+                        // ⇒ *"A host channel does not need its ring bound in order to be
+                        // born"*; the binding is needed at **fetch**, which is after this.
+                        // The caller still only offers `Some` for a `Passthrough` channel
+                        // whose leaf the supply side already joined, so nothing here adopts
+                        // an unjoined leaf — the far side re-checks it by name anyway
+                        // (`RING_NOT_A_JOINED_WINDOW`).
                         match rm.alloc_channel(
                             vas,
                             *engine,
                             None,
-                            None,
+                            *adopt,
                             notifier.map(|(_, memory)| memory),
                         ) {
                             Ok(c) => {

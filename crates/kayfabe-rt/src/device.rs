@@ -2866,12 +2866,13 @@ impl SharedDevice {
                         let r = kayfabe_fwd::route_doorbell(spine, target_gpu, token)?;
                         Ok((r.proc, r))
                     },
-                    |_spine, proc, route| {
+                    |spine, proc, route| {
                         // ★★★★★ **w288 — THE VMM'S GRANT, PASSED THROUGH.** Nothing in this
                         // crate derives it and nothing here checks it: only the VMM may mint
                         // a `GuestRamGrant`, and `plan_doorbell` still gates it on the
                         // channel's own declaration.
                         let planned = kayfabe_fwd::plan_doorbell(
+                            spine,
                             proc,
                             &route,
                             working_set,

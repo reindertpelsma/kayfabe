@@ -3735,7 +3735,7 @@ pub fn exec_doorbell(
     working_set: &[GpuVa],
     err_notifier_grant: Option<GuestRamGrant>,
 ) -> Result<DoorbellOutcome, FwdFault> {
-    let planned = plan_doorbell(proc, route, working_set, err_notifier_grant)?;
+    let planned = plan_doorbell(spine, proc, route, working_set, err_notifier_grant)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_doorbell(spine, proc, &planned.plan, reply)
@@ -3813,6 +3813,7 @@ pub struct DoorbellPlan {
 /// grant for a channel that declared no reachable notifier is dropped rather than honoured,
 /// so a caller cannot attach one to a channel the guest never asked to be told about.
 pub fn plan_doorbell(
+    spine: &Spine,
     proc: &Proc,
     route: &DoorbellRoute,
     working_set: &[GpuVa],
@@ -3889,20 +3890,42 @@ pub fn plan_doorbell(
     } else {
         None
     };
-    // ★★★★★ **w392i — BIRTH-KIND WITNESS. Owner, 2026-09-09:** *"in passthrough you should not
-    // have a `RingSource::Ours`, in fact you should not parse, advance, read the ring at all.
-    // The guest directly reads the hardware GPU ring. In Emulated channels and RPC calls we
-    // have our own fake ring we drive."*
+    // ★★★★★ **w392j — THE BIRTH DECIDES BY KIND, AND `Ours` IS NOT LEGAL FOR PASSTHROUGH.**
     //
-    // ⇒ **`Ours` is LEGAL for `Emulated` and ILLEGAL for `Passthrough`.** This birth path
-    // materializes with a literal `None, None` regardless of kind (`kayfabe-isolate`'s
-    // `VerbPlan::Doorbell` arm), so a passthrough channel is born on OUR EMPTY RING **by
-    // construction** — measured w392h: `adopt=NOT-ASKED … → RingSource::Ours(None)`, doorbell
-    // forwarded, engine reads an empty ring, **no completion and no fault**, `Xid 0`.
+    // **Owner, 2026-09-09:** *"in passthrough you should not have a `RingSource::Ours`, in
+    // fact you should not parse, advance, read the ring at all. The guest directly reads the
+    // hardware GPU ring. In Emulated channels and RPC calls we have our own fake ring we
+    // drive … each work runs asynchronous our own function body."*
     //
-    // ⊘ **This rung only WITNESSES it.** Refusing here, or adopting here, would change the
-    // behaviour of a path `cup3` (`CUP3_VAL=43`, the known-positive) also travels — and
-    // whether it does is exactly what is not yet measured. `VMM integration must be ADDITIVE`.
+    // ⇒ **`Emulated` ⇒ ours is CORRECT** (we drive that ring; it runs our function bodies,
+    // and its `GP_PUT`/`GP_GET` are fictions living only in the guest module and in us).
+    // **`Passthrough` ⇒ ours is ILLEGAL BY CONSTRUCTION** — the guest drives its own ring and
+    // hardware writes `GP_GET`, so there is no `ours` option on that kind at all.
+    //
+    // ⊘ This arm used to pass a literal `None` **regardless of kind**. Measured w392h/w392i:
+    // the raw client's 7 births are ALL `kind=Passthrough` and ALL `adopt=NOT-ASKED`, so each
+    // got `RingSource::Ours(None)` — our own empty ring. The doorbell was forwarded, the
+    // engine fetched from a ring nothing had written, and returned **no completion and no
+    // fault** (`Xid 0`, every client row `NEVER RETIRED`).
+    //
+    // ⊘ **Only on the birth.** A channel that already exists was born over whatever it was
+    // born over; re-declaring its ring here would be a second, silent opinion about a fact RM
+    // already holds — the same reason [`VerbPlan::EngineObject`]'s `adopt` is birth-only.
+    //
+    // ★ **Regression safety is MEASURED, not argued:** `cup3` (`CUP3_VAL=43`) and `cup2` take
+    // this path **zero** times — every one of their host channels is born at the engine-object
+    // latch (`adopt=NOT-ASKED` is 0 across `w297cup3`, `w267_{off,on}`, and w392i's own cup3
+    // arm printed **0** `BIRTH-KIND` lines while the client printed 7).
+    let adopt = if channel.is_some() {
+        None
+    } else {
+        match chan.kind {
+            kayfabe_core::channel_kind::GuestChannelKind::Emulated => None,
+            kayfabe_core::channel_kind::GuestChannelKind::Passthrough => {
+                adopted_guest_ring(spine, proc, chan, cgpu)
+            }
+        }
+    };
     if channel.is_none() {
         eprintln!(
             "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} kind={:?} {}",
@@ -3911,11 +3934,16 @@ pub fn plan_doorbell(
             route.vchid,
             chan.engine,
             chan.kind,
-            match chan.kind {
-                kayfabe_core::channel_kind::GuestChannelKind::Emulated =>
-                    "✔ EMULATED — our own ring is CORRECT here: we drive it and it runs our                      function bodies",
-                kayfabe_core::channel_kind::GuestChannelKind::Passthrough =>
-                    "★★★ PASSTHROUGH born on a DOORBELL MATERIALIZATION ⇒ RingSource::Ours(None)                      — ILLEGAL BY CONSTRUCTION: the guest drives its own ring and hardware                      writes GP_GET, so there is no `ours` option on this kind",
+            match (chan.kind, adopt.is_some()) {
+                (kayfabe_core::channel_kind::GuestChannelKind::Emulated, _) =>
+                    "✔ EMULATED — our own ring is CORRECT here: we drive it and it runs our \
+                     function bodies",
+                (kayfabe_core::channel_kind::GuestChannelKind::Passthrough, true) =>
+                    "✔✔ PASSTHROUGH → ADOPTING THE GUEST'S RING on a doorbell birth (w392j)",
+                (kayfabe_core::channel_kind::GuestChannelKind::Passthrough, false) =>
+                    "★★★ PASSTHROUGH and NOT ADOPTABLE ⇒ still RingSource::Ours(None) — the \
+                     ADOPT-WHY line above names which conjunct failed; the leaf has not been \
+                     joined yet by the supply side",
             },
         );
     }
@@ -3927,6 +3955,7 @@ pub fn plan_doorbell(
         chan.engine,
         schedule,
         err_notifier,
+        adopt,
     )
     // ★ Re-derive the EXACT fault from the offending VA, which is the division of
     // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
@@ -4606,12 +4635,48 @@ fn adopted_guest_ring(
     // exist here"*, and the question that decides correctness is *"does the guest reach these
     // bytes some other way"*. `[measured 2026-08-11]` `representability_of` made exactly that
     // mistake and it is why `BackingBytes` exists at all.
-    if host.bytes() != kayfabe_mmu::BackingBytes::JoinsGuestWindow {
+    // ★★★★★ **w392j — "IS THIS THE GUEST'S OWN BYTES?" — TWO legal shapes, not one.**
+    //
+    // ⊘ **This test used to be `!= JoinsGuestWindow`, and that is MIS-SCOPED.** Its stated
+    // purpose is to refuse [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] — a separate host
+    // object at the guest's VA whose bytes are unrelated. But a shadow **cannot be
+    // constructed**: `Binding::real_gpu_memory` refuses it unconditionally
+    // (`kayfabe-mmu/src/lib.rs:687`), and that crate states outright *"there is no spelling of
+    // this state that reaches `AddressTable::bind`"*. ⇒ The only thing the old test actually
+    // rejected in production was **`SoleBacking`** — and that is the shape the **guest-RAM
+    // pin** produces, i.e. the guest's own DRAM pages mapped through, which
+    // [`GuestRing::memory`]'s own doc calls *the production path* (an
+    // `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's pages). A gate written to stop an
+    // impossible state was silently refusing the legitimate one.
+    //
+    // ★★★ **The predicate that is actually meant**, and it needs BOTH enums because neither
+    // alone can say it:
+    // | shape | `RegionKind` + `BackingBytes` | the guest's bytes? |
+    // |---|---|---|
+    // | a joined framebuffer leaf | any + `JoinsGuestWindow` | **yes** — one memory, two mappings |
+    // | the guest's own RAM, pinned | `GuestPhysDma` + `SoleBacking` | **yes** — its actual pages |
+    // | our scratchpad / `Publish` arena | `RealGpuMemory` + `SoleBacking` | ⊘ **NO** — bytes we
+    //   invented, which the guest has no independent path to. Adopting one would be a shadow
+    //   under another name, which is exactly what this gate exists to prevent. |
+    //
+    // ⊘ `SoleBacking` ALONE cannot distinguish rows 2 and 3 — its own doc says it covers both
+    // *"we invented the bytes"* and *"they are the guest's own pages mapped through"*. That is
+    // why `Binding::pinned_guest_ram` demands `GuestPhysDma` **and** `SoleBacking` together
+    // (`kayfabe-mmu/src/lib.rs:743-746`), and why this reads both.
+    let guests_own_bytes = matches!(
+        host.bytes(),
+        kayfabe_mmu::BackingBytes::JoinsGuestWindow
+    ) || (matches!(binding.kind(), kayfabe_mmu::RegionKind::GuestPhysDma)
+        && matches!(host.bytes(), kayfabe_mmu::BackingBytes::SoleBacking));
+    if !guests_own_bytes {
         eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (7) host object \
-             PRESENT but bytes={:?} — adoption needs JoinsGuestWindow (one memory). ⚠ This is \
-             the arm that says the leaf was TWINNED rather than JOINED",
+             PRESENT but these are NOT THE GUEST'S BYTES: kind={:?} bytes={:?}. Adoption \
+             needs a JOINED framebuffer leaf (JoinsGuestWindow) or the guest's own RAM pinned \
+             (GuestPhysDma + SoleBacking). ⚠ RealGpuMemory+SoleBacking is OUR scratchpad and \
+             is refused here on purpose — adopting it would be a shadow under another name",
             ring.va,
+            binding.kind(),
             host.bytes()
         );
         return None;
