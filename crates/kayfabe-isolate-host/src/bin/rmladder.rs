@@ -13265,8 +13265,8 @@ mod uvm_raw {
 /// guessed by anything that did not actually read B.
 mod mean {
     use super::{HostRmBackend, RmBackend};
-    use kayfabe_arch::ids::{GpuId, GpuVa};
-    use kayfabe_isolate::{HostHandle, IsolateId};
+    use kayfabe_arch::ids::{ClassId, GpuId, GpuVa};
+    use kayfabe_isolate::{HostHandle, IsolateId, RmError};
     use kayfabe_isolate_host::rm::RmConnection;
     use std::sync::Arc;
 
@@ -13333,7 +13333,11 @@ mod mean {
                     "no UVM page-tree grow ran — see w392c: registration alone grows nothing"
                         .to_owned(),
                 ),
-                p3_rpc_bind: PathState::Unexercised("no RPC-bound mapping round ran".to_owned()),
+                p3_rpc_bind: PathState::Unexercised(
+                    "no RPC-bound mapping round ran — P3 runs inside P2's UVM session, so a \
+                     P2 that stopped early leaves this row at its default"
+                        .to_owned(),
+                ),
                 stale_race: PathState::Unexercised("the remap race did not run".to_owned()),
                 threads: 0,
                 thread_faults: Vec::new(),
@@ -14001,6 +14005,13 @@ mod mean {
         gpu: u32,
         nonce: u32,
         rounds: u32,
+        // ★★★ P3 IS AN OUT-PARAMETER AND NOT A SECOND RETURN VALUE, and that is deliberate:
+        // every early exit above leaves it at the caller's `Unexercised`, so a P2 that
+        // stopped before P3 could start reports *"never ran"* for P3 rather than inventing a
+        // refusal of its own. ⊘ P3 needs P2's UVM session, P2's address space and P2's copy
+        // engine — it is the reader for P3's content check — so the two cannot be separate
+        // top-level rows without building all of that twice.
+        p3_out: &mut PathState,
     ) -> PathState {
         let ctl_fd = rm.host_ctl_fd();
         let client = rm.host_client();
@@ -14244,6 +14255,19 @@ mod mean {
             }
         }
 
+        // ── P3, in the address space P2 just proved, with P2's copy engine as its reader.
+        //    ⊘ Gated on P2 having verified: a P3 whose readback engine is itself unproven
+        //    would report the reader's failure as the RPC bind's.
+        if out.ok() {
+            println!("--- W392D P3: the RPC bind (GPU_PROMOTE_CTX), with its negative control ---");
+            *p3_out = p3_rpc_bind(rm, &sess, space, ctl_fd, client, &mut lane, nonce, rounds);
+        } else {
+            *p3_out = PathState::Unexercised(format!(
+                "P2 did not verify ({}), and P3's readback is P2's copy engine — a P3 run                  behind an unproven reader would report the reader's failure as the RPC                  bind's",
+                out.describe()
+            ));
+        }
+
         // 7 ── teardown. ⊘ The channel goes before the UVM session drops: freeing it while
         //      the va_space is being torn down would be a channel in an address space whose
         //      page tables are going away. The externally-owned VA space itself is
@@ -14257,6 +14281,311 @@ mod mean {
         let _ = rm.free(lane.chan);
         drop(sess);
         out
+    }
+
+
+    /// P3's GR channel ring, in the same UVM-owned address space P2 built.
+    const P3_RING: u64 = 0x0000_0091_0000_0000;
+    /// Where the GR channel releases its payload, and where P2's copy engine reads it back.
+    const P3_TARGET: u64 = 0x0000_0091_4000_0000;
+    /// Where `UVM_REGISTER_CHANNEL` places the GR channel's **context buffers**. ★ Unlike
+    /// P2's, this range IS used: `uvm_register_channel_under_write` calls `create_va_ranges`
+    /// whenever `num_resources > 0`, which is every GR channel.
+    const P3_CHANRES: u64 = 0x0000_0092_0000_0000;
+    /// 256 MiB — comfortably more than a GA10x GR context's buffer set.
+    const P3_CHANRES_LEN: u64 = 0x1000_0000;
+    /// `AMPERE_COMPUTE_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7c0.h:32`). ⚠ A
+    /// GA10x constant, named here rather than derived: this row runs on the bench's GA106
+    /// and a different part would refuse it **loudly** (`NV_ERR_INVALID_CLASS`), which is the
+    /// failure mode to prefer over a silent substitution.
+    const AMPERE_COMPUTE_B: u32 = 0xC7C0;
+    /// `NV_GR_ALLOCATION_PARAMETERS.version` (`ogkm-580: nvos.h:2717`, *"set to 0x2"*).
+    const GR_ALLOC_VERSION: u32 = 2;
+    /// `sizeof(NV_GR_ALLOCATION_PARAMETERS)` — four `NvU32`.
+    const GR_ALLOC_SIZE: u32 = 16;
+    /// ⊘ Distinct from [`POISON`], because this one poisons the **source** of P3's readback
+    /// while `POISON` poisons the scratch. Two sentinels, so *"the GR channel never wrote"*
+    /// and *"the copy never landed"* can never be confused for one another.
+    const P3_POISON: u32 = 0xDEAD_BEEF;
+    /// `NV_ERR_INVALID_STATE`, which is what `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` answers for a
+    /// channel `kchannelIsSchedulable_IMPL` rejects (`kernel_channel.c:2200`).
+    const NV_ERR_INVALID_STATE: u32 = 0x40;
+
+    /// ★★★★★ **P3 — THE RPC BIND, WITH ITS OWN NEGATIVE CONTROL IN THE SAME ROW.**
+    ///
+    /// # What is actually bound over an RPC here, and why it is not a map
+    ///
+    /// A GR channel in an **externally-owned** address space cannot run until its context
+    /// buffers have been declared to RM by `NV2080_CTRL_CMD_GPU_PROMOTE_CTX` — an
+    /// `{bufferId, gpuVirtAddr}` declaration carried to the GSP, not a page-table write. It
+    /// is the *first* of the three publish sources `mode2_address_table.md` names, and the
+    /// one this repo's CLAUDE.md records the C snooping in flight (`nvkvm_snoop_promote_ctx`).
+    ///
+    /// The only userspace door to it is `UVM_REGISTER_CHANNEL`, which retains the channel,
+    /// maps its resources, and then calls `nvGpuOpsBindChannelResources`
+    /// (`nv_gpu_ops.c:10884-10903`) — a `GPU_PROMOTE_CTX` whose `promoteEntry[i].gpuVirtAddr`
+    /// is each resource's VA.
+    ///
+    /// # ★★★ THE NEGATIVE CONTROL, AND IT IS WHAT MAKES THE ROW A MEASUREMENT
+    ///
+    /// ```text
+    ///   A  schedule BEFORE the promote  -> MUST be REFUSED 0x40      [no RPC bind exists]
+    ///   B  UVM_REGISTER_CHANNEL          -> the promote happens
+    ///   C  schedule AFTER  the promote  -> MUST succeed
+    ///   D  the channel EXECUTES: an un-guessable payload lands at a VA
+    ///   E  P2's copy engine reads that VA back                        [CONTENT]
+    /// ```
+    ///
+    /// ⊘ Without arm A this row would be *"a GR channel ran"*, which says nothing about the
+    /// RPC. With it, the run has measured **both** sides of the binding: the same channel,
+    /// the same schedule call, refused before the declaration and accepted after it. That is
+    /// the `a_refusal_needs_a_negative_control` lesson applied where it belongs.
+    ///
+    /// ⚠ **And here is what this row does NOT claim.** The payload is released by a *host*
+    /// method, so it is not evidence that the GR engine loaded the promoted context. What is
+    /// evidence is arm A: RM refuses to schedule the channel at all until `bIsContextBound`,
+    /// and the promote is the only thing that sets it. ⇒ The claim is *"the RPC-carried bind
+    /// is what made this channel executable, and it then executed and its bytes are right"*,
+    /// not *"we read the contents of a context buffer"*. The context buffers are RM's and
+    /// this client cannot read them.
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    fn p3_rpc_bind(
+        rm: &mut HostRmBackend,
+        sess: &super::uvm_raw::Session,
+        space: u32,
+        ctl_fd: i32,
+        client: u32,
+        lane: &mut Lane,
+        nonce: u32,
+        rounds: u32,
+    ) -> PathState {
+        // 1 ── a GR channel, ring published by UVM exactly as P2's was.
+        let ring_bytes = HostRmBackend::ring_object_bytes();
+        let ring = match rm.alloc_ring_object() {
+            Ok(h) => h,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "alloc GR ring object",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        let ring_raw = u32::try_from(ring.raw()).unwrap_or(0);
+        if let Err(e) = sess.create_external_range(P3_RING, ring_bytes) {
+            return PathState::Refused {
+                step: "UVM_CREATE_EXTERNAL_RANGE (GR ring)",
+                status: e,
+            };
+        }
+        if let Err(e) = sess.map_external(P3_RING, ring_bytes, ctl_fd, client, ring_raw) {
+            return PathState::Refused {
+                step: "UVM_MAP_EXTERNAL_ALLOCATION (GR ring)",
+                status: e,
+            };
+        }
+        let (gr_chan, gr_token) = match rm.alloc_channel_in_uvm_space(
+            space,
+            kayfabe_abi::submit::ENGINE_TYPE_GRAPHICS,
+            ring,
+            P3_RING,
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "alloc GR channel in UVM space",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        let gr_raw = u32::try_from(gr_chan.raw()).unwrap_or(0);
+        println!(
+            "ok    W392D P3 GR channel = {gr_raw:#010x} in the UVM-owned space, token \
+             {gr_token:#010x} (runlist {})",
+            (gr_token >> 16) as u32
+        );
+
+        // 2 ── the compute object. ⊘ Without it the channel has NO graphics context at all,
+        //      and `UVM_REGISTER_CHANNEL` answers `0x31` from `kgrctxGetCtxBufferInfo`
+        //      (`pGrCtxBufferMemDesc != NULL` fails) — measured on this bench, on the run
+        //      before this row existed.
+        let mut gr_params = [0u8; 16];
+        gr_params[0..4].copy_from_slice(&GR_ALLOC_VERSION.to_ne_bytes());
+        gr_params[8..12].copy_from_slice(&GR_ALLOC_SIZE.to_ne_bytes());
+        if let Err(e) = rm.alloc(gr_chan, ClassId(AMPERE_COMPUTE_B), &gr_params) {
+            let _ = rm.free(gr_chan);
+            return PathState::Refused {
+                step: "alloc AMPERE_COMPUTE_B on the GR channel",
+                status: format!("{e:?}"),
+            };
+        }
+        println!("ok    W392D P3 gr object  = AMPERE_COMPUTE_B allocated — the channel now has a context");
+
+        // 3 ── ARM A: THE NEGATIVE CONTROL. No promote has happened, so RM must refuse.
+        let before = rm.schedule(gr_chan);
+        match &before {
+            Err(RmError::Other(s)) if *s == NV_ERR_INVALID_STATE => {
+                println!(
+                    "★     W392D P3 arm A      = schedule REFUSED {NV_ERR_INVALID_STATE:#x} \
+                     BEFORE the promote — the negative control fired, so arm C's success is \
+                     attributable to the RPC bind and to nothing else"
+                );
+            }
+            other => {
+                // ⊘ A control that did not fire makes arm C uninterpretable, and saying so is
+                //   the whole reason arm A exists. It is NOT graded as a pass either way.
+                let _ = rm.free(gr_chan);
+                return PathState::Refused {
+                    step: "arm A negative control",
+                    status: format!(
+                        "schedule BEFORE the promote answered {other:?}, not \
+                         {NV_ERR_INVALID_STATE:#x}. ⊘ UNINTERPRETABLE: if the channel is \
+                         schedulable without a promote then arm C proves nothing about the \
+                         RPC bind"
+                    ),
+                };
+            }
+        }
+
+        // 4 ── ARM B: the promote itself.
+        if let Err(e) = sess.register_channel(ctl_fd, client, gr_raw, P3_CHANRES, P3_CHANRES_LEN) {
+            let _ = rm.free(gr_chan);
+            return PathState::Refused {
+                step: "UVM_REGISTER_CHANNEL (GR) — the GPU_PROMOTE_CTX door",
+                status: e,
+            };
+        }
+        println!(
+            "ok    W392D P3 arm B      = UVM_REGISTER_CHANNEL accepted — the channel's \
+             context buffers were mapped at {P3_CHANRES:#018x} and PROMOTED over RPC"
+        );
+
+        // 5 ── ARM C: the same call that was refused in arm A.
+        if let Err(e) = rm.schedule(gr_chan) {
+            let _ = sess.unregister_channel(client, gr_raw);
+            let _ = rm.free(gr_chan);
+            return PathState::Refused {
+                step: "arm C schedule after the promote",
+                status: format!("{e:?} — the promote did not make the channel schedulable"),
+            };
+        }
+        println!(
+            "★★★   W392D P3 arm C      = the SAME schedule call now SUCCEEDS. ⇒ the \
+             RPC-carried bind is what made this channel executable"
+        );
+
+        // 6 ── the target, published by UVM, poisoned before anything runs.
+        let target = match rm.alloc_probe_local(LEN) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = sess.unregister_channel(client, gr_raw);
+                let _ = rm.free(gr_chan);
+                return PathState::Refused {
+                    step: "alloc P3 target",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        let target_raw = u32::try_from(target.raw()).unwrap_or(0);
+        let done = |rm: &mut HostRmBackend, st: PathState| -> PathState {
+            let _ = sess.free_range(P3_TARGET, LEN);
+            let _ = rm.free(target);
+            let _ = sess.unregister_channel(client, gr_raw);
+            let _ = rm.free(gr_chan);
+            st
+        };
+        if let Err(e) = sess.create_external_range(P3_TARGET, LEN) {
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "UVM_CREATE_EXTERNAL_RANGE (P3 target)",
+                    status: e,
+                },
+            );
+        }
+        if let Err(e) = sess.map_external(P3_TARGET, LEN, ctl_fd, client, target_raw) {
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "UVM_MAP_EXTERNAL_ALLOCATION (P3 target)",
+                    status: e,
+                },
+            );
+        }
+
+        // 7 ── ARMS D and E, once per round.
+        for r in 0..rounds {
+            let magic = pattern(nonce, 4, r);
+            if let Err(e) = rm.fill_words(target, LEN, P3_POISON, 0) {
+                return done(
+                    rm,
+                    PathState::Refused {
+                        step: "poison P3 target",
+                        status: format!("round {r}: {e:?}"),
+                    },
+                );
+            }
+            if let Err(e) = rm.submit_release_at(gr_chan, gr_token, P3_TARGET, magic) {
+                return done(
+                    rm,
+                    PathState::Refused {
+                        step: "GR channel release",
+                        status: format!("round {r}: {e:?}"),
+                    },
+                );
+            }
+            // ⚠ The GR channel and P2's copy engine are two channels with NO ordering
+            //   between them, so the readback is polled rather than taken once. A single
+            //   read would report `P3_POISON` on a machine that was merely slow, and
+            //   *"the GR channel never ran"* is not a thing to conclude from one sample.
+            let deadline = std::time::Instant::now() + RETIRE_TIMEOUT;
+            let mut seen;
+            loop {
+                seen = engine_read_through_va(rm, lane, P3_TARGET);
+                if matches!(seen, Ok(v) if v == magic) || std::time::Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(RETIRE_POLL);
+            }
+            match seen {
+                Err(e) => {
+                    return done(
+                        rm,
+                        PathState::Refused {
+                            step: "engine read @P3 target",
+                            status: format!("round {r}: {e}"),
+                        },
+                    );
+                }
+                Ok(v) if v == P3_POISON => {
+                    return done(
+                        rm,
+                        PathState::Mismatch {
+                            rounds: r + 1,
+                            first_bad: format!(
+                                "round {r} at {P3_TARGET:#018x}: still the poison \
+                                 {P3_POISON:#010x} after {RETIRE_TIMEOUT:?} — the GR channel \
+                                 was scheduled but NEVER WROTE. ⊘ An UNMEASURED round, not a \
+                                 wrong value"
+                            ),
+                        },
+                    );
+                }
+                Ok(v) if v != magic => {
+                    return done(
+                        rm,
+                        PathState::Mismatch {
+                            rounds: r + 1,
+                            first_bad: format!(
+                                "round {r} at {P3_TARGET:#018x}: expected {magic:#010x}, got \
+                                 {v:#010x}"
+                            ),
+                        },
+                    );
+                }
+                Ok(_) => {}
+            }
+        }
+        done(rm, PathState::Verified { rounds })
     }
 
     /// Configuration for one `--uvm-mean` run. Every field is printed before the run.
@@ -14347,34 +14676,15 @@ mod mean {
             "--- W392D P2: nvidia-uvm publishes the mapping, {} rounds at one VA ---",
             cfg.p1_rounds
         );
-        led.p2_uvm_memop = p2_uvm_round(rm, cfg.gpu, cfg.nonce, cfg.p1_rounds);
+        led.p2_uvm_memop = p2_uvm_round(
+            rm,
+            cfg.gpu,
+            cfg.nonce,
+            cfg.p1_rounds,
+            &mut led.p3_rpc_bind,
+        );
         println!("    P2 → {}", led.p2_uvm_memop.describe());
 
-        // ── P3 ────────────────────────────────────────────────────────────────────────
-        // ★★★★★ AN HONEST RED, AND IT IS THE REQUIRED OUTCOME OF THIS ARM ON BARE METAL.
-        //
-        // This row asks for a mapping that is reachable through the **RPC/bind** transport
-        // and through no other, so that a content check on it speaks about that transport
-        // alone. On BARE METAL there is no such buffer available to a raw client, and this
-        // tree already says so in its own words: `rpc_mixed_allocs`'s docs record that
-        // *"which of those crosses to the emulated GSP is RM's routing decision, and this
-        // rung does NOT measure it"*. Every allocation a raw client makes — vidmem, sysmem,
-        // channel, VA space — is serviced by RM, and RM on a GSP part is *itself* reached by
-        // RPC; so "the RPC path" is not a property that distinguishes any two of our buffers.
-        //
-        // ⇒ Claiming P1's buffer, or a vidmem allocation, as "RPC-bound" would satisfy the
-        // row's letter and destroy its meaning. It is left UNEXERCISED with the reason
-        // stated, which is the outcome the owner asked for over a fake green.
-        led.p3_rpc_bind = PathState::Unexercised(
-            "a raw RM client on BARE METAL has no buffer reachable ONLY via the RPC/bind \
-             transport: every allocation it can make is serviced by RM, and on a GSP part \
-             RM is itself reached by RPC, so no two of this client's buffers differ in that \
-             property. ⊘ Claiming P1's buffer here would satisfy the row's letter and \
-             destroy its meaning. This row needs either (a) the Mode-2 emulated GSP, where \
-             the crossing is observable device-side, or (b) a GPU_PROMOTE_CTX round on a GR \
-             channel, which this client does not build"
-                .to_owned(),
-        );
         println!("    P3 → {}", led.p3_rpc_bind.describe());
 
         // ── THE THREAD PHASE ──────────────────────────────────────────────────────────
