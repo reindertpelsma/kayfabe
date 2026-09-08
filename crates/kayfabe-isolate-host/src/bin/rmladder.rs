@@ -12454,6 +12454,15 @@ mod uvm_raw {
     const UVM_REGISTER_GPU_VASPACE: u64 = 25;
     /// `uvm_ioctl.h:538` — `UVM_UNREGISTER_GPU`, so the arm leaves no session behind.
     const UVM_UNREGISTER_GPU: u64 = 38;
+    /// `uvm_ioctl.h:1087`, `UVM_IOCTL_BASE(75)`. The **secondary** fd that binds an `mm`.
+    const UVM_MM_INITIALIZE: u64 = 75;
+    /// `nvstatuscodes.h:176`. ⚠ A **WARNING**, and it means SUCCESS — see the call site.
+    const NV_WARN_NOTHING_TO_DO: u32 = 0x0001_0006;
+
+    // `UVM_MM_INITIALIZE_PARAMS` (`uvm_ioctl.h:1089-1092`): { NvS32 uvmFd; NV_STATUS rmStatus; }
+    const MM_UVMFD: usize = 0;
+    const MM_STATUS: usize = 4;
+    const MM_LEN: usize = 8;
     /// What `_IOC_SIZE(UVM_INITIALIZE)` decodes to. See the module docs.
     const INITIALIZE_DECODED_SIZE: usize = 12288;
 
@@ -12613,6 +12622,65 @@ mod uvm_raw {
                 return false;
             }
         }
+
+        // 1b. ★★★★★ UVM_MM_INITIALIZE — THE STEP WHOSE ABSENCE WAS THE WHOLE 0x5d.
+        //
+        // ⊘⊘ THIRD defect the bare-metal gate caught, and the first two "fixes" were both
+        // wrong guesses at it (a null hVaSpace, then an externally-owned VAS). The real
+        // contract is stated in `uvm_ioctl.h:1060-1086`: a **secondary** fd holds a
+        // reference on the memory map, and without it the va_space has no `mm`, so
+        // `uvm_va_space.c:829` sets `disallow_new_registers` and every register answers
+        // `NV_ERR_PAGE_TABLE_NOT_AVAIL` — whose own documented meaning (`uvm.h:368`) is
+        // *"the UVM file descriptor [must] be associated with a single process"*, not
+        // anything about page tables at all.
+        //
+        // ⚠ THE FD MUST STAY OPEN. *"Once this file-descriptor has been closed the UVM
+        //   context is effectively dead"* — so it is bound to a variable that outlives the
+        //   registrations below, not dropped at the end of this block.
+        // ⚠ AND `NV_WARN_NOTHING_TO_DO` IS SUCCESS. *"Not all platforms require this
+        //   secondary file-descriptor. On those platforms NV_WARN_NOTHING_TO_DO will be
+        //   returned"* — treating a WARNING as a failure here would make the client refuse
+        //   on exactly the platforms where it had nothing left to do.
+        let _mm_fd = match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/nvidia-uvm")
+        {
+            Ok(f) => {
+                let mm = CharDevice::adopt(std::os::fd::OwnedFd::from(f));
+                let mut enc = Enc::new(MM_LEN, 0);
+                enc.i32_at(MM_UVMFD, dev.fd_number());
+                let mut buf = enc.0;
+                match mm.ioctl(UVM_MM_INITIALIZE, &mut buf, &mut []) {
+                    Ok(_) => {
+                        let st = status_of(&buf, MM_STATUS);
+                        let ok = st == 0 || st == NV_WARN_NOTHING_TO_DO;
+                        println!(
+                            "{} W392C MM_INITIALIZE = rmStatus {st:#x}{}",
+                            if ok { "ok   " } else { "FAIL " },
+                            if st == NV_WARN_NOTHING_TO_DO {
+                                " (NV_WARN_NOTHING_TO_DO — a WARNING that means SUCCESS on \
+                                 platforms needing no secondary fd)"
+                            } else {
+                                ""
+                            }
+                        );
+                        if !ok {
+                            return false;
+                        }
+                    }
+                    Err(e) => {
+                        println!("FAIL  W392C MM_INITIALIZE = ioctl refused: {e:?}");
+                        return false;
+                    }
+                }
+                Some(mm)
+            }
+            Err(e) => {
+                println!("FAIL  W392C MM_INITIALIZE = second /dev/nvidia-uvm open: {e}");
+                return false;
+            }
+        };
 
         // 2. UVM_REGISTER_GPU — ★ THIS is the step that builds the channel manager, and
         //    therefore the step that makes point 2's transport exist at all.
