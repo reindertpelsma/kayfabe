@@ -153,9 +153,21 @@ impl FbJoinTable {
     #[must_use]
     pub fn token_for(&self, phys: u64, len: u64) -> Option<u64> {
         let t = self.joins.lock().unwrap_or_else(|e| e.into_inner());
+        // ★★★ w392k — the NEWEST join wins, not the first. Nothing removes an entry from this
+        // table when the VMM gives a store join back, so a frame that was joined, released and
+        // joined again carries TWO non-alias entries. `[measured w392j,
+        // run_w392j_qemu.log:102,135,140]` frame `0x50000`: minted at `va=0x8080000000`
+        // (`memory=0xcafe0009`), revoked, re-minted at `va=0x80c0000000` (`memory=0xcafe000d`).
+        // `find` answered the FIRST — the released `memfd`, which no guest window maps any
+        // more — so an alias of that frame would have mapped the stale pages: two memories,
+        // silent, under the word that says one. The store refuses an overlapping second join,
+        // so at any instant at most ONE non-alias entry per frame is live, and it is the last
+        // installed. ⊘ The stale entries themselves are a pre-existing, bounded leak (one
+        // mapping per release) and are not touched here.
         t.iter()
+            .rev()
             .find(|j| j.phys == phys && j.len == len && !j.alias)
-            .or_else(|| t.iter().find(|j| j.phys == phys && j.len == len))
+            .or_else(|| t.iter().rev().find(|j| j.phys == phys && j.len == len))
             .map(|j| j.token)
     }
 
@@ -368,6 +380,30 @@ mod tests {
             0xdead_beef,
             "★★★★★ what the ALIAS wrote is what the JOIN's mapping reads. Two `memfd`s would              have answered zero here and looked exactly as healthy everywhere else"
         );
+    }
+
+    /// ★★★ w392k — a frame joined, released and joined AGAIN has two non-alias entries here,
+    /// because nothing removes one. The alias must follow the NEWEST: the older `memfd` is the
+    /// one no guest window maps any more, and aliasing it is two memories under one word.
+    /// `[measured w392j]` frame `0x50000` — see `token_for`.
+    #[test]
+    fn the_token_lookup_follows_the_newest_join_of_a_rejoined_frame() {
+        const LEN: u64 = 0x1_0000;
+        let t = FbJoinTable::new();
+        let old = SharedRam::create(LEN).expect("memfd");
+        t.install(0x5_0000, LEN, 0x80_8000_0000, 9, map_of(&old, LEN));
+        assert_eq!(t.token_for(0x5_0000, LEN), Some(9), "the first join");
+        // The VMM gave the store's join back and the frame was re-minted at another VA.
+        let new = SharedRam::create(LEN).expect("memfd");
+        t.install(0x5_0000, LEN, 0x80_c000_0000, 13, map_of(&new, LEN));
+        assert_eq!(
+            t.token_for(0x5_0000, LEN),
+            Some(13),
+            "★ the alias must lend the pages the guest's window maps NOW, not the released ones"
+        );
+        // And an alias over the new join does not shadow it for the next alias.
+        t.install_alias(0x5_0000, LEN, 0x90_8000_0000, 13, map_of(&new, LEN));
+        assert_eq!(t.token_for(0x5_0000, LEN), Some(13));
     }
 
     /// ⊘ **`token_for` is EXACT in base and length.** An alias over part of a frame, or over a

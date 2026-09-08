@@ -4238,6 +4238,13 @@ impl SharedDevice {
     /// | no, and nobody does | nobody | reclaim the orphan, then join fresh |
     /// | no, and a live peer does | another proc | refuse by name; a peer's backing is not ours |
     ///
+    /// ⊘⊘ **CORRECTED w392k — "names it" here means PUBLISHES it, and the table is missing a
+    /// row.** A frame the guest has moved to a new VA (old row revoked, new row bound and not
+    /// yet joined) is published by nobody and still *described* by this VAS; this verb answers
+    /// `None` for it, and the shell's second row then reclaimed a live frame and re-minted it
+    /// blank (`[measured w392j]`). The shell now consults its minter ledger for that case and
+    /// [`SharedDevice::fb_frame_namers`] before any reclaim; this verb's contract is unchanged.
+    ///
     /// ⇒ Asking the cheap per-VAS question first is also what keeps the expensive
     /// device-wide census ([`SharedDevice::fb_join_namers`], O(procs × VASes × rows)) off the
     /// common path — `w364` measured that census costing the GPU when it ran on every refusal.
@@ -4275,6 +4282,95 @@ impl SharedDevice {
             })
         })
         .flatten()
+    }
+
+    /// ★★★★★ **w392k — does `(gpu, pdb)` still DESCRIBE framebuffer frame `phys` at any VA
+    /// other than `except`?** Any row naming the frame counts — published or not — which is
+    /// exactly the predicate [`SharedDevice::fb_join_va_in_vas`] does NOT ask.
+    ///
+    /// # Why a second verb beside `fb_join_va_in_vas`
+    ///
+    /// `[measured w392j, box 50260029, run_w392j_qemu.log:102,135,140]` the guest MOVED frame
+    /// `0x50000` from `va=0x8080000000` to `va=0x80c0000000` between two doorbells. The
+    /// settlement at the second doorbell unbound the old row and, because nothing in the VAS
+    /// held a **`JoinsGuestWindow`** row for the frame any more, `release_revoked_joins` gave
+    /// the store's join back (`revoked=1 released=1 still_desired=1`) — while the same
+    /// settlement had just bound a fresh **unpublished** row for the same frame at the new VA.
+    /// The next join at the new VA then minted a second memory: `established=0 bytes`, the
+    /// 4096 non-zero bytes the frame held at the old VA gone. That is a silent substitution of
+    /// the frame's content with zeros; real vidmem keeps its bytes across a VA move.
+    ///
+    /// ⇒ The question the release path must ask is *"is the frame still described here"*, not
+    /// *"is the frame still host-published here"*. This answers the former. ⚠ It scans one
+    /// VAS's rows (the same cost as `fb_join_va_in_vas`), and returns the FIRST such VA.
+    ///
+    /// ⊘ `Aperture::Vidmem` is required: `Binding::phys` is a guest-physical address for sysmem
+    /// rows, so a phys-only match would equate a framebuffer offset with an unrelated GPA.
+    #[must_use]
+    pub fn fb_frame_va_in_vas(&self, gpu: GpuId, pdb: Pdb, phys: u64, except: u64) -> Option<u64> {
+        let pid = self
+            .route_act(
+                |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+                |_spine, proc, ()| proc.id,
+            )
+            .ok()?;
+        self.with_proc_mut(pid, |p| {
+            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            vas.table.iter().find_map(|(va, _len, b)| {
+                (va != except
+                    && b.aperture() == kayfabe_arch::Aperture::Vidmem
+                    && b.phys() == phys)
+                    .then_some(va)
+            })
+        })
+        .flatten()
+    }
+
+    /// ★★★ **w392k — how many LIVE address-table rows, in any VAS of any live GUEST proc,
+    /// name framebuffer frame `phys`** — published or not. The describing twin of the `live`
+    /// half of [`SharedDevice::fb_join_namers`].
+    ///
+    /// Two callers, two questions:
+    /// - the **release** path asks it with `except_pdb = None` — *"does anyone still describe
+    ///   the frame this revoked row named"*. `[measured w392k]` frame `0x140000` was described at
+    ///   THREE VAs across TWO VASes of one proc (`0x8280000000`/`0x82c0000000` in pdb `0x0`,
+    ///   `0x9080000000` in pdb `0x201000`), so a per-VAS answer would have missed the third.
+    /// - the **orphan-reclaim** path asks it with `except_pdb = Some(the asker's VAS)` — *"does
+    ///   anyone OTHER than the asker still describe it"*. A store join kept across a VA move
+    ///   (see [`SharedDevice::fb_frame_va_in_vas`]) has, for a while, **no `JoinsGuestWindow`
+    ///   row anywhere**, so `fb_join_namers` answers `(0, 0)` and the reclaim would give a live
+    ///   process's frame — and its bytes — back to the store.
+    ///
+    /// ⊘ **The system proc is skipped**, and not as an optimisation: `[measured w392j,
+    /// `TABLE-DESCRIBES proc=0 … rows=6254 runs=2 0x120000000+0x30006d000`]` the guest kernel's
+    /// VAS identity-maps the whole framebuffer, so its rows name every 2 MiB-aligned frame and
+    /// would make every orphan reclaim of a GR context frame (`0x400000`, `0x600000`, `0x800000`
+    /// — `w366`'s measured fix) read as *"described by a live peer"*. It holds no host state by
+    /// construction (§12.26), so it cannot be the peer this census exists to protect.
+    ///
+    /// ⚠ Same cost class as `fb_join_namers` (O(procs × VASes × rows)); call it only where that
+    /// census is already being paid for.
+    #[must_use]
+    pub fn fb_frame_namers(&self, phys: u64, except_pdb: Option<Pdb>) -> usize {
+        let mut live = 0usize;
+        for pid in self.live_pids() {
+            if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC {
+                continue;
+            }
+            self.with_proc(pid, |p| {
+                for ((_gpu, pdb), vas) in &p.vases {
+                    if except_pdb == Some(*pdb) {
+                        continue;
+                    }
+                    for (_va, _len, b) in vas.table.iter() {
+                        if b.aperture() == kayfabe_arch::Aperture::Vidmem && b.phys() == phys {
+                            live += 1;
+                        }
+                    }
+                }
+            });
+        }
+        live
     }
 
     /// ★★★★★ **w329 leg 2 — SUPERSEDE the stale join of a recycled framebuffer frame.**

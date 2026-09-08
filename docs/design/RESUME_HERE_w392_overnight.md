@@ -71,6 +71,12 @@ Behaviourally **identical** to w392j: `7 × adopt=GUEST-RING`, `ADOPTABLE 7`, `5
 which is what removing an unconstructible state should do. **Bench archive compiles with
 `host-isolates` at that rev (`RC=0`).**
 
+## ⊘ FAILED EXPERIMENT (not a result)
+`KAYFABE_JOIN_RELEASE=off` to isolate the release: boot died `rc=3`, *"no adapter output … The
+adapter was never exercised, so this capture cannot support any claim about where the boot stops.
+⊘ Do not cite it."* Matches the memory note that `off` reproduces w327's death. **Not a usable
+isolation arm.** ★ Note the harness refused to let me cite it — that refusal is the feature.
+
 ## OWNER RULINGS FROM TONIGHT — these overturn older docs
 - **Ours vs guest is decided by KIND, not by timing.** Emulated: our fake ring, `GP_PUT`/`GP_GET`
   are fictions, work runs as **our own function bodies**; real work goes to the **scratchpad**.
@@ -85,6 +91,24 @@ which is what removing an unconstructible state should do. **Bench archive compi
 - ⊘ **`guest_ring_adoption.md` §3's "birth must move to the doorbell" is REFUTED by its own §3.3**
   (sourced: RM allocates channels with `gpFifoOffset=0` on purpose; measured: R31 arm C accepted a
   never-mapped address). A host channel does **not** need its ring bound to be born.
+
+## ⚠⚠ OPEN QUESTION FOR THE OWNER — FIRST THING IN THE MORNING
+**Owner asked 2026-09-09 ~01:20 CEST:** *"we don't do publish at doorbells more right? that's
+removed? including no trap to bar 1/2 or guest declared ram?"*
+
+**Measured answer: publish at doorbells is NOT removed.**
+- `ring()` (`shim.rs:5133`) still calls `decode_cpu_pt_writes()` **and** `sweep_cpu_pt_tables()` on
+  every doorbell.
+- `KAYFABE_VAS_PUBLISH=drain` additionally does whole-VAS publication + a guest-RAM pin drain there.
+- **BAR1/BAR2 DO appear untrapped** (as the owner expected): no Rust MMIO handlers registered for
+  them, and although `bar1_writes`/`bar2_writes` exist as audit fields the boot emits none. Only
+  BAR0 is the trapped register plane.
+
+⇒ **EVERY result tonight was measured under the LEGACY arming**, because that is the arming w392d
+used and the only one with a known-positive (`CUP3_VAL=43`). If publication-at-doorbell is meant to
+be gone, the `JOIN-RELEASE` release defect below may be an artifact of a path that should not run
+at all, and the right next experiment is the client **without** `VAS_PUBLISH`/`PT_SWEEP`.
+⚠ Counter-evidence not to discard: w390 measured compute **dead** without publication.
 
 ## TRAPS PAID FOR TONIGHT
 - `Aperture::Vidmem` ≠ `FbLeafBacking::Vidmem` ≠ `BackingBytes::*` — three types, one word. I read

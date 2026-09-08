@@ -4011,7 +4011,7 @@ fn observer_loop(
                     let (live, _retired) = device.fb_join_namers(r.phys);
                     if live > 0 || !frames_given_back.insert(r.phys) {
                         already += 1;
-                    } else if plane.release_fb_join(r.phys) {
+                    } else if release_store_join(&plane, r.phys) {
                         released += 1;
                     } else {
                         already += 1;
@@ -8250,10 +8250,24 @@ impl SharedDoorbell {
         // the isolate pool at its step 1. Holding a session across it is a deadlock, not a
         // slowdown.
         //
-        // ★ Keyed by `leaf.phys` and de-duplicated HERE rather than inside the join: two
-        // operands in one 64 KiB leaf are ONE join, and the second must not be attempted.
-        let mut leaves: std::collections::BTreeMap<u64, kayfabe_rt::completion_watch::FbLeaf> =
-            std::collections::BTreeMap::new();
+        // ★ Keyed by `(leaf.phys, leaf.va)` and de-duplicated HERE rather than inside the
+        // join: two operands in one 64 KiB leaf are ONE join, and the second must not be
+        // attempted.
+        //
+        // ⊘⊘ **CORRECTED w392k — it was keyed by `leaf.phys` ALONE, and that key conflates two
+        // different facts.** Two operands in the same leaf (same phys, same VA) are one join;
+        // two operands at two VAs that MAP THE SAME FRAME (same phys, different VA) are one
+        // join plus one ALIAS, and the second leaf must reach `join_one_fb_leaf`, whose step 0
+        // then finds the store's join and the published sibling row and chooses
+        // `FbLeafBacking::Aliased` (`w380`). Keyed by phys, the second VA was dropped here with
+        // *"SAME LEAF as an earlier operand — one join, not two"* and never bound: the exact
+        // *one frame, two VAs, one binding* shape `w392j` §10 names, produced in a single pass.
+        // ★ The join itself is still attempted once per frame per VA — the store refuses an
+        // overlapping second `install_join` by name, so this key cannot mint two memories.
+        let mut leaves: std::collections::BTreeMap<
+            (u64, u64),
+            kayfabe_rt::completion_watch::FbLeaf,
+        > = std::collections::BTreeMap::new();
         let mut walk_lines: Vec<String> = Vec::new();
         for &pva in &candidates {
             let (site, leaf) = plane.ce_session_with_root(
@@ -8263,11 +8277,20 @@ impl SharedDoorbell {
             );
             match leaf {
                 Some(l) => {
-                    if leaves.insert(l.phys, l).is_some() {
+                    if leaves.insert((l.phys, l.va), l).is_some() {
                         walk_lines.push(format!(
                             "va=0x{pva:x} → leaf fb_phys=0x{:x} (SAME LEAF as an earlier \
                              operand — one join, not two)",
                             l.phys
+                        ));
+                    } else if leaves.keys().any(|(p, v)| *p == l.phys && *v != l.va) {
+                        // ★ w392k — the SAME FRAME at ANOTHER VA. Kept as its own leaf so the
+                        // join loop below aliases it; see the key's correction above.
+                        walk_lines.push(format!(
+                            "va=0x{pva:x} → leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} ★ SAME \
+                             FRAME as an earlier operand at a DIFFERENT VA — one join plus one \
+                             ALIAS, not one join",
+                            l.va, l.len, l.phys
                         ));
                     } else {
                         walk_lines.push(format!(
@@ -8295,7 +8318,7 @@ impl SharedDoorbell {
         let mut joined = 0usize;
         let mut refused = 0usize;
         if let Some(exports) = exports.filter(|_| self.operand_join.joins()) {
-            for (phys, leaf) in &leaves {
+            for ((phys, _va), leaf) in &leaves {
                 let what = format!("CE-OPERAND(chan={} fb_phys=0x{phys:x})", f.chan.0);
                 match join_one_fb_leaf(
                     &head,
@@ -8679,12 +8702,49 @@ impl SharedDoorbell {
         // `traces/real_ga106/w379_mapping_plane_real_ga106.txt` measured *"unmapping VA_A left
         // VA_B live"* on real hardware, 5/5.
         let mut kept_for_siblings = 0usize;
+        // ★★★★★ **w392k — KEPT FOR A MOVE: the frame is still DESCRIBED, just not PUBLISHED.**
+        //
+        // ⊘⊘ The `kept_for_siblings` arm below asks `fb_join_namers`, which counts only
+        // `JoinsGuestWindow` rows — so it keeps the store's join for a sibling that has ALREADY
+        // been joined and gives it back for a sibling that has not. `[measured w392j,
+        // run_w392j_qemu.log:135]` `revoked=1 released=1 kept_for_siblings=0 still_desired=1
+        // first=[va=0x8080000000 fb_phys=0x50000]`, and `[measured w392k]` `revoked=4 released=4
+        // kept_for_siblings=0 still_desired=2` with `fb_phys=0x140000` described at three guest
+        // VAs across two VASes. In both, the same settlement had just bound an UNPUBLISHED row
+        // for the very frame being released; the next join at that row then minted a second
+        // memory (`established=0 bytes` at `:140`) — the frame's bytes replaced by zeros, which
+        // is a silent substitution and not what vidmem does on a VA move.
+        //
+        // ⇒ The question is *"does any live guest proc still describe this frame"*
+        // (`fb_frame_namers`, device-wide, published or not), asked beside the published one.
+        // A frame still described keeps its store join and loses only this row's host half;
+        // its minter aliases it at the new VA on the next join (`join_one_fb_leaf` step 0,
+        // `MOVED-FRAME ALIASING`). ⊘ `still_desired` is the settlement's own count of this
+        // case and is left as it was — it is the instrument this arm is graded against.
+        let mut kept_for_move = 0usize;
         let mut first: Option<String> = None;
         for r in revoked {
             // ⊘ Asked AFTER the settlement unbound this row, so `r` is not its own namer. A
             // non-zero answer is a genuine surviving alias.
             let (live, retired) = self.device.fb_join_namers(r.phys);
-            if live > 0 || retired > 0 || frames_given_back.contains(&r.phys) {
+            let described = self.device.fb_frame_namers(r.phys, None);
+            if live == 0 && retired == 0 && described > 0 && !frames_given_back.contains(&r.phys)
+            {
+                self.device
+                    .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                kept_for_move += 1;
+                eprintln!(
+                    "kayfabe: JOIN-RELEASE ★★★★★ KEPT-FOR-MOVE va=0x{:x} fb_phys=0x{:x} \
+                     described_by={described} live row(s) (none published, minted_by={:?}) — \
+                     this row's host object is unmapped and freed, and the STORE'S JOIN IS KEPT \
+                     because a live address space still describes the frame at another VA. ⊘ \
+                     Releasing it would zero the frame under that VA; its minter aliases it \
+                     there on the next join",
+                    r.va.0,
+                    r.phys,
+                    minted_join_by(r.phys),
+                );
+            } else if live > 0 || retired > 0 || frames_given_back.contains(&r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                 kept_for_siblings += 1;
@@ -8696,7 +8756,7 @@ impl SharedDoorbell {
                      pages while the engine still reads the real ones",
                     r.va.0, r.phys
                 );
-            } else if plane.release_fb_join(r.phys) {
+            } else if release_store_join(plane, r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                 frames_given_back.insert(r.phys);
@@ -8724,7 +8784,7 @@ impl SharedDoorbell {
         let drained = self.device.drain_pending_releases();
         format!(
             " revoked={} released={released} kept_for_siblings={kept_for_siblings} \
-             stranded={stranded} drained={drained} \
+             kept_for_move={kept_for_move} stranded={stranded} drained={drained} \
              joined_ranges={} still_desired={still_desired} remaps_refused={remaps_refused} \
              first=[{}]",
             revoked.len(),
@@ -11360,6 +11420,16 @@ fn join_one_fb_leaf(
     //   this VAS names it → **ALIAS**: describe the same pages again at this VA. No victim.
     //   nobody names it   → **ORPHAN**: reclaim the store's join, then join fresh.
     //   a live peer does  → **REFUSE BY NAME**: another isolate's object is not ours to take.
+    //
+    // ⊘⊘ **CORRECTED w392k — there are FOUR cases, and "names it" was read as "PUBLISHES it".**
+    // `fb_join_va_in_vas` sees only `JoinsGuestWindow` rows. A frame the guest has MOVED (old
+    // VA unmapped and revoked, new VA bound but not yet joined) is named by nobody in that
+    // sense and by this VAS in the one that matters — `[measured w392j,
+    // run_w392j_qemu.log:135→140]` it fell into ORPHAN, the store's join was reclaimed and the
+    // frame re-minted with `established=0 bytes`. The fourth row, and the arm that serves it:
+    //   the store's join is OURS (minter ledger) and no row publishes it → **ALIAS** too
+    //   (`MOVED-FRAME ALIASING`); and ORPHAN additionally refuses when a live PEER still
+    //   DESCRIBES the frame (`fb_frame_namers`), because its bytes are what would be zeroed.
     let mut how = kayfabe_rt::FbLeafBacking::Joined;
     if (release.aliases() || release.supersedes()) && plane.fb_join_installed_at(leaf.phys) {
         // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
@@ -11422,7 +11492,7 @@ fn join_one_fb_leaf(
                 // ★★★ TABLE ROW GONE (above), STORE next, HOST last. The store must stop
                 // serving out of the region before the host mapping is torn down; the row must
                 // stop naming the object before either.
-                if plane.release_fb_join(r.phys) {
+                if release_store_join(plane, r.phys) {
                     device.revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                     let drained = device.drain_pending_releases();
                     *supersede_ledger()
@@ -11452,6 +11522,34 @@ fn join_one_fb_leaf(
                     );
                 }
             }
+        } else if release.aliases() && minted_join_by(leaf.phys) == Some(isolate) {
+            // ★★★★★ **w392k — THE MOVED FRAME: the store holds OUR pages, and no row in this
+            // VAS is published for them any more.**
+            //
+            // `[measured w392j, run_w392j_qemu.log:102,135,140]` the guest re-pointed frame
+            // `0x50000` from `va=0x8080000000` to `va=0x80c0000000`; the settlement revoked the
+            // old row; and this leaf — the new VA, a plain unpublished candidate — arrived here
+            // with `fb_join_installed_at == true` and `fb_join_va_in_vas == None`. Every arm
+            // below reads that as *"someone else's frame"* and, finding no namer, RECLAIMS the
+            // join and mints a fresh one: `JOINED … established=0 bytes` — the frame's 4096
+            // non-zero bytes silently replaced by zeros. ⊘ The sibling predicate needs a
+            // PUBLISHED row, and a move leaves none.
+            //
+            // ★ The minter ledger is the fact the sibling predicate cannot see: the store's join
+            // at this frame was installed by THIS isolate, so its export directory can lend the
+            // pages (`RmBackend::alias_fb_leaf` → `FbJoinTable::token_for`, per-isolate), and an
+            // alias here is ONE memory at a new address — the same chain `w380` built, reached
+            // by a different key. Nothing is reclaimed, nothing is re-minted, no bytes move.
+            how = kayfabe_rt::FbLeafBacking::Aliased;
+            eprintln!(
+                "{head} {what} ★★★★★ MOVED-FRAME ALIASING fb_phys=0x{:x} at va=0x{:x}: the \
+                 store's join at this frame was minted by THIS isolate ({isolate:?}) and no \
+                 row in this VAS is published for it any more — the guest re-pointed the frame \
+                 (or its old row was revoked). The frame's pages are described to RM again at \
+                 the new VA; ⊘ NOT reclaimed, NOT re-minted, so the bytes the frame holds \
+                 survive the move",
+                leaf.phys, leaf.va
+            );
         } else {
             // ⊘⊘⊘ **THE THIRD OUTCOME, AND IT WAS SILENT — which cost a wrong diagnosis.**
             //
@@ -11502,8 +11600,26 @@ fn join_one_fb_leaf(
             // follow-up should plumb the backing out of `FbStore::release_join`, which
             // already returns it, through `RegPlane::release_fb_join`, which discards it.
             let (live_now, retired_now) = device.fb_join_namers(leaf.phys);
-            if live_now == 0 && retired_now == 0 {
-                if plane.release_fb_join(leaf.phys) {
+            // ★★★ w392k — a store join KEPT across a VA move (`release_revoked_joins`'
+            // `kept_for_move` arm) has, until its new VA is joined, no `JoinsGuestWindow` row
+            // anywhere, so the census above answers `(0, 0)` for a frame a LIVE peer still
+            // describes and still reads through. Reclaiming it would hand that peer's bytes
+            // back to the store as zeros. ⊘ Asked with THIS VAS excluded: the asker's own
+            // candidate row is what brought it here and is not a peer.
+            let peer_described = device.fb_frame_namers(leaf.phys, Some(pdb));
+            if live_now == 0 && retired_now == 0 && peer_described > 0 {
+                eprintln!(
+                    "{head} {what} ⊘ NOT AN ORPHAN fb_phys=0x{:x} va=0x{:x}: no row is \
+                     PUBLISHED for this frame, but {peer_described} live row(s) in OTHER \
+                     address space(s) still DESCRIBE it (minted_by={:?}). The store's join \
+                     holds the frame's bytes for that peer; reclaiming it would zero them. \
+                     Refused BY NAME — this leaf stays fabricated",
+                    leaf.phys,
+                    leaf.va,
+                    minted_join_by(leaf.phys),
+                );
+            } else if live_now == 0 && retired_now == 0 {
+                if release_store_join(plane, leaf.phys) {
                     let drained = device.drain_pending_releases();
                     eprintln!(
                         "{head} {what} ★★★★★ ORPHAN-RECLAIMED fb_phys=0x{:x}: no LIVE and no \
@@ -11675,6 +11791,14 @@ fn join_one_fb_leaf(
     // ★★★★★ **AND NOTHING IS BOUND UNTIL THIS RETURNS `Ok`.**
     match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
         Ok(est) => {
+            // ★ w392k — the store now holds a join at this frame and THIS isolate minted its
+            // pages. Recorded here, on the install's own success path and before the bind, so
+            // a moved frame can be aliased by its minter after its published row is gone (see
+            // `minted_join_ledger`). ⊘ Erased only through `release_store_join`.
+            minted_join_ledger()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(leaf.phys, isolate);
             eprintln!(
                 "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → JOINED ({}) \
                  memory={:#x} host_va=0x{:x} placed_as_asked={} established={} bytes over {} \
@@ -17015,6 +17139,62 @@ fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u
         std::sync::Mutex<std::collections::HashMap<u64, (usize, usize)>>,
     > = std::sync::OnceLock::new();
     C.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// ★★★★★ **w392k — WHICH ISOLATE MINTED THE STORE'S JOIN AT EACH FRAME.** `fb_phys → IsolateId`,
+/// written at `join_one_fb_leaf`'s step 3 (the one place a store join is installed) and erased
+/// by [`release_store_join`] (the one wrapper every release goes through).
+///
+/// # Why this exists — the frame-MOVE, measured
+///
+/// `[measured w392j, run_w392j_qemu.log:102 → :135 → :140]` the guest unmapped frame `0x50000`
+/// at `va=0x8080000000` and mapped it at `va=0x80c0000000` between two doorbells. The
+/// settlement revoked the old row, the release path gave the store's join back (no
+/// `JoinsGuestWindow` row was left to call a sibling), and the next join at the new VA minted
+/// a **second memory** with `established=0 bytes` — the frame's 4096 non-zero bytes were gone.
+///
+/// The fix keeps the store's join across the move (see `release_revoked_joins`), which creates a
+/// state the alias arm of `join_one_fb_leaf` could not previously recognise: the store holds a
+/// join at the frame, **no** row in the VAS is host-published for it, and the pages are ours.
+/// `fb_join_va_in_vas` cannot say so — it needs a published sibling. This ledger can: the
+/// isolate that minted the pages is the only one whose export directory can lend them
+/// (`RmBackend::alias_fb_leaf` → `FbJoinTable::token_for` is per-isolate), so *"minted by this
+/// isolate"* is precisely *"an alias here is one memory"*.
+///
+/// ⊘ A ledger, not a second source of truth about what the store holds: `fb_join_installed_at`
+/// is still asked first, and an entry here with no store join is simply ignored. It is keyed by
+/// frame because a frame has at most ONE store join (`install_join` refuses any overlap).
+fn minted_join_ledger(
+) -> &'static std::sync::Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>> {
+    static L: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>>,
+    > = std::sync::OnceLock::new();
+    L.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// ★ Which isolate minted the store's join at `phys`, if [`minted_join_ledger`] knows.
+fn minted_join_by(phys: u64) -> Option<kayfabe_isolate::IsolateId> {
+    minted_join_ledger()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&phys)
+        .copied()
+}
+
+/// ★★★ **THE ONE WAY a store join is given back**, so the minter ledger cannot outlive the join
+/// it describes. Wraps `RegPlane::release_fb_join` and erases the ledger entry iff a join was
+/// actually there — a `false` answer leaves the ledger alone, because a ledger entry with no
+/// store join is inert (see [`minted_join_ledger`]) and erasing it on a store miss would hide
+/// a table/store disagreement the caller is about to report.
+fn release_store_join(plane: &RegPlane, phys: u64) -> bool {
+    let had = plane.release_fb_join(phys);
+    if had {
+        minted_join_ledger()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&phys);
+    }
+    had
 }
 
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a
