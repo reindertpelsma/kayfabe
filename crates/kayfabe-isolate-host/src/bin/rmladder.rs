@@ -12878,6 +12878,30 @@ mod uvm_raw {
     const UVM_MAP_EXTERNAL_ALLOCATION: u64 = 33;
     /// `uvm_ioctl.h:509`, `UVM_IOCTL_BASE(34)`.
     const UVM_FREE: u64 = 34;
+    /// `uvm_ioctl.h:425`, `UVM_IOCTL_BASE(27)`.
+    const UVM_REGISTER_CHANNEL: u64 = 27;
+    /// `uvm_ioctl.h:441`, `UVM_IOCTL_BASE(28)`.
+    const UVM_UNREGISTER_CHANNEL: u64 = 28;
+
+    // `UVM_REGISTER_CHANNEL_PARAMS` (`uvm_ioctl.h:427-436`).
+    // ⚠ THREE… no, FOUR PADDING BYTES at 28..32: `hChannel` ends at 28 and `base` is
+    // `NV_ALIGN_BYTES(8)`. Getting this wrong puts `base` where the kernel reads nothing and
+    // `length` where it reads `base` — and for a CE channel, whose resource count is zero,
+    // BOTH would be ignored and the call would succeed with a silently wrong struct.
+    const CHAN_UUID: usize = 0;
+    const CHAN_CTL_FD: usize = 16;
+    const CHAN_HCLIENT: usize = 20;
+    const CHAN_HCHANNEL: usize = 24;
+    const CHAN_BASE: usize = 32;
+    const CHAN_LEN: usize = 40;
+    const CHAN_STATUS: usize = 48;
+    const CHAN_SIZE: usize = 56;
+
+    // `UVM_UNREGISTER_CHANNEL_PARAMS` (`uvm_ioctl.h:443-449`): no 8-byte field, no padding.
+    const UNCHAN_HCLIENT: usize = 16;
+    const UNCHAN_HCHANNEL: usize = 20;
+    const UNCHAN_STATUS: usize = 24;
+    const UNCHAN_SIZE: usize = 28;
 
     // `UVM_CREATE_EXTERNAL_RANGE_PARAMS` (`uvm_ioctl.h:1044-1048`) and
     // `UVM_FREE_PARAMS` (`:511-515`) are the same three fields in the same order.
@@ -13054,6 +13078,79 @@ mod uvm_raw {
                 enc.0,
                 MAP_STATUS,
                 "UVM_MAP_EXTERNAL_ALLOCATION",
+                &[],
+            )
+        }
+
+        /// ★★★★★ **`UVM_REGISTER_CHANNEL` — the step without which a channel in a
+        /// UVM-owned address space CANNOT BE SCHEDULED.**
+        ///
+        /// `[measured 2026-09-08 on this GA106]` creating the channel succeeds and
+        /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` then answers `0x40`, with RM printing
+        /// `kchannelIsSchedulable_IMPL: Cannot schedule externally-owned channel 0x00000009
+        /// with unbound allocations!`.
+        ///
+        /// ⊘ **AND THE STATUS NAME WOULD HAVE SENT ANYONE AT THE WRONG MECHANISM** — the
+        /// same trap `UVM_REGISTER_GPU_VASPACE`'s `0x5d` set. The gate is
+        /// `kernel_channel.c:2200`: `gvaspaceIsExternallyOwned(pGVAS) && IS_GR(engineDesc)
+        /// && !bIsContextBound`. ★ Note `IS_GR` — **this is a COPY channel**, and it still
+        /// matches, because `kchannelGetEngine_GM107` resolves the engine from the
+        /// **runlist** and *"will pick the first engine on this runlist"*
+        /// (`kernel_channel_gm107.c:722-727`): on this part CE0 shares runlist 0 with GR, so
+        /// a copy channel is graded by the graphics rule.
+        ///
+        /// The only writer of `bIsContextBound` reachable from userspace is UVM's
+        /// `bind_channel_resources` (`uvm_user_channel.c:686`) → `nvGpuOpsBindChannelResources`
+        /// (`nv_gpu_ops.c:10903`), and this ioctl is its door.
+        ///
+        /// `base`/`length` describe where the channel's *resources* go. ⊘ For a CE channel
+        /// they are **unused** — `nv_gpu_ops.c:10855` says *"CE channels have 0 resources, so
+        /// they skip this step"*, and `uvm_register_channel_under_write` only touches the
+        /// range `if (user_channel->num_resources > 0)`. A range is passed anyway so the call
+        /// is correct if that ever stops being true.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn register_channel(
+            &self,
+            rm_ctrl_fd: i32,
+            h_client: u32,
+            h_channel: u32,
+            base: u64,
+            len: u64,
+        ) -> Result<(), String> {
+            let mut enc = Enc::new(CHAN_SIZE, 0);
+            enc.bytes_at(CHAN_UUID, &self.uuid);
+            enc.i32_at(CHAN_CTL_FD, rm_ctrl_fd);
+            enc.u32_at(CHAN_HCLIENT, h_client);
+            enc.u32_at(CHAN_HCHANNEL, h_channel);
+            enc.u64_at(CHAN_BASE, base);
+            enc.u64_at(CHAN_LEN, len);
+            call(
+                &self.dev,
+                UVM_REGISTER_CHANNEL,
+                enc.0,
+                CHAN_STATUS,
+                "UVM_REGISTER_CHANNEL",
+                &[],
+            )
+        }
+
+        /// `UVM_UNREGISTER_CHANNEL`. Best-effort; the caller logs.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn unregister_channel(&self, h_client: u32, h_channel: u32) -> Result<(), String> {
+            let mut enc = Enc::new(UNCHAN_SIZE, 0);
+            enc.bytes_at(CHAN_UUID, &self.uuid);
+            enc.u32_at(UNCHAN_HCLIENT, h_client);
+            enc.u32_at(UNCHAN_HCHANNEL, h_channel);
+            call(
+                &self.dev,
+                UVM_UNREGISTER_CHANNEL,
+                enc.0,
+                UNCHAN_STATUS,
+                "UVM_UNREGISTER_CHANNEL",
                 &[],
             )
         }
@@ -13854,6 +13951,12 @@ mod mean {
     const P2_SCRATCH: u64 = 0x0000_0090_4000_0000;
     /// P2's object under test. Every round maps a different allocation here.
     const P2_DATA: u64 = 0x0000_0090_8000_0000;
+    /// Where `UVM_REGISTER_CHANNEL` may place the channel's own resources. ⊘ Unused for a
+    /// copy engine — see [`super::uvm_raw::Session::register_channel`] — but named and kept
+    /// clear of everything else so the call is correct if that changes.
+    const P2_CHANRES: u64 = 0x0000_0090_C000_0000;
+    /// The length of that region. 1 MiB, which is far more than a GR channel's resource set.
+    const P2_CHANRES_LEN: u64 = 0x0010_0000;
 
     /// ★★★★★ **P2 — grow nvidia-uvm's page tree, then read what it published WITH THE
     /// ENGINE.**
@@ -13958,7 +14061,27 @@ mod mean {
                 };
             }
         };
+        // ★★★★★ THE STEP THE FIRST RUN OF THIS ROW WAS MISSING. See
+        // `Session::register_channel`: without it RM refuses the schedule with `0x40` and a
+        // dmesg line naming `bIsContextBound`, and the ONLY userspace door to that flag is
+        // this ioctl.
+        let Ok(chan_raw) = u32::try_from(chan.raw()) else {
+            let _ = rm.free(chan);
+            return PathState::Refused {
+                step: "channel handle",
+                status: format!("{:#x} is not an RM handle", chan.raw()),
+            };
+        };
+        if let Err(e) = sess.register_channel(ctl_fd, client, chan_raw, P2_CHANRES, P2_CHANRES_LEN)
+        {
+            let _ = rm.free(chan);
+            return PathState::Refused {
+                step: "UVM_REGISTER_CHANNEL",
+                status: e,
+            };
+        }
         if let Err(e) = rm.schedule(chan) {
+            let _ = sess.unregister_channel(client, chan_raw);
             let _ = rm.free(chan);
             return PathState::Refused {
                 step: "schedule (UVM space)",
@@ -14085,6 +14208,7 @@ mod mean {
         let _ = sess.free_range(P2_SCRATCH, LEN);
         let _ = rm.free(lane.scratch);
         let _ = sess.free_range(P2_RING, ring_bytes);
+        let _ = sess.unregister_channel(client, chan_raw);
         let _ = rm.free(lane.chan);
         drop(sess);
         out
