@@ -9,6 +9,23 @@ refuted, and the hole it does **not** close.
 Supersedes nothing. **Corrects** `fb_leaf_crossing.md` §1 and §3 (folded in there, above the
 text they correct).
 
+> ### ⊘⊘ CORRECTED 2026-09-09 — `BackingBytes::ShadowsGuestMemory` IS DELETED. Every row
+> ### below that says it is *"refused, under every aperture"* now reads: **unrepresentable.**
+> Owner ruling, 2026-09-09: a host object whose bytes are unrelated to the guest's, bound at
+> the guest's VA, must not exist **by construction** — either the guest's real memory is
+> mapped, or we refuse. The variant existed only so `Binding::real_gpu_memory` had something
+> to refuse (§8's `matches!(host.bytes(), ShadowsGuestMemory)` disjunct, now gone); it had no
+> production producer since 2026-08-11. What changed in code: the `BackingBytes` enum has two
+> variants (`SoleBacking`, `JoinsGuestWindow`); the constructor keeps the aperture test alone,
+> byte-for-byte; `kayfabe_fwd::bind_backed_fb_leaf`'s `FbLeafBacking::Vidmem` arm returns
+> `FwdFault::RegionKindRefused { FakeFbAtRealGpuVa { Vidmem } }` **by name at its own site**
+> before any `HostBacking` is built (same fault, same orphans, same point in the sequence —
+> `fb_leaf_backing.rs` asserts it by value, unchanged). `FbLeafBacking::Vidmem` and
+> `VerbPlan::PublishVidmem` are kept: they are the *chain's* name, not the shadow's, and
+> `backing_for`'s conformance mapping still needs a word for "the guest's PTEs said device
+> memory". ★ §1.3's line *"under the four-kind model the variant `ShadowsGuestMemory` does
+> become unrepresentable"* was the right prediction; it took until today to make it true.
+
 ★★★ **READ §8 BEFORE §0–§7.** Three statements in the analysis are now out of date as
 *descriptions of the code*, and each is corrected in place below:
 - §1.1's table of two unguarded arms — the first arm is **gone** (§8.1).

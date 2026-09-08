@@ -1434,20 +1434,28 @@ fn classify_host_backed(
 /// of an isolate except the scratchpad."*
 ///
 /// ⇒ The state is now **unconstructible**: [`kayfabe_mmu::Binding::real_gpu_memory`] is the
-/// only way a [`HostBacking`] enters a binding and it refuses both spellings of the
-/// forbidden state. So the falsifier arms assert on the **constructor**, and the point of
-/// the test is that the classifier can never see the input the old arm fed it.
+/// only way a [`HostBacking`] enters a binding and it refuses the forbidden state. So the
+/// falsifier arm asserts on the **constructor**, and the point of the test is that the
+/// classifier can never see the input the old arm fed it.
 ///
-/// # ⚠ Why there are THREE arms and they must disagree
+/// ⊘⊘ **CORRECTED 2026-09-09 — "both spellings" became ONE, and the other is not refused
+/// but UNWRITABLE.** The constructor used to refuse two spellings: a `Vidmem` aperture, and
+/// a backing declaring `BackingBytes::ShadowsGuestMemory`. The second is deleted by owner
+/// ruling (the shadow must not exist by construction), so falsifier 1 below — *"the caller
+/// DECLARES the shadow"* — had no input left and is removed. The known-positive and the
+/// silent-caller falsifier are unchanged.
+///
+/// # ⚠ Why there are TWO arms and they must disagree
 ///
 /// A census that only ever reports *absence* cannot be told from a census incapable of
 /// reporting *presence* (§16.82.9). The `SoleBacking` + sysmem arm is the **known-positive**:
 /// it proves the constructor still builds kind 3 and the classifier still answers `HostCe`.
 /// Without it, "refuses everything" would pass.
 ///
-/// ★ **The two falsifiers fail independently**, which is why both are here: one caller is
-/// honest about the shadow over an innocent-looking aperture, the other is honest about the
-/// address and silent about the shadow. A single test would let either half be deleted.
+/// ★ The falsifier that remains is the caller honest about the address and silent about the
+/// shadow. Its sibling — honest about the shadow over an innocent-looking aperture — failed
+/// independently of it and is why both were here; that sibling's input is now unspellable,
+/// which is the stronger guarantee, not a weaker one.
 #[test]
 fn a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table() {
     // ---- known-positive: the constructor CAN still build kind 3 ----------------------
@@ -1467,16 +1475,11 @@ fn a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table() {
         "and `HostBacked` still selects the real engine"
     );
 
-    // ---- falsifier 1: the caller DECLARES the shadow ---------------------------------
-    assert_eq!(
-        classify_host_backed(Aperture::SysmemCoherent, BackingBytes::ShadowsGuestMemory).err(),
-        Some(kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
-            aperture: Aperture::SysmemCoherent
-        }),
-        "★★★ FORBIDDEN #2: a backing that declares itself a SECOND memory must not become a \
-         binding at all. If this is `Ok`, the object reaches the table and every later \
-         reader sees a published range."
-    );
+    // ---- falsifier 1 stood here until 2026-09-09: the caller DECLARES the shadow ------
+    // `classify_host_backed(SysmemCoherent, BackingBytes::ShadowsGuestMemory)` asserted
+    // `Err(FakeFbAtRealGpuVa { SysmemCoherent })` — FORBIDDEN #2 at the entrance. The
+    // variant is deleted, so a backing can no longer declare itself a second memory; the
+    // object cannot reach the table because the declaration cannot be written.
 
     // ---- falsifier 2: the caller is SILENT about it, and the aperture says it --------
     assert_eq!(
@@ -1505,10 +1508,19 @@ fn a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_table() {
 /// `kayfabe-fwd` declare **different** values, and the difference is the whole gate:
 /// `Publish` binds a GPA carved from our own arena and is [`BackingBytes::SoleBacking`];
 /// `PublishVidmem` binds the **guest's own framebuffer offset** while allocating a separate
-/// host object, and is [`BackingBytes::ShadowsGuestMemory`].
+/// host object, and was `BackingBytes::ShadowsGuestMemory`.
 ///
 /// ⇒ This test pins that split so a future edit cannot quietly relabel one as the other —
 /// which is the only way the gate can be disarmed without anything looking wrong.
+///
+/// ⊘⊘ **CORRECTED 2026-09-09 — the second word is DELETED, and the census now counts its
+/// ABSENCE plus the word a relabel would have to use.** `ShadowsGuestMemory` no longer
+/// exists (owner ruling: the shadow must not exist by construction); `PublishVidmem`'s
+/// commit arm refuses by name at its own site and builds no `HostBacking` at all. The
+/// relabelling hazard this census guards is therefore no longer *"shadow → `SoleBacking`"*
+/// (that would still be refused by the constructor's aperture test) but *"shadow →
+/// `JoinsGuestWindow`"*, the one word the constructor ADMITS over `Vidmem`. So the rows
+/// below count `JoinsGuestWindow` too.
 #[test]
 fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_gate() {
     // ⊘ **Non-comment lines only, and that filter is the test's own scar.** The first
@@ -1537,6 +1549,7 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
     };
     let sole = code("BackingBytes::SoleBacking");
     let shadow = code("BackingBytes::ShadowsGuestMemory");
+    let joined = code("BackingBytes::JoinsGuestWindow");
     // ★★★ **1 → 2 at the w291 (2a) MERGE, ADMITTED 2026-08-14 (w296).** The second
     // declaration is `commit_pin_guest_ram`'s (`kayfabe-fwd/src/lib.rs:1940`), and
     // `SoleBacking` is the only label it *could* carry: a guest-RAM pin maps THE GUEST'S OWN
@@ -1546,36 +1559,69 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
     // it at a guest address; this one mints nothing and maps the guest's.
     //
     // ⚠ And the relabelling escape this row guards is still shut, from the other side:
-    // `Binding::pinned_guest_ram` REFUSES `Aperture::Vidmem` and refuses a
-    // `ShadowsGuestMemory` backing outright (`RegionKindFault::NotGuestRam`), which is
-    // `publish_census::the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow`.
-    // ⇒ A third `SoleBacking` is still a finding; this second one is a decision.
+    // `Binding::pinned_guest_ram` REFUSES `Aperture::Vidmem` and refuses any backing that
+    // is not `SoleBacking` (`RegionKindFault::NotGuestRam`), which is
+    // `publish_census::the_pin_constructor_refuses_a_framebuffer_row_and_a_joined_declaration`
+    // (⊘ renamed 2026-09-09; its second arm used to offer a `ShadowsGuestMemory` backing,
+    // which no longer exists).
+    // ⇒ A third `SoleBacking` DECLARATION is still a finding; this second one is a decision.
+    //
+    // ⊘⊘ **2 → 3 at w392j (`41a79d42`), and the third is NOT a declaration — READ BEFORE
+    // TRUSTING THE NUMBER.** `adopted_guest_ring`'s adoption gate was rewritten to accept
+    // `JoinsGuestWindow` OR (`RegionKind::GuestPhysDma` + `SoleBacking`), and it spells the
+    // latter as `matches!(host.bytes(), kayfabe_mmu::BackingBytes::SoleBacking)` — a
+    // PREDICATE that reads a declaration, on a code line. This census counts code-line
+    // mentions and cannot tell the two apart (that is its recorded scar, above), so it went
+    // RED at `41a79d42` and was re-pinned at 3 on 2026-09-09 with the third occurrence named
+    // here. ⚠ The pin still fires for a fourth: whoever adds one must say which kind it is.
     assert_eq!(
-        sole, 2,
+        sole, 3,
         "exactly two production chains may claim to be the range's only memory: `Publish` \
          (a GPA carved from our own arena) and the guest-RAM pin (the guest's own pages, \
-         where the claim is trivially true). A third is a new chain nobody adjudicated"
+         where the claim is trivially true) — plus ONE predicate that reads the claim, \
+         `adopted_guest_ring`'s adoption gate (w392j). A fourth mention is either a new chain \
+         nobody adjudicated or a new reader, and the difference must be written down here"
     );
     // ★★★ **THE COUNT IS UNCHANGED AND ITS MEANING IS NOT — read the note before trusting
     // it.** `[watched RED 2026-08-11]` an earlier draft of this rung asserted `shadow == 0`,
     // reasoning that ruling 3 abolishes the chain. That was **wrong as a census**:
-    // `commit_back_fb_leaf` still *constructs* the shadowing `HostBacking` — and hands it
-    // straight to [`kayfabe_mmu::Binding::real_gpu_memory`], which REFUSES it. The line
-    // survives; what died is the bind behind it.
+    // `commit_back_fb_leaf` still *constructed* the shadowing `HostBacking` — and handed it
+    // straight to [`kayfabe_mmu::Binding::real_gpu_memory`], which REFUSED it. The line
+    // survived; what died was the bind behind it.
     //
-    // ⇒ This census can only see that the declaration exists, never what happens to it. The
-    // half it cannot check — that the construction is refused and the guest's own row
+    // ⊘⊘ **AND NOW `shadow == 0` IS RIGHT, for a different reason than the 08-11 draft
+    // gave.** The 08-11 draft reasoned from a RULING (refused ⇒ gone) and was wrong because
+    // the declaration outlived the bind. On 2026-09-09 the VARIANT was deleted: the
+    // declaration cannot be written, `commit_back_fb_leaf`'s `Vidmem` arm returns
+    // `FakeFbAtRealGpuVa` by name before building any `HostBacking`, and the count is 0
+    // because the identifier does not exist — not because a chain was relabelled. ⇒ This row
+    // now guards REINTRODUCTION: a nonzero count means someone put the word back.
+    //
+    // ⇒ This census can only see that a declaration exists, never what happens to it. The
+    // half it cannot check — that the `Vidmem` arm refuses by name and the guest's own row
     // survives — is `fb_leaf_backing::backing_a_framebuffer_leaf_is_refused_by_name_and_\
-    // the_guests_own_row_survives`, and the half about a caller RELABELLING a shadow as
+    // the_guests_own_row_survives`, and the half about a caller RELABELLING the arm as
     // `SoleBacking` is `a_host_object_the_guest_cannot_see_into_cannot_enter_the_address_\
-    // table`'s second falsifier, which refuses on the `Vidmem` aperture whatever the label
-    // says. ⊘ Three tests, three different things; none of them is the others.
+    // table`'s remaining falsifier, which refuses on the `Vidmem` aperture whatever the
+    // label says. ⊘ Three tests, three different things; none of them is the others.
     assert_eq!(
-        shadow, 1,
-        "exactly one production chain (`PublishVidmem`) still DECLARES that it would shadow \
-         memory the guest already reaches — and that declaration is the input ruling 3 \
-         refuses. If this becomes 0 the declaration has been relabelled, which is how the \
-         w228 hazard comes back wearing an innocent name; if it becomes 2 a second chain is \
-         being built"
+        shadow, 0,
+        "`BackingBytes::ShadowsGuestMemory` was deleted 2026-09-09 (the shadow must not exist \
+         by construction). A nonzero count means the word was reintroduced — the honest \
+         spelling of the w228 two-memories state is back in the vocabulary"
+    );
+    // ★★★ **THE WORD A RELABEL WOULD NOW HAVE TO USE.** With the shadow unspellable, the only
+    // `BackingBytes` the constructor ADMITS over a `Vidmem` aperture is `JoinsGuestWindow`, so
+    // the way the w228 chain comes back wearing an innocent name is `FbLeafBacking::Vidmem`
+    // declaring the join. Two code-line mentions today, and they are different kinds:
+    // `bind_backed_fb_leaf`'s `Joined | Aliased` arm (the one DECLARATION, `:3332`) and
+    // `adopted_guest_ring`'s gate PREDICATE (w392j, `:4708`). A third is the relabel, or a new
+    // chain, or a new reader — and, as with `sole`, the difference must be written down here.
+    assert_eq!(
+        joined, 2,
+        "exactly one production chain declares `JoinsGuestWindow` (the framebuffer join / \
+         alias commit) and exactly one predicate reads it (the ring adoption gate). A third \
+         mention is the `Vidmem` arm relabelled as the join — the w228 chain admitted under \
+         ruling 4's word — unless it is named here as something else"
     );
 }

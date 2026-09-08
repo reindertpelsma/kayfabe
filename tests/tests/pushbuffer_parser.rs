@@ -494,11 +494,14 @@ fn t14_per_vas_publication_gates_the_ring() {
 /// ⊘ **That fixture is now unconstructible, and deliberately so.** `Binding`'s fields are
 /// private and its only two constructors are
 /// [`kayfabe_mmu::Binding::declared_by_guest`] (always `host: None`) and
-/// [`kayfabe_mmu::Binding::real_gpu_memory`], which **refuses** `ShadowsGuestMemory` by
+/// [`kayfabe_mmu::Binding::real_gpu_memory`], which **refused** `ShadowsGuestMemory` by
 /// ruling 3. The refusal the test was checking moved from the ring gate to the address
-/// plane's entrance; the fixture that injected the forbidden state moved with it. The
-/// falsifier below therefore asserts the *constructor* refuses, which is where the
-/// prohibition now lives — see `tests/tests/gpga_region_kind.rs` for its exhaustive form.
+/// plane's entrance; the fixture that injected the forbidden state moved with it.
+/// ⊘⊘ **And since 2026-09-09 the word itself is gone**: `BackingBytes::ShadowsGuestMemory`
+/// was deleted by owner ruling (the shadow must not exist by construction), so the
+/// falsifier that asserted the constructor's refusal has nothing left to offer it. The
+/// property is now structural; `tests/tests/gpga_region_kind.rs` sweeps what remains of
+/// the constructor's input space.
 fn published_sole() -> (
     Guarded<Gpu>,
     kayfabe_core::ProcId,
@@ -580,15 +583,32 @@ fn published_sole() -> (
 /// producer. Asserting a gate's answer over a binding the type system forbids is a test
 /// pinning a state, not a behaviour.
 ///
-/// ⇒ The falsifier now targets **the site that actually refuses**. The property is
+/// ⇒ The falsifier then targeted **the site that actually refuses**. The property is
 /// unchanged and its name is still true.
 ///
-/// # Why TWO arms, and why they must differ
+/// # ⊘⊘ REWRITTEN AGAIN 2026-09-09 — THE FALSIFIER ARM IS GONE, BECAUSE ITS INPUT IS
 ///
-/// The known-positive is the half that makes the falsifier mean anything: a gate that
-/// refused everything would pass a single-arm test while having destroyed the plane. That
-/// is this campaign's §16.85.3 class — a census whose instrument cannot return the other
-/// answer — and it is cheap to close here.
+/// The second arm built `HostBacking::whole(sole.memory(), sole.host_va(),
+/// BackingBytes::ShadowsGuestMemory)` — the positive arm's object restated as a shadow,
+/// everything else byte-identical — and asserted `real_gpu_memory` answered
+/// `FakeFbAtRealGpuVa { SysmemCoherent }`. **That variant is deleted** (owner ruling: the
+/// shadow must not exist by construction), so the arm was a test of a refusal whose input
+/// can no longer be written down. It is removed rather than rewritten: there is no other
+/// `BackingBytes` a *sysmem* backing at this identity would be refused for (`SoleBacking`
+/// is admitted, and `JoinsGuestWindow` over sysmem is admitted too — see
+/// `gpga_region_kind.rs`'s sweep), so a replacement falsifier here would have to change
+/// the aperture, at which point it is `gpga_region_kind.rs`'s test and not this one.
+///
+/// ⇒ What remains is the **known-positive**, and it is still load-bearing on its own: it
+/// is the arm that says the gate has not become a blanket refusal. The "arms differ in
+/// one field" check at the bottom survives as an assertion about what the positive arm's
+/// object declared, which is the fact the deleted arm used to be contrasted against.
+///
+/// # Why the known-positive matters even alone
+///
+/// A gate that refused everything would pass a single-arm test while having destroyed the
+/// plane. That is this campaign's §16.85.3 class — a census whose instrument cannot return
+/// the other answer — and it is cheap to close here.
 ///
 /// ★ Both **forms** of the gate are asserted on the positive arm, because they are
 /// different code paths onto one predicate: the read-only `gate_working_set` query, and the
@@ -613,40 +633,24 @@ fn a_ring_never_names_a_backing_the_guest_reads_somewhere_else() {
         "…through the ENFORCING form too — the query is not the thing that rings"
     );
 
-    // ---- the falsifier: the SAME object, restated as a shadow, at the SAME identity ----
-    // Everything but `BackingBytes` is held byte-identical — same host handle, same host
-    // VA, same aperture — because it is the variable under test and a two-arm test whose
-    // arms differ in more than one place measures nothing.
-    let shadow = kayfabe_mmu::Binding::real_gpu_memory(
-        SHARED_VA.0,
-        kayfabe_arch::Aperture::SysmemCoherent,
-        kayfabe_mmu::HostBacking::whole(
-            sole.memory(),
-            sole.host_va(),
-            kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
-        ),
-    );
-    assert_eq!(
-        shadow,
-        Err(kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
-            aperture: kayfabe_arch::Aperture::SysmemCoherent,
-        }),
-        "★★★ FORBIDDEN #2, AT THE ENTRANCE: a second memory at an address the guest reads \
-         somewhere else cannot be bound at all, so it can never reach a doorbell. And by \
-         NAME — `RegionKindFault::FakeFbAtRealGpuVa` says which decision could not be taken \
-         truthfully, which is the wrong-name-refusal class §16.108 paid for."
-    );
+    // ---- the falsifier arm stood here until 2026-09-09 ---------------------------------
+    // It restated `sole` with `BackingBytes::ShadowsGuestMemory` — same host handle, same
+    // host VA, same aperture — and asserted the constructor answered
+    // `FakeFbAtRealGpuVa { SysmemCoherent }`. That variant no longer exists, so "a second
+    // memory at an address the guest reads somewhere else" cannot be bound because it
+    // cannot be *spelled*, which is the stronger form of the refusal this arm observed.
+    // See the doc comment above for why no replacement falsifier belongs in this test.
 
-    // ---- and the arms must DIFFER, or neither measured anything -----------------------
-    // ⊘ The same three inputs that the positive arm bound successfully differ from these in
-    // exactly one field, so this is the arms-disagree check the old `assert_ne!` was: the
-    // constructor said yes to `SoleBacking` (the binding `published_sole` asserted is kind
-    // 3) and no to `ShadowsGuestMemory`.
+    // ---- what the positive arm's object DECLARED -----------------------------------------
+    // ⊘ This used to be the arms-disagree check (the constructor said yes to `SoleBacking`
+    // and no to `ShadowsGuestMemory`). With one arm left it pins the fact the known-positive
+    // rests on: the object the gate admitted IS the range's only memory, which is the one
+    // declaration a `Publish` may truthfully make.
     assert_eq!(
         sole.bytes(),
         kayfabe_mmu::BackingBytes::SoleBacking,
-        "★ the arms differ in exactly one field: the positive arm's object IS the range's \
-         only memory, and the constructor admitted it"
+        "★ the positive arm's object IS the range's only memory, and the constructor \
+         admitted it"
     );
 }
 

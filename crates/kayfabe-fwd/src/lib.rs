@@ -4605,12 +4605,21 @@ pub fn plan_engine_object(
 /// default build's behaviour is byte-identical without a second selector that could drift
 /// out of step with the first (`a_second_source_of_truth_beside_a_complete_value`).
 ///
-/// # ⊘ THE OWNER INVARIANT — the forbidden state is not reachable from here
+/// # ⊘ THE OWNER INVARIANT — the forbidden state is now UNREPRESENTABLE, not merely refused
 ///
-/// [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] — `w228`'s **blank** host vidmem twin at
-/// the guest's own VA, *"two memories"* — is refused by the `match` below rather than by a
-/// comment. A channel born over that object fetches GPFIFO entries out of a page nothing ever
-/// wrote, decodes zeros, never advances `GP_GET`, and reports **no error at all**.
+/// ⊘⊘ **CORRECTED 2026-09-09.** This paragraph named `BackingBytes::ShadowsGuestMemory` —
+/// `w228`'s **blank** host vidmem twin at the guest's own VA, *"two memories"* — and said the
+/// `match` below refuses it. **That variant no longer exists.** Owner ruling, same day: a
+/// shadow must not be expressible at all, because with the scratchpad there is never a reason
+/// for one — either we have the guest's real memory mapped, or we refuse. It was already
+/// unconstructible (`Binding::real_gpu_memory` rejected it unconditionally), so deleting it
+/// turned a **runtime refusal into an unrepresentable state**, which is strictly stronger.
+///
+/// ★ The hazard it named is still real and is why the gate below reads BOTH enums: a channel
+/// born over memory that is not the guest's fetches GPFIFO entries out of a page nothing ever
+/// wrote, decodes zeros, never advances `GP_GET`, and reports **no error at all**. Today the
+/// shape that would do that is `RegionKind::RealGpuMemory + SoleBacking` — **our scratchpad** —
+/// and refusing it is the whole reason the predicate is not just a `BackingBytes` test.
 fn adopted_guest_ring(
     spine: &Spine,
     proc: &Proc,
