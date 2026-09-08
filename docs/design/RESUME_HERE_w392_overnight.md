@@ -93,6 +93,21 @@ adapter was never exercised, so this capture cannot support any claim about wher
 ⊘ Do not cite it."* Matches the memory note that `off` reproduces w327's death. **Not a usable
 isolation arm.** ★ Note the harness refused to let me cite it — that refusal is the feature.
 
+## LLM BASELINE ON TONIGHT'S BUILD (w392llm, rev `6ae36bda`)
+```
+W392_GPU_TOKENS=0   W392_GPU_RC=1        the GPU run ERRORED, generated nothing
+W392_CPU_TOKENS=16  W392_CPU_RC=0        same-boot CPU oracle healthy
+W392_MINMM_SUM=64                        ★ the small compute path is BIT-CORRECT
+W392_XIDS=17/17/17  (before / after-4x4 / after-gpu)
+W392_OUTCOME=(Z) the GPU run produced 0 tokens — it did not generate.
+```
+★ **`MINMM_SUM=64` means basic GPU compute through kayfabe is sound on this build.**
+★★ **`17/17/17`** — seventeen Xids existed **before** the LLM started and **neither** the 4×4 nor
+the LLM added one. ⇒ the LLM is **not faulting**; it fails earlier with `rc=1`. That is a different
+failure from this campaign's previous *"16 tokens of garbage text"* — 0-with-an-error is honest
+rather than forged, but it is **not yet diagnosed**. ⚠ Do not assume tonight's changes caused it;
+no LLM run was taken on the pre-change build tonight, so there is **no same-build control**.
+
 ## OWNER RULINGS FROM TONIGHT — these overturn older docs
 - **Ours vs guest is decided by KIND, not by timing.** Emulated: our fake ring, `GP_PUT`/`GP_GET`
   are fictions, work runs as **our own function bodies**; real work goes to the **scratchpad**.
