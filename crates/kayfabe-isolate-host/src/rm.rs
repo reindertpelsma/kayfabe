@@ -4423,6 +4423,41 @@ impl HostRmBackend {
     /// exactly how the isolate's own memory ends up somewhere a guest can name — so it
     /// cannot go through the trait verb, and duplicating R7b's two-object dance is how the
     /// pairing gets forgotten.
+    /// ★★★ w392c — a `FERMI_VASPACE_A` allocated **externally owned**, which is what
+    /// `UVM_REGISTER_GPU_VASPACE` requires and what the plain one is not.
+    ///
+    /// ⊘⊘ **SECOND DEFECT CAUGHT BY THE BARE-METAL GATE.** With a *real* `hVaSpace` the
+    /// register still answered `0x5d` (`NV_ERR_PAGE_TABLE_NOT_AVAIL`) — so the first
+    /// reading, *"the handle was 0"*, was **only half the cause**. UVM takes ownership of
+    /// the page tables of the VA space it registers, so RM must not have built them:
+    /// `NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED` (`nvos.h:3170`, `BIT(3)`) is the
+    /// declaration that says so. Without it RM has already populated the tables and
+    /// truthfully reports that the page table UVM is asking for is not available.
+    ///
+    /// ⚠ Returns the **space** handle directly — an externally-owned VAS gets no
+    /// `NV01_MEMORY_VIRTUAL` range, because ranges are RM-managed mappings and the whole
+    /// point of this flag is that RM manages nothing here.
+    ///
+    /// # Errors
+    /// Whatever RM said; a caller must not substitute a handle.
+    pub fn host_alloc_vaspace_externally_owned(&mut self) -> Result<u32, RmError> {
+        /// `nvos.h:3170`.
+        const IS_EXTERNALLY_OWNED: u32 = 1 << 3;
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters {
+            flags: IS_EXTERNALLY_OWNED,
+            ..NvVaspaceAllocationParameters::default()
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        Ok(space)
+    }
+
     fn alloc_vaspace_raw(&mut self) -> Result<u32, RmError> {
         // R7. All-zero parameters: index 0, no flags, `vaSize = 0` meaning the default
         // range. Per-`Vas` separation is the property that matters, not the geometry.

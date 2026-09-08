@@ -11822,7 +11822,7 @@ fn main() -> std::process::ExitCode {
         );
         // ⊘ Allocate a REAL VA space first — passing 0 got `NV_ERR_PAGE_TABLE_NOT_AVAIL`
         //   from UVM on bare metal, which is a defect in the client and not a finding.
-        let hvas = match rm.host_alloc_vaspace_space() {
+        let hvas = match rm.host_alloc_vaspace_externally_owned() {
             Ok(h) => {
                 println!("ok    W392C hVaSpace      = {h:#010x}");
                 h
