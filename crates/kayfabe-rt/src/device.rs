@@ -2901,8 +2901,37 @@ impl SharedDevice {
         // visible, not inside the thing being skipped.
         // ★★★★★ **w287 — AND THE KIND.** `out.kind` is carried off the same `chan` as
         // `out.engine`; a `Passthrough` channel's ring is the guest's and is never read here.
+        // ★★★★★ **w392 — THE JOINT FACT, RECORDED. Neither aggregate can answer it.**
+        //
+        // `ring_content_is_forwardable` is a CONJUNCTION, and a boot that logs `engine=` on
+        // some lines and `kind=` on others records both MARGINALS and never the joint. The
+        // w392 cup3 boot measured `Ce=355`, `kind=emulated` ×202 and `FWD-RING`=0 — from
+        // which it is impossible to say whether the CE doorbells were all Passthrough, the
+        // emulated ones all GR, or both. Those have different fixes, so the pair is printed
+        // here, once per doorbell, on the ONE line where both are in scope.
+        //
+        // ⊘ And the skip is NAMED with the conjunct that failed, not merely counted: this
+        // is the arm on which the `MEM_OP`/`MMU_TLB_INVALIDATE` census
+        // ([`kayfabe_fwd::memop_census`]) can only ever read zero, so *"nothing was
+        // parsed"* has to arrive as a reason rather than as an absence.
+        let forwardable = ring_content_is_forwardable(out.engine, out.kind);
+        eprintln!(
+            "kayfabe: RING-GATE engine={:?} kind={:?} route={:?} vmm={} forwardable={} {}",
+            out.engine,
+            out.kind,
+            route_of_engine(out.engine),
+            vmm.is_some(),
+            forwardable,
+            if forwardable {
+                "→ PARSING (a MEM_OP can be seen here)"
+            } else if !matches!(route_of_engine(out.engine), DoorbellRoute::CpuCe) {
+                "⊘ SKIPPED: ENGINE conjunct — route is not CpuCe"
+            } else {
+                "⊘ SKIPPED: KIND conjunct — the channel is not Emulated"
+            },
+        );
         if let Some(vmm) = vmm
-            && ring_content_is_forwardable(out.engine, out.kind)
+            && forwardable
         {
             self.forward_ring(vmm, out.proc, out.chan)?;
         }
