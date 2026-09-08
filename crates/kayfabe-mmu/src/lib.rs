@@ -224,12 +224,35 @@ pub struct HostBacking {
 /// | chain | `Binding::phys` | the guest's other path to those bytes | this field |
 /// |---|---|---|---|
 /// | `VerbPlan::Publish` (host sysmem) | a GPA carved from **our own arena** | **none** — we invented the memory | [`BackingBytes::SoleBacking`] |
-/// | `VerbPlan::PublishVidmem` (host vidmem) | the **guest's own framebuffer offset** | **BAR1/BAR2 into the device's `SparseFb`**, continuously | [`BackingBytes::ShadowsGuestMemory`] |
+/// | `VerbPlan::PublishVidmem` (host vidmem) | the **guest's own framebuffer offset** | **BAR1/BAR2 into the device's `SparseFb`**, continuously | ⊘ **no variant — see below** |
 ///
 /// ⇒ `w228` measured the second row directly: `placed_as_asked=true` **and blank**. An
 /// engine pointed at that object reads zeros where the guest wrote and writes where the
 /// guest cannot look — `#12` in the C artifact, which cost weeks — and it is
 /// **self-concealing**: a run over a blank object logs identically to a correct one.
+///
+/// # ⊘⊘ DELETED 2026-09-09 — `ShadowsGuestMemory`, the second row's word, no longer exists
+///
+/// This enum carried a third variant, `ShadowsGuestMemory` — *"a SECOND memory, at an
+/// address the guest already reaches another way; the address is the guest's, the bytes are
+/// ours"* — and it existed for exactly one purpose: so that [`Binding::real_gpu_memory`]
+/// had something to **refuse**. It was unconstructible in production from 2026-08-11 (the
+/// constructor refused it under every aperture, and `kayfabe_fwd::commit_back_fb_leaf`'s
+/// `Vidmem` arm, its only producer, had no production caller), so every path through it was
+/// *declare the shadow, then be refused for declaring it*.
+///
+/// ★ **Owner ruling, 2026-09-09: the shadow must not exist BY CONSTRUCTION.** Either the
+/// guest's real memory is mapped, or we refuse. A runtime refusal of a representable state
+/// is strictly weaker than an unrepresentable state, so the variant is gone: there is now no
+/// spelling of *"two memories at one guest address"* in this vocabulary at all. The chain
+/// that used to declare it (`FbLeafBacking::Vidmem`) now refuses **by name at its own site**,
+/// before any `HostBacking` is built, with the same
+/// [`RegionKindFault::FakeFbAtRealGpuVa`] the constructor used to answer.
+///
+/// ⚠ What this did NOT change: the [`Aperture::Vidmem`] test in [`Binding::real_gpu_memory`]
+/// still refuses a *silent* caller (`SoleBacking` over `Vidmem`), and the carve-out is still
+/// bought only by [`BackingBytes::JoinsGuestWindow`]. Deleting the honest word for the shadow
+/// does not admit the silent one.
 ///
 /// ⊘ **And a third chain is invisible here entirely.** `VerbPlan::PinGuestRam`, the one
 /// crossing that genuinely shares memory with the guest, records into `Vas::guest_ram_pins`
@@ -255,27 +278,16 @@ pub enum BackingBytes {
     /// writer to diverge into, so a real engine pointed here produces an end-state that is
     /// **the** end-state.
     SoleBacking,
-    /// ★★★ **A SECOND memory, at an address the guest already reaches another way.** The
-    /// address is the guest's, the bytes are ours, and the guest's own accesses go on
-    /// landing in the *other* one — the emulated framebuffer, or guest RAM. The two diverge
-    /// from the first write and nothing reconciles them.
-    ///
-    /// ⊘ **Fatal for anything the guest reads or polls, which is what a ring is.**
-    ///
-    /// ★★★ **It has NO production producer any more, and that is the fix rather than a
-    /// gap.** This variant is the *name of the state ruling 3 forbids*, and it exists so
-    /// that [`Binding::real_gpu_memory`] has something to refuse: a caller honest enough to
-    /// declare a shadow is refused by that declaration, and a caller silent about it is
-    /// refused by the [`Aperture::Vidmem`] test beside it. `commit_back_fb_leaf` — the one
-    /// chain that used to construct it — now raises
-    /// `kayfabe_fwd::FwdFault::RegionKindRefused` and hands its host objects back as
-    /// orphans instead of binding them.
-    ShadowsGuestMemory,
+    // ⊘ `ShadowsGuestMemory` stood here until 2026-09-09 — "a SECOND memory, at an address
+    // the guest already reaches another way … fatal for anything the guest reads or polls,
+    // which is what a ring is". See the enum's doc for why it was deleted rather than kept
+    // as the thing `real_gpu_memory` refuses.
     /// ★★★★★ **ONE memory, at an address the guest already reaches — because the guest's own
     /// WINDOW for this range has been re-pointed at THESE pages.**
     ///
-    /// ⊘ **Not a softer [`BackingBytes::ShadowsGuestMemory`], and not a wider
-    /// [`BackingBytes::SoleBacking`].** The difference from the shadow is not one of degree:
+    /// ⊘ **Not a wider [`BackingBytes::SoleBacking`], and not a softer form of the shadow
+    /// this enum used to name** (`ShadowsGuestMemory`, deleted 2026-09-09 — a second memory
+    /// at the guest's address). The difference from that shadow is not one of degree:
     /// there is no second memory left to diverge into, because the store that held the other
     /// one no longer holds it. `kayfabe_device::FbStore::install_join` copies what the guest
     /// had already written into these pages, **removes the local pages for the range**, and
@@ -319,7 +331,9 @@ impl BackingBytes {
     pub const fn dissolves_fake_framebuffer(self) -> bool {
         match self {
             BackingBytes::JoinsGuestWindow => true,
-            BackingBytes::SoleBacking | BackingBytes::ShadowsGuestMemory => false,
+            // ⊘ `ShadowsGuestMemory` answered `false` here too until it was deleted
+            // (2026-09-09); `SoleBacking`'s answer is unchanged.
+            BackingBytes::SoleBacking => false,
         }
     }
 }
@@ -543,9 +557,14 @@ pub enum RegionKindFault {
     /// ⊘ Refused rather than coerced. The two ways in are opposite mistakes and both are
     /// real: a `Vidmem` row belongs to the framebuffer-join chain, which mints memory and
     /// re-points the guest's window; and a backing declaring
-    /// [`BackingBytes::ShadowsGuestMemory`] is the two-memories state ruling 3 forbids under
-    /// **every** aperture. `Binding::pinned_guest_ram` exists to record a mapping of the
-    /// guest's **own** pages, and neither of those is one.
+    /// [`BackingBytes::JoinsGuestWindow`] is that chain's own word, which a pin of the
+    /// guest's pages cannot truthfully wear. `Binding::pinned_guest_ram` exists to record a
+    /// mapping of the guest's **own** pages, and neither of those is one.
+    ///
+    /// ⊘ Until 2026-09-09 the second way in was also reachable by declaring
+    /// `BackingBytes::ShadowsGuestMemory` — the two-memories state ruling 3 forbids under
+    /// **every** aperture. That variant is deleted; the state is unrepresentable rather than
+    /// refused here.
     NotGuestRam {
         /// The aperture the row declared.
         aperture: Aperture,
