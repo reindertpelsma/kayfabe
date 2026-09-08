@@ -50,6 +50,42 @@ if ! $G true >/dev/null 2>&1; then echo "W392_OUTCOME=(E) ⊘ UNMEASURED_GUEST_U
 
 XID_BEFORE=$(xids); echo "HOST_XID_BEFORE=$XID_BEFORE"
 
+# ---- 0. THE SCALE DISCRIMINATOR — the smallest thing that reaches cuBLAS ---------------
+# ★★★★★ w392b — WHY THIS RUNS BEFORE THE MODEL.
+#
+# The w392 LLM boot produced **16 tokens of garbage with ZERO Xids** — it completed, it
+# faulted nowhere, and the arithmetic was wrong. `CUP3_VAL=43` passed in the same tree the
+# same day. So the failure is NOT "compute is broken" and NOT "a mapping is missing" (a
+# missing mapping FAULTS; this did not). It is memory that was **mapped and held the wrong
+# bytes**.
+#
+# A 4x4 fp32 matmul of ones has ONE tiny allocation and no weight transfer. Its sum is 64,
+# and 64 is un-forgeable by a copy, a fill or a zero page.
+#
+#   64 here + garbage from the LLM  ⇒ the defect SCALES with allocation count/size, not
+#                                     with the arithmetic path. Look at mapping/publication
+#                                     of the large weight buffers.
+#   wrong here                      ⇒ the compute path itself is broken, which is a much
+#                                     more fundamental and much easier target.
+#
+# ⊘ Runs BEFORE the model load so it cannot be contaminated by a poisoned context, and its
+#   own Xid delta is read separately so "it failed AND faulted" is distinguishable from
+#   "it failed cleanly".
+echo "--- 4x4 scale discriminator (before any weight transfer) ---"
+MIN=$($G "timeout 300 $PY - <<'PYEOF' 2>&1
+import torch
+try:
+    a = torch.ones(4, 4, device='cuda')
+    b = torch.ones(4, 4, device='cuda')
+    print('MINMM_SUM=%g' % (a @ b).sum().item())   # 4x4 of ones -> every element 4 -> 64
+    print('MINMM_OK=1')
+except Exception as e:
+    print('MINMM_OK=0'); print('MINMM_EXC=%s: %s' % (type(e).__name__, e))
+PYEOF" 2>&1 | tr -d '\r')
+echo "$MIN" | sed 's/^/    /'
+MINSUM=$(echo "$MIN" | sed -n 's/^MINMM_SUM=//p' | tail -1)
+XID_AFTER_MIN=$(xids); echo "HOST_XID_AFTER_MINMM=$XID_AFTER_MIN"
+
 # ---- 1. THE WORKLOAD ON THE GPU (this is the thing under test) -------------------------
 echo "--- GPU run ---"
 GPU_OUT=$($G "cd /opt/llm && HF_HOME=/opt/llm/hf LLM_DEVICE=cuda LLM_NTOK=$NTOK \
@@ -75,7 +111,8 @@ echo "W392_GPU_TOKENS=${GPU_TOK:-ABSENT}  W392_GPU_RC=${GPU_RC:-ABSENT}"
 echo "W392_CPU_TOKENS=${CPU_TOK:-ABSENT}  W392_CPU_RC=${CPU_RC:-ABSENT}"
 echo "W392_GPU_TEXT=[${GPU_TXT}]"
 echo "W392_CPU_TEXT=[${CPU_TXT}]"
-echo "W392_XIDS=${XID_BEFORE}/${XID_AFTER} (before/after-gpu)"
+echo "W392_MINMM_SUM=${MINSUM:-ABSENT} (64 = the small path is CORRECT)"
+echo "W392_XIDS=${XID_BEFORE}/${XID_AFTER_MIN:-?}/${XID_AFTER} (before/after-4x4/after-gpu)"
 
 echo "=== ★★★★★ THE VERDICT — pre-registered, stated once ==="
 if [ -z "${GPU_TOK:-}" ]; then
@@ -89,8 +126,15 @@ elif [ "${GPU_TOK}" -gt 0 ] 2>/dev/null && [ "$GPU_TXT" = "$CPU_TXT" ]; then
   echo "    W392_OUTCOME=(P) ★★★★★ PASS — ${GPU_TOK} tokens AND the text matches the CPU"
   echo "        oracle EXACTLY. The host GPU did the arithmetic, through our emulated device,"
   echo "        correctly. ⊘ Un-forgeable by a copy, a fill or a completion we wrote."
+elif [ "${GPU_TOK}" -gt 0 ] 2>/dev/null && [ "${MINSUM:-x}" = "64" ]; then
+  echo "    W392_OUTCOME=(F-scale) ★★★★★ FORGED-PASS, AND IT SCALES — ${GPU_TOK} tokens of"
+  echo "        WRONG TEXT while the 4x4 matmul is EXACTLY 64. The arithmetic path is"
+  echo "        CORRECT at one small allocation and WRONG at the model's. ⇒ the defect is"
+  echo "        in mapping/publication of the large buffers, not in compute."
 elif [ "${GPU_TOK}" -gt 0 ] 2>/dev/null; then
   echo "    W392_OUTCOME=(F) ★★★ FORGED-PASS CAUGHT — ${GPU_TOK} tokens, WRONG TEXT."
+  echo "        4x4 sum=${MINSUM:-ABSENT} (not 64) ⇒ the SMALL path is wrong too, so this is"
+  echo "        NOT scale-dependent — a much more fundamental target."
   echo "        The old LLM_TOKENS grade would have called this a PASS (w386, measured)."
   echo "        ⇒ the pipeline RAN and the ARITHMETIC IS WRONG. That is a worse defect than"
   echo "        a refusal, and it is now visible."
