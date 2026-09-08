@@ -13457,7 +13457,25 @@ impl Regs {
             // this scope and a nested one re-entered the same halt. ⇒ An arming count that
             // double-counts makes `publications / armed` — the ratio C1 is graded on — wrong
             // by a factor nobody would question, because 754 is a plausible number.
-            if let Some(line) = self.doorbell_port.publish_ctx().publish_vas_rows(val, None) {
+            // ★★★★★ **w390d — THE INVALIDATE PUBLISHES ON ITS OWN AUTHORITY, NOT THE
+            // DOORBELL'S.** `publish_ctx()` carries the doorbell's `vas_publish` arm; using it
+            // unchanged makes the two triggers INSEPARABLE, and the one experiment that
+            // settles R1/R2 is exactly the one that needs them separate:
+            //
+            //   `KAYFABE_VAS_PUBLISH=assert`  ⇒ the DOORBELL censuses and publishes nothing
+            //   `KAYFABE_MMU_INVAL=on`        ⇒ the INVALIDATE publishes
+            //   ⇒ `CUP3_VAL=43` still? Then publication at the doorbell is NOT required for
+            //     correctness, and the trigger can move to the blockage point the owner's
+            //     2026-09-06 ruling demands. A non-43 says the doorbell's half was load-bearing.
+            //
+            // ⊘ `Publish`, not `Drain`. The drain half is scoped by `CeChannelFacts`, which an
+            // invalidate structurally cannot supply — `[measured 2026-09-08, w390c2]` it printed
+            // `⚠⚠ TARGET NEVER VISITED — the drain did NOT run` on all 377 lines. Asking for a
+            // pass that cannot run here would spend the halt on a guaranteed no-op and report
+            // `pinned=0` as if it were a result.
+            let mut ctx = self.doorbell_port.publish_ctx();
+            ctx.vas_publish = VasPublishArm::Publish;
+            if let Some(line) = ctx.publish_vas_rows(val, None) {
                 // ⊘⊘ **FLATTEN, DO NOT PRINT VERBATIM — measured 2026-09-08, boot w390c3.**
                 // `publish_vas_rows` splices `"\nkayfabe: "` between its pin clause and its
                 // publish summary, so a naive `eprintln!("… MMUINVAL-PUBLISH {line}")` tags
