@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# ★★★★★ w392 — THE LLM, GRADED ON ITS TEXT AGAINST A SAME-BOOT CPU ORACLE.
+#
+# ## ⊘ Why the existing grade cannot be trusted, measured
+#
+# `provision_guest_llm.sh:49` states the old contract in words: *"LLM_TOKENS is the whole
+# grade — a token count cannot be forged by a copy, a fill, or a completion we wrote
+# ourselves."* **That is false, and w386 measured it false**: a boot reported
+# `LLM_TOKENS=16` over TEXT THAT WAS GARBAGE. Under `do_sample=False` the model emits
+# exactly `max_new_tokens` whatever the numerics are, so the count is a function of the
+# ARGUMENT, not of the computation. A wrong matmul produces 16 wrong tokens and scores
+# identically to 16 right ones.
+#
+# ⇒ **The count says the pipeline RAN. Only the text says it ran CORRECTLY.**
+#
+# ## ★★★ Why the reference is a SAME-BOOT CPU run and not a hardcoded string
+#
+# Hardcoding `"Paris"` would bake in a claim about one model's greedy output that nobody
+# measured, and it would go stale silently the first time the model or the tokenizer
+# changed — the `a_capture_derived_table_expires_as_a_vendor_regression` shape.
+#
+# The CPU run is the same weights, the same tokenizer, the same prompt and the same greedy
+# decode, differing in EXACTLY the thing under test: whether the arithmetic happened on the
+# host GPU through our emulated device. So it is a **differential**, and it is generated
+# fresh in the boot it grades.
+# ⊘ The provisioning script already ran a CPU control and THREW ITS TEXT AWAY. That is the
+#   discarded-oracle shape; this keeps it.
+#
+# ## The outcomes, pre-registered
+#
+#   (P) tokens>0 AND gpu_text == cpu_text  → PASS. The GPU did the arithmetic correctly.
+#   (F) tokens>0 AND gpu_text != cpu_text  → ★★★ FORGED-PASS CAUGHT. The old grade would
+#                                            have said PASS. This is w386's exact case.
+#   (E) no LLM_TOKENS line at all          → ⊘ UNMEASURED. NOT zero, NOT a failure.
+#   (C) the CPU oracle itself failed       → ⊘ UNGRADABLE. Without a reference the GPU
+#                                            run's text cannot be judged, and saying
+#                                            "PASS because tokens>0" is the defect above.
+set -uo pipefail
+SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+G="$SRC_DIR/gssh_nv"
+NTOK=${LLM_NTOK:-16}
+TMO=${LLM_TIMEOUT:-900}
+CPU_TMO=${LLM_CPU_TIMEOUT:-900}
+PY=/home/ubuntu/llmvenv/bin/python
+
+xids() { sudo dmesg 2>/dev/null | grep -c "Xid (PCI" || echo 0; }
+
+echo "=== ★★★★★ w392 LLM — graded on TEXT against a same-boot CPU oracle ==="
+if ! $G true >/dev/null 2>&1; then echo "W392_OUTCOME=(E) ⊘ UNMEASURED_GUEST_UNREACHABLE"; exit 0; fi
+
+XID_BEFORE=$(xids); echo "HOST_XID_BEFORE=$XID_BEFORE"
+
+# ---- 1. THE WORKLOAD ON THE GPU (this is the thing under test) -------------------------
+echo "--- GPU run ---"
+GPU_OUT=$($G "cd /opt/llm && HF_HOME=/opt/llm/hf LLM_DEVICE=cuda LLM_NTOK=$NTOK \
+          timeout $TMO $PY run_llm.py 2>&1" 2>&1 | tr -d '\r')
+echo "$GPU_OUT" | sed 's/^/    /'
+XID_AFTER=$(xids); echo "HOST_XID_AFTER_GPU=$XID_AFTER"
+
+# ---- 2. THE ORACLE, SAME BOOT, SAME EVERYTHING BUT THE DEVICE --------------------------
+# ⚠ Run AFTER the GPU arm, deliberately: running it first would warm caches and could mask
+#   a GPU failure that only shows on a cold model load. It also means a GPU run that WEDGES
+#   the guest is visible as a missing oracle rather than as a silently-skipped comparison.
+echo "--- CPU oracle run (same weights, same prompt, same greedy decode) ---"
+CPU_OUT=$($G "cd /opt/llm && HF_HOME=/opt/llm/hf LLM_DEVICE=cpu LLM_NTOK=$NTOK \
+          timeout $CPU_TMO $PY run_llm.py 2>&1" 2>&1 | tr -d '\r')
+echo "$CPU_OUT" | sed 's/^/    /'
+
+pick() { echo "$1" | sed -n "s/^$2=//p" | tail -1; }
+GPU_TOK=$(pick "$GPU_OUT" LLM_TOKENS); GPU_TXT=$(pick "$GPU_OUT" LLM_TEXT); GPU_RC=$(pick "$GPU_OUT" LLM_RC)
+CPU_TOK=$(pick "$CPU_OUT" LLM_TOKENS); CPU_TXT=$(pick "$CPU_OUT" LLM_TEXT); CPU_RC=$(pick "$CPU_OUT" LLM_RC)
+
+echo ""
+echo "W392_GPU_TOKENS=${GPU_TOK:-ABSENT}  W392_GPU_RC=${GPU_RC:-ABSENT}"
+echo "W392_CPU_TOKENS=${CPU_TOK:-ABSENT}  W392_CPU_RC=${CPU_RC:-ABSENT}"
+echo "W392_GPU_TEXT=[${GPU_TXT}]"
+echo "W392_CPU_TEXT=[${CPU_TXT}]"
+echo "W392_XIDS=${XID_BEFORE}/${XID_AFTER} (before/after-gpu)"
+
+echo "=== ★★★★★ THE VERDICT — pre-registered, stated once ==="
+if [ -z "${GPU_TOK:-}" ]; then
+  echo "    W392_OUTCOME=(E) ⊘ UNMEASURED — the GPU run printed no LLM_TOKENS line at all."
+  echo "        ⊘ This is NOT 'zero tokens' and NOT a failure. Read LLM_EXC above."
+elif [ -z "${CPU_TOK:-}" ] || [ "${CPU_RC:-1}" != "0" ]; then
+  echo "    W392_OUTCOME=(C) ⊘ UNGRADABLE — the CPU ORACLE did not produce a reference."
+  echo "        GPU tokens=${GPU_TOK}. ⊘ Grading that as PASS on the count alone is exactly"
+  echo "        the w386 defect this hook exists to remove, so it is NOT graded."
+elif [ "${GPU_TOK}" -gt 0 ] 2>/dev/null && [ "$GPU_TXT" = "$CPU_TXT" ]; then
+  echo "    W392_OUTCOME=(P) ★★★★★ PASS — ${GPU_TOK} tokens AND the text matches the CPU"
+  echo "        oracle EXACTLY. The host GPU did the arithmetic, through our emulated device,"
+  echo "        correctly. ⊘ Un-forgeable by a copy, a fill or a completion we wrote."
+elif [ "${GPU_TOK}" -gt 0 ] 2>/dev/null; then
+  echo "    W392_OUTCOME=(F) ★★★ FORGED-PASS CAUGHT — ${GPU_TOK} tokens, WRONG TEXT."
+  echo "        The old LLM_TOKENS grade would have called this a PASS (w386, measured)."
+  echo "        ⇒ the pipeline RAN and the ARITHMETIC IS WRONG. That is a worse defect than"
+  echo "        a refusal, and it is now visible."
+else
+  echo "    W392_OUTCOME=(Z) the GPU run produced ${GPU_TOK} tokens — it did not generate."
+fi
+echo "=== w392 llm hook DONE ==="
