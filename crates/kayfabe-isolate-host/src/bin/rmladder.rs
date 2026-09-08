@@ -11044,6 +11044,16 @@ fn main() -> std::process::ExitCode {
     // is inside. See [`blockage_coverage`].
     let mut want_blockage_coverage = false;
     let mut want_uvm = false;
+    // ★★★★★ w392d — `--uvm-mean`, THE MEAN CLIENT. Its own flag and deliberately not
+    // folded into any battery: its verdict is a LEDGER over five rows, and a battery
+    // that ran it beside other rungs would interleave their channels' completions with
+    // its own engine reads. See [`mean::run`].
+    let mut want_mean = false;
+    let mut mean_threads: usize = 4;
+    let mut mean_p1_rounds: u32 = 4;
+    // ⊘ `None` means *"draw one and PRINT it"*, never *"do not seed"*: a content
+    //   failure whose pattern cannot be reproduced is an anecdote.
+    let mut mean_nonce: Option<u32> = None;
     // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
     // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
     // that runs a rung WITHOUT its positive control, because a rung whose control did not
@@ -11152,6 +11162,63 @@ fn main() -> std::process::ExitCode {
             // to compare it to.
             "--blockage-coverage" => want_blockage_coverage = true,
             "--uvm-invalidate" => want_uvm = true,
+            // ★★★★★ w392d — the MEAN client. Runs every row in one invocation, for
+            // `--late-map-race`'s reason: a flag that could select one row would
+            // produce the favourable half of a ledger whose whole point is that an
+            // unexercised row holds the verdict red.
+            "--uvm-mean" => want_mean = true,
+            "--mean-threads" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--mean-threads needs a value");
+                    return std::process::ExitCode::from(64);
+                };
+                match v.parse::<usize>() {
+                    Ok(n) if n >= 2 => mean_threads = n,
+                    // ⊘ Refused rather than clamped: a run that silently became
+                    //   single-threaded would fail the THREADS row for a reason
+                    //   nothing in its output names.
+                    Ok(n) => {
+                        eprintln!("--mean-threads {n} cannot race; the row needs >= 2");
+                        return std::process::ExitCode::from(64);
+                    }
+                    Err(_) => {
+                        eprintln!("--mean-threads {v} is not a number");
+                        return std::process::ExitCode::from(64);
+                    }
+                }
+            }
+            "--mean-rounds" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--mean-rounds needs a value");
+                    return std::process::ExitCode::from(64);
+                };
+                match v.parse::<u32>() {
+                    Ok(n) if n >= 2 => mean_p1_rounds = n,
+                    // ⊘ One round cannot catch a stale mapping: P1's whole content is
+                    //   the comparison BETWEEN rounds at one VA.
+                    Ok(n) => {
+                        eprintln!("--mean-rounds {n} cannot see a stale mapping; need >= 2");
+                        return std::process::ExitCode::from(64);
+                    }
+                    Err(_) => {
+                        eprintln!("--mean-rounds {v} is not a number");
+                        return std::process::ExitCode::from(64);
+                    }
+                }
+            }
+            "--mean-nonce" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--mean-nonce needs a value");
+                    return std::process::ExitCode::from(64);
+                };
+                match u32::from_str_radix(v.trim_start_matches("0x"), 16) {
+                    Ok(n) => mean_nonce = Some(n),
+                    Err(_) => {
+                        eprintln!("--mean-nonce {v} is not hex");
+                        return std::process::ExitCode::from(64);
+                    }
+                }
+            }
             // ★★★★★ w379 R1′ — one allocation, two GPU VAs, and a release through the
             // FIRST one after the second is mapped.
             "--alias-two-vas" => want_alias_two_vas = true,
@@ -11839,6 +11906,37 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::SUCCESS
         } else {
             std::process::ExitCode::FAILURE
+        };
+    }
+    // ★★★★★ w392d — THE MEAN CLIENT. Placed after `--uvm-invalidate` (whose chain it
+    // reuses for P2) and before every other rung, because its engine reads wait on a
+    // completion semaphore and another rung's channel retiring into the same process
+    // would be indistinguishable noise.
+    if want_mean {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ⚠ Drawn from the clock, PRINTED by `mean::run`, and overridable with
+        //   `--mean-nonce` so any failure replays with the same patterns.
+        let nonce = mean_nonce.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0x4B46_0001, |d| d.subsec_nanos() ^ (d.as_secs() as u32))
+                | 1
+        });
+        let cfg = mean::Cfg {
+            gpu,
+            threads: mean_threads,
+            p1_rounds: mean_p1_rounds,
+            nonce,
+        };
+        let ok = mean::run(&mut rm, &conn, &cfg);
+        println!("done — w392d mean client only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
         };
     }
     if want_blockage_coverage {
@@ -12812,21 +12910,21 @@ mod uvm_raw {
 /// guessed by anything that did not actually read B.
 mod mean {
     use super::{HostRmBackend, RmBackend};
-    use kayfabe_isolate::HostHandle;
+    use kayfabe_arch::ids::{GpuId, GpuVa};
+    use kayfabe_isolate::{HostHandle, IsolateId};
+    use kayfabe_isolate_host::rm::RmConnection;
+    use std::sync::Arc;
 
     /// One coverage point's state. ⊘ There is deliberately **no** `Skipped` — a path is
     /// either verified or it is holding the verdict red.
     #[derive(Debug)]
     pub enum PathState {
         /// Never driven on this run. **This is a FAIL**, and it carries why.
-        Unexercised(&'static str),
+        Unexercised(String),
         /// Driven, and the engine read back exactly what was written, `rounds` times.
         Verified { rounds: u32 },
         /// Driven and the content did not match — the strongest possible signal.
-        Mismatch {
-            rounds: u32,
-            first_bad: String,
-        },
+        Mismatch { rounds: u32, first_bad: String },
         /// An ioctl refused before content could be tested. NOT a content result.
         Refused { step: &'static str, status: String },
     }
@@ -12857,21 +12955,34 @@ mod mean {
         pub p3_rpc_bind: PathState,
         /// Did the stale-mapping race run AND come out right?
         pub stale_race: PathState,
-        /// How many threads actually drove work concurrently. 1 is a FAIL: a single thread
-        /// cannot exercise a publication/use race.
+        /// How many threads drove concurrent work **and came back clean**. 1 is a FAIL: a
+        /// single thread cannot exercise a publication/use race.
         pub threads: u32,
+        /// ★★★★★ **EVERY THREAD THAT DID NOT COME BACK CLEAN, BY NAME.** ⊘ Without this the
+        /// count above is a *"every row verified"* over the rows that happened to survive:
+        /// four workers of which two mismatched would report `threads = 2` and pass the
+        /// `>= 2` gate on the strength of the half that worked.
+        pub thread_faults: Vec<String>,
+        /// How many threads were actually STARTED. ⊘ Printed beside `threads` so *"two
+        /// verified"* and *"two ran"* are never the same sentence.
+        pub threads_started: u32,
     }
 
     impl Ledger {
         pub fn new() -> Self {
             Self {
-                p1_rm_invalidate: PathState::Unexercised("no RM map+invalidate round ran"),
-                p2_uvm_memop: PathState::Unexercised(
-                    "no UVM page-tree grow ran — see w392c: registration alone grows nothing",
+                p1_rm_invalidate: PathState::Unexercised(
+                    "no RM map+invalidate round ran".to_owned(),
                 ),
-                p3_rpc_bind: PathState::Unexercised("no RPC-bound mapping round ran"),
-                stale_race: PathState::Unexercised("the remap race did not run"),
-                threads: 1,
+                p2_uvm_memop: PathState::Unexercised(
+                    "no UVM page-tree grow ran — see w392c: registration alone grows nothing"
+                        .to_owned(),
+                ),
+                p3_rpc_bind: PathState::Unexercised("no RPC-bound mapping round ran".to_owned()),
+                stale_race: PathState::Unexercised("the remap race did not run".to_owned()),
+                threads: 0,
+                thread_faults: Vec::new(),
+                threads_started: 0,
             }
         }
 
@@ -12883,19 +12994,26 @@ mod mean {
             println!("    P3 rpc-bind       {}", self.p3_rpc_bind.describe());
             println!("    STALE RACE        {}", self.stale_race.describe());
             println!(
-                "    THREADS           {} {}",
+                "    THREADS           {} of {} verified {}",
                 self.threads,
-                if self.threads >= 2 {
+                self.threads_started,
+                if self.threads >= 2 && self.thread_faults.is_empty() {
                     "✔"
-                } else {
+                } else if self.thread_faults.is_empty() {
                     "⊘ ONE THREAD CANNOT RACE — a publish/use race needs a concurrent user"
+                } else {
+                    "⊘ A WORKER CAME BACK DIRTY — see the faults below"
                 }
             );
+            for f in &self.thread_faults {
+                println!("        ⊘ thread fault: {f}");
+            }
             let all = self.p1_rm_invalidate.ok()
                 && self.p2_uvm_memop.ok()
                 && self.p3_rpc_bind.ok()
                 && self.stale_race.ok()
-                && self.threads >= 2;
+                && self.threads >= 2
+                && self.thread_faults.is_empty();
             if all {
                 println!("    W392D_OUTCOME=(P) ★★★★★ PASS — all three paths content-verified,");
                 println!("        the stale-mapping race came out right, and it was concurrent.");
@@ -12914,10 +13032,7 @@ mod mean {
     #[must_use]
     pub fn pattern(nonce: u32, slot: u32, round: u32) -> u32 {
         // A cheap avalanche — the point is distinctness and unguessability, not crypto.
-        let mut h = nonce
-            ^ slot.rotate_left(11)
-            ^ round.rotate_left(23)
-            ^ 0x9E37_79B9;
+        let mut h = nonce ^ slot.rotate_left(11) ^ round.rotate_left(23) ^ 0x9E37_79B9;
         h ^= h >> 16;
         h = h.wrapping_mul(0x85EB_CA6B);
         h ^= h >> 13;
@@ -12926,139 +13041,724 @@ mod mean {
         h | 1
     }
 
+    /// ⊘ Cannot collide with any [`pattern`] — those are always odd (`| 1`).
+    const POISON: u32 = 0xDEAD_BEEE;
+    /// How long a four-byte copy is given to retire before the read is called UNMEASURED.
+    const RETIRE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+    /// How often the completion semaphore is sampled while waiting.
+    const RETIRE_POLL: std::time::Duration = std::time::Duration::from_micros(200);
+    /// The mapped length of every object this client tests through. One page.
+    const LEN: u64 = 0x1000;
+
+    /// Everything one *lane* — one thread, or the main one — needs to read GPU memory with
+    /// the copy engine: a channel, its work-submit token, and a scratch object that is both
+    /// GPU-writable and CPU-readable.
+    struct Lane {
+        chan: HostHandle,
+        token: u64,
+        scratch: HostHandle,
+        scratch_va: u64,
+        /// Monotonic per-lane, so no two engine reads ever share a completion payload.
+        seq: u32,
+    }
 
     /// ★★★ **THE ENGINE READS THROUGH THE VA — never the CPU, never the handle.**
     ///
     /// Poisons the scratch first, so *"the copy never ran"* cannot look like *"the copy
-    /// returned the right value"*. That is the same discipline `w381_engine_readback`'s
-    /// docs record paying for: a readback that never happened leaves whatever was in the
-    /// slot.
+    /// returned the right value"*, and then **waits for the copy's own completion
+    /// semaphore** before reading it.
+    ///
+    /// ⊘⊘ **TWO DEFECTS THIS FUNCTION CARRIED BEFORE IT WAS EVER RUN, both of which would
+    /// have made every row above it meaningless:**
+    ///
+    /// 1. It called [`HostRmBackend::submit_copy_at`], whose `src` argument is an **offset
+    ///    inside the channel's own ring object** and which refuses anything past
+    ///    `RING_OBJECT_BYTES`. Passing a full GPU VA there does not read that VA — it is
+    ///    refused outright by a bounds check wearing an encode error's name. The verb that
+    ///    takes an arbitrary source VA is [`HostRmBackend::submit_copy_va`].
+    /// 2. It read the scratch **immediately after submitting**, with nothing waiting for
+    ///    retirement. A four-byte CE copy takes microseconds, so the read would *usually*
+    ///    have raced ahead of it and seen the poison — reported as *"the copy never
+    ///    landed"*, i.e. a red that is the harness's.
+    ///
+    /// ⚠ The completion payload is **derived per call** and never a constant:
+    /// `submit_copy_va` clears the semaphore to `0` before it pushes, so `0` is the
+    /// *not-yet* value — and a payload reused between two reads would let the **previous**
+    /// copy's retirement satisfy this one's wait.
     fn engine_read_through_va(
         rm: &mut HostRmBackend,
-        chan: HostHandle,
-        token: u64,
+        lane: &mut Lane,
         src_va: u64,
-        scratch: HostHandle,
-        scratch_va: u64,
     ) -> Result<u32, String> {
-        /// Cannot collide with any `pattern()` — those are always odd (`| 1`).
-        const POISON: u32 = 0xDEAD_BEEE;
-        rm.fill_words(scratch, 4, POISON, 0)
+        let (_src_off, sem_off) = HostRmBackend::copy_probe_offsets();
+        lane.seq = lane.seq.wrapping_add(1);
+        let payload = 0x6D00_0000 | (lane.seq & 0x00FF_FFFF);
+        rm.fill_words(lane.scratch, LEN, POISON, 0)
             .map_err(|e| format!("poison scratch: {e:?}"))?;
-        rm.submit_copy_at(chan, token, src_va, scratch_va, 4, 0x5EED_0001)
-            .map_err(|e| format!("engine copy {src_va:#x} -> {scratch_va:#x}: {e:?}"))?;
+        rm.submit_copy_va(lane.chan, lane.token, src_va, lane.scratch_va, 4, payload)
+            .map_err(|e| {
+                format!(
+                    "engine copy {src_va:#018x} -> {:#018x}: {e:?}",
+                    lane.scratch_va
+                )
+            })?;
+        let deadline = std::time::Instant::now() + RETIRE_TIMEOUT;
+        let mut retired = false;
+        while std::time::Instant::now() < deadline {
+            if matches!(rm.ring_load_u32(lane.chan, sem_off), Ok(v) if v == payload) {
+                retired = true;
+                break;
+            }
+            std::thread::sleep(RETIRE_POLL);
+        }
+        if !retired {
+            let seen = rm.ring_load_u32(lane.chan, sem_off);
+            return Err(format!(
+                "⊘ the copy from {src_va:#018x} NEVER RETIRED — the completion semaphore \
+                 never reached {payload:#010x} in {RETIRE_TIMEOUT:?} (it holds {seen:?}). \
+                 This is an UNMEASURED read, not a wrong value: the engine may have faulted \
+                 on the source VA, in which case the host dmesg carries an Xid 31"
+            ));
+        }
         let got = rm
-            .read_words_independently(scratch, 4, &[0])
+            .read_words_independently(lane.scratch, LEN, &[0])
             .map_err(|e| format!("read scratch: {e:?}"))?
             .first()
             .copied()
             .unwrap_or(0);
         if got == POISON {
             return Err(format!(
-                "⊘ scratch still holds the poison {POISON:#010x} — THE ENGINE COPY NEVER \
-                 LANDED. This is an UNMEASURED read, not a wrong value."
+                "⊘ scratch still holds the poison {POISON:#010x} AFTER a retired copy — the \
+                 engine released its semaphore without writing the destination. UNMEASURED."
             ));
         }
         Ok(got)
     }
 
-    /// ★★★★★ **THE STALE-MAPPING RACE.** See the module docs for the shape and why
-    /// `pattern_b` is un-forgeable.
+    /// ★★★★★ **P1 — THE RM MAPPING PATH, AND THE INVALIDATE THAT MUST FOLLOW IT.**
     ///
-    /// Returns the state to record in the ledger — never a bare bool, because *"refused"*,
-    /// *"mismatched"* and *"never ran"* must not collapse into one word.
-    /// ⊘⊘ **A FLAW I CAUGHT IN MY OWN FIRST CUT, AND IT WOULD HAVE MADE THE WHOLE TEST
-    /// VACUOUS.** The first version verified with `read_words_independently(a, …)` — a
-    /// **CPU read of the object by handle**. That never goes through `va_x` at all, so it
-    /// would have returned the right bytes no matter how broken the translation was, and
-    /// the stale race would have passed unconditionally. Same family as
-    /// `a_probe_that_shares_the_allocator_is_not_an_observer`.
+    /// Each round allocates a **fresh** object, fills it with a **fresh** pattern, maps it
+    /// at the **same** VA the last round used, has the engine read it, then unmaps and frees
+    /// it. So the round-to-round comparison is exactly the question the row is named for:
     ///
-    /// ⇒ **The read must be the ENGINE's, through the VA**: `submit_copy_at` copies
-    /// `va_x → scratch_va`, and only then does the CPU read the scratch. That is also
-    /// strictly stronger evidence — it proves the engine can *translate and read* `va_x`,
-    /// which a CPU load of the backing object cannot say (`w381_engine_readback`'s own
-    /// doctrine, applied here).
-    pub fn stale_race(
+    /// ```text
+    ///   round r   : VA -> object_r  (pattern_r)   engine must read pattern_r
+    ///   round r+1 : VA -> object_r+1 (pattern_r+1) engine must read pattern_r+1
+    ///                                              ⊘ reading pattern_r means the PTE and/or
+    ///                                                the TLB entry RM should have retired
+    ///                                                at the unmap is still live
+    /// ```
+    ///
+    /// ⚠ The freed object's storage may be handed straight back out, so *"the same bytes"*
+    /// is not evidence on its own — which is why every round writes a pattern that no other
+    /// round in the run can produce.
+    fn p1_rm_round(
         rm: &mut HostRmBackend,
         vas: HostHandle,
-        chan: HostHandle,
-        token: u64,
-        scratch: HostHandle,
-        scratch_va: u64,
+        lane: &mut Lane,
+        va: u64,
+        nonce: u32,
+        rounds: u32,
+    ) -> PathState {
+        for r in 0..rounds {
+            let obj = match rm.alloc_probe_local(LEN) {
+                Ok(h) => h,
+                Err(e) => {
+                    return PathState::Refused {
+                        step: "alloc_probe_local",
+                        status: format!("round {r}: {e:?}"),
+                    };
+                }
+            };
+            let p = pattern(nonce, 2, r);
+            if let Err(e) = rm.fill_words(obj, LEN, p, 0) {
+                let _ = rm.free(obj);
+                return PathState::Refused {
+                    step: "fill",
+                    status: format!("round {r}: {e:?}"),
+                };
+            }
+            let got_va = match rm.map_local_at(vas, obj, LEN, Some(va)) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = rm.free(obj);
+                    return PathState::Refused {
+                        step: "map_local_at",
+                        status: format!("round {r} at {va:#018x}: {e:?}"),
+                    };
+                }
+            };
+            if got_va != va {
+                let _ = rm.unmap_local(vas, got_va);
+                let _ = rm.free(obj);
+                return PathState::Refused {
+                    step: "map_local_at placement",
+                    status: format!("round {r}: asked {va:#018x}, RM placed {got_va:#018x}"),
+                };
+            }
+            let seen = engine_read_through_va(rm, lane, va);
+            let _ = rm.unmap_local(vas, va);
+            let _ = rm.free(obj);
+            match seen {
+                Err(e) => {
+                    return PathState::Refused {
+                        step: "engine read @P1 VA",
+                        status: format!("round {r}: {e}"),
+                    };
+                }
+                Ok(v) if v != p => {
+                    // ★ Name the previous round's pattern explicitly when that is what came
+                    //   back: *"wrong value"* and *"the mapping we retired is still live"*
+                    //   are different defects and must not share a sentence.
+                    let stale = r > 0 && v == pattern(nonce, 2, r - 1);
+                    return PathState::Mismatch {
+                        rounds: r + 1,
+                        first_bad: if stale {
+                            format!(
+                                "★★★★★ STALE RM MAPPING at {va:#018x}: round {r} read round \
+                                 {}'s pattern {v:#010x} instead of its own {p:#010x}. The \
+                                 unmap did not retire the translation.",
+                                r - 1
+                            )
+                        } else {
+                            format!(
+                                "round {r} at {va:#018x}: expected {p:#010x}, got {v:#010x} \
+                                 (⊘ not any earlier round's pattern either)"
+                            )
+                        },
+                    };
+                }
+                Ok(_) => {}
+            }
+        }
+        PathState::Verified { rounds }
+    }
+
+    /// ★★★★★ **THE STALE-MAPPING RACE.**
+    ///
+    /// ```text
+    ///   fill A with pattern_a (CPU)        fill B with pattern_b (CPU)
+    ///   map   VA_X -> A
+    ///   engine reads VA_X                  must be pattern_a
+    ///   unmap VA_X ;  map VA_X -> B        <- THE REMAP
+    ///   engine reads VA_X                  must be pattern_b
+    ///                                      ⊘ if it is pattern_a, a STALE MAPPING is caught
+    ///                                        RED-HANDED
+    /// ```
+    ///
+    /// ★ Unlike [`p1_rm_round`], **A stays allocated across the remap**. That is the whole
+    /// difference and it is what makes the row worth running beside P1: a stale translation
+    /// here points at memory that is still live and still holds `pattern_a`, so the wrong
+    /// answer is unambiguous rather than dependent on whether the allocator recycled a page.
+    ///
+    /// Returns the state to record — never a bare bool, because *"refused"*, *"mismatched"*
+    /// and *"never ran"* must not collapse into one word.
+    fn stale_race(
+        rm: &mut HostRmBackend,
+        vas: HostHandle,
+        lane: &mut Lane,
         va_x: u64,
         nonce: u32,
+        quiet: bool,
     ) -> PathState {
-        const LEN: u64 = 0x1000;
         let a = match rm.alloc_probe_local(LEN) {
             Ok(h) => h,
             Err(e) => {
-                return PathState::Refused { step: "alloc A", status: format!("{e:?}") }
+                return PathState::Refused {
+                    step: "alloc A",
+                    status: format!("{e:?}"),
+                };
             }
         };
         let b = match rm.alloc_probe_local(LEN) {
             Ok(h) => h,
             Err(e) => {
-                return PathState::Refused { step: "alloc B", status: format!("{e:?}") }
+                let _ = rm.free(a);
+                return PathState::Refused {
+                    step: "alloc B",
+                    status: format!("{e:?}"),
+                };
             }
         };
         let pa = pattern(nonce, 0, 0);
         let pb = pattern(nonce, 1, 0);
+        let done = |rm: &mut HostRmBackend, st: PathState| -> PathState {
+            let _ = rm.unmap_local(vas, va_x);
+            let _ = rm.free(b);
+            let _ = rm.free(a);
+            st
+        };
         if let Err(e) = rm.fill_words(a, LEN, pa, 0) {
-            return PathState::Refused { step: "fill A", status: format!("{e:?}") };
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "fill A",
+                    status: format!("{e:?}"),
+                },
+            );
         }
         if let Err(e) = rm.fill_words(b, LEN, pb, 0) {
-            return PathState::Refused { step: "fill B", status: format!("{e:?}") };
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "fill B",
+                    status: format!("{e:?}"),
+                },
+            );
         }
-        println!("    w392d stale: A pattern={pa:#010x}  B pattern={pb:#010x}  VA={va_x:#x}");
+        if !quiet {
+            println!(
+                "    w392d stale: A pattern={pa:#010x}  B pattern={pb:#010x}  VA={va_x:#018x}"
+            );
+        }
 
         // ---- round 1: VA_X -> A, and the engine must see A ---------------------------
         if let Err(e) = rm.map_local_at(vas, a, LEN, Some(va_x)) {
-            return PathState::Refused { step: "map A@VA_X", status: format!("{e:?}") };
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "map A@VA_X",
+                    status: format!("{e:?}"),
+                },
+            );
         }
-        let seen_a = match engine_read_through_va(rm, chan, token, va_x, scratch, scratch_va) {
+        let seen_a = match engine_read_through_va(rm, lane, va_x) {
             Ok(v) => v,
-            Err(e) => return PathState::Refused { step: "engine read @VA_X (round 1)", status: e },
+            Err(e) => {
+                return done(
+                    rm,
+                    PathState::Refused {
+                        step: "engine read @VA_X (round 1)",
+                        status: e,
+                    },
+                );
+            }
         };
         if seen_a != pa {
-            return PathState::Mismatch {
-                rounds: 1,
-                first_bad: format!("round 1 at {va_x:#x}: expected {pa:#010x}, got {seen_a:#010x}"),
-            };
+            return done(
+                rm,
+                PathState::Mismatch {
+                    rounds: 1,
+                    first_bad: format!(
+                        "round 1 at {va_x:#018x}: expected {pa:#010x}, got {seen_a:#010x}"
+                    ),
+                },
+            );
         }
 
         // ---- THE REMAP: same VA, different object ------------------------------------
         if let Err(e) = rm.unmap_local(vas, va_x) {
-            return PathState::Refused { step: "unmap VA_X", status: format!("{e:?}") };
+            let _ = rm.free(b);
+            let _ = rm.free(a);
+            return PathState::Refused {
+                step: "unmap VA_X",
+                status: format!("{e:?}"),
+            };
         }
         if let Err(e) = rm.map_local_at(vas, b, LEN, Some(va_x)) {
-            return PathState::Refused { step: "map B@VA_X", status: format!("{e:?}") };
+            let _ = rm.free(b);
+            let _ = rm.free(a);
+            return PathState::Refused {
+                step: "map B@VA_X",
+                status: format!("{e:?}"),
+            };
         }
 
         // ---- round 2: the SAME VA must now read B, and MUST NOT read A ----------------
-        let seen_b = match engine_read_through_va(rm, chan, token, va_x, scratch, scratch_va) {
+        let seen_b = match engine_read_through_va(rm, lane, va_x) {
             Ok(v) => v,
-            Err(e) => return PathState::Refused { step: "engine read @VA_X (round 2)", status: e },
+            Err(e) => {
+                return done(
+                    rm,
+                    PathState::Refused {
+                        step: "engine read @VA_X (round 2)",
+                        status: e,
+                    },
+                );
+            }
         };
         if seen_b == pa {
-            return PathState::Mismatch {
-                rounds: 2,
-                first_bad: format!(
-                    "★★★★★ STALE MAPPING CAUGHT RED-HANDED at {va_x:#x}: after the remap the \
-                     read returned A's pattern {pa:#010x}, not B's {pb:#010x}. The binding we \
-                     should have retired is still translating."
-                ),
-            };
+            return done(
+                rm,
+                PathState::Mismatch {
+                    rounds: 2,
+                    first_bad: format!(
+                        "★★★★★ STALE MAPPING CAUGHT RED-HANDED at {va_x:#018x}: after the \
+                         remap the read returned A's pattern {pa:#010x}, not B's {pb:#010x}. \
+                         The binding we should have retired is still translating."
+                    ),
+                },
+            );
         }
         if seen_b != pb {
-            return PathState::Mismatch {
-                rounds: 2,
-                first_bad: format!(
-                    "round 2 at {va_x:#x}: expected B {pb:#010x}, got {seen_b:#010x} \
-                     (⊘ neither A nor B — a THIRD value, which is worse than a stale read)"
-                ),
-            };
+            return done(
+                rm,
+                PathState::Mismatch {
+                    rounds: 2,
+                    first_bad: format!(
+                        "round 2 at {va_x:#018x}: expected B {pb:#010x}, got {seen_b:#010x} \
+                         (⊘ neither A nor B — a THIRD value, which is worse than a stale read)"
+                    ),
+                },
+            );
         }
-        PathState::Verified { rounds: 2 }
+        done(rm, PathState::Verified { rounds: 2 })
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // THE ADDRESS MAP. ★ Every region is ≥ 1 GiB from every other, which is twice the
+    // ≥ 512 MiB separation `late_map_race` and `map_stress` document needing: a target
+    // adjacent to another region can be covered by a large PTE the neighbour's mapping
+    // installed, and then a row passes for a reason that has nothing to do with what it
+    // tested. ⊘ The base is clear of `--late-map-race` (0x4–0x7), `--rpc-mixed-allocs`
+    // (0xC–0x1A) and `--concurrent-fuzz` (0x20 + lane × 8 GiB) so a single invocation can
+    // name several arms.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    /// The base of everything this arm names.
+    const BASE: u64 = 0x0000_0080_0000_0000;
+    /// The main lane's channel ring.
+    const MAIN_RING: u64 = BASE;
+    /// The main lane's scratch — the ONE object the CPU ever reads.
+    const MAIN_SCRATCH: u64 = BASE + 0x4000_0000;
+    /// P1's single re-used VA. Every round maps a different object here.
+    const P1_VA: u64 = BASE + 0x8000_0000;
+    /// The stale race's VA.
+    const STALE_VA: u64 = BASE + 0xC000_0000;
+    /// The first worker's window; each worker gets [`THREAD_STRIDE`] to itself.
+    const THREAD_BASE: u64 = BASE + 0x2_0000_0000;
+    /// 8 GiB per worker — the same stride `--concurrent-fuzz` uses, for the same reason.
+    const THREAD_STRIDE: u64 = 0x2_0000_0000;
+    /// RM's default `FERMI_VASPACE_A` limit on this part. A window past it is refused by
+    /// name rather than producing a confident red in which every mapping fails.
+    const VAS_LIMIT: u64 = 0x0000_0100_0000_0000;
+
+    /// Build one lane: a channel at a dictated ring VA, scheduled, plus a scratch object at
+    /// a dictated VA.
+    ///
+    /// ⊘ The ring's placement is checked against RM's **[OUT]** `dmaOffset` and not against
+    /// the value we asked for — a channel RM quietly relocated runs, rings, and then walks
+    /// the MMU into nothing.
+    fn build_lane(
+        rm: &mut HostRmBackend,
+        vas: HostHandle,
+        engine_type: u32,
+        ring_at: u64,
+        scratch_at: u64,
+    ) -> Result<Lane, String> {
+        let (chan, token) = rm
+            .alloc_channel_at(vas, engine_type, Some(GpuVa(ring_at)))
+            .map_err(|e| format!("alloc_channel_at {ring_at:#018x}: {e:?}"))?;
+        let got = rm.channel_ring_va(chan);
+        if got != Some(ring_at) {
+            let _ = rm.free(chan);
+            return Err(format!(
+                "ring placement: asked {ring_at:#018x}, RM's dmaOffset says {got:?}"
+            ));
+        }
+        rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
+        let scratch = rm
+            .alloc_probe_local(LEN)
+            .map_err(|e| format!("alloc scratch: {e:?}"))?;
+        let va = rm
+            .map_local_at(vas, scratch, LEN, Some(scratch_at))
+            .map_err(|e| format!("map scratch at {scratch_at:#018x}: {e:?}"))?;
+        if va != scratch_at {
+            return Err(format!(
+                "scratch placement: asked {scratch_at:#018x}, RM placed {va:#018x}"
+            ));
+        }
+        Ok(Lane {
+            chan,
+            token,
+            scratch,
+            scratch_va: scratch_at,
+            seq: 0,
+        })
+    }
+
+    /// What one concurrent worker reports back.
+    struct WorkerReport {
+        /// `None` = the worker verified both of its rows. `Some` = the reason it did not,
+        /// and the reason is the row's own `describe()`.
+        fault: Option<String>,
+        /// The interval the worker's *graded* work occupied, relative to a shared origin.
+        /// ⊘ Two workers whose intervals never intersect sampled no concurrency at all.
+        span: (u128, u128),
+    }
+
+    /// ★★★★★ **ONE CONCURRENT WORKER — its own backend, its own channel, its own VA window,
+    /// the SHARED address space.**
+    ///
+    /// The address space is shared on purpose. A per-worker VAS would leave RM's per-VAS page
+    /// tables uncontended, which is exactly the plane a concurrent map/remap test exists to
+    /// stress; the per-worker VA **window** is what keeps a violation attributable to one
+    /// worker.
+    ///
+    /// ⚠ Every worker builds its **own** [`HostRmBackend`] over the shared
+    /// [`RmConnection`]. The backend carries per-channel GPFIFO slot cursors, so two workers
+    /// sharing one would overwrite each other's ring entries and produce a red that is the
+    /// harness's rather than the driver's.
+    // ⊘ Nine arguments, and none of them is bundleable without hiding something: the
+    //   shared connection, the shared VA space and the shared barrier are three
+    //   different sharing disciplines, and a struct wrapping them would read as one.
+    #[allow(clippy::too_many_arguments)]
+    fn thread_worker(
+        tid: usize,
+        conn: Arc<RmConnection>,
+        vas_raw: u64,
+        engine_type: u32,
+        gpu: u32,
+        nonce: u32,
+        rounds: u32,
+        barrier: &std::sync::Barrier,
+        origin: std::time::Instant,
+    ) -> WorkerReport {
+        let window = THREAD_BASE + (tid as u64) * THREAD_STRIDE;
+        let id = IsolateId::new(tid as u32, GpuId(gpu));
+        let vas = HostHandle::new(id, vas_raw);
+        let mut rm = HostRmBackend::new(
+            id,
+            conn,
+            Arc::new(kayfabe_isolate_host::ChildExports::new()),
+        );
+        let mut lane = match build_lane(
+            &mut rm,
+            vas,
+            engine_type,
+            window,
+            window + 0x4000_0000,
+        ) {
+            Ok(l) => l,
+            Err(e) => {
+                // ⊘ Still join the barrier, or every other worker blocks forever on a
+                //   failure that has nothing to do with them and the whole arm hangs.
+                barrier.wait();
+                return WorkerReport {
+                    fault: Some(format!("tid {tid}: lane refused: {e}")),
+                    span: (0, 0),
+                };
+            }
+        };
+        // ★ Everything above is setup and is NOT part of the measured interval; the barrier
+        //   is what makes the intervals below actually overlap rather than merely being on
+        //   different threads.
+        barrier.wait();
+        let t0 = origin.elapsed().as_nanos();
+        // ⚠ Each worker's nonce is its own, so a value that crossed between two workers'
+        //   windows is recognisable as *whose* it is rather than merely wrong.
+        let wnonce = nonce ^ ((tid as u32).wrapping_mul(0x9E37_79B9));
+        let p1 = p1_rm_round(
+            &mut rm,
+            vas,
+            &mut lane,
+            window + 0x8000_0000,
+            wnonce,
+            rounds,
+        );
+        let race = stale_race(&mut rm, vas, &mut lane, window + 0xC000_0000, wnonce, true);
+        let t1 = origin.elapsed().as_nanos();
+        let fault = if !p1.ok() {
+            Some(format!("tid {tid} P1: {}", p1.describe()))
+        } else if !race.ok() {
+            Some(format!("tid {tid} STALE RACE: {}", race.describe()))
+        } else {
+            None
+        };
+        let _ = rm.unmap_local(vas, lane.scratch_va);
+        let _ = rm.free(lane.scratch);
+        let _ = rm.free(lane.chan);
+        WorkerReport {
+            fault,
+            span: (t0, t1),
+        }
+    }
+
+    /// Configuration for one `--uvm-mean` run. Every field is printed before the run.
+    pub struct Cfg {
+        /// The GPU index — the one the UUID is read for and the one RM is opened on.
+        pub gpu: u32,
+        /// How many concurrent workers the thread phase starts.
+        pub threads: usize,
+        /// How many map → engine-read → unmap rounds P1 performs at one VA.
+        pub p1_rounds: u32,
+        /// The run nonce. Printed, so a failure is replayable.
+        pub nonce: u32,
+    }
+
+    /// ★★★★★ **THE MEAN CLIENT'S ENTRY POINT.**
+    ///
+    /// Returns the ledger's own verdict and nothing else — the process's exit status is that
+    /// verdict, so a harness that reads only `$?` and a reader who reads only the ledger can
+    /// never disagree.
+    #[allow(clippy::too_many_lines)]
+    pub fn run(rm: &mut HostRmBackend, conn: &Arc<RmConnection>, cfg: &Cfg) -> bool {
+        let mut led = Ledger::new();
+        println!(
+            "info  W392D config        = gpu {} threads {} p1_rounds {} nonce {:#010x} euid {}",
+            cfg.gpu,
+            cfg.threads,
+            cfg.p1_rounds,
+            cfg.nonce,
+            kayfabe_linux_raw::geteuid()
+        );
+        println!(
+            "info  W392D the bar       = EVERY row must be ✔. ⊘ A row this build cannot \
+             drive is a FAIL BY NAME and holds the whole client red — it does not drop out \
+             of the grade"
+        );
+
+        let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(0) else {
+            println!("FAIL  W392D engine        = COPY0 is not expressible");
+            return led.report();
+        };
+        let last = THREAD_BASE + (cfg.threads.max(1) as u64) * THREAD_STRIDE;
+        if last > VAS_LIMIT {
+            println!(
+                "FAIL  W392D geometry      = {} workers would place a window at {last:#018x}, \
+                 past the address space's {VAS_LIMIT:#018x} limit. ⊘ HARNESS FAULT — lower \
+                 --mean-threads",
+                cfg.threads
+            );
+            return led.report();
+        }
+
+        let vas = match rm.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                println!("FAIL  W392D vaspace       = {e:?} — ⊘ nothing below is a driver result");
+                return led.report();
+            }
+        };
+        let mut lane = match build_lane(rm, vas, engine_type, MAIN_RING, MAIN_SCRATCH) {
+            Ok(l) => l,
+            Err(e) => {
+                println!("FAIL  W392D main lane     = {e}");
+                println!("      ⊘ No engine exists on this run, so P1 and the STALE RACE are");
+                println!("        UNMEASURED rather than failed. The ledger says so by name.");
+                led.p1_rm_invalidate =
+                    PathState::Refused { step: "build main lane", status: e.clone() };
+                led.stale_race = PathState::Refused { step: "build main lane", status: e };
+                return led.report();
+            }
+        };
+        println!(
+            "ok    W392D main lane     = channel ring at {MAIN_RING:#018x}, scratch at \
+             {MAIN_SCRATCH:#018x} — the engine can be asked questions"
+        );
+
+        // ── P1 ────────────────────────────────────────────────────────────────────────
+        println!("--- W392D P1: the RM mapping path, {} rounds at one VA ---", cfg.p1_rounds);
+        led.p1_rm_invalidate = p1_rm_round(rm, vas, &mut lane, P1_VA, cfg.nonce, cfg.p1_rounds);
+        println!("    P1 → {}", led.p1_rm_invalidate.describe());
+
+        // ── THE STALE RACE ────────────────────────────────────────────────────────────
+        println!("--- W392D STALE RACE: remap one VA between two LIVE objects ---");
+        led.stale_race = stale_race(rm, vas, &mut lane, STALE_VA, cfg.nonce, false);
+        println!("    STALE RACE → {}", led.stale_race.describe());
+
+        // ── P3 ────────────────────────────────────────────────────────────────────────
+        // ★★★★★ AN HONEST RED, AND IT IS THE REQUIRED OUTCOME OF THIS ARM ON BARE METAL.
+        //
+        // This row asks for a mapping that is reachable through the **RPC/bind** transport
+        // and through no other, so that a content check on it speaks about that transport
+        // alone. On BARE METAL there is no such buffer available to a raw client, and this
+        // tree already says so in its own words: `rpc_mixed_allocs`'s docs record that
+        // *"which of those crosses to the emulated GSP is RM's routing decision, and this
+        // rung does NOT measure it"*. Every allocation a raw client makes — vidmem, sysmem,
+        // channel, VA space — is serviced by RM, and RM on a GSP part is *itself* reached by
+        // RPC; so "the RPC path" is not a property that distinguishes any two of our buffers.
+        //
+        // ⇒ Claiming P1's buffer, or a vidmem allocation, as "RPC-bound" would satisfy the
+        // row's letter and destroy its meaning. It is left UNEXERCISED with the reason
+        // stated, which is the outcome the owner asked for over a fake green.
+        led.p3_rpc_bind = PathState::Unexercised(
+            "a raw RM client on BARE METAL has no buffer reachable ONLY via the RPC/bind \
+             transport: every allocation it can make is serviced by RM, and on a GSP part \
+             RM is itself reached by RPC, so no two of this client's buffers differ in that \
+             property. ⊘ Claiming P1's buffer here would satisfy the row's letter and \
+             destroy its meaning. This row needs either (a) the Mode-2 emulated GSP, where \
+             the crossing is observable device-side, or (b) a GPU_PROMOTE_CTX round on a GR \
+             channel, which this client does not build"
+                .to_owned(),
+        );
+        println!("    P3 → {}", led.p3_rpc_bind.describe());
+
+        // ── THE THREAD PHASE ──────────────────────────────────────────────────────────
+        println!(
+            "--- W392D THREADS: {} workers, ONE shared VA space, a window each ---",
+            cfg.threads
+        );
+        let vas_raw = vas.raw();
+        let origin = std::time::Instant::now();
+        let barrier = Arc::new(std::sync::Barrier::new(cfg.threads));
+        let mut handles = Vec::with_capacity(cfg.threads);
+        for tid in 0..cfg.threads {
+            let conn = Arc::clone(conn);
+            let barrier = Arc::clone(&barrier);
+            let (gpu, nonce, rounds) = (cfg.gpu, cfg.nonce, cfg.p1_rounds);
+            handles.push(std::thread::spawn(move || {
+                thread_worker(
+                    tid,
+                    conn,
+                    vas_raw,
+                    engine_type,
+                    gpu,
+                    nonce,
+                    rounds,
+                    &barrier,
+                    origin,
+                )
+            }));
+        }
+        let mut spans: Vec<(u128, u128)> = Vec::new();
+        for (tid, h) in handles.into_iter().enumerate() {
+            led.threads_started += 1;
+            match h.join() {
+                // ★★★ A PANIC IN A WORKER IS A RESULT, and swallowing it would turn the
+                // loudest possible red into a missing row.
+                Err(_) => led
+                    .thread_faults
+                    .push(format!("tid {tid} PANICKED — a witness assert or an unwrap")),
+                Ok(r) => {
+                    if let Some(f) = r.fault {
+                        led.thread_faults.push(f);
+                    } else {
+                        led.threads += 1;
+                        spans.push(r.span);
+                    }
+                }
+            }
+        }
+        // ⊘ ZERO OVERLAP VETOES THE ROW. Workers that ran one after another sampled no
+        //   concurrency at all, and calling that a concurrent pass reports a property never
+        //   measured.
+        let mut overlaps = 0usize;
+        for (i, a) in spans.iter().enumerate() {
+            for b in &spans[i + 1..] {
+                if a.0 < b.1 && b.0 < a.1 {
+                    overlaps += 1;
+                }
+            }
+        }
+        println!(
+            "    THREADS → {}/{} clean, {overlaps} overlapping pair(s) of graded intervals",
+            led.threads, led.threads_started
+        );
+        if led.threads >= 2 && overlaps == 0 {
+            led.thread_faults.push(format!(
+                "NO_CONCURRENCY_OBSERVED — {} workers came back clean but no two of their \
+                 graded intervals intersected, so nothing raced. ⊘ NOT a pass",
+                led.threads
+            ));
+        }
+
+        // ── teardown ──────────────────────────────────────────────────────────────────
+        let _ = rm.unmap_local(vas, lane.scratch_va);
+        let _ = rm.free(lane.scratch);
+        let _ = rm.free(lane.chan);
+        let _ = rm.free(vas);
+
+        led.report()
     }
 }
+
