@@ -495,3 +495,32 @@ decodes untrusted guest content for no functional reason.
 
 ⊘ **Which leaves the guest-red mean client WITHOUT AN EXPLANATION.** Every candidate I raised
 today is now withdrawn. State the absence rather than reach for a sixth.
+
+### ★★★★★ §6 — THE OWNER'S RULE, AND IT INVERTS §5i/§5j's INSTINCT
+
+*"If your raw client passes consistently on bare metal but not in the guest, then the only valid
+explanation for being not a kayfabe bug is that your client did not hold the protocol contract
+NVIDIA, was therefore based on heuristics, and CUDA would never execute like that. But that's a
+rare case that needs good support, most often it's a kayfabe bug."*
+
+⚠ **I reached for "the client is at fault" twice today and was wrong twice** (§5i's vidmem-ring
+hypothesis; then the UVM-VAS reading below). The rule names the bias.
+
+**Applied to the live finding, it INVERTS the conclusion.** `--uvm-mean` places its ring via
+`UVM_MAP_EXTERNAL_ALLOCATION`, and the nvdiff oracle measures the guest in lockstep with hardware
+**to that exact call — 221 of `cuCtxCreate`'s 479 ioctls.** A UVM-placed ring is inside NVIDIA's
+contract; CUDA does precisely this. ⇒ the adoption path finding a `JoinsGuestWindow` binding for
+RM-managed placements and **not** for UVM-managed ones is **a kayfabe gap**, not a client defect.
+`RingSource::OursPlaced` names the condition itself: *"already placed at `ring_va` by
+`nvidia-uvm`, in a VA space RM does not manage."*
+
+**Measured contrast (same binary, two arms):**
+| | `--ce-client` (w283) | `--uvm-mean` (w392d) |
+|---|---|---|
+| births | `guest_ring=1 declined=0` | **8 DECLINED, 7 NOT-ASKED, 0 GUEST-RING** |
+| `joined=` on the birth line | `joined=YES` | **absent** |
+| USERD vs ring leaf | misses by 1 byte ⇒ `userd=DECLINED` | inside the leaf — **passes** |
+| ring placement | RM-managed VAS | **UVM-managed VAS** |
+
+⇒ my client clears the USERD blocker that stopped `--ce-client`, and fails one rung earlier, at a
+join that w283 shows working 88 times for the RM-placed case.
