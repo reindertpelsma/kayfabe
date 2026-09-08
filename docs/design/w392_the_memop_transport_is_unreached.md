@@ -524,3 +524,23 @@ RM-managed placements and **not** for UVM-managed ones is **a kayfabe gap**, not
 
 ⇒ my client clears the USERD blocker that stopped `--ce-client`, and fails one rung earlier, at a
 join that w283 shows working 88 times for the RM-placed case.
+
+### ★★★★★ §7 — OWNER: AN UNPUBLISHED GPFIFO PAGE IS LEGAL. THE DEFECT IS THE FALLBACK.
+
+*"GPFIFO can exist on a page that isn't published, for example continuing advancing when it got
+unpublished, but I agree this is very rare, but not a violation, so it's debug only."*
+
+⇒ **No invariant "the ring's page must be published."** A channel may legitimately keep advancing
+over an unpublished page. Rare ⇒ **debug log**, never a refusal of the guest.
+
+⊘ **§6 called the `adopted_guest_ring` refusal *"correct — it is protecting me."* Over-stated,
+and it would have aimed the fix at enforcing an invariant that does not hold.** The accurate
+split:
+- Declining to adopt a `ShadowsGuestMemory` twin: **defensible** (its doc: a channel born over one
+  *"decodes zeros, never advances `GP_GET`, and reports no error at all"*).
+- ⊘ Falling back to **`RingSource::Ours(None)`** — *our own empty ring*: **the actual defect.** It
+  converts a rare legal state into **silence with no diagnostic**, which is exactly w392d's
+  measured symptom (`Xid 0`, no completion, all rows `NEVER RETIRED`).
+
+★ **THE RULE: publish it, or refuse BY NAME. Never quietly substitute a different ring.** A
+substitution is indistinguishable from success in every log line the path prints.
