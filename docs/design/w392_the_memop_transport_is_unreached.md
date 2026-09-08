@@ -311,3 +311,37 @@ ring VA is the first place its absence bites.
 ⚠ **The ordering is part of the requirement, not a detail.** The join must exist **before
 the engine-object birth that would name it** — a publication that lands later cannot
 retro-adopt a channel already born on `Ours(None)`.
+
+### §5f — NEVER LEARNED, NOT REFUSED — and my secondary lead was WRONG
+
+**Discrimination run (`traces/w392d_guest_wall/EVIDENCE.txt`, source `b7fb876b`).** Three verbs
+name the ring VA `0x8000001000` this boot — `VAS-BIND-CENSUS`, `RING-PROJ`, `GUEST-RAM`.
+**No join / bind / publish verb ever names it.** Refusals exist and are counted this boot
+(22 `REFUSED`, `refused=1`×3, `refused=2`×7) — **none at the ring VA**.
+⇒ the address table lacks a binding there because **nothing ever tried to make one**, not
+because a predicate said no. A refusal would be my defect; an absence is a coverage hook.
+
+⊘ **RETRACTED, same hour, by reading the code instead of two log lines.** I read
+`PT-DECODE latched=0 requeued=817 rounds=0` under the w318 `⊘SKIPPED` banner as *"the dirty
+gate is skipping a pass whose predecessor never completed"*. **It is not.** The gate sits on
+**EXEC-WITNESS** (the *producer*), and its arming edge is stated in its own comment as
+*"the store's EXECUTOR WRITE COUNT, not the page set"*, with `None` (unmeasured) **arming**
+rather than skipping. No executor write ⇒ identical bytes ⇒ identical decode. `rounds=0` is
+the **correct output of a sound skip**. ⚠ Two log lines are not a mechanism.
+
+★★★ **And the retraction SHARPENED the finding.** `PT-DECODE`/`EXEC-WITNESS` decode
+**executor-written FRAMEBUFFER pages**. The guest's ring is in **GUEST RAM** — the `GUEST-RAM`
+verb is one of the three that names it. So our publication machinery does not miss the ring by
+accident; **it operates on a different memory plane and structurally cannot reach it.** This
+gap cannot be closed by extending PT-DECODE.
+
+★★★★★ **AND THE EXACT SHAPE OF THE GAP, from `RING-PROJ`:**
+```
+ring=0x8000001000 entries=64 … GET=0 PUT=1 resY root=0x0/ap1/sh47 rootsrc=published
+gp[0]@0x8000001000=0x8000000000+0x40  pb=V:0x10000  pbm[16w of 64B…]
+```
+**We READ the guest's ring completely** — descend, resolve (`resY`), see `GP_PUT=1`, decode
+entry 0 and its pushbuffer. What we never do is **MAP it into the host GPU's VAS at that same
+VA**. **Reading and mapping are different verbs, and only the first is built.** That is owner
+ruling #231 verbatim (*"map the guest's ring/pushbuffer/USERD into the host GPU's VAS at
+IDENTICAL VAs"*), re-derived from a raw client by a path that knew nothing about it.
