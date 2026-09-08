@@ -428,3 +428,44 @@ construction) is the client's actual path. Three successive readings — *"never
 *"absence not refusal"*, *"vidmem cannot be exported"* — were each produced by inferring a
 mechanism from log prose and each was refuted by reading the source the log was printed from.
 ★ **The instrument that broke all three was the owner asking one short question.**
+
+### ⊘⊘⊘ §5i — "EVERY CHANNEL IS PASSTHROUGH" IS FALSE. THE REAL CENSUS SAYS THE CLASSIFIER IS RIGHT.
+
+The owner: *"many kernel channels should be Emulated."* Correct. From `channel_kind_census()`
+(`device.rs:4070`), the census built for exactly this question:
+```
+CHANNEL-KIND AGREES emulated=2 passthrough=1 system_proc_channels=2 user_proc_channels=1
+CHANNEL-KIND AGREES emulated=2 passthrough=5 system_proc_channels=2 user_proc_channels=5
+CHANNEL-KIND AGREES emulated=6 passthrough=2 system_proc_channels=6 user_proc_channels=2
+CHANNEL-KIND ⊘VACUOUS emulated=0 passthrough=0 … NO LIVE CHANNELS AT ALL … AT=teardown
+```
+⇒ **emulated channels exist (2–6 live), and the verdict is `AGREES`**: `system_not_emulated=0`,
+`user_not_passthrough=0`. Every system channel is emulated, every user channel is passthrough.
+**The classifier is correct and was never in question.**
+
+⊘ **My "12 Passthrough / 0 Emulated" was NOT A CENSUS.** `kind=` is printed only by the
+`RING-GATE` line I added at the **sole `forward_ring` call site**. Emulated channels have
+`trap_contract() → ScheduleAndReturn` — **they are handled and returned and never reach
+`forward_ring`.** The instrument could not see them *by construction*, and I read its silence as
+their absence. ★ Note the shape: this is `every_row_verified_over_zero_rows` and
+`a_census_over_transports_is_as_complete_as_its_list` **at the same time**, and the correct
+census already existed in the same binary, rendered at `shim.rs:9247`.
+
+### ⊘⊘ AND THE DEFINITIONS I MANGLED (owner, verbatim)
+- **fake FB** = the emulated framebuffer = **ordinary host RAM** = the **emulated** plane. Rings
+  there belong to emulated channels, and those are the rings we parse.
+- **vidmem** = real GPU VRAM. Rings there are **ours**, for channels **we** manage (scratchpad).
+- **passthrough** = the guest's own channels. Follow the guest: mmap into GPA with correct
+  cacheability for real FB, DMA when it reaches sysmem. **Never parse.**
+- ⊘ *"Passthrough channels are running against a fake framebuffer"* is a **category error** —
+  fake FB IS the emulated plane's memory; it is not a thing a passthrough channel runs against.
+  I also used `Aperture::Vidmem` to mean "real VRAM" and "the fake framebuffer" in adjacent
+  paragraphs, when the code says it is the latter and that the aperture is the **guest's
+  declaration**, not the backing.
+
+★★★ **THE HYPOTHESIS THIS OPENS, AND IT POINTS AT MY OWN CLIENT.** `--uvm-mean` is a *user*
+process, so its channels are passthrough — correct. But its GPFIFO ring resolves to
+`Aperture::Vidmem`. Under the ruling above, **a guest ring in vidmem is a configuration we must
+not support by construction.** If my raw client allocated its ring in vidmem, then it is testing
+an unsupported shape and the defect is in **the client**, not in kayfabe — which would also
+explain why real CUDA (`cup3`, `CUP3_VAL=43`) computes on this same build. ⚠ Hypothesis, unrun.
