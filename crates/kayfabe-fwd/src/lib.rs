@@ -91,6 +91,124 @@ use kayfabe_mmu::AddressTable;
 use kayfabe_mmu::{AddressFault, Binding};
 use kayfabe_vmm::{FbMeta, IrqSpec, Present, PresentError, SurfaceHandle, Vmm, VmmError};
 
+/// ★★★★★ **w391 POINT 2 — THE `MEM_OP`/`MMU_TLB_INVALIDATE` CENSUS.**
+///
+/// The owner's three-point coverage ruling (2026-09-08) makes the guest's *emulated*
+/// channels one of exactly three places we must learn a mapping from. The transport is
+/// `MEM_OP_A..D` with `MEM_OP_D.OPERATION = MMU_TLB_INVALIDATE`, and it is a **kernel
+/// channel** by a chain that is total rather than heuristic:
+///
+/// | # | fact | citation (ogkm 580.159.04) |
+/// |---|---|---|
+/// | 1 | GA106's invalidate is `MEM_OP_D OPERATION=MMU_TLB_INVALIDATE`, class C56F | `kernel-open/nvidia-uvm/uvm_ampere_host.c:255` |
+/// | 2 | every one rides `UVM_CHANNEL_TYPE_MEMOPS` on `gpu->channel_manager` | `uvm_mmu.c:62`, `:722` |
+/// | 3 | that manager comes from `nvGpuOpsCreateSession` → `rmapiGetInterface(RMAPI_EXTERNAL_KERNEL)` | `src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:777` |
+/// | 4 | ⇒ `privLevel >= RS_PRIV_LEVEL_KERNEL` ⇒ RM stamps `processID = KERNEL_PID` **in the RPC encoder, i.e. on our wire** | `src/nvidia/src/kernel/vgpu/rpc.c:3382` |
+/// | 5 | we decode `KERNEL_PID → ClientKind::Kernel` | `kayfabe_abi::guest_os:286` |
+/// | 6 | every declared Kernel client folds into the ONE system component at `SYSTEM_ANCHOR` | `kayfabe_core::project:1026`, `:1170` |
+/// | 7 | `channel_kind() → Emulated` ⇒ `trap_contract() → ScheduleAndReturn` | `kayfabe_core::project:312` |
+///
+/// # ⊘ Why this is a CENSUS and not yet a publish
+///
+/// [`PushbufferOutcome::invalidates`] has had **one writer and zero readers** for the life
+/// of the field. `CLAUDE.md` records the C measuring this transport at **ZERO** on the
+/// Mode-2 compute path — and a zero with no known-positive is not a measurement, it is an
+/// absence that could equally be a decoder that never fires, a channel that never reaches
+/// [`apply_pushbuffer`], or a workload that genuinely never invalidates. Those three
+/// demand completely different fixes.
+///
+/// ⇒ **This counts first.** Wiring a publish onto an arm that never executes would be the
+/// `a_production_consumer_is_not_a_path_that_has_run` failure again.
+///
+/// # The print discipline, both halves paid for
+///
+/// - **Counting is UNCAPPED.** `w386` measured a global print cap turning a live path into
+///   a reported absence: proc 1 ate all 128 dumps and proc 2's page printed zero times.
+///   Here the cap governs the *detail* line only; [`seen`] counts every single one.
+/// # ⊘ THE BLIND SPOT, named because a census that cannot see something must say so
+///
+/// `Ga10xPushbuffer::tlb_invalidate` (`kayfabe_chips::ga10x:1457`) returns `None` for the
+/// `TLB_INVALIDATE_PDB_ALL` form — *"`PDB_ALL` names no page directory; there is no `pdb`
+/// to report"* — so a whole-GPU invalidate falls through to `PushMethod::Opaque` and is
+/// **counted nowhere**. That is correct for a publish (there is no VAS to publish) and
+/// wrong for a census, so it is stated rather than left to be rediscovered.
+///
+/// ⇒ `seen()` is a count of **PDB-targeted** invalidates, not of all of them. UVM's own
+/// emitter uses `TLB_INVALIDATE_PDB, ONE` (`uvm_ampere_host.c:258`), so the path this
+/// census exists to measure is inside what it can see.
+///
+/// - **Printing is INLINE, never buffered to teardown.** Buffer-then-dump preserves order
+///   and destroys interval, and every log then reports the favourable answer by
+///   construction.
+pub mod memop_census {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
+    /// Every decoded `MMU_TLB_INVALIDATE` that reached [`super::apply_pushbuffer`]. Never
+    /// capped, never sampled.
+    static SEEN: AtomicU64 = AtomicU64::new(0);
+    /// The subset carrying `PDB_ONE` — a *targeted* invalidate naming one page-directory
+    /// base. `PDB_ALL` carries no address at all and cannot name a VAS.
+    static TARGETED: AtomicU64 = AtomicU64::new(0);
+    /// Detail lines emitted. Bounds log volume ONLY; divergence from [`SEEN`] is itself
+    /// the signal that the cap bound something.
+    static PRINTED: AtomicU64 = AtomicU64::new(0);
+    /// How many detail lines to print before falling silent. Counting continues.
+    const DETAIL_CAP: u64 = 96;
+
+    /// Record one decoded invalidate. Every one that reaches here is **PDB-targeted** —
+    /// see [`memop_census`]'s blind-spot note for the `PDB_ALL` form, which the decoder
+    /// drops before this point.
+    pub fn note(pid: u32, cid: u32, pdb: u64, membar: bool) {
+        let n = SEEN.fetch_add(1, Ordering::Relaxed) + 1;
+        TARGETED.fetch_add(1, Ordering::Relaxed);
+        let p = PRINTED.fetch_add(1, Ordering::Relaxed);
+        if p < DETAIL_CAP {
+            eprintln!(
+                "kayfabe: MEMOP-INVAL #{n} proc={pid} chan={cid} pdb=0x{pdb:x} \
+                 membar={membar} (PDB-targeted — names a VAS)"
+            );
+        } else if p == DETAIL_CAP {
+            eprintln!(
+                "kayfabe: MEMOP-INVAL detail cap {DETAIL_CAP} reached — DETAIL only; \
+                 the census still counts every one"
+            );
+        }
+    }
+
+    /// Total decoded invalidates. ⊘ A zero here is NOT evidence the guest does not
+    /// invalidate; it is evidence this arm did not execute, which has three causes.
+    #[must_use]
+    pub fn seen() -> u64 {
+        SEEN.load(Ordering::Relaxed)
+    }
+
+    /// The `PDB_ONE` subset — the only ones that could drive a per-VAS publish.
+    #[must_use]
+    pub fn targeted() -> u64 {
+        TARGETED.load(Ordering::Relaxed)
+    }
+
+    /// One line for a boot log, naming its own blindness when it is zero.
+    #[must_use]
+    pub fn census() -> String {
+        let (s, t) = (seen(), targeted());
+        if s == 0 {
+            "MEMOP-CENSUS seen=0 targeted=0 ⊘ UNMEASURED-OR-ABSENT: no MMU_TLB_INVALIDATE \
+             reached apply_pushbuffer. Three causes, different fixes: (a) the emulated \
+             channels never reach the parse, (b) the decode never matches, (c) the guest \
+             genuinely never invalidates on this workload."
+                .to_owned()
+        } else {
+            format!(
+                "MEMOP-CENSUS seen={s} targeted={t} printed={} \
+                 (every one names a VAS; ⊘ PDB_ALL forms are invisible here by \
+                 construction — see the blind-spot note)",
+                PRINTED.load(Ordering::Relaxed).min(DETAIL_CAP),
+            )
+        }
+    }
+}
+
 mod ptdecode;
 mod trace;
 
@@ -7290,6 +7408,14 @@ pub fn apply_pushbuffer(
             }
             kayfabe_arch::PushMethod::TlbInvalidate { pdb, membar } => {
                 out.invalidates.push((pdb, membar));
+                // ★★★★★ w391 POINT 2 — see [`memop_census`] for the seven-link chain that
+                // makes this arm a KERNEL channel and therefore inside our contract.
+                //
+                // ⊘ The census is deliberately upstream of any publish decision: the C
+                // measured this transport at ZERO on the compute path, and a zero with no
+                // known-positive cannot tell "the guest never invalidates" from "this arm
+                // never runs". Count first, then wire the drain onto an arm proved live.
+                memop_census::note(proc.id.0, cid.0, pdb.0, membar);
                 // A membar is a hard barrier: the interpreter honors it before
                 // advancing (recorded here; the real transport blocks on refresh).
             }

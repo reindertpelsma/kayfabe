@@ -14086,6 +14086,17 @@ impl Regs {
             "kayfabe: {} AT=teardown",
             self.doorbell_port.blockage_census()
         );
+        // ★★★★★ w391 POINT 2 — the `MEM_OP`/`MMU_TLB_INVALIDATE` transport on the guest's
+        // EMULATED channels, the second of the owner's three coverage points.
+        //
+        // ⊘ Printed unconditionally and with no arm beside it, because unlike the lane
+        // above there is nothing to switch on: this census counts a decode that either
+        // happened or did not. A zero therefore has THREE causes, and the census line
+        // names all three rather than letting a reader pick the flattering one.
+        eprintln!(
+            "kayfabe: {} AT=teardown",
+            kayfabe_fwd::memop_census::census()
+        );
         // ★★★★★ w326 — did the revocation drain get a driver that is not the guest?
         eprintln!("kayfabe: {}", self.reclaim.census());
         // ★★★ §14.41 — the replayable-fault-buffer registrations. The count is the report's
