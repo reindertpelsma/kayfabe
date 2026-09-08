@@ -55,12 +55,21 @@ host_isolates=true`, `FB-JOIN arm=shared`, `GR-ROUTE arm=passthrough`, `VAS-PUBL
 ```
 va=0x8080000000 : Vidmem@0x50000   va=0x80c0000000 : Vidmem@0x50000    ← ONE page, TWO VAs
 va=0x8480000000 : Vidmem@0x110000  va=0x84c0000000 : Vidmem@0x110000
-MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x80_80000000  FAULT_PDE ACCESS_TYPE_VIRT_READ
-MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x84_80000000  FAULT_PDE ACCESS_TYPE_VIRT_READ
+MMU Fault: ENGINE CE0 HUBCLIENT_CE1  FAULT_PDE ACCESS_TYPE_VIRT_READ, at FIVE VAs on a
+regular 0x2_00000000 stride:  0x80_80000000  0x82_80000000  0x84_80000000  0x86_80000000
+                              0x88_80000000
 ```
+★ **The stride is the tell.** Five faults, exactly 8 GiB apart, one per client slot — this is
+systematic ("the second VA of every pair is never bound"), not a sporadic race.
 Four fb pages aliased at two VAs each; **both faults are the unbound half of a pair**. `ALIAS`
 fired 3×, `remaps_refused=0`. `FbLeafBacking::Aliased` (w380) is built for exactly this and is not
 applied to every alias of a joined leaf. Same class as the LLM wall.
+
+## ✔ CONTROL, w392k (rev `6ae36bda`, shadow type removed)
+Behaviourally **identical** to w392j: `7 × adopt=GUEST-RING`, `ADOPTABLE 7`, `5 × Xid 31`,
+`MEAN_FALSIFIER=PASS`, outcome `(F)`. ⇒ deleting `ShadowsGuestMemory` perturbs nothing observable,
+which is what removing an unconstructible state should do. **Bench archive compiles with
+`host-isolates` at that rev (`RC=0`).**
 
 ## OWNER RULINGS FROM TONIGHT — these overturn older docs
 - **Ours vs guest is decided by KIND, not by timing.** Emulated: our fake ring, `GP_PUT`/`GP_GET`
