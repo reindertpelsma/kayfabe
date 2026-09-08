@@ -12755,3 +12755,310 @@ mod uvm_raw {
         vas_ok
     }
 }
+
+// =========================================================================================
+// ★★★★★ w392d — THE MEAN CLIENT: a PASS that requires ALL THREE PATHS, CONTENT, AND A RACE
+// =========================================================================================
+
+/// ⊘⊘ **WHY w392c's CLIENT WAS TOO KIND, AND IT IS THE SAME DEFECT AS THE LLM GRADE.**
+///
+/// w392c checks `rmStatus`. The corruption w392 measured on this exact bench was **16 tokens
+/// of garbage text with every `rmStatus` clean and zero Xids** — so a status oracle scores
+/// the worst outcome we have ever measured as a pass. Owner, same session: *"the raw client
+/// also needs to test for corruption of old mappings — and test that the contents is right"*
+/// and *"ensure the client could only pass if all three paths are intercepted, and the
+/// blocking works, also race through stale mappings, and multithreaded."*
+///
+/// # ★★★★★ THE ONE ARCHITECTURAL MOVE — an unexercised path is a **FAIL BY NAME**
+///
+/// *"Could only pass if all three paths are intercepted"* is not a checklist you remember to
+/// run; it has to be **structural**, or it decays the first time an arm is skipped. So the
+/// verdict is computed from a [`PathLedger`] in which every path starts
+/// [`PathState::Unexercised`] and **`PASS` is unreachable unless every one has become
+/// `Verified` with zero mismatches**. An arm that is not built yet does not quietly drop out
+/// of the grade — it holds the whole client RED and says which one it is.
+///
+/// ⇒ This is the `orphan_gate_asks_visibility_not_reachability` lesson inverted: rather than
+/// hoping the census sees everything, make the *absence of coverage* the loudest thing in
+/// the output.
+///
+/// # ★★★ WHY A CONTENT CHECK CAN SPEAK ABOUT INTERCEPTION AT ALL
+///
+/// The client runs **in the guest** and cannot read our device's counters. It does not need
+/// to. Each path maps a **freshly allocated object at its own VA**, then has the **engine**
+/// read it back and compares bytes:
+///
+/// - we intercepted and published the mapping ⇒ the host GPU has a translation ⇒ right bytes;
+/// - we missed it ⇒ no translation (fault) or a **stale** one (wrong bytes).
+///
+/// ⚠ **The implication holds only because each path's buffer is reachable by that path
+/// alone.** That is this client's load-bearing assumption and it is stated here rather than
+/// assumed: if two paths ever shared a buffer, a pass would no longer distinguish them.
+///
+/// # ★★★★ THE STALE RACE — the un-forgeable core
+///
+/// ```text
+///   fill A with pattern_a (CPU)        fill B with pattern_b (CPU)
+///   map   VA_X -> A
+///   engine reads VA_X                  must be pattern_a
+///   unmap VA_X ;  map VA_X -> B        <- THE REMAP
+///   engine reads VA_X                  must be pattern_b
+///                                      ⊘ if it is pattern_a, a STALE MAPPING is caught
+///                                        RED-HANDED: the engine translated VA_X through a
+///                                        binding we should have retired.
+/// ```
+///
+/// `pattern_b` is derived from a per-run nonce, so it cannot be precomputed, echoed, or
+/// guessed by anything that did not actually read B.
+mod mean {
+    use super::{HostRmBackend, RmBackend};
+    use kayfabe_isolate::HostHandle;
+
+    /// One coverage point's state. ⊘ There is deliberately **no** `Skipped` — a path is
+    /// either verified or it is holding the verdict red.
+    #[derive(Debug)]
+    pub enum PathState {
+        /// Never driven on this run. **This is a FAIL**, and it carries why.
+        Unexercised(&'static str),
+        /// Driven, and the engine read back exactly what was written, `rounds` times.
+        Verified { rounds: u32 },
+        /// Driven and the content did not match — the strongest possible signal.
+        Mismatch {
+            rounds: u32,
+            first_bad: String,
+        },
+        /// An ioctl refused before content could be tested. NOT a content result.
+        Refused { step: &'static str, status: String },
+    }
+
+    impl PathState {
+        fn ok(&self) -> bool {
+            matches!(self, Self::Verified { .. })
+        }
+        fn describe(&self) -> String {
+            match self {
+                Self::Unexercised(why) => format!("⊘ UNEXERCISED — {why}"),
+                Self::Verified { rounds } => format!("✔ VERIFIED over {rounds} round(s)"),
+                Self::Mismatch { rounds, first_bad } => {
+                    format!("★★★ CONTENT MISMATCH after {rounds} round(s): {first_bad}")
+                }
+                Self::Refused { step, status } => {
+                    format!("⊘ REFUSED at {step}: {status} — NOT a content result")
+                }
+            }
+        }
+    }
+
+    /// The three points of the owner's coverage ruling, plus the properties that make a pass
+    /// mean something.
+    pub struct Ledger {
+        pub p1_rm_invalidate: PathState,
+        pub p2_uvm_memop: PathState,
+        pub p3_rpc_bind: PathState,
+        /// Did the stale-mapping race run AND come out right?
+        pub stale_race: PathState,
+        /// How many threads actually drove work concurrently. 1 is a FAIL: a single thread
+        /// cannot exercise a publication/use race.
+        pub threads: u32,
+    }
+
+    impl Ledger {
+        pub fn new() -> Self {
+            Self {
+                p1_rm_invalidate: PathState::Unexercised("no RM map+invalidate round ran"),
+                p2_uvm_memop: PathState::Unexercised(
+                    "no UVM page-tree grow ran — see w392c: registration alone grows nothing",
+                ),
+                p3_rpc_bind: PathState::Unexercised("no RPC-bound mapping round ran"),
+                stale_race: PathState::Unexercised("the remap race did not run"),
+                threads: 1,
+            }
+        }
+
+        /// ★★★★★ **THE VERDICT, AND IT CANNOT SAY PASS ON A PARTIAL RUN.**
+        pub fn report(&self) -> bool {
+            println!("=== ★★★★★ w392d LEDGER — every row must be ✔ for a PASS ===");
+            println!("    P1 rm-invalidate  {}", self.p1_rm_invalidate.describe());
+            println!("    P2 uvm-memop      {}", self.p2_uvm_memop.describe());
+            println!("    P3 rpc-bind       {}", self.p3_rpc_bind.describe());
+            println!("    STALE RACE        {}", self.stale_race.describe());
+            println!(
+                "    THREADS           {} {}",
+                self.threads,
+                if self.threads >= 2 {
+                    "✔"
+                } else {
+                    "⊘ ONE THREAD CANNOT RACE — a publish/use race needs a concurrent user"
+                }
+            );
+            let all = self.p1_rm_invalidate.ok()
+                && self.p2_uvm_memop.ok()
+                && self.p3_rpc_bind.ok()
+                && self.stale_race.ok()
+                && self.threads >= 2;
+            if all {
+                println!("    W392D_OUTCOME=(P) ★★★★★ PASS — all three paths content-verified,");
+                println!("        the stale-mapping race came out right, and it was concurrent.");
+            } else {
+                println!("    W392D_OUTCOME=(F) ⊘ NOT A PASS — at least one row above is not ✔.");
+                println!("        ⊘ This is the DESIGNED behaviour of a partial run: an");
+                println!("        unexercised path holds the whole client RED rather than");
+                println!("        dropping silently out of the grade.");
+            }
+            all
+        }
+    }
+
+    /// A per-run pattern nobody can precompute. Derived from the run nonce, the slot and the
+    /// round, so no two buffers in a run ever share one and a stale read is unambiguous.
+    #[must_use]
+    pub fn pattern(nonce: u32, slot: u32, round: u32) -> u32 {
+        // A cheap avalanche — the point is distinctness and unguessability, not crypto.
+        let mut h = nonce
+            ^ slot.rotate_left(11)
+            ^ round.rotate_left(23)
+            ^ 0x9E37_79B9;
+        h ^= h >> 16;
+        h = h.wrapping_mul(0x85EB_CA6B);
+        h ^= h >> 13;
+        // ⊘ Never zero and never the poison: a readback that never ran must not be able to
+        //   look like a correct one.
+        h | 1
+    }
+
+
+    /// ★★★ **THE ENGINE READS THROUGH THE VA — never the CPU, never the handle.**
+    ///
+    /// Poisons the scratch first, so *"the copy never ran"* cannot look like *"the copy
+    /// returned the right value"*. That is the same discipline `w381_engine_readback`'s
+    /// docs record paying for: a readback that never happened leaves whatever was in the
+    /// slot.
+    fn engine_read_through_va(
+        rm: &mut HostRmBackend,
+        chan: HostHandle,
+        token: u64,
+        src_va: u64,
+        scratch: HostHandle,
+        scratch_va: u64,
+    ) -> Result<u32, String> {
+        /// Cannot collide with any `pattern()` — those are always odd (`| 1`).
+        const POISON: u32 = 0xDEAD_BEEE;
+        rm.fill_words(scratch, 4, POISON, 0)
+            .map_err(|e| format!("poison scratch: {e:?}"))?;
+        rm.submit_copy_at(chan, token, src_va, scratch_va, 4, 0x5EED_0001)
+            .map_err(|e| format!("engine copy {src_va:#x} -> {scratch_va:#x}: {e:?}"))?;
+        let got = rm
+            .read_words_independently(scratch, 4, &[0])
+            .map_err(|e| format!("read scratch: {e:?}"))?
+            .first()
+            .copied()
+            .unwrap_or(0);
+        if got == POISON {
+            return Err(format!(
+                "⊘ scratch still holds the poison {POISON:#010x} — THE ENGINE COPY NEVER \
+                 LANDED. This is an UNMEASURED read, not a wrong value."
+            ));
+        }
+        Ok(got)
+    }
+
+    /// ★★★★★ **THE STALE-MAPPING RACE.** See the module docs for the shape and why
+    /// `pattern_b` is un-forgeable.
+    ///
+    /// Returns the state to record in the ledger — never a bare bool, because *"refused"*,
+    /// *"mismatched"* and *"never ran"* must not collapse into one word.
+    /// ⊘⊘ **A FLAW I CAUGHT IN MY OWN FIRST CUT, AND IT WOULD HAVE MADE THE WHOLE TEST
+    /// VACUOUS.** The first version verified with `read_words_independently(a, …)` — a
+    /// **CPU read of the object by handle**. That never goes through `va_x` at all, so it
+    /// would have returned the right bytes no matter how broken the translation was, and
+    /// the stale race would have passed unconditionally. Same family as
+    /// `a_probe_that_shares_the_allocator_is_not_an_observer`.
+    ///
+    /// ⇒ **The read must be the ENGINE's, through the VA**: `submit_copy_at` copies
+    /// `va_x → scratch_va`, and only then does the CPU read the scratch. That is also
+    /// strictly stronger evidence — it proves the engine can *translate and read* `va_x`,
+    /// which a CPU load of the backing object cannot say (`w381_engine_readback`'s own
+    /// doctrine, applied here).
+    pub fn stale_race(
+        rm: &mut HostRmBackend,
+        vas: HostHandle,
+        chan: HostHandle,
+        token: u64,
+        scratch: HostHandle,
+        scratch_va: u64,
+        va_x: u64,
+        nonce: u32,
+    ) -> PathState {
+        const LEN: u64 = 0x1000;
+        let a = match rm.alloc_probe_local(LEN) {
+            Ok(h) => h,
+            Err(e) => {
+                return PathState::Refused { step: "alloc A", status: format!("{e:?}") }
+            }
+        };
+        let b = match rm.alloc_probe_local(LEN) {
+            Ok(h) => h,
+            Err(e) => {
+                return PathState::Refused { step: "alloc B", status: format!("{e:?}") }
+            }
+        };
+        let pa = pattern(nonce, 0, 0);
+        let pb = pattern(nonce, 1, 0);
+        if let Err(e) = rm.fill_words(a, LEN, pa, 0) {
+            return PathState::Refused { step: "fill A", status: format!("{e:?}") };
+        }
+        if let Err(e) = rm.fill_words(b, LEN, pb, 0) {
+            return PathState::Refused { step: "fill B", status: format!("{e:?}") };
+        }
+        println!("    w392d stale: A pattern={pa:#010x}  B pattern={pb:#010x}  VA={va_x:#x}");
+
+        // ---- round 1: VA_X -> A, and the engine must see A ---------------------------
+        if let Err(e) = rm.map_local_at(vas, a, LEN, Some(va_x)) {
+            return PathState::Refused { step: "map A@VA_X", status: format!("{e:?}") };
+        }
+        let seen_a = match engine_read_through_va(rm, chan, token, va_x, scratch, scratch_va) {
+            Ok(v) => v,
+            Err(e) => return PathState::Refused { step: "engine read @VA_X (round 1)", status: e },
+        };
+        if seen_a != pa {
+            return PathState::Mismatch {
+                rounds: 1,
+                first_bad: format!("round 1 at {va_x:#x}: expected {pa:#010x}, got {seen_a:#010x}"),
+            };
+        }
+
+        // ---- THE REMAP: same VA, different object ------------------------------------
+        if let Err(e) = rm.unmap_local(vas, va_x) {
+            return PathState::Refused { step: "unmap VA_X", status: format!("{e:?}") };
+        }
+        if let Err(e) = rm.map_local_at(vas, b, LEN, Some(va_x)) {
+            return PathState::Refused { step: "map B@VA_X", status: format!("{e:?}") };
+        }
+
+        // ---- round 2: the SAME VA must now read B, and MUST NOT read A ----------------
+        let seen_b = match engine_read_through_va(rm, chan, token, va_x, scratch, scratch_va) {
+            Ok(v) => v,
+            Err(e) => return PathState::Refused { step: "engine read @VA_X (round 2)", status: e },
+        };
+        if seen_b == pa {
+            return PathState::Mismatch {
+                rounds: 2,
+                first_bad: format!(
+                    "★★★★★ STALE MAPPING CAUGHT RED-HANDED at {va_x:#x}: after the remap the \
+                     read returned A's pattern {pa:#010x}, not B's {pb:#010x}. The binding we \
+                     should have retired is still translating."
+                ),
+            };
+        }
+        if seen_b != pb {
+            return PathState::Mismatch {
+                rounds: 2,
+                first_bad: format!(
+                    "round 2 at {va_x:#x}: expected B {pb:#010x}, got {seen_b:#010x} \
+                     (⊘ neither A nor B — a THIRD value, which is worse than a stale read)"
+                ),
+            };
+        }
+        PathState::Verified { rounds: 2 }
+    }
+}
