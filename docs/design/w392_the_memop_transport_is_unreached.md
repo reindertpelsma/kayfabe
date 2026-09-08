@@ -275,3 +275,39 @@ built to ask: mappings cannot be graded in the guest until a submitted copy can 
 
 ⚠ It also means the guest arm of point 2 is blocked on a **different subsystem** — the
 completion plane — and not on address-plane coverage.
+
+### ★★★★★ §5e — ROOT CAUSE, IN OUR OWN DEVICE'S WORDS — AND IT IS THE SAME FACT AS POINT 2
+
+```
+adopt=DECLINED ⊘ an engine-object birth, so the armed path WAS consulted — and the
+               address table held NO JOINED BINDING at this channel's ring VA
+userd=DECLINED ⊘ the ring's leaf was consulted — and the guest's resolved USERD was
+               UNREADABLE, in guest RAM, undeclared, or outside that leaf
+               → RingSource::Ours(None)
+[births=N guest_ring=0 guest_userd=0 declined=N not_asked=0 refused=0]
+```
+
+⊘ **`guest_ring=0`. Not one adoption in the whole boot.** (An earlier reading of "1" was
+the *banner* line matching the grep, not an adoption — `a_count_cannot_see_a_substitution`,
+again.)
+
+**The complete causal chain, every link measured this boot:**
+
+1. the guest maps its GPFIFO ring;
+2. **we do not have that mapping joined in the address table** at the ring's VA;
+3. at engine-object birth the armed adoption path is consulted, finds nothing, and
+   **declines** → the host channel is born on `RingSource::Ours(None)` — *our* ring, empty;
+4. the guest rings its doorbell; we translate and forward it (`DOORBELL-VERB engine=Ce` ×12);
+5. the host engine reads **its own empty ring**, finds no work → **no completion, and no
+   fault**, because nothing was ever translated badly;
+6. every engine read in the mean client times out at "NEVER RETIRED", `Xid=0`.
+
+⇒ ★★★★★ **THE COMPLETION WALL AND THE COVERAGE QUESTION ARE ONE FACT.** This is not a
+missing completion architecture and it is not a missing semaphore writer — under the
+owner's passthrough ruling we write neither. It is **a mapping we never learned about**,
+one VA wide, and it is the ring's. Point 2 is not a side quest to the LLM corruption; the
+ring VA is the first place its absence bites.
+
+⚠ **The ordering is part of the requirement, not a detail.** The join must exist **before
+the engine-object birth that would name it** — a publication that lands later cannot
+retro-adopt a channel already born on `Ours(None)`.
