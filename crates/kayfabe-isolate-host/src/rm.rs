@@ -4318,6 +4318,33 @@ impl HostRmBackend {
         self.conn.ctl_fd()
     }
 
+    /// ★★★ w392c — a real `FERMI_VASPACE_A` handle for `UVM_REGISTER_GPU_VASPACE.hVaSpace`.
+    ///
+    /// ⊘⊘ **CAUGHT ON BARE METAL, WHICH IS THE ENTIRE POINT OF RUNNING IT THERE FIRST.**
+    /// The first cut passed `hVaSpace = 0` and UVM answered `0x5d`
+    /// (`NV_ERR_PAGE_TABLE_NOT_AVAIL`, `nvstatuscodes.h:122`) — a defect in *the client*,
+    /// not in anything under test. Inside the guest that same line would have been
+    /// indistinguishable from our emulated device failing to serve a VA-space allocation,
+    /// and it would have been read as a finding.
+    ///
+    /// ⚠ **It must be the SPACE handle, not the RANGE handle.** `alloc_vaspace_raw`
+    /// deliberately returns the `NV01_MEMORY_VIRTUAL` *range* — that is what
+    /// `NV_ESC_RM_MAP_MEMORY_DMA`'s `hDma` names, a distinction this tree already paid for
+    /// once (see R7b in that function). UVM wants the address space itself, so this reaches
+    /// through [`RmConnection::space_of`] for the companion.
+    ///
+    /// # Errors
+    /// Propagates whatever RM said; a caller must not substitute a handle.
+    pub fn host_alloc_vaspace_space(&mut self) -> Result<u32, RmError> {
+        let range = self.alloc_vaspace_raw()?;
+        self.conn
+            .space_of(range)
+            // ⊘ `alloc_vaspace_raw` pairs the two by construction, so a missing companion is
+            //   an invariant break in THIS crate, not an answer from RM. It gets the same
+            //   "not on this rung" code the rest of the file uses for exactly that case.
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))
+    }
+
     /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp
     /// `first, first+step, first+2*step, …`, one word at a time, through a CPU mapping
     /// this call opens and drops.

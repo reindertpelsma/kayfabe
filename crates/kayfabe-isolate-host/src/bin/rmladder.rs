@@ -11820,7 +11820,20 @@ fn main() -> std::process::ExitCode {
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
         );
-        let ok = uvm_raw::drive(gpu, rm.host_ctl_fd(), rm.host_client(), 0);
+        // ⊘ Allocate a REAL VA space first — passing 0 got `NV_ERR_PAGE_TABLE_NOT_AVAIL`
+        //   from UVM on bare metal, which is a defect in the client and not a finding.
+        let hvas = match rm.host_alloc_vaspace_space() {
+            Ok(h) => {
+                println!("ok    W392C hVaSpace      = {h:#010x}");
+                h
+            }
+            Err(e) => {
+                println!("FAIL  W392C hVaSpace      = {e:?} — ⊘ the CLIENT could not build a VA");
+                println!("      space, so nothing below is a statement about UVM.");
+                return std::process::ExitCode::FAILURE;
+            }
+        };
+        let ok = uvm_raw::drive(gpu, rm.host_ctl_fd(), rm.host_client(), hvas);
         println!("done — uvm-invalidate probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
