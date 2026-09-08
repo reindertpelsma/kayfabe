@@ -175,6 +175,48 @@ single process"*. The missing call was `UVM_MM_INITIALIZE`, not anything about p
 ⇒ when a status code sends you at a mechanism twice and misses, read the header's **prose**
 for that call, not the shared error-code table.
 
+## §5c — ★★★★★ THE GUEST RUN: THE FALSIFIER SURVIVES, AND THE CENSUS IS STILL ZERO
+
+**Owner's falsifier, 2026-09-08:** *"then it must pass on the guest if you have all maps."*
+
+`[measured, boot w392cguest, Mode-2 guest on our emulated GPU, source ca78bd5e]`
+
+```
+ok W392C uuid          = GPU-78b352c7-1ccd-7a86-d282-49484c827f27
+ok W392C INITIALIZE    = rmStatus 0x0
+ok W392C MM_INITIALIZE = rmStatus 0x0
+ok W392C REGISTER_GPU  = rmStatus 0x0
+ok W392C REGISTER_VAS  = rmStatus 0x0
+W392C_GUEST_OUTCOME=(P) THE FALSIFIER SURVIVES
+```
+
+★ **It passed.** The same client, byte-identical, that passes on bare metal completes the
+entire UVM registration path against **our emulated GPU**. ⊘ And the UUID differs from the
+host's (`GPU-b448b62a-…`), so this is our device answering, not a leak of the real one.
+
+⇒ **On the registration path our coverage holds.** That is a real positive result and it is
+the first time point 2's precondition has been shown to exist inside the guest at all.
+
+### ⊘⊘ AND THE CENSUS IS STILL `seen=0` — BUT FOR A THIRD REASON, WHICH IS MINE
+
+```
+MEMOP-CENSUS seen=0 targeted=0
+RING-GATE  — ZERO LINES IN THE WHOLE BOOT
+```
+
+`RING-GATE` printing **nothing** is the tell: `SharedDevice::doorbell` was never entered.
+No doorbell rang, so nothing could have been parsed, so no `MEM_OP` could have been seen.
+
+⊘ **The client registers and immediately unregisters. It never makes UVM do any work.**
+`uvm_mmu.c:722`'s `tlb_invalidate_all` fires when the **page tree grows**, and a
+registration that maps nothing grows nothing. So this zero is neither *"the transport is
+missing"* nor *"the guest never invalidates"* — it is **the known-positive not yet being
+one**, which is the same shape this file's §1 warns about applied to my own client.
+
+⇒ **The next edit is small and named**: force a page-tree grow inside the client —
+`UVM_ALLOC_SEMAPHORE_POOL` (`uvm_ioctl.h:957`, base 68) or an mmap on the UVM fd plus a
+touch — and re-run. Only then does a `seen=0` say something about the transport.
+
 ## §6 — RESIDUE
 
 - ⊘ The `RING-GATE` instrumentation is written and compiled but **its output has not been
