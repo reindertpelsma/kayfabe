@@ -622,3 +622,39 @@ name at `plan_back_fb_leaf` (`lib.rs:2788`), so kernel channels can never join; 
 channel. ⚠ One genuine second defect surfaced: **2 × `FbLeafGranularity`** — a ring that IS in the
 framebuffer, refused because its PTEs are 4 KiB and the join demands a 64 KiB granule
 (`FB_LEAF_GRANULE`, `lib.rs:2796`). Separate rung; `proc=0` only in this boot.
+
+### ★★★★★ §10 — THE CLIENT ADOPTS THE GUEST'S RING, THE ENGINE EXECUTES, AND THE NEW WALL IS **FB-JOIN ALIASING**
+
+**w392j, fully armed, rev `41a79d42a`:**
+| | before (w392h/i) | after |
+|---|---|---|
+| `BIRTH-KIND` | 7 × "PASSTHROUGH not adoptable" | **7 × ✔✔ PASSTHROUGH adopting** |
+| `ADOPT-WHY` | 0 adoptable | **7 × ✔ ADOPTABLE** |
+| `GR-BIRTH` | 7 × `adopt=NOT-ASKED` | **7 × `adopt=GUEST-RING`** |
+| host `Xid` | **0** | **5 × Xid 31 FAULT_PDE** |
+
+★★★ **Zero Xids meant the engine never executed** — it was fetching OUR empty ring. Faulting means
+it now **fetches the guest's ring and runs the guest's pushbuffer**, then cannot reach the data.
+The wall moved from *"no work at all"* to *"work, wrong address"*. `MEAN_FALSIFIER=PASS` throughout,
+so the reader is still honest and the ✔ rows are not free.
+
+⊘ **The supply side needed NO change** — `ADOPT-WHY` reached arm **(7)**, not arm (5), for the
+client. The two things that were actually wrong: **(a)** the doorbell birth passed a literal `None`
+*regardless of channel kind*, so `Ours` — legal only for `Emulated` — was applied to `Passthrough`;
+**(b)** the adoption gate was **mis-scoped**: written to refuse `ShadowsGuestMemory`, which is
+**unconstructible**, it in practice refused the *legitimate* `GuestPhysDma + SoleBacking` (the
+guest's own RAM, pinned) that `GuestRing::memory`'s doc calls the production shape.
+
+★★★★★ **THE NEW WALL, MEASURED: one framebuffer page, TWO guest VAs, ONE binding.**
+```
+va=0x8080000000 : Vidmem@0x50000      va=0x80c0000000 : Vidmem@0x50000   ← same page
+va=0x8480000000 : Vidmem@0x110000     va=0x84c0000000 : Vidmem@0x110000  ← same page
+MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x80_80000000  FAULT_PDE ACCESS_TYPE_VIRT_READ
+MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x84_80000000  FAULT_PDE ACCESS_TYPE_VIRT_READ
+```
+**Four fb pages are each aliased at exactly two guest VAs, and BOTH faulting addresses are one half
+of such a pair.** The join binds the host object at one VA; the engine reads through the other and
+faults. `ALIAS` fired 3×, `remaps_refused=0`. ⇒ Same class as
+[[the_llm_wall_is_our_own_refusal_predicate]] (*"one frame host-backed at ONE VA, guest aliases 17
+at TWO"*). `FbLeafBacking::Aliased` (w380) exists for exactly this — **the mechanism is built and is
+not being applied to every alias of a joined leaf.**

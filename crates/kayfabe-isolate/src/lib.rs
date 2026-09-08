@@ -2211,8 +2211,10 @@ pub trait RingWorkingSet {
     /// `false` is the total answer for *every* reason a ring may not name this VA — no
     /// mapping at all; a mapping with no host publication; and (since 2026-08-11) a
     /// mapping whose host object is a **second** memory shadowing one the guest already
-    /// reaches, which `kayfabe_mmu::BackingBytes::ShadowsGuestMemory` calls *"fatal for
-    /// anything the guest reads or polls, which is what a ring is"*. The caller
+    /// reaches, which `kayfabe_mmu::BackingBytes` called *"fatal for anything the guest
+    /// reads or polls, which is what a ring is"*. ⊘ Since 2026-09-09 that third reason has
+    /// no spelling at all — the `ShadowsGuestMemory` variant is deleted, so a shadowing
+    /// backing cannot enter a `Binding` and this predicate never meets one. The caller
     /// (`kayfabe-fwd`) owns the exact fault vocabulary and re-derives which one it was
     /// from the offending VA in [`UngatedVa`], so this predicate stays a predicate and the
     /// two crates cannot drift into two classifications of one refusal.

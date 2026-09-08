@@ -827,7 +827,7 @@ pub fn apply_settlement(
 /// |---|---|
 /// | `start == va.0` and the row is the whole tabled extent | the **partial extent**: a proposal naming part of a larger binding would revoke bytes nobody proposed. `w291`'s merge was bounded to exact-extent rows for this reason. |
 /// | [`crate::HostBacking::frees_object`] | the **double free**: an [`crate::HostExtent::Slice`] names an arena object that serves sibling bindings at other offsets, so freeing it here destroys what the last one owns. This is the same predicate `kayfabe_fwd::unpublish_backing` already gates its `free` on. |
-/// | `bytes == BackingBytes::JoinsGuestWindow` | the **wrong plane**: `ShadowsGuestMemory` is ruling 3's refused chain and a published-GPA row is the arena case above; only the join is 1 leaf : 1 whole object. |
+/// | `bytes == BackingBytes::JoinsGuestWindow` | the **wrong plane**: a published-GPA row (`SoleBacking`) is the arena case above; only the join is 1 leaf : 1 whole object. (⊘ `ShadowsGuestMemory`, ruling 3's refused chain, used to be the third answer here; deleted 2026-09-09, the state is unrepresentable.) |
 /// | the caller asked for it | the **orphan**: the row's host half leaves in [`ApplyOutcome::revoked`] and the caller must dispose of it. A caller that ignores the field has traded a frozen row for a leaked object. |
 ///
 /// ⊘ **Everything else keeps the refusal, byte for byte.** A row that is host-published and

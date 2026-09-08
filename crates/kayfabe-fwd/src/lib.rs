@@ -2154,9 +2154,11 @@ pub fn commit_pin_guest_ram(
             let backing = kayfabe_mmu::HostBacking::whole(
                 memory,
                 host_va,
-                // ★ `SoleBacking` and never `ShadowsGuestMemory`: these ARE the guest's pages.
-                // There is no second memory for a writer to diverge into. That variant's own
-                // doc names this producer.
+                // ★ `SoleBacking`, and it is the only word that is true here: these ARE the
+                // guest's pages. There is no second memory for a writer to diverge into.
+                // `SoleBacking`'s own doc names this producer. (⊘ Until 2026-09-09 this note
+                // read "and never `ShadowsGuestMemory`"; that variant is deleted, so the
+                // wrong word no longer exists to be chosen.)
                 kayfabe_mmu::BackingBytes::SoleBacking,
             );
             match kayfabe_mmu::Binding::pinned_guest_ram(old.phys(), old.aperture(), backing) {
@@ -3153,7 +3155,8 @@ pub fn adopt_joined_fb_leaf(
 /// chains end on, factored out because they now reach it at **different times**.
 ///
 /// [`commit_back_fb_leaf`] calls it inline for [`FbLeafBacking::Vidmem`] (where ruling 3
-/// refuses it, every time); [`adopt_joined_fb_leaf`] calls it after the caller has installed
+/// refuses it by name, every time, after the R5 checks and before any `HostBacking` is
+/// built); [`adopt_joined_fb_leaf`] calls it after the caller has installed
 /// the guest's view. ⊘ One body rather than two: the R5 checks and the unwind-on-overlap are
 /// the part that is easy to get subtly wrong, and a second copy of them would be a second
 /// reading of what "this leaf is still the leaf we planned" means.
@@ -3162,9 +3165,9 @@ pub fn adopt_joined_fb_leaf(
 /// what the execute phase produced.
 ///
 /// # Errors
-/// [`Refusal`] — carrying the orphans the caller must release. ★ The `BackingBytes` is
-/// derived from `plan.how` and from nothing else, so ruling 3 adjudicates the chain that
-/// actually ran.
+/// [`Refusal`] — carrying the orphans the caller must release. ★ The `BackingBytes` — or
+/// the refusal to build one — is derived from `plan.how` and from nothing else, so ruling 3
+/// adjudicates the chain that actually ran.
 fn bind_backed_fb_leaf(
     vas: &mut kayfabe_core::gpu::Vas,
     plan: &BackFbLeafPlan,
@@ -3232,8 +3235,11 @@ fn bind_backed_fb_leaf(
     // Read this before the paragraph below. `plan.how` selects between them and the
     // `BackingBytes` each one declares is what ruling 3 adjudicates:
     //
-    //   * `FbLeafBacking::Vidmem` — `w228`'s chain, `ShadowsGuestMemory`. Everything below
-    //     is true of it, verbatim, and it is still refused. It has no production caller.
+    //   * `FbLeafBacking::Vidmem` — `w228`'s chain. Everything below is true of it,
+    //     verbatim, and it is still refused. It has no production caller. ⊘ Until
+    //     2026-09-09 it declared `BackingBytes::ShadowsGuestMemory` and was refused by the
+    //     constructor for saying so; that variant is deleted, so this arm now refuses at
+    //     its own site (see the block at the `match` below).
     //   * `FbLeafBacking::Joined` — `JoinsGuestWindow`, and it is **ruling 4**, not a
     //     relaxation of ruling 3: an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over host pages the
     //     guest's own framebuffer window has been re-pointed at. There is no second memory,
@@ -3253,10 +3259,12 @@ fn bind_backed_fb_leaf(
     // host vidmem object the execute phase just allocated is a SECOND, separate memory at
     // the same address. `[measured 2026-08-11, w228]` `placed_as_asked=true` **and blank**.
     //
-    // ⊘ **The enforcement is `Binding::real_gpu_memory` refusing to be constructed**, not a
-    // test here: `Aperture::Vidmem` IS the emulated framebuffer in this design, and
-    // `BackingBytes::ShadowsGuestMemory` says the same thing a second way. There is no
-    // spelling of this state that reaches [`AddressTable::bind`].
+    // ⊘ **The enforcement is that this state has no spelling.** `Aperture::Vidmem` IS the
+    // emulated framebuffer in this design, and `Binding::real_gpu_memory` refuses a host
+    // object at it unless the backing declares the window was re-pointed; and the honest
+    // word for "a second memory here" — `BackingBytes::ShadowsGuestMemory` — was deleted on
+    // 2026-09-09, so the `Vidmem` arm cannot even build the `HostBacking` it would have been
+    // refused for. There is no spelling of this state that reaches [`AddressTable::bind`].
     //
     // ★★ **What is deliberately NOT done: the table is left alone.** The `previous` row —
     // the guest-declared `RegionKind::FakeFramebuffer` binding a page-table decode put
@@ -3275,18 +3283,47 @@ fn bind_backed_fb_leaf(
     // aperture here, because the region's aperture is the guest's declaration and not the
     // object's class.
     //
-    // ★★ **The refusal is ASKED FOR, not restated.** This site calls the constructor and
-    // propagates its answer rather than raising `FakeFbAtRealGpuVa` from a literal — a
-    // literal here would be a second computation of ruling 3 that agrees with the first
-    // today and can drift from it tomorrow, and a mutant weakening the constructor would
-    // leave this chain's own tests green.
+    // ⊘⊘ **CORRECTED 2026-09-09 — the `Vidmem` arm's refusal is now RAISED HERE, by name,
+    // and the paragraph below it is true only of the `Joined`/`Aliased` arm.** Until today
+    // the `Vidmem` arm declared `BackingBytes::ShadowsGuestMemory` and let the constructor
+    // refuse it, so that ruling 3 was computed in exactly one place. The owner's ruling is
+    // that the shadow must not exist by construction, so that variant is deleted and there
+    // is no longer any `HostBacking` this arm could truthfully build: `SoleBacking` would be
+    // a false declaration (there IS a second memory — the guest's `SparseFb` bytes), and
+    // `JoinsGuestWindow` would be the w228 chain wearing ruling 4's word. ⇒ The arm returns
+    // the refusal itself, carrying the same `FakeFbAtRealGpuVa { Vidmem }` the constructor
+    // answered, with the same orphans, at the same point in the sequence (after the R5
+    // checks, before the bind). `fb_leaf_backing.rs` asserts that fault by value, so the
+    // observable behaviour is byte-identical. ⚠ The drift hazard the old text named is now
+    // bounded from the other side: the constructor's aperture test still refuses a silent
+    // `SoleBacking` over `Vidmem`, so a mutant that turned this arm back into a declaration
+    // would still be refused — only a mutant that declared the join would be admitted, and
+    // `ce_representability_split.rs`'s source census counts those.
+    //
+    // ★★ **The refusal is ASKED FOR, not restated** — for the arms that build a backing.
+    // The `Joined`/`Aliased` arm calls the constructor and propagates its answer rather than
+    // raising `FakeFbAtRealGpuVa` from a literal — a literal there would be a second
+    // computation of ruling 3 that agrees with the first today and can drift from it
+    // tomorrow, and a mutant weakening the constructor would leave this chain's own tests
+    // green.
     //
     // ★★★★★ **AND THIS IS THE ONE FACT ONLY THIS SITE KNOWS.** `BackingBytes` has no default
     // and no inference by construction; the chain that created the memory is the only thing
     // that can say which of the two it is, and it says so from `plan.how` — the field the
     // plan carried precisely so the commit could not re-derive it from the reply's shape.
     let bytes = match plan.how {
-        FbLeafBacking::Vidmem => kayfabe_mmu::BackingBytes::ShadowsGuestMemory,
+        FbLeafBacking::Vidmem => {
+            return Err(Refusal {
+                fault: FwdFault::RegionKindRefused {
+                    va: plan.va,
+                    fault: kayfabe_mmu::RegionKindFault::FakeFbAtRealGpuVa {
+                        aperture: Aperture::Vidmem,
+                    },
+                },
+                orphans: orphans(),
+                retry: false,
+            });
+        }
         // ★★★ w380 — an alias declares `JoinsGuestWindow` and it is TRUE of it: the guest's
         // window for the frame was re-pointed at these pages by the join, and an alias maps
         // the very same pages. ⊘ There is no weaker word for "one memory at another address",
@@ -3533,9 +3570,9 @@ fn gate_vas(
 /// at this address"* — which is the **same refuted predicate**
 /// [`representability_of`] was corrected off the same day. The correction landed on the
 /// copy-engine classifier and **not** here, so the two authorities for one question
-/// disagreed: `representability_of` refused a
-/// [`kayfabe_mmu::BackingBytes::ShadowsGuestMemory`] backing by name while this gate
-/// admitted it to a ring. [`kayfabe_mmu::BackingBytes`]'s own words are the ruling —
+/// disagreed: `representability_of` refused a `ShadowsGuestMemory` backing (a
+/// [`kayfabe_mmu::BackingBytes`] variant deleted 2026-09-09) by name while this gate
+/// admitted it to a ring. [`kayfabe_mmu::BackingBytes`]'s own words were the ruling —
 /// *"⊘ Fatal for anything the guest reads or polls, **which is what a ring is**"* — so the
 /// gate was the site that contradicted the doc, not the doc that over-reached.
 ///
@@ -3554,9 +3591,11 @@ fn gate_vas(
 /// *"resolved, host object, but a SECOND memory shadowing what the guest reads"* ⇒
 /// `FwdFault::BackingNotGuestVisible`. The region-kind lane then moved that same refusal
 /// **to the entrance**: [`kayfabe_mmu::Binding::real_gpu_memory`] is the only constructor
-/// that can set `host: Some(..)`, and it refuses [`kayfabe_mmu::BackingBytes`]'s
-/// `ShadowsGuestMemory` outright (ruling 3). [`kayfabe_mmu::Binding::declared_by_guest`],
-/// the other and only remaining constructor, always sets `host: None`.
+/// that can set `host: Some(..)`, and it refused [`kayfabe_mmu::BackingBytes`]'s
+/// `ShadowsGuestMemory` outright (ruling 3) — ⊘ and since 2026-09-09 that variant does
+/// not exist, so the state is unrepresentable rather than refused.
+/// [`kayfabe_mmu::Binding::declared_by_guest`], the other constructor, always sets
+/// `host: None`.
 ///
 /// ⇒ **`host().is_some()` ⟺ `kind() == RegionKind::RealGpuMemory`, by construction**, and
 /// there is no longer any state for a third arm to name. `FwdFault::BackingNotGuestVisible`
@@ -3965,7 +4004,8 @@ pub fn plan_doorbell(
     // ⊘ CORRECTED 2026-08-11 (integration): this comment used to say *"there are
     // three answers, not two — a `ShadowsGuestMemory` backing is
     // `BackingNotGuestVisible`, not a `Miss`"*. There are **two**. Ruling 3 made a
-    // shadowing backing unbindable, so `ring_admits` now yields only `Miss` and
+    // shadowing backing unbindable (and since 2026-09-09 unspellable — the variant is
+    // deleted), so `ring_admits` now yields only `Miss` and
     // `FwdFault::BackingNotGuestVisible` no longer exists — see `ring_admits`.
     //
     // ★ The re-derivation is kept even though every arm currently answers `Miss`:

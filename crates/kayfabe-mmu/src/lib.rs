@@ -571,23 +571,37 @@ pub enum RegionKindFault {
     },
     /// ★★★ **Owner ruling, 2026-08-11: fake framebuffer at a real GPU VA of an isolate.**
     ///
+    /// ⊘⊘⊘ **CORRECTED 2026-09-09 — the SECOND spelling below is GONE, and the state it
+    /// named is now unrepresentable.** Read this before the two paragraphs it corrects.
+    /// `BackingBytes::ShadowsGuestMemory` — the caller's own declaration of a second memory
+    /// — was deleted (owner ruling: the shadow must not exist by construction). The
+    /// constructor keeps **one** test, the aperture one, qualified exactly as the 08-11
+    /// correction states. The chain that used to declare the shadow
+    /// (`kayfabe_fwd::commit_back_fb_leaf`'s `Vidmem` arm) raises this same fault **by
+    /// name at its own site**, before any [`HostBacking`] exists, so a reader of this fault
+    /// still cannot tell ruling 3 from an allocation failure by anything but its name — and
+    /// does not need to.
+    ///
     /// ⊘⊘ **CORRECTED 2026-08-11 — the aperture arm below is now QUALIFIED, and only that
     /// arm.** Read this before it. An [`Aperture::Vidmem`] region is refused *unless* the
     /// backing declares [`BackingBytes::JoinsGuestWindow`], which says the emulated
     /// framebuffer is no longer this range's store (ruling 4, the scratchpad). The
-    /// `ShadowsGuestMemory` arm is unqualified and refuses under **every** aperture.
+    /// `ShadowsGuestMemory` arm was unqualified and refused under **every** aperture.
     ///
-    /// A [`HostBacking`] was offered for a region that is kind 2 — either because its
-    /// aperture is [`Aperture::Vidmem`] (there is no *other* video memory in this design;
-    /// `no_real_phys_only_gpga_or_gpa`), or because the backing itself declares
-    /// [`BackingBytes::ShadowsGuestMemory`], i.e. a SECOND memory at an address the guest
-    /// goes on reading somewhere else.
+    /// A [`HostBacking`] was offered for a region that is kind 2 — because its aperture is
+    /// [`Aperture::Vidmem`] (there is no *other* video memory in this design;
+    /// `no_real_phys_only_gpga_or_gpa`) and the backing does not dissolve the fake
+    /// framebuffer. Until 2026-09-09 it could also be raised because the backing itself
+    /// declared `ShadowsGuestMemory`, i.e. a SECOND memory at an address the guest goes on
+    /// reading somewhere else.
     ///
-    /// ⊘ **Both tests are here rather than one**, because they fail independently: the
-    /// aperture catches a caller that is honest about the address and silent about the
-    /// shadow, and `BackingBytes` catches a caller that is honest about the shadow over an
+    /// ⊘ **Both tests used to be here rather than one**, because they failed independently:
+    /// the aperture caught a caller that is honest about the address and silent about the
+    /// shadow, and `BackingBytes` caught a caller that is honest about the shadow over an
     /// aperture that looks innocent. `[measured 2026-08-11, `w228`]` the `PublishVidmem`
-    /// chain is both at once — `placed_as_asked=true` **and blank**.
+    /// chain is both at once — `placed_as_asked=true` **and blank**. ★ The second catch is
+    /// not weakened by its deletion: a caller can no longer be *honest about the shadow*,
+    /// because there is no word for it, and the silent caller is caught exactly as before.
     FakeFbAtRealGpuVa {
         /// The aperture the caller named.
         aperture: Aperture,
@@ -669,8 +683,10 @@ impl Binding {
     ///
     /// # Errors
     /// [`RegionKindFault::FakeFbAtRealGpuVa`] — ruling 3. `aperture` is [`Aperture::Vidmem`]
-    /// (the emulated framebuffer is the only video memory in this design), or `host` declares
-    /// [`BackingBytes::ShadowsGuestMemory`].
+    /// (the emulated framebuffer is the only video memory in this design) and `host` does not
+    /// declare [`BackingBytes::JoinsGuestWindow`]. ⊘ Until 2026-09-09 this was also raised
+    /// for `host` declaring `ShadowsGuestMemory`; that variant is deleted and the state has
+    /// no spelling.
     ///
     /// [`RegionKindFault::PeerHasNoKind`] — `aperture` is [`Aperture::Peer`].
     pub const fn real_gpu_memory(
@@ -687,25 +703,28 @@ impl Binding {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
-        // ★★★ RULING 3, and both spellings of it. The aperture test catches a caller honest
-        // about the address and silent about the shadow (`Vidmem` IS the framebuffer we
-        // fabricate, so a host object at it is a second memory by definition); the
-        // `BackingBytes` test catches a caller honest about the shadow over an aperture that
-        // looks innocent. They fail independently.
+        // ★★★ RULING 3. The aperture test catches a caller honest about the address and
+        // silent about the shadow (`Vidmem` IS the framebuffer we fabricate, so a host
+        // object at it is a second memory by definition).
+        //
+        // ⊘⊘ **CORRECTED 2026-09-09 — this used to be "both spellings of it".** A second
+        // disjunct, `matches!(host.bytes(), BackingBytes::ShadowsGuestMemory)`, caught a
+        // caller honest about the shadow over an aperture that looks innocent, and the two
+        // failed independently. That variant is deleted (owner ruling: the shadow must not
+        // exist by construction), so the honest spelling of the forbidden state no longer
+        // compiles and this `if` has one arm. ⚠ Nothing else about it moved: the expression
+        // that survives is byte-for-byte the first disjunct.
         //
         // ★★★ **AND RULING 4, the scratchpad carve-out, which is why the aperture test is
         // qualified and not deleted.** `BackingBytes::JoinsGuestWindow` says the emulated
         // framebuffer is no longer the store for this range — the guest's own window has been
         // re-pointed at the very pages the `OS_DESCRIPTOR` describes — so the premise the
         // aperture test rests on ("`Vidmem` means there is another memory") is false *for
-        // that declaration and only for it*. ⊘ Note what is deliberately NOT done: the
-        // `ShadowsGuestMemory` test below is not qualified at all, and a caller that stays
-        // silent (`SoleBacking`) over `Vidmem` is refused exactly as before. The carve-out is
-        // bought by a third word, never by making the guard aperture-blind — which would
-        // re-open `w228`'s chain under an innocent name.
-        if (!declared.kind.may_be_host_mapped() && !host.bytes().dissolves_fake_framebuffer())
-            || matches!(host.bytes(), BackingBytes::ShadowsGuestMemory)
-        {
+        // that declaration and only for it*. ⊘ Note what is deliberately NOT done: a caller
+        // that stays silent (`SoleBacking`) over `Vidmem` is refused exactly as before. The
+        // carve-out is bought by a second word, never by making the guard aperture-blind —
+        // which would re-open `w228`'s chain under an innocent name.
+        if !declared.kind.may_be_host_mapped() && !host.bytes().dissolves_fake_framebuffer() {
             return Err(RegionKindFault::FakeFbAtRealGpuVa { aperture });
         }
         Ok(Binding {
@@ -746,7 +765,10 @@ impl Binding {
     /// [`RegionKind::GuestPhysDma`], or `host` declares bytes other than
     /// [`BackingBytes::SoleBacking`]. ⊘ Both are refusals rather than coercions: a `Vidmem`
     /// row is the framebuffer join's population and has its own chain, and a backing that
-    /// declares a **shadow** is the two-memories state ruling 3 forbids under every aperture.
+    /// declares [`BackingBytes::JoinsGuestWindow`] is wearing that chain's word over pages it
+    /// did not join. (Until 2026-09-09 the second refusal also covered a declared **shadow**,
+    /// `ShadowsGuestMemory` — the two-memories state ruling 3 forbids under every aperture.
+    /// That variant is deleted; the `SoleBacking` test is unchanged.)
     pub const fn pinned_guest_ram(
         phys: u64,
         aperture: Aperture,

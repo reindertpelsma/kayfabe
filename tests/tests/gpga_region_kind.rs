@@ -44,11 +44,12 @@ const APERTURES: [Aperture; 4] = [
 
 /// Every `BackingBytes` the tree has, swept for the same reason [`APERTURES`] is: a guard
 /// that widens to admit one more declaration must fail here.
-const BYTES: [BackingBytes; 3] = [
-    BackingBytes::SoleBacking,
-    BackingBytes::ShadowsGuestMemory,
-    BackingBytes::JoinsGuestWindow,
-];
+///
+/// ⊘ **Two, not three, since 2026-09-09.** `BackingBytes::ShadowsGuestMemory` — the honest
+/// declaration of a second memory — was deleted by owner ruling (the shadow must not exist by
+/// construction). Its column of this sweep was *refused under every aperture*; that column is
+/// now unrepresentable and the sweep is over the space that remains.
+const BYTES: [BackingBytes; 2] = [BackingBytes::SoleBacking, BackingBytes::JoinsGuestWindow];
 
 fn backing(bytes: BackingBytes) -> HostBacking {
     HostBacking::whole(
