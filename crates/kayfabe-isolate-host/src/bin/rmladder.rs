@@ -11054,6 +11054,7 @@ fn main() -> std::process::ExitCode {
     // ⊘ `None` means *"draw one and PRINT it"*, never *"do not seed"*: a content
     //   failure whose pattern cannot be reproduced is an anecdote.
     let mut mean_nonce: Option<u32> = None;
+    let mut mean_falsify = false;
     // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
     // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
     // that runs a rung WITHOUT its positive control, because a rung whose control did not
@@ -11206,6 +11207,9 @@ fn main() -> std::process::ExitCode {
                     }
                 }
             }
+            // ★★★★★ THE FALSIFIER. Opt-in because it provokes a real Xid 31 and kills its
+            // own channel — see [`mean::falsifier`].
+            "--mean-falsify" => mean_falsify = true,
             "--mean-nonce" => {
                 let Some(v) = args.next() else {
                     eprintln!("--mean-nonce needs a value");
@@ -11930,6 +11934,7 @@ fn main() -> std::process::ExitCode {
             threads: mean_threads,
             p1_rounds: mean_p1_rounds,
             nonce,
+            falsify: mean_falsify,
         };
         let ok = mean::run(&mut rm, &conn, &cfg);
         println!("done — w392d mean client only");
@@ -14588,6 +14593,85 @@ mod mean {
         done(rm, PathState::Verified { rounds })
     }
 
+
+    /// A VA nothing in this run ever maps. ⊘ Far above every other region this arm names, and
+    /// under the address space's limit so the refusal is the MMU's and not RM's.
+    const FALSIFY_VA: u64 = 0x0000_00A0_0000_0000;
+    /// The falsifier's own ring and scratch. Its own channel, because the fault kills it.
+    const FALSIFY_RING: u64 = 0x0000_00A0_4000_0000;
+    const FALSIFY_SCRATCH: u64 = 0x0000_00A0_8000_0000;
+
+    /// ★★★★★ **THE FALSIFIER — CAN THIS CLIENT'S READER SAY "NO"?**
+    ///
+    /// Every ✔ above is [`engine_read_through_va`] returning the right word. That is worth
+    /// exactly as much as the same function's ability to return *nothing* when there is
+    /// nothing to read — and a run in which every source VA is mapped never exercises it.
+    /// `a_green_test_can_hold_a_wall_in_place`, and `a_census_zero_needs_a_known_positive`
+    /// one step further: a reader that cannot fail is not an oracle.
+    ///
+    /// So: the same call, against a VA **this run never maps**. The required outcome is a
+    /// **refusal** — the engine faults, the completion semaphore never reaches the payload,
+    /// and the function reports `NEVER RETIRED`. If it returns a *value* instead, then the
+    /// scratch was not really poisoned, or the wait was satisfied by something other than
+    /// this submission, and **every row above is vacuous**.
+    ///
+    /// ⚠ **Opt-in, and it is the last thing the process does.** It provokes a real
+    /// `Xid 31 FAULT_PDE` and kills its own channel. That is the measurement, not a side
+    /// effect — which is why it is a flag and why it runs on a channel and address space
+    /// nothing else in the run shares.
+    fn falsifier(rm: &mut HostRmBackend, engine_type: u32) -> bool {
+        println!(
+            "--- W392D FALSIFIER: the SAME engine read against a VA nothing mapped. A \
+             REFUSAL is the pass ---"
+        );
+        let vas = match rm.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                println!("??    W392D falsifier    = no VA space: {e:?}");
+                println!("MEAN_FALSIFIER=NOTRUN");
+                return false;
+            }
+        };
+        let mut lane = match build_lane(rm, vas, engine_type, FALSIFY_RING, FALSIFY_SCRATCH) {
+            Ok(l) => l,
+            Err(e) => {
+                println!("??    W392D falsifier    = no lane: {e}");
+                println!("MEAN_FALSIFIER=NOTRUN");
+                let _ = rm.free(vas);
+                return false;
+            }
+        };
+        let out = engine_read_through_va(rm, &mut lane, FALSIFY_VA);
+        let ok = match &out {
+            Err(why) => {
+                println!(
+                    "★★★   W392D falsifier    = the reader REFUSED, as it must: {why}"
+                );
+                println!(
+                    "      ⇒ the poison, the per-call completion payload and the retirement \
+                     wait all do work. The ✔ rows above are not free."
+                );
+                true
+            }
+            Ok(v) => {
+                println!(
+                    "⊘⊘⊘   W392D falsifier    = the reader returned {v:#010x} for a VA THIS \
+                     RUN NEVER MAPPED. ⊘⊘ EVERY ROW ABOVE IS VACUOUS: the scratch was not \
+                     really poisoned, or the wait was satisfied by something other than this \
+                     submission"
+                );
+                false
+            }
+        };
+        println!("MEAN_FALSIFIER={}", if ok { "PASS" } else { "FAIL" });
+        // ⊘ The channel is dead — its engine faulted — so the free is best-effort and its
+        //   own failure is not a result.
+        let _ = rm.free(lane.scratch);
+        let _ = rm.free(lane.chan);
+        let _ = rm.free(vas);
+        ok
+    }
+
     /// Configuration for one `--uvm-mean` run. Every field is printed before the run.
     pub struct Cfg {
         /// The GPU index — the one the UUID is read for and the one RM is opened on.
@@ -14598,6 +14682,8 @@ mod mean {
         pub p1_rounds: u32,
         /// The run nonce. Printed, so a failure is replayable.
         pub nonce: u32,
+        /// Run [`falsifier`] after the ledger. ⊘ Default OFF: it provokes a real `Xid 31`.
+        pub falsify: bool,
     }
 
     /// ★★★★★ **THE MEAN CLIENT'S ENTRY POINT.**
@@ -14762,7 +14848,27 @@ mod mean {
         let _ = rm.free(lane.chan);
         let _ = rm.free(vas);
 
-        led.report()
+        let verdict = led.report();
+        // ⊘ AFTER the ledger, never before, and its result is printed on its own line rather
+        //   than folded into the verdict. The falsifier does not grade the driver — it grades
+        //   THIS CLIENT'S READER — and a run that mixed the two would report an instrument
+        //   failure as a driver failure.
+        if cfg.falsify {
+            let fals = falsifier(rm, engine_type);
+            if !fals {
+                println!(
+                    "⊘⊘⊘   W392D_OUTCOME QUALIFIED = the falsifier FAILED, so the ledger above \
+                     is UNINTERPRETABLE whatever it says"
+                );
+                return false;
+            }
+        } else {
+            println!(
+                "info  W392D falsifier    = NOT RUN (pass --mean-falsify). ⊘ The ledger's ✔ \
+                 rows are therefore un-negative-controlled ON THIS RUN"
+            );
+        }
+        verdict
     }
 }
 
