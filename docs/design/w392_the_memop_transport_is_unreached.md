@@ -469,3 +469,29 @@ process, so its channels are passthrough — correct. But its GPFIFO ring resolv
 not support by construction.** If my raw client allocated its ring in vidmem, then it is testing
 an unsupported shape and the defect is in **the client**, not in kayfabe — which would also
 explain why real CUDA (`cup3`, `CUP3_VAL=43`) computes on this same build. ⚠ Hypothesis, unrun.
+
+### ⊘⊘ §5j — OWNER SCOPES THE RULE: IT IS ABOUT PARSING, NOT PLACEMENT. §5i's HYPOTHESIS RETRACTED.
+
+*"A guest ring in vidmem **we parse** is a shape we should not support by construction. Real guest
+rings may live in vidmem (or sysmem if that's possible) but only in passthrough. For emulated
+channels all rings live in real ram, regardless what the guest kernel says. I would not put it
+this strict though — **any GPGA can be used as ring for emulated channels**, just it's preferred
+that rings we parse is in fake fb and therefore in ram. Any GPGA is mappable anyways."*
+
+⇒ The forbidden thing is **the verb**. Placement is free: passthrough rings go wherever the guest
+puts them; emulated rings may use **any GPGA**, with fake-FB/RAM a *preference for parsed rings*.
+
+⊘⊘ **§5i's closing hypothesis is RETRACTED.** I proposed the mean client was at fault for putting
+its GPFIFO ring in vidmem. **It is not** — a user proc's channel is passthrough, and a vidmem ring
+there is legitimate. I would have "fixed" correct code on the strength of a rule I had just
+mis-stated.
+
+★ **And the rule is already honoured on the functional path:** `ring_content_is_forwardable =
+CpuCe && Emulated` gates the only live parse, and the census returns `AGREES` with
+`system_not_emulated=0 user_not_passthrough=0`.
+⚠ **One violator: `RING-PROJ`**, a read-only diagnostic that descends a passthrough ring and
+decodes its pushbuffer. *"By construction"* means structurally unable, not harmless — and it
+decodes untrusted guest content for no functional reason.
+
+⊘ **Which leaves the guest-red mean client WITHOUT AN EXPLANATION.** Every candidate I raised
+today is now withdrawn. State the absence rather than reach for a sixth.
