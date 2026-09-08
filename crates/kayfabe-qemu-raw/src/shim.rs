@@ -4011,7 +4011,7 @@ fn observer_loop(
                     let (live, _retired) = device.fb_join_namers(r.phys);
                     if live > 0 || !frames_given_back.insert(r.phys) {
                         already += 1;
-                    } else if release_store_join(&plane, r.phys) {
+                    } else if release_store_join(plane, r.phys) {
                         released += 1;
                     } else {
                         already += 1;

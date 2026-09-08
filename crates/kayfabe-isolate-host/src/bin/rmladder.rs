@@ -12455,6 +12455,13 @@ fn main() -> std::process::ExitCode {
                 // ⊘ `None`: this rung asks whether the gate admits an EMPTY working set.
                 // A guest-RAM grant would need a guest, and this driver has none.
                 None,
+                // ⊘ `None` — w392j's `adopt`. This rung is the RING GATE's own test and births
+                // nothing over a guest's ring: there is no guest here to have declared one.
+                // ⚠ It is `None` because the question is *"does the gate admit an empty working
+                // set"*, NOT because a doorbell birth may skip adoption — on the production path
+                // a `Passthrough` channel that reaches this constructor with `None` is exactly
+                // the defect w392j fixed.
+                None,
             ) {
                 Err(u) => println!("FAIL  R16 ring gate       = refused an empty set at {u:?}"),
                 Ok(plan) => match w.execute(
