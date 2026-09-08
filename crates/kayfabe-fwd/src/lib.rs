@@ -3960,8 +3960,33 @@ pub fn plan_doorbell(
     } else {
         match chan.kind {
             kayfabe_core::channel_kind::GuestChannelKind::Emulated => None,
+            // ★★★★★ **w392o — ADOPT THE RING, NEVER THE USERD, ON A DOORBELL BIRTH.**
+            //
+            // ⊘⊘ **w392j adopted BOTH here and that is a MEASURED data-corruption hazard**
+            // (`rm_takes_a_guest_userd_and_zeroes_it`, w233, real GA106, `ad6bb9f`, host
+            // Xid 0/0): host RM **accepts** a caller-supplied USERD through
+            // `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — the same descriptor type the guest's ring
+            // reaches us as — and then **ZEROES all 512 bytes**, with the alloc still
+            // returning `NV_OK`. The control inverted cleanly: naming `userdOffset=0x8000`
+            // moved the zeroing to `0x8000`.
+            //
+            // ★★★ **And the ordering makes it certain rather than hypothetical:** a doorbell
+            // birth is *by definition* **after** the guest wrote `GP_PUT`. ⇒ adopting the
+            // USERD here **destroys the very cursor that caused this doorbell.**
+            // `[measured w392j/w392k]` doorbell 1 rang with `GP_PUT=1` and the engine ran
+            // **nothing**; doorbell 2 set `PUT=2` and the engine then executed entry 0 —
+            // 40 ms after the guest had already moved that entry's source frame, which is
+            // where all five `Xid 31`s come from.
+            //
+            // ⇒ **Ring: adopted** (hardware fetches the guest's own entries — that is the
+            // point). **USERD: OURS**, and we advance `GP_PUT` into it. The memory's own
+            // conclusion is *"adoption must happen at channel creation, before the guest
+            // writes — never lazily"*; until the birth moves there, taking the ring without
+            // the cursor is the half that is safe to take late.
             kayfabe_core::channel_kind::GuestChannelKind::Passthrough => {
-                adopted_guest_ring(spine, proc, chan, cgpu)
+                adopted_guest_ring(spine, proc, chan, cgpu).map(|r| {
+                    kayfabe_isolate::AdoptedGuestRing { userd: None, ..r }
+                })
             }
         }
     };
