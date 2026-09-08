@@ -79,6 +79,55 @@ VAS. Publication there is vacuous, not refused. **Do not sum the two.**
 
 ---
 
+## §2b — ⊘⊘ §2 IS CORRECTED BY w390f: THE GATE WAS ONE BUG, AND IT WAS NOT THE WHOLE ANSWER
+
+**Owner, 2026-09-08:** *"maybe its because tlb invalidate is called before the mappings are
+realized rather than after, making it an invalid synchronization point?"*
+
+### The ordering hypothesis, tested against the epochs already on disk (no new boot)
+
+```
+  INVAL    (377 lines):  (0,0)x426 (1,0)x6 (4,0)x16 (7,0)x7 (21,0)x38 (6254,0)x45 (13356,0)x39
+  DOORBELL ( 19 lines):  (0,0)x15  (21,0)x14 (6254,0)x14 (13350,0)x7 (13356,0)x7
+```
+
+⊘ **The SYSTEMATIC form is not supported.** The invalidate reaches `(13356, 0)` — the **same
+maximum epoch the doorbell ever sees** — over a VAS carrying 13 348 rows. It is not, in
+aggregate, arriving before the mappings are realized.
+
+### ★★★ But asking it found a THIRD defect, and §2's experiment was VOID
+
+`PublishStamp` was inserted `if !budget_hit` — **unconditional on whether anything was
+PUBLISHED**. On `assert` the census runs, publishes nothing, and stamped anyway. So in `w390e2`
+the census-only doorbell stamped every epoch and the invalidate — forced to `Publish` precisely
+so it could substitute — was skipped 293 times. **The arm I had disarmed was still suppressing
+the arm I was testing.** Fixed at `d0655640`; it is a production hazard, latent only because
+`drain` publishes unconditionally today.
+
+### ★★★★★ AND THE FAIR RE-TEST GIVES THE REAL ANSWER — IT IS COVERAGE, NOT ORDERING
+
+`[measured 2026-09-08, w390f1/f2 @ d0655640, real GA106]`
+
+| boot | doorbell | invalidate | **rows published** | result |
+|---|---|---|---|---|
+| `w390b3` | `drain` | off | **74** (by the doorbell) | **`CUP3_VAL=43`**, Xid 0 |
+| `w390f1` | `assert` | off | **0** | `NO_KERNEL_LINE`, **16 × Xid 31** |
+| `w390f2` | `assert` | **publish** | **25** (by the invalidate) | `NO_KERNEL_LINE`, **16 × Xid 31** |
+
+The stamp fix moved the invalidate from **1 row to 25**. The doorbell publishes **74**. ⇒ **The
+invalidate covers roughly a THIRD of the rows, and the missing ~49 are the ones the engine
+faults on.**
+
+⇒ ★★★★★ **THE OWNER'S CONCLUSION HOLDS AND THE MECHANISM IS NAMED: the TLB invalidate is a
+valid BARRIER wherever it fires, and an INVALID NOTIFICATION, because the guest does not fire
+one for every mapping.** It is not early — it is *absent* for two rows in three. ⊘ That is
+exactly what `NVOS46_FLAGS_DEFER_TLB_INVALIDATION` guarantees the guest need not do, and it
+independently re-derives w387's ruling: **enumerate WRITERS, not SIGNALS.**
+
+⚠ So §2's *"the blocker is the dirty gate"* is **half right and must not be cited alone**. The
+gate was a real bug and fixing it bought 1 → 25 rows. It did not buy correctness, and no fix to
+it can: the remaining gap is mappings about which the guest emits **no invalidate at all**.
+
 ## §3 — SCOPE, STATED SO IT IS NOT OVER-READ
 
 - **`hubtlb_only = 232` of 377.** Those are **BAR** VA-space invalidates.
