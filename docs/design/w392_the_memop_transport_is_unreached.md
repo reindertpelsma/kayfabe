@@ -345,3 +345,46 @@ entry 0 and its pushbuffer. What we never do is **MAP it into the host GPU's VAS
 VA**. **Reading and mapping are different verbs, and only the first is built.** That is owner
 ruling #231 verbatim (*"map the guest's ring/pushbuffer/USERD into the host GPU's VAS at
 IDENTICAL VAs"*), re-derived from a raw client by a path that knew nothing about it.
+
+### ⊘⊘⊘ §5g — CORRECTED SAME DAY, ON THE OWNER'S CHALLENGE. §5e AND §5f ARE BOTH WRONG.
+
+The owner asked *"how do you mean the VA is never learned?"* — and the evidence bundle I had
+already captured refutes me twice over.
+
+```
+VAS-BIND-CENSUS va=0x8000001000 vas=PRESENT rows=3
+                hit=0x11000/Vidmem/start0x8000000000/len0x10000 … published=3
+GUEST-RAM PIN   ring=0x8000001000 → NOT IN GUEST RAM (the table binds this VA in aperture
+                Vidmem at 0x11000; `Binding::phys` is a guest-physical address ONLY for
+                sysmem, so there is no file offset to ask the layout for.
+                ⊘ Refused by name — nothing here reinterprets a framebuffer address as a GPA)
+```
+
+- ⊘ **"Never learned" is FALSE.** `RING-PROJ` resolves the ring, reads `GP_PUT`, decodes the
+  pushbuffer. The VA is fully known.
+- ⊘ **"The address table held no binding" is FALSE.** `vas=PRESENT rows=3 published=3`, hitting
+  `Vidmem` at `0x11000`. The row exists. (The adopt path's *"no **joined** binding"* is about the
+  **host-side** join, and is consistent with a present guest-side row.)
+- ⊘⊘ **"Absence, not refusal" is FALSE, and it was the load-bearing half.** There **is** a
+  refusal, **by name**: `GUEST-RAM PIN → NOT IN GUEST RAM`. It is a **correct** refusal — a
+  framebuffer offset is not a GPA and nothing may reinterpret it as one.
+
+★★★★★ **THE ACTUAL WALL: THE GUEST'S RING IS IN (EMULATED) VRAM, AND VIDMEM CANNOT BE EXPORTED.**
+Identical-VA passthrough requires handing the host GPU the memory behind the ring. Our only
+export mechanism (`GuestRamGrant` / OS_DESCRIPTOR) takes a **guest-physical address**, which
+`Binding::phys` supplies **only for sysmem**. A vidmem-backed ring has no such address, so the
+crossing does not exist today — for the ring or for anything else the guest places in VRAM.
+⇒ This is **owner item #271** (*"MAP VIDMEM INTO THE GPA — the device-node mmap route we
+specified and never issued"*, 2026-08-27), reached from a completely different direction.
+⊘ It **retires** the RM-map-hook recommendation of §5f: hooking RM's map path would have
+published the same Vidmem row we already have, and changed nothing.
+
+⚠ **HOW A REFUSAL SCORED AS AN ABSENCE — and it is a class already in memory.** I grepped for
+*join / bind / publish* verbs at the ring VA, found none, and concluded nothing had been
+attempted. **The verb that attempted it is called `GUEST-RAM PIN`.** My vocabulary list did not
+contain it, so its named refusal read as silence — exactly
+`a_census_over_transports_is_as_complete_as_its_list`, which this campaign paid for at w326 and
+which I re-ran today. ★ **A census over verbs is only as complete as its verb list, and the verb
+you did not think to list is the one holding the answer.** The discrimination
+*"refused vs never attempted"* is only sound if the refusal vocabulary is enumerated from the
+**code**, not guessed from the log.
