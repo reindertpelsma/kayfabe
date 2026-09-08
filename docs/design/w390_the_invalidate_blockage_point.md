@@ -177,3 +177,73 @@ would give one arm two sources of truth."* The harness was right; the invocation
   named and is one component away, in `DirtyGate`, not in the blockage model.
 - ⊘ The blockage-point model itself is **untouched and unrefuted**: the guest genuinely is
   stopped at the invalidate, for 25 ms, 311 times on the compute path.
+
+---
+
+## §6 — ⊘ WHY ogkm WOULD NOT INVALIDATE: THREE EXITS, AND NOTHING REPLAYS A DEFERRED ONE
+
+**Owner, 2026-09-08:** *"a simple raw client that just creates a mapping, runs dma copy, does
+not invoke tlb invalidate … and if it does not invoke tlb invalidate I want to know why in
+ogkm."*
+
+Read from `open-gpu-kernel-modules` (`research_clones/ogkm`), map path only.
+
+### The gate itself — `virt_mem_allocator_gm107.c:2563-2573`
+
+```c
+done:
+    // Invalidate VAS TLB entries.
+    if ((NULL == pTgtPteMem) && DMA_TLB_INVALIDATE == deferInvalidate)
+    {
+        kbusFlush_HAL(pGpu, pKernelBus, BUS_FLUSH_VIDEO_MEMORY | BUS_FLUSH_SYSTEM_MEMORY);
+        tlbStatus = gvaspaceInvalidateTlb(pGVAS, pGpu, update_type);
+    }
+```
+
+**Two conditions, not one — and the call it guards has a third exit inside it.**
+
+| # | exit | reachable? |
+|---|---|---|
+| 1 | `deferInvalidate != DMA_TLB_INVALIDATE` — set from `NVOS46_FLAGS_DEFER_TLB_INVALIDATION` at `:414` | ★★★ **YES — one unprivileged userspace flag bit** |
+| 2 | `pTgtPteMem != NULL` — *"CPU pointer to PTE memory for **Vista** updates"* (`:2126`) | ⊘ **DEAD on Linux.** Both call sites in this file (`:1437`, `:1611`) pass `NULL` — verified, not assumed |
+| 3 | `gvaspaceInvalidateTlb_IMPL` (`gpu_vaspace.c:2120-2131`): `mmuWalkGetPageLevelInfo` yields `pRootMem == NULL` ⇒ **`return NV_OK`** having issued nothing | ◐ **A SILENT SUCCESS** — the caller cannot distinguish *"invalidated"* from *"there was nothing to invalidate"*. Reachability on the map path unmeasured |
+
+### ★★★★★ AND NOTHING REPLAYS A DEFERRED INVALIDATE
+
+- The only two sites that force `_DEFER_TLB_INVALIDATION, _FALSE` (`virtual_mem.c:1406`, `:1448`)
+  are the **error-rollback** `dmaFreeMap` when `intermapRegisterDmaMapping` fails. They are not
+  a later flush.
+- `kgmmuCheckPendingInvalidates_*` is the **hardware TRIGGER poll** (wait for the register's
+  in-flight bit to clear before issuing the next one), **not** a software queue of owed
+  invalidates. `grep` finds no `pendingInvalidate`/`deferredInvalidate` bookkeeping anywhere.
+
+⇒ **`DEFER` means the invalidate is never issued, and RM does not compensate.** The contract is
+that userspace promised to handle it.
+
+### ⚠ AND THE FLUSH IS INSIDE THE SAME `if` — which reframes w388
+
+`kbusFlush_HAL` and `gvaspaceInvalidateTlb` share one condition. So `DEFER` skips **the flush as
+well as the TLB invalidate**. w388's `DEFER_LIVENESS=B` (*"a deferred PTE is not live without an
+invalidate"*) is therefore **ambiguous between two mechanisms**: the PTE write may not have been
+made visible to the GPU at all (flush), rather than the TLB holding a stale entry (invalidate).
+Those have different consequences and only one of them is about synchronisation.
+
+### ⇒ What this makes the raw client
+
+**Constructible, via one flag bit, with no compensating replay.** The client must therefore
+discriminate, not merely omit:
+
+1. **fresh VA, ordinary map** (flush happens, invalidate happens) → DMA → the positive control.
+2. **fresh VA, `DEFER`** → DMA. A fresh VA has no stale TLB entry, so if this WORKS the
+   invalidate was never needed here and exit 1 is a real coverage hole. If it FAILS, w388
+   reproduces and the next arm separates the two mechanisms.
+3. **fresh VA, `DEFER`, then an explicit `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB`** → DMA. Rescues
+   (2). ⊘ This does NOT separate flush from TLB either — see 4.
+4. **recycled VA** (mapped, unmapped, remapped) with `DEFER` → DMA. **This is the arm that
+   isolates the TLB**, because it is the only one where a stale entry provably existed.
+
+⚠ **The count must be kernel-side.** A BAR0 register write is invisible to an ioctl shim, and
+our own `MMU_INVALIDATE` census sees one transport. A kprobe on `kgmmuInvalidateTlb_HAL` /
+`gvaspaceInvalidateTlb` against the open module counts what actually happened, including
+transports the census cannot see — this tree has already paid once for a census whose transport
+list was incomplete.
