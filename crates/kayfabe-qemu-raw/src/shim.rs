@@ -10162,7 +10162,35 @@ impl PublishContext {
                 // ⊘ `tests/tests/unranked_locks.rs` caught it; it is fixed here rather than
                 // classified as safe, because the honest classification would have been *"a
                 // ranked lock and an allocation run beneath it"*.
-                if !budget_hit && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb) {
+                // ★★★★★ **w390f — A CENSUS-ONLY PASS MAY NOT STAMP, AND THAT IS A REAL BUG,
+                // NOT AN EXPERIMENT ARTEFACT.**
+                //
+                // The stamp means *"a pass that would have published ran to completion at this
+                // epoch and found nothing more to do"*. `self.vas_publish.publishes()` is what
+                // makes that sentence true: on `assert` (and any future observe-only arm) the
+                // census runs, publishes NOTHING, and — before this line — stamped anyway. The
+                // next pass at the same epoch, **even one that would have published**, was then
+                // told `REPLAY-OF-LAST-CENSUS`.
+                //
+                // `[measured 2026-09-08, boot w390e2]` this **voided the deciding experiment**.
+                // With the doorbell on `assert` and the invalidate forced to `Publish`, the
+                // invalidate reached epoch `(13356, 0)` over a VAS of 13 348 rows — the SAME
+                // maximum epoch the doorbell ever sees, so it was **not** arriving early — and
+                // was skipped 293 times because the census-only doorbell had already stamped
+                // every one of those epochs. ⇒ The arm I had disarmed was still suppressing the
+                // arm I was testing.
+                //
+                // ⚠ **Latent in production only because publication is currently
+                // unconditional.** Today `drain` always publishes, so stamp and publication
+                // coincide. The moment publication becomes conditional — which is precisely
+                // what moving the trigger off the doorbell means — a non-publishing pass
+                // poisons the gate for the publishing one. Fixed here rather than in the
+                // experiment, because it is the production hazard that the experiment happened
+                // to hit first.
+                if !budget_hit
+                    && self.vas_publish.publishes()
+                    && let Some(after) = self.device.vas_publish_epoch(pid, gpu, pdb)
+                {
                     let stamp = PublishStamp {
                         epoch: after,
                         joined: plane.joined_fb_ranges().len(),
