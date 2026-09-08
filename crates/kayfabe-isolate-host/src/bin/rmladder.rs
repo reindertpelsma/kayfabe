@@ -13958,6 +13958,29 @@ mod mean {
     /// The length of that region. 1 MiB, which is far more than a GR channel's resource set.
     const P2_CHANRES_LEN: u64 = 0x0010_0000;
 
+    /// ★★★★★ **THE COPY ENGINE P2 MUST USE, AND WHY IT IS NOT `COPY(0)`.**
+    ///
+    /// `[measured 2026-09-08, `--engines` R13b on this GA106]` the eight `COPY(i)` engine
+    /// types route to **four** runlists: `COPY(0)` and `COPY(1)` → runlist **0**, `COPY(2)` →
+    /// 1, `COPY(3)` → 2, `COPY(4)` → 8. Runlist 0 is the **graphics** runlist, and
+    /// `kchannelGetEngine_GM107` resolves a channel's engine from its runlist, picking *"the
+    /// first engine on this runlist"* — so a `COPY(0)` channel is reported as **GR** by every
+    /// RM path that asks.
+    ///
+    /// That has bitten this row twice, with two different statuses, and neither named it:
+    /// - `kchannelIsSchedulable_IMPL` refuses `0x40` because `IS_GR(engineDesc)` is true and
+    ///   `bIsContextBound` is false;
+    /// - `nvGpuOpsRetainChannel` then refuses `0x31` from `kgrctxGetCtxBufferInfo`, because
+    ///   `nvGpuOpsGetChannelEngineType` calls it `UVM_GPU_CHANNEL_ENGINE_TYPE_GR` and goes
+    ///   looking for **graphics context buffers a copy channel does not have**
+    ///   (`pGrCtxBufferMemDesc != NULL` fails at `kernel_graphics_context.c:821`).
+    ///
+    /// ⇒ An **async** copy engine, on a runlist of its own, is graded as a CE by both paths.
+    /// ⊘ This is not a workaround for a driver bug: on this part `COPY(0)` genuinely *is* the
+    /// GRCE, and asking for a GR-runlist channel in an externally-owned VA space without
+    /// promoting a GR context is a thing RM is right to refuse.
+    const P2_COPY_ENGINE: u32 = 2;
+
     /// ★★★★★ **P2 — grow nvidia-uvm's page tree, then read what it published WITH THE
     /// ENGINE.**
     ///
@@ -13975,13 +13998,18 @@ mod mean {
     #[allow(clippy::too_many_lines)]
     fn p2_uvm_round(
         rm: &mut HostRmBackend,
-        engine_type: u32,
         gpu: u32,
         nonce: u32,
         rounds: u32,
     ) -> PathState {
         let ctl_fd = rm.host_ctl_fd();
         let client = rm.host_client();
+        let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(P2_COPY_ENGINE) else {
+            return PathState::Refused {
+                step: "engine type",
+                status: format!("COPY({P2_COPY_ENGINE}) is not expressible"),
+            };
+        };
 
         // 1 ── the address space UVM will take over. ⊘ Externally owned, or RM has already
         //      populated its page tables and truthfully answers that the page table UVM wants
@@ -14088,7 +14116,24 @@ mod mean {
                 status: format!("{e:?}"),
             };
         }
-        println!("ok    W392D P2 channel    = a copy engine is bound to the UVM-owned space");
+        // ★★★ THE RUNLIST IS CHECKED, NOT ASSUMED. The work-submit token's upper half is the
+        //     runlist id (`--engines` R13b: `COPY(2)` → token `0x0001_0007`). A zero there
+        //     means this channel landed on the GRAPHICS runlist after all, and every refusal
+        //     below would then be the GR rule firing on a copy channel — a red that is the
+        //     harness's choice of engine and not a driver result.
+        let runlist = (token >> 16) as u32;
+        if runlist == 0 {
+            let _ = rm.free(chan);
+            return PathState::Refused {
+                step: "engine runlist",
+                status: format!(
+                    "COPY({P2_COPY_ENGINE}) landed on runlist 0 (token {token:#010x}) — the                      GRAPHICS runlist. ⊘ HARNESS FAULT: pick an async copy engine, or this                      row measures the GR context rule"
+                ),
+            };
+        }
+        println!(
+            "ok    W392D P2 channel    = COPY({P2_COPY_ENGINE}) bound to the UVM-owned space,              runlist {runlist} (token {token:#010x}) — NOT the graphics runlist"
+        );
 
         // 5 ── the scratch. GPU-written through UVM, CPU-read by handle.
         let scratch = match rm.alloc_probe_local(LEN) {
@@ -14302,7 +14347,7 @@ mod mean {
             "--- W392D P2: nvidia-uvm publishes the mapping, {} rounds at one VA ---",
             cfg.p1_rounds
         );
-        led.p2_uvm_memop = p2_uvm_round(rm, engine_type, cfg.gpu, cfg.nonce, cfg.p1_rounds);
+        led.p2_uvm_memop = p2_uvm_round(rm, cfg.gpu, cfg.nonce, cfg.p1_rounds);
         println!("    P2 → {}", led.p2_uvm_memop.describe());
 
         // ── P3 ────────────────────────────────────────────────────────────────────────
