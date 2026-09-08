@@ -96,27 +96,33 @@ fn the_guests_declared_aperture_decides_the_kind_and_peer_is_refused() {
 /// ★★★★★ **RULING 3, SWEPT: every cell of the host-backing input space, and the forbidden
 /// ones refuse.**
 ///
-/// ⊘ Two independent spellings of *"fake framebuffer at a real GPU VA"*, and they fail
-/// **independently**, which is why both are here and why the sweep is exhaustive:
+/// ⊘⊘ **CORRECTED 2026-09-09 — ONE spelling now, not two.** The table below had a second
+/// row, *"honest about the shadow, over an innocent aperture — caught by
+/// `BackingBytes::ShadowsGuestMemory`"*, and the sweep had a column for it that refused in
+/// every cell. That variant is **deleted** (owner ruling: the shadow must not exist by
+/// construction), so the honest caller no longer has a word to be honest with; the state is
+/// unrepresentable, which is strictly stronger than the refusal this sweep used to observe.
+/// The sweep is now over the eight cells that remain, and the silent caller's row is
+/// unchanged.
+///
+/// ⊘ One spelling of *"fake framebuffer at a real GPU VA"* remains, and the sweep is
+/// exhaustive over it:
 ///
 /// | the caller | caught by |
 /// |---|---|
 /// | honest about the address, silent about the shadow | the [`Aperture::Vidmem`] test |
-/// | honest about the shadow, over an innocent aperture | [`BackingBytes::ShadowsGuestMemory`] |
 ///
-/// ★ A single test would let either half be deleted while the other kept the file green.
 /// `[measured 2026-08-11, w228]` the chain that used to build this state produced
 /// `placed_as_asked=true` **and blank** — self-concealing in a boot, which is why it must be
 /// caught at construction.
 ///
-/// # ★★★ THE CARVE-OUT, and why it does not weaken either spelling
+/// # ★★★ THE CARVE-OUT, and why it does not weaken the spelling
 ///
 /// [`BackingBytes::JoinsGuestWindow`] is ruling **4** — the scratchpad — and it is the only
-/// cell of this sweep that admits [`Aperture::Vidmem`]. It changes neither test above:
-/// `Vidmem` + `SoleBacking` is still refused (a silent caller gains nothing) and
-/// `ShadowsGuestMemory` is still refused under every aperture (an honest shadow gains
-/// nothing). ⇒ The admit is bought by a **third, distinct declaration**, not by relaxing the
-/// aperture test — which is the shape that would re-open `w228`'s *"two memories"* chain.
+/// cell of this sweep that admits [`Aperture::Vidmem`]. It changes nothing above:
+/// `Vidmem` + `SoleBacking` is still refused (a silent caller gains nothing). ⇒ The admit is
+/// bought by a **distinct declaration**, not by relaxing the aperture test — which is the
+/// shape that would re-open `w228`'s *"two memories"* chain.
 #[test]
 fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() {
     let mut admitted = 0;
@@ -126,9 +132,6 @@ fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() 
             let got = Binding::real_gpu_memory(0x1000_0000, aperture, backing(bytes));
             let expected: Result<RegionKind, RegionKindFault> = match (aperture, bytes) {
                 (Aperture::Peer, _) => Err(RegionKindFault::PeerHasNoKind),
-                (_, BackingBytes::ShadowsGuestMemory) => {
-                    Err(RegionKindFault::FakeFbAtRealGpuVa { aperture })
-                }
                 // ★★★ The carve-out, and it is the ONLY cell in which a `Vidmem` aperture is
                 // admitted. See `BackingBytes::JoinsGuestWindow`.
                 (_, BackingBytes::JoinsGuestWindow) => Ok(RegionKind::RealGpuMemory),
@@ -149,12 +152,14 @@ fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() 
     }
     // ★ Non-vacuity, in both directions: a guard that refused everything and a guard that
     // refused nothing would each satisfy a one-sided sweep.
+    // ⊘ `(5, 7)` until 2026-09-09: the deleted `ShadowsGuestMemory` column contributed four
+    // refusals (one per aperture). The five admitted cells are exactly the ones they were.
     assert_eq!(
         (admitted, refused),
-        (5, 7),
+        (5, 3),
         "★ the sweep must observe BOTH answers — five admitted cells (the two sysmem \
          apertures with a sole backing, and the three non-`Peer` apertures with a joined \
-         one) and seven refused"
+         one) and three refused (`Vidmem` + sole, and `Peer` under both declarations)"
     );
 }
 
@@ -163,13 +168,14 @@ fn ruling_3_refuses_every_fake_fb_at_a_real_gpu_va_and_admits_everything_else() 
 ///
 /// ⊘ The tempting repair for the framebuffer join was *"stop refusing on the aperture"*, and
 /// it is the one repair that must not be made: it would re-admit `Vidmem` +
-/// [`BackingBytes::SoleBacking`], which is `w228`'s chain wearing an innocent word, and
-/// `Vidmem` + [`BackingBytes::ShadowsGuestMemory`], which is that chain saying so out loud.
-/// The sweep above would still pass an aperture-blind guard on nine of its twelve cells, so
-/// the three that separate the two designs are asserted here **by name**.
+/// [`BackingBytes::SoleBacking`], which is `w228`'s chain wearing an innocent word. (⊘ Until
+/// 2026-09-09 it would also have re-admitted `Vidmem` + `ShadowsGuestMemory`, that chain
+/// saying so out loud; the variant is deleted, so there is nothing left to say it with.)
+/// The sweep above would still pass an aperture-blind guard on seven of its eight cells, so
+/// the one that separates the two designs is asserted here **by name**.
 #[test]
-fn only_the_join_admits_a_vidmem_aperture_and_the_other_two_declarations_still_refuse() {
-    for bytes in [BackingBytes::SoleBacking, BackingBytes::ShadowsGuestMemory] {
+fn only_the_join_admits_a_vidmem_aperture_and_the_other_declaration_still_refuses() {
+    for bytes in [BackingBytes::SoleBacking] {
         assert_eq!(
             Binding::real_gpu_memory(0x1000_0000, Aperture::Vidmem, backing(bytes)).err(),
             Some(RegionKindFault::FakeFbAtRealGpuVa {
@@ -204,7 +210,7 @@ fn only_the_join_admits_a_vidmem_aperture_and_the_other_two_declarations_still_r
         BackingBytes::JoinsGuestWindow.dissolves_fake_framebuffer(),
         "and the carve-out is read from ONE place"
     );
-    for bytes in [BackingBytes::SoleBacking, BackingBytes::ShadowsGuestMemory] {
+    for bytes in [BackingBytes::SoleBacking] {
         assert!(!bytes.dissolves_fake_framebuffer(), "{bytes:?}");
     }
 }

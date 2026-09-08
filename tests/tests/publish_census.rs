@@ -277,8 +277,18 @@ fn a_pinned_guest_ram_row_carries_its_host_backing_and_stays_guest_ram() {
 }
 
 /// ⊘ Refused by name, both ways in — and they are opposite mistakes.
+///
+/// ⊘⊘ **CORRECTED 2026-09-09 — the second way in was a DECLARED SHADOW, and it no longer
+/// has a spelling.** This test was
+/// `the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow`, and its second
+/// arm offered `BackingBytes::ShadowsGuestMemory` over a sysmem row and asserted
+/// `NotGuestRam`. That variant is deleted by owner ruling (the shadow must not exist by
+/// construction), so the arm was pinning a refusal of a state that can no longer be written
+/// down — it is removed rather than weakened. The other-declaration arm the constructor
+/// still has is `JoinsGuestWindow`, which is the framebuffer join's own word and is asserted
+/// below in its place; the `SoleBacking` test inside the constructor is unchanged.
 #[test]
-fn the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow() {
+fn the_pin_constructor_refuses_a_framebuffer_row_and_a_joined_declaration() {
     use kayfabe_mmu::{BackingBytes, Binding, HostBacking, RegionKindFault};
     let sole = HostBacking::whole(
         kayfabe_isolate::HostHandle::NULL,
@@ -293,15 +303,16 @@ fn the_pin_constructor_refuses_a_framebuffer_row_and_a_declared_shadow() {
             aperture: Aperture::Vidmem
         }),
     );
-    // A backing that declares a SHADOW is the two-memories state ruling 3 forbids under
-    // every aperture — and these are supposed to BE the guest's pages.
-    let shadow = HostBacking::whole(
+    // A backing that declares the JOIN is wearing the framebuffer chain's word over pages
+    // it did not join — and these are supposed to BE the guest's pages, which is the one
+    // declaration (`SoleBacking`) a pin may make.
+    let joined = HostBacking::whole(
         kayfabe_isolate::HostHandle::NULL,
         0x7f00_0000,
-        BackingBytes::ShadowsGuestMemory,
+        BackingBytes::JoinsGuestWindow,
     );
     assert_eq!(
-        Binding::pinned_guest_ram(0x4000_0000, Aperture::SysmemCoherent, shadow),
+        Binding::pinned_guest_ram(0x4000_0000, Aperture::SysmemCoherent, joined),
         Err(RegionKindFault::NotGuestRam {
             aperture: Aperture::SysmemCoherent
         }),
