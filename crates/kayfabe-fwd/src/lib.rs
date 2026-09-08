@@ -3889,6 +3889,36 @@ pub fn plan_doorbell(
     } else {
         None
     };
+    // ★★★★★ **w392i — BIRTH-KIND WITNESS. Owner, 2026-09-09:** *"in passthrough you should not
+    // have a `RingSource::Ours`, in fact you should not parse, advance, read the ring at all.
+    // The guest directly reads the hardware GPU ring. In Emulated channels and RPC calls we
+    // have our own fake ring we drive."*
+    //
+    // ⇒ **`Ours` is LEGAL for `Emulated` and ILLEGAL for `Passthrough`.** This birth path
+    // materializes with a literal `None, None` regardless of kind (`kayfabe-isolate`'s
+    // `VerbPlan::Doorbell` arm), so a passthrough channel is born on OUR EMPTY RING **by
+    // construction** — measured w392h: `adopt=NOT-ASKED … → RingSource::Ours(None)`, doorbell
+    // forwarded, engine reads an empty ring, **no completion and no fault**, `Xid 0`.
+    //
+    // ⊘ **This rung only WITNESSES it.** Refusing here, or adopting here, would change the
+    // behaviour of a path `cup3` (`CUP3_VAL=43`, the known-positive) also travels — and
+    // whether it does is exactly what is not yet measured. `VMM integration must be ADDITIVE`.
+    if channel.is_none() {
+        eprintln!(
+            "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} kind={:?} {}",
+            pid,
+            cid,
+            route.vchid,
+            chan.engine,
+            chan.kind,
+            match chan.kind {
+                kayfabe_core::channel_kind::GuestChannelKind::Emulated =>
+                    "✔ EMULATED — our own ring is CORRECT here: we drive it and it runs our                      function bodies",
+                kayfabe_core::channel_kind::GuestChannelKind::Passthrough =>
+                    "★★★ PASSTHROUGH born on a DOORBELL MATERIALIZATION ⇒ RingSource::Ours(None)                      — ILLEGAL BY CONSTRUCTION: the guest drives its own ring and hardware                      writes GP_GET, so there is no `ours` option on this kind",
+            },
+        );
+    }
     let verbs = VerbPlan::gated_doorbell(
         gate,
         working_set,
