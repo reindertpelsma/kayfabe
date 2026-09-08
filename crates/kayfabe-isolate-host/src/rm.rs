@@ -673,6 +673,23 @@ enum RingOwner {
     /// lifetime, held by the party that made the grant, and a channel teardown that
     /// unmapped the guest's ring would leave a *live* guest channel pointing at nothing.
     HandedIn,
+    /// ★★★ **w392d — OUR OWN ring object, placed in the address space by somebody who is
+    /// not RM's map verb.**
+    ///
+    /// This is [`RingOwner::Ours`] in every respect that concerns *ownership* — we allocated
+    /// the object, we CPU-map it, we free it, the GPFIFO layout inside it is ours — and
+    /// differs in exactly one: **[`ChannelParts::range`] does not name the mapping**, because
+    /// there is no `NV01_MEMORY_VIRTUAL` range over the address space at all. The mapping was
+    /// made by `nvidia-uvm`, into a `FERMI_VASPACE_A` allocated
+    /// `IS_EXTERNALLY_OWNED`, whose page tables RM does not manage.
+    ///
+    /// ⚠ Teardown therefore frees the object and must **not** call `raw_unmap_dma` — the
+    /// range handle it would pass is not one, and RM would be asked to retire a PTE it never
+    /// wrote. ⊘ It is not `HandedIn` either: `HandedIn` means *"not ours to free and not
+    /// ours to CPU-map"*, and both of those are false here. Collapsing the two would either
+    /// leak a 64 KiB object every channel or refuse every `ring_store_u32` the submitter
+    /// makes.
+    OursUnmapped,
 }
 
 /// The three numbers a channel's GPFIFO is described by, kept **per channel** because on a
@@ -1036,6 +1053,20 @@ enum RingSource {
     /// Allocate the isolate's own [`RING_OBJECT_BYTES`] device-local ring, optionally at
     /// an address we dictate (R26).
     Ours(Option<GpuVa>),
+    /// ★★★ **w392d — allocate the isolate's own ring, but do NOT map it**: it is already
+    /// placed at `ring_va` by `nvidia-uvm`, in a VA space RM does not manage. See
+    /// [`RingOwner::OursUnmapped`] for why this is not [`RingSource::Guest`].
+    OursPlaced {
+        /// The ring object, **already allocated by the caller** — it had to be, because the
+        /// party that places it (nvidia-uvm) needs its RM handle before this call can be
+        /// made. ⚠ Ownership TRANSFERS here: the channel frees it, and an unwind on this
+        /// call frees it too, exactly as on the [`RingSource::Ours`] arm.
+        ring: u32,
+        /// Where `UVM_MAP_EXTERNAL_ALLOCATION` put the ring object. The GPFIFO is at
+        /// `ring_va + GPFIFO_OFFSET` exactly as on the [`RingSource::Ours`] arm, because the
+        /// object's internal layout is ours either way.
+        ring_va: u64,
+    },
     /// Adopt the guest's, already placed. See [`GuestRing`].
     Guest(GuestRing),
 }
@@ -5056,6 +5087,13 @@ impl RmBackend for HostRmBackend {
                 RingOwner::HandedIn => {
                     keep(self.free_one(parts.tsg));
                 }
+                // ★★★ w392d — ours to free, NOT ours to unmap. `parts.range` is not an
+                // `NV01_MEMORY_VIRTUAL` range on this arm; the placement is nvidia-uvm's and
+                // is retired by `UVM_FREE`, or by the UVM session going away.
+                RingOwner::OursUnmapped => {
+                    keep(self.free_one(parts.tsg));
+                    keep(self.free_one(parts.ring));
+                }
             }
             // ⊘ Same rule as the ring, one object over: a joined framebuffer window is the
             // JOIN's object and the guest is still writing its cursor into it. Freeing it
@@ -5893,6 +5931,71 @@ impl HostRmBackend {
         self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), None)
     }
 
+    /// ★★★★★ **w392d — A COPY-ENGINE CHANNEL INSIDE AN ADDRESS SPACE `nvidia-uvm` OWNS.**
+    ///
+    /// `space` is the raw `FERMI_VASPACE_A` handle from
+    /// [`Self::host_alloc_vaspace_externally_owned`], **after** `UVM_REGISTER_GPU_VASPACE`
+    /// has taken it over — at which point its page directory is UVM's page tree
+    /// (`nvGpuOpsSetPageDirectory` → `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`), so every VA
+    /// this channel touches is translated through **UVM's** tables and not RM's.
+    ///
+    /// `ring` is an object from [`Self::alloc_ring_object`] and `ring_va` is where the
+    /// caller already had UVM place it with `UVM_MAP_EXTERNAL_ALLOCATION`. ⚠ **Ownership of
+    /// `ring` transfers on success**: freeing the channel frees it, and so does an unwind
+    /// inside this call. It has to be the caller's to begin with because the party that
+    /// places it needs its RM handle, which does not exist until it is allocated.
+    ///
+    /// # ⊘ Why this is not [`Self::alloc_channel_over_guest_ring`]
+    ///
+    /// That verb's ring is **not ours**: it is not CPU-mapped, `ring_store_u32` refuses on it
+    /// by name (`RING_NOT_OURS`) and `submit_entry` refuses too. A probe that has to compose
+    /// a pushbuffer into the ring cannot use it. This one's ring is ours in every way except
+    /// who placed it.
+    ///
+    /// # Errors
+    /// Whatever RM refused the channel, its group, or its USERD with.
+    pub fn alloc_channel_in_uvm_space(
+        &mut self,
+        space: u32,
+        engine_type: u32,
+        ring: HostHandle,
+        ring_va: u64,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let ring_raw = self.narrow(ring)?;
+        self.alloc_channel_in(
+            space,
+            engine_type,
+            RingSource::OursPlaced {
+                ring: ring_raw,
+                ring_va,
+            },
+            None,
+        )
+    }
+
+    /// ★★★ **w392d — a bare [`RING_OBJECT_BYTES`] device-local object, for a caller that
+    /// must place it itself.**
+    ///
+    /// ⊘ It exists because [`Self::alloc_channel_in_uvm_space`] needs its ring **already
+    /// mapped** at the VA it is told, and the only party that can map into a UVM-owned
+    /// address space is nvidia-uvm — which needs the RM handle first. So the object's
+    /// allocation and the channel's creation cannot be one call, and the size is this
+    /// module's rather than the caller's.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_ring_object(&mut self) -> Result<HostHandle, RmError> {
+        let raw = self.conn.alloc_device_local(RING_OBJECT_BYTES)?;
+        Ok(self.stamp(raw))
+    }
+
+    /// The size of the object [`Self::alloc_ring_object`] returns, so a caller mapping it
+    /// asks for exactly the length RM was told.
+    #[must_use]
+    pub const fn ring_object_bytes() -> u64 {
+        RING_OBJECT_BYTES
+    }
+
     /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
     ///
     /// [`Self::alloc_channel_at`]'s body over an [`ExecutorVas`] instead of a guest `Vas`.
@@ -6425,10 +6528,22 @@ impl HostRmBackend {
     ) -> Result<(HostHandle, u64), RmError> {
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
-        let space = self
-            .conn
-            .space_of(range)
-            .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?;
+        //
+        // ⊘⊘ **w392d — AND ON ONE ARM THERE IS NO RANGE AT ALL.** A `FERMI_VASPACE_A`
+        // allocated `IS_EXTERNALLY_OWNED` gets no `NV01_MEMORY_VIRTUAL` companion, because
+        // ranges are RM-managed mappings and the whole point of that flag is that RM manages
+        // nothing there (`host_alloc_vaspace_externally_owned`'s own docs). On that arm the
+        // caller passes the SPACE handle itself and `RingSource::OursPlaced` guarantees this
+        // function never asks RM to map through it. ⚠ The two are kept apart by the ring
+        // source and not by a flag, so a caller cannot name a space and then ask for a
+        // mapping in it.
+        let space = match ring {
+            RingSource::OursPlaced { .. } => range,
+            RingSource::Ours(_) | RingSource::Guest(_) => self
+                .conn
+                .space_of(range)
+                .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?,
+        };
 
         let unwind = |me: &mut Self, objs: &[u32]| {
             for h in objs.iter().rev() {
@@ -6445,6 +6560,9 @@ impl HostRmBackend {
                 self.conn.alloc_device_local(RING_OBJECT_BYTES)?,
                 RingOwner::Ours,
             ),
+            // ⊘ Allocates NOTHING: the object exists already, because UVM had to be given
+            //   its handle to place it. Ownership transfers — see the variant's docs.
+            RingSource::OursPlaced { ring, .. } => (ring, RingOwner::OursUnmapped),
             RingSource::Guest(g) => {
                 // ⊘ Refused HERE, before any host object exists, because it is the ONE
                 // number in the guest's declaration this file cannot pass through: it is
@@ -6461,7 +6579,7 @@ impl HostRmBackend {
         // free memory the guest is still pushing into.
         let owned_ring = [ring_obj];
         let ours: &[u32] = match owner {
-            RingOwner::Ours => &owned_ring,
+            RingOwner::Ours | RingOwner::OursUnmapped => &owned_ring,
             RingOwner::HandedIn => &[],
         };
 
@@ -6480,7 +6598,9 @@ impl HostRmBackend {
             // `adopted_guest_userd`'s containment test can succeed when this channel is the
             // one a guest declares to us. See [`USERD_OFFSET_IN_RING`] for the three boots
             // that measured the old layout failing that test by one byte of extent.
-            RingSource::Ours(_) => (ring_obj, UserdOwner::InRing, USERD_OFFSET_IN_RING),
+            RingSource::Ours(_) | RingSource::OursPlaced { .. } => {
+                (ring_obj, UserdOwner::InRing, USERD_OFFSET_IN_RING)
+            }
             // ⊘ **NOT folded into the arm above, and the distinction is load-bearing.** Here
             // `ring_obj` is the GUEST's object, handed in over the guest's own pages. Placing
             // our USERD at an offset inside it would put our cursor in memory the guest owns
@@ -6589,6 +6709,16 @@ impl HostRmBackend {
                     },
                 )
             }
+            // ★★★ w392d — the OBJECT is ours, so its internal layout is ours; only the
+            // BASE is somebody else's. ⊘ Deliberately not folded into the `Guest` arm below,
+            // whose whole content is that *none* of the three numbers is this file's.
+            RingSource::OursPlaced { ring_va, .. } => (
+                ring_va,
+                RingLayout {
+                    gp_fifo_va: ring_va + GPFIFO_OFFSET,
+                    entries: ladder_gpfifo_entries(),
+                },
+            ),
             // ★★ G2 + G3: the two numbers RM is about to be told are the GUEST'S, passed
             // through untouched. Neither is derived from `ring_va`, and neither is one of
             // this file's constants.
@@ -6807,7 +6937,7 @@ impl HostRmBackend {
             // `hUserdMemory[0]`. Claiming uncached here because the word "USERD" appears
             // would be a comfortable guess, and the fence discipline is what makes
             // write-combining survivable.
-            RingOwner::Ours => Some(self.conn.map_cpu(
+            RingOwner::Ours | RingOwner::OursUnmapped => Some(self.conn.map_cpu(
                 ring_obj,
                 RING_OBJECT_BYTES,
                 CachePolicy::WriteCombining,

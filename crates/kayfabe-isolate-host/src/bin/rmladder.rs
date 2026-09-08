@@ -12852,6 +12852,264 @@ mod uvm_raw {
         }
         vas_ok
     }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // ★★★★★ w392d — THE PART OF UVM THAT ACTUALLY GROWS A PAGE TREE
+    //
+    // `drive()` above registers a GPU and a VA space and stops. That is where w392c stopped
+    // too, and it is **not enough to make a mapping exist**: registration hands UVM the
+    // address space and sets its page directory (`nvGpuOpsSetPageDirectory` →
+    // `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`), but the tree under that directory is empty
+    // until something is mapped into it.
+    //
+    // The three ioctls below are what CUDA uses to put something there, and they need **no
+    // CPU mapping at all**: `uvm_create_external_range` validates only 4 KiB alignment and
+    // inserts a node into the VA space's range tree
+    // (`ogkm-580: uvm_map_external.c:600-619`), and `uvm_map_external_allocation` then dups
+    // an **RM object** by `{rmCtrlFd, hClient, hMemory}` and writes its PTEs
+    // (`:974-1046`). ⊘ So this client can name a GPU VA of its own choosing and have UVM —
+    // not RM — publish a mapping there. That is precisely what makes P2's content check a
+    // statement about the UVM transport.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// `uvm_ioctl.h:1042`, `UVM_IOCTL_BASE(73)`.
+    const UVM_CREATE_EXTERNAL_RANGE: u64 = 73;
+    /// `uvm_ioctl.h:491`, `UVM_IOCTL_BASE(33)`.
+    const UVM_MAP_EXTERNAL_ALLOCATION: u64 = 33;
+    /// `uvm_ioctl.h:509`, `UVM_IOCTL_BASE(34)`.
+    const UVM_FREE: u64 = 34;
+
+    // `UVM_CREATE_EXTERNAL_RANGE_PARAMS` (`uvm_ioctl.h:1044-1048`) and
+    // `UVM_FREE_PARAMS` (`:511-515`) are the same three fields in the same order.
+    const RANGE_BASE: usize = 0;
+    const RANGE_LEN: usize = 8;
+    const RANGE_STATUS: usize = 16;
+    const RANGE_SIZE: usize = 24;
+
+    // `UvmGpuMappingAttributes` (`uvm_types.h:84-94`): `NvProcessorUuid gpuUuid` then five
+    // `NvU32`. 16 + 20 = 36, alignment 4, so no padding anywhere.
+    const ATTR_STRIDE: usize = 36;
+    /// `UVM_MAX_GPUS` = `NV_MAX_DEVICES (32)` × `UVM_PARENT_ID_MAX_SUB_PROCESSORS (8)`
+    /// (`uvm_types.h:57,64`, `nvlimits.h:37`). ⚠ It is the **array length in the ABI**, not
+    /// a count of anything on this machine — get it wrong and every field after the array
+    /// lands somewhere the kernel does not read.
+    const UVM_MAX_GPUS: usize = 256;
+
+    // `UVM_MAP_EXTERNAL_ALLOCATION_PARAMS` (`uvm_ioctl.h:493-504`). The three `NvU64`s, then
+    // the 9216-byte attribute array, then `gpuAttributesCount` — which is `NV_ALIGN_BYTES(8)`
+    // and lands at 9240, already 8-aligned, so again no padding.
+    const MAP_BASE: usize = 0;
+    const MAP_LEN: usize = 8;
+    const MAP_OFFSET: usize = 16;
+    const MAP_ATTRS: usize = 24;
+    const MAP_ATTR_COUNT: usize = MAP_ATTRS + ATTR_STRIDE * UVM_MAX_GPUS;
+    const MAP_CTL_FD: usize = MAP_ATTR_COUNT + 8;
+    const MAP_HCLIENT: usize = MAP_CTL_FD + 4;
+    const MAP_HMEMORY: usize = MAP_HCLIENT + 4;
+    const MAP_STATUS: usize = MAP_HMEMORY + 4;
+    const MAP_SIZE: usize = MAP_STATUS + 4;
+
+    /// A live `nvidia-uvm` session: an initialised va_space with a GPU registered in it.
+    ///
+    /// ⚠ **Both descriptors must outlive every call.** The primary fd *is* the va_space
+    /// (`uvm_va_space_get(filp)`); the secondary one holds the reference on the memory map
+    /// without which `disallow_new_registers` is set and every register answers
+    /// `NV_ERR_PAGE_TABLE_NOT_AVAIL` — the `0x5d` w392c spent two wrong guesses on.
+    pub struct Session {
+        dev: CharDevice,
+        /// Held, never used. ⊘ Named with a leading underscore rather than dropped, because
+        /// *"this fd exists to stay open"* is the entire content of the field.
+        _mm: CharDevice,
+        uuid: [u8; 16],
+    }
+
+    impl Session {
+        /// `UVM_INITIALIZE` → `UVM_MM_INITIALIZE` → `UVM_REGISTER_GPU`, on a fresh pair of
+        /// descriptors.
+        ///
+        /// # Errors
+        /// A human-readable string naming the step and the `rmStatus`. ⊘ Never a bare bool:
+        /// *"UVM refused"* and *"the node would not open"* are different findings.
+        pub fn open(gpu_index: u32, rm_ctrl_fd: i32, h_client: u32) -> Result<Self, String> {
+            let (uuid, _txt) = gpu_uuid(gpu_index).ok_or_else(|| {
+                "could not read the GPU UUID from /proc — NOT a UVM result".to_owned()
+            })?;
+            let dev = open_uvm().map_err(|e| format!("open /dev/nvidia-uvm: {e}"))?;
+            let mut enc = Enc::new(INIT_LEN, INITIALIZE_DECODED_SIZE);
+            enc.u64_at(INIT_FLAGS, 0);
+            call(&dev, UVM_INITIALIZE, enc.0, INIT_STATUS, "UVM_INITIALIZE", &[])?;
+
+            let mm = open_uvm().map_err(|e| format!("open second /dev/nvidia-uvm: {e}"))?;
+            let mut enc = Enc::new(MM_LEN, 0);
+            enc.i32_at(MM_UVMFD, dev.fd_number());
+            // ⚠ `NV_WARN_NOTHING_TO_DO` IS SUCCESS here — see `drive()`'s note.
+            call(
+                &mm,
+                UVM_MM_INITIALIZE,
+                enc.0,
+                MM_STATUS,
+                "UVM_MM_INITIALIZE",
+                &[NV_WARN_NOTHING_TO_DO],
+            )?;
+
+            let mut enc = Enc::new(REG_LEN, 0);
+            enc.bytes_at(REG_UUID, &uuid);
+            enc.u8_at(REG_NUMA_ENABLED, 0);
+            enc.i32_at(REG_NUMA_NODE, -1);
+            enc.i32_at(REG_CTL_FD, rm_ctrl_fd);
+            enc.u32_at(REG_HCLIENT, h_client);
+            enc.u32_at(REG_HSMC, 0);
+            call(
+                &dev,
+                UVM_REGISTER_GPU,
+                enc.0,
+                REG_STATUS,
+                "UVM_REGISTER_GPU",
+                &[],
+            )?;
+            Ok(Session {
+                dev,
+                _mm: mm,
+                uuid,
+            })
+        }
+
+        /// `UVM_REGISTER_GPU_VASPACE` — hand UVM an `IS_EXTERNALLY_OWNED` `FERMI_VASPACE_A`.
+        ///
+        /// ★ After this the address space's page directory is **UVM's page tree**, so a
+        /// channel created in it translates through UVM's tables and not RM's.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn register_vaspace(
+            &self,
+            rm_ctrl_fd: i32,
+            h_client: u32,
+            h_va_space: u32,
+        ) -> Result<(), String> {
+            let mut enc = Enc::new(VAS_LEN, 0);
+            enc.bytes_at(VAS_UUID, &self.uuid);
+            enc.i32_at(VAS_CTL_FD, rm_ctrl_fd);
+            enc.u32_at(VAS_HCLIENT, h_client);
+            enc.u32_at(VAS_HVASPACE, h_va_space);
+            call(
+                &self.dev,
+                UVM_REGISTER_GPU_VASPACE,
+                enc.0,
+                VAS_STATUS,
+                "UVM_REGISTER_GPU_VASPACE",
+                &[],
+            )
+        }
+
+        /// `UVM_CREATE_EXTERNAL_RANGE` — reserve `[base, base+len)` in UVM's range tree.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn create_external_range(&self, base: u64, len: u64) -> Result<(), String> {
+            let mut enc = Enc::new(RANGE_SIZE, 0);
+            enc.u64_at(RANGE_BASE, base);
+            enc.u64_at(RANGE_LEN, len);
+            call(
+                &self.dev,
+                UVM_CREATE_EXTERNAL_RANGE,
+                enc.0,
+                RANGE_STATUS,
+                "UVM_CREATE_EXTERNAL_RANGE",
+                &[],
+            )
+        }
+
+        /// `UVM_MAP_EXTERNAL_ALLOCATION` — have **UVM** write the PTEs that put the RM
+        /// object `h_memory` at `base`.
+        ///
+        /// All five mapping attributes are left `0` = the `…Default` member of each enum
+        /// (`nv_uvm_user_types.h:65-120`), which is *"let the UVM driver decide"* and is what
+        /// CUDA passes for an ordinary allocation.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn map_external(
+            &self,
+            base: u64,
+            len: u64,
+            rm_ctrl_fd: i32,
+            h_client: u32,
+            h_memory: u32,
+        ) -> Result<(), String> {
+            let mut enc = Enc::new(MAP_SIZE, 0);
+            enc.u64_at(MAP_BASE, base);
+            enc.u64_at(MAP_LEN, len);
+            enc.u64_at(MAP_OFFSET, 0);
+            // Exactly one GPU's attributes, and the only non-zero field in it is the UUID
+            // that selects which registered GPU to map for.
+            enc.bytes_at(MAP_ATTRS, &self.uuid);
+            enc.u64_at(MAP_ATTR_COUNT, 1);
+            enc.i32_at(MAP_CTL_FD, rm_ctrl_fd);
+            enc.u32_at(MAP_HCLIENT, h_client);
+            enc.u32_at(MAP_HMEMORY, h_memory);
+            call(
+                &self.dev,
+                UVM_MAP_EXTERNAL_ALLOCATION,
+                enc.0,
+                MAP_STATUS,
+                "UVM_MAP_EXTERNAL_ALLOCATION",
+                &[],
+            )
+        }
+
+        /// `UVM_FREE` — retire a range this session created. Best-effort; the caller logs.
+        ///
+        /// # Errors
+        /// As [`Session::open`].
+        pub fn free_range(&self, base: u64, len: u64) -> Result<(), String> {
+            let mut enc = Enc::new(RANGE_SIZE, 0);
+            enc.u64_at(RANGE_BASE, base);
+            enc.u64_at(RANGE_LEN, len);
+            call(&self.dev, UVM_FREE, enc.0, RANGE_STATUS, "UVM_FREE", &[])
+        }
+    }
+
+    /// Open `/dev/nvidia-uvm` read-write through `std` and adopt the descriptor.
+    ///
+    /// ⊘ [`CharDevice::openat`] needs a held `DevDir`, which is the sandbox capability the
+    /// isolate carries and this probe does not.
+    fn open_uvm() -> std::io::Result<CharDevice> {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/nvidia-uvm")
+            .map(|f| CharDevice::adopt(std::os::fd::OwnedFd::from(f)))
+    }
+
+    /// One UVM ioctl, with its `rmStatus` decoded and every outcome named.
+    ///
+    /// ⊘ `also_ok` exists for exactly one caller and it is not a convenience: a **warning**
+    /// (`NV_WARN_NOTHING_TO_DO`) is `UVM_MM_INITIALIZE`'s success on platforms that need no
+    /// secondary descriptor, and treating it as a failure would make the client refuse
+    /// precisely where it had nothing left to do.
+    fn call(
+        dev: &CharDevice,
+        request: u64,
+        mut buf: Vec<u8>,
+        status_at: usize,
+        what: &'static str,
+        also_ok: &[u32],
+    ) -> Result<(), String> {
+        match dev.ioctl(request, &mut buf, &mut []) {
+            Ok(_) => {
+                let st = status_of(&buf, status_at);
+                if st == 0 || also_ok.contains(&st) {
+                    Ok(())
+                } else {
+                    Err(format!("{what}: rmStatus {st:#x}"))
+                }
+            }
+            // ⊘ An ioctl the kernel refused OUTRIGHT and one that ran and answered a status
+            //   are different findings, and the message says which.
+            Err(e) => Err(format!("{what}: ioctl refused: {e:?}")),
+        }
+    }
 }
 
 // =========================================================================================
@@ -13573,6 +13831,265 @@ mod mean {
         }
     }
 
+
+    // ═════════════════════════════════════════════════════════════════════════════════════
+    // ★★★★★ P2 — THE UVM TRANSPORT, VERIFIED BY THE ENGINE
+    //
+    // Everything below lives in a **second address space**: a `FERMI_VASPACE_A` allocated
+    // `IS_EXTERNALLY_OWNED` and then handed to nvidia-uvm with `UVM_REGISTER_GPU_VASPACE`,
+    // at which point its page directory is UVM's page tree
+    // (`ogkm-580: nv_gpu_ops.c:8855-8875`, `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`).
+    //
+    // ★★★ THAT IS WHAT MAKES THE ROW MEAN SOMETHING. The copy engine channel is created
+    // **inside that space**, so every VA it translates is walked through UVM's tables. The
+    // object under test is placed there by `UVM_MAP_EXTERNAL_ALLOCATION` and by nothing
+    // else — `NV_ESC_RM_MAP_MEMORY_DMA` is never called on it, and could not be: RM manages
+    // no page tables in an externally-owned space. ⇒ the buffer is reachable through the UVM
+    // path ALONE, which is the exclusivity the ledger's whole design turns on.
+    // ═════════════════════════════════════════════════════════════════════════════════════
+
+    /// P2's channel ring, in the UVM-owned address space.
+    const P2_RING: u64 = 0x0000_0090_0000_0000;
+    /// P2's scratch — the one object the CPU reads, and the destination of every engine copy.
+    const P2_SCRATCH: u64 = 0x0000_0090_4000_0000;
+    /// P2's object under test. Every round maps a different allocation here.
+    const P2_DATA: u64 = 0x0000_0090_8000_0000;
+
+    /// ★★★★★ **P2 — grow nvidia-uvm's page tree, then read what it published WITH THE
+    /// ENGINE.**
+    ///
+    /// ⊘⊘ **WHY REGISTRATION ALONE IS NOT THIS ROW, restated because w392c stopped there.**
+    /// `UVM_REGISTER_GPU` + `UVM_REGISTER_GPU_VASPACE` hand UVM an address space and set its
+    /// page directory. The tree under that directory is **empty**. A census taken after
+    /// registration therefore measures a driver that has been *asked* to own a space and has
+    /// not yet been asked to map anything into it — which is exactly the shape of an
+    /// unmeasured zero.
+    ///
+    /// Each round below allocates a fresh RM object, fills a fresh un-guessable pattern into
+    /// it, has **UVM** publish it at the same VA the last round used, and then has the copy
+    /// engine read that VA. Reading the previous round's pattern is a stale UVM mapping;
+    /// reading anything else is a wrong value; reading nothing is `UNMEASURED` and says so.
+    #[allow(clippy::too_many_lines)]
+    fn p2_uvm_round(
+        rm: &mut HostRmBackend,
+        engine_type: u32,
+        gpu: u32,
+        nonce: u32,
+        rounds: u32,
+    ) -> PathState {
+        let ctl_fd = rm.host_ctl_fd();
+        let client = rm.host_client();
+
+        // 1 ── the address space UVM will take over. ⊘ Externally owned, or RM has already
+        //      populated its page tables and truthfully answers that the page table UVM wants
+        //      is not available (`NV_ERR_PAGE_TABLE_NOT_AVAIL`, 0x5d).
+        let space = match rm.host_alloc_vaspace_externally_owned() {
+            Ok(s) => s,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "alloc externally-owned VA space",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+
+        // 2 ── the UVM session. Both of its descriptors stay open for the whole row.
+        let sess = match super::uvm_raw::Session::open(gpu, ctl_fd, client) {
+            Ok(s) => s,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "UVM session",
+                    status: e,
+                };
+            }
+        };
+        if let Err(e) = sess.register_vaspace(ctl_fd, client, space) {
+            return PathState::Refused {
+                step: "UVM_REGISTER_GPU_VASPACE",
+                status: e,
+            };
+        }
+        println!(
+            "ok    W392D P2 vaspace    = {space:#010x} registered with nvidia-uvm — its page \
+             directory is now UVM's page tree"
+        );
+
+        // 3 ── the channel's ring, placed BY UVM. ⚠ The object is allocated first because
+        //      `UVM_MAP_EXTERNAL_ALLOCATION` dups it by RM handle, which does not exist
+        //      until it does.
+        let ring_bytes = HostRmBackend::ring_object_bytes();
+        let ring = match rm.alloc_ring_object() {
+            Ok(h) => h,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "alloc ring object",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        let Ok(ring_raw) = u32::try_from(ring.raw()) else {
+            return PathState::Refused {
+                step: "ring handle",
+                status: format!("{:#x} is not an RM handle", ring.raw()),
+            };
+        };
+        if let Err(e) = sess.create_external_range(P2_RING, ring_bytes) {
+            return PathState::Refused {
+                step: "UVM_CREATE_EXTERNAL_RANGE (ring)",
+                status: e,
+            };
+        }
+        if let Err(e) = sess.map_external(P2_RING, ring_bytes, ctl_fd, client, ring_raw) {
+            return PathState::Refused {
+                step: "UVM_MAP_EXTERNAL_ALLOCATION (ring)",
+                status: e,
+            };
+        }
+        println!("ok    W392D P2 ring       = UVM published the ring object at {P2_RING:#018x}");
+
+        // 4 ── the channel, INSIDE the UVM-owned space.
+        let (chan, token) = match rm.alloc_channel_in_uvm_space(space, engine_type, ring, P2_RING)
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return PathState::Refused {
+                    step: "alloc_channel_in_uvm_space",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        if let Err(e) = rm.schedule(chan) {
+            let _ = rm.free(chan);
+            return PathState::Refused {
+                step: "schedule (UVM space)",
+                status: format!("{e:?}"),
+            };
+        }
+        println!("ok    W392D P2 channel    = a copy engine is bound to the UVM-owned space");
+
+        // 5 ── the scratch. GPU-written through UVM, CPU-read by handle.
+        let scratch = match rm.alloc_probe_local(LEN) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = rm.free(chan);
+                return PathState::Refused {
+                    step: "alloc scratch",
+                    status: format!("{e:?}"),
+                };
+            }
+        };
+        let scratch_raw = u32::try_from(scratch.raw()).unwrap_or(0);
+        let fail = |rm: &mut HostRmBackend, step: &'static str, status: String| -> PathState {
+            let _ = rm.free(scratch);
+            let _ = rm.free(chan);
+            PathState::Refused { step, status }
+        };
+        if let Err(e) = sess.create_external_range(P2_SCRATCH, LEN) {
+            return fail(rm, "UVM_CREATE_EXTERNAL_RANGE (scratch)", e);
+        }
+        if let Err(e) = sess.map_external(P2_SCRATCH, LEN, ctl_fd, client, scratch_raw) {
+            return fail(rm, "UVM_MAP_EXTERNAL_ALLOCATION (scratch)", e);
+        }
+        let mut lane = Lane {
+            chan,
+            token,
+            scratch,
+            scratch_va: P2_SCRATCH,
+            seq: 0,
+        };
+
+        // 6 ── the graded rounds.
+        let mut out = PathState::Verified { rounds };
+        for r in 0..rounds {
+            let obj = match rm.alloc_probe_local(LEN) {
+                Ok(h) => h,
+                Err(e) => {
+                    out = PathState::Refused {
+                        step: "alloc round object",
+                        status: format!("round {r}: {e:?}"),
+                    };
+                    break;
+                }
+            };
+            let obj_raw = u32::try_from(obj.raw()).unwrap_or(0);
+            let p = pattern(nonce, 3, r);
+            if let Err(e) = rm.fill_words(obj, LEN, p, 0) {
+                let _ = rm.free(obj);
+                out = PathState::Refused {
+                    step: "fill round object",
+                    status: format!("round {r}: {e:?}"),
+                };
+                break;
+            }
+            if let Err(e) = sess.create_external_range(P2_DATA, LEN) {
+                let _ = rm.free(obj);
+                out = PathState::Refused {
+                    step: "UVM_CREATE_EXTERNAL_RANGE (data)",
+                    status: format!("round {r}: {e}"),
+                };
+                break;
+            }
+            if let Err(e) = sess.map_external(P2_DATA, LEN, ctl_fd, client, obj_raw) {
+                let _ = sess.free_range(P2_DATA, LEN);
+                let _ = rm.free(obj);
+                out = PathState::Refused {
+                    step: "UVM_MAP_EXTERNAL_ALLOCATION (data)",
+                    status: format!("round {r}: {e}"),
+                };
+                break;
+            }
+            let seen = engine_read_through_va(rm, &mut lane, P2_DATA);
+            // ⚠ The range is retired BEFORE the next round creates it again — an overlapping
+            //   `UVM_CREATE_EXTERNAL_RANGE` is refused by the range tree, and that refusal
+            //   would read as *"UVM would not map"* rather than *"we left the last one up"*.
+            let _ = sess.free_range(P2_DATA, LEN);
+            let _ = rm.free(obj);
+            match seen {
+                Err(e) => {
+                    out = PathState::Refused {
+                        step: "engine read @P2 VA",
+                        status: format!("round {r}: {e}"),
+                    };
+                    break;
+                }
+                Ok(v) if v != p => {
+                    let stale = r > 0 && v == pattern(nonce, 3, r - 1);
+                    out = PathState::Mismatch {
+                        rounds: r + 1,
+                        first_bad: if stale {
+                            format!(
+                                "★★★★★ STALE UVM MAPPING at {P2_DATA:#018x}: round {r} read \
+                                 round {}'s pattern {v:#010x} instead of its own {p:#010x}. \
+                                 UVM_FREE did not retire the translation.",
+                                r - 1
+                            )
+                        } else {
+                            format!(
+                                "round {r} at {P2_DATA:#018x}: expected {p:#010x}, got \
+                                 {v:#010x} (⊘ not any earlier round's pattern either)"
+                            )
+                        },
+                    };
+                    break;
+                }
+                Ok(_) => {}
+            }
+        }
+
+        // 7 ── teardown. ⊘ The channel goes before the UVM session drops: freeing it while
+        //      the va_space is being torn down would be a channel in an address space whose
+        //      page tables are going away. The externally-owned VA space itself is
+        //      deliberately NOT freed here — UVM holds its page directory and the process is
+        //      about to exit, and an RM free racing UVM's teardown is a worse failure than a
+        //      handle that outlives the run.
+        let _ = sess.free_range(P2_SCRATCH, LEN);
+        let _ = rm.free(lane.scratch);
+        let _ = sess.free_range(P2_RING, ring_bytes);
+        let _ = rm.free(lane.chan);
+        drop(sess);
+        out
+    }
+
     /// Configuration for one `--uvm-mean` run. Every field is printed before the run.
     pub struct Cfg {
         /// The GPU index — the one the UUID is read for and the one RM is opened on.
@@ -13655,6 +14172,14 @@ mod mean {
         println!("--- W392D STALE RACE: remap one VA between two LIVE objects ---");
         led.stale_race = stale_race(rm, vas, &mut lane, STALE_VA, cfg.nonce, false);
         println!("    STALE RACE → {}", led.stale_race.describe());
+
+        // ── P2 ────────────────────────────────────────────────────────────────────────
+        println!(
+            "--- W392D P2: nvidia-uvm publishes the mapping, {} rounds at one VA ---",
+            cfg.p1_rounds
+        );
+        led.p2_uvm_memop = p2_uvm_round(rm, engine_type, cfg.gpu, cfg.nonce, cfg.p1_rounds);
+        println!("    P2 → {}", led.p2_uvm_memop.describe());
 
         // ── P3 ────────────────────────────────────────────────────────────────────────
         // ★★★★★ AN HONEST RED, AND IT IS THE REQUIRED OUTCOME OF THIS ARM ON BARE METAL.
