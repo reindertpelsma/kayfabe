@@ -4527,23 +4527,70 @@ fn adopted_guest_ring(
     // would be two lookups of one object that a future refactor could point at different
     // revisions — and the ring and the USERD have to be the SAME channel's or the
     // containment test below is being run against the wrong leaf.
-    let facts = spine.rmgraph.node_of_resource(chan.key)?.facts;
-    let ring = facts.gp_fifo_ring?;
+    // ★★★★★ **w392e — NAME WHICH CONJUNCT FAILED.** Every early return below reached the
+    // guest through ONE birth-line sentence ("the address table held no joined binding at
+    // this channel's ring VA"), so **seven distinct causes were indistinguishable**. A full
+    // day of w392d was spent inferring which one fires; the answer is one `eprintln!` per
+    // arm. ⊘ Do not collapse these back into `?` — the `?` is what cost the day.
+    let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
+        eprintln!("kayfabe: ADOPT-WHY ⊘ (1) NO RMGRAPH NODE for this channel");
+        return None;
+    };
+    let facts = node.facts;
+    let Some(ring) = facts.gp_fifo_ring else {
+        eprintln!("kayfabe: ADOPT-WHY ⊘ (2) the channel DECLARED NO GPFIFO RING");
+        return None;
+    };
     let userd = facts.userd;
-    let pdb = chan.vas_pdb?;
-    let (start, len, binding) = proc
-        .vases
-        .get(&(cgpu, pdb))?
-        .table
-        .binding_at(kayfabe_arch::ids::GpuVa(ring.va))?;
-    let host = binding.host()?;
+    let Some(pdb) = chan.vas_pdb else {
+        eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (3) the channel names NO VAS PDB",
+            ring.va
+        );
+        return None;
+    };
+    let Some(vas) = proc.vases.get(&(cgpu, pdb)) else {
+        eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (4) NO VAS for this (gpu, pdb) pair",
+            ring.va
+        );
+        return None;
+    };
+    let Some((start, len, binding)) = vas.table.binding_at(kayfabe_arch::ids::GpuVa(ring.va))
+    else {
+        eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (5) NO BINDING AT THE RING VA in the address table",
+            ring.va
+        );
+        return None;
+    };
+    let Some(host) = binding.host() else {
+        eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (6) the binding \
+             EXISTS but carries NO HOST OBJECT — nothing on the host side to adopt",
+            ring.va
+        );
+        return None;
+    };
     // ★★★ THE ONE ARM. ⊘ Not `binding.host().is_some()` — that asks *"does a host object
     // exist here"*, and the question that decides correctness is *"does the guest reach these
     // bytes some other way"*. `[measured 2026-08-11]` `representability_of` made exactly that
     // mistake and it is why `BackingBytes` exists at all.
     if host.bytes() != kayfabe_mmu::BackingBytes::JoinsGuestWindow {
+        eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (7) host object \
+             PRESENT but bytes={:?} — adoption needs JoinsGuestWindow (one memory). ⚠ This is \
+             the arm that says the leaf was TWINNED rather than JOINED",
+            ring.va,
+            host.bytes()
+        );
         return None;
     }
+    eprintln!(
+        "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ✔ ADOPTABLE — one memory, \
+         JoinsGuestWindow",
+        ring.va
+    );
     Some(kayfabe_isolate::AdoptedGuestRing {
         memory: host.memory(),
         // Where the joined object is placed — the leaf's own base, which is what
