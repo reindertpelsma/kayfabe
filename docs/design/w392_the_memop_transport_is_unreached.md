@@ -544,3 +544,35 @@ split:
 
 ★ **THE RULE: publish it, or refuse BY NAME. Never quietly substitute a different ring.** A
 substitution is indistinguishable from success in every log line the path prints.
+
+### ★★★★★ §8 — MEASURED (w392e, boot `w392e`, src `9e50102e`): THE ARM IS **(5) NO BINDING AT THE RING VA** — AND IT IS UNIVERSAL
+
+The `ADOPT-WHY` instrument answers the question a day of inference could not:
+
+```
+9 × ADOPT-WHY ⊘ (5) NO BINDING AT THE RING VA in the address table
+0 × ✔ ADOPTABLE
+```
+Per ring VA: `0x0`×2, `0x121010000`, `0x121040000`, `0x121070000`, `0x1210a0000`,
+`0x420064000`×2, `0x9100001000` (the mean client's own).
+
+⇒ **`binding_at(ring.va)` returns `None` for EVERY engine-object birth in the boot.** Not the
+client's channel specially — **all nine**, kernel and user alike. Zero adoptable.
+
+⊘⊘ **THIS REFUTES THE CAUSE I WAS ABOUT TO FIX.** §5h–§7 built toward arm **(7)** — *"host object
+present but bytes != JoinsGuestWindow"*, the twinned-not-joined case — and I was one edit from
+rewriting `backing_for`/`honours_declaration` to chase it. **Arm (7) never fires. Neither does
+(6).** The failure is one rung earlier and much simpler: there is no row at that VA at all when
+adoption asks. ★ The instrument earned itself in a single boot.
+
+**Run provenance** (`HOOK_RC=0`, `W392D_GUEST_STARTED`, `W392D_GUEST_RC=1`,
+`W392D_OUTCOME=(F)`, guest dmesg 71 lines / 68 `NVRM` / delta 37, **host dmesg delta 0 — still no
+Xid**). ⚠ `boot_capture` exited `rc=5` on its evidence-persist bookkeeping (*"only 4/3 evidence
+files"*), **not** on the experiment; the workload ran start to finish.
+
+⚠ **What is NOT established, and must not be assumed:** *why* the row is absent at birth.
+`VAS-BIND-CENSUS` printed **zero** times this boot, so the w392d census line
+(`vas=PRESENT rows=3` at the ring VA) **cannot be compared against this boot** — different
+instrument, different boot, different VA. The tempting story *"present later, absent at birth ⇒
+ordering"* is **unmeasured**, and pairing a census from one boot with a birth from another is the
+join error that produced #222.
