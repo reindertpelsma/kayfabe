@@ -40,7 +40,16 @@ The raw mean client now **adopts the guest's ring** and the host engine **execut
 pushbuffer** (`Xid 0 → 5 × Xid 31`). It still fails, and the remaining wall is **FB-JOIN ALIASING**:
 one framebuffer page mapped at two guest VAs, host object bound at only one.
 
-## THE GOAL CHAIN (owner, 2026-09-09)
+## ★ THE FULL GOAL CHAIN (owner, 2026-09-09 ~04:00 CEST) — in order
+1. **LLM works and all client gates green** (P1 ✔ P2 ✔ STALE RACE ✔; **P3 still red**; LLM text is
+   byte-identical to the CPU oracle but a **ledger-printed graded verdict is still owed**)
+2. **all tests and CI work**
+3. **LLM parity** (tok/s against a real host)
+4. **the compute workloads `nvkvm-pv` can run**
+5. **porting to all driver archs**
+Use Fable as heavily as needed. ⏱ **GENUINE STOP AT 07:00 CEST = 05:00 UTC**, whatever is reached.
+
+## SUPERSEDED GOAL CHAIN
 1. get `--uvm-mean` passing in the guest ← **HERE**
 2. then get LLM tokens flowing
 3. then parity tok/s
