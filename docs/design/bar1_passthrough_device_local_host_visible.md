@@ -452,3 +452,21 @@ fill (two `mmap`s + one `KVM_SET_USER_MEMORY_REGION`) and of a revalidation (692
 ~76 walks) is not resolved by its wall time; the throughput question is the next boot's.
 `DEVICE_LOCAL` is still §4.3's lease — this is `HOST_VISIBLE` over the memory the engine
 already reads.
+
+### 7.7 Second ladder, counter-fix revision `857334e5` (same box, same binary for all three arms)
+
+| arm | BAR1 traps (entries = touches = r+w) | BAR1 fills / pages / frames | BAR2 traps | BAR2 fills / pages / frames | client | Xid |
+|---|---|---|---|---|---|---|
+| off | **88,070 = 88,070 = 8,119 + 79,951** | — | 0 | — | (P) 4 of 4 PASS | 0 |
+| bar1 | **89** | 84 / 38 / 42 | 0 | — | (P) 4 of 4 PASS | 0 |
+| both | **90** | 84 / 39 / 42 | **374** | 191 / 92 / 101 | (P) 4 of 4 PASS | 0 |
+
+★ With atomic counters the control's three counts **agree exactly** (`touches-minus-misses`
+aside, which is `touches` by definition on the control) — the §7.6 deltas were the race and
+nothing else. Mechanism rows reproduce to the slot: `revalidate[runs=692 kept=6,354 removed=81]`
+(bar1) / `[692, 53,299, 272]` (both), `quiesce[67, 3]`, arena 1,712–1,713 pages, slots peak
+31 / 125. n=2 per arm across the two revisions; every row (P).
+
+⊘ `printed live 374 of at most 8` on the `both` row is a cosmetic artefact of the atomic
+`fetch_inc` on the printed counter (it now counts attempts); clamped in the report in the
+commit after this one. Nothing it describes changed.

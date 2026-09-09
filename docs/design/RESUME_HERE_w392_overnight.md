@@ -24,7 +24,10 @@ the `(F-scale)`/"corruption reproduces" sections are **superseded** and kept onl
 2. **The `nvkvm-pv` compute workloads** — `gpu_bench.c`, `mem_bandwidth_probe.c`, `cuda_micro.c` are
    runnable今 (driver API, `gcc -ldl`, no toolkit); the 10 `.cu` kernels need `nvcc`.
 3. **Porting across driver archs.**
-4. **BAR1/2 untrapped** — branch `w393-bar-passthrough` (`8d74b11d`), 1522 lines, **untested**.
+4. **BAR1/2 untrapped** — branch `w393-bar-passthrough`: ⊘ SUPERSEDED 2026-09-09 — the
+   demand-driven mirror is BOOTED and MEASURED (`857334e5`): BAR1 traps 88,193 → 91, BAR2 armed
+   too, client (P) 4 of 4 on all three arms, Xid 0. See
+   `bar1_passthrough_device_local_host_visible.md` §7.6/§7.7. Not yet measured: throughput, LLM.
 
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.

@@ -2308,7 +2308,8 @@ static void nvkvm_report_registers(NvkvmState *s)
     info_report("nvkvm: BAR1-PASSTHROUGH arm=%s misses=%" PRIu64 " (printed live %u of at "
                 "most %u). %s",
                 s->bar1_passthrough ? "on" : "off",
-                s->bar1_passthrough_misses, s->bar1_passthrough_miss_printed,
+                s->bar1_passthrough_misses,
+                MIN(s->bar1_passthrough_miss_printed, NVKVM_BAR1_MISS_LIVE),
                 NVKVM_BAR1_MISS_LIVE,
                 s->bar1_passthrough
                     ? "⇒ every miss is a BAR1 access that took a VM exit under the arm; "
@@ -2335,7 +2336,8 @@ static void nvkvm_report_registers(NvkvmState *s)
     info_report("nvkvm: BAR2-PASSTHROUGH arm=%s misses=%" PRIu64 " (printed live %u of at "
                 "most %u). %s",
                 s->bar2_passthrough ? "on" : "off",
-                s->bar2_passthrough_misses, s->bar2_passthrough_miss_printed,
+                s->bar2_passthrough_misses,
+                MIN(s->bar2_passthrough_miss_printed, NVKVM_BAR2_MISS_LIVE),
                 NVKVM_BAR2_MISS_LIVE,
                 s->bar2_passthrough
                     ? "⇒ every miss is a BAR2 access that took a VM exit under the arm; "
