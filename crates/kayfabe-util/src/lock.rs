@@ -46,6 +46,7 @@
 //! it. A poisoned device is a device whose invariants can no longer be trusted —
 //! MISS=FAULT applies to lock state too.
 
+use std::cell::Cell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -394,8 +395,27 @@ impl<T> Drop for RankedMutexGuard<'_, T> {
 /// and its two asserts (construction and every `run`) are unchanged.
 #[derive(Debug)]
 pub struct BlockingSection {
+    /// What this section is, for the census.
+    what: &'static str,
+    /// The class of the thread that opened it — judged differently per class.
+    class: ThreadClass,
+    /// When it opened, so a coordinator's section can be judged on DURATION.
+    opened: std::time::Instant,
     /// Pins the section to its constructing thread (`!Send`/`!Sync`).
     _not_send: PhantomData<*mut ()>,
+}
+
+impl Drop for BlockingSection {
+    fn drop(&mut self) {
+        // A coordinator may park; it may not sit in a millisecond-scale operation. That is a
+        // judgement about DURATION and can only be made here, at close.
+        if self.class == ThreadClass::Coordinator {
+            let us = u64::try_from(self.opened.elapsed().as_micros()).unwrap_or(u64::MAX);
+            if us >= COORDINATOR_SLOW_US {
+                note_slow_coordinator(self.what, us);
+            }
+        }
+    }
 }
 
 impl BlockingSection {
@@ -418,10 +438,17 @@ impl BlockingSection {
         // ⊘ Recorded, not panicked: the census must be able to report the CURRENT residue
         // before it is zero, and a gate that aborts the boot can only ever be turned on
         // after the work is finished — which is the wrong order for measuring it.
-        if crate::trapwitness::in_trap() {
+        // ⊘ Only a vCPU is recorded at ENTRY, because on a vCPU the mere fact of blocking
+        // is the violation. On a coordinator it is the DURATION that offends, so that one is
+        // judged on `Drop` (see `BlockingSection::drop`); on a worker it is expected and is
+        // not a violation at all.
+        if current_class() == ThreadClass::Vcpu {
             note_vcpu_blocking(what, false);
         }
         BlockingSection {
+            what,
+            class: current_class(),
+            opened: std::time::Instant::now(),
             _not_send: PhantomData,
         }
     }
@@ -439,10 +466,13 @@ impl BlockingSection {
     #[must_use]
     pub fn enter_required_on_vcpu(what: &'static str) -> Self {
         Self::assert_lock_free("entering a required-on-vCPU BlockingSection");
-        if crate::trapwitness::in_trap() {
+        if current_class() == ThreadClass::Vcpu {
             note_vcpu_blocking(what, true);
         }
         BlockingSection {
+            what,
+            class: current_class(),
+            opened: std::time::Instant::now(),
             _not_send: PhantomData,
         }
     }
@@ -599,6 +629,62 @@ mod tests {
 
 
 // =====================================================================================
+// ★★★★★ THREAD CLASS — owner, 2026-09-09: "a VCPU block is worse than a block in a reader
+// thread. Reader threads can sleep to wait for an operation, vcpu threads not."
+// =====================================================================================
+
+/// What kind of thread this is, which is what decides how bad a blocking call on it is.
+///
+/// **Owner's model, 2026-09-09:** *"a reader thread is fine to coordinate, as long as the long
+/// waiting blocking calls (the milliseconds one) aren't on that one. you have separate worker
+/// threads for that. In fact a VCPU block is worse than a block in a reader thread. Reader
+/// threads can sleep to wait for an operation, vcpu threads not."*
+///
+/// ⇒ Severity is **not** flat. Three classes, three different rules:
+/// | class | blocking is | why |
+/// |---|---|---|
+/// | [`ThreadClass::Vcpu`] | **a violation, always** (bar the allowlist) | it is running GUEST CODE. It cannot sleep: every microsecond is stolen from the guest, and the hardware it emulates posts and returns. |
+/// | [`ThreadClass::Coordinator`] | fine when SHORT, a violation when long | a reader/dispatch thread may park to coordinate; it may not sit in a millisecond-scale operation, because everything it coordinates queues behind it. |
+/// | [`ThreadClass::Worker`] | **expected** | this is what a worker is FOR. A worker that never blocks is a worker that was not needed. |
+///
+/// ⊘ This is why a single "no blocking calls" rule was the wrong shape: it would flag the
+/// worker threads we deliberately created in order to obey it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreadClass {
+    /// A guest vCPU inside an MMIO trap. Detected, never declared — see [`current_class`].
+    Vcpu,
+    /// A reader/dispatch thread: may park to coordinate, may not run long operations.
+    Coordinator,
+    /// A dedicated worker: blocking here is the design working.
+    Worker,
+}
+
+thread_local! {
+    static DECLARED_CLASS: Cell<Option<ThreadClass>> = const { Cell::new(None) };
+}
+
+/// Declare this thread's class. Call once, at the top of a spawned thread's body.
+///
+/// ⊘ A thread that declares nothing is treated as a [`ThreadClass::Coordinator`], which is the
+/// **middle** severity on purpose: defaulting to `Worker` would silently excuse every
+/// unclassified thread (the permissive default that makes a census read clean), and defaulting
+/// to `Vcpu` would cry wolf on threads that are legitimately allowed to park.
+pub fn declare_thread_class(class: ThreadClass) {
+    DECLARED_CLASS.with(|c| c.set(Some(class)));
+}
+
+/// This thread's class. A thread inside a guest trap is [`ThreadClass::Vcpu`] **regardless of
+/// what it declared** — the trap witness is measured, a declaration is a claim, and where they
+/// disagree the measurement wins.
+#[must_use]
+pub fn current_class() -> ThreadClass {
+    if crate::trapwitness::in_trap() {
+        return ThreadClass::Vcpu;
+    }
+    DECLARED_CLASS.with(Cell::get).unwrap_or(ThreadClass::Coordinator)
+}
+
+// =====================================================================================
 // ★★★★★ WHAT BLOCKED ON A vCPU THREAD — the owner's 2026-09-09 allowlist, as a census.
 // =====================================================================================
 
@@ -615,6 +701,12 @@ static VB_HITS: [AtomicU64; VCPU_BLOCK_SLOTS] = [const { AtomicU64::new(0) }; VC
 static VB_ALLOWED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
     [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
 static VB_OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+/// A blocking section that ran longer than this on a [`ThreadClass::Coordinator`] is a
+/// violation: the owner's rule is that a reader thread may park to coordinate but must not sit
+/// in *"the long waiting blocking calls (the milliseconds one)"*, because everything it
+/// coordinates queues behind it.
+pub const COORDINATOR_SLOW_US: u64 = 1_000;
 
 /// Lock-free, because this records **on the vCPU thread inside a trap**, which is exactly
 /// where a blocking site is forbidden. An instrument that took a mutex here would be inside
@@ -638,6 +730,59 @@ fn note_vcpu_blocking(what: &'static str, allowed: bool) {
         return;
     }
     VB_OVERFLOW.fetch_add(1, AtomicOrdering::Relaxed);
+}
+
+/// Coordinator sections that ran long enough to queue whatever they coordinate.
+static SLOW_COORD: AtomicU64 = AtomicU64::new(0);
+static SLOW_COORD_WORST_US: AtomicU64 = AtomicU64::new(0);
+static SLOW_COORD_NAME: [OnceLock<&'static str>; VCPU_BLOCK_SLOTS] =
+    [const { OnceLock::new() }; VCPU_BLOCK_SLOTS];
+static SLOW_COORD_CLAIMED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
+    [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
+static SLOW_COORD_HITS: [AtomicU64; VCPU_BLOCK_SLOTS] =
+    [const { AtomicU64::new(0) }; VCPU_BLOCK_SLOTS];
+
+fn note_slow_coordinator(what: &'static str, us: u64) {
+    SLOW_COORD.fetch_add(1, AtomicOrdering::Relaxed);
+    SLOW_COORD_WORST_US.fetch_max(us, AtomicOrdering::Relaxed);
+    let ptr = what.as_ptr() as usize;
+    for i in 0..VCPU_BLOCK_SLOTS {
+        let cur = SLOW_COORD_CLAIMED[i].load(AtomicOrdering::Relaxed);
+        if cur != ptr {
+            if cur != 0
+                || SLOW_COORD_CLAIMED[i]
+                    .compare_exchange(0, ptr, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+                    .is_err()
+            {
+                continue;
+            }
+            let _ = SLOW_COORD_NAME[i].set(what);
+        }
+        SLOW_COORD_HITS[i].fetch_add(1, AtomicOrdering::Relaxed);
+        return;
+    }
+}
+
+/// The coordinator-thread half of the census: `(reason, hits)`, plus the worst duration seen.
+#[must_use]
+pub fn slow_coordinator_rows() -> (Vec<(&'static str, u64)>, u64, u64) {
+    let mut out = Vec::new();
+    for i in 0..VCPU_BLOCK_SLOTS {
+        let hits = SLOW_COORD_HITS[i].load(AtomicOrdering::Relaxed);
+        if hits == 0 {
+            continue;
+        }
+        out.push((
+            SLOW_COORD_NAME[i].get().copied().unwrap_or("⊘ (unnamed)"),
+            hits,
+        ));
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1));
+    (
+        out,
+        SLOW_COORD.load(AtomicOrdering::Relaxed),
+        SLOW_COORD_WORST_US.load(AtomicOrdering::Relaxed),
+    )
 }
 
 /// `(reason, hits, was_allowlisted)` for everything that blocked on a vCPU thread.
@@ -674,8 +819,26 @@ pub fn vcpu_blocking_census() -> String {
     let rows = vcpu_blocking_rows();
     let over = VB_OVERFLOW.load(AtomicOrdering::Relaxed);
     let undeclared = "⊘ COVERAGE: only sites that go through BlockingSection are visible here;                       cross-check worst_trap/slow_traps, which measure the hold itself";
+    let (coord_rows, coord_n, coord_worst) = slow_coordinator_rows();
+    let coord = if coord_n == 0 {
+        // ⊘ Zero is the EXPECTED value and is stated, not omitted: an absent line and a clean
+        // line are indistinguishable, which is how five instruments went unread today.
+        format!(" | COORD-SLOW 0 (expected) over {}us", COORDINATOR_SLOW_US)
+    } else {
+        format!(
+            " | COORD-SLOW {coord_n} section(s) over {}us, worst={coord_worst}us {} \
+             ⊘ a reader thread may PARK to coordinate but not sit in a long operation — \
+             everything it coordinates queues behind it",
+            COORDINATOR_SLOW_US,
+            coord_rows
+                .iter()
+                .map(|(w, n)| format!("[{n} × {w}]"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    };
     if rows.is_empty() {
-        return format!("VCPU-BLOCKING none declared — {undeclared}");
+        return format!("VCPU-BLOCKING none declared — {undeclared}{coord}");
     }
     format!(
         "VCPU-BLOCKING {}{} — {undeclared}",
@@ -870,6 +1033,73 @@ mod lock_cost_separates_wait_from_hold {
         assert!(
             !line.contains("worst_wait=0us worst_hold=0us"),
             "a rank with no traffic must be absent, not zeroed: {line}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod blocking_severity_is_per_thread_class {
+    //! ★★★★★ **OWNER, 2026-09-09:** *"a reader thread is fine to coordinate, as long as the
+    //! long waiting blocking calls (the milliseconds one) aren't on that one. you have
+    //! separate worker threads for that. In fact a VCPU block is worse than a block in a
+    //! reader thread. Reader threads can sleep to wait for an operation, vcpu threads not."*
+    //!
+    //! ⇒ Severity is not flat, and a flat rule was the wrong shape: it would have flagged the
+    //! very worker threads we created in order to obey it.
+    use super::*;
+
+    #[test]
+    fn a_worker_may_block_freely_and_is_never_a_violation() {
+        std::thread::spawn(|| {
+            declare_thread_class(ThreadClass::Worker);
+            assert_eq!(current_class(), ThreadClass::Worker);
+            let mut s = BlockingSection::enter("unit-test-worker-blocks");
+            s.run(|| std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US * 2)));
+        })
+        .join()
+        .unwrap();
+        let (rows, _, _) = slow_coordinator_rows();
+        assert!(
+            !rows.iter().any(|r| r.0 == "unit-test-worker-blocks"),
+            "a worker blocking is the design working, not a violation: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn a_coordinator_is_judged_on_DURATION_not_on_blocking_at_all() {
+        std::thread::spawn(|| {
+            declare_thread_class(ThreadClass::Coordinator);
+            // Short: parking to coordinate is explicitly allowed.
+            drop(BlockingSection::enter("unit-test-coord-short"));
+            // Long: everything it coordinates queues behind this.
+            let s = BlockingSection::enter("unit-test-coord-long");
+            std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US + 500));
+            drop(s);
+        })
+        .join()
+        .unwrap();
+        let (rows, n, worst) = slow_coordinator_rows();
+        assert!(n >= 1 && worst >= COORDINATOR_SLOW_US, "n={n} worst={worst}");
+        assert!(rows.iter().any(|r| r.0 == "unit-test-coord-long"), "{rows:?}");
+        assert!(
+            !rows.iter().any(|r| r.0 == "unit-test-coord-short"),
+            "a SHORT coordinator section must not be reported — the rule is about duration: \
+             {rows:?}"
+        );
+    }
+
+    /// ⊘ A trap-thread measurement BEATS a declaration. A thread may claim to be a worker; if
+    /// it is inside a guest trap it is a vCPU, because the trap witness is measured and the
+    /// declaration is only a claim.
+    #[test]
+    fn the_trap_measurement_overrides_a_thread_s_own_claim() {
+        declare_thread_class(ThreadClass::Worker);
+        assert_eq!(current_class(), ThreadClass::Worker);
+        let _t = crate::trapwitness::TrapGuard::enter();
+        assert_eq!(
+            current_class(),
+            ThreadClass::Vcpu,
+            "inside a trap the measurement wins over the declaration"
         );
     }
 }
