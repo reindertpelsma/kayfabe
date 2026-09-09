@@ -5862,12 +5862,13 @@ impl SharedDevice {
                 for cell in st.procs.values() {
                     redrive(&mut cell.lock());
                 }
-                if rebound > 0 {
-                    eprintln!(
-                        "kayfabe: PROMOTE-REDRIVE gpu={} new_globals={added} bound={rebound}                          ⇒ ranges that were parked AwaitingPhysical are now bound, because the                          global they were waiting for has arrived",
-                        route.gpu.0
-                    );
-                }
+                // ⊘ ALWAYS printed when globals grew, including bound=0. Printing only
+                // the success case cannot separate "no new globals ever arrived" from
+                // "they arrived and completed nothing" — different fixes entirely.
+                eprintln!(
+                    "kayfabe: PROMOTE-REDRIVE gpu={} new_globals={added} bound={rebound} ⇒ bound=0 with new_globals>0 means the parked halves await a physical the globals do NOT carry",
+                    route.gpu.0
+                );
             }
             drop(st);
             // ★ Latch, do not publish: see `promote_binds`. The rows are in the spine now;
