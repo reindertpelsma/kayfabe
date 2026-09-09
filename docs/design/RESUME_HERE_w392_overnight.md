@@ -124,6 +124,12 @@ host: 49 GiB total, 47 GiB available
 Qwen2-0.5B's weights alone are ~2 GB and load shard-by-shard into guest RAM before reaching the
 GPU; it dies at 135/290, almost exactly halfway. ⇒ **raise `NVKVM_RAM_MB`** (it drives BOTH `-m`
 and the memfd `size=`, which QEMU requires to match exactly). Re-run underway at 16384.
+★★★ **CONFIRMED at 16 GiB (`w392llm2`): the OOM is GONE** — `out of memory` occurrences **0**
+(was: died at weight shard 135/290). New outcome `(E) UNMEASURED` — **no `LLM_TOKENS` line at all**,
+i.e. it now runs long enough to exceed the 900 s budget instead of dying. `MINMM_SUM=64` still
+correct, `XIDS=17/17/17` still unchanged (nothing faults). ⇒ **next: raise `LLM_MS` to ~2700000**
+(w383 measured `LLM_MS=722820` for a full run, so 900 s was never enough once loading succeeded).
+
 ⊘ **This is a harness configuration limit, NOT a kayfabe defect**, and it means the campaign's
 "LLM corruption" story needs re-checking on a guest that is not starved.
 
