@@ -47,6 +47,9 @@ chain and host RM verbs included, inside the guest's store, under the BQL, every
 ★ The channel doorbell had already been fixed three ways (w383/w384/w394) and `worst_trap` went
 1 927 527 → 1 855 594 → 1 791 581 µs — because the real holder was a register nobody was looking
 at. That is the reason §6 grades on the **site** (`at=`) and not on the number alone.
+⊘⊘ **And the site was not the cause either** — see §6.2: with the GSP ring fully off the vCPU
+the same site holds for the same 1.8 s, which `KFTIME-SEG` attributes to `Regs::write`'s
+`materialize_pending` and the event-counting census then narrows to a **device-lock wait**.
 
 ## §2 Why deferring is safe — the guest-observable contract was always asynchronous
 
@@ -298,12 +301,34 @@ KFTIME-SEG birth_drain   shape=work  n=540600  total_ms=80.064    mean_us=0   ma
 KFTIME-SEG err_grants    shape=work  n=540600  total_ms=4.064     mean_us=0   max_us=65       share=0.1%
 ```
 
-★★★★★ **`worst_trap` IS `materialize_pending` — the memslot install** (`max_us=1877849` against
-`worst_trap=1877907us`: the same event to 58 µs). That is the owner's own canonical allowlist
-member — *"unless its required like a memslot install"* — arriving on the `QUEUE_HEAD` store
-because the RPC reply the guest has just drained is what makes a memslot pending. It is
-**allowed** and it is **1.9 s**, which is worth its own rung (which memslot, and whether the
-16 GiB `memfd` guest RAM or the w393 BAR mirror is the one that costs it); it is not this one.
+★★★★★ **`worst_trap` IS the `materialize_pending` call** (`max_us=1877849` against
+`worst_trap=1877907us`: the same event to 58 µs).
+
+> ### ⊘⊘⊘ CORRECTED THE SAME HOUR — IT IS NOT A MEMSLOT INSTALL, IT IS A LOCK WAIT.
+> The first reading of this line was *"the memslot install — the owner's own allowlist
+> member"*. The **event-counting** census (round 4's binary, perf boot `w395p_r4_on_1`,
+> `worst_trap=1890832us at=bar0+0x110c00`) prints **no memslot-install row at all**:
+> `VCPU-BLOCKING [50 × ring adoption …] [48 × notifier grants …] [2 × GSP bind …]` — the
+> `materialize_pending() > 0` branch never fired in the whole boot. `materialize_pending`
+> with nothing pending is exactly two statements: `self.state.write()` on the device
+> `RankedRwLock` and an empty `take_pending_spawns`. ⇒ **The 1.9 s is the vCPU blocked
+> acquiring the device WRITE lock, held by an off-vCPU worker** — the doorbell publish
+> worker's `ring_inline` (publication legs and pins under the device lock) or the GSP worker's
+> policy chain. It rides the `QUEUE_HEAD` store because that is the write the guest issues
+> while the worker is busy, and it was **already 1.79 s in w394h before this branch existed**
+> (with `KAYFABE_DOORBELL_ASYNC=on` by default) — consistent with the doorbell worker being
+> the holder.
+> ⚠ Stated as the reading consistent with two measurements, not as measured: the check is
+> to time `state.write()` and `materialize(spawns)` separately inside `materialize_pending`
+> (one `Instant`, two segments) and to print which thread held the device lock when a trap
+> waited longer than `SLOW_TRAP_US`. Not run — the campaign was bounded here.
+> ⇒ The allowlist question is therefore different from *"is a memslot install allowed"*: a
+> trap that **waits on a lock a worker holds** is the same violation as running the work
+> inline, arriving through a different door — the exact shape §6.0 found one lock over. The
+> owner's rule needs a corollary: **work moved off the vCPU must not hold a lock the trap
+> path takes.** `RegPlane::gsp_gate` is that corollary applied to the plane mutex; the
+> device `RwLock` needs the same treatment (the trap's `take_pending_spawns` is a
+> `try_write`/lock-free latch away from never waiting).
 
 ⊘⊘ **And the CONTROL says the same thing** (`w395diag_off`, arm `off`, `(P)` / `4 of 4` /
 `PASS`, `worst_trap=1875321us at=bar0+0x110c00`): `materialize max_us=1875049`, and the `plane`
