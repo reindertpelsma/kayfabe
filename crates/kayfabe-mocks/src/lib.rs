@@ -1644,6 +1644,20 @@ struct HoldState {
 }
 
 impl VerbHold {
+    /// ★ 2026-09-09 — tolerate a POISONED lock. `wait_entered`'s 30 s panic fires WITH
+    /// this mutex held, so it is poisoned for the rest of that unwind — and `release()`
+    /// runs from a `Drop` on that same unwind. `.expect("hold")` there was a SECOND panic
+    /// inside the first, which aborts the whole test binary (SIGABRT) and hides every
+    /// other test in it (measured: `l1_mean`, 2026-09-09 — two tests' failures reported
+    /// as one abort). The state is bools and an `Option`; a poisoned guard's contents are
+    /// exactly as consistent as an unpoisoned one's, so the poison carries no information
+    /// the first panic did not already report.
+    fn hold_state(&self) -> std::sync::MutexGuard<'_, HoldState> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// A fresh, un-entered, un-released hold.
     #[must_use]
     pub fn new() -> Arc<Self> {
@@ -1656,7 +1670,7 @@ impl VerbHold {
     /// True once a verb has actually entered this hold and is parked in it.
     #[must_use]
     pub fn is_pending(&self) -> bool {
-        let g = self.state.lock().expect("hold");
+        let g = self.hold_state();
         g.entered && !g.released
     }
 
@@ -1689,7 +1703,7 @@ impl VerbHold {
 
         let bound = crate::watchdog::limit_or_env(NOT_COMING);
         let started = std::time::Instant::now();
-        let mut g = self.state.lock().expect("hold");
+        let mut g = self.hold_state();
         while !g.entered {
             let left = match bound.checked_sub(started.elapsed()) {
                 Some(d) if !d.is_zero() => d,
@@ -1707,7 +1721,10 @@ impl VerbHold {
                     crate::watchdog::thread_report(),
                 ),
             };
-            let (ng, _) = self.cv.wait_timeout(g, left).expect("hold");
+            let (ng, _) = self
+                .cv
+                .wait_timeout(g, left)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             g = ng;
         }
     }
@@ -1722,18 +1739,18 @@ impl VerbHold {
     /// D-state shape, not a broken seam.
     #[must_use]
     pub fn cancel_request_seen(&self) -> Option<CancelReason> {
-        self.state.lock().expect("hold").cancelled
+        self.hold_state().cancelled
     }
 
     /// True once §7.5's abandon reached this parked verb.
     #[must_use]
     pub fn abandon_seen(&self) -> bool {
-        self.state.lock().expect("hold").abandoned
+        self.hold_state().abandoned
     }
 
     /// Release the held verb. Idempotent.
     pub fn release(&self) {
-        let mut g = self.state.lock().expect("hold");
+        let mut g = self.hold_state();
         g.released = true;
         self.cv.notify_all();
     }
@@ -1752,7 +1769,7 @@ impl VerbHold {
     /// cancel lands would make the whole D-state escape untestable and would prove a
     /// property the host does not have.
     fn enter_and_park(&self, interruptible: bool) -> Result<(), RmError> {
-        let mut g = self.state.lock().expect("hold");
+        let mut g = self.hold_state();
         g.entered = true;
         self.cv.notify_all();
         loop {
@@ -1765,14 +1782,17 @@ impl VerbHold {
             if g.released {
                 return Ok(());
             }
-            g = self.cv.wait(g).expect("hold");
+            g = self
+                .cv
+                .wait(g)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
         }
     }
 
     /// The cancel side: record the break signal and wake the parked verb. Takes only
     /// this hold's own mutex, and is called with the cell's mutex already **dropped**.
     fn signal(&self, cancelled: Option<CancelReason>, abandoned: bool) {
-        let mut g = self.state.lock().expect("hold");
+        let mut g = self.hold_state();
         if let Some(r) = cancelled {
             g.cancelled = Some(r);
         }

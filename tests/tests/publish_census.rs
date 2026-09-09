@@ -36,6 +36,10 @@ const H_GR_CHANNEL: HObject = HObject(0x5c00_0019);
 /// RM's fixed-placement granule, read from the one place that defines it. ⊘ Never restated:
 /// a test carrying its own `0x1_0000` would pass while the gate it claims to pin moved.
 const GRANULE: u64 = kayfabe_fwd::FB_LEAF_GRANULE;
+/// ★ 2026-09-09 (w392q): the JOIN's granule is one 4 KiB PTE (`FB_LEAF_PAGE`), and
+/// `vas_publish_census` classifies with that predicate (`FbLeafBacking::Joined
+/// .places_exactly`) — so the rows built to trip the granularity gate must be SUB-PAGE.
+const SUB_PAGE: u64 = kayfabe_fwd::FB_LEAF_PAGE / 2;
 
 fn world() -> Guarded<Gpu> {
     world_inner(None)
@@ -110,11 +114,17 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
         vec![
             // ★ THE CANDIDATE: Vidmem, 64 KiB long, 64 KiB aligned.
             range(0x8000_0000, GRANULE, Aperture::Vidmem),
-            // ⊘ Vidmem and 64 KiB ALIGNED but too SHORT — the dominant shape in cup2's real
-            // table, and the reason run-coalescing is what the granularity gate wants.
-            range(0x8010_0000, 0x1000, Aperture::Vidmem),
-            // ⊘ Vidmem, a whole granule long, but MISALIGNED in VA.
-            range(0x8020_1000, GRANULE, Aperture::Vidmem),
+            // ⊘⊘ REWRITTEN 2026-09-09 (w392q). What stood here: a `0x1000`-long row and a
+            // row misaligned by `0x1000` — both tripped the old 64 KiB granule
+            // (`FB_LEAF_GRANULE`, now the VIDMEM chain's rule only). The join's granule is
+            // `FB_LEAF_PAGE` (4 KiB) and the census applies the drain's own predicate, so a
+            // 4 KiB row at a 4 KiB-aligned VA is now a legitimate CANDIDATE (measured: this
+            // test reported `candidates=3 not_granular=0` at `f60f793c`). The two trip rows
+            // are therefore SUB-PAGE — the one shape no 4 KiB PTE can place exactly.
+            // ⊘ Vidmem, page-ALIGNED but too SHORT for one 4 KiB PTE.
+            range(0x8010_0000, SUB_PAGE, Aperture::Vidmem),
+            // ⊘ Vidmem, a whole granule long, but MISALIGNED in VA — within a page.
+            range(0x8020_0000 + SUB_PAGE, GRANULE, Aperture::Vidmem),
             // ⊘⊘ NOT VIDMEM — and it lands in `guest_ram`, NOT in `not_vidmem`. See the
             // assertion below: this row is the known-positive for w289 §43's finding, not
             // for the aperture gate.
@@ -143,7 +153,7 @@ fn every_gate_has_a_row_that_trips_it_and_the_buckets_sum() {
     );
     assert_eq!(
         c.not_granular_bytes,
-        0x1000 + GRANULE,
+        SUB_PAGE + GRANULE,
         "weighted by SIZE too: a count of 4 KiB rows and a count of 64 KiB rows are not \
          comparable quantities: {c:?}"
     );

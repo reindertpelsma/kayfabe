@@ -822,6 +822,9 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
             facts: AllocFacts {
                 h_vaspace: Some(handles.vaspace),
                 userd_flags: MockArch::userd_flags_for(T0_VCHID),
+                // ★ 2026-09-09 (w392p birth-at-alloc): the channel declares its ring, as
+                // a real user channel always does — the birth below adopts it.
+                gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(T0_VCHID)),
                 ..Default::default()
             },
         })
@@ -829,9 +832,16 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
     device
         .schedule_channel(client, chan, true)
         .expect("T0: the guest schedules the channel it just declared (#177)");
+    // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here: the doorbell
+    // `expect`ed to MATERIALIZE the host channel + token. A doorbell never births a
+    // passthrough channel any more (`FwdFault::PassthroughDoorbellBirth`, by name —
+    // measured at `f60f793c`); the channel is born at its alloc, which in production is the
+    // tail of the register write that carried it. `device.apply` bypasses that tail, so
+    // birth it here the way the shim's tail would, then ring the BORN channel.
+    kayfabe_tests::birth_passthrough_channels_dev(&device);
     let rung = device
         .doorbell(None, gpu, MockArch::token_for(T0_VCHID), &[], None)
-        .expect("T0: the guest rings it, materializing a host channel + token");
+        .expect("T0: the guest rings the channel born at its alloc; the ring forwards");
     assert_eq!(
         token_lane(rung.host_token),
         (ProcId(rung.proc.0).0 + 1, gpu.0),
@@ -898,6 +908,11 @@ fn generation_recycle(
         dev.apply(ev)
             .expect("({mode:?}) the recycle's generation 1 applies");
     }
+    // ★ 2026-09-09 (w392p birth-at-alloc): generation 1's channels are BORN at their
+    // alloc — production does it in the tail of the register write that carried the alloc;
+    // `dev.apply` bypasses that tail, so the fixture births here, before the ring below.
+    // (Measured at `f60f793c`: the ring refused `PassthroughDoorbellBirth` by name.)
+    kayfabe_tests::birth_passthrough_channels_dev(dev);
     dev.publish_backing(GPU0, GEN1_PDB, GpuVa(VA_GEN), 0x1000)
         .expect("({mode:?}) generation 1 publishes");
     // #177: the guest schedules its channel before ringing it.
@@ -943,6 +958,11 @@ fn generation_recycle(
         dev.apply(ev)
             .expect("({mode:?}) ★ re-declaring a recycled namespace is LEGAL");
     }
+    // ★ 2026-09-09 (w392p birth-at-alloc): generation 2's channels are BORN at their
+    // alloc — production does it in the tail of the register write that carried the alloc;
+    // `dev.apply` bypasses that tail, so the fixture births here, before the ring below.
+    // (Measured at `f60f793c`: the ring refused `PassthroughDoorbellBirth` by name.)
+    kayfabe_tests::birth_passthrough_channels_dev(dev);
     dev.publish_backing(GPU1, GEN2_PDB, GpuVa(VA_GEN), 0x1000)
         .expect("({mode:?}) generation 2 publishes");
     // #177: same, for the recycled generation's own channel.
@@ -1101,8 +1121,18 @@ fn mean_run(mode: LockMode) -> MeanReport {
             });
 
             latches.arm(&rec, pids[P_TEARDOWN], GPU0, 0, VerbKind::AllocSysmem);
-            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
-            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here parked
+            // `VerbKind::AllocChannel` on these two lanes: the GR doorbells spawned below
+            // used to BIRTH the host channel, so its alloc verb was the one a doorbell drove
+            // into the isolate. As of w392p every `Passthrough` channel is born at its own
+            // alloc (`kayfabe_tests::birth_passthrough_channels`, in the world builder),
+            // BEFORE these latches are armed — an `AllocChannel` hold armed here can never
+            // be entered (measured: 30 s `HELD VERB NEVER ENTERED THE BACKEND`, then SIGABRT,
+            // at `f60f793c`). The verb the doorbell drives into the isolate now is the ring
+            // itself, so THAT is what is parked; the mid-flight free / re-route these lanes
+            // exist to test still lands on a parked host verb of the routed channel.
+            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::RingDoorbell);
+            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::RingDoorbell);
             // ★★ M2-e — the WEDGE canary (§7.5), composed into the same window as
             // everything else. `MapGpuVa`, not `AllocSysmem`: the chain must be parked
             // MID-chain, with a host memory object already minted, because a wedged
@@ -1204,10 +1234,20 @@ fn mean_run(mode: LockMode) -> MeanReport {
                 facts: AllocFacts {
                     h_vaspace: Some(handles.vaspace),
                     userd_flags: MockArch::userd_flags_for(lane_of(P_REROUTE).gr),
+                    // ★ 2026-09-09 (w392p birth-at-alloc): the successor declares its
+                    // ring — the same VA as its predecessor's, which is exactly the
+                    // "same vChid, different ChanId" shape (c) is about.
+                    gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(lane_of(P_REROUTE).gr)),
                     ..Default::default()
                 },
             })
             .expect("the re-alloc applies");
+            // ★ 2026-09-09 (w392p): …and it is BORN at that alloc, as production does in
+            // the tail of the register write that carried it (`dev.apply` bypasses that
+            // tail). Without this the later `T0` birth pass panics by name on this channel
+            // (`ring_declared_by`, measured at `f60f793c`), and a doorbell on it would be
+            // `PassthroughDoorbellBirth` rather than a re-resolved route.
+            kayfabe_tests::birth_passthrough_channels_dev(dev);
             // (d) a worker dies out of band → the slot is dead forever and the proc
             // retires loudly (§7.3).
             tx.send(CoreEvent::SourceSignal(hup));
@@ -5235,6 +5275,11 @@ fn a_recycled_channel_handle_never_shares_the_ghosts_host_channel() {
         facts: AllocFacts {
             h_vaspace: Some(RECYC_OBJ_VAS),
             userd_flags: MockArch::userd_flags_for(RECYC_CH_GR2),
+            // ★ 2026-09-09 (w392p birth-at-alloc): a re-allocated Passthrough channel is
+            // BORN at this alloc over the guest's own ring, so it must declare one — a
+            // real user channel always does (`Scenario::compute_process`). Without it the
+            // fixture's birth panics by name (`ring_declared_by`, measured at `f60f793c`).
+            gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(RECYC_CH_GR2)),
             ..Default::default()
         },
     })
@@ -6233,8 +6278,18 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
                 dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD2), 0x1000)
             });
             latches.arm(&rec, pids[P_TEARDOWN], GPU0, 0, VerbKind::AllocSysmem);
-            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
-            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here parked
+            // `VerbKind::AllocChannel` on these two lanes: the GR doorbells spawned below
+            // used to BIRTH the host channel, so its alloc verb was the one a doorbell drove
+            // into the isolate. As of w392p every `Passthrough` channel is born at its own
+            // alloc (`kayfabe_tests::birth_passthrough_channels`, in the world builder),
+            // BEFORE these latches are armed — an `AllocChannel` hold armed here can never
+            // be entered (measured: 30 s `HELD VERB NEVER ENTERED THE BACKEND`, then SIGABRT,
+            // at `f60f793c`). The verb the doorbell drives into the isolate now is the ring
+            // itself, so THAT is what is parked; the mid-flight free / re-route these lanes
+            // exist to test still lands on a parked host verb of the routed channel.
+            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::RingDoorbell);
+            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::RingDoorbell);
             let t_teardown = sc.spawn(move || {
                 dev.publish_backing(GPU0, lane_of(P_TEARDOWN).pdb, GpuVa(VA_HELD), 0x1000)
             });
@@ -6930,8 +6985,18 @@ fn gpa_mean_run(mode: LockMode) -> GpaMeanReport {
             // proc this script retires: a reap requires a quiesced isolate (G3), and
             // the point here is the RECYCLE, not the deferral.
             let mut latches = Latches::new();
-            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::AllocChannel);
-            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::AllocChannel);
+            // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here parked
+            // `VerbKind::AllocChannel` on these two lanes: the GR doorbells spawned below
+            // used to BIRTH the host channel, so its alloc verb was the one a doorbell drove
+            // into the isolate. As of w392p every `Passthrough` channel is born at its own
+            // alloc (`kayfabe_tests::birth_passthrough_channels`, in the world builder),
+            // BEFORE these latches are armed — an `AllocChannel` hold armed here can never
+            // be entered (measured: 30 s `HELD VERB NEVER ENTERED THE BACKEND`, then SIGABRT,
+            // at `f60f793c`). The verb the doorbell drives into the isolate now is the ring
+            // itself, so THAT is what is parked; the mid-flight free / re-route these lanes
+            // exist to test still lands on a parked host verb of the routed channel.
+            latches.arm(&rec, pids[P_CHANFREE], GPU1, 0, VerbKind::RingDoorbell);
+            latches.arm(&rec, pids[P_REROUTE], GPU0, 0, VerbKind::RingDoorbell);
             let t_hold1 = sc.spawn(move || {
                 dev.doorbell(
                     None,
@@ -7661,7 +7726,12 @@ fn real_mean_run(mode: LockMode) -> RealMeanReport {
             let t_held = sc.spawn(move || {
                 dev.publish_backing(GPU0, lane_of(P_WITNESS).pdb, GpuVa(VA_HELD), 0x1000)
             });
-            latches.arm(&rec, pids[P_PEER], GPU1, 0, VerbKind::AllocChannel);
+            // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc) — same reason as the
+            // `P_CHANFREE`/`P_REROUTE` arms above: the GR doorbell no longer births the
+            // channel, so an `AllocChannel` hold armed here is never entered (measured:
+            // 30 s `HELD VERB NEVER ENTERED THE BACKEND` at `f60f793c`). Park the verb the
+            // doorbell drives now: the ring itself.
+            latches.arm(&rec, pids[P_PEER], GPU1, 0, VerbKind::RingDoorbell);
             let t_held2 = sc.spawn(move || {
                 dev.doorbell(
                     None,
@@ -9993,6 +10063,10 @@ fn n3_push_second_device(
         facts: AllocFacts {
             h_vaspace: Some(h.vaspace),
             userd_flags: MockArch::userd_flags_for(h.gr_vchid),
+            // ★ 2026-09-09 (w392p birth-at-alloc): declared exactly as
+            // `Scenario::compute_process` does, so the fixture can birth these channels
+            // at their alloc (measured: `ring_declared_by` panicked by name at `f60f793c`).
+            gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(h.gr_vchid)),
             ..Default::default()
         },
     });
@@ -10004,6 +10078,7 @@ fn n3_push_second_device(
         facts: AllocFacts {
             h_vaspace: Some(h.vaspace),
             userd_flags: MockArch::userd_flags_for(h.ce_vchid),
+            gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(h.ce_vchid)),
             ..Default::default()
         },
     });

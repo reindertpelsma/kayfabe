@@ -321,6 +321,8 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
     use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 
+    use kayfabe_fwd::FwdFault;
+
     let r = regs();
     let dev = r.object_model();
 
@@ -430,6 +432,39 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
     dev.schedule_channel(CLIENT, chan, true)
         .expect("the guest schedules the channel it just declared");
 
+    // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here: the doorbell was
+    // asserted to refuse `FwdFault::IsolateRetired` — the isolate-plane refusal — because
+    // the DOORBELL used to be where a passthrough host channel was born. As of w392p the
+    // host channel is born at the guest's CHANNEL ALLOC: `SharedDevice::apply` latches the
+    // birth and the shim's `Regs::write` tail drains it (`report_channel_birth_drain` →
+    // `run_pending_channel_births`) — in production, in the tail of the RPC write that
+    // carried the alloc, BEFORE any doorbell. `dev.apply` above is the bridge's object
+    // model called directly, so no write tail has run yet: drain the latch here, in the
+    // order production does. The refusal is now met one verb earlier, at the birth, and
+    // it is still DOWNSTREAM OF ROUTING: `route_channel_birth` resolved the channel first,
+    // and the refusal names the routed proc and chan. ⊘ Measured 2026-09-09: this fixture
+    // declares no ring (`gp_fifo_ring: None`), so `plan_channel_birth` refuses
+    // `PassthroughRingNotAdoptable { ring_va: None }` BEFORE the isolate plane is asked —
+    // the isolate-plane witness (`IsolateRetired`) is no longer reachable from a fixture
+    // with no adoptable ring; it lives with the birth tests in `tests/tests/`.
+    let births = dev.run_pending_channel_births(&[]);
+    assert_eq!(
+        births.len(),
+        1,
+        "★ exactly the one channel declared above was latched for birth: {births:?}"
+    );
+    assert_eq!((births[0].client, births[0].channel), (CLIENT, chan));
+    assert!(
+        matches!(
+            births[0].out,
+            Err(FwdFault::PassthroughRingNotAdoptable { ring_va: None, .. })
+        ),
+        "★ the route resolved (the refusal names the routed proc/chan) and the birth was \
+         refused BY NAME — no ring declared, so nothing to adopt — at the birth, which is \
+         where the passthrough host channel is made as of w392p: {:?}",
+        births[0].out
+    );
+
     // ---- ★ THE WITNESS: the same token, now routed.
     let after = r.write(BAR_REGS, DOORBELL, 4, 0);
     let report = after.doorbell.as_ref().expect("a doorbell");
@@ -444,13 +479,15 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
          which is exactly the shape a SECOND `Gpu` behind the port produces — and it is \
          invisible to every other test in this crate."
     );
-    // …and the refusal it DOES give is the one the shipped archive's plane owes: there is
-    // no forwarding isolate, and it says so rather than parking on a pool gate that can
-    // never signal (`kayfabe_fwd::FwdFault::IsolateRetired`).
+    // …and the refusal it DOES give is the NEW contract's: a doorbell never births a
+    // passthrough channel (`kayfabe_fwd::plan_doorbell` refuses it BY NAME), so with the
+    // alloc-time birth refused above the channel is routed — not `UnknownVchid` — and the
+    // doorbell is refused as unborn, never silently born over our own ring.
     assert_eq!(
-        kind, "FwdFault::IsolateRetired",
-        "★ the route resolved and the refusal came from the ISOLATE plane — the first \
-         refusal in this port's life that is downstream of routing"
+        kind, "FwdFault::PassthroughDoorbellBirth",
+        "★ the route resolved and the doorbell refused BY NAME: a doorbell on a routed but \
+         unborn passthrough channel is `PassthroughDoorbellBirth` (w392p) — the isolate-plane \
+         refusal now lives at the birth, asserted above"
     );
 
     let a = r.audit();
@@ -570,88 +607,101 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
 
     // ⊘ One fixture, parameterised by the single event under study, so the two outcomes
     // cannot differ by anything else. A second hand-written fixture could drift.
-    let ring = |with_engine_object: bool| -> (String, kayfabe_rt::completion_watch::WatchStats) {
-        let r = regs();
-        let dev = r.object_model();
-        const CLIENT: HClient = HClient(0x5c00_0000);
-        const PDB: Pdb = Pdb(0x4E60_0000);
-        let h = |off: u32| HObject(0x5c00_0000 + off);
-        let (root, device, vas, tsg, chan) = (h(0), h(1), h(0x10), h(0x12), h(0x19));
-        let mut events = vec![
-            RmEvent::Alloc {
-                client: CLIENT,
-                parent: root,
-                handle: root,
-                class: ClassId(nv::NV01_ROOT),
-                facts: AllocFacts {
-                    client_kind: Some(ClientKind::User { pid: CLIENT.0 }),
-                    ..Default::default()
+    let ring =
+        |with_engine_object: bool| -> (String, kayfabe_rt::completion_watch::WatchStats, String) {
+            let r = regs();
+            let dev = r.object_model();
+            const CLIENT: HClient = HClient(0x5c00_0000);
+            const PDB: Pdb = Pdb(0x4E60_0000);
+            let h = |off: u32| HObject(0x5c00_0000 + off);
+            let (root, device, vas, tsg, chan) = (h(0), h(1), h(0x10), h(0x12), h(0x19));
+            let mut events = vec![
+                RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: root,
+                    handle: root,
+                    class: ClassId(nv::NV01_ROOT),
+                    facts: AllocFacts {
+                        client_kind: Some(ClientKind::User { pid: CLIENT.0 }),
+                        ..Default::default()
+                    },
                 },
-            },
-            RmEvent::Alloc {
-                client: CLIENT,
-                parent: root,
-                handle: device,
-                class: ClassId(nv::NV01_DEVICE_0),
-                facts: AllocFacts {
-                    device_instance: Some(0),
-                    ..Default::default()
+                RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: root,
+                    handle: device,
+                    class: ClassId(nv::NV01_DEVICE_0),
+                    facts: AllocFacts {
+                        device_instance: Some(0),
+                        ..Default::default()
+                    },
                 },
-            },
-            RmEvent::Alloc {
-                client: CLIENT,
-                parent: device,
-                handle: vas,
-                class: ClassId(nv::FERMI_VASPACE_A),
-                facts: AllocFacts::default(),
-            },
-            RmEvent::SetPageDir {
-                client: CLIENT,
-                vaspace: vas,
-                pdb: PDB,
-            },
-            RmEvent::Alloc {
-                client: CLIENT,
-                parent: device,
-                handle: tsg,
-                class: ClassId(nv::KEPLER_CHANNEL_GROUP_A),
-                facts: AllocFacts {
-                    h_vaspace: Some(vas),
-                    ..Default::default()
+                RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: device,
+                    handle: vas,
+                    class: ClassId(nv::FERMI_VASPACE_A),
+                    facts: AllocFacts::default(),
                 },
-            },
-            RmEvent::Alloc {
-                client: CLIENT,
-                parent: tsg,
-                handle: chan,
-                class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
-                facts: AllocFacts {
-                    h_vaspace: Some(vas),
-                    userd_flags: kayfabe_mocks::MockArch::userd_flags_for(VChid(0)),
-                    ..Default::default()
+                RmEvent::SetPageDir {
+                    client: CLIENT,
+                    vaspace: vas,
+                    pdb: PDB,
                 },
-            },
-        ];
-        if with_engine_object {
-            events.push(RmEvent::Alloc {
-                client: CLIENT,
-                parent: chan,
-                handle: h(0x1A),
-                class: ClassId(nv::AMPERE_DMA_COPY_B),
-                facts: AllocFacts::default(),
-            });
-        }
-        for ev in events {
-            dev.apply(ev).expect("the bridge's object model accepts it");
-        }
-        dev.schedule_channel(CLIENT, chan, true)
-            .expect("the guest schedules the channel it just declared");
-        let after = r.write(BAR_REGS, DOORBELL, 4, 0);
-        (
-            kind_of(after.doorbell.as_ref().expect("a doorbell")).to_string(),
-            r.completion_watch().stats(),
-        )
-    };
+                RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: device,
+                    handle: tsg,
+                    class: ClassId(nv::KEPLER_CHANNEL_GROUP_A),
+                    facts: AllocFacts {
+                        h_vaspace: Some(vas),
+                        ..Default::default()
+                    },
+                },
+                RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: tsg,
+                    handle: chan,
+                    class: ClassId(nv::AMPERE_CHANNEL_GPFIFO_A),
+                    facts: AllocFacts {
+                        h_vaspace: Some(vas),
+                        userd_flags: kayfabe_mocks::MockArch::userd_flags_for(VChid(0)),
+                        ..Default::default()
+                    },
+                },
+            ];
+            if with_engine_object {
+                events.push(RmEvent::Alloc {
+                    client: CLIENT,
+                    parent: chan,
+                    handle: h(0x1A),
+                    class: ClassId(nv::AMPERE_DMA_COPY_B),
+                    facts: AllocFacts::default(),
+                });
+            }
+            for ev in events {
+                dev.apply(ev).expect("the bridge's object model accepts it");
+            }
+            dev.schedule_channel(CLIENT, chan, true)
+                .expect("the guest schedules the channel it just declared");
+            // ★ w392p (rewritten 2026-09-09): the passthrough host channel is born at the
+            // guest's alloc, in the tail of the register write that carried it — before any
+            // doorbell. `dev.apply` bypasses that tail, so drain the latch here, in production's
+            // order. See `the_doorbell_reaches_the_same_object_model_the_bridge_declares_into`.
+            let births = dev.run_pending_channel_births(&[]);
+            assert_eq!(
+                births.len(),
+                1,
+                "one channel, one latched birth: {births:?}"
+            );
+            let birth = format!("{:?}", births[0].out);
+            let after = r.write(BAR_REGS, DOORBELL, 4, 0);
+            (
+                kind_of(after.doorbell.as_ref().expect("a doorbell")).to_string(),
+                r.completion_watch().stats(),
+                birth,
+            )
+        };
 
     assert_eq!(
         ring(false).0,
@@ -660,11 +710,25 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
          handed to the copy-engine codec to decline by the shape of bytes it was never \
          meant to read",
     );
+    // ⊘⊘ REWRITTEN 2026-09-09 (w392p birth-at-alloc). What stood here was
+    // `FwdFault::IsolateRetired` — the isolate-plane refusal the DOORBELL birth used to
+    // reach. That refusal is now met at the channel's alloc-time birth (the third tuple
+    // element — `PassthroughRingNotAdoptable`, this fixture declaring no ring), and the
+    // doorbell on the unborn channel is refused BY NAME.
+    let ce = ring(true);
+    assert!(
+        ce.2.starts_with("Err(PassthroughRingNotAdoptable"),
+        "★ the CE channel's alloc-time birth was refused BY NAME, downstream of routing \
+         (`route_channel_birth` resolved it first; this fixture declares no ring, so there \
+         is nothing to adopt — measured 2026-09-09): {}",
+        ce.2
+    );
     assert_eq!(
-        ring(true).0,
-        "FwdFault::IsolateRetired",
-        "★ and a CE channel is untouched by the gate: it falls through to exactly the \
-         refusal it received before this rung, which is what 'additive' has to MEAN",
+        ce.0, "FwdFault::PassthroughDoorbellBirth",
+        "★ and a CE channel is untouched by the ROUTING gate: it falls through routing to \
+         the birth gate and is refused there BY NAME (a doorbell never births a passthrough \
+         channel, w392p), which is what 'additive' has to MEAN — the GR arm refuses by \
+         ROUTE, the CE arm downstream of it",
     );
     // ⊘ Non-vacuity: the two names really are different, so the fixture's single varied
     // event is what decides — and the gate is not answering the same thing to everything.
