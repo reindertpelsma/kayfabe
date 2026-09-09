@@ -419,3 +419,41 @@ Make `QUEUE_HEAD` post-and-return: the store validates and enqueues, a worker se
 command queue, and the guest observes completion the way hardware makes it — the response queue
 plus the status IRQ that `BootStep::ClearStatusIrq` already models. The seam exists on the
 event side; what runs inline is the servicing.
+
+---
+
+# ★★★★★ THE MULTI-APP WEDGE: THE ROOT IS `gpuStateLoad`, **NOT** WPR2
+Owner, 2026-09-09: *"I really want iteration over many cuda apps."* That is currently gated by
+the wedge, because **each app is one device open** and the suite dies partway through a boot.
+
+The guest's own dmesg, in order (`traces/w394_cuda_apps/w394_guest_dmesg_after.log:274-303`):
+```
+356.583  RmInitNvDevice: *** Cannot LOAD STATE into the device  → RmInitAdapter failed (0x25:0xffff:1249)
+358.282  RmInitNvDevice: *** Cannot INITIALIZE the device       → RmInitAdapter failed (0x24:0x40:1220)
+359.551  _kgspBootGspRm: unexpected WPR2 already up             → RmInitAdapter failed (0x62:0x40:2028)
+360.207  … repeats — by now the GPU is genuinely wedged
+```
+⊘⊘ **`WPR2 already up` is the THIRD failure and a CONSEQUENCE.** Two earlier re-inits already
+failed and left the device dirty; only then does the WPR2 gate fire. **The root is the first
+line: `gpuStateLoad` fails on the re-init after teardown.**
+
+★ I had started down the WPR2 path — our FSM takes WPR2 down only on the Booter Unload
+(`boot.rs:225`, SEC2 STARTCPU with the Unload argument → `Halted`), so "the guest never
+unloads" was a tidy, plausible story. It is a story about the **third** symptom. Reading the
+dmesg **in timestamp order** cost one command and redirected the whole investigation.
+⚠ Same class as `rank_divergences_by_kind_never_by_index`: the first message by **time** is not
+the first cause by **rank**, and here the loudest, most-quotable line (`WPR2 already up`, which
+even tells you the GPU "may need to be reset") is the furthest downstream.
+
+## ⇒ WHAT THIS MAKES THE NEXT QUESTION
+Not *"why is WPR2 still up"* but **"why does `gpuStateLoad` fail on the second
+`RmInitAdapter`"**. The tree already states the surrounding fact
+(`kayfabe-gsp/src/boot.rs:1208`): `MESSAGE_QUEUE_INFO` lives **exactly one
+RmInitAdapter↔RmShutdownAdapter span** (`kernel_gsp.c:3607` create, `:4353` destroy), *"which
+the bench measured directly: the guest printed `Expected 0` on EVERY cycle."* So the re-init
+path is known territory — it is the **state load** inside it that has never been made to work.
+
+⊘ And note what this is NOT: it is not "the 5th open" as a magic ordinal (w370's framing). Four
+opens succeeded because they shared one adapter span; the failure is the **teardown→re-init
+cycle**, which is what a 5th open happened to trigger. A suite of 4 apps is not safe by being
+under a limit — it is safe by never having torn the adapter down.
