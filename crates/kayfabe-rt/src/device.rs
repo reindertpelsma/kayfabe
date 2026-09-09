@@ -1392,15 +1392,20 @@ impl SharedDevice {
     /// Idempotent and cheap when there is nothing latched: one rank-1 acquisition that moves a
     /// `Vec` and returns. ⚠ **Call with every ranked lock down.** `materialize` asserts it, so
     /// a caller that is wrong is refused by name rather than spawning under a lock.
-    pub fn materialize_pending(&self) {
+    pub fn materialize_pending(&self) -> usize {
         let spawns = {
             let mut g = self.state.write();
             g.spine.take_pending_spawns()
         };
         if spawns.is_empty() {
-            return;
+            return 0;
         }
+        // ★ w395 — the count is returned so the caller's `VCPU-BLOCKING` census records a
+        // memslot install only when one HAPPENED: `[measured w395c_r3_on_1]` counting the
+        // section on entry credited 495 183 installs to a boot that performed a handful.
+        let n = spawns.len();
         self.materialize(spawns);
+        n
     }
 
     /// ★★★★★ **§16.96 — [`Self::forward_engine_object_by_parent`], for a caller that is

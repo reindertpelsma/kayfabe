@@ -325,7 +325,32 @@ not-allowlisted residue in the bracket is `ring_adopt` (42 ms max), `fwd_drain` 
 
 ### §6.3 Round 3 — merged master (`281ba010`…) + the `VCPU-BLOCKING` census
 
-[TO FILL — ledger lines + `VCPU-BLOCKING [n × what (ALLOWLISTED | ⊘ NOT ALLOWLISTED)]`]
+Base: `origin/master` at `d0fea68b` (merge `80349168`), so the control arm here is **not**
+the control w394 measured — it carries the BAR mirror merge (`281ba010`) and
+`BlockingSection` (`8a84ef9f`).
+
+`w395c_r3_on_1` (`(P)` / `4 of 4` / `PASS`, `worst_trap=1867028us at=bar0+0x110c00`,
+`GSPQUEUE queued=491 … commands=493 worst_hold_us=1043`), the first census ever printed:
+
+```
+VCPU-BLOCKING [495183 × memslot install — materialize_pending (KVM requires it under the BQL with the vCPUs stopped) (ALLOWLISTED)]
+              [495183 × ring adoption — adopt_pending_channel_rings (…; TO MOVE to the doorbell worker) ⊘ NOT ALLOWLISTED]
+              [495183 × notifier grants + channel-birth/engine-forward drains (host verbs; TO MOVE) ⊘ NOT ALLOWLISTED]
+              [494122 × pin reclaim + budgeted retired-drain (revocation floor, 40 ms budget) ⊘ NOT ALLOWLISTED]
+              [2 × GSP bind in the MAILBOX1 store: LibOS region walk + INIT_DONE post (B4 backlog drain deferred to the worker) ⊘ NOT ALLOWLISTED]
+```
+
+⊘⊘ **And the first census was WRONG in a way that looks right.** `495183` is the number of
+register writes, not the number of memslot installs: a section entered unconditionally at
+the top of each drain counts *the site*, not *the event*. A boot that performed a handful of
+installs was credited with half a million — the exact shape `a_count_cannot_see_a_substitution`
+names. Round 4 declares each section **only when the drain has work** (`materialize_pending`
+now returns the count; ring adoption declares after its has-work test; the grants section is
+conditional on a pending grant; the reap on a released pin or a disposal turn). What survives
+from round 3 as a true statement: the row set — five reasons, one allowlisted — and the
+`2 × GSP bind` row, which was already an event count.
+
+[TO FILL — round 4 ledger + census]
 
 ### §6.5 Perf (`gpu_bench`) — reported as RANGES, n=2 per arm
 

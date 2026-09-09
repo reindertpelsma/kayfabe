@@ -14129,6 +14129,14 @@ impl Regs {
         if pending.is_empty() {
             return;
         }
+        // ⊘ w395 — NOT allowlisted: fb-leaf resolve + `join_one_fb_leaf`, a host verb, on
+        // the vCPU. Nothing requires it here; the doorbell worker's pass runs before the
+        // forward and is where it belongs. TO MOVE. Declared here, after the has-work test,
+        // so the census counts adoptions and not register writes.
+        let _declared = kayfabe_util::lock::BlockingSection::enter(
+            "ring adoption — adopt_pending_channel_rings (fb-leaf resolve + join, a host \
+             verb; TO MOVE to the doorbell worker)",
+        );
         // ★★★★★ THE POSITIVE SIGNAL, emitted on EVERY armed pass that has anything to do,
         // **including the ones that join nothing.** ⚠ Without it *"leg A never executed"* and
         // *"leg A executed and changed nothing"* are identical on every other observable —
@@ -14512,14 +14520,17 @@ impl Regs {
         // 1 743 823 µs at `bar0+0x110c00` — the residue is in one of these drains, which ride
         // whatever register write arrives when their work is pending. `KFTIME-SEG` brackets
         // each one; this census is what names it by reason.
-        {
-            // ★ THE ALLOWLIST'S CANONICAL MEMBER, in the owner's own words: a memslot install
-            // must happen with the vCPUs stopped and the BQL held — KVM requires it.
+        // ★ THE ALLOWLIST'S CANONICAL MEMBER, in the owner's own words: a memslot install
+        // must happen with the vCPUs stopped and the BQL held — KVM requires it.
+        // ⊘ Recorded only when an install HAPPENED. `[measured w395c_r3_on_1]` a section
+        // entered on every register write credited `495183 × memslot install` to a boot
+        // that performed a handful; a census that counts the site and not the event is
+        // a census of how often the code ran, which is not what the allowlist asks.
+        if self.device.materialize_pending() > 0 {
             let _s = kayfabe_util::lock::BlockingSection::enter_required_on_vcpu(
                 "memslot install — materialize_pending (KVM requires it under the BQL with \
                  the vCPUs stopped)",
             );
-            self.device.materialize_pending();
         }
         kft.mark("materialize");
         // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
@@ -14548,26 +14559,13 @@ impl Regs {
         // `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory handle — so the
         // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
         // nothing to name. ⊘ Ordering, not preference.
-        {
-            // ⊘ NOT allowlisted: fb-leaf resolve + `join_one_fb_leaf`, a host verb. Nothing
-            // requires it here; the doorbell worker's pass runs before the forward and is
-            // where it belongs. TO MOVE.
-            let _s = kayfabe_util::lock::BlockingSection::enter(
-                "ring adoption — adopt_pending_channel_rings (fb-leaf resolve + join, a host \
-                 verb; TO MOVE to the doorbell worker)",
-            );
-            self.adopt_pending_channel_rings();
-        }
+        // ⊘ Declared INSIDE `adopt_pending_channel_rings`, once it knows it has work.
+        self.adopt_pending_channel_rings();
         kft.mark("ring_adopt");
         // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
         // reason one field over: the drain births the host channel, and `hObjectError` is a
         // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
         // preference.
-        // ⊘ NOT allowlisted: host verbs reached from the trap. TO MOVE. Held open through
-        // the two drains below and dropped explicitly after `fwd_drain`.
-        let grants_section = kayfabe_util::lock::BlockingSection::enter(
-            "notifier grants + channel-birth/engine-forward drains (host verbs; TO MOVE)",
-        );
         let err_notifier_grants = self.pending_err_notifier_grants();
         kft.mark("err_grants");
         // ★★★★★ **w393 — THE THIRD DRAIN: channel births, BEFORE the engine forwards.**
@@ -14583,6 +14581,16 @@ impl Regs {
         // the channel already born with its USERD, not birth it itself without one.
         // ⊘ `Emulated` channels pass through this drain silently — not their birth site.
         let birth_grants = self.pending_birth_notifier_grants();
+        // ⊘ w395 — NOT allowlisted: host verbs reached from the trap. TO MOVE. Declared
+        // only when a grant is pending (so the census counts drains, not register writes),
+        // held through both drains and dropped after `fwd_drain`.
+        let grants_section = (!err_notifier_grants.is_empty() || !birth_grants.is_empty())
+            .then(|| {
+                kayfabe_util::lock::BlockingSection::enter(
+                    "notifier grants + channel-birth/engine-forward drains (host verbs; TO \
+                     MOVE)",
+                )
+            });
         report_channel_birth_drain(&self.device, &birth_grants);
         kft.mark("birth_drain");
         report_engine_forward_drain(&self.device, &err_notifier_grants);
@@ -14662,13 +14670,6 @@ impl Regs {
         // EVERY trap. An early return would drop the skipped traps out of the timing census
         // entirely, so the arm that skips more would look like the arm with fewer traps.
         if let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap() {
-            // ⊘ NOT allowlisted, and BOUNDED rather than excused: revocation (valid→invalid)
-            // may not be deferred — `publication_off_the_bql.md` §4 — and the disposal is
-            // budgeted to 1 % of the shortest named guest timeout. Declared so the census
-            // can say how often the vCPU paid it.
-            let _s = kayfabe_util::lock::BlockingSection::enter(
-                "pin reclaim + budgeted retired-drain (revocation floor, 40 ms budget)",
-            );
             let pins = self.device.pin_reclaim_gone();
             let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
             if total
@@ -14705,6 +14706,16 @@ impl Regs {
                     >= RETIRED_DRAIN_BUDGET_US
             });
             let drain_us = u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+            // ⊘ w395 — NOT allowlisted, and BOUNDED rather than excused: revocation
+            // (valid→invalid) may not be deferred — `publication_off_the_bql.md` §4 — and
+            // the disposal is budgeted to 1 % of the shortest named guest timeout. Declared
+            // only when the vCPU actually paid something (a pin released or a disposal
+            // turn), so the census counts events and not register writes.
+            if total > 0 || drain.turns > 0 {
+                let _s = kayfabe_util::lock::BlockingSection::enter(
+                    "pin reclaim + budgeted retired-drain (revocation floor, 40 ms budget)",
+                );
+            }
             if drain.turns > 0
                 && drain_us
                     > self
