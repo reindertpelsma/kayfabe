@@ -220,3 +220,41 @@ mismatched)` again alongside it. Correct bytes, unusable rate: the house failure
 342 ms/launch is ~4 doorbell traps at the known ~86 ms cost. Nothing about memory, BAR, or the
 CE plane is on the critical path for parity — all three were measured and all three are
 elsewhere.
+
+---
+
+# ★★★★★ THE LLM AGREES WITH THE MICROBENCHMARK — 190 LAUNCHES PER TOKEN
+2026-09-09, boot `w394c`, binary stamped `c3e31ce6` (= tree HEAD, verified). Arming as above.
+
+```
+W392_OUTCOME=(P)   GPU text BYTE-IDENTICAL to the same-boot CPU oracle   (n=2 for correctness)
+W392_GPU_MS=1042577.8   W392_GPU_TOKS_PER_S=0.015     ⇒ 65 161 ms PER TOKEN
+W392_CPU_MS=1588.9      W392_CPU_TOKS_PER_S=10.070    ⊘ correctness oracle, NOT a perf baseline
+W392_XIDS=4/4/4         ⇒ no NEW Xid during the run
+```
+
+## ★★★ THE CONFIRMATION, and it is independent
+```
+65 161 ms/token ÷ 342.24 ms/launch  =  190 launches per token
+```
+A 24-layer 0.5 B transformer's forward pass is ~190–200 kernel launches. **A workload with
+nothing in common with `gpu_bench` — different binary, different framework, different kernels —
+lands on the same constant.** The launch floor is not a microbenchmark artefact; it is the
+whole cost model.
+⇒ Everything this campaign has measured today reduces to one number: **342 ms per launch.**
+GEMM (95.7 % launch), the LLM (190 launches/token), `launch+sync` directly. Fix that and every
+figure moves together; fix anything else and none of them do.
+
+## ⊘ WHAT THIS NUMBER IS AND IS NOT
+- It is **decode throughput** — `generate()` only. It **excludes** model load and the
+  `.to(device)` weight upload, which is where w394 measured H2D at ~17 s per 16 MiB. The
+  end-to-end figure is therefore **worse** than 0.015 tok/s, not better.
+- ⊘ The CPU arm's 10.07 tok/s is **not** a baseline to beat: it is the correctness oracle, and
+  `W392_TPS_RATIO_GPU_OVER_CPU=0.001` is printed only so nobody derives it by hand and calls it
+  parity. The parity denominator is a NATIVE GPU run, which this boot does not contain.
+- ⚠ **For this arming** (`KAYFABE_VAS_PUBLISH=drain`, `KAYFABE_PT_SWEEP=on`).
+
+## ⊘ AND FOR SCALE, AGAINST THE C ARTIFACT
+The C's 20→60 tok/s figures are **CPU-copy** numbers from a run with `m2cexec` OFF — not a
+forwarding baseline, as `CLAUDE.md` says in the same breath. They are not this number's
+competitor and must not be quoted beside it as though they were.
