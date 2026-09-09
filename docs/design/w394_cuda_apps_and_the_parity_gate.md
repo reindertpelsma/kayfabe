@@ -548,3 +548,35 @@ has it off. Not publication (a one-variable control with publication back on sti
 not the sweep. Default reverted. ⚠ Note the failure SHAPE differs from P3's: BAR-on gives
 `0 of 4` and copies that never retire; the RPC-bind gap gives `4 of 4` with one content
 mismatch. Two different defects, and conflating them would have hidden the second.
+
+---
+
+# ⊘⊘ THE RPC-BIND PUBLISH IS RIGHT AND IS **NOT** THE FIX FOR P3
+`[measured w401]` both synchronization points genuinely armed (`MMUINVAL armed=true`, RPC-bind
+publication firing 4×, publishing 3 rows once and 0 three times). **P3 is still red.**
+
+Three checks, in order, and each moved the diagnosis:
+```
+P3's VA 0x9140000000 in the log:            115 ×
+   … inside an RPCBIND-PUBLISH line:          0 ×     ⇒ not a scope we published
+first RPCBIND publish  line 141
+P3's VA first appears  line 903                        ⇒ publication ran FIRST — not an ordering bug
+contexts naming that VA: ALREADY-JOINED 46×, JOINED, WALK:, JOIN-RELEASE, CE-OPERAND
+                                                       ⇒ THE VA IS BACKED
+```
+⇒ **P3 does not fail because promoted rows went unpublished.** The target is joined 46 times
+over. The failure text says so plainly and I under-read it: *"the GR channel was **scheduled but
+NEVER** [completed]"* — an **execution** failure, not a mapping one.
+
+## ⊘ SO WHAT THE RPC PUBLISH ACTUALLY IS
+Architecturally right and independently justified — synchronization point (2) should publish
+what it binds, and before this it recorded rows into the spine and backed nothing, relying on a
+doorbell leg that is now deleted. Keep it. But it is **not** P3's fix, and the commit that
+added it must not be read as one. ⚠ It published 3 rows in this boot; whether anything needed
+them is unmeasured.
+
+## ⇒ THE NEXT QUESTION IS NARROWER THAN THE ONE I WAS ASKING
+Not *"which mapping is missing"* but **"why was a scheduled GR channel never executed"**. The
+distinction matters because the two have disjoint suspects: publication/join on one side,
+doorbell routing and the forward on the other — and the join census already says the mapping
+side is satisfied for this VA.
