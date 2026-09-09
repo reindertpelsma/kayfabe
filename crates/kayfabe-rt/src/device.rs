@@ -3978,6 +3978,64 @@ impl SharedDevice {
     /// ⚠ `cap` truncates the range list and the caller must print that it did. A truncated list
     /// read as complete turns *"not in the list"* — the answer arm 2.1 rests on — into a lie.
     #[must_use]
+    /// ★★★★★ **IS THE GUEST'S OWN PAGE TABLE A SUPERSET OF WHAT THE PROMOTE SUPPLIED?**
+    ///
+    /// The whole promote join is, by its own module header, a narrow gap-filler: *"under
+    /// MISS = FAULT, resolving a GR context-buffer VA with no binding faults. This is the
+    /// gap-filler that stops that, and nothing more."* The host RM allocates and self-maps its
+    /// own context buffers; the guest's promoted ranges are never what the host engine uses.
+    ///
+    /// ⇒ So the promote plane earns its keep **only** for VAs that nothing else describes. If
+    /// every `promote_bound` VA is also reachable through the guest's own page tables, then a
+    /// PTE rescan is a superset and the entire pairing apparatus — `AwaitingVa` /
+    /// `AwaitingPhysical`, `global_ctx_phys`, `PhysHalfScope`, the parked set, the re-drive —
+    /// is dead weight that can be deleted rather than repaired.
+    ///
+    /// ⊘ `only_promote` is the number that decides it, and it must be read per VAS, not summed:
+    /// one VAS carrying a promote-only VA is enough to keep the mechanism, and summing would
+    /// let a zero elsewhere hide it.
+    /// ⊘ A VA is "covered" when it falls inside a reachable RUN, not when a run starts at it —
+    /// context buffers are sub-allocations and an exact-start test would report almost
+    /// everything as promote-only and be wrong in the flattering direction.
+    #[must_use]
+    pub fn vas_promote_superset(&self, pid: ProcId) -> Vec<String> {
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .iter()
+                .map(|(&(gpu, pdb), vas)| {
+                    let runs = vas.reach.reachable_ranges();
+                    let mut covered = 0usize;
+                    let mut only = Vec::<u64>::new();
+                    for va in &vas.promote_bound {
+                        if runs.iter().any(|(start, len)| *va >= *start && *va < start + len) {
+                            covered += 1;
+                        } else {
+                            only.push(*va);
+                        }
+                    }
+                    let sample: Vec<String> =
+                        only.iter().take(6).map(|v| format!("0x{v:x}")).collect();
+                    format!(
+                        "[proc={} gpu={} pdb=0x{:x} promote_bound={} covered_by_guest_pt={} \
+                         only_promote={}{}]",
+                        pid.0,
+                        gpu.0,
+                        pdb.0,
+                        vas.promote_bound.len(),
+                        covered,
+                        only.len(),
+                        if sample.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" {}", sample.join(","))
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+    }
+
     pub fn vas_reachable_ranges(&self, pid: ProcId, cap: usize) -> Vec<String> {
         self.with_proc_mut(pid, |p| {
             p.vases

@@ -9510,7 +9510,8 @@ impl SharedDoorbell {
     /// was empty, which is a different fact and says so.
     fn vas_census(&self) -> String {
         let pids = self.device.live_pids();
-        let (mut reach, mut table, mut published, mut parked) = (
+        let (mut reach, mut table, mut published, mut parked, mut superset) = (
+            Vec::<String>::new(),
             Vec::<String>::new(),
             Vec::<String>::new(),
             Vec::<String>::new(),
@@ -9525,6 +9526,7 @@ impl SharedDoorbell {
             table.extend(self.device.vas_table_ranges(*pid, PT_SWEEP_RANGE_CAP));
             published.extend(self.device.vas_published_ranges(*pid, PT_SWEEP_RANGE_CAP));
             parked.extend(self.device.vas_promote_halves(*pid));
+            superset.extend(self.device.vas_promote_superset(*pid));
             cov.extend(self.device.vas_coverage(*pid));
         }
         let none = |v: &Vec<String>, what: &str| {
@@ -9540,12 +9542,15 @@ impl SharedDoorbell {
             .collect();
         format!(
             " | VAS-CENSUS procs={} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {} \
-             | HOST-PUBLISHED {} | PROMOTE-PARKED {} | COVERAGE {} | COVERAGE-VAS {}",
+             | HOST-PUBLISHED {} | PROMOTE-PARKED {} | PROMOTE-SUPERSET {} ⊘ only_promote=0 \
+             on every VAS ⇒ the guest's own page tables already describe everything the \
+             promote join supplied, and the pairing apparatus is deletable              | COVERAGE {} | COVERAGE-VAS {}",
             pids.len(),
             none(&reach, "reachable"),
             none(&table, "in the table"),
             none(&published, "published"),
             none(&parked, "parked"),
+            none(&superset, "compared"),
             kayfabe_rt::device::coverage_aggregate_line(&cov),
             none(&verdicts, "covered"),
         )
