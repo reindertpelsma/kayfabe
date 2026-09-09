@@ -283,6 +283,22 @@ pub struct ReachShadow {
     /// that feeds it is *drained*: a page witnessed in one pass and linked in the next would
     /// otherwise bind nothing.
     witnessed: BTreeSet<u64>,
+    /// ★★★★★ **A MONOTONIC COUNT OF WITNESSED WRITES — the GUEST-side term the dirty gate
+    /// was missing.**
+    ///
+    /// `Vas::publish_epoch` was `(table.generation(), guest_ram_pins.len())` — **both our own
+    /// state**. The sweep exists to DISCOVER guest page-table changes and fold them into our
+    /// table, and the gate skipped the sweep when our table had not changed. That is circular:
+    /// the guest writes new PTEs ⇒ our table is unchanged ⇒ the epoch is unchanged ⇒ the sweep
+    /// is skipped ⇒ we never decode them ⇒ our table stays unchanged. A self-fulfilling skip.
+    ///
+    /// `[measured w406]` 47 of 47 sweep invocations ran ZERO tasks with `skipped=4`, and the
+    /// four GR context VAs the promote had bound were invisible to `reachable_ranges`.
+    ///
+    /// ⊘ A COUNT, not a set size: re-writing a page already in `witnessed` must still move the
+    /// epoch. A set's `len()` is unchanged by a repeat write, which is precisely the case that
+    /// matters — a page table being rewritten in place is the common shape.
+    witness_writes: u64,
     /// ★★★★★ **Pages admitted by a whole-VAS SWEEP** — the C's `enum_gr_sysmem`
     /// (`C: nvkvm_gpu_emul.c:583-591`), and the ONE relaxation of the witness rule this port
     /// carries. See [`ReachShadow::witness_swept`] for what it costs and what pays for it.
@@ -309,6 +325,7 @@ impl ReachShadow {
             root,
             pages: BTreeMap::new(),
             witnessed: BTreeSet::new(),
+            witness_writes: 0,
             swept: BTreeSet::new(),
             published: BTreeMap::new(),
             slots: 0,
@@ -345,6 +362,15 @@ impl ReachShadow {
     /// it, because the dirty set is consumed.
     pub fn witness(&mut self, phys: u64) {
         self.witnessed.insert(phys);
+        self.witness_writes = self.witness_writes.saturating_add(1);
+    }
+
+    /// How many writes have been witnessed into this VAS's page tables, ever.
+    ///
+    /// The guest-side half of the dirty gate's key: see [`Reach::witness_writes`].
+    #[must_use]
+    pub fn witness_writes(&self) -> u64 {
+        self.witness_writes
     }
 
     /// Has the guest been seen to write this page?
@@ -399,6 +425,7 @@ impl ReachShadow {
     /// the address table's own refusals.
     pub fn witness_swept(&mut self, phys: u64) {
         self.swept.insert(phys);
+        self.witness_writes = self.witness_writes.saturating_add(1);
     }
 
     /// Was this page admitted by a sweep (and not by a witnessed guest write)?
@@ -1055,3 +1082,43 @@ pub struct ApplyOutcome {
 }
 
 kayfabe_util::assert_send_sync!(ReachShadow, Settlement, ReachFault, ApplyOutcome);
+
+#[cfg(test)]
+mod the_gate_must_key_on_the_guest_not_on_us {
+    //! ★★★★★ **THE CIRCULAR DIRTY GATE, pinned so it cannot come back.**
+    //!
+    //! `Vas::publish_epoch` was a function of OUR table alone. The sweep exists to discover the
+    //! guest's page-table changes; the gate skipped the sweep when our table had not changed;
+    //! and our table only changes when the sweep runs. `[measured w406]` that skipped every
+    //! sweep and hid four GR context VAs completely.
+    //!
+    //! The guest-side term must move on a write EVEN WHEN THE PAGE IS ALREADY KNOWN — a page
+    //! table rewritten in place is the common shape, and a set's `len()` cannot see it.
+    use super::*;
+
+    #[test]
+    fn a_repeat_write_to_a_known_page_still_moves_the_counter() {
+        let mut r = ReachShadow::new(0x1000);
+        assert_eq!(r.witness_writes(), 0);
+        r.witness(0x2000);
+        let after_first = r.witness_writes();
+        assert!(after_first > 0);
+
+        // The page is now KNOWN. A second write must still move the epoch term — this is the
+        // case a `witnessed.len()` term silently misses, and it is the one that matters.
+        r.witness(0x2000);
+        assert!(
+            r.witness_writes() > after_first,
+            "a rewrite of an already-witnessed page MUST move the gate's key, or a page table \
+             edited in place is invisible forever"
+        );
+    }
+
+    #[test]
+    fn the_sweep_also_moves_it_so_a_swept_discovery_is_not_lost() {
+        let mut r = ReachShadow::new(0x1000);
+        let before = r.witness_writes();
+        r.witness_swept(0x3000);
+        assert!(r.witness_writes() > before);
+    }
+}

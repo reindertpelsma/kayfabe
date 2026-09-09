@@ -320,7 +320,27 @@ impl Vas {
     /// `PublishStamp` carries one and names it.
     #[must_use]
     pub fn publish_epoch(&self) -> (u64, usize) {
-        (self.table.generation(), self.guest_ram_pins.len())
+        // ★★★★★ **THE GUEST-SIDE TERM, AND WITHOUT IT THIS GATE IS CIRCULAR.**
+        //
+        // This was `(table.generation(), guest_ram_pins.len())` — both OUR OWN state. The sweep
+        // exists to DISCOVER guest page-table changes and fold them into our table, and the
+        // dirty gate skipped the sweep whenever our table had not changed. So: the guest writes
+        // new PTEs ⇒ our table is unchanged ⇒ the epoch is unchanged ⇒ the sweep is skipped ⇒
+        // we never decode them ⇒ our table stays unchanged. **A self-fulfilling skip.**
+        //
+        // `[measured w406]` every sweep invocation but a handful ran ZERO tasks with
+        // `skipped=4`, and the four GR context VAs the promote had bound were invisible to
+        // `Reach::reachable_ranges` — `only_promote=4 of 4`.
+        //
+        // ⇒ `witness_writes` is the term that breaks the cycle: it counts writes WE OBSERVED
+        // into this VAS's page tables (CPU stores and CE writes alike — the `EXEC` writer class
+        // in the first-writer census), so a guest that changes its tables moves the epoch even
+        // though our table has not caught up yet. That is the whole point: the gate must be
+        // keyed on the thing it is trying to notice, not on our record of having noticed it.
+        (
+            self.table.generation() ^ self.reach.witness_writes().rotate_left(32),
+            self.guest_ram_pins.len(),
+        )
     }
 
     /// ★★★ **The orphan count** — parked halves that never found their partner, split by
