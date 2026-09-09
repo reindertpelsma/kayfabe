@@ -302,3 +302,69 @@ would carry them already exists and is empty.
 default-off and UNSAFE). This is the *execute* phase moving off the trap thread, with the
 doorbell's observable ordering unchanged — a different change with a different safety argument,
 and that argument has to be made explicitly before any of it is armed.
+
+---
+
+# ★★★★★ THE OWNER WAS RIGHT: WE HOLD THE DOORBELL WRITE FOR MILLISECONDS
+Owner, 2026-09-09: *"are you sure you are not holding a doorbell write for milliseconds"*.
+**No — and the instrument had already said so, in a field I had read past twice.**
+
+```
+worst_trap = 1 927 527 us   ⇒ ONE guest MMIO register write held for 1.93 SECONDS
+mean       =     234 ms     per launch (the doorbell write not returning)
+```
+`TrapGuard::enter()` wraps `regs.write(bar, off, size, val)` (`shim_unsafe.rs:1378`) — it is
+the **guest register write itself**, not some enclosing scope. The comment beside it already
+cites w317 measuring a **3.70 s** hold.
+
+## ⊘ AND THE TREE HAD ALREADY RULED ON IT, TWICE
+- `GuestChannelKind::Emulated` declares `TrapContract::ScheduleAndReturn`, whose doc says
+  *"the handler must not run on the vCPU thread"*, with `may_run_on_the_vcpu_thread()` as the
+  predicate.
+- **Owner ruling, 2026-09-06, quoted in our own source**: *"never do a blocking call during a
+  doorbell write."*
+- [`DOORBELL_ASYNC_ENV`] (`KAYFABE_DOORBELL_ASYNC`) exists for exactly this and **defaults to
+  `off`**; its own comment says the contract was until then *"read and reported as violated in
+  the same breath."*
+⇒ **Every measurement in this document — 342 ms/launch, 190 launches/token, the 1.9 s trap —
+was taken in the configuration that violates that ruling.** This is not a newly discovered
+wall. It is a wall we documented, built the fix for, defaulted to off, and then measured
+around. That is why `PUBQUEUE` read zero in every column: nothing was ever queued because the
+lane was never armed.
+
+## ★★★★★ AND `VERBCOST` OVERTURNS MY OWN COST MODEL — IT IS NOT THE HOST ROUND TRIP
+```
+VERBCOST total=1429942us over 4309 plan(s)
+  [PinGuestRam n=3676 mean=0.20ms 50.4%] [JoinFbLeaf n=79 mean=3.27ms 18.0%]
+  [EngineObject n=32 mean=7.97ms 17.8%] [Doorbell n=493 mean=0.21ms 7.2%]
+  [Release n=5 mean=12.66ms 4.4%] [ChannelBirth n=16 mean=1.00ms 1.1%]
+  [AliasFbLeaf n=8 mean=1.59ms 0.9%]
+```
+| per launch | ms | share |
+|---|---|---|
+| wall | 234.0 | 100 % |
+| **host verbs (measured)** | **7.15** | **3.1 %** |
+| **our own trap-side work** | **226.8** | **96.9 %** |
+
+⊘ **My "11.98 ms per verb plan" was wrong**, and wrong in an instructive way: I computed it as
+*wall ÷ mint count*, which silently assumes the verbs are the wall. Measured directly, they are
+**3 %**. A ratio built from two numbers that were never the same quantity will look like an
+attribution and be an artefact.
+★ This **reproduces w315 exactly** — *"91.5 % of an 86.7 ms trap is page-table + publication,
+the real host forward 4 %"* — on a different workload, a different instrument and a year of
+intervening work. The cost was never the host; it is our own page-table decode and publication,
+run inline on the vCPU inside its own MMIO exit.
+⇒ Which is **precisely what `KAYFABE_DOORBELL_ASYNC=on` moves off the vCPU**: *"the trap
+validates, offers the token to the coalescing publication lane and returns; a worker thread
+runs the identical body in the identical order."*
+
+## ⏭ THE EXPERIMENT, PRE-REGISTERED (`w394g`)
+Correctness **first**, because an unsafe reordering shows up in content verification and never
+in a timing number:
+1. `KAYFABE_DOORBELL_ASYNC=on` + the mean client ⇒ must still print `W392D_OUTCOME=(P)`,
+   `THREADS 4 of 4`, `MEAN_FALSIFIER=PASS`.
+2. Same arm + `gpu_bench` ⇒ `launch RTT` must fall from ~234 ms, `off_trap_claims` must become
+   **> 0**, and `PUBQUEUE` must stop reading zero.
+⊘ If (1) goes red the arm is unsafe as built and the perf number is irrelevant — report the
+red, do not quote the speed. ⊘ If `off_trap_claims` stays 0 the arm did not engage and any
+timing change is something else; `nocoalesce` is the negative control for the coalescing half.
