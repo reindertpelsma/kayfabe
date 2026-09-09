@@ -506,3 +506,45 @@ over every register; and now a trap's site over a trap's cause.
   GFLOP/s vs `off` 21.4–26.3 — the within-arm spread exceeds the between-arm gap).
 ⇒ Merge it for the contract and for the census, not for a speed claim. The speed is the next
 rung: **time the lock acquire separately and name the holder.**
+
+---
+
+# ★★★★★ THE DOORBELL PUBLICATION WAS COVERING FOR **ONE** SYNCHRONIZATION POINT
+Owner's model, 2026-09-09: all mappings are obtainable at three blockable points —
+**(1) TLB invalidate, (2) RPC RM map calls, (3) kernel emulated channels setting up UVM**.
+
+`[measured w399b]` doorbell publication **deleted**, `PT_SWEEP=on`, `KAYFABE_MMU_INVAL=on`
+(armed, 688 triggers), BAR passthrough off:
+```
+P1  rm-invalidate  ✔ VERIFIED over 4 rounds     ← point (1)
+P2  uvm-memop      ✔ VERIFIED over 4 rounds     ← point (3)
+STALE RACE         ✔ VERIFIED over 2 rounds
+THREADS            ✔ 4 of 4 verified
+P3  rpc-bind       ★★★ CONTENT MISMATCH — still the poison 0xdeadbeef after 3s,
+                       "the GR channel was scheduled but NEVER [completed]"   ← point (2)
+```
+⇒ **Two of the three points already carry their own mappings. The third — the RPC map-call
+capture — does not, and the doorbell publication was covering for it.** That is the entire
+residual dependency, and it is one named path rather than a diffuse "publication is needed".
+
+★ The client's rows were built to exercise exactly these transports, so the mapping from
+verdict to synchronization point is direct: `P1 rm-invalidate`, `P2 uvm-memop`, `P3 rpc-bind`.
+
+## ⊘ AND A DELETE THAT WAS TOO WIDE, CAUGHT BY THE COMPILER
+The first attempt removed `publish_vas_rows` and `PublishContext` along with the arm — 713
+lines. The build then failed on `shim.rs:14315`:
+```rust
+let mut ctx = self.doorbell_port.publish_ctx();
+ctx.vas_publish = VasPublishArm::Publish;
+```
+That is the **TLB-invalidate path's own publisher**. Deleting the publisher would have removed
+the doorbell trigger *and* the good trigger's ability to publish — i.e. it would have deleted
+point (1) while trying to delete a doorbell. ⇒ What must go is the **trigger and the knob**;
+the publisher is shared and stays.
+
+## ⇒ THE BAR RESULT, SEPARATELY AND UNAMBIGUOUSLY
+Five boots: every arming with BAR passthrough **on** fails with `THREADS 0 of 4`; the only pass
+has it off. Not publication (a one-variable control with publication back on still failed) and
+not the sweep. Default reverted. ⚠ Note the failure SHAPE differs from P3's: BAR-on gives
+`0 of 4` and copies that never retire; the RPC-bind gap gives `4 of 4` with one content
+mismatch. Two different defects, and conflating them would have hidden the second.
