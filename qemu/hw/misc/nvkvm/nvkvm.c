@@ -3495,9 +3495,9 @@ static const Property nvkvm_properties[] = {
     /* ★★★★★ w393 — the BAR1 passthrough arm.  See NvkvmState::bar1_passthrough.  Default
      * OFF is the control; ON changes one answer (nvkvm_op_bar_is_unbacked_reservation for
      * BAR1) and turns every access that still traps into a NAMED miss. */
-    DEFINE_PROP_BOOL("bar1-passthrough", NvkvmState, bar1_passthrough, false),
+    DEFINE_PROP_BOOL("bar1-passthrough", NvkvmState, bar1_passthrough, true),
     /* ★★★★★ w393 (2) — the BAR2 passthrough arm.  See NvkvmState::bar2_passthrough. */
-    DEFINE_PROP_BOOL("bar2-passthrough", NvkvmState, bar2_passthrough, false),
+    DEFINE_PROP_BOOL("bar2-passthrough", NvkvmState, bar2_passthrough, true),
     NVKVM_PROP_TERMINATOR
 };
 
