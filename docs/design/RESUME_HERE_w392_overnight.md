@@ -62,8 +62,19 @@ host Xid 0/0): host RM **accepts** a caller-supplied USERD through
 **The trace fits exactly:** doorbell 1 rang with `GP_PUT=1` and the engine ran **nothing**;
 doorbell 2 set `PUT=2` and the engine then executed entry 0 — **40 ms after the guest had already
 moved that entry's source frame**. That is where all five `Xid 31` come from.
-⇒ **`w392o` (`4f64dc44`) adopts the RING and passes `userd: None`.** UNTESTED as of writing —
-build + boot it first thing.
+⇒ **`w392o` (`4f64dc44`) adopts the RING and passes `userd: None`. MEASURED (boot `w392o`):**
+```
+adopt=GUEST-RING x7    userd=NOT-ASKED x7    host Xid = 0    client (F), all rows NEVER RETIRED
+```
+★ **The mistimed faults are GONE** (Xid 31 x5 → 0) — the USERD adoption really was their cause.
+⊘ **But there are still no completions**, and `GuestRing`'s own doc predicted exactly this:
+*"it does not make the channel runnable. **Nothing in this rung writes the guest's `GP_PUT` into
+our USERD, so the engine still has nothing to fetch.** Adopting the ring and advancing the cursor
+are two rungs, and this is the first."* `rm.rs:1286` names the symptom: *"nobody ever advances:
+`GP_PUT == GP_GET` forever, scheduled, doorbelled, and reporting no error."*
+⇒ **DO NOT build a cursor bridge.** Birth-at-channel-allocation subsumes it: adopt the USERD at
+CREATION (before the guest writes, so RM's zeroing is harmless) and thereafter the guest's own
+`GP_PUT` writes land directly in the USERD the engine reads. No mirroring, no cursor to sync.
 ⚠ The memory's real conclusion is stronger: **adoption must happen at CHANNEL CREATION, never
 lazily.** Ring-late is safe; cursor-late is not. Moving the birth is the proper fix.
 
