@@ -4070,6 +4070,38 @@ impl RegPlane {
                 },
             };
         }
+        // ★★★★★ **w395 — THE CONTROL'S VIOLATION, DECLARED SO THE CENSUS NAMES IT.** On the
+        // `off` arm a `QUEUE_HEAD` store services the whole command ring under this lock, and
+        // a `MAILBOX1` store runs the bind's B4 backlog drain the same way. Both are blocking
+        // work on a vCPU thread and neither is on the owner's allowlist — so they go through
+        // `BlockingSection::enter` (NOT the allowlist door) and `VCPU-BLOCKING` prints them as
+        // `⊘ NOT ALLOWLISTED`. On the armed arm the `QUEUE_HEAD` path returned above without
+        // reaching here; what remains under this section for `MAILBOX1` is the bind itself
+        // (LibOS region walk, region page table, `INIT_DONE` post — bounded guest-RAM reads,
+        // no host verb), declared rather than excused: `kgspWaitForRmInitDone` polls for
+        // `INIT_DONE` immediately, but that is a reason it must be *visible soon*, not a
+        // reason it must run *here*.
+        // ⊘ Entered BEFORE the lock: the section asserts zero ranked locks on this thread.
+        let _declared = match self.model.decode_reg(bar, off) {
+            Some(kayfabe_arch::gsp::GspReg::GspQueueHead(_)) => {
+                Some(kayfabe_util::lock::BlockingSection::enter(
+                    "GSP command ring serviced INLINE in the QUEUE_HEAD store \
+                     (KAYFABE_GSP_SUBMIT_ASYNC=off, the control)",
+                ))
+            }
+            Some(kayfabe_arch::gsp::GspReg::GspFalconMailbox1) => {
+                Some(kayfabe_util::lock::BlockingSection::enter(
+                    if self.gsp_submit_armed.load(Ordering::Acquire) {
+                        "GSP bind in the MAILBOX1 store: LibOS region walk + INIT_DONE post \
+                         (B4 backlog drain deferred to the worker)"
+                    } else {
+                        "GSP bind + B4 backlog drain serviced INLINE in the MAILBOX1 store \
+                         (KAYFABE_GSP_SUBMIT_ASYNC=off, the control)"
+                    },
+                ))
+            }
+            _ => None,
+        };
         let mut s = self.state.lock();
         // ⊘ `cpu_intr` is deliberately NOT bound here any more: §16.77.1 moved the only
         // consumer to `RegPlane::ring_doorbell`, and leaving the binding would have let a

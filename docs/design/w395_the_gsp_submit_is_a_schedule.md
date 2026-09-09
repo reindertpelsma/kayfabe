@@ -70,14 +70,17 @@ never sent. The request is counted (`GSPQUEUE status_irq_requested=`) so the rat
 ```
 guest store to bar0+0x110c00                                (vCPU, BQL held)
   → TrapGuard::enter_at(site)                               unchanged
-  → RegPlane::write → fsm.mmio_write_with
-      → BootStep::CommandDoorbell, SubmitMode::Deferred
-      → doorbell_gate():  Unbound ∧ Halted  ⇒ Err(QueueNotBound)   E8, zero RAM read  (§3.2)
-                          Unbound ∧ ¬Halted ⇒ E12                  zero RAM read
-                          Bound             ⇒ report.service_owed = true
-  → plane: lane.kick()            two integer compares + notify_one, under a leaf mutex
+  → RegPlane::write: decode_reg == GspQueueHead ∧ armed     ★ BEFORE state.lock() — round 2
+      → gsp_gate (AtomicU8 snapshot, §4.3):
+            HALTED  ⇒ fault QueueNotBound, faults+1          E8, zero RAM, zero locks  (§3.2)
+            PREBIND ⇒ transitions=1                          E12, zero RAM, zero locks
+            BOUND   ⇒ lane.kick()                            two compares + notify_one, leaf mutex
   → WriteOutcome { gsp_service_scheduled: true, commands: 0 }
   → return to VM entry
+
+  (The FSM's own `SubmitMode::Deferred` arm — the same gate, reached through
+   `mmio_write_with` — remains for callers that drive the FSM directly, e.g. the crec replay,
+   and for the bind's B4 drain, which arrives through MAILBOX1 and does take the lock.)
 
 kayfabe-gsp-submit worker
   loop wait_kick():
@@ -160,6 +163,17 @@ guest MMIO access during the RPC wait needed that mutex. Two do:
    is one command's service — the unit the C serviced per doorbell anyway. `GSPQUEUE
    worst_hold_us=` measures exactly this, and §6 reads it.
 
+3. **The store itself** — round 1's finding (§6.0): classifying the armed store under
+   `state.lock()` queued it behind the worker's current command, and the 1.8 s did not move.
+   **Fix:** `RegPlane::gsp_gate`, an `AtomicU8` snapshot of the FSM's gate
+   (pre-bind / bound / halted) refreshed under the mutex at every site that can move `queue`
+   or `phase` — the write path (both result arms), `device_reset`, the worker's pass, arm and
+   disarm. The armed store reads the snapshot and never takes the mutex. The one race (a store
+   reading `BOUND` an instant before a teardown on another vCPU) degrades to a kick the worker
+   re-gates and counts (`prebind=` / `faults=`); the authority is the worker's gate, the
+   snapshot only decides whether the *store* refuses loudly on the vCPU, which it does in every
+   non-racing case exactly as the control did.
+
 ⚠ `publication_off_the_bql.md` §5.2's finding *"no guest-visible MMIO read depends on completed
 work"* stays true; what this section adds is that a read can depend on a **lock** the completed
 work holds, which is a different sentence and was invisible while every service ran on the vCPU.
@@ -184,6 +198,14 @@ The list has more than a couple of entries; that is a finding, stated plainly.
 
 ⇒ Entries **4 and 5** are the next things to move, and `worst_trap at=` after this change is
 what says whether they bind (§6).
+
+★★★★★ **This table is now the census, not a description of it** (round 3, after merging
+`8a84ef9f`): every row marked ALLOWED/BOUNDED/TO MOVE above goes through
+`kayfabe_util::lock::BlockingSection` — entry 1 through `enter_required_on_vcpu` (the
+allowlist door, the only one), entries 2–5 and the control's inline GSP service through
+`enter` — and `VCPU-BLOCKING [n × what (ALLOWLISTED | ⊘ NOT ALLOWLISTED)]` prints on the
+per-doorbell `PT-DECODE` line beside `TRAPWITNESS`. A row here that the census does not print
+is a row that stopped being true.
 
 ## §6 The measurement
 
@@ -228,19 +250,82 @@ The armed store now consults an atomic snapshot of the gate (bound / pre-bind / 
 refreshed under the mutex at every FSM mutation site (bind, teardown, reset, worker pass), and
 **never takes the plane mutex**: E8 refuses, E12 classifies, bound kicks — all lock-free.
 
-[TO FILL — round-2 ledger lines verbatim]
+Four boots, interleaved, binary content-verified (`ARMED WITH NO LANE` string = 1), base
+`742b9e88` + this branch at `e8e23283`. All four `W392D_OUTCOME=(P)` / `THREADS 4 of 4
+verified` / `MEAN_FALSIFIER=PASS`, `Xid=0`, `rpcRecvPoll=0`, `RmInitAdapter failed=0`.
 
-### §6.2 Trap witness — the conformance metric for the whole rule
+| boot | arm ran | `worst_trap` | `at=` | `slow_traps` | `GSPQUEUE` (armed arm) |
+|---|---|---|---|---|---|
+| `w395c_r2_on_1`  | on  | 1 743 823 µs | `bar0+0x110c00` | 50 | `queued=491 coalesced=0 taken=491 passes=984 commands=493 prebind=0 faults=0 status_irq_requested=984 completed=491 depth=0 high_water=1 worst_hold_us=1123 worst_drain_us=1127` |
+| `w395c_r2_off_1` | off | 1 924 058 µs | `bar0+0x110c00` | 87 | (control — no lane) |
+| `w395c_r2_on_2`  | on  | 1 841 164 µs | `bar0+0x110c00` | 83 | `queued=491 … commands=493 … worst_hold_us=852 worst_drain_us=856` |
+| `w395c_r2_off_2` | off | 1 877 619 µs | `bar0+0x110c00` | 85 | (control — no lane) |
 
-[TO FILL — `TRAPWITNESS … worst_trap=… at=… slow_traps(>1000us)=…` per boot, both arms]
+★★★★★ **Read the two halves separately, because they say different things.**
 
-### §6.3 The lane's census
+1. **The GSP plane is off the vCPU, completely and safely.** 491 kicks, 493 commands, zero
+   coalesced (the guest is synchronous — one RPC in flight — so a level never folds), zero
+   faults, zero pre-bind kicks; the longest the worker ever held the plane mutex for one
+   command was **1.1 ms** (`worst_hold_us=1123`, then 852), and the longest drain of one wake
+   was the same — i.e. every kick was one command. The store itself is lock-free.
+   Correctness held on every boot.
+2. ⊘⊘ **And `worst_trap` did not move — so it was never the GSP service.** With the ring
+   serviced entirely on the worker, one `bar0+0x110c00` trap still lasted 1.7–1.8 s on both
+   arms (ranges overlap: on 1.74–1.84 s, off 1.88–1.92 s — **INCONCLUSIVE** as a timing
+   result). The store's own work is now two atomics and a `notify_one`. What remains inside
+   `TrapGuard`'s bracket at that site is **`Regs::write`'s post-plane drains** — materialize
+   (memslot install), ring adoption, notifier grants, the birth/forward drains, the
+   reclaim/retired drain — which run after *every* register write and ride whichever write
+   arrives while their work is pending. `QUEUE_HEAD` is the write that arrives then, because
+   the guest's RPC reply is what makes that work pending. §1's attribution of the 1.79 s to
+   *"the queue drained inline"* was an inference from the site; the site was right and the
+   inference was wrong. §6.2 attributes it by segment.
 
-[TO FILL — `GSPQUEUE …` per boot]
+### §6.2 Segment attribution (`KAYFABE_KFTIME=census`, one boot per arm)
 
-### §6.4 Guest dmesg
+`w395diag_on` (arm `on`, `KAYFABE_KFTIME=census KAYFABE_KFTIME_CENSUS_EVERY=100`, raw client
+`(P)` / `4 of 4` / `MEAN_FALSIFIER=PASS`, `worst_trap=1877907us at=bar0+0x110c00`), the last
+census per segment of the write path, sorted by `max_us`:
 
-[TO FILL — Xid / rpcRecvPoll / RmInitAdapter failed counts per boot]
+```
+KFTIME-SEG materialize   shape=host  n=540600  total_ms=2041.918  mean_us=3   max_us=1877849  share=41.8%
+KFTIME-SEG ring_adopt    shape=work  n=540600  total_ms=155.990   mean_us=0   max_us=42195    share=3.2%
+KFTIME-SEG fwd_drain     shape=host  n=540600  total_ms=136.352   mean_us=0   max_us=36205    share=2.8%
+KFTIME-SEG reap          shape=work  n=539969  total_ms=241.865   mean_us=0   max_us=22378    share=5.0%
+KFTIME-SEG plane         shape=work  n=540600  total_ms=895.391   mean_us=1   max_us=13158    share=18.3%
+KFTIME-SEG plane_read    shape=work  n=21500   total_ms=77.044    mean_us=3   max_us=13129    share=83.8%
+KFTIME-SEG birth_drain   shape=work  n=540600  total_ms=80.064    mean_us=0   max_us=10778    share=1.6%
+KFTIME-SEG err_grants    shape=work  n=540600  total_ms=4.064     mean_us=0   max_us=65       share=0.1%
+```
+
+★★★★★ **`worst_trap` IS `materialize_pending` — the memslot install** (`max_us=1877849` against
+`worst_trap=1877907us`: the same event to 58 µs). That is the owner's own canonical allowlist
+member — *"unless its required like a memslot install"* — arriving on the `QUEUE_HEAD` store
+because the RPC reply the guest has just drained is what makes a memslot pending. It is
+**allowed** and it is **1.9 s**, which is worth its own rung (which memslot, and whether the
+16 GiB `memfd` guest RAM or the w393 BAR mirror is the one that costs it); it is not this one.
+
+⊘⊘ **And the CONTROL says the same thing** (`w395diag_off`, arm `off`, `(P)` / `4 of 4` /
+`PASS`, `worst_trap=1875321us at=bar0+0x110c00`): `materialize max_us=1875049`, and the `plane`
+segment — which on the control INCLUDES the inline GSP command service — peaks at **13.3 ms**
+(`n=540600 total_ms=806.238`, against `895.391` on the armed arm: the same population to within
+noise). ⇒ **The inline service never cost more than ~13 ms per store on either arm.** w394's
+sentence *"drains and services the whole GSP command queue inline … that is the 1.79 s"* was an
+inference from the trap's site to the trap's cause, and the cause was a different frame in the
+same bracket. This rung implements the ruling exactly as specified and measures it as such;
+what it does **not** do is move `worst_trap`, because `worst_trap` was never the thing the
+ruling named at this register. ★ Same class as the campaign's *"a site is not a cause"* — the
+instrument that settles it is `KFTIME-SEG`, which existed all along and was not armed for w394.
+
+⇒ On the armed arm the FSM's whole share of the store (`plane`, which includes the bind and
+every other claimed register) peaks at **13.2 ms**, and the GSP command ring contributes
+nothing to it (`GSPQUEUE worst_hold_us` 0.85–1.1 ms, on the worker). The remaining
+not-allowlisted residue in the bracket is `ring_adopt` (42 ms max), `fwd_drain` (36 ms),
+`reap` (22 ms, budgeted), `birth_drain` (11 ms) — §5's entries 3, 4 and 5, now with numbers.
+
+### §6.3 Round 3 — merged master (`281ba010`…) + the `VCPU-BLOCKING` census
+
+[TO FILL — ledger lines + `VCPU-BLOCKING [n × what (ALLOWLISTED | ⊘ NOT ALLOWLISTED)]`]
 
 ### §6.5 Perf (`gpu_bench`) — reported as RANGES, n=2 per arm
 

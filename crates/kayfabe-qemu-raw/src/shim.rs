@@ -5631,8 +5631,12 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {}",
+                "{} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
+                // ★★★★★ w395 — THE ALLOWLIST CENSUS, on the line every doorbell prints. It is
+                // the owner's allowlist made measurable (`8a84ef9f`), and until this line it
+                // was computed and printed nowhere.
+                kayfabe_util::lock::vcpu_blocking_census(),
                 kayfabe_isolate::verbcost::census(),
                 // ★★★★★ w395 — THE GSP LANE'S CENSUS, ON THE LINE EVERY DOORBELL PRINTS.
                 // `[measured w395c_on_1]` the teardown census never printed: the harness
@@ -13440,7 +13444,11 @@ impl Regs {
             self.gsp_lane.census(),
             self.plane.gsp_service_orphaned(),
             self.plane.gsp_running_seen_on_worker(),
-            kayfabe_util::trapwitness::census(),
+            format!(
+                "{} | {}",
+                kayfabe_util::trapwitness::census(),
+                kayfabe_util::lock::vcpu_blocking_census()
+            ),
         );
     }
 
@@ -14419,6 +14427,14 @@ impl Regs {
                 }
             }
             let _complete = PublishGuard(self.plane.as_ref());
+            // ⊘ Declared, NOT allowlisted: the guest spins on TRIGGER by protocol, which
+            // bounds the hold, but the publication itself could run on a worker that
+            // completes the trigger when done. The owner ranked this boundary first as a
+            // publish TRIGGER; that is not the same as requiring the WORK on this thread.
+            let _s = kayfabe_util::lock::BlockingSection::enter(
+                "TLB-invalidate blockage-point publication (guest spins on TRIGGER; the work \
+                 could move to a worker that completes the trigger)",
+            );
             // ⊘⊘ **NO SECOND `BlockageGuard` HERE — the first draft had one and it was a
             // DEFECT, caught by its own census.** `[measured 2026-09-08, boot w390c2]` the
             // `armed=[… tlb-invalidate=N …]` count read **754** against `triggers=377`:
@@ -14484,7 +14500,27 @@ impl Regs {
         //
         // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
         // is refused **by name, here**, rather than by a spawn six crates away.
-        self.device.materialize_pending();
+        // ★★★★★ **w395 — EVERYTHING FROM HERE TO THE REAP RUNS ON THE vCPU AFTER EVERY
+        // REGISTER WRITE, and is now DECLARED to `BlockingSection` so the `VCPU-BLOCKING`
+        // census names it.** The owner's rule (2026-09-09) is an allowlist: *"avoid a
+        // blocking call on vcpu thread at all, unless its required like a memslot install"*.
+        // Exactly ONE entry goes through the allowlist door; the rest are declared as what
+        // they are, with `TO MOVE` where nothing pins them here.
+        //
+        // `[measured w395c_r2_on_1]` with the GSP command ring fully off the vCPU
+        // (`GSPQUEUE commands=493 worst_hold_us=1123`) the boot's `worst_trap` was STILL
+        // 1 743 823 µs at `bar0+0x110c00` — the residue is in one of these drains, which ride
+        // whatever register write arrives when their work is pending. `KFTIME-SEG` brackets
+        // each one; this census is what names it by reason.
+        {
+            // ★ THE ALLOWLIST'S CANONICAL MEMBER, in the owner's own words: a memslot install
+            // must happen with the vCPUs stopped and the BQL held — KVM requires it.
+            let _s = kayfabe_util::lock::BlockingSection::enter_required_on_vcpu(
+                "memslot install — materialize_pending (KVM requires it under the BQL with \
+                 the vCPUs stopped)",
+            );
+            self.device.materialize_pending();
+        }
         kft.mark("materialize");
         // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
         //
@@ -14512,12 +14548,26 @@ impl Regs {
         // `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory handle — so the
         // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
         // nothing to name. ⊘ Ordering, not preference.
-        self.adopt_pending_channel_rings();
+        {
+            // ⊘ NOT allowlisted: fb-leaf resolve + `join_one_fb_leaf`, a host verb. Nothing
+            // requires it here; the doorbell worker's pass runs before the forward and is
+            // where it belongs. TO MOVE.
+            let _s = kayfabe_util::lock::BlockingSection::enter(
+                "ring adoption — adopt_pending_channel_rings (fb-leaf resolve + join, a host \
+                 verb; TO MOVE to the doorbell worker)",
+            );
+            self.adopt_pending_channel_rings();
+        }
         kft.mark("ring_adopt");
         // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
         // reason one field over: the drain births the host channel, and `hObjectError` is a
         // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
         // preference.
+        // ⊘ NOT allowlisted: host verbs reached from the trap. TO MOVE. Held open through
+        // the two drains below and dropped explicitly after `fwd_drain`.
+        let grants_section = kayfabe_util::lock::BlockingSection::enter(
+            "notifier grants + channel-birth/engine-forward drains (host verbs; TO MOVE)",
+        );
         let err_notifier_grants = self.pending_err_notifier_grants();
         kft.mark("err_grants");
         // ★★★★★ **w393 — THE THIRD DRAIN: channel births, BEFORE the engine forwards.**
@@ -14537,6 +14587,7 @@ impl Regs {
         kft.mark("birth_drain");
         report_engine_forward_drain(&self.device, &err_notifier_grants);
         kft.mark("fwd_drain");
+        drop(grants_section);
         // ★★★★★ **w303 — THE REAP, AND THIS LINE IS THE WHOLE OF FIX A.**
         //
         // `docs/audits/w301_cancellation_error_leaks.md` §3.1: the per-object teardown chain
@@ -14611,6 +14662,13 @@ impl Regs {
         // EVERY trap. An early return would drop the skipped traps out of the timing census
         // entirely, so the arm that skips more would look like the arm with fewer traps.
         if let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap() {
+            // ⊘ NOT allowlisted, and BOUNDED rather than excused: revocation (valid→invalid)
+            // may not be deferred — `publication_off_the_bql.md` §4 — and the disposal is
+            // budgeted to 1 % of the shortest named guest timeout. Declared so the census
+            // can say how often the vCPU paid it.
+            let _s = kayfabe_util::lock::BlockingSection::enter(
+                "pin reclaim + budgeted retired-drain (revocation floor, 40 ms budget)",
+            );
             let pins = self.device.pin_reclaim_gone();
             let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
             if total
