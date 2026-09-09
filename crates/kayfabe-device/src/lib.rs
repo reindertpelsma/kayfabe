@@ -58,6 +58,7 @@ pub mod cpuintr;
 pub mod doorbell;
 pub mod faultbuffer;
 pub mod fbwin;
+pub mod gpgaview;
 pub mod ga10x;
 pub mod guestsysinfo;
 pub mod gvaspub;
