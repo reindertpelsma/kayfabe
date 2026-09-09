@@ -166,6 +166,13 @@ pub enum PublicationKind {
     /// does not make the guest miss it. What changes is only that the wait happens in the
     /// guest's own loop instead of inside one held MMIO store.
     Invalidate,
+    /// ★★★ The guest completed an **RPC map call** (`GPU_PROMOTE_CTX`) — the owner's
+    /// synchronization point (2). Publish the rows it bound.
+    ///
+    /// ⊘ No completion to signal: unlike an invalidate there is no trigger register the guest
+    /// polls. The RPC has already returned; what remains is getting its rows onto the host
+    /// before the engine that uses them runs.
+    RpcBind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -191,6 +198,15 @@ impl MapPublication {
         Self {
             token: val,
             kind: PublicationKind::Invalidate,
+        }
+    }
+
+    /// The guest bound mappings through an RPC map call; publish them.
+    #[must_use]
+    pub const fn for_rpc_bind(seq: u64) -> Self {
+        Self {
+            token: seq,
+            kind: PublicationKind::RpcBind,
         }
     }
 

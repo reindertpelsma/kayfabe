@@ -847,6 +847,19 @@ pub struct SharedDevice {
     mode: LockMode,
     state: RankedRwLock<DeviceState>,
     pool: PoolGate,
+    /// ★★★★★ **RPC-BIND PUBLICATION LATCH — the owner's synchronization point (2).**
+    ///
+    /// A successful `GPU_PROMOTE_CTX` RECORDS its `{gpuVirtAddr, gpuPhysAddr, size}` rows into
+    /// the spine and backs **nothing** on the host. Until 2026-09-09 the doorbell's leg 8 swept
+    /// them up at the next ring; with that deleted the rows never reach the host and the GR
+    /// channel reads unbacked memory — `[measured w399b]` exactly one red row,
+    /// `P3 rpc-bind ★ CONTENT MISMATCH … still the poison 0xdeadbeef`.
+    ///
+    /// ⊘ A LATCH and not a direct publish because `promote_ctx` is reached from
+    /// `RegPlane::write` **with the plane's rank-0 mutex held**, six crates up. Publishing
+    /// there would block under a lock on a vCPU — both of the owner's invariants at once. The
+    /// spawn latch beside it exists for the same reason and drains at the same place.
+    promote_binds: std::sync::atomic::AtomicU64,
     /// ★★★ **The isolate factory, reachable with NO lock held** (R1, `l1_concurrency.md`
     /// §3.3) — a clone of the `Arc` the wrapped `Gpu` was realized with, so there is one
     /// factory and this is a second handle on it, never a second factory.
@@ -1218,6 +1231,7 @@ impl SharedDevice {
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
+            promote_binds: std::sync::atomic::AtomicU64::new(0),
             spawner,
             state: RankedRwLock::new(
                 LockRank::Device,
@@ -5815,8 +5829,23 @@ impl SharedDevice {
                 .write()
                 .spine
                 .merge_global_ctx_phys(route.gpu, &globals);
+            // ★ Latch, do not publish: see `promote_binds`. The rows are in the spine now;
+            // getting them onto the host is the drain's job — off this thread and out of this
+            // lock.
+            self.promote_binds
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         out
+    }
+
+    /// How many `GPU_PROMOTE_CTX` binds have landed since the last drain, clearing the latch.
+    ///
+    /// ⊘ Take-and-clear rather than read: two drains must not publish one bind twice, and a
+    /// bind arriving *during* a drain must not be lost — `swap(0)` gives both.
+    #[must_use]
+    pub fn take_promote_binds(&self) -> u64 {
+        self.promote_binds
+            .swap(0, std::sync::atomic::Ordering::AcqRel)
     }
 
     /// ★★★ **#177** — perform the guest's `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`, in the

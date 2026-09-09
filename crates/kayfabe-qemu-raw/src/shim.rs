@@ -4964,6 +4964,21 @@ fn doorbell_publish_loop(
         // ⊘ Unconditional once taken — including when the publication yields no line. A job
         // that returns without completing hangs the guest by construction, so there is no
         // early-return path between here and `complete()`.
+        if job.kind() == kayfabe_device::pubqueue::PublicationKind::RpcBind {
+            // ★★★ Synchronization point (2): publish what the RPC bound. No completion is
+            // signalled — there is no trigger register the guest polls, the RPC has already
+            // returned, and what remains is getting the rows onto the host before the engine
+            // that uses them runs.
+            let mut ctx = port.publish_ctx();
+            ctx.vas_publish = VasPublishArm::Publish;
+            if let Some(line) = ctx.publish_vas_rows(token, None) {
+                eprintln!(
+                    "kayfabe: RPCBIND-PUBLISH (off-vCPU) {}",
+                    line.replace("\nkayfabe: ", "  ⏎  ")
+                );
+            }
+            continue;
+        }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Publish;
@@ -14414,6 +14429,19 @@ impl Regs {
         // nothing to name. ⊘ Ordering, not preference.
         self.adopt_pending_channel_rings();
         kft.mark("ring_adopt");
+        // ★★★★★ **DRAIN THE RPC-BIND LATCH — synchronization point (2), off the vCPU.**
+        //
+        // `GPU_PROMOTE_CTX` records its rows in the spine while the plane's rank-0 mutex is
+        // held, so it cannot publish there. It latches instead, and this is the first place
+        // the guard is down — the same place the isolate-spawn latch drains, for the same
+        // reason. ⊘ Offered to the lane rather than run here: this is still a vCPU.
+        let binds = self.device.take_promote_binds();
+        if binds > 0 {
+            let _ = self
+                .pubqueue
+                .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(binds));
+        }
+        kft.mark("rpcbind_offer");
         // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
         // reason one field over: the drain births the host channel, and `hObjectError` is a
         // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
