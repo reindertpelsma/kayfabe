@@ -368,3 +368,54 @@ in a timing number:
 ⊘ If (1) goes red the arm is unsafe as built and the perf number is irrelevant — report the
 red, do not quote the speed. ⊘ If `off_trap_claims` stays 0 the arm did not engage and any
 timing change is something else; `nocoalesce` is the negative control for the coalescing half.
+
+---
+
+# ★★★★★ THE WORST MMIO TRAP IS **`NV_PGSP_QUEUE_HEAD(0)`** — THE GSP RPC SUBMIT REGISTER
+Boot `w394h`, stamp `f365d831`, content-verified. **The env was deliberately unset**, so this
+also verifies the flipped default: `off_trap_claims=11491` proves the async lane armed itself.
+
+```
+TRAPWITNESS off_trap_claims=11491 inline_exceptions=51
+            worst_trap=1791581us at=bar0+0x110c00  slow_traps(>1000us)=380
+PUBQUEUE coalesce=true queued=526 taken=526 completed=525 depth=0 high_water=15
+```
+
+`bar0+0x110c00` is **`NV_PGSP_QUEUE_HEAD(0)`** (`kayfabe-device/src/ga10x.rs:94`). The write
+handler routes to `BootStep::CommandDoorbell` → `self.doorbell(ram, policy)`
+(`kayfabe-gsp/src/boot.rs:945`), which **drains and services the GSP command queue inline** —
+inside the guest's MMIO store.
+
+★★★ **This is the owner's own example, arrived at from the other end.** Owner, 2026-09-09:
+*"real gpu also never holds any mmio write for milliseconds right. **like rpc mmio starts the
+operation, the block is for example a semaphore**"*. `QUEUE_HEAD` is exactly an RPC submit: on
+hardware it posts the message and returns, and the driver waits on the response queue. We
+execute the whole RPC in the store.
+⇒ **The worst trap was never the channel doorbell.** All of today's launch-floor work was aimed
+at a different register, and the async-doorbell arm — correctly ruled and correctly defaulted —
+does not touch this one at all. `worst_trap` barely moved across every arm today
+(1 927 527 → 1 855 594 → 1 791 581 us) for exactly that reason.
+
+★ **And it is a POPULATION, not an outlier**: `slow_traps(>1000us)=380`. A maximum can be waved
+away; 380 violations in one boot cannot.
+
+## ⊘⊘ CORRECTION — MY "launch RTT 1.23×" CLAIM DOES NOT SURVIVE n=2
+| arm | GEMM GFLOP/s | launch RTT µs |
+|---|---|---|
+| `off` | 8.2, 8.3, 6.0 | 233 979 · 253 979 · 342 242 |
+| `on` | 26.8, 20.1 | 189 551 · **343 213** |
+
+- **GEMM SEPARATES**: `min(on)=20.1 > max(off)=8.3`. A real **2.4–3.3×**, no overlap.
+- **launch RTT DOES NOT**: `on` spans 189 551–343 213 and `off` spans 233 979–342 242 — fully
+  overlapping. ⇒ **My "233 979 → 189 551, 1.23×" was one boot against one boot**, and this tree
+  already measured that trap: [[submit_ms_is_a_per_boot_lottery]] — 85.32 / 9.41 / 64.39 ms on
+  three CONSECUTIVE boots of one build. I quoted a lottery ticket as a result.
+⊘ The async default still stands: it is the **owner's ruling** and the **declared contract**,
+and GEMM improves with no overlap. But the *launch-RTT* half of my justification is withdrawn
+until n is larger.
+
+## ⇒ NEXT CUT, AND IT IS NOT WHERE I WAS LOOKING
+Make `QUEUE_HEAD` post-and-return: the store validates and enqueues, a worker services the GSP
+command queue, and the guest observes completion the way hardware makes it — the response queue
+plus the status IRQ that `BootStep::ClearStatusIrq` already models. The seam exists on the
+event side; what runs inline is the servicing.
