@@ -2,7 +2,35 @@
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.
 
-## ★★★★★ THE STATE — 3 OF 4 ROWS GREEN (w392q, rev `b703e477`)
+## ★★★★★ THE STATE — ALL FOUR NAMED ROWS GREEN, BUT (F) ON A FIFTH (w392t, rev `9f12c85d`)
+```
+P1 rm-invalidate  ✔ VERIFIED over 4 round(s)
+P2 uvm-memop      ✔ VERIFIED over 4 round(s)
+P3 rpc-bind       ✔ VERIFIED over 4 round(s)      <- SETTLE-BEFORE-BIRTH fixed it (fired 19x)
+STALE RACE        ✔ VERIFIED over 2 round(s)
+MEAN_FALSIFIER=PASS        host Xid = 1 (the falsifier's own VA only)
+THREADS  0 of 4 verified ⊘ A WORKER CAME BACK DIRTY
+   tid0 @0x8280000000 expected 0x1c136183, got 0x00000000   (and tid1/2/3 alike)
+W392D_OUTCOME=(F)
+```
+★★ **Four green rows would read as a pass to any coarser instrument.** The THREADS row is what
+keeps the client honest — exactly the multithreaded dimension the owner specified.
+
+**ROOT-CAUSED (w392v, `a7e2699a`, UNBOOTED at time of writing):** RM hands each worker **the same
+frame every round**, so round *r+1*'s CPU fill lands while round *r*'s join is still installed and
+routes into the memfd. A **peer's** doorbell then decodes the unmap→map gap and
+`release_revoked_joins` → `release_store_join` → `SparseFb::release_join` **drops the bytes**
+(*"any bytes the join held are gone"*). The **head** of the fill is lost, the tail lands in local
+pages, and the re-join establishes only the tail — **word 0 is the first word written**, hence
+`0x00000000`. Serial control in the same boot: `revoked=0 released=0` on every round.
+⇒ Fix: use `release_store_join_carrying_bytes` there too; refusals **keep** the join rather than
+falling back to the dropping release.
+⊘ Tonight's new code is **exonerated**: `ORPHAN-RECLAIMED 0`, `NOT AN ORPHAN 0`, no lock window.
+⚠ tid2 r2 is a **separate leg**, measured not root-caused (its own decode did nothing;
+`OPERAND-JOIN-TABLE 1 MISS`; doorbell stored anyway). Expect THREADS 3 of 4 if leg (i) is all of it.
+⚠ `shim.rs:4128` (retired-proc release) still drops bytes — same hazard across procs.
+
+## SUPERSEDED — 3 OF 4 (w392q, rev `b703e477`)
 ```
 P1 rm-invalidate  ✔ VERIFIED over 4 round(s)
 P2 uvm-memop      ✔ VERIFIED over 4 round(s)      ← the 4 KiB join fix (w392q)
