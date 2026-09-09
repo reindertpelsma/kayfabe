@@ -394,6 +394,61 @@ a plain mutex never held across a syscall.
   (`slots.rs`, taken only when the kernel ceiling allows; the attach banner states the
   range). Past it the fill refuses by the allocator's own name and the page traps.
 
-### 7.6 Result
+### 7.6 Result — MEASURED 2026-09-09, box 50389992 (RTX 3060 GA106, host 580.159.04 open,
+guest 580.159.04 open on 6.8.0-138), ONE binary `kayfabe-rev:55ff7b56`, three arms, the
+w392d mean client (`--uvm-mean --mean-falsify`) under the legacy arming set
 
-_(filled in by the boots; if this line is still here, §7 is unbooted.)_
+| arm | BAR1 misses (C) | BAR1 fills / distinct pages / distinct frames | BAR2 misses (C) | BAR2 fills / pages / frames | client | host Xid |
+|---|---|---|---|---|---|---|
+| **off** (control) | **88,193** (8,256 r / 79,921 w) | mirror OFF | 0 (arm off) | mirror OFF | `W392D_OUTCOME=(P)` `THREADS 4 of 4` `MEAN_FALSIFIER=PASS` | 0 |
+| **bar1** | **91** (2 r / 89 w) | 84 / 36 / 42 | 0 (arm off) | mirror OFF | `(P)` `4 of 4` `PASS` | 0 |
+| **both** | **90** (1 r / 89 w) | 84 / 39 / 43 | **384** | 196 / 92 / 101 | `(P)` `4 of 4` `PASS` | 0 |
+
+★★★★★ **Criterion 1: BAR1 misses fell 88,193 → 91 (969×), to ~2.2 per distinct frame** (42
+frames; the surplus is the 81 slots a revalidation retired and the guest re-touched — the
+guest re-maps the same BAR1 pages to new frames every round, `distinct_frames > distinct_pages`).
+**Criterion 2: the client passes on every arm**, all four rows and 4 of 4 threads, Xid 0.
+**Criterion 3: the archive's `bar1_reads`/`bar1_writes` audit read 2/89 under the arm** (vs
+8,256/79,952 on the control) — the counters only move on fills. **Criterion 4: BAR2 has its
+own arm and census**: 384 misses for 196 fills over 92 pages.
+
+**The mechanism's own numbers (arm=both):** slots peak 125; `revalidate[runs=692 kept=53,189
+removed=277]` — one run per guest `MMU_INVALIDATE` trigger, re-walking every live entry and
+retiring only the changed ones (never a wholesale flush); `quiesce[calls=67 removed=3]` — 67
+join installs/releases passed through the plane's port, retiring 3 slots that sat over frames
+about to move; arena 1,713 pages live (7 MiB), 83 recycled; **no `QUIESCE WAITED`**, no
+`HEAP-PAGE`, no `SLOT-BUDGET`, no `JOIN-GONE`.
+
+⊘ **`refused=[ALREADY-COVERED=192 RACED-AND-DROPPED=2]` on BAR2 (and 4 / 3 on BAR1) are not
+defects, and reading them as "192 misses the mirror could not fill" would be wrong.** The
+printed rows are pairs at `+0` and `+4` of one page, microseconds apart: the guest's
+**8-byte** PTE store arrives as ONE MMIO exit that QEMU dispatches as **two 4-byte
+callbacks** (`nvkvm_bar2_ops` declares no `.impl.max_access_size`, which defaults to 4). The
+first half fills; the second half of the *same exit* finds the slot already there. It costs
+nothing beyond the one exit that was already taken. ⇒ For BAR2, `misses ≈ 2 × fills` is the
+split, and the *distinct-page* number (92) is the honest denominator.
+
+★★★★★ **THE 4-ACCESS DISCREPANCY IS ANSWERED, AND IT WAS NEVER FOUR ACCESSES.** The control
+arm's one-instant line read `entries=88208 touches=88193 (reads=8256 writes=79921)` — three
+counters bumped three lines apart in the same two callbacks, **three different totals**,
+while the archive's atomic counters said `8256 / 79952`. Every region of this device is
+`memory_region_enable_lockless_io` (`nvkvm.c`, `nvkvm_region_init_io`), so the BAR callbacks
+run **concurrently on every vCPU with no BQL**, and every `x++` in them was a plain
+load-add-store: **lost increments**. The 2026-09-09 `87,740 vs 87,736` was the same race
+(a smaller one — that boot had fewer vCPUs racing). Fixed in the same commit: every counter
+in the handlers is `qatomic_*`, and the two bounded logs (`bar1_log`, `gp_put_pages`) —
+whose `used++` under a `>=` check could index **one past the end** under the same race —
+sit under a `QemuSpin`. ⚠ It also falsifies a standing comment in the archive
+(`kayfabe_shim_regs_write`: *"arrives here with the QEMU BQL held"*): it does not. The
+archive's own counters are atomics and its plane is behind a ranked mutex, so nothing on
+the Rust side was wrong; the mirror's table was built for concurrent fills from the start
+(`pending` tickets), and `PENDING-ELSEWHERE=0` on every arm says two vCPUs never raced one
+page.
+
+⊘ **What this measures and what it does not.** One raw client, one boot per arm (n=1 per arm
+at this revision; a second ladder at the counter-fix revision is in §7.7). It says nothing
+yet about the LLM or about throughput: the client's rounds are small, so the *cost* of a
+fill (two `mmap`s + one `KVM_SET_USER_MEMORY_REGION`) and of a revalidation (692 runs ×
+~76 walks) is not resolved by its wall time; the throughput question is the next boot's.
+`DEVICE_LOCAL` is still §4.3's lease — this is `HOST_VISIBLE` over the memory the engine
+already reads.

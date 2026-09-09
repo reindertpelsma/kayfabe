@@ -339,6 +339,19 @@ struct NvkvmState {
     uint64_t bar1_touch_reads;
     uint64_t bar1_touch_writes;
     uint64_t bar1_entries;
+    /* ★★★★★ w393 — ANSWERED: THE 4-ACCESS DISCREPANCY WAS LOST INCREMENTS UNDER LOCKLESS MMIO.
+     * Every region of this device is `memory_region_enable_lockless_io` (nvkvm_region_init_io),
+     * so these callbacks run CONCURRENTLY on every vCPU with NO BQL — and every `x++` above
+     * was a plain load-add-store.  `[measured 2026-09-09, boot w393m_off, ONE report at ONE
+     * instant]` entries=88208 touches=88193 reads+writes=88177 while the archive's atomic
+     * counters said 8256 + 79952: FOUR different totals for one stream of events, all short,
+     * all by different amounts — the signature of lost updates, not of four extra accesses.
+     * ⇒ Every counter in these handlers is now `qatomic_*`, and the bounded logs
+     * (`bar1_log`, `gp_put_pages`), whose `used++` under a `>=` check could index ONE PAST
+     * THE END under the same race, are guarded by this spin lock.  ⚠ Also corrects a comment
+     * in the archive (`kayfabe_shim_regs_write`: "arrives here with the QEMU BQL held") —
+     * it does not; the archive's own counters are atomics and are unaffected. */
+    QemuSpin diag_lock;
     /* ★★★★ §16.17 — THE BAR1 ACCESS LOG, not just its count.
      *
      * `[src] ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:984-1015`
@@ -724,27 +737,30 @@ static const MemoryRegionOps nvkvm_trap_ops = {
 static void nvkvm_bar2_passthrough_miss(NvkvmState *s, uint64_t addr, unsigned size,
                                         bool is_write)
 {
+    uint64_t n;
+    unsigned printed;
+
     if (!s->bar2_passthrough) {
         return;
     }
-    s->bar2_passthrough_misses++;
-    if (s->bar2_passthrough_miss_printed >= NVKVM_BAR2_MISS_LIVE) {
+    n = qatomic_fetch_inc(&s->bar2_passthrough_misses) + 1;
+    printed = qatomic_fetch_inc(&s->bar2_passthrough_miss_printed) + 1;
+    if (printed > NVKVM_BAR2_MISS_LIVE) {
         return;
     }
-    s->bar2_passthrough_miss_printed++;
     warn_report("nvkvm: ⊘ BAR2-PASSTHROUGH MISS #%" PRIu64 ": a %u-byte %s at aperture "
                 "+0x%" PRIx64 " reached the TRAP under the armed arm — no memslot covered "
                 "this page yet. Served through the archive, which then fills it. "
                 "(printed %u of %u; the total is reported at teardown and is not capped)",
-                s->bar2_passthrough_misses, size, is_write ? "WRITE" : "read",
-                addr, s->bar2_passthrough_miss_printed, NVKVM_BAR2_MISS_LIVE);
+                n, size, is_write ? "WRITE" : "read",
+                addr, printed, NVKVM_BAR2_MISS_LIVE);
 }
 
 static uint64_t nvkvm_bar2_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
-    s->trap_reads++;
+    qatomic_inc(&s->trap_reads);
     nvkvm_bar2_passthrough_miss(s, (uint64_t)addr, size, false);
     return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_INST, (uint64_t)addr, size);
 }
@@ -754,7 +770,7 @@ static void nvkvm_bar2_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
     NvkvmState *s = opaque;
     KayfabeRegWrite w;
 
-    s->trap_writes++;
+    qatomic_inc(&s->trap_writes);
     nvkvm_bar2_passthrough_miss(s, (uint64_t)addr, size, true);
     memset(&w, 0, sizeof(w));
     kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_INST, (uint64_t)addr, size, val, &w);
@@ -789,20 +805,23 @@ static const MemoryRegionOps nvkvm_bar2_ops = {
 static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
                               unsigned size, bool is_write)
 {
-    s->bar1_touches++;
+    qatomic_inc(&s->bar1_touches);
     if (is_write) {
-        s->bar1_touch_writes++;
+        qatomic_inc(&s->bar1_touch_writes);
     } else {
-        s->bar1_touch_reads++;
+        qatomic_inc(&s->bar1_touch_reads);
     }
-    if (s->bar1_log_used >= NVKVM_BAR1_LOG) {
-        return;
+    /* Lockless MMIO (see NvkvmState::diag_lock): the bounded log's index is claimed under
+     * a spin, never by a racy check-then-increment. */
+    qemu_spin_lock(&s->diag_lock);
+    if (s->bar1_log_used < NVKVM_BAR1_LOG) {
+        s->bar1_log[s->bar1_log_used].addr     = addr;
+        s->bar1_log[s->bar1_log_used].val      = val;
+        s->bar1_log[s->bar1_log_used].size     = size;
+        s->bar1_log[s->bar1_log_used].is_write = is_write;
+        s->bar1_log_used++;
     }
-    s->bar1_log[s->bar1_log_used].addr     = addr;
-    s->bar1_log[s->bar1_log_used].val      = val;
-    s->bar1_log[s->bar1_log_used].size     = size;
-    s->bar1_log[s->bar1_log_used].is_write = is_write;
-    s->bar1_log_used++;
+    qemu_spin_unlock(&s->diag_lock);
 }
 
 /*
@@ -839,29 +858,32 @@ static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
 static void nvkvm_bar1_passthrough_miss(NvkvmState *s, uint64_t addr, unsigned size,
                                         bool is_write)
 {
+    uint64_t n;
+    unsigned printed;
+
     if (!s->bar1_passthrough) {
         return;
     }
-    s->bar1_passthrough_misses++;
-    if (s->bar1_passthrough_miss_printed >= NVKVM_BAR1_MISS_LIVE) {
+    n = qatomic_fetch_inc(&s->bar1_passthrough_misses) + 1;
+    printed = qatomic_fetch_inc(&s->bar1_passthrough_miss_printed) + 1;
+    if (printed > NVKVM_BAR1_MISS_LIVE) {
         return;
     }
-    s->bar1_passthrough_miss_printed++;
     warn_report("nvkvm: ⊘ BAR1-PASSTHROUGH MISS #%" PRIu64 ": a %u-byte %s at aperture "
                 "+0x%" PRIx64 " reached the TRAP under the armed arm — no memslot covers "
                 "this range, so it costs a VM exit and a software page walk. Served "
                 "correctly through the archive; NOT passthrough. (printed %u of %u; the "
                 "total is reported at teardown and is not capped)",
-                s->bar1_passthrough_misses, size, is_write ? "WRITE" : "read",
-                addr, s->bar1_passthrough_miss_printed, NVKVM_BAR1_MISS_LIVE);
+                n, size, is_write ? "WRITE" : "read",
+                addr, printed, NVKVM_BAR1_MISS_LIVE);
 }
 
 static uint64_t nvkvm_bar1_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
-    s->bar1_entries++;
-    s->trap_reads++;
+    qatomic_inc(&s->bar1_entries);
+    qatomic_inc(&s->trap_reads);
     nvkvm_bar1_record(s, (uint64_t)addr, 0, size, false);
     nvkvm_bar1_passthrough_miss(s, (uint64_t)addr, size, false);
     return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size);
@@ -883,12 +905,14 @@ static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, u
     if (size != 4 || (addr & 0xfffu) != NVKVM_USERD_GP_PUT) {
         return;
     }
-    s->gp_put_writes++;
+    qatomic_inc(&s->gp_put_writes);
     gp_put_possible = val < (uint64_t)NVKVM_GP_PUT_MAX_ENTRIES;
     if (!gp_put_possible) {
-        s->gp_put_implausible++;
+        qatomic_inc(&s->gp_put_implausible);
     }
-    /* ★★★★★ w262 — PER-PAGE FIRST TOUCH, printed live and uncapped in its count. */
+    /* ★★★★★ w262 — PER-PAGE FIRST TOUCH, printed live and uncapped in its count.
+     * Under the diag spin (NvkvmState::diag_lock): lockless MMIO, bounded table. */
+    qemu_spin_lock(&s->diag_lock);
     {
         uint64_t page = addr & ~(uint64_t)0xfff;
         unsigned pi;
@@ -922,10 +946,10 @@ static void nvkvm_bar1_gp_put_live(NvkvmState *s, uint64_t addr, uint64_t val, u
             }
         }
     }
-    if (s->gp_put_printed >= NVKVM_GP_PUT_LIVE) {
+    qemu_spin_unlock(&s->diag_lock);
+    if (qatomic_fetch_inc(&s->gp_put_printed) + 1 > NVKVM_GP_PUT_LIVE) {
         return;
     }
-    s->gp_put_printed++;
     info_report("nvkvm: BAR1 GP_PUT #%" PRIu64 " aperture +0x%" PRIx64 " val=0x%" PRIx64
                 " — %s (offset 0x%x). "
                 "⊘ WHICH channel is NOT known here: nothing joins a BAR1 offset to a "
@@ -946,8 +970,8 @@ static void nvkvm_bar1_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
     NvkvmState *s = opaque;
     KayfabeRegWrite w;
 
-    s->bar1_entries++;
-    s->trap_writes++;
+    qatomic_inc(&s->bar1_entries);
+    qatomic_inc(&s->trap_writes);
     nvkvm_bar1_record(s, (uint64_t)addr, val, size, true);
     nvkvm_bar1_passthrough_miss(s, (uint64_t)addr, size, true);
     nvkvm_bar1_gp_put_live(s, (uint64_t)addr, val, size);
@@ -3217,6 +3241,9 @@ static bool nvkvm_identity_realize(NvkvmState *s, Error **errp)
 static void nvkvm_realize(PCIDevice *pci, Error **errp)
 {
     NvkvmState *s = NVKVM(pci);
+
+    /* w393 — the diagnostics' spin (NvkvmState::diag_lock), before any region can trap. */
+    qemu_spin_init(&s->diag_lock);
 
     /*
      * ★ The accelerator refusal, first and loud.  The global-lock opt-out is honoured only on

@@ -55,7 +55,8 @@ for arm in $ARMS; do
   rc=$?
   say "boot_capture rc=$rc (⊘ rc=5 is the evidence-persist check; read the artefacts)"
   Q="$BENCH/run_${tag}_qemu.log"
-  D="$BENCH/run_${tag}_driver.log"
+  # ⊘ The hook's output is appended to the PROBE log by boot_capture.sh, not to its stdout.
+  D="$BENCH/run_${tag}_probe.log"
   echo "--- LEDGER arm=$arm tag=$tag ---"
   echo "[C]      $(grep -a 'BAR1-PASSTHROUGH arm=' "$Q" | grep -a misses= | tail -1 | sed 's/.*nvkvm: //' | cut -c1-90)"
   echo "[C]      $(grep -a 'BAR1 COUNTERS' "$Q" | tail -1 | sed 's/.*nvkvm: //')"
