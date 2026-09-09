@@ -1223,3 +1223,78 @@ pub fn apply_promote_ctx(
         globals_added,
     })
 }
+
+/// ★★★★★ **RE-DRIVE PARKED PROMOTES WHEN A LATER GLOBAL ARRIVES.**
+///
+/// `[measured w402]` the RPC map call parks more than it binds, every time:
+/// ```text
+/// PROMOTE-BOUND proc=0 bound=4 already=0 joined=0 parked=5   (×2)
+/// PROMOTE-BOUND proc=2 bound=0 already=0 joined=4 parked=6
+/// PROMOTE-BOUND proc=2 bound=0 already=0 joined=0 parked=3
+/// ```
+/// For the **user** proc — the one whose GR channel `P3 rpc-bind` exercises — `bound` is
+/// **zero on both promotes**, with nine ranges left `AwaitingPhysical`.
+///
+/// # ⊘ Why they never resolved
+///
+/// [`apply_promote_ctx`] completes an `AwaitingPhysical` half from the per-GPU globals — but
+/// only for the promotion **currently being applied**. A half parked because its global was
+/// not yet known resolves only if a *later promotion of that same VAS* happens to arrive after
+/// the global does. Nothing re-visits a VAS when the global it was waiting for turns up, and
+/// `Spine::merge_global_ctx_phys` already computes exactly that signal — the count of newly
+/// added globals — **and its callers discard it**.
+///
+/// ⇒ The rows stay parked, so they are never bound; a publisher walking the table cannot reach
+/// them however broad its scope; and the GR channel is scheduled against context that was
+/// declared and never backed. Which is precisely what the guest reports: *"the GR channel was
+/// scheduled but NEVER completed"*, with the target VA itself `ALREADY-JOINED` 46 times —
+/// **the data was mapped and the channel's own context was not.**
+///
+/// # What this does
+///
+/// Completes every `AwaitingPhysical` half whose buffer now has a global, binds it through the
+/// same `table.bind` + `promote_bound` path a first-pass completion uses, and returns how many
+/// it bound.
+///
+/// ⊘ **Per-GPU halves only**, matching [`apply_promote_ctx`]'s own filter: a half whose scope
+/// is not [`PhysHalfScope::PerGpu`] is not completable from the per-GPU globals and must be
+/// left parked rather than bound from the wrong source.
+/// ⊘ **A collision leaves the half parked and is not an error.** The first-pass path can refuse
+/// a promotion outright because it is answering a guest control; here there is no control to
+/// answer and no caller to report to, and un-parking a range we could not bind would lose it
+/// silently. Leaving it parked keeps it visible in the `parked=` census and re-drivable.
+pub fn complete_parked_from_globals(
+    vas: &mut crate::gpu::Vas,
+    pdb: Pdb,
+    globals: &GlobalCtxPhys,
+) -> u32 {
+    let mut bound = 0u32;
+    let mut still_parked = vas.promote_halves.clone();
+    for (buffer_id, half) in &vas.promote_halves {
+        if phys_half_scope(*buffer_id) != PhysHalfScope::PerGpu {
+            continue;
+        }
+        let ParkedHalf::AwaitingPhysical { va } = half else {
+            continue;
+        };
+        let Some(g) = globals.get(buffer_id) else {
+            continue;
+        };
+        let Ok(binding) = kayfabe_mmu::Binding::declared_by_guest(g.phys, g.aperture) else {
+            continue;
+        };
+        // ⊘ Already bound at this VA ⇒ the park is stale, not pending. Drop it without
+        // re-binding: a second bind of an identical range is the `Collides` path.
+        if vas.promote_bound.contains(&va.0) {
+            still_parked.remove(buffer_id);
+            continue;
+        }
+        if vas.table.bind(pdb, *va, g.len, binding).is_ok() {
+            vas.promote_bound.insert(va.0);
+            still_parked.remove(buffer_id);
+            bound += 1;
+        }
+    }
+    vas.promote_halves = still_parked;
+    bound
+}

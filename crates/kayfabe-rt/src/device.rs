@@ -5825,10 +5825,51 @@ impl SharedDevice {
             // ⊘ No `self.mode` branch: the merge is a WRITE in both modes, so the two
             // arms would be identical. Degenerate mode differs only in that the route
             // phase already had to take the write lock.
-            self.state
-                .write()
-                .spine
-                .merge_global_ctx_phys(route.gpu, &globals);
+            // ★★★★★ **THE RETURN VALUE WAS BEING DISCARDED, AND IT IS THE SIGNAL.**
+            // `merge_global_ctx_phys` reports how many globals are NEWLY known. A range parked
+            // `AwaitingPhysical` is waiting for exactly one of those, and nothing re-visited
+            // it when the global arrived — so it stayed parked, never bound, never publishable,
+            // and the GR channel ran against context that was declared and never backed.
+            let mut st = self.state.write();
+            let added = st.spine.merge_global_ctx_phys(route.gpu, &globals);
+            if added > 0 {
+                let fresh = st.spine.global_ctx_phys_for(route.gpu);
+                let mut rebound = 0u32;
+                // ⊘ Every proc, not just the promoting one: the range that stayed parked
+                // belongs to whichever proc promoted it FIRST, and the global completing it
+                // arrives on a LATER promote that may well be a different proc — which is
+                // exactly the measured shape (proc=0 supplies globals, proc=2's ranges are the
+                // ones stranded).
+                // ⊘ EVERY proc, not just the promoting one: a range stays parked in whichever
+                // proc promoted it FIRST, while the global that completes it arrives on a LATER
+                // promote that may be a different proc — which is exactly the measured shape
+                // (proc=0 supplies globals; proc=2's nine ranges are the stranded ones).
+                // ⊘ Rank 2 under rank 1 is the increasing order, so these acquires are legal.
+                //   The work itself is pure table manipulation — no syscall, nothing blocking —
+                //   so it does not violate the no-blocking-under-a-lock invariant, and the
+                //   parked sets are single digits.
+                let mut redrive = |proc: &mut kayfabe_core::gpu::Proc| {
+                    for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
+                        if gpu != route.gpu {
+                            continue;
+                        }
+                        rebound += kayfabe_core::promote::complete_parked_from_globals(
+                            vas, pdb, &fresh,
+                        );
+                    }
+                };
+                redrive(st.system.get_mut());
+                for cell in st.procs.values() {
+                    redrive(&mut cell.lock());
+                }
+                if rebound > 0 {
+                    eprintln!(
+                        "kayfabe: PROMOTE-REDRIVE gpu={} new_globals={added} bound={rebound}                          ⇒ ranges that were parked AwaitingPhysical are now bound, because the                          global they were waiting for has arrived",
+                        route.gpu.0
+                    );
+                }
+            }
+            drop(st);
             // ★ Latch, do not publish: see `promote_binds`. The rows are in the spine now;
             // getting them onto the host is the drain's job — off this thread and out of this
             // lock.
