@@ -115,12 +115,40 @@ echo "$CPU_OUT" | sed 's/^/    /'
 pick() { echo "$1" | sed -n "s/^[[:space:]]*$2=//p" | tail -1; }
 GPU_TOK=$(pick "$GPU_OUT" LLM_TOKENS); GPU_TXT=$(pick "$GPU_OUT" LLM_TEXT); GPU_RC=$(pick "$GPU_OUT" LLM_RC)
 CPU_TOK=$(pick "$CPU_OUT" LLM_TOKENS); CPU_TXT=$(pick "$CPU_OUT" LLM_TEXT); CPU_RC=$(pick "$CPU_OUT" LLM_RC)
+GPU_MS=$(pick "$GPU_OUT" LLM_MS);      CPU_MS=$(pick "$CPU_OUT" LLM_MS)
+
+# ★★★★★ tok/s — THE PARITY NUMBER, AND IT WAS ALREADY BEING MEASURED.
+#
+# ⊘ The campaign note *"nothing in the repo computes tok/s"* was half right in the way that
+# matters least: `provision_guest_llm.sh` has ALWAYS printed `LLM_MS`, the wall time around
+# `generate()` alone. What was missing was a READER. The measurement existed and no grade
+# consumed it — the discarded-oracle shape this file already calls out for the CPU control's
+# text, repeated one field over.
+# ⚠ Separately true and easy to conflate: the ENV VAR `LLM_MS` is read by nothing (the
+#   timeout is `LLM_TIMEOUT`, in SECONDS). The PRINTED `LLM_MS=` line is real data.
+#
+# ⊘ WHAT THIS NUMBER IS: decode throughput over `generate()` only. It EXCLUDES model load and
+# the `.to(device)` weight upload — which, on the Mode-2 path, is exactly where w394 measured
+# H2D at ~17 s per 16 MiB. So tok/s here is the FAVOURABLE half of the story and must never be
+# quoted as end-to-end parity. Name both or name neither.
+toks_per_s() {  # toks_per_s <tokens> <ms>
+  awk -v t="${1:-}" -v m="${2:-}" 'BEGIN{
+    if (t == "" || m == "" || m+0 <= 0) { print "UNMEASURED" } else { printf "%.3f", t/(m/1000.0) }
+  }'
+}
+GPU_TPS=$(toks_per_s "$GPU_TOK" "$GPU_MS"); CPU_TPS=$(toks_per_s "$CPU_TOK" "$CPU_MS")
 
 echo ""
 echo "W392_GPU_TOKENS=${GPU_TOK:-ABSENT}  W392_GPU_RC=${GPU_RC:-ABSENT}"
 echo "W392_CPU_TOKENS=${CPU_TOK:-ABSENT}  W392_CPU_RC=${CPU_RC:-ABSENT}"
 echo "W392_GPU_TEXT=[${GPU_TXT}]"
 echo "W392_CPU_TEXT=[${CPU_TXT}]"
+echo "W392_GPU_MS=${GPU_MS:-ABSENT}  W392_GPU_TOKS_PER_S=${GPU_TPS}"
+echo "W392_CPU_MS=${CPU_MS:-ABSENT}  W392_CPU_TOKS_PER_S=${CPU_TPS}  ⊘ CPU is a CORRECTNESS oracle, NOT a perf baseline"
+echo "W392_TPS_RATIO_GPU_OVER_CPU=$(awk -v g="$GPU_TPS" -v c="$CPU_TPS" 'BEGIN{
+  if (g=="UNMEASURED"||c=="UNMEASURED"||c+0==0) print "UNMEASURED"; else printf "%.3f", g/c }')"
+echo "    ⊘ decode only — EXCLUDES model load and the .to(device) weight upload."
+echo "    ⊘ FOR THIS BOOT'S ARMING (VAS_PUBLISH=drain, PT_SWEEP=on). Quote the arming or don't quote it."
 echo "W392_MINMM_SUM=${MINSUM:-ABSENT} (64 = the small path is CORRECT)"
 echo "W392_XIDS=${XID_BEFORE}/${XID_AFTER_MIN:-?}/${XID_AFTER} (before/after-4x4/after-gpu)"
 
