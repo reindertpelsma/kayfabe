@@ -102,7 +102,17 @@ CPU_OUT=$($G "cd /opt/llm && HF_HOME=/opt/llm/hf LLM_DEVICE=cpu LLM_NTOK=$NTOK \
           timeout $CPU_TMO $PY run_llm.py 2>&1" 2>&1 | tr -d '\r')
 echo "$CPU_OUT" | sed 's/^/    /'
 
-pick() { echo "$1" | sed -n "s/^$2=//p" | tail -1; }
+# ⊘⊘ **CORRECTED 2026-09-09 (w392llm3) — THIS ANCHOR MISGRADED A PASSING RUN.**
+# It was `s/^$2=//p`. The GPU arm's output reaches us INDENTED (the guest-side runner pads its
+# lines), so every GPU field read ABSENT and the grader printed `(E) UNMEASURED` over a run that
+# had, in the same log:
+#     LLM_TEXT= ______. A. Paris B. London C. New York D
+#     LLM_TOKENS=16   LLM_OK=1
+# i.e. **byte-identical to the CPU oracle**. The CPU arm parsed only because its lines happen to be
+# flush-left. ⇒ A grader whose extractor is anchored more tightly than its input reports UNMEASURED
+# for SUCCESS — the mirror of `a_count_cannot_see_a_substitution`, and it cost this campaign a
+# night of believing the LLM still failed.
+pick() { echo "$1" | sed -n "s/^[[:space:]]*$2=//p" | tail -1; }
 GPU_TOK=$(pick "$GPU_OUT" LLM_TOKENS); GPU_TXT=$(pick "$GPU_OUT" LLM_TEXT); GPU_RC=$(pick "$GPU_OUT" LLM_RC)
 CPU_TOK=$(pick "$CPU_OUT" LLM_TOKENS); CPU_TXT=$(pick "$CPU_OUT" LLM_TEXT); CPU_RC=$(pick "$CPU_OUT" LLM_RC)
 
