@@ -745,13 +745,38 @@ fn commit_pt_sweep_inner(
         };
         match &r.decode {
             Ok(d) => {
-                vas.sweep.sweeps += 1;
+                // ★★★★★ **DIRTY IS CLEARED ONLY BY A SCAN THAT ACTUALLY HAPPENED.**
+                //
+                // Owner, 2026-09-10: "your VA refresh function checks the parent, if the
+                // parent is not set, it does not scan the contents, and does not unset dirty."
+                //
+                // This cleared `dirty` and counted a sweep on ANY `Ok` — including one that
+                // visited NOTHING, which is what a walk from a root whose entries are all
+                // invalid returns. `[measured w408]` exactly that happened: `pdb=0x201000` had
+                // one witnessed page and an empty reachable set, its first sweep retired the
+                // `NeverSwept` trigger, and nothing could re-arm it. The guest built its tables
+                // afterwards and we never looked again — so four GR context VAs stayed
+                // invisible and `P3 rpc-bind` stayed red.
+                //
+                // ⇒ An empty scan establishes NOTHING and must not retire the trigger that
+                // would make us look again. Leaving `dirty` set makes the refresh a FIXPOINT:
+                // a subtree under an invalid parent stays pending until that parent is valid,
+                // and the scan that finally descends is the one that clears it.
+                //
+                // ⊘ Same shape as `every_row_verified_over_zero_rows`: a pass that examined
+                // nothing reported success and closed the question.
                 vas.sweep.truncated = false;
-                // ⊘ Cleared HERE and not at the plan. A dirty bit cleared when the sweep was
-                // *scheduled* would lose every write that landed during the walk — which is
-                // precisely the torn-read window this bit exists to close.
-                vas.sweep.dirty = false;
-                vas.sweep.last_pages = d.visited.len();
+                if d.visited.is_empty() {
+                    vas.sweep.last_pages = 0;
+                    // `sweeps` NOT incremented, `dirty` NOT cleared — deliberately.
+                } else {
+                    vas.sweep.sweeps += 1;
+                    // ⊘ Cleared HERE and not at the plan: a dirty bit cleared when the sweep is
+                    // SCHEDULED would lose every write that landed during the walk, which is
+                    // precisely the torn-read window this bit exists to close.
+                    vas.sweep.dirty = false;
+                    vas.sweep.last_pages = d.visited.len();
+                }
             }
             Err(_) => {
                 vas.sweep.truncated = true;

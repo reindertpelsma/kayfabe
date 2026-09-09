@@ -44,6 +44,7 @@
 pub mod blockage;
 pub mod gpga;
 pub mod reach;
+pub mod refresh;
 pub mod walker;
 
 use blockage::{BlockageCensus, BlockageCounts, Publication};
