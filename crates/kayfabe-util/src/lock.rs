@@ -397,6 +397,8 @@ impl<T> Drop for RankedMutexGuard<'_, T> {
 pub struct BlockingSection {
     /// What this section is, for the census.
     what: &'static str,
+    /// Responsive (multiplexed, wakeable) or Committed (runs to completion).
+    kind: WaitKind,
     /// The class of the thread that opened it — judged differently per class.
     class: ThreadClass,
     /// When it opened, so a coordinator's section can be judged on DURATION.
@@ -409,10 +411,17 @@ impl Drop for BlockingSection {
     fn drop(&mut self) {
         // A coordinator may park; it may not sit in a millisecond-scale operation. That is a
         // judgement about DURATION and can only be made here, at close.
-        if self.class == ThreadClass::Coordinator {
-            let us = u64::try_from(self.opened.elapsed().as_micros()).unwrap_or(u64::MAX);
-            if us >= COORDINATOR_SLOW_US {
-                note_slow_coordinator(self.what, us);
+        let us = u64::try_from(self.opened.elapsed().as_micros()).unwrap_or(u64::MAX);
+        match self.kind {
+            // ⊘ Responsive time is RECORDED and never a violation: on a coordinator it is
+            // availability, not latency. Recording it anyway matters — a boot where the
+            // coordinator spent no time responsive is a coordinator that was never idle,
+            // which is its own (different) problem.
+            WaitKind::Responsive { .. } => note_responsive(self.what, us),
+            WaitKind::Committed => {
+                if self.class == ThreadClass::Coordinator && us >= COORDINATOR_SLOW_US {
+                    note_slow_coordinator(self.what, us);
+                }
             }
         }
     }
@@ -447,6 +456,29 @@ impl BlockingSection {
         }
         BlockingSection {
             what,
+            kind: WaitKind::Committed,
+            class: current_class(),
+            opened: std::time::Instant::now(),
+            _not_send: PhantomData,
+        }
+    }
+
+    /// ★★★★★ **A RESPONSIVE wait — multiplexed and wakeable, and therefore unbounded on a
+    /// coordinator.** `wakes_on` names the source that can interrupt it, and naming it is the
+    /// point: a wait that cannot say what would wake it is not responsive, it is optimistic.
+    ///
+    /// ⊘ Still a violation on a [`ThreadClass::Vcpu`]. A vCPU must not wait AT ALL — not even
+    /// responsively — because it is running guest code, and "we would have woken promptly" is
+    /// no comfort to a guest whose vCPU was not executing.
+    #[must_use]
+    pub fn responsive(what: &'static str, wakes_on: &'static str) -> Self {
+        Self::assert_lock_free("entering a responsive wait");
+        if current_class() == ThreadClass::Vcpu {
+            note_vcpu_blocking(what, false);
+        }
+        BlockingSection {
+            what,
+            kind: WaitKind::Responsive { wakes_on },
             class: current_class(),
             opened: std::time::Instant::now(),
             _not_send: PhantomData,
@@ -471,6 +503,7 @@ impl BlockingSection {
         }
         BlockingSection {
             what,
+            kind: WaitKind::Committed,
             class: current_class(),
             opened: std::time::Instant::now(),
             _not_send: PhantomData,
@@ -702,7 +735,40 @@ static VB_ALLOWED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
     [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
 static VB_OVERFLOW: AtomicU64 = AtomicU64::new(0);
 
-/// A blocking section that ran longer than this on a [`ThreadClass::Coordinator`] is a
+/// ★★★★★ **WHAT KIND OF WAIT THIS IS — and this, not duration, is the load-bearing axis.**
+///
+/// **Owner, 2026-09-09:** *"for a coordinator the only long sleep you should encounter is a
+/// poll/epoll waiting on multiple fds (thats allowed) and is responsive to new input. The only
+/// thing is that its therefore responsive always, rather than block."* Correct, and it
+/// **refutes the duration rule this module shipped an hour earlier**: a healthy idle
+/// `epoll_wait` parked for five seconds would have been reported as the worst offender in the
+/// system, while a 900 µs uninterruptible `ioctl` — the actually harmful thing — passed. A
+/// metric that is loudest where the design is most correct is worse than no metric.
+///
+/// ⇒ The question is not *"how long did you sleep"* but **"could new work have woken you"**.
+///
+/// ⚠ **One refinement on the owner's phrasing, and it is not pedantry.** *"Reader threads can
+/// sleep to wait for an operation"* — waiting for AN OPERATION TO COMPLETE is the **bad** case:
+/// for that duration the thread is deaf to everything else. What is safe is waiting for
+/// **events**, with that operation's completion multiplexed *alongside* new input on the same
+/// primitive. The two look identical in a stack trace and behave oppositely.
+/// ⇒ Which is why [`WaitKind::Responsive`] **must name what can wake it**. A wait that cannot
+/// name its wake source is not responsive; it is optimistic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitKind {
+    /// A multiplexed, cancellable wait — `epoll`/`poll`/`select`, or a condvar that the
+    /// producer of new work also signals. `wakes_on` names the source that can interrupt it.
+    ///
+    /// ⊘ Unbounded on a [`ThreadClass::Coordinator`] **by design**: that is a coordinator's
+    /// whole job, and time spent here is availability, not latency.
+    Responsive { wakes_on: &'static str },
+    /// A wait that must run to completion — an `ioctl`, a lock held by a long operation, a
+    /// write to a full pipe. **Nothing can wake it early**, so everything behind it queues.
+    /// This is the currency the census actually measures.
+    Committed,
+}
+
+/// A COMMITTED section that ran longer than this on a [`ThreadClass::Coordinator`] is a
 /// violation: the owner's rule is that a reader thread may park to coordinate but must not sit
 /// in *"the long waiting blocking calls (the milliseconds one)"*, because everything it
 /// coordinates queues behind it.
@@ -741,6 +807,16 @@ static SLOW_COORD_CLAIMED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
     [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
 static SLOW_COORD_HITS: [AtomicU64; VCPU_BLOCK_SLOTS] =
     [const { AtomicU64::new(0) }; VCPU_BLOCK_SLOTS];
+
+static RESPONSIVE_N: AtomicU64 = AtomicU64::new(0);
+static RESPONSIVE_US: AtomicU64 = AtomicU64::new(0);
+
+/// Time spent in a multiplexed, wakeable wait. Never a violation — recorded because its
+/// ABSENCE is informative: a coordinator that was never responsive was never idle.
+fn note_responsive(_what: &'static str, us: u64) {
+    RESPONSIVE_N.fetch_add(1, AtomicOrdering::Relaxed);
+    RESPONSIVE_US.fetch_add(us, AtomicOrdering::Relaxed);
+}
 
 fn note_slow_coordinator(what: &'static str, us: u64) {
     SLOW_COORD.fetch_add(1, AtomicOrdering::Relaxed);
@@ -820,10 +896,16 @@ pub fn vcpu_blocking_census() -> String {
     let over = VB_OVERFLOW.load(AtomicOrdering::Relaxed);
     let undeclared = "⊘ COVERAGE: only sites that go through BlockingSection are visible here;                       cross-check worst_trap/slow_traps, which measure the hold itself";
     let (coord_rows, coord_n, coord_worst) = slow_coordinator_rows();
+    let resp = format!(
+        " | RESPONSIVE {} wait(s) totalling {}us ⊘ never a violation — on a coordinator this \
+         is AVAILABILITY, not latency; its ABSENCE would mean the thread was never idle",
+        RESPONSIVE_N.load(AtomicOrdering::Relaxed),
+        RESPONSIVE_US.load(AtomicOrdering::Relaxed),
+    );
     let coord = if coord_n == 0 {
         // ⊘ Zero is the EXPECTED value and is stated, not omitted: an absent line and a clean
         // line are indistinguishable, which is how five instruments went unread today.
-        format!(" | COORD-SLOW 0 (expected) over {}us", COORDINATOR_SLOW_US)
+        format!(" | COORD-SLOW 0 committed-over-{}us (expected)", COORDINATOR_SLOW_US)
     } else {
         format!(
             " | COORD-SLOW {coord_n} section(s) over {}us, worst={coord_worst}us {} \
@@ -838,7 +920,7 @@ pub fn vcpu_blocking_census() -> String {
         )
     };
     if rows.is_empty() {
-        return format!("VCPU-BLOCKING none declared — {undeclared}{coord}");
+        return format!("VCPU-BLOCKING none declared — {undeclared}{coord}{resp}");
     }
     format!(
         "VCPU-BLOCKING {}{} — {undeclared}",
@@ -1085,6 +1167,60 @@ mod blocking_severity_is_per_thread_class {
             !rows.iter().any(|r| r.0 == "unit-test-coord-short"),
             "a SHORT coordinator section must not be reported — the rule is about duration: \
              {rows:?}"
+        );
+    }
+
+    /// ★★★★★ **THE REFUTATION, AS A TEST.** An hour before this existed, the rule was
+    /// DURATION, and it would have called a healthy idle `epoll` the worst offender in the
+    /// system while passing a 900 µs uninterruptible `ioctl`. This pins the corrected
+    /// predicate: responsiveness, not length.
+    #[test]
+    fn a_long_responsive_wait_is_clean_and_a_short_committed_one_can_still_offend() {
+        std::thread::spawn(|| {
+            declare_thread_class(ThreadClass::Coordinator);
+            // The healthy shape: parked far longer than the threshold, but wakeable.
+            let long_poll =
+                BlockingSection::responsive("unit-test-epoll", "the submission queue's eventfd");
+            std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US * 3));
+            drop(long_poll);
+            // The harmful shape: shorter, but nothing could have woken it.
+            let committed = BlockingSection::enter("unit-test-committed-ioctl");
+            std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US + 200));
+            drop(committed);
+        })
+        .join()
+        .unwrap();
+        let (rows, _, _) = slow_coordinator_rows();
+        assert!(
+            rows.iter().any(|r| r.0 == "unit-test-committed-ioctl"),
+            "a COMMITTED wait past the bound must offend: {rows:?}"
+        );
+        assert!(
+            !rows.iter().any(|r| r.0 == "unit-test-epoll"),
+            "a RESPONSIVE wait must never offend however long it ran — it is availability, \
+             not latency. Flagging it is the bug this test exists to prevent: {rows:?}"
+        );
+        assert!(
+            vcpu_blocking_census().contains("RESPONSIVE"),
+            "and responsive time must still be REPORTED, because its absence would mean the \
+             coordinator was never idle: {}",
+            vcpu_blocking_census()
+        );
+    }
+
+    /// ⊘ Responsiveness does NOT excuse a vCPU. "We would have woken promptly" is no comfort
+    /// to a guest whose vCPU was not executing.
+    #[test]
+    fn a_responsive_wait_on_a_vcpu_is_still_a_violation() {
+        {
+            let _t = crate::trapwitness::TrapGuard::enter();
+            drop(BlockingSection::responsive("unit-test-vcpu-responsive", "anything"));
+        }
+        assert!(
+            vcpu_blocking_rows()
+                .iter()
+                .any(|r| r.0 == "unit-test-vcpu-responsive" && !r.2),
+            "a vCPU must not wait at all, responsively or otherwise"
         );
     }
 
