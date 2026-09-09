@@ -825,6 +825,24 @@ pub fn apply_settlement(
 ///
 /// | condition | the hazard it closes |
 /// |---|---|
+/// ⊘⊘ **CORRECTED 2026-09-09 (w392v, boot `run_w392v_qemu.log:1204/1232`) — a RE-MAP now
+/// QUALIFIES too; it used to be the fifth condition and it held a stale translation live.**
+/// The guest unmapped `VA_X → A` and mapped `VA_X → B` (both LIVE objects) and a peer thread's
+/// doorbell drained the witness after both PTE writes had landed, so ONE settlement carried
+/// `unbind(VA_X); bind(VA_X→B)`. The `!is_remap` guard refused it (`remaps_refused=1`,
+/// `refused_vas=[0x82c0000000]`, `by_kind={RepointsPublished:1, UnbindsPublished:1}`), the row
+/// stayed host-published at A, the next operand join read `ALREADY-JOINED`, and the engine
+/// returned A's pattern through a VA the guest had re-pointed at B — the raw client's
+/// `STALE MAPPING CAUGHT RED-HANDED`. The serial arm of the same boot passed only because its
+/// two PTE writes were seen by two different passes (decode saw the unmap alone and revoked;
+/// the sweep saw the map) — luck of the drain, not a property of the design.
+/// ⇒ A re-map of a whole joined row is a REVOKE of the old half plus a fresh, unpublished bind
+/// of the new one, which the next operand join / publication re-joins at B. Safe now because
+/// the caller releases the join CARRYING ITS BYTES (`w392t`, `release_store_join_carrying_bytes`);
+/// `w329b1`'s regression was a byte-dropping release, not the revoke itself. Counted as
+/// [`ApplyOutcome::remaps_revoked`]; [`ApplyOutcome::remaps_refused`] now means what it says —
+/// a re-map that was host-published and failed one of the conditions BELOW.
+///
 /// | `start == va.0` and the row is the whole tabled extent | the **partial extent**: a proposal naming part of a larger binding would revoke bytes nobody proposed. `w291`'s merge was bounded to exact-extent rows for this reason. |
 /// | [`crate::HostBacking::frees_object`] | the **double free**: an [`crate::HostExtent::Slice`] names an arena object that serves sibling bindings at other offsets, so freeing it here destroys what the last one owns. This is the same predicate `kayfabe_fwd::unpublish_backing` already gates its `free` on. |
 /// | `bytes == BackingBytes::JoinsGuestWindow` | the **wrong plane**: a published-GPA row (`SoleBacking`) is the arena case above; only the join is 1 leaf : 1 whole object. (⊘ `ShadowsGuestMemory`, ruling 3's refused chain, used to be the third answer here; deleted 2026-09-09, the state is unrepresentable.) |
@@ -873,6 +891,13 @@ pub fn apply_settlement_as(
     // `va=0x7d05d0200000` — **the bandwidth workload's OUTPUT buffer, live across both of its
     // rows** — and a `4,64` list that PASSED for `w327` failed at `rc=719`. ⚠ That is a
     // revoke of a LIVE translation: no double free, and a regression all the same.
+    //
+    // ⊘⊘ CORRECTED 2026-09-09 (w392v): the w329b1 loss was the RELEASE dropping the join's
+    // bytes (`SparseFb::release_join`), which `w392t` fixed by carrying them back. The
+    // revoke itself is the right action for a re-map — refusing it left `VA_X` translating
+    // to the object the guest had unmapped. `remapped` is now used only to COUNT
+    // (`remaps_revoked` / `remaps_refused`), never to gate. ⚠ Not yet booted against the
+    // `4,64` bandwidth list; the `STALE RACE` THREADS row is the falsifier it was built for.
     let remapped: BTreeSet<u64> = if policy == PublishedUnbind::Refuse {
         BTreeSet::new()
     } else {
@@ -884,14 +909,19 @@ pub fn apply_settlement_as(
                 let h = b.host.expect("checked in the guard");
                 let whole_row = start == va.0;
                 let is_remap = remapped.contains(&va.0);
-                if is_remap && policy == PublishedUnbind::RevokeWholeJoins {
-                    out.remaps_refused += 1;
-                }
+                // ⊘⊘ `!is_remap` was a condition here until 2026-09-09 (w392v). See the doc
+                // block above: it kept a re-pointed row translating to its OLD object.
                 let qualifies = policy == PublishedUnbind::RevokeWholeJoins
-                    && !is_remap
                     && whole_row
                     && h.frees_object()
                     && h.bytes() == crate::BackingBytes::JoinsGuestWindow;
+                if is_remap && policy == PublishedUnbind::RevokeWholeJoins {
+                    if qualifies {
+                        out.remaps_revoked += 1;
+                    } else {
+                        out.remaps_refused += 1;
+                    }
+                }
                 if qualifies {
                     // ★★★ The row leaves the table and its host half leaves WITH it, in one
                     // statement. There is no instant at which the range is untabled and the
@@ -1002,12 +1032,19 @@ pub struct ApplyOutcome {
     /// row is already out of the table when this is returned; the object it named is reachable
     /// through nothing else.
     pub revoked: Vec<RevokedPublication>,
-    /// ★★★ How many host-published unbinds were kept as refusals **because the same
-    /// settlement also binds that VA** — i.e. they are RE-MAPS, not removals. `[measured,
-    /// w329b1]` revoking one of these took out the bandwidth workload's live output buffer.
-    /// ⊘ A re-map wants a RE-POINT (`RepointsPublished`'s question), and this counter is
-    /// how big that unbuilt population is.
+    /// ★★★ How many host-published RE-MAPS (the same settlement also binds that VA) were
+    /// kept as refusals because they failed a condition OTHER than being a re-map — partial
+    /// extent, arena slice, or not a join. ⊘⊘ **Until 2026-09-09 every re-map landed here**
+    /// (`[measured, w329b1]` revoking one dropped the bandwidth workload's output bytes — a
+    /// byte-dropping RELEASE, fixed by `w392t`'s carry-back, not a reason to keep the row).
+    /// Re-maps that qualify are now revoked and counted in [`ApplyOutcome::remaps_revoked`].
     pub remaps_refused: usize,
+    /// ★★★★★ **w392v — how many of [`ApplyOutcome::revoked`] were RE-MAPS**: the same
+    /// settlement also binds that VA to a different page, so the old host half was released
+    /// (bytes carried back by the caller) and the new leaf was bound UNPUBLISHED for the next
+    /// join to take. ⊘ Until 2026-09-09 these were counted in `remaps_refused` and left in the
+    /// table, still translating to the old object — the raw client's `STALE RACE` under threads.
+    pub remaps_revoked: usize,
     /// ★ How many of [`ApplyOutcome::revoked`] name a framebuffer offset **this same
     /// settlement also wants bound** — i.e. the guest moved the frame to another VA rather
     /// than releasing it. Counted because it is the one sub-case where dropping the join's

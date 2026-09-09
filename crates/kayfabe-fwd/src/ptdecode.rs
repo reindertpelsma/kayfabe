@@ -263,6 +263,9 @@ pub struct PtDecodeOutcome {
     /// RE-MAPS, not removals — the population a re-point path would serve and this one must
     /// not touch. See [`kayfabe_mmu::reach::ApplyOutcome::remaps_refused`].
     pub remaps_refused: usize,
+    /// ★★★★★ w392v — how many of [`Self::revoked`] are RE-MAPS: the old host half released,
+    /// the new leaf bound unpublished. See [`kayfabe_mmu::reach::ApplyOutcome::remaps_revoked`].
+    pub remaps_revoked: usize,
     /// Leaves forward-populated into a free range.
     pub bound: usize,
     /// Leaves that restated a binding already in the table.
@@ -901,6 +904,7 @@ fn commit_pt_decode_with(
         }));
         out.revoked_still_desired += po.revoked_still_desired;
         out.remaps_refused += po.remaps_refused;
+        out.remaps_revoked += po.remaps_revoked;
         out.bound += po.bound;
         out.unchanged += po.unchanged;
         out.repointed += po.repointed;
