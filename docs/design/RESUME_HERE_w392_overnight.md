@@ -1,5 +1,32 @@
 # ★★★★★ RESUME HERE — w392 overnight, 2026-09-09
 
+## ✅✅ BOTH OBJECTIVES ARE NOW MET (2026-09-09, box 50376491, rev `c8fe67d6`)
+```
+RAW CLIENT   W392D_OUTCOME=(P)   P1 ✔ P2 ✔ P3 ✔ STALE RACE ✔  THREADS 4 of 4 ✔
+                                 MEAN_FALSIFIER=PASS
+                                 GROW-IN-PLACE 1 · old refusal 0 · Xid 1 (the falsifier's own)
+LLM          W392_OUTCOME=(P)    GPU 16 tokens, text BYTE-IDENTICAL to the same-boot CPU oracle
+                                 LLM_DEVICE=cuda AND =cpu both printed, both RC=0 · host Xid 0
+```
+★★★ **AND THEY WERE THE SAME BUG.** The campaign's long-standing *"16 tokens of garbage text"*
+corruption was the **stale binding**: `reach.rs` had `qualifies = … && !is_remap`, so a re-mapped
+joined row was never revoked and the old binding **kept translating** — you read the *previous
+tensor*. The corrupt measurement (`w392llm5`) ran on `ded5d262`; `9c86655c` removed that guard.
+⊘ The guard itself was a workaround for `SparseFb::release_join` **dropping bytes**, fixed the same
+night by the carrying release — so an earlier fix is what made the later one safe.
+
+⚠ **STALE BELOW THIS LINE.** Everything after this block was written while the LLM was still failing;
+the `(F-scale)`/"corruption reproduces" sections are **superseded** and kept only for the trail.
+
+## ⏭ NEXT, in the owner's stated order
+1. **LLM parity (tok/s)** — needs a NATIVE baseline; nothing in the repo computes tok/s (only
+   `LLM_MS`). ⚠ Any number is *for the legacy arming* (`VAS_PUBLISH=drain`, `PT_SWEEP=on`) — say so.
+2. **The `nvkvm-pv` compute workloads** — `gpu_bench.c`, `mem_bandwidth_probe.c`, `cuda_micro.c` are
+   runnable今 (driver API, `gcc -ldl`, no toolkit); the 10 `.cu` kernels need `nvcc`.
+3. **Porting across driver archs.**
+4. **BAR1/2 untrapped** — branch `w393-bar-passthrough` (`8d74b11d`), 1522 lines, **untested**.
+
+
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.
 
 ## ★★★★★ FINAL STATE OF THE NIGHT — 4 NAMED ROWS GREEN + 3/4 THREADS, **REPRODUCED n=2**
