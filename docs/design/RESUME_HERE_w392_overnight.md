@@ -2,7 +2,24 @@
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.
 
-## THE ONE-LINE STATE
+## ★★★★★ THE ONE-LINE STATE — 2 OF 3 ROWS ARE GREEN (w392p, rev `9977197c`)
+```
+P1          → ✔ VERIFIED over 4 round(s)        ← FIRST EVER GREEN ROW IN THE GUEST
+STALE RACE  → ✔ VERIFIED over 2 round(s)
+P2          → ⊘ REFUSED … 0x9080000000 NEVER RETIRED
+MEAN_FALSIFIER=PASS
+GR-BIRTH: adopt=GUEST-RING x8, userd=GUEST-USERD x8   ← BOTH halves are the guest's, at last
+BIRTH-AT-ALLOC proc=2 kind=Passthrough x5+           ← births now at CHANNEL ALLOCATION
+host Xid = 2, and BOTH are accounted for:
+   CE0 @ 0xa0_00000000  = the FALSIFIER's deliberately-unmapped VA (why the falsifier passes)
+   CE2 @ 0x90_80000000  = P2's operand — the ONE real failure left
+```
+**The remaining wall is the UVM lane only.** `UVM published the ring object at 0x9000000000` and
+`COPY(2) bound to the UVM-owned space, runlist 1` — a VA space **`nvidia-uvm` owns and RM does not
+manage** (`RingSource::OursPlaced`'s documented case). P2's operand at `0x9080000000` is not in the
+host VAS, so CE2 faults `FAULT_PDE`.
+
+## SUPERSEDED ONE-LINE STATE (kept for the trail)
 The raw mean client now **adopts the guest's ring** and the host engine **executes the guest's
 pushbuffer** (`Xid 0 → 5 × Xid 31`). It still fails, and the remaining wall is **FB-JOIN ALIASING**:
 one framebuffer page mapped at two guest VAs, host object bound at only one.
