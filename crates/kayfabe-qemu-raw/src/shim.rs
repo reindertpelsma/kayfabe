@@ -11789,7 +11789,40 @@ fn join_one_fb_leaf(
             // a sibling) is the ORPHAN arm's `NOT AN ORPHAN` case: its bytes are what the old
             // join holds, and a regrow would hand it a frame it cannot alias at its own length.
             // Refused by name for the same reason, before anything is released.
-            let peer_described = device.fb_frame_namers(leaf.phys, Some(pdb));
+            // ★★★★★ **w393 — A PEER DOES NOT BLOCK A LEAF THAT CONTAINS ITS JOIN.**
+            //
+            // ⊘⊘ The refusal below was written for a peer whose bytes the old join holds, on the
+            // reasoning that *"a regrow would hand it a frame it cannot alias at its own length"*.
+            // **That is false when the new leaf is LARGER and starts at the same base**, because
+            // `SparseFb::joined_at` resolves by **containment**, not by exact base+length: a
+            // 64 KiB join at `phys` serves every 4 KiB sub-range of itself. The peer keeps
+            // reading the same bytes through the bigger join.
+            //
+            // ★ **And the peer this fires on is measured to be a GHOST** `[w392w,
+            // run_w392w_qemu.log:1233 + :610]`: the only other row naming the frame belongs to an
+            // **externally-owned UVM VAS** whose page tree `nvidia-uvm` drops **wholesale** at
+            // teardown — there is no per-PTE clear for us to witness, so the row is never unbound
+            // and `fb_frame_namers` (which counts **table rows, not guest PTEs**,
+            // `device.rs:4654`) counts it forever. The guest heap then re-hands the frame to a new
+            // object, and the stale row pins the join permanently: `JOINED 0 leaf/leaves,
+            // 1 REFUSED`, the ONLY refusal in that boot, repeated on 7 later publish passes.
+            //
+            // ⇒ Containment is the discriminator that does not require proving the peer dead:
+            // **grow-in-place is safe for any peer, ghost or live.** A leaf that would SHRINK the
+            // join, or sit at a different base, still refuses by name — that case really can take
+            // bytes away from a peer.
+            let contains_existing = leaf.len >= existing_len;
+            let peer_described = if contains_existing {
+                0
+            } else {
+                device.fb_frame_namers(leaf.phys, Some(pdb))
+            };
+            if contains_existing {
+                eprintln!(
+                    "{head} {what} ★★★ JOIN-EXTENT GROW-IN-PLACE fb_phys=0x{:x}: the store's join                      is len=0x{:x} and this leaf at va=0x{:x} wants len=0x{:x}, which CONTAINS it                      — regrowing carries the bytes and every peer keeps reading them through the                      larger join (`joined_at` resolves by containment). ⊘ A SHRINK or a different                      base still refuses by name",
+                    leaf.phys, existing_len, leaf.va, leaf.len
+                );
+            }
             if peer_described > 0 {
                 eprintln!(
                     "{head} {what} ⊘ JOIN-EXTENT MISMATCH (LIVE PEER) fb_phys=0x{:x}: the \
