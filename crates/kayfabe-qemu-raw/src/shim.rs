@@ -4980,6 +4980,16 @@ fn doorbell_publish_loop(
             continue;
         }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
+            // ★★★★★ **THE BARRIER ARMS THE RESCAN.** The guest has told us its page tables are
+            // committed, so this is the moment the answer is knowable — and the only trigger
+            // that can discover page-table pages we have never seen, which a dirty-bit hint
+            // keyed on KNOWN pt_pages structurally cannot.
+            let armed = port.arm_rescan_for_gpu();
+            if armed > 0 {
+                eprintln!(
+                    "kayfabe: MMUINVAL-RESCAN armed={armed} VAS(es) ⇒ re-walk from the root at                      the barrier, rather than guessing which subtree moved"
+                );
+            }
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Publish;
             if let Some(line) = ctx.publish_vas_rows(token, None) {
@@ -5974,6 +5984,12 @@ impl SharedDoorbell {
     ///
     /// ⚠ Calling this does not make anything asynchronous. It removes the reason publication
     /// *could not* leave the trap thread; the call site above is still synchronous.
+    /// Arm a re-walk of every VAS on the doorbell target GPU. See
+    /// [`kayfabe_rt::device::SharedDevice::arm_rescan_for_gpu`].
+    fn arm_rescan_for_gpu(&self) -> usize {
+        self.device.arm_rescan_for_gpu(DOORBELL_TARGET_GPU)
+    }
+
     fn publish_ctx(&self) -> PublishContext {
         PublishContext {
             device: Arc::clone(&self.device),

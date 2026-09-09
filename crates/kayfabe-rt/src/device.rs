@@ -3998,6 +3998,45 @@ impl SharedDevice {
     /// context buffers are sub-allocations and an exact-start test would report almost
     /// everything as promote-only and be wrong in the flattering direction.
     #[must_use]
+    /// ★★★★★ **ARM A RESCAN OF EVERY VAS ON `gpu` — the barrier the owner's design turns on.**
+    ///
+    /// Owner, 2026-09-10: the VA refresh *"fires at tlb invalidate, the rpc for maps at the call
+    /// its needed, the kernel emulated channel barrier."*
+    ///
+    /// ⊘ **Why a barrier and not a dirty-page hint.** `plan_pt_sweep` sets `dirty` only when a
+    /// page **already known to be a page-table page** is written (`vas.pt_pages` /
+    /// `vas.pt_meta`). A guest that GROWS its tree allocates fresh pages we have never seen, so
+    /// writes to them can never arm anything: we only notice changes to things we already know
+    /// about. `[measured w407/w408/w409]` that left `pdb=0x201000` skipped on 45 of ~60 sweep
+    /// passes across three consecutive builds, with four GR context VAs invisible and
+    /// `P3 rpc-bind` red — three different fixes upstream of it changed nothing, because the
+    /// arming was never the part that was broken.
+    ///
+    /// ⇒ At a barrier we do not guess which subtree moved; we re-walk from the root, which is
+    /// the only thing that can discover a page we have never seen. The guest has told us its
+    /// tables are committed, so this is exactly the moment the answer is knowable.
+    /// ⊘ Affordable: `w328` measured the whole-VAS sweep at **0.0084 %** of the worst trap.
+    /// ⊘ It sets `dirty` rather than resetting `sweeps`: `dirty` is the "look again" signal and
+    /// `sweeps == 0` means "never established anything". Conflating them would make every
+    /// barrier look like a first sight.
+    pub fn arm_rescan_for_gpu(&self, gpu: GpuId) -> usize {
+        let mut armed = 0usize;
+        let mut st = self.state.write();
+        let mut arm = |p: &mut kayfabe_core::gpu::Proc| {
+            for (&(g, _), vas) in &mut p.vases {
+                if g == gpu {
+                    vas.sweep.dirty = true;
+                    armed += 1;
+                }
+            }
+        };
+        arm(st.system.get_mut());
+        for cell in st.procs.values() {
+            arm(&mut cell.lock());
+        }
+        armed
+    }
+
     pub fn vas_promote_superset(&self, pid: ProcId) -> Vec<String> {
         self.with_proc_mut(pid, |p| {
             p.vases
