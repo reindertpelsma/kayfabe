@@ -9542,9 +9542,7 @@ impl SharedDoorbell {
             .collect();
         format!(
             " | VAS-CENSUS procs={} | GUEST-DESCRIBES {} | TABLE-DESCRIBES {} \
-             | HOST-PUBLISHED {} | PROMOTE-PARKED {} | PROMOTE-SUPERSET {} ⊘ only_promote=0 \
-             on every VAS ⇒ the guest's own page tables already describe everything the \
-             promote join supplied, and the pairing apparatus is deletable              | COVERAGE {} | COVERAGE-VAS {}",
+             | HOST-PUBLISHED {} | PROMOTE-PARKED {} | PROMOTE-SUPERSET {} ⊘⊘ MEASURED w406: only_promote=4 of 4 on the user VAS — the guest page-table view covers NONE of the promote-bound VAs, so a PTE rescan is NOT a superset and the promote join is NOT deletable on this evidence | COVERAGE {} | COVERAGE-VAS {}",
             pids.len(),
             none(&reach, "reachable"),
             none(&table, "in the table"),
