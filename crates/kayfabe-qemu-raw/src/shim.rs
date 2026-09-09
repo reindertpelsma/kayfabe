@@ -13356,6 +13356,10 @@ impl Regs {
         // halves of "did the guest ever get told anything": the pubqueue says what WE
         // deferred, the os-event gate says what the GUEST was allowed to receive.
         eprintln!("kayfabe: {}", self.os_event_census());
+        // ★★★★★ Owner invariant (2): "no blocking calls in a lock in any thread unless
+        // needed." Printed beside the others because `worst_trap` says a trap WAITED and
+        // this is the only thing that says WHO HELD and FOR HOW LONG.
+        eprintln!("kayfabe: {}", kayfabe_util::lock::lockcost::census());
     }
 
     /// ★★★★★ **Start the completion observer's reactor loop.** See [`ObserverThread`].

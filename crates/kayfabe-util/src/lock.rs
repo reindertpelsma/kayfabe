@@ -200,22 +200,35 @@ impl<T> RankedRwLock<T> {
     /// deliberately not relaxed for shared mode.
     pub fn read(&self) -> RankedReadGuard<'_, T> {
         check_acquire(self.rank);
+        let t0 = std::time::Instant::now();
         let inner = self.inner.read().expect(POISONED);
+        lockcost::note_wait(self.rank, t0.elapsed());
         note_acquired(self.rank);
         RankedReadGuard {
             inner,
             rank: self.rank,
+            held_since: std::time::Instant::now(),
         }
     }
 
     /// Exclusive (write) acquisition. R3-checked as [`RankedRwLock::read`].
     pub fn write(&self) -> RankedWriteGuard<'_, T> {
         check_acquire(self.rank);
+        // ★★★★★ **OWNER INVARIANT (2), 2026-09-09: "no blocking calls in a lock in any
+        // thread unless needed."** The WAIT is measured separately from the HOLD because
+        // they accuse different threads: a long wait is a fact about whoever HELD the lock,
+        // and only the hold names the offender. `[measured]` the vCPU's `materialize`
+        // segment — a bare `state.write()` acquire with nothing pending — matched
+        // `worst_trap` to 58 us at 1.88 s, while the inline work it was blamed on peaked at
+        // 13 ms. The whole 1.9 s was this line, and nothing said who was holding it.
+        let t0 = std::time::Instant::now();
         let inner = self.inner.write().expect(POISONED);
+        lockcost::note_wait(self.rank, t0.elapsed());
         note_acquired(self.rank);
         RankedWriteGuard {
             inner,
             rank: self.rank,
+            held_since: std::time::Instant::now(),
         }
     }
 
@@ -234,6 +247,8 @@ impl<T> RankedRwLock<T> {
 pub struct RankedReadGuard<'a, T> {
     inner: RwLockReadGuard<'a, T>,
     rank: LockRank,
+    /// When the lock was actually acquired — the HOLD, which names the offender.
+    held_since: std::time::Instant,
 }
 
 impl<T> Deref for RankedReadGuard<'_, T> {
@@ -245,6 +260,7 @@ impl<T> Deref for RankedReadGuard<'_, T> {
 
 impl<T> Drop for RankedReadGuard<'_, T> {
     fn drop(&mut self) {
+        lockcost::note_hold(self.rank, self.held_since.elapsed());
         note_released(self.rank);
     }
 }
@@ -254,6 +270,8 @@ impl<T> Drop for RankedReadGuard<'_, T> {
 pub struct RankedWriteGuard<'a, T> {
     inner: RwLockWriteGuard<'a, T>,
     rank: LockRank,
+    /// When the lock was actually acquired — see [`RankedReadGuard::held_since`].
+    held_since: std::time::Instant,
 }
 
 impl<T> Deref for RankedWriteGuard<'_, T> {
@@ -271,6 +289,7 @@ impl<T> DerefMut for RankedWriteGuard<'_, T> {
 
 impl<T> Drop for RankedWriteGuard<'_, T> {
     fn drop(&mut self) {
+        lockcost::note_hold(self.rank, self.held_since.elapsed());
         note_released(self.rank);
     }
 }
@@ -738,6 +757,119 @@ mod the_vcpu_allowlist {
         assert!(
             vcpu_blocking_census().contains("worst_trap"),
             "and it must name the cross-check that CANNOT be fooled by an undeclared site"
+        );
+    }
+}
+
+
+// =====================================================================================
+// ★★★★★ OWNER INVARIANT (2), 2026-09-09 — "no blocking calls in a lock in any thread
+// unless needed", made measurable. WAIT accuses the HOLDER; only the HOLD names it.
+// =====================================================================================
+pub mod lockcost {
+    use super::LockRank;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    /// A hold or wait longer than this is a violation worth ranking. 1 ms is generous:
+    /// an uncontended acquire is nanoseconds, so millisecond scale already means someone
+    /// did real work inside.
+    pub const SLOW_US: u64 = 1_000;
+    const RANKS: usize = 8;
+
+    static WORST_WAIT: [AtomicU64; RANKS] = [const { AtomicU64::new(0) }; RANKS];
+    static WORST_HOLD: [AtomicU64; RANKS] = [const { AtomicU64::new(0) }; RANKS];
+    static SLOW_WAITS: [AtomicU64; RANKS] = [const { AtomicU64::new(0) }; RANKS];
+    static SLOW_HOLDS: [AtomicU64; RANKS] = [const { AtomicU64::new(0) }; RANKS];
+
+    fn slot(rank: LockRank) -> usize {
+        (rank as usize).min(RANKS - 1)
+    }
+
+    pub fn note_wait(rank: LockRank, d: Duration) {
+        let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
+        WORST_WAIT[slot(rank)].fetch_max(us, Ordering::Relaxed);
+        if us >= SLOW_US {
+            SLOW_WAITS[slot(rank)].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn note_hold(rank: LockRank, d: Duration) {
+        let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
+        WORST_HOLD[slot(rank)].fetch_max(us, Ordering::Relaxed);
+        if us >= SLOW_US {
+            SLOW_HOLDS[slot(rank)].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// One line per rank that saw traffic.
+    ///
+    /// ⊘ **Reading it**: a large `worst_wait` with a small `worst_hold` at the same rank is
+    /// **starvation or a queue of short holders**, not one long holder — an important
+    /// difference, because the fixes are opposite (shorten the critical section vs. change
+    /// the fairness/shape). A large `worst_hold` names the invariant-(2) violation directly.
+    /// ⊘ Ranks with no traffic print nothing rather than a row of zeros: "never acquired"
+    /// and "acquired instantly" are different facts.
+    #[must_use]
+    pub fn census() -> String {
+        let mut rows = Vec::new();
+        for r in 0..RANKS {
+            let (w, h) = (
+                WORST_WAIT[r].load(Ordering::Relaxed),
+                WORST_HOLD[r].load(Ordering::Relaxed),
+            );
+            if w == 0 && h == 0 {
+                continue;
+            }
+            rows.push(format!(
+                "[rank{r} worst_wait={w}us worst_hold={h}us slow_waits={} slow_holds={}]",
+                SLOW_WAITS[r].load(Ordering::Relaxed),
+                SLOW_HOLDS[r].load(Ordering::Relaxed),
+            ));
+        }
+        if rows.is_empty() {
+            return "LOCKCOST ⊘ no ranked lock was ever acquired — unmeasured, not zero"
+                .to_string();
+        }
+        format!(
+            "LOCKCOST(>{}us) {} ⊘ a big wait with a small hold is STARVATION or many short \
+             holders, not one long one — opposite fixes",
+            SLOW_US,
+            rows.join(" ")
+        )
+    }
+}
+
+#[cfg(test)]
+mod lock_cost_separates_wait_from_hold {
+    //! ★★★ **WAIT and HOLD accuse different threads, and conflating them is what cost this
+    //! campaign the day.** `worst_trap` said a trap waited 1.9 s; I attributed it to the work
+    //! visible at that trap's site. Segment timing later showed the work took 13 ms and the
+    //! 1.9 s was the acquire. A wait is a fact about **whoever held**; only the hold names it.
+    use super::*;
+
+    #[test]
+    fn a_long_hold_is_counted_and_a_bare_acquire_is_not() {
+        let l = RankedRwLock::new(LockRank::Leaf, 0u32);
+        {
+            let _g = l.write();
+            std::thread::sleep(std::time::Duration::from_micros(lockcost::SLOW_US + 500));
+        }
+        let line = lockcost::census();
+        assert!(line.contains("worst_hold="), "{line}");
+        assert!(line.contains("rank3"), "the LEAF rank must be the one named: {line}");
+        assert!(!line.contains("slow_holds=0]"), "a >1ms hold must count: {line}");
+    }
+
+    /// ⊘ An untouched rank must print NOTHING, not a row of zeros — "never acquired" and
+    /// "acquired instantly" are different facts and this tree has paid for reading one as
+    /// the other.
+    #[test]
+    fn an_untouched_rank_prints_nothing_rather_than_a_tidy_zero() {
+        let line = lockcost::census();
+        assert!(
+            !line.contains("worst_wait=0us worst_hold=0us"),
+            "a rank with no traffic must be absent, not zeroed: {line}"
         );
     }
 }
