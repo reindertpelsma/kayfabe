@@ -24,7 +24,16 @@ the `(F-scale)`/"corruption reproduces" sections are **superseded** and kept onl
 2. **The `nvkvm-pv` compute workloads** — `gpu_bench.c`, `mem_bandwidth_probe.c`, `cuda_micro.c` are
    runnable今 (driver API, `gcc -ldl`, no toolkit); the 10 `.cu` kernels need `nvcc`.
 3. **Porting across driver archs.**
-4. **BAR1/2 untrapped** — branch `w393-bar-passthrough` (`8d74b11d`), 1522 lines, **untested**.
+4. **BAR1/2 untrapped** — branch `w393-bar-passthrough`, **MERGED to master 2026-09-09**.
+   The demand-driven mirror is BOOTED and MEASURED (`fa9d6395`): BAR1 traps **88,193 → 91**
+   (969×), BAR2 armed with its own census, client `(P)` `THREADS 4 of 4` on **all three** arms,
+   n=2, Xid 0. See `bar1_passthrough_device_local_host_visible.md` §7.6/§7.7.
+   ⊘ **Not measured**: throughput, and the LLM under the arms.
+   ⊘ **And it is NOT the parity gate** — measured the same day: BAR1 saw 5 839 accesses in a
+   boot that moved 128 MB of H2D, so the bulk data never goes through BAR1 (it DMAs to guest
+   RAM by GPA). It keeps its priority for the owner's *other* reason: a QEMU **IO** region has
+   no cacheability at all, so `DEVICE_LOCAL | HOST_VISIBLE` is the only shape in which WB/WC is
+   expressible.
 
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.

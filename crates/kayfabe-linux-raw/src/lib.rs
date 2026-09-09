@@ -269,6 +269,7 @@ compile_error!(
 
 pub mod affinity;
 mod affinity_unsafe;
+mod arena_unsafe;
 pub mod bounds;
 pub mod cache;
 pub mod census;
@@ -308,6 +309,7 @@ pub mod sandbox {
     };
 }
 
+pub use arena_unsafe::{ARENA_EXHAUSTED, ARENA_PAGE, ArenaPage, SharedPageArena};
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevDir, Indirect, POINTER_FIELD_WIDTH};

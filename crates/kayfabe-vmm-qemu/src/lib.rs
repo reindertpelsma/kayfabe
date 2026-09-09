@@ -757,6 +757,25 @@ impl Drop for PlanReservation {
 
 /// Everything one reservation's execute phase created, so a failure anywhere inside it
 /// drops the whole lot before a single field has been recorded anywhere.
+/// ★ w393 — what backs a reservation window at install time.
+#[derive(Debug, Clone, Copy)]
+enum WindowBacking<'fd> {
+    /// The plane mints the backing: anonymous, or a `SharedRam` when `shareable_ram`.
+    /// Today's behaviour for every existing caller, byte for byte.
+    Minted,
+    /// ★★★★★ An armed device node the isolate crossed — placed whole by
+    /// [`GuestWindow::place_device_view`]; see [`QemuMachine::install_device_window`].
+    DeviceView(std::os::fd::BorrowedFd<'fd>),
+    /// ★★★★★ w393 — a `MAP_SHARED` file the caller already holds bytes in (a join's
+    /// `memfd`, the framebuffer page arena), placed at `offset`; see
+    /// [`QemuMachine::install_file_window`]. Not minted here and not exportable through
+    /// [`QemuVmm::export_ram`]: the pages have an owner already.
+    SharedFile {
+        fd: std::os::fd::BorrowedFd<'fd>,
+        offset: u64,
+    },
+}
+
 #[derive(Debug)]
 struct Installed {
     window: Arc<GuestWindow>,
@@ -1044,7 +1063,7 @@ impl QemuMachine {
         let ceiling = slots
             .ceiling()
             .map_err(|e| host_refused("querying the memslot ceiling", &e))?;
-        let alloc = SlotAllocator::new(ceiling).map_err(VmmError::Unsupported)?;
+        let alloc = SlotAllocator::for_machine(ceiling).map_err(VmmError::Unsupported)?;
         // 4. Block migration and checkpoint-restart, before anything is mapped (§8.4).
         let blocker = host
             .migrate_add_blocker("this device forwards to a host GPU through process-local state")
@@ -1164,7 +1183,108 @@ impl QemuMachine {
         spec: &WindowSpec,
         what: &'static str,
     ) -> Result<RamRegionId, VmmError> {
-        self.install_window_inner(spec, None, what).map(|(r, _)| r)
+        self.install_window_inner(spec, None, WindowBacking::Minted, what)
+            .map(|(r, _)| r)
+    }
+
+    /// ★★★★★ **w393 — install a passthrough window over `[gpa, gpa+len)` whose backing is
+    /// an ARMED DEVICE NODE the isolate crossed** (`kayfabe_isolate::DeviceView`): the
+    /// guest-side half of `DEVICE_LOCAL | HOST_VISIBLE`. The guest's memslot resolves to
+    /// the card's own pages; a guest CPU store into it takes **no VM exit** and lands in
+    /// memory the host engine reads natively. No `SparseFb` page, no join, no carry.
+    ///
+    /// Everything about the slot is [`QemuMachine::install_ram_window`]'s: the BAR must be
+    /// one the hypervisor does not back (`bar_is_unbacked_reservation`, which the QOM
+    /// glue answers *yes* for BAR1 only under its `bar1-passthrough` property), the range
+    /// must be page-aligned and inside it, and the plane's own reservations may not
+    /// overlap. What differs is the backing placed inside the window:
+    /// [`GuestWindow::place_device_view`] instead of a minted `SharedRam`, so this window
+    /// has no `ram` and [`QemuVmm::export_ram`] cannot name it — the pages are not ours to
+    /// export twice.
+    ///
+    /// `fd` is borrowed for the duration of the `mmap` only. The mapping outlives the
+    /// descriptor (the VMA holds the `struct file`), so the caller may close it on return
+    /// — and under decision (b) it should, to shorten the interval in which this process
+    /// holds a descriptor with an RM escape handler behind it. `len` must be the isolate's
+    /// reported page-rounded `mmap_len`, or the driver refuses the `mmap` with `ENXIO`.
+    ///
+    /// ⚠ **No production caller on this branch.** The mirror that walks the guest's BAR1
+    /// page table and drives this verb is the remaining work, and the crossing it consumes
+    /// waits on the owner's decision-(b) ruling. It exists so the plane's half is real and
+    /// checkable before the policy question is settled.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_ram_window`], plus whatever the driver's `mmap` refuses.
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn install_device_window(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+    ) -> Result<RamRegionId, VmmError> {
+        self.install_window_inner(
+            &WindowSpec::passthrough(gpa, len),
+            None,
+            WindowBacking::DeviceView(fd),
+            "installing a device-view reservation",
+        )
+        .map(|(r, _)| r)
+    }
+
+    /// ★★★★★ **w393 — install a window over `[gpa, gpa+len)` whose backing is `len` bytes
+    /// of a shared file the caller already serves from**, at file `offset`: the
+    /// demand-driven BAR mirror's verb. The guest's memslot resolves to the **same
+    /// physical pages** the framebuffer store reads and writes for that frame (a join's
+    /// `memfd`, or the page arena), so a guest access through it takes no VM exit and lands
+    /// in the one memory everything else already names.
+    ///
+    /// `readonly` installs a read-only slot: a guest **store** still exits and reaches the
+    /// trap, which is what a read-only PTE in the guest's own BAR page table demands.
+    ///
+    /// Everything about the slot is [`QemuMachine::install_ram_window`]'s — the BAR must be
+    /// one the hypervisor does not back, the range page-aligned and inside it, no overlap
+    /// with another of our reservations. `fd` is borrowed for the `mmap` only; the mapping
+    /// outlives it.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_ram_window`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn install_file_window(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+        offset: u64,
+        readonly: bool,
+    ) -> Result<RamRegionId, VmmError> {
+        let spec = WindowSpec::passthrough(gpa, len);
+        let whole = gpa..gpa + len;
+        self.install_window_inner(
+            &spec,
+            if readonly { Some(&whole) } else { None },
+            WindowBacking::SharedFile { fd, offset },
+            "installing a shared-file window (BAR mirror)",
+        )
+        .map(|(r, _)| r)
+    }
+
+    /// ★ w393 — where BAR `bar` was realized, or `None` if this machine has no such BAR.
+    #[must_use]
+    pub fn bar_placement(&self, bar: BarId) -> Option<BarPlacement> {
+        self.plane.bars.iter().copied().find(|b| b.bar == bar)
+    }
+
+    /// ★ w393 — the hypervisor's own answer to *"is `bar` a range I do not back?"*, i.e.
+    /// whether a reservation may be installed inside it at all. The QOM glue answers *yes*
+    /// for BAR1/BAR2 only under its `bar1-passthrough` / `bar2-passthrough` properties, so
+    /// this is how the shell learns the arm without a second flag that could disagree.
+    #[must_use]
+    pub fn bar_is_unbacked_reservation(&self, bar: BarId) -> bool {
+        self.plane.host.bar_is_unbacked_reservation(bar)
     }
 
     /// The shared body. `read_native` carries the write-trap sub-range that needs a
@@ -1173,6 +1293,7 @@ impl QemuMachine {
         &self,
         spec: &WindowSpec,
         read_native: Option<&Range<u64>>,
+        backing: WindowBacking<'_>,
         what: &'static str,
     ) -> Result<(RamRegionId, SlotId), VmmError> {
         let p = &self.plane;
@@ -1242,7 +1363,27 @@ impl QemuMachine {
                 p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                 host_refused("a reservation mapping", &e)
             })?);
-            let ram = if p.shareable_ram {
+            // ★ w393 — a device view is placed whole and mints nothing: the pages are the
+            // card's, and `shareable_ram` is a statement about guest RAM we author.
+            if let WindowBacking::DeviceView(fd) = backing {
+                window
+                    .place_device_view(HostOffset::ZERO, len, fd)
+                    .map_err(|e| {
+                        p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                        host_refused("placing the device view", &e)
+                    })?;
+            }
+            // ★ w393 — a shared file is placed whole at the caller's offset, for the same
+            // reason: the bytes already have an owner (the store's arena, a join's memfd).
+            if let WindowBacking::SharedFile { fd, offset } = backing {
+                window
+                    .place(HostOffset::ZERO, len, RawBacking::SharedFile { fd, offset })
+                    .map_err(|e| {
+                        p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                        host_refused("placing the shared-file backing (BAR mirror)", &e)
+                    })?;
+            }
+            let ram = if matches!(backing, WindowBacking::Minted) && p.shareable_ram {
                 let r = Arc::new(SharedRam::create(len).map_err(|e| {
                     p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                     host_refused("a shareable guest-RAM backing", &e)
@@ -1982,6 +2123,16 @@ impl QemuVmm {
         self.plane.audit.report()
     }
 
+    /// ★ w393 — a [`QemuMachine`] handle onto the same plane, for a caller that holds only
+    /// a `QemuVmm` and needs the machine's window verbs (the BAR mirror). Two handles, one
+    /// plane; nothing is duplicated and nothing is torn down by dropping this one.
+    #[must_use]
+    pub fn machine(&self) -> QemuMachine {
+        QemuMachine {
+            plane: Arc::clone(&self.plane),
+        }
+    }
+
     /// ★★★★★ **The stated layout, asked through the handle a data-plane caller already
     /// holds** — the same table [`QemuMachine::resolve_guest_ram`] answers from, because it
     /// is the same `Plane`.
@@ -2497,6 +2648,7 @@ impl Vmm for QemuVmm {
         let (region, slot) = machine.install_window_inner(
             &spec,
             write_trap.as_ref(),
+            WindowBacking::Minted,
             "map_read_native (a read-native reservation)",
         )?;
         // The overlay's contents come from the named backing; a read-native window whose
