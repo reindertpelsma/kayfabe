@@ -614,3 +614,52 @@ half of a promoted context buffer, and why does the user proc never receive it?*
 calls `with_proc_mut` from inside the promote, which is already inside `route_act` — the
 re-entrant call returns `None` and `.flatten()` swallowed it. Read the halves from the `Vas`
 already in scope, not through a second routing call.
+
+---
+
+# ★★★★★ P3's ROOT CAUSE: the page-table walker reads only ONE aperture
+Six boots, each ruling out the previous hypothesis, ending in a structural defect.
+
+| boot | showed | ruled out |
+|---|---|---|
+| w406 | `only_promote=4 of 4` | "the PTE rescan is a superset" |
+| w407 | epoch fixed, still skipped | the circular dirty gate as the binding constraint |
+| w408 | `witness_writes=191 reach_pages=1` | attribution — the writes DO reach the right VAS |
+| w409 | empty-scan fix, still skipped | `sweeps==0` retirement |
+| w410 | barrier arms 606×, sweeps 30→63 pages | the trigger — arming now works |
+| w411 | **`pdb=0x201000` gets 37 sweep tasks** | the sweep not running. **It runs and finds nothing.** |
+
+```rust
+pub struct PtPage { pub phys: u64, pub aperture: Aperture, pub level: u8, .. }
+
+pub trait FbRead {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool;   // ← phys only. NO APERTURE.
+}
+```
+⇒ **The walker decodes an aperture into `PtPage` and the byte source throws it away.** Every
+page-table page is read as though it lived in the framebuffer. A VAS whose tables live in
+**sysmem** is read from the wrong memory, forever, no matter what triggers the walk.
+
+★ It explains every observation at once: `proc=0`'s VASes sweep fine (tables in FB); the user
+proc's `pdb=0x201000` takes 37 sweep tasks and yields nothing; its four GR context VAs are
+`only_promote`; `P3 rpc-bind` is red while `P1`/`P2`/`THREADS` are green.
+
+## ⊘ AND IT FAILS SILENTLY, in the way the trait's own doc predicts
+`truncated=0` — the reads **succeed**. So the source returns bytes for an address it does not
+back, and a zero-filled page decodes as a page of entirely invalid entries. `FbRead::read`'s doc
+says exactly this:
+> *"`false` means **this source cannot serve the range** … It must never be spelled as "zeros":
+> a zero-filled page decodes as a full page of invalid entries, which is a page that
+> legitimately maps nothing, and the two are opposite facts."*
+⇒ Two opposite facts — *"the tables say nothing is mapped"* and *"we cannot see the tables"* —
+arriving as the same answer. That is why four correct upstream fixes changed nothing: each made
+the walk happen more, and the walk was reading the wrong bytes and reporting success.
+
+## ⇒ THE FIX IS THE OWNER'S OWN DESIGN
+`FbRead` must take **a GPGA and its aperture** and return the right bytes regardless of
+backing — which is `gpga_views_one_accessor.md` exactly: *"any code needing to handle gpga data
+… do not worry about the backing, any backing works, they just use the proper function."* The
+page-table walker is the first consumer that needs it, and the reason it needs it is not
+tidiness: it is reading the wrong memory today.
+⊘ And `read` must distinguish unbacked from zero, or the fix is invisible for the same reason
+the bug was.
