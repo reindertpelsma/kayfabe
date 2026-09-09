@@ -13360,6 +13360,49 @@ impl Regs {
         // needed." Printed beside the others because `worst_trap` says a trap WAITED and
         // this is the only thing that says WHO HELD and FOR HOW LONG.
         eprintln!("kayfabe: {}", kayfabe_util::lock::lockcost::census());
+        // ★★★★★ **OWNER, 2026-09-09 (from nvkvm-pv): "you need to support enough concurrent
+        // operations, otherwise allow scaling threads, so that for operations bare metal runs
+        // in parallel for you its not queued serialised."**
+        //
+        // `DEFAULT_POOL_WORKERS = 4` per `(Proc, GpuId)` isolate, and its doc is explicit that
+        // the pool "is *statically* sized first and grows dynamically only when a measured
+        // workload proves the bound hurts". `PoolWaits` carries exactly the numbers that
+        // would prove it — `saturated`, `parked`, and `peak_waiters`, whose own doc calls it
+        // *"the number that says whether the pool is merely touched or genuinely the
+        // constraint"* — and **no boot has ever printed them**, so the trigger the design
+        // names has never been checkable.
+        // ⊘ It also bounds the claim: RM serializes every ioctl-reachable path on the
+        // per-client WRITE lock and takes the GLOBAL API lock in WRITE for every alloc/free,
+        // held across the GSP RPC, so more workers buy no wire concurrency for ALLOCS. What
+        // they buy is liveness isolation. ⚠ The sharp case the owner names is different and
+        // is NOT covered by that argument: **a kernel launch costs ZERO ioctls** and is fully
+        // parallel on bare metal, so anything that funnels launches through one lane
+        // serializes work the hardware runs concurrently.
+        {
+            let waits = self.device.pool_waits();
+            if waits.is_empty() {
+                eprintln!(
+                    "kayfabe: POOLWAITS ⊘ no isolate pool was ever asked — unmeasured, not zero"
+                );
+            } else {
+                let rows = waits
+                    .iter()
+                    .map(|(gpu, w)| {
+                        format!(
+                            "[gpu{} saturated={} parked={} peak_waiters={} waiting={}]",
+                            gpu.0, w.saturated, w.parked, w.peak_waiters, w.waiting
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                eprintln!(
+                    "kayfabe: POOLWAITS workers={}/isolate {rows} ⊘ peak_waiters>0 means guest \
+                     threads QUEUED behind the pool; saturated>0 with peak_waiters=0 is a \
+                     near-miss and is NOT evidence the bound hurts",
+                    kayfabe_isolate::DEFAULT_POOL_WORKERS,
+                );
+            }
+        }
     }
 
     /// ★★★★★ **Start the completion observer's reactor loop.** See [`ObserverThread`].
