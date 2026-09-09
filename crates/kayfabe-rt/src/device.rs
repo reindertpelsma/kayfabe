@@ -5834,6 +5834,26 @@ impl SharedDevice {
             // lock.
             self.promote_binds
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            // ★★★★★ **WHAT THE CAPTURE ACTUALLY BOUND** — `[w401]` the RPC-bind publication
+            // fired 4× and published 3 rows once and 0 three times, while `P3 rpc-bind` stayed
+            // red. Two readings fit that equally: the capture binds P3's context and the
+            // PUBLISHER misses it, or the capture never binds it at all. A count of
+            // publications cannot separate them, so print what the JOIN itself bound —
+            // route, counts, and the ranges — and let the next boot say which.
+            // ⊘ One line per promote, not per range: this is on a vCPU under the plane's
+            // rank-0 mutex, and `eprintln!` is itself a blocking site.
+            if let Ok(join) = out.as_ref() {
+                eprintln!(
+                    "kayfabe: PROMOTE-BOUND proc={} gpu={} bound={} already={} joined={} parked={} half_already={} ⇒ the rows the RPC map call put in the table. ★ `parked` is the one to read: a parked range is DECLARED and NOT BOUND, so a publisher walking the table cannot reach it however broad its scope",
+                    route.proc.0,
+                    route.gpu.0,
+                    join.bound,
+                    join.already,
+                    join.joined,
+                    join.parked,
+                    join.half_already,
+                );
+            }
         }
         out
     }
