@@ -82,7 +82,8 @@
 
 use std::cell::Cell;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::OnceLock;
 
 thread_local! {
     /// Nesting depth of guest-trap dispatches on THIS thread. A depth rather than a
@@ -134,6 +135,100 @@ pub fn off_trap_claims() -> u64 {
     OFF_TRAP_CLAIMS.load(Ordering::Relaxed)
 }
 
+/// ★★★★★ **PER-REASON ATTRIBUTION FOR THE INLINE RESIDUE — because one total over four
+/// sites cannot say which site to fix.**
+///
+/// `[measured w394, boot w394g]` a boot printed `inline_exceptions=46568` beside
+/// `worst_trap=2666348us`, and that pair is the strongest lead this campaign has on parity
+/// (342 ms per kernel launch, ~4 doorbell traps at the known ~86 ms cost). But
+/// [`inline_exceptions`] is **one scalar over every call site**, and there are four. A
+/// number that fits four different repair plans equally well has not told you which to
+/// start — the same shape as `a_measurement_that_fits_two_models_is_not_a_measurement`,
+/// one level up: there the count could not recover a distribution, here it cannot recover
+/// an attribution.
+///
+/// # ⊘ Why a lock-free table and not a `Mutex<BTreeMap>`
+///
+/// [`OffTrap::inline_under_bql`] is minted **on the trap thread, under the BQL**, which is
+/// exactly where `l1_concurrency.md` R1 forbids a potentially-blocking site. A mutex here
+/// would put the instrument inside the hazard it exists to measure. So: a fixed table of
+/// atomics, linear-probed, no allocation, no lock, no syscall.
+///
+/// Keyed by the `&'static str`'s **pointer**, not its content — the reasons are literals,
+/// so pointer identity is exact and needs no comparison of bytes on a trap thread. ⊘ Two
+/// distinct literals with identical text would occupy two slots, which is honest (they are
+/// two sites) and is why the report prints the text beside each count.
+const INLINE_REASON_SLOTS: usize = 16;
+static INLINE_REASON_PTR: [AtomicUsize; INLINE_REASON_SLOTS] =
+    [const { AtomicUsize::new(0) }; INLINE_REASON_SLOTS];
+/// The reason text itself. ⊘ A `OnceLock` and not a reconstructed pointer: this crate
+/// forbids `unsafe`, and rebuilding a `&'static str` from a recorded (ptr, len) needs it.
+/// Only the thread that WON the slot's CAS ever calls `set`, so there is no contention and
+/// no blocking here either.
+static INLINE_REASON_TEXT: [OnceLock<&'static str>; INLINE_REASON_SLOTS] =
+    [const { OnceLock::new() }; INLINE_REASON_SLOTS];
+static INLINE_REASON_HITS: [AtomicU64; INLINE_REASON_SLOTS] =
+    [const { AtomicU64::new(0) }; INLINE_REASON_SLOTS];
+/// Mints whose reason found no free slot. ⊘ Counted rather than dropped: a table that
+/// silently discards the 17th reason would under-report exactly when the picture got
+/// complicated, and read as if it had not.
+static INLINE_REASON_OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+/// Record one inline mint against its reason. Lock-free; safe under the BQL.
+fn note_inline_reason(what: &'static str) {
+    let ptr = what.as_ptr() as usize;
+    for i in 0..INLINE_REASON_SLOTS {
+        let cur = INLINE_REASON_PTR[i].load(Ordering::Relaxed);
+        if cur == ptr {
+            INLINE_REASON_HITS[i].fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        if cur == 0
+            && INLINE_REASON_PTR[i]
+                .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            let _ = INLINE_REASON_TEXT[i].set(what);
+            INLINE_REASON_HITS[i].fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        // Lost the race for this slot, or it belongs to another reason — probe on.
+    }
+    INLINE_REASON_OVERFLOW.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The inline residue, attributed by reason and ranked heaviest first.
+///
+/// ⊘ Returns pairs rather than a formatted string so a test can assert on the attribution
+/// itself; [`census`] does the formatting.
+#[must_use]
+pub fn inline_by_reason() -> Vec<(&'static str, u64)> {
+    let mut out: Vec<(&'static str, u64)> = Vec::new();
+    for i in 0..INLINE_REASON_SLOTS {
+        let ptr = INLINE_REASON_PTR[i].load(Ordering::Acquire);
+        let hits = INLINE_REASON_HITS[i].load(Ordering::Relaxed);
+        if ptr == 0 || hits == 0 {
+            continue;
+        }
+        // ⊘ A claimed slot whose text is not yet visible is counted, not guessed: the
+        // claimer sets it immediately after the CAS, so this window is vanishingly small,
+        // and printing "(text not yet published)" is honest where inventing one is not.
+        match INLINE_REASON_TEXT[i].get() {
+            Some(what) => out.push((*what, hits)),
+            None => out.push(("⊘ (reason text not yet published)", hits)),
+        }
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1));
+    out
+}
+
+/// Mints whose reason did not fit the table. **Must be 0** for [`inline_by_reason`] to be
+/// a complete attribution rather than a partial one.
+#[must_use]
+pub fn inline_reason_overflow() -> u64 {
+    INLINE_REASON_OVERFLOW.load(Ordering::Relaxed)
+}
+
 /// ★★★ How many [`OffTrap`]s were minted by the **enumerated inline exception**,
 /// process-wide — the residue clause (b) is about. **Target: 0.**
 #[must_use]
@@ -165,7 +260,26 @@ pub fn census() -> String {
         } else {
             format!("{worst}us")
         },
-    )
+    ) + &{
+        let by = inline_by_reason();
+        if by.is_empty() {
+            String::new()
+        } else {
+            let over = inline_reason_overflow();
+            format!(
+                " | INLINE-BY-REASON{} {}",
+                if over == 0 {
+                    String::new()
+                } else {
+                    format!(" ⊘ INCOMPLETE: {over} mint(s) did not fit the table")
+                },
+                by.iter()
+                    .map(|(what, n)| format!("[{n} × {what}]"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        }
+    }
 }
 
 /// ★★★ **The RAII marker installed at every guest-trap entry.**
@@ -291,6 +405,7 @@ impl OffTrap {
     #[must_use]
     pub fn inline_under_bql(what: &'static str) -> Self {
         INLINE_EXCEPTIONS.fetch_add(1, Ordering::Relaxed);
+        note_inline_reason(what);
         Self {
             what,
             inline: true,
@@ -463,6 +578,72 @@ mod tests {
         assert!(
             !census().contains("UNMEASURED"),
             "a closed guard must publish a hold"
+        );
+    }
+}
+
+#[cfg(test)]
+mod inline_attribution {
+    //! ★★★★★ **THE RESIDUE, ATTRIBUTED.** `inline_exceptions` is one scalar over four
+    //! production call sites, and `[measured w394]` it read 46 568 beside a 2.67 s worst
+    //! trap — the strongest parity lead this campaign has. One number over four sites cannot
+    //! say which site to fix: it fits every repair plan equally well and endorses none.
+    //!
+    //! ⊘ **ONE test, not three, and that is forced rather than stylistic.** The table is
+    //! process-global and fixed-size, so a test that fills it changes what every other test
+    //! can observe — even under `--test-threads=1`, where the order is still not ours to
+    //! choose. Splitting these would produce a suite that passes or fails on test ORDER,
+    //! which is the instrument being unreliable about itself.
+    use super::*;
+
+    #[test]
+    fn the_residue_is_ranked_heaviest_first_and_admits_what_it_lost() {
+        // ---- 1. RANKING. A list that does not sort is the scalar again, in a costume.
+        let heavy: &'static str = "a heavy site";
+        let light: &'static str = "a light site";
+        for _ in 0..7 {
+            note_inline_reason(heavy);
+        }
+        note_inline_reason(light);
+
+        let by = inline_by_reason();
+        let h = by.iter().find(|(w, _)| *w == heavy).expect("heavy missing");
+        let l = by.iter().find(|(w, _)| *w == light).expect("light missing");
+        assert_eq!(h.1, 7, "{by:?}");
+        assert_eq!(l.1, 1, "{by:?}");
+        assert!(
+            by.iter().position(|(w, _)| *w == heavy).unwrap()
+                < by.iter().position(|(w, _)| *w == light).unwrap(),
+            "the heavier site must sort first: {by:?}"
+        );
+        assert_eq!(
+            inline_reason_overflow(),
+            0,
+            "two reasons must not overflow a 16-slot table"
+        );
+        assert!(!census().contains("INCOMPLETE"), "{}", census());
+
+        // ---- 2. OVERFLOW. The table is fixed-size and CAN lose a reason. It must say so:
+        // a partial attribution presented as a whole one is worse than the scalar it
+        // replaced, because it looks finished.
+        const FILL: [&str; INLINE_REASON_SLOTS] = [
+            "f00", "f01", "f02", "f03", "f04", "f05", "f06", "f07", "f08", "f09", "f10",
+            "f11", "f12", "f13", "f14", "f15",
+        ];
+        for w in FILL {
+            note_inline_reason(w);
+        }
+        let before = inline_reason_overflow();
+        note_inline_reason("one too many");
+        assert!(
+            inline_reason_overflow() > before,
+            "a reason that found no slot must be COUNTED; dropping it silently would \
+             under-report exactly when the picture got complicated"
+        );
+        assert!(
+            census().contains("INCOMPLETE"),
+            "and the census must SAY the attribution is partial: {}",
+            census()
         );
     }
 }
