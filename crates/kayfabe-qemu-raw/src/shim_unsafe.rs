@@ -1270,6 +1270,9 @@ pub unsafe extern "C" fn kayfabe_shim_regs_attach_ram(regs: *mut c_void, shim: *
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kayfabe_shim_regs_report_ram_layout(regs: *mut c_void, shim: *mut c_void) {
     if let (Some(regs), Some(shim)) = (borrow_regs(regs), borrow(shim)) {
+        // ★ w393 — the BAR mirror's census first: it is the acceptance-test row and it does
+        // not depend on the guest-RAM crossing being armed.
+        regs.report_bar_mirror("END OF RUN");
         regs.report_stated_guest_ram_at(shim, "END OF RUN");
     }
 }

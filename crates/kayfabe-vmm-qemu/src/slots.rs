@@ -69,6 +69,19 @@ pub const KERNEL_EBUSY: i32 = 16;
 /// let the hypervisor grow into before we refuse rather than overwrite.
 pub const OUR_SLOT_BUDGET: u32 = 64;
 
+/// ★★★★★ **w393 — the BAR mirror's slot budget**, on top of [`OUR_SLOT_BUDGET`].
+///
+/// The demand-driven BAR1/BAR2 mirror installs **one memslot per guest-touched 4 KiB
+/// aperture page** (`docs/design/bar1_passthrough_device_local_host_visible.md` §2.3), so
+/// its population is the guest's BAR working set, not a handful of reservations. 4096 slots
+/// = 16 MiB of BAR pages mirrored at once; past it the mirror refuses by name
+/// (`SLOT-BUDGET`) and the page is served by the trap, correctly and slowly.
+///
+/// ⊘ Taken only when the kernel's ceiling can hold it with a hypervisor's worth beneath
+/// (see [`SlotAllocator::for_machine`]): on a kernel reporting the old 509-slot ceiling the
+/// allocator falls back to [`OUR_SLOT_BUDGET`] alone and the mirror's census says so.
+pub const MIRROR_SLOT_BUDGET: u32 = 4096;
+
 /// A live memslot. Dropping it **clears the slot in the kernel** before releasing whatever
 /// the kernel was pointing at.
 ///
@@ -221,20 +234,46 @@ impl SlotAllocator {
     /// [`CEILING_TOO_SMALL`] if the kernel's ceiling cannot hold the budget plus a
     /// hypervisor's worth of slots beneath it.
     pub fn new(ceiling: u32) -> Result<Self, &'static str> {
+        Self::with_budget(ceiling, OUR_SLOT_BUDGET)
+    }
+
+    /// ★ w393 — the allocator a real machine gets: [`OUR_SLOT_BUDGET`] plus
+    /// [`MIRROR_SLOT_BUDGET`] when the ceiling can hold both with a hypervisor's worth
+    /// beneath, else [`OUR_SLOT_BUDGET`] alone. The choice is reported through
+    /// [`SlotAllocator::budget`], so a boot can state which one it ran with.
+    ///
+    /// # Errors
+    /// As [`SlotAllocator::new`].
+    pub fn for_machine(ceiling: u32) -> Result<Self, &'static str> {
+        let wide = OUR_SLOT_BUDGET.saturating_add(MIRROR_SLOT_BUDGET);
+        if ceiling >= wide.saturating_mul(2) {
+            Self::with_budget(ceiling, wide)
+        } else {
+            Self::with_budget(ceiling, OUR_SLOT_BUDGET)
+        }
+    }
+
+    fn with_budget(ceiling: u32, budget: u32) -> Result<Self, &'static str> {
         // The hypervisor starts at 16 slots and doubles (`qemu: kvm-all.c:250-262`), so a
         // ceiling that leaves it fewer than the budget itself beneath us is one where the
         // two ranges are not credibly disjoint. Stated as arithmetic rather than as a
         // magic minimum.
-        if ceiling < OUR_SLOT_BUDGET.saturating_mul(2) {
+        if ceiling < budget.saturating_mul(2) {
             return Err(CEILING_TOO_SMALL);
         }
         Ok(SlotAllocator {
             ceiling,
-            floor: ceiling - OUR_SLOT_BUDGET,
+            floor: ceiling - budget,
             next: ceiling,
             free: Vec::new(),
             recycled: 0,
         })
+    }
+
+    /// How many numbers this allocator may hold at once — `ceiling - floor`.
+    #[must_use]
+    pub fn budget(&self) -> u32 {
+        self.ceiling - self.floor
     }
 
     /// The kernel's ceiling this allocator was built from.

@@ -766,6 +766,14 @@ enum WindowBacking<'fd> {
     /// ★★★★★ An armed device node the isolate crossed — placed whole by
     /// [`GuestWindow::place_device_view`]; see [`QemuMachine::install_device_window`].
     DeviceView(std::os::fd::BorrowedFd<'fd>),
+    /// ★★★★★ w393 — a `MAP_SHARED` file the caller already holds bytes in (a join's
+    /// `memfd`, the framebuffer page arena), placed at `offset`; see
+    /// [`QemuMachine::install_file_window`]. Not minted here and not exportable through
+    /// [`QemuVmm::export_ram`]: the pages have an owner already.
+    SharedFile {
+        fd: std::os::fd::BorrowedFd<'fd>,
+        offset: u64,
+    },
 }
 
 #[derive(Debug)]
@@ -1055,7 +1063,7 @@ impl QemuMachine {
         let ceiling = slots
             .ceiling()
             .map_err(|e| host_refused("querying the memslot ceiling", &e))?;
-        let alloc = SlotAllocator::new(ceiling).map_err(VmmError::Unsupported)?;
+        let alloc = SlotAllocator::for_machine(ceiling).map_err(VmmError::Unsupported)?;
         // 4. Block migration and checkpoint-restart, before anything is mapped (§8.4).
         let blocker = host
             .migrate_add_blocker("this device forwards to a host GPU through process-local state")
@@ -1225,6 +1233,60 @@ impl QemuMachine {
         .map(|(r, _)| r)
     }
 
+    /// ★★★★★ **w393 — install a window over `[gpa, gpa+len)` whose backing is `len` bytes
+    /// of a shared file the caller already serves from**, at file `offset`: the
+    /// demand-driven BAR mirror's verb. The guest's memslot resolves to the **same
+    /// physical pages** the framebuffer store reads and writes for that frame (a join's
+    /// `memfd`, or the page arena), so a guest access through it takes no VM exit and lands
+    /// in the one memory everything else already names.
+    ///
+    /// `readonly` installs a read-only slot: a guest **store** still exits and reaches the
+    /// trap, which is what a read-only PTE in the guest's own BAR page table demands.
+    ///
+    /// Everything about the slot is [`QemuMachine::install_ram_window`]'s — the BAR must be
+    /// one the hypervisor does not back, the range page-aligned and inside it, no overlap
+    /// with another of our reservations. `fd` is borrowed for the `mmap` only; the mapping
+    /// outlives it.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_ram_window`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn install_file_window(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+        offset: u64,
+        readonly: bool,
+    ) -> Result<RamRegionId, VmmError> {
+        let spec = WindowSpec::passthrough(gpa, len);
+        let whole = gpa..gpa + len;
+        self.install_window_inner(
+            &spec,
+            if readonly { Some(&whole) } else { None },
+            WindowBacking::SharedFile { fd, offset },
+            "installing a shared-file window (BAR mirror)",
+        )
+        .map(|(r, _)| r)
+    }
+
+    /// ★ w393 — where BAR `bar` was realized, or `None` if this machine has no such BAR.
+    #[must_use]
+    pub fn bar_placement(&self, bar: BarId) -> Option<BarPlacement> {
+        self.plane.bars.iter().copied().find(|b| b.bar == bar)
+    }
+
+    /// ★ w393 — the hypervisor's own answer to *"is `bar` a range I do not back?"*, i.e.
+    /// whether a reservation may be installed inside it at all. The QOM glue answers *yes*
+    /// for BAR1/BAR2 only under its `bar1-passthrough` / `bar2-passthrough` properties, so
+    /// this is how the shell learns the arm without a second flag that could disagree.
+    #[must_use]
+    pub fn bar_is_unbacked_reservation(&self, bar: BarId) -> bool {
+        self.plane.host.bar_is_unbacked_reservation(bar)
+    }
+
     /// The shared body. `read_native` carries the write-trap sub-range that needs a
     /// read-only slot of its own.
     fn install_window_inner(
@@ -1309,6 +1371,16 @@ impl QemuMachine {
                     .map_err(|e| {
                         p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                         host_refused("placing the device view", &e)
+                    })?;
+            }
+            // ★ w393 — a shared file is placed whole at the caller's offset, for the same
+            // reason: the bytes already have an owner (the store's arena, a join's memfd).
+            if let WindowBacking::SharedFile { fd, offset } = backing {
+                window
+                    .place(HostOffset::ZERO, len, RawBacking::SharedFile { fd, offset })
+                    .map_err(|e| {
+                        p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                        host_refused("placing the shared-file backing (BAR mirror)", &e)
                     })?;
             }
             let ram = if matches!(backing, WindowBacking::Minted) && p.shareable_ram {
@@ -2049,6 +2121,16 @@ impl QemuVmm {
     #[must_use]
     pub fn audit(&self) -> AuditReport {
         self.plane.audit.report()
+    }
+
+    /// ★ w393 — a [`QemuMachine`] handle onto the same plane, for a caller that holds only
+    /// a `QemuVmm` and needs the machine's window verbs (the BAR mirror). Two handles, one
+    /// plane; nothing is duplicated and nothing is torn down by dropping this one.
+    #[must_use]
+    pub fn machine(&self) -> QemuMachine {
+        QemuMachine {
+            plane: Arc::clone(&self.plane),
+        }
     }
 
     /// ★★★★★ **The stated layout, asked through the handle a data-plane caller already

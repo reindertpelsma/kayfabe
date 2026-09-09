@@ -3660,7 +3660,32 @@ impl DirtyGate {
 /// store's `FbRefused` carries a sentence rather than a `Debug`.
 #[cfg(feature = "host-isolates")]
 #[derive(Debug)]
-struct MappedFb(kayfabe_linux_raw::MappedRegion);
+struct MappedFb {
+    region: kayfabe_linux_raw::MappedRegion,
+    /// ★★★★★ w393 — the join's `memfd`, registered so the BAR mirror can place a memslot
+    /// over it (`crate::barmirror::JoinRegistry`). `None` on the private/negative-control
+    /// arm, where there is no shared file to name — the store then answers
+    /// `JOIN_NOT_EXPORTABLE` and the page keeps trapping, by name.
+    export: Option<crate::barmirror::JoinExport>,
+}
+
+#[cfg(feature = "host-isolates")]
+impl MappedFb {
+    /// The VMM's view of a joined leaf. `fd`/`offset` name the file the region maps, for
+    /// the mirror; on a non-shared arm nothing is registered.
+    fn new(
+        region: kayfabe_linux_raw::MappedRegion,
+        fd: &std::os::fd::OwnedFd,
+        offset: u64,
+        arm: FbJoinArm,
+    ) -> MappedFb {
+        let export = match arm {
+            FbJoinArm::Shared => crate::barmirror::JoinExport::register(fd, offset),
+            FbJoinArm::Private | FbJoinArm::Off => None,
+        };
+        MappedFb { region, export }
+    }
+}
 
 /// [`MappedFb`]'s one sentence when an access falls outside the mapping.
 #[cfg(feature = "host-isolates")]
@@ -3671,19 +3696,23 @@ const JOINED_OUT_OF_EXTENT: &str = "that access falls outside the joined backing
 #[cfg(feature = "host-isolates")]
 impl kayfabe_device::FbJoined for MappedFb {
     fn len(&self) -> u64 {
-        self.0.len_bytes()
+        self.region.len_bytes()
     }
 
     fn read(&self, off: u64, buf: &mut [u8]) -> Result<(), &'static str> {
-        self.0
+        self.region
             .read_into(kayfabe_linux_raw::HostOffset::new(off), buf)
             .map_err(|_| JOINED_OUT_OF_EXTENT)
     }
 
     fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), &'static str> {
-        self.0
+        self.region
             .write_from(kayfabe_linux_raw::HostOffset::new(off), bytes)
             .map_err(|_| JOINED_OUT_OF_EXTENT)
+    }
+
+    fn export(&self) -> Option<kayfabe_device::FbPageExport> {
+        self.export.as_ref().map(crate::barmirror::JoinExport::export)
     }
 }
 
@@ -12142,7 +12171,10 @@ fn join_one_fb_leaf(
     // ---- 3. ESTABLISH + INSTALL, in ONE hold of the plane lock.
     //
     // ★★★★★ **AND NOTHING IS BOUND UNTIL THIS RETURNS `Ok`.**
-    match plane.join_fb(leaf.phys, Box::new(MappedFb(region))) {
+    match plane.join_fb(
+        leaf.phys,
+        Box::new(MappedFb::new(region, &fd, backing.offset, fb_join)),
+    ) {
         Ok(est) => {
             // ★ w392k — the store now holds a join at this frame and THIS isolate minted its
             // pages. Recorded here, on the install's own success path and before the bind, so
@@ -12416,6 +12448,11 @@ pub struct Regs {
     /// ★★★★★ **w383 — the worker's lifetime.** `None` before `attach_ram` and after
     /// `detach_ram`; see [`DoorbellPublishThread`] for why the join is not optional.
     doorbell_worker: std::sync::Mutex<Option<DoorbellPublishThread>>,
+    /// ★★★★★ **w393 — the demand-driven BAR1/BAR2 mirror**, armed at `attach_ram` from the
+    /// hypervisor's own answer to `bar_is_unbacked_reservation` (the QOM
+    /// `bar1-passthrough` / `bar2-passthrough` properties). `None` on the control.
+    #[cfg(feature = "host-isolates")]
+    bar_mirror: std::sync::OnceLock<Arc<crate::barmirror::BarMirror>>,
     /// ★★★★★ **w383 — which arm this boot runs.** Read ONCE at the composition root and
     /// carried; the port carries the same value, from the same read.
     doorbell_async: DoorbellAsyncArm,
@@ -13045,8 +13082,48 @@ impl Regs {
             pubqueue,
             doorbell_port,
             doorbell_worker: std::sync::Mutex::new(None),
+            #[cfg(feature = "host-isolates")]
+            bar_mirror: std::sync::OnceLock::new(),
             doorbell_async,
         })
+    }
+
+    /// ★★★★★ **w393 — arm the BAR mirror**, if the hypervisor declares BAR1 and/or BAR2
+    /// unbacked. Lock-free context (an `mmap`); called from [`Regs::attach_ram`].
+    #[cfg(feature = "host-isolates")]
+    fn arm_bar_mirror(&self, shim: &Shim) {
+        if self.bar_mirror.get().is_some() {
+            return;
+        }
+        if let Some(m) =
+            crate::barmirror::BarMirror::arm(Arc::clone(&self.plane), shim.machine().vmm().machine())
+        {
+            self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
+            let _ = self.bar_mirror.set(m);
+        }
+    }
+
+    /// The mirror's census, for the end-of-run report. ⊘ Prints the control's own line
+    /// when the mirror is not armed, so a boot without it cannot be read as a boot with
+    /// it and no traffic.
+    pub fn report_bar_mirror(&self, at: &str) {
+        #[cfg(feature = "host-isolates")]
+        {
+            match self.bar_mirror.get() {
+                Some(m) => m.report(at),
+                None => eprintln!(
+                    "kayfabe: BAR-MIRROR AT {at}: NOT ARMED — neither QOM row answered \
+                     unbacked (bar1-passthrough / bar2-passthrough off), so every BAR1/BAR2 \
+                     access trapped (the control)"
+                ),
+            }
+        }
+        #[cfg(not(feature = "host-isolates"))]
+        eprintln!(
+            "kayfabe: BAR-MIRROR AT {at}: NOT BUILT — this archive has no `host-isolates` \
+             feature, so no mirror exists and every BAR1/BAR2 access trapped whatever the \
+             QOM arms say"
+        );
     }
 
     /// The plane, for a caller that needs more than this seam exposes.
@@ -13130,6 +13207,10 @@ impl Regs {
         // reads the guest's page tables and the guest's GPFIFO ring, and before this
         // instant there is neither.
         self.start_doorbell_publish_worker(shim.machine().vmm());
+        // ★★★★★ w393 — and the BAR mirror, for the same reason once more: a memslot needs
+        // the memory plane, and the arm is the hypervisor's own answer about its BAR rows.
+        #[cfg(feature = "host-isolates")]
+        self.arm_bar_mirror(shim);
     }
 
     /// ★★★★★ **w383 — start the deferred-publication worker.** See
@@ -13542,6 +13623,15 @@ impl Regs {
         // RAM port is refused: it holds its own `QemuVmm` and is in the middle of reading
         // guest page tables.
         self.stop_doorbell_publish_worker();
+        // ★★★★★ w393 — the mirror's memslots go BEFORE the machine's windows are torn down
+        // beneath them, and the port is withdrawn so no later join/release calls a mirror
+        // whose machine is gone.
+        #[cfg(feature = "host-isolates")]
+        if let Some(m) = self.bar_mirror.get() {
+            kayfabe_device::FbMirrorPort::retire_all(m.as_ref(), "detach_ram");
+            m.report("DETACH");
+        }
+        self.plane.clear_fb_mirror();
         self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
         // The teardown half, and not optional for the same reason: a copy-engine
         // submission arriving after the machine released its slots must be refused by
@@ -13573,10 +13663,21 @@ impl Regs {
     #[must_use]
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
         let mut kft = crate::kftime::Segs::start();
-        let v = self
-            .plane
-            .read(clamp_bar(bar), off, clamp_size(size))
-            .value();
+        let out = self.plane.read(clamp_bar(bar), off, clamp_size(size));
+        // ★★★★★ w393 — a translated-window read that the archive served is, under the
+        // mirror, a MISS: fill the page so the next access to it takes no exit. Runs with
+        // the plane lock released (R1); a cheap `None` on the control.
+        #[cfg(feature = "host-isolates")]
+        if let kayfabe_device::ReadOutcome::Fb {
+            window: w @ (kayfabe_device::FbWindow::FbAperture | kayfabe_device::FbWindow::InstanceWindow),
+            ..
+        } = &out
+        {
+            if let Some(m) = self.bar_mirror.get() {
+                m.fill(*w, off);
+            }
+        }
+        let v = out.value();
         kft.mark("plane_read");
         crate::kftime::record_hot("mmio_read", bar, off, kft.total_us());
         // ⊘ NEVER per-event printed, whatever the arming: reads are the hot path and ~900
@@ -13999,6 +14100,25 @@ impl Regs {
         let mut kft = crate::kftime::Segs::start();
         let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
         kft.mark("plane");
+        // ★★★★★ w393 — the mirror's two trap-path hooks, plane lock released (R1):
+        // a landed translated-window write is a miss to fill; an invalidate trigger or a
+        // BAR2 root publication is a flush to revalidate against.
+        #[cfg(feature = "host-isolates")]
+        if let Some(m) = self.bar_mirror.get() {
+            if out.fb_landed.is_some() {
+                let w = match usize::from(clamp_bar(bar)) {
+                    kayfabe_abi::pcibars::bus_bar::FB => Some(kayfabe_device::FbWindow::FbAperture),
+                    kayfabe_abi::pcibars::bus_bar::INST => {
+                        Some(kayfabe_device::FbWindow::InstanceWindow)
+                    }
+                    _ => None,
+                };
+                if let Some(w) = w {
+                    m.fill(w, off);
+                }
+            }
+            m.after_write(&out);
+        }
         // ★★★★★ **R1 / C1 — THE TLB-INVALIDATE BLOCKAGE POINT.**
         //
         // `docs/design/REQUIREMENTS_TARGET.md` R1.1's third row. The guest wrote BAR0

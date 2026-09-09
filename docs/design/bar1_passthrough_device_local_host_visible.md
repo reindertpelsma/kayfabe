@@ -1,6 +1,10 @@
 # ★★★★★ BAR1 passthrough — `DEVICE_LOCAL | HOST_VISIBLE`, not trapped at all
 
-**STATUS: DESIGN-ONLY + FIRST INCREMENT LANDED, 2026-09-09 (branch `w393-bar-passthrough`).**
+**STATUS: LIVE — SECOND INCREMENT LANDED, 2026-09-09 (branch `w393-bar-passthrough`): the
+DEMAND-DRIVEN MIRROR, for BAR1 *and* BAR2, behind two QOM arms (`bar1-passthrough`,
+`bar2-passthrough`). See §7. §2.7 below is SUPERSEDED by §7.1 and says so in place. The
+first increment (§3, the crossing and the placement) is unchanged and still has no production
+caller; the owner AUTHORISED the fd crossing in that shape on 2026-09-09 (§3.2 is answered).**
 The owner's stated architecture (2026-09-09): *"bar1/2 should not have traps and just
 passthrough"*, named precisely as the Vulkan memory-property pair **`DEVICE_LOCAL | HOST_VISIBLE`**.
 This doc records (1) how BAR1/BAR2 are realized **today**, with file:line; (2) the design that
@@ -156,6 +160,16 @@ this reason: the policy is decided below us and cannot be read back.
 
 ### 2.7 BAR2 stays trapped — and why that is not a weakening
 
+> ⊘⊘ **SUPERSEDED 2026-09-09, the same day, by §7.1 — and the reasoning below is where the
+> mistake was.** *"BAR2 is the observation point for the guest's page-table writes"* is true
+> **only of an observation-driven mirror**. The mirror that landed is **demand-driven** (a
+> memslot is installed on the first-touch miss of a page and revalidated on the guest's own
+> `MMU_INVALIDATE`), so nothing needs to watch the guest write its tables — the access **is**
+> the notification — and BAR2 has no watchpoint role left. Owner: *"we can also make bar2
+> untrapped"* → *"ok go"* (commit `f55984af`). BAR2 is now armed by `bar2-passthrough` on
+> exactly BAR1's terms. The publish-trigger dependency named below is dissolved for the BAR
+> apertures for the same reason: a first-touch miss is a trigger that cannot be missed.
+
 BAR2 is the CPU-visible page-table/instance-block aperture: **it is the observation point** for the
 guest's page-table writes, including the BAR1 page table the mirror in §2.3 depends on, and the
 GR/CE VAS tables the publication plane depends on. The owner's publish-trigger ordering
@@ -240,7 +254,8 @@ the acceptance test's criterion 1 is *this counter reading zero* once it does.
 6. **Retire the join** for leased frames: `join_fb_leaf` degenerates to `map_gpu_va` of the lease;
    release/carry/revoke have nothing to carry. ⊘ Not touched on this branch — the owner is mid-test
    on `join_one_fb_leaf`'s extent arms.
-7. **BAR2** — only after a replacement publish trigger (§2.7); separate ruling.
+7. ~~**BAR2** — only after a replacement publish trigger (§2.7); separate ruling.~~ ⊘ Done
+   in §7: the demand-driven mirror needs no publish trigger, and BAR2 has its own arm.
 
 ---
 
@@ -285,3 +300,100 @@ scp target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder <box>:/tmp/ && ss
 ### 6.4 Result
 
 _(filled in by the run; if this line is still here, the readings in §3.3 are readings.)_
+
+---
+
+## 7. ★★★★★ THE DEMAND-DRIVEN MIRROR — increment 2, BAR1 *and* BAR2 (2026-09-09)
+
+**Owner direction (commit `f55984af`):** build the first-touch mirror; it removes BAR2's
+watchpoint role, so untrap BAR2 too. **Acceptance:** `misses` falls from ~87,736 to
+approximately the number of DISTINCT FRAMES touched; the client still prints
+`W392D_OUTCOME=(P)`, `THREADS 4 of 4`, `MEAN_FALSIFIER=PASS`; the archive's `bar1_reads` /
+`bar1_writes` stop moving for covered frames; BAR2 likewise with its own arm and census.
+
+### 7.1 The mechanism, in one paragraph — the mirror IS the guest's BAR TLB
+
+A trapped BAR1/BAR2 access is served exactly as before (page walk through the guest's own
+BAR page table → the store). **Then**, with the plane lock released, the shell treats the
+access as a **TLB miss** and fills: it re-walks the page (`RegPlane::window_page_backing`,
+`plane.rs`), asks the store **what memory backs that frame** (`FbStore::page_backing`,
+`fbwin.rs`) — materialising the page into the **page arena** if it is not resident or is a
+heap page — and installs a **4 KiB KVM memslot** over *that memory* at the page's
+guest-physical address (`QemuMachine::install_file_window`, `kayfabe-vmm-qemu/src/lib.rs`).
+Every later access to the page is exit-free and lands in the very bytes the walker, the BAR0
+window, the GSP emulation and the join all read: **one memory, two names, nothing copied**.
+The flush is the guest's own `MMU_INVALIDATE` trigger (and a BAR2 root re-publication):
+`BarMirror::revalidate` re-walks every live entry and drops only those whose translation or
+backing changed (`crates/kayfabe-qemu-raw/src/barmirror.rs`).
+
+### 7.2 Where the bytes live now — three page kinds, one store
+
+| the store's page is | a memslot over it names | who else maps it |
+|---|---|---|
+| **arena page** (`kayfabe_linux_raw::SharedPageArena`, `arena_unsafe.rs`) — a 4 KiB index of one sealed 1 GiB sparse `memfd`, mapped once for the store | `(arena memfd, index × 4096)` | nobody but the guest (through the slot) and the store |
+| **joined leaf** (`MappedFb` over the join's `memfd`, `shim.rs`) | `(join memfd, join offset + page offset)` via `JoinRegistry` | the isolate (`OS_DESCRIPTOR` → the engine) |
+| **heap page** (`Box<[u8;4096]>`) — only a page created before the arena was installed, or while the arena was exhausted | — (refused by name, `HEAP-PAGE`) | nobody; served by the trap |
+
+`SparseFb::pages` is now `HashMap<frame, FbPage>` with `FbPage::{Heap, Arena}`; every
+new page comes from the arena once `install_page_arena` ran (at memory-plane attach, only
+when an arm is on — the control's store is byte-for-byte the old one).
+
+### 7.3 ★★★ The invariant, and the two places it is enforced
+
+> **A memslot over a framebuffer range exists only while the store serves that range from
+> the very pages the slot names.**
+
+1. **Before the store moves a range's bytes** the plane calls `FbMirrorPort::quiesce`
+   (`plane.rs`: `join_fb`, `release_fb_join`, `release_fb_join_carrying_bytes`,
+   `device_reset`) with **no ranked lock held**; the mirror retires every slot over the
+   range and refuses fills there until `resume`. This is the ordering the join's own doc
+   demanded (*"mapping after execution seems racy"*): the second name is taken away
+   **before** the copy, so a guest store cannot land in a page that is about to be dropped.
+2. **After installing a slot** the fill re-resolves the page under the plane lock and keeps
+   the slot only if translation and backing are what it installed over, and its *pending*
+   ticket survived (a quiesce or a competing fill cancels it). A slot that lost the race is
+   removed before anyone can hit it (`RACED-AND-DROPPED`, counted).
+
+Every memslot ioctl runs outside the plane's `RankedMutex` (R1); the mirror's own table is
+a plain mutex never held across a syscall.
+
+### 7.4 The arms, the censuses, and how to read them
+
+- **QOM:** `bar1-passthrough=on` / `bar2-passthrough=on` (`NVKVM_DEV_EXTRA=bar1-passthrough=on,bar2-passthrough=on`
+  through `boot_nvkvm.sh`). Each flips one answer — `bar_is_unbacked_reservation` for that
+  row — and turns every trapped access into a NAMED miss (`BAR1-PASSTHROUGH MISS #n`,
+  `BAR2-PASSTHROUGH MISS #n`, bounded live, uncapped total). **The archive learns the arm by
+  asking the hypervisor that same question** (`QemuMachine::bar_is_unbacked_reservation`), so
+  there is no second flag that could disagree.
+- **Archive banners at attach:** `BAR-MIRROR bar1: ARMED …` / `OFF (the control)` /
+  `NOT BUILT` (no `host-isolates` feature). ⚠ A boot whose C says `arm=on` and whose archive
+  says `NOT BUILT` is the census-only build of §3.4 — every access traps.
+- **Archive census (END OF RUN, DETACH, and every 512 fills):**
+  `BAR-MIRROR bar1 AT …: arm=on fills=F distinct_pages=P distinct_frames=D` and
+  `BAR-MIRROR MECHANISM AT …: slots live/peak, revalidate[runs kept removed],
+  quiesce[calls removed], retire_all[…], arena[…], refused=[NAME=n …]`.
+- **The C's one-instant line:** `BAR1 COUNTERS (one instant): entries=… touches=… (reads=…
+  writes=…) misses=… touches-minus-misses=…` — the three counts of one event that the
+  2026-09-09 census could not reconcile (87,740 vs 87,736) are now printed together; under
+  `arm=on` the delta must be 0 within one report, and the report is printed twice (exit
+  notifier and device exit).
+- **Reading rule:** `misses ≈ fills + Σ refused`. `fills ≈ distinct_pages + slots removed by
+  revalidation/quiesce that were re-touched`. The acceptance ratio is `misses / distinct_frames`.
+
+### 7.5 What this increment is NOT
+
+- It is **`HOST_VISIBLE` on the memory the store already uses** — sysmem (arena / join
+  `memfd`), the same memory the engine reads for joined leaves. It is **not yet
+  `DEVICE_LOCAL`**: that needs the lease (§4.3) so a leaf's backing is a vidmem object; the
+  mirror is backing-agnostic (`FbPageBacking` names a token + offset) and the crossed device
+  view of §3 plugs in as a third page kind when that lands.
+- A read-only PTE gets a **read-only slot** (writes still trap and are refused by name);
+  a sysmem-aperture PTE is still `BAR1_FOREIGN_APERTURE` (a named `TRANSLATION-REFUSED`
+  fill refusal).
+- Slot budget: `MIRROR_SLOT_BUDGET = 4096` on top of `OUR_SLOT_BUDGET = 64`
+  (`slots.rs`, taken only when the kernel ceiling allows; the attach banner states the
+  range). Past it the fill refuses by the allocator's own name and the page traps.
+
+### 7.6 Result
+
+_(filled in by the boots; if this line is still here, §7 is unbooted.)_
