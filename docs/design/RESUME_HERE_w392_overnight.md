@@ -172,7 +172,25 @@ adapter was never exercised, so this capture cannot support any claim about wher
 ⊘ Do not cite it."* Matches the memory note that `off` reproduces w327's death. **Not a usable
 isolation arm.** ★ Note the harness refused to let me cite it — that refusal is the feature.
 
-## ⊘⊘⊘ RETRACTED — "THE LLM PASSES" WAS FALSE. I COMPARED THE ORACLE TO ITSELF.
+## ★★★★★ LLM, MEASURED HONESTLY (w392llm5, `LLM_TIMEOUT=2700`, rev `ded5d262`)
+**THE CORRUPTION REPRODUCES.** First run all night not killed mid-load:
+```
+W392_GPU_TOKENS=16  W392_GPU_RC=0   LLM_MS=930910.3   => ~0.017 tok/s
+W392_GPU_TEXT=[ ，ize'sus(,.- A的  : ]                  <- GARBAGE
+W392_CPU_TEXT=[ ______. A. Paris B. London C. New York D]
+W392_MINMM_SUM=64        W392_XIDS=21/21/21  (nothing faulted)
+W392_OUTCOME=(F-scale) ★★★★★ FORGED-PASS, AND IT SCALES
+```
+⇒ completion **without error and without correctness** — memory mapped, holding wrong contents.
+★★★ **The discriminator is now SAME-BOOT and sharp:** a 4×4 matmul through this exact stack is
+**bit-correct** (`MINMM_SUM=64`) while a 290-shard model is garbage ⇒ **not the arithmetic path;
+it scales with the number/size of allocations.**
+⊘ **0.017 tok/s** is the parity starting point. `nvkvm-pv`'s published 0.97–0.99x rows are **Mode 1**
+and a different workload — not a Mode-2 baseline.
+⚠ **`LLM_TIMEOUT` is in SECONDS.** `LLM_MS` is read by nothing; passing it kills the GPU arm at the
+900 s default, mid-load, which is what produced every earlier bogus verdict.
+
+## SUPERSEDED RETRACTION — "THE LLM PASSES" WAS FALSE. I COMPARED THE ORACLE TO ITSELF.
 **The GPU arm never produced any text.** Its output ends mid-progress-bar and is killed:
 ```
 LLM_DEVICE=cuda  TORCH_CUDA_AVAILABLE=True
