@@ -249,6 +249,40 @@ adapter was never exercised, so this capture cannot support any claim about wher
 ⊘ Do not cite it."* Matches the memory note that `off` reproduces w327's death. **Not a usable
 isolation arm.** ★ Note the harness refused to let me cite it — that refusal is the feature.
 
+## ★★★★★★ FIRST ACTION IN THE MORNING — THE LLM CORRUPTION MAY ALREADY BE FIXED (25-min test)
+**The LLM corruption was measured on `ded5d262`, and the re-map fix `9c86655c` (w392w) came AFTER
+it** (`git merge-base --is-ancestor ded5d262 9c86655c` → YES). So that run had the **stale-binding
+bug live**: `qualifies = … && !is_remap` meant a re-mapped joined row was **never revoked**, and the
+old binding **kept translating**.
+
+**Every LLM observation fits a stale binding:**
+| observation | stale binding explains it |
+|---|---|
+| 290 shards garbage, 4×4 matmul bit-correct (`MINMM_SUM=64`) | scales with **alloc/free/re-map cycles**, not arithmetic |
+| `rc=0`, **zero Xids** | the stale translation is **valid** — it just points at the previous object |
+| **wrong bytes, not zeros** | you read the **previous tensor's** data |
+| grader's own words: *"FORGED-PASS, AND IT SCALES"* | precisely a per-allocation stale binding |
+
+⇒ **THE TEST: re-run `w392_llm.sh` on HEAD (or anything ≥ `9c86655c`).** One boot, ~25 min.
+`NVKVM_RAM_MB=16384`, **`LLM_TIMEOUT=2700` (SECONDS — `LLM_MS` is read by nothing)**, full arming,
+`KAYFABE_SHIM_FEATURES=host-isolates`. Grade on `W392_GPU_TEXT` vs `W392_CPU_TEXT`.
+⚠ If it is still garbage, the hypothesis is dead and the owner's oracle plan below is the next move.
+
+## ★ THE OWNER'S ORACLE PLAN (2026-09-09 ~06:10 CEST) — if the above does not fix it
+> *"since llama is open, find the libcuda calls that cause the corruption compared to running it on
+> host. as soon as you have that sequence of minimal production, strace it, and construct a
+> corruption test raw client to reproduce it, tested it passes on host. then you have an oracle to
+> iterate and fix against."*
+This is exactly the method that produced tonight's six client fixes. Concretely:
+1. `nvdiff` already does host-vs-guest ioctl diffing (`tests/mode2/nvdiff/`, noise floor **0**) —
+   point it at the LLM rather than at `cuCtxCreate`.
+2. Bisect to the **minimal** allocation/free/re-map sequence that corrupts.
+3. Extend `--uvm-mean` with a `--corrupt` arm reproducing it; **prove it passes on bare metal
+   first** (`the_bare_metal_gate_caught_three_client_defects` — it caught 3 defects in MY client).
+4. Then iterate against it exactly as the mean client was iterated tonight.
+⚠ Also worth checking per the owner: **are guest-userspace mappings coherent with GPU VA, and does
+the scrubber actually run?** A frame handed out unscrubbed would look identical to a stale binding.
+
 ## ★★★★★ LLM, MEASURED HONESTLY (w392llm5, `LLM_TIMEOUT=2700`, rev `ded5d262`)
 **THE CORRUPTION REPRODUCES.** First run all night not killed mid-load:
 ```
