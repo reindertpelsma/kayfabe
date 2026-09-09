@@ -1,7 +1,9 @@
 # ★★★★★ w395 — THE GSP SUBMIT IS A SCHEDULE: `NV_PGSP_QUEUE_HEAD(0)` validates, kicks, returns
 
 **STATUS — 2026-09-09 — LIVE. Built on branch `w395-gsp-submit-async`, default `on`, measured
-on a live GA106 (§6). Not merged; the owner's call.** Parents: `w383_the_doorbell_is_a_schedule.md`
+on a live GA106 (§6): correctness PASSES on every boot of both arms; `worst_trap` did NOT move
+and was never the GSP service (§6.2, a device-lock wait); perf INCONCLUSIVE (§6.5). Not merged;
+the owner's call.** Parents: `w383_the_doorbell_is_a_schedule.md`
 (the channel-doorbell lane this mirrors), `publication_off_the_bql.md` (§5.2's *"no guest-visible
 MMIO read depends on completed work"*, which §4 here narrows once more), and the w394 commit
 `742b9e88` that found the register.
@@ -397,9 +399,28 @@ and refused — a false negative from my own instrument, in the campaign that na
 The coordinator bounded the run at that point (budget); the perf boots below ran on the
 round-4 binary and carry the corrected census as a by-product.
 
-### §6.5 Perf (`gpu_bench`) — reported as RANGES, n=2 per arm
+### §6.5 Perf (`gpu_bench`, `W394_ONLY=gpu_bench`) — n=2 per arm, interleaved, round-4 binary
 
-[TO FILL, or INCONCLUSIVE if the ranges overlap]
+| boot | arm | GEMM 1024² ×5 | launch RTT (200) | alloc RTT (200) | `worst_trap` / `slow_traps` | `off_trap_claims` / `inline_exceptions` |
+|---|---|---|---|---|---|---|
+| `w395p_r4_on_1`  | on  | 17.5 GFLOP/s | 355 302 µs | 12 534 µs | 1 890 832 µs / 367 | 9198 / 51 |
+| `w395p_r4_off_1` | off | 21.4 GFLOP/s | 272 424 µs | 13 053 µs | 1 740 377 µs / 400 | 4886 / 51 |
+| `w395p_r4_on_2`  | on  | 27.6 GFLOP/s | 181 976 µs | 12 950 µs | 1 911 322 µs / 321 | 3537 / 51 |
+| `w395p_r4_off_2` | off | 26.3 GFLOP/s | 193 597 µs | 12 870 µs | 1 912 270 µs / 326 | 3519 / 51 |
+
+`W394_GUEST_RC_gpu_bench=0`, `Xid=0`, `rpcRecvPoll=0`, `RmInitAdapter_failed=0` on all four.
+
+⇒ **INCONCLUSIVE, and not narrowly.** `on` spans 17.5–27.6 GFLOP/s and 182–355 ms/launch;
+`off` spans 21.4–26.3 and 194–272 ms. The within-arm spread (1.6× GEMM, 2× RTT for `on`) is
+larger than any between-arm difference — `submit_ms_is_a_per_boot_lottery` again. Nothing here
+may be read as a speed-up or a slow-down. What is *not* a lottery: `worst_trap` and
+`slow_traps(>1000us)` are the same population on both arms (1.74–1.91 s; 321–400), which is the
+§6.2 finding restated — the residue is not the GSP service.
+
+`GSPQUEUE` on the two armed perf boots: `queued=534 coalesced=0 taken=534 passes=1070
+commands=536 prebind=0 faults=0 worst_hold_us=6524` (`on_1`); the CUDA workload pushes the
+longest single-command hold to 6.5 ms, still an order of magnitude under `SLOW_TRAP_US`'s
+neighbourhood and 300× under the trap it was blamed for.
 
 ## §7 What is NOT measured
 
