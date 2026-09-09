@@ -1207,6 +1207,37 @@ pub fn apply_promote_ctx(
             bound += 1;
         }
     }
+    // ★★★★★ **WHAT STAYS PARKED, AND WHICH SOURCE COULD EVER COMPLETE IT.**
+    //
+    // `[measured w404]` the user proc binds ZERO ranges and strands nine halves, while the
+    // per-GPU globals gain one entry in the whole boot and complete none of them. Two readings
+    // fit: the halves are `PerGpu` and the global that would complete them never arrives, or
+    // they are NOT `PerGpu` and the globals could never have completed them at all — in which
+    // case `complete_parked_from_globals` skips them BY DESIGN and is the wrong mechanism.
+    // ⊘ The scope is the discriminator, so print it beside each id. A count of parked ranges
+    // cannot distinguish "waiting for something that never came" from "waiting for something
+    // this mechanism never supplies", and those have different fixes in different crates.
+    if !scratch.is_empty() {
+        let ids = scratch
+            .iter()
+            .map(|(id, h)| {
+                let scope = match phys_half_scope(*id) {
+                    PhysHalfScope::PerGpu => "PerGpu",
+                    _ => "not-PerGpu",
+                };
+                let what = match h {
+                    ParkedHalf::AwaitingPhysical { .. } => "AwaitingPhysical",
+                    ParkedHalf::AwaitingVa { .. } => "AwaitingVa",
+                };
+                format!("{id:#06x}:{what}:{scope}")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        eprintln!(
+            "kayfabe: PROMOTE-PARKED-IDS proc={} pdb={:#x} {ids}",
+            route.proc.0, route.pdb.0
+        );
+    }
     vas.promote_halves = scratch;
     Ok(PromoteJoin {
         route: *route,
