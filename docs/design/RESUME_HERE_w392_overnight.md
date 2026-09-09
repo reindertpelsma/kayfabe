@@ -40,6 +40,32 @@ The raw mean client now **adopts the guest's ring** and the host engine **execut
 pushbuffer** (`Xid 0 → 5 × Xid 31`). It still fails, and the remaining wall is **FB-JOIN ALIASING**:
 one framebuffer page mapped at two guest VAs, host object bound at only one.
 
+## ✅ TEST SUITE + CI STATE (measured at `f60f793c`, per-target, 258 targets)
+**250 GREEN / 8 RED at HEAD → 252 / 6 after repair.** Enumerated per target with rc captured
+without a pipe — `cargo test --workspace` reports a stopping point, not a result.
+- **Fixed:** `e2_doorbell` (2, superseded contract → now pins BOTH refusals by name);
+  `publish_census` (1, the predicted 4 KiB-granule consequence → trip rows made sub-page);
+  ★ **`l1_mean` was SIGABRT-ing over its own results** — a `VerbHold` timeout panicked **while
+  holding the mutex** → `PoisonError` in a `Drop` → double panic → abort masked the entire binary.
+  Mock hold-locks made poison-tolerant; now 35 pass / 11 fail where **nothing** was reportable.
+- **Still red (6), all classified:** `doorbell_reaches_the_completion_observer` (3) and
+  `ring_out_of_our_own_framebuffer` (2) are **pre-existing** w287 severance; plus
+  `admitted_is_served` (2, missing trace data), `unranked_locks` (1), `guest_ring_census` (2) —
+  identical at the pre-tonight baseline `e570ad90`.
+- **11 `l1_mean` reds need the Dup/LateMerge RULING** (7×) or a shared-helper change to
+  `ring_gpa_for` (2×) — deliberately not rewritten.
+- ⚠ **CI has been RED on every push since 2026-07-30** (last green `30510591257`) — **not tonight's
+  doing**; current failure is runner-environment (`execve errno 13`), and HEAD gets **further** than
+  the baseline, which failed earlier on a compile error. `fmt` red (tonight's part is
+  `kayfabe-device`), `clippy` red mostly at baseline.
+- ⊘ **Clippy's "`release_store_join_carrying_bytes` never used" is a FALSE ALARM** — it runs on
+  default features, where the whole `host-isolates` block is compiled out. The call is live at
+  `shim.rs:11710`.
+
+## ⚠ UNBOOTED AS OF THIS WRITING
+`f60f793c` (w392t, **settle-before-birth** — the P3 fix) is committed and **has never been booted**.
+That is the next bench action after the LLM run frees the box.
+
 ## ★ THE FULL GOAL CHAIN (owner, 2026-09-09 ~04:00 CEST) — in order
 1. **LLM works and all client gates green** (P1 ✔ P2 ✔ STALE RACE ✔; **P3 still red**; LLM text is
    byte-identical to the CPU oracle but a **ledger-printed graded verdict is still owed**)
