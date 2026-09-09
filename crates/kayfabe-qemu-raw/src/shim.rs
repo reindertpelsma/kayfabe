@@ -16470,13 +16470,30 @@ impl DoorbellAsyncArm {
 ///
 /// # Errors
 /// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
-/// [`DoorbellAsyncArm::Off`].
+/// [`DoorbellAsyncArm::On`] — the owner ruling of 2026-09-09 made the absent case `on`.
 pub fn doorbell_async_from(
     value: Option<&str>,
 ) -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(DoorbellAsyncArm::Off),
-        Some("on") => Ok(DoorbellAsyncArm::On),
+        // ★★★★★ **OWNER RULING 2026-09-09: "yes doorbell no blocking calls, then that must
+        // be on, and the off path eventually discarded."** ⇒ ABSENT IS NOW `On`.
+        //
+        // The ruling is the same one this file already quotes from 2026-09-06 — *"never do a
+        // blocking call during a doorbell write"* — and `Emulated`'s own
+        // `TrapContract::ScheduleAndReturn` says *"the handler must not run on the vCPU
+        // thread"*. The contract, the ruling and the arm all existed; only the DEFAULT
+        // disagreed with them, so every boot measured the violation.
+        //
+        // `[measured w394g]` on one binary, one workload, one box: correctness held
+        // (`W392D_OUTCOME=(P)`, `THREADS 4 of 4`, `MEAN_FALSIFIER=PASS`), `off_trap_claims`
+        // 0 → 3416, `inline_exceptions` 4309 → 51, the pubqueue carried work for the first
+        // time (`queued=540 taken=540 completed=539 high_water=15`), GEMM 8.2 → 26.8 GFLOP/s
+        // and launch RTT 233 979 → 189 551 us.
+        // ⊘ `off` REMAINS SELECTABLE, and must, until it is deleted: it is the control every
+        // future before/after is measured against, and w298's ruling is that an arm which
+        // cannot be disarmed makes an evidence run and its control indistinguishable.
+        None | Some("on") => Ok(DoorbellAsyncArm::On),
+        Some("off") => Ok(DoorbellAsyncArm::Off),
         Some("nocoalesce") => Ok(DoorbellAsyncArm::NoCoalesce),
         Some(_) => Err((
             Status::Unsupported,
@@ -16501,7 +16518,7 @@ pub fn doorbell_async_from(
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match std::env::var_os(DOORBELL_ASYNC_ENV) {
-        None => Ok(DoorbellAsyncArm::Off),
+        None => Ok(DoorbellAsyncArm::On),
         Some(v) => doorbell_async_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -18402,5 +18419,63 @@ mod w328_scope_predicate_tests {
             ),
             "★★★★★ proc 0 is NEVER ATTEMPTED by either pass; scoping to it scopes to nothing"
         );
+    }
+}
+
+#[cfg(test)]
+mod the_doorbell_default_is_the_ruling {
+    //! ★★★★★ **A DEFAULT WITH NO TEST IS HOW THIS ONE DRIFTED.**
+    //!
+    //! `TrapContract::ScheduleAndReturn` said *"the handler must not run on the vCPU
+    //! thread"*. The owner ruled on 2026-09-06 *"never do a blocking call during a doorbell
+    //! write"*. The arm that obeys both existed. And the DEFAULT was `off`, so every boot
+    //! this campaign ever measured — 342 ms/launch, 190 launches/token, a 1.9 s trap —
+    //! measured the violation. Nothing was lying; nothing was checking.
+    //!
+    //! ⇒ The default is now part of the ruling and is pinned here. If someone flips it back,
+    //! this test says so with the reason attached, instead of a year of measurements
+    //! quietly describing a configuration nobody intended to ship.
+    use super::*;
+
+    #[test]
+    fn absent_means_on_because_a_doorbell_may_not_block() {
+        assert_eq!(
+            doorbell_async_from(None).expect("absent is not an error"),
+            DoorbellAsyncArm::On,
+            "owner ruling 2026-09-09: a doorbell does no blocking work, so the arm that \
+             moves it off the vCPU is the DEFAULT, not an opt-in"
+        );
+        assert_eq!(
+            doorbell_async_from(Some("on")).expect("on"),
+            DoorbellAsyncArm::On
+        );
+    }
+
+    /// ⊘ `off` must REMAIN reachable until it is deleted: it is the control every future
+    /// before/after is measured against, and w298's ruling is that an arm which cannot be
+    /// disarmed makes an evidence run and its control indistinguishable.
+    #[test]
+    fn off_is_still_selectable_because_a_control_you_cannot_select_is_not_a_control() {
+        assert_eq!(
+            doorbell_async_from(Some("off")).expect("off"),
+            DoorbellAsyncArm::Off
+        );
+        assert_eq!(
+            doorbell_async_from(Some("nocoalesce")).expect("nocoalesce"),
+            DoorbellAsyncArm::NoCoalesce
+        );
+    }
+
+    /// ⊘ A spelling a typo can reach must not silently select an arm — least of all now that
+    /// the safe arm is the default and a typo would be a SILENT REGRESSION rather than a
+    /// silent no-op.
+    #[test]
+    fn a_typo_is_refused_and_never_resolved_to_an_arm() {
+        for bad in ["1", "true", "yes", "ON", "Off", ""] {
+            assert!(
+                doorbell_async_from(Some(bad)).is_err(),
+                "{bad:?} must not name an arm"
+            );
+        }
     }
 }
