@@ -535,21 +535,45 @@ pub enum FwdFault {
         /// What this proc's address table said.
         tabled: (u64, Aperture),
     },
-    /// ⊘ A framebuffer leaf whose length RM cannot place, refused **by name** rather
-    /// than rounded.
+    /// ⊘ A framebuffer leaf whose length or base the chosen backing chain cannot place
+    /// exactly, refused **by name** rather than rounded.
+    ///
+    /// ### ⊘⊘ CORRECTED 2026-09-09 (w392q) — the granule is a property of the CHAIN, and
+    /// ### the 64 KiB one was OURS for the join.
+    /// This variant used to fire on any leaf that was not a whole number of 64 KiB, for
+    /// every chain, on the stated ground *"RM places a fixed mapping in 64 KiB granules"*.
+    /// That is true of the **vidmem** chain and false of the **join**: a join describes a
+    /// sysmem `OS_DESCRIPTOR` whose memdesc page size is `NV_RM_PAGE_SIZE`
+    /// (`ogkm-580: arch/nvalloc/unix/src/osmemdesc.c:250`), a fixed map takes that page
+    /// size (`gpu/mem_mgr/arch/maxwell/virt_mem_allocator_gm107.c:635`, the
+    /// `PAGE_SIZE_DEFAULT` arm with `bSysmemPageSizeDefaultAllowLargePages == NV_FALSE`
+    /// on every chip but GB10B/GB20B/GB20C, `generated/g_mem_mgr_nvoc.c:417-426`), aligns
+    /// the VA down to it (`:922`) and reserves `ALIGN_UP(len, max(pageSize, compAlign))`
+    /// (`:931-933`, `compAlign == 1` for an uncompressible kind, `mem_mgr.c:2560-2565`).
+    /// ⇒ RM places a 4 KiB sysmem leaf at a 4 KiB-aligned VA **exactly**, and
+    /// `[measured w392p]` the refusal was the one thing between P2's UVM-mapped operand
+    /// (`0x9080000000`, 4 KiB PTEs) and the host engine. See [`FbLeafBacking::granule`].
     ///
     /// The C rounds the allocation up to 64 KiB and registers the rounded range
     /// (`C: nvkvm_gpu_emul.c:8242-8243`, `asize` vs `tsize`), which makes the object
     /// claim up to 60 KiB of guest framebuffer address space **past the end of the leaf**
     /// — an overhang the establishment copy never fills and the local shadow can no
     /// longer answer for. ⚠ That is the C's, not a defect this port inherits: here a leaf
-    /// that is not a whole number of 64 KiB granules is refused, so the overhang is
-    /// unrepresentable instead of silent.
+    /// that is not a whole number of its chain's granules is refused, so the overhang is
+    /// unrepresentable instead of silent — and ⊘ **still never rounded**, because a
+    /// rounded join would map host pages at up to 15 VAs the guest declared elsewhere or
+    /// not at all (UVM's 4 KiB PTEs need not be frame-contiguous), which is a silent
+    /// substitution of memory, not a granularity fix.
     FbLeafGranularity {
         /// The leaf VA.
         va: GpuVa,
         /// Its length, as the walk reported it.
         len: u64,
+        /// ★ The granule the chosen chain needed — `len` and `va` must both be whole
+        /// multiples of it. Carried so the refusal says *which* rule was broken: a 4 KiB
+        /// leaf refused against `0x1_0000` is the vidmem chain doing its job, and the same
+        /// leaf refused against `0x1000` is a bug.
+        granule: u64,
     },
     /// ⊘ The address table binds this VA, but over a **different range** than the leaf
     /// the walk found. Backing it would either overhang a neighbour or leave a hole, and
@@ -2744,17 +2768,68 @@ pub struct BackFbLeafPlan {
     pub how: FbLeafBacking,
 }
 
-/// ★ RM places a fixed mapping in 64 KiB granules; a leaf that is not a whole number of
-/// them cannot be covered exactly. See [`FwdFault::FbLeafGranularity`] for why this port
-/// refuses rather than rounds.
+/// ★ The placement granule of the **vidmem** chain ([`FbLeafBacking::Vidmem`]): RM maps
+/// device-local memory with 64 KiB big pages regardless of what is asked
+/// (`[measured 2026-08-10, vh]` a 4 KiB fixed ask at `ring_va + 0x2000` was placed at
+/// `ring_va` — `kayfabe_isolate_host::rm::HostRmBackend::probe_va`), so a vidmem leaf that
+/// is not a whole number of them cannot be covered exactly and would expose up to 60 KiB of
+/// undeclared VA if it were rounded. See [`FwdFault::FbLeafGranularity`].
+///
+/// ### ⊘⊘ CORRECTED 2026-09-09 (w392q) — this is NOT the join chain's granule.
+/// The doc above used to read *"RM places a fixed mapping in 64 KiB granules"* with no
+/// chain named, and [`plan_back_fb_leaf`] applied it to every chain. For a join the object
+/// is a sysmem `OS_DESCRIPTOR`, RM maps it with 4 KiB pages and reserves exactly
+/// `ALIGN_UP(len, 4 KiB)` of VA (citations on the fault variant). The join's granule is
+/// [`FB_LEAF_PAGE`]; **ask [`FbLeafBacking::granule`], never this constant directly**, or
+/// the census and the verb will disagree about which rows are placeable.
 ///
 /// ⊘ **`pub` since w290, and the reason is the trap and not convenience.** The publication
 /// census (`SharedDevice::vas_publish_census`) must classify a row as *"this verb would
 /// refuse it on granularity"* BEFORE issuing any host verb, and a census carrying its own
 /// copy of `0x1_0000` would be a **second source of truth for one constant** — the exact
 /// shape `two_projections_of_one_fact_disagreeing` is banked for. The census reads THIS
-/// value or it is not measuring this gate.
+/// value (through [`FbLeafBacking::granule`]) or it is not measuring this gate.
 pub const FB_LEAF_GRANULE: u64 = 0x1_0000;
+
+/// ★ The placement granule of the **join** and **alias** chains ([`FbLeafBacking::Joined`],
+/// [`FbLeafBacking::Aliased`]): RM's small page, `NV_RM_PAGE_SIZE`, which is the page size
+/// of the sysmem `OS_DESCRIPTOR` the join describes
+/// (`ogkm-580: arch/nvalloc/unix/src/osmemdesc.c:250`) and therefore the page size of its
+/// fixed mapping (`virt_mem_allocator_gm107.c:635`).
+///
+/// ⊘ Same rule as [`FB_LEAF_GRANULE`]: one definition, read through
+/// [`FbLeafBacking::granule`]. A leaf below or off this granule is refused by name; a
+/// leaf on it is placed **exactly**, one PTE per page, with no VA reserved past `len`
+/// (`virt_mem_allocator_gm107.c:931-933, 953-956`) — so the guest's neighbouring 4 KiB
+/// leaves can be joined later without the `0x51` collision a rounded reservation would
+/// cause.
+pub const FB_LEAF_PAGE: u64 = 0x1000;
+
+impl FbLeafBacking {
+    /// ★★★ **The granule this chain can place a leaf at** — the single predicate both
+    /// [`plan_back_fb_leaf`] and the publication census apply, so the two cannot drift.
+    ///
+    /// | chain | granule | why |
+    /// |---|---|---|
+    /// | `Vidmem` | [`FB_LEAF_GRANULE`] (64 KiB) | RM maps device-local memory with big pages; a smaller object is placed at the containing 64 KiB and would expose undeclared VA |
+    /// | `Joined`, `Aliased` | [`FB_LEAF_PAGE`] (4 KiB) | a sysmem `OS_DESCRIPTOR` maps with 4 KiB PTEs and reserves exactly `len` |
+    #[must_use]
+    pub const fn granule(self) -> u64 {
+        match self {
+            Self::Vidmem => FB_LEAF_GRANULE,
+            Self::Joined | Self::Aliased => FB_LEAF_PAGE,
+        }
+    }
+
+    /// ★ Would this chain place a leaf of `len` bytes at `va` **exactly**? The gate
+    /// [`plan_back_fb_leaf`] applies first, exposed so the census can ask it of a row
+    /// without building a plan. `false` means [`FwdFault::FbLeafGranularity`].
+    #[must_use]
+    pub fn places_exactly(self, va: u64, len: u64) -> bool {
+        let g = self.granule();
+        len >= g && len.is_multiple_of(g) && va.is_multiple_of(g)
+    }
+}
 
 /// ★★★★★ **THE SECOND CROSSING — back ONE framebuffer leaf with real host vidmem.**
 ///
@@ -2834,12 +2909,14 @@ pub fn plan_back_fb_leaf(
     }
     // ★ The granularity gate runs FIRST, before any core state is consulted: a leaf RM
     // cannot place exactly is refused on its own terms, not as a consequence of some
-    // other lookup.
-    if len < FB_LEAF_GRANULE
-        || !len.is_multiple_of(FB_LEAF_GRANULE)
-        || !va.0.is_multiple_of(FB_LEAF_GRANULE)
-    {
-        return Err(FwdFault::FbLeafGranularity { va, len });
+    // other lookup. ⊘ The granule is the CHAIN's (`FbLeafBacking::granule`): 4 KiB for a
+    // join, 64 KiB for vidmem — see `FB_LEAF_GRANULE`'s 2026-09-09 correction.
+    if !how.places_exactly(va.0, len) {
+        return Err(FwdFault::FbLeafGranularity {
+            va,
+            len,
+            granule: how.granule(),
+        });
     }
     let pid = proc.id;
     let vas = proc
@@ -4791,10 +4868,15 @@ fn adopted_guest_ring(
         );
         return None;
     }
+    // ⊘ w393 — print WHICH of the two legal shapes matched. This line used to say
+    // `JoinsGuestWindow` unconditionally, and the first pinned-ring fixture printed it
+    // over a `GuestPhysDma + SoleBacking` row: log prose that names the wrong mechanism.
     eprintln!(
-        "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ✔ ADOPTABLE — one memory, \
-         JoinsGuestWindow",
-        ring.va
+        "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ✔ ADOPTABLE — the guest's \
+         own bytes: kind={:?} bytes={:?}",
+        ring.va,
+        binding.kind(),
+        host.bytes()
     );
     Some(kayfabe_isolate::AdoptedGuestRing {
         memory: host.memory(),
@@ -5327,6 +5409,64 @@ pub fn commit_channel_birth(
         engine: chan.engine,
         guest_userd: plan.guest_userd,
     })
+}
+
+/// ★ **w393 — PLAN + EXECUTE + COMMIT of one birth-at-alloc, on a proc already in hand.**
+/// [`exec_engine_object`]'s twin for the third birth site, and the body
+/// `kayfabe_rt::SharedDevice::birth_channel_by_handle` composes under its own locks.
+///
+/// # Errors
+/// [`plan_channel_birth`]'s, then the host's, then [`commit_channel_birth`]'s.
+pub fn exec_channel_birth(
+    spine: &Spine,
+    proc: &mut Proc,
+    route: &ChannelBirthRoute,
+    err_notifier_grant: Option<GuestRamGrant>,
+) -> Result<ChannelBirthOutcome, FwdFault> {
+    let planned = plan_channel_birth(spine, proc, route, err_notifier_grant)?;
+    let gpu = planned.plan.cgpu;
+    round_trip(proc, gpu, planned.verbs, |proc, reply| {
+        commit_channel_birth(spine, proc, &planned.plan, reply)
+    })
+}
+
+/// ★★★★★ **w393 — birth one `Passthrough` channel's host channel at the guest's own channel
+/// alloc, keyed on the guest's `(hClient, hChannel)`** — the `&mut Gpu` composition of
+/// [`route_channel_birth`] + [`exec_channel_birth`], exactly as [`forward_engine_object_by_parent`]
+/// composes the engine-object birth. The `SharedDevice` twin is `birth_channel_by_handle`.
+///
+/// ⊘ This is the ONLY birth site for a `Passthrough` channel that adopts the guest's USERD:
+/// a doorbell can no longer birth one ([`FwdFault::PassthroughDoorbellBirth`]), because by
+/// then the guest has written the cursor RM would zero (`[measured w233]`).
+///
+/// # Errors
+/// [`FwdFault`], by variant — `PassthroughRingNotAdoptable` being the one this site exists
+/// to surface; `Emulated` and already-born channels come back as
+/// [`ChannelBirthOutcome::Skipped`], never as an error.
+pub fn birth_channel(
+    gpu: &mut Gpu,
+    client: HClient,
+    channel: HObject,
+    err_notifier_grant: Option<GuestRamGrant>,
+) -> Result<ChannelBirthOutcome, FwdFault> {
+    let Gpu {
+        spine,
+        procs,
+        system,
+        ..
+    } = gpu;
+    let route = route_channel_birth(spine, client, channel)?;
+    // ⊘ The system proc lives in its own field, not the map (`Gpu::schedule_channel`'s
+    // shape): an `Emulated` channel routes there and must come back as
+    // `Skipped(Emulated)`, not as a `RetiredProc` that would read as a dead guest kernel.
+    let proc = if route.proc == Gpu::SYSTEM_PROC {
+        &mut *system
+    } else {
+        procs
+            .get_mut(&route.proc)
+            .ok_or(FwdFault::RetiredProc(route.proc))?
+    };
+    exec_channel_birth(spine, proc, &route, err_notifier_grant)
 }
 
 /// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the

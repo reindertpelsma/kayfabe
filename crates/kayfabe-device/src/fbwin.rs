@@ -1142,7 +1142,8 @@ impl FbStore for SparseFb {
         // ★★★★★ **OWNER RULING 2026-08-27 — WHEN THIS BACKING BECOMES VIDMEM, THIS LOOP
         // MUST BECOME A `ce_copy`.** See `docs/design/copy_placement_policy.md` §2.2.
         //
-        // A leaf is at least one `FB_LEAF_GRANULE`, so the copy below is **bulk HtoD**. Today
+        // A leaf is at least one `FB_LEAF_PAGE` (4 KiB since w392q; 64 KiB before), so the
+        // copy below is **bulk HtoD**. Today
         // `region` is a `memfd` and this is HtoH — a memcpy, correct and fastest. The moment
         // the leaf is backed by vidmem it becomes a bulk CPU write **across the BAR**, which
         // the policy forbids: bulk DtoH, HtoD and DtoD all go to the copy engine

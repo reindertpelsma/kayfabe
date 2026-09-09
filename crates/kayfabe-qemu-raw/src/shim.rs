@@ -10015,6 +10015,10 @@ impl PublishContext {
     ///
     /// - `FbLeafGranularity` — *"RM places a fixed mapping in 64 KiB granules"* (`:2244-2247`).
     ///   A run **passes** this; the 4 KiB rows it is made of **cannot**.
+    ///   ⊘⊘ **CORRECTED 2026-09-09 (w392q): that sentence was the VIDMEM chain's rule applied
+    ///   to the join.** The join's granule is RM's 4 KiB small page
+    ///   (`kayfabe_fwd::FbLeafBacking::granule`, `FB_LEAF_PAGE`); a page-aligned 4 KiB row
+    ///   now passes, so the two gates no longer pull in opposite directions.
     /// - `FbLeafExtent` — the request must be **exactly one table row**, start and length.
     ///   A run **fails** this whenever it spans more than one row.
     ///

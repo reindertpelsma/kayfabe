@@ -71,7 +71,7 @@ use kayfabe_core::reactor::{CompletionSource, Dispatch, SourceFault, SourceKind}
 use kayfabe_core::rmgraph::RmEvent;
 use kayfabe_core::{ChanId, ProcId};
 use kayfabe_fwd::{
-    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FB_LEAF_GRANULE, FwdFault, Orphans,
+    ControlRoute, DoorbellOutcome, EngineObjectForwarded, FbLeafBacking, FwdFault, Orphans,
     Planned, Published, Refusal,
 };
 use kayfabe_isolate::{
@@ -1946,6 +1946,16 @@ impl SharedDevice {
         out
     }
 
+    /// ★ **w393 — read the spine under the read guard**, a diagnostic window shaped like
+    /// [`SharedDevice::with_proc`]: the borrow cannot escape the guard, and `f` runs with
+    /// rank 0 held, so it may take **no** proc lock (R3). Added for the conformance suite's
+    /// birth-at-alloc fixture, which needs a channel's declared `gpFifoOffset` off its own
+    /// graph node — a fact that lives on the spine, not on the proc.
+    pub fn with_spine<R>(&self, f: impl FnOnce(&Spine) -> R) -> R {
+        let st = self.state.read();
+        f(&st.spine)
+    }
+
     /// Every proc the device currently holds live, the system proc first. **Spine op**
     /// (read guard); pairs with [`SharedDevice::with_proc`] so a caller can walk the
     /// whole live set one rank-1 lock at a time — never two at once, which R3 would
@@ -3027,9 +3037,14 @@ pub struct PublishCensus {
     /// `tests/tests/publish_census.rs`, because a dead bucket nobody pins reads as a
     /// measured zero and would send a reader chasing the wrong gate.
     pub not_vidmem: usize,
-    /// ★★★ Rows RM's 64 KiB fixed-placement granularity cannot cover exactly
+    /// ★★★ Rows the join chain's placement granule cannot cover exactly
     /// (`FbLeafGranularity`). **This is the number that decides the rung**: it is how much
     /// of the table the proven verb structurally cannot take.
+    ///
+    /// ⊘⊘ **CORRECTED 2026-09-09 (w392q).** This read *"RM's 64 KiB fixed-placement
+    /// granularity"*; the join's granule is RM's 4 KiB small page
+    /// (`kayfabe_fwd::FB_LEAF_PAGE`, `FbLeafBacking::granule`), so a 4 KiB, 4 KiB-aligned
+    /// row is now a candidate and lands here only if it is sub-page or misaligned.
     pub not_granular: usize,
     /// The bytes behind [`Self::not_granular`] — the same fact weighted by size, because a
     /// count of 4 KiB rows and a count of 2 MiB rows are not comparable quantities.
@@ -4431,7 +4446,7 @@ impl SharedDevice {
     ///
     /// | refusal | source | why it cannot be relaxed here |
     /// |---|---|---|
-    /// | `FbLeafGranularity` | `kayfabe-fwd/src/lib.rs:2244-2247` — *"RM places a fixed mapping in 64 KiB granules"* | it is RM's placement granularity; a 4 KiB row **cannot** be covered exactly |
+    /// | `FbLeafGranularity` | `kayfabe_fwd::FbLeafBacking::granule` — ⊘⊘ **CORRECTED 2026-09-09 (w392q)**: was *"RM places a fixed mapping in 64 KiB granules"*; that is the **vidmem** chain's. The join describes a sysmem `OS_DESCRIPTOR`, which RM maps with 4 KiB pages (`ogkm-580: osmemdesc.c:250`, `virt_mem_allocator_gm107.c:635`) | the census asks the SAME predicate the verb applies, for the chain the drain uses (`Joined`); a 4 KiB, page-aligned row is a candidate |
     /// | `FbLeafDisagrees` | `:2360-2366` | a row whose aperture is not `Vidmem` has no framebuffer to join |
     /// | `FbLeafExtent` | `:2352-2358` | the leaf must be **exactly one table row**, start and length |
     ///
@@ -4442,6 +4457,11 @@ impl SharedDevice {
     /// **cannot be handed a run**. This census reports both facts as counts rather than
     /// guessing which dominates: `not_granular` is how many rows the run-coalescing would
     /// have rescued, and it is measured, not estimated.
+    ///
+    /// ⊘⊘ **SUPERSEDED 2026-09-09 (w392q) — the tension above dissolved once the granule
+    /// was the chain's.** The join places 4 KiB rows exactly (see the table's first row), so
+    /// per-row publication is no longer "what the first gate forbids"; coalescing is now
+    /// purely an efficiency question and `not_granular` counts sub-page or misaligned rows.
     ///
     /// ⊘ `guest_ram` rows are counted and **excluded, not refused**: they are leg 6's
     /// population and are served by the guest-RAM pin, which is a different verb with a
@@ -4479,10 +4499,11 @@ impl SharedDevice {
                     c.guest_ram += 1;
                 } else if b.aperture() != kayfabe_arch::Aperture::Vidmem {
                     c.not_vidmem += 1;
-                } else if len < FB_LEAF_GRANULE
-                    || len % FB_LEAF_GRANULE != 0
-                    || va % FB_LEAF_GRANULE != 0
-                {
+                } else if !FbLeafBacking::Joined.places_exactly(va, len) {
+                    // ★ THE SAME PREDICATE THE VERB APPLIES, for the chain the drain hands
+                    // these rows to (`join_one_fb_leaf` decides `Joined` vs `Aliased`, never
+                    // `Vidmem`, and the two share a granule). A census with its own copy of
+                    // the rule is the two-projections trap `FB_LEAF_GRANULE`'s doc names.
                     c.not_granular += 1;
                     c.not_granular_bytes += len;
                 } else {
