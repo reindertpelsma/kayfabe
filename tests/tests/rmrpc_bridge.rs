@@ -3437,6 +3437,14 @@ fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
                 // the assertion below requires `userd` to actually TRACK the tail, so the
                 // exclusion here is paid for by a positive check rather than by a hole.
                 userd: None,
+                // ★ w393 — masked for the SAME reason: `channel_engine_type` is the raw
+                // twin of `channel_engine`, read by the same version-pinned past-prefix
+                // wire (`ChannelEngineWire`). `channel_engine` never needed masking only
+                // because `decode_kind` folds an unrecognised code to `None`; the raw
+                // field deliberately does NOT fold (it is carried verbatim to RM), so a
+                // 0xff tail is `Some(0xffff_ffff)` here by design. ⊘ Paid for by the
+                // positive check below, as `userd`'s mask is — never a hole.
+                channel_engine_type: None,
                 ..facts_of(&long)
             },
             want,
@@ -3475,6 +3483,21 @@ fn nothing_past_the_channel_prefix_is_read_however_hostile_it_is() {
         "★ the USERD decoder must read the TAIL's bytes — if this reports zeros it is not \
          reading the field at all, and every USERD line in a boot log would be an artefact \
          of the decoder rather than a fact about the guest",
+    );
+    // ★ w393 — the same two-sided proof for the raw `engineType`: too short ⇒ `None`
+    // (never zero-extended into "the guest declared NULL"), long enough ⇒ the tail's own
+    // bytes, verbatim and unfolded — which is exactly what the birth-at-alloc hands RM.
+    assert_eq!(
+        facts_of(&short).channel_engine_type,
+        None,
+        "⊘ params that stop before `engineType` must yield None — a decoder that \
+         zero-extended here would birth a channel on runlist 0 the guest never asked for",
+    );
+    assert_eq!(
+        facts_of(&full).channel_engine_type,
+        Some(0xffff_ffff),
+        "★ the raw engineType decoder must read the TAIL's bytes, unfolded — a value that \
+         came back `None` or 0 here is a decoder that is not reading the field",
     );
 }
 
