@@ -384,8 +384,45 @@ impl BlockingSection {
     /// ranked lock** — the assert that turns "held a guard across a blocking
     /// call" from a production deadlock into an immediate, named test failure.
     #[must_use]
-    pub fn enter() -> Self {
+    pub fn enter(what: &'static str) -> Self {
         Self::assert_lock_free("entering a BlockingSection");
+        // ★★★★★ **OWNER RULING 2026-09-09 — THE ALLOWLIST, MEASURED.**
+        //
+        // > *"the thing is to avoid a blocking call on vcpu thread at all, unless its
+        // > required like a memslot install, even mmaps in vmm va can often run largely off
+        // > vcpu thread"*
+        //
+        // The default inverts: blocking work does NOT belong on a vCPU thread, and the
+        // exceptions are a short NAMED list (a memslot install, because KVM requires it
+        // there), not "whatever happens to be there already". So a section entered inside a
+        // guest trap is recorded **by reason**, and the boot prints the list.
+        // ⊘ Recorded, not panicked: the census must be able to report the CURRENT residue
+        // before it is zero, and a gate that aborts the boot can only ever be turned on
+        // after the work is finished — which is the wrong order for measuring it.
+        if crate::trapwitness::in_trap() {
+            note_vcpu_blocking(what, false);
+        }
+        BlockingSection {
+            _not_send: PhantomData,
+        }
+    }
+
+    /// ★★★ **The allowlist door.** A blocking thing that genuinely cannot leave the vCPU
+    /// thread — a memslot install is the canonical member, because KVM requires it there.
+    ///
+    /// ⊘ Separate constructor rather than a boolean argument, so the exceptions are
+    /// *greppable as a set*: `enter_required_on_vcpu` is the whole allowlist, and its call
+    /// sites are the list. A boolean would let an exception be introduced by flipping a
+    /// literal at a call site nobody re-reads.
+    /// ⚠ "It was already there" is not a reason. Each call site must carry, in a comment,
+    /// why the work cannot move — the owner's own example is that even `mmap` into the VMM's
+    /// VA usually CAN move, so the bar is high.
+    #[must_use]
+    pub fn enter_required_on_vcpu(what: &'static str) -> Self {
+        Self::assert_lock_free("entering a required-on-vCPU BlockingSection");
+        if crate::trapwitness::in_trap() {
+            note_vcpu_blocking(what, true);
+        }
         BlockingSection {
             _not_send: PhantomData,
         }
@@ -486,7 +523,7 @@ mod tests {
     fn r1_blocking_section_under_a_lock_panics() {
         let device = RankedRwLock::new(LockRank::Device, 0u32);
         let _g = device.read();
-        let _section = BlockingSection::enter(); // lock alive → panic
+        let _section = BlockingSection::enter("existing lock.rs test"); // lock alive → panic
     }
 
     /// R1's second tooth: a section constructed legally, then used AFTER a lock
@@ -495,7 +532,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "R1 no-blocking-under-lock violation")]
     fn r1_blocking_section_run_under_a_late_lock_panics() {
-        let mut section = BlockingSection::enter(); // legal: nothing held
+        let mut section = BlockingSection::enter("existing lock.rs test"); // legal: nothing held
         let proc = RankedMutex::new(LockRank::Proc, 0u32);
         let _g = proc.lock();
         section.run(|| ()); // lock alive at the call → panic
@@ -504,7 +541,7 @@ mod tests {
     /// R1's success polarity: with zero locks held the section constructs and runs.
     #[test]
     fn r1_blocking_section_with_no_locks_runs() {
-        let mut section = BlockingSection::enter();
+        let mut section = BlockingSection::enter("existing lock.rs test");
         assert_eq!(section.run(|| 41 + 1), 42);
         // And the lock-then-release-then-block shape (the R1-compliant verb
         // round-trip: drop every guard, THEN block) is legal.
@@ -538,5 +575,169 @@ mod tests {
         *m.get_mut() += 1;
         assert_eq!(m.into_inner(), 4);
         assert_eq!(acquisitions(LockRank::Proc) - before_p, 1);
+    }
+}
+
+
+// =====================================================================================
+// ★★★★★ WHAT BLOCKED ON A vCPU THREAD — the owner's 2026-09-09 allowlist, as a census.
+// =====================================================================================
+
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::OnceLock;
+
+const VCPU_BLOCK_SLOTS: usize = 16;
+static VB_CLAIMED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
+    [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
+static VB_NAME: [OnceLock<&'static str>; VCPU_BLOCK_SLOTS] =
+    [const { OnceLock::new() }; VCPU_BLOCK_SLOTS];
+static VB_HITS: [AtomicU64; VCPU_BLOCK_SLOTS] = [const { AtomicU64::new(0) }; VCPU_BLOCK_SLOTS];
+/// Whether the slot came through the allowlist door.
+static VB_ALLOWED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
+    [const { AtomicUsize::new(0) }; VCPU_BLOCK_SLOTS];
+static VB_OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+/// Lock-free, because this records **on the vCPU thread inside a trap**, which is exactly
+/// where a blocking site is forbidden. An instrument that took a mutex here would be inside
+/// the hazard it measures.
+fn note_vcpu_blocking(what: &'static str, allowed: bool) {
+    let ptr = what.as_ptr() as usize;
+    for i in 0..VCPU_BLOCK_SLOTS {
+        let cur = VB_CLAIMED[i].load(AtomicOrdering::Relaxed);
+        if cur != ptr {
+            if cur != 0
+                || VB_CLAIMED[i]
+                    .compare_exchange(0, ptr, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+                    .is_err()
+            {
+                continue;
+            }
+            let _ = VB_NAME[i].set(what);
+            VB_ALLOWED[i].store(usize::from(allowed), AtomicOrdering::Release);
+        }
+        VB_HITS[i].fetch_add(1, AtomicOrdering::Relaxed);
+        return;
+    }
+    VB_OVERFLOW.fetch_add(1, AtomicOrdering::Relaxed);
+}
+
+/// `(reason, hits, was_allowlisted)` for everything that blocked on a vCPU thread.
+#[must_use]
+pub fn vcpu_blocking_rows() -> Vec<(&'static str, u64, bool)> {
+    let mut out = Vec::new();
+    for i in 0..VCPU_BLOCK_SLOTS {
+        let hits = VB_HITS[i].load(AtomicOrdering::Relaxed);
+        if hits == 0 {
+            continue;
+        }
+        out.push((
+            VB_NAME[i].get().copied().unwrap_or("⊘ (reason not yet published)"),
+            hits,
+            VB_ALLOWED[i].load(AtomicOrdering::Acquire) == 1,
+        ));
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1));
+    out
+}
+
+/// One line for the boot report.
+///
+/// ⊘⊘ **IT STATES ITS OWN COVERAGE, and that is not decoration.** This census can only see
+/// blocking work that goes through [`BlockingSection`], and `[measured 2026-09-09]` the whole
+/// workspace had **one** such call site while a single MMIO trap was demonstrably held for
+/// **1.79 s**. So an empty line here means *"nothing DECLARED blocked"*, which is a fact
+/// about the declarations and not about the boot. Printing a bare `0` would be the
+/// [`a_census_over_transports_is_as_complete_as_its_list`] failure exactly — and the
+/// unforgiving cross-check is `trapwitness::census()`'s `worst_trap`/`slow_traps`, which
+/// measures the HOLD itself and cannot be fooled by an undeclared site.
+#[must_use]
+pub fn vcpu_blocking_census() -> String {
+    let rows = vcpu_blocking_rows();
+    let over = VB_OVERFLOW.load(AtomicOrdering::Relaxed);
+    let undeclared = "⊘ COVERAGE: only sites that go through BlockingSection are visible here;                       cross-check worst_trap/slow_traps, which measure the hold itself";
+    if rows.is_empty() {
+        return format!("VCPU-BLOCKING none declared — {undeclared}");
+    }
+    format!(
+        "VCPU-BLOCKING {}{} — {undeclared}",
+        rows.iter()
+            .map(|(what, n, allowed)| format!(
+                "[{n} × {what}{}]",
+                if *allowed { " (ALLOWLISTED)" } else { " ⊘ NOT ALLOWLISTED" }
+            ))
+            .collect::<Vec<_>>()
+            .join(" "),
+        if over == 0 {
+            String::new()
+        } else {
+            format!(" ⊘ INCOMPLETE: {over} site(s) did not fit the table")
+        }
+    )
+}
+
+#[cfg(test)]
+mod the_vcpu_allowlist {
+    //! ★★★★★ **OWNER RULING 2026-09-09, as an ALLOWLIST rather than a prohibition.**
+    //!
+    //! > *"the thing is to avoid a blocking call on vcpu thread at all, unless its required
+    //! > like a memslot install, even mmaps in vmm va can often run largely off vcpu thread"*
+    //!
+    //! The default inverts: blocking work does not belong on a vCPU thread, and the
+    //! exceptions are a short NAMED list. `enter_required_on_vcpu`'s call sites ARE that
+    //! list, which is why it is a separate constructor and not a boolean argument — a
+    //! boolean lets an exception appear by flipping a literal nobody re-reads.
+    use super::*;
+
+    #[test]
+    fn a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded() {
+        let before = vcpu_blocking_rows().len();
+        let _s = BlockingSection::enter("unit-test-off-trap");
+        assert!(
+            !vcpu_blocking_rows().iter().any(|r| r.0 == "unit-test-off-trap"),
+            "off-trap blocking is the CORRECT shape and must not be reported as a violation"
+        );
+        assert_eq!(vcpu_blocking_rows().len(), before);
+    }
+
+    #[test]
+    fn blocking_inside_a_trap_is_recorded_and_says_whether_it_was_allowlisted() {
+        {
+            let _t = crate::trapwitness::TrapGuard::enter();
+            let _a = BlockingSection::enter("unit-test-undeclared-on-vcpu");
+            let _b = BlockingSection::enter_required_on_vcpu("unit-test-memslot-install");
+        }
+        let rows = vcpu_blocking_rows();
+        let bad = rows
+            .iter()
+            .find(|r| r.0 == "unit-test-undeclared-on-vcpu")
+            .expect("the undeclared site must be recorded");
+        let ok = rows
+            .iter()
+            .find(|r| r.0 == "unit-test-memslot-install")
+            .expect("the allowlisted site must be recorded too");
+        assert!(!bad.2, "an ordinary section on a vCPU thread is NOT allowlisted");
+        assert!(ok.2, "the allowlist door must mark its entries");
+
+        let line = vcpu_blocking_census();
+        assert!(line.contains("⊘ NOT ALLOWLISTED"), "{line}");
+        assert!(line.contains("(ALLOWLISTED)"), "{line}");
+    }
+
+    /// ⊘⊘ **THE COVERAGE STATEMENT IS THE POINT.** `[measured 2026-09-09]` the whole
+    /// workspace had ONE `BlockingSection` call site while a single MMIO trap was held for
+    /// 1.79 s — so this census can be empty and the boot can still be blocking for seconds.
+    /// An empty line that printed a bare `0` would be the
+    /// `a_census_over_transports_is_as_complete_as_its_list` failure exactly.
+    #[test]
+    fn the_census_always_states_what_it_cannot_see() {
+        assert!(
+            vcpu_blocking_census().contains("COVERAGE"),
+            "every rendering, empty or not, must say that only DECLARED sites are visible: {}",
+            vcpu_blocking_census()
+        );
+        assert!(
+            vcpu_blocking_census().contains("worst_trap"),
+            "and it must name the cross-check that CANNOT be fooled by an undeclared site"
+        );
     }
 }
