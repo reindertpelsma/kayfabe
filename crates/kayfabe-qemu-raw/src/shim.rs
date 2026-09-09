@@ -13291,6 +13291,41 @@ impl Regs {
     /// ⊘ The census prints on **both** arms, including all-zeros on the control, so a boot
     /// log always answers *"was the lane armed, and did it carry anything"* rather than
     /// leaving an absence to be interpreted.
+    /// ★★★★★ **THE OS-EVENT GATE, PRINTED — the number `OsEventLog::gated`'s own doc calls
+    /// "the number to read when delivery stops", which no boot has ever printed.**
+    ///
+    /// `[measured w394, the 6-probe boot]` the multi-app wedge's root is an **event
+    /// notification control failing** on the re-init after teardown:
+    /// ```text
+    /// _memmgrMemUtilsScrubInitRegisterCallback: event notification control failed
+    ///   → objCreate(&pScrubber->pCeUtils) → scrubberConstruct → gpuStateLoad
+    ///   → RmInitNvDevice: *** Cannot load state into the device
+    /// ```
+    /// `gated()`'s doc predicts exactly this shape — *"a large `gated` beside `batches == 1`
+    /// says the guest never wrote `IRQSCLR`, i.e. the opener never fired and the gate is
+    /// stuck"* — and then says **"which no test in this repository can observe"**, because
+    /// `cap1` contains zero `IRQSCLR` writes.
+    ///
+    /// ⇒ So the hypothesis is already written down, the counter that would confirm or kill
+    /// it already exists, and nothing prints it. That is this campaign's most expensive
+    /// recurring shape, and printing it costs one line.
+    /// ⊘ This does NOT claim the gate is the cause. It makes the claim **testable**: a boot
+    /// that wedges with `gated` large and `batches` small implicates it; one that wedges with
+    /// `gated == 0` **exonerates** it and sends the next look elsewhere.
+    fn os_event_census(&self) -> String {
+        let log = self.plane.os_event_log();
+        format!(
+            "OSEVENT batches={} gated={} not_running={} failed={} woke_with_nothing={} \
+             ⊘ `gated` large beside a small `batches` = the IRQSCLR opener never fired and \
+             the flow-control gate is latched shut; `gated=0` EXONERATES the gate",
+            log.batches(),
+            log.gated(),
+            log.not_running(),
+            log.failed(),
+            log.woke_with_nothing(),
+        )
+    }
+
     fn stop_doorbell_publish_worker(&self) {
         let taken = self
             .doorbell_worker
@@ -13317,6 +13352,10 @@ impl Regs {
             },
             self.pubqueue.census(),
         );
+        // ★ Printed at teardown beside the lane census, because the two answer different
+        // halves of "did the guest ever get told anything": the pubqueue says what WE
+        // deferred, the os-event gate says what the GUEST was allowed to receive.
+        eprintln!("kayfabe: {}", self.os_event_census());
     }
 
     /// ★★★★★ **Start the completion observer's reactor loop.** See [`ObserverThread`].
