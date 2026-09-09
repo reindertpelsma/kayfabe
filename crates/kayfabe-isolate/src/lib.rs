@@ -892,6 +892,40 @@ pub trait RmBackend: Send + Sync {
         err_notifier: Option<HostHandle>,
     ) -> Result<(HostHandle, u64), RmError>;
 
+    /// ★★★★★ **w393 — [`Self::alloc_channel`] for a birth AT THE GUEST'S CHANNEL ALLOC**:
+    /// no engine object to host, a **mandatory** adoption, and the guest's own
+    /// `engineType` carried raw in place of the instance §16.106 would have read off the
+    /// object.
+    ///
+    /// # ⊘ Why a second verb and not a sixth argument on `alloc_channel`
+    ///
+    /// Two facts differ and both are the guest's: **(1)** `adopt` is not optional — a
+    /// channel born here over a ring of ours is the w392h defect (`RingSource::Ours(None)`,
+    /// engine fetches nothing, `Xid 0`) restated, and the type refuses to spell it;
+    /// **(2)** the runlist comes from the guest's channel alloc, not from an object that
+    /// does not exist yet. A `bool`/`Option` pair on the older verb would make both one
+    /// caller mistake away.
+    ///
+    /// `declared_engine_type` is the raw `NV2080_ENGINE_TYPE_*` code the guest wrote.
+    /// `None` = *"this port could not read it"*; the adapter then answers exactly as it does
+    /// for a `hosting: None` birth (`engine_type_for`), which is the pre-w393 behaviour,
+    /// labelled rather than silent.
+    ///
+    /// # ⚠ USERD, and the reason this verb exists at all
+    ///
+    /// `[measured w233]` RM zeroes a caller-supplied USERD at alloc. Adopted **here** —
+    /// before the guest has written `GP_PUT` — that is harmless; adopted at the first
+    /// doorbell it wipes the cursor that rang. See [`AdoptedGuestUserd`]. This is the only
+    /// verb on which `adopt.userd` may be `Some`; the doorbell arm passes `None`.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError>;
+
     /// Intent verb: allocate an **engine object** (compute / graphics / CE / NVENC)
     /// of `class` on host channel `chan` — the Case-1 forward that makes the host
     /// kernel-RM build and self-promote its OWN context (golden ctx included, on real
@@ -1970,31 +2004,63 @@ pub enum VerbPlan {
         /// ([`GuestRamGrant::originated_by_the_vmm`]), which is the same rule
         /// [`VerbPlan::PinGuestRam`] states and the same `-m 8G` bug it exists to refuse.
         err_notifier: Option<GuestRamGrant>,
-        /// ★★★★★ **w392j — THE GUEST'S OWN RING, ON THE DOORBELL BIRTH TOO.**
-        ///
-        /// **Owner, 2026-09-09:** *"in passthrough you should not have a `RingSource::Ours`
-        /// … the guest directly reads the hardware GPU ring. In Emulated channels and RPC
-        /// calls we have our own fake ring we drive."* ⇒ `Ours` is CORRECT for `Emulated`
-        /// and ILLEGAL for `Passthrough`, and this arm used to pass a literal `None`
-        /// **regardless of kind** — so every passthrough channel born here got our empty
-        /// ring by construction (measured w392h/w392i: 7 births, all `Passthrough`,
-        /// `adopt=NOT-ASKED` → `RingSource::Ours(None)`, engine fetches nothing, **no
-        /// completion and no fault**, `Xid 0`).
-        ///
-        /// ⊘ **The old comment here said a ring adopted on this path *"would be adopted
-        /// without the leaf having been joined"*. That is refuted by our own
-        /// `guest_ring_adoption.md` §3.3, sourced AND measured:** the open driver forwards
-        /// `gpFifoOffset` to GSP without resolving it, RM itself allocates channels with
-        /// `gpFifoOffset = 0` on purpose, and R31 arm C had a channel alloc at an address
-        /// nothing was ever mapped at **accepted**. ⇒ *"A host channel does not need its
-        /// ring bound in order to be born."* The binding is needed when hardware
-        /// **fetches**, which is after this — the surviving constraint is
-        /// **pin-before-doorbell**, and the pin is already there.
-        ///
-        /// ⊘ Read **only** on the `channel == None` arm, for the same reason
-        /// [`VerbPlan::EngineObject`]'s `adopt` is: re-declaring the ring of a channel that
-        /// already exists would be a second, silent opinion about a fact RM already holds.
-        adopt: Option<AdoptedGuestRing>,
+        // ⊘⊘ **w393 — THERE IS NO `adopt` HERE, AND THAT IS A TYPE FACT.** w392j added one
+        // (ring + USERD on a doorbell birth) and w392o kept the ring half; both were lazy
+        // births, and `[measured w233]` RM zeroes a caller-supplied USERD at alloc — at a
+        // doorbell that is the cursor that rang. A `Passthrough` channel is born at its own
+        // channel alloc (`VerbPlan::ChannelBirth`), and `kayfabe_fwd::plan_doorbell` refuses
+        // by name (`FwdFault::PassthroughDoorbellBirth`) before this variant is built for one.
+        // The only birth this arm still performs is an `Emulated` channel's, over our own
+        // ring, which is correct for that kind. A doorbell birth that adopts is unspellable.
+    },
+    /// ★★★★★ **w393 — A HOST CHANNEL BORN AT THE GUEST'S OWN CHANNEL ALLOC**, over the
+    /// guest's ring **and** the guest's USERD, before the guest has written a cursor.
+    ///
+    /// (optionally) allocate the `Vas`'s host VAS → (optionally) describe the error
+    /// notifier → [`RmBackend::alloc_channel_declared`]. No engine object, no schedule,
+    /// no doorbell: the chain *births* and stops.
+    ///
+    /// # ★★★ Why a third birth site, and why it is the only one that may adopt a USERD
+    ///
+    /// `[measured w233, real GA106, `ad6bb9f`]` host RM **accepts** a caller-supplied USERD
+    /// through `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and then **zeroes all 512 bytes** of it,
+    /// with the alloc returning `NV_OK`. So a USERD adopted at the first doorbell — which is
+    /// *by definition* after the guest wrote `GP_PUT` — destroys the cursor that caused the
+    /// doorbell (`[measured w392j/w392k]`: doorbell 1 rang with `GP_PUT=1` and the engine
+    /// ran nothing; doorbell 2 then executed entry 0, 40 ms after the guest had moved that
+    /// entry's source frame — every one of the five `Xid 31`). The memory's conclusion is
+    /// the whole design: *"adoption must happen at channel creation, before the guest
+    /// writes — never lazily."* This variant is that creation.
+    ///
+    /// # ⊘ `adopt` is NOT an `Option`, and that is the owner's rule made unspellable
+    ///
+    /// **Owner, 2026-09-09:** a `Passthrough` channel has no `RingSource::Ours` at all —
+    /// the guest drives its own ring and hardware writes `GP_GET`. A birth on this chain
+    /// that had nothing to adopt is not a birth with a fallback; it is a plan that must not
+    /// exist, and `kayfabe_fwd::plan_channel_birth` refuses **by name** before one does.
+    /// Making the field an `Option` would put *"born at alloc over our empty ring"* one
+    /// `None` away from a caller mistake — which is exactly the w392h shape this replaces.
+    ///
+    /// # ⊘ `declared_engine_type` — the guest's `NV2080_ENGINE_TYPE_*` code, verbatim
+    ///
+    /// The engine-object latch recovers a CE channel's *instance* from the CE object's
+    /// params (§16.106). There is no object here. The guest declared the instance in the
+    /// channel alloc itself; it is carried raw and handed back to RM unchanged, never
+    /// invented. `None` = *"this port could not read it"* and the adapter falls back to
+    /// `engine_type_for` exactly as a `hosting: None` birth does — which is the pre-w393
+    /// answer, labelled.
+    ChannelBirth {
+        /// The `Vas`'s host VAS, or `None` to allocate one.
+        host_vas: Option<HostHandle>,
+        /// The channel's graph-derived engine (GR-1: the core declares the runlist).
+        engine: EngineKind,
+        /// The guest's own `engineType`, raw. See the variant doc.
+        declared_engine_type: Option<u32>,
+        /// ★★★★★ The guest's ring — and, when it lies in the same joined leaf, the
+        /// guest's USERD. Mandatory: see the variant doc.
+        adopt: AdoptedGuestRing,
+        /// ★ w288 — the guest's own error-notifier pages, as on the two older birth arms.
+        err_notifier: Option<GuestRamGrant>,
     },
     /// The Case-1 engine-object chain: (optionally) host VAS → (optionally) host
     /// channel → engine-object alloc.
@@ -2281,7 +2347,6 @@ impl VerbPlan {
         engine: EngineKind,
         schedule: bool,
         err_notifier: Option<GuestRamGrant>,
-        adopt: Option<AdoptedGuestRing>,
     ) -> Result<VerbPlan, UngatedVa> {
         if let Some(&va) = working_set.iter().find(|&&va| !vas.is_host_published(va)) {
             return Err(UngatedVa(va));
@@ -2292,7 +2357,6 @@ impl VerbPlan {
             engine,
             schedule,
             err_notifier,
-            adopt,
         })
     }
 
@@ -2311,6 +2375,19 @@ impl VerbPlan {
             | VerbPlan::JoinFbLeaf { host_vas, .. }
             | VerbPlan::AliasFbLeaf { host_vas, .. }
             | VerbPlan::PinGuestRam { host_vas, .. } => host_vas.iter().copied().collect(),
+            // ★ w393 — the VAS it may reuse, and the joined object(s) the birth names: the
+            // ring's memory and, when present, the USERD's. A foreign one reaching
+            // `alloc_channel_declared` would be a channel born over ANOTHER isolate's
+            // joined leaf — the far side re-checks `fb_joins` membership too, and both is
+            // correct: this is the central gate, that is the direct-call entrance.
+            VerbPlan::ChannelBirth {
+                host_vas, adopt, ..
+            } => host_vas
+                .iter()
+                .copied()
+                .chain(core::iter::once(adopt.memory))
+                .chain(adopt.userd.map(|u| u.memory))
+                .collect(),
             VerbPlan::Doorbell {
                 host_vas, channel, ..
             }
@@ -2419,6 +2496,15 @@ pub enum VerbReply {
         channel: Option<ChannelHandles>,
         /// The host engine object.
         object: HostHandle,
+    },
+    /// ★★★★★ w393 — [`VerbPlan::ChannelBirth`]'s reply. ⊘ `channel` is NOT an `Option`:
+    /// this chain exists to birth, so a reply without a channel is not a reply.
+    ChannelBorn {
+        /// Freshly allocated host VAS, if any.
+        host_vas: Option<HostHandle>,
+        /// The host channel that was born — over the guest's ring, and its USERD when
+        /// the plan carried one.
+        channel: ChannelHandles,
     },
     /// [`VerbPlan::Control`]'s reply — the payload as the host wrote it back.
     Control {
@@ -3240,7 +3326,6 @@ impl Worker {
                 engine,
                 schedule,
                 err_notifier,
-                adopt,
             } => {
                 let (chan, fresh_vas, fresh_chan) = match *channel {
                     Some(c) => (c, None, None),
@@ -3274,34 +3359,25 @@ impl Worker {
                                 return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
                             }
                         };
-                        // ⊘ `hosting: None` still: a doorbell materialization hosts no
-                        // engine object, so there is no declaration to refine the engine
-                        // with (§16.106). That half is unchanged.
+                        // ⊘ `hosting: None`: a doorbell materialization hosts no engine
+                        // object, so there is no declaration to refine the engine with
+                        // (§16.106).
                         //
-                        // ★★★★★ **w392j — `adopt` IS NO LONGER A LITERAL `None`.** It used
-                        // to be, *regardless of channel kind*, which meant every
-                        // **passthrough** channel born here got `RingSource::Ours(None)` —
-                        // our own empty ring — by construction. Measured w392h/w392i: 7
-                        // births, all `kind=Passthrough`, `adopt=NOT-ASKED`; the doorbell
-                        // was forwarded, the engine fetched from a ring nothing had written,
-                        // and there was **no completion and no fault** (`Xid 0`).
-                        //
-                        // ⊘ The old comment here justified the literal with *"a ring adopted
-                        // here would be adopted without the leaf having been joined"*.
-                        // **Refuted by `guest_ring_adoption.md` §3.3, sourced and measured:**
-                        // RM allocates channels with `gpFifoOffset = 0` deliberately, and a
-                        // channel alloc at a never-mapped address was ACCEPTED (R31 arm C).
-                        // ⇒ *"A host channel does not need its ring bound in order to be
-                        // born"*; the binding is needed at **fetch**, which is after this.
-                        // The caller still only offers `Some` for a `Passthrough` channel
-                        // whose leaf the supply side already joined, so nothing here adopts
-                        // an unjoined leaf — the far side re-checks it by name anyway
-                        // (`RING_NOT_A_JOINED_WINDOW`).
+                        // ⊘⊘ **w393 — `adopt` is a LITERAL `None` AGAIN, and this time by
+                        // type.** w392j threaded a ring (+ USERD) through here; the USERD
+                        // half zeroed the cursor that rang (`[measured w233]`, five `Xid 31`
+                        // in w392j/k) and the ring half was a stopgap. The birth of a
+                        // `Passthrough` channel is `VerbPlan::ChannelBirth`, at the guest's
+                        // own alloc, and `plan_doorbell` refuses such a channel by name before
+                        // this arm can run for it. ⇒ every channel born HERE is `Emulated`,
+                        // over `RingSource::Ours(None)` — which is the design for that kind.
+                        // The witness therefore reads `hosting=None, adopt=None` = NOT-ASKED,
+                        // and that reading is TRUE: this path offers no ring at all.
                         match rm.alloc_channel(
                             vas,
                             *engine,
                             None,
-                            *adopt,
+                            None,
                             notifier.map(|(_, memory)| memory),
                         ) {
                             Ok(c) => {
@@ -3480,6 +3556,102 @@ impl Worker {
                         // this is the last instant its identity is knowable. See
                         // [`VerbFailure::on`].
                         Err(unwind_on(rm, orphans, e, Some(chan.0)))
+                    }
+                }
+            }
+            // ★★★★★ **w393 — THE BIRTH-AT-ALLOC ARM.** The doorbell arm's `channel == None`
+            // branch, minus the schedule and the ring, plus a mandatory adoption.
+            VerbPlan::ChannelBirth {
+                host_vas,
+                engine,
+                declared_engine_type,
+                adopt,
+                err_notifier,
+            } => {
+                let (vas, fresh_vas) = match *host_vas {
+                    Some(h) => (h, None),
+                    None => {
+                        let h = rm.alloc_vaspace()?;
+                        (h, Some(h))
+                    }
+                };
+                // ★ w288 — the notifier BEFORE the channel: `hObjectError` is a birth
+                // parameter. See [`describe_err_notifier`].
+                let notifier = match describe_err_notifier(rm, *err_notifier) {
+                    Ok(n) => n,
+                    Err(r) => {
+                        eprintln!(
+                            "kayfabe-isolate: ERROR-NOTIFIER REFUSED {} engine={engine:?} \
+                             (channel birth) ⊘ {:?} — the caller ASKED for a notifier and it \
+                             could not be built, so the birth chain unwinds rather than \
+                             birthing a channel that silently has none",
+                            r.as_str(),
+                            r.error(),
+                        );
+                        return Err(unwind(rm, fresh_vas.into_iter().collect(), r.error()));
+                    }
+                };
+                match rm.alloc_channel_declared(
+                    vas,
+                    *engine,
+                    *declared_engine_type,
+                    *adopt,
+                    notifier.map(|(_, memory)| memory),
+                ) {
+                    Ok(c) => {
+                        if let Some((_, memory)) = notifier {
+                            eprintln!(
+                                "kayfabe-isolate: ERROR-NOTIFIER BUILT engine={engine:?} \
+                                 (channel birth) host_chan={:#x} host_token={:#x} memory={:#x} \
+                                 grant_len={} ⇒ hObjectError names the GUEST'S OWN pages",
+                                c.0.raw(),
+                                c.1,
+                                memory.raw(),
+                                err_notifier.map_or(0, |g| g.len()),
+                            );
+                        }
+                        // ★★★ THE CENSUS LINE for this birth site. ⊘ No host-side read-back
+                        // of the ring or the USERD: a guest-backed `OS_DESCRIPTOR` cannot be
+                        // CPU-mapped (`[measured, R31 arm B]`).
+                        eprintln!(
+                            "kayfabe-isolate: CHANNEL-BIRTH engine={engine:?} \
+                             declared_engine_type={} host_chan={:#x} host_token={:#x} \
+                             ring_va={:#x} gp_fifo_va={:#x} entries={} userd={} ⇒ born AT ALLOC \
+                             over the guest's ring{}",
+                            declared_engine_type.map_or_else(
+                                || "UNREAD→adapter default".to_string(),
+                                |t| format!("{t:#x}")
+                            ),
+                            c.0.raw(),
+                            c.1,
+                            adopt.ring_va,
+                            adopt.gp_fifo_va,
+                            adopt.gp_fifo_entries,
+                            adopt.userd.map_or_else(
+                                || "OURS".to_string(),
+                                |u| format!("GUEST@+{:#x}", u.offset)
+                            ),
+                            if adopt.userd.is_some() {
+                                " AND the guest's USERD, before any cursor was written"
+                            } else {
+                                " (USERD ours: the guest's lies outside the joined leaf)"
+                            },
+                        );
+                        Ok(VerbReply::ChannelBorn {
+                            host_vas: fresh_vas,
+                            channel: c,
+                        })
+                    }
+                    Err(e) => {
+                        // ⚠ As the two older birth arms: the descriptor is an RM object and
+                        // orphans; the guest-RAM mapping is neither and is released in line.
+                        let mut orphans: Vec<HostHandle> = Vec::new();
+                        if let Some((mapped, memory)) = notifier {
+                            orphans.push(memory);
+                            let _ = rm.unmap_guest_ram(mapped);
+                        }
+                        orphans.extend(fresh_vas);
+                        Err(unwind(rm, orphans, e))
                     }
                 }
             }

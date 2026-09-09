@@ -747,6 +747,38 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 Err(e) => failed(e),
             },
         },
+        // ★★★★★ w393 — the birth-at-alloc verb, dispatched BY VARIANT to the trait method
+        // whose type makes the adoption mandatory. ⊘ The five integers are rebuilt here and
+        // re-validated by the adapter as objects `join_fb_leaf` minted, exactly as
+        // `AllocChannel`'s `adopt` is; nothing on this side trusts them.
+        Request::AllocChannelDeclared {
+            vas,
+            engine,
+            declared_engine_type,
+            adopt: (memory, ring_va, gp_fifo_va, gp_fifo_entries, userd),
+            err_notifier,
+        } => match engine_from_code(engine) {
+            None => Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            Some(engine) => match rm.alloc_channel_declared(
+                raw(vas),
+                engine,
+                declared_engine_type,
+                kayfabe_isolate::AdoptedGuestRing {
+                    memory: raw(memory),
+                    ring_va,
+                    gp_fifo_va,
+                    gp_fifo_entries,
+                    userd: userd.map(|(memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
+                        memory: raw(memory),
+                        offset,
+                    }),
+                },
+                err_notifier.map(raw),
+            ) {
+                Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
+                Err(e) => failed(e),
+            },
+        },
         Request::AllocEngineObject {
             chan,
             class,

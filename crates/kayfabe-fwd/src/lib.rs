@@ -1024,6 +1024,48 @@ pub enum FwdFault {
         /// freed by the unwind that produced the failure. See [`kayfabe_isolate::VerbFailure::on`].
         on: Option<HostHandle>,
     },
+    /// ★★★★★ **w393 — a DOORBELL tried to birth a `Passthrough` channel.** Refused by
+    /// name, and NOTHING is materialized.
+    ///
+    /// A `Passthrough` channel is born at the guest's own channel alloc
+    /// ([`plan_channel_birth`]), over the guest's ring **and** USERD, before the guest has
+    /// written a cursor. A doorbell that finds no host channel therefore means that birth
+    /// was refused ([`FwdFault::PassthroughRingNotAdoptable`], printed as `BIRTH-AT-ALLOC`)
+    /// or was never latched. Both are facts to surface, not to paper over:
+    ///
+    /// - adopting the guest's USERD *now* would zero the cursor that rang
+    ///   (`[measured w233]` RM zeroes a caller-supplied USERD; `[measured w392j]` doorbell 1
+    ///   ran nothing, doorbell 2 ran entry 0 forty ms late — five `Xid 31`);
+    /// - birthing over our own ring is **illegal for this kind** (owner, 2026-09-09) and was
+    ///   the w392h silence (`Xid 0`, engine fetches nothing).
+    ///
+    /// ⊘ `Emulated` channels are unaffected: their doorbell birth over our ring is correct
+    /// and unchanged.
+    PassthroughDoorbellBirth {
+        /// The owning proc.
+        proc: ProcId,
+        /// The channel.
+        chan: ChanId,
+        /// Its vChid, for the log.
+        vchid: VChid,
+    },
+    /// ★★★★★ **w393 — a `Passthrough` channel's birth-at-alloc found NOTHING to adopt.**
+    /// The `ADOPT-WHY` line printed just before names which of the seven conjuncts failed.
+    ///
+    /// ⊘ A refusal, never a fallback: the alternative — birth over our ring and hope — is
+    /// the w392h defect by construction. The channel stays un-born; a later
+    /// `GPFIFO_SCHEDULE` re-latches the birth (the guest may bind its ring after the
+    /// alloc, `guest_ring_adoption.md` §3.3), and a doorbell that arrives before any birth
+    /// succeeded is [`FwdFault::PassthroughDoorbellBirth`].
+    PassthroughRingNotAdoptable {
+        /// The owning proc.
+        proc: ProcId,
+        /// The channel.
+        chan: ChanId,
+        /// The guest's declared `gpFifoOffset`, when it declared one. ⚠ `Some(0)` is a
+        /// value (the golden-context channel), `None` is *"declared none / unreadable"*.
+        ring_va: Option<u64>,
+    },
     /// A class the guest tried to alloc as an engine object is not one this arch
     /// recognizes as an engine — MISS=FAULT (never guessed into a GR/CE object).
     NotAnEngine(ClassId),
@@ -3852,7 +3894,11 @@ pub struct DoorbellPlan {
 /// grant for a channel that declared no reachable notifier is dropped rather than honoured,
 /// so a caller cannot attach one to a channel the guest never asked to be told about.
 pub fn plan_doorbell(
-    spine: &Spine,
+    // ⊘ w393 — its only read was the doorbell-side `adopted_guest_ring` consult, which is
+    // gone: a passthrough birth is planned at the channel alloc (`plan_channel_birth`), and
+    // this arm refuses by name instead. Kept in the signature so the three planners keep one
+    // shape and the call sites do not churn.
+    _spine: &Spine,
     proc: &Proc,
     route: &DoorbellRoute,
     working_set: &[GpuVa],
@@ -3955,61 +4001,52 @@ pub fn plan_doorbell(
     // this path **zero** times — every one of their host channels is born at the engine-object
     // latch (`adopt=NOT-ASKED` is 0 across `w297cup3`, `w267_{off,on}`, and w392i's own cup3
     // arm printed **0** `BIRTH-KIND` lines while the client printed 7).
-    let adopt = if channel.is_some() {
-        None
-    } else {
+    // ★★★★★ **w393 — A DOORBELL NEVER BIRTHS A PASSTHROUGH CHANNEL. Refused BY NAME.**
+    //
+    // w392j adopted the ring AND the USERD here; w392o (`4f64dc44`) kept the ring and
+    // dropped the USERD as a stopgap. Both were lazy births, and the memory that caught
+    // w392j (`rm_takes_a_guest_userd_and_zeroes_it`, w233) says the whole thing: *"adoption
+    // must happen at CHANNEL CREATION, before the guest writes — never lazily."* The birth
+    // now lives at the guest's own channel alloc (`plan_channel_birth`, latched by
+    // `SharedDevice::apply` and re-latched at `GPFIFO_SCHEDULE`, drained in the
+    // register-write tail before any doorbell can trap). So a `Passthrough` channel that
+    // reaches this arm un-born is a channel whose birth was **refused** — and the only two
+    // things this arm could do about it are the two measured defects: adopt the USERD now
+    // (zeroes the cursor that rang) or birth over our ring (illegal for the kind; `Xid 0`).
+    //
+    // ⊘ `Emulated` is unchanged and correct: we drive that ring, it runs our function
+    // bodies, and its lazy birth over `RingSource::Ours(None)` is the design.
+    //
+    // ★ Regression safety is MEASURED, not argued: `cup3` (`CUP3_VAL=43`) and `cup2` reach
+    // this arm with `channel.is_none()` **zero** times (every one of their host channels is
+    // born at the engine-object latch; w392i's cup3 arm printed 0 `BIRTH-KIND` lines).
+    if channel.is_none() {
         match chan.kind {
-            kayfabe_core::channel_kind::GuestChannelKind::Emulated => None,
-            // ★★★★★ **w392o — ADOPT THE RING, NEVER THE USERD, ON A DOORBELL BIRTH.**
-            //
-            // ⊘⊘ **w392j adopted BOTH here and that is a MEASURED data-corruption hazard**
-            // (`rm_takes_a_guest_userd_and_zeroes_it`, w233, real GA106, `ad6bb9f`, host
-            // Xid 0/0): host RM **accepts** a caller-supplied USERD through
-            // `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — the same descriptor type the guest's ring
-            // reaches us as — and then **ZEROES all 512 bytes**, with the alloc still
-            // returning `NV_OK`. The control inverted cleanly: naming `userdOffset=0x8000`
-            // moved the zeroing to `0x8000`.
-            //
-            // ★★★ **And the ordering makes it certain rather than hypothetical:** a doorbell
-            // birth is *by definition* **after** the guest wrote `GP_PUT`. ⇒ adopting the
-            // USERD here **destroys the very cursor that caused this doorbell.**
-            // `[measured w392j/w392k]` doorbell 1 rang with `GP_PUT=1` and the engine ran
-            // **nothing**; doorbell 2 set `PUT=2` and the engine then executed entry 0 —
-            // 40 ms after the guest had already moved that entry's source frame, which is
-            // where all five `Xid 31`s come from.
-            //
-            // ⇒ **Ring: adopted** (hardware fetches the guest's own entries — that is the
-            // point). **USERD: OURS**, and we advance `GP_PUT` into it. The memory's own
-            // conclusion is *"adoption must happen at channel creation, before the guest
-            // writes — never lazily"*; until the birth moves there, taking the ring without
-            // the cursor is the half that is safe to take late.
+            kayfabe_core::channel_kind::GuestChannelKind::Emulated => {
+                eprintln!(
+                    "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
+                     kind=Emulated ✔ EMULATED — our own ring is CORRECT here: we drive it and \
+                     it runs our function bodies",
+                    pid, cid, route.vchid, chan.engine,
+                );
+            }
             kayfabe_core::channel_kind::GuestChannelKind::Passthrough => {
-                adopted_guest_ring(spine, proc, chan, cgpu).map(|r| {
-                    kayfabe_isolate::AdoptedGuestRing { userd: None, ..r }
-                })
+                eprintln!(
+                    "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
+                     kind=Passthrough ⊘⊘ REFUSED PassthroughDoorbellBirth — a passthrough \
+                     channel is born at its own channel alloc (w393, BIRTH-AT-ALLOC), and this \
+                     one was not: look for its BIRTH-AT-ALLOC line and the ADOPT-WHY conjunct \
+                     it names. NOTHING was materialized: adopting the USERD now would zero \
+                     the cursor that rang (w233), and our ring is illegal for this kind",
+                    pid, cid, route.vchid, chan.engine,
+                );
+                return Err(FwdFault::PassthroughDoorbellBirth {
+                    proc: pid,
+                    chan: cid,
+                    vchid: route.vchid,
+                });
             }
         }
-    };
-    if channel.is_none() {
-        eprintln!(
-            "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} kind={:?} {}",
-            pid,
-            cid,
-            route.vchid,
-            chan.engine,
-            chan.kind,
-            match (chan.kind, adopt.is_some()) {
-                (kayfabe_core::channel_kind::GuestChannelKind::Emulated, _) =>
-                    "✔ EMULATED — our own ring is CORRECT here: we drive it and it runs our \
-                     function bodies",
-                (kayfabe_core::channel_kind::GuestChannelKind::Passthrough, true) =>
-                    "✔✔ PASSTHROUGH → ADOPTING THE GUEST'S RING on a doorbell birth (w392j)",
-                (kayfabe_core::channel_kind::GuestChannelKind::Passthrough, false) =>
-                    "★★★ PASSTHROUGH and NOT ADOPTABLE ⇒ still RingSource::Ours(None) — the \
-                     ADOPT-WHY line above names which conjunct failed; the leaf has not been \
-                     joined yet by the supply side",
-            },
-        );
     }
     let verbs = VerbPlan::gated_doorbell(
         gate,
@@ -4019,7 +4056,6 @@ pub fn plan_doorbell(
         chan.engine,
         schedule,
         err_notifier,
-        adopt,
     )
     // ★ Re-derive the EXACT fault from the offending VA, which is the division of
     // labour `RingWorkingSet`'s doc specifies: the seam carries a bare bool, this
@@ -4952,6 +4988,344 @@ pub fn commit_engine_object(
         host_object: object,
         materialized_channel: fresh_chan.is_some(),
         reused: plan.replay.is_some(),
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w393 — BIRTH AT THE GUEST'S CHANNEL ALLOC (the third birth site, and the only one
+// that may adopt a USERD)
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **w393 — the route for a channel birth: `(hClient, hChannel)` off the guest's own
+/// `GSP_RM_ALLOC`, forward-derived to `(Proc, Channel)`.**
+///
+/// [`route_engine_object_by_parent`]'s body **without its class gate** — the object being
+/// routed IS the channel, not something allocated on it — and with the same discipline: both
+/// keys come out of the channel's own alloc facts by the computations `kayfabe_core::project`
+/// used to build `Spine::by_vchid`, and the answer is put back through `by_vchid` so it stays
+/// the single authority. A disagreement is a loud [`FwdFault::UnknownVchid`].
+///
+/// ⊘ Misses reuse [`FwdFault::EngineObjectParent`] / [`EngineParentMiss`]: the four hops are
+/// the same four hops, and a second enum spelling them again would be a second vocabulary
+/// for one fact. `object` in that variant is the channel handle here.
+///
+/// # Errors
+/// [`FwdFault::EngineObjectParent`] naming the hop, or [`FwdFault::UnknownVchid`].
+pub fn route_channel_birth(
+    spine: &Spine,
+    client: HClient,
+    channel: HObject,
+) -> Result<ChannelBirthRoute, FwdFault> {
+    let miss = |why| FwdFault::EngineObjectParent {
+        client,
+        object: channel,
+        why,
+    };
+    let node = spine
+        .rmgraph
+        .node(kayfabe_core::rmgraph::NodeKey::new(client, channel))
+        .ok_or_else(|| miss(EngineParentMiss::NoNode))?;
+    if !matches!(node.kind, kayfabe_arch::ObjectKind::Channel { .. }) {
+        return Err(miss(EngineParentMiss::NotAChannel));
+    }
+    let gpu = spine
+        .rmgraph
+        .gpu_of_resource(node.id())
+        .ok_or_else(|| miss(EngineParentMiss::NoTarget))?;
+    let vchid = spine
+        .arch()
+        .vchid_from_userd_flags(node.facts.userd_flags)
+        .ok_or_else(|| miss(EngineParentMiss::UnnamedVchid))?;
+    let (pid, cid) = *spine
+        .by_vchid
+        .get(&(gpu, vchid))
+        .ok_or_else(|| vchid_miss(spine, gpu, vchid))?;
+    Ok(ChannelBirthRoute {
+        proc: pid,
+        chan: cid,
+        gpu,
+        vchid,
+    })
+}
+
+/// What [`route_channel_birth`] resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelBirthRoute {
+    /// The owning proc.
+    pub proc: ProcId,
+    /// The channel slot.
+    pub chan: ChanId,
+    /// The target GPU the channel's `Device` resolved to.
+    pub gpu: GpuId,
+    /// The channel's vChid (per-GPU), for fault naming.
+    pub vchid: VChid,
+}
+
+/// ★ Why a latched birth was **skipped** rather than run or refused — two named non-events,
+/// so a drain report can say which without a fault.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthSkip {
+    /// The channel is [`kayfabe_core::channel_kind::GuestChannelKind::Emulated`]: our own
+    /// ring is CORRECT for it and it is born where it always was (engine-object latch or
+    /// doorbell). This site does not touch it.
+    Emulated,
+    /// A host channel already exists for this guest channel — a re-sent alloc, a
+    /// `GPFIFO_SCHEDULE` re-latch after a successful birth, or a sibling thread's win.
+    AlreadyBorn,
+}
+
+/// The ID-shaped hints [`commit_channel_birth`] re-validates against (R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelBirthPlan {
+    /// Owning proc.
+    pub proc: ProcId,
+    /// The channel.
+    pub chan: ChanId,
+    /// The GPU the route resolved (routing key with `vchid`).
+    pub gpu: GpuId,
+    /// The channel's OWN target GPU (its isolate key).
+    pub cgpu: GpuId,
+    /// The channel's vChid.
+    pub vchid: VChid,
+    /// The channel's declared VAS, if any.
+    pub vas_pdb: Option<Pdb>,
+    /// `Some` = no verbs were planned, for this named reason.
+    pub skipped: Option<BirthSkip>,
+    /// Whether the plan's adoption carried the guest's USERD (for the outcome).
+    pub guest_userd: bool,
+}
+
+/// What one channel birth did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelBirthOutcome {
+    /// A host channel was born — over the guest's ring, and its USERD when `guest_userd`.
+    Born {
+        /// The owning proc.
+        proc: ProcId,
+        /// The channel.
+        chan: ChanId,
+        /// The host work-submit token RM assigned.
+        host_token: u64,
+        /// The channel's engine.
+        engine: EngineKind,
+        /// `true` = the guest's USERD was adopted at creation, before any cursor was
+        /// written — the whole point of this site.
+        guest_userd: bool,
+    },
+    /// Nothing was born, for a named non-fault reason.
+    Skipped(BirthSkip),
+}
+
+/// ★★★★★ **PLAN (R1) for the birth-at-alloc: a `Passthrough` channel's host channel, over
+/// the guest's ring AND USERD, decided at the guest's own channel alloc.**
+///
+/// # ★★★ The one rule, and where it is enforced
+///
+/// **Passthrough ⇒ adopt or refuse. Never our ring.** [`adopted_guest_ring`] is consulted
+/// exactly as at the engine-object latch; `None` here is [`FwdFault::PassthroughRingNotAdoptable`]
+/// and **no plan exists** — `VerbPlan::ChannelBirth::adopt` is not an `Option`, so a birth
+/// over `RingSource::Ours` cannot be spelled on this chain at all.
+///
+/// # ⊘ Why the USERD may be taken HERE and nowhere else
+///
+/// `[measured w233]` RM zeroes a caller-supplied USERD at alloc. At this instant the guest
+/// has not written `GP_PUT` (it just allocated the channel), so the zeroing is harmless; at
+/// the first doorbell it is the cursor. Leg B's containment test (`adopted_guest_userd`)
+/// still decides whether the USERD is *reachable* — inside the ring's joined leaf — and a
+/// USERD that is not stays ours, printed as such by the isolate's `CHANNEL-BIRTH` line.
+///
+/// # ⊘ The arming is INHERITED
+///
+/// No flag. With `KAYFABE_GUEST_RING` disarmed, `adopted_guest_ring` is `None` by
+/// construction, every passthrough birth here refuses by name, and the channel is born
+/// where it was before (the engine-object latch) — `cup3`'s measured path, byte-identical.
+///
+/// # Errors
+/// [`FwdFault::PassthroughRingNotAdoptable`]; the route/isolate/VAS faults as
+/// [`plan_engine_object`].
+pub fn plan_channel_birth(
+    spine: &Spine,
+    proc: &Proc,
+    route: &ChannelBirthRoute,
+    err_notifier_grant: Option<GuestRamGrant>,
+) -> Result<Planned<ChannelBirthPlan>, FwdFault> {
+    let pid = route.proc;
+    let cid = route.chan;
+    if proc.is_retired() {
+        return Err(FwdFault::RetiredProc(pid));
+    }
+    let chan: &Channel = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
+        gpu: route.gpu,
+        vchid: route.vchid,
+    })?;
+    let cgpu = chan.gpu;
+    let base = ChannelBirthPlan {
+        proc: pid,
+        chan: cid,
+        gpu: route.gpu,
+        cgpu,
+        vchid: route.vchid,
+        vas_pdb: chan.vas_pdb,
+        skipped: None,
+        guest_userd: false,
+    };
+    let skip = |why| {
+        Ok(Planned {
+            plan: ChannelBirthPlan {
+                skipped: Some(why),
+                ..base
+            },
+            verbs: None,
+        })
+    };
+    // ⊘ SILENT for `Emulated`, by design: our ring is correct there, this site is not its
+    // birth site, and a control boot's log must not gain a line the armed run's lacks.
+    if chan.kind == kayfabe_core::channel_kind::GuestChannelKind::Emulated {
+        return skip(BirthSkip::Emulated);
+    }
+    if chan.host_channel.zip(chan.host_token).is_some() {
+        return skip(BirthSkip::AlreadyBorn);
+    }
+    // ★★★ R1's spawn deferral — see [`missing_isolate`].
+    if !proc.isolates.contains_key(&cgpu) {
+        return Err(missing_isolate(proc, cgpu));
+    }
+    let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
+    let host_vas = proc
+        .vases
+        .get(&(cgpu, pdb))
+        .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
+        .host_vas;
+    // ★ ONE read of the channel's graph node for the two raw declarations this plan carries
+    // beside the adoption: the ring VA (for the refusal's name) and the raw `engineType`.
+    let node = spine.rmgraph.node_of_resource(chan.key);
+    let ring_va = node.and_then(|n| n.facts.gp_fifo_ring).map(|r| r.va);
+    let declared_engine_type = node.and_then(|n| n.facts.channel_engine_type);
+    // ★★★★★ THE RULE. `adopted_guest_ring` prints `ADOPT-WHY` naming which conjunct failed.
+    let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu) else {
+        eprintln!(
+            "kayfabe: BIRTH-AT-ALLOC proc={:?} chan={:?} vchid={:?} engine={:?} \
+             kind=Passthrough ring_va={} ⊘⊘ REFUSED PassthroughRingNotAdoptable — the ADOPT-WHY \
+             line above names the conjunct. NO host channel was born and NOTHING fell back to \
+             our ring; a GPFIFO_SCHEDULE re-latches this birth, and a doorbell before any birth \
+             succeeds is refused as PassthroughDoorbellBirth",
+            pid,
+            cid,
+            route.vchid,
+            chan.engine,
+            ring_va.map_or_else(|| "NONE".to_string(), |v| format!("{v:#x}")),
+        );
+        return Err(FwdFault::PassthroughRingNotAdoptable {
+            proc: pid,
+            chan: cid,
+            ring_va,
+        });
+    };
+    eprintln!(
+        "kayfabe: BIRTH-AT-ALLOC proc={:?} chan={:?} vchid={:?} engine={:?} kind=Passthrough \
+         ring_va={:#x} entries={} userd={} declared_engine_type={} ✔✔ ADOPTING at creation, \
+         before the guest has written a cursor (w233: RM zeroes a taken USERD — harmless HERE, \
+         fatal at a doorbell)",
+        pid,
+        cid,
+        route.vchid,
+        chan.engine,
+        adopt.gp_fifo_va,
+        adopt.gp_fifo_entries,
+        adopt.userd.map_or_else(
+            || "OURS(outside the joined leaf)".to_string(),
+            |u| format!("GUEST@+{:#x}", u.offset)
+        ),
+        declared_engine_type.map_or_else(|| "UNREAD".to_string(), |t| format!("{t:#x}")),
+    );
+    Ok(Planned {
+        plan: ChannelBirthPlan {
+            guest_userd: adopt.userd.is_some(),
+            ..base
+        },
+        verbs: Some(VerbPlan::ChannelBirth {
+            host_vas,
+            engine: chan.engine,
+            declared_engine_type,
+            adopt,
+            // ★ w288 — gated on the channel's own declaration, as on both older arms.
+            err_notifier: err_notifier_grant_for(chan, err_notifier_grant),
+        }),
+    })
+}
+
+/// COMMIT (R5) for the birth-at-alloc: [`commit_doorbell`]'s route/channel re-resolution,
+/// then adopt the freshly born host handles. A sibling that won the same birth is
+/// `Stale::Rebound` with `retry` — the loser frees its duplicate and re-plans, and the
+/// re-plan reads [`BirthSkip::AlreadyBorn`].
+///
+/// # Panics
+/// If `reply` is not the [`VerbReply::ChannelBorn`] its plan asked for.
+pub fn commit_channel_birth(
+    spine: &Spine,
+    proc: &mut Proc,
+    plan: &ChannelBirthPlan,
+    reply: Option<VerbReply>,
+) -> Result<ChannelBirthOutcome, Refusal> {
+    let (fresh_vas, (hchan, htok)) = match (plan.skipped, reply) {
+        // Skipped: nothing ran, nothing to adopt, nothing to re-validate.
+        (Some(why), None) => return Ok(ChannelBirthOutcome::Skipped(why)),
+        (None, Some(VerbReply::ChannelBorn { host_vas, channel })) => (host_vas, channel),
+        _ => return wrong_reply("channel-birth"),
+    };
+    let orphans = || Orphans {
+        unmap: Vec::new(),
+        free: core::iter::once(hchan).chain(fresh_vas).collect(),
+        guest_ram: Vec::new(),
+    };
+    let refuse = |what: Stale| {
+        Err(Refusal {
+            fault: FwdFault::Stale(what),
+            orphans: orphans(),
+            retry: matches!(what, Stale::Rebound),
+        })
+    };
+    if proc.is_retired() || proc.id != plan.proc {
+        return refuse(Stale::Proc(plan.proc));
+    }
+    if spine.by_vchid.get(&(plan.gpu, plan.vchid)) != Some(&(plan.proc, plan.chan)) {
+        return refuse(Stale::Route {
+            gpu: plan.gpu,
+            vchid: plan.vchid,
+        });
+    }
+    let Proc {
+        vases, channels, ..
+    } = proc;
+    let Some(chan) = channels.get_mut(&plan.chan) else {
+        return refuse(Stale::Channel(plan.chan));
+    };
+    if let Some(fresh) = fresh_vas {
+        let pdb = plan.vas_pdb.expect("a birth requires a declared VAS");
+        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+            return refuse(Stale::Vas {
+                gpu: plan.cgpu,
+                pdb,
+            });
+        };
+        if vas.host_vas.is_some() {
+            return refuse(Stale::Rebound);
+        }
+        vas.host_vas = Some(fresh);
+    }
+    // We birthed: nobody else may have, or one of the two host channels is instantly
+    // orphaned (and the guest's vChid would ring the wrong one).
+    if chan.host_channel.is_some() {
+        return refuse(Stale::Rebound);
+    }
+    chan.host_channel = Some(hchan);
+    chan.host_token = Some(htok);
+    Ok(ChannelBirthOutcome::Born {
+        proc: plan.proc,
+        chan: plan.chan,
+        host_token: htok,
+        engine: chan.engine,
+        guest_userd: plan.guest_userd,
     })
 }
 

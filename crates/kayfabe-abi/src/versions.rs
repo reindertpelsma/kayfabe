@@ -1138,6 +1138,36 @@ impl DriverAbiTable {
         }
     }
 
+    /// ★★★★★ **w393 — the declared `NV2080_ENGINE_TYPE_*` code, RAW**, beside
+    /// [`Self::decode_channel_engine`]'s narrowed reading of the same four bytes.
+    ///
+    /// # ⊘ Why the raw code crosses this seam at all, when decision #2 says numbers stay here
+    ///
+    /// [`Self::decode_channel_engine`] narrows `COPY2` to [`kayfabe_arch::ids::EngineKind::Ce`]
+    /// and the copy-engine **instance** is lost. That was fine while every host channel was
+    /// born at the engine-object latch, where `declared_copy_engine_type` recovers the
+    /// instance from the CE *object's* params (§16.106). A channel born **at the guest's own
+    /// channel alloc** has no object yet — and a birth that fell back to `COPY0` there would
+    /// re-create §16.106's 14 measured `kfifoRunlistSetId_GM107` refusals, one rung earlier.
+    /// The guest stated the instance in this very message; carrying it verbatim is the only
+    /// answer that is not a guess.
+    ///
+    /// ⊘ It is carried as an **opaque** `u32` and interpreted by nobody above this crate:
+    /// the core files it on the channel's graph node and the isolate adapter hands it back
+    /// to RM as the same `engineType` the guest wrote. Nothing branches on its value.
+    ///
+    /// `Ok(None)` for exactly [`Self::decode_channel_engine`]'s three reasons.
+    ///
+    /// # Errors
+    /// [`AbiError`] from the primitive readers, which the wire's own length check makes
+    /// unreachable.
+    pub fn decode_channel_engine_type(&self, bytes: &[u8]) -> Result<Option<u32>, AbiError> {
+        match self.channel_engine {
+            Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
+    }
+
     /// Which alloc-params shape a class carries — the **class table**, and the
     /// only thing that decides which decoder above an alloc goes through.
     ///

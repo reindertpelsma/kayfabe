@@ -230,6 +230,8 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
                             entries: 512,
                         }),
                     },
+                    // ★ w393 — the raw `engineType` twin of `channel_engine`; `None` = unread.
+                    channel_engine_type: None,
                 },
             }),
         (a_client(), a_handle(), a_handle(), a_va()).prop_map(|(client, vaspace, memory, va)| {

@@ -667,6 +667,37 @@ impl RmBackend for ProxyRmBackend {
         }
     }
 
+    /// ★★★★★ w393 — its OWN request, never `AllocChannel` with a flag: the child must call
+    /// `alloc_channel_declared` (mandatory adoption, guest's `engineType`), and an in-band
+    /// discriminator (`hosting: None && adopt: Some`) is exactly the shape the doorbell arm
+    /// already sends for a ring-only adoption. See `Request::AllocChannelDeclared`.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let reply = self.call(Request::AllocChannelDeclared {
+            vas: vas.raw(),
+            engine: engine_code(engine),
+            declared_engine_type,
+            adopt: (
+                adopt.memory.raw(),
+                adopt.ring_va,
+                adopt.gp_fifo_va,
+                adopt.gp_fifo_entries,
+                adopt.userd.map(|u| (u.memory.raw(), u.offset)),
+            ),
+            err_notifier: err_notifier.map(|h| h.raw()),
+        })?;
+        match self.lift(reply)? {
+            Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn alloc_engine_object(
         &mut self,
         chan: HostHandle,

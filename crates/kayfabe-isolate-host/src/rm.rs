@@ -4808,166 +4808,54 @@ impl RmBackend for HostRmBackend {
         // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
         // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
         // no engine type is not a channel with a default one, it is a channel on runlist 0.
-        // ★★★★★ **THE BIRTH WITNESS — read BEFORE `hosting` is consumed.** See [`BirthOffer`]
-        // for why two states would not have closed `w261`'s hole, and why the discriminator is
-        // `hosting` rather than a new field.
-        let offer = BirthOffer::read(hosting.is_some(), adopt.is_some());
-        // ★★★★★ **LEG B's WITNESS — the SAME reading, applied to the other limb.** ⊘ Not a
-        // second predicate: `BirthOffer::read` is one function and this is its second call,
-        // so "declined" cannot come to mean different things on the two legs.
-        let userd_offer =
-            BirthOffer::read(hosting.is_some(), adopt.is_some_and(|a| a.userd.is_some()));
-        // ⊘ Captured, not re-read at each print: an isolate is a POOL and the census below is
-        // PER PROCESS, so two children interleave their own `#1, #2, …` into one log.
-        // `[measured 2026-08-12, w262_ring]` the log carries `#1..#8` and `#1..#16` from two
-        // children and NOTHING on the line said which was which.
-        let iso = self.id;
         let engine_type = declared_channel_engine_type(engine, hosting)
             .or_else(|| engine_type_for(engine))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
-        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
-        // `scripts/bench/boot_capture.sh` redirects to `run_<tag>_qemu.log`. Same reasoning as
-        // `ce_copy`'s `CE-SUBMIT` line: the evidence is a file the boot itself wrote, not a
-        // session transcript nobody can re-read.
-        //
-        // ⊘⊘ **IT PRINTS AND IT DECIDES NOTHING.** No branch below reads `offer`, no refusal is
-        // gated on it, no ring byte is read and no method is decoded. Deleting every line of
-        // this witness would leave the channel RM is asked for byte-identical.
-        let (nth, guest_ring, guest_userd, declined, not_asked, refused) =
-            birth_census::tally(offer, userd_offer);
-        let census = format!(
-            "[births={nth} guest_ring={guest_ring} guest_userd={guest_userd} \
-             declined={declined} not_asked={not_asked} refused={refused}]"
-        );
-        // ⊘ Printed on EVERY arm below, including the refusals — a witness that only speaks
-        // when the thing succeeded is silent on exactly the outcome it is run to see.
-        let userd_says = format!(
-            "userd={} ⊘ {}",
-            userd_offer.as_str(BirthLimb::Userd),
-            userd_offer.because(BirthLimb::Userd),
-        );
-        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until
-        // `361fca8` `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and
-        // it was the R31 diagnostic probe; every host channel a guest ever caused was
-        // `RingSource::Ours(None)`.
-        let Some(ring) = adopt else {
-            eprintln!(
-                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} \
-                 {userd_says} → RingSource::Ours(None) {census}",
-                iso,
-                vas.raw(),
-                offer.as_str(BirthLimb::Ring),
-                offer.because(BirthLimb::Ring),
-            );
-            // ★★★★★ **w288 — TWO ARMS, NOT AN `unwrap_or(0)`.** `None` reaches
-            // `alloc_channel_at(.., None)` and is every pre-w288 boot byte for byte; `Some`
-            // goes through the verb that NAMES the notifier, so a reader of this file can
-            // see which of the two a channel was born on without decoding a handle value.
-            // ⊘ Zero is a legal-looking handle and must never be the carrier of "absent".
-            return match err_notifier {
-                None => self.alloc_channel_on(vas, engine_type),
-                Some(n) => self.alloc_channel_at_with_error_notifier(vas, engine_type, None, n),
-            };
-        };
-        // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
-        // for why the core's own type-level check cannot reach here.
-        let raw_memory = self.narrow(ring.memory)?;
-        let joined = self
-            .fb_joins
-            .as_ref()
-            .is_some_and(|t| t.is_joined_object(raw_memory));
-        // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
-        // reason, one plane over: a witness that only speaks when the thing succeeded is silent
-        // on exactly the outcome it is run to see.
-        let named = format!(
-            "memory={:#x} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
-             userd_offset={}",
-            ring.memory.raw(),
-            ring.ring_va,
-            ring.gp_fifo_va,
-            ring.gp_fifo_entries,
-            // ⊘ The guest's TWO leg-B numbers printed on both the success and the refusal
-            // side, and printed as `NONE` rather than as `0x0` when absent: offset zero is a
-            // legal USERD placement (the slot at the joined leaf's own base).
-            ring.userd
-                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.memory.raw())),
-            ring.userd
-                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.offset)),
-        );
-        if !joined {
-            let n = birth_census::refuse();
-            eprintln!(
-                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
-                 {userd_says} joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not \
-                 mint that object by joining a framebuffer leaf; refused={n}) {census}",
-                iso,
-                vas.raw(),
-                offer.as_str(BirthLimb::Ring),
-            );
-            return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
-        }
-        // ★★★★★ **LEG B's far-side check, and it is NOT implied by the ring's.** The two
-        // handles arrive as separate integers over the wire and a child cannot see the
-        // address table that related them. ⊘ Refusal, never a downgrade to a USERD of ours:
-        // a channel silently given our USERD after being told it would carry the guest's is
-        // the exact `GP_PUT == GP_GET` silence this leg exists to end, and it would make an
-        // armed run and its control produce the same channel.
-        let adopted_userd = match ring.userd {
-            None => None,
-            Some(u) => {
-                let raw_userd = self.narrow(u.memory)?;
-                if !self
-                    .fb_joins
-                    .as_ref()
-                    .is_some_and(|t| t.is_joined_object(raw_userd))
-                {
-                    let n = birth_census::refuse();
-                    eprintln!(
-                        "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} \
-                         adopt={} {named} {userd_says} → REFUSED USERD_NOT_A_JOINED_WINDOW \
-                         (this isolate did not mint that object by joining a framebuffer leaf; \
-                         refused={n}) {census}",
-                        iso,
-                        vas.raw(),
-                        offer.as_str(BirthLimb::Ring),
-                    );
-                    return Err(RmError::Other(USERD_NOT_A_JOINED_WINDOW));
-                }
-                Some(u)
-            }
-        };
-        // ★★★★★ **THE LINE THAT PROVES LEG A2 FIRED.** Absent on a disarmed run by
-        // construction — `adopted_guest_ring` is `None` when nothing joined the leaf — and
-        // present exactly when a host channel is about to be born over memory this port did not
-        // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
-        // it replaces.
+        // ★ w393 — the witness, the adoption arm and the two named refusals live in ONE
+        // lowering shared with `alloc_channel_declared`, so the two verbs cannot come to
+        // read `DECLINED` differently. `asked = hosting.is_some()` is exactly the
+        // discriminator `BirthOffer::read` has always taken from this call.
+        self.alloc_channel_lowered(
+            vas,
+            engine,
+            engine_type,
+            hosting.is_some(),
+            adopt,
+            err_notifier,
+        )
+    }
+
+    /// ★★★★★ **w393 — the birth-at-alloc verb.** The guest's own `engineType` first, then
+    /// the SAME lowering as [`RmBackend::alloc_channel`] — same witness line, same
+    /// `RING_NOT_A_JOINED_WINDOW` / `USERD_NOT_A_JOINED_WINDOW` refusals — with the adoption
+    /// mandatory by type.
+    ///
+    /// ⊘ `asked = true`: a caller of this verb has by construction consulted the supply side
+    /// (it holds an `AdoptedGuestRing`), so the witness can never read `NOT-ASKED` here, and
+    /// the `DECLINED` word is unreachable on this verb because `adopt` is not an `Option`.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★ THE GUEST'S NUMBER, VERBATIM. `None` = this port could not read the field and
+        // the answer is `engine_type_for`'s — the same fall-through a `hosting: None` birth
+        // takes, so an unreadable declaration costs nothing that worked before. ⊘ Never read
+        // as "copy engine 0"; the fall-through ARRIVES at COPY0 through the unchanged path.
+        let engine_type = declared_engine_type
+            .or_else(|| engine_type_for(engine))
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         eprintln!(
-            "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
-             {userd_says} joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
-            iso,
-            vas.raw(),
-            offer.as_str(BirthLimb::Ring),
-            offer.because(BirthLimb::Ring),
+            "kayfabe-isolate: CHANNEL-BIRTH-ENGINE {:?} engine={engine:?} declared={} → \
+             engine_type={engine_type:#x} ⇒ the runlist is the GUEST'S declaration, not an \
+             instance recovered from an object that does not exist yet",
+            self.id,
+            declared_engine_type.map_or_else(|| "UNREAD".to_string(), |t| format!("{t:#x}")),
         );
-        let guest_ring = GuestRing {
-            memory: ring.memory,
-            ring_va: ring.ring_va,
-            gp_fifo_va: ring.gp_fifo_va,
-            gp_fifo_entries: ring.gp_fifo_entries,
-            userd: adopted_userd,
-        };
-        // ★★★★★ **w288 — the `Ours` arm's two arms, on the guest-ring limb.** Same reason:
-        // the verb that carries a notifier is a different name from the one that does not,
-        // so which was used is readable here rather than inferable from a handle value.
-        match err_notifier {
-            None => self.alloc_channel_over_guest_ring(vas, engine_type, guest_ring),
-            Some(n) => self.alloc_channel_over_guest_ring_with_error_notifier(
-                vas,
-                engine_type,
-                guest_ring,
-                n,
-            ),
-        }
+        self.alloc_channel_lowered(vas, engine, engine_type, true, Some(adopt), err_notifier)
     }
 
     /// The generic alloc with `parent = chan`, exactly as the port's docs say — the host
@@ -5821,6 +5709,185 @@ impl HostRmBackend {
         params: &[u8],
     ) -> Result<HostHandle, RmError> {
         self.alloc_engine_object(chan, class.ce_object_id(), params)
+    }
+
+    /// ★★★★★ **w393 — THE ONE LOWERING behind [`RmBackend::alloc_channel`] and
+    /// [`RmBackend::alloc_channel_declared`].** The birth witness, the leg-A2 adoption arm
+    /// and its two named refusals, unchanged from where they were — moved rather than
+    /// copied, so a channel born at the guest's alloc and one born at the engine-object
+    /// latch are witnessed by the same code and cannot come to mean different things.
+    ///
+    /// `asked` is what `BirthOffer::read` has always taken from `hosting.is_some()`: *"was
+    /// the supply side consulted at all"*. `engine_type` is already lowered by the caller —
+    /// the two verbs differ in exactly where that number comes from, and nowhere else.
+    fn alloc_channel_lowered(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        engine_type: u32,
+        asked: bool,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
+        // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
+        // no engine type is not a channel with a default one, it is a channel on runlist 0.
+        // ★★★★★ **THE BIRTH WITNESS — read BEFORE `hosting` is consumed.** See [`BirthOffer`]
+        // for why two states would not have closed `w261`'s hole, and why the discriminator is
+        // `hosting` rather than a new field.
+        let offer = BirthOffer::read(asked, adopt.is_some());
+        // ★★★★★ **LEG B's WITNESS — the SAME reading, applied to the other limb.** ⊘ Not a
+        // second predicate: `BirthOffer::read` is one function and this is its second call,
+        // so "declined" cannot come to mean different things on the two legs.
+        let userd_offer = BirthOffer::read(asked, adopt.is_some_and(|a| a.userd.is_some()));
+        // ⊘ Captured, not re-read at each print: an isolate is a POOL and the census below is
+        // PER PROCESS, so two children interleave their own `#1, #2, …` into one log.
+        // `[measured 2026-08-12, w262_ring]` the log carries `#1..#8` and `#1..#16` from two
+        // children and NOTHING on the line said which was which.
+        let iso = self.id;
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_capture.sh` redirects to `run_<tag>_qemu.log`. Same reasoning as
+        // `ce_copy`'s `CE-SUBMIT` line: the evidence is a file the boot itself wrote, not a
+        // session transcript nobody can re-read.
+        //
+        // ⊘⊘ **IT PRINTS AND IT DECIDES NOTHING.** No branch below reads `offer`, no refusal is
+        // gated on it, no ring byte is read and no method is decoded. Deleting every line of
+        // this witness would leave the channel RM is asked for byte-identical.
+        let (nth, guest_ring, guest_userd, declined, not_asked, refused) =
+            birth_census::tally(offer, userd_offer);
+        let census = format!(
+            "[births={nth} guest_ring={guest_ring} guest_userd={guest_userd} \
+             declined={declined} not_asked={not_asked} refused={refused}]"
+        );
+        // ⊘ Printed on EVERY arm below, including the refusals — a witness that only speaks
+        // when the thing succeeded is silent on exactly the outcome it is run to see.
+        let userd_says = format!(
+            "userd={} ⊘ {}",
+            userd_offer.as_str(BirthLimb::Userd),
+            userd_offer.because(BirthLimb::Userd),
+        );
+        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until
+        // `361fca8` `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and
+        // it was the R31 diagnostic probe; every host channel a guest ever caused was
+        // `RingSource::Ours(None)`.
+        let Some(ring) = adopt else {
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} \
+                 {userd_says} → RingSource::Ours(None) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+                offer.because(BirthLimb::Ring),
+            );
+            // ★★★★★ **w288 — TWO ARMS, NOT AN `unwrap_or(0)`.** `None` reaches
+            // `alloc_channel_at(.., None)` and is every pre-w288 boot byte for byte; `Some`
+            // goes through the verb that NAMES the notifier, so a reader of this file can
+            // see which of the two a channel was born on without decoding a handle value.
+            // ⊘ Zero is a legal-looking handle and must never be the carrier of "absent".
+            return match err_notifier {
+                None => self.alloc_channel_on(vas, engine_type),
+                Some(n) => self.alloc_channel_at_with_error_notifier(vas, engine_type, None, n),
+            };
+        };
+        // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
+        // for why the core's own type-level check cannot reach here.
+        let raw_memory = self.narrow(ring.memory)?;
+        let joined = self
+            .fb_joins
+            .as_ref()
+            .is_some_and(|t| t.is_joined_object(raw_memory));
+        // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
+        // reason, one plane over: a witness that only speaks when the thing succeeded is silent
+        // on exactly the outcome it is run to see.
+        let named = format!(
+            "memory={:#x} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
+             userd_offset={}",
+            ring.memory.raw(),
+            ring.ring_va,
+            ring.gp_fifo_va,
+            ring.gp_fifo_entries,
+            // ⊘ The guest's TWO leg-B numbers printed on both the success and the refusal
+            // side, and printed as `NONE` rather than as `0x0` when absent: offset zero is a
+            // legal USERD placement (the slot at the joined leaf's own base).
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.memory.raw())),
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.offset)),
+        );
+        if !joined {
+            let n = birth_census::refuse();
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+                 {userd_says} joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not \
+                 mint that object by joining a framebuffer leaf; refused={n}) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+            );
+            return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
+        }
+        // ★★★★★ **LEG B's far-side check, and it is NOT implied by the ring's.** The two
+        // handles arrive as separate integers over the wire and a child cannot see the
+        // address table that related them. ⊘ Refusal, never a downgrade to a USERD of ours:
+        // a channel silently given our USERD after being told it would carry the guest's is
+        // the exact `GP_PUT == GP_GET` silence this leg exists to end, and it would make an
+        // armed run and its control produce the same channel.
+        let adopted_userd = match ring.userd {
+            None => None,
+            Some(u) => {
+                let raw_userd = self.narrow(u.memory)?;
+                if !self
+                    .fb_joins
+                    .as_ref()
+                    .is_some_and(|t| t.is_joined_object(raw_userd))
+                {
+                    let n = birth_census::refuse();
+                    eprintln!(
+                        "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} \
+                         adopt={} {named} {userd_says} → REFUSED USERD_NOT_A_JOINED_WINDOW \
+                         (this isolate did not mint that object by joining a framebuffer leaf; \
+                         refused={n}) {census}",
+                        iso,
+                        vas.raw(),
+                        offer.as_str(BirthLimb::Ring),
+                    );
+                    return Err(RmError::Other(USERD_NOT_A_JOINED_WINDOW));
+                }
+                Some(u)
+            }
+        };
+        // ★★★★★ **THE LINE THAT PROVES LEG A2 FIRED.** Absent on a disarmed run by
+        // construction — `adopted_guest_ring` is `None` when nothing joined the leaf — and
+        // present exactly when a host channel is about to be born over memory this port did not
+        // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
+        // it replaces.
+        eprintln!(
+            "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+             {userd_says} joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
+            iso,
+            vas.raw(),
+            offer.as_str(BirthLimb::Ring),
+            offer.because(BirthLimb::Ring),
+        );
+        let guest_ring = GuestRing {
+            memory: ring.memory,
+            ring_va: ring.ring_va,
+            gp_fifo_va: ring.gp_fifo_va,
+            gp_fifo_entries: ring.gp_fifo_entries,
+            userd: adopted_userd,
+        };
+        // ★★★★★ **w288 — the `Ours` arm's two arms, on the guest-ring limb.** Same reason:
+        // the verb that carries a notifier is a different name from the one that does not,
+        // so which was used is readable here rather than inferable from a handle value.
+        match err_notifier {
+            None => self.alloc_channel_over_guest_ring(vas, engine_type, guest_ring),
+            Some(n) => self.alloc_channel_over_guest_ring_with_error_notifier(
+                vas,
+                engine_type,
+                guest_ring,
+                n,
+            ),
+        }
     }
 
     /// ★★ [`RmBackend::alloc_channel`]'s body, taking the **raw** `NV2080_ENGINE_TYPE_*`

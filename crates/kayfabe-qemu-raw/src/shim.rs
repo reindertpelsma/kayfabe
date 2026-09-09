@@ -3018,6 +3018,120 @@ fn report_engine_forward_drain(
     }
 }
 
+/// ★★★★★ **w393 — the birth drain's rows and totals.** [`ENGINE_FWD_REPORT_MAX`]'s policy
+/// (`engine_fwd_report_action`) over its own counters: rows are capped, the three counts are
+/// not, and a refusal is printed with its exact `FwdFault` variant — the one line the whole
+/// site exists to produce is `REFUSED … PassthroughRingNotAdoptable`.
+static BIRTH_SEEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BIRTH_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BIRTH_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Print one channel-birth outcome into the boot's own `run_<tag>_qemu.log`.
+///
+/// ⊘ `Skipped(Emulated)` prints NOTHING and counts nothing: our ring is correct for that
+/// kind and this is not its birth site, so a control boot's log must not gain a line the
+/// armed run's lacks. `Skipped(AlreadyBorn)` is printed — it is the `GPFIFO_SCHEDULE`
+/// re-latch finding a successful alloc-time birth, which is a fact worth one line.
+fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
+    use std::sync::atomic::Ordering::Relaxed;
+    if matches!(
+        run.out,
+        Ok(kayfabe_rt::ChannelBirthOutcome::Skipped(
+            kayfabe_rt::BirthSkip::Emulated
+        ))
+    ) {
+        return;
+    }
+    let seen = BIRTH_SEEN.fetch_add(1, Relaxed) + 1;
+    let (ok, refused, nth) = match run.out {
+        Ok(_) => {
+            let ok = BIRTH_OK.fetch_add(1, Relaxed) + 1;
+            (ok, BIRTH_REFUSED.load(Relaxed), ok)
+        }
+        Err(_) => {
+            let refused = BIRTH_REFUSED.fetch_add(1, Relaxed) + 1;
+            (BIRTH_OK.load(Relaxed), refused, refused)
+        }
+    };
+    match engine_fwd_report_action(nth, seen) {
+        EngineFwdReport::Row => {}
+        EngineFwdReport::TotalsOnly => {
+            eprintln!(
+                "kayfabe: CHANNEL-BIRTH CENSUS [seen={seen} born={ok} refused={refused}] ⊘ ROWS \
+                 are capped at {ENGINE_FWD_REPORT_MAX} per outcome class; THESE THREE COUNTS \
+                 ARE NOT"
+            );
+            return;
+        }
+        EngineFwdReport::Silent => return,
+    }
+    let verdict = match &run.out {
+        Ok(kayfabe_rt::ChannelBirthOutcome::Born {
+            proc,
+            chan,
+            host_token,
+            engine,
+            guest_userd,
+        }) => format!(
+            "★★★★★ BORN AT ALLOC proc={} chan={} engine={engine:?} host_token={host_token:#x} \
+             guest_userd={guest_userd} ⇒ the guest's ring{} adopted at CREATION, before any \
+             cursor was written",
+            proc.0,
+            chan.0,
+            if *guest_userd {
+                " AND USERD"
+            } else {
+                " (USERD ours)"
+            },
+        ),
+        Ok(kayfabe_rt::ChannelBirthOutcome::Skipped(why)) => format!("SKIPPED {why:?}"),
+        Err(e) => format!(
+            "⊘⊘ REFUSED {e:?} — NO host channel exists for this guest channel; \
+             a doorbell on it will be PassthroughDoorbellBirth"
+        ),
+    };
+    eprintln!(
+        "kayfabe: CHANNEL-BIRTH client={:#x} channel={:#x} → {verdict} [seen={seen} born={ok} \
+         refused={refused}]{}",
+        run.client.0,
+        run.channel.0,
+        if nth == ENGINE_FWD_REPORT_MAX {
+            " ⊘ REPORT BOUND REACHED for this outcome class — later ones are counted, not printed"
+        } else {
+            ""
+        },
+    );
+}
+
+/// ★★★★★ **w393 — run the latched channel births and REPORT, lock-free.**
+/// [`report_engine_forward_drain`]'s twin, with the same budget and the same reason for
+/// living outside the `ObjectModel` impl: that impl runs under the plane's rank-0 mutex and
+/// may only latch; this frame holds nothing and is where a birth's real outcome exists.
+fn report_channel_birth_drain(
+    device: &kayfabe_rt::device::SharedDevice,
+    err_notifier_grants: &[kayfabe_rt::ChannelBirthGrant],
+) {
+    let t0 = Instant::now();
+    let runs = device.run_pending_channel_births(err_notifier_grants);
+    if runs.is_empty() {
+        return;
+    }
+    let elapsed = t0.elapsed();
+    for r in &runs {
+        report_channel_birth(r);
+    }
+    if elapsed >= ENGINE_FWD_DRAIN_BUDGET {
+        eprintln!(
+            "kayfabe: ⚠⚠⚠ CHANNEL-BIRTH DRAIN OVERRUN — {} birth(s) took {:?}, over the {:?} \
+             budget. ⚠ Charged against the guest's `_kgspRpcRecvPoll` deadline exactly as the \
+             engine-forward drain is (see ENGINE_FWD_DRAIN_BUDGET)",
+            runs.len(),
+            elapsed,
+            ENGINE_FWD_DRAIN_BUDGET,
+        );
+    }
+}
+
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
     fn apply(
         &mut self,
@@ -13340,6 +13454,47 @@ impl Regs {
         out
     }
 
+    /// ★★★★★ **w393 — the VMM's half of a latched BIRTH's error notifier**, keyed by the
+    /// pair the latch carries. [`Self::pending_err_notifier_grants`]'s twin, over
+    /// `peek_pending_channel_births` and `channel_birth_facts`; same silence when the
+    /// crossing is unarmed, same refusal to print a second line for a latch the drain will
+    /// refuse by its own name.
+    fn pending_birth_notifier_grants(&self) -> Vec<kayfabe_rt::ChannelBirthGrant> {
+        if self.guest_ram_backing.is_none() {
+            return Vec::new();
+        }
+        let pending = self.device.peek_pending_channel_births();
+        if pending.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (client, channel) in pending {
+            let Ok(facts) = self.device.channel_birth_facts(client, channel) else {
+                continue;
+            };
+            // ⊘ Silent for `Emulated`: not this site's birth, and the drain skips it silently.
+            if facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough {
+                continue;
+            }
+            if let Some(grant) = err_notifier_grant(
+                &self.ce,
+                self.guest_ram_backing,
+                facts.error_notifier,
+                &format!(
+                    "birth client={:#x} channel={:#x} proc={} chan={}",
+                    client.0, channel.0, facts.proc.0, facts.chan.0
+                ),
+            ) {
+                out.push(kayfabe_rt::ChannelBirthGrant {
+                    client,
+                    channel,
+                    grant,
+                });
+            }
+        }
+        out
+    }
+
     #[cfg(feature = "host-isolates")]
     fn adopt_pending_channel_rings(&self) {
         if !self.guest_ring.adopts_ring() {
@@ -13348,9 +13503,48 @@ impl Regs {
             // being comparable. The arming itself is on disk, printed once at the root.
             return;
         }
-        let pending = self.device.peek_pending_engine_forwards();
-        if pending.is_empty() {
+        // ★★★★★ **w393 — TWO latches feed this join, and the BIRTH one is the point.** A
+        // channel born at its own alloc adopts its ring AND USERD at creation, and
+        // `adopted_guest_ring` can only say yes over a leaf this pass has already joined. So
+        // every pending birth's ring leaf is walked and joined HERE, before the birth
+        // drains — the exact ordering leg A1 already imposes on the engine-object latch.
+        // ⊘ Births of `Emulated` channels are filtered out silently: not this site's birth,
+        // and `plan_back_fb_leaf` would refuse `SYSTEM_PROC` by name anyway — one line per
+        // kernel channel at boot is a log the control must not gain.
+        let forwards = self.device.peek_pending_engine_forwards();
+        let births = self.device.peek_pending_channel_births();
+        if forwards.is_empty() && births.is_empty() {
             // The overwhelmingly common case — this runs on every register write.
+            return;
+        }
+        let mut targets: Vec<(
+            String,
+            Result<kayfabe_rt::device::CeChannelFacts, kayfabe_rt::FwdFault>,
+        )> = Vec::with_capacity(forwards.len() + births.len());
+        for (client, parent, class) in forwards {
+            targets.push((
+                format!(
+                    "client={:#x} parent={:#x} class={:#06x}",
+                    client.0, parent.0, class.0
+                ),
+                self.device
+                    .engine_object_channel_facts(client, parent, class),
+            ));
+        }
+        for (client, channel) in births {
+            let facts = self.device.channel_birth_facts(client, channel);
+            if let Ok(f) = &facts
+                && f.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough
+            {
+                continue;
+            }
+            targets.push((
+                format!("BIRTH client={:#x} channel={:#x}", client.0, channel.0),
+                facts,
+            ));
+        }
+        let pending = targets;
+        if pending.is_empty() {
             return;
         }
         // ★★★★★ THE POSITIVE SIGNAL, emitted on EVERY armed pass that has anything to do,
@@ -13376,18 +13570,14 @@ impl Regs {
             self.fb_join.as_str(),
             pending.len(),
         );
-        for (client, parent, class) in pending {
-            let facts = match self
-                .device
-                .engine_object_channel_facts(client, parent, class)
-            {
+        for (label, facts) in pending {
+            let facts = match facts {
                 Ok(f) => f,
                 Err(e) => {
                     eprintln!(
-                        "{head} client={:#x} parent={:#x} class={:#06x} → ⊘ NOT ROUTED `{e:?}` \
-                         — this alloc names no channel this port can resolve, so there is no \
-                         ring to adopt. ⊘ Not a miss: the drain refuses it too",
-                        client.0, parent.0, class.0,
+                        "{head} {label} → ⊘ NOT ROUTED `{e:?}` — this alloc names no channel \
+                         this port can resolve, so there is no ring to adopt. ⊘ Not a miss: \
+                         the drain refuses it too",
                     );
                     continue;
                 }
@@ -13396,16 +13586,11 @@ impl Regs {
                 (facts.ring_va, facts.vas_pdb, facts.vaspace)
             else {
                 eprintln!(
-                    "{head} proc={} chan={} class={:#06x} → ⊘ NOTHING TO ADOPT: ring_va={:?} \
+                    "{head} proc={} chan={} {label} → ⊘ NOTHING TO ADOPT: ring_va={:?} \
                      vas_pdb={:?} vaspace={:?}. ⚠ `ring_va = Some(0)` would be a VALUE and not \
                      a blank — the driver declares `gpFifoOffset = 0` for its golden-context \
                      channel — so a `None` here is the channel declaring no ring at all",
-                    facts.proc.0,
-                    facts.chan.0,
-                    class.0,
-                    facts.ring_va,
-                    facts.vas_pdb,
-                    facts.vaspace,
+                    facts.proc.0, facts.chan.0, facts.ring_va, facts.vas_pdb, facts.vaspace,
                 );
                 continue;
             };
@@ -13703,6 +13888,21 @@ impl Regs {
         // preference.
         let err_notifier_grants = self.pending_err_notifier_grants();
         kft.mark("err_grants");
+        // ★★★★★ **w393 — THE THIRD DRAIN: channel births, BEFORE the engine forwards.**
+        //
+        // A `Passthrough` channel the guest allocated on this very register write (or
+        // `GPFIFO_SCHEDULE`d on it) is born HERE — lock-free, after `materialize_pending`
+        // installed its isolate and after `adopt_pending_channel_rings` joined its ring's
+        // leaf — over the guest's ring AND USERD, before the guest has written a cursor.
+        // That ordering is the whole fix for w392j's five `Xid 31` (w233: RM zeroes a taken
+        // USERD; at alloc that is harmless, at a doorbell it is the cursor that rang).
+        //
+        // ⊘ Before the engine drain: an engine object latched on the same write must find
+        // the channel already born with its USERD, not birth it itself without one.
+        // ⊘ `Emulated` channels pass through this drain silently — not their birth site.
+        let birth_grants = self.pending_birth_notifier_grants();
+        report_channel_birth_drain(&self.device, &birth_grants);
+        kft.mark("birth_drain");
         report_engine_forward_drain(&self.device, &err_notifier_grants);
         kft.mark("fwd_drain");
         // ★★★★★ **w303 — THE REAP, AND THIS LINE IS THE WHOLE OF FIX A.**

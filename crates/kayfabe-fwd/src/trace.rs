@@ -108,6 +108,16 @@ impl Faulted for FwdFault {
             // census keyed on it would split one cause across two rows.
             FwdFault::Rm { err, .. } => err.fault_tag(),
             FwdFault::NotAnEngine(_) => FaultTag("FwdFault::NotAnEngine"),
+            // ★ w393 — two DIFFERENT findings: "a doorbell reached an un-born passthrough
+            // channel" and "its birth found nothing to adopt". The second is the usual cause
+            // of the first, and a census that merged them could not say whether the supply
+            // side or the latch was the thing that failed.
+            FwdFault::PassthroughDoorbellBirth { .. } => {
+                FaultTag("FwdFault::PassthroughDoorbellBirth")
+            }
+            FwdFault::PassthroughRingNotAdoptable { .. } => {
+                FaultTag("FwdFault::PassthroughRingNotAdoptable")
+            }
             // ★ The HOP is in the tag, not only in the variant: "the parent was not a
             // channel" and "the parent's Device has not resolved yet" are a permanent
             // refusal and a deferral, and a census that could not tell them apart would

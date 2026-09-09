@@ -665,6 +665,19 @@ impl kayfabe_isolate::RmBackend for Relocating {
         self.0
             .alloc_channel(vas, engine, hosting, adopt, err_notifier)
     }
+    // ★ w393 — delegated like every other verb here; this fixture relocates mappings and
+    // has no opinion about how a channel is born.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: kayfabe_arch::ids::EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<kayfabe_isolate::ChannelHandles, RmError> {
+        self.0
+            .alloc_channel_declared(vas, engine, declared_engine_type, adopt, err_notifier)
+    }
     fn alloc_engine_object(
         &mut self,
         chan: HostHandle,

@@ -152,6 +152,31 @@ pub enum Request {
         /// bytes — and the second is the shape of a bug we would then be unable to see.
         err_notifier: Option<u64>,
     },
+    /// ★★★★★ **w393 — [`kayfabe_isolate::RmBackend::alloc_channel_declared`], across the
+    /// wire.** A host channel born at the guest's own channel alloc: no `hosting`, a
+    /// **mandatory** adoption, and the guest's raw `engineType`.
+    ///
+    /// ⊘⊘ **Its own tag, not `AllocChannel` with a flag.** The child dispatches by variant
+    /// to the verb whose type makes the adoption mandatory; an in-band reading of
+    /// `hosting: None && adopt: Some` on the older request is exactly what the doorbell arm
+    /// already sends for a ring-only adoption, and would make the two births one decode
+    /// away from each other.
+    ///
+    /// ⚠ `declared_engine_type` carries a presence byte for `err_notifier`'s reason: `0`
+    /// is `NV2080_ENGINE_TYPE_NULL`, a value RM reads as *"runlist 0"*, and a sentinel
+    /// would make *"could not read it"* and *"the guest declared NULL"* the same bytes.
+    AllocChannelDeclared {
+        /// Host VAS handle, raw.
+        vas: u64,
+        /// The channel's engine, as [`engine_code`].
+        engine: u8,
+        /// The guest's own `NV2080_ENGINE_TYPE_*` code, or `None` when unread.
+        declared_engine_type: Option<u32>,
+        /// The adoption — mandatory. Same tuple as [`Self::AllocChannel::adopt`]'s `Some`.
+        adopt: AdoptedRingWire,
+        /// As [`Self::AllocChannel::err_notifier`].
+        err_notifier: Option<u64>,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
         /// Host channel handle, raw.
@@ -788,6 +813,45 @@ impl Envelope {
                     }
                 }
             }
+            // ★ w393 — the adoption tuple is laid out byte-for-byte as `AllocChannel`'s
+            // `Some` arm, minus the outer presence byte (it is mandatory here).
+            Request::AllocChannelDeclared {
+                vas,
+                engine,
+                declared_engine_type,
+                adopt: (memory, ring_va, gp_fifo_va, entries, userd),
+                err_notifier,
+            } => {
+                out.push(24);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.push(*engine);
+                match declared_engine_type {
+                    None => out.push(0),
+                    Some(t) => {
+                        out.push(1);
+                        out.extend_from_slice(&t.to_le_bytes());
+                    }
+                }
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&ring_va.to_le_bytes());
+                out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                out.extend_from_slice(&entries.to_le_bytes());
+                match userd {
+                    None => out.push(0),
+                    Some((umem, uoff)) => {
+                        out.push(1);
+                        out.extend_from_slice(&umem.to_le_bytes());
+                        out.extend_from_slice(&uoff.to_le_bytes());
+                    }
+                }
+                match err_notifier {
+                    None => out.push(0),
+                    Some(memory) => {
+                        out.push(1);
+                        out.extend_from_slice(&memory.to_le_bytes());
+                    }
+                }
+            }
             Request::AllocEngineObject {
                 chan,
                 class,
@@ -1016,6 +1080,51 @@ impl Envelope {
                     tag => {
                         return Err(ProtoError::UnknownTag {
                             what: "channel err_notifier presence",
+                            tag,
+                        });
+                    }
+                },
+            },
+            24 => Request::AllocChannelDeclared {
+                vas: c.u64("declared channel vas")?,
+                engine: c.u8("declared channel engine")?,
+                declared_engine_type: match c.u8("declared engine type presence")? {
+                    0 => None,
+                    1 => Some(c.u32("declared engine type")?),
+                    // ⊘ Refused by name for `AllocChannel`'s reason: an unknown byte means
+                    // the two sides disagree about the frame.
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "declared engine type presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: (
+                    c.u64("declared adopt memory")?,
+                    c.u64("declared adopt ring_va")?,
+                    c.u64("declared adopt gp_fifo_va")?,
+                    c.u32("declared adopt gp_fifo_entries")?,
+                    match c.u8("declared adopt userd presence")? {
+                        0 => None,
+                        1 => Some((
+                            c.u64("declared adopt userd memory")?,
+                            c.u64("declared adopt userd offset")?,
+                        )),
+                        tag => {
+                            return Err(ProtoError::UnknownTag {
+                                what: "declared adopt userd presence",
+                                tag,
+                            });
+                        }
+                    },
+                ),
+                err_notifier: match c.u8("declared channel err_notifier presence")? {
+                    0 => None,
+                    1 => Some(c.u64("declared channel err_notifier memory")?),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "declared channel err_notifier presence",
                             tag,
                         });
                     }
@@ -1421,6 +1530,30 @@ mod tests {
                 )),
                 err_notifier: Some(0x5c00_0021),
             },
+            // ★ w393 — BOTH arms of `declared_engine_type` and of the nested USERD, for the
+            // presence-byte reason every other option here gives. ⚠ `declared_engine_type:
+            // Some(0)` is deliberate: 0 is `NV2080_ENGINE_TYPE_NULL`, a VALUE, and a codec
+            // that treated it as absence would pass a non-zero-only sample.
+            Request::AllocChannelDeclared {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: Some(0),
+                adopt: (0x5c00_0019, 0x2_0020_0000, 0, 1024, None),
+                err_notifier: None,
+            },
+            Request::AllocChannelDeclared {
+                vas: 7,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: None,
+                adopt: (
+                    0x5c00_0019,
+                    0x2_0020_0000,
+                    0x2_0020_0000,
+                    4096,
+                    Some((0x5c00_0019, 0x2000)),
+                ),
+                err_notifier: Some(0x5c00_0021),
+            },
             Request::AllocEngineObject {
                 chan: 9,
                 class: 0xc7c0,
@@ -1567,6 +1700,7 @@ mod tests {
             Request::AllocSysmem { .. } => "AllocSysmem",
             Request::AllocVidmem { .. } => "AllocVidmem",
             Request::AllocChannel { .. } => "AllocChannel",
+            Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
             Request::Schedule { .. } => "Schedule",
             Request::Free { .. } => "Free",
@@ -1597,6 +1731,7 @@ mod tests {
                 "AliasFbLeaf",
                 "Alloc",
                 "AllocChannel",
+                "AllocChannelDeclared",
                 "AllocEngineObject",
                 "AllocSysmem",
                 "AllocVaSpace",

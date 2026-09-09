@@ -275,6 +275,20 @@ impl RmBackend for LoopbackRm {
         Ok(self.stamp(h))
     }
 
+    /// ★ w393 — the same loud discard as [`Self::alloc_channel`]'s, through it: this
+    /// backend has no RM, no runlist and no joined leaf, so neither the declared engine
+    /// type nor the mandatory adoption can be honoured, and the line it prints says so.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        _declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel(vas, engine, None, Some(adopt), err_notifier)
+    }
+
     fn alloc_channel(
         &mut self,
         vas: HostHandle,

@@ -3113,6 +3113,23 @@ impl RmBackend for MockRmBackend {
         Ok((handle, token))
     }
 
+    /// ★ w393 — recorded as an [`RmVerb::AllocChannel`] with `hosting: None` and
+    /// `adopt: Some(..)`, which is the one shape the older verb can never produce from a
+    /// production caller (the doorbell arm's `adopt` is ring-only and the engine-object arm
+    /// always hosts) — so a verb log still tells the three birth sites apart. ⊘ The declared
+    /// engine type is dropped: this fixture has no runlist to place a channel on, and a
+    /// recorded number nothing checks is a second source of truth.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        _declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel(vas, engine, None, Some(adopt), err_notifier)
+    }
+
     fn alloc_engine_object(
         &mut self,
         chan: HostHandle,

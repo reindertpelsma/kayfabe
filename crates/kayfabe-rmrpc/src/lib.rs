@@ -1417,6 +1417,10 @@ fn translate_alloc(
                 // very message, four fields further down. ⊘ `Ok(None)` is honest ignorance
                 // and falls back to that derivation; see `AllocFacts::channel_engine`.
                 channel_engine: abi.decode_channel_engine(params)?,
+                // ★★★★★ w393 — the SAME four bytes, RAW, for the birth-at-alloc path that
+                // has no engine object to recover the CE instance from. See
+                // `AllocFacts::channel_engine_type`. ⊘ `Ok(None)` for the identical reasons.
+                channel_engine_type: abi.decode_channel_engine_type(params)?,
                 ..Default::default()
             }
         }

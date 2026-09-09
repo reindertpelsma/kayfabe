@@ -441,6 +441,52 @@ struct DeviceState {
     ///
     /// ⚠ **Bounded** by [`MAX_PENDING_ENGINE_FORWARDS`], and the bound REFUSES BY NAME.
     pending_engine_forwards: Vec<PendingEngineForward>,
+    /// ★★★★★ **w393 — the channel-birth latch.** See [`SharedDevice::latch_channel_birth`].
+    ///
+    /// The engine-forward latch's twin, for the same reason it exists: the guest's channel
+    /// alloc reaches [`SharedDevice::apply_deferring`] under the plane's rank-0 mutex, and
+    /// a birth is a host RM verb. It lives beside the spine so the register-write tail —
+    /// the frame that may issue — finds it without anything crossing a port.
+    ///
+    /// ⚠ **Bounded** by [`MAX_PENDING_CHANNEL_BIRTHS`], refusing by name at the bound.
+    pending_channel_births: Vec<PendingChannelBirth>,
+}
+
+/// ★★★★★ **w393 — one guest channel alloc (or `GPFIFO_SCHEDULE`) whose host channel may be
+/// born at the next lock-free drain.** Plain data: a latch outlives the guard that made it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingChannelBirth {
+    /// The channel's owning `hClient`.
+    client: HClient,
+    /// The guest's channel handle in that namespace.
+    channel: HObject,
+}
+
+/// ★★ **w393 — the birth latch's bound**, for [`MAX_PENDING_ENGINE_FORWARDS`]'s reason: the
+/// guest is synchronous under the GPU lock today, so the population is one per register
+/// write — an observation about **this** guest, not a property of the protocol. The bound
+/// refuses by name ([`BirthAdmission::LatchFull`]) instead of growing on a guest that
+/// batches. Generous rather than tight, so it never fires in normal operation.
+pub const MAX_PENDING_CHANNEL_BIRTHS: usize = 64;
+
+/// ★ **w393 — what [`SharedDevice::latch_channel_birth`] did with a request.** ADMITTED,
+/// never SERVED: the drain reports the outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthAdmission {
+    /// Latched; runs at the next drain.
+    Latched {
+        /// Latch depth after this admission.
+        pending: usize,
+    },
+    /// ⊘ Refused by name at the bound. Nothing was latched; the channel will be re-latched
+    /// by its `GPFIFO_SCHEDULE` if one arrives, and a doorbell before any birth is
+    /// `FwdFault::PassthroughDoorbellBirth`.
+    LatchFull {
+        /// Latch depth at refusal.
+        pending: usize,
+        /// The bound.
+        bound: usize,
+    },
 }
 
 /// ★★★★★ **§16.96** — one Case-1 engine-object alloc the plane decided under its **rank-0**
@@ -543,6 +589,86 @@ pub struct EngineForwardRun {
     pub params_len: usize,
     /// What the host verb did.
     pub out: Result<EngineObjectForwarded, FwdFault>,
+}
+
+/// ★★★★★ **w393 — the VMM's answer to *"where are THIS latched birth's channel's error
+/// notifier pages?"***, keyed by the pair the latch carries. [`EngineNotifierGrant`]'s twin.
+#[derive(Debug, Clone, Copy)]
+pub struct ChannelBirthGrant {
+    /// The latched channel's owning `hClient`.
+    pub client: HClient,
+    /// The guest's channel handle.
+    pub channel: HObject,
+    /// The guest's own notifier pages, as the VMM derived them.
+    pub grant: kayfabe_isolate::GuestRamGrant,
+}
+
+/// ★★★ **w393 — one latched birth, RUN.** What [`SharedDevice::run_pending_channel_births`]
+/// reports per latch; the identity travels back because the reporter never saw the latch.
+#[derive(Debug, Clone)]
+pub struct ChannelBirthRun {
+    /// The channel's owning `hClient`.
+    pub client: HClient,
+    /// The guest's channel handle.
+    pub channel: HObject,
+    /// What the birth did.
+    pub out: Result<kayfabe_fwd::ChannelBirthOutcome, FwdFault>,
+}
+
+/// ★★★★★ **w393 — the post-`apply` hook.** Inside the guard `apply` already holds: if the
+/// event that just applied was an alloc whose node the graph now files as a **channel**,
+/// latch its birth. Kind (`Emulated`/`Passthrough`) and adoptability are decided by the
+/// drain under the proc lock — ⊘ not re-derived here from `proc == SYSTEM_PROC`, which is
+/// the re-derivation `Channel::kind`'s doc records the cost of.
+fn latch_channel_birth_after_apply(st: &mut DeviceState, ev: RmEvent) {
+    let RmEvent::Alloc { client, handle, .. } = ev else {
+        return;
+    };
+    let is_channel = st
+        .spine
+        .rmgraph
+        .node(kayfabe_core::rmgraph::NodeKey::new(client, handle))
+        .is_some_and(|n| matches!(n.kind, kayfabe_arch::ObjectKind::Channel { .. }));
+    if !is_channel {
+        return;
+    }
+    let _ = latch_channel_birth_in(st, client, handle);
+}
+
+/// The latch itself, over an already-held `DeviceState`. Refuses by name at the bound —
+/// and says so, because a silently dropped birth is a doorbell refusal with no cause line.
+fn latch_channel_birth_in(
+    st: &mut DeviceState,
+    client: HClient,
+    channel: HObject,
+) -> BirthAdmission {
+    let pending = st.pending_channel_births.len();
+    if pending >= MAX_PENDING_CHANNEL_BIRTHS {
+        eprintln!(
+            "kayfabe: BIRTH-LATCH client={:#x} channel={:#x} ⊘ REFUSED LatchFull pending={pending} \
+             bound={MAX_PENDING_CHANNEL_BIRTHS} — nothing latched; the channel's GPFIFO_SCHEDULE \
+             will re-latch it, and a doorbell before that is PassthroughDoorbellBirth",
+            client.0, channel.0,
+        );
+        return BirthAdmission::LatchFull {
+            pending,
+            bound: MAX_PENDING_CHANNEL_BIRTHS,
+        };
+    }
+    // ⊘ Idempotent within one latch: a `GPFIFO_SCHEDULE` arriving on the same register
+    // write as the alloc (not a measured shape) must not birth twice.
+    if st
+        .pending_channel_births
+        .iter()
+        .any(|p| p.client == client && p.channel == channel)
+    {
+        return BirthAdmission::Latched { pending };
+    }
+    st.pending_channel_births
+        .push(PendingChannelBirth { client, channel });
+    BirthAdmission::Latched {
+        pending: pending + 1,
+    }
 }
 
 impl DeviceState {
@@ -1103,6 +1229,7 @@ impl SharedDevice {
                         .map(|(id, p)| (id, RankedMutex::new(LockRank::Proc, p)))
                         .collect(),
                     pending_engine_forwards: Vec::new(),
+                    pending_channel_births: Vec::new(),
                 },
             ),
         }
@@ -1144,6 +1271,9 @@ impl SharedDevice {
             // ⚠ Dropping it is correct and is NOT silent: [`EngineForwardRun`] never
             // existed for it, so no census row claims the verb ran.
             pending_engine_forwards: _dismantled,
+            // ⊘ Same disposition, same reason: a birth latched by a plane being dismantled
+            // has no drain left to run on, and no `ChannelBirthRun` ever claimed it ran.
+            pending_channel_births: _dismantled_births,
         } = state.into_inner();
         Gpu {
             spine,
@@ -1188,6 +1318,13 @@ impl SharedDevice {
             let out = st
                 .spine
                 .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev);
+            // ★★★★★ w393 — AFTER `apply`, inside the SAME guard: the projection has just
+            // filed the channel and rebuilt `by_vchid`, which is exactly what the birth's
+            // route reads. A channel alloc that applied is latched here and born at the
+            // register-write tail, lock-free. See [`SharedDevice::latch_channel_birth`].
+            if out.is_ok() {
+                latch_channel_birth_after_apply(st, ev);
+            }
             (
                 out,
                 st.spine.take_pending_cancels(),
@@ -1237,6 +1374,13 @@ impl SharedDevice {
             let out = st
                 .spine
                 .apply(st.system.get_mut(), &mut ExclusiveProcs(&mut st.procs), ev);
+            // ★★★★★ w393 — AFTER `apply`, inside the SAME guard: the projection has just
+            // filed the channel and rebuilt `by_vchid`, which is exactly what the birth's
+            // route reads. A channel alloc that applied is latched here and born at the
+            // register-write tail, lock-free. See [`SharedDevice::latch_channel_birth`].
+            if out.is_ok() {
+                latch_channel_birth_after_apply(st, ev);
+            }
             (out, st.spine.take_pending_cancels())
         };
         cancels.discharge_all();
@@ -1428,6 +1572,114 @@ impl SharedDevice {
             .collect()
     }
 
+    /// ★★★★★ **w393 — LATCH a channel birth**, for a caller UNDER A LOCK IT DID NOT TAKE.
+    /// Decides nothing, issues nothing.
+    ///
+    /// Reached from two places, both under the plane's rank-0 mutex: [`Self::apply`] /
+    /// [`Self::apply_deferring`] on every channel alloc that applied (via
+    /// `latch_channel_birth_after_apply`, inside the same guard), and
+    /// [`Self::schedule_channel`] on every `GPFIFO_SCHEDULE(enable)`. The drain
+    /// ([`Self::run_pending_channel_births`]) decides kind and adoptability under the proc
+    /// lock; this only records *"a channel the guest just named may need a host channel"*.
+    ///
+    /// ⊘ Why latching is legal for a birth: nothing in the guest's alloc reply depends on
+    /// it — the reply is our fake GSP's, and it was already `NV_OK` before any host channel
+    /// existed (every boot before w393). Same argument as
+    /// [`Self::forward_engine_object_deferring`], verbatim.
+    pub fn latch_channel_birth(&self, client: HClient, channel: HObject) -> BirthAdmission {
+        let mut g = self.state.write();
+        latch_channel_birth_in(&mut g, client, channel)
+    }
+
+    /// ★ **w393 — the birth latch, READ and not taken.** [`Self::peek_pending_engine_forwards`]'s
+    /// twin: the shim joins each pending birth's ring leaf (`adopt_pending_channel_rings`)
+    /// and resolves its notifier grant BEFORE the drain, and both need to know which
+    /// channels are about to be born without running the births.
+    #[must_use]
+    pub fn peek_pending_channel_births(&self) -> Vec<(HClient, HObject)> {
+        self.state
+            .read()
+            .pending_channel_births
+            .iter()
+            .map(|p| (p.client, p.channel))
+            .collect()
+    }
+
+    /// ★★★★★ **w393 — drain and run whatever [`Self::latch_channel_birth`] latched.** The
+    /// mirror of [`Self::run_pending_engine_forwards`]: idempotent, one rank-1 acquisition
+    /// when empty, **call with every ranked lock down** (`Worker::execute` asserts it).
+    ///
+    /// ⊘ One row per latch **in latch order**, refusals included — a birth that was refused
+    /// is the row that matters most, and this drain never swallows one. Grants are matched
+    /// by `(client, channel)`, never positionally: the latch can grow between a peek and this
+    /// drain, and a positional scheme would notify the wrong channel.
+    ///
+    /// ⚠ Must run BEFORE [`Self::run_pending_engine_forwards`] in the tail: a `Passthrough`
+    /// channel whose engine object was latched on the same write (not a shape any measured
+    /// guest produces, but a legal one) must be born HERE, with its USERD, and the engine
+    /// forward must then find `channel.is_some()`.
+    #[must_use]
+    pub fn run_pending_channel_births(
+        &self,
+        err_notifier_grants: &[ChannelBirthGrant],
+    ) -> Vec<ChannelBirthRun> {
+        let batch = {
+            let mut g = self.state.write();
+            core::mem::take(&mut g.pending_channel_births)
+        };
+        batch
+            .into_iter()
+            .map(|p| {
+                let grant = err_notifier_grants
+                    .iter()
+                    .find(|g| g.client == p.client && g.channel == p.channel)
+                    .map(|g| g.grant);
+                ChannelBirthRun {
+                    client: p.client,
+                    channel: p.channel,
+                    out: self.birth_channel_by_handle(p.client, p.channel, grant),
+                }
+            })
+            .collect()
+    }
+
+    /// ★★★★★ **w393 — birth one `Passthrough` channel's host channel, keyed on the guest's
+    /// own `(hClient, hChannel)`.** ROUTE under the device read lock, PLAN + checkout under
+    /// the owning proc's lock, EXECUTE lock-free, COMMIT re-validated — [`Self::verb_op`]'s
+    /// shape, and [`Self::forward_engine_object_by_parent`]'s composition with the three
+    /// `kayfabe_fwd` halves swapped for the birth's.
+    ///
+    /// # Errors
+    /// [`FwdFault`], by variant — `PassthroughRingNotAdoptable` being the one this site
+    /// exists to surface.
+    pub fn birth_channel_by_handle(
+        &self,
+        client: HClient,
+        channel: HObject,
+        err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<kayfabe_fwd::ChannelBirthOutcome, FwdFault> {
+        self.verb_op(
+            || {
+                self.route_act(
+                    |spine| {
+                        let r = kayfabe_fwd::route_channel_birth(spine, client, channel)?;
+                        Ok((r.proc, r))
+                    },
+                    |spine, proc, route| {
+                        let planned = kayfabe_fwd::plan_channel_birth(
+                            spine,
+                            proc,
+                            &route,
+                            err_notifier_grant,
+                        )?;
+                        Staged::check_out(proc, planned.plan.cgpu, planned)
+                    },
+                )?
+            },
+            kayfabe_fwd::commit_channel_birth,
+        )
+    }
+
     /// ★★★ **The DRAIN half of R1's spawn deferral: spawn lock-free, then re-acquire and
     /// RE-VALIDATE (R5).**
     ///
@@ -1471,6 +1723,7 @@ impl SharedDevice {
                 // ⊘ Not this op's business; named because the destructure is exhaustive
                 // by design (a field added and not considered is a compile error here).
                 pending_engine_forwards: _,
+                pending_channel_births: _,
             } = &mut *g;
             let p = if pid == Gpu::SYSTEM_PROC {
                 Some(system.get_mut())
@@ -2029,6 +2282,7 @@ impl SharedDevice {
                     procs,
                     // ⊘ Not this op's business; see `materialize`'s destructure.
                     pending_engine_forwards: _,
+                    pending_channel_births: _,
                 } = &mut *g;
                 let (pid, t) = route(spine)?;
                 let p = if pid == Gpu::SYSTEM_PROC {
@@ -2079,6 +2333,7 @@ impl SharedDevice {
                     procs,
                     // ⊘ Not this op's business; see `materialize`'s destructure.
                     pending_engine_forwards: _,
+                    pending_channel_births: _,
                 } = &mut *g;
                 let p = if pid == Gpu::SYSTEM_PROC {
                     system.get_mut()
@@ -2555,6 +2810,30 @@ impl SharedDevice {
         self.route_act(
             |spine| {
                 let r = kayfabe_fwd::route_engine_object_by_parent(spine, client, parent, class)?;
+                Ok((r.proc, r))
+            },
+            |spine, proc, route| {
+                channel_facts_from(spine, proc, route.proc, route.chan, route.gpu, route.vchid)
+            },
+        )?
+    }
+
+    /// ★★★★★ **w393 — the SAME declared facts, routed by the channel's OWN handle**, for a
+    /// latched birth: the shim joins the ring's leaf and resolves the notifier grant off
+    /// these before the birth drains. Third route, same body (`channel_facts_from`), so it
+    /// cannot disagree with the other two.
+    ///
+    /// # Errors
+    /// Whatever [`kayfabe_fwd::route_channel_birth`] refuses with, then as
+    /// [`Self::ce_channel_facts`].
+    pub fn channel_birth_facts(
+        &self,
+        client: HClient,
+        channel: HObject,
+    ) -> Result<CeChannelFacts, FwdFault> {
+        self.route_act(
+            |spine| {
+                let r = kayfabe_fwd::route_channel_birth(spine, client, channel)?;
                 Ok((r.proc, r))
             },
             |spine, proc, route| {
@@ -5543,10 +5822,24 @@ impl SharedDevice {
                 LockMode::Degenerate => route_in(&self.state.write().spine),
             }?
         };
-        self.with_proc_mut(route.proc, |proc| {
-            kayfabe_core::gpu::apply_schedule_channel(proc, &route, enable)
-        })
-        .ok_or(kayfabe_core::gpu::ScheduleFault::ChannelNotMaterialized { client, object })
+        let ack = self
+            .with_proc_mut(route.proc, |proc| {
+                kayfabe_core::gpu::apply_schedule_channel(proc, &route, enable)
+            })
+            .ok_or(kayfabe_core::gpu::ScheduleFault::ChannelNotMaterialized { client, object })?;
+        // ★★★★★ **w393 — THE SECOND BIRTH LATCH POINT.** A guest may bind its ring AFTER the
+        // channel alloc (`guest_ring_adoption.md` §3.3: RM accepts an unbound `gpFifoOffset`
+        // on purpose), so a birth refused at the alloc for `ADOPT-WHY (5)` gets one more
+        // attempt at the one control every submitter issues before its first doorbell —
+        // and, like the alloc, `#177`'s `GPFIFO_SCHEDULE` is before the guest has written a
+        // cursor on any path this tree has measured (⚠ UNMEASURED for the raw client).
+        // ⊘ The drain is idempotent: a channel already born reads `BirthSkip::AlreadyBorn`
+        // and an `Emulated` one is skipped silently, so re-latching costs one routed read.
+        // ⊘ Rank 0 is re-acquired AFTER rank 1 was released — sequential, never nested.
+        if enable {
+            let _ = self.latch_channel_birth(client, object);
+        }
+        Ok(ack)
     }
 
     /// ★★★★ **§16.56** — perform the guest's `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` (the TSG

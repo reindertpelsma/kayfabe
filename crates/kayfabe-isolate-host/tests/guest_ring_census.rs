@@ -339,20 +339,66 @@ fn the_birth_witness_can_tell_declined_from_never_asked() {
     // ever grew a second selector, `adopt: None` would stop meaning "asked and declined" and
     // the arming would have two sources of truth — the defect
     // `a_second_source_of_truth_beside_a_complete_value` names.
+    //
+    // ⊘⊘ **CORRECTED 2026-09-09 (w393) — THE RULING IS NOW TWO, AND THE SECOND IS A BIRTH
+    // SITE THAT CANNOT DECLINE.** `plan_channel_birth` consults `adopted_guest_ring` at the
+    // guest's own channel alloc and, for a `Passthrough` channel, turns `None` into a NAMED
+    // REFUSAL (`FwdFault::PassthroughRingNotAdoptable`) rather than into `adopt: None` — so
+    // the isolate's `DECLINED` reading is still produced by exactly ONE site
+    // (`plan_engine_object`), which is what the witness's `because()` text relies on.
+    // ★ Between w392j and w393 there was a THIRD call — the doorbell arm — and it was the
+    // measured USERD-zeroing hazard (w233 / w392j's five `Xid 31`); that consult is gone and
+    // its return is what the `None, None` literal above now pins.
     let fwd = sibling_body("kayfabe-fwd", "src/lib.rs");
     assert_eq!(
         fwd.matches("adopted_guest_ring(spine, proc, chan, cgpu)")
             .count(),
-        1,
-        "`adopted_guest_ring` is called from somewhere other than the single birth site in \
-         `plan_engine_object`, or from nowhere. Exactly one call is what makes the isolate's \
-         `adopt: None` readable as *the armed path ran and produced nothing*."
+        2,
+        "`adopted_guest_ring` is called from somewhere other than the TWO birth sites — \
+         `plan_engine_object` (may decline → `adopt: None`) and `plan_channel_birth` (may \
+         NOT decline → refuses by name). A third is a doorbell-side consult growing back, which \
+         is w392j's USERD-zeroing hazard by construction."
     );
     assert!(
         fwd.contains("adopt: if channel.is_none() {"),
         "The consult is no longer gated on `channel.is_none()` alone. ⊘ A second condition \
          here — a flag, a feature, an env read — would make `DECLINED` ambiguous again, which \
          is the exact state this rung exists to leave."
+    );
+    // ★★★★★ w393 — the THIRD birth site's shape: its consult is a `let … else` whose else-arm
+    // is a refusal, and the plan variant it builds has NO `Option` around the adoption. Both
+    // are what make *"a passthrough channel born over our ring"* unspellable on this path.
+    assert_eq!(
+        fwd.matches("let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu) else {")
+            .count(),
+        1,
+        "`plan_channel_birth`'s consult is no longer a refuse-by-name `let … else`. ⊘ If it \
+         became an `Option` that flows into the plan, a birth-at-alloc over OUR ring would be \
+         spellable again, which is the w392h silence (`Xid 0`) by construction."
+    );
+    assert_eq!(
+        isolate.matches("rm.alloc_channel_declared(").count(),
+        1,
+        "`RmBackend::alloc_channel_declared` — the birth verb whose adoption is mandatory by \
+         type — is reached from somewhere other than the single `VerbPlan::ChannelBirth` arm, \
+         or from nowhere."
+    );
+    // ⊘ And on the far side, ONE lowering behind BOTH channel verbs: the birth witness, the
+    // `RING_NOT_A_JOINED_WINDOW` / `USERD_NOT_A_JOINED_WINDOW` refusals and the guest-ring
+    // arm are shared code, so the two verbs cannot come to read `DECLINED` differently.
+    let rm = body_of("src/rm.rs");
+    assert_eq!(
+        rm.matches("fn alloc_channel_lowered(").count(),
+        1,
+        "the shared lowering behind `alloc_channel` and `alloc_channel_declared` is gone or \
+         duplicated."
+    );
+    assert_eq!(
+        rm.matches(".alloc_channel_lowered(").count(),
+        2,
+        "`alloc_channel_lowered` has {} callers, not 2 (`alloc_channel` and \
+         `alloc_channel_declared`). A third is a channel verb that bypassed the shared witness.",
+        rm.matches(".alloc_channel_lowered(").count()
     );
 }
 

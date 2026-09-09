@@ -142,6 +142,16 @@ pub enum HostChannelKind {
     /// and it is the `rmladder` R31 **diagnostic binary**, not the core. ⇒ ring
     /// provenance is a *detail beneath* this kind, on its way to agreeing with it, and
     /// naming today's `Ours` "scratchpad" would be false of the majority of channels.
+    ///
+    /// ⊘⊘ **SUPERSEDED 2026-09-09 (w393).** The paragraph above is a dated measurement and
+    /// is no longer true: `RmBackend::alloc_channel_declared` — reached from
+    /// `kayfabe_fwd::plan_channel_birth` at the guest's own channel alloc — lowers a
+    /// `Passthrough` channel to `RingSource::Guest(..)` with the adoption **mandatory by
+    /// type**, and `plan_doorbell` refuses to birth a `Passthrough` channel over ours by
+    /// name (`FwdFault::PassthroughDoorbellBirth`). ⇒ `Shadow` and `RingOwner::HandedIn`
+    /// now agree on every channel born at the alloc; the engine-object latch still admits
+    /// `Ours` for a `Passthrough` channel whose ring was not adoptable (cup3's measured
+    /// path), which is the one remaining disagreement and is recorded, not hidden.
     Shadow,
     /// **SCRATCHPAD** — ours end to end. No guest channel is bound to it and the guest
     /// cannot name its address space.

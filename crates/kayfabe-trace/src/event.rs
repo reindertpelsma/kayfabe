@@ -382,6 +382,11 @@ pub enum VerbTag {
     Doorbell,
     /// The Case-1 engine-object chain.
     EngineObject,
+    /// ★ w393 — a host channel born at the guest's own channel alloc, over the guest's
+    /// ring and USERD. ⊘ A distinct tag from [`VerbTag::Doorbell`] / [`VerbTag::EngineObject`]
+    /// for the fact a reader most needs off this field: WHICH of the three birth sites a
+    /// channel came from decides whether its USERD could have been the guest's at all.
+    ChannelBirth,
     /// One Case-1 control.
     Control,
     /// ★ w346 — one control on the isolate's own subdevice; carries no handle.
@@ -404,6 +409,7 @@ impl VerbTag {
             VerbPlan::PinGuestRam { .. } => VerbTag::PinGuestRam,
             VerbPlan::Doorbell { .. } => VerbTag::Doorbell,
             VerbPlan::EngineObject { .. } => VerbTag::EngineObject,
+            VerbPlan::ChannelBirth { .. } => VerbTag::ChannelBirth,
             VerbPlan::Control { .. } => VerbTag::Control,
             VerbPlan::SubdeviceControl { .. } => VerbTag::SubdeviceControl,
             VerbPlan::CeSplit { .. } => VerbTag::CeSplit,

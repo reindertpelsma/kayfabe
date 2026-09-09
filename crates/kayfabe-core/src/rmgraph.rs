@@ -469,6 +469,24 @@ pub struct AllocFacts {
     /// Only meaningful on a channel alloc; on any other class the field is ignored, exactly
     /// as [`Self::client_kind`] is everywhere but a client root.
     pub channel_engine: Option<kayfabe_arch::ids::EngineKind>,
+    /// ★★★★★ **w393 — the SAME declaration, RAW**: the `NV2080_ENGINE_TYPE_*` code off
+    /// `NV_CHANNEL_ALLOC_PARAMS.engineType`, verbatim, beside [`Self::channel_engine`]'s
+    /// narrowing of it.
+    ///
+    /// # ⊘ Why a second field for one four-byte declaration
+    ///
+    /// [`Self::channel_engine`] deliberately drops the copy-engine **instance** (`COPY2`
+    /// arrives as `Ce`), and its own doc says the one consumer that needs the instance takes
+    /// it from the CE *object* instead. That consumer runs at the engine-object latch. A
+    /// host channel born **at the guest's own channel alloc** (w393, `kayfabe_fwd::
+    /// plan_channel_birth`) has no object yet, and a birth that invented `COPY0` there would
+    /// reproduce §16.106's 14 measured runlist refusals one rung earlier. So the raw code is
+    /// filed here, **opaque**, for that one birth path to hand back to RM unchanged.
+    ///
+    /// ⊘ **Interpreted by nobody in this crate.** It is not matched on, not compared, not
+    /// narrowed; `channel_engine` remains the only reading the core acts on. `None` is
+    /// exactly `channel_engine`'s `None` — *"could not read it"*, never *"declared GR"*.
+    pub channel_engine_type: Option<u32>,
 }
 
 /// ★★★ **The GPFIFO ring a channel declared, verbatim** — `gpFifoOffset` /

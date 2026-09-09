@@ -60,6 +60,7 @@ pub mod executor;
 pub mod inbox;
 pub mod lock;
 
+pub use device::{BirthAdmission, ChannelBirthGrant, ChannelBirthRun, MAX_PENDING_CHANNEL_BIRTHS};
 /// ★★★★ §16.65 — the doorbell **routing verdict** and the per-engine census's shape,
 /// re-exported for the same reason [`GpuId`] is.
 ///
@@ -135,8 +136,8 @@ pub use kayfabe_arch::ids::{HClient, HObject};
 /// policy layer and the QEMU shim both have to NAME them, and neither may take an edge
 /// this one already owns.
 pub use kayfabe_fwd::{
-    ChannelControlRelay, ChannelControlRelayFault, EngineObjectForwarded, FbLeafBacking,
-    FbLeafRange, FwdFault,
+    BirthSkip, ChannelBirthOutcome, ChannelControlRelay, ChannelControlRelayFault,
+    EngineObjectForwarded, FbLeafBacking, FbLeafRange, FwdFault,
 };
 
 // The concurrency contract (decision #17), compile-time-asserted for the shell's
