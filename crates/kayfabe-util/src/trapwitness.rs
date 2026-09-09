@@ -105,6 +105,34 @@ static INLINE_EXCEPTIONS: AtomicU64 = AtomicU64::new(0);
 /// and monotonic: it answers *"has clause (b) ever been at risk"*, never *"what is the
 /// current hold"*.
 static WORST_TRAP_US: AtomicU64 = AtomicU64::new(0);
+/// ★★★★★ **WHICH trap held the longest — because a scalar names no site to fix.**
+///
+/// **Owner ruling 2026-09-09**: *"no inline blocking executions in mmio traps. just general
+/// rule. real gpu also never holds any mmio write for milliseconds right. like rpc mmio
+/// starts the operation, the block is for example a semaphore."*
+///
+/// [`worst_trap_us`] is the conformance metric for that rule across **every** MMIO trap —
+/// [`TrapGuard`] wraps both the register read and the register write path. But a bare
+/// maximum says only *that* something held 1.86 s, not *what*, and this campaign has now
+/// twice paid for a single number that fit several repair plans equally well
+/// (`inline_exceptions` over four sites; the GEMM ratio over launch-vs-compute).
+///
+/// So the worst hold carries its site. Encoded as one `u64` — `(bar << 56) | offset` — and
+/// updated only by the thread that actually won [`WORST_TRAP_US`]'s `fetch_max`, so the two
+/// cannot disagree about which trap they describe.
+/// ⊘ Racy in principle: two threads can win the max and the identity in different orders.
+/// The census therefore prints the pair as *"the worst hold, and the site that most recently
+/// claimed it"* rather than asserting they are one event — an honest weaker claim beats a
+/// strong one the mechanism cannot support.
+static WORST_TRAP_SITE: AtomicU64 = AtomicU64::new(u64::MAX);
+/// How many traps exceeded [`SLOW_TRAP_US`] — the rule's violation count, not its extreme.
+/// ⊘ A maximum is one event and can be dismissed as an outlier; a COUNT cannot.
+static SLOW_TRAPS: AtomicU64 = AtomicU64::new(0);
+/// A trap holding longer than this is a violation of the owner's 2026-09-09 rule. 1 ms is
+/// deliberately generous: real MMIO posts in nanoseconds, so anything at millisecond scale is
+/// already the wrong shape, and a threshold set at the hardware's own cost would report every
+/// trap and rank nothing.
+pub const SLOW_TRAP_US: u64 = 1_000;
 
 /// Is THIS thread currently inside a guest-trap dispatch?
 ///
@@ -258,7 +286,17 @@ pub fn census() -> String {
         if worst == 0 {
             "UNMEASURED (no guard has closed)".to_string()
         } else {
-            format!("{worst}us")
+            let site = WORST_TRAP_SITE.load(Ordering::Relaxed);
+            format!(
+                "{worst}us{} slow_traps(>{}us)={}",
+                if site == u64::MAX {
+                    " at=UNATTRIBUTED".to_string()
+                } else {
+                    format!(" at=bar{}+{:#x}", site >> 56, site & 0x00ff_ffff_ffff_ffff)
+                },
+                SLOW_TRAP_US,
+                SLOW_TRAPS.load(Ordering::Relaxed)
+            )
         },
     ) + &{
         let by = inline_by_reason();
@@ -291,6 +329,8 @@ pub fn census() -> String {
 /// ⊘ Not `Send`: a guard is a statement about the stack it sits on.
 #[derive(Debug)]
 pub struct TrapGuard {
+    /// `(bar << 56) | offset` of the trapped access, or `u64::MAX` if unattributed.
+    site: u64,
     start: std::time::Instant,
     _not_send: PhantomData<*mut ()>,
 }
@@ -299,10 +339,18 @@ impl TrapGuard {
     /// Mark this thread as executing a guest trap until the guard drops.
     #[must_use]
     pub fn enter() -> Self {
+        Self::enter_at(u64::MAX)
+    }
+
+    /// Enter a trap whose SITE is known — `site` is `(bar << 56) | offset`, or `u64::MAX`
+    /// for "unattributed". See [`WORST_TRAP_SITE`].
+    #[must_use]
+    pub fn enter_at(site: u64) -> Self {
         TRAP_DEPTH.with(|d| d.set(d.get() + 1));
         TRAP_ENTRIES.with(|c| c.set(c.get() + 1));
         Self {
             start: std::time::Instant::now(),
+            site,
             _not_send: PhantomData,
         }
     }
@@ -320,7 +368,13 @@ impl Drop for TrapGuard {
         });
         if depth == 0 {
             let us = u64::try_from(self.start.elapsed().as_micros()).unwrap_or(u64::MAX);
-            WORST_TRAP_US.fetch_max(us, Ordering::Relaxed);
+            if us >= SLOW_TRAP_US {
+                SLOW_TRAPS.fetch_add(1, Ordering::Relaxed);
+            }
+            // `fetch_max` returns the PREVIOUS value: we won iff it was smaller than ours.
+            if WORST_TRAP_US.fetch_max(us, Ordering::Relaxed) < us {
+                WORST_TRAP_SITE.store(self.site, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -643,6 +697,62 @@ mod inline_attribution {
         assert!(
             census().contains("INCOMPLETE"),
             "and the census must SAY the attribution is partial: {}",
+            census()
+        );
+    }
+}
+
+#[cfg(test)]
+mod the_mmio_rule_is_measured_not_asserted {
+    //! ★★★★★ **OWNER RULING 2026-09-09, as a metric.**
+    //!
+    //! > *"no inline blocking executions in mmio traps. just general rule. real gpu also
+    //! > never holds any mmio write for milliseconds right. like rpc mmio starts the
+    //! > operation, the block is for example a semaphore"*
+    //!
+    //! An MMIO write on real hardware POSTS: it retires and the vCPU walks away, and the
+    //! guest's wait is a separate explicit thing (a semaphore, an interrupt). A trap held for
+    //! milliseconds is therefore not merely slow, it is **the wrong shape** — it invents a
+    //! blocking store the hardware does not have.
+    //!
+    //! ⊘ [`worst_trap_us`] alone cannot drive that rule: a maximum is ONE event and is
+    //! dismissible as an outlier, and a bare number names no site. So the census carries the
+    //! worst hold's SITE and a COUNT of violations.
+    use super::*;
+
+    #[test]
+    fn the_census_names_the_site_of_the_worst_hold_and_counts_the_violations() {
+        {
+            let _g = TrapGuard::enter_at((1u64 << 56) | 0x8c);
+            std::thread::sleep(std::time::Duration::from_micros(SLOW_TRAP_US + 500));
+        }
+        let line = census();
+        assert!(line.contains("at=bar1+0x8c"), "must name the site: {line}");
+        assert!(
+            line.contains(&format!("slow_traps(>{}us)=", SLOW_TRAP_US)),
+            "must count violations, not only report an extreme: {line}"
+        );
+        assert!(
+            !line.contains("slow_traps(>1000us)=0"),
+            "a hold longer than the threshold must COUNT as one: {line}"
+        );
+    }
+
+    /// ⊘ An unattributed guard must say so rather than print a plausible `bar0+0x0`, which is
+    /// a real register and would send a reader to the wrong place.
+    #[test]
+    fn an_unattributed_trap_says_unattributed_and_never_invents_a_register() {
+        let site_line = {
+            let _g = TrapGuard::enter();
+            "entered"
+        };
+        assert_eq!(site_line, "entered");
+        // The census may name an earlier attributed site from another test in this binary;
+        // what must never happen is `u64::MAX` decoding to a real-looking register.
+        let decoded = format!("at=bar{}+{:#x}", u64::MAX >> 56, u64::MAX & 0x00ff_ffff_ffff_ffff);
+        assert!(
+            !census().contains(&decoded),
+            "the sentinel must not decode as a register: {}",
             census()
         );
     }

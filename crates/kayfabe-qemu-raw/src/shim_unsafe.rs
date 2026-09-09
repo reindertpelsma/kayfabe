@@ -1333,7 +1333,11 @@ pub unsafe extern "C" fn kayfabe_shim_regs_read(
         // say so instead of being invisible. **A gate that only watches the path you
         // already suspect cannot refute you.**
         Some(regs) => {
-            let _trap = kayfabe_util::trapwitness::TrapGuard::enter();
+            // ★ Attributed: the owner's 2026-09-09 rule is about MMIO traps in general, and a
+            // worst-hold with no site names nothing to fix.
+            let _trap = kayfabe_util::trapwitness::TrapGuard::enter_at(
+                (u64::from(bar) << 56) | (off & 0x00ff_ffff_ffff_ffff),
+            );
             regs.read(bar, off, size)
         }
     }
@@ -1375,7 +1379,9 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     // `kayfabe_util::trapwitness::worst_trap_us()`. A census that only counted violations
     // could not answer clause (b) — *"is the residue BOUNDED"* — and that is the half a
     // predicate about placement cannot reach on its own.
-    let _trap = kayfabe_util::trapwitness::TrapGuard::enter();
+    let _trap = kayfabe_util::trapwitness::TrapGuard::enter_at(
+        (u64::from(bar) << 56) | (off & 0x00ff_ffff_ffff_ffff),
+    );
     let o = KayfabeRegWrite::from_outcome(&regs.write(bar, off, size, val));
     if out.is_null() {
         return;
