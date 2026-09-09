@@ -329,8 +329,17 @@ Base: `origin/master` at `d0fea68b` (merge `80349168`), so the control arm here 
 the control w394 measured — it carries the BAR mirror merge (`281ba010`) and
 `BlockingSection` (`8a84ef9f`).
 
-`w395c_r3_on_1` (`(P)` / `4 of 4` / `PASS`, `worst_trap=1867028us at=bar0+0x110c00`,
-`GSPQUEUE queued=491 … commands=493 worst_hold_us=1043`), the first census ever printed:
+| boot | arm | `worst_trap` | `at=` | `slow_traps` | client | `GSPQUEUE` |
+|---|---|---|---|---|---|---|
+| `w395c_r3_on_1`  | on  | 1 867 028 µs | `bar0+0x110c00` | 87 | (P) 4/4 PASS | `commands=493 worst_hold_us=1043` |
+| `w395c_r3_off_1` | off | 1 752 018 µs | `bar0+0x110c00` | 88 | (P) 4/4 PASS | — |
+| `w395c_r3_on_2`  | on  | 1 845 618 µs | `bar0+0x110c00` | 81 | (P) 4/4 PASS | `commands=493 worst_hold_us=958` |
+| `w395c_r3_off_2` | off | 2 309 720 µs | `bar0+0x110c00` | 80 | (P) 4/4 PASS | — |
+
+(`Xid=0 rpcRecvPoll=0 RmInitAdapter_failed=0` on all four; the control's 2.31 s is the memslot
+install's own per-boot variance — §6.2 — and is the largest value in the whole campaign.)
+
+`w395c_r3_on_1`, the first census ever printed:
 
 ```
 VCPU-BLOCKING [495183 × memslot install — materialize_pending (KVM requires it under the BQL with the vCPUs stopped) (ALLOWLISTED)]
@@ -350,7 +359,18 @@ conditional on a pending grant; the reap on a released pin or a disposal turn). 
 from round 3 as a true statement: the row set — five reasons, one allowlisted — and the
 `2 × GSP bind` row, which was already an event count.
 
-[TO FILL — round 4 ledger + census]
+★ **What round 3's census DOES establish, per-event rows only:** on the control the row
+`[493 × GSP command ring serviced INLINE in the QUEUE_HEAD store (KAYFABE_GSP_SUBMIT_ASYNC=off,
+the control) ⊘ NOT ALLOWLISTED]` prints on both `off` boots, and is **absent** on both `on`
+boots — 493 is exactly `GSPQUEUE commands=493` on the armed arm. The violation the ruling names
+is counted by name on the control and gone on the default, and `[2 × GSP bind in the MAILBOX1
+store …]` is the declared residue of this register family on both arms.
+
+⊘ **Round 4 (the event-counting census) built but did not boot**: the harness's freshness check
+compared the binary's mtime against a log that was still being appended to, read "not rebuilt",
+and refused — a false negative from my own instrument, in the campaign that names that class.
+The coordinator bounded the run at that point (budget); the perf boots below ran on the
+round-4 binary and carry the corrected census as a by-product.
 
 ### §6.5 Perf (`gpu_bench`) — reported as RANGES, n=2 per arm
 
