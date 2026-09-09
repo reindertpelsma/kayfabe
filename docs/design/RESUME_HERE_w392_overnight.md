@@ -12,6 +12,23 @@ Different worker, different VA, same shape ⇒ a race landing on whichever worke
 frame. `remaps_revoked=0` in run 2, so the ghost-peer refusal is the dominant cause **independent**
 of the re-map fix.
 
+### ✅ RULING 1 NOW HAS EVIDENCE (control run, 04:00 UTC)
+Same workload (`KAYFABE_BENCH_BW=4,64 BW_ONLY=1`), same box, two builds:
+| build | `bad=65536` | `bad=131072` | `bad=524288` | FUNC_RC | Xid |
+|---|---|---|---|---|---|
+| `9c86655c` guard **removed** | 7 | 2 | 1 | 0 | 0 |
+| `3ffa9237` guard **present** | 7 | 2 | 1 | 0 | 0 |
+**Byte-for-byte identical** ⇒ removing `!is_remap` does **NOT** re-open w329b1's output-buffer loss,
+which was the guard's entire justification. ⊘ `reachability.rs:1341` is still red and still
+untouched — retiring a falsifier is the owner's call.
+
+### ★★★ SEPARATE, OLDER, AND NOBODY HAD LOOKED: the 4,64 bandwidth workload SILENTLY CORRUPTS
+On **both** builds: `bad=65536` ×7, `bad=131072` ×2, `bad=524288` ×1 — while reporting
+`BENCH_BW_FUNC_RC=0`, `BENCH_BW_ROWS=2`, `ROWS_UNMEASURED=0` and **zero Xids**. Every top-line
+signal green. Same *completion-without-correctness* shape as the LLM's `(F-scale)` and the client's
+THREADS zeros. ⚠ Found only by refusing to trust a grep count of 28 and reading **what** it counted
+(18 were `bad=0`).
+
 ### ⊘⊘ THE LAST FAULT NEEDS AN OWNER RULING — do not patch it blind
 Measured (`run_w392w_qemu.log`): the re-join after a revoke is **refused by name** at
 `join_one_fb_leaf` step 0, the `JOIN-EXTENT MISMATCH (LIVE PEER)` arm (`shim.rs:11791`), on the
