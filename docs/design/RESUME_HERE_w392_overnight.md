@@ -112,6 +112,27 @@ W392_MINMM_SUM=64                        ★ the small compute path is BIT-CORRE
 W392_XIDS=17/17/17  (before / after-4x4 / after-gpu)
 W392_OUTCOME=(Z) the GPU run produced 0 tokens — it did not generate.
 ```
+★★★★★ **CAUSE FOUND, AND IT IS NOT KAYFABE: THE GUEST HAD 2 GiB OF RAM.**
+```
+LLM_EXC=RuntimeError: CUDA error: out of memory     (at weight shard 135 of 290)
+NVRM: Out of memory [NV_ERR_NO_MEMORY] (0x51) from _memdescAllocInternal @ mem_desc.c
+NVRM: Out of memory [NV_ERR_NO_MEMORY] (0x51) from rmStatus @ system_mem.c:356
+boot_nvkvm.sh:30   NVKVM_RAM_MB=${NVKVM_RAM_MB:-2048}     ⇒ -m 2048
+host: 49 GiB total, 47 GiB available
+```
+`system_mem.c` is **system** memory — the guest's RM could not allocate **guest RAM**, not VRAM.
+Qwen2-0.5B's weights alone are ~2 GB and load shard-by-shard into guest RAM before reaching the
+GPU; it dies at 135/290, almost exactly halfway. ⇒ **raise `NVKVM_RAM_MB`** (it drives BOTH `-m`
+and the memfd `size=`, which QEMU requires to match exactly). Re-run underway at 16384.
+⊘ **This is a harness configuration limit, NOT a kayfabe defect**, and it means the campaign's
+"LLM corruption" story needs re-checking on a guest that is not starved.
+
+★ **Two dead ends on the way, both mine, both the same class:** I read `12 × Rm(NoMemory)` and
+`112 × 0x51` out of the qemu log and built a whole theory on the C's *"0x51 on a FIXED map means
+already-mapped"* semantic. **Every one of those hits was the same warning TEMPLATE** — the join
+refusal message literally contains *"⚠ If this is `Rm(NoMemory)` it is status 0x51…"*. The real
+refusals were 12 × `SystemDataPlane` on kernel channels, correct by design. ⇒ **grep counts of a
+string that appears in a caveat are not counts of an event.**
 ★ **`MINMM_SUM=64` means basic GPU compute through kayfabe is sound on this build.**
 ★★ **`17/17/17`** — seventeen Xids existed **before** the LLM started and **neither** the 4×4 nor
 the LLM added one. ⇒ the LLM is **not faulting**; it fails earlier with `rc=1`. That is a different
