@@ -757,6 +757,17 @@ impl Drop for PlanReservation {
 
 /// Everything one reservation's execute phase created, so a failure anywhere inside it
 /// drops the whole lot before a single field has been recorded anywhere.
+/// ★ w393 — what backs a reservation window at install time.
+#[derive(Debug, Clone, Copy)]
+enum WindowBacking<'fd> {
+    /// The plane mints the backing: anonymous, or a `SharedRam` when `shareable_ram`.
+    /// Today's behaviour for every existing caller, byte for byte.
+    Minted,
+    /// ★★★★★ An armed device node the isolate crossed — placed whole by
+    /// [`GuestWindow::place_device_view`]; see [`QemuMachine::install_device_window`].
+    DeviceView(std::os::fd::BorrowedFd<'fd>),
+}
+
 #[derive(Debug)]
 struct Installed {
     window: Arc<GuestWindow>,
@@ -1164,7 +1175,54 @@ impl QemuMachine {
         spec: &WindowSpec,
         what: &'static str,
     ) -> Result<RamRegionId, VmmError> {
-        self.install_window_inner(spec, None, what).map(|(r, _)| r)
+        self.install_window_inner(spec, None, WindowBacking::Minted, what)
+            .map(|(r, _)| r)
+    }
+
+    /// ★★★★★ **w393 — install a passthrough window over `[gpa, gpa+len)` whose backing is
+    /// an ARMED DEVICE NODE the isolate crossed** (`kayfabe_isolate::DeviceView`): the
+    /// guest-side half of `DEVICE_LOCAL | HOST_VISIBLE`. The guest's memslot resolves to
+    /// the card's own pages; a guest CPU store into it takes **no VM exit** and lands in
+    /// memory the host engine reads natively. No `SparseFb` page, no join, no carry.
+    ///
+    /// Everything about the slot is [`QemuMachine::install_ram_window`]'s: the BAR must be
+    /// one the hypervisor does not back (`bar_is_unbacked_reservation`, which the QOM
+    /// glue answers *yes* for BAR1 only under its `bar1-passthrough` property), the range
+    /// must be page-aligned and inside it, and the plane's own reservations may not
+    /// overlap. What differs is the backing placed inside the window:
+    /// [`GuestWindow::place_device_view`] instead of a minted `SharedRam`, so this window
+    /// has no `ram` and [`QemuVmm::export_ram`] cannot name it — the pages are not ours to
+    /// export twice.
+    ///
+    /// `fd` is borrowed for the duration of the `mmap` only. The mapping outlives the
+    /// descriptor (the VMA holds the `struct file`), so the caller may close it on return
+    /// — and under decision (b) it should, to shorten the interval in which this process
+    /// holds a descriptor with an RM escape handler behind it. `len` must be the isolate's
+    /// reported page-rounded `mmap_len`, or the driver refuses the `mmap` with `ENXIO`.
+    ///
+    /// ⚠ **No production caller on this branch.** The mirror that walks the guest's BAR1
+    /// page table and drives this verb is the remaining work, and the crossing it consumes
+    /// waits on the owner's decision-(b) ruling. It exists so the plane's half is real and
+    /// checkable before the policy question is settled.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_ram_window`], plus whatever the driver's `mmap` refuses.
+    ///
+    /// # Panics
+    /// If called with any ranked lock or any leaf lock held (R1).
+    pub fn install_device_window(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+    ) -> Result<RamRegionId, VmmError> {
+        self.install_window_inner(
+            &WindowSpec::passthrough(gpa, len),
+            None,
+            WindowBacking::DeviceView(fd),
+            "installing a device-view reservation",
+        )
+        .map(|(r, _)| r)
     }
 
     /// The shared body. `read_native` carries the write-trap sub-range that needs a
@@ -1173,6 +1231,7 @@ impl QemuMachine {
         &self,
         spec: &WindowSpec,
         read_native: Option<&Range<u64>>,
+        backing: WindowBacking<'_>,
         what: &'static str,
     ) -> Result<(RamRegionId, SlotId), VmmError> {
         let p = &self.plane;
@@ -1242,7 +1301,17 @@ impl QemuMachine {
                 p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                 host_refused("a reservation mapping", &e)
             })?);
-            let ram = if p.shareable_ram {
+            // ★ w393 — a device view is placed whole and mints nothing: the pages are the
+            // card's, and `shareable_ram` is a statement about guest RAM we author.
+            if let WindowBacking::DeviceView(fd) = backing {
+                window
+                    .place_device_view(HostOffset::ZERO, len, fd)
+                    .map_err(|e| {
+                        p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                        host_refused("placing the device view", &e)
+                    })?;
+            }
+            let ram = if matches!(backing, WindowBacking::Minted) && p.shareable_ram {
                 let r = Arc::new(SharedRam::create(len).map_err(|e| {
                     p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                     host_refused("a shareable guest-RAM backing", &e)
@@ -2497,6 +2566,7 @@ impl Vmm for QemuVmm {
         let (region, slot) = machine.install_window_inner(
             &spec,
             write_trap.as_ref(),
+            WindowBacking::Minted,
             "map_read_native (a read-native reservation)",
         )?;
         // The overlay's contents come from the named backing; a read-native window whose

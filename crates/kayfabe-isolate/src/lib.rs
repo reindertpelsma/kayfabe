@@ -621,6 +621,66 @@ pub struct ExportedBacking {
     pub prot: Prot,
 }
 
+/// ★★★★★ **w393 — a CPU VIEW of the host card's own memory, crossed to the VMM as an
+/// ARMED DEVICE NODE** — [`RmBackend::export_device_view`]'s answer.
+///
+/// # What this is, and what it is deliberately NOT
+///
+/// The owner's target for BAR1 (2026-09-09) is the Vulkan pair
+/// **`DEVICE_LOCAL | HOST_VISIBLE`**: one real allocation on the card, mapped twice — into
+/// the guest's BAR1 guest-physical range so guest CPU stores land in it with **no VM exit**,
+/// and into the host GPU's address space so the engine reads the **same bytes** with no
+/// join, alias, publish or carry step. The GPU half already exists
+/// ([`RmBackend::map_gpu_va`] over a vidmem object). This type is the **host-visible half
+/// crossing the isolate ⇄ VMM boundary**: the isolate arms a freshly opened per-GPU node
+/// with `NV_ESC_RM_MAP_MEMORY` (`0x4E`) for `[offset, offset+len)` of `memory`, and the
+/// node — not the object, not the control descriptor — rides the reply.
+///
+/// ⊘ **It is not [`ExportSource::HostDeviceMemory`] succeeding.** That request asks for the
+/// card's pages *as memory* (a `memfd`-shaped thing the VMM may place anywhere) and stays
+/// refused by name: a copy is not a mapping. This verb hands over a **mapping context**,
+/// which the VMM `mmap`s exactly once at file offset zero (`nv-mmap.c:533-536`) and then
+/// closes — the VMA keeps the file alive; the descriptor does not need to.
+///
+/// # ★ The policy fact a reader must carry (decision (b), `isolate_vmm_fd_crossing.md` §12)
+///
+/// What crosses is a `/dev/nvidia<N>` descriptor, i.e. a character device with an RM
+/// escape handler behind it. The property that keeps decision (b) honest is **structural
+/// on the VMM side, not a promise**: the VMM issues no escape on it, only `mmap`, and
+/// `secInfo.privLevel` is recomputed **per escape** from the caller
+/// (`ogkm-580: escape.c:304`), so a process that never escapes never gains anything. The
+/// shipped sibling `nvkvm-pv` runs exactly this shape
+/// (`src/qemu/nvkvm_isolate_handlers.c:3618` → `nvkvm_mmap_host.c:1269`). ⚠ Whether the
+/// VMM may hold such a descriptor at all — even transiently, even without escaping — is the
+/// owner's ruling to make; this verb is the mechanism that ruling would switch on. It is
+/// **not** reachable from any production path on this branch.
+///
+/// # ⊘ Readings, not measurements (`claim_ledger.md`)
+///
+/// The framebuffer arm of `nvidia_mmap_helper` gates on `mmap_context->valid`,
+/// `vm_pgoff == 0`, the GPU's state and `safe_to_mmap`, and sets
+/// `VM_IO | VM_PFNMAP | VM_DONTEXPAND` (`ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`).
+/// **No check names the calling process**, and nothing on that path clears `valid` after a
+/// successful `mmap` — it is freed at file close (`nv.c:1054`). Both are readings of the
+/// source at those lines; neither has been driven cross-process on hardware from this
+/// tree. `rmladder --bar1-crossing` is the probe that would turn them into measurements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceView {
+    /// Adapter-scoped opaque index naming the **armed node** the adapter adopted (as a
+    /// `CharDevice`, established from the kernel — never claimed by the peer). Minted by the
+    /// parent, never carried on the wire, exactly as [`ExportedBacking::token`].
+    pub token: u64,
+    /// The RM object the view is over — the same handle the caller named. Echoed so the
+    /// value is self-describing when it reaches an installer that never saw the request.
+    pub memory: HostHandle,
+    /// Byte offset **within the object** the view starts at, as registered.
+    pub offset: u64,
+    /// ★ The `mmap` length the driver will accept — the registered length rounded up to a
+    /// host page (`osapi.c:1976-1986` rounds; `nv-mmap.c:560-565` compares against the
+    /// rounded size). A VMM that `mmap`s the unrounded length is refused with `ENXIO`.
+    pub mmap_len: u64,
+}
+
 /// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
 ///
 /// Handed to [`RmBackend::alloc_channel`] so the adapter can honour a declaration the
@@ -1161,6 +1221,31 @@ pub trait RmBackend: Send + Sync {
     /// [`RmError::NotExportableAsMemory`] for the device class; [`RmError::NoMemory`] if
     /// the host would not mint the backing; whatever the transport refuses with.
     fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError>;
+
+    /// ★★★★★ **w393 — arm a CPU view of `[offset, offset+len)` of a host vidmem object and
+    /// hand the ARMED NODE up to the VMM**, so the VMM can `mmap` it and install a guest
+    /// memslot over it: the host-visible half of `DEVICE_LOCAL | HOST_VISIBLE`. See
+    /// [`DeviceView`] for what crosses, what does not, and the policy ruling it waits on.
+    ///
+    /// ⊘ **Defaulted to a refusal by name**, and the default is a statement rather than a
+    /// convenience: every backend that has not been taught this crossing — the mocks, the
+    /// loopback fixture — must answer *"not crossable here"* and never *"here is some other
+    /// descriptor"*. The real backend and the wire proxy override it.
+    ///
+    /// # Errors
+    /// [`RmError::NotExportableAsMemory`] from a backend that cannot cross a device view
+    /// (the default); [`RmError::BadHandle`] for an object this connection does not own;
+    /// whatever `NV_ESC_RM_MAP_MEMORY` refuses with (a vidmem object that is not
+    /// CPU-mappable, a host BAR1 that has no room for the view).
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+    ) -> Result<DeviceView, RmError> {
+        let _ = (offset, len);
+        Err(RmError::NotExportableAsMemory { memory })
+    }
 
     /// ★★★★★ **ONE memory for a framebuffer leaf** — mint a fabricated backing, map it
     /// here, describe it to RM, place it at `at`, and hand the **same pages** up to the VMM
@@ -2949,6 +3034,37 @@ impl Worker {
             });
         }
         self.backend.export_backing(want)
+    }
+
+    /// ★★★★★ **w393 — ask the isolate to arm a CPU view of one of its vidmem objects and
+    /// hand the armed node up** ([`RmBackend::export_device_view`], [`DeviceView`]).
+    ///
+    /// Beside [`Worker::export_backing`] and with the same two gates, for the same reasons:
+    /// R1 (a syscall in another process, reached over a socket) and the foreign-handle gate
+    /// (`l1_concurrency.md` §12.26 — a handle from another isolate's namespace is live and
+    /// different here, and a view armed over *another* isolate's object would be exactly the
+    /// `#14` breach the isolate exists to prevent).
+    ///
+    /// # Errors
+    /// [`RmError::ForeignHandle`] before anything runs; otherwise whatever
+    /// [`RmBackend::export_device_view`] refuses with.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1).
+    pub fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+    ) -> Result<DeviceView, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting a host device view to the VMM");
+        if !memory.belongs_to(self.isolate) {
+            return Err(RmError::ForeignHandle {
+                handle: memory,
+                worker_isolate: self.isolate,
+            });
+        }
+        self.backend.export_device_view(memory, offset, len)
     }
 
     /// ★★★★★ Carry the VMM's guest-RAM grant to this worker's isolate.

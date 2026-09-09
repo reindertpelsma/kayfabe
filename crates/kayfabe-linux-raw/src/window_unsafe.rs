@@ -70,7 +70,7 @@ use crate::mapping_unsafe::Backing;
 use crate::page_size::HostPageSize;
 use core::ptr::NonNull;
 use kayfabe_util::lockwitness;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, BorrowedFd};
 
 /// A guest-physical window's host backing: an address range that is mapped from
 /// construction until `Drop`, into which page-granular backings are placed and restored.
@@ -213,6 +213,65 @@ impl GuestWindow {
             Backing::DeviceFile { .. } => return Err(RawError::DeviceBackingNotPlaceable),
         };
         self.fixed_map(offset, len, fd, file_offset, share_flags, "placement")
+    }
+
+    /// ★★★★★ **w393 — place an ARMED DEVICE NODE over `[offset, offset + len)` of the
+    /// window**: the guest-side half of `DEVICE_LOCAL | HOST_VISIBLE`.
+    ///
+    /// # Why this is a second door and not a fourth arm of [`GuestWindow::place`]
+    ///
+    /// [`GuestWindow::place`] refuses [`Backing::DeviceFile`] **by variant**
+    /// ([`RawError::DeviceBackingNotPlaceable`]), and its reason is worth keeping true: a
+    /// window placement is `MAP_FIXED` into a range a guest memslot names, so a device
+    /// backing placed there is *hardware in the guest's physical address space*. That is
+    /// exactly the thing the owner's BAR1 target asks for (2026-09-09: *"bar1/2 should not
+    /// have traps and just passthrough"* — the Vulkan pair `DEVICE_LOCAL | HOST_VISIBLE`),
+    /// and exactly the thing every other caller of `place` must never do by accident. A
+    /// separate verb keeps the refusal where it is and makes the one legitimate use a
+    /// **named** act at its call site rather than a matched arm anyone can reach.
+    ///
+    /// The `RawError::DeviceBackingNotPlaceable` doc says: *"If a legitimate need for a
+    /// device mapping inside a window ever appears, it is a design change with an owner
+    /// ruling, not a matched arm."* This is that design change, and the ruling it needs is
+    /// decision (b)'s scope (`isolate_vmm_fd_crossing.md` §12): whether the VMM may hold —
+    /// even transiently, never escaping on it — the `/dev/nvidia<N>` node whose `mmap`
+    /// context the isolate armed. ⚠ **Not reachable from any production path until that
+    /// ruling lands**; the only caller is the installer verb built for it.
+    ///
+    /// # What the driver decides, and what it does not
+    ///
+    /// - File offset is **zero**, always: `nvidia_mmap_helper` refuses any other `vm_pgoff`
+    ///   (`ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`), and *what* is mapped was fixed by
+    ///   the `NV_ESC_RM_MAP_MEMORY` that armed the node. So there is no offset parameter.
+    /// - `len` must equal the driver's page-rounded registered size or the `mmap` is refused
+    ///   with `ENXIO` (`nv-mmap.c:560-565`); the isolate reports that rounded length beside
+    ///   the node for this reason.
+    /// - The VMA comes back `VM_IO | VM_PFNMAP | VM_DONTEXPAND` (`nv-mmap.c:641`) — the same
+    ///   shape a VFIO BAR mapping has, which is what a hypervisor memslot over it relies on.
+    ///   ⊘ The **memory type** the guest sees through such a slot is the hypervisor's
+    ///   decision for a non-RAM pfn, not the driver's write-combining — a measurement this
+    ///   crate cannot make (see [`Backing::attainable_cache_policy`]'s `None`).
+    ///
+    /// # Errors
+    /// As [`GuestWindow::place`], plus whatever the driver's `mmap` handler refuses with.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn place_device_view(
+        &self,
+        offset: HostOffset,
+        len: u64,
+        fd: BorrowedFd<'_>,
+    ) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("mmap MAP_FIXED (placing an armed device node)");
+        self.fixed_map(
+            offset,
+            len,
+            fd.as_raw_fd(),
+            0,
+            libc::MAP_SHARED,
+            "device view",
+        )
     }
 
     /// ★★ Restore `[offset, offset + len)` to anonymous zero-fill — the **unmap** of the

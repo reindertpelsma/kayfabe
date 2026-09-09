@@ -1335,6 +1335,493 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// memories. This rung measures, on real hardware, which object can carry the missing view
 /// — and it is deliberately a **host-side** ladder rung rather than a guest boot, because
 /// every question it asks is about RM and none of them is about the guest.
+/// ★★★★★ **w393 — THE BAR1 CROSSING, measured on bare metal: an ARMED DEVICE NODE crosses
+/// a process boundary, the other process `mmap`s it, and the two processes' views of one
+/// vidmem object are ONE MEMORY.** Then, if `/dev/kvm` is here, a real vCPU stores through a
+/// memslot placed over a third view and the store lands on the card with NO exit.
+///
+/// This is the owner's `DEVICE_LOCAL | HOST_VISIBLE` target reduced to the two facts the
+/// design rests on and nothing in this tree had measured:
+///
+/// 1. `nvidia_mmap_helper`'s framebuffer arm names no calling process (a READING,
+///    `ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`) — so a node armed by one process can
+///    be `mmap`ed by another. **Leg A** turns that reading into a measurement.
+/// 2. A hypervisor memslot over a `VM_IO | VM_PFNMAP` mapping serves a guest store natively
+///    (the VFIO shape; `nvkvm-pv` ships it at `nvkvm_mmap_host.c:1203`). **Leg B** measures
+///    it with this tree's own raw KVM harness: the ONLY exit the guest takes is its
+///    trapped signal store, never the data store, and the data is then read back through a
+///    view the guest never had.
+///
+/// ⊘ What it does NOT measure, said here: that the **engine** reads those bytes. The GPU
+/// half of the pair is `map_gpu_va` over the same object, which R25/R30 already exercise;
+/// wiring a copy-engine readback into this rung is the next step, not this one.
+///
+/// The child is this same binary in `--bar1-crossing-child`, given one end of a socketpair
+/// as its stdin. The node arrives as `SCM_RIGHTS` ancillary data on a length-prefixed frame
+/// (`fdcross`), is kind-checked against the KERNEL (`require_kind`, never the sender's word),
+/// `mmap`ed once at file offset zero, written, fenced and dropped. The parent closes its own
+/// copy of that node the moment it is sent, so the child's mapping is the only one.
+fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    use kayfabe_isolate_host::write_frame_with_fds;
+    use kayfabe_linux_raw::{
+        Backing, CachePolicy, GuestWindow, HostOffset, HostPageSize, Kvm, KvmMemslot, KvmVcpu,
+        VcpuExit, VolatileRegion, release_fence,
+    };
+    use std::io::Read;
+    use std::os::fd::AsFd;
+
+    const LEN: u64 = 0x1_0000;
+    const WORDS: u32 = 64;
+    const PATTERN: u32 = 0xba51_0000;
+    const KVM_PATTERN: u32 = 0xc0de_0001;
+
+    println!(
+        "==    W393 bar1-crossing = gpu {gpu}, euid {}, object {LEN:#x} bytes, {WORDS} words",
+        kayfabe_linux_raw::geteuid()
+    );
+    let page = HostPageSize::query();
+
+    // ---- 0. The object. Device-local, this connection's own.
+    let mem = match rm.alloc_vidmem(LEN) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  W393 vidmem        = {e:?}");
+            return false;
+        }
+    };
+
+    // ---- 1. THREE armed nodes on ONE object: A for the child, B for this process's
+    // readback, C for the KVM leg. Each is a fresh `/dev/nvidia<N>` carrying its own
+    // one-shot context (`nv-usermap.c:53-57`); the object is mapped once per node.
+    let arm = |rm: &mut HostRmBackend, what: &str| match rm.export_device_view(mem, 0, LEN) {
+        Ok(v) => {
+            println!(
+                "ok    W393 arm {what}       = node token {} mmap_len {:#x} (NV_ESC_RM_MAP_MEMORY \
+                 accepted; the node is NOT mmapped here)",
+                v.token, v.mmap_len
+            );
+            Some(v)
+        }
+        Err(e) => {
+            println!(
+                "FAIL  W393 arm {what}       = {e:?} ⊘ the premise — a CPU view of vidmem — \
+                 refused; nothing below can run"
+            );
+            None
+        }
+    };
+    let Some(va) = arm(rm, "A") else { return false };
+    let Some(vb) = arm(rm, "B") else { return false };
+    let (fd_a, fd_b) = match (rm.exports().lend(va.token), rm.exports().lend(vb.token)) {
+        (Ok(a), Ok(b)) => (a, b),
+        (a, b) => {
+            println!("FAIL  W393 lend          = A {:?} B {:?}", a.err(), b.err());
+            return false;
+        }
+    };
+
+    // ---- 2. This process's own view, through B. Write-combining is the right REQUIREMENT
+    // for a framebuffer object (`map_cpu`'s own docs); it is a requirement this layer
+    // cannot verify, which is why it is a parameter there and a stated choice here.
+    let view_b = match VolatileRegion::map(
+        Backing::DeviceFile { fd: fd_b.as_fd() },
+        vb.mmap_len,
+        CachePolicy::WriteCombining,
+        page,
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("FAIL  W393 mmap B        = {e} (this process, its own armed node)");
+            return false;
+        }
+    };
+    // The negative control's known state: zero every word through B and fence.
+    for i in 0..WORDS {
+        if view_b
+            .store_u32(HostOffset::new(u64::from(i) * 4), 0)
+            .is_err()
+        {
+            println!("FAIL  W393 prefill B     = store refused at word {i}");
+            return false;
+        }
+    }
+    release_fence();
+    let before: Vec<u32> = (0..WORDS)
+        .map(|i| {
+            view_b
+                .load_u32(HostOffset::new(u64::from(i) * 4))
+                .unwrap_or(u32::MAX)
+        })
+        .collect();
+    let before_nonzero = before.iter().filter(|w| **w != 0).count();
+    println!(
+        "ok    W393 control       = {WORDS} words zeroed through B, {before_nonzero} read back \
+         non-zero (must be 0 — a view that does not hold its own stores decides nothing)"
+    );
+    if before_nonzero != 0 {
+        return false;
+    }
+
+    // ---- 3. LEG A — the crossing. Spawn the child with one socket end as its stdin, send
+    // node A on a frame, close our copy, wait.
+    let Ok((ours, theirs)) = std::os::unix::net::UnixStream::pair() else {
+        println!("FAIL  W393 socketpair    = refused");
+        return false;
+    };
+    let Ok(exe) = std::env::current_exe() else {
+        println!("FAIL  W393 current_exe   = unknown");
+        return false;
+    };
+    let mut child = match std::process::Command::new(exe)
+        .arg("--bar1-crossing-child")
+        .stdin(std::process::Stdio::from(std::os::fd::OwnedFd::from(
+            theirs,
+        )))
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            println!("FAIL  W393 spawn         = {e}");
+            return false;
+        }
+    };
+    let mut body = Vec::with_capacity(16);
+    body.extend_from_slice(&va.mmap_len.to_le_bytes());
+    body.extend_from_slice(&PATTERN.to_le_bytes());
+    body.extend_from_slice(&WORDS.to_le_bytes());
+    if let Err(e) = write_frame_with_fds(ours.as_fd(), &body, &[fd_a.as_fd()]) {
+        println!("FAIL  W393 send A        = {e:?}");
+        let _ = child.kill();
+        return false;
+    }
+    // ★ Our copy of A goes NOW. From here the child's descriptor is the only one, so a
+    // mapping the child makes is a mapping this process could not have made for it.
+    drop(fd_a);
+    drop(ours);
+    let mut child_out = String::new();
+    if let Some(mut so) = child.stdout.take() {
+        let _ = so.read_to_string(&mut child_out);
+    }
+    let status = child.wait().map(|s| s.code()).unwrap_or(None);
+    for line in child_out.lines() {
+        println!("      W393 child         | {line}");
+    }
+    let child_ok = status == Some(0) && child_out.contains("BAR1X-CHILD wrote=");
+    println!(
+        "{}  W393 leg A child    = exit {status:?} — {}",
+        if child_ok { "ok  " } else { "FAIL" },
+        if child_ok {
+            "the OTHER process mmapped the node we armed and stored through it"
+        } else {
+            "the child did not report a completed write; read its lines above"
+        }
+    );
+    if !child_ok {
+        return false;
+    }
+
+    // ---- 4. Read back through B, and compare against what the child says it wrote.
+    release_fence();
+    let mut agree = 0u32;
+    let mut first_bad: Option<(u32, u32, u32)> = None;
+    for i in 0..WORDS {
+        let want = PATTERN ^ i;
+        let got = view_b
+            .load_u32(HostOffset::new(u64::from(i) * 4))
+            .unwrap_or(u32::MAX);
+        if got == want {
+            agree += 1;
+        } else if first_bad.is_none() {
+            first_bad = Some((i, want, got));
+        }
+    }
+    let leg_a = agree == WORDS;
+    match first_bad {
+        None => println!(
+            "★★★★★ W393 LEG A        = ONE MEMORY: all {WORDS} words the child stored through \
+             node A read back through node B in THIS process. ⇒ an armed device node CROSSES \
+             a process boundary and the framebuffer mmap path names no caller — the reading \
+             of nv-mmap.c:505-641 is now a measurement."
+        ),
+        Some((i, want, got)) => println!(
+            "FAIL  W393 LEG A        = {agree}/{WORDS} words agree; first disagreement at word \
+             {i}: wanted {want:#010x}, read {got:#010x} through B. ⊘ Either the child's mapping \
+             was not this object, or the two views are not coherent — read the child's lines."
+        ),
+    }
+    if !leg_a {
+        return false;
+    }
+
+    // ---- 5. LEG B — a REAL GUEST STORE through a memslot over a device view. Skipped BY
+    // NAME without /dev/kvm; never silently.
+    let kvm = match Kvm::open() {
+        Ok(k) => k,
+        Err(e) => {
+            println!(
+                "⊘     W393 LEG B        = SKIPPED: /dev/kvm is not usable here ({e}). Leg A \
+                 stands on its own; leg B needs a KVM-capable box (vast: vms_enabled=true + \
+                 the KVM template)."
+            );
+            return true;
+        }
+    };
+    let Some(vc) = arm(rm, "C") else { return false };
+    let Ok(fd_c) = rm.exports().lend(vc.token) else {
+        println!("FAIL  W393 lend C        = refused");
+        return false;
+    };
+    // The window a memslot needs, with the device view placed WHOLE inside it — the exact
+    // verb `QemuMachine::install_device_window` uses, one crate up.
+    let win = match GuestWindow::create(vc.mmap_len, page) {
+        Ok(w) => Arc::new(w),
+        Err(e) => {
+            println!("FAIL  W393 window        = {e}");
+            return false;
+        }
+    };
+    if let Err(e) = win.place_device_view(HostOffset::ZERO, vc.mmap_len, fd_c.as_fd()) {
+        println!("FAIL  W393 place C       = {e} (GuestWindow::place_device_view)");
+        return false;
+    }
+    drop(fd_c);
+    let vm = match kvm.create_vm() {
+        Ok(v) => Arc::new(v),
+        Err(e) => {
+            println!("FAIL  W393 kvm vm        = {e}");
+            return false;
+        }
+    };
+    let _ = vm.set_tss_addr_if_supported();
+    // Guest layout: code page at `page`, the device view at DATA_GPA, a trap address no
+    // slot covers as the guest's "done" signal.
+    let code_gpa = page.bytes();
+    let data_gpa: u64 = 0x1000_0000;
+    let trap_gpa: u64 = 0x8000_0000;
+    //   0: C7 05 <data> <value>   mov dword [data], value   ; the STORE under test
+    //  10: A1 <data>              mov eax, [data]           ; a LOAD from the slot
+    //  15: 89 03                  mov [ebx], eax            ; the trapped signal store
+    //  17: F4                     hlt
+    let d = u32::try_from(data_gpa).expect("below 4 GiB").to_le_bytes();
+    let v = KVM_PATTERN.to_le_bytes();
+    let image: [u8; 18] = [
+        0xC7, 0x05, d[0], d[1], d[2], d[3], v[0], v[1], v[2], v[3], // mov [data], value
+        0xA1, d[0], d[1], d[2], d[3], // mov eax, [data]
+        0x89, 0x03, // mov [ebx], eax
+        0xF4, // hlt
+    ];
+    let code_win = match GuestWindow::create(page.bytes(), page) {
+        Ok(w) => Arc::new(w),
+        Err(e) => {
+            println!("FAIL  W393 code window   = {e}");
+            return false;
+        }
+    };
+    if code_win.write_from(HostOffset::ZERO, &image).is_err() {
+        println!("FAIL  W393 code fill     = refused");
+        return false;
+    }
+    let _code_slot = match KvmMemslot::install(
+        Arc::clone(&vm),
+        0,
+        code_gpa,
+        Arc::clone(&code_win),
+        0,
+        page.bytes(),
+        false,
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("FAIL  W393 code slot     = {e}");
+            return false;
+        }
+    };
+    let _data_slot = match KvmMemslot::install(
+        Arc::clone(&vm),
+        1,
+        data_gpa,
+        Arc::clone(&win),
+        0,
+        vc.mmap_len,
+        false,
+    ) {
+        Ok(s) => {
+            println!(
+                "ok    W393 device slot   = KVM_SET_USER_MEMORY_REGION accepted a VM_PFNMAP \
+                 device view as memslot 1 at {data_gpa:#x} ({:#x} bytes)",
+                vc.mmap_len
+            );
+            s
+        }
+        Err(e) => {
+            println!(
+                "FAIL  W393 device slot   = {e} ⊘ the kernel refused a memslot over the device \
+                 mapping — THAT is a finding: KVM will not take this VMA as guest memory"
+            );
+            return false;
+        }
+    };
+    let mut vcpu = match KvmVcpu::create(&kvm, Arc::clone(&vm), 0) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("FAIL  W393 vcpu          = {e}");
+            return false;
+        }
+    };
+    if let Err(e) = vcpu.enter_flat_protected_mode(code_gpa, trap_gpa) {
+        println!("FAIL  W393 vcpu mode     = {e}");
+        return false;
+    }
+    // ★ THE ACCEPTANCE TEST, criterion 1: the first exit must be the SIGNAL store, carrying
+    // the value the guest loaded back from the slot. An exit AT data_gpa is the device slot
+    // failing to serve the store — the opposite finding, and it is named.
+    let exit = loop {
+        match vcpu.run() {
+            Ok(VcpuExit::Interrupted) => continue,
+            Ok(e) => break e,
+            Err(e) => {
+                println!("FAIL  W393 vcpu run      = {e}");
+                return false;
+            }
+        }
+    };
+    let leg_b_exit = match exit {
+        VcpuExit::Mmio {
+            gpa,
+            len,
+            is_write,
+            data,
+        } if gpa == trap_gpa && is_write => {
+            let got = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+            println!(
+                "ok    W393 guest exit    = the ONLY exit is the signal store at {gpa:#x} \
+                 ({len} bytes), carrying eax={got:#010x} loaded back from the slot (want \
+                 {KVM_PATTERN:#010x}) — the data store and the data load took NO exit"
+            );
+            got == KVM_PATTERN
+        }
+        VcpuExit::Mmio { gpa, is_write, .. } if gpa == data_gpa => {
+            println!(
+                "FAIL  W393 guest exit    = the guest EXITED on its {} at the DEVICE SLOT \
+                 ({gpa:#x}): the memslot over the device view did not serve it. ⊘ This is \
+                 the KVM-over-VM_PFNMAP question answered NO on this kernel.",
+                if is_write { "store" } else { "load" }
+            );
+            false
+        }
+        other => {
+            println!(
+                "FAIL  W393 guest exit    = {other:?} — neither the signal store nor a data-slot \
+                 exit; the vCPU did not run the program as written"
+            );
+            false
+        }
+    };
+    // Criterion 3, from the other side: the bytes are on the card, read through B — a view
+    // the guest never had and this process wrote nothing into since the prefill.
+    release_fence();
+    let through_b = view_b.load_u32(HostOffset::ZERO).unwrap_or(u32::MAX);
+    let leg_b = leg_b_exit && through_b == KVM_PATTERN;
+    println!(
+        "{} W393 LEG B        = word 0 through B after the guest ran = {through_b:#010x} (want \
+         {KVM_PATTERN:#010x}). {}",
+        if leg_b { "★★★★★" } else { "FAIL " },
+        if leg_b {
+            "⇒ DEVICE_LOCAL | HOST_VISIBLE, measured: a guest CPU store took no VM exit and \
+             landed in card memory another CPU view reads. ⊘ The ENGINE half is not measured \
+             here; see the rung's doc."
+        } else {
+            "⊘ the guest's store did not reach the card through the slot"
+        }
+    );
+    leg_b
+}
+
+/// ★ w393 — the child half of [`bar1_crossing_probe`]. Reads ONE frame carrying ONE
+/// descriptor from stdin, checks the kernel's word on what it is, maps it once at offset
+/// zero for the length the parent named, stores the pattern, fences, and reports.
+fn bar1_crossing_child() -> std::process::ExitCode {
+    use kayfabe_isolate_host::read_frame_with_fds;
+    use kayfabe_linux_raw::{
+        Backing, CachePolicy, DescriptorKind, HostOffset, HostPageSize, VolatileRegion,
+        release_fence, require_kind,
+    };
+    use std::os::fd::AsFd;
+
+    let stdin = std::io::stdin();
+    let mut buf = Vec::new();
+    let mut fds = Vec::new();
+    match read_frame_with_fds(stdin.as_fd(), &mut buf, &mut fds, 1) {
+        Ok(true) => {}
+        other => {
+            println!("BAR1X-CHILD FAIL frame={other:?}");
+            return std::process::ExitCode::from(2);
+        }
+    }
+    if buf.len() != 16 || fds.len() != 1 {
+        println!(
+            "BAR1X-CHILD FAIL frame shape: {} body bytes, {} descriptor(s)",
+            buf.len(),
+            fds.len()
+        );
+        return std::process::ExitCode::from(2);
+    }
+    let mmap_len = u64::from_le_bytes(buf[0..8].try_into().expect("8 bytes"));
+    let pattern = u32::from_le_bytes(buf[8..12].try_into().expect("4 bytes"));
+    let words = u32::from_le_bytes(buf[12..16].try_into().expect("4 bytes"));
+    let fd = fds.pop().expect("exactly one");
+    // ★ The KERNEL says what arrived. The parent asked for a character device; anything else
+    // is refused by name before it is mapped.
+    if let Err(e) = require_kind(fd.as_fd(), DescriptorKind::CharDevice) {
+        println!("BAR1X-CHILD FAIL kind={e}");
+        return std::process::ExitCode::from(3);
+    }
+    let view = match VolatileRegion::map(
+        Backing::DeviceFile { fd: fd.as_fd() },
+        mmap_len,
+        CachePolicy::WriteCombining,
+        HostPageSize::query(),
+    ) {
+        Ok(v) => v,
+        Err(e) => {
+            println!(
+                "BAR1X-CHILD FAIL mmap={e} ⊘ the driver refused THIS process's mmap of a node \
+                 ANOTHER process armed — if leg A's premise fails, it fails here"
+            );
+            return std::process::ExitCode::from(4);
+        }
+    };
+    let mut wrote = 0u32;
+    for i in 0..words {
+        if view
+            .store_u32(HostOffset::new(u64::from(i) * 4), pattern ^ i)
+            .is_ok()
+        {
+            wrote += 1;
+        }
+    }
+    release_fence();
+    // Read our own stores back through the same view, so the parent can tell "the child's
+    // view holds stores" from "the two views agree" — two facts, reported separately.
+    let mut held = 0u32;
+    for i in 0..words {
+        if view.load_u32(HostOffset::new(u64::from(i) * 4)) == Ok(pattern ^ i) {
+            held += 1;
+        }
+    }
+    drop(view);
+    drop(fd);
+    println!(
+        "BAR1X-CHILD wrote={wrote} held={held} of {words} kind=CharDevice mmap_len={mmap_len:#x}"
+    );
+    if wrote == words {
+        std::process::ExitCode::SUCCESS
+    } else {
+        std::process::ExitCode::from(5)
+    }
+}
+
 fn fb_view_probe(rm: &mut HostRmBackend, gpu: u32, join: FbViewJoin) -> bool {
     // ⊘ A VA in the same band the other ladder rungs use, and one this process's own VAS
     // demonstrably does not already bind — the point is `DMA_OFFSET_FIXED_TRUE`, not the
@@ -11108,6 +11595,7 @@ fn main() -> std::process::ExitCode {
     let mut want_executor_vas = false;
     let mut want_executor_alias = false;
     let mut want_fb_view: Option<FbViewJoin> = None;
+    let mut want_bar1_crossing = false;
     let mut want_ce_client = false;
     let mut want_ce_client_fault = false;
     // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
@@ -11439,6 +11927,9 @@ fn main() -> std::process::ExitCode {
             "--notifier-vidmem" => {
                 notifier_aperture = kayfabe_isolate_host::rm::NotifierAperture::Vidmem;
             }
+            // ★★★★★ w393 — the BAR1 crossing on bare metal; see `bar1_crossing_probe`.
+            "--bar1-crossing" => want_bar1_crossing = true,
+            "--bar1-crossing-child" => return bar1_crossing_child(),
             "--fb-view-probe" => want_fb_view = Some(FbViewJoin::Shared),
             // ⊘ The negative control. Same chain, private guest-side pages, inverted verdict.
             "--fb-view-negative" => want_fb_view = Some(FbViewJoin::Private),
@@ -12017,6 +12508,22 @@ fn main() -> std::process::ExitCode {
         );
         let ok = guest_ring_channel_probe(&mut rm, gpu);
         println!("done — guest-ring channel probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ w393 — the BAR1 crossing runs here and RETURNS, for R30's reason: its objects
+    // and its child process must be the only things in the census.
+    if want_bar1_crossing {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = bar1_crossing_probe(&mut rm, gpu);
+        println!("done \u{2014} bar1-crossing probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {
@@ -12664,7 +13171,11 @@ mod uvm_raw {
         let text = std::fs::read_to_string(&path).ok()?;
         let line = text.lines().find(|l| l.contains("GPU UUID"))?;
         let tag = line.split(':').nth(1)?.trim().to_owned();
-        let hex: String = tag.trim_start_matches("GPU-").chars().filter(char::is_ascii_hexdigit).collect();
+        let hex: String = tag
+            .trim_start_matches("GPU-")
+            .chars()
+            .filter(char::is_ascii_hexdigit)
+            .collect();
         if hex.len() != 32 {
             return None;
         }
@@ -12686,7 +13197,9 @@ mod uvm_raw {
         println!("--- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---");
 
         let Some((uuid, uuid_text)) = gpu_uuid(gpu_index) else {
-            println!("FAIL  W392C uuid          = ⊘ could not read GPU UUID from /proc — NOT a UVM result");
+            println!(
+                "FAIL  W392C uuid          = ⊘ could not read GPU UUID from /proc — NOT a UVM result"
+            );
             return false;
         };
         println!("ok    W392C uuid          = {uuid_text}");
@@ -12703,7 +13216,9 @@ mod uvm_raw {
             Ok(f) => CharDevice::adopt(std::os::fd::OwnedFd::from(f)),
             Err(e) => {
                 println!("FAIL  W392C open          = /dev/nvidia-uvm: {e}");
-                println!("      ⊘ the node is absent or unopenable. This is NOT a statement about UVM.");
+                println!(
+                    "      ⊘ the node is absent or unopenable. This is NOT a statement about UVM."
+                );
                 return false;
             }
         };
@@ -12717,7 +13232,10 @@ mod uvm_raw {
         match dev.ioctl(UVM_INITIALIZE, &mut buf, &mut []) {
             Ok(_) => {
                 let st = status_of(&buf, INIT_STATUS);
-                println!("{} W392C INITIALIZE    = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                println!(
+                    "{} W392C INITIALIZE    = rmStatus {st:#x}",
+                    if st == 0 { "ok   " } else { "FAIL " }
+                );
                 if st != 0 {
                     return false;
                 }
@@ -12800,7 +13318,10 @@ mod uvm_raw {
         let registered = match dev.ioctl(UVM_REGISTER_GPU, &mut buf, &mut []) {
             Ok(_) => {
                 let st = status_of(&buf, REG_STATUS);
-                println!("{} W392C REGISTER_GPU  = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                println!(
+                    "{} W392C REGISTER_GPU  = rmStatus {st:#x}",
+                    if st == 0 { "ok   " } else { "FAIL " }
+                );
                 st == 0
             }
             Err(e) => {
@@ -12809,7 +13330,9 @@ mod uvm_raw {
             }
         };
         if !registered {
-            println!("      ⊘ no channel manager was built, so a MEMOP census reading zero after this");
+            println!(
+                "      ⊘ no channel manager was built, so a MEMOP census reading zero after this"
+            );
             println!("        says nothing about our device.");
             return false;
         }
@@ -12825,7 +13348,10 @@ mod uvm_raw {
         let vas_ok = match dev.ioctl(UVM_REGISTER_GPU_VASPACE, &mut buf, &mut []) {
             Ok(_) => {
                 let st = status_of(&buf, VAS_STATUS);
-                println!("{} W392C REGISTER_VAS  = rmStatus {st:#x}", if st == 0 { "ok   " } else { "FAIL " });
+                println!(
+                    "{} W392C REGISTER_VAS  = rmStatus {st:#x}",
+                    if st == 0 { "ok   " } else { "FAIL " }
+                );
                 st == 0
             }
             Err(e) => {
@@ -12847,11 +13373,15 @@ mod uvm_raw {
 
         println!("=== ★★ W392C VERDICT — pre-registered ===");
         if vas_ok {
-            println!("    W392C_OUTCOME=(P) ★★★★★ THE CLIENT WORKS. UVM registered the GPU and a VA");
+            println!(
+                "    W392C_OUTCOME=(P) ★★★★★ THE CLIENT WORKS. UVM registered the GPU and a VA"
+            );
             println!("        space against a RAW RM connection — so nvidia-uvm built its channel");
             println!("        manager, and point 2's transport EXISTS on this run.");
             println!("        ⇒ On BARE METAL this is the client's known-positive.");
-            println!("        ⇒ In the GUEST, a MEMOP-CENSUS of zero after this is OURS to explain.");
+            println!(
+                "        ⇒ In the GUEST, a MEMOP-CENSUS of zero after this is OURS to explain."
+            );
         } else {
             println!("    W392C_OUTCOME=(V) REGISTER_GPU passed, REGISTER_GPU_VASPACE did not.");
             println!("        ⊘ Half a session. The channel manager may exist; the page tree does");
@@ -12968,7 +13498,14 @@ mod uvm_raw {
             let dev = open_uvm().map_err(|e| format!("open /dev/nvidia-uvm: {e}"))?;
             let mut enc = Enc::new(INIT_LEN, INITIALIZE_DECODED_SIZE);
             enc.u64_at(INIT_FLAGS, 0);
-            call(&dev, UVM_INITIALIZE, enc.0, INIT_STATUS, "UVM_INITIALIZE", &[])?;
+            call(
+                &dev,
+                UVM_INITIALIZE,
+                enc.0,
+                INIT_STATUS,
+                "UVM_INITIALIZE",
+                &[],
+            )?;
 
             let mm = open_uvm().map_err(|e| format!("open second /dev/nvidia-uvm: {e}"))?;
             let mut enc = Enc::new(MM_LEN, 0);
@@ -12998,11 +13535,7 @@ mod uvm_raw {
                 "UVM_REGISTER_GPU",
                 &[],
             )?;
-            Ok(Session {
-                dev,
-                _mm: mm,
-                uuid,
-            })
+            Ok(Session { dev, _mm: mm, uuid })
         }
 
         /// `UVM_REGISTER_GPU_VASPACE` — hand UVM an `IS_EXTERNALLY_OWNED` `FERMI_VASPACE_A`.
@@ -13887,13 +14420,7 @@ mod mean {
             conn,
             Arc::new(kayfabe_isolate_host::ChildExports::new()),
         );
-        let mut lane = match build_lane(
-            &mut rm,
-            vas,
-            engine_type,
-            window,
-            window + 0x4000_0000,
-        ) {
+        let mut lane = match build_lane(&mut rm, vas, engine_type, window, window + 0x4000_0000) {
             Ok(l) => l,
             Err(e) => {
                 // ⊘ Still join the barrier, or every other worker blocks forever on a
@@ -13938,7 +14465,6 @@ mod mean {
             span: (t0, t1),
         }
     }
-
 
     // ═════════════════════════════════════════════════════════════════════════════════════
     // ★★★★★ P2 — THE UVM TRANSPORT, VERIFIED BY THE ENGINE
@@ -14097,8 +14623,7 @@ mod mean {
         println!("ok    W392D P2 ring       = UVM published the ring object at {P2_RING:#018x}");
 
         // 4 ── the channel, INSIDE the UVM-owned space.
-        let (chan, token) = match rm.alloc_channel_in_uvm_space(space, engine_type, ring, P2_RING)
-        {
+        let (chan, token) = match rm.alloc_channel_in_uvm_space(space, engine_type, ring, P2_RING) {
             Ok(c) => c,
             Err(e) => {
                 return PathState::Refused {
@@ -14290,7 +14815,6 @@ mod mean {
         out
     }
 
-
     /// P3's GR channel ring, in the same UVM-owned address space P2 built.
     const P3_RING: u64 = 0x0000_0091_0000_0000;
     /// Where the GR channel releases its payload, and where P2's copy engine reads it back.
@@ -14425,7 +14949,9 @@ mod mean {
                 status: format!("{e:?}"),
             };
         }
-        println!("ok    W392D P3 gr object  = AMPERE_COMPUTE_B allocated — the channel now has a context");
+        println!(
+            "ok    W392D P3 gr object  = AMPERE_COMPUTE_B allocated — the channel now has a context"
+        );
 
         // 3 ── ARM A: THE NEGATIVE CONTROL. No promote has happened, so RM must refuse.
         let before = rm.schedule(gr_chan);
@@ -14595,7 +15121,6 @@ mod mean {
         done(rm, PathState::Verified { rounds })
     }
 
-
     /// A VA nothing in this run ever maps. ⊘ Far above every other region this arm names, and
     /// under the address space's limit so the refusal is the MMU's and not RM's.
     const FALSIFY_VA: u64 = 0x0000_00A0_0000_0000;
@@ -14646,9 +15171,7 @@ mod mean {
         let out = engine_read_through_va(rm, &mut lane, FALSIFY_VA);
         let ok = match &out {
             Err(why) => {
-                println!(
-                    "★★★   W392D falsifier    = the reader REFUSED, as it must: {why}"
-                );
+                println!("★★★   W392D falsifier    = the reader REFUSED, as it must: {why}");
                 println!(
                     "      ⇒ the poison, the per-call completion payload and the retirement \
                      wait all do work. The ✔ rows above are not free."
@@ -14738,9 +15261,14 @@ mod mean {
                 println!("FAIL  W392D main lane     = {e}");
                 println!("      ⊘ No engine exists on this run, so P1 and the STALE RACE are");
                 println!("        UNMEASURED rather than failed. The ledger says so by name.");
-                led.p1_rm_invalidate =
-                    PathState::Refused { step: "build main lane", status: e.clone() };
-                led.stale_race = PathState::Refused { step: "build main lane", status: e };
+                led.p1_rm_invalidate = PathState::Refused {
+                    step: "build main lane",
+                    status: e.clone(),
+                };
+                led.stale_race = PathState::Refused {
+                    step: "build main lane",
+                    status: e,
+                };
                 return led.report();
             }
         };
@@ -14750,7 +15278,10 @@ mod mean {
         );
 
         // ── P1 ────────────────────────────────────────────────────────────────────────
-        println!("--- W392D P1: the RM mapping path, {} rounds at one VA ---", cfg.p1_rounds);
+        println!(
+            "--- W392D P1: the RM mapping path, {} rounds at one VA ---",
+            cfg.p1_rounds
+        );
         led.p1_rm_invalidate = p1_rm_round(rm, vas, &mut lane, P1_VA, cfg.nonce, cfg.p1_rounds);
         println!("    P1 → {}", led.p1_rm_invalidate.describe());
 
@@ -14764,13 +15295,8 @@ mod mean {
             "--- W392D P2: nvidia-uvm publishes the mapping, {} rounds at one VA ---",
             cfg.p1_rounds
         );
-        led.p2_uvm_memop = p2_uvm_round(
-            rm,
-            cfg.gpu,
-            cfg.nonce,
-            cfg.p1_rounds,
-            &mut led.p3_rpc_bind,
-        );
+        led.p2_uvm_memop =
+            p2_uvm_round(rm, cfg.gpu, cfg.nonce, cfg.p1_rounds, &mut led.p3_rpc_bind);
         println!("    P2 → {}", led.p2_uvm_memop.describe());
 
         println!("    P3 → {}", led.p3_rpc_bind.describe());
@@ -14808,9 +15334,9 @@ mod mean {
             match h.join() {
                 // ★★★ A PANIC IN A WORKER IS A RESULT, and swallowing it would turn the
                 // loudest possible red into a missing row.
-                Err(_) => led
-                    .thread_faults
-                    .push(format!("tid {tid} PANICKED — a witness assert or an unwrap")),
+                Err(_) => led.thread_faults.push(format!(
+                    "tid {tid} PANICKED — a witness assert or an unwrap"
+                )),
                 Ok(r) => {
                     if let Some(f) = r.fault {
                         led.thread_faults.push(f);
@@ -14873,4 +15399,3 @@ mod mean {
         verdict
     }
 }
-

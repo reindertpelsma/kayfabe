@@ -526,7 +526,49 @@ fn serve_one(
             phys,
             prot,
         } => join_fb_leaf(rm, vas, len, at, phys, prot, exports),
+        // ★★★★★ w393 — the THIRD descriptor-carrying reply, and the first whose descriptor
+        // is a device node by design. Intercepted here for the same reason as the two above.
+        Request::ExportDeviceView {
+            memory,
+            offset,
+            len,
+        } => export_device_view(rm, memory, offset, len, exports),
         other => (execute(rm, other), None),
+    }
+}
+
+/// ★★★★★ **w393 — the armed-node arm**: arm a CPU view of a vidmem object and attach the
+/// node whose `mmap` context now carries it ([`kayfabe_isolate::DeviceView`]).
+///
+/// [`export_backing`]'s sibling, not a mode of it: that arm lends a `memfd` the isolate
+/// authored; this one lends a `/dev/nvidia<N>` node the isolate armed with
+/// `NV_ESC_RM_MAP_MEMORY` and will never `mmap` itself. The parent adopts it asking for a
+/// character device and nothing else.
+fn export_device_view(
+    rm: &mut dyn RmBackend,
+    memory: u64,
+    offset: u64,
+    len: u64,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    let view = match rm.export_device_view(raw(memory), offset, len) {
+        Ok(v) => v,
+        Err(e) => return (failed(e), None),
+    };
+    // ★ `view.token` is the CHILD's index into its own table and does not go on the wire.
+    match exports.lend(view.token) {
+        Ok(fd) => (
+            Reply::DeviceView {
+                memory: view.memory.raw(),
+                offset: view.offset,
+                mmap_len: view.mmap_len,
+            },
+            Some(fd),
+        ),
+        Err(_) => (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        ),
     }
 }
 
@@ -835,7 +877,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // explicitly rather than caught by a wildcard so that a future verb which also
         // carries a descriptor cannot be silently routed here and answered with bytes and
         // no fd — which the parent would read as a `Backing` naming nothing.
-        Request::ExportBacking { .. } | Request::JoinFbLeaf { .. } => {
+        Request::ExportBacking { .. }
+        | Request::JoinFbLeaf { .. }
+        | Request::ExportDeviceView { .. } => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
         // ★★★★★ **w380 — the alias, and it is NOT in the line above.** Its reply carries no

@@ -241,6 +241,35 @@ struct NvkvmState {
      * than booting probe-off, and the set in effect comes back in the end-of-run census
      * so the boot's own report proves what it ran with. */
     char    *probe_arm_notifier;
+    /* ★★★★★ w393 — THE BAR1 PASSTHROUGH ARM.  Owner, 2026-09-09: "bar1/2 should not have
+     * traps and just passthrough" — the Vulkan pair DEVICE_LOCAL | HOST_VISIBLE: one real
+     * allocation on the card, mapped into the guest's BAR1 range (guest CPU stores land in
+     * it with NO VM EXIT) and into the host GPU's address space (the engine reads the same
+     * bytes with no join, alias, publish or carry step).
+     *
+     * What this property changes HERE, and only here: nvkvm_op_bar_is_unbacked_reservation
+     * answers "yes" for the BAR1 row, so the archive MAY install its own memslots over
+     * sub-ranges of the (still pure-MMIO, still `memory_region_init_io`) BAR1 region — the
+     * §1.5 safety argument is unchanged because the constructor is unchanged.  The trap
+     * callbacks stay registered and become the NAMED FALLBACK: an access that still reaches
+     * them under this arm is a PASSTHROUGH MISS, counted and printed by name, and served
+     * correctly through the archive as before.  ⊘ It is never a silent fallback.
+     *
+     * A DEVICE PROPERTY rather than an env var, for probe-arm-notifier's reason: the boot's
+     * own census must report the arm it actually ran with.  Default OFF = today's behaviour
+     * byte for byte, which is the control.
+     *
+     * ⚠ On this branch NOTHING installs such a slot yet — the archive's mirror of the
+     * guest's BAR1 page table onto crossed device views is the remaining work, and the
+     * crossing itself waits on the owner's decision-(b) ruling.  Arming the property today
+     * therefore measures exactly one thing: the census of BAR1 accesses a mirror would have
+     * to cover, printed as misses. */
+    bool     bar1_passthrough;
+    /* ★ w393 — BAR1 accesses that reached the trap while `bar1_passthrough` was armed.  Two
+     * numbers, for NvkvmState's IRQ pair's reason: "printed none because there were none"
+     * and "printed none because the cap was spent" must stay distinguishable. */
+    uint64_t bar1_passthrough_misses;
+    unsigned bar1_passthrough_miss_printed;
 
     /* --- regions ---------------------------------------------------------------- */
     MemoryRegion mr[NVKVM_N_REGIONS];
@@ -750,12 +779,40 @@ static void nvkvm_bar1_record(NvkvmState *s, uint64_t addr, uint64_t val,
  * KayfabeRegAudit::bar1_pde_base.  As with BAR0 and BAR2, THERE IS NO LOGIC BELOW THIS
  * LINE: the walk, the root, the refusals and the counters are all inside the archive.
  */
+/* ★★★★★ w393 — a BAR1 access that reached the trap while the passthrough arm was ON.
+ * Counted uncapped, printed bounded, and then SERVED as before: the archive still resolves
+ * it through the guest's BAR1 page table, so correctness is unchanged and only the cost is
+ * wrong.  ⊘ Printed by NAME so a boot on the armed arm can never read a served access as a
+ * passthrough — "the counter did not move" is the acceptance test's criterion 1, and this
+ * is the counter. */
+#define NVKVM_BAR1_MISS_LIVE 8u
+static void nvkvm_bar1_passthrough_miss(NvkvmState *s, uint64_t addr, unsigned size,
+                                        bool is_write)
+{
+    if (!s->bar1_passthrough) {
+        return;
+    }
+    s->bar1_passthrough_misses++;
+    if (s->bar1_passthrough_miss_printed >= NVKVM_BAR1_MISS_LIVE) {
+        return;
+    }
+    s->bar1_passthrough_miss_printed++;
+    warn_report("nvkvm: ⊘ BAR1-PASSTHROUGH MISS #%" PRIu64 ": a %u-byte %s at aperture "
+                "+0x%" PRIx64 " reached the TRAP under the armed arm — no memslot covers "
+                "this range, so it costs a VM exit and a software page walk. Served "
+                "correctly through the archive; NOT passthrough. (printed %u of %u; the "
+                "total is reported at teardown and is not capped)",
+                s->bar1_passthrough_misses, size, is_write ? "WRITE" : "read",
+                addr, s->bar1_passthrough_miss_printed, NVKVM_BAR1_MISS_LIVE);
+}
+
 static uint64_t nvkvm_bar1_read(void *opaque, hwaddr addr, unsigned size)
 {
     NvkvmState *s = opaque;
 
     s->trap_reads++;
     nvkvm_bar1_record(s, (uint64_t)addr, 0, size, false);
+    nvkvm_bar1_passthrough_miss(s, (uint64_t)addr, size, false);
     return kayfabe_shim_regs_read(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size);
 }
 
@@ -840,6 +897,7 @@ static void nvkvm_bar1_write(void *opaque, hwaddr addr, uint64_t val, unsigned s
 
     s->trap_writes++;
     nvkvm_bar1_record(s, (uint64_t)addr, val, size, true);
+    nvkvm_bar1_passthrough_miss(s, (uint64_t)addr, size, true);
     nvkvm_bar1_gp_put_live(s, (uint64_t)addr, val, size);
     memset(&w, 0, sizeof(w));
     kayfabe_shim_regs_write(s->regs, KAYFABE_BUS_BAR_FB, (uint64_t)addr, size, val, &w);
@@ -1277,9 +1335,24 @@ static int32_t nvkvm_op_register_listener(void *dev)
 
 static int32_t nvkvm_op_bar_is_unbacked_reservation(void *dev, uint32_t bar)
 {
+    NvkvmState *s = dev;
     const NvkvmRegionSpec *row = nvkvm_row_for_port(bar);
 
-    (void)dev;
+    /*
+     * ★★★★★ w393 — THE BAR1 PASSTHROUGH ARM ANSWERS "YES" FOR THE BAR1 ROW, and it is
+     * truthful to do so: the question the archive is asking is "does the hypervisor back
+     * this register?", and the answer is a property of the CONSTRUCTOR, which is still
+     * memory_region_init_io.  What the arm relaxes is the second half of the §16.18
+     * reasoning — "a slot there would answer the guest out of memory the framebuffer store
+     * cannot see" — which is exactly the premise the owner's DEVICE_LOCAL | HOST_VISIBLE
+     * target replaces: the slot's backing IS the card's memory, and there is no store.
+     * ⊘ Only BAR1 (port 1).  BAR2 keeps trapping under this arm because it is the
+     * observation point for the guest's page-table writes, including the BAR1 page table
+     * the mirror itself depends on.
+     */
+    if (row && row->port_index == 1 && s->bar1_passthrough) {
+        return 1;
+    }
     /*
      * ★★★ Truthful, not optimistic.  The answer is a property of HOW the region was
      * constructed, and both kinds here are built with the pure-MMIO constructor — so both are
@@ -2144,6 +2217,24 @@ static void nvkvm_report_registers(NvkvmState *s)
      * BAR1" predicts.  An 8-byte store whose value decodes as a plausible GPFIFO entry is a
      * different fact from three stray probes, and only the value can say which.
      */
+    /*
+     * ★★★★★ w393 — THE PASSTHROUGH ARM'S OWN ROW, printed unconditionally (zero included)
+     * for the `dlen=0` reason: a boot that ran the arm OFF and a boot that ran it ON with no
+     * misses are different facts, and the arm is stated on the line so they cannot be read
+     * as one.  Under the armed arm this total IS acceptance-test criterion 1 — it must be
+     * ZERO for every range a slot covers, and every non-zero is a named miss above.
+     */
+    info_report("nvkvm: BAR1-PASSTHROUGH arm=%s misses=%" PRIu64 " (printed live %u of at "
+                "most %u). %s",
+                s->bar1_passthrough ? "on" : "off",
+                s->bar1_passthrough_misses, s->bar1_passthrough_miss_printed,
+                NVKVM_BAR1_MISS_LIVE,
+                s->bar1_passthrough
+                    ? "⇒ every miss is a BAR1 access that took a VM exit under the arm "
+                      "that promises none; ⊘ on this branch no slot is installed yet, so "
+                      "this total is the CENSUS a mirror must cover, not a defect count."
+                    : "⊘ OFF is the control: every BAR1 access traps by design and none is "
+                      "a miss.");
     if (s->bar1_log_used == 0) {
         info_report("nvkvm:   BAR1 access log: EMPTY — no access reached the handler, so "
                     "there is nothing to attribute. ⊘ Read this beside the trap-status row "
@@ -3154,6 +3245,17 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
     s->exit_notifier.notify = nvkvm_exit_notify;
     qemu_add_exit_notifier(&s->exit_notifier);
 
+    /* ★★★★★ w393 — the arm, stated by the boot itself.  See NvkvmState::bar1_passthrough. */
+    info_report("nvkvm: BAR1-PASSTHROUGH arm=%s ⇒ %s",
+                s->bar1_passthrough ? "on" : "off",
+                s->bar1_passthrough
+                    ? "the archive MAY shadow sub-ranges of the BAR1 window with its own "
+                      "memslots (bar_is_unbacked_reservation answers yes for BAR1); every "
+                      "access that still traps is a NAMED miss. ⊘ No mirror installs a slot "
+                      "on this build yet — the miss total is a census."
+                    : "every BAR1 access traps to the archive (the control; today's "
+                      "behaviour byte for byte)");
+
     s->traps_open = true;
 }
 
@@ -3267,6 +3369,10 @@ static const Property nvkvm_properties[] = {
      * report the set it actually ran with: three boots ran probe-off while looking
      * armed from the launching shell, and their conclusions had to be retracted. */
     DEFINE_PROP_STRING("probe-arm-notifier", NvkvmState, probe_arm_notifier),
+    /* ★★★★★ w393 — the BAR1 passthrough arm.  See NvkvmState::bar1_passthrough.  Default
+     * OFF is the control; ON changes one answer (nvkvm_op_bar_is_unbacked_reservation for
+     * BAR1) and turns every access that still traps into a NAMED miss. */
+    DEFINE_PROP_BOOL("bar1-passthrough", NvkvmState, bar1_passthrough, false),
     NVKVM_PROP_TERMINATOR
 };
 
