@@ -13681,6 +13681,45 @@ impl Regs {
             self.fb_join.as_str(),
             pending.len(),
         );
+        // ★★★★★ **w393 — SETTLE THE PAGE TABLES BEFORE THE BIRTH-TIME JOIN.** A birth
+        // happens on a register write, BETWEEN doorbells, and `join_one_fb_leaf`'s sibling
+        // predicate (`fb_join_va_in_vas`) answers out of OUR address table — which is only
+        // brought level with the guest's page tables by the settlement `ring_inline` runs
+        // (`witness_executor_fb_pages` → `decode_cpu_pt_writes` → `sweep_cpu_pt_tables`).
+        //
+        // `[measured w392s, run_w392s_qemu.log:421,451,455,458,495-505]` the last settlement
+        // before P3's birth was P2's round-3 doorbell (`:421`, `exec_writes=47`), which
+        // precedes that round's `UVM_FREE` + `NV01_FREE` of its 4 KiB object; the guest's
+        // allocator then re-issued the SAME frame `0x140000` to P3's 64 KiB ring. At the
+        // birth (`:451`, `:458`) the row `0x9080000000 → 0x140000` was still
+        // `JoinsGuestWindow` in the table — a frame the guest had already unmapped read as a
+        // LIVE SIBLING, the ring's leaf was refused by name, and the channel was born
+        // `PassthroughRingNotAdoptable` (`:455`). The very next settlement, at P3's OWN first
+        // doorbell (`:496`, `exec_writes=74`, `drained=123`), revoked exactly that row
+        // (`revoked=1 kept_for_move=1`, `KEPT-FOR-MOVE va=0x9080000000` at `:495`) and the
+        // REGROW arm then joined the ring at 64 KiB (`:503-505`, `established=65536 bytes`)
+        // — 45 lines after the birth it was needed for.
+        //
+        // ⇒ Run the SAME three passes here, first. Not a new predicate and not a second
+        // source of truth beside the settlement: the one settlement, one consumer earlier.
+        // ⊘ Scoped by construction to a register write with a Passthrough birth or engine
+        // forward pending (the early returns above), so a plain doorbell — which has already
+        // settled in `ring_inline` — never pays for it twice. ⊘ Emits nothing into the
+        // guest's message queue (the passes print and issue host verbs only), so the
+        // `bPollingForRpcResponse` obligation the call site names is untouched.
+        // ⚠ NOT YET MEASURED against a boot: the chain it relies on is measured only in
+        // pieces (the revoke at `:496`, the REGROW at `:503-505`, adoption at P2's CE births).
+        {
+            let w = self.doorbell_port.witness_executor_fb_pages();
+            let d = self.doorbell_port.decode_cpu_pt_writes();
+            let s = self.doorbell_port.sweep_cpu_pt_tables();
+            eprintln!(
+                "{head} SETTLE-BEFORE-BIRTH pending={} → the doorbell's own page-table \
+                 settlement, run BEFORE the join so a row the guest has already unmapped \
+                 cannot read as a LIVE SIBLING ([measured w392s:421→451→496]){w}{d}{s}",
+                pending.len(),
+            );
+        }
         for (label, facts) in pending {
             let facts = match facts {
                 Ok(f) => f,
