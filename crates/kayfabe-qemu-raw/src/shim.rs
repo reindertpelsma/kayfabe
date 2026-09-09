@@ -15775,7 +15775,8 @@ pub fn guest_ram_source_from(
 /// — which takes the `Some` arm, because it was SET.
 fn selected_guest_ram_source() -> Result<GuestRamSource, (Status, &'static str)> {
     match std::env::var_os(GUEST_RAM_ENV) {
-        None => Ok(GuestRamSource::None),
+        // ⊘ ONE default, not two: delegate to `guest_ram_source_from` rather than restate it here.
+        None => guest_ram_source_from(None),
         Some(v) => guest_ram_source_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16008,7 +16009,8 @@ pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutorChoice, (Status
 /// one** — which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_ce_executor() -> Result<CeExecutorChoice, (Status, &'static str)> {
     match std::env::var_os(CE_EXECUTOR_ENV) {
-        None => Ok(CeExecutorChoice::Local),
+        // ⊘ ONE default, not two: delegate to `ce_executor_from` rather than restate it here.
+        None => ce_executor_from(None),
         Some(v) => ce_executor_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16142,7 +16144,8 @@ pub fn gr_route_from(value: Option<&str>) -> Result<GrRouteArm, (Status, &'stati
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_gr_route() -> Result<GrRouteArm, (Status, &'static str)> {
     match std::env::var_os(GR_ROUTE_ENV) {
-        None => Ok(GrRouteArm::Refuse),
+        // ⊘ ONE default, not two: delegate to `gr_route_from` rather than restate it here.
+        None => gr_route_from(None),
         Some(v) => gr_route_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16421,7 +16424,8 @@ fn mmu_inval_from(v: Option<&str>) -> Result<MmuInvalArm, (Status, &'static str)
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_mmu_inval() -> Result<MmuInvalArm, (Status, &'static str)> {
     match std::env::var_os(MMU_INVAL_ENV) {
-        None => Ok(MmuInvalArm::Off),
+        // ⊘ ONE default, not two: delegate to `mmu_inval_from` rather than restate it here.
+        None => mmu_inval_from(None),
         Some(v) => mmu_inval_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16522,7 +16526,8 @@ pub fn operand_join_from(value: Option<&str>) -> Result<OperandJoinArm, (Status,
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
     match std::env::var_os(OPERAND_JOIN_ENV) {
-        None => Ok(OperandJoinArm::Off),
+        // ⊘ ONE default, not two: delegate to `operand_join_from` rather than restate it here.
+        None => operand_join_from(None),
         Some(v) => operand_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16814,7 +16819,8 @@ pub fn doorbell_async_from(
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match std::env::var_os(DOORBELL_ASYNC_ENV) {
-        None => Ok(DoorbellAsyncArm::On),
+        // ⊘ ONE default, not two: delegate to `doorbell_async_from` rather than restate it here.
+        None => doorbell_async_from(None),
         Some(v) => doorbell_async_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16826,7 +16832,8 @@ fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)>
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_vas_publish() -> Result<VasPublishArm, (Status, &'static str)> {
     match std::env::var_os(VAS_PUBLISH_ENV) {
-        None => Ok(VasPublishArm::Off),
+        // ⊘ ONE default, not two: delegate to `vas_publish_from` rather than restate it here.
+        None => vas_publish_from(None),
         Some(v) => vas_publish_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16838,7 +16845,8 @@ fn selected_vas_publish() -> Result<VasPublishArm, (Status, &'static str)> {
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_guest_ring() -> Result<GuestRingArm, (Status, &'static str)> {
     match std::env::var_os(GUEST_RING_ENV) {
-        None => Ok(GuestRingArm::Off),
+        // ⊘ ONE default, not two: delegate to `guest_ring_from` rather than restate it here.
+        None => guest_ring_from(None),
         Some(v) => guest_ring_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
@@ -16901,7 +16909,8 @@ pub fn fb_join_from(value: Option<&str>) -> Result<FbJoinArm, (Status, &'static 
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn selected_fb_join() -> Result<FbJoinArm, (Status, &'static str)> {
     match std::env::var_os(FB_JOIN_ENV) {
-        None => Ok(FbJoinArm::Off),
+        // ⊘ ONE default, not two: delegate to `fb_join_from` rather than restate it here.
+        None => fb_join_from(None),
         Some(v) => fb_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
