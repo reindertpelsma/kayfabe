@@ -4017,7 +4017,7 @@ impl SharedDevice {
                         only.iter().take(6).map(|v| format!("0x{v:x}")).collect();
                     format!(
                         "[proc={} gpu={} pdb=0x{:x} promote_bound={} covered_by_guest_pt={} \
-                         only_promote={}{}]",
+                         only_promote={}{} witness_writes={} reach_pages={}]",
                         pid.0,
                         gpu.0,
                         pdb.0,
@@ -4028,7 +4028,17 @@ impl SharedDevice {
                             String::new()
                         } else {
                             format!(" {}", sample.join(","))
-                        }
+                        },
+                        // ★★★ THE ATTRIBUTION CHECK. `[measured w407]` breaking the circular
+                        // dirty gate changed nothing — the sweep still skipped this VAS as
+                        // unchanged. If `witness_writes` is 0 here while the boot-wide
+                        // `exec_writes` is in the thousands, then page-table writes ARE being
+                        // observed and are NOT being attributed to the VAS whose tables they
+                        // belong to, and the bug is that routing rather than the gate or the
+                        // walk. A non-zero count says the opposite and sends the next look to
+                        // the decode.
+                        vas.reach.witness_writes(),
+                        vas.reach.witnessed_len(),
                     )
                 })
                 .collect::<Vec<_>>()
