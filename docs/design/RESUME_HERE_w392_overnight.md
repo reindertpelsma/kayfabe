@@ -2,7 +2,39 @@
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.
 
-## ★★★★★ THE STATE — ALL FOUR NAMED ROWS GREEN, BUT (F) ON A FIFTH (w392t, rev `9f12c85d`)
+## ★★★★★ FINAL STATE OF THE NIGHT — 4 NAMED ROWS GREEN + 3/4 THREADS, **REPRODUCED n=2**
+```
+w392w (rev 9c86655c)   P1✔ P2✔ P3✔ STALE RACE✔   THREADS 3/4   tid 0 @0x82c0000000
+w392x (same build)     P1✔ P2✔ P3✔ STALE RACE✔   THREADS 3/4   tid 2 @0x86c0000000
+both: MEAN_FALSIFIER=PASS   W392D_OUTCOME=(F)   host Xid 2
+```
+Different worker, different VA, same shape ⇒ a race landing on whichever worker inherits the ghost
+frame. `remaps_revoked=0` in run 2, so the ghost-peer refusal is the dominant cause **independent**
+of the re-map fix.
+
+### ⊘⊘ THE LAST FAULT NEEDS AN OWNER RULING — do not patch it blind
+Measured (`run_w392w_qemu.log`): the re-join after a revoke is **refused by name** at
+`join_one_fb_leaf` step 0, the `JOIN-EXTENT MISMATCH (LIVE PEER)` arm (`shim.rs:11791`), on the
+doorbell and on **7** subsequent VAS-PUBLISH passes — `JOINED 0 leaf/leaves, 1 REFUSED`, **the only
+refusal in the boot**. So no host mapping is ever made, the copy routes to `CeExecutor::Ours`
+(`#255 FIRED`) and no host engine writes the semaphore ⇒ `NEVER RETIRED`.
+★★★ **The "live peer" is a GHOST.** The frame's only other row is P2's **UVM** VAS
+(`pdb=0x201000`). P2's teardown `drop(sess)` deliberately never frees the VAS, so UVM frees its
+allocations and **drops its page tree wholesale — no per-PTE clear to witness**, so nothing unbinds
+our row. The guest heap re-hands the frame to a new object, and `fb_frame_namers`
+(`device.rs:4654`) counts **table rows, not guest PTEs** ⇒ it counts the ghost and pins the stale
+join forever. The extent mismatch (0x4000 vs 0x10000 at one base) itself proves the old object is
+dead. ⊘ The arm's own text *"no row published"* is wrong there too — the ghost **is** published,
+invisible only because `fb_join_va_in_vas` is per-VAS.
+**THE RULING, in one line:**
+> *A guest heap free of a framebuffer frame ends every lease on it: every table row naming that
+> frame, in EVERY VAS, is RETIRED at the free (join released carrying bytes), so a later object at
+> the same frame never meets them as live peers.*
+That is *memory is owned globally, procs lease it* applied at the **free** event, and it is the C's
+shape. The alternative — verify each peer against the guest's page tables at refusal time — fails
+safe but reads a page tree UVM may already have freed and reused.
+
+## SUPERSEDED STATE (w392t, rev `9f12c85d`)
 ```
 P1 rm-invalidate  ✔ VERIFIED over 4 round(s)
 P2 uvm-memop      ✔ VERIFIED over 4 round(s)
