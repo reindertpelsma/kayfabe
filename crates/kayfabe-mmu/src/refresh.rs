@@ -112,16 +112,29 @@ pub enum WalkOutcome {
     Mapped { phys: u64, aperture: Aperture },
     /// They do not — invalid entry, cleared parent, dangling pointer. The GMMU would fault.
     NoMapping,
-    /// They DO describe it, in an aperture we cannot serve. `PEER` names another GPU's memory
-    /// and has no CPU plane at all.
+    /// They DO describe it, in an aperture we cannot serve **yet**. `PEER` names another GPU's
+    /// memory and has no CPU plane at all.
+    ///
+    /// ⊘⊘ **DEFERRED, NOT EXCLUDED — owner, 2026-09-10: *"Between GPU mappings is eventually a
+    /// goal to support though."*** This variant must not calcify into an architectural
+    /// assumption that peer memory is out of scope. It says *"we do not serve this today"*, and
+    /// the distinction from [`WalkOutcome::NoMapping`] exists precisely so that the day we do,
+    /// the sites needing to change are greppable rather than indistinguishable from ranges the
+    /// guest never mapped.
+    ///
+    /// ★ The structure already anticipates it: a peer mapping is a **view of one GPU's memory
+    /// in another GPU's space**, which is what `kayfabe_device::gpgaview::ViewSpace` models —
+    /// and the tree already keys isolates per `(ProcId, GpuId)` with a separate completion path
+    /// per target (MG-5/MG-6), so "another GPU" is an existing axis rather than a new one. What
+    /// is missing is a plane for it, not a place to put it.
     Unsupported(Aperture),
 }
 
 impl WalkOutcome {
     fn of(phys: u64, aperture: Aperture) -> Self {
         match aperture {
-            // ⊘ Peer memory is real and the GPU can follow it; we simply cannot back it. That
-            // is a refusal, not an absence.
+            // ⊘ Peer memory is real and the GPU can follow it; we simply cannot back it TODAY.
+            // A refusal, not an absence — and a deferral, not an exclusion. See the variant.
             Aperture::Peer => Self::Unsupported(aperture),
             _ => Self::Mapped { phys, aperture },
         }
@@ -505,6 +518,11 @@ mod the_aperture_is_part_of_the_entry {
     /// ★★★ `GMMU_APERTURE_PEER` names ANOTHER GPU's memory. The guest DID map it and the GPU
     /// can follow it; we have no CPU plane for it. That is a REFUSAL, and reporting it as
     /// "the guest unmapped it" would be a false statement about the guest.
+    ///
+    /// ⊘ And a refusal we intend to retire: peer mappings are a goal (owner, 2026-09-10). This
+    /// test pins the CURRENT behaviour and its distinctness — when peer is supported it should
+    /// be **changed**, not deleted, because the thing worth keeping is that peer never silently
+    /// becomes "unmapped".
     #[test]
     fn peer_is_unsupported_and_is_not_reported_as_an_absent_mapping() {
         let mut w = world_with(Aperture::Peer);
