@@ -148,9 +148,30 @@ use std::sync::{Condvar, Mutex};
 /// the type's guarantee — *"this is an invalid→valid transition, whose late arrival costs a
 /// GPU fault and nothing worse"* — is a claim about how the value was **obtained**, which
 /// only a constructor can make.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// ★★★★★ **WHAT A QUEUED PUBLICATION IS FOR.**
+///
+/// The lane carries publication JOBS, not doorbells — the type has always been named
+/// `MapPublication`. Adding a second kind here is what lets the guest's `MMU_INVALIDATE` be
+/// published **off the vCPU** without a second worker thread, which the owner explicitly does
+/// not want: *"You don't have to have a separate doorbell thread (in fact better is not)."*
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PublicationKind {
+    /// The guest rang a doorbell; publish what its submission needs, then forward.
+    Doorbell,
+    /// ★★★ The guest wrote the **TLB invalidate trigger**. Publish, then signal completion so
+    /// the guest's own poll of the trigger register clears.
+    ///
+    /// ⊘ The guest waits by POLLING the register — that is what
+    /// `kgmmuCheckPendingInvalidates_TU102` does on real hardware — so deferring this work
+    /// does not make the guest miss it. What changes is only that the wait happens in the
+    /// guest's own loop instead of inside one held MMIO store.
+    Invalidate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MapPublication {
     token: u64,
+    kind: PublicationKind,
 }
 
 impl MapPublication {
@@ -158,7 +179,25 @@ impl MapPublication {
     /// the host channel rung, on a worker.
     #[must_use]
     pub const fn for_doorbell(token: u64) -> Self {
-        Self { token }
+        Self {
+            token,
+            kind: PublicationKind::Doorbell,
+        }
+    }
+
+    /// The guest wrote the TLB invalidate trigger `val`; publish, then complete it.
+    #[must_use]
+    pub const fn for_invalidate(val: u64) -> Self {
+        Self {
+            token: val,
+            kind: PublicationKind::Invalidate,
+        }
+    }
+
+    /// What this job is for.
+    #[must_use]
+    pub const fn kind(self) -> PublicationKind {
+        self.kind
     }
 
     /// The guest's own doorbell token.
@@ -237,7 +276,7 @@ pub struct QueueStats {
 struct Inner {
     /// FIFO of tokens awaiting execution. ★ Order across tokens is preserved; order
     /// *within* a token is vacuous because there is at most one entry per token.
-    order: VecDeque<u64>,
+    order: VecDeque<MapPublication>,
     /// Membership, so `offer` is O(1) rather than a scan of `order`.
     pending: HashSet<u64>,
     stats: QueueStats,
@@ -350,7 +389,7 @@ impl PublicationQueue {
             return Offered::Full;
         }
         g.pending.insert(token);
-        g.order.push_back(token);
+        g.order.push_back(job);
         g.stats.queued += 1;
         g.stats.high_water = g.stats.high_water.max(g.order.len());
         drop(g);
@@ -368,10 +407,12 @@ impl PublicationQueue {
     /// unrelated doorbell — a **lost wakeup**, which is the classic bug of this shape.
     pub fn take(&self) -> Option<MapPublication> {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        let token = g.order.pop_front()?;
-        g.pending.remove(&token);
+        // ⊘ The JOB is stored, not rebuilt from its token: rebuilding lost the kind, which
+        // would silently turn every queued invalidate into a doorbell.
+        let job = g.order.pop_front()?;
+        g.pending.remove(&job.token());
         g.stats.taken += 1;
-        Some(MapPublication::for_doorbell(token))
+        Some(job)
     }
 
     /// Block until there is a token or the queue is stopping. `None` ⇒ stop.
@@ -383,10 +424,12 @@ impl PublicationQueue {
     pub fn take_blocking(&self) -> Option<MapPublication> {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         loop {
-            if let Some(token) = g.order.pop_front() {
-                g.pending.remove(&token);
+            if let Some(job) = g.order.pop_front() {
+                // ⊘ Return the STORED job: rebuilding from the token lost the kind, which
+                // would silently execute every queued invalidate as a doorbell.
+                g.pending.remove(&job.token());
                 g.stats.taken += 1;
-                return Some(MapPublication::for_doorbell(token));
+                return Some(job);
             }
             if g.stopping {
                 return None;

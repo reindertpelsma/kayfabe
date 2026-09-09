@@ -4950,8 +4950,34 @@ fn doorbell_publish_loop(
     queue: &std::sync::Arc<kayfabe_device::pubqueue::PublicationQueue>,
     mut vmm: kayfabe_vmm_qemu::QemuVmm,
 ) {
+    // ★★★★★ This thread is a WORKER by the owner's 2026-09-09 classification: blocking here
+    // is the design working, and the census must not report it as a violation.
+    kayfabe_util::lock::declare_thread_class(kayfabe_util::lock::ThreadClass::Worker);
     while let Some(job) = queue.take_blocking() {
         let token = job.token();
+        // ★★★ **THE INVALIDATE ARM — publish, THEN complete.**
+        //
+        // The guest is polling its trigger register (`kgmmuCheckPendingInvalidates_TU102`
+        // spins on it), so `complete()` is the ONLY thing that ends its wait. It is called
+        // after the publication and never before: completing first would restate, from a
+        // worker instead of a vCPU, exactly the lie the inline version told.
+        // ⊘ Unconditional once taken — including when the publication yields no line. A job
+        // that returns without completing hangs the guest by construction, so there is no
+        // early-return path between here and `complete()`.
+        if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
+            let mut ctx = port.publish_ctx();
+            ctx.vas_publish = VasPublishArm::Publish;
+            if let Some(line) = ctx.publish_vas_rows(token, None) {
+                eprintln!(
+                    "kayfabe: MMUINVAL-PUBLISH (off-vCPU) {}",
+                    line.replace("\nkayfabe: ", "  ⏎  ")
+                );
+            }
+            if let Some(plane) = port.plane.upgrade() {
+                plane.mmu_inval().complete(plane.clock_now_us());
+            }
+            continue;
+        }
         let report = port.ring_inline(token);
         // ★ The plane's own accounting, called from here so `doorbells_served` /
         // `doorbells_refused` keep meaning what they meant. ⊘ A second set of counters on
@@ -14281,55 +14307,60 @@ impl Regs {
         // ⊘ The token is the trigger's raw value, so a publication line can be joined to the
         // invalidate that caused it. It is NOT a doorbell token and must not be read as one.
         if out.publish_before_completing {
-            struct PublishGuard<'a>(&'a RegPlane);
-            impl Drop for PublishGuard<'_> {
-                fn drop(&mut self) {
-                    self.0.mmu_inval().complete(self.0.clock_now_us());
+            // ★★★★★ **OWNER, 2026-09-09: the invalidate must complete to the guest, and must
+            // NOT run on a blocked vCPU thread.** Both halves matter and they used to be in
+            // tension here: publication ran INLINE inside this MMIO store, and a `PublishGuard`
+            // signalled completion when that inline work finished. The vCPU was held for the
+            // whole publication.
+            //
+            // ⇒ Now: **enqueue and return.** The worker publishes and then calls
+            // `complete()`, which clears the trigger the guest is polling.
+            //
+            // ⊘ **The guest does not miss the completion — it POLLS.**
+            // `kgmmuCheckPendingInvalidates_TU102` (`ogkm-580: kern_gmmu_tu102.c:59-84`) spins
+            // reading the trigger register, which is exactly what real hardware makes it do.
+            // Deferring the work moves the guest's wait from *inside one held MMIO store* into
+            // *its own interruptible loop*. The guest waits either way; the difference is that
+            // a vCPU is no longer parked inside a single store while it happens.
+            // ⚠ Which means `complete()` is now the ONLY thing that clears the trigger, and a
+            // worker that dies without calling it hangs the guest by construction — the same
+            // hazard `MmuInvalidateLog::arm`'s doc already names for a half-wired arm. The
+            // lane is fail-closed for exactly this reason: if the worker cannot start, the arm
+            // tears itself down rather than accepting work nothing will drain.
+            //
+            // ⊘ No `PublishGuard` here any more: a `Drop` on this thread would signal
+            // completion when the ENQUEUE returned, which is precisely the lie the inline
+            // version told — "invalidate done" before anything was published.
+            match self.pubqueue.offer(kayfabe_device::pubqueue::MapPublication::for_invalidate(val))
+            {
+                kayfabe_device::pubqueue::Offered::Full => {
+                    // ⊘ Refused, so nothing will publish and nothing will complete. Do it
+                    // inline rather than hang the guest — and SAY SO, because this is the one
+                    // path that still blocks the vCPU and it must never be silent.
+                    eprintln!(
+                        "kayfabe: MMUINVAL-PUBLISH ⊘⊘ LANE FULL — publishing INLINE on the vCPU \
+                         and completing here. This is the fallback, not the design; a boot that \
+                         prints this has a vCPU held for a publication."
+                    );
+                    // ★★★★★ **DECLARED, so the census can see it.** An inline publication on
+                    // a vCPU is precisely the violation `VCPU-BLOCKING` exists to name — and
+                    // the version this replaced did NOT go through this marker, so a boot
+                    // could hold a vCPU for a whole publication while the census printed
+                    // "none declared". A gate only catches what announces itself.
+                    let mut _blocking = kayfabe_util::lock::BlockingSection::enter(
+                        "MMUINVAL fallback: publishing INLINE on the vCPU because the lane                          was full",
+                    );
+                    let mut ctx = self.doorbell_port.publish_ctx();
+                    ctx.vas_publish = VasPublishArm::Publish;
+                    if let Some(line) = _blocking.run(|| ctx.publish_vas_rows(val, None)) {
+                        eprintln!(
+                            "kayfabe: MMUINVAL-PUBLISH {}",
+                            line.replace("\nkayfabe: ", "  ⏎  ")
+                        );
+                    }
+                    self.plane.mmu_inval().complete(self.plane.clock_now_us());
                 }
-            }
-            let _complete = PublishGuard(self.plane.as_ref());
-            // ⊘⊘ **NO SECOND `BlockageGuard` HERE — the first draft had one and it was a
-            // DEFECT, caught by its own census.** `[measured 2026-09-08, boot w390c2]` the
-            // `armed=[… tlb-invalidate=N …]` count read **754** against `triggers=377`:
-            // exactly 2×, because the guard above (gated on `out.invalidate`) already covers
-            // this scope and a nested one re-entered the same halt. ⇒ An arming count that
-            // double-counts makes `publications / armed` — the ratio C1 is graded on — wrong
-            // by a factor nobody would question, because 754 is a plausible number.
-            // ★★★★★ **w390d — THE INVALIDATE PUBLISHES ON ITS OWN AUTHORITY, NOT THE
-            // DOORBELL'S.** `publish_ctx()` carries the doorbell's `vas_publish` arm; using it
-            // unchanged makes the two triggers INSEPARABLE, and the one experiment that
-            // settles R1/R2 is exactly the one that needs them separate:
-            //
-            //   `KAYFABE_VAS_PUBLISH=assert`  ⇒ the DOORBELL censuses and publishes nothing
-            //   `KAYFABE_MMU_INVAL=on`        ⇒ the INVALIDATE publishes
-            //   ⇒ `CUP3_VAL=43` still? Then publication at the doorbell is NOT required for
-            //     correctness, and the trigger can move to the blockage point the owner's
-            //     2026-09-06 ruling demands. A non-43 says the doorbell's half was load-bearing.
-            //
-            // ⊘ `Publish`, not `Drain`. The drain half is scoped by `CeChannelFacts`, which an
-            // invalidate structurally cannot supply — `[measured 2026-09-08, w390c2]` it printed
-            // `⚠⚠ TARGET NEVER VISITED — the drain did NOT run` on all 377 lines. Asking for a
-            // pass that cannot run here would spend the halt on a guaranteed no-op and report
-            // `pinned=0` as if it were a result.
-            let mut ctx = self.doorbell_port.publish_ctx();
-            ctx.vas_publish = VasPublishArm::Publish;
-            if let Some(line) = ctx.publish_vas_rows(val, None) {
-                // ⊘⊘ **FLATTEN, DO NOT PRINT VERBATIM — measured 2026-09-08, boot w390c3.**
-                // `publish_vas_rows` splices `"\nkayfabe: "` between its pin clause and its
-                // publish summary, so a naive `eprintln!("… MMUINVAL-PUBLISH {line}")` tags
-                // ONLY THE FIRST OF THE TWO LINES. The summary — the half carrying
-                // `published=`, `refused=` and `over N VAS row(s)` — came out untagged and
-                // therefore INDISTINGUISHABLE from the doorbell's own publishes in the same
-                // log. `[measured]` `grep MMUINVAL-PUBLISH | grep published=` returned **0**
-                // over a boot in which the pass ran 377 times, and the row histogram mixed
-                // both producers into one pile of 1212.
-                // ⇒ One physical line per invocation, so every clause is attributable to the
-                // trigger that caused it. ⚠ Same class as `a_count_cannot_see_a_substitution`:
-                // the log looked complete and was silently reporting someone else's numbers.
-                eprintln!(
-                    "kayfabe: MMUINVAL-PUBLISH {}",
-                    line.replace("\nkayfabe: ", "  ⏎  ")
-                );
+                _ => {}
             }
         }
         // ★★★★★ **THE DRAIN, and this line is the whole fix (§16.91).**
