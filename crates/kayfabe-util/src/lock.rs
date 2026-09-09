@@ -923,7 +923,7 @@ pub fn vcpu_blocking_census() -> String {
         return format!("VCPU-BLOCKING none declared — {undeclared}{coord}{resp}");
     }
     format!(
-        "VCPU-BLOCKING {}{} — {undeclared}",
+        "VCPU-BLOCKING {}{} — {undeclared}{coord}{resp}",
         rows.iter()
             .map(|(what, n, allowed)| format!(
                 "[{n} × {what}{}]",
@@ -1102,8 +1102,18 @@ mod lock_cost_separates_wait_from_hold {
         }
         let line = lockcost::census();
         assert!(line.contains("worst_hold="), "{line}");
-        assert!(line.contains("rank3"), "the LEAF rank must be the one named: {line}");
-        assert!(!line.contains("slow_holds=0]"), "a >1ms hold must count: {line}");
+        // ⊘ Assert on THIS test's own rank, never on the whole census string. Other ranks are
+        // touched concurrently by sibling tests and a legitimate `slow_holds=0` on one of them
+        // is not this test's business — the first version of this assertion scanned the whole
+        // line and failed on rank1's honest zero.
+        let mine = line
+            .split('[')
+            .find(|seg| seg.starts_with("rank3 "))
+            .unwrap_or_else(|| panic!("the LEAF rank must be named: {line}"));
+        assert!(
+            !mine.contains("slow_holds=0"),
+            "a >1ms hold must count against its OWN rank: {mine}"
+        );
     }
 
     /// ⊘ An untouched rank must print NOTHING, not a row of zeros — "never acquired" and
