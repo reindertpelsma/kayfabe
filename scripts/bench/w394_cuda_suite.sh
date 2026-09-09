@@ -73,7 +73,30 @@ run_one() {                    # run_one <name> <args...>
   echo "--- W394_${ARM^^}_END $name $(date -Is)"
 }
 
-echo "=== ★ w394 CUDA-apps suite — arm=$ARM tag=$TAG $(date -Is) ==="
+# ★★★★★ W394_ONLY — RUN EXACTLY ONE PROBE, BECAUSE BEING FIFTH IS ITSELF A TREATMENT.
+#
+# `[measured w394, boot w394g]` this suite ran six probes in one boot. Probes 1-4 passed;
+# probes 5 and 6 died on `cuInit 999` with `NVRM: _kgspBootGspRm: unexpected WPR2 already up`.
+# That is w370's 5th-DEVICE-OPEN wedge, and the suite reproduced it by accident — it had no
+# idea it was a multi-open test.
+#
+# ⇒ A timing number measured from the 5th open is a number about the wedge. For the parity
+# arm each probe therefore gets its OWN boot, and `W394_ONLY` is how a boot is told which.
+# ⊘ The CORRECTNESS arm is deliberately left as one boot of six: there, four passes plus a
+#   reproduction of a known wall is more information than four boots of one.
+if [ -n "${W394_ONLY:-}" ]; then
+  keep=()
+  for spec in "${PROBES[@]}"; do
+    [ "${spec%%|*}" = "$W394_ONLY" ] && keep+=("$spec")
+  done
+  if [ ${#keep[@]} -eq 0 ]; then
+    echo "W394_OUTCOME=(E) ⊘ UNMEASURED — W394_ONLY=$W394_ONLY names no probe in this suite"
+    exit 2
+  fi
+  PROBES=("${keep[@]}")
+fi
+
+echo "=== ★ w394 CUDA-apps suite — arm=$ARM tag=$TAG only=${W394_ONLY:-<all>} $(date -Is) ==="
 build || echo "⊘ at least one probe did not compile; the sections below are only as complete as W394_BUILT"
 
 if [ "$ARM" = guest ]; then
