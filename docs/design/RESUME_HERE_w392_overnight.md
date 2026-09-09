@@ -2,7 +2,23 @@
 
 **STATUS: LIVE.** Written for a compacted context. Everything below is measured unless marked.
 
-## ★★★★★ THE ONE-LINE STATE — 2 OF 3 ROWS ARE GREEN (w392p, rev `9977197c`)
+## ★★★★★ THE STATE — 3 OF 4 ROWS GREEN (w392q, rev `b703e477`)
+```
+P1 rm-invalidate  ✔ VERIFIED over 4 round(s)
+P2 uvm-memop      ✔ VERIFIED over 4 round(s)      ← the 4 KiB join fix (w392q)
+P3 rpc-bind       ★★★ CONTENT MISMATCH: 0x9140000000 still the poison 0xdeadbeef after 3s
+STALE RACE        ✔ VERIFIED over 2 round(s)
+MEAN_FALSIFIER=PASS       W392D_OUTCOME=(F)
+FbLeafGranularity refusals 0   OPERAND-JOIN(P2 token) 2 JOINED
+host Xid 1 — and it is the FALSIFIER'S OWN unmapped VA. All real work completes without faulting.
+```
+**P3 is a NEW SHAPE: not a timeout, not a fault — the copy completes and the destination still holds
+the poison.** It is the GR/compute lane; the CE lanes all pass. Its setup all succeeds (arm A's
+negative control fires, arm B's `UVM_REGISTER_CHANNEL` is accepted, arm C's schedule then succeeds).
+⇒ Look at whether the GR lane's operands are joined at all (`join_operand_fb_leaves` is the CE path)
+and whether anything gates GR to `CpuCe`.
+
+## SUPERSEDED — 2 OF 3 (w392p, rev `9977197c`)
 ```
 P1          → ✔ VERIFIED over 4 round(s)        ← FIRST EVER GREEN ROW IN THE GUEST
 STALE RACE  → ✔ VERIFIED over 2 round(s)
