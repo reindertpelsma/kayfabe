@@ -137,7 +137,22 @@ adapter was never exercised, so this capture cannot support any claim about wher
 ⊘ Do not cite it."* Matches the memory note that `off` reproduces w327's death. **Not a usable
 isolation arm.** ★ Note the harness refused to let me cite it — that refusal is the feature.
 
-## LLM BASELINE ON TONIGHT'S BUILD (w392llm, rev `6ae36bda`)
+## ★★★★★ THE LLM PASSES (w392llm3, 16 GiB guest, rev `b703e477`)
+```
+Loading weights: 100%|##########| 290/290      the model FULLY LOADS (was dying at 135/290)
+GPU:  LLM_TEXT= ______. A. Paris B. London C. New York D    LLM_TOKENS=16   LLM_OK=1
+CPU:  W392_CPU_TEXT=[ ______. A. Paris B. London C. New York D]
+```
+**BYTE-IDENTICAL to the same-boot CPU oracle. 16 tokens. No corruption.** The campaign's standing
+*"16 tokens of garbage text"* story **is not reproducing**: the 2 GiB guest starved the loader.
+
+⊘⊘ **AND THE GRADER PRINTED `(E) UNMEASURED` OVER IT.** `pick()` was `sed -n "s/^$2=//p"` — anchored
+at `^` — while the GPU arm's output arrives **indented**, so every GPU field read `ABSENT`
+(`GPU_TOKENS=ABSENT`, `GPU_TEXT=[]`). The CPU arm parsed only because its lines are flush-left.
+★ **A grader whose extractor is anchored more tightly than its input reports UNMEASURED for
+SUCCESS.** Fixed in `scripts/bench/w392_llm.sh` (`c6788ab6`); a graded re-run is still owed.
+
+## SUPERSEDED — LLM BASELINE ON TONIGHT'S BUILD (w392llm, rev `6ae36bda`)
 ```
 W392_GPU_TOKENS=0   W392_GPU_RC=1        the GPU run ERRORED, generated nothing
 W392_CPU_TOKENS=16  W392_CPU_RC=0        same-boot CPU oracle healthy
