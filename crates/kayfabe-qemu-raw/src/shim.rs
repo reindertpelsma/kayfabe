@@ -16324,8 +16324,29 @@ impl MmuInvalArm {
 /// [`Status::Unsupported`] for a value that names no arm.
 fn mmu_inval_from(v: Option<&str>) -> Result<MmuInvalArm, (Status, &'static str)> {
     match v {
-        None | Some("off") => Ok(MmuInvalArm::Off),
-        Some("on") => Ok(MmuInvalArm::On),
+        // ★★★★★ **OWNER RULING 2026-09-09 — `off` IS A CORRECTNESS BUG, NOT A CONTROL.**
+        //
+        // > *"doing not an invalidate if tlb invalidate is called is a correctness bug, why is
+        // > it relevant?"* … *"The TLB invalidate also should not be able to be turned off,
+        // > these options are not worth building when we eventually get a prod build. Tuning
+        // > only breaks stuff and the alternatives are never useful."*
+        //
+        // Disarmed, this device **records the guest's `MMU_INVALIDATE` and answers it complete
+        // immediately, having published nothing** — it tells the guest its stale translations
+        // are gone when they are not. That is not a baseline; it is a device that lies.
+        //
+        // ⚠ And it was the DEFAULT for this entire campaign, which means the "known-good"
+        // client pass (sweep on, doorbell publication on, invalidate OFF) was **green on an
+        // incorrect device**: the sweep and the doorbell publication re-derived mappings
+        // continuously and masked the missing invalidate semantics. A green run on a device
+        // that lies about invalidates is not a control — it is a test not checking the thing.
+        //
+        // ⇒ Absent is `On`. `off` is still *spellable* only so an explicit, deliberate
+        // A/B against the old behaviour remains possible while the RPC map-call path is
+        // brought up (`P3 rpc-bind`); it is scheduled for deletion with that path's landing,
+        // and it is NOT reachable by omission any more.
+        None | Some("on") => Ok(MmuInvalArm::On),
+        Some("off") => Ok(MmuInvalArm::Off),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_MMU_INVAL names no arm — it is `off` or `on`, and a value that names \
@@ -18692,6 +18713,44 @@ mod the_doorbell_default_is_the_ruling {
                 doorbell_async_from(Some(bad)).is_err(),
                 "{bad:?} must not name an arm"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod honouring_an_invalidate_is_not_optional {
+    //! ★★★★★ **OWNER, 2026-09-09:** *"doing not an invalidate if tlb invalidate is called is a
+    //! correctness bug, why is it relevant?"*
+    //!
+    //! Exactly right, and it retires an argument I had just made for keeping the switch. With
+    //! the arm off the device records the guest's `MMU_INVALIDATE` and answers it **complete
+    //! immediately, having published nothing** — it reports stale translations gone when they
+    //! are not. A configuration that is wrong by construction cannot serve as a control, and a
+    //! test that passes against it is a test not checking invalidates.
+    //!
+    //! ⚠ It was the default for the whole campaign, so the "known-good" client pass was green
+    //! on a device that lies — the sweep and the doorbell publication re-derived mappings
+    //! continuously and masked it.
+    use super::*;
+
+    #[test]
+    fn absent_means_on_because_ignoring_an_invalidate_is_incorrect_not_a_tuning_choice() {
+        assert_eq!(
+            mmu_inval_from(None).expect("absent is not an error"),
+            MmuInvalArm::On,
+            "a device that acknowledges an invalidate it did not perform is incorrect; that \
+             cannot be what you get by saying nothing"
+        );
+    }
+
+    /// ⊘ `off` remains SPELLABLE — but only deliberately, never by omission — so an explicit
+    /// A/B against the old behaviour is still possible while `P3 rpc-bind` is brought up. It
+    /// is scheduled for deletion with that path's landing.
+    #[test]
+    fn off_is_reachable_only_by_asking_for_it_explicitly() {
+        assert_eq!(mmu_inval_from(Some("off")).expect("off"), MmuInvalArm::Off);
+        for bad in ["1", "true", "yes", "OFF", ""] {
+            assert!(mmu_inval_from(Some(bad)).is_err(), "{bad:?} must not name an arm");
         }
     }
 }
