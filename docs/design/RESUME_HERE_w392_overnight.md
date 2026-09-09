@@ -194,6 +194,15 @@ no LLM run was taken on the pre-change build tonight, so there is **no same-buil
   (sourced: RM allocates channels with `gpFifoOffset=0` on purpose; measured: R31 arm C accepted a
   never-mapped address). A host channel does **not** need its ring bound to be born.
 
+## ⚠⚠⚠ SECOND OPEN QUESTION — A REAL SEMANTIC CHANGE FROM w392p, NEEDS A RULING
+**Birth-at-alloc makes a proc "touched" at CHANNEL ALLOCATION rather than at its first doorbell.**
+Measured consequence (in `l1_mean`): the **user↔user `Dup` with `LateMerge` now REFUSES** where it
+was legal. ⇒ **If a real guest ever dups between user clients AFTER allocating channels (IPC), w392p
+turned that from legal into a refusal.** That is a behaviour change for guest processes sharing
+handles, not a test artifact — and a green suite would have hidden it.
+⊘ Not fixed, not worked around. It needs a decision: is "touched at alloc" correct (and the Dup
+refusal right), or must the touch stay at first doorbell?
+
 ## ⚠⚠ OPEN QUESTION FOR THE OWNER — FIRST THING IN THE MORNING
 **Owner asked 2026-09-09 ~01:20 CEST:** *"we don't do publish at doorbells more right? that's
 removed? including no trap to bar 1/2 or guest declared ram?"*
