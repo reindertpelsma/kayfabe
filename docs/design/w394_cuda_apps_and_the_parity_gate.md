@@ -457,3 +457,52 @@ path is known territory — it is the **state load** inside it that has never be
 opens succeeded because they shared one adapter span; the failure is the **teardown→re-init
 cycle**, which is what a 5th open happened to trigger. A suite of 4 apps is not safe by being
 under a limit — it is safe by never having torn the adapter down.
+
+---
+
+# ⊘⊘⊘ CORRECTION — THE 1.79 s IS A **LOCK WAIT**, NOT THE GSP SERVICING
+Measured on branch `w395-gsp-submit-async` (14 correctness boots + 4 perf boots, both arms,
+binary content-verified each round).
+
+I attributed `worst_trap=1791581us at=bar0+0x110c00` to the inline GSP command drain, because
+that register's handler services the queue in the store. **That inference was wrong**, and
+segment timing (`KAYFABE_KFTIME=census`) says so:
+```
+KFTIME-SEG materialize  max_us=1877849 (armed)   1875049 (control)   ← matches worst_trap to 58 µs
+KFTIME-SEG plane        max_us≈13000  on BOTH arms  ← and the control's `plane` INCLUDES the
+                                                      inline GSP service
+```
+⇒ **The inline GSP service never cost more than ~13 ms per store.** The 1.9 s is the vCPU
+**waiting for the device write lock**, held by an off-vCPU worker — and it is 1.9 s on the arm
+where the GSP work was moved off the vCPU *and* on the arm where it was not.
+
+## ★★★★★ WHY THIS IS THE DAY'S REAL FINDING
+It explains a result I could not explain and reported three times as a puzzle: **`worst_trap`
+barely moved no matter what I deferred** (1.93 → 1.86 → 1.79 s across the async-doorbell arms,
+and now unchanged again across the GSP arms). Of course it did not. Deferring work off the vCPU
+**relocates** the stall unless the worker also stops holding the lock the trap path takes.
+
+⇒ **Corollary, and it belongs in the owner's rule:** *work moved off the vCPU must not hold a
+lock the trap path takes.* Otherwise "asynchronous" buys the contract (the store returns without
+doing the work) and **none of the latency** (the next store blocks on the worker instead).
+
+## ★★ AND THE INSTRUMENT LESSON, WHICH IS THE SAME ONE AGAIN
+`at=bar0+0x110c00` is **where the guest touched**, not **what the trap waited on**. Attaching a
+site to `worst_trap` was a real improvement — it is what found QUEUE_HEAD at all — but a site is
+not a cause, and I read it as one. The thing that actually decided it was **segment timing
+inside the trap**, which no census had.
+⚠ Fourth instance today of one shape: a number that names *something* being read as naming *the
+cause*. `inline_exceptions` over four sites; the GEMM ratio over launch-vs-compute; `worst_trap`
+over every register; and now a trap's site over a trap's cause.
+
+## ⊘ WHAT `w395` DID AND DID NOT BUY
+- **Correctness: unchanged.** 14 boots, both arms: `(P)`, `THREADS 4 of 4`, `MEAN_FALSIFIER=PASS`,
+  `Xid=0`, `rpcRecvPoll=0`, `RmInitAdapter failed=0`.
+- **The contract: bought.** The armed store no longer services the ring; the control's census row
+  `[493 × GSP command ring serviced INLINE in the QUEUE_HEAD store ⊘ NOT ALLOWLISTED]` is present
+  on `off` and **absent** on `on`. `cap1` (359 062 records) replays byte-identical Inline vs
+  Deferred.
+- **Latency: NOT bought.** `worst_trap` unchanged; `gpu_bench` INCONCLUSIVE (`on` 17.5–27.6
+  GFLOP/s vs `off` 21.4–26.3 — the within-arm spread exceeds the between-arm gap).
+⇒ Merge it for the contract and for the census, not for a speed claim. The speed is the next
+rung: **time the lock acquire separately and name the holder.**
