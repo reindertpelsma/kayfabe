@@ -250,6 +250,12 @@ struct Table {
     /// Framebuffer ranges the plane is moving bytes for right now: `(phys, len)`.
     quiesced: Vec<(u64, u64)>,
     next_ticket: u64,
+    /// ★★★ Bumped at the START of every revalidation. A fill that took its ticket before a
+    /// revalidation began and commits after it took its snapshot would install a slot the
+    /// snapshot never saw, over a translation the invalidate may have retired — so a fill
+    /// whose epoch moved between ticket and commit drops its slot (one extra trap on the
+    /// next touch, never a stale mapping).
+    reval_epoch: u64,
     /// Every aperture page ever covered, per window (0 = BAR1, 1 = BAR2).
     pages_ever: [HashSet<u64>; 2],
     /// Every framebuffer frame ever covered, per window.
@@ -488,7 +494,7 @@ impl BarMirror {
         };
 
         // ---- 2. RESERVE + INSTALL (no ranked lock) ---------------------------------------
-        let ticket = {
+        let (ticket, epoch) = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
             if t.slots.contains_key(&gpa) {
                 drop(t);
@@ -518,7 +524,7 @@ impl BarMirror {
             t.next_ticket += 1;
             let ticket = t.next_ticket;
             t.pending.insert(gpa, (ticket, key.phys));
-            ticket
+            (ticket, t.reval_epoch)
         };
         let join_fd;
         let fd = if key.token == ARENA_TOKEN {
@@ -563,7 +569,7 @@ impl BarMirror {
         let kept = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
             let mine = t.pending.remove(&gpa).is_some_and(|(tk, _)| tk == ticket);
-            if mine && still && !Self::quiesced_covers(&t, key.phys) {
+            if mine && still && !Self::quiesced_covers(&t, key.phys) && t.reval_epoch == epoch {
                 t.slots.insert(
                     gpa,
                     Slot {
@@ -631,8 +637,35 @@ impl BarMirror {
             t.slots.remove(g);
         }
         t.live = t.live.saturating_sub(gone.len() as u64);
-        t.pending.retain(|_, (_, p)| !(*p >= phys && *p < end));
         gone
+    }
+
+    /// ★★★ Wait for every fill in flight over `[phys, phys+len)` to reach its commit —
+    /// where it will find the range quiesced and DROP its slot. Cancelling the pendings
+    /// instead would leave a just-installed slot live for the interval between the cancel
+    /// and the fill's own drop, which is exactly the window a quiesce exists to close.
+    /// Bounded: a fill's phase 2 is two `mmap`s and one ioctl, so the wait is microseconds;
+    /// past the bound this says so loudly and proceeds rather than hanging the plane.
+    fn drain_pending_over(&self, phys: u64, len: u64) {
+        let end = phys.saturating_add(len);
+        for i in 0..20_000u32 {
+            let busy = {
+                let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+                t.pending.values().any(|(_, p)| *p >= phys && *p < end)
+            };
+            if !busy {
+                return;
+            }
+            if i == 19_999 {
+                eprintln!(
+                    "kayfabe: BAR-MIRROR ⚠⚠ QUIESCE WAITED 2 s for a fill over fb 0x{phys:x}+0x{len:x} \
+                     that never committed — proceeding; if a slot outlives this, the fill's \
+                     own commit will drop it (quiesced range), but the interval was not zero"
+                );
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_micros(100));
+        }
     }
 
     /// ★★★★★ **THE FLUSH** — on the guest's own `MMU_INVALIDATE` trigger, or a BAR2 root
@@ -642,7 +675,9 @@ impl BarMirror {
     /// invalidate is still exactly right, and the guest's next touch would only re-create it.
     pub fn revalidate(&self, why: &'static str) {
         let snapshot: Vec<(u64, Slot)> = {
-            let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            // ★ The epoch moves BEFORE the snapshot is taken (see `Table::reval_epoch`).
+            t.reval_epoch += 1;
             t.slots.iter().map(|(g, s)| (*g, *s)).collect()
         };
         let mut kept = 0u64;
@@ -767,6 +802,7 @@ impl FbMirrorPort for BarMirror {
             Self::take_over_frames(&mut t, phys, len)
         };
         let n = self.retire(gone);
+        self.drain_pending_over(phys, len);
         self.census.quiesce_calls.fetch_add(1, Ordering::Relaxed);
         self.census.quiesce_removed.fetch_add(n, Ordering::Relaxed);
     }
