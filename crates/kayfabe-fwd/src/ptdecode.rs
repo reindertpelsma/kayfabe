@@ -552,6 +552,14 @@ pub fn plan_pt_sweep(proc: &mut Proc) -> PtSweepPlan {
         // Level 0 is a DECLARED fact — `plan_pt_decode` says the same thing at the same
         // statement, and for a sweep it is the *only* fact needed to start: everything deeper
         // is handed its level by the parent that pointed at it.
+        // ★ WHICH VAS a sweep task is actually for. `[w407-w410]` four fixes upstream each
+        // changed the aggregate (`tasks`, `pages`) without moving `pdb=0x201000`'s coverage,
+        // and an aggregate cannot say whether the VAS that matters was ever in the set. Naming
+        // the pdb is the difference between "sweeps are happening" and "this one is swept".
+        eprintln!(
+            "kayfabe: PT-SWEEP-TASK gpu={} pdb={:#x} reason={:?} sweeps={} dirty={}",
+            gpu.0, pdb.0, reason, vas.sweep.sweeps, vas.sweep.dirty
+        );
         plan.tasks.push(PtDecodeTask {
             gpu,
             pdb,
