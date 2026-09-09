@@ -580,3 +580,37 @@ Not *"which mapping is missing"* but **"why was a scheduled GR channel never exe
 distinction matters because the two have disjoint suspects: publication/join on one side,
 doorbell routing and the forward on the other — and the join census already says the mapping
 side is satisfied for this VA.
+
+---
+
+# ★★★★★ P3 IS LOCALISED: NINE RANGES PARK AND NOTHING EVER SUPPLIES THEIR PHYSICAL
+Chain of measurements, each one narrowing the previous:
+
+| boot | what it showed | what it ruled out |
+|---|---|---|
+| w399b | `P3 rpc-bind` red, P1/P2/STALE/THREADS green | publication in general — 4 of 5 rows pass without the doorbell leg |
+| w401 | P3's VA never in a publish line; publication ran **first**; VA is `ALREADY-JOINED` 46× | scope **and** ordering **and** "the data is unmapped" |
+| w402 | `PROMOTE-BOUND proc=2 bound=0 … parked=6` and `parked=3` | the publisher — **the capture binds nothing for the user proc** |
+| w404 | `PROMOTE-REDRIVE gpu=0 new_globals=1 bound=0`, once | the re-drive as a sufficient fix — globals grew and completed nothing |
+
+⇒ **The user proc binds ZERO promoted ranges across both its promotions and leaves nine
+`AwaitingPhysical`.** The per-GPU globals gain exactly one entry in the whole boot, and it
+completes none of them. So the physical halves those ranges wait for are never supplied by any
+transport we capture — which is precisely why the GR channel is *"scheduled but NEVER
+completed"* while its data VA is joined 46 times over: **the data is mapped and the channel's
+own context is not.**
+
+## ⊘ WHAT IS FIXED AND WHAT IS NOT
+- **Fixed and kept**: the doorbell is no longer a publication trigger; the invalidate publishes
+  off the vCPU and completes from the worker; the RPC map call publishes what it binds; parked
+  ranges are re-driven when a global arrives. All four are independently right.
+- **Not fixed**: `P3 rpc-bind`. The re-drive is a necessary mechanism with nothing to feed it.
+
+## ⇒ THE NEXT QUESTION, NARROWED ONCE MORE
+Not *"why isn't it published"* (it is unbindable, not unpublished) and not *"why isn't it
+re-driven"* (it is, and there is nothing to bind) but: **what transport supplies the physical
+half of a promoted context buffer, and why does the user proc never receive it?**
+⚠ Instrument caveat before the next attempt: `PROMOTE-PARKED-IDS` printed nothing because it
+calls `with_proc_mut` from inside the promote, which is already inside `route_act` — the
+re-entrant call returns `None` and `.flatten()` swallowed it. Read the halves from the `Vas`
+already in scope, not through a second routing call.
