@@ -258,3 +258,47 @@ figure moves together; fix anything else and none of them do.
 The C's 20→60 tok/s figures are **CPU-copy** numbers from a run with `m2cexec` OFF — not a
 forwarding baseline, as `CLAUDE.md` says in the same breath. They are not this number's
 competitor and must not be quoted beside it as though they were.
+
+---
+
+# ★★★★★ WALL 1, ATTRIBUTED — AND `off_trap_claims=0` IS THE HEADLINE
+Boot `w394e`/`w394d`, binary stamped `9fed06ab`, **verified by content** (`HAS_ATTRIBUTION=1`),
+not by stamp. Client re-passed on this build: `THREADS 4 of 4`, `MEAN_FALSIFIER=PASS`.
+
+```
+TRAPWITNESS off_trap_claims=0  inline_exceptions=166  worst_trap=1771955us
+  INLINE-BY-REASON [134 × kayfabe_rt::SharedDevice::verb_op — the execute phase]
+                   [ 32 × kayfabe_fwd::dispose_on — the revocation chain (NOT deferrable)]
+PUBQUEUE coalesce=false queued=0 coalesced=0 refused=0 taken=0 completed=0 depth=0 cap=4096
+```
+
+## ★★★★★ `off_trap_claims=0` — THE DEFERRAL MACHINERY HAS NEVER ONCE FIRED
+`at_a_host_verb` takes the honest branch: `claim` off-trap, `inline_under_bql` on a trap. The
+census says **every host verb in the boot took the inline branch, and none took the other one.**
+The `PUBQUEUE` is idle in every column — `queued=0 taken=0 completed=0 depth=0` against
+`cap=4096`.
+⇒ This is not *"deferral is tuned badly"*. It is *"deferral is built, wired, and has never
+executed"* — the [[a_deferral_is_a_claim_about_consequences]] shape again, and the same shape
+this tree recorded for the completion plane (23 producers on the fill side, **0** on the drain
+side). ⚠ A capability with a `cap=4096` and a zero in every counter reads as *configured*; it
+is *unexercised*.
+
+## ★ THE RANKING, AND ITS SCOPE
+`verb_op` is **81 %** of the mints; `dispose_on` is 19 %; `Proc::drop` and `fwd::round_trip`
+fired **zero** times. ⇒ Two of four sites are dead weight in this workload and the fix has one
+obvious first target.
+⊘ **SCOPE, and it matters**: this is the *mean client* — 198 doorbells, 166 mints ≈ **0.84 per
+doorbell**. The boot that produced `inline_exceptions=46568` had 2 089 doorbells ≈ **22.3 per
+doorbell**, a 27× different regime. A ranking measured at one scale is a hypothesis at the
+other, so `w394e` re-measures it under `gpu_bench` — the workload that actually carries the
+342 ms launch.
+⚠ Do not quote the 81 % as the CUDA-workload split until that lands.
+
+## ⇒ THE FIX IS NAMED
+Make `SharedDevice::verb_op`'s execute phase take the `claim` branch — i.e. run the host verbs
+on the publication worker instead of on the vCPU inside its own MMIO exit. The pubqueue that
+would carry them already exists and is empty.
+⊘ **NOT the async-doorbell lane** ([[the_llm_passes_and_the_cause_was_an_unreachable_default]]:
+default-off and UNSAFE). This is the *execute* phase moving off the trap thread, with the
+doorbell's observable ordering unchanged — a different change with a different safety argument,
+and that argument has to be made explicitly before any of it is armed.
