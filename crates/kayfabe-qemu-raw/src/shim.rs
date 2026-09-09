@@ -8836,6 +8836,10 @@ impl SharedDoorbell {
         // `MOVED-FRAME ALIASING`). ⊘ `still_desired` is the settlement's own count of this
         // case and is left as it was — it is the instrument this arm is graded against.
         let mut kept_for_move = 0usize;
+        // ★★★★★ w392t — bytes carried back into the store by the releases below, and rows
+        // whose join was KEPT because the store refused to carry. See the release arm.
+        let (mut carried_bytes, mut carried_nonzero) = (0u64, 0u64);
+        let mut kept_carry_refused = 0usize;
         let mut first: Option<String> = None;
         for r in revoked {
             // ⊘ Asked AFTER the settlement unbound this row, so `r` is not its own namer. A
@@ -8870,37 +8874,111 @@ impl SharedDoorbell {
                      pages while the engine still reads the real ones",
                     r.va.0, r.phys
                 );
-            } else if release_store_join(plane, r.phys) {
-                self.device
-                    .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
-                frames_given_back.insert(r.phys);
-                released += 1;
-                if first.is_none() {
-                    first = Some(format!(
-                        "va=0x{:x} len=0x{:x} fb_phys=0x{:x} host_va=0x{:x}",
-                        r.va.0, r.len, r.phys, r.host_va
-                    ));
-                }
             } else {
-                // ⊘ The table said this row was a join and the store held nothing at that
-                // offset. LOUD, and the object is NOT freed — see the doc above.
-                stranded += 1;
-                eprintln!(
-                    "kayfabe: JOIN-RELEASE ⚠ TABLE/STORE DISAGREE va=0x{:x} fb_phys=0x{:x} — the \
-                     address table carried a JoinsGuestWindow row here and the framebuffer store \
-                     holds no join at that offset. ⊘ The host object is NOT freed: a leak here is \
-                     strictly better than freeing memory something may still be reading through",
-                    r.va.0, r.phys
-                );
+                // ★★★★★ **w392t — THE STORE'S JOIN IS GIVEN BACK CARRYING ITS BYTES, NEVER
+                // DROPPING THEM.** `[measured w392t, run_w392t_qemu.log:871,890,908,926,1010]`
+                // with four workers in ONE address space, a revoke of a P1 row landed at a
+                // PEER's doorbell (or at the owner's own, `unbound=1 bound=0 unwitnessed=4`)
+                // AFTER the guest had already freed the object, re-allocated the SAME frame and
+                // begun its CPU fill through BAR1. Those bytes went into the still-installed
+                // join; `SparseFb::release_join` then dropped them (*"any bytes the join held
+                // are gone"*); the next `install_join` established only what the guest wrote
+                // AFTER the drop — `:931 established=4096 … 3044 NON-ZERO`, `:939 … 2836`,
+                // `:1015 established=0 bytes` — and the engine read `0x00000000` at word 0 on
+                // exactly those three (VA, round) pairs. ⊘ Serially the same path never
+                // revokes at all (`revoked=0` on all four rounds at `:114-194`), because the
+                // decode only ever sees the PTE re-pointed identically.
+                //
+                // ⇒ `release_join`'s reason #1 — *"a frame no page table names is an
+                // unallocated frame"* — is refuted by the driver's own legal order:
+                // `alloc → CPU fill → map`. A frame can hold live guest bytes while no GPU PTE
+                // names it, so the bytes belong to the FRAMEBUFFER, not to the mapping, and a
+                // release that discards them is a silent substitution. The carrying twin
+                // (`w393`, built for the extent regrow) is the correct verb here too: the
+                // bytes come back into the store's own pages FIRST, under one plane-lock hold,
+                // and the next join over the range establishes from them. Only non-zero pages
+                // materialise, and the next `install_join` removes them again, so the
+                // residency cost is transient and bounded by the join's own extent.
+                match release_store_join_carrying_bytes(plane, r.phys) {
+                    Ok(carried) => {
+                        self.device
+                            .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                        frames_given_back.insert(r.phys);
+                        released += 1;
+                        carried_bytes += carried.carried;
+                        carried_nonzero += carried.nonzero;
+                        if first.is_none() {
+                            first = Some(format!(
+                                "va=0x{:x} len=0x{:x} fb_phys=0x{:x} host_va=0x{:x} \
+                                 carried={}B/{}nz",
+                                r.va.0, r.len, r.phys, r.host_va, carried.carried, carried.nonzero
+                            ));
+                        }
+                        if carried.nonzero > 0 {
+                            // ★ Printed ONLY when bytes actually came back: this is the exact
+                            // event that used to be a silent drop, and a boot with zero such
+                            // lines is a boot in which the old code would have lost nothing.
+                            eprintln!(
+                                "kayfabe: JOIN-RELEASE ★★★★★ CARRIED-BACK va=0x{:x} \
+                                 fb_phys=0x{:x} len=0x{:x}: the store's join is released and \
+                                 {} byte(s) over {} page(s), of which {} NON-ZERO, are back in \
+                                 the store's own pages. ⊘ Before w392t these bytes were DROPPED \
+                                 — the guest had already re-populated the frame under a row the \
+                                 settlement revoked late",
+                                r.va.0,
+                                r.phys,
+                                carried.released_len,
+                                carried.carried,
+                                carried.pages,
+                                carried.nonzero,
+                            );
+                        }
+                    }
+                    Err(e) if e.why == kayfabe_device::CARRY_BACK_NO_JOIN => {
+                        // ⊘ The table said this row was a join and the store held nothing at
+                        // that offset. LOUD, and the object is NOT freed — see the doc above.
+                        stranded += 1;
+                        eprintln!(
+                            "kayfabe: JOIN-RELEASE ⚠ TABLE/STORE DISAGREE va=0x{:x} \
+                             fb_phys=0x{:x} — the address table carried a JoinsGuestWindow row \
+                             here and the framebuffer store holds no join at that offset. ⊘ The \
+                             host object is NOT freed: a leak here is strictly better than \
+                             freeing memory something may still be reading through",
+                            r.va.0, r.phys
+                        );
+                    }
+                    Err(e) => {
+                        // ⊘ The store would not give the bytes back (residency ceiling, or the
+                        // join's own read refused). The store is unchanged, so the JOIN IS
+                        // KEPT — the `ALIAS SURVIVES` shape: this row's host half goes, the
+                        // frame keeps serving its bytes, and the minter ledger keeps its entry
+                        // so the next join at this frame ALIASES it (`MOVED-FRAME ALIASING`)
+                        // rather than minting a second memory. ⊘ Never fall back to the
+                        // dropping release here: that would re-create the w392t zeros exactly
+                        // when memory is tight, which is when it would be least visible.
+                        self.device
+                            .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
+                        kept_carry_refused += 1;
+                        eprintln!(
+                            "kayfabe: JOIN-RELEASE ⚠ KEPT (carry-back refused) va=0x{:x} \
+                             fb_phys=0x{:x}: the store refused to give the join back keeping \
+                             its bytes: `{}`. This row's host object is unmapped and freed; the \
+                             STORE'S JOIN IS KEPT so the frame's bytes survive; its minter \
+                             aliases it on the next join",
+                            r.va.0, r.phys, e.why
+                        );
+                    }
+                }
             }
         }
         // ★★★ SYNCHRONOUS, per the direction ruling. See step 3 above.
         let drained = self.device.drain_pending_releases();
         format!(
             " revoked={} released={released} kept_for_siblings={kept_for_siblings} \
-             kept_for_move={kept_for_move} stranded={stranded} drained={drained} \
-             joined_ranges={} still_desired={still_desired} remaps_refused={remaps_refused} \
-             first=[{}]",
+             kept_for_move={kept_for_move} kept_carry_refused={kept_carry_refused} \
+             carried={carried_bytes}B/{carried_nonzero}nz stranded={stranded} \
+             drained={drained} joined_ranges={} still_desired={still_desired} \
+             remaps_refused={remaps_refused} first=[{}]",
             revoked.len(),
             plane.joined_fb_ranges().len(),
             first.as_deref().unwrap_or("NONE"),
