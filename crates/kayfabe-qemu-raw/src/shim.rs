@@ -5669,14 +5669,24 @@ impl SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm, so the control's log stays
         // byte-comparable.
-        crate::kftime::maybe_inject("vas_publish");
-        if let Some(line) = self.publish_ctx().publish_vas_rows(token, seen.as_ref()) {
-            kft.mark("vas_publish");
-            eprintln!("kayfabe: {line}");
-            kft.mark("log_vas_publish");
-        } else {
-            kft.mark("vas_publish");
-        }
+        // ⊘⊘⊘ **LEG 8 DELETED — 2026-09-09, owner's instruction.**
+        //
+        // > *"no vas publish in doorbells … if it simplifies code, just discard things that I
+        // > don't need such as a vas publish path that runs inline or inside a thread of a
+        // > doorbell thats completely not intended for it."*
+        //
+        // This leg walked a VAS's rows and published them from inside the doorbell body. It
+        // was the campaign's single largest source of doorbell-time work, and it had already
+        // been **default-OFF** (`KAYFABE_VAS_PUBLISH` absent ⇒ `Off`) — every boot that
+        // measured it was a boot whose HARNESS armed it explicitly. Deleting the trigger
+        // rather than leaving it disarmed is the point: a disarmed path is one environment
+        // variable away from being measured again by accident, which is exactly what happened
+        // to every parity number this campaign reported.
+        //
+        // ⊘ **Publication itself is NOT deleted, and must not be** — it has a legitimate
+        // trigger. The owner's 2026-08-14 preference ordering is *"exact GPU boundary (TLB
+        // invalidate) > trap the PTE write"*, and w390 wired that blockage point. What dies
+        // here is the doorbell as a publication trigger, not the ability to publish.
         // ★★★ **The forwarding path is now GIVEN THE RING.** Until it was, `Served` here
         // meant, in `execution_plane_increments.md` §15.5's own words, *"we rang a doorbell
         // on a host channel into which the guest's methods were never copied"* — and the
