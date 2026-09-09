@@ -58,7 +58,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use kayfabe_arch::ids::{GpuId, HClient, HObject, Pdb, VChid};
+use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::{ProcId, rmgraph::RmEvent};
@@ -453,6 +453,11 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
         Duration::from_secs(60),
     );
     let (factory, _rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let mut gpu =
         Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
     for ev in process_events(0) {
@@ -480,6 +485,28 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
         "nothing has been spawned"
     );
 
+    // ★ w393 — the verb that lands in the gap is the birth-at-alloc's first host verb, the
+    // PIN of the channel's own ring page (`SharedDevice::pin_guest_ram`), followed by the
+    // birth itself. ⊘ It used to be the doorbell, which can no longer be a channel's first
+    // verb: a doorbell on an un-born `Passthrough` channel is refused by name
+    // (`FwdFault::PassthroughDoorbellBirth`), so it would resolve the deferral AND refuse —
+    // and "succeeds" is half of what this test pins.
+    let born = kayfabe_tests::birth_passthrough_channels_dev(&device);
+    assert_eq!(
+        born.born.len(),
+        2,
+        "the proc's two channels are born — the verbs in the gap SUCCEEDED, on the \
+         isolate they materialized"
+    );
+
+    assert_eq!(
+        device.isolate_census().materialized,
+        1,
+        "exactly the one the verb needed — a verb materializes what it routes to, never \
+         the whole latch"
+    );
+
+    // …and the exec plane rides the same isolate: the doorbell finds its born channel.
     device
         .doorbell(
             None,
@@ -488,13 +515,11 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
             &[],
             None,
         )
-        .expect("the doorbell resolves the deferral rather than refusing it");
-
+        .expect("the doorbell on the born channel is served on the installed isolate");
     assert_eq!(
         device.isolate_census().materialized,
         1,
-        "exactly the one the verb needed — a verb materializes what it routes to, never \
-         the whole latch"
+        "and it spawned nothing more"
     );
 }
 
@@ -515,6 +540,11 @@ fn two_threads_racing_one_deferral_spawn_twice_and_install_once() {
         Duration::from_secs(60),
     );
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let contested = IsolateId::new(1, GpuId::ZERO); // the first guest proc's
     let gate = Arc::new(SpawnGate::new(contested, 2));
     let mut gpu = Gpu::new(
@@ -542,15 +572,27 @@ fn two_threads_racing_one_deferral_spawn_twice_and_install_once() {
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
 
     let device = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
-    let token = MockArch::token_for(gr_vchid(0));
-    let hands: Vec<_> = (0..2)
-        .map(|_| {
+    // ★ w393 — the two racing verbs are PUBLISHES at distinct VAs. ⊘ They used to be
+    // doorbells, which can no longer be a channel's first verb (an un-born `Passthrough`
+    // channel's doorbell is refused by name, `FwdFault::PassthroughDoorbellBirth`); a birth
+    // would race a SECOND way (`Stale::Rebound` between two births of one channel), which
+    // is not the race under test. A publish lands in the gap exactly as a doorbell did:
+    // `IsolatePending` → spawn → install-or-surplus → re-plan.
+    let hands: Vec<_> = (0..2u64)
+        .map(|t| {
             let d = Arc::clone(&device);
-            thread::spawn(move || d.doorbell(None, GpuId::ZERO, token, &[], None))
+            thread::spawn(move || {
+                d.publish_backing(
+                    GpuId::ZERO,
+                    pdb_of(0),
+                    GpuVa(0x2_0000_0000 + t * 0x10_0000),
+                    0x1000,
+                )
+            })
         })
         .collect();
     for h in hands {
-        h.join().expect("no thread panicked").expect("doorbell");
+        h.join().expect("no thread panicked").expect("publish");
     }
 
     assert_eq!(

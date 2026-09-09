@@ -389,6 +389,26 @@ pub fn channel_params(flags: u32, h_ctx_share: u32, h_vaspace: u32) -> Vec<u8> {
     channel_params_sized(flags, h_ctx_share, h_vaspace, 32)
 }
 
+/// ★ w393 — [`channel_params`] with the ring the guest **always** declares filled in:
+/// `gpFifoOffset @ +8` and `gpFifoEntries @ +16`, both inside the agreed prefix and at the
+/// same offset in **both** vendored trees (`ogkm-580: alloc_channel.h:300-301`,
+/// `ogkm-610: :300-301`). [`channel_params`] leaves them zero, which decodes as the
+/// golden-context channel's deliberate `gpFifoOffset = 0` — a value no user channel
+/// declares, and one a birth-at-alloc can never adopt.
+#[must_use]
+pub fn channel_params_with_ring(
+    flags: u32,
+    h_ctx_share: u32,
+    h_vaspace: u32,
+    gp_fifo_offset: u64,
+    gp_fifo_entries: u32,
+) -> Vec<u8> {
+    let mut p = channel_params(flags, h_ctx_share, h_vaspace);
+    put64(&mut p, 8, gp_fifo_offset);
+    put32(&mut p, 16, gp_fifo_entries);
+    p
+}
+
 /// ★★★★★ A channel's params **with `engineType` declared** — the field that separates a
 /// GR channel from a CE channel, since both are `AMPERE_CHANNEL_GPFIFO_A`.
 ///
@@ -1063,6 +1083,35 @@ impl RpcScript {
             h_object,
             AMPERE_CHANNEL_GPFIFO_A,
             &channel_params(flags, h_ctx_share, h_vaspace),
+        )
+    }
+
+    /// ★ w393 — an `AMPERE_CHANNEL_GPFIFO_A` alloc that **declares its GPFIFO ring**, as
+    /// every user channel does. See [`channel_params_with_ring`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn channel_with_ring(
+        &mut self,
+        h_client: u32,
+        h_parent: u32,
+        h_object: u32,
+        flags: u32,
+        h_ctx_share: u32,
+        h_vaspace: u32,
+        gp_fifo_offset: u64,
+        gp_fifo_entries: u32,
+    ) -> &mut RpcScript {
+        self.alloc(
+            h_client,
+            h_parent,
+            h_object,
+            AMPERE_CHANNEL_GPFIFO_A,
+            &channel_params_with_ring(
+                flags,
+                h_ctx_share,
+                h_vaspace,
+                gp_fifo_offset,
+                gp_fifo_entries,
+            ),
         )
     }
 

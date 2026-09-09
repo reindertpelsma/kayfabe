@@ -91,6 +91,11 @@ const VA2: GpuVa = GpuVa(0x2_0030_0000);
 /// One guest compute process on GPU0, plus the shared verb recorder.
 fn one_proc_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
@@ -173,6 +178,13 @@ fn reclaim_plan(proc: &Proc, gpu: GpuId) -> Orphans {
                     o.free.push(h.memory());
                 }
             }
+        }
+        // ★ w393 — the guest-RAM pins the birth-at-alloc made (the channels' own ring
+        // pages). Their `memory` and GPU mapping are already on the lists above, off the
+        // pinned BINDING's `host()`; what only the pin knows is the guest-RAM MAPPING —
+        // the third kind `Orphans` carries (`Orphans::guest_ram`, w310).
+        for pin in vas.guest_ram_pins.values() {
+            o.guest_ram.push(pin.mapped);
         }
         o.free.push(host_vas);
     }
@@ -313,7 +325,12 @@ fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
              a worker, with core state left standing — the point being that the objects \
              are addressable, not that the core reclaimed them",
         )
-        .dangling(5, 2),
+        // ⊘ w393 — 8 objects + 4 mappings, from 5 + 2: the two channels are born at their
+        // alloc (2 host channels, where the doorbell used to birth one) and each birth
+        // pinned its ring page (2 `OS_DESCRIPTOR` objects, 2 fixed GPU mappings). The
+        // rest is unchanged: 2 sysmem backings + their 2 mappings, the host VAS, the
+        // engine object.
+        .dangling(8, 4),
     );
 
     {
@@ -321,6 +338,11 @@ fn g1_a_full_process_lifecycle_leaves_the_host_ledger_balanced() {
         kayfabe_fwd::publish_backing(proc, GPU, PDB, VA, 0x1000).expect("publish");
         kayfabe_fwd::publish_backing(proc, GPU, PDB, VA2, 0x1000).expect("publish 2");
     }
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(GR), &[VA]).expect("ring");
     kayfabe_fwd::forward_engine_object(
         &mut gpu,

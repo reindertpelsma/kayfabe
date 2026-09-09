@@ -20,10 +20,11 @@ use kayfabe_fwd::{
     CompletionArm, ControlRoute, FwdFault, arm_fence, completion_arm, fence_observed,
     forward_engine_object, handle_doorbell, publish_backing, route_control,
 };
-use kayfabe_isolate::RmError;
+use kayfabe_isolate::{IsolateId, RmError};
 use kayfabe_mocks::{
     MockArch, MockIsolateFactory, RmVerb, SharedRecorder, VerbKind, mock_classes as mc, mock_ctrl,
 };
+use kayfabe_rt::device::{LockMode, SharedDevice};
 use kayfabe_tests::{Guarded, Scenario, identical_handles};
 
 const CLIENT: HClient = HClient(0xAA);
@@ -34,6 +35,11 @@ const CE_VCHID: VChid = VChid(0x11);
 fn compute_gpu() -> (Guarded<Gpu>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -270,26 +276,102 @@ fn the_guests_ce_alloc_params_reach_the_channel_alloc() {
     );
 }
 
-/// ⊘ The other arm: a channel materialized by a **doorbell** hosts no object, so it names
+/// ⊘ The other arm: a channel born **without** an engine object hosts none, so it names
 /// none. Without this, `hosting` could be filled in from something ambient and the test
 /// above would still pass.
+///
+/// ⊘⊘ **REWRITTEN 2026-09-09 (w393) — this used to be
+/// `a_doorbell_materialized_channel_names_no_hosted_object`, and the shape it pinned is
+/// superseded.** A user-proc (`Passthrough`) channel is no longer materialized by its first
+/// doorbell over a ring of ours: it is born at its own channel alloc, over the guest's ring
+/// and USERD, because a doorbell birth adopts the USERD *after* the guest wrote `GP_PUT` and
+/// host RM zeroes a taken USERD (`[measured w233]`, real GA106 — the cursor that rang is
+/// destroyed). The invariant this test carries — *the birth that hosts nothing records
+/// `hosting: None`* — is unchanged; the birth site moved, and the doorbell half became the
+/// refusal pinned by [`a_doorbell_never_births_a_passthrough_channel`].
 #[test]
-fn a_doorbell_materialized_channel_names_no_hosted_object() {
+fn a_channel_born_at_its_alloc_names_no_hosted_object() {
     let (mut gpu, recorder) = compute_gpu();
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
-    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
-        .expect("CE doorbell materializes + rings");
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born.len(),
+        2,
+        "both of the proc's channels are born at their alloc"
+    );
 
+    /// One recorded `AllocChannel`: `(hosting, adopted?)`.
+    type Birth = (Option<(ClassId, Vec<u8>)>, bool);
     let log = recorder.lock().expect("recorder");
-    let hosting = log
+    let births: Vec<Birth> = log
         .log
         .iter()
-        .find_map(|(_, v)| match v {
-            RmVerb::AllocChannel { hosting, .. } => Some(hosting.clone()),
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, adopt, .. } => Some((hosting.clone(), adopt.is_some())),
             _ => None,
         })
-        .expect("the channel was materialized");
-    assert_eq!(hosting, None, "a doorbell materialization hosts no object");
+        .collect();
+    assert_eq!(
+        births.len(),
+        2,
+        "one host channel per guest channel, and no more"
+    );
+    for (hosting, adopted) in births {
+        assert_eq!(hosting, None, "a birth at the alloc hosts no object");
+        assert!(
+            adopted,
+            "★ and it is over the GUEST'S ring — `adopt: Some` is the one shape the \
+             older doorbell arm could never record (its adopt was ring-only and the \
+             engine-object arm always hosts), which is how a verb log tells the three \
+             birth sites apart"
+        );
+    }
+}
+
+/// ★★★★★ **w393 — THE NEW CONTRACT: a doorbell NEVER births a `Passthrough` channel.**
+/// Refused by name, with **zero** host ops — no channel, no schedule, no doorbell — because
+/// the only two things a doorbell birth could do are the two measured defects: adopt the
+/// USERD now (zeroing the cursor that rang, `[measured w233]` / `[measured w392j]` 5× Xid 31)
+/// or birth over our own ring (illegal for the kind; `[measured w392h]` `Xid 0`, the engine
+/// fetches nothing and reports nothing).
+///
+/// ⊘ `Emulated` channels are NOT under this rule: their lazy doorbell birth over our ring is
+/// the design (we drive that ring; it runs our function bodies) — pinned beside this by
+/// [`an_emulated_channels_first_doorbell_still_births_it_over_our_ring`].
+#[test]
+fn a_doorbell_never_births_a_passthrough_channel() {
+    let (mut gpu, recorder) = compute_gpu();
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CE_VCHID)];
+    assert_eq!(
+        gpu.procs[&pid].channels[&cid].kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Passthrough,
+        "the subject is a user-proc channel"
+    );
+    let before = recorder.lock().expect("recorder").log.len();
+
+    let refused = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[]);
+
+    assert_eq!(
+        refused,
+        Err(FwdFault::PassthroughDoorbellBirth {
+            proc: pid,
+            chan: cid,
+            vchid: CE_VCHID,
+        }),
+        "★ refused BY NAME — not `NoVas`, not `NotScheduled`, not a served ring over a \
+         ring of ours"
+    );
+    assert_eq!(
+        recorder.lock().expect("recorder").log.len(),
+        before,
+        "★ and NOTHING was materialized: a refusal that had already allocated a channel \
+         would be the w392h silence with a fault message on top"
+    );
+    assert!(
+        gpu.procs[&pid].channels[&cid].host_channel.is_none(),
+        "the channel is still un-born — the birth belongs to the alloc, not to this arm"
+    );
 }
 
 /// ★ Engine-object forward idempotency (§2.2: "re-sends are idempotent"): a REPLAYED
@@ -598,18 +680,36 @@ fn channel_materialization_declares_its_engine_to_the_backend() {
         );
     }
 
-    // Site 2 (`handle_doorbell` lazy materialization): the CE channel's first ring
-    // materializes it as Ce — not the GR/compute default.
+    // Site 2 (the birth at the channel ALLOC — ⊘ w393: this used to be `handle_doorbell`'s
+    // lazy materialization, which no longer exists for a `Passthrough` channel): the CE
+    // channel is born as Ce — not the GR/compute default — and its first ring finds it so.
     let (mut gpu, recorder) = compute_gpu();
     // ★ #177 — the guest schedules before it rings.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
-    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
-        .expect("CE doorbell materializes + rings");
-    assert_eq!(
-        recorded_engine(&recorder),
-        EngineKind::Ce,
-        "doorbell-materialized CE channel must land on the CE runlist"
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, CE_VCHID)];
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert!(
+        born.born.contains(&(pid, cid)),
+        "the CE channel was born at its alloc"
     );
+    let ce_births: Vec<EngineKind> = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { engine, .. } => Some(*engine),
+            _ => None,
+        })
+        .filter(|e| *e == EngineKind::Ce)
+        .collect();
+    assert_eq!(
+        ce_births.len(),
+        1,
+        "the alloc-born CE channel must land on the CE runlist (and only one channel did)"
+    );
+    handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CE_VCHID), &[])
+        .expect("CE doorbell rings the alloc-born channel");
 }
 
 // =================================================================================
@@ -901,5 +1001,128 @@ fn the_engine_census_buckets_are_distinct_and_cover_the_enum() {
         names.len(),
         EngineKind::ALL.len(),
         "★ two engines share a label"
+    );
+}
+
+/// ★★★ **w393 — THE OTHER KIND, unchanged: an `Emulated` channel IS still born by its first
+/// doorbell, over a ring of OURS.** The guest kernel's own channel (a KERNEL client root ⇒
+/// the system proc ⇒ `GuestChannelKind::Emulated`) has no host channel until it rings; the
+/// ring births one with `adopt: None` (our ring is correct here — we drive it, it runs our
+/// function bodies) and `hosting: None`, on the SYSTEM isolate.
+///
+/// ⊘ The negative control for [`a_doorbell_never_births_a_passthrough_channel`]: the
+/// refusal there is BY KIND, not a blanket. A tree that refused every lazy birth would pass
+/// that test and fail this one.
+///
+/// ⊘ Through `SharedDevice::doorbell`, not `handle_doorbell`: the system proc lives in its
+/// own field, and only the shell's route reaches it.
+#[test]
+fn an_emulated_channels_first_doorbell_still_births_it_over_our_ring() {
+    const K_CLIENT: HClient = HClient(0xC1D0_000A);
+    const K_DEVICE: HObject = HObject(0xC1D0_0101);
+    const K_VASPACE: HObject = HObject(0xC1D0_0110);
+    const K_CHANNEL: HObject = HObject(0xC1D0_0119);
+    const K_VCHID: VChid = VChid(0x40);
+    const K_PDB: Pdb = Pdb(0x2_efa9_c000);
+
+    let (mut gpu, recorder) = compute_gpu();
+    // The guest kernel's own subgraph — the CeUtils/scrubber shape every boot creates.
+    for ev in [
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: HObject(K_CLIENT.0),
+            handle: HObject(K_CLIENT.0),
+            class: mc::CLIENT,
+            facts: kayfabe_tests::kernel_client(),
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: HObject(K_CLIENT.0),
+            handle: K_DEVICE,
+            class: mc::DEVICE,
+            facts: AllocFacts {
+                device_instance: Some(0),
+                ..Default::default()
+            },
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: K_DEVICE,
+            handle: K_VASPACE,
+            class: mc::VASPACE,
+            facts: AllocFacts::default(),
+        },
+        RmEvent::SetPageDir {
+            client: K_CLIENT,
+            vaspace: K_VASPACE,
+            pdb: K_PDB,
+        },
+        RmEvent::Alloc {
+            client: K_CLIENT,
+            parent: K_DEVICE,
+            handle: K_CHANNEL,
+            class: mc::CHANNEL_CE,
+            facts: AllocFacts {
+                h_vaspace: Some(K_VASPACE),
+                userd_flags: MockArch::userd_flags_for(K_VCHID),
+                ..Default::default()
+            },
+        },
+    ] {
+        gpu.apply(ev).expect("the guest kernel's subgraph applies");
+    }
+    kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    let (pid, cid) = gpu.spine.by_vchid[&(GpuId::ZERO, K_VCHID)];
+    assert_eq!(
+        pid,
+        Gpu::SYSTEM_PROC,
+        "the kernel's channel routes to the system proc"
+    );
+    assert_eq!(
+        gpu.system.channels[&cid].kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Emulated,
+        "…and is declared Emulated"
+    );
+    assert!(
+        gpu.system.channels[&cid].host_channel.is_none(),
+        "non-vacuity: nothing has born it yet — the doorbell below is the birth"
+    );
+    let dev = gpu.map(|g| SharedDevice::new(g, LockMode::Sharded));
+
+    let out = dev
+        .doorbell(None, GpuId::ZERO, MockArch::token_for(K_VCHID), &[], None)
+        .expect("★ an Emulated channel's first doorbell births it and rings it");
+    assert_eq!(out.proc, Gpu::SYSTEM_PROC);
+    assert_eq!(
+        out.kind,
+        kayfabe_core::channel_kind::GuestChannelKind::Emulated
+    );
+
+    let births: Vec<(bool, bool)> = recorder
+        .lock()
+        .expect("recorder")
+        .log
+        .iter()
+        .filter(|(iso, _)| *iso == IsolateId::new(Gpu::SYSTEM_PROC.0, GpuId::ZERO))
+        .filter_map(|(_, v)| match v {
+            RmVerb::AllocChannel { hosting, adopt, .. } => {
+                Some((hosting.is_some(), adopt.is_some()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        births,
+        vec![(false, false)],
+        "★ exactly one host channel, born on the SYSTEM isolate by the doorbell, hosting \
+         no object and adopting NO guest ring — `RingSource::Ours`, which is the design \
+         for this kind and illegal for the other"
+    );
+    assert!(
+        dev.with_proc(Gpu::SYSTEM_PROC, |p| p.channels[&cid]
+            .host_channel
+            .is_some())
+            .expect("the system proc is always live"),
+        "…and the core adopted it"
     );
 }

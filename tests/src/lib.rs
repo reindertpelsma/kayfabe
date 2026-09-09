@@ -452,6 +452,11 @@ impl Scenario {
                 error_notifier: Some(ErrorNotifier::Sysmem {
                     gpa: notifier_gpa(h.gr_vchid),
                 }),
+                // ★ w393 — a real user channel always declares its GPFIFO ring, and a
+                // `Passthrough` channel is now BORN at this alloc over that ring
+                // (`birth_passthrough_channels`); without it there is nothing to adopt and
+                // no `ours` fallback for the kind.
+                gp_fifo_ring: Some(ring_fact_for(h.gr_vchid)),
                 ..Default::default()
             },
         });
@@ -466,6 +471,7 @@ impl Scenario {
                 error_notifier: Some(ErrorNotifier::Sysmem {
                     gpa: notifier_gpa(h.ce_vchid),
                 }),
+                gp_fifo_ring: Some(ring_fact_for(h.ce_vchid)),
                 ..Default::default()
             },
         });
@@ -1186,4 +1192,342 @@ pub fn guest_schedules_every_channel(gpu: &mut kayfabe_core::gpu::Gpu) -> usize 
         }
     }
     n
+}
+
+// =================================================================================
+// ★★★★★ w393 — BIRTH-AT-ALLOC: the fixture's guest-userspace channels are born the way
+// production births them, BEFORE any doorbell
+// =================================================================================
+
+/// How much guest RAM a fixture's isolates can see, when it opens the guest-RAM door
+/// ([`kayfabe_mocks::MockIsolateFactory::with_guest_ram`]). Large enough that every
+/// [`ring_grant_for`] offset lands inside it.
+pub const GUEST_RAM_BYTES: u64 = 0x2_0000_0000;
+
+/// One page: the extent every conventional fixture ring is bound and pinned at.
+pub const RING_BYTES: u64 = 4096;
+
+/// The `gpFifoEntries` a conventional fixture channel declares — one page of the mock
+/// codec's 16-byte entries (`script_ring_via`).
+pub const RING_ENTRIES: u32 = (RING_BYTES / 16) as u32;
+
+/// Where the guest-RAM block appears in the hypervisor's own file offsets. ⊘ Deliberately
+/// NOT identity with the GPA (`tests/tests/guest_ram_pin.rs` on why: identity holds on the
+/// bench's `-m 2048` and breaks at `-m 8G`, and a fixture that made them equal could not
+/// tell a correct chain from one that re-derived the offset from the address).
+pub const GUEST_RAM_FILE_BASE: u64 = 0x1_0000_0000;
+
+/// The guest-physical page a conventional fixture channel's GPFIFO ring lives in — keyed
+/// on the vChid for the same reason [`notifier_gpa`] is: two procs in the #14 shape share
+/// handle *values*, so a ring keyed on a handle would alias across them.
+#[must_use]
+pub fn ring_gpa_for(vchid: kayfabe_arch::ids::VChid) -> u64 {
+    0x5100_0000 + (u64::from(vchid.0) << 12)
+}
+
+/// The guest VA that channel's ring is declared at (`gpFifoOffset`) — biased by
+/// [`PB_VA_BIAS`], so a VA is never a plausible GPA.
+#[must_use]
+pub fn ring_va_for(vchid: kayfabe_arch::ids::VChid) -> GpuVa {
+    pb_va(ring_gpa_for(vchid))
+}
+
+/// The declared `gp_fifo_ring` fact for a conventional fixture channel.
+#[must_use]
+pub fn ring_fact_for(vchid: kayfabe_arch::ids::VChid) -> kayfabe_core::rmgraph::GpFifoRing {
+    kayfabe_core::rmgraph::GpFifoRing {
+        va: ring_va_for(vchid).0,
+        entries: RING_ENTRIES,
+    }
+}
+
+/// The VMM's grant for `len` bytes of guest RAM at guest-physical `gpa` — what a
+/// hypervisor would state for a ring page, minted the only way a grant can be.
+#[must_use]
+pub fn ring_grant_for(gpa: u64, len: u64) -> kayfabe_isolate::GuestRamGrant {
+    kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+        GUEST_RAM_FILE_BASE + gpa,
+        len,
+        Prot::ReadWrite,
+    )
+}
+
+/// What [`birth_passthrough_channels`] did.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BornChannels {
+    /// Every `Passthrough` channel born by this call, in `(proc, chan)` order.
+    pub born: Vec<(kayfabe_core::ProcId, kayfabe_core::ChanId)>,
+    /// ⊘ `Passthrough` channels that name NO VAS yet — a birth needs a host VAS to place
+    /// the ring in, so these stay un-born, **by name**, until the guest's `SetPageDir`
+    /// lands and the caller births again. Reported, never silently skipped.
+    pub no_vas: Vec<(kayfabe_core::ProcId, kayfabe_core::ChanId)>,
+}
+
+/// One un-born `Passthrough` channel's coordinates, collected under one borrow so the
+/// acts below can take `&mut`.
+struct UnbornPassthrough {
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+    key: kayfabe_core::rmgraph::ResourceKey,
+    gpu: kayfabe_arch::ids::GpuId,
+    pdb: Option<Pdb>,
+    vchid: kayfabe_arch::ids::VChid,
+}
+
+fn unborn_passthrough(proc: &kayfabe_core::gpu::Proc) -> Vec<UnbornPassthrough> {
+    proc.channels
+        .values()
+        .filter(|c| {
+            c.kind == kayfabe_core::channel_kind::GuestChannelKind::Passthrough
+                && c.host_channel.is_none()
+        })
+        .map(|c| UnbornPassthrough {
+            pid: proc.id,
+            cid: c.id,
+            key: c.key,
+            gpu: c.gpu,
+            pdb: c.vas_pdb,
+            vchid: c.vchid,
+        })
+        .collect()
+}
+
+/// The ring's `(start, len, gpa)` in `vas`'s table — bound by the fixture at the
+/// conventional GPA if the guest has not bound it already. ★ An existing binding is kept
+/// (a fixture that scripted its own ring through [`bind_ring_at`] keeps its bytes).
+fn ring_binding_in(
+    vas: &mut kayfabe_core::gpu::Vas,
+    ring_va: GpuVa,
+    vchid: kayfabe_arch::ids::VChid,
+) -> (u64, u64, u64) {
+    if let Some((start, len, b)) = vas.table.binding_at(ring_va) {
+        return (start, len, b.phys());
+    }
+    let gpa = ring_gpa_for(vchid);
+    let pdb = vas.pdb;
+    vas.table
+        .bind(
+            pdb,
+            ring_va,
+            RING_BYTES,
+            kayfabe_mmu::Binding::declared_by_guest(gpa, kayfabe_arch::Aperture::SysmemCoherent)
+                .expect("the fixture declares a kind the guest can declare"),
+        )
+        .expect("the ring page binds");
+    (ring_va.0, RING_BYTES, gpa)
+}
+
+fn ring_declared_by(
+    node: Option<&kayfabe_core::rmgraph::RmNode>,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+) -> GpuVa {
+    let ring = node.and_then(|n| n.facts.gp_fifo_ring).unwrap_or_else(|| {
+        panic!(
+            "★ w393 — {pid:?}/{cid:?} is a Passthrough channel that DECLARED NO GPFIFO RING, so \
+             nothing can birth it: a passthrough birth adopts the guest's ring at the channel \
+             alloc and there is no `ours` fallback for this kind. Declare one on the channel's \
+             `AllocFacts::gp_fifo_ring` (`Scenario::compute_process` does; `ring_fact_for` is \
+             the conventional value)."
+        )
+    });
+    GpuVa(ring.va)
+}
+
+fn expect_pinned(out: Result<kayfabe_fwd::GuestRamPinned, kayfabe_fwd::FwdFault>, va: GpuVa) {
+    match out {
+        Ok(_) => {}
+        Err(kayfabe_fwd::FwdFault::Rm {
+            err: kayfabe_isolate::RmError::GuestRamUnavailable,
+            ..
+        }) => panic!(
+            "★ w393 — the ring page at {va:?} cannot be pinned because this fixture's isolates \
+             have NO guest-RAM door: build the factory with \
+             `.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES)`. A passthrough birth adopts the \
+             guest's OWN ring, and the mock refuses to describe guest pages it was never told \
+             exist (the same refusal the real path makes without `memory-backend-memfd,share=on`)."
+        ),
+        Err(e) => panic!("★ w393 — the ring page at {va:?} did not pin: {e:?}"),
+    }
+}
+
+fn expect_born(
+    out: Result<kayfabe_fwd::ChannelBirthOutcome, kayfabe_fwd::FwdFault>,
+    pid: kayfabe_core::ProcId,
+    cid: kayfabe_core::ChanId,
+) {
+    match out {
+        Ok(kayfabe_fwd::ChannelBirthOutcome::Born { .. }) => {}
+        other => panic!(
+            "★ w393 — {pid:?}/{cid:?} was not born at its channel alloc: {other:?}. The ring \
+             page was pinned (GuestPhysDma + SoleBacking, the guest's own bytes) just before \
+             this, so a refusal here is the birth chain's, not the fixture's."
+        ),
+    }
+}
+
+/// ★★★★★ **w393 — birth every un-born `Passthrough` channel the way production now does:
+/// at the guest's own channel alloc, over the guest's own ring, BEFORE any doorbell.**
+///
+/// # Why this helper exists, and why it is not a bypass
+///
+/// A doorbell used to birth a user-proc's host channel lazily, over a ring of ours. That
+/// was wrong for the kind (`Passthrough` ⇒ the guest drives its own ring and hardware
+/// writes `GP_GET`; `RingSource::Ours` is illegal there) and, worse, adopting the guest's
+/// USERD at a doorbell birth **destroys the cursor that rang it** — host RM accepts a
+/// caller-supplied USERD and then zeroes all 512 bytes (`[measured w233]`, real GA106).
+/// So `kayfabe_fwd::plan_doorbell` now refuses a `Passthrough` doorbell on an un-born
+/// channel **by name** (`FwdFault::PassthroughDoorbellBirth`), and the birth lives at the
+/// alloc (`kayfabe_fwd::plan_channel_birth`), where the guest has not yet written a cursor.
+///
+/// This is the step every doorbell-ringing harness in the workspace was missing once the
+/// birth moved — restored in one place, through the **production chain** and nothing else:
+///
+/// 1. the guest's own ring page is bound in the channel's VAS (the fixture stands in for
+///    the populate pass, as `tests/tests/guest_ram_pin.rs` does);
+/// 2. it is **pinned** through [`kayfabe_fwd::pin_guest_ram`] — an `OS_DESCRIPTOR` over the
+///    guest's own pages, the shape `GuestRing::memory` calls production, which is what makes
+///    the binding *"the guest's own bytes"* (`GuestPhysDma` + `SoleBacking`) and therefore
+///    adoptable;
+/// 3. the channel is born through [`kayfabe_fwd::birth_channel`], which adopts that ring
+///    (and, when reachable, the USERD) or refuses by name. ⊘ No fallback to our ring exists
+///    on that chain — `VerbPlan::ChannelBirth::adopt` is not an `Option`.
+///
+/// `Emulated` channels are untouched: their doorbell birth over our ring is still the
+/// design, and `kayfabe_fwd::plan_channel_birth` skips them by name.
+///
+/// # Panics
+/// If a `Passthrough` channel declares no ring, its pin is refused, or its birth is
+/// refused — each with the cause named. A channel that names no VAS is reported in
+/// [`BornChannels::no_vas`] rather than panicked on: its birth is legitimately later.
+pub fn birth_passthrough_channels(gpu: &mut kayfabe_core::gpu::Gpu) -> BornChannels {
+    let mut out = BornChannels::default();
+    let work: Vec<UnbornPassthrough> = gpu.procs.values().flat_map(unborn_passthrough).collect();
+    for u in work {
+        let Some(pdb) = u.pdb else {
+            out.no_vas.push((u.pid, u.cid));
+            continue;
+        };
+        let ring_va = ring_declared_by(gpu.spine.rmgraph.node_of_resource(u.key), u.pid, u.cid);
+        let proc = gpu.procs.get_mut(&u.pid).expect("the proc is live");
+        let vas = proc
+            .vases
+            .get_mut(&(u.gpu, pdb))
+            .expect("the channel's VAS exists");
+        let (start, len, gpa) = ring_binding_in(vas, ring_va, u.vchid);
+        expect_pinned(
+            kayfabe_fwd::pin_guest_ram(proc, u.gpu, pdb, GpuVa(start), ring_grant_for(gpa, len)),
+            ring_va,
+        );
+        expect_born(
+            kayfabe_fwd::birth_channel(gpu, u.key.origin.client, u.key.origin.handle, None),
+            u.pid,
+            u.cid,
+        );
+        out.born.push((u.pid, u.cid));
+    }
+    out
+}
+
+/// One un-born `Passthrough` channel whose ring page [`pin_passthrough_rings_dev`] has
+/// pinned — everything a birth needs, and the identity a test races the birth on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PinnedRing {
+    /// The owning proc.
+    pub pid: kayfabe_core::ProcId,
+    /// The channel.
+    pub cid: kayfabe_core::ChanId,
+    /// The guest's `hClient` — `SharedDevice::birth_channel_by_handle`'s first key.
+    pub client: HClient,
+    /// The guest's channel handle — its second key.
+    pub channel: HObject,
+}
+
+/// ★ **Steps 1–2 of [`birth_passthrough_channels`] against a live
+/// [`kayfabe_rt::device::SharedDevice`]** — bind (if the guest has not) and PIN every
+/// un-born `Passthrough` channel's ring page through the device's own `pin_guest_ram`
+/// verb, one rank-1 lock at a time — and hand back what is now ready to be born.
+///
+/// Split from [`birth_passthrough_channels_dev`] so a test can put the BIRTH itself in
+/// flight (hold its `AllocChannel`, move the world under it) — the R5 canaries — with the
+/// pin, which is not the verb under study, already done.
+///
+/// # Panics
+/// As [`birth_passthrough_channels`]. A channel that names no VAS is skipped and reported
+/// in the returned pair's second element rather than panicked on.
+pub fn pin_passthrough_rings_dev(
+    dev: &kayfabe_rt::device::SharedDevice,
+) -> (
+    Vec<PinnedRing>,
+    Vec<(kayfabe_core::ProcId, kayfabe_core::ChanId)>,
+) {
+    use kayfabe_core::gpu::Gpu;
+    let mut ready = Vec::new();
+    let mut no_vas = Vec::new();
+    let mut work: Vec<UnbornPassthrough> = Vec::new();
+    for pid in dev.live_pids() {
+        if pid == Gpu::SYSTEM_PROC {
+            continue;
+        }
+        if let Some(mut w) = dev.with_proc(pid, unborn_passthrough) {
+            work.append(&mut w);
+        }
+    }
+    for u in work {
+        let Some(pdb) = u.pdb else {
+            no_vas.push((u.pid, u.cid));
+            continue;
+        };
+        let ring_va =
+            dev.with_spine(|s| ring_declared_by(s.rmgraph.node_of_resource(u.key), u.pid, u.cid));
+        let (start, len, gpa) = dev
+            .with_proc_mut(u.pid, |p| {
+                let vas = p
+                    .vases
+                    .get_mut(&(u.gpu, pdb))
+                    .expect("the channel's VAS exists");
+                ring_binding_in(vas, ring_va, u.vchid)
+            })
+            .expect("the proc is live");
+        expect_pinned(
+            dev.pin_guest_ram(u.gpu, pdb, GpuVa(start), ring_grant_for(gpa, len)),
+            ring_va,
+        );
+        ready.push(PinnedRing {
+            pid: u.pid,
+            cid: u.cid,
+            client: u.key.origin.client,
+            channel: u.key.origin.handle,
+        });
+    }
+    (ready, no_vas)
+}
+
+/// [`birth_passthrough_channels`] against a live [`kayfabe_rt::device::SharedDevice`] —
+/// [`pin_passthrough_rings_dev`], then the device's own `birth_channel_by_handle` for each
+/// pinned ring. Also drains the device's own birth latch (`SharedDevice::apply` latches
+/// every channel alloc, as the shim's register-write tail would), so a fixture that
+/// allocates a proc *after* wrapping sees the same outcome.
+///
+/// # Panics
+/// As [`birth_passthrough_channels`].
+pub fn birth_passthrough_channels_dev(dev: &kayfabe_rt::device::SharedDevice) -> BornChannels {
+    let (ready, no_vas) = pin_passthrough_rings_dev(dev);
+    let mut out = BornChannels {
+        born: Vec::new(),
+        no_vas,
+    };
+    for r in ready {
+        expect_born(
+            dev.birth_channel_by_handle(r.client, r.channel, None),
+            r.pid,
+            r.cid,
+        );
+        out.born.push((r.pid, r.cid));
+    }
+    // The latch `SharedDevice::apply` filled for these allocs: every row is now
+    // `AlreadyBorn` (or `Emulated`), and draining it here keeps the device in the state the
+    // shim's tail would leave it in.
+    let _ = dev.run_pending_channel_births(&[]);
+    out
 }

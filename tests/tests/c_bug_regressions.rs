@@ -47,6 +47,11 @@ fn gpu_with_window(
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(window, arena_len);
     (
         Guarded::new(
@@ -89,6 +94,26 @@ fn build_proc(
     // than `NotScheduled`.
     kayfabe_tests::guest_schedules_every_channel(gpu);
     (pid, cid)
+}
+
+/// [`build_proc`], then **born**: every `Passthrough` channel's host channel is created at
+/// its alloc, over the guest's own ring, before any doorbell — because a doorbell no
+/// longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by name: adopting the
+/// guest's USERD at a doorbell zeroes the cursor that rang it, `[measured w233]`, and our
+/// own ring is illegal for the kind).
+///
+/// ⊘ Kept apart from [`build_proc`] on purpose: the `cb14_*_touch_alone_*` tests need a
+/// proc whose data plane is **untouched** (no host channel, no host VAS) so they can set
+/// ONE clause by hand, and a birth at build would touch two of the three.
+fn born_proc(
+    gpu: &mut Gpu,
+    client: HClient,
+    pdb: Pdb,
+    vchids: (u16, u16),
+) -> (kayfabe_core::ProcId, kayfabe_core::ChanId) {
+    let out = build_proc(gpu, client, pdb, vchids);
+    kayfabe_tests::birth_passthrough_channels(gpu);
+    out
 }
 
 /// Lay out a one-entry GPFIFO ring pointing at method words written to guest RAM, and
@@ -604,7 +629,7 @@ fn cbfuzz_gpfifo_range_gpa_near_umax_never_panics() {
 fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
     let (mut gpu, _rec) = fresh_gpu();
     // Proc A is built AND fully active: published, scheduled, rung, completed.
-    let (pid_a, _cid_a) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_a, _cid_a) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let pub_a = publish_backing(
         gpu.procs.get_mut(&pid_a).unwrap(),
         GpuId::ZERO,
@@ -633,7 +658,7 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
         .ack(batch.events[0]);
 
     // NOW proc B arrives — identical handles, identical guest VA.
-    let (pid_b, _cid_b) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let (pid_b, _cid_b) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     let pub_b = publish_backing(
         gpu.procs.get_mut(&pid_b).unwrap(),
         GpuId::ZERO,
@@ -687,8 +712,8 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
 #[test]
 fn cb14_late_merge_after_touch_is_loud_and_atomic() {
     let (mut gpu, _rec) = fresh_gpu();
-    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
-    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let (pid_a, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     let pub_a = publish_backing(
         gpu.procs.get_mut(&pid_a).unwrap(),
         GpuId::ZERO,
@@ -903,12 +928,13 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
 #[test]
 fn cb14_ring_gate_on_vas_freed_channel_refuses_nonempty_allows_empty() {
     let (mut gpu, rec) = fresh_gpu();
-    let (_pid, cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (_pid, cid) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
     let token = MockArch::token_for(VChid(0x10));
 
-    // Materialize + schedule the GR channel with an empty (trivially gated) ring.
-    let first =
-        handle_doorbell(&mut gpu, GpuId::ZERO, token, &[]).expect("first ring materializes");
+    // Schedule the GR channel with an empty (trivially gated) ring. ⊘ w393: the host
+    // channel was born at the alloc (`build_proc`), not here — a doorbell schedules and
+    // rings, it no longer materializes.
+    let first = handle_doorbell(&mut gpu, GpuId::ZERO, token, &[]).expect("first ring schedules");
     assert!(first.scheduled_now);
 
     // The guest frees its VASpace HANDLE: re-projection nulls the channel's declared
@@ -967,8 +993,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     let (mut gpu, rec) = gpu_with_window(0x1_0000_0000..0x1_3000_0000, 0x1000_0000);
 
     // ---- Generation 1: two procs, real work. ----
-    let (pid_a, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
-    let (pid_b, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let (pid_a, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     publish_backing(
         gpu.procs.get_mut(&pid_a).unwrap(),
         GpuId::ZERO,
@@ -1025,8 +1051,8 @@ fn cb_lifecycle_full_teardown_reap_rebuild_identical() {
     );
 
     // ---- Generation 2: IDENTICAL handles, PDBs, VAs. ----
-    let (pid_a2, _) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
-    let (pid_b2, _) = build_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
+    let (pid_a2, _) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+    let (pid_b2, _) = born_proc(&mut gpu, HClient(0xBB), B_PDB, (0x20, 0x21));
     let pa2 = publish_backing(
         gpu.procs.get_mut(&pid_a2).unwrap(),
         GpuId::ZERO,
@@ -1102,7 +1128,7 @@ fn cb_lifecycle_process_churn_never_exhausts_the_window() {
     for generation in 0..24u64 {
         // Same client handle + PDB + VA every generation — the #12 identical-reuse
         // shape, at device-lifecycle scale.
-        let (pid, _cid) = build_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
+        let (pid, _cid) = born_proc(&mut gpu, HClient(0xAA), A_PDB, (0x10, 0x11));
         let p = publish_backing(
             gpu.procs.get_mut(&pid).unwrap(),
             GpuId::ZERO,

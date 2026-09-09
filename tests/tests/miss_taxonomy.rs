@@ -69,6 +69,11 @@ fn fresh_graph() -> (MockArch, RmGraph) {
 fn fresh_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     Guarded::new(
         "miss_taxonomy::fresh_gpu",
@@ -950,6 +955,9 @@ fn defer_a_channel_with_an_unresolved_vaspace_faults_at_use_then_resolves() {
             facts: AllocFacts {
                 h_vaspace: Some(H_VAS),
                 userd_flags: MockArch::userd_flags_for(GR_VCHID),
+                // ★ w393 — the ring a real channel always declares, so the channel can be
+                // BORN once its VAS arrives (a birth adopts this ring; nothing else can).
+                gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(GR_VCHID)),
                 ..Default::default()
             },
         },
@@ -991,6 +999,17 @@ fn defer_a_channel_with_an_unresolved_vaspace_faults_at_use_then_resolves() {
     );
     // #177: the guest always schedules a channel before ringing its doorbell.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — and the channel is BORN now that it has a VAS to be born in: the birth is
+    // at the alloc in production, re-latched by the guest's `GPFIFO_SCHEDULE` for exactly
+    // this late-VAS shape (`guest_ring_adoption.md` §3.3). Before the VAS arrived the
+    // birth could not happen (`no_vas`), and the doorbell above was refused `NoVas` — by
+    // name, BEFORE the birth refusal it would otherwise have met.
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born,
+        vec![(pid, cid)],
+        "★ the SAME channel, born on its resolved VAS"
+    );
     kayfabe_fwd::publish_backing(
         gpu.procs.get_mut(&pid).unwrap(),
         GpuId::ZERO,

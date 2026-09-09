@@ -85,6 +85,11 @@ const GPU1: GpuId = GpuId(1);
 fn world() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GPU0, GPU1])
         .expect("the two-GPU device realizes");
@@ -101,6 +106,13 @@ fn world() -> Guarded<Gpu> {
     // `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`; declare every channel scheduled so the
     // doorbells this world's callers ring reach their actual subject, not `NotScheduled`.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    // ⊘ Not traced: the births are the world's bring-up, not the script under
+    // observation — exactly as the isolates' spawns are not.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     Guarded::new("trace_replay::world", gpu, recorder)
 }
 

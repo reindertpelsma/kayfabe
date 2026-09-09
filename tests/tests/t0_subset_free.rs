@@ -119,6 +119,11 @@ fn device_with(
 ) -> (Guarded<Arc<SharedDevice>>, ProcId, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
 
@@ -170,6 +175,8 @@ fn declare_channel(device: &SharedDevice, handle: HObject, vchid: VChid) {
             facts: AllocFacts {
                 h_vaspace: Some(identical_handles(0, 0).vaspace),
                 userd_flags: MockArch::userd_flags_for(vchid),
+                // ★ w393 — the ring every real channel declares; the birth below adopts it.
+                gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(vchid)),
                 ..Default::default()
             },
         })
@@ -178,6 +185,11 @@ fn declare_channel(device: &SharedDevice, handle: HObject, vchid: VChid) {
     device
         .schedule_channel(CLIENT, handle, true)
         .expect("the guest schedules the channel it just declared");
+    // ★ w393 — …and the channel is BORN at its alloc (the device latched the alloc; this
+    // is the register-write tail's drain), so the doorbell that follows finds a host
+    // channel instead of refusing `PassthroughDoorbellBirth` by name. ⊘ Every un-born
+    // `Passthrough` channel of the proc is born here, the fixture's own two included.
+    kayfabe_tests::birth_passthrough_channels_dev(device);
 }
 
 /// The guest frees one of its own objects and keeps running.
@@ -354,7 +366,7 @@ fn freeing_a_channel_frees_its_engine_objects_before_the_channel() {
         let forwarded = device
             .forward_engine_object(GPU, SCRATCH_VCHID, kayfabe_tests::COMPUTE_CLASS, &[], None)
             .expect("and forwards an engine object onto it");
-        let host_channel = host_channel_of(&rec, pid);
+        let host_channel = host_channel_of(&device, pid);
 
         let m = mark(&rec);
         guest_free(&device, SCRATCH_CHAN);
@@ -399,15 +411,22 @@ fn freeing_a_channel_frees_its_engine_objects_before_the_channel() {
     }
 }
 
-/// The host channel handle the mock minted for the scratch channel, read off the log.
-fn host_channel_of(rec: &SharedRecorder, pid: ProcId) -> HostHandle {
-    verbs_since(rec, pid, 0)
-        .into_iter()
-        .find_map(|v| match v {
-            RmVerb::AllocChannel { handle, .. } => Some(handle),
-            _ => None,
+/// The host channel handle the mock minted for the scratch channel.
+///
+/// ⊘ w393 — read off the CORE's own record of the scratch channel, not *"the first
+/// `AllocChannel` in the log"*: since the birth-at-alloc, the fixture's two main channels
+/// are born before the scratch one, so the first alloc in the log is no longer it.
+fn host_channel_of(device: &SharedDevice, pid: ProcId) -> HostHandle {
+    device
+        .with_proc(pid, |p| {
+            p.channels
+                .values()
+                .find(|c| c.vchid == SCRATCH_VCHID)
+                .expect("the scratch channel is live")
+                .host_channel
+                .expect("the birth at its alloc gave it a host channel")
         })
-        .expect("the ring allocated a host channel")
+        .expect("the proc is live")
 }
 
 // ---------------------------------------------------------------------------------

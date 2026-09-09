@@ -70,6 +70,11 @@ fn build(
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     // Big window / 16-GiB arenas: a real soak must not exhaust the bump allocator
     // (no recycling yet — gpa.rs). 3 procs × ~1000 iters × 64 KiB ≈ 192 MiB each.
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x4_0000_0000);
@@ -97,6 +102,11 @@ fn build(
     }
     // ★ #177 — the guest schedules before it rings.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     let pids: Vec<_> = infs
         .iter()
         .map(|inf| *gpu.spine.by_pdb.get(&(GpuId::ZERO, inf.pdb)).unwrap())

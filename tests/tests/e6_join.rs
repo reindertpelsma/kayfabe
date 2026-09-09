@@ -402,12 +402,71 @@ fn a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever() {
     // AFTER that (a dead isolate plane), not the scheduling gate itself.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
     let vchid = gpu.procs[&pid].channels[&cid].vchid;
+    // ★ w393 — the guest's own ring page, declared by the channel and bound by the fixture
+    // (the populate pass's stand-in, as `guest_ram_pin.rs` does it). Its PIN is the first
+    // verb of the birth-at-alloc, and therefore the first submission to reach the pool.
+    let ring_va = kayfabe_tests::ring_va_for(vchid);
+    let ring_gpa = kayfabe_tests::ring_gpa_for(vchid);
+    gpu.procs
+        .get_mut(&pid)
+        .expect("live")
+        .vases
+        .get_mut(&(GPU, PDB0))
+        .expect("the compute VAS")
+        .table
+        .bind(
+            PDB0,
+            ring_va,
+            kayfabe_tests::RING_BYTES,
+            kayfabe_mmu::Binding::declared_by_guest(
+                ring_gpa,
+                kayfabe_arch::Aperture::SysmemCoherent,
+            )
+            .expect("a kind the guest can declare"),
+        )
+        .expect("the ring page binds");
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
+    // ⊘⊘ **CORRECTED 2026-09-09 (w393), above the paragraph it corrects.** The doc above
+    // says *"the DOORBELL does not [refuse upstream of the pool]"*. Since w393 it does, for
+    // a `Passthrough` channel that was never born: `FwdFault::PassthroughDoorbellBirth`,
+    // by name, before `Staged::check_out` — a doorbell no longer births a channel, so on a
+    // dead plane it never reaches the pool at all. Asserted here so the arm below is read
+    // for what it is: the doorbell is no longer the submission that reaches the pool.
     let (tx, rx) = mpsc::channel();
     let d = Arc::clone(&dev);
     std::thread::spawn(move || {
         let _ = tx.send(d.doorbell(None, GPU, MockArch::token_for(vchid), &[], None));
+    });
+    let got = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("★ the doorbell on an un-born channel must not park either");
+    assert_eq!(
+        got.map(|o| o.chan),
+        Err(FwdFault::PassthroughDoorbellBirth {
+            proc: pid,
+            chan: cid,
+            vchid,
+        }),
+        "★ w393 — refused UPSTREAM of the pool, by name: an un-born passthrough channel is \
+         refused before any worker is asked for, dead plane or not"
+    );
+
+    // ★★★ THE FINDING, on the verb that DOES reach the pool: the ring page's pin
+    // (`VerbPlan::PinGuestRam`) plans against a routed channel's VAS and an isolate that can
+    // never serve — exactly the configuration the doorbell used to carry here.
+    let (tx, rx) = mpsc::channel();
+    let d = Arc::clone(&dev);
+    std::thread::spawn(move || {
+        let _ = tx.send(
+            d.pin_guest_ram(
+                GPU,
+                PDB0,
+                ring_va,
+                kayfabe_tests::ring_grant_for(ring_gpa, kayfabe_tests::RING_BYTES),
+            )
+            .map(|p| p.host_va),
+        );
     });
     let got = rx.recv_timeout(Duration::from_secs(10)).expect(
         "★★★ IT PARKED. `Isolate::checkout` answers `None` for a saturated pool AND for \
@@ -416,7 +475,7 @@ fn a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever() {
          E6 finding — see FwdFault::IsolateRetired.",
     );
     assert_eq!(
-        got.map(|o| o.chan),
+        got,
         Err(FwdFault::IsolateRetired {
             proc: pid,
             gpu: GPU

@@ -184,6 +184,11 @@ fn expected_root_event(client: u32, class: u32, kind: ClientKind) -> RmEvent {
 
 fn fresh_gpu() -> kayfabe_tests::Guarded<Gpu> {
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     kayfabe_tests::Guarded::new(
         "rmrpc_bridge::fresh_gpu",
@@ -2831,8 +2836,29 @@ fn script_compute() -> RpcScript {
         .vaspace(cp::C, cp::DEV, cp::VAS)
         .tsg(cp::C, cp::DEV, cp::TSG, cp::VAS)
         .ctxshare(cp::C, cp::VAS, cp::CTXSHARE, cp::VAS)
-        .channel(cp::C, cp::TSG, cp::GR, gr_flags(), 0, cp::VAS)
-        .channel(cp::C, cp::TSG, cp::CE, ce_flags(), cp::CTXSHARE, 0)
+        // ★ w393 — both channels declare their GPFIFO ring, as every user channel does:
+        // the birth-at-alloc adopts it, and a doorbell on a channel that was never born
+        // is refused by name (`FwdFault::PassthroughDoorbellBirth`).
+        .channel_with_ring(
+            cp::C,
+            cp::TSG,
+            cp::GR,
+            gr_flags(),
+            0,
+            cp::VAS,
+            kayfabe_tests::ring_va_for(CP_GR_VCHID).0,
+            kayfabe_tests::RING_ENTRIES,
+        )
+        .channel_with_ring(
+            cp::C,
+            cp::TSG,
+            cp::CE,
+            ce_flags(),
+            cp::CTXSHARE,
+            0,
+            kayfabe_tests::ring_va_for(CP_CE_VCHID).0,
+            kayfabe_tests::RING_ENTRIES,
+        )
         .engine_object(cp::C, cp::GR, cp::GR_OBJ, w::AMPERE_COMPUTE_B)
         .engine_object(cp::C, cp::CE, cp::CE_OBJ, w::AMPERE_DMA_COPY_B)
         // ★★ B4. The VASpace acquires its `Pdb` from a real `SET_PAGE_DIRECTORY`, issued
@@ -2905,11 +2931,12 @@ fn scenario_compute() -> Scenario {
         AllocFacts {
             h_vaspace: Some(HObject(cp::VAS)),
             userd_flags: gr_flags(),
-            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
-            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
-            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
-            // declared no ring at all, which no channel does.
-            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
+            // ★ §8.2.2: a channel's params ALWAYS declare a ring. ⊘ w393: this used to
+            // be the deliberate zero (`GpFifoRing { va: 0 }` — a value, not an absence,
+            // `ogkm-580: kernel_graphics.c:2420-2424`, the golden-context channel's); the
+            // wire twin now declares a real user ring, because the birth-at-alloc adopts
+            // it and the doorbell below needs the channel born.
+            gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(CP_GR_VCHID)),
             ..Default::default()
         },
     ))
@@ -2920,11 +2947,8 @@ fn scenario_compute() -> Scenario {
         AllocFacts {
             h_ctx_share: Some(HObject(cp::CTXSHARE)),
             userd_flags: ce_flags(),
-            // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
-            // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
-            // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
-            // declared no ring at all, which no channel does.
-            gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
+            // ★ §8.2.2 / w393 — as above.
+            gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(CP_CE_VCHID)),
             ..Default::default()
         },
     ))
@@ -3851,6 +3875,13 @@ fn the_compute_subgraph_from_wire_bytes_equals_the_hand_written_scenario() {
     );
 
     // And the doorbell actually works on both, which is what "the subgraph is real" means.
+    // ★ w393 — after the channels are BORN at their alloc, over the rings the wire declared.
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born.len(),
+        2,
+        "both wire-declared channels are born at their alloc"
+    );
     for vchid in [CP_GR_VCHID, CP_CE_VCHID] {
         assert!(
             handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(vchid), &[]).is_ok(),
@@ -3996,7 +4027,15 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
             w::AMPERE_CHANNEL_GPFIFO_A,
             32,
             w::RMAPI_RPC_FLAGS_NONE,
-            &w::channel_params(gr_flags(), 0, cp::VAS),
+            // ★ w393 — with the ring the guest declares, so the decoded arm can be BORN
+            // before it rings (a doorbell no longer births a channel).
+            &w::channel_params_with_ring(
+                gr_flags(),
+                0,
+                cp::VAS,
+                kayfabe_tests::ring_va_for(CP_GR_VCHID).0,
+                kayfabe_tests::RING_ENTRIES,
+            ),
         ),
     );
     let decoded = match xlate(&channel_msg) {
@@ -4023,11 +4062,10 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
     let undecoded = with_facts(AllocFacts::default());
     let flags_only = with_facts(AllocFacts {
         userd_flags: gr_flags(),
-        // ★ §8.2.2: a channel's params ALWAYS declare a ring, and this fixture's is
-        // the deliberate zero (`GpFifoRing { va: 0 }` is a value, not an absence —
-        // `ogkm-580: kernel_graphics.c:2420-2424`). `None` would mean the class
-        // declared no ring at all, which no channel does.
-        gp_fifo_ring: Some(GpFifoRing { va: 0, entries: 0 }),
+        // ★ §8.2.2: a channel's params ALWAYS declare a ring — the one the message above
+        // declares (⊘ w393: no longer the deliberate zero, since the message itself now
+        // carries a real ring; the arm strips the HANDLE facts, not the ring).
+        gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(CP_GR_VCHID)),
         ..Default::default()
     });
     assert_ne!(decoded, undecoded, "the two differ only in `facts`");
@@ -4059,6 +4097,10 @@ fn with_the_channel_decoder_removed_the_doorbell_takes_no_vas() {
         // fault (`NoVas`) unchanged: `plan_doorbell` returns `NoVas` before it ever
         // checks `exec.requested` when the channel has no VAS.
         kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+        // ★ w393 — and BORN at its alloc when it has a VAS to be born in; the arm whose
+        // channel found no VAS stays un-born (`no_vas`) and its doorbell still reaches
+        // `NoVas`, which `plan_doorbell` names BEFORE the birth refusal.
+        let _ = kayfabe_tests::birth_passthrough_channels(&mut gpu);
         let outcome = handle_doorbell(&mut gpu, GpuId::ZERO, MockArch::token_for(CP_GR_VCHID), &[]);
         let vas_pdb = gpu
             .spine
@@ -5483,6 +5525,14 @@ fn the_whole_compute_process_including_its_page_directory_comes_from_wire_bytes(
         b.by_pdb.keys().copied().collect::<Vec<_>>(),
         vec![(GpuId::ZERO, CP_PDB)],
         "★ the VAS routes, on a PDB decoded from a control message",
+    );
+    // ★ w393 — the channels are BORN at their alloc first (over the rings the wire
+    // declared, in the VAS the wire-declared page directory names).
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born.len(),
+        2,
+        "both channels are born on the wire-declared VAS"
     );
     for vchid in [CP_GR_VCHID, CP_CE_VCHID] {
         assert!(

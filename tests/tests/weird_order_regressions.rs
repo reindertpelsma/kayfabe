@@ -29,6 +29,11 @@ fn fresh_gpu() -> (
 ) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     (
         Guarded::new(
@@ -89,6 +94,11 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
     .expect("CTX1 backs VA");
     // ★ #177 — the guest schedules before it rings.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     let out1 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX1 doorbell");
     assert!(
         out1.scheduled_now,
@@ -147,6 +157,11 @@ fn wo_12_second_context_recreate_identical_handles_no_stale_state() {
 
     // ★ #177 — the guest schedules before it rings, for CTX2's OWN (fresh) proc.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     // CTX2's doorbell schedules CTX2's OWN channel — the sticky-one-shot #12 bug
     // would have left it off-runlist (scheduled_now == false).
     let out2 = handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("CTX2 doorbell");
@@ -367,6 +382,11 @@ fn wo_teardown_during_active_inflight_completion_is_clean() {
     .unwrap();
     // ★ #177 — the guest schedules before it rings.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     handle_doorbell(&mut gpu, GpuId::ZERO, gr_token, &[]).expect("channel rung");
     // An in-flight completion is pending for this proc.
     gpu.procs

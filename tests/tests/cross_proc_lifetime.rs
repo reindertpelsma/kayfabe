@@ -1188,6 +1188,11 @@ const VA3: GpuVa = GpuVa(0x2_0040_0000);
 /// `Proc` and test nothing.
 fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
@@ -1213,6 +1218,13 @@ fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     }
     // #177: the guest always schedules a channel before ringing its doorbell.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    // ⊘ BOTH of the owner's channels are born here (a real guest births every channel
+    // it allocates), so the per-object reclaim below counts two host channels, not one.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     let owner = gpu.spine.by_pdb[&(GPU, OWNER_PDB)];
     (
         Guarded::new(
@@ -1366,6 +1378,16 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
                 .expect("the forwarded compute object"),
         )
     };
+    // ★ w393 — the CE channel was born at its alloc too (nothing rings it here, but a
+    // real guest births every channel it allocates), so it is a third host object on the
+    // unreferenced half.
+    let host_ce_chan = gpu.procs[&owner]
+        .channels
+        .values()
+        .find(|c| c.vchid == OWNER_CE)
+        .expect("the CE channel is live")
+        .host_channel
+        .expect("born at its alloc");
     assert!(
         frees_on_owner(&rec, owner).is_empty(),
         "precondition: nothing has been freed yet"
@@ -1407,20 +1429,35 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
         "the owner's channels hung off its client root and nothing dup'd them, so RM's \
          refcount does not keep them: they are gone"
     );
+    // ⊘ w393: THREE objects, not two — the engine object, the GR channel it lives on, and
+    // the CE channel born at its own alloc. (⊘ NOT the channels' ring pins: those live in
+    // the VAS the kernel reference keeps alive, and they go with it, below.)
     assert_eq!(
         gpu.procs[&owner].pending_release_len(),
-        2,
+        3,
         "…and T0/G2 staged their host objects for release rather than dropping the \
          handles on the floor (`l1_os_shell.md` §7.6)"
     );
-    assert_eq!(drain_pending(&mut gpu, owner), 2, "the drain took both");
     assert_eq!(
-        frees_on_owner(&rec, owner),
-        vec![host_engine, host_chan],
-        "★ the exact `Free` verbs reached the backend, engine object BEFORE channel — \
-         RM frees children ahead of parents (`clientUpdatePendingFreeList_IMPL`, \
-         byte-identical at both tags: `ogkm-580: .../resserv/src/rs_server.c:963-981`, \
-         `ogkm-610:` idem)",
+        drain_pending(&mut gpu, owner),
+        3,
+        "the drain took all three"
+    );
+    let freed = frees_on_owner(&rec, owner);
+    assert_eq!(
+        freed
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([host_engine, host_chan, host_ce_chan]),
+        "★ exactly the unreferenced half's `Free` verbs reached the backend: {freed:?}",
+    );
+    let at = |h: HostHandle| freed.iter().position(|&f| f == h).expect("freed");
+    assert!(
+        at(host_engine) < at(host_chan),
+        "★ engine object BEFORE the channel it lives on — RM frees children ahead of \
+         parents (`clientUpdatePendingFreeList_IMPL`, byte-identical at both tags: \
+         `ogkm-580: .../resserv/src/rs_server.c:963-981`, `ogkm-610:` idem): {freed:?}",
     );
 
     // The exec plane is genuinely gone, and says which key missed.
@@ -1548,6 +1585,14 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
     let host_vas = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
         .host_vas
         .expect("host VAS");
+    // ★ w393 — the two ring-page pins the births at alloc made live in this VAS too, and
+    // go with it, per object, at refcount 0 — `Vas::take_guest_ram_pins` (w310).
+    let ring_pins: Vec<HostHandle> = gpu.procs[&owner].vases[&(GPU, OWNER_PDB)]
+        .guest_ram_pins
+        .values()
+        .map(|p| p.memory)
+        .collect();
+    assert_eq!(ring_pins.len(), 2, "one pinned ring page per born channel");
     let arena = gpu.procs[&owner].arenas[&GPU].range.clone();
 
     // The owner dies; the kernel reference keeps its `Proc` alive (previous test), and
@@ -1555,9 +1600,10 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
     free_owner_root(&mut gpu);
     let reclaimed_with_owner = drain_pending(&mut gpu, owner);
     assert_eq!(
-        reclaimed_with_owner, 1,
-        "the GR channel's host object was freed at the owner's death (no engine object \
-         was forwarded here, so it is the only one)"
+        reclaimed_with_owner, 2,
+        "the two channels' host objects were freed at the owner's death (no engine \
+         object was forwarded here, and ⊘ w393: BOTH channels were born at their alloc, \
+         so there are two)"
     );
     let freed_before = frees_on_owner(&rec, owner);
     assert!(
@@ -1607,15 +1653,16 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
     // ---- ★★ §12.35: THE CLOSED FINDING. ----
     let mut expected = freed_before.clone();
     expected.extend([backing, host_vas]);
+    expected.extend(ring_pins);
     expected.sort_unstable();
     let mut actually_freed = frees_on_owner(&rec, owner);
     actually_freed.sort_unstable();
     assert_eq!(
         actually_freed, expected,
-        "★★ the dup-referenced half IS freed per object at refcount 0 — the backing and \
-         the host VAS both, on the owner's own isolate. §12.33 measured `freed_before` \
-         here (not one further `Free`); §12.35's `decide → stage → drain → remove` is \
-         what changed it.",
+        "★★ the dup-referenced half IS freed per object at refcount 0 — the backing, the \
+         host VAS, and (w393) the two ring-page descriptors pinned in it, on the owner's \
+         own isolate. §12.33 measured `freed_before` here (not one further `Free`); \
+         §12.35's `decide → stage → drain → remove` is what changed it.",
     );
 
     let l = ledger(&rec);
@@ -1710,7 +1757,12 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
         )
         .objects(kayfabe_mocks::VerbKind::AllocVaSpace, 1)
         .objects(kayfabe_mocks::VerbKind::AllocSysmem, 1)
-        .maps(1),
+        // ★ w393 — the owner's two channels were born at their alloc: two host channels
+        // and two ring-page `OS_DESCRIPTOR`s (classified `Alloc`), each with its fixed
+        // GPU mapping. Same §7.0 disposition, four more objects.
+        .objects(kayfabe_mocks::VerbKind::AllocChannel, 2)
+        .objects(kayfabe_mocks::VerbKind::Alloc, 2)
+        .maps(3),
     );
 
     kayfabe_fwd::publish_backing(
@@ -1809,9 +1861,37 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
 
     // The ledger: namespace death is the disposition, and nothing worse happened.
     let l = ledger(&rec);
+    // ⊘ w393 — the residue also carries the two host channels born at their alloc and
+    // the two ring-page pins (one `OS_DESCRIPTOR` object each) those births adopted:
+    // six objects on the dead isolate, all of them the §7.0 disposition's. Read off the
+    // ledger's own acquisition record rather than hand-listed, so the SET is asserted —
+    // every object the isolate ever minted, and nothing that any other isolate minted.
+    let minted_on_owner: std::collections::BTreeSet<HostHandle> = rec
+        .lock()
+        .expect("recorder")
+        .verbs_of(owner_iso)
+        .into_iter()
+        .filter_map(|v| match v {
+            RmVerb::AllocVaSpace { handle }
+            | RmVerb::AllocSysmem { handle, .. }
+            | RmVerb::AllocChannel { handle, .. }
+            | RmVerb::AllocEngineObject { handle, .. } => Some(handle),
+            RmVerb::DescribeGuestRam { memory, .. } => Some(memory),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        minted_on_owner.contains(&host_vas) && minted_on_owner.contains(&backing),
+        "non-vacuity: the host VAS and the backing are among the isolate's objects"
+    );
+    assert_eq!(
+        minted_on_owner.len(),
+        6,
+        "host VAS + backing + 2 host channels + 2 ring-page descriptors: {minted_on_owner:?}"
+    );
     assert_eq!(
         l.leaked_on(owner_iso),
-        std::collections::BTreeSet::from([host_vas, backing]),
+        minted_on_owner,
         "the condemned isolate's own objects are the §7.0 residue — that is namespace \
          death, stated rather than papered over",
     );

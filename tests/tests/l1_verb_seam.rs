@@ -105,14 +105,31 @@ const CE2: VChid = VChid(0x201);
 const MEM: HObject = HObject(0x6000_0000);
 const VA: GpuVa = GpuVa(0x2_0020_0000);
 
-/// One guest proc (optionally two) on GPU0, with `pool` workers per isolate.
+/// One guest proc (optionally two) on GPU0, with `pool` workers per isolate — every
+/// `Passthrough` channel already born at its alloc.
 fn device_with(
     procs: usize,
     pool: usize,
     mode: LockMode,
 ) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
+    device_with_opts(procs, pool, mode, true)
+}
+
+/// [`device_with`], with the births made optional: `born = false` leaves every channel
+/// un-born, for the two R5 canaries that put the BIRTH itself in flight.
+fn device_with_opts(
+    procs: usize,
+    pool: usize,
+    mode: LockMode,
+    born: bool,
+) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
 
@@ -138,6 +155,13 @@ fn device_with(
     // `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`; declare every channel scheduled up front so
     // the doorbells this file's tests ring reach their actual subject, not `NotScheduled`.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    if born {
+        kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    }
     let pids: Vec<ProcId> = (0..procs)
         .map(|i| gpu.spine.by_pdb[&(GPU, if i == 0 { PDB } else { PDB2 })])
         .collect();
@@ -463,13 +487,27 @@ fn r5_canary_proc_retired_in_the_gap_refuses_loudly() {
 #[test]
 fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     let _wd = watchdog("r5_canary_channel_torn_down", Duration::from_secs(60));
-    let (device, pids, rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Sharded);
+    // ★ w393 — the verb in flight is the BIRTH-AT-ALLOC of the GR channel, not a doorbell.
+    // ⊘ It used to be the doorbell, whose execute phase allocated the host channel; a
+    // doorbell allocates nothing any more (an un-born `Passthrough` channel's doorbell is
+    // refused by name, `FwdFault::PassthroughDoorbellBirth`). The birth is the verb that
+    // now allocates the host VAS + channel, so it is the one whose commit R5 must
+    // re-validate — same hold, same gap, same disposition.
+    let (device, pids, rec) = device_with_opts(1, DEFAULT_POOL_WORKERS, LockMode::Sharded, false);
     let pid = pids[0];
-    // The doorbell's first touch allocates the host channel — hold THAT verb.
+    let (ready, _) = kayfabe_tests::pin_passthrough_rings_dev(&device);
+    let gr = *ready
+        .iter()
+        .find(|r| r.channel == identical_handles(GR.0, CE.0).gr_channel)
+        .expect("the GR channel's ring is pinned and it is ready to be born");
+    // Everything before this mark is the pin's (the host VAS among it); what the HELD
+    // verb allocates and what its refused commit releases are read from here on.
+    let m = rec.lock().expect("recorder").log.len();
+    // The birth's first touch allocates the host channel — hold THAT verb.
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[], None));
+    let t = thread::spawn(move || d.birth_channel_by_handle(gr.client, gr.channel, None));
     held.wait_until_pending();
 
     // ← the guest tears the channel down while the alloc is in flight
@@ -483,7 +521,7 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     held.release();
     let out = t.join().expect("joins");
     assert_eq!(
-        out,
+        out.map(|o| format!("{o:?}")),
         Err(FwdFault::Stale(Stale::Route {
             gpu: GPU,
             vchid: GR
@@ -507,20 +545,21 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
     // otherwise indistinguishable from the outside: the whole `Orphans::is_empty`
     // gate can be short-circuited to "nothing to do" without a single other
     // assertion in this file changing colour (the campaign found exactly that).
-    let frees: Vec<_> = rec
-        .lock()
-        .expect("recorder")
-        .verbs_of(IsolateId::new(pid.0, GPU))
+    let since = |m: usize| -> Vec<RmVerb> {
+        rec.lock().expect("recorder").log[m..]
+            .iter()
+            .filter(|(i, _)| *i == IsolateId::new(pid.0, GPU))
+            .map(|(_, v)| v.clone())
+            .collect()
+    };
+    let frees: Vec<_> = since(m)
         .into_iter()
         .filter_map(|v| match v {
             RmVerb::Free { obj } => Some(obj),
             _ => None,
         })
         .collect();
-    let allocated: Vec<_> = rec
-        .lock()
-        .expect("recorder")
-        .verbs_of(IsolateId::new(pid.0, GPU))
+    let allocated: Vec<_> = since(m)
         .into_iter()
         .filter_map(|v| match v {
             RmVerb::AllocChannel { handle, .. } | RmVerb::AllocVaSpace { handle } => Some(handle),
@@ -531,8 +570,10 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
         !allocated.is_empty(),
         "non-vacuity: the held verb DID allocate host state to orphan"
     );
-    // Released in REVERSE allocation order — child (the channel) before the parent
-    // (the VAS it was allocated on), which is the only order an RM namespace accepts.
+    // Released in REVERSE allocation order — child before parent, which is the only
+    // order an RM namespace accepts. ⊘ w393: here that is the channel alone — the host
+    // VAS it lives in was allocated by the ring pin BEFORE the held verb, is adopted by
+    // core state, and is exactly what the refused commit must NOT free.
     let expected: Vec<_> = allocated.iter().rev().copied().collect();
     assert_eq!(
         frees, expected,
@@ -550,13 +591,19 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
 #[test]
 fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     let _wd = watchdog("r5_canary_routing_rewrite", Duration::from_secs(60));
-    let (device, pids, rec) = device_with(1, DEFAULT_POOL_WORKERS, LockMode::Sharded);
+    // ★ w393 — the verb in flight is the BIRTH-AT-ALLOC, as in the canary above.
+    let (device, pids, rec) = device_with_opts(1, DEFAULT_POOL_WORKERS, LockMode::Sharded, false);
     let pid = pids[0];
     let h = identical_handles(GR.0, CE.0);
+    let (ready, _) = kayfabe_tests::pin_passthrough_rings_dev(&device);
+    let gr = *ready
+        .iter()
+        .find(|r| r.channel == h.gr_channel)
+        .expect("the GR channel's ring is pinned and it is ready to be born");
     let held = hold(&rec, pid, 0, VerbKind::AllocChannel);
 
     let d = Arc::clone(&device);
-    let t = thread::spawn(move || d.doorbell(None, GPU, MockArch::token_for(GR), &[], None));
+    let t = thread::spawn(move || d.birth_channel_by_handle(gr.client, gr.channel, None));
     held.wait_until_pending();
 
     // ← free + re-alloc at the SAME vChid: routing resolves, to a new identity.
@@ -575,6 +622,9 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
             facts: AllocFacts {
                 h_vaspace: Some(h.vaspace),
                 userd_flags: MockArch::userd_flags_for(GR),
+                // ★ w393 — the re-allocated channel declares the same ring the guest
+                // uses for this vChid; it is a NEW channel and needs its OWN birth.
+                gp_fifo_ring: Some(kayfabe_tests::ring_fact_for(GR)),
                 ..Default::default()
             },
         })
@@ -588,7 +638,7 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
     held.release();
     let out = t.join().expect("joins");
     assert_eq!(
-        out,
+        out.map(|o| format!("{o:?}")),
         Err(FwdFault::Stale(Stale::Route {
             gpu: GPU,
             vchid: GR
@@ -596,9 +646,26 @@ fn r5_canary_apply_rewrote_routing_in_the_gap_refuses_loudly() {
         "the route was rewritten under the verb: the commit must re-resolve and refuse"
     );
     // The NEW channel is untouched — no host channel was written into it.
+    assert!(
+        device
+            .with_proc(pid, |p| p
+                .channels
+                .values()
+                .all(|c| c.host_channel.is_none()))
+            .expect("live"),
+        "★ the refused commit adopted NOTHING into the re-allocated channel"
+    );
+    // …and its OWN birth (the ring page was pinned above; `SharedDevice::apply` latched
+    // the re-alloc) then a doorbell serve it cleanly.
+    let reborn = kayfabe_tests::birth_passthrough_channels_dev(&device);
+    assert_eq!(
+        reborn.born.len(),
+        2,
+        "the re-allocated channel and the CE channel are born"
+    );
     let fresh = device
         .doorbell(None, GPU, MockArch::token_for(GR), &[], None)
-        .expect("the re-allocated channel routes and materializes cleanly");
+        .expect("the re-allocated channel routes and rings cleanly");
     assert_eq!(fresh.proc, pid);
     assert!(
         fresh.scheduled_now,
@@ -623,6 +690,9 @@ fn pool_full_is_backpressure_not_a_hang() {
     let _wd = watchdog("pool_full_is_backpressure", Duration::from_secs(60));
     let (device, pids, rec) = device_with(1, 1, LockMode::Sharded); // pool of ONE
     let pid = pids[0];
+    // ⊘ w393 — the births at alloc already mapped the two ring pages; only the maps
+    // this test's two threads issue are the ordering under test.
+    let m = rec.lock().expect("recorder").log.len();
     let held = hold(&rec, pid, 0, VerbKind::AllocSysmem);
 
     let d = Arc::clone(&device);
@@ -643,8 +713,7 @@ fn pool_full_is_backpressure_not_a_hang() {
 
     // Progress ordering: on a one-worker pool, B's map necessarily follows A's.
     let log = rec.lock().expect("recorder");
-    let maps: Vec<u64> = log
-        .log
+    let maps: Vec<u64> = log.log[m..]
         .iter()
         .filter_map(|(_, v)| match v {
             kayfabe_mocks::RmVerb::MapGpuVa { va, .. } => Some(*va),
@@ -807,7 +876,12 @@ fn worker_death_retires_the_proc_loudly_and_never_resurrects() {
             )
             .objects(VerbKind::AllocVaSpace, 1)
             .objects(VerbKind::AllocSysmem, 1)
-            .maps(1),
+            // ★ w393 — the victim's two channels were born at their alloc: two host
+            // channels and two ring-page `OS_DESCRIPTOR`s (classified `Alloc`), each
+            // with its fixed GPU mapping. Same disposition, four more objects.
+            .objects(VerbKind::AllocChannel, 2)
+            .objects(VerbKind::Alloc, 2)
+            .maps(3),
         );
 
         // The victim has live host state and a live completion source.
@@ -1376,13 +1450,15 @@ fn commit_publish_and_doorbell_proc_guards_refuse_on_either_term_alone() {
     // channel is materialized and the commit needs no fresh handles.
     let (mut gpu, pids) = plain_gpu(2);
     let (a, b) = (pids[0], pids[1]);
+    // ⊘ w393: the channel was born at its alloc (`device_with`); this first ring only
+    // schedules it, so the plan taken next is over an existing host channel.
     kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(GR), &[])
-        .expect("A rings once, materializing its channel");
+        .expect("A rings once, scheduling its channel");
     let route = kayfabe_fwd::route_doorbell(&gpu.spine, GPU, MockArch::token_for(GR))
         .expect("A's GR channel routes");
     assert_eq!(route.proc, a);
-    let planned =
-        kayfabe_fwd::plan_doorbell(&gpu.procs[&a], &route, &[], None).expect("A plans a ring");
+    let planned = kayfabe_fwd::plan_doorbell(&gpu.spine, &gpu.procs[&a], &route, &[], None)
+        .expect("A plans a ring");
     let reply = || {
         Some(kayfabe_isolate::VerbReply::Doorbell {
             host_vas: None,

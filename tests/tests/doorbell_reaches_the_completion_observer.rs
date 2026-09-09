@@ -102,6 +102,23 @@
 //!
 //! ⚠ Resolving this needs an owner ruling on where ring-content forwarding belongs, and its
 //! own arm and its own boot. It is out of scope for a maintenance rung.
+//!
+//! # ⊘⊘ STATUS 2026-09-09 (w393) — still RED for the reason above, and one arm REWRITTEN
+//!
+//! w393 moved a `Passthrough` channel's birth to its own channel alloc
+//! (`kayfabe_fwd::plan_channel_birth`, over the guest's ring) and made a doorbell on an
+//! un-born one a refusal by name (`FwdFault::PassthroughDoorbellBirth`). The fixture now
+//! births its channel (its ring page is pinned as the guest's own bytes), so the three red
+//! tests reach the w287 severance again and fail there — **unchanged, and still not to be
+//! edited to pass.**
+//!
+//! ⊘ `a_served_doorbell_that_forwarded_nothing_names_the_reason` (§16.70) pinned a shape
+//! w393 retires on purpose: *a doorbell over a ring this port cannot find is SERVED and
+//! forwards nothing*. That silence is the owner's named defect (*"an unpublished GPFIFO page
+//! is LEGAL — the defect is the silent fallback"*, 2026-09-08). It is rewritten to the new
+//! contract: the absence is still **named** (`RingLook::RingVaUnbound`, unchanged), the
+//! birth refuses **by name** with the same VA, and the doorbell refuses **by name** instead
+//! of being served.
 
 #![allow(clippy::unusual_byte_groupings)] // NVIDIA-shaped handle/VA literals
 
@@ -171,6 +188,11 @@ fn guest() -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
 /// guest's published page tables instead, `SharedDoorbell::try_ce_submission`).
 fn guest_with_gpfifo_binding(bind_gpfifo: bool) -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
         Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
@@ -279,6 +301,18 @@ fn guest_with_gpfifo_binding(bind_gpfifo: bool) -> (Gpu, MockVmm, SharedRecorder
     // ★ #177 — the guest schedules before it rings. This file's subject is what happens
     // after that, not the scheduling gate.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — and the channel is BORN at its alloc, over the guest's own ring page: the
+    // binding above is pinned as the guest's own bytes and adopted. ⊘ Only when the guest
+    // bound the ring: with `bind_gpfifo = false` there is nothing to adopt, and the birth
+    // — like the doorbell after it — refuses by name (§16.70's arm, rewritten).
+    if bind_gpfifo {
+        let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+        assert_eq!(
+            born.born,
+            vec![(pid, cid)],
+            "the CE channel is born at its alloc"
+        );
+    }
 
     (gpu, vmm, rec, pid, cid)
 }
@@ -487,11 +521,20 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
 /// `forwarded` counts the doorbells the **port** rang and has never counted work.
 ///
 /// This is the second story, constructed: everything about the guest is unchanged except
-/// that this port's address table holds no binding for the ring's own VA. The doorbell is
-/// still **`Ok`** (that is correct — a channel whose ring we cannot read is not a channel to
-/// refuse traffic on at this rung), the backend is asked for **nothing**, and
+/// that this port's address table holds no binding for the ring's own VA.
 /// [`kayfabe_fwd::read_gpfifo_ring`] names the reason `RING-VA-UNBOUND` instead of returning
 /// the bare `None` that made all six of its absences one silence.
+///
+/// ⊘⊘ **REWRITTEN 2026-09-09 (w393), above the paragraph it corrects.** This test used to
+/// go on: *"The doorbell is still `Ok` (that is correct — a channel whose ring we cannot read
+/// is not a channel to refuse traffic on at this rung), the backend is asked for nothing"*.
+/// That is the **superseded contract** — a doorbell birth over a ring of ours, forwarded,
+/// with the guest's ring unfound: `[measured w392h]` the engine fetches from a ring nothing
+/// wrote, `Xid 0`, no completion, no fault. The owner named it (2026-09-08): *"an unpublished
+/// GPFIFO page is LEGAL (rare) ⇒ debug-only. The defect is the silent fallback."* So the
+/// naming is still the subject, and there are now THREE names for one absence, all carrying
+/// the same VA: the reader's `RingVaUnbound`, the birth's `PassthroughRingNotAdoptable`, and
+/// the doorbell's `PassthroughDoorbellBirth` — and the doorbell is **refused**, not served.
 ///
 /// ⊘ **The naming is the subject, not the counting.** `copies(&rec).is_empty()` is also true
 /// of `a_second_doorbell_over_an_unchanged_ring_forwards_nothing`, of a ring that decodes to
@@ -500,7 +543,7 @@ fn the_observers_negative_verdict_refuses_the_guest_doorbell() {
 /// §16.69.5 defect one layer down, and asserting on the variant is what closes it.
 #[test]
 fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
-    let (gpu, mut vmm, rec, pid, cid) = guest_with_gpfifo_binding(false);
+    let (mut gpu, mut vmm, rec, pid, cid) = guest_with_gpfifo_binding(false);
 
     // ★ THE NAMED ABSENCE, read off the production function rather than off a print.
     let look = kayfabe_fwd::read_gpfifo_ring(&gpu.spine, &gpu.procs[&pid], cid, &mut vmm, None)
@@ -515,21 +558,51 @@ fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
          not a measurement. Got {look:?}"
     );
 
-    // ★ And the doorbell over it: SERVED, with nothing forwarded.
+    // ★ w393 — the birth, at the alloc, names the SAME absence at the SAME VA: nothing to
+    // adopt, so no host channel and no fallback to a ring of ours.
+    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC0B_001A), None);
+    assert_eq!(
+        birth.map(|o| format!("{o:?}")),
+        Err(FwdFault::PassthroughRingNotAdoptable {
+            proc: pid,
+            chan: cid,
+            ring_va: Some(pb_va(GPFIFO_GPA).0),
+        }),
+        "★ the birth refuses BY NAME, carrying the ring VA the reader could not find"
+    );
+
+    // ★ And the doorbell over it: REFUSED by name, with nothing forwarded and nothing born.
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
-    dev.doorbell(
+    let out = dev.doorbell(
         Some(&mut vmm),
         GPU,
         MockArch::token_for(CE_VCHID),
         &[],
         None,
-    )
-    .expect("a doorbell whose ring this port cannot read is still served at this rung");
+    );
+    assert_eq!(
+        out.map(|o| o.chan),
+        Err(FwdFault::PassthroughDoorbellBirth {
+            proc: pid,
+            chan: cid,
+            vchid: CE_VCHID,
+        }),
+        "★★★ the second story, whole, and no longer silent: the port REFUSES the doorbell \
+         by name instead of reporting it SERVED over a ring the guest never wrote"
+    );
     assert!(
         copies(&rec).is_empty(),
-        "★ the second story, whole: the port reports the doorbell SERVED and the only \
-         function that observes a host completion was asked for nothing. Saw {:?}",
+        "★ and the only function that observes a host completion was asked for nothing. \
+         Saw {:?}",
         copies(&rec)
+    );
+    assert!(
+        !rec.lock()
+            .expect("recorder")
+            .log
+            .iter()
+            .any(|(_, v)| matches!(v, RmVerb::AllocChannel { .. })),
+        "⊘ and no host channel exists for this guest channel — nothing was born over ours"
     );
 }
 

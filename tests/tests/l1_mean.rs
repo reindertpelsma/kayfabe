@@ -393,6 +393,11 @@ fn mean_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, Share
 fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
     let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
@@ -426,6 +431,10 @@ fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
     // ringing its doorbell; declare every channel this world just derived so the mean
     // script's doorbells don't trip `FwdFault::NotScheduled` before its own subjects run.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     assert_eq!(gpu.procs.len(), N_PROCS, "six distinct procs were derived");
     // Resolved through the routing map, never assumed from mint order.
     let pids: Vec<ProcId> = (0..N_PROCS)
@@ -3036,6 +3045,10 @@ fn reinit(gpu: &mut Gpu, client: HClient, pdb: Pdb, gr: VChid, ce: VChid, target
     }
     // #177: the recovering guest schedules its fresh channels before ringing them.
     kayfabe_tests::guest_schedules_every_channel(gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(gpu);
 }
 
 /// Every host object identity a `Proc` currently holds — host VASes, published backing
@@ -3447,6 +3460,10 @@ fn recovery_after_a_multi_gpu_condemnation_serves_both_targets() {
     // that `reinit`'s own sweep (taken before the merge) never saw. Re-sweep now that the
     // merge has happened, before either plane is next rung.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
 
     // Served on BOTH planes, end to end.
     for (g, pdb, gr) in [(GPU0, R_PDB, R_GR), (GPU1, R_PDB2, R_GR2)] {
@@ -4237,6 +4254,10 @@ fn a_live_component_that_splits_yields_two_procs() {
     // `reinit` sweep (taken before the merge) never saw. Re-sweep post-merge, before
     // either half's first ring below.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     let merged = gpu.spine.by_pdb[&(GPU0, SPLIT_A_PDB)];
     assert_eq!(
         gpu.spine.by_pdb[&(GPU0, SPLIT_B_PDB)],
@@ -4339,6 +4360,10 @@ fn a_live_component_that_splits_yields_two_procs() {
     // #177: the departing half re-materialised with a FRESH channel (new `ChanId`, new
     // `Proc`, empty `exec.requested`) — schedule it before it is next rung.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     for (pid, pdb, gr) in [
         (pid_a, SPLIT_A_PDB, SPLIT_A_GR),
         (pid_b, SPLIT_B_PDB, SPLIT_B_GR),
@@ -5217,6 +5242,10 @@ fn a_recycled_channel_handle_never_shares_the_ghosts_host_channel() {
     // #177: the successor channel is freshly minted outside `reinit`; schedule it (and
     // re-declare the ghost's, harmlessly) before either is rung below.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
 
     // ---- ★★ THE BREACH, first: BOTH live channels must have an exec plane of their own.
     let route = |gpu: &Gpu, v: VChid| gpu.spine.by_vchid.get(&(GPU0, v)).copied();
@@ -6526,6 +6555,11 @@ impl GpaAudit {
 fn gpa_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(GPA_WIN_BASE..GPA_WIN_BASE + GPA_WINDOW_LEN, GPA_ARENA_LEN);
     let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])
         .expect("device realizes");
@@ -6550,6 +6584,10 @@ fn gpa_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, Shared
     }
     // #177: same reasoning as `mean_gpu` — declare every channel before any doorbell.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     assert_eq!(gpu.procs.len(), N_PROCS, "six distinct procs were derived");
     let pids: Vec<ProcId> = (0..N_PROCS)
         .map(|i| gpu.spine.by_pdb[&(gpu_of(i), lane_of(i).pdb)])
@@ -9999,6 +10037,11 @@ fn n3_world(
 fn n3_gpu() -> (Guarded<Gpu>, ProcId, ProcId, ProcId, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GPU0, GPU1])
         .expect("the two-GPU device realizes");
@@ -10037,6 +10080,10 @@ fn n3_gpu() -> (Guarded<Gpu>, ProcId, ProcId, ProcId, SharedRecorder) {
     }
     // #177: declare every channel of this world before any doorbell.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name).
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
 
     let straddler = gpu.spine.by_pdb[&(GPU0, N3_PDB)];
     assert_eq!(
@@ -10823,6 +10870,11 @@ fn rb_hostile() -> Vec<(w::Step, FaultTag)> {
 /// GPU, mock isolates.
 fn rb_gpu() -> (Guarded<Gpu>, SharedRecorder) {
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     let gpu = Gpu::new(
         Box::new(kayfabe_mocks::WireClassArch::new()),

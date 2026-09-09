@@ -79,6 +79,11 @@ const FN_SET_GUEST_SYSTEM_INFO: u32 = 1;
 fn two_app_gpu() -> Guarded<Gpu> {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -91,6 +96,11 @@ fn two_app_gpu() -> Guarded<Gpu> {
     // step so `refuse_ring` below reaches the address-plane miss under test, not
     // `NotScheduled`.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell.
+    // A doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name, and refused BEFORE the ring gate runs) — so without this step `refuse_ring`
+    // below would meet the birth refusal, not the address-plane miss it exists to reach.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     Guarded::new("simulated_fault", gpu, rec)
 }
 
@@ -251,6 +261,11 @@ fn an_unmapped_application_va_reaches_the_guest_as_a_channel_fault() {
 fn a_guest_kernel_channels_miss_is_escalated_and_builds_no_event() {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     // A KERNEL-privileged client, built out by hand rather than through

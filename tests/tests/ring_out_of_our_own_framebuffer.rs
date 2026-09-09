@@ -33,6 +33,20 @@
 //! channel. That is `ce_executor_tree.md`'s **forbidden #2** in its self-concealing form,
 //! which is why the gate is residency (*a page nothing ever wrote is not in the map*) and
 //! never a byte census.
+//!
+//! # ⊘⊘ STATUS 2026-09-09 (w393) — the two reds above are now masked by an EARLIER refusal
+//!
+//! Since w393 a `Passthrough` channel is born at its own channel alloc, over the guest's
+//! ring (`kayfabe_fwd::plan_channel_birth`), and a doorbell on an un-born one is refused by
+//! name (`FwdFault::PassthroughDoorbellBirth`). This file's channel declares a **vidmem**
+//! ring: the only adoptable shape for that is a joined framebuffer leaf
+//! (`BackingBytes::JoinsGuestWindow`, through `adopt_joined_fb_leaf`) — a guest-RAM pin
+//! refuses `GuestRamNotSysmem` — and this fixture has no fb-join plane. So the two tests that
+//! were red for w287's reason (`Ok(Served)` where `Err(..)` was required) now fail one step
+//! earlier, at `Err(PassthroughDoorbellBirth)`, and the vacuous green below is unchanged.
+//! ⊘ **Not repaired here, deliberately**: repairing the fixture means building the fb-join
+//! shape for a channel whose ring content w287 says is never read on this kind — which is
+//! the same product decision the reds already wait on. Left failing, and said so.
 
 use kayfabe_arch::Aperture;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};

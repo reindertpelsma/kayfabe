@@ -62,6 +62,11 @@ fn script_pushbuffer(
 fn one_proc_gpu() -> (Guarded<Gpu>, MockVmm) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -386,6 +391,11 @@ fn hostile_ring_never_panics() {
 fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
     let arch = Box::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
@@ -397,6 +407,11 @@ fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
     // ★177: the guest always schedules a channel before ringing it; restore that step
     // so the doorbell gate's fault is the one under test, not `NotScheduled`.
     kayfabe_tests::guest_schedules_every_channel(&mut gpu);
+    // ★ w393 — …and every `Passthrough` channel is BORN at its alloc, before any doorbell:
+    // a doorbell no longer births one (`FwdFault::PassthroughDoorbellBirth`, refused by
+    // name), because adopting the guest's USERD at a doorbell zeroes the cursor that rang
+    // it (`[measured w233]`) and our own ring is illegal for the kind.
+    kayfabe_tests::birth_passthrough_channels(&mut gpu);
     (
         Guarded::new("pushbuffer_parser::two_proc_gpu", gpu, rec.clone()),
         MockVmm::new(),
@@ -406,9 +421,12 @@ fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
 
 /// ★ THE #14 regression through the exec path — now STRUCTURAL: `handle_doorbell` is
 /// the ONE ring path and it gates. Two Procs, identical guest VAs: neither can ring
-/// its declared working set before publishing (loud fault, ZERO host ops — not even
-/// channel materialization); after each publishes into its OWN host VAS, both ring,
-/// on distinct host tokens.
+/// its declared working set before publishing (loud fault, ZERO host ops); after each
+/// publishes into its OWN host VAS, both ring, on distinct host tokens.
+///
+/// ⊘ w393: *"not even channel materialization"* used to be part of the zero — the host
+/// channel is now born at the alloc (`two_proc_gpu`), so the zero is measured as *the
+/// verb log did not grow*, which is the same claim about the ring.
 #[test]
 fn t14_per_vas_publication_gates_the_ring() {
     let (mut gpu, _vmm, rec) = two_proc_gpu();
@@ -421,6 +439,7 @@ fn t14_per_vas_publication_gates_the_ring() {
     // Before publication: a doorbell declaring the identical working-set VA is a
     // LOUD fault for BOTH — the exact #14 EXECUTION fault, refused by the ONE ring
     // path itself (there is no ungated sibling to reach the host through).
+    let before = rec.lock().unwrap().log.len();
     assert!(matches!(
         handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),
         Err(FwdFault::Address(_))
@@ -429,9 +448,11 @@ fn t14_per_vas_publication_gates_the_ring() {
         handle_doorbell(&mut gpu, GpuId::ZERO, b_token, &[SHARED_VA]),
         Err(FwdFault::Address(_))
     ));
-    // The refused rings did NOTHING host-side: no channel, no schedule, no doorbell.
-    assert!(
-        rec.lock().unwrap().log.is_empty(),
+    // The refused rings did NOTHING host-side: no schedule, no doorbell — the log holds
+    // exactly what the births at alloc put there and not one verb more.
+    assert_eq!(
+        rec.lock().unwrap().log.len(),
+        before,
         "a gated-out ring performs ZERO host ops"
     );
     // The query form agrees (and cannot ring anything by construction).
@@ -699,7 +720,8 @@ fn t14_ring_gate_is_structural_no_ungated_door() {
     }
 
     // The ONE ring path refuses it — bound but not host-published — with ZERO host
-    // ops (not even channel materialization). There is no ungated door to try instead.
+    // ops. There is no ungated door to try instead. (⊘ w393: the host channel was born
+    // at the alloc; a doorbell no longer materializes one, refused or served.)
     let before = rec.lock().unwrap().log.len();
     assert_eq!(
         handle_doorbell(&mut gpu, GpuId::ZERO, a_token, &[SHARED_VA]),

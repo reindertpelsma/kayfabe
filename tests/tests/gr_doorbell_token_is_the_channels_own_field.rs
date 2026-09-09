@@ -132,6 +132,11 @@ const CHAN: HObject = HObject(0xC1D_0019);
 /// well as before it.
 fn gr_guest() -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
     let (factory, rec) = MockIsolateFactory::new();
+    // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
+    // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
+    // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
+    // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
+    let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
         Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
@@ -381,6 +386,16 @@ fn the_same_translation_serves_a_ce_channel_and_is_not_keyed_on_the_engine() {
         facts: AllocFacts::default(),
     })
     .expect("a copy-engine object lands on the channel");
+    // ★ w393 — the channel is BORN at its alloc, over the guest's own ring, before it is
+    // rung: a doorbell no longer births a `Passthrough` channel (refused by name,
+    // `FwdFault::PassthroughDoorbellBirth`). ⊘ The GR test above keeps the OTHER
+    // production birth site — the engine-object latch — so both remain covered.
+    let born = kayfabe_tests::birth_passthrough_channels(&mut gpu);
+    assert_eq!(
+        born.born,
+        vec![(pid, cid)],
+        "the CE channel was born at its alloc"
+    );
     let dev = Arc::new(SharedDevice::new(gpu, LockMode::Sharded));
 
     dev.with_proc(pid, |proc| {
