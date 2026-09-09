@@ -1160,7 +1160,42 @@ pub struct RegPlane {
     /// [`RegPlane::service_gsp_queue_pass`]. An `RwLock` and not a `OnceLock` so the arm can
     /// be inspected and the census printed on both arms.
     gsp_submit: RwLock<Option<Arc<crate::gspsubmit::GspSubmitLane>>>,
+    /// ★★★★★ **w395 — whether the lane is ARMED** (the FSM is in `SubmitMode::Deferred`).
+    /// An atomic so the `QUEUE_HEAD` store can ask without the plane mutex.
+    gsp_submit_armed: std::sync::atomic::AtomicBool,
+    /// ★★★★★ **w395 — THE DOORBELL GATE, AS A LOCK-FREE SNAPSHOT.** One of
+    /// [`GATE_PREBIND`] / [`GATE_BOUND`] / [`GATE_HALTED`], refreshed by
+    /// [`RegPlane::refresh_gsp_gate`] at **every** site that can move the FSM's queue or
+    /// phase — all of which hold [`RegPlane::state`] — so the armed `QUEUE_HEAD` store can run
+    /// E8 / E12 / kick **without taking the mutex**.
+    ///
+    /// # ⊘⊘ Why this exists — measured, boot `w395c_on_1`
+    ///
+    /// The first cut deferred the service and still classified the store INSIDE
+    /// `state.lock()`. `worst_trap=1802444us at=bar0+0x110c00` — unchanged from the control
+    /// (`1884842us`). The worker holds the mutex for one command's service; the guest's next
+    /// `QUEUE_HEAD` store queued behind it, and the 1.8 s moved from *executing* the command to
+    /// *waiting for the lock the executor held*. Same site, same duration, one lock over. ⇒ A
+    /// deferral whose entry point takes the lock the worker holds is not a deferral.
+    ///
+    /// # Why a snapshot is sound here
+    ///
+    /// `queue` and `phase` change only under `state` (bind E6, teardown E2/E4, reset E11, and
+    /// the worker's own pass), and every one of those sites refreshes this word before
+    /// releasing the lock. The one race — a store on vCPU A reading `Bound` an instant before a
+    /// teardown on vCPU B — degrades to a kick the worker re-gates (`service_deferred` runs the
+    /// same gate first and answers E12 / E8 there, counted as `GSPQUEUE prebind=` / `faults=`).
+    /// The authority is the worker's gate; the snapshot only decides whether the STORE refuses
+    /// loudly on the vCPU, which it does in every non-racing case exactly as the control did.
+    gsp_gate: std::sync::atomic::AtomicU8,
 }
+
+/// [`RegPlane::gsp_gate`]: unbound, no binding has existed in this life — E12, nothing to kick.
+const GATE_PREBIND: u8 = 0;
+/// [`RegPlane::gsp_gate`]: a validated binding exists — kick.
+const GATE_BOUND: u8 = 1;
+/// [`RegPlane::gsp_gate`]: unbound in `Halted` — E8, `QueueNotBound`, the stale-binding refusal.
+const GATE_HALTED: u8 = 2;
 
 /// ★★★★★ **w395 — what one [`RegPlane::service_gsp_queue_pass`] did.**
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1611,7 +1646,23 @@ impl RegPlane {
             doorbell_log: Mutex::new(DoorbellLog::default()),
             samples: Mutex::new(Samples::default()),
             gsp_submit: RwLock::new(None),
+            gsp_submit_armed: std::sync::atomic::AtomicBool::new(false),
+            gsp_gate: std::sync::atomic::AtomicU8::new(GATE_PREBIND),
         })
+    }
+
+    /// ★★★★★ w395 — recompute [`RegPlane::gsp_gate`] from the FSM. Called with
+    /// [`RegPlane::state`] held, at every site that can move `queue` or `phase`.
+    fn refresh_gsp_gate(&self, fsm: &GspFsm) {
+        let bound = matches!(fsm.queue(), kayfabe_gsp::QueueState::Bound(_));
+        let g = if bound {
+            GATE_BOUND
+        } else if fsm.phase() == kayfabe_gsp::BootPhase::Halted {
+            GATE_HALTED
+        } else {
+            GATE_PREBIND
+        };
+        self.gsp_gate.store(g, Ordering::Release);
     }
 
     /// ★★★★★ **w395 — ARM THE GSP SUBMIT LANE: from here on a `QUEUE_HEAD` store (and the
@@ -1625,6 +1676,8 @@ impl RegPlane {
         let mut s = self.state.lock();
         *self.gsp_submit.write().unwrap_or_else(|e| e.into_inner()) = Some(lane);
         s.fsm.set_submit_mode(kayfabe_gsp::SubmitMode::Deferred);
+        self.refresh_gsp_gate(&s.fsm);
+        self.gsp_submit_armed.store(true, Ordering::Release);
     }
 
     /// ★ **w395 — FAIL CLOSED: put the doorbell back INLINE.** For a shell whose worker
@@ -1635,6 +1688,7 @@ impl RegPlane {
     /// The lane handle is kept so a census can still be printed; only the FSM's mode moves.
     pub fn disarm_gsp_submit(&self) {
         let mut s = self.state.lock();
+        self.gsp_submit_armed.store(false, Ordering::Release);
         s.fsm.set_submit_mode(kayfabe_gsp::SubmitMode::Inline);
     }
 
@@ -1679,6 +1733,7 @@ impl RegPlane {
             fsm, ram, policy, ..
         } = &mut *s;
         let res = fsm.service_deferred(ram.as_mut(), policy.as_mut(), max_commands);
+        self.refresh_gsp_gate(fsm);
         let pass = match res {
             Ok(report) => {
                 if report.raise_status_irq {
@@ -2774,6 +2829,8 @@ impl RegPlane {
             // lane is the shell's wiring and its census is the shell's to print.
             samples: _,
             gsp_submit: _,
+            gsp_submit_armed: _,
+            gsp_gate: _,
         } = self;
         let counters = self.counters();
         let doorbell = doorbell_log
@@ -2979,6 +3036,7 @@ impl RegPlane {
     pub fn device_reset(&self) {
         let mut s = self.state.lock();
         s.fsm.device_reset();
+        self.refresh_gsp_gate(&s.fsm);
         s.bar0_window = Bar0Window::new();
         s.fb.device_reset();
         // ★★★ **AND THE INTERRUPT TREE** — `#151`'s state, and §14.18 is what made leaving
@@ -3772,6 +3830,59 @@ impl RegPlane {
             return WriteOutcome::nothing();
         }
         self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
+        // ★★★★★ **w395 — THE ARMED `QUEUE_HEAD` STORE NEVER TAKES THE PLANE MUTEX.** See
+        // [`RegPlane::gsp_gate`] for the boot that showed why: classifying it under `state`
+        // put the store behind the worker's current command and the 1.8 s did not move.
+        // The three answers are the FSM's own three (`doorbell_gate`), from the snapshot the
+        // FSM's mutators keep current; the worker re-gates before it reads anything.
+        if self.gsp_submit_armed.load(Ordering::Acquire)
+            && matches!(
+                self.model.decode_reg(bar, off),
+                Some(kayfabe_arch::gsp::GspReg::GspQueueHead(_))
+            )
+        {
+            return match self.gsp_gate.load(Ordering::Acquire) {
+                GATE_BOUND => {
+                    let lane = self.gsp_submit_lane();
+                    match lane {
+                        Some(lane) => {
+                            lane.kick();
+                            WriteOutcome {
+                                claimed: true,
+                                gsp_service_scheduled: true,
+                                ..WriteOutcome::nothing()
+                            }
+                        }
+                        None => {
+                            self.c.gsp_service_orphaned.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "kayfabe: GSP-SUBMIT ⊘⊘⊘ ARMED WITH NO LANE at bar{bar}+{off:#x} \
+                                 — THIS SUBMISSION WAS NOT SERVICED."
+                            );
+                            WriteOutcome {
+                                claimed: true,
+                                ..WriteOutcome::nothing()
+                            }
+                        }
+                    }
+                }
+                GATE_HALTED => {
+                    // E8 — the stale-binding refusal, by name, on the vCPU, zero RAM read.
+                    self.c.faults.fetch_add(1, Ordering::Relaxed);
+                    WriteOutcome {
+                        claimed: true,
+                        fault: Some(GspFault::QueueNotBound.fault_tag().0),
+                        ..WriteOutcome::nothing()
+                    }
+                }
+                // E12 — the healthy 580 pre-bootstrap doorbell. One transition, no kick.
+                _ => WriteOutcome {
+                    claimed: true,
+                    transitions: 1,
+                    ..WriteOutcome::nothing()
+                },
+            };
+        }
         let mut s = self.state.lock();
         // ⊘ `cpu_intr` is deliberately NOT bound here any more: §16.77.1 moved the only
         // consumer to `RegPlane::ring_doorbell`, and leaving the binding would have let a
@@ -3780,14 +3891,18 @@ impl RegPlane {
         let PlaneState {
             fsm, ram, policy, ..
         } = &mut *s;
-        match fsm.mmio_write_with(
+        let written = fsm.mmio_write_with(
             ram.as_mut(),
             self.model.as_ref(),
             policy.as_mut(),
             bar,
             off,
             val,
-        ) {
+        );
+        // ★ w395 — a bind, a teardown or a fault may have moved the gate; refresh before the
+        // lock is released, on both arms of the result.
+        self.refresh_gsp_gate(fsm);
+        match written {
             Ok(report) => {
                 if report.raise_status_irq {
                     self.c.irq_requests.fetch_add(1, Ordering::Relaxed);

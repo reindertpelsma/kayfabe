@@ -5602,9 +5602,18 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {}",
+                "{} | {} | {}",
                 kayfabe_util::trapwitness::census(),
-                kayfabe_isolate::verbcost::census()
+                kayfabe_isolate::verbcost::census(),
+                // ★★★★★ w395 — THE GSP LANE'S CENSUS, ON THE LINE EVERY DOORBELL PRINTS.
+                // `[measured w395c_on_1]` the teardown census never printed: the harness
+                // powers the guest off and QEMU exits without `detach_ram`, so a census that
+                // lives only at teardown is a census nobody reads. Same reason PUBQUEUE's
+                // depth rides this line.
+                self.plane
+                    .upgrade()
+                    .and_then(|p| p.gsp_submit_lane())
+                    .map_or_else(|| "GSPQUEUE <no lane>".to_string(), |l| l.census())
             ),
             // ★★★★★ w383 — THE LANE'S DEPTH, ON THE LINE EVERY DOORBELL PRINTS. A queue
             // whose depth is only readable at teardown cannot answer *"is the worker
