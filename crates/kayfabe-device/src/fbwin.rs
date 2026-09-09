@@ -463,6 +463,52 @@ pub trait FbStore: Send + core::fmt::Debug {
         None
     }
 
+    /// ★★★★★ **w393 — GIVE BACK the join at `phys` AND KEEP ITS BYTES**, so the same frame
+    /// can be re-joined at a **different extent** without its content changing.
+    ///
+    /// # Why this exists beside [`FbStore::release_join`], whose doc argues the opposite
+    ///
+    /// `release_join` deliberately drops the join's bytes, and its two reasons are both about
+    /// a frame **nobody names any more**. This verb is for the other case, measured in
+    /// `w392q`: the store holds a **4 KiB** join at a frame (a completed operand), and the
+    /// guest now maps the same frame as the first page of a **64 KiB** ring. The alias path
+    /// cannot lend a 4 KiB `memfd` for a 64 KiB leaf (`FbJoinTable::token_for` is exact-length
+    /// by design), and re-minting through `release_join` + [`FbStore::install_join`] would
+    /// establish the new join from this store's pages — of which the range has **none**, because
+    /// the install removed them. `established=0 bytes`: the frame's content silently replaced
+    /// by zeros, the exact `w392j` defect, reached through a different door.
+    ///
+    /// ⇒ The join's bytes are read back into this store's own pages **before** the join goes,
+    /// so the next `install_join` over the range establishes from them. Between this call and
+    /// that install the range is served from local pages, which is the state it was in before
+    /// the first join — correct, and observable only as a transient residency bump bounded by
+    /// the join's own extent.
+    ///
+    /// # ★★★ Refuses BEFORE it changes anything
+    ///
+    /// The bytes are read and the residency ceiling is checked with the join still installed.
+    /// A refusal ([`CARRY_BACK_NO_JOIN`], [`RESIDENT_CAP_REACHED`], or the join's own read
+    /// sentence) leaves the store exactly as it was, so a caller can refuse by name instead of
+    /// discovering it has released a join it cannot re-establish.
+    ///
+    /// ⊘ All-zero pages are not materialised — an unwritten page and a zero page are the same
+    /// fact to this store, and [`FbStore::install_join`] counts the same way.
+    ///
+    /// # Errors
+    /// [`FbRefused`] when no join is installed at exactly `phys`, when the carried pages would
+    /// exceed the residency ceiling, or when the join's bytes could not be read. ⊘ The
+    /// default answers [`NO_JOIN_SUPPORT`]: a store that cannot join has nothing to carry.
+    fn release_join_carrying_bytes(
+        &mut self,
+        phys: u64,
+    ) -> Result<(Box<dyn FbJoined>, FbJoinCarried), FbRefused> {
+        Err(FbRefused {
+            phys,
+            len: 0,
+            why: NO_JOIN_SUPPORT,
+        })
+    }
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -533,6 +579,34 @@ pub struct FbJoinInstalled {
     /// How many 4 KiB pages of this store the copy read from — i.e. were resident.
     pub pages: u64,
 }
+
+/// ★★★ What [`FbStore::release_join_carrying_bytes`] did — **the carry-back, counted**, the
+/// mirror of [`FbJoinInstalled`] and reported for the same reason: *"the join is gone"* and
+/// *"its bytes survived"* are two facts, and a report that carried only the first would let a
+/// vacuous carry-back read as evidence that nothing was lost.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FbJoinCarried {
+    /// How long the released join was, in bytes — the OLD extent, for a caller that is about
+    /// to install a join of a different length over the same base.
+    pub released_len: u64,
+    /// How many bytes were carried out of the join into this store's own pages.
+    pub carried: u64,
+    /// ★ How many of those bytes were **non-zero** — the non-vacuity term.
+    pub nonzero: u64,
+    /// How many 4 KiB pages this store now holds for the range that it did not before.
+    pub pages: u64,
+}
+
+/// [`FbStore::release_join_carrying_bytes`]'s refusal when no join is installed at exactly the
+/// base named. ⊘ A refusal and not a success, for [`FbStore::release_join`]'s reason.
+pub const CARRY_BACK_NO_JOIN: &str = "no framebuffer join is installed at exactly that base, so there is nothing to give \
+     back and nothing to carry; the store was not changed";
+
+/// [`FbStore::release_join_carrying_bytes`]'s refusal when the join's own bytes could not be
+/// read. ⊘ The join stays installed: a release that lost the bytes it was asked to keep would
+/// be the two-memories defect under the verb that exists to prevent it.
+pub const CARRY_BACK_READ_FAILED: &str = "the joined backing refused a read of its own extent, so its bytes could not be \
+     carried back; the join was NOT released and the store was not changed";
 
 /// [`FbStore::install_join`]'s refusal from a store that cannot join at all.
 pub const NO_JOIN_SUPPORT: &str = "this framebuffer store cannot hold a joined range; it has no pages of its own to \
@@ -1215,6 +1289,88 @@ impl FbStore for SparseFb {
         // `joined_ranges`'s "already ascending" property survives a release as well as an
         // install.
         Some(region)
+    }
+
+    fn release_join_carrying_bytes(
+        &mut self,
+        phys: u64,
+    ) -> Result<(Box<dyn FbJoined>, FbJoinCarried), FbRefused> {
+        // ★ EXACT base, per `release_join`'s reason.
+        let Some(i) = self.joined.iter().position(|(b, _)| *b == phys) else {
+            return Err(FbRefused {
+                phys,
+                len: 0,
+                why: CARRY_BACK_NO_JOIN,
+            });
+        };
+        let len = self.joined[i].1.len();
+        let ulen = usize::try_from(len).unwrap_or(usize::MAX);
+        // ---- 1. READ the whole join FIRST, with it still installed. Walked with `runs` so
+        // the carry-back splits the range exactly as a write would; an all-zero run is
+        // dropped for `install_join`'s reason (an unwritten page and a zero page are one fact).
+        let mut kept: Vec<(u64, usize, Vec<u8>)> = Vec::new();
+        for (frame, off, take) in SparseFb::runs(phys, ulen) {
+            let mut buf = vec![0u8; take];
+            let at = frame * FB_PAGE + off as u64 - phys;
+            if self.joined[i].1.read(at, &mut buf).is_err() {
+                return Err(FbRefused {
+                    phys,
+                    len: ulen,
+                    why: CARRY_BACK_READ_FAILED,
+                });
+            }
+            if buf.iter().any(|b| *b != 0) {
+                kept.push((frame, off, buf));
+            }
+        }
+        // ---- 2. ROOM, checked for the WHOLE carry-back before a single page is created —
+        // `write_tagged`'s rule, and the second refusal that leaves the store unchanged.
+        let fresh = {
+            let mut frames: Vec<u64> = kept
+                .iter()
+                .map(|(f, _, _)| *f)
+                .filter(|f| !self.pages.contains_key(f))
+                .collect();
+            frames.dedup();
+            frames.len() as u64
+        };
+        if self.resident_bytes() + fresh * FB_PAGE > self.cap {
+            return Err(FbRefused {
+                phys,
+                len: ulen,
+                why: RESIDENT_CAP_REACHED,
+            });
+        }
+        // ---- 3. RELEASE, then CARRY. Nothing below can fail.
+        let (_, region) = self.joined.remove(i);
+        let mut out = FbJoinCarried {
+            released_len: len,
+            ..FbJoinCarried::default()
+        };
+        for (frame, off, buf) in kept {
+            if !self.pages.contains_key(&frame) {
+                // ⊘ `Unattributed`, honestly: these bytes came through the join, and no
+                // window of ours wrote them. Claiming one would put a carry-back in the
+                // by-writer census as though the guest had used that window.
+                self.seq += 1;
+                self.origin.insert(
+                    frame,
+                    FbPageOrigin {
+                        by: FbWriter::Unattributed,
+                        seq: self.seq,
+                    },
+                );
+                out.pages += 1;
+            }
+            let page = self
+                .pages
+                .entry(frame)
+                .or_insert_with(|| Box::new([0u8; FB_PAGE as usize]));
+            page[off..off + buf.len()].copy_from_slice(&buf);
+            out.carried += buf.len() as u64;
+            out.nonzero += buf.iter().filter(|b| **b != 0).count() as u64;
+        }
+        Ok((region, out))
     }
 
     fn device_reset(&mut self) {

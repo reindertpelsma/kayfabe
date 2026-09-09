@@ -11549,13 +11549,45 @@ fn join_one_fb_leaf(
     //   (`MOVED-FRAME ALIASING`); and ORPHAN additionally refuses when a live PEER still
     //   DESCRIBES the frame (`fb_frame_namers`), because its bytes are what would be zeroed.
     let mut how = kayfabe_rt::FbLeafBacking::Joined;
-    if (release.aliases() || release.supersedes()) && plane.fb_join_installed_at(leaf.phys) {
+    // ★★★★★ **w393 — THE STORE'S JOIN HAS AN EXTENT, AND THE BASE MATCHING IS NOT THE EXTENT
+    // MATCHING.** `[measured w392q, run_w392q_qemu.log:331,359,452,460,506]` P2's **4 KiB**
+    // operand objects landed on `fb_phys=0x140000`, their join was KEPT-FOR-MOVE across P2's
+    // rounds, and P3's **64 KiB** ring object then landed on the same frame. `fb_join_installed_at`
+    // matches on exact base, so every arm below read *"this frame already has pages"* and chose
+    // `Aliased` — and `FbJoinTable::token_for` is exact-LENGTH by design, so the alias was refused
+    // `FB_ALIAS_NO_JOIN` three times, and nothing ever released the 4 KiB join. ⇒ The extent is
+    // asked HERE, once, and every arm that would alias compares it to `leaf.len` first.
+    let existing_extent = if release.aliases() || release.supersedes() {
+        plane.fb_join_extent_at(leaf.phys)
+    } else {
+        None
+    };
+    if let Some(existing_len) = existing_extent {
         // ★ The cheap per-VAS question, asked before the expensive device-wide census below.
         // ⊘ `leaf.va` is EXCLUDED. A re-ask of a leaf we already backed matches the sibling
         // predicate with its own row, and the alias sentence would then announce one VA as
         // two — see `fb_join_va_in_vas`.
         let sibling = device.fb_join_va_in_vas(DOORBELL_TARGET_GPU, pdb, leaf.phys, leaf.va);
-        if let (true, Some(other)) = (release.aliases(), sibling) {
+        let extent_mismatch = existing_len != leaf.len;
+        if let (true, Some(other), true) = (release.aliases(), sibling, extent_mismatch) {
+            // ★★★★★ **w393 — LIVE-SIBLING LENGTH MISMATCH: REFUSED BY NAME.** The row at
+            // `other` is PUBLISHED and its host object is bound over the store's join at the
+            // OLD extent; an engine may be reading through it right now. Releasing that join
+            // to re-mint it at `leaf.len` would put the guest's window on fresh pages while
+            // the sibling's engine goes on reading the old `memfd` — two memories, silent
+            // (`w228`). And `alias_fb_leaf` cannot lend a `memfd` of one length for a leaf of
+            // another (`FbJoinTable::token_for` is exact-length by design). ⊘ So there is no
+            // correct action here but to say so, with every number the next reader needs.
+            eprintln!(
+                "{head} {what} ⊘ JOIN-EXTENT MISMATCH (LIVE SIBLING) fb_phys=0x{:x}: the store \
+                 holds a join of len=0x{:x} at this frame, PUBLISHED at va=0x{:x}, and this leaf \
+                 at va=0x{:x} wants len=0x{:x}. A join cannot be aliased at a different length \
+                 and cannot be released under a live sibling. Refused BY NAME — this leaf stays \
+                 fabricated, NOT retried, nothing released, nothing minted",
+                leaf.phys, existing_len, other, leaf.va, leaf.len
+            );
+            return None;
+        } else if let (true, Some(other)) = (release.aliases(), sibling) {
             // ★★★★★ **THE FIX (w380).** One memory, one more address. Nothing is unbound,
             // nothing is released, and the row at `other` keeps its own host object — which is
             // what makes `N` unbounded rather than capped: there is no ping-pong to bound.
@@ -11638,6 +11670,81 @@ fn join_one_fb_leaf(
                          object is ⊘ NOT freed",
                         r.phys, r.va.0
                     );
+                }
+            }
+        } else if release.aliases() && minted_join_by(leaf.phys) == Some(isolate) && extent_mismatch
+        {
+            // ★★★★★ **w393 — THE MOVED FRAME AT A NEW EXTENT: release the stale join CARRYING
+            // ITS BYTES, and mint fresh at `leaf.len`.**
+            //
+            // The store's join is OURS (minter ledger) and no row anywhere publishes it, so
+            // the MOVED-FRAME arm below would alias — and `FbJoinTable::token_for` would refuse
+            // the alias because the `memfd` is `existing_len` long and this leaf is `leaf.len`
+            // (`[measured w392q]` 0x1000 vs 0x10000, `FB_ALIAS_NO_JOIN` x3). The ORPHAN arm's
+            // `release_store_join` would free the join but NOT its bytes (`FbStore::release_join`:
+            // *"any bytes the join held are gone"*), and `install_join` establishes only from
+            // resident store pages, of which the range has none after a join — so a plain
+            // release + re-mint would print `established=0 bytes` over a frame the guest wrote.
+            // ⇒ `release_join_carrying_bytes`: the join's bytes come back into the store's own
+            // pages FIRST, under one lock hold, and the fresh install below establishes from
+            // them. It refuses before changing anything, so a refusal here is a refusal by name
+            // with nothing to unwind.
+            //
+            // ⊘ A live PEER in another VAS that still DESCRIBES the frame (unpublished, i.e. not
+            // a sibling) is the ORPHAN arm's `NOT AN ORPHAN` case: its bytes are what the old
+            // join holds, and a regrow would hand it a frame it cannot alias at its own length.
+            // Refused by name for the same reason, before anything is released.
+            let peer_described = device.fb_frame_namers(leaf.phys, Some(pdb));
+            if peer_described > 0 {
+                eprintln!(
+                    "{head} {what} ⊘ JOIN-EXTENT MISMATCH (LIVE PEER) fb_phys=0x{:x}: the \
+                     store's join is len=0x{:x} (minted by THIS isolate {isolate:?}, no row \
+                     published), this leaf at va=0x{:x} wants len=0x{:x}, and \
+                     {peer_described} live row(s) in OTHER address space(s) still DESCRIBE the \
+                     frame. Not released, not re-minted — refused BY NAME; this leaf stays \
+                     fabricated",
+                    leaf.phys, existing_len, leaf.va, leaf.len
+                );
+                return None;
+            }
+            match release_store_join_carrying_bytes(plane, leaf.phys) {
+                Ok(carried) => {
+                    let drained = device.drain_pending_releases();
+                    eprintln!(
+                        "{head} {what} ★★★★★ JOIN-EXTENT REGROW fb_phys=0x{:x} at va=0x{:x}: the \
+                         store's join was len=0x{:x} (minted by THIS isolate {isolate:?}, no row \
+                         published, no peer describes it) and this leaf wants len=0x{:x} \
+                         ({}). The stale join is RELEASED with its bytes CARRIED BACK into the \
+                         store — carried={} bytes over {} page(s), of which {} NON-ZERO — so the \
+                         fresh join below establishes from them. drained={drained} ⚠ the old \
+                         host `memfd` stays in the isolate's join table at its old length \
+                         (pre-existing bounded leak; `token_for` for THAT length still answers \
+                         it, and this arm is what keeps a caller from asking for it)",
+                        leaf.phys,
+                        leaf.va,
+                        carried.released_len,
+                        leaf.len,
+                        if leaf.len > carried.released_len {
+                            "GROW"
+                        } else {
+                            "SHRINK"
+                        },
+                        carried.carried,
+                        carried.pages,
+                        carried.nonzero,
+                    );
+                    // `how` stays `Joined`: step 1 mints a fresh memfd at `leaf.len` and step
+                    // 3's `install_join` establishes from the carried pages.
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{head} {what} ⊘ JOIN-EXTENT REGROW REFUSED fb_phys=0x{:x} at \
+                         va=0x{:x}: existing join len=0x{:x}, wanted len=0x{:x} — the store \
+                         would not give the join back keeping its bytes: `{}`. Nothing was \
+                         released, nothing minted; this leaf stays fabricated. Refused BY NAME",
+                        leaf.phys, leaf.va, existing_len, leaf.len, e.why
+                    );
+                    return None;
                 }
             }
         } else if release.aliases() && minted_join_by(leaf.phys) == Some(isolate) {
@@ -17399,6 +17506,23 @@ fn release_store_join(plane: &RegPlane, phys: u64) -> bool {
             .remove(&phys);
     }
     had
+}
+
+/// ★★★ **w393 — [`release_store_join`]'s CARRYING twin**, for a join that is about to be
+/// re-minted at a different extent over the same base. Wraps
+/// `RegPlane::release_fb_join_carrying_bytes` and erases the ledger entry iff the join was
+/// actually released — an `Err` leaves both the store and the ledger exactly as they were,
+/// so the caller can refuse by name with nothing to unwind.
+fn release_store_join_carrying_bytes(
+    plane: &RegPlane,
+    phys: u64,
+) -> Result<kayfabe_device::FbJoinCarried, kayfabe_device::FbRefused> {
+    let out = plane.release_fb_join_carrying_bytes(phys)?;
+    minted_join_ledger()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&phys);
+    Ok(out)
 }
 
 /// The per-frame takeover ledger. ⊘ Process-global rather than a field, because it is a

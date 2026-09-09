@@ -1706,6 +1706,52 @@ impl RegPlane {
         s.fb.joined_ranges().iter().any(|(b, _)| *b == phys)
     }
 
+    /// ★★★ **w393 — the EXTENT of the join installed at EXACTLY `phys`**, `None` when there
+    /// is none. [`RegPlane::fb_join_installed_at`] with the length attached, for the caller
+    /// that must compare it: a join's base matching says nothing about its length, and
+    /// `[measured w392q]` a 4 KiB join at a frame answered `true` for a 64 KiB leaf at the
+    /// same base, which then had no `memfd` of its length to alias.
+    #[must_use]
+    pub fn fb_join_extent_at(&self, phys: u64) -> Option<u64> {
+        let s = self.state.lock();
+        s.fb
+            .joined_ranges()
+            .iter()
+            .find(|(b, _)| *b == phys)
+            .map(|(_, l)| *l)
+    }
+
+    /// ★★★★★ **w393 — RELEASE the join at `phys`, KEEPING ITS BYTES in the store**, so the
+    /// frame can be re-joined at another extent. [`RegPlane::release_fb_join`]'s carrying
+    /// twin; see [`crate::fbwin::FbStore::release_join_carrying_bytes`] for why the bytes
+    /// must come back and why the store refuses before it changes anything.
+    ///
+    /// ★ The read-back and the release happen under ONE hold of the plane lock, for
+    /// [`RegPlane::join_fb`]'s reason: between them the range would otherwise have its bytes
+    /// in two places, and a guest write landing in that window would go to the copy about to
+    /// be discarded.
+    ///
+    /// ⚠ The `munmap` is OUTSIDE the lock, exactly as in [`RegPlane::release_fb_join`], and
+    /// the `drop` is a statement for the same measured reason (`w289j`).
+    ///
+    /// # Errors
+    /// The store's own sentence, whole; on `Err` the store is unchanged and the join stands.
+    pub fn release_fb_join_carrying_bytes(
+        &self,
+        phys: u64,
+    ) -> Result<crate::fbwin::FbJoinCarried, FbRefused> {
+        let (out, released) = {
+            let mut s = self.state.lock();
+            match s.fb.release_join_carrying_bytes(phys) {
+                Ok((region, carried)) => (Ok(carried), Some(region)),
+                Err(why) => (Err(why), None),
+            }
+        };
+        // ⊘ HERE, after the guard is gone. See the doc above.
+        drop(released);
+        out
+    }
+
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
     #[must_use]
     pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {

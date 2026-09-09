@@ -15,8 +15,8 @@
 //! cannot leak them into the next one.
 
 use kayfabe_device::{
-    ALREADY_JOINED, ESTABLISH_FAILED, FbJoined, FbStore, FbWriter, NO_JOIN_SUPPORT, RefusingFb,
-    SparseFb,
+    ALREADY_JOINED, CARRY_BACK_NO_JOIN, ESTABLISH_FAILED, FbJoined, FbStore, FbWriter,
+    NO_JOIN_SUPPORT, RefusingFb, SparseFb,
 };
 
 /// ★ A register plane over the shipped chip row — §5's arms are about the PLANE's reading of
@@ -622,4 +622,117 @@ fn a_released_range_reads_as_never_written_and_holds_no_resident_page() {
         Some(false),
         "and no page was materialised to hold what the join had"
     );
+}
+
+// =====================================================================================
+// 7 — ★★★★★ w393: RELEASE CARRYING BYTES, so a frame can be RE-JOINED AT ANOTHER EXTENT
+// =====================================================================================
+
+/// ★★★★★ **The P3 shape (`w392q`): a 4 KiB join at a frame, and a 64 KiB leaf then wants the
+/// same base.** `release_join` would give the range back and DROP its bytes (the test above
+/// states that as a property), and `install_join` establishes only from resident pages — so
+/// release + re-join prints `established=0 bytes` over a frame the guest wrote. The carrying
+/// release is the fix: the join's bytes come back into the store first, the longer join
+/// establishes from them, and every byte the guest wrote at either extent is visible
+/// through the new join.
+#[test]
+fn a_join_released_carrying_bytes_re_establishes_them_in_a_longer_join() {
+    const SHORT: u64 = 0x1000;
+    let mut fb = SparseFb::new(FB);
+    // Bytes written BEFORE the short join existed …
+    let before = image(0x5151_0000, 0x800);
+    fb.write_tagged(AT, &before, FbWriter::Executor)
+        .expect("inside the advertised framebuffer");
+    let est = fb
+        .install_join(AT, Box::new(Elsewhere::new(SHORT)))
+        .expect("the short join installs");
+    assert_eq!(est.copied, SHORT, "one resident page established the short join");
+    // … and bytes written THROUGH it, which live only in the join.
+    let through = image(0x7a7a_0000, 0x800);
+    fb.write(AT + 0x800, &through)
+        .expect("a write into a joined range lands in the join");
+    assert_eq!(
+        fb.joined_ranges(),
+        vec![(AT, SHORT)],
+        "the store holds the short join and nothing else"
+    );
+
+    // ★★★★★ THE VERB. The join is gone, the bytes are not.
+    let (back, carried) = fb
+        .release_join_carrying_bytes(AT)
+        .expect("a join was installed at exactly AT");
+    assert_eq!(back.len(), SHORT, "the caller gets the old backing whole");
+    assert_eq!(carried.released_len, SHORT, "and is told the OLD extent");
+    assert_eq!(carried.carried, SHORT, "the whole page came back");
+    assert!(carried.nonzero > 0, "and the carry-back was not vacuous");
+    assert_eq!(carried.pages, 1, "one page was materialised for it");
+    assert!(fb.joined_ranges().is_empty(), "the store no longer claims the range");
+    assert_eq!(
+        fb.is_resident(AT),
+        Some(true),
+        "★ the FALSIFIER against `release_join`: the frame's bytes are HELD, not dropped"
+    );
+    let mut got = vec![0u8; 0x1000];
+    fb.read(AT, &mut got).expect("inside the framebuffer");
+    assert_eq!(&got[..0x800], &before[..], "the pre-join bytes survived the release");
+    assert_eq!(&got[0x800..], &through[..], "and so did the bytes written through the join");
+
+    // ★ THE RE-JOIN AT THE NEW EXTENT establishes from the carried page — this is the line
+    // that read `established=0 bytes` in w392j and would have again here.
+    let est = fb
+        .install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the longer join installs over the released base");
+    assert_eq!(est.pages, 1, "exactly the carried page was resident to establish from");
+    assert_eq!(est.copied, SHORT);
+    assert!(est.nonzero > 0, "the establishment copy was NOT vacuous");
+    assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "one join, at the NEW length");
+    let mut got = vec![0u8; 0x1000];
+    fb.read(AT, &mut got).expect("served through the new join");
+    assert_eq!(&got[..0x800], &before[..], "visible through the 64 KiB join");
+    assert_eq!(&got[0x800..], &through[..]);
+    let mut tail = [0xffu8; 8];
+    fb.read(AT + LEN - 8, &mut tail).expect("the far end of the new join");
+    assert_eq!(tail, [0u8; 8], "the never-written tail of the longer join reads zero");
+}
+
+/// ⊘ **A carrying release of an all-zero join materialises NOTHING.** An unwritten page and a
+/// zero page are the same fact to this store, and `install_join` counts the same way; a
+/// carry-back that created resident zero pages would be the residency leak the plain
+/// `release_join` doc refuses, re-created under the verb built to avoid it.
+#[test]
+fn a_carrying_release_of_an_all_zero_join_holds_no_page() {
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the join installs");
+    let (_, carried) = fb
+        .release_join_carrying_bytes(AT)
+        .expect("installed at exactly AT");
+    assert_eq!(carried.released_len, LEN);
+    assert_eq!((carried.carried, carried.nonzero, carried.pages), (0, 0, 0));
+    assert_eq!(fb.is_resident(AT), Some(false), "no page was materialised");
+    assert!(fb.joined_ranges().is_empty());
+}
+
+/// ⊘ **Refused BY NAME where there is no join, and the store is untouched.** Same rule as
+/// `release_join`: an interior address names no join, and a carrying release that resolved
+/// it to the containing range would carry — and release — more than the caller named.
+#[test]
+fn a_carrying_release_with_no_join_at_that_base_refuses_and_changes_nothing() {
+    let mut fb = SparseFb::new(FB);
+    fb.install_join(AT, Box::new(Elsewhere::new(LEN)))
+        .expect("the join installs");
+    for at in [AT + 0x1000, AT + LEN, AT - 0x1000] {
+        let e = fb
+            .release_join_carrying_bytes(at)
+            .expect_err("no join is installed at exactly that base");
+        assert_eq!(e.why, CARRY_BACK_NO_JOIN);
+        assert_eq!(e.phys, at);
+    }
+    assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "the join stands");
+
+    let mut none = RefusingFb;
+    let e = none
+        .release_join_carrying_bytes(AT)
+        .expect_err("a store that cannot join has nothing to carry");
+    assert_eq!(e.why, NO_JOIN_SUPPORT);
 }
