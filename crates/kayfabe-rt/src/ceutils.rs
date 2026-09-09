@@ -234,6 +234,26 @@ pub struct CeUtilsRun {
     pub spans: usize,
     /// Bytes actually moved by the CPU executor.
     pub bytes: u64,
+    /// ★★★★★ **OWNER RULE, 2026-09-09, MADE MEASURABLE: which STORE each byte went to.**
+    ///
+    /// > *"A CE thats between fake fb and CPU ram or between fake fb is expected and
+    /// > intended to be a memcpy. But anything kayfabe knows its a Device D then it should
+    /// > be a CE."*
+    ///
+    /// The rule is already enforced twice — [`CpuPlane`] has no variant naming real device
+    /// memory, and [`CeSpan::dst_place`] is `None` for a device destination, which
+    /// `execute_ours` refuses by name as `CpuCeStraddle` rather than guessing a store. But
+    /// **both of those are arguments from types**, and a boot printed neither. A rule whose
+    /// only witness is that the code could not express its violation is a rule nobody is
+    /// measuring: it holds until a third plane is added, and then it fails silently.
+    ///
+    /// These two counters make each served submission SAY which store it wrote, so
+    /// `fb + guest_ram == bytes` is checkable per record and any future plane shows up as
+    /// bytes that belong to neither.
+    /// ⊘ Destination only. The source plane is a separate question and is not claimed here.
+    pub dst_bytes_fb: u64,
+    /// Bytes written to guest system memory — see [`CeUtilsRun::dst_bytes_fb`].
+    pub dst_bytes_guest_ram: u64,
     /// finishPayload semaphores written, after the bytes.
     pub completions: usize,
     /// ★ Where the **last** completion landed — its VA, its plane and its plane address.
@@ -271,13 +291,28 @@ impl CeUtilsRun {
     #[must_use]
     pub fn describe(&self) -> String {
         format!(
-            "cpu-ce: {} gp, {} methods, {} launch ({} release-only), {} span, {} B, {} sem{}",
+            "cpu-ce: {} gp, {} methods, {} launch ({} release-only), {} span, {} B \
+             (dst V:{} B S:{} B{}), {} sem{}",
             self.entries,
             self.methods,
             self.launches,
             self.releases,
             self.spans,
             self.bytes,
+            self.dst_bytes_fb,
+            self.dst_bytes_guest_ram,
+            // ⊘ The identity, stated in the line itself rather than left to the reader. A
+            // byte in neither store is the owner's rule being violated, and it must be
+            // impossible to read this line and not see it.
+            if self.dst_bytes_fb + self.dst_bytes_guest_ram == self.bytes {
+                String::new()
+            } else {
+                format!(
+                    " ⊘⊘ UNACCOUNTED {} B — a destination in NEITHER store",
+                    self.bytes
+                        .saturating_sub(self.dst_bytes_fb + self.dst_bytes_guest_ram)
+                )
+            },
             self.completions,
             self.completion_at
                 .map_or_else(String::new, |(va, plane, phys)| format!(
@@ -836,6 +871,19 @@ pub fn run_submission(
         run.spans += spans.len();
         crate::cpu_ce::execute_ours_spans(ce.fb(), vmm, &spans).map_err(CeUtilsRefusal::plain)?;
         run.bytes += spans.iter().map(|s| s.sub.len).sum::<u64>();
+        // ★ Attribute those bytes to the store that received them. `dst_place` is `None`
+        // exactly for a destination this executor cannot reach — real device memory — and
+        // `execute_ours` has already refused such a span above, so a span reaching here
+        // always has a plane. Counting it anyway (rather than asserting) keeps the witness
+        // honest if that ever stops being true: the bytes would then be in NEITHER counter
+        // and the `fb + guest_ram == bytes` identity would break loudly.
+        for sp in &spans {
+            match sp.dst_place.map(|o| o.residency.plane) {
+                Some(CpuPlane::Fb) => run.dst_bytes_fb += sp.sub.len,
+                Some(CpuPlane::GuestRam) => run.dst_bytes_guest_ram += sp.sub.len,
+                None => {}
+            }
+        }
 
         // ---- 5. SIGNAL, and only now. --------------------------------------------------
         //
@@ -1970,5 +2018,81 @@ mod operand_target_tests {
             got.methods, 11,
             "the read's own count carries through: {got:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod owner_ce_rule_witness {
+    //! ★★★★★ **THE OWNER'S CE RULE, AS A FALSIFIABLE BOOT-TIME ASSERTION.**
+    //!
+    //! Owner, 2026-09-09: *"CE copy should not be a memcpy for any meaningful size if it
+    //! crosses into real GPU memory. A CE thats between fake fb and CPU ram or between fake
+    //! fb is expected and intended to be a memcpy. But anything kayfabe knows its a Device D
+    //! then it should be a CE."*
+    //!
+    //! The rule is enforced in two places already, and **both are arguments from types**:
+    //! [`CpuPlane`] has no variant that names real device memory, and a [`CeSpan`] whose
+    //! `dst_place` is `None` (device memory) is refused by name as `CpuCeStraddle` instead
+    //! of being guessed at. Neither of those prints anything, so no boot has ever *stated*
+    //! that the rule held — it was inferred from the code's inability to express the
+    //! violation. That inference is sound today and expires the moment a third plane exists.
+    //!
+    //! [`CeUtilsRun::describe`] now carries a per-store byte census, and this module exists
+    //! to prove the census can **see a violation**, not merely to watch it agree with itself.
+    use super::*;
+
+    /// The ordinary case: every byte lands in a store, and the line says which.
+    #[test]
+    fn a_served_copy_names_the_store_it_wrote_and_claims_nothing_more() {
+        let run = CeUtilsRun {
+            entries: 1,
+            bytes: 4096,
+            dst_bytes_fb: 4096,
+            ..CeUtilsRun::default()
+        };
+        let line = run.describe();
+        assert!(line.contains("dst V:4096 B S:0 B"), "{line}");
+        assert!(
+            !line.contains("UNACCOUNTED"),
+            "a fully-attributed copy must not raise the alarm: {line}"
+        );
+    }
+
+    /// ★★★ THE DETECTION TEST. A copy whose bytes reached NEITHER store is the owner's rule
+    /// being violated, and the line must say so. ⊘ Today this state is unreachable — the
+    /// executor refuses such a span — which is exactly why the check must be tested
+    /// directly: an assertion that can only ever be exercised by a future regression is
+    /// otherwise never known to work until that regression ships.
+    #[test]
+    fn bytes_that_reached_neither_store_are_named_in_the_line() {
+        let run = CeUtilsRun {
+            entries: 1,
+            bytes: 16 * 1024 * 1024,
+            dst_bytes_fb: 4096,
+            dst_bytes_guest_ram: 0,
+            ..CeUtilsRun::default()
+        };
+        let line = run.describe();
+        assert!(line.contains("UNACCOUNTED"), "{line}");
+        assert!(
+            line.contains(&format!("{} B", 16 * 1024 * 1024 - 4096)),
+            "the line must name HOW MANY bytes went unaccounted, not merely that some did: \
+             {line}"
+        );
+    }
+
+    /// A release-only submission moves no bytes, and must not read as an unaccounted one.
+    /// ⊘ `0 == 0 + 0` is the identity holding, not a vacuous pass — but a naive
+    /// `bytes > fb + ram` check written as `!=` on unsigned arithmetic would have made this
+    /// the noisiest line in every boot.
+    #[test]
+    fn a_release_only_submission_is_not_an_unaccounted_one() {
+        let run = CeUtilsRun {
+            entries: 1,
+            launches: 1,
+            releases: 1,
+            ..CeUtilsRun::default()
+        };
+        assert!(!run.describe().contains("UNACCOUNTED"), "{}", run.describe());
     }
 }
