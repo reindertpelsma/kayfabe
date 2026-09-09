@@ -136,9 +136,9 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased,
-    FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend,
-    RmError,
+    CeExecutor, CeSource, CeSubCopy, DeviceView, ExportRequest, ExportSource, ExportedBacking,
+    FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
+    IsolateId, RmBackend, RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -2511,45 +2511,10 @@ impl RmConnection {
         // attempts, so an early `?` must not be able to hide one.
         self.cpu_maps
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let len = register_len;
-        // ⊘ A FRESH node either way — see fact 3 above. `self.ctl` is the connection's
-        // long-lived control descriptor and already carries RM state; registering a
-        // one-shot mmap context on it would work once and then answer
-        // `NV_ERR_STATE_IN_USE`, so the `Ctl` arm opens its own `nvidiactl` rather than
-        // borrowing that one.
-        let node = match which {
-            MapNode::Gpu => {
-                let name = CString::new(format!("nvidia{}", self.gpu_index))
-                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-                CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?
-            }
-            MapNode::Ctl => {
-                CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?
-            }
-        };
-
-        let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
-        Nvos33ParametersWithFd {
-            h_client: self.client.raw(),
-            h_device: self.device,
-            h_memory,
-            offset: 0,
-            length: len,
-            p_linear_address: 0,
-            status: 0,
-            flags: 0,
-            fd: node.fd_number(),
-        }
-        .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
-        let out =
-            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        status_check(out.status)?;
+        // ★ w393 — the registration is its own verb now, because the armed node is a thing
+        // this crate hands to ANOTHER process without ever `mmap`ing it here
+        // (`RmBackend::export_device_view`). Everything below this line is the `mmap`.
+        let node = self.arm_cpu_view(which, h_memory, 0, register_len)?;
 
         // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
         // the work: this is memory **hardware writes**, so every access must be a naturally
@@ -2574,6 +2539,68 @@ impl RmConnection {
         )
         .map_err(|e| region_error(&e))?;
         Ok((node, region))
+    }
+
+    /// ★★★★★ **w393 — the first half of [`Self::map_cpu_windowed_on`], as a verb: open a
+    /// FRESH node and register an `mmap` context for `[offset, offset+len)` of `h_memory`
+    /// against it, and hand the ARMED NODE back un-`mmap`ed.**
+    ///
+    /// Split out because the node is now something this process may hand to **another**
+    /// process — the VMM — which performs the `mmap` itself and installs a guest memslot
+    /// over it (`kayfabe_isolate::DeviceView`; the host-visible half of
+    /// `DEVICE_LOCAL | HOST_VISIBLE`). Nothing on the driver's framebuffer `mmap` path names
+    /// the calling process (`ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`, a reading),
+    /// so the node's `struct file` carries the whole context wherever the descriptor goes.
+    ///
+    /// ⊘ A FRESH node either way — see fact 3 on [`Self::map_cpu_windowed_on`]. `self.ctl`
+    /// is the connection's long-lived control descriptor and already carries RM state;
+    /// registering a one-shot mmap context on it would work once and then answer
+    /// `NV_ERR_STATE_IN_USE`, so the `Ctl` arm opens its own `nvidiactl` rather than
+    /// borrowing that one.
+    ///
+    /// `offset` is the offset **within the object** (`NVOS33_PARAMETERS::offset`,
+    /// `kayfabe_abi::submit::Nvos33ParametersWithFd::offset`); every pre-existing caller
+    /// passes `0` through [`Self::map_cpu_windowed_on`] and is unchanged.
+    fn arm_cpu_view(
+        &self,
+        which: MapNode,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+    ) -> Result<CharDevice, RmError> {
+        let node = match which {
+            MapNode::Gpu => {
+                let name = CString::new(format!("nvidia{}", self.gpu_index))
+                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?
+            }
+            MapNode::Ctl => {
+                CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?
+            }
+        };
+        let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
+        Nvos33ParametersWithFd {
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_memory,
+            offset,
+            length: len,
+            p_linear_address: 0,
+            status: 0,
+            flags: 0,
+            fd: node.fd_number(),
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        Ok(node)
     }
 
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
@@ -4643,6 +4670,15 @@ impl HostRmBackend {
     fn narrow(&self, h: HostHandle) -> Result<u32, RmError> {
         u32::try_from(h.raw()).map_err(|_| RmError::BadHandle(h))
     }
+
+    /// ★ w393 — this backend's export table, for an **in-process** holder that wants to lend
+    /// a token it minted ([`RmBackend::export_device_view`]) to a process it spawned itself.
+    /// The child isolate reaches the same table through `crate::child::serve_one`; a probe
+    /// that runs the backend directly has no serve loop and needs the door.
+    #[must_use]
+    pub fn exports(&self) -> &Arc<ChildExports> {
+        &self.exports
+    }
 }
 
 impl RmBackend for HostRmBackend {
@@ -5304,6 +5340,54 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::NotExportableAsMemory { memory });
         };
         mint_fabricated(&self.exports, want)
+    }
+
+    /// ★★★★★ **w393 — arm a CPU view of one of this connection's vidmem objects and hand
+    /// the ARMED NODE up** ([`kayfabe_isolate::DeviceView`]).
+    ///
+    /// This is the door the correction block on [`RmBackend::export_backing`] above named
+    /// as *"ours"*, opened as a **separate verb** rather than by relaxing that refusal:
+    /// `export_backing(HostDeviceMemory)` still answers `NotExportableAsMemory`, because the
+    /// card's pages are still not *memory* the VMM may place anywhere. What this hands over
+    /// is a `/dev/nvidia<N>` node carrying a one-shot `NV_ESC_RM_MAP_MEMORY` context for
+    /// exactly `[offset, offset+len)` of `memory` — the thing [`ChildExports::mint_armed_node`]
+    /// was built to lend and nothing had asked for.
+    ///
+    /// ⊘ The node is never `mmap`ed **here**. The VMM `mmap`s it once at file offset zero
+    /// and installs a guest memslot over the mapping; this process keeps only the table
+    /// entry, so the descriptor can be lent on the reply. The RM object stays owned by this
+    /// connection and is freed through [`RmBackend::free`] like any other.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for an object this connection did not mint; otherwise whatever
+    /// `NV_ESC_RM_MAP_MEMORY` refuses with — including a host BAR1 with no room for the view,
+    /// which is the hardware budget the design doc names.
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+    ) -> Result<DeviceView, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let raw = self.narrow(memory)?;
+        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len)?;
+        // ★ The driver rounds the registered range up to a host page and compares the
+        // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
+        // so the length that crosses is the one the VMM's `mmap` must use.
+        let page = HostPageSize::query().bytes();
+        let mmap_len = len
+            .checked_add(page - 1)
+            .map(|n| n & !(page - 1))
+            .ok_or(RmError::NoMemory)?;
+        let token = self.exports.mint_armed_node(node);
+        Ok(DeviceView {
+            token,
+            memory,
+            offset,
+            mmap_len,
+        })
     }
 
     /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — `fb_cpu_view.md` §4's chain, and it is

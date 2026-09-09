@@ -992,7 +992,7 @@ impl PoolGate {
     /// `gpu`. **Panics (R1) unless the caller holds zero ranked locks** — the whole point
     /// of the exercise.
     fn wait_for_return(&self, gpu: GpuId, seen: u64) {
-        let mut section = BlockingSection::enter();
+        let mut section = BlockingSection::enter("kayfabe_rt::SharedDevice — the pool-full condvar wait");
         section.run(|| {
             let mut g = self.state.lock().expect("pool gate");
             // The saturation event is recorded whether or not this thread ends up

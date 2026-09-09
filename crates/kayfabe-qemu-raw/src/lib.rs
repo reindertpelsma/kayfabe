@@ -79,6 +79,9 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+/// ★★★★★ w393 — the demand-driven BAR1/BAR2 mirror (a memslot per touched aperture page).
+#[cfg(feature = "host-isolates")]
+pub mod barmirror;
 pub mod kftime;
 pub mod reclaimtick;
 pub mod shim;

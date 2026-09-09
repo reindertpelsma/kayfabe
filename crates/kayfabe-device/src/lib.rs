@@ -93,8 +93,9 @@ use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
-    CePlane, Counters, DoorbellLog, GspServicePass, NanoClock, PlaneResidue, ReadOutcome,
-    RefusingRam, RegPlane, SteppingClock, WriteOutcome,
+    CePlane, Counters, DoorbellLog, FbMirrorPort, GspServicePass, NanoClock, PlaneResidue,
+    ReadOutcome, RefusingRam, RegPlane, SteppingClock, WindowPageResolution, WindowRefusal,
+    WriteOutcome,
 };
 
 /// ★ The fault vocabulary a [`DoorbellReport`] speaks, re-exported.
@@ -112,9 +113,10 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{
     ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED, ESTABLISH_FAILED,
-    FB_WRITER_KINDS, FbJoinCarried, FbJoinInstalled, FbJoined,
-    FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter, NO_JOIN_SUPPORT, RefusingFb,
-    SparseFb,
+    FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoined, FbPageArena,
+    FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter,
+    JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, PAGE_NOT_RESIDENT,
+    RefusingFb, SparseFb,
 };
 
 /// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s

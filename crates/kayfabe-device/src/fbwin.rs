@@ -509,6 +509,33 @@ pub trait FbStore: Send + core::fmt::Debug {
         })
     }
 
+    /// ★★★★★ **w393 — install the page source a memslot can name.** From this call on,
+    /// every page this store creates comes from `arena` (falling back to the heap, counted,
+    /// when the arena refuses). Pages that already exist are untouched until
+    /// [`FbStore::page_backing`] is asked to materialise them, which migrates them.
+    ///
+    /// # Errors
+    /// The arena, handed back, from a store that cannot use one.
+    fn install_page_arena(
+        &mut self,
+        arena: Box<dyn FbPageArena>,
+    ) -> Result<(), Box<dyn FbPageArena>> {
+        Err(arena)
+    }
+
+    /// ★★★★★ **w393 — WHAT BACKS the page containing `phys`**, for the BAR mirror.
+    ///
+    /// `materialise` asks the store to make the page memslottable if it can: allocate an
+    /// arena page for a never-written frame, or migrate a heap page into the arena (a 4 KiB
+    /// copy under the caller's lock, no syscall). With it `false` the store only reports.
+    ///
+    /// ⊘ Never a guess: a joined range answers its backing's own export, the store's own
+    /// pages answer theirs, and every other case is a named [`FbPageBacking::Refused`].
+    fn page_backing(&mut self, phys: u64, materialise: bool) -> FbPageBacking {
+        let _ = (phys, materialise);
+        FbPageBacking::Refused(NO_PAGE_EXPORT)
+    }
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -559,6 +586,16 @@ pub trait FbJoined: Send + core::fmt::Debug {
     /// # Errors
     /// As [`FbJoined::read`].
     fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), &'static str>;
+
+    /// ★★★★★ **w393 — the name a memslot placement uses for byte 0 of this join**, or
+    /// `None` when the backing cannot be named (the private/negative-control arm).
+    ///
+    /// The store adds a page's offset within the join before handing it out. ⊘ Default
+    /// `None`: a join that says nothing is one no memslot is placed over, which is correct
+    /// and counted, never a crash.
+    fn export(&self) -> Option<FbPageExport> {
+        None
+    }
 }
 
 /// ★★★ What [`FbStore::install_join`] did — **the establishment copy, counted**.
@@ -620,6 +657,131 @@ pub const ALREADY_JOINED: &str = "that framebuffer range is already joined; inst
 pub const ESTABLISH_FAILED: &str = "the establishment copy into the joined backing failed, so the join was NOT \
      installed: a live join whose pre-existing bytes never arrived would present the engine \
      a blank pool for a leaf the guest has already written";
+
+/// ★★★★★ **w393 — the NAME of the memory behind one framebuffer page**, for a memslot to
+/// point at: an opaque backing token plus a byte offset into it.
+///
+/// This crate is pure and holds no descriptor, so the token is whatever the shell that
+/// minted the backing chose — a join's registry id, the page arena's constant. The shell
+/// resolves it back to a descriptor **outside** the register plane's lock, which is why this
+/// is data and not a handle. ⊘ A token the shell no longer knows is a refusal at the shell,
+/// not a stale mapping: the shell re-resolves the frame before it commits a memslot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbPageExport {
+    /// The backing's token, as the shell minted it.
+    pub token: u64,
+    /// Byte offset of this page **within the backing** — host-page aligned.
+    pub offset: u64,
+}
+
+/// ★★★★★ **w393 — what backs one framebuffer page, as [`FbStore::page_backing`] answers it.**
+///
+/// Every arm is a distinct fact and none of them is *"zero"*: a page a memslot can name
+/// (`Joined`, `Arena`), a page it cannot (`Heap`, and the reason), or a page the store could
+/// not materialise (`Refused`, by name). The mirror counts each arm separately, because
+/// *"no slot was installed"* has four different causes and only one of them is a defect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbPageBacking {
+    /// The page lies inside a joined range whose backing exports itself. The memory the
+    /// engine reads through its own mapping of the same file.
+    Joined(FbPageExport),
+    /// The page is one of the store's own, held in the page arena.
+    Arena(FbPageExport),
+    /// The page is one of the store's own, on the heap — created before an arena was
+    /// installed, or while the arena was exhausted. Not memslottable; served by the trap.
+    Heap,
+    /// The store could not (or was asked not to) materialise the page. The sentence says why.
+    Refused(&'static str),
+}
+
+/// [`FbStore::page_backing`]'s answer from a store that has no page export at all.
+pub const NO_PAGE_EXPORT: &str = "this framebuffer store has no exportable pages: nothing in it can be named by a \
+     memslot";
+
+/// [`FbStore::page_backing`] refused to materialise a page because no arena is installed and
+/// the caller asked for an exportable page, not a heap one.
+pub const NO_PAGE_ARENA: &str = "no page arena is installed in this store, so a fresh page could only be a heap \
+     page, which no memslot can name";
+
+/// [`FbStore::page_backing`] found the page inside a joined range whose backing does not
+/// export itself (the join's private/negative-control arm).
+pub const JOIN_NOT_EXPORTABLE: &str = "the page lies in a joined range whose backing does not export a descriptor, so a \
+     memslot cannot be placed over it";
+
+/// [`FbStore::page_backing`] was asked to look only, and the page is not resident.
+pub const PAGE_NOT_RESIDENT: &str = "no page is resident at that frame and the caller asked not to materialise one";
+
+/// ★★★★★ **w393 — one exclusively-owned page of a [`FbPageArena`]**, as this pure crate sees
+/// it: two verbs over 4 KiB and a name a memslot can use.
+///
+/// The one implementation wraps `kayfabe_linux_raw::ArenaPage`; the store never learns that.
+pub trait FbArenaPage: Send + core::fmt::Debug {
+    /// Fill `buf` from byte `off` of the page.
+    ///
+    /// # Errors
+    /// One sentence when the access leaves the page.
+    fn read(&self, off: u64, buf: &mut [u8]) -> Result<(), &'static str>;
+
+    /// Write `bytes` at byte `off` of the page.
+    ///
+    /// # Errors
+    /// As [`FbArenaPage::read`].
+    fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), &'static str>;
+
+    /// The `(token, offset)` a memslot placement names this page by.
+    fn export(&self) -> FbPageExport;
+}
+
+/// ★★★★★ **w393 — the page source a memslot can name** ([`SparseFb::install_page_arena`]).
+///
+/// ⊘ [`FbPageArena::alloc`] runs **under the register plane's lock** — it must not block,
+/// take a ranked lock, or make a syscall. The implementation is a bump cursor and a free
+/// list behind a plain mutex over a mapping created before the arena was installed.
+pub trait FbPageArena: Send + core::fmt::Debug {
+    /// One fresh page, or a named refusal when the arena is exhausted. The page's bytes are
+    /// unspecified; the store overwrites the whole page before serving it.
+    ///
+    /// # Errors
+    /// One sentence naming the limit.
+    fn alloc(&mut self) -> Result<Box<dyn FbArenaPage>, &'static str>;
+}
+
+/// One resident page of a [`SparseFb`]: on the heap, or in the arena.
+#[derive(Debug)]
+enum FbPage {
+    Heap(Box<[u8; FB_PAGE as usize]>),
+    Arena(Box<dyn FbArenaPage>),
+}
+
+impl FbPage {
+    fn read(&self, off: usize, buf: &mut [u8]) {
+        match self {
+            FbPage::Heap(p) => buf.copy_from_slice(&p[off..off + buf.len()]),
+            // ⊘ An arena page refuses only an access outside itself, and `runs` never
+            // produces one; a refusal here would be a bug in this file, not a guest fact.
+            FbPage::Arena(a) => {
+                if a.read(off as u64, buf).is_err() {
+                    buf.fill(0);
+                }
+            }
+        }
+    }
+
+    fn write(&mut self, off: usize, src: &[u8]) {
+        match self {
+            FbPage::Heap(p) => p[off..off + src.len()].copy_from_slice(src),
+            FbPage::Arena(a) => {
+                let _ = a.write(off as u64, src);
+            }
+        }
+    }
+
+    fn whole(&self) -> [u8; FB_PAGE as usize] {
+        let mut out = [0u8; FB_PAGE as usize];
+        self.read(0, &mut out);
+        out
+    }
+}
 
 /// ★★★★★ **Where one framebuffer page STANDS — and the join is an arm of it, not a footnote.**
 ///
@@ -920,8 +1082,16 @@ pub struct SparseFb {
     limit: u64,
     /// The residency ceiling, in bytes. See [`SPARSE_FB_RESIDENT_CAP`].
     cap: u64,
-    /// Page frame → 4 KiB of bytes.
-    pages: HashMap<u64, Box<[u8; FB_PAGE as usize]>>,
+    /// Page frame → 4 KiB of bytes, on the heap or in the arena ([`FbPage`]).
+    pages: HashMap<u64, FbPage>,
+    /// ★★★★★ **w393 — the page source a memslot can name**, once a shell installs one.
+    /// `None` is the pre-w393 store byte for byte: every page is a heap page.
+    arena: Option<Box<dyn FbPageArena>>,
+    /// How many times the arena refused and a heap page was created instead — a named
+    /// count, so *"this page is not memslottable"* is a measured fact and not a mystery.
+    arena_refusals: u64,
+    /// How many heap pages were migrated into the arena on demand.
+    arena_migrations: u64,
     /// ★★★★ Page frame → who created it and in what order. Parallel to
     /// [`SparseFb::pages`] and cleared with it; see [`FbWriter`].
     origin: HashMap<u64, FbPageOrigin>,
@@ -963,11 +1133,36 @@ impl SparseFb {
             limit,
             cap,
             pages: HashMap::new(),
+            arena: None,
+            arena_refusals: 0,
+            arena_migrations: 0,
             origin: HashMap::new(),
             seq: 0,
             joined: Vec::new(),
             writes_by: [0; FB_WRITER_KINDS],
         }
+    }
+
+    /// `(arena refusals, heap→arena migrations)` — the w393 census terms.
+    #[must_use]
+    pub fn arena_census(&self) -> (u64, u64) {
+        (self.arena_refusals, self.arena_migrations)
+    }
+
+    /// ★ A fresh page: from the arena when one is installed and willing, else the heap —
+    /// counted. `zero` says whether the bytes must read as zero (an arena page's bytes are
+    /// unspecified until written; a heap page is zero by construction).
+    fn fresh_page(&mut self) -> FbPage {
+        if let Some(arena) = self.arena.as_mut() {
+            match arena.alloc() {
+                Ok(mut p) => {
+                    let _ = p.write(0, &[0u8; FB_PAGE as usize]);
+                    return FbPage::Arena(p);
+                }
+                Err(_) => self.arena_refusals += 1,
+            }
+        }
+        FbPage::Heap(Box::new([0u8; FB_PAGE as usize]))
     }
 
     /// One past the highest address this store backs.
@@ -1067,7 +1262,7 @@ impl FbStore for SparseFb {
                 // ★ Memory we advertised and nobody has written. Zero, and `Ok` — the
                 // module docs argue why that is a statement rather than an invention.
                 None => buf[done..done + take].fill(0),
-                Some(p) => buf[done..done + take].copy_from_slice(&p[off..off + take]),
+                Some(p) => p.read(off, &mut buf[done..done + take]),
             }
             done += take;
         }
@@ -1130,11 +1325,12 @@ impl FbStore for SparseFb {
                 self.origin
                     .insert(frame, FbPageOrigin { by, seq: self.seq });
             }
-            let page = self
-                .pages
-                .entry(frame)
-                .or_insert_with(|| Box::new([0u8; FB_PAGE as usize]));
-            page[off..off + take].copy_from_slice(&bytes[done..done + take]);
+            if !self.pages.contains_key(&frame) {
+                let fresh = self.fresh_page();
+                self.pages.insert(frame, fresh);
+            }
+            let page = self.pages.get_mut(&frame).expect("inserted above");
+            page.write(off, &bytes[done..done + take]);
             done += take;
         }
         Ok(())
@@ -1239,7 +1435,8 @@ impl FbStore for SparseFb {
             let Some(page) = self.pages.get(&frame) else {
                 continue;
             };
-            let src = &page[off..off + take];
+            let whole = page.whole();
+            let src = &whole[off..off + take];
             let at = frame * FB_PAGE + off as u64 - phys;
             if region.write(at, src).is_err() {
                 return Err((refuse(ESTABLISH_FAILED), region));
@@ -1362,15 +1559,93 @@ impl FbStore for SparseFb {
                 );
                 out.pages += 1;
             }
-            let page = self
-                .pages
-                .entry(frame)
-                .or_insert_with(|| Box::new([0u8; FB_PAGE as usize]));
-            page[off..off + buf.len()].copy_from_slice(&buf);
+            if !self.pages.contains_key(&frame) {
+                let fresh = self.fresh_page();
+                self.pages.insert(frame, fresh);
+            }
+            let page = self.pages.get_mut(&frame).expect("inserted above");
+            page.write(off, &buf);
             out.carried += buf.len() as u64;
             out.nonzero += buf.iter().filter(|b| **b != 0).count() as u64;
         }
         Ok((region, out))
+    }
+
+    fn install_page_arena(
+        &mut self,
+        arena: Box<dyn FbPageArena>,
+    ) -> Result<(), Box<dyn FbPageArena>> {
+        if self.arena.is_some() {
+            return Err(arena);
+        }
+        self.arena = Some(arena);
+        Ok(())
+    }
+
+    fn page_backing(&mut self, phys: u64, materialise: bool) -> FbPageBacking {
+        let frame = phys / FB_PAGE;
+        let base = frame * FB_PAGE;
+        if !self.covers(base, FB_PAGE as usize) {
+            return FbPageBacking::Refused(OUTSIDE_FRAMEBUFFER);
+        }
+        // ★★★★★ THE JOIN, checked FIRST — `read`/`write` do the same, and a page inside a
+        // join has no local page to export by construction (`install_join` removed it).
+        if let Some((i, off)) = self.joined_at(base, FB_PAGE as usize) {
+            return match self.joined[i].1.export() {
+                Some(e) => FbPageBacking::Joined(FbPageExport {
+                    token: e.token,
+                    offset: e.offset + off,
+                }),
+                None => FbPageBacking::Refused(JOIN_NOT_EXPORTABLE),
+            };
+        }
+        match self.pages.get(&frame) {
+            Some(FbPage::Arena(a)) => return FbPageBacking::Arena(a.export()),
+            Some(FbPage::Heap(_)) if !materialise => return FbPageBacking::Heap,
+            None if !materialise => return FbPageBacking::Refused(PAGE_NOT_RESIDENT),
+            _ => {}
+        }
+        if self.arena.is_none() {
+            return FbPageBacking::Refused(NO_PAGE_ARENA);
+        }
+        // ---- MATERIALISE: migrate a heap page, or create a fresh arena page. Both are a
+        // 4 KiB copy at most, under the caller's lock, with no syscall.
+        if let Some(FbPage::Heap(_)) = self.pages.get(&frame) {
+            let fresh = self.fresh_page();
+            let FbPage::Arena(mut a) = fresh else {
+                // The arena refused (counted in `fresh_page`); the heap page stays.
+                return FbPageBacking::Heap;
+            };
+            let old = self.pages.get(&frame).expect("checked above").whole();
+            let _ = a.write(0, &old);
+            self.pages.insert(frame, FbPage::Arena(a));
+            self.arena_migrations += 1;
+            let Some(FbPage::Arena(a)) = self.pages.get(&frame) else {
+                unreachable!("inserted an arena page one line up");
+            };
+            return FbPageBacking::Arena(a.export());
+        }
+        // Never written: the residency ceiling applies exactly as it does to a write.
+        if self.resident_bytes() + FB_PAGE > self.cap {
+            return FbPageBacking::Refused(RESIDENT_CAP_REACHED);
+        }
+        let fresh = self.fresh_page();
+        let FbPage::Arena(a) = fresh else {
+            return FbPageBacking::Heap;
+        };
+        // ⊘ `Unattributed`, honestly: the mirror created this page because the guest
+        // TOUCHED the frame, and no window of ours wrote it.
+        self.seq += 1;
+        self.origin.insert(
+            frame,
+            FbPageOrigin {
+                by: FbWriter::Unattributed,
+                seq: self.seq,
+            },
+        );
+        let export = a.export();
+        self.pages.insert(frame, FbPage::Arena(a));
+        FbPageBacking::Arena(export)
     }
 
     fn device_reset(&mut self) {

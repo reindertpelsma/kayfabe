@@ -56,9 +56,9 @@ use crate::proto::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant,
-    GuestRamMapped, HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend,
-    RmError, Txn, Worker, WorkerId,
+    DeviceView, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined,
+    GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId,
+    RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use kayfabe_vmm::SurfaceHandle;
@@ -517,6 +517,57 @@ impl ProxyRmBackend {
         })
     }
 
+    /// ★★★★★ **w393 — the THIRD call that reads with a descriptor allowance**, and the
+    /// first whose descriptor is a device node **by request**.
+    ///
+    /// ⊘ A sibling of [`ProxyRmBackend::call_for_backing`], not a mode of it, for the
+    /// reason that method gives about the join: the two differ in exactly the fact that
+    /// matters. There the arriving node is the thing refused; here it is the thing asked
+    /// for, and `adopt` is told so — `DescriptorKind::CharDevice` — so a child answering
+    /// with a `memfd` is refused by name instead. The property *"the kind is established
+    /// from the kernel, never claimed by the peer"* is unchanged (`export.rs`).
+    fn call_for_device_view(&mut self, request: Request) -> Result<DeviceView, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope { txn, request }.encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 1) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let (memory, offset, mmap_len) = match self.lift(reply)? {
+            Reply::DeviceView {
+                memory,
+                offset,
+                mmap_len,
+            } => (memory, offset, mmap_len),
+            // ★ Any other shape drops `fds`, which closes whatever arrived.
+            _ => return Err(RmError::Wedged),
+        };
+        let Ok([fd]) = <[_; 1]>::try_from(fds) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(token) = self.exports.adopt(
+            fd,
+            self.isolate,
+            kayfabe_linux_raw::DescriptorKind::CharDevice,
+        ) else {
+            return Err(RmError::Wedged);
+        };
+        Ok(DeviceView {
+            token,
+            // ★ Stamped with THIS connection's isolate, never taken from the wire.
+            memory: HostHandle::new(self.isolate, memory),
+            offset,
+            mmap_len,
+        })
+    }
+
     /// ★★★★★ The **second** call that reads with a descriptor allowance — the join
     /// (`fb_cpu_view.md` §4).
     ///
@@ -846,6 +897,25 @@ impl RmBackend for ProxyRmBackend {
             memory,
             len: want.len,
             prot: prot_code(want.prot),
+        })
+    }
+
+    /// ★★★★★ **w393 — the armed device node, on the wire** ([`kayfabe_isolate::DeviceView`]).
+    ///
+    /// One request, one reply, one descriptor — and the descriptor is adopted asking for a
+    /// **character device**, which is the one kind [`ProxyRmBackend::call_for_backing`]
+    /// refuses. The two crossings are opposite narrowings of the same check, and neither
+    /// takes the child's word for what it sent.
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+    ) -> Result<DeviceView, RmError> {
+        self.call_for_device_view(Request::ExportDeviceView {
+            memory: memory.raw(),
+            offset,
+            len,
         })
     }
 

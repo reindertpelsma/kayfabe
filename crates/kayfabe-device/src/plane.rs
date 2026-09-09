@@ -146,7 +146,7 @@ use kayfabe_util::lock::{LockRank, RankedMutex};
 use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
 use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
-use crate::fbwin::{Bar0Window, FbRefused, FbStore, FbWriter, RefusingFb};
+use crate::fbwin::{Bar0Window, FbPageArena, FbPageBacking, FbRefused, FbStore, FbWriter, RefusingFb};
 use crate::gvaspub::{GvasPubLog, GvasPubSnapshot};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -1079,6 +1079,43 @@ pub const BAR1_READ_ONLY: &str = "the guest's own page tables mark this framebuf
      letting a write through would give the guest a mapping stronger than the one it \
      published";
 
+/// ★★★★★ **w393 — the BAR mirror's port into the plane**: what the plane must tell the
+/// shell BEFORE it moves a framebuffer range's bytes between memories.
+///
+/// The shell installs memslots over the store's pages and joins (the demand-driven BAR1/BAR2
+/// mirror). A memslot is a second name for those bytes that the guest writes through with
+/// **no trap**, so every operation that changes which memory a range is served from — a join
+/// install (`install_join` copies the local pages in and drops them), a release (the bytes
+/// move back or are dropped), a device reset (everything goes) — must first take that second
+/// name away, or a guest store landing between the copy and the retire is lost. The plane is
+/// the one choke point every such operation passes through, so the plane calls this port.
+///
+/// ⊘ Called with **no ranked lock held** — before the plane's own lock is taken — because the
+/// retire is a hypervisor ioctl (blocking, R1). The shell's `resume` re-enables fills for
+/// the range afterwards; between the two the range is served by the trap, correctly.
+pub trait FbMirrorPort: Send + Sync + core::fmt::Debug {
+    /// Retire every memslot over `[phys, phys+len)` and refuse new ones there until
+    /// [`FbMirrorPort::resume`].
+    fn quiesce(&self, phys: u64, len: u64);
+    /// Lift the refusal [`FbMirrorPort::quiesce`] placed.
+    fn resume(&self, phys: u64, len: u64);
+    /// Retire every memslot the mirror holds, naming why (a device reset).
+    fn retire_all(&self, why: &'static str);
+}
+
+/// ★★★★★ **w393 — one translated-window page, resolved for the mirror**: where it lands in
+/// the framebuffer, whether the guest's own PTE forbids writes, and what memory backs it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowPageResolution {
+    /// The framebuffer-physical address of the page (page-aligned).
+    pub phys: u64,
+    /// The guest's PTE marks the page read-only: a memslot over it must be read-only too,
+    /// so a guest store still traps and is refused by name as it is today.
+    pub read_only: bool,
+    /// What backs the page — see [`FbPageBacking`].
+    pub backing: FbPageBacking,
+}
+
 /// ★★★ The register plane: the routing stage Q4 adds.
 pub struct RegPlane {
     chip: &'static ChipProfile,
@@ -1118,6 +1155,10 @@ pub struct RegPlane {
     /// doorbell, and a caller that replaced the policy still gets to read what the guest
     /// published.
     bar_pdes: BarPdeLog,
+    /// ★★★★★ **w393 — the BAR mirror's port** ([`FbMirrorPort`]), `None` until a shell
+    /// installs one. Read on the join/release/reset paths **before** the plane's lock is
+    /// taken; a plane with none behaves byte for byte as before w393.
+    fb_mirror: RwLock<Option<std::sync::Arc<dyn FbMirrorPort>>>,
     /// ★★★ **The VA-space page-directory publications** (`crate::gvaspub`) — the guest
     /// telling us where its page directories live, with the `hObject` that names which VA
     /// space they root. Held here for the two reasons `bar_pdes` is: reading it must not
@@ -1328,7 +1369,7 @@ pub(crate) const MAX_FORMAT_LEVELS: u8 = 16;
 /// what it has always been), and the other is a window that IS modelled and refused this
 /// particular address (counted as a translation fault, with the address).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowRefusal {
+pub enum WindowRefusal {
     /// No address model for this window at all.
     NoAddressModel,
     /// A translated window that would not resolve this virtual address.
@@ -1638,6 +1679,7 @@ impl RegPlane {
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
             fault_buffer,
             bar_pdes,
+            fb_mirror: RwLock::new(None),
             gvas_pub,
             set_page_dir,
             os_events,
@@ -1817,6 +1859,81 @@ impl RegPlane {
         s.fb = fb;
     }
 
+    /// ★★★★★ **w393 — install the BAR mirror's port.** Takes `&self`, like
+    /// [`RegPlane::set_fb`]. ⊘ Not under the plane's lock: the port is consulted before that
+    /// lock is taken, so it lives behind its own.
+    pub fn set_fb_mirror(&self, port: std::sync::Arc<dyn FbMirrorPort>) {
+        *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = Some(port);
+    }
+
+    /// Withdraw the port. Every later join/release/reset runs without it, which is the
+    /// pre-w393 behaviour; the shell retires its own slots before calling this.
+    pub fn clear_fb_mirror(&self) {
+        *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    fn fb_mirror(&self) -> Option<std::sync::Arc<dyn FbMirrorPort>> {
+        self.fb_mirror
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// ★★★★★ **w393 — hand the store its page arena.** See
+    /// [`crate::fbwin::FbStore::install_page_arena`].
+    ///
+    /// # Errors
+    /// The arena, back, when the store refused it (no arena support, or one already installed).
+    pub fn install_fb_page_arena(
+        &self,
+        arena: Box<dyn FbPageArena>,
+    ) -> Result<(), Box<dyn FbPageArena>> {
+        let mut s = self.state.lock();
+        s.fb.install_page_arena(arena)
+    }
+
+    /// ★★★★★ **w393 — resolve one page of a translated window for the mirror**: the same
+    /// page walk the trap performs, then [`crate::fbwin::FbStore::page_backing`] on the
+    /// frame it lands on — in **one** hold of the plane lock, so the translation and the
+    /// backing are one instant's answer.
+    ///
+    /// `off` is the aperture offset (any byte; the page containing it is resolved).
+    /// `materialise` is passed through to the store.
+    ///
+    /// ⊘ A window with no address model, or a translation the guest's own tables refuse, is
+    /// the same named [`WindowRefusal`] the trap reports — never a zero.
+    ///
+    /// # Errors
+    /// [`WindowRefusal`], by name.
+    pub fn window_page_backing(
+        &self,
+        w: FbWindow,
+        off: u64,
+        materialise: bool,
+    ) -> Result<WindowPageResolution, WindowRefusal> {
+        let page_off = off & !(crate::fbwin::FB_PAGE - 1);
+        let mut s = self.state.lock();
+        let (phys, read_only) = match w {
+            FbWindow::Pramin => (
+                s.bar0_window
+                    .fb_addr(page_off.wrapping_sub(self.chip.pramin_window.base)),
+                false,
+            ),
+            FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
+                return Err(WindowRefusal::NoAddressModel);
+            }
+            FbWindow::FbAperture => self.bar1_translate(page_off, &mut s)?,
+            FbWindow::InstanceWindow => self.bar2_translate(page_off, &mut s)?,
+        };
+        let phys = phys & !(crate::fbwin::FB_PAGE - 1);
+        let backing = s.fb.page_backing(phys, materialise);
+        Ok(WindowPageResolution {
+            phys,
+            read_only,
+            backing,
+        })
+    }
+
     /// ★★★★★ **Join one framebuffer range to memory a second party also maps**
     /// (`fb_cpu_view.md` §4) — the establishment copy and the install, in **one** hold of the
     /// plane lock.
@@ -1860,6 +1977,16 @@ impl RegPlane {
         // ★ The fix is `l1_concurrency.md` §3.3's own prescription — *"drop every guard"*
         // before the blocking call. `install_join` now hands the region **back** on refusal so
         // this function can release the lock first and drop it lock-free.
+        // ★★★★★ w393 — THE MIRROR'S SLOTS COME OFF FIRST, before the lock and before the
+        // establishment copy: a guest store through a memslot over a local page, landing
+        // after the copy read that page, would be lost. `quiesce` is a hypervisor ioctl, so
+        // it runs here, lock-free (R1), and `resume` after the install lets the mirror
+        // re-fill the range over the JOIN's memory on the next touch.
+        let len = region.len();
+        let mirror = self.fb_mirror();
+        if let Some(m) = &mirror {
+            m.quiesce(phys, len);
+        }
         let (out, displaced) = {
             let mut s = self.state.lock();
             match s.fb.install_join(phys, region) {
@@ -1867,6 +1994,9 @@ impl RegPlane {
                 Err((why, back)) => (Err(why), Some(back)),
             }
         };
+        if let Some(m) = &mirror {
+            m.resume(phys, len);
+        }
         // ⊘ Explicit, not incidental: this is where the `munmap` happens, and it must stay
         // after the block above. A `let _ =` or an inlined match would put it back under the
         // guard and re-arm the abort.
@@ -1892,10 +2022,15 @@ impl RegPlane {
     /// ⊘ The `drop` is a **statement**, deliberately not a `let _ =` and not an inlined match:
     /// either of those would put it back under the guard and re-arm the abort.
     pub fn release_fb_join(&self, phys: u64) -> bool {
+        // ★★★★★ w393 — mirror slots over the join come off BEFORE its bytes go (see
+        // `join_fb`). The extent is looked up first because the release itself does not
+        // carry it; a range that turns out to hold no join quiesces nothing.
+        let quiesced = self.quiesce_mirror_over_join(phys);
         let released = {
             let mut s = self.state.lock();
             s.fb.release_join(phys)
         };
+        self.resume_mirror(quiesced);
         let had = released.is_some();
         // ⊘ HERE, after the guard is gone. See the doc above.
         drop(released);
@@ -1949,6 +2084,10 @@ impl RegPlane {
         &self,
         phys: u64,
     ) -> Result<crate::fbwin::FbJoinCarried, FbRefused> {
+        // ★★★★★ w393 — mirror slots over the join come off BEFORE its bytes are carried
+        // back (see `join_fb`): a guest store through such a slot after the carry read it
+        // would be lost, and the whole point of this verb is that no byte is.
+        let quiesced = self.quiesce_mirror_over_join(phys);
         let (out, released) = {
             let mut s = self.state.lock();
             match s.fb.release_join_carrying_bytes(phys) {
@@ -1956,9 +2095,35 @@ impl RegPlane {
                 Err(why) => (Err(why), None),
             }
         };
+        self.resume_mirror(quiesced);
         // ⊘ HERE, after the guard is gone. See the doc above.
         drop(released);
         out
+    }
+
+    /// The quiesce half shared by both release verbs: look the join's extent up (one short
+    /// hold of the lock), then retire the mirror's slots over it, lock-free.
+    fn quiesce_mirror_over_join(
+        &self,
+        phys: u64,
+    ) -> Option<(std::sync::Arc<dyn FbMirrorPort>, u64, u64)> {
+        let m = self.fb_mirror()?;
+        let len = {
+            let s = self.state.lock();
+            s.fb
+                .joined_ranges()
+                .iter()
+                .find(|(b, _)| *b == phys)
+                .map(|(_, l)| *l)
+        }?;
+        m.quiesce(phys, len);
+        Some((m, phys, len))
+    }
+
+    fn resume_mirror(&self, q: Option<(std::sync::Arc<dyn FbMirrorPort>, u64, u64)>) {
+        if let Some((m, phys, len)) = q {
+            m.resume(phys, len);
+        }
     }
 
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
@@ -2816,6 +2981,8 @@ impl RegPlane {
             mmu_inval,
             fault_buffer,
             bar_pdes,
+            // ★ The mirror port is the shell's wiring, like `ram` and `policy`.
+            fb_mirror: _,
             gvas_pub,
             set_page_dir,
             // ⊘ Read through `os_event_log()`; the registry's own counters are what the
@@ -3034,6 +3201,12 @@ impl RegPlane {
     /// the previous guest's page tables, instance blocks and semaphores, readable by the
     /// next one through this very window — see [`FbStore::device_reset`].
     pub fn device_reset(&self) {
+        // ★★★★★ w393 — the mirror's memslots go FIRST, lock-free: the store is about to
+        // forget every byte, and a slot that outlived that would hand the next guest the
+        // previous one's framebuffer through a window nothing traps.
+        if let Some(m) = self.fb_mirror() {
+            m.retire_all("device reset");
+        }
         let mut s = self.state.lock();
         s.fsm.device_reset();
         self.refresh_gsp_gate(&s.fsm);
@@ -3318,6 +3491,19 @@ impl RegPlane {
     /// well-formed *"maps nothing"* and a zero-filled data read is a well-formed *"the guest
     /// wrote nothing"*, and a guest acts on both.
     fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+        let (phys, read_only) = self.bar1_translate(va, s)?;
+        if write && read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR1_READ_ONLY,
+            });
+        }
+        Ok(phys)
+    }
+
+    /// The walk half of [`RegPlane::bar1_phys`]: `(phys, read_only)`, with the write check
+    /// left to the caller so the mirror can ask about a page without choosing a direction.
+    fn bar1_translate(&self, va: u64, s: &mut PlaneState) -> Result<(u64, bool), WindowRefusal> {
         let PlaneState { mmu, fb, .. } = s;
         let Some(fmt) = mmu.as_deref() else {
             return Err(WindowRefusal::Translated {
@@ -3357,13 +3543,7 @@ impl RegPlane {
                 why: BAR1_FOREIGN_APERTURE,
             });
         }
-        if write && t.read_only {
-            return Err(WindowRefusal::Translated {
-                va,
-                why: BAR1_READ_ONLY,
-            });
-        }
-        Ok(t.phys)
+        Ok((t.phys, t.read_only))
     }
 
     /// ★★★ **THE GMMU TRANSLATION** — one aperture offset, one page walk, one framebuffer
@@ -3386,6 +3566,19 @@ impl RegPlane {
     /// page-table entry is a well-formed *"this maps nothing"* and a zero-filled data read
     /// is a well-formed *"the guest wrote nothing"*. Both are answers a guest acts on.
     fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+        let (phys, read_only) = self.bar2_translate(va, s)?;
+        if write && read_only {
+            return Err(WindowRefusal::Translated {
+                va,
+                why: BAR2_READ_ONLY,
+            });
+        }
+        Ok(phys)
+    }
+
+    /// The walk half of [`RegPlane::bar2_phys`]: `(phys, read_only)` — see
+    /// [`RegPlane::bar1_translate`] for why the write check is the caller's.
+    fn bar2_translate(&self, va: u64, s: &mut PlaneState) -> Result<(u64, bool), WindowRefusal> {
         // ★ Destructured so the format and the byte store can be borrowed at once. They
         // are different fields and the borrow checker knows it; a method call on `s`
         // would not let it.
@@ -3443,13 +3636,7 @@ impl RegPlane {
                 why: BAR2_FOREIGN_APERTURE,
             });
         }
-        if write && t.read_only {
-            return Err(WindowRefusal::Translated {
-                va,
-                why: BAR2_READ_ONLY,
-            });
-        }
-        Ok(t.phys)
+        Ok((t.phys, t.read_only))
     }
 
     /// Serve one framebuffer-window read.
