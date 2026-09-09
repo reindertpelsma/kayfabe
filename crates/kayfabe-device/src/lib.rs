@@ -59,6 +59,7 @@ pub mod doorbell;
 pub mod faultbuffer;
 pub mod fbwin;
 pub mod ga10x;
+pub mod gspsubmit;
 pub mod guestsysinfo;
 pub mod gvaspub;
 pub mod inert;
@@ -92,8 +93,8 @@ use kayfabe_abi::vbios::{VbiosError, VbiosWire, profile_for_device_id};
 use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
-    CePlane, Counters, DoorbellLog, NanoClock, PlaneResidue, ReadOutcome, RefusingRam, RegPlane,
-    SteppingClock, WriteOutcome,
+    CePlane, Counters, DoorbellLog, GspServicePass, NanoClock, PlaneResidue, ReadOutcome,
+    RefusingRam, RegPlane, SteppingClock, WriteOutcome,
 };
 
 /// ★ The fault vocabulary a [`DoorbellReport`] speaks, re-exported.
@@ -139,7 +140,7 @@ pub use doorbell::{
 /// ★ [`kayfabe_gsp::BootPhase`] and [`kayfabe_gsp::GspFsm`] are re-exported for the same
 /// reason one step further out: [`plane::RegPlane::phase`] and [`plane::RegPlane::gsp_state`]
 /// *return* them, and a shell that cannot name a method's return type cannot bind it.
-pub use kayfabe_gsp::{BootPhase, GspFsm, GuestRam, RamRefused};
+pub use kayfabe_gsp::{BootPhase, GspFsm, GuestRam, RamRefused, SubmitMode};
 
 /// A register whose value is a constant of the silicon.
 ///

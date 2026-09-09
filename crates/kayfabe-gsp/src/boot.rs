@@ -262,11 +262,51 @@ pub enum Transition {
     Running,
 }
 
+/// ★ w395 — what [`GspFsm::doorbell_gate`] found, in the two non-refusing cases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DoorbellGate {
+    /// Unbound and no binding has existed in this life — the healthy 580 pre-bootstrap
+    /// doorbell, [`Transition::E12`]. Nothing to service.
+    PreBind,
+    /// A validated binding exists; the ring may be serviced.
+    Bound,
+}
+
+/// ★★★★★ **w395 — WHERE A COMMAND DOORBELL'S SERVICE RUNS.**
+///
+/// The guest's write to `NV_PGSP_QUEUE_HEAD(0)` is an **RPC submit**: hardware latches the
+/// head pointer and returns, and the driver waits on the *response queue* in its own RAM
+/// (`_kgspRpcRecvPoll`, `ogkm-580: kernel_gsp.c`). Nothing the guest can observe depends on
+/// the service having happened before the store retires. `[measured w394h, GA106]` this port
+/// serviced the whole queue inside the store — `worst_trap=1791581us at=bar0+0x110c00`,
+/// 380 traps over a millisecond in one boot.
+///
+/// Owner, 2026-09-09: *"submit register is a schedule, you should return to vm immediately
+/// and run it off the vcpu threads"*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubmitMode {
+    /// ★ THE CONTROL — the doorbell (and the bind's B4 backlog drain) service the command
+    /// ring **inside the MMIO write**, byte-identical to every boot before w395.
+    #[default]
+    Inline,
+    /// ★★★★★ The write **validates and returns**: the stale-binding gate ([`Transition::E8`])
+    /// and the pre-bind classification ([`Transition::E12`]) run exactly as on the control,
+    /// reading zero guest RAM; a bound queue produces [`ServiceReport::service_owed`] and
+    /// **no** command is decoded. The shell's worker then calls
+    /// [`GspFsm::service_deferred`] until the ring is empty.
+    Deferred,
+}
+
 /// What one MMIO write did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ServiceReport {
     /// Transitions that fired, in order.
     pub transitions: Vec<Transition>,
+    /// ★★★★★ **w395 — the command ring has work and NOBODY HAS SERVICED IT.** Set only in
+    /// [`SubmitMode::Deferred`], by a doorbell on a bound queue or by the bind itself (whose
+    /// B4 backlog drain is deferred the same way). The shell **owes** a worker pass; a shell
+    /// that reads this and does nothing has accepted a submission and dropped it.
+    pub service_owed: bool,
     /// Commands decoded off the command queue.
     pub commands: Vec<RpcCommand>,
     /// True if the status-queue interrupt should be announced to the guest.
@@ -678,6 +718,11 @@ pub struct GspFsm {
     /// Bound on how many LibOS region-array entries a hostile guest can make us read.
     /// Also bounds the page-table entry count.
     max_entries: u32,
+    /// ★★★★★ w395 — see [`SubmitMode`]. `Inline` until a shell arms the deferred lane;
+    /// **not** cleared by [`GspFsm::device_reset`], because it is the shell's wiring, not
+    /// the device's state — a reset that silently made the next doorbell run inline would
+    /// be a doorbell nobody expects on the vCPU.
+    submit_mode: SubmitMode,
 }
 
 impl GspFsm {
@@ -700,7 +745,24 @@ impl GspFsm {
             cmd_read_ptr: 0,
             region_identity: None,
             max_entries: 4096,
+            submit_mode: SubmitMode::Inline,
         }
+    }
+
+    /// ★★★★★ w395 — where a doorbell's service runs. See [`SubmitMode`].
+    ///
+    /// ⚠ A shell that selects [`SubmitMode::Deferred`] has undertaken to run
+    /// [`GspFsm::service_deferred`] whenever a report carries
+    /// [`ServiceReport::service_owed`]. There is no arm of this FSM that services a
+    /// deferred doorbell by itself.
+    pub fn set_submit_mode(&mut self, mode: SubmitMode) {
+        self.submit_mode = mode;
+    }
+
+    /// Which [`SubmitMode`] is selected.
+    #[must_use]
+    pub fn submit_mode(&self) -> SubmitMode {
+        self.submit_mode
     }
 
     /// The current phase.
@@ -749,7 +811,16 @@ impl GspFsm {
     /// reset is field-by-field at four separate sites (`C:2471-2475`, `C:4257-4258`,
     /// `C:9393-9399`, `C:3484-3485`) and they disagree.
     pub fn device_reset(&mut self) -> Transition {
-        *self = GspFsm::new(self.abi);
+        // ★ w395 — the submit mode is the SHELL'S WIRING, not device state: a reset that
+        // silently put the doorbell back inline would make the next `QUEUE_HEAD` store run
+        // the ring service on the vCPU with the lane still armed and its worker idle. It
+        // survives the reset the way the shell's RAM port and policy do.
+        // `tests/device_recycle.rs::a_power_on_reset_puts_the_emulated_gsp_back_to_cold`
+        // compares the reset FSM to a fresh one as a whole value, on the shipping arm.
+        *self = GspFsm {
+            submit_mode: self.submit_mode,
+            ..GspFsm::new(self.abi)
+        };
         Transition::E11
     }
 
@@ -941,15 +1012,37 @@ impl GspFsm {
                 report.commands.extend(r.commands);
                 report.unserviced.extend(r.unserviced);
                 report.raise_status_irq = true;
+                // ★ w395 — the bind's B4 backlog drain, when deferred, is owed the same
+                // way a doorbell's service is; see `GspFsm::publish`'s tail.
+                report.service_owed |= r.service_owed;
             }
-            BootStep::CommandDoorbell => {
-                let (t, mut r) = self.doorbell(ram, policy)?;
-                report.transitions.push(t);
-                report.transitions.append(&mut r.transitions);
-                report.commands.extend(r.commands);
-                report.unserviced.extend(r.unserviced);
-                report.raise_status_irq |= r.raise_status_irq;
-            }
+            BootStep::CommandDoorbell => match self.submit_mode {
+                SubmitMode::Inline => {
+                    let (t, mut r) = self.doorbell(ram, policy)?;
+                    report.transitions.push(t);
+                    report.transitions.append(&mut r.transitions);
+                    report.commands.extend(r.commands);
+                    report.unserviced.extend(r.unserviced);
+                    report.raise_status_irq |= r.raise_status_irq;
+                }
+                // ★★★★★ w395 — VALIDATE, OWE, RETURN. The gate is the SAME function the
+                // inline arm runs first, so E8 refuses and E12 classifies identically and
+                // both still read zero guest RAM. What differs is only that a bound queue
+                // is not drained here: `service_owed` says the shell's worker must.
+                //
+                // ⊘ The validation is IN THE STORE and not on the worker, deliberately:
+                // it is two enum compares on state this write already holds the lock for,
+                // it is *validation* rather than execution, and its refusal is the
+                // guest's — attributable to this write through the same `Err` path,
+                // counted by the same fault counter, as on the control. A refusal raised
+                // from a worker has no trap to be attributed to. The worker re-runs the
+                // same gate before it reads anything, so a binding dropped between the
+                // kick and the pass is refused there too (`GspFsm::service_deferred`).
+                SubmitMode::Deferred => match self.doorbell_gate()? {
+                    DoorbellGate::PreBind => report.transitions.push(Transition::E12),
+                    DoorbellGate::Bound => report.service_owed = true,
+                },
+            },
             // E10 — the guest's ISR clears the edge before draining the queue
             // (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`).
             BootStep::ClearStatusIrq => {
@@ -1327,7 +1420,20 @@ impl GspFsm {
         // *recovered by luck*. Draining on the bind makes the recovery structural, and on
         // a guest whose ring is empty (610's order) it reads the write pointer, finds
         // nothing, and does nothing.
-        self.service_command_queue(ram, policy)
+        //
+        // ★★★★★ w395 — and in `SubmitMode::Deferred` the drain is OWED, not run: it is the
+        // same servicing the doorbell arm defers, reached through `MAILBOX1` instead of
+        // `QUEUE_HEAD`, and it services `GSP_SET_SYSTEM_INFO` + `SET_REGISTRY` — a policy
+        // pass with host verbs in it — inside the guest's mailbox store. `INIT_DONE` is
+        // already posted above, so `kgspWaitForRmInitDone`'s poll is satisfied before this
+        // returns either way; only the backlog's replies arrive from the worker.
+        match self.submit_mode {
+            SubmitMode::Inline => self.service_command_queue(ram, policy),
+            SubmitMode::Deferred => Ok(ServiceReport {
+                service_owed: true,
+                ..ServiceReport::default()
+            }),
+        }
     }
 
     /// E7 / E8 / E12 — a doorbell.
@@ -1349,15 +1455,73 @@ impl GspFsm {
         // *healthy* 580 pre-bootstrap doorbell (see [`Transition::E12`]), and reporting
         // that as the stale-binding attack signature would put a false positive in the
         // ledger on every boot. Both arms read zero guest RAM; only the name differs.
+        match self.doorbell_gate()? {
+            DoorbellGate::PreBind => return Ok((Transition::E12, ServiceReport::default())),
+            DoorbellGate::Bound => {}
+        }
+        let report = self.service_command_queue(ram, policy)?;
+        Ok((Transition::E7, report))
+    }
+
+    /// ★★★★★ **w395 — THE DOORBELL'S GATE, shared by both submit modes.** E8 / E12 / bound,
+    /// reading **zero** guest RAM in every arm. One function, so the deferred store and the
+    /// inline store cannot come to classify a stale ring differently.
+    ///
+    /// # Errors
+    ///
+    /// [`GspFault::QueueNotBound`] — E8, the stale-binding refusal: unbound **and** a binding
+    /// has already existed in this device life (`phase == Halted`).
+    fn doorbell_gate(&self) -> Result<DoorbellGate, GspFault> {
         if matches!(self.queue, QueueState::Unbound) {
             return if self.phase == BootPhase::Halted {
                 Err(GspFault::QueueNotBound)
             } else {
-                Ok((Transition::E12, ServiceReport::default()))
+                Ok(DoorbellGate::PreBind)
             };
         }
-        let report = self.service_command_queue(ram, policy)?;
-        Ok((Transition::E7, report))
+        Ok(DoorbellGate::Bound)
+    }
+
+    /// ★★★★★ **w395 — ONE WORKER PASS over a deferred doorbell: at most `max_commands`
+    /// commands, then return.**
+    ///
+    /// The shell's worker calls this in a loop until a pass answers **zero** commands. The
+    /// bound is the whole reason this is not simply [`GspFsm::service_command_queue`]: the
+    /// worker holds the register plane's mutex for the duration of one call, and every
+    /// guest MMIO read of a claimed GSP register waits on that mutex. Bounding a pass to one
+    /// command bounds that wait to one command's service — the unit the C serviced inline
+    /// per doorbell anyway — instead of the whole backlog.
+    ///
+    /// ★ Runs [`GspFsm::doorbell_gate`] **again** before reading anything: a binding dropped
+    /// between the store that owed this pass and the pass itself (a teardown on another vCPU)
+    /// is refused here by the same name it would have been refused in the store.
+    ///
+    /// ⊘ Ordering is the ring's, not the caller's. Commands are serviced in `readPtr` order
+    /// under one lock by one thread, and the guest's `writePtr` is read fresh on every pass —
+    /// so N stores before the worker runs and one store after the last are the same act, and
+    /// coalescing *kicks* (the shell's lane does) cannot reorder or lose a command.
+    ///
+    /// # Errors
+    ///
+    /// As [`GspFsm::service_command_queue`], plus E8's [`GspFault::QueueNotBound`].
+    pub fn service_deferred(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+        max_commands: usize,
+    ) -> Result<ServiceReport, GspFault> {
+        match self.doorbell_gate()? {
+            DoorbellGate::PreBind => {
+                return Ok(ServiceReport {
+                    transitions: vec![Transition::E12],
+                    ..ServiceReport::default()
+                });
+            }
+            DoorbellGate::Bound => {}
+        }
+        let mut report = self.service_command_queue_bounded(ram, policy, max_commands)?;
+        report.transitions.insert(0, Transition::E7);
+        Ok(report)
     }
 
     /// Drain the command queue: decode every complete message, answer it, and publish our
@@ -1373,13 +1537,28 @@ impl GspFsm {
         ram: &mut dyn GuestRam,
         policy: &mut dyn CommandPolicy,
     ) -> Result<ServiceReport, GspFault> {
+        self.service_command_queue_bounded(ram, policy, usize::MAX)
+    }
+
+    /// [`GspFsm::service_command_queue`] with a bound on how many commands one pass
+    /// answers. `usize::MAX` is the unbounded drain; `1` is what the w395 worker uses.
+    ///
+    /// # Errors
+    ///
+    /// As [`GspFsm::service_command_queue`].
+    pub fn service_command_queue_bounded(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+        max_commands: usize,
+    ) -> Result<ServiceReport, GspFault> {
         let mut report = ServiceReport::default();
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
         let geom = binding.geom.clone();
 
-        let outcome = self.drain_commands(ram, policy, &geom, &mut report);
+        let outcome = self.drain_commands(ram, policy, &geom, &mut report, max_commands);
 
         // ★★★ **PC-D2 — the acknowledgement is published however the pass ended.**
         //
@@ -1449,6 +1628,7 @@ impl GspFsm {
         policy: &mut dyn CommandPolicy,
         geom: &MsgqGeometry,
         report: &mut ServiceReport,
+        max_commands: usize,
     ) -> Result<(), GspFault> {
         let count = geom.msg_count();
         let element_size = geom.element_size();
@@ -1458,7 +1638,9 @@ impl GspFsm {
         let mut expect_seq = self.cmd_seq;
         let mut avail = available_elements(write_ptr, read_ptr, count)?;
 
-        while avail > 0 {
+        // ★ w395 — a bounded pass stops after `max_commands`; what remains is still in the
+        // ring at `readPtr`, and the next pass reads `writePtr` afresh and continues.
+        while avail > 0 && report.commands.len() < max_commands {
             let mut first = vec![0u8; element_size as usize];
             geom.region()
                 .read(ram, geom.cmd_element_off(count.slot(read_ptr)), &mut first)?;

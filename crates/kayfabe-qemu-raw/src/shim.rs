@@ -4979,6 +4979,90 @@ fn doorbell_publish_loop(
     }
 }
 
+/// ★★★★★ **w395 — THE GSP SUBMIT WORKER'S HANDLE.** Shaped like [`DoorbellPublishThread`]
+/// and [`ObserverThread`] for their reason: a stop flag that is ours (the lane's) and a
+/// `JoinHandle` that is **joined**, because the loop reads the guest's command ring through
+/// the plane's RAM port and `detach_ram` withdraws that port.
+#[derive(Debug)]
+struct GspSubmitThread {
+    lane: std::sync::Arc<kayfabe_device::gspsubmit::GspSubmitLane>,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+/// ★★★★★ **w395 — how many commands one plane-lock hold may service.**
+///
+/// **1.** The worker holds [`kayfabe_device::RegPlane`]'s state mutex for one call of
+/// [`kayfabe_device::RegPlane::service_gsp_queue_pass`], and every guest MMIO read of a
+/// *claimed* GSP register (`IRQSTAT`, the mailboxes, `WPR2`, …) waits on that mutex. One
+/// command per hold bounds that wait to one command's service — the unit the C serviced per
+/// doorbell anyway — instead of a whole backlog. `GSPQUEUE worst_hold_us=` measures it.
+const GSP_PASS_MAX_COMMANDS: usize = 1;
+
+/// How many faulting worker passes are printed before they count silently. The total is on
+/// the `GSPQUEUE faults=` census either way.
+const GSP_SUBMIT_FAULT_LOG_MAX: u64 = 8;
+static GSP_SUBMIT_FAULTS_LOGGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ **w395 — THE WORKER LOOP: wait for a kick, service the ring one command per lock
+/// hold until it is empty, account it.**
+///
+/// # ★★★ What makes this the *same* act the trap performed
+///
+/// It calls [`kayfabe_device::RegPlane::service_gsp_queue_pass`], which runs
+/// `GspFsm::service_deferred` — the same gate, the same `drain_commands`, the same policy
+/// chain, the same cursor commit, the same `readPtr` acknowledgement — that the inline arm
+/// runs through `GspFsm::doorbell`. Nothing about the servicing lives here. What lives here
+/// is only the loop that the inline arm had inside one lock hold.
+///
+/// # ⊘ The `OffTrap` is minted BENEATH this, not here
+///
+/// This thread installs no `TrapGuard`, so every host verb the policy chain issues from
+/// here moves from `inline_exceptions` to `off_trap_claims` **by construction** — the census
+/// measures the move rather than being told about it. Same mechanism as
+/// [`doorbell_publish_loop`].
+///
+/// # ⚠ What is NOT here, stated: a vector
+///
+/// The FSM's `raise_status_irq` is counted (`GSPQUEUE status_irq_requested=`) and **not
+/// delivered**, because the control never delivered it either: the C shell refuses it by
+/// name (`qemu/hw/misc/nvkvm/nvkvm.c:603`, `irq_requests_dropped`) and the guest's
+/// `_kgspRpcRecvPoll` polls the response queue in its own RAM. The notification the guest
+/// sees is the reply landing in the ring, and the pass produced it.
+fn gsp_submit_loop(
+    plane: &std::sync::Arc<kayfabe_device::RegPlane>,
+    lane: &std::sync::Arc<kayfabe_device::gspsubmit::GspSubmitLane>,
+) {
+    while lane.wait_kick().is_some() {
+        let t0 = std::time::Instant::now();
+        loop {
+            let pass = plane.service_gsp_queue_pass(GSP_PASS_MAX_COMMANDS);
+            lane.note_pass(kayfabe_device::gspsubmit::PassFacts {
+                commands: pass.commands as u64,
+                prebind: pass.prebind,
+                faulted: pass.fault.is_some(),
+                status_irq_requested: pass.raise_status_irq,
+                hold: pass.hold,
+            });
+            if let Some(f) = pass.fault {
+                let n = GSP_SUBMIT_FAULTS_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if n <= GSP_SUBMIT_FAULT_LOG_MAX {
+                    eprintln!(
+                        "kayfabe: GSP-SUBMIT ⊘ worker pass REFUSED #{n}: {f} — the cursor was \
+                         not advanced past the refusing message; the next kick re-reads it \
+                         (the same retry the inline arm had). faults total={n} (printing the \
+                         first {GSP_SUBMIT_FAULT_LOG_MAX})"
+                    );
+                }
+                break;
+            }
+            if pass.commands == 0 {
+                break;
+            }
+        }
+        lane.note_completed(t0.elapsed());
+    }
+}
+
 /// ★★★★ **§16.65 — how the arriving doorbells PARTITION by the engine of the channel they
 /// routed to.** The instrument this rung's routing change is read against.
 ///
@@ -12426,6 +12510,15 @@ pub struct Regs {
     /// ★★★★★ **w383 — which arm this boot runs.** Read ONCE at the composition root and
     /// carried; the port carries the same value, from the same read.
     doorbell_async: DoorbellAsyncArm,
+    /// ★★★★★ **w395 — THE GSP SUBMIT LANE**, shared with the plane (which kicks it from
+    /// the `QUEUE_HEAD` store) and the worker (which drains it). Present on **both** arms so
+    /// the census prints on both; on the control it is never armed and reads all zeros.
+    gsp_lane: std::sync::Arc<kayfabe_device::gspsubmit::GspSubmitLane>,
+    /// ★★★★★ **w395 — the GSP submit worker's lifetime.** `None` before `attach_ram` and
+    /// after `detach_ram`; see [`GspSubmitThread`] for why the join is not optional.
+    gsp_worker: std::sync::Mutex<Option<GspSubmitThread>>,
+    /// ★★★★★ **w395 — which arm this boot runs.** Read ONCE at the composition root.
+    gsp_submit_async: GspSubmitAsyncArm,
 }
 
 /// ★★★★★ **w317 — THE BUDGET, and what it is a fraction OF.**
@@ -12674,6 +12767,8 @@ impl Regs {
         // once, beside the other seven, and carried by value into both the port and `Regs`
         // so no consumer can re-read the environment and get a different answer.
         let doorbell_async = selected_doorbell_async()?;
+        // ★★★★★ w395 — the GSP submit's arm, read HERE beside the doorbell's, exactly once.
+        let gsp_submit_async = selected_gsp_submit_async()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -13002,6 +13097,35 @@ impl Regs {
                      which was never the requirement",
             },
         );
+        // ★★★★★ **w395 — THE GSP SUBMIT LANE, MINTED ONCE AND ARMED HERE.** One lane, two
+        // holders: the plane kicks it from the `QUEUE_HEAD` store, the worker drains it.
+        // ⊘ Minted on BOTH arms and armed on one: a census that is absent on the control
+        // makes *"the lane was disarmed"* and *"this build has no lane"* the same log.
+        let gsp_lane = Arc::new(kayfabe_device::gspsubmit::GspSubmitLane::new());
+        if gsp_submit_async.defers() {
+            plane.arm_gsp_submit(Arc::clone(&gsp_lane));
+        }
+        eprintln!(
+            "kayfabe: GSP-SUBMIT-ASYNC arm={} ⇒ a guest NV_PGSP_QUEUE_HEAD(0) store {}",
+            gsp_submit_async.as_str(),
+            match gsp_submit_async {
+                GspSubmitAsyncArm::Off =>
+                    "DRAINS AND SERVICES THE WHOLE GSP COMMAND RING INLINE — policy chain, \
+                     host RM verbs and all — inside the guest's store, under the BQL: the \
+                     CONTROL, byte-identical to every boot before w395. ⊘ Expected reading: \
+                     `TRAPWITNESS worst_trap=… at=bar0+0x110c00` and a `GSPQUEUE` census of \
+                     all zeros",
+                GspSubmitAsyncArm::On =>
+                    "VALIDATES (E8 stale-binding refusal and E12 pre-bind classification, \
+                     zero guest RAM read), KICKS the lane and RETURNS — ★★★★★ the owner's \
+                     2026-09-09 ruling: `submit register is a schedule, return to vm \
+                     immediately and run it off the vcpu threads`. A `kayfabe-gsp-submit` \
+                     worker services the ring in ring order, ONE COMMAND PER LOCK HOLD, \
+                     until it is empty. The bind's B4 backlog drain is deferred the same way. \
+                     ⊘ No vector is raised for it and none was before: the shell refuses \
+                     `raise_status_irq` by name and the guest polls its response queue",
+            },
+        );
         // ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT.** See [`MMU_INVAL_ENV`] for why
         // arming and the publish-consumer had to land in one commit.
         //
@@ -13053,6 +13177,9 @@ impl Regs {
             doorbell_port,
             doorbell_worker: std::sync::Mutex::new(None),
             doorbell_async,
+            gsp_lane,
+            gsp_worker: std::sync::Mutex::new(None),
+            gsp_submit_async,
         })
     }
 
@@ -13137,6 +13264,94 @@ impl Regs {
         // reads the guest's page tables and the guest's GPFIFO ring, and before this
         // instant there is neither.
         self.start_doorbell_publish_worker(shim.machine().vmm());
+        // ★★★★★ w395 — and the GSP submit worker, for the same reason once more: it
+        // services the command ring through the plane's guest-RAM port, which is installed
+        // three statements up and refuses everything before that.
+        self.start_gsp_submit_worker();
+    }
+
+    /// ★★★★★ **w395 — start the GSP submit worker.** See [`GspSubmitThread`] and
+    /// [`gsp_submit_loop`].
+    ///
+    /// ⊘ Idempotent and quiet on a second attach; **loud** on every other outcome, and —
+    /// unlike the doorbell lane — **FAIL CLOSED BY DISARMING**: a spawn failure puts the FSM
+    /// back in `SubmitMode::Inline` (the control) and runs one full inline pass right here,
+    /// so a kick the guest has already issued is serviced rather than stranded. The guest
+    /// is synchronous under its GPU lock — one RPC in flight — so a stranded kick is not a
+    /// backlog, it is a driver blocked in `rpcRecvPoll` until its timeout.
+    fn start_gsp_submit_worker(&self) {
+        if !self.gsp_submit_async.defers() {
+            eprintln!(
+                "kayfabe: GSP-SUBMIT-ASYNC ⊘ NO WORKER — arm={} (the control). Every \
+                 QUEUE_HEAD store services the command ring on the vCPU that trapped it.",
+                self.gsp_submit_async.as_str(),
+            );
+            return;
+        }
+        let mut slot = self.gsp_worker.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return;
+        }
+        let plane = std::sync::Arc::clone(&self.plane);
+        let lane = std::sync::Arc::clone(&self.gsp_lane);
+        let lane_for_thread = std::sync::Arc::clone(&lane);
+        match std::thread::Builder::new()
+            .name("kayfabe-gsp-submit".into())
+            .spawn(move || gsp_submit_loop(&plane, &lane_for_thread))
+        {
+            Ok(join) => {
+                eprintln!(
+                    "kayfabe: GSP-SUBMIT-ASYNC worker STARTED — one thread, one level-\
+                     triggered lane, {GSP_PASS_MAX_COMMANDS} command(s) per plane-lock hold. \
+                     ⊘ The QUEUE_HEAD store now validates, kicks and returns; the ring is \
+                     serviced here, in ring order."
+                );
+                *slot = Some(GspSubmitThread {
+                    lane,
+                    join: Some(join),
+                });
+            }
+            Err(why) => {
+                self.plane.disarm_gsp_submit();
+                let pass = self.plane.service_gsp_queue_pass(usize::MAX);
+                eprintln!(
+                    "kayfabe: GSP-SUBMIT-ASYNC ⊘⊘⊘ WORKER FAILED TO START: {why}. The FSM \
+                     has been put back INLINE (the control) and one full pass was run here \
+                     ({} command(s), fault={:?}) so nothing already kicked is stranded. ⚠ THIS \
+                     BOOT MEASURES THE CONTROL from this point on, whatever the arm says.",
+                    pass.commands, pass.fault,
+                );
+            }
+        }
+    }
+
+    /// ★★★★★ **w395 — stop the GSP submit worker and JOIN it**, before the plane's RAM port
+    /// is withdrawn. `stop` first, then the join: `wait_kick` returns `None` only once
+    /// nothing is pending, so this drains what was kicked rather than abandoning it.
+    ///
+    /// ⊘ The census prints on **both** arms, all-zeros on the control, beside the trap
+    /// witness it is graded against.
+    fn stop_gsp_submit_worker(&self) {
+        let taken = self.gsp_worker.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(mut w) = taken {
+            w.lane.stop();
+            if let Some(j) = w.join.take() {
+                let _ = j.join();
+            }
+        }
+        eprintln!(
+            "kayfabe: GSP-SUBMIT-ASYNC arm={} {} | {} orphaned={} running_seen_on_worker={} | {}",
+            self.gsp_submit_async.as_str(),
+            if self.gsp_submit_async.defers() {
+                "worker STOPPED and JOINED"
+            } else {
+                "⊘ no worker ran (the control)"
+            },
+            self.gsp_lane.census(),
+            self.plane.gsp_service_orphaned(),
+            self.plane.gsp_running_seen_on_worker(),
+            kayfabe_util::trapwitness::census(),
+        );
     }
 
     /// ★★★★★ **w383 — start the deferred-publication worker.** See
@@ -13549,6 +13764,9 @@ impl Regs {
         // RAM port is refused: it holds its own `QemuVmm` and is in the middle of reading
         // guest page tables.
         self.stop_doorbell_publish_worker();
+        // ★★★★★ w395 — and the GSP submit worker, BEFORE the RAM port is refused: a pass
+        // still running would read the command ring through a port about to be withdrawn.
+        self.stop_gsp_submit_worker();
         self.plane.set_ram(Box::new(kayfabe_device::RefusingRam));
         // The teardown half, and not optional for the same reason: a copy-engine
         // submission arriving after the machine released its slots must be refused by
@@ -16523,6 +16741,95 @@ fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)>
     }
 }
 
+/// ★★★★★ **w395 — where the GSP command ring is SERVICED when the guest writes
+/// `NV_PGSP_QUEUE_HEAD(0)`.** `off` / `on`; absent is `on`.
+///
+/// `[measured w394h, rev f365d831, GA106]` with every other lane armed:
+/// `worst_trap=1791581us at=bar0+0x110c00 slow_traps(>1000us)=380` — the RPC submit
+/// serviced inline, inside the guest's store, was the worst MMIO trap in the boot and a
+/// population of 380 over a millisecond. Owner, 2026-09-09: *"submit register is a schedule,
+/// you should return to vm immediately and run it off the vcpu threads"*.
+///
+/// See `docs/design/w395_the_gsp_submit_is_a_schedule.md`.
+pub const GSP_SUBMIT_ASYNC_ENV: &str = "KAYFABE_GSP_SUBMIT_ASYNC";
+
+/// ★★★★★ **w395 — which arm [`GSP_SUBMIT_ASYNC_ENV`] selected.** Two arms and not three,
+/// for [`DoorbellAsyncArm`]'s reason: the disarmed arm **is** the control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GspSubmitAsyncArm {
+    /// ★ THE CONTROL. The `QUEUE_HEAD` store (and the bind's B4 drain) service the whole
+    /// command ring inline on the vCPU under the BQL — byte-identical to every boot before
+    /// w395.
+    Off,
+    /// ★★★★★ The store **validates, kicks and returns**. A `kayfabe-gsp-submit` thread
+    /// services the ring in ring order, one command per plane-lock hold, until it is empty.
+    ///
+    /// ⊘ Kicks COALESCE, and here that is correct where `w383` refuted it for channel
+    /// doorbells: the FSM reads the guest's `writePtr` afresh on every pass and never
+    /// consults the `QUEUE_HEAD` value, so N stores before the worker wakes are one pass
+    /// that answers everything in the ring (`kayfabe_device::gspsubmit` §2).
+    On,
+}
+
+impl GspSubmitAsyncArm {
+    /// One word, for the boot's own log.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            GspSubmitAsyncArm::Off => "off",
+            GspSubmitAsyncArm::On => "on",
+        }
+    }
+
+    /// Whether the store schedules instead of servicing.
+    #[must_use]
+    pub const fn defers(self) -> bool {
+        matches!(self, GspSubmitAsyncArm::On)
+    }
+}
+
+/// Which arm `value` names — the pure half of [`selected_gsp_submit_async`].
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
+/// [`GspSubmitAsyncArm::On`] — the owner ruling of 2026-09-09 makes the absent case `on`.
+pub fn gsp_submit_async_from(
+    value: Option<&str>,
+) -> Result<GspSubmitAsyncArm, (Status, &'static str)> {
+    match value {
+        // ★★★★★ OWNER RULING 2026-09-09: "no inline blocking executions in mmio traps. just
+        // general rule … submit register is a schedule, you should return to vm immediately
+        // and run it off the vcpu threads". ⇒ ABSENT IS `On`.
+        // ⊘ `off` REMAINS SELECTABLE, and must: it is the control every before/after is
+        // measured against (w298: an arm that cannot be disarmed makes an evidence run and
+        // its control indistinguishable).
+        None | Some("on") => Ok(GspSubmitAsyncArm::On),
+        Some("off") => Ok(GspSubmitAsyncArm::Off),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_GSP_SUBMIT_ASYNC does not name an arm: the only values are `off` (the \
+             CONTROL — the QUEUE_HEAD store drains and services the whole GSP command ring \
+             inline on the vCPU under the BQL, byte-identical to every boot before w395) and \
+             `on` (the store validates, kicks the submit lane and returns; a worker thread \
+             services the ring in ring order, one command per lock hold). ⊘ `1`/`true`/`yes` \
+             are not accepted, for the same reason no other selector in this file accepts \
+             them: a spelling a typo can reach silently disarms the experiment.",
+        )),
+    }
+}
+
+/// Which arm [`GSP_SUBMIT_ASYNC_ENV`] names.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn selected_gsp_submit_async() -> Result<GspSubmitAsyncArm, (Status, &'static str)> {
+    match std::env::var_os(GSP_SUBMIT_ASYNC_ENV) {
+        None => Ok(GspSubmitAsyncArm::On),
+        Some(v) => gsp_submit_async_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
 /// Which arm [`VAS_PUBLISH_ENV`] names.
 ///
 /// # Errors
@@ -18419,6 +18726,52 @@ mod w328_scope_predicate_tests {
             ),
             "★★★★★ proc 0 is NEVER ATTEMPTED by either pass; scoping to it scopes to nothing"
         );
+    }
+}
+
+#[cfg(test)]
+mod the_gsp_submit_default_is_the_ruling {
+    //! ★★★★★ **A DEFAULT WITH NO TEST IS HOW `KAYFABE_DOORBELL_ASYNC` DRIFTED** — the arm
+    //! that obeyed the contract existed for a whole campaign while the default measured the
+    //! violation. This one is pinned on the day it is written.
+    use super::*;
+
+    #[test]
+    fn absent_means_on_because_a_submit_register_is_a_schedule() {
+        assert_eq!(
+            gsp_submit_async_from(None).expect("absent is not an error"),
+            GspSubmitAsyncArm::On,
+            "owner ruling 2026-09-09: `submit register is a schedule, you should return to \
+             vm immediately and run it off the vcpu threads` — the arm that does so is the \
+             DEFAULT, not an opt-in"
+        );
+        assert_eq!(
+            gsp_submit_async_from(Some("on")).expect("on"),
+            GspSubmitAsyncArm::On
+        );
+        assert!(GspSubmitAsyncArm::On.defers());
+    }
+
+    /// ⊘ `off` must REMAIN reachable: it is the control every before/after is measured
+    /// against (w298).
+    #[test]
+    fn off_is_still_selectable_because_a_control_you_cannot_select_is_not_a_control() {
+        assert_eq!(
+            gsp_submit_async_from(Some("off")).expect("off"),
+            GspSubmitAsyncArm::Off
+        );
+        assert!(!GspSubmitAsyncArm::Off.defers());
+    }
+
+    /// ⊘ A spelling a typo can reach must not silently select an arm.
+    #[test]
+    fn a_typo_is_refused_and_never_resolved_to_an_arm() {
+        for bad in ["1", "true", "yes", "ON", "Off", "", "nocoalesce"] {
+            assert!(
+                gsp_submit_async_from(Some(bad)).is_err(),
+                "{bad:?} must not name an arm"
+            );
+        }
     }
 }
 

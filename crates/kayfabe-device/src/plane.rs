@@ -134,7 +134,7 @@
 //! this boot dropped on the floor*.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use kayfabe_arch::gsp::GspModel;
 use kayfabe_arch::{Aperture, GmmuFmt};
@@ -619,11 +619,18 @@ pub struct PlaneResidue {
     pub doorbell: DoorbellLog,
 }
 
-/// The mutable half — everything that needs the lock.
-struct PlaneState {
-    fsm: GspFsm,
-    ram: Box<dyn GuestRam>,
-    policy: Box<dyn CommandPolicy>,
+/// ★★★ **w395 — the two diagnostic samples, OUT from under the FSM's mutex.**
+///
+/// They used to be fields of [`PlaneState`], so recording *"the guest touched an offset
+/// nobody owns"* took [`RegPlane::state`]. That was invisible while every service pass ran
+/// on the vCPU itself; the instant the GSP command queue is serviced on a worker, an
+/// unclaimed read from the guest — and `rpcRecvPoll` performs one **per poll iteration**,
+/// the CrashCat wayfinder scratch read (`ogkm-580: kernel_gsp.c:1827`) — would wait behind
+/// that worker for exactly the duration the deferral was built to remove.
+///
+/// A leaf `Mutex`, held for a bounded `contains`+`push`, contended by nothing that blocks.
+#[derive(Debug, Default)]
+struct Samples {
     /// The first unclaimed accesses seen, as `(bar, offset)`, for diagnosis. Bounded,
     /// deliberately: an unbounded set is a guest-driven allocation, and a poller can produce
     /// millions.
@@ -636,6 +643,13 @@ struct PlaneState {
     /// The first framebuffer-window accesses seen, as `(window, offset)`. Bounded for the
     /// same reason and by the same constant.
     fb_window: Vec<(FbWindow, u64)>,
+}
+
+/// The mutable half — everything that needs the lock.
+struct PlaneState {
+    fsm: GspFsm,
+    ram: Box<dyn GuestRam>,
+    policy: Box<dyn CommandPolicy>,
     /// ★★★ The BAR0 moving window's register. **Under the same lock as everything the
     /// window resolves**, so a read and a write on two vCPUs cannot observe half of a
     /// re-point.
@@ -926,6 +940,10 @@ pub struct WriteOutcome {
     pub transitions: usize,
     /// How many commands were decoded off the command queue.
     pub commands: usize,
+    /// ★★★★★ **w395 — this write KICKED the GSP submit lane** and the command ring's
+    /// service is owed to the shell's worker. `commands` is 0 on such a write by
+    /// construction: nothing was decoded on the vCPU.
+    pub gsp_service_scheduled: bool,
 }
 
 impl WriteOutcome {
@@ -952,6 +970,7 @@ impl WriteOutcome {
             publish_before_completing: false,
             transitions: 0,
             commands: 0,
+            gsp_service_scheduled: false,
         }
     }
 }
@@ -1133,6 +1152,31 @@ pub struct RegPlane {
     /// What the doorbell aperture has seen, beyond the counts. Its own small lock, taken
     /// *after* the port has answered and never held across the call.
     doorbell_log: Mutex<DoorbellLog>,
+    /// ★★★ w395 — the diagnostic samples, on a leaf lock of their own. See [`Samples`].
+    samples: Mutex<Samples>,
+    /// ★★★★★ **w395 — the GSP submit lane**, `Some` once a shell has
+    /// [`RegPlane::arm_gsp_submit`]-ed. Kicked from [`RegPlane::write`] when the FSM reports
+    /// [`kayfabe_gsp::ServiceReport::service_owed`]; drained by the shell's worker through
+    /// [`RegPlane::service_gsp_queue_pass`]. An `RwLock` and not a `OnceLock` so the arm can
+    /// be inspected and the census printed on both arms.
+    gsp_submit: RwLock<Option<Arc<crate::gspsubmit::GspSubmitLane>>>,
+}
+
+/// ★★★★★ **w395 — what one [`RegPlane::service_gsp_queue_pass`] did.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GspServicePass {
+    /// Commands answered. **Zero means the ring is drained** (or a message is still being
+    /// written by the guest, who will ring again when it is complete).
+    pub commands: usize,
+    /// The FSM's gate found the queue unbound — a kick that outlived its binding.
+    pub prebind: bool,
+    /// The FSM asked for the status-queue announcement. ⊘ NOT delivered by the worker: the
+    /// C shell refuses this flag by name and the guest polls; see `crate::gspsubmit` §3.
+    pub raise_status_irq: bool,
+    /// The pass refused by name.
+    pub fault: Option<&'static str>,
+    /// How long [`RegPlane::state`] was held.
+    pub hold: std::time::Duration,
 }
 
 /// ★★★ **E2** — what this device life's doorbell aperture saw, beyond the counters.
@@ -1179,6 +1223,10 @@ impl core::fmt::Debug for RegPlane {
 /// blocks behind a doorbell being serviced.
 #[derive(Debug, Default)]
 struct PlaneCounters {
+    /// ★ w395 — a deferred service owed with no lane to kick. Must stay 0; see `write`.
+    gsp_service_orphaned: AtomicU64,
+    /// ★ w395 — the worker saw the FSM enter `Running`. A flag, so a boot log can tell.
+    gsp_running_seen: AtomicU64,
     reads: AtomicU64,
     writes: AtomicU64,
     boot_reg_reads: AtomicU64,
@@ -1540,8 +1588,6 @@ impl RegPlane {
                         census.clone(),
                         links,
                     ),
-                    unclaimed: Vec::new(),
-                    fb_window: Vec::new(),
                     bar0_window: Bar0Window::new(),
                     cpu_intr: CpuIntrTree::new(),
                     fb: Box::new(RefusingFb),
@@ -1563,7 +1609,115 @@ impl RegPlane {
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
             doorbell: RwLock::new(Box::new(RefusingDoorbell)),
             doorbell_log: Mutex::new(DoorbellLog::default()),
+            samples: Mutex::new(Samples::default()),
+            gsp_submit: RwLock::new(None),
         })
+    }
+
+    /// ★★★★★ **w395 — ARM THE GSP SUBMIT LANE: from here on a `QUEUE_HEAD` store (and the
+    /// bind's B4 backlog drain) VALIDATES, KICKS `lane` AND RETURNS**, and the shell's worker
+    /// owes [`RegPlane::service_gsp_queue_pass`] until the ring is empty.
+    ///
+    /// ⊘ The FSM's mode and the lane are set under one lock acquisition, so there is no
+    /// instant at which a doorbell is deferred with nothing to kick. See
+    /// [`crate::gspsubmit`] for the lane and [`kayfabe_gsp::SubmitMode`] for the FSM's half.
+    pub fn arm_gsp_submit(&self, lane: Arc<crate::gspsubmit::GspSubmitLane>) {
+        let mut s = self.state.lock();
+        *self.gsp_submit.write().unwrap_or_else(|e| e.into_inner()) = Some(lane);
+        s.fsm.set_submit_mode(kayfabe_gsp::SubmitMode::Deferred);
+    }
+
+    /// ★ **w395 — FAIL CLOSED: put the doorbell back INLINE.** For a shell whose worker
+    /// would not start: a lane nobody drains would accept every submission and execute none,
+    /// which is the single worst failure the deferral can have. Inline is the control and
+    /// is never worse than the status quo.
+    ///
+    /// The lane handle is kept so a census can still be printed; only the FSM's mode moves.
+    pub fn disarm_gsp_submit(&self) {
+        let mut s = self.state.lock();
+        s.fsm.set_submit_mode(kayfabe_gsp::SubmitMode::Inline);
+    }
+
+    /// ★ w395 — deferred services owed with no lane to kick. **Must read 0**; see `write`.
+    #[must_use]
+    pub fn gsp_service_orphaned(&self) -> u64 {
+        self.c.gsp_service_orphaned.load(Ordering::Relaxed)
+    }
+
+    /// ★ w395 — whether a worker pass witnessed the FSM enter `Running`.
+    #[must_use]
+    pub fn gsp_running_seen_on_worker(&self) -> bool {
+        self.c.gsp_running_seen.load(Ordering::Relaxed) != 0
+    }
+
+    /// The armed lane, if any.
+    #[must_use]
+    pub fn gsp_submit_lane(&self) -> Option<Arc<crate::gspsubmit::GspSubmitLane>> {
+        self.gsp_submit
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// ★★★★★ **w395 — ONE WORKER PASS over the GSP command ring, off the vCPU.**
+    ///
+    /// Takes [`RegPlane::state`], runs [`GspFsm::service_deferred`] for at most
+    /// `max_commands`, does **the same accounting the inline write path does** (so
+    /// `irq_requests`, `commands`, `faults` and `ram_refusals` keep meaning what they meant
+    /// on the control), and releases. The worker calls it in a loop until
+    /// [`GspServicePass::commands`] is zero.
+    ///
+    /// ⚠ The lock is held for the pass, which includes the policy chain and whatever host
+    /// verbs it issues — the same lock the inline path held for the same work. What changes
+    /// is *which thread* holds it: not a vCPU under the BQL. What is **bounded** by
+    /// `max_commands` is how long a guest MMIO access to a claimed GSP register waits on it.
+    /// `hold` measures exactly that.
+    pub fn service_gsp_queue_pass(&self, max_commands: usize) -> GspServicePass {
+        let t0 = std::time::Instant::now();
+        let mut s = self.state.lock();
+        let PlaneState {
+            fsm, ram, policy, ..
+        } = &mut *s;
+        let res = fsm.service_deferred(ram.as_mut(), policy.as_mut(), max_commands);
+        let pass = match res {
+            Ok(report) => {
+                if report.raise_status_irq {
+                    self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c
+                    .commands
+                    .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                let prebind = report.transitions.contains(&kayfabe_gsp::Transition::E12);
+                if report.transitions.contains(&kayfabe_gsp::Transition::Running) {
+                    self.c.gsp_running_seen.store(1, Ordering::Relaxed);
+                }
+                GspServicePass {
+                    commands: report.commands.len(),
+                    prebind,
+                    raise_status_irq: report.raise_status_irq,
+                    fault: None,
+                    hold: std::time::Duration::ZERO,
+                }
+            }
+            Err(f) => {
+                self.c.faults.fetch_add(1, Ordering::Relaxed);
+                if matches!(f, GspFault::GuestRam(_)) {
+                    self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
+                }
+                GspServicePass {
+                    commands: 0,
+                    prebind: false,
+                    raise_status_irq: false,
+                    fault: Some(f.fault_tag().0),
+                    hold: std::time::Duration::ZERO,
+                }
+            }
+        };
+        drop(s);
+        GspServicePass {
+            hold: t0.elapsed(),
+            ..pass
+        }
     }
 
     /// The chip this plane answers as.
@@ -2462,6 +2616,9 @@ impl RegPlane {
     pub fn counters(&self) -> Counters {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         let PlaneCounters {
+            // ★ w395 — read through their own accessors; not part of the public census struct.
+            gsp_service_orphaned: _,
+            gsp_running_seen: _,
             reads,
             writes,
             boot_reg_reads,
@@ -2613,6 +2770,10 @@ impl RegPlane {
             // life SAW through it is carried out as `doorbell` just below.
             doorbell: _,
             doorbell_log,
+            // ★ w395 — read through `unclaimed_sample()` / `fb_window_sample()` below; the
+            // lane is the shell's wiring and its census is the shell's to print.
+            samples: _,
+            gsp_submit: _,
         } = self;
         let counters = self.counters();
         let doorbell = doorbell_log
@@ -2625,8 +2786,6 @@ impl RegPlane {
             fsm,
             ram: _,
             policy: _,
-            unclaimed,
-            fb_window,
             bar0_window,
             // ★ Carried out as counters rather than as state: *"how many vectors did this
             // life ask for, how many could it not announce, and would any have been
@@ -2664,8 +2823,8 @@ impl RegPlane {
                 refused: *pt_witness_refused,
             },
             gsp: fsm.clone(),
-            unclaimed: unclaimed.clone(),
-            fb_window: fb_window.clone(),
+            unclaimed: self.unclaimed_sample(),
+            fb_window: self.fb_window_sample(),
             unserviced: unserviced.sample(),
             census: census.snapshot(),
             mmu_inval: mmu_inval.snapshot(),
@@ -2763,8 +2922,11 @@ impl RegPlane {
     /// a register one.
     #[must_use]
     pub fn unclaimed_sample(&self) -> Vec<(u8, u64)> {
-        let s = self.state.lock();
-        s.unclaimed.clone()
+        self.samples
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .unclaimed
+            .clone()
     }
 
     /// ★★★ The distinct framebuffer-window accesses seen, up to [`UNCLAIMED_SAMPLE_MAX`].
@@ -2774,8 +2936,11 @@ impl RegPlane {
     /// every entry is a byte of device memory this port did not carry.
     #[must_use]
     pub fn fb_window_sample(&self) -> Vec<(FbWindow, u64)> {
-        let s = self.state.lock();
-        s.fb_window.clone()
+        self.samples
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .fb_window
+            .clone()
     }
 
     /// The FSM's current boot phase, so a test can assert the guest moved it.
@@ -2987,6 +3152,22 @@ impl RegPlane {
         // such a chip at realize, so reaching here means the two really are separate.
         if let Some(w) = self.chip.fb_window(bar, off) {
             return self.fb_read(w, off, size);
+        }
+        // ★★★★★ **w395 — AN UNCLAIMED READ TAKES NO LOCK.** `decode_reg` is a pure function
+        // of the offset, and on a regime whose boot sequence answers no unnamed offsets
+        // (`BootSequence::answers_unnamed_reads`) a `None` here is exactly the `None` the
+        // locked arm below would have returned — `GspFsm::mmio_read_with` asks the model
+        // first and the sequence second, in that order, and both are consulted here.
+        //
+        // Why it matters: the guest's `_kgspRpcRecvPoll` reads the CrashCat wayfinder
+        // scratch register on EVERY iteration (`kgspHealthCheck_TU102`), an offset this
+        // model does not name. With the GSP command queue serviced on a worker that holds
+        // `state`, a lock-taking unclaimed arm would park the polling vCPU behind the
+        // worker for the duration of the pass — the 1.79 s trap, relocated to a read.
+        if self.model.decode_reg(bar, off).is_none()
+            && !self.model.boot_sequence().answers_unnamed_reads()
+        {
+            return ReadOutcome::Unclaimed;
         }
         let s = self.state.lock();
         match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
@@ -3614,6 +3795,33 @@ impl RegPlane {
                 self.c
                     .commands
                     .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                // ★★★★★ **w395 — THE KICK.** The FSM validated and owes a service; two
+                // integer compares and a `notify_one`, then this write returns to the VM.
+                // ⊘ Still under `state` here — the kick is O(1) and blocks on nothing.
+                let gsp_service_scheduled = if report.service_owed {
+                    match &*self.gsp_submit.read().unwrap_or_else(|e| e.into_inner()) {
+                        Some(lane) => {
+                            lane.kick();
+                            true
+                        }
+                        // ⚠ Unreachable by construction (`arm_gsp_submit` sets the mode
+                        // and the lane under one lock) — and said out loud if it is
+                        // reached, because the alternative is a submission accepted and
+                        // never serviced, which is the failure this rung must not have.
+                        None => {
+                            self.c.gsp_service_orphaned.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "kayfabe: GSP-SUBMIT ⊘⊘⊘ SERVICE OWED WITH NO LANE at \
+                                 bar{bar}+{off:#x} — the FSM is in Deferred mode and \
+                                 nothing was armed to drain it. THIS SUBMISSION WAS NOT \
+                                 SERVICED."
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
                 // ★★★★★ §16.76 — THE OPENER, counted. See `Counters::status_irq_cleared`.
                 let opened = report
                     .transitions
@@ -3653,6 +3861,7 @@ impl RegPlane {
                     raise_status_irq: report.raise_status_irq,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
+                    gsp_service_scheduled,
                     ..WriteOutcome::nothing()
                 }
             }
@@ -4012,15 +4221,16 @@ impl RegPlane {
         true
     }
 
+    /// ⊘ w395 — on the samples' own leaf lock, never [`RegPlane::state`]: see [`Samples`].
     fn note_unclaimed(&self, bar: u8, off: u64) {
-        let mut s = self.state.lock();
+        let mut s = self.samples.lock().unwrap_or_else(|e| e.into_inner());
         if s.unclaimed.len() < UNCLAIMED_SAMPLE_MAX && !s.unclaimed.contains(&(bar, off)) {
             s.unclaimed.push((bar, off));
         }
     }
 
     fn note_fb_window(&self, w: FbWindow, off: u64) {
-        let mut s = self.state.lock();
+        let mut s = self.samples.lock().unwrap_or_else(|e| e.into_inner());
         if s.fb_window.len() < UNCLAIMED_SAMPLE_MAX && !s.fb_window.contains(&(w, off)) {
             s.fb_window.push((w, off));
         }

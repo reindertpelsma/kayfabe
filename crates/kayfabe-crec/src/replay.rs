@@ -47,7 +47,7 @@ use kayfabe_arch::gsp::GspReg;
 use kayfabe_arch::ids::Gpa;
 use kayfabe_gsp::{
     BootPhase, EchoOk, GspAbi, GspFault, GspFsm, Observation, Projection, QueueState, RpcCommand,
-    Transition,
+    SubmitMode, Transition,
 };
 use kayfabe_trace::{Bar, IrqSpec, TraceEvent, Width};
 
@@ -225,6 +225,8 @@ pub struct Replay<'a> {
     abi: GspAbi,
     arch: Ga10xArch,
     policy: PolicyFactory,
+    /// ★ w395 — see [`Replay::with_deferred_submit`].
+    submit: SubmitMode,
 }
 
 impl<'a> Replay<'a> {
@@ -244,6 +246,26 @@ impl<'a> Replay<'a> {
             abi,
             arch: Ga10xArch::new(),
             policy: || Box::new(EchoOk),
+            submit: SubmitMode::Inline,
+        }
+    }
+
+    /// ★★★★★ **w395 — run the FSM in [`SubmitMode::Deferred`], servicing every owed pass
+    /// IMMEDIATELY after the write that owed it**, exactly as the shell's worker would if it
+    /// won the race every time. The doorbell store then validates and returns, and the
+    /// service runs as a separate `GspFsm::service_deferred` call — so a replay in this mode
+    /// against the same capture is the offline oracle for *"the deferral changes nothing the
+    /// guest can observe"*: identical projected guest-RAM writes, identical commands,
+    /// identical final phase. `tests/cap1_deferred_submit.rs` is that comparison.
+    ///
+    /// ⊘ What this CANNOT measure: the worker racing the guest. A capture is a total order;
+    /// the deferral's only new behaviour — the guest running while the ring is serviced —
+    /// has no representation here and only a live boot exercises it.
+    #[must_use]
+    pub fn with_deferred_submit(self) -> Replay<'a> {
+        Replay {
+            submit: SubmitMode::Deferred,
+            ..self
         }
     }
 
@@ -337,6 +359,7 @@ impl<'a> Replay<'a> {
         }
 
         let mut fsm = GspFsm::new(self.abi);
+        fsm.set_submit_mode(self.submit);
         let mut policy = (self.policy)();
         let mut projection: Option<Projection> = None;
 
@@ -411,6 +434,25 @@ impl<'a> Replay<'a> {
                     head.a,
                     head.b,
                 );
+                // ★ w395 — a deferred store owes a service; run it now, as the worker
+                // would, and fold its report into the write's so the projection below sees
+                // one transaction. See `Replay::with_deferred_submit`.
+                let res = match res {
+                    Ok(mut report) if report.service_owed => {
+                        match fsm.service_deferred(&mut ram, policy.as_mut(), usize::MAX) {
+                            Ok(mut r) => {
+                                report.transitions.append(&mut r.transitions);
+                                report.commands.extend(r.commands);
+                                report.unserviced.extend(r.unserviced);
+                                report.raise_status_irq |= r.raise_status_irq;
+                                report.service_owed = false;
+                                Ok(report)
+                            }
+                            Err(f) => Err(f),
+                        }
+                    }
+                    other => other,
+                };
                 let mut raise_irq = false;
                 match res {
                     Ok(report) => {

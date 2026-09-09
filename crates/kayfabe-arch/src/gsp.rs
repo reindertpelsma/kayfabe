@@ -683,6 +683,25 @@ pub trait BootSequence: Send + Sync {
     ) -> Option<u64> {
         None
     }
+
+    /// ★★★★★ **w395 — whether [`BootSequence::on_read`] can ever answer `Some`.**
+    ///
+    /// A register plane that knows the answer is *"never"* may classify an offset the
+    /// shared vocabulary declines as **unclaimed without taking the FSM's lock** — and
+    /// that is not an optimisation, it is the difference between an RPC submit that runs
+    /// off the vCPU and one that merely moved its stall: the guest's `rpcRecvPoll` reads
+    /// the CrashCat wayfinder scratch register on **every** iteration
+    /// (`ogkm-580: kernel_gsp.c:1827` → `kgspHealthCheck_TU102`, CrashCat configured with
+    /// `bEnable = NV_TRUE` at `kernel_gsp_tu102.c:79`), an offset no [`GspReg`] names, so a
+    /// lock-taking unclaimed arm puts the polling vCPU behind whatever thread is servicing
+    /// the queue.
+    ///
+    /// ⊘ Answered by the sequence and not derived by the plane, because only the sequence
+    /// knows whether its `on_read` is the trait default. A regime that answers unnamed
+    /// offsets (`Gh100FspBoot`) says `true` and keeps the locked path, byte for byte.
+    fn answers_unnamed_reads(&self) -> bool {
+        false
+    }
 }
 
 /// **A generation whose boot ordering has not been implemented**, said out loud.

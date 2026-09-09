@@ -469,6 +469,12 @@ impl BootSequence for Gh100FspBoot {
         }
     }
 
+    /// ★ w395 — this regime DOES answer offsets the shared vocabulary cannot name (the
+    /// `on_read` below), so the register plane must keep the locked path for it.
+    fn answers_unnamed_reads(&self) -> bool {
+        true
+    }
+
     fn on_read(
         &self,
         _model: &dyn GspModel,
