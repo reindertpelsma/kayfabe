@@ -160,3 +160,63 @@ loses is only the claim that lane (2) *waits* on it.
 | 4 | BAR cacheability | region kind `IO` | unreachable by construction |
 ⚠ Stop hunting a single cause. Wall 1 explains D2D and cannot explain the H2D/D2H excess over
 it; wall 4 cannot explain either, because the bytes do not go through BAR1.
+
+---
+
+# ★★★★★ LANE (2) PARITY — MEASURED, AND IT IS **ONE** TERM: THE LAUNCH
+2026-09-09, box `50376491`, one probe per boot (`W394_ONLY`), fully armed, legacy arming
+(`KAYFABE_VAS_PUBLISH=drain`, `KAYFABE_PT_SWEEP=on`). Both probes ran to completion — the
+single-probe-per-boot change removed the 5th-device-open wedge exactly as predicted.
+
+| metric | guest | native | ratio |
+|---|---|---|---|
+| `rm_control` (`cuMemGetInfo`) | 506.28 µs | 6.97 µs | **72.6×** |
+| `alloc+free` (gpu_bench) | 7 700.16 µs | 109.70 µs | **70.2×** |
+| `alloc+free` (cuda_micro) | 7 736.56 µs | 117.69 µs | **65.7×** |
+| **`launch RTT`** | **342 242.60 µs** | 6.03 µs | **56 757×** |
+| **`launch+sync`** | **139 759.64 µs** | 5.91 µs | **23 648×** |
+| `uvm_alloc` (managed+touch) | 231.80 µs | 215.59 µs | **1.075×** |
+| GEMM throughput | 6.0 GFLOP/s | 426.2 GFLOP/s | 0.014× |
+
+## ★★★★★ THE GEMM NUMBER IS NOT A COMPUTE DEFICIT. IT IS 5 LAUNCHES.
+```
+GEMM wall 1.789 s;  5 launches × 342.24 ms = 1.711 s = 95.7 % OF IT
+residual (everything that is not launch overhead) = 0.078 s ⇒ ~138 GFLOP/s
+```
+⇒ **0.014× reads as "the GPU is 71× slower at arithmetic". It is not.** 95.7 % of that wall is
+our own launch cost, and the arithmetic underneath is running at ~138 GFLOP/s against a native
+426.2 — same order, on a residual that is a small difference of two large numbers and therefore
+imprecise. ⚠ Quote the 0.014× without this decomposition and you have described a compute
+problem that does not exist.
+
+## ★★★ THE TABLE HAS EXACTLY TWO CLUSTERS, AND THEY ARE THREE ORDERS APART
+- **~66–73×** — `rm_control`, both `alloc+free`. A flat control-plane tax on forwarded ioctls.
+- **~24 000–57 000×** — `launch RTT`, `launch+sync`. The submit path.
+⇒ These are not one phenomenon with a spread; they are two mechanisms. Fixing the control-plane
+tax buys ~70× on control ops and **nothing** on the thing that dominates every real workload.
+
+## ★ THE NEGATIVE CONTROL, and it is load-bearing: `uvm_alloc` IS AT PARITY (1.075×)
+A path exists, in this same boot, that costs the same as native. ⇒ The 70× is **not** an
+architectural "everything through the emulated device is slow" tax, and it is not the guest, or
+QEMU, or the box.
+⊘ **Scope it honestly**: `cuMemAllocManaged`+touch+free most likely never reaches our device at
+all, so this measures *"a path that does not reach us is native"* — which is trivially true and
+still useful, because it **eliminates the whole-stack explanations** rather than confirming
+ours can be fast.
+
+## ⊘ TWO ANOMALIES, RECORDED AND NOT EXPLAINED AWAY
+1. **An unsynced launch costs MORE than a synced one** — `launch RTT` 342 ms vs `launch+sync`
+   140 ms, 2.4× the wrong way round. An async launch should be the cheap one. Recorded as an
+   observation; I have no mechanism for it and will not invent one.
+2. **`cuLaunchKernel … failed: 719`** (`CUDA_ERROR_LAUNCH_FAILED`) in `cuda_micro` subtest 6
+   (`uvm_migrate`), after `uvm_alloc` passed, plus **1 host Xid** in that boot. That is lane (4)
+   territory and is not on the parity path, but it is a real defect and it is written down.
+⊘ Bandwidth printed `0.0 GB/s` again at 16 MiB — and `DtoH correctness: OK (0/4194304
+mismatched)` again alongside it. Correct bytes, unusable rate: the house failure shape.
+
+## ⇒ WHAT THIS SETTLES FOR THE ROADMAP
+**Parity is one term, and it is the launch.** `inline_exceptions=46568` with
+`worst_trap=2 666 348 µs` is the already-named metric for it, with a stated target of **0**, and
+342 ms/launch is ~4 doorbell traps at the known ~86 ms cost. Nothing about memory, BAR, or the
+CE plane is on the critical path for parity — all three were measured and all three are
+elsewhere.
