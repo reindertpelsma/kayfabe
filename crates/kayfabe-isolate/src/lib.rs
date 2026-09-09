@@ -2302,6 +2302,162 @@ pub trait RingWorkingSet {
 pub struct UngatedVa(pub GpuVa);
 
 impl VerbPlan {
+    /// ★★★★★ **WHICH VERB THIS IS, as a stable literal — the key the cost census is
+    /// grouped by.** ⊘ Not `Debug`: that formats the whole payload (addresses, lengths) and
+    /// would make every plan its own group, which is the opposite of an attribution.
+    #[must_use]
+    pub const fn kind(&self) -> &'static str {
+        match self {
+            VerbPlan::Publish { .. } => "Publish",
+            VerbPlan::PublishVidmem { .. } => "PublishVidmem",
+            VerbPlan::JoinFbLeaf { .. } => "JoinFbLeaf",
+            VerbPlan::AliasFbLeaf { .. } => "AliasFbLeaf",
+            VerbPlan::PinGuestRam { .. } => "PinGuestRam",
+            VerbPlan::Doorbell { .. } => "Doorbell",
+            VerbPlan::ChannelBirth { .. } => "ChannelBirth",
+            VerbPlan::EngineObject { .. } => "EngineObject",
+            VerbPlan::Control { .. } => "Control",
+            VerbPlan::SubdeviceControl { .. } => "SubdeviceControl",
+            VerbPlan::CeSplit { .. } => "CeSplit",
+            VerbPlan::Release { .. } => "Release",
+        }
+    }
+}
+
+/// ★★★★★ **WHERE THE LAUNCH COST ACTUALLY GOES — per verb kind, count AND microseconds.**
+///
+/// `[measured w394e]` a `gpu_bench` boot: 200 launches in 50.796 s = **254 ms per launch**,
+/// carrying **4 240** `verb_op` execute phases = **21.2 verb plans per launch at ~12 ms
+/// each**. A native RM control ioctl on the same box costs **6.97 µs**, so a forwarded verb
+/// plan is running ~1 700× a real ioctl.
+///
+/// ⊘ **Until this module existed there was NO timing anywhere in the verb path**, so
+/// "the launch costs 342 ms" could not be decomposed at all — not into which verb, not into
+/// how many, not into how long each took. `inline_exceptions` counted the phases and said
+/// nothing about their cost, and a count without a duration cannot tell *many cheap verbs*
+/// from *few expensive ones*. Those two have opposite fixes.
+///
+/// ⚠ **AND IT CORRECTS A FIX I HAD ALREADY NAMED.** I proposed moving this phase off the
+/// trap thread to drive `inline_exceptions` to 0. But `qemu/hw/misc/nvkvm/nvkvm.c:931` calls
+/// `memory_region_enable_lockless_io` on **every** nvkvm region, so the BQL is **not held**
+/// during a doorbell trap — the inline execution blocks no other vCPU, and the calling vCPU
+/// must wait for the reply regardless because `commit_phase` consumes it. Moving the phase
+/// would therefore have bought **no latency at all**. The question is not *where* the work
+/// runs; it is *why one verb plan costs 12 ms*.
+///
+/// Lock-free for the same reason [`kayfabe_util::trapwitness`]'s table is: this records on
+/// the trap thread, where a blocking site is forbidden.
+/// Records the plan's duration on EVERY exit path — this function returns early in a dozen
+/// places and through `?`, and a timer that only fires on the happy path would systematically
+/// under-count exactly the slow, failing verbs one most wants to see.
+struct VerbCostTimer {
+    t0: std::time::Instant,
+    kind: &'static str,
+}
+
+impl Drop for VerbCostTimer {
+    fn drop(&mut self) {
+        verbcost::note(
+            self.kind,
+            u64::try_from(self.t0.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
+    }
+}
+
+pub mod verbcost {
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use std::sync::OnceLock;
+
+    const SLOTS: usize = 16;
+    static NAME: [OnceLock<&'static str>; SLOTS] = [const { OnceLock::new() }; SLOTS];
+    static CLAIMED: [AtomicUsize; SLOTS] = [const { AtomicUsize::new(0) }; SLOTS];
+    static HITS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static NANOS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static WORST_NS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+    /// Record one completed verb plan: its kind, and how long it took.
+    pub fn note(kind: &'static str, nanos: u64) {
+        let ptr = kind.as_ptr() as usize;
+        for i in 0..SLOTS {
+            let cur = CLAIMED[i].load(Ordering::Relaxed);
+            if cur != ptr {
+                if cur != 0
+                    || CLAIMED[i]
+                        .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
+                        .is_err()
+                {
+                    continue;
+                }
+                let _ = NAME[i].set(kind);
+            }
+            HITS[i].fetch_add(1, Ordering::Relaxed);
+            NANOS[i].fetch_add(nanos, Ordering::Relaxed);
+            WORST_NS[i].fetch_max(nanos, Ordering::Relaxed);
+            return;
+        }
+        OVERFLOW.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// `(kind, count, total_us, worst_us)`, ranked by TOTAL time — the thing to fix first is
+    /// the one that owns the most wall clock, which is not always the most frequent.
+    #[must_use]
+    pub fn census_rows() -> Vec<(&'static str, u64, u64, u64)> {
+        let mut out = Vec::new();
+        for i in 0..SLOTS {
+            let hits = HITS[i].load(Ordering::Relaxed);
+            if hits == 0 {
+                continue;
+            }
+            out.push((
+                NAME[i].get().copied().unwrap_or("⊘ (kind not yet published)"),
+                hits,
+                NANOS[i].load(Ordering::Relaxed) / 1_000,
+                WORST_NS[i].load(Ordering::Relaxed) / 1_000,
+            ));
+        }
+        out.sort_by(|a, b| b.2.cmp(&a.2));
+        out
+    }
+
+    /// One line for the boot report.
+    #[must_use]
+    pub fn census() -> String {
+        let rows = census_rows();
+        if rows.is_empty() {
+            // ⊘ An empty census is "no verb plan ever completed", which is a fact about the
+            // boot and must not print as a tidy zero row.
+            return "VERBCOST ⊘ NO VERB PLAN COMPLETED — unmeasured, not zero".to_string();
+        }
+        let total: u64 = rows.iter().map(|r| r.2).sum();
+        let over = OVERFLOW.load(Ordering::Relaxed);
+        format!(
+            "VERBCOST total={}us over {} plan(s){} {}",
+            total,
+            rows.iter().map(|r| r.1).sum::<u64>(),
+            if over == 0 {
+                String::new()
+            } else {
+                format!(" ⊘ INCOMPLETE: {over} plan(s) did not fit the table")
+            },
+            rows.iter()
+                .map(|(k, n, us, worst)| format!(
+                    "[{k} n={n} total={us}us mean={:.2}ms worst={:.2}ms {:.1}%]",
+                    (*us as f64) / (*n as f64) / 1000.0,
+                    (*worst as f64) / 1000.0,
+                    if total == 0 {
+                        0.0
+                    } else {
+                        100.0 * (*us as f64) / (total as f64)
+                    }
+                ))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    }
+}
+
+impl VerbPlan {
     /// ★★★ **THE ONLY constructor of [`VerbPlan::Doorbell`], and it IS the #14
     /// ring-gate.** (`ARCHITECTURE.md` invariant 5, `execution_plane.md` §2.4.)
     ///
@@ -3063,6 +3219,12 @@ impl Worker {
             }));
         }
         let rm = &mut *self.backend;
+        // ★ Time the whole plan, including the handle checks above's successor work. The
+        // clock starts here because everything before it is argument validation that cannot
+        // reach the host.
+        let _t0 = std::time::Instant::now();
+        let _kind = plan.kind();
+        let _timer = VerbCostTimer { t0: _t0, kind: _kind };
         match plan {
             VerbPlan::Publish { host_vas, len, at } => {
                 let (vas, fresh_vas) = match *host_vas {
@@ -4618,3 +4780,47 @@ kayfabe_util::assert_send_sync!(
 // The backend and the `Worker` that owns one: `Send + Sync` because pool slots live
 // inside the `Sync` core (crate docs), even though no call path ever shares one.
 kayfabe_util::assert_send_sync!(dyn RmBackend, Worker);
+
+#[cfg(test)]
+mod verbcost_records_every_exit_path {
+    //! ★★★ `Worker::execute` returns early in a dozen places and through `?`. A timer that
+    //! only fired on the happy path would systematically under-count exactly the slow,
+    //! failing verbs one most wants to see — so it is an RAII `Drop`, and this pins that.
+    use super::*;
+
+    #[test]
+    fn a_plan_that_returns_early_is_still_timed_and_the_census_ranks_by_TIME() {
+        let before = verbcost::census_rows()
+            .into_iter()
+            .find(|r| r.0 == "unit-test-early-return")
+            .map_or(0, |r| r.1);
+        {
+            let _t = VerbCostTimer {
+                t0: std::time::Instant::now(),
+                kind: "unit-test-early-return",
+            };
+            // …and the scope ends here as if by `?`, with no explicit record call.
+        }
+        let after = verbcost::census_rows()
+            .into_iter()
+            .find(|r| r.0 == "unit-test-early-return")
+            .map_or(0, |r| r.1);
+        assert_eq!(after, before + 1, "the drop must have recorded the plan");
+    }
+
+    /// ⊘ An empty census must say UNMEASURED, never print a tidy zero: "no verb plan
+    /// completed" is a fact about the boot, and this tree has paid for reading an absent
+    /// measurement as a zero one.
+    #[test]
+    fn the_census_line_never_dresses_an_absence_as_a_zero() {
+        let line = verbcost::census();
+        assert!(
+            line.starts_with("VERBCOST"),
+            "the line must be findable by a fixed prefix: {line}"
+        );
+        if verbcost::census_rows().is_empty() {
+            assert!(line.contains("NO VERB PLAN COMPLETED"), "{line}");
+            assert!(line.contains("unmeasured"), "{line}");
+        }
+    }
+}
