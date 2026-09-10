@@ -37,6 +37,9 @@ echo "qemu rev: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | g
 # ⚠ The CONTENT check, and it must be `vas_changed=` — only the writer-side trigger emits it.
 # `RPCBIND-PUBLISH` is in BOTH builds and would pass vacuously against the old latch.
 echo "WRITER-TRIGGER in binary: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -c 'vas_changed=') (0 ⇒ this is the OLD promote-only latch — STOP, do not grade)"
+# ★★★★★ w406 — the CONTENT check for THIS build: only the refresh-before-complete build emits
+# `MMUINVAL-REFRESH` / `CE-LOCAL-REFRESH`. A stamp is a claim; the string table is what runs.
+echo "W406-REFRESH in binary: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -c 'MMUINVAL-REFRESH\|CE-LOCAL-REFRESH') (0 ⇒ the refresh arms are NOT in this binary — STOP, do not grade)"
 
 if pgrep -x qemu-system-x86 >/dev/null 2>&1; then echo "⊘ a QEMU is running; refusing"; exit 3; fi
 bash "$SRC_DIR/boot_capture.sh" "$tag" > "$BENCH/run_${tag}_driver.log" 2>&1
@@ -76,6 +79,15 @@ echo "[trig]   RPCMAP-PUBLISH (inline, the fix): $(grep -ac "RPCMAP-PUBLISH" "$Q
 echo "[trig]   RPCBIND-PUBLISH lines: $(grep -ac 'RPCBIND-PUBLISH' "$Q")"
 grep -a 'RPCBIND-PUBLISH' "$Q" | head -8 | sed 's/.*kayfabe: /[trig] /' | cut -c1-150
 echo "[trig]   MMUINVAL-PUBLISH lines: $(grep -ac 'MMUINVAL-PUBLISH' "$Q")"
+# ★★★★★ w406 — the two synchronization points the owner named that are NOT a doorbell, each
+# printing its own firing count. `0` on either is "never ran", which is a different finding
+# from "ran and did not help" — three hooks in a row fired zero times before this was printed.
+echo "[w406]   MMUINVAL-REFRESH firings: $(grep -ac 'MMUINVAL-REFRESH #' "$Q")  (the TLB-invalidate arm refreshed BEFORE completing)"
+echo "[w406]   CE-LOCAL-REFRESH firings: $(grep -ac 'CE-LOCAL-REFRESH #' "$Q")  (the UVM emulated channel refreshed BEFORE its release was written)"
+echo "[w406]   MMUINVAL-COMPLETE WITHHELD: $(grep -ac 'MMUINVAL-COMPLETE ⊘ WITHHELD' "$Q")  (a newer trigger arrived mid-refresh; expected 0 — RM serialises)"
+echo "[w406]   CE-LOCAL COMPLETION NOT WRITTEN: $(grep -ac 'COMPLETION NOT WRITTEN' "$Q")  (must be 0: a stranded waiter)"
+echo "[w406]   worst refresh_ms: $(grep -ao 'refresh_ms=[0-9.]*' "$Q" | cut -d= -f2 | sort -n | tail -1)  (the guest spins on TRIGGER for this long)"
+grep -a 'MMUINVAL armed=' "$Q" | tail -1 | grep -ao 'worst_hold_us=[0-9]* over_budget=[0-9]* reentrant=[0-9]*' | sed 's/^/[w406]   invalidate census: /'
 echo "[trig]   PROMOTE-BOUND lines:    $(grep -ac 'PROMOTE-BOUND' "$Q")"
 echo "[xid]    host Xid lines: $(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
 echo "[boot]   arming banners: $(grep -ao 'GUEST-RING arm=[a-z]*\|FB-JOIN arm=[a-z]*\|GR-ROUTE arm=[a-z]*\|PT-SWEEP arm=[a-z]*' "$Q" | sort -u | tr '\n' ' ')"

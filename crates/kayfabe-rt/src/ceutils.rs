@@ -256,6 +256,23 @@ pub struct CeUtilsRun {
     pub dst_bytes_guest_ram: u64,
     /// finishPayload semaphores written, after the bytes.
     pub completions: usize,
+    /// ★★★★★ **Completions RESOLVED but NOT YET WRITTEN** — populated only under
+    /// [`ReleaseTiming::Deferred`], and the caller owes every one of them.
+    ///
+    /// Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call
+    /// or the kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."* The **kernel emulated channel for UVM** is this executor: UVM writes its
+    /// page tables through `LAUNCH_DMA`s served here and then waits on the release that
+    /// follows them. Writing that release inline — as [`run_submission`] does — hands UVM its
+    /// completion BEFORE anything has re-read the tables it just wrote, and the next engine
+    /// the guest rings walks host tables that do not yet describe the mapping (`FAULT_PDE`).
+    ///
+    /// ⊘ These are `ResolvedRelease`s, minted by `resolve_releases` from the guest's own
+    /// pushbuffer and its own page tables — deferring them changes WHEN the guest sees them,
+    /// never WHAT it sees. Nothing here forges a completion: a caller that drops this vector
+    /// has lost a completion the guest is waiting for, which is why the shim writes them
+    /// unconditionally after its refresh and reports the count.
+    pub deferred_releases: Vec<crate::cpu_ce::ResolvedRelease>,
     /// ★ Where the **last** completion landed — its VA, its plane and its plane address.
     /// Carried so a boot can state the `#12` question's answer instead of implying it.
     pub completion_at: Option<(GpuVa, CpuPlane, u64)>,
@@ -292,7 +309,7 @@ impl CeUtilsRun {
     pub fn describe(&self) -> String {
         format!(
             "cpu-ce: {} gp, {} methods, {} launch ({} release-only), {} span, {} B \
-             (dst V:{} B S:{} B{}), {} sem{}",
+             (dst V:{} B S:{} B{}), {} sem{}{}",
             self.entries,
             self.methods,
             self.launches,
@@ -314,6 +331,11 @@ impl CeUtilsRun {
                 )
             },
             self.completions,
+            if self.deferred_releases.is_empty() {
+                String::new()
+            } else {
+                format!(" deferred_releases={}", self.deferred_releases.len())
+            },
             self.completion_at
                 .map_or_else(String::new, |(va, plane, phys)| format!(
                     " fin va=0x{:x} -> {}:0x{phys:x}",
@@ -599,6 +621,50 @@ pub fn run_submission(
     cursor: GpCursor,
     state: MethodState,
 ) -> Result<CeUtilsRun, CeUtilsRefusal> {
+    run_submission_timed(ce, pb, vmm, chan, cursor, state, ReleaseTiming::Inline)
+}
+
+/// ★★★★★ **When the guest gets to SEE each completion this submission releases.**
+///
+/// A real copy engine writes a release when the work before it retires; nothing in between
+/// re-reads the page tables that work may have written. This executor is different in one
+/// way that matters: the work it serves for UVM's kernel channel IS page-table writes, and
+/// the mapping those writes describe must reach the host GPU before the guest — released by
+/// the completion — rings an engine at it. See [`CeUtilsRun::deferred_releases`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseTiming {
+    /// Write every release as it is decoded — the executor's original behaviour.
+    Inline,
+    /// Resolve every release and hand it back in [`CeUtilsRun::deferred_releases`] for the
+    /// caller to write **after** its page-table refresh. The bytes of every `LAUNCH_DMA`
+    /// still move here; only the completion words wait.
+    Deferred,
+}
+
+/// [`run_submission`] with every release DEFERRED — see [`ReleaseTiming::Deferred`].
+///
+/// ⚠ The caller owes `run.deferred_releases` to the guest. A path that takes this and does
+/// not write them has stranded a waiter on a completion that will never come.
+pub fn run_submission_deferring_releases(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+) -> Result<CeUtilsRun, CeUtilsRefusal> {
+    run_submission_timed(ce, pb, vmm, chan, cursor, state, ReleaseTiming::Deferred)
+}
+
+fn run_submission_timed(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+    timing: ReleaseTiming,
+) -> Result<CeUtilsRun, CeUtilsRefusal> {
     let mut last: Option<(GpuVa, CeResolve)> = None;
     let mut run = CeUtilsRun {
         cursor,
@@ -814,6 +880,10 @@ pub fn run_submission(
             // releases and hardware stamps each with the time IT completed, so one sample
             // shared across a run would report a single instant for a sequence of events —
             // the same shape as an end-of-boot census answering a lifetime question.
+            if timing == ReleaseTiming::Deferred {
+                run.deferred_releases.extend(resolved);
+                continue;
+            }
             let now_ns = ce.now_ns();
             run.completions +=
                 crate::cpu_ce::write_resolved_completion(ce.fb(), vmm, &resolved, Some(now_ns))
@@ -906,6 +976,10 @@ pub fn run_submission(
         };
         if let Some(r) = resolved.first() {
             run.completion_at = Some((r.va, r.op.residency.plane, r.op.addr.0));
+        }
+        if timing == ReleaseTiming::Deferred {
+            run.deferred_releases.extend(resolved);
+            continue;
         }
         let now_ns = ce.now_ns();
         run.completions +=

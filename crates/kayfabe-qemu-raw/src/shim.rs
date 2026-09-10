@@ -4960,6 +4960,25 @@ const DEFERRED_LOCAL_LOG_MAX: u64 = 8;
 /// Every deferred doorbell the CE shell executor claimed, process-wide. See
 /// [`DEFERRED_LOCAL_LOG_MAX`].
 static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★★★ **w406 — how many times the TLB-invalidate arm ran the page-table REFRESH before
+/// completing to the guest.** Printed on every firing as `MMUINVAL-REFRESH #n`, so a boot
+/// whose log carries no such line ran a build — or a path — in which the refresh never
+/// happened. A count is the only thing that separates *"never ran"* from *"ran and did not
+/// help"*, and this tree has shipped three hooks that fired zero times in a row.
+static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★★★ **w406 — how many locally-served CE submissions ran the REFRESH before writing the
+/// completion their guest is waiting on.** `CE-LOCAL-REFRESH #n` per firing.
+static CE_LOCAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// What one page-table refresh did — the three settlement passes' own lines, and how long
+/// they took together. See [`SharedDoorbell::refresh_page_tables`].
+struct PtRefresh {
+    /// The `EXEC-WITNESS` / `PT-DECODE` / `PT-SWEEP` fragments, concatenated, exactly as the
+    /// doorbell's `PT-DECODE token=` line prints them.
+    line: String,
+    /// Wall time of the three passes, on the worker.
+    took: std::time::Duration,
+}
 
 #[allow(clippy::needless_pass_by_value)]
 fn doorbell_publish_loop(
@@ -5035,26 +5054,57 @@ fn doorbell_publish_loop(
             continue;
         }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
-            // ★★★★★ **THE BARRIER ARMS THE RESCAN.** The guest has told us its page tables are
-            // committed, so this is the moment the answer is knowable — and the only trigger
-            // that can discover page-table pages we have never seen, which a dirty-bit hint
-            // keyed on KNOWN pt_pages structurally cannot.
+            // ★★★★★ **w406 — THE ORDER IS: SNAPSHOT, REFRESH, PUBLISH, COMPLETE.**
+            //
+            // `seq` is read FIRST. It names the trigger this job answers for; a trigger that
+            // arrives after this read is somebody else's job to complete (see
+            // `MmuInvalidateLog::complete_through`), so a guest whose poll timed out and
+            // re-triggered cannot be released by a publication that never saw its writes.
+            let plane_ref = port.plane.upgrade();
+            let seq = plane_ref.as_ref().map_or(0, |p| p.mmu_inval().issued());
+            // ★★★★★ **THE BARRIER ARMS THE RESCAN — AND THEN RUNS IT.** The guest has told
+            // us its page tables are committed, so this is the moment the answer is knowable,
+            // and the only trigger that can discover page-table pages we have never seen,
+            // which a dirty-bit hint keyed on KNOWN pt_pages structurally cannot.
+            //
+            // ⊘⊘ Before w406 this arm ARMED the rescan and did not RUN it: `arm_rescan_for_gpu`
+            // is `vas.sweep.dirty = true` and nothing else, and the sweep it arms lived only
+            // on the doorbell path. The table was published as it stood BEFORE the guest's
+            // PTE writes were decoded, and the invalidate was completed on top of that — the
+            // owner's rule violated in one line. `[measured w405, run_w405_qemu.log:911-949]`.
             let armed = port.arm_rescan_for_gpu();
-            if armed > 0 {
-                eprintln!(
-                    "kayfabe: MMUINVAL-RESCAN armed={armed} VAS(es) ⇒ re-walk from the root at                      the barrier, rather than guessing which subtree moved"
-                );
-            }
+            let refresh = port.refresh_page_tables();
+            let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Publish;
-            if let Some(line) = ctx.publish_vas_rows(token, None) {
+            let published = ctx.publish_vas_rows(token, None);
+            // ★ One line per firing, and it carries the COUNT: the refresh's three fragments
+            // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
+            // compare what the invalidate found against what the next doorbell finds.
+            eprintln!(
+                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2}{}",
+                refresh.took.as_secs_f64() * 1e3,
+                refresh.line
+            );
+            if let Some(line) = published {
                 eprintln!(
                     "kayfabe: MMUINVAL-PUBLISH (off-vCPU) {}",
                     line.replace("\nkayfabe: ", "  ⏎  ")
                 );
             }
-            if let Some(plane) = port.plane.upgrade() {
-                plane.mmu_inval().complete(plane.clock_now_us());
+            if let Some(plane) = plane_ref
+                && !plane
+                    .mmu_inval()
+                    .complete_through(seq, plane.clock_now_us())
+            {
+                eprintln!(
+                    "kayfabe: MMUINVAL-COMPLETE ⊘ WITHHELD seq={seq} issued={} — a newer \
+                     trigger arrived during this refresh; the guest keeps spinning until \
+                     that trigger's own job has refreshed and published (it is queued \
+                     behind this one)",
+                    plane.mmu_inval().issued()
+                );
             }
             // ★★★★★ **AND NOW THE GUEST MAY PROCEED.** The rows this command bound are on
             // the host, so post the reply that was held for them.
@@ -6069,6 +6119,35 @@ impl SharedDoorbell {
     /// [`kayfabe_rt::device::SharedDevice::arm_rescan_for_gpu`].
     fn arm_rescan_for_gpu(&self) -> usize {
         self.device.arm_rescan_for_gpu(DOORBELL_TARGET_GPU)
+    }
+
+    /// ★★★★★ **w406 — THE PAGE-TABLE REFRESH, AS ONE VERB.** Witness → decode → sweep: the
+    /// same three passes [`SharedDoorbell::ring_inline`] runs as the doorbell's settlement,
+    /// made callable from the two synchronization points that are NOT a doorbell.
+    ///
+    /// Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call
+    /// or the kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."* This is that function. Before it existed the invalidate arm called
+    /// `arm_rescan_for_gpu` — which only sets `vas.sweep.dirty = true` — then published the
+    /// table AS IT WAS and completed the invalidate. The actual re-read of the guest's tables
+    /// ran at the NEXT doorbell, after the guest had already been told its invalidate was
+    /// done. `[measured w404/w405, run_w405_qemu.log:911-949]` the stale-race row
+    /// `0x80c0000000` was bound by the doorbell's own settlement (`:934`) and published six
+    /// lines AFTER the host was rung (`:943` → `:949`); the host CE faulted `FAULT_PDE` at
+    /// exactly that VA.
+    ///
+    /// ⊘ Worker-thread only. Each pass takes and releases its own locks (the plane's, the
+    /// device's) and none of them blocks on the guest; `ring_inline` already runs all three
+    /// from this same thread, so no new lock order is introduced here.
+    fn refresh_page_tables(&self) -> PtRefresh {
+        let t0 = Instant::now();
+        let w = self.witness_executor_fb_pages();
+        let d = self.decode_cpu_pt_writes();
+        let sw = self.sweep_cpu_pt_tables();
+        PtRefresh {
+            line: format!("{w}{d}{sw}"),
+            took: t0.elapsed(),
+        }
     }
 
     fn publish_ctx(&self) -> PublishContext {
@@ -7246,7 +7325,10 @@ impl SharedDoorbell {
         let mut run = |root: &kayfabe_device::ceresolve::VasRoot| {
             plane.ce_session_with_root(root, demand, |ce| {
                 self.device.with_pushbuffer(|pb| {
-                    kayfabe_rt::ceutils::run_submission(ce, pb, vmm, chan, cursor, state)
+                    // ★★★★★ w406 — releases DEFERRED: written below, AFTER the refresh.
+                    kayfabe_rt::ceutils::run_submission_deferring_releases(
+                        ce, pb, vmm, chan, cursor, state,
+                    )
                 })
             })
         };
@@ -7326,7 +7408,7 @@ impl SharedDoorbell {
             ));
         };
         Some(match outcome {
-            Ok(run) => {
+            Ok(mut run) => {
                 // ★★★★★ **w386 — WHAT THE WALK ACTUALLY CONSUMED, in the boot log.**
                 //
                 // `[measured w384, boot `run_w384c_guest_probe`, rev 5756322d]` the whole
@@ -7385,6 +7467,119 @@ impl SharedDoorbell {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .insert(key, run.state);
+                // ★★★★★ **w406 — SYNCHRONIZATION POINT (3): THE KERNEL EMULATED CHANNEL FOR
+                // UVM.** The bytes have moved and the cursor is committed; what the guest is
+                // now waiting on is the release word(s) this run resolved and did NOT write.
+                //
+                // Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC
+                // map call or the kernel emulated channel for UVM after the PTE/PDB page
+                // table refresh function finished."* UVM writes its page tables through the
+                // `LAUNCH_DMA`s this executor just served (`uvm_mmu.c:800-809`: write the
+                // PTEs, `wfi_membar`, `tlb_invalidate_all`, then release), and then waits on
+                // the release. `[measured w405, run_w405_qemu.log:1491-1549]` four such runs
+                // on `proc=0 chan=6` were served and completed inline; the row they described
+                // (`0x9140000000`) was bound at the NEXT doorbell's settlement (`:1535`) and
+                // published six lines AFTER the GR channel was rung (`:1543` → `:1549`);
+                // `GR0_PBDMA0` faulted `FAULT_PDE` at exactly that VA.
+                //
+                // ⇒ Refresh, publish, THEN write the completion. Every lock the run held is
+                // released (`drop(held)` above); the refresh's passes take their own, as they
+                // do on the doorbell path, and the completion is written under a fresh session.
+                let owed = std::mem::take(&mut run.deferred_releases);
+                if !owed.is_empty() {
+                    let n = CE_LOCAL_REFRESH_FIRINGS
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                        + 1;
+                    let refresh = self.refresh_page_tables();
+                    let mut ctx = self.publish_ctx();
+                    ctx.vas_publish = VasPublishArm::Publish;
+                    let published = ctx.publish_vas_rows(token, None);
+                    eprintln!(
+                        "kayfabe: CE-LOCAL-REFRESH #{n} token={token:#010x} proc={} chan={} \
+                         releases_owed={} bytes={} refresh_ms={:.2}{}",
+                        facts.proc.0,
+                        facts.chan.0,
+                        owed.len(),
+                        run.bytes,
+                        refresh.took.as_secs_f64() * 1e3,
+                        refresh.line
+                    );
+                    if let Some(line) = published {
+                        eprintln!(
+                            "kayfabe: CE-LOCAL-PUBLISH token={token:#010x} {}",
+                            line.replace("\nkayfabe: ", "  ⏎  ")
+                        );
+                    }
+                    // ★★★★★ **AND NOW THE GUEST MAY PROCEED** — the rows its writes described
+                    // are on the host, so the release it is polling for is written.
+                    // ⊘ Unconditional once the refresh has run, including when the
+                    // publication found nothing: a withheld release is a stranded waiter,
+                    // and a refresh that found no work does not make its wait correct.
+                    let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                    let written = match (held.as_mut(), root.as_ref()) {
+                        (Some(vmm), Some(root)) => {
+                            Some(plane.ce_session_with_root(root, demand, |ce| {
+                                let now_ns = ce.now_ns();
+                                kayfabe_rt::cpu_ce::write_resolved_completion(
+                                    ce.fb(),
+                                    vmm,
+                                    &owed,
+                                    Some(now_ns),
+                                )
+                            }))
+                        }
+                        // Structurally unreachable — the run above needed both — but a
+                        // `None` here is a stranded waiter and must be said, not unwrapped.
+                        _ => None,
+                    };
+                    drop(held);
+                    match written {
+                        Some(Ok(k)) => run.completions += k,
+                        None => {
+                            eprintln!(
+                                "kayfabe: CE-LOCAL-REFRESH ⊘⊘ COMPLETION NOT WRITTEN \
+                                 token={token:#010x} proc={} chan={} releases_owed={} — the \
+                                 memory plane or the walkable root went away between the run \
+                                 and its completion",
+                                facts.proc.0,
+                                facts.chan.0,
+                                owed.len()
+                            );
+                            return Some(refused(
+                                token,
+                                kayfabe_device::FaultTag("CeLocal::DeferredCompletionNoSession"),
+                                format!(
+                                    "deferred completion had no session to write through{}",
+                                    self.addressing_probe(token)
+                                ),
+                            ));
+                        }
+                        Some(Err(f)) => {
+                            // ⊘⊘ The bytes moved and the cursor is committed, but the guest's
+                            // release was NOT written. Said loudly and refused by name — the
+                            // guest's waiter will time out on this, and the line is what
+                            // separates that from a hang with no cause.
+                            eprintln!(
+                                "kayfabe: CE-LOCAL-REFRESH ⊘⊘ COMPLETION NOT WRITTEN \
+                                 token={token:#010x} proc={} chan={} releases_owed={} {f:?} — \
+                                 the run executed and its cursor is committed, but the \
+                                 guest's release word was refused AFTER the refresh",
+                                facts.proc.0,
+                                facts.chan.0,
+                                owed.len()
+                            );
+                            return Some(refused(
+                                token,
+                                kayfabe_device::Faulted::fault_tag(&f),
+                                format!(
+                                    "deferred completion refused after the page-table \
+                                     refresh: {f:?}{}",
+                                    self.addressing_probe(token)
+                                ),
+                            ));
+                        }
+                    }
+                }
                 kayfabe_device::DoorbellReport::ServedLocally {
                     token,
                     proc: facts.proc.0,

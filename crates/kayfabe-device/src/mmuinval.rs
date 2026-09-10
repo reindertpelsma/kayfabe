@@ -315,6 +315,17 @@ pub struct MmuInvalidateLog {
     inner: Mutex<Inner>,
     /// Counters the poll path bumps, outside the mutex for the same reason `pending` is.
     polls: AtomicU64,
+    /// ★★★ **How many triggers have been ISSUED to a worker** — bumped on every
+    /// [`TriggerAction::Publish`], never on a disarmed or non-trigger write.
+    ///
+    /// The worker snapshots this with [`Self::issued`] when it takes a job and completes
+    /// with [`Self::complete_through`], which clears `pending` **only if no newer trigger
+    /// has arrived since**. RM serialises invalidates under its own lock, so a newer
+    /// trigger during an in-flight publication should not happen — but a guest whose
+    /// poll timed out will issue one, and a completion for the OLD trigger must not release
+    /// the guest from the NEW one before its own publication has run. That is the exact
+    /// ordering this whole plane exists to respect, so it is enforced rather than assumed.
+    issued: AtomicU64,
 }
 
 impl Default for MmuInvalidateLog {
@@ -333,6 +344,7 @@ impl MmuInvalidateLog {
             armed: AtomicBool::new(false),
             inner: Mutex::new(Inner::default()),
             polls: AtomicU64::new(0),
+            issued: AtomicU64::new(0),
         }
     }
 
@@ -415,7 +427,30 @@ impl MmuInvalidateLog {
             g.snap.reentrant += 1;
         }
         g.pending_since_us = Some(now_us);
+        self.issued.fetch_add(1, Ordering::AcqRel);
         (inv, TriggerAction::Publish)
+    }
+
+    /// The number of triggers handed to a worker so far. Snapshot it when a job is TAKEN
+    /// and pass it to [`Self::complete_through`] when that job's publication has run.
+    #[must_use]
+    pub fn issued(&self) -> u64 {
+        self.issued.load(Ordering::Acquire)
+    }
+
+    /// ★★★★★ **Complete the trigger a worker took at `seq`, and ONLY that one.**
+    ///
+    /// Returns `true` if the guest was released. Returns `false` — and leaves `TRIGGER`
+    /// set — when a newer trigger has been issued since `seq` was read: that trigger's own
+    /// job is queued behind this one and will complete it after its own publication, so the
+    /// guest keeps spinning until the tables IT committed are on the host. ⊘ A `false` here
+    /// is not a leak: the newer job is the completer, by construction, and it prints.
+    pub fn complete_through(&self, seq: u64, now_us: u64) -> bool {
+        if self.issued.load(Ordering::Acquire) != seq {
+            return false;
+        }
+        self.complete(now_us);
+        true
     }
 
     /// ★★★★★ **The completion.** Clears `TRIGGER` so the guest's poll returns.
@@ -622,6 +657,29 @@ mod tests {
         assert_eq!(s.worst_hold_us, 2_000);
         assert_eq!(s.over_budget, 0);
         assert_eq!(s.triggers, 1);
+    }
+
+    /// ★★★★★ **A completion for an OLD trigger must not release the guest from a NEW one.**
+    ///
+    /// The worker took trigger #1 (`seq = 1`), and while it was publishing the guest issued
+    /// trigger #2. `complete_through(1)` must leave `TRIGGER` set; only the job that took
+    /// `seq = 2` may clear it.
+    #[test]
+    fn a_stale_completion_does_not_release_a_newer_trigger() {
+        let log = MmuInvalidateLog::new();
+        log.arm();
+        assert_eq!(log.issued(), 0);
+        log.note_trigger(0x8001_0001, 0);
+        let seq1 = log.issued();
+        assert_eq!(seq1, 1);
+        // the guest's poll timed out and it triggered again while #1 was in flight
+        log.note_trigger(0x8001_0001, 10);
+        assert_eq!(log.issued(), 2);
+        assert!(!log.complete_through(seq1, 20), "#1's completion must NOT clear");
+        assert_eq!(log.read_trigger(), 1 << 31, "★ the guest keeps spinning");
+        assert!(log.complete_through(2, 30), "#2's own job clears it");
+        assert_eq!(log.read_trigger(), 0);
+        assert_eq!(log.snapshot().reentrant, 1);
     }
 
     /// ★★★ **Idempotent completion** — the `Drop` guard and a success path may both fire.

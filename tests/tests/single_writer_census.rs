@@ -137,10 +137,23 @@ const WRITE_SURFACE: &[(&str, &str, usize, &str)] = &[
         "crates/kayfabe-rt/src/ceutils.rs",
         "write_resolved_completion(",
         2,
-        "★ THE ONLY TWO PRODUCTION RELEASE SITES IN THE TREE: `run_submission`'s \
-         transfer-NONE arm and the copy launch's carried finishPayload. Both take a \
-         `&[ResolvedRelease]` the resolver minted, both pass `Some(now_ns)`, both run after \
-         every byte of the copy has landed.",
+        "★ THE TWO INLINE PRODUCTION RELEASE SITES: `run_submission`'s transfer-NONE arm \
+         and the copy launch's carried finishPayload. Both take a `&[ResolvedRelease]` the \
+         resolver minted, both pass `Some(now_ns)`, both run after every byte of the copy \
+         has landed. ⊘ Under `ReleaseTiming::Deferred` NEITHER writes: the same resolved \
+         releases are handed back in `CeUtilsRun::deferred_releases` for the third site below.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "write_resolved_completion(",
+        1,
+        "★★★★★ w406 — THE DEFERRED SITE, synchronization point (3): the shell's locally-served \
+         CE arm takes `run_submission_deferring_releases`, runs the page-table refresh and \
+         the publication, and only THEN writes the `ResolvedRelease`s that run minted — the \
+         same values, the same primitive, the same resolve-all → write-all → signal \
+         discipline; only WHEN the guest sees them moves. Owner, 2026-09-10: *\"only return \
+         from … the kernel emulated channel for UVM after the PTE/PDB page table refresh \
+         function finished.\"* It writes nothing the resolver did not mint.",
     ),
     (
         "crates/kayfabe-rt/src/cpu_ce.rs",
