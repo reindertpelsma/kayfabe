@@ -860,6 +860,14 @@ pub struct SharedDevice {
     /// there would block under a lock on a vCPU — both of the owner's invariants at once. The
     /// spawn latch beside it exists for the same reason and drains at the same place.
     promote_binds: std::sync::atomic::AtomicU64,
+    /// ★★★ The publication watermark: the last-published `AddressTable::generation` per VAS.
+    /// See [`SharedDevice::take_table_changes`] for why the trigger lives here and not in a
+    /// handler. ⊘ A `Mutex` and not an atomic because the unit of comparison is per-VAS, and
+    /// a single counter is exactly the summing that two opposite moves can cancel.
+    /// ⊘ `Leaf` rank — this lock is taken with NOTHING else held (the `state` read is
+    /// collected and dropped first), which is precisely what `Leaf` asserts. The rank checker
+    /// then makes that a checked property rather than a comment.
+    published_gen: RankedMutex<kayfabe_device::pubmark::PublicationWatermark>,
     /// ★★★ **The isolate factory, reachable with NO lock held** (R1, `l1_concurrency.md`
     /// §3.3) — a clone of the `Arc` the wrapped `Gpu` was realized with, so there is one
     /// factory and this is a second handle on it, never a second factory.
@@ -1232,6 +1240,10 @@ impl SharedDevice {
             mode,
             pool: PoolGate::default(),
             promote_binds: std::sync::atomic::AtomicU64::new(0),
+            published_gen: RankedMutex::new(
+                LockRank::Leaf,
+                kayfabe_device::pubmark::PublicationWatermark::new(),
+            ),
             spawner,
             state: RankedRwLock::new(
                 LockRank::Device,
@@ -4019,6 +4031,55 @@ impl SharedDevice {
     /// ⊘ It sets `dirty` rather than resetting `sweeps`: `dirty` is the "look again" signal and
     /// `sweeps == 0` means "never established anything". Conflating them would make every
     /// barrier look like a first sight.
+    /// ★★★★★ **THE PUBLICATION TRIGGER, MOVED FROM A HANDLER TO THE WRITERS.**
+    ///
+    /// Returns how many VAS tables have changed since the last call, and re-watermarks.
+    ///
+    /// ⊘ **Why this replaces [`Self::take_promote_binds`] as the trigger.** That latch is set
+    /// by exactly one handler — `GPU_PROMOTE_CTX` — so it fired **4 times in a boot** and every
+    /// other way a row enters a VAS published nothing at all. RM map RPCs, UVM external
+    /// allocation maps and the parked-promote re-drive are all writers, and none of them
+    /// latched.
+    ///
+    /// ★ That gap was invisible while **leg 8** existed, because leg 8 re-published the whole
+    /// VAS **on every doorbell** — thousands of times a boot. It was not a notification; it was
+    /// a **poll**, and a poll hides the incompleteness of every real trigger underneath it.
+    /// Deleting it (owner: *"no vas publish in doorbells"*) was right, and it exposed that
+    /// `P3 rpc-bind` had been riding on the poll rather than on the trigger.
+    ///
+    /// ⊘ **This is the owner's own ruling applied** — *"there is no universal publish trigger …
+    /// enumerate WRITERS, not SIGNALS"*. [`kayfabe_mmu::AddressTable::generation`] IS the
+    /// writer-side fact: `bind` and `unbind` move it, a **refused** bind does not, and
+    /// `taddr_generation_moves_exactly_on_a_content_change` has pinned that since w318. So a
+    /// table whose generation moved has new rows to publish, whichever call put them there,
+    /// and one that did not is genuinely clean rather than merely unvisited.
+    ///
+    /// ⚠ Runs on a vCPU, so it does exactly the work the invariants allow under a lock: a walk
+    /// over single-digit-to-tens of VASes reading one `u64` each. No syscall, no allocation of
+    /// consequence, nothing blocking. The publication itself is still the worker's job.
+    pub fn take_table_changes(&self) -> usize {
+        // ⊘ Two passes, deliberately NOT nested. Collecting under `state` and then comparing
+        // under the watermark means the two locks are never held at once, so no ordering
+        // between them can exist to get wrong later — which is what the `Leaf` rank asserts.
+        let mut observed: Vec<(kayfabe_device::pubmark::VasKey, u64)> = Vec::new();
+        {
+            let st = self.state.read();
+            let mut scan = |p: &kayfabe_core::gpu::Proc| {
+                for vas in p.vases.values() {
+                    observed.push((
+                        (p.id.0, vas.gpu.0, vas.pdb.0),
+                        vas.table.generation(),
+                    ));
+                }
+            };
+            scan(&st.system.lock());
+            for cell in st.procs.values() {
+                scan(&cell.lock());
+            }
+        }
+        self.published_gen.lock().take_changed(&observed)
+    }
+
     pub fn arm_rescan_for_gpu(&self, gpu: GpuId) -> usize {
         let mut armed = 0usize;
         let mut st = self.state.write();
@@ -7069,3 +7130,4 @@ impl CeChannelFacts {
         self.engine.name()
     }
 }
+

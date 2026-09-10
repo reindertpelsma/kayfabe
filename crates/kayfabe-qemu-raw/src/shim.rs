@@ -14454,12 +14454,33 @@ impl Regs {
         // held, so it cannot publish there. It latches instead, and this is the first place
         // the guard is down — the same place the isolate-spawn latch drains, for the same
         // reason. ⊘ Offered to the lane rather than run here: this is still a vCPU.
-        let binds = self.device.take_promote_binds();
-        if binds > 0 {
+        // ⊘⊘ **THE TRIGGER IS THE WRITER, NOT THE HANDLER — corrected 2026-09-10 (w401).**
+        //
+        // This used to read `take_promote_binds()`, a latch set by exactly ONE handler
+        // (`GPU_PROMOTE_CTX`). It fired **4 times in a boot**, and every other way a row
+        // enters a VAS — RM map RPCs, UVM external allocation maps, the parked-promote
+        // re-drive — published nothing at all. `P3 rpc-bind` went red the moment **leg 8**
+        // was deleted, and this is why: leg 8 re-published the whole VAS **on every
+        // doorbell**, so it was a POLL, and a poll hides the incompleteness of every real
+        // trigger beneath it. The rung was riding on the poll.
+        //
+        // ★ [`SharedDevice::take_table_changes`] asks the writers instead:
+        // `AddressTable::generation` moves on a bind and on an unbind, and NOT on a refused
+        // bind (`taddr_generation_moves_exactly_on_a_content_change`, w318). Owner's ruling,
+        // applied: *"there is no universal publish trigger ⇒ enumerate WRITERS, not SIGNALS."*
+        //
+        // ⊘ The promote latch is still drained, and drained UNCONDITIONALLY — it feeds the
+        // `PROMOTE-BOUND` accounting. It is simply no longer what decides to publish.
+        let promoted = self.device.take_promote_binds();
+        let changed = self.device.take_table_changes();
+        if changed > 0 {
             let _ = self
                 .pubqueue
-                .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(binds));
+                .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(
+                    changed as u64,
+                ));
         }
+        let _ = promoted;
         kft.mark("rpcbind_offer");
         // ★★★★★ **w288 — AND IT MUST ALSO BE THE LINE ABOVE THE DRAIN**, for leg A1's exact
         // reason one field over: the drain births the host channel, and `hObjectError` is a
