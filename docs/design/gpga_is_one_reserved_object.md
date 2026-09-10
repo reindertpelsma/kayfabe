@@ -195,6 +195,60 @@ promotes at least one new page and the page set is finite, and because the walk 
 cycles and dangling pointers. ⚠ An unbounded loop here hangs the invalidate the guest is waiting
 on — the one place we cannot afford one.
 
+### ⚠ THERE IS NO GLOBAL QUIESCENCE — scope the refresh to the trigger's address space
+
+`[verified 2026-09-11, ogkm-580]` **UVM and RM serialise independently.** `uvm_mmu.c` contains
+**no** RM interface call — no `rmapi`, no `nvUvmInterface`, no `rm_gpu_ops` — and does all
+page-tree work under its own mutex (10 sites). RM uses the GPU group lock. Neither knows about
+the other's.
+
+| trigger | caller holds | excludes | does **NOT** exclude |
+|---|---|---|---|
+| RM map call | RM GPU group lock | other RM page-table work | **UVM editing any of its trees** |
+| UVM kernel channel | that tree's mutex | edits to **that** tree | RM work; UVM's other trees |
+| TLB invalidate | whichever subsystem issued it | that subsystem's own | the other subsystem entirely |
+
+⊘ So RM can sit blocked on our RPC holding its lock while UVM edits trees throughout. ⇒ **A
+GLOBAL refresh has no safe window.** Only the address space named by the trigger is quiesced.
+
+★ **Scope the refresh to that address space.** Every trigger names one — the invalidate carries
+its PDB, the map call names its space. What we give up is noticing changes nobody invalidated,
+which is exactly right: a change nobody invalidated is one the guest has not yet asked the GPU
+to honour. ⊘ The two subsystems own **disjoint** spaces (UVM manages the externally-owned ones,
+RM does not walk them), so scoping leaves no gap where both could edit the same tables.
+
+### The invalidate also carries a DEPTH, and we discard it
+
+`tlb_invalidate_all(push, pdb_address, invalidate_depth, membar)` — UVM computes the depth from
+the shallowest directory it touched (`dir->host_parent->depth` when linking, `dir->depth` when
+freeing) and asserts it non-negative. ⇒ **Free information from the guest about the extent of
+its own change**: re-walk from that depth, and everything above it needs neither promotion nor
+re-reading.
+
+### Root identity comes from the RPC path; root CONTENTS from the walk
+
+A page directory base **never arrives by invalidation**. It is `SetPageDir` for a normal space,
+`UPDATE_BAR_PDE` for BAR2, and for BAR1 a number **we publish**. ⇒ The root never needs the
+"assume dirty" treatment unpromoted video-memory pages need — it changes only on an observable
+event. ⚠ And conflating the two sources is what produced the zero-`bar1PdeBase` bug: a wrong
+root makes every walk from it read the wrong memory, and **no invalidate would ever correct it.**
+
+### ★ PRAMIN is excluded from demotion condition (2) — verified, not assumed
+
+`[verified 2026-09-11]` `memmgrGetMemTransferType` has exactly ONE path returning
+`TRANSFER_TYPE_BAR0`, guarded by `IS_SIMULATION(pGpu)` — *"significantly faster on fmodel …
+because of the backdoor memory reads and writes"*. **On silicon that branch cannot run.**
+Everything else goes to a processor copy, the copy engine, or GSP DMA.
+
+⇒ The exclusion rests on the driver's control flow, not on *"it would not do that during an
+invalidate"*. ⚠ Two caveats: firmware and early boot are a different regime (our own capture
+sees heavy BAR0-window traffic there), and the guard is a *simulation* check rather than a
+post-init one, so a future driver could widen it. Assert it rather than comment it.
+
+⊘ **BAR2 is NOT excluded.** It is a live transfer path on real hardware, so excluding it would
+rest purely on timing. It does not need an exception anyway: if the table is genuinely unused,
+its BAR2 mapping goes with it.
+
 ### Exclusion, not protection
 
 One refresh runs at a time, under a lock that **a vCPU never takes** and that may block. ⊘ It
