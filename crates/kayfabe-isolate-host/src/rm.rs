@@ -4529,39 +4529,72 @@ impl HostRmBackend {
         Ok((took, acc))
     }
 
-    /// ★★★ **Throughput at one buffer size, repeated to a fixed total** — the owner's sweep.
+    /// ★★★★★ **THE READ SWEEP, done properly: ONE object, ONE mapping, copies of varying size.**
     ///
-    /// Allocates `chunk` bytes, maps once, and reads it `reps` times, returning the elapsed
-    /// time for `chunk * reps` bytes. ⊘ The mapping is made ONCE and reused: mapping cost is a
-    /// per-object constant and folding it into a throughput figure would make small chunks
-    /// look worse for a reason that is not the transfer.
+    /// Owner, correcting the first attempt twice over: *"you should not measure allocation
+    /// time … You can just do one RM object and then test different sizes of memcpy on it
+    /// using MMIO"*, and *"initialize the whole thing with /dev/urandom for a good test"*.
+    ///
+    /// Both corrections were right and the first sweep was wrong on both counts:
+    ///
+    /// - It allocated and mapped **per row**, so allocation and per-mapping locality were
+    ///   inside every number. Smaller rows looked slower partly for that reason.
+    /// - Every access was an 8-byte load whatever the "chunk size" was, so the row size
+    ///   changed only the LOOP STRUCTURE. It barely measured transfer size at all.
+    ///
+    /// This allocates once, maps once, fills with **random bytes**, and then copies at each
+    /// width. ⊘ Random fill matters: a device that returns zeros for never-written memory, or
+    /// a bus that compresses a repeating pattern, would make a read of an untouched object
+    /// look faster than a read of real page tables. The checksum is returned so the work
+    /// cannot be optimised away.
+    ///
+    /// Returns `(chunk_bytes, elapsed, checksum)` per row.
     ///
     /// # Errors
-    /// Whatever the allocation or mapping refused with.
-    pub fn time_vidmem_chunked(
+    /// Whatever the allocation, mapping, fill or a copy refused with.
+    pub fn sweep_vidmem_reads(
         &self,
-        chunk: u64,
-        reps: u64,
-    ) -> Result<(std::time::Duration, u64), RmError> {
-        let raw = self.conn.alloc_device_local(chunk)?;
-        let (node, map) = self.conn.map_cpu(raw, chunk, CachePolicy::WriteCombining)?;
-        let mut acc = 0u64;
-        let start = std::time::Instant::now();
-        for _ in 0..reps {
-            let mut off = 0u64;
-            while off + 8 <= chunk {
-                acc = acc.wrapping_add(
-                    map.load_u64(HostOffset::new(off))
-                        .map_err(|e| region_error(&e))?,
-                );
-                off += 8;
-            }
+        object_len: u64,
+        chunks: &[u64],
+    ) -> Result<Vec<(u64, std::time::Duration, u64)>, RmError> {
+        let raw = self.conn.alloc_device_local(object_len)?;
+        let (node, map) = self.conn.map_cpu(raw, object_len, CachePolicy::WriteCombining)?;
+
+        // ⊘ Fill with randomness, in page-sized bursts. Writes to write-combining memory are
+        // buffered and fast; it is the READ side this measures.
+        // ⊘ A `splitmix64` step, not `getrandom`: the property we need is *"not a repeating
+        // pattern a bus or a device could compress or shortcut"*, not cryptographic quality —
+        // and a deterministic seed makes a surprising result reproducible.
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut off = 0u64;
+        while off + 8 <= object_len {
+            x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            map.store_u64(HostOffset::new(off), z ^ (z >> 31))
+                .map_err(|e| region_error(&e))?;
+            off += 8;
         }
-        let took = start.elapsed();
+
+        let mut out = Vec::new();
+        for &chunk in chunks {
+            let mut buf = vec![0u8; usize::try_from(chunk).unwrap_or(0)];
+            let mut acc = 0u64;
+            let start = std::time::Instant::now();
+            let mut at = 0u64;
+            while at + chunk <= object_len {
+                map.copy_out(HostOffset::new(at), &mut buf)
+                    .map_err(|e| region_error(&e))?;
+                acc = acc.wrapping_add(u64::from(buf[0])).wrapping_add(u64::from(buf[buf.len() - 1]));
+                at += chunk;
+            }
+            out.push((chunk, start.elapsed(), acc));
+        }
         drop(map);
         drop(node);
         let _ = raw;
-        Ok((took, acc))
+        Ok(out)
     }
 
     /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
