@@ -58,7 +58,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kayfabe_arch::fault::ErrorNotifier;
 use kayfabe_arch::ids::{ClassId, GpuId, GpuVa, HClient, HObject, Pdb};
-use kayfabe_arch::{Arch, ClientKind, ObjectKind, VaSpaceRole};
+use kayfabe_arch::{Aperture, Arch, ClientKind, ObjectKind, VaSpaceRole};
 
 /// Global identity of an RM *handle*: handles are **per-client namespaces** (two
 /// processes routinely present identical `HObject` values — #14 round 1), so a
@@ -675,6 +675,29 @@ pub enum RmEvent {
         vaspace: HObject,
         /// The declared page-directory base.
         pdb: Pdb,
+        /// ★★★★★ **WHICH ADDRESS SPACE `pdb` IS IN.**
+        ///
+        /// `[found 2026-09-10]` this field's absence was written down as a bug *and then marked
+        /// resolved without the code changing*. The original note said the aperture *"is
+        /// dropped … so a vidmem-rooted and a sysmem-rooted page directory become the same
+        /// event"* and named its own expiry — *"the day a walker follows a PDB it must know
+        /// whether the address is a framebuffer offset or a guest-physical address"* — and a
+        /// later paragraph declared that day arrived while `RmEvent::SetPageDir` still carried
+        /// only the address.
+        ///
+        /// ⇒ The walker then had no way to know, so `plan_pt_sweep` hardcoded
+        /// `Aperture::Vidmem` for every root. A sysmem-rooted VAS is read out of the
+        /// framebuffer, decodes as a page of invalid entries, and yields nothing reachable —
+        /// silently, because a wrong-aperture read SUCCEEDS.
+        ///
+        /// ⊘ It was never a structural limit. `RmEvent` is ours; the aperture was decoded
+        /// correctly at the wire by `PdbAperture::from_flags` and discarded one layer later.
+        /// This is the field that was missing.
+        /// ⊘ `None` means the guest published a value we do not understand
+        /// (`PdbAperture::Undefined(n)`). It must NOT collapse to vidmem: defaulting an
+        /// aperture you were told is exactly the defect above, and a walker that guesses reads
+        /// the wrong memory and reports success.
+        pdb_aperture: Option<Aperture>,
     },
     /// `RM_MAP_MEMORY_DMA` (NVOS46) — the RPC/control bind-time transport that maps a
     /// MEMORY resource into a VASpace at `va` for `len` bytes (from `offset` into the
@@ -805,6 +828,11 @@ struct Resource {
     /// A property of the RESOURCE, not of any one handle — so it survives the origin
     /// handle's free as long as a dup keeps the resource alive. Last declaration wins.
     pdb: Option<Pdb>,
+    /// ★★★ Which address space [`Self::pdb`] is in. `None` = not yet published, or published
+    /// as a value we do not understand (`PdbAperture::Undefined`). Either way a walker must
+    /// REFUSE rather than assume vidmem — see `RmEvent::SetPageDir::pdb_aperture` for what
+    /// assuming cost.
+    pdb_aperture: Option<Aperture>,
     /// ★ Cached GPU target (`multi_gpu_and_mig.md`): resolved from this resource's
     /// `Device` ancestor's `deviceInstance` the moment it becomes resolvable, then
     /// STICKY — a property of the resource that survives the origin handle's (and its
@@ -1761,6 +1789,7 @@ impl RmGraph {
                                 node,
                                 refs: BTreeSet::from([key]),
                                 pdb: None,
+                                pdb_aperture: None,
                                 gpu: None,
                                 map_refs: 0,
                                 owner_kind,
@@ -1918,6 +1947,7 @@ impl RmGraph {
                 client,
                 vaspace,
                 pdb,
+                pdb_aperture,
             } => {
                 // Re-binding a VASpace to a new PDB is protocol-legal
                 // (UNSET/SET_PAGE_DIRECTORY); last declaration wins. The PDB belongs to
@@ -1930,6 +1960,12 @@ impl RmGraph {
                             .get_mut(&id)
                             .expect("resource_of returned a live id")
                             .pdb = Some(pdb);
+                        // ★ Carried beside the address, so a walker can tell a framebuffer
+                        // offset from a guest-physical one. See the field's doc.
+                        self.resources
+                            .get_mut(&id)
+                            .expect("resource_of returned a live id")
+                            .pdb_aperture = pdb_aperture;
                         // Any mapping already installed against this VAS learns the PDB
                         // now (a MAP_MEMORY_DMA that preceded SET_PAGE_DIRECTORY).
                         for (mk, mapping) in self.mappings.iter_mut() {

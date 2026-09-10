@@ -473,6 +473,28 @@ pub enum PdbAperture {
 }
 
 impl PdbAperture {
+    /// ★★★★★ **The one translation from the wire's aperture to the domain's.**
+    ///
+    /// ⊘ `None` for [`PdbAperture::Undefined`] — *"the guest published a value we do not
+    /// understand"* — and **never** a fold to vidmem. This variant's own doc says why: *"folding
+    /// is how a new aperture silently becomes 'vidmem' and every walk from that PDB reads the
+    /// wrong memory."*
+    ///
+    /// ⊘ A function and not an inline `match`, because it has two callers and the first draft
+    /// of this change wrote the mapping out twice. Two copies of a translation are two things
+    /// that can disagree, and this tree has spent a day on exactly that shape — nine `selected_*`
+    /// helpers each restating a default until one of them drifted.
+    #[must_use]
+    pub fn to_domain(self) -> Option<kayfabe_arch::Aperture> {
+        match self {
+            Self::Vidmem => Some(kayfabe_arch::Aperture::Vidmem),
+            Self::SysmemCoherent => Some(kayfabe_arch::Aperture::SysmemCoherent),
+            Self::SysmemNoncoherent => Some(kayfabe_arch::Aperture::SysmemNonCoherent),
+            Self::Undefined(_) => None,
+        }
+    }
+
+
     /// Decode from the two-bit aperture field.
     #[must_use]
     pub fn from_flags(flags: u32) -> Self {
@@ -943,5 +965,68 @@ mod tests {
                 available: 4096
             })
         );
+    }
+}
+
+#[cfg(test)]
+mod the_pdb_aperture_must_not_fold_into_a_default {
+    //! ★★★★★ Owner, 2026-09-10: *"test what you do as well."*
+    //!
+    //! `RmEvent::SetPageDir` carried only the ADDRESS, so a vidmem-rooted and a sysmem-rooted
+    //! page directory arrived as the same event and `plan_pt_sweep` hardcoded
+    //! `Aperture::Vidmem` for every root. The tree had written that down as a bug, named its own
+    //! expiry — *"the day a walker follows a PDB it must know whether the address is a
+    //! framebuffer offset or a guest-physical address"* — and then **marked it resolved while
+    //! the field was still missing**.
+    //!
+    //! These pin the translation so it cannot silently regress to that.
+    use super::*;
+
+    #[test]
+    fn each_defined_aperture_maps_to_its_own_domain_value() {
+        assert_eq!(
+            PdbAperture::Vidmem.to_domain(),
+            Some(kayfabe_arch::Aperture::Vidmem)
+        );
+        assert_eq!(
+            PdbAperture::SysmemCoherent.to_domain(),
+            Some(kayfabe_arch::Aperture::SysmemCoherent)
+        );
+        assert_eq!(
+            PdbAperture::SysmemNoncoherent.to_domain(),
+            Some(kayfabe_arch::Aperture::SysmemNonCoherent)
+        );
+    }
+
+    /// ★★★ THE ONE THAT MATTERS. An aperture NVIDIA has not defined must arrive as "unknown",
+    /// never as vidmem — a walker that assumes reads the wrong memory AND REPORTS SUCCESS,
+    /// because a wrong-aperture read returns zeros and a zero page decodes as "maps nothing".
+    #[test]
+    fn an_undefined_aperture_is_unknown_and_never_vidmem() {
+        for raw in [3u32, 7, 0xffff_ffff] {
+            let a = PdbAperture::Undefined(raw);
+            assert_eq!(
+                a.to_domain(),
+                None,
+                "Undefined({raw}) must be UNKNOWN — folding it into a default is how a new \
+                 aperture silently becomes vidmem"
+            );
+            assert_ne!(a.to_domain(), Some(kayfabe_arch::Aperture::Vidmem));
+        }
+    }
+
+    /// ⊘ And the decode itself, so the two bits are read once and the same way by both callers.
+    #[test]
+    fn the_wire_bits_decode_through_one_function() {
+        assert_eq!(PdbAperture::from_flags(0).to_domain(), Some(kayfabe_arch::Aperture::Vidmem));
+        assert_eq!(
+            PdbAperture::from_flags(1).to_domain(),
+            Some(kayfabe_arch::Aperture::SysmemCoherent)
+        );
+        assert_eq!(
+            PdbAperture::from_flags(2).to_domain(),
+            Some(kayfabe_arch::Aperture::SysmemNonCoherent)
+        );
+        assert_eq!(PdbAperture::from_flags(3).to_domain(), None, "3 is undefined at 580");
     }
 }

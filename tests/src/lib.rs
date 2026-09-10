@@ -430,6 +430,9 @@ impl Scenario {
             client,
             vaspace: vas,
             pdb,
+            // ⊘ Test helpers publish a vidmem root: the default the PRODUCTION path must
+            // never assume. Stated so a reader does not take it as the general case.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
         });
         self.push(RmEvent::Alloc {
             client,
@@ -633,6 +636,9 @@ impl Scenario {
             client,
             vaspace: vas,
             pdb,
+            // ⊘ Test helpers publish a vidmem root: the default the PRODUCTION path must
+            // never assume. Stated so a reader does not take it as the general case.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
         });
         // The cross-client transfer edge: alias the compute VASpace into this client.
         self.push(RmEvent::Dup {
@@ -689,6 +695,9 @@ pub fn ga10x_process(s: &mut Scenario, client: HClient, pdb: Pdb, base: u32) -> 
         client,
         vaspace: vas,
         pdb,
+        // ⊘ Test helpers publish a vidmem root: the default the PRODUCTION path must
+        // never assume. Stated so a reader does not take it as the general case.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
     });
     s.push(RmEvent::Alloc {
         client,

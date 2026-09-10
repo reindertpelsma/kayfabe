@@ -1630,6 +1630,10 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         client,
         vaspace: HObject(p.h_vaspace),
         pdb: Pdb(p.phys_address),
+        // ★ The aperture the guest published, carried instead of discarded. `Undefined` maps to
+        // `None` — "we do not understand this" — never to vidmem, because folding an unknown
+        // into a default is how a walk reads the wrong memory and reports success.
+        pdb_aperture: p.aperture.to_domain(),
     }))
 }
 
@@ -1711,6 +1715,10 @@ fn translate_published_pdes(
         client,
         vaspace,
         pdb: Pdb(root.phys_address),
+        // ★ Same rule on this arm: carry it, never fold `Undefined` into vidmem.
+        // ⊘ Raw `flags` on this arm, so decode it through the same function the other arm's
+        // value came from — never a second, hand-rolled reading of the same two bits.
+        pdb_aperture: kayfabe_abi::view::PdbAperture::from_flags(root.aperture).to_domain(),
     }))
 }
 
