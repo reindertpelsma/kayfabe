@@ -49,7 +49,25 @@ echo "[client] $(grep -a 'THREADS ' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)
 echo "[client] $(grep -a 'MEAN_FALSIFIER' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "--- THE LADDER (P1..Pn), which is what this change is graded on ---"
 grep -aE '^\s+P[0-9]+ ' "$D" | sed 's/^ */[ladder] /' | cut -c1-120
+echo "--- ★★★ THE ORDERING, WHICH IS THE WHOLE GRADE ---"
+# The bug was never coverage: the row WAS published, six lines after the host was rung.
+# So the grade is a COMPARISON OF LINE NUMBERS, not a count of publications.
+pub_ln=$(grep -an "leaf va=0x9140000000" "$Q" | head -1 | cut -d: -f1)
+ring_ln=$(grep -an "DOORBELL-XLATE.*guest_token=0x00000009" "$Q" | head -1 | cut -d: -f1)
+echo "[order]  publish of 0x9140000000 at line ${pub_ln:-NONE};  ring of token 9 at line ${ring_ln:-NONE}"
+if [ -n "$pub_ln" ] && [ -n "$ring_ln" ]; then
+  if [ "$pub_ln" -lt "$ring_ln" ]; then
+    echo "[order]  ✔ PUBLISHED BEFORE THE RING — the page is backed when the engine may fetch"
+  else
+    echo "[order]  ⊘ RUNG FIRST — the engine may fetch a page we have not backed. THE BUG STANDS."
+  fi
+else
+  echo "[order]  ⊘ UNMEASURED — one of the two lines is absent; do not grade this boot"
+fi
+echo "[order]  GR0 fault at 0x91_40000000: $(grep -ac "GR0_PBDMA0.*91_40000000" "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null) (must be 0)"
+echo "[order]  CE0 bystander @0xa0_00000000: $(grep -ac "CE0.*a0_00000000" "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null) (present in GREEN runs too)"
 echo "--- THE TRIGGER ITSELF ---"
+echo "[trig]   RPCMAP-PUBLISH (inline, the fix): $(grep -ac "RPCMAP-PUBLISH" "$Q")"
 echo "[trig]   RPCBIND-PUBLISH lines: $(grep -ac 'RPCBIND-PUBLISH' "$Q")"
 grep -a 'RPCBIND-PUBLISH' "$Q" | head -8 | sed 's/.*kayfabe: /[trig] /' | cut -c1-150
 echo "[trig]   MMUINVAL-PUBLISH lines: $(grep -ac 'MMUINVAL-PUBLISH' "$Q")"

@@ -14486,11 +14486,55 @@ impl Regs {
         let promoted = self.device.take_promote_binds();
         let changed = self.device.take_table_changes();
         if changed > 0 {
-            let _ = self
-                .pubqueue
-                .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(
-                    changed as u64,
-                ));
+            // ★★★★★ **PUBLISH HERE, INLINE, BEFORE THE GUEST GETS ITS REPLY — w401.**
+            //
+            // ⊘⊘ This was an `offer()` onto the publication queue, and that was the bug.
+            // Owner, 2026-09-10, ruling out every doorbell-side fix by construction:
+            //
+            // > *"a real gpu never guarantees that work hasn't already be scheduled before
+            // > the doorbell. its purely a hint to its now scheduled. therefore you can't
+            // > block a doorbell hoping to register before works run. its async by
+            // > construction, so vas publish or any other operation than queing + waking
+            // > for emulated channel looper or forward to host is simply incorrect."*
+            //
+            // ⇒ There is **no window at a doorbell to be inside**. The channel may already
+            // be scheduled and its pushbuffer already fetchable; the write is a hint, not a
+            // barrier. So the page a ring names must be backed **before the guest can make
+            // the work fetchable at all** — which is the RPC map call, not the ring.
+            //
+            // ★ Measured, `run_w401a_qemu.log`: the RPC map call bound the rows at line
+            // ~1286 (`PROMOTE-BOUND … ⇒ the rows the RPC map call put in the table`), the
+            // vCPU rang the host at **1323**, and the queued publication landed at **1329**
+            // — six lines too late. The host GPU then faulted exactly as it should:
+            // `Xid 31 … GR0_PBDMA0 … @ 0x91_40000000 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE`.
+            // In the green boot the same publish ran at 543 and the ring at 632.
+            //
+            // ⚠ **This blocks the vCPU on purpose, and it is the sanctioned kind.** The
+            // owner's 2026-09-09 ruling names three synchronization points that are
+            // blockable, and *"RPC RM map calls"* is the second. `enter_required_on_vcpu`
+            // is the allowlist door precisely so the exceptions stay greppable as a set —
+            // this is not an escape from the invariant, it is the invariant's own carve-out
+            // being used where it was written for.
+            //
+            // ⊘ And it is **after** the plane's rank-0 mutex is down (see the latch's own
+            // note above: *"this is the first place the guard is down"*), so the
+            // no-blocking-under-a-lock invariant holds unchanged.
+            let _blocking = kayfabe_util::lock::BlockingSection::enter_required_on_vcpu(
+                "kayfabe_qemu_raw::rpc_map_call — publish before the reply (sync point 2)",
+            );
+            let mut ctx = self.doorbell_port.publish_ctx();
+            ctx.vas_publish = VasPublishArm::Publish;
+            if let Some(line) = ctx.publish_vas_rows(changed as u64, None) {
+                eprintln!(
+                    "kayfabe: RPCMAP-PUBLISH (inline, pre-reply) vas_changed={changed} {}",
+                    line.replace("\nkayfabe: ", "  ⏎  ")
+                );
+            } else {
+                eprintln!(
+                    "kayfabe: RPCMAP-PUBLISH (inline, pre-reply) vas_changed={changed} ⊘ the \
+                     publisher returned NO LINE — rows changed and nothing was published"
+                );
+            }
         }
         let _ = promoted;
         kft.mark("rpcbind_offer");
