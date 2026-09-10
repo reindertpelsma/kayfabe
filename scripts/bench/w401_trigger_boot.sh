@@ -34,7 +34,9 @@ echo "=== w401 TRIGGER BOOT $(date -Is) tag=$tag ==="
 # ⚠ VERIFY THE BINARY BY CONTENT. The box's HEAD has lied before; a stamp is a claim and the
 # string table is the thing that will actually run.
 echo "qemu rev: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | tr '\n' ' ')"
-echo "trigger present in binary: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -c 'RPCBIND-PUBLISH')"
+# ⚠ The CONTENT check, and it must be `vas_changed=` — only the writer-side trigger emits it.
+# `RPCBIND-PUBLISH` is in BOTH builds and would pass vacuously against the old latch.
+echo "WRITER-TRIGGER in binary: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -c 'vas_changed=') (0 ⇒ this is the OLD promote-only latch — STOP, do not grade)"
 
 if pgrep -x qemu-system-x86 >/dev/null 2>&1; then echo "⊘ a QEMU is running; refusing"; exit 3; fi
 bash "$SRC_DIR/boot_capture.sh" "$tag" > "$BENCH/run_${tag}_driver.log" 2>&1
