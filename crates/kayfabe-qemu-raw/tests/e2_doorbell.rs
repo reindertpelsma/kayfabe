@@ -373,6 +373,9 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
             client: CLIENT,
             vaspace: vas,
             pdb: PDB,
+            // ⊘ The TEST default; the PRODUCTION path must never assume it.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: CLIENT,
@@ -647,6 +650,9 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
                     client: CLIENT,
                     vaspace: vas,
                     pdb: PDB,
+                    // ⊘ The TEST default; the PRODUCTION path must never assume it.
+                    pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
                 },
                 RmEvent::Alloc {
                     client: CLIENT,

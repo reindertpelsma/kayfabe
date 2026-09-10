@@ -1263,6 +1263,11 @@ fn pass_fixture_two_vases() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder
         client: HClient(0xAA),
         vaspace: SECOND_VAS,
         pdb: B_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     for ev in s.events {
         gpu.apply(ev).expect("applies");

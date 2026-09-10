@@ -905,6 +905,11 @@ fn a_range_bound_in_one_vas_does_not_resolve_in_another_on_the_same_proc() {
         client: CLIENT,
         vaspace: SECOND_VAS,
         pdb: B_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     for ev in s.events {
         gpu.apply(ev).expect("applies");

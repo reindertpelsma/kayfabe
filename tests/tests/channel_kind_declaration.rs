@@ -87,6 +87,11 @@ fn kernel_channel(s: &mut Scenario) {
         client: K_CLIENT,
         vaspace: K_VASPACE,
         pdb: K_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     s.push(RmEvent::Alloc {
         client: K_CLIENT,

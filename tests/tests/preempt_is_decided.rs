@@ -98,6 +98,11 @@ fn one_group_gpu() -> (kayfabe_core::gpu::Gpu, HObject) {
             client: CLIENT,
             vaspace: vas,
             pdb: PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: CLIENT,

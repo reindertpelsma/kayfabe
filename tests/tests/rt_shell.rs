@@ -839,7 +839,7 @@ fn threads_smoke_hammers_both_lock_modes_bounded() {
                                 // R1 kept hot: a legal blocking section (no locks
                                 // held here — the natural call site).
                                 85..=89 => {
-                                    let mut section = BlockingSection::enter();
+                                    let mut section = BlockingSection::enter("rt_shell fuzz — a legal blocking section");
                                     section.run(|| ());
                                 }
                                 // RM map churn through apply.

@@ -118,7 +118,17 @@ impl Fb {
 }
 
 impl FbRead for Fb {
-    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+    /// ⊘ `read_in`, not `read`. `read` has a default body that hands `Aperture::Vidmem` to
+    /// this one, so implementing `read` instead would leave the aperture UNCHECKED — which
+    /// is the exact defect the aperture work exists to close: a wrong-aperture read returns
+    /// zeros, a page of zeros decodes as "maps nothing", and the walk reports success.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        // ⊘ This double IS the fabricated framebuffer, so it can serve vidmem and nothing
+        // else. Refusing rather than serving zeros mirrors `plane.rs`, the one production
+        // place that branches on backing.
+        if aperture != kayfabe_arch::Aperture::Vidmem {
+            return false;
+        }
         let at = phys as usize;
         match self.0.get(at..at + buf.len()) {
             Some(s) => {

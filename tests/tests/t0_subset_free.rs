@@ -160,6 +160,11 @@ fn declare_vaspace(device: &SharedDevice, handle: HObject, pdb: Pdb) {
             client: CLIENT,
             vaspace: handle,
             pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         })
         .expect("and binds a page directory to it");
 }

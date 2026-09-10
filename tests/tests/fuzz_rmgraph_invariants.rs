@@ -213,6 +213,11 @@ fn any_event() -> impl Strategy<Value = RmEvent> {
                 client,
                 vaspace,
                 pdb,
+                // ⊘ The TEST default. The PRODUCTION path must never assume it:
+                // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+                // reports success, because a wrong-aperture read returns zeros.
+                pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
             }
         }),
         // Free: of anything — allocated, dup'd, already-freed, or never-seen.
@@ -666,6 +671,11 @@ fn valid_fact_stream() -> impl Strategy<Value = Vec<RmEvent>> {
                 client,
                 vaspace: vas,
                 pdb,
+                // ⊘ The TEST default. The PRODUCTION path must never assume it:
+                // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+                // reports success, because a wrong-aperture read returns zeros.
+                pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
             });
             events.push(RmEvent::Alloc {
                 client,

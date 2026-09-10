@@ -357,6 +357,11 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
             client: c,
             vaspace: vas1,
             pdb: SHARED_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: c,
@@ -373,6 +378,11 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
         client: c,
         vaspace: vas2,
         pdb: SHARED_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     // ★ §12.38 — the EXACT variant, every field. `..` wildcarded the colliding PDB and
     // BOTH claimants, i.e. everything that says *what* collided; the guard's whole job is
@@ -429,6 +439,11 @@ fn security_same_gpu_dup_refused_cross_gpu_identical_allowed() {
             client: d,
             vaspace: dvas,
             pdb: SHARED_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: d,

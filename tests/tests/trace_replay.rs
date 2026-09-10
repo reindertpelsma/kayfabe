@@ -1258,7 +1258,12 @@ fn every_rm_event_converts_to_a_trace_verb_carrying_its_identifying_fields() {
         RmEvent::SetPageDir {
             client: A_CLIENT,
             vaspace: H_VASPACE,
-            pdb: A_PDB
+            pdb: A_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         }
         .as_rm_verb(),
         RmVerb::SetPageDir { pdb: A_PDB }

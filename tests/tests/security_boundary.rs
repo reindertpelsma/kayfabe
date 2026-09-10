@@ -258,7 +258,12 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
         (a_client(), a_handle(), a_pdb()).prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir {
             client,
             vaspace,
-            pdb
+            pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         }),
         (a_client(), a_handle()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
@@ -415,6 +420,11 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         client: a,
         vaspace: HObject(2),
         pdb: Pdb(0xBAD),
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     })
     .unwrap();
 
@@ -423,6 +433,11 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         client: a,
         vaspace: HObject(3),
         pdb: Pdb(0xBAD),
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     assert!(
         matches!(collide, Err(GpuError::Projection(_))),
@@ -486,6 +501,11 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
         client: a,
         vaspace: HObject(2),
         pdb: Pdb(0xA11),
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -590,6 +610,11 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         client: A_CLIENT,
         vaspace: a_vas,
         pdb: B_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
 
     // The squat is refused (B declared B_PDB first) — loud + contained.
@@ -839,6 +864,11 @@ fn b2_pending_pdb_flood_is_capped_loud() {
             // A distinct, never-allocated handle each time → parks forever.
             vaspace: HObject(0x8000_0000 + i as u32),
             pdb: Pdb(0x3400_0000 + i * 0x1000),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         };
         if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
             faulted_at = Some(i);
@@ -899,6 +929,11 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
             client: c,
             vaspace: victim,
             pdb: Pdb(0x9900_0000),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     )
     .expect("the first parked declaration lands");
@@ -910,6 +945,11 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
             client: c,
             vaspace: HObject(0x8000_0000 + i as u32),
             pdb: Pdb(0x3400_0000 + i * 0x1000),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         };
         if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
             faulted_at = Some(i);
@@ -931,6 +971,11 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
                 client: c,
                 vaspace: victim,
                 pdb: Pdb(0x9911_0000),
+                // ⊘ The TEST default. The PRODUCTION path must never assume it:
+                // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+                // reports success, because a wrong-aperture read returns zeros.
+                pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
             },
         ),
         Ok(()),
@@ -1008,6 +1053,11 @@ fn b2_mapping_flood_is_capped_loud() {
             client: c,
             vaspace: HObject(2),
             pdb: Pdb(0x5000),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     )
     .unwrap();
@@ -1238,6 +1288,11 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
             client: c,
             vaspace: fake_vas,
             pdb: Pdb(0x9999),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     )
     .unwrap();
@@ -1499,6 +1554,11 @@ fn b6_gpa_window_exhaustion_is_graceful() {
                 client: c,
                 vaspace: vas,
                 pdb: Pdb(0x1000 * u64::from(i + 1)),
+                // ⊘ The TEST default. The PRODUCTION path must never assume it:
+                // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+                // reports success, because a wrong-aperture read returns zeros.
+                pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
             },
         ];
         for ev in steps {
@@ -2158,6 +2218,11 @@ fn g9_an_undeclared_device_instance_is_unroutable_not_gpu_zero() {
             client: C,
             vaspace: vas,
             pdb: P,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     ] {
         gpu.apply(ev)

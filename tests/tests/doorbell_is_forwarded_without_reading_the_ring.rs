@@ -201,6 +201,11 @@ fn gr_guest_with_unreadable_ring(born: bool) -> (Gpu, MockVmm, SharedRecorder, P
         client: CLIENT,
         vaspace: vas,
         pdb: PDB0,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     s.push(RmEvent::Alloc {
         client: CLIENT,

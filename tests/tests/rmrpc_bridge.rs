@@ -151,6 +151,11 @@ fn expected_set_page_dir(client: u32, vaspace: u32, pdb: u64) -> RmEvent {
         client: HClient(client),
         vaspace: HObject(vaspace),
         pdb: Pdb(pdb),
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     }
 }
 
@@ -2998,6 +3003,11 @@ fn set_page_dir() -> RmEvent {
         client: HClient(cp::C),
         vaspace: HObject(cp::VAS),
         pdb: CP_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     }
 }
 
@@ -6156,6 +6166,11 @@ fn push_process_events(s: &mut Scenario, client: u32, pid: u32, dev: u32, vas: u
         client: HClient(client),
         vaspace: HObject(vas),
         pdb: Pdb(pdb),
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
 }
 

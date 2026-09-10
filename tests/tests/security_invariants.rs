@@ -165,6 +165,11 @@ fn i1_junk_event() -> impl Strategy<Value = RmEvent> {
             client,
             vaspace,
             pdb: Pdb(0x9300_0000 + p),
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         }),
         (jc(), jh()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
@@ -594,7 +599,12 @@ fn i4_hostile_event() -> impl Strategy<Value = RmEvent> {
         (ac(), ah(), apdb()).prop_map(|(client, vaspace, pdb)| RmEvent::SetPageDir {
             client,
             vaspace,
-            pdb
+            pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         }),
         (ac(), ah(), ac(), ah()).prop_map(|(sc, sh, dc, dh)| RmEvent::Dup {
             src: NodeKey::new(sc, sh),
@@ -829,6 +839,11 @@ fn p3_channel_vas_resolution_type_checks_every_hop() {
             client: c,
             vaspace: mem,
             pdb: bait_pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: c,
@@ -923,6 +938,11 @@ fn p4_map_naming_a_non_memory_object_is_a_loud_unbacked_fault_not_a_silent_bind(
             client: c,
             vaspace: real_vas,
             pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         // The bait: a VASpace carrying an attacker-declared mem_phys in its alloc facts.
         RmEvent::Alloc {
@@ -1040,6 +1060,11 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         client: a,
         vaspace: h1,
         pdb: BY_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     })
     .unwrap();
     // 2/3. Alloc h2 as the attacker's own VASpace and give it its OWN pdb.
@@ -1055,6 +1080,11 @@ fn p4_parked_setpagedir_via_dup_alias_cannot_wedge_the_device() {
         client: a,
         vaspace: h2,
         pdb: a_pdb,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     })
     .unwrap();
     // 4. Dup h2 onto h1 — the stale parked SetPageDir now resolves onto h2's resource.
@@ -1142,6 +1172,11 @@ fn p4_parked_unbacked_map_via_dup_alias_cannot_wedge_the_device() {
             client: a,
             vaspace: vas,
             pdb: a_pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: a,

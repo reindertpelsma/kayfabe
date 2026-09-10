@@ -136,6 +136,11 @@ fn uvm_session(s: &mut Scenario) {
         client: UVM,
         vaspace: HObject(0x9000_0010),
         pdb: UVM_PDB,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
 }
 
@@ -1403,6 +1408,11 @@ fn a_recycled_object_handle_projects_identically_in_every_order() {
             client: OBJ_RECYCLED,
             vaspace: h.vaspace,
             pdb: OBJ_SECOND_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     ];
 
@@ -1739,6 +1749,11 @@ fn a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespa
             client: GHOST_NS,
             vaspace: GHOST_HVAS,
             pdb: GHOST_VICTIM_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     ] {
         g.apply(&arch, ev).expect("every event is legal RM traffic");
@@ -1979,6 +1994,11 @@ fn a_ghost_engine_object_never_retypes_the_next_tenants_channel() {
             client: REFINE_NS,
             vaspace: HObject(0x8300_0010),
             pdb: REFINE_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: REFINE_NS,

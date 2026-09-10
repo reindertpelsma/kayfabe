@@ -806,6 +806,11 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
             client,
             vaspace: vas,
             pdb: T0_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         })
         .expect("T0: and binds a page directory to it");
     device
@@ -4698,6 +4703,11 @@ fn a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane() {
             client: SHAPE_B_RECYCLED,
             vaspace: SHAPE_B_VAS,
             pdb: SHAPE_B_ORPHAN_PDB,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         // The alias that will keep the VASpace alive past its namespace's death.
         RmEvent::Dup {
@@ -5093,6 +5103,11 @@ fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
             client: RECYC_OBJ_CLIENT,
             vaspace: RECYC_OBJ_VAS,
             pdb: RECYC_OBJ_PDB2,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
     ] {
         gpu.apply(ev).expect(
@@ -6708,6 +6723,11 @@ fn gpa_workload(
             client,
             vaspace: vas_h,
             pdb,
+            // ⊘ The TEST default. The PRODUCTION path must never assume it:
+            // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+            // reports success, because a wrong-aperture read returns zeros.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         })
         .expect("…and binds a page directory to it");
 
@@ -10044,6 +10064,11 @@ fn n3_push_second_device(
         client,
         vaspace: h.vaspace,
         pdb,
+        // ⊘ The TEST default. The PRODUCTION path must never assume it:
+        // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+        // reports success, because a wrong-aperture read returns zeros.
+        pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
     });
     s.push(RmEvent::Alloc {
         client,

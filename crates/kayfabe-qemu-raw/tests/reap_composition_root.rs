@@ -118,6 +118,9 @@ fn declare_one_proc(
             client: CLIENT,
             vaspace: vas,
             pdb: PDB,
+            // ⊘ The TEST default; the PRODUCTION path must never assume it.
+            pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
         },
         RmEvent::Alloc {
             client: CLIENT,

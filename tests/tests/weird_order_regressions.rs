@@ -495,6 +495,11 @@ fn wo_dup_then_free_src_keeps_dst_alias_alive() {
                 client: COMPUTE,
                 vaspace: HObject(0x5c00_0010),
                 pdb: PDB,
+                // ⊘ The TEST default. The PRODUCTION path must never assume it:
+                // a sysmem-rooted PDB read as vidmem walks the wrong memory and
+                // reports success, because a wrong-aperture read returns zeros.
+                pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
+
             },
         )
         .unwrap();

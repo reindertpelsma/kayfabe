@@ -80,7 +80,14 @@ impl Fb {
 }
 
 impl FbRead for Fb {
-    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+    /// ⊘ `read_in`, not `read`: `read`'s default body hands `Aperture::Vidmem` to this
+    /// one, so implementing `read` would leave the aperture UNCHECKED — and a
+    /// wrong-aperture read returns zeros, which decodes as "maps nothing" and reports
+    /// success. This double is the fabricated framebuffer: it serves vidmem or refuses.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        if aperture != kayfabe_arch::Aperture::Vidmem {
+            return false;
+        }
         match self.pages.get(&phys) {
             Some(v) if v.len() >= buf.len() => {
                 buf.copy_from_slice(&v[..buf.len()]);
