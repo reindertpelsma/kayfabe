@@ -737,26 +737,29 @@ static VB_OVERFLOW: AtomicU64 = AtomicU64::new(0);
 
 /// ★★★★★ **WHAT KIND OF WAIT THIS IS — and this, not duration, is the load-bearing axis.**
 ///
-/// **Owner, 2026-09-09:** *"for a coordinator the only long sleep you should encounter is a
-/// poll/epoll waiting on multiple fds (thats allowed) and is responsive to new input. The only
-/// thing is that its therefore responsive always, rather than block."* Correct, and it
-/// **refutes the duration rule this module shipped an hour earlier**: a healthy idle
-/// `epoll_wait` parked for five seconds would have been reported as the worst offender in the
-/// system, while a 900 µs uninterruptible `ioctl` — the actually harmful thing — passed. A
-/// metric that is loudest where the design is most correct is worse than no metric.
+/// The owner's 2026-09-09 ruling is quoted verbatim in
+/// `docs/design/the_wait_kind_ruling.md`, together with the 2026-09-10 policy it generalises
+/// to. ⊘ It lives there rather than here because it names host readiness machinery by name and
+/// this crate is gated against doing that, even in comments (`l1_concurrency.md` §6.2).
+/// ⚠ Rewording an owner's words to satisfy a lint would be the wrong repair; moving them to
+/// where they are allowed is the right one.
+///
+/// It **refutes the duration rule this module shipped an hour earlier**: a healthy idle
+/// multiplexed wait parked for five seconds would have been reported as the worst offender in
+/// the system, while a 900 µs uninterruptible device call — the actually harmful thing —
+/// passed. A metric that is loudest where the design is most correct is worse than no metric.
 ///
 /// ⇒ The question is not *"how long did you sleep"* but **"could new work have woken you"**.
 ///
-/// ⚠ **One refinement on the owner's phrasing, and it is not pedantry.** *"Reader threads can
-/// sleep to wait for an operation"* — waiting for AN OPERATION TO COMPLETE is the **bad** case:
-/// for that duration the thread is deaf to everything else. What is safe is waiting for
-/// **events**, with that operation's completion multiplexed *alongside* new input on the same
-/// primitive. The two look identical in a stack trace and behave oppositely.
+/// ⚠ **One refinement, and it is not pedantry.** Waiting for AN OPERATION TO COMPLETE is the
+/// **bad** case: for that duration the thread is deaf to everything else. What is safe is
+/// waiting for **events**, with that operation's completion multiplexed *alongside* new input
+/// on the same primitive. The two look identical in a stack trace and behave oppositely.
 /// ⇒ Which is why [`WaitKind::Responsive`] **must name what can wake it**. A wait that cannot
 /// name its wake source is not responsive; it is optimistic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WaitKind {
-    /// A multiplexed, cancellable wait — `epoll`/`poll`/`select`, or a condvar that the
+    /// A multiplexed, cancellable wait over several readiness sources, or a condvar that the
     /// producer of new work also signals. `wakes_on` names the source that can interrupt it.
     ///
     /// ⊘ Unbounded on a [`ThreadClass::Coordinator`] **by design**: that is a coordinator's
@@ -1181,7 +1184,7 @@ mod blocking_severity_is_per_thread_class {
     }
 
     /// ★★★★★ **THE REFUTATION, AS A TEST.** An hour before this existed, the rule was
-    /// DURATION, and it would have called a healthy idle `epoll` the worst offender in the
+    /// DURATION, and it would have called a healthy idle multiplexed wait the worst offender in the
     /// system while passing a 900 µs uninterruptible `ioctl`. This pins the corrected
     /// predicate: responsiveness, not length.
     #[test]
@@ -1190,7 +1193,7 @@ mod blocking_severity_is_per_thread_class {
             declare_thread_class(ThreadClass::Coordinator);
             // The healthy shape: parked far longer than the threshold, but wakeable.
             let long_poll =
-                BlockingSection::responsive("unit-test-epoll", "the submission queue's eventfd");
+                BlockingSection::responsive("unit-test-multiplexed", "the submission queue's wakeup");
             std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US * 3));
             drop(long_poll);
             // The harmful shape: shorter, but nothing could have woken it.
@@ -1206,7 +1209,7 @@ mod blocking_severity_is_per_thread_class {
             "a COMMITTED wait past the bound must offend: {rows:?}"
         );
         assert!(
-            !rows.iter().any(|r| r.0 == "unit-test-epoll"),
+            !rows.iter().any(|r| r.0 == "unit-test-multiplexed"),
             "a RESPONSIVE wait must never offend however long it ran — it is availability, \
              not latency. Flagging it is the bug this test exists to prevent: {rows:?}"
         );

@@ -1494,7 +1494,25 @@ jobs:
           #      writes through no caller pointer at all.
           # ⊘ DIAGNOSTIC-ONLY: nothing in the shipped isolate or shim pins anything; the VMM
           # owns vCPU placement. See `docs/design/w385_the_concurrent_fuzz.md` §2.1.
-          AUDITED="kayfabe-linux-raw:99 kayfabe-qemu-raw:49"
+          # ⊘ 99 → 101, 2026-09-10. `arena_unsafe.rs` landed in 84be84e1 (w393, the BAR
+          # mirror) with TWO relaxations and the bar was not moved with it, so this ratchet
+          # has been RED since 2026-09-09 15:15 and every commit pushed after it was pushed
+          # over a failing gate. ⚠ That is the ratchet working and nobody reading it — the
+          # gate exists precisely so a new relaxation is a reviewed commit rather than a
+          # line inside a debugging diff, and it can only do that if it is RUN.
+          #
+          # The two, audited 2026-09-10 (`arena_unsafe.rs:102` and `:104`):
+          #   `unsafe impl Sync for ArenaInner` — `map` is reached ONLY through `ArenaPage`
+          #     handles, each owning a distinct index for its whole life: issued once under
+          #     the `free` mutex (`alloc` pops the free list or bumps `next`) and returned
+          #     only by its own `Drop`. `ArenaPage` derives `Debug` alone, so it cannot be
+          #     cloned and no two handles can hold one index. ⇒ concurrent accesses through
+          #     different handles address DISJOINT byte ranges of one mapping. `file` is an
+          #     `OwnedFd` plus a length and is never mutated; `pages` is immutable; `free`
+          #     is a `Mutex`. Pinned by `pages_are_disjoint_and_recycled`.
+          #   `unsafe impl Send for ArenaInner` — every field is `Send` on its own
+          #     (`MappedRegion`, `SharedRam`, `Mutex<ArenaFree>`, `u64`).
+          AUDITED="kayfabe-linux-raw:101 kayfabe-qemu-raw:49"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
