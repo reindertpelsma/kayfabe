@@ -4971,10 +4971,22 @@ fn doorbell_publish_loop(
             // that uses them runs.
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Publish;
+            // ⊘ `token` here is the number of VAS TABLES that changed since the last
+            // publication — not a doorbell token. Printed by name because a count of
+            // publications cannot, on its own, separate *"the trigger fired and found
+            // nothing"* from *"the trigger never fired"*, and those need different fixes.
+            // ⚠ It is also this build's CONTENT MARKER: the writer-side trigger is the only
+            // thing that can emit `vas_changed=`, so a boot whose log lacks it ran the old
+            // promote-only latch whatever its revision stamp claims.
             if let Some(line) = ctx.publish_vas_rows(token, None) {
                 eprintln!(
-                    "kayfabe: RPCBIND-PUBLISH (off-vCPU) {}",
+                    "kayfabe: RPCBIND-PUBLISH (off-vCPU) vas_changed={token} {}",
                     line.replace("\nkayfabe: ", "  ⏎  ")
+                );
+            } else {
+                eprintln!(
+                    "kayfabe: RPCBIND-PUBLISH (off-vCPU) vas_changed={token} ⊘ the publisher \
+                     returned NO LINE — the trigger fired and the publication did not run"
                 );
             }
             continue;
