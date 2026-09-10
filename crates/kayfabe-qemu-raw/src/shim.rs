@@ -3132,6 +3132,58 @@ fn report_channel_birth_drain(
     }
 }
 
+/// ★★★★★ **THE CAPABILITY THAT MAKES THE RULE STRUCTURAL.**
+///
+/// A witness that the caller is **the publication worker**, and therefore neither a vCPU nor a
+/// doorbell. [`Regs::publish_vas_rows`] and [`SharedDoorbell::refresh_page_tables`] require one,
+/// so *"do not publish at a doorbell"* and *"nothing blocking on a vCPU"* stop being sentences
+/// somebody has to remember and become **things that do not compile**.
+///
+/// # Why this exists, and it is not defensive programming
+///
+/// The owner has stated the same two constraints repeatedly — *"no vas publish in doorbells"*,
+/// *"vCPU thread no allowance for such blocking things"*, *"doorbell must be simple, it just
+/// reads a table, does ring host + return for passthrough or queues and wake thread for
+/// emulated, all non blocking, and returns"* — and they were re-violated **anyway**, twice in
+/// one day, by two different authors, in code that was reviewed and tested:
+///
+/// - `try_ce_submission`, reached from `ring_inline` (**the doorbell handler**), ran a full
+///   page-table refresh AND a publication. It fired **232 times** in the boot reported as the
+///   raw client passing.
+/// - `Regs::write` (**the MMIO trap, on a vCPU**) opened a blocking section and published.
+///
+/// ⇒ Both were written by someone who had just read the rule. A constraint that lives only in
+/// prose is re-litigated by every new path, and the reviewer who has to notice it is the
+/// weakest link in the system. **The type is the reviewer.**
+///
+/// ⊘ It is deliberately NOT a runtime check. A runtime assert fires on the machine that runs
+/// the boot, in a log nobody greps, hours later — which is precisely how these two shipped.
+/// This one fires in `cargo build`, at the call site, in the author's editor.
+///
+/// ⚠ Minted in exactly ONE place, [`OffVcpu::for_publication_worker`], whose call site is the
+/// worker loop. `grep -n 'for_publication_worker'` IS the audit, and it must return one line.
+#[derive(Debug, Clone, Copy)]
+pub struct OffVcpu(());
+
+impl OffVcpu {
+    /// Mint the witness. ⊘ The ONLY constructor, and the one call site is the publication
+    /// worker's loop. A second call site is the regression this type exists to make visible.
+    ///
+    /// # Panics
+    ///
+    /// If the calling thread is measured as a vCPU — the witness would then be a lie, and a
+    /// lie that compiles is worse than no witness at all.
+    #[must_use]
+    pub fn for_publication_worker() -> Self {
+        assert!(
+            kayfabe_util::lock::current_class() != kayfabe_util::lock::ThreadClass::Vcpu,
+            "OffVcpu minted on a vCPU thread — the witness would be false, and every check \
+             built on it downstream would pass while the invariant it names is broken"
+        );
+        Self(())
+    }
+}
+
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
     /// ★★★★★ **THE OVERRIDE THAT MAKES THE HOLD REACHABLE AT ALL.**
     ///
@@ -4965,6 +5017,11 @@ static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 = std::sync::atomic
 /// whose log carries no such line ran a build — or a path — in which the refresh never
 /// happened. A count is the only thing that separates *"never ran"* from *"ran and did not
 /// help"*, and this tree has shipped three hooks that fired zero times in a row.
+/// How many invalidates found the publication lane full and were completed UNPUBLISHED.
+/// ⊘ Zero on every measured boot. A non-zero value means the lane needs to be bigger or the
+/// worker faster — it does NOT mean the vCPU should do the work.
+static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// ★★★★★ **w406 — how many locally-served CE submissions ran the REFRESH before writing the
 /// completion their guest is waiting on.** `CE-LOCAL-REFRESH #n` per firing.
@@ -4989,6 +5046,11 @@ fn doorbell_publish_loop(
     // ★★★★★ This thread is a WORKER by the owner's 2026-09-09 classification: blocking here
     // is the design working, and the census must not report it as a violation.
     kayfabe_util::lock::declare_thread_class(kayfabe_util::lock::ThreadClass::Worker);
+    // ★★★★★ THE ONE MINT. `grep -n 'for_publication_worker'` is the audit and must return
+    // exactly this line plus the constructor. Everything that may publish or refresh takes
+    // this witness by value, so the doorbell and the trap CANNOT reach those verbs — not by
+    // convention, by type.
+    let off_vcpu = OffVcpu::for_publication_worker();
     while let Some(job) = queue.take_blocking() {
         let token = job.token();
         // ★★★ **THE INVALIDATE ARM — publish, THEN complete.**
@@ -5014,7 +5076,7 @@ fn doorbell_publish_loop(
             // ⚠ It is also this build's CONTENT MARKER: the writer-side trigger is the only
             // thing that can emit `vas_changed=`, so a boot whose log lacks it ran the old
             // promote-only latch whatever its revision stamp claims.
-            if let Some(line) = ctx.publish_vas_rows(token, None) {
+            if let Some(line) = ctx.publish_vas_rows(token, None, off_vcpu) {
                 eprintln!(
                     "kayfabe: RPCBIND-PUBLISH (off-vCPU) vas_changed={token} {}",
                     line.replace("\nkayfabe: ", "  ⏎  ")
@@ -5073,12 +5135,12 @@ fn doorbell_publish_loop(
             // PTE writes were decoded, and the invalidate was completed on top of that — the
             // owner's rule violated in one line. `[measured w405, run_w405_qemu.log:911-949]`.
             let armed = port.arm_rescan_for_gpu();
-            let refresh = port.refresh_page_tables();
+            let refresh = port.refresh_page_tables(off_vcpu);
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Publish;
-            let published = ctx.publish_vas_rows(token, None);
+            let published = ctx.publish_vas_rows(token, None, off_vcpu);
             // ★ One line per firing, and it carries the COUNT: the refresh's three fragments
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
             // compare what the invalidate found against what the next doorbell finds.
@@ -6139,7 +6201,7 @@ impl SharedDoorbell {
     /// ⊘ Worker-thread only. Each pass takes and releases its own locks (the plane's, the
     /// device's) and none of them blocks on the guest; `ring_inline` already runs all three
     /// from this same thread, so no new lock order is introduced here.
-    fn refresh_page_tables(&self) -> PtRefresh {
+    fn refresh_page_tables(&self, _off_vcpu: OffVcpu) -> PtRefresh {
         let t0 = Instant::now();
         let w = self.witness_executor_fb_pages();
         let d = self.decode_cpu_pt_writes();
@@ -7490,26 +7552,38 @@ impl SharedDoorbell {
                     let n = CE_LOCAL_REFRESH_FIRINGS
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                         + 1;
-                    let refresh = self.refresh_page_tables();
-                    let mut ctx = self.publish_ctx();
-                    ctx.vas_publish = VasPublishArm::Publish;
-                    let published = ctx.publish_vas_rows(token, None);
+                    // ⊘⊘⊘ **THE REFRESH AND PUBLICATION ARE DELETED FROM HERE.**
+                    //
+                    // This block sits in `try_ce_submission`, which is reached from
+                    // `ring_inline` — **the doorbell handler**. It ran a full page-table
+                    // refresh AND a publication there, 232 times in the boot reported as the
+                    // raw client passing. Owner, repeatedly and in these words:
+                    //
+                    // > *"doorbell must be simple, it just reads a table, does ring host +
+                    // > return for passthrough or queues and wake thread for emulated, all
+                    // > non blocking, and returns"*
+                    // > *"vas publish or any other operation than queing + waking for
+                    // > emulated channel looper or forward to host is simply incorrect"*
+                    //
+                    // ⚠ The INTENT was right — the owner's third synchronization point, the
+                    // UVM emulated channel, does need its rows on the host before the guest
+                    // proceeds. The PLACE was wrong, and no comment was going to stop the
+                    // next author putting it back. `OffVcpu` now does: this function cannot
+                    // obtain the witness, so it cannot call either verb.
+                    //
+                    // ⊘ **What is NOT solved by deleting it:** sync point (3) now has no
+                    // ordering guarantee at all. That is an honest gap, not a fix — it needs
+                    // its own worker lane carrying the owed releases, the same shape as the
+                    // invalidate's. Recorded rather than papered over.
                     eprintln!(
                         "kayfabe: CE-LOCAL-REFRESH #{n} token={token:#010x} proc={} chan={} \
-                         releases_owed={} bytes={} refresh_ms={:.2}{}",
+                         releases_owed={} bytes={} ⊘ NO REFRESH, NO PUBLISH — a doorbell may \
+                         only queue+wake or forward; sync point (3) needs a worker lane",
                         facts.proc.0,
                         facts.chan.0,
                         owed.len(),
                         run.bytes,
-                        refresh.took.as_secs_f64() * 1e3,
-                        refresh.line
                     );
-                    if let Some(line) = published {
-                        eprintln!(
-                            "kayfabe: CE-LOCAL-PUBLISH token={token:#010x} {}",
-                            line.replace("\nkayfabe: ", "  ⏎  ")
-                        );
-                    }
                     // ★★★★★ **AND NOW THE GUEST MAY PROCEED** — the rows its writes described
                     // are on the host, so the release it is polling for is written.
                     // ⊘ Unconditional once the refresh has run, including when the
@@ -10559,6 +10633,7 @@ impl PublishContext {
         &self,
         token: u64,
         seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+        _off_vcpu: OffVcpu,
     ) -> Option<String> {
         if !self.vas_publish.observes() {
             return None;
@@ -11665,6 +11740,7 @@ impl PublishContext {
         &self,
         token: u64,
         _seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+        _off_vcpu: OffVcpu,
     ) -> Option<String> {
         if !self.vas_publish.observes() {
             return None;
@@ -14657,17 +14733,28 @@ impl Regs {
                     // the version this replaced did NOT go through this marker, so a boot
                     // could hold a vCPU for a whole publication while the census printed
                     // "none declared". A gate only catches what announces itself.
-                    let mut _blocking = kayfabe_util::lock::BlockingSection::enter(
-                        "MMUINVAL fallback: publishing INLINE on the vCPU because the lane                          was full",
+                    // ⊘⊘⊘ **THE INLINE FALLBACK IS DELETED — it published on a vCPU.**
+                    //
+                    // It ran `publish_vas_rows` inside the MMIO trap whenever the lane was
+                    // full, which is the one thing a vCPU may never do. `OffVcpu` now makes
+                    // it not compile, and this is the shape the owner already ruled on
+                    // elsewhere: **an unpublished mapping is legal, a SILENT FALLBACK is
+                    // not.** A fallback that quietly does the forbidden thing under load is
+                    // worse than the load, because it only appears when the system is
+                    // already struggling and it looks like the correct path in every log.
+                    //
+                    // ⚠ It has never fired: the publication queue's own census reads ZERO in
+                    // every column against `cap=4096` on every measured boot. So this arm is
+                    // a **counted refusal**, not a silent degradation, and the guest is
+                    // released rather than parked — an unpublished row surfaces as a fault
+                    // we can see, where a held `TRIGGER` nobody completes is a frozen VM.
+                    LANE_FULL_INVALIDATES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    eprintln!(
+                        "kayfabe: MMUINVAL-LANE-FULL ⊘ REFUSED to publish inline (that would \
+                         be a vCPU publishing). The invalidate completes UNPUBLISHED — any \
+                         row it would have carried is now a FAULT waiting to happen, and \
+                         that is deliberate: visible beats frozen."
                     );
-                    let mut ctx = self.doorbell_port.publish_ctx();
-                    ctx.vas_publish = VasPublishArm::Publish;
-                    if let Some(line) = _blocking.run(|| ctx.publish_vas_rows(val, None)) {
-                        eprintln!(
-                            "kayfabe: MMUINVAL-PUBLISH {}",
-                            line.replace("\nkayfabe: ", "  ⏎  ")
-                        );
-                    }
                     self.plane.mmu_inval().complete(self.plane.clock_now_us());
                 }
                 _ => {}

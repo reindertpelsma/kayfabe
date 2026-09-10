@@ -770,3 +770,37 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
          routing gate and never reaches this path. Saw {ce:?}",
     );
 }
+
+/// ★★★★★ **THE STRUCTURAL GUARD — the constraint as a test, not a sentence.**
+///
+/// The owner has stated the same two rules repeatedly and they were violated anyway, twice in
+/// one day, by two different authors, in reviewed and tested code:
+/// *"no vas publish in doorbells"* and *"vCPU thread no allowance for such blocking things"*.
+///
+/// `OffVcpu` makes both a compile error. This test guards the ONE remaining way to undo that:
+/// minting the witness somewhere new. ⊘ It is a source-text census on purpose — the same shape
+/// as `guest_ring_census` — because the property is *"where may this appear"*, and no runtime
+/// assertion can answer that.
+#[test]
+fn the_publication_capability_is_minted_in_exactly_one_place() {
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
+    )
+    .expect("shim.rs is readable");
+    // ⊘ Comment lines are excluded: the audit is about CODE, and the doc on the constructor
+    // names the function repeatedly on purpose.
+    let mints = src
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .filter(|l| l.contains("for_publication_worker"))
+        .count();
+    assert_eq!(
+        mints, 2,
+        "`OffVcpu::for_publication_worker` must appear exactly twice in code — its own \
+         definition and the ONE call in the publication worker's loop. A third occurrence is \
+         somebody handing the doorbell or a vCPU the right to publish, which is the exact \
+         regression this capability exists to make impossible. If a second worker genuinely \
+         needs it, that is a DECISION: change this number in the same commit and say which \
+         thread it runs on and why it is not a vCPU."
+    );
+}
