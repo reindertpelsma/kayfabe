@@ -94,3 +94,41 @@ run 20+), which is worse than an hour of billing.
 touch /workspace/kf-master/.deadman/beat        # postpone
 vastai destroy instance 50376491 -y             # ★ -y skips the confirmation prompt
 ```
+
+## ★★★★★ THE DEBUG TOOLING ALREADY EXISTS — use it before guessing at CUDA
+
+Owner, 2026-09-11: *"do not forget how valuable your raw client is to get a pass and debug with
+before looking at cuda itself, if you can reproduce raw"*, and that both older trees carry a
+long history of libcuda debugging.
+
+### `/workspace/nvidia-gpu-passthrough/tests/mode2/nvdiff/` — the live differential oracle
+
+| file | what it is |
+|---|---|
+| `nvdiff_shim.c` | **LD_PRELOAD ioctl/mmap recorder**, JSONL. Per call: ordering + thread, the decoded request word, the raw header **BEFORE and AFTER**, and for `RM_CONTROL`/`RM_ALLOC` the out-of-line parameter **pointer, declared size, and bytes on both sides**. ⇒ the nested-pointer case, solved. |
+| `uvm_sizes.h` (+ `gen_uvm_sizes.sh`) | ⚠ **THE SIZE BUG.** UVM ioctl numbers are RAW INTEGERS, not size-encoded: `_IOC_SIZE(0x30000001)` = **12288** against a **16-byte** struct. A first cut recorded ~500 bytes of unrelated stack as "the parameter" and produced **2672 phantom divergences**. Sizes come from the driver headers, never from the request word. |
+| `nvdiff.py` | align + classify — MISSING / EXTRA / SIZE / STATUS / VALUE |
+| `nvd_selftest.sh` | ⚠ **RUN IT BEFORE TRUSTING ANY DIFF.** Checks the differ *detects*, offline, no GPU: it must find exactly **479** divergences (`dev` vs `ctx`) and **5** (`ctx` vs `alloc`). |
+| `nvd_capture.sh`, `nvd_apis_capture.sh`, `nvd_fault_run.sh` | drive a capture |
+| `nvd_phases.py`, `nvd_progress.py`, `nvd_census.py`, `nvd_dma_census.py` | phase / progress / census decoders |
+
+★ Noise floor measured **ZERO** over 12 pairings and 6 stages. ⚠ **Rank divergences by KIND,
+never by index** — the first by index was environmental (the reference host is a five-GPU rig on
+the closed driver).
+
+### `/workspace/nvkvm-pv/tools/` — the Mode-1 sibling's set
+
+`nv_ioctl_trace.c`, `uvm_ioctl_shim.c`, `uvm_backing_probe.cu`, `uvm_sysmem_probe.c`,
+`uvm_va_probe.c`, `ogkm_ctrl_audit.sh`, `abi_derive.sh`. ⊘ Read-only — another agent owns that
+repo.
+
+### The order to work in
+
+1. **Reproduce in the raw client first.** The LLM hangs in CUDA setup with **ZERO doorbells**,
+   and the client already drives channels, memory objects, mappings and copies to a pass. So the
+   gap is what CUDA does that the client does not — a rung, not a hang inside a runtime.
+2. The tree already records the wall sits **above the ioctl boundary**, in a handful of controls
+   only the CUDA runtime issues (~105 ioctls vs the passing driver). That is the list to extend
+   the client with.
+3. Only then reach for `gdb` on libcuda, or debug prints in `ogkm` — both are allowed and both
+   have precedent here.
