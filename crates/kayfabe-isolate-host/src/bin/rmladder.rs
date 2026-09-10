@@ -12152,19 +12152,31 @@ fn main() -> std::process::ExitCode {
         // ★★★ The owner's size sweep: same total bytes, different buffer sizes, so a
         // size-dependent effect separates from a per-access one.
         println!("--- GPGA read sweep (1 GiB total per row, 8-byte accesses) ---");
-        for (chunk_mb, reps) in [(1u64, 1024u64), (10, 102), (100, 10), (1024, 1)] {
-            let chunk = chunk_mb << 20;
+        // ⊘ Sizes in KiB so the small end is expressible. Same ~1 GiB total per row, so a
+        // size-dependent effect separates from a per-access one. ★ The small rows matter
+        // most: a page-table page is 4 KiB, so the 1 KiB and 10 KiB rows are the shape the
+        // sweep ACTUALLY reads, and the megabyte rows are the optimistic bound.
+        for (chunk_kb, reps) in [
+            (1u64, 1_000_000u64),
+            (10, 100_000),
+            (100, 10_000),
+            (1024, 1024),
+            (10 << 10, 102),
+            (100 << 10, 10),
+            (1024 << 10, 1),
+        ] {
+            let chunk = chunk_kb << 10;
             match rm.time_vidmem_chunked(chunk, reps) {
                 Ok((took, _)) => {
                     let total = (chunk * reps) as f64 / (1u64 << 20) as f64;
                     println!(
-                        "GPGA_SWEEP chunk={chunk_mb:>4} MiB x{reps:<5} total={total:>7.0} MiB \
+                        "GPGA_SWEEP chunk={chunk_kb:>7} KiB x{reps:<8} total={total:>7.0} MiB \
                          in {:>7.2} s => {:>7.1} MiB/s",
                         took.as_secs_f64(),
                         total / took.as_secs_f64()
                     );
                 }
-                Err(e) => println!("GPGA_SWEEP chunk={chunk_mb} MiB ⊘ REFUSED {e:?}"),
+                Err(e) => println!("GPGA_SWEEP chunk={chunk_kb} KiB ⊘ REFUSED {e:?}"),
             }
         }
         return std::process::ExitCode::SUCCESS;
