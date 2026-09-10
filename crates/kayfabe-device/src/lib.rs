@@ -56,6 +56,7 @@ pub mod census;
 pub mod ceresolve;
 pub mod cpuintr;
 pub mod doorbell;
+pub mod dropped;
 pub mod faultbuffer;
 pub mod fbwin;
 pub mod gpgaview;

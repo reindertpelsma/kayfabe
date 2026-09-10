@@ -5017,10 +5017,22 @@ static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 = std::sync::atomic
 /// whose log carries no such line ran a build — or a path — in which the refresh never
 /// happened. A count is the only thing that separates *"never ran"* from *"ran and did not
 /// help"*, and this tree has shipped three hooks that fired zero times in a row.
-/// How many invalidates found the publication lane full and were completed UNPUBLISHED.
-/// ⊘ Zero on every measured boot. A non-zero value means the lane needs to be bigger or the
-/// worker faster — it does NOT mean the vCPU should do the work.
+/// How many invalidates found the publication lane full and were dropped in favour of a full
+/// rescan. ⊘ Zero on every measured boot. A non-zero value means the lane needs to be bigger or
+/// the worker faster — it does NOT mean the vCPU should do the work.
 static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ Set when a publication job could not be queued. The next refresh in the worker treats
+/// **every** page directory and page table as dirty, so a dropped notification costs time and
+/// never coverage. Owner's design, 2026-09-10.
+/// How many doorbells found the lane full and were deferred to a full emulated sweep.
+static LANE_FULL_DOORBELLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ The two dropped-signal latches, as a TESTED protocol rather than two loose
+/// `AtomicBool`s. See [`kayfabe_device::dropped::DroppedSignals`] for the owner's rule and for
+/// why the lost-wakeup case is the only bug it can have.
+static DROPPED: kayfabe_device::dropped::DroppedSignals =
+    kayfabe_device::dropped::DroppedSignals::new();
 
 static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// ★★★★★ **w406 — how many locally-served CE submissions ran the REFRESH before writing the
@@ -5135,6 +5147,29 @@ fn doorbell_publish_loop(
             // PTE writes were decoded, and the invalidate was completed on top of that — the
             // owner's rule violated in one line. `[measured w405, run_w405_qemu.log:911-949]`.
             let armed = port.arm_rescan_for_gpu();
+            // ★★★★★ **CONSUME THE DROPPED-SIGNAL FLAGS BEFORE REFRESHING.** A job that could
+            // not be queued left one of these set; honouring it here is what makes the drop
+            // safe. Owner: *"if the queue is full then a flag must be set that the refresh
+            // considers the entirety of PTE/PDB dirty (i.e it rescans everything). then its
+            // correct, only a bit slower on full queue."*
+            //
+            // ⊘ `swap`, not `load`+`store`: two workers must not both think they own the
+            // sweep and both skip it, and a flag set *during* our refresh must survive to the
+            // next pass rather than be cleared by it.
+            if DROPPED.take_full_rescan() {
+                let armed = port.arm_rescan_all_gpus();
+                eprintln!(
+                    "kayfabe: FULL-RESCAN honouring a dropped publication job — {armed} VAS(es) \
+                     marked dirty. ⚠ This is the slow path being CORRECT, not a failure."
+                );
+            }
+            if DROPPED.take_emulated_sweep() {
+                let looped = port.loop_all_emulated_channels();
+                eprintln!(
+                    "kayfabe: FULL-EMULATED-SWEEP honouring a dropped doorbell — {looped} \
+                     emulated channel(s) looped. ⚠ Slower, never less complete."
+                );
+            }
             let refresh = port.refresh_page_tables(off_vcpu);
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
@@ -5511,12 +5546,24 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
     /// (`publication_off_the_bql.md` §5.3). That obligation is the ring reader's and this
     /// rung does not discharge it.
     ///
-    /// # ⊘ THE REFUSAL ARM DEGRADES TO THE STATUS QUO, NEVER TO A DROP
+    /// # ★★★★★ THE REFUSAL ARM ARMS A FULL SWEEP — it does NOT run the body here
     ///
-    /// `Offered::Full` runs the body inline — i.e. exactly what the disarmed arm does — and
-    /// the queue counts it, so a boot can never mistake *"the lane was saturated"* for
-    /// *"the lane was fine"*. A dropped doorbell would be a lost submission; there is no
-    /// arm here that produces one.
+    /// Owner, 2026-09-10: *"Emulated channel doorbells add the channels that are doorbelled to
+    /// the queue. If that queue is full, then the coordinator thread is told to loop all
+    /// emulated channels. For passthrough doorbells no such tracking is needed since we only
+    /// forward them without keeping any state."*
+    ///
+    /// ⊘ This arm used to call `ring_inline` — *"today's behaviour, never worse than the
+    /// status quo"*. That reasoning was wrong in the way that matters: the status quo was
+    /// **executing an emulated channel inside the doorbell**, which is the thing a doorbell
+    /// may never do, so degrading *to* it is degrading into the violation. And it only ever
+    /// happens under load, where it is least affordable and least visible.
+    ///
+    /// ★ The correct degradation is the same shape as the publication lane's: a lost
+    /// NOTIFICATION becomes a conservative FULL SWEEP. The queue carries *"this channel was
+    /// rung"*; losing an entry may cost time and may never cost coverage, because the
+    /// coordinator then loops **every** emulated channel. Nothing is dropped and nothing is
+    /// executed on the vCPU.
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
         if !self.doorbell_async.defers() {
             return self.ring_inline(token);
@@ -5541,9 +5588,22 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
                     queued: false,
                 }
             }
-            // ⊘ Saturated. Run it here — today's behaviour, never worse than the status
-            // quo — and let `PUBQUEUE refused=N` say so.
-            kayfabe_device::pubqueue::Offered::Full => self.ring_inline(token),
+            // ⊘ Saturated. Arm the sweep and RETURN — the coordinator loops every emulated
+            // channel, so this doorbell's channel is covered without the vCPU running it.
+            kayfabe_device::pubqueue::Offered::Full => {
+                LANE_FULL_DOORBELLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                DROPPED.arm_emulated_sweep();
+                eprintln!(
+                    "kayfabe: DOORBELL-LANE-FULL ⊘ not run inline — FULL EMULATED SWEEP armed. \
+                     ⚠ Slower, never less complete, and never on a vCPU."
+                );
+                kayfabe_device::DoorbellReport::Scheduled {
+                    token,
+                    // ⊘ NOT queued: the entry was refused. `false` is the honest value and
+                    // the census must be able to tell a coalesce from a drop-into-sweep.
+                    queued: false,
+                }
+            }
         }
     }
 }
@@ -6181,6 +6241,25 @@ impl SharedDoorbell {
     /// [`kayfabe_rt::device::SharedDevice::arm_rescan_for_gpu`].
     fn arm_rescan_for_gpu(&self) -> usize {
         self.device.arm_rescan_for_gpu(DOORBELL_TARGET_GPU)
+    }
+
+    /// Every VAS on every GPU marked dirty — the answer to a DROPPED publication job.
+    /// See [`kayfabe_rt::device::SharedDevice::arm_rescan_all_gpus`].
+    fn arm_rescan_all_gpus(&self) -> usize {
+        self.device.arm_rescan_all_gpus()
+    }
+
+    /// ★★★ Every EMULATED channel looped — the answer to a DROPPED doorbell.
+    ///
+    /// Owner, 2026-09-10: *"Emulated channel doorbells add the channels that are doorbelled to
+    /// the queue. If that queue is full, then the coordinator thread is told to loop all
+    /// emulated channels. For passthrough doorbells no such tracking is needed since we only
+    /// forward them without keeping any state."*
+    ///
+    /// ⊘ Passthrough channels are deliberately NOT looped: a passthrough doorbell is forwarded
+    /// and keeps no state of ours, so there is nothing a dropped one could have lost.
+    fn loop_all_emulated_channels(&self) -> usize {
+        self.device.loop_all_emulated_channels()
     }
 
     /// ★★★★★ **w406 — THE PAGE-TABLE REFRESH, AS ONE VERB.** Witness → decode → sweep: the
@@ -14737,25 +14816,33 @@ impl Regs {
                     //
                     // It ran `publish_vas_rows` inside the MMIO trap whenever the lane was
                     // full, which is the one thing a vCPU may never do. `OffVcpu` now makes
-                    // it not compile, and this is the shape the owner already ruled on
-                    // elsewhere: **an unpublished mapping is legal, a SILENT FALLBACK is
-                    // not.** A fallback that quietly does the forbidden thing under load is
-                    // worse than the load, because it only appears when the system is
-                    // already struggling and it looks like the correct path in every log.
+                    // that not compile.
                     //
-                    // ⚠ It has never fired: the publication queue's own census reads ZERO in
-                    // every column against `cap=4096` on every measured boot. So this arm is
-                    // a **counted refusal**, not a silent degradation, and the guest is
-                    // released rather than parked — an unpublished row surfaces as a fault
-                    // we can see, where a held `TRIGGER` nobody completes is a frozen VM.
+                    // ★★★★★ **AND DROPPING THE JOB IS SAFE, because of what we set instead.**
+                    // Owner, 2026-09-10: *"if the queue is full then a flag must be set that
+                    // the refresh considers the entirety of PTE/PDB dirty (i.e it rescans
+                    // everything). then its correct, only a bit slower on full queue."*
+                    //
+                    // ⇒ A lost NOTIFICATION becomes a conservative FULL RESCAN. That is the
+                    // right shape for every dropped signal in this design: the queue carries
+                    // *"look at this"*, and losing one may only ever cost time, never
+                    // coverage. ⊘ The old code instead did the forbidden thing under load —
+                    // a fallback that only appears when the system is already struggling and
+                    // looks like the correct path in every log.
+                    //
+                    // ⚠ The invalidate is NOT completed here. It stays pending, and the
+                    // worker's next pass — which is guaranteed to happen, since a FULL queue
+                    // means jobs are already waiting for it — does the full-scope refresh and
+                    // then `complete_through` the current sequence, which releases this one
+                    // too. Completing it here would be releasing the guest ahead of the very
+                    // rescan this flag exists to force.
                     LANE_FULL_INVALIDATES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    DROPPED.arm_full_rescan();
                     eprintln!(
-                        "kayfabe: MMUINVAL-LANE-FULL ⊘ REFUSED to publish inline (that would \
-                         be a vCPU publishing). The invalidate completes UNPUBLISHED — any \
-                         row it would have carried is now a FAULT waiting to happen, and \
-                         that is deliberate: visible beats frozen."
+                        "kayfabe: MMUINVAL-LANE-FULL ⊘ job dropped, FULL RESCAN armed — the \
+                         next refresh treats every PDB/PTE as dirty, so nothing this \
+                         invalidate named can be missed. ⚠ Slower, never less complete."
                     );
-                    self.plane.mmu_inval().complete(self.plane.clock_now_us());
                 }
                 _ => {}
             }

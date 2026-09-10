@@ -4104,6 +4104,57 @@ impl SharedDevice {
         self.published_gen.lock().take_changed(&observed)
     }
 
+    /// ★★★★★ **MARK EVERY VAS ON EVERY GPU DIRTY** — the conservative answer to a dropped
+    /// publication job.
+    ///
+    /// Owner, 2026-09-10: *"if the queue is full then a flag must be set that the refresh
+    /// considers the entirety of PTE/PDB dirty (i.e it rescans everything). then its correct,
+    /// only a bit slower on full queue."*
+    ///
+    /// ⊘ The point is that a lost NOTIFICATION may only ever cost TIME. The queue carries
+    /// *"look at this"*; if an entry is lost, looking at everything is still correct, and it
+    /// is the only degradation that cannot silently lose coverage. Contrast the code this
+    /// replaced, which did the forbidden thing (publishing on a vCPU) precisely when the
+    /// system was most loaded and least able to afford it.
+    /// ★★★ Re-offer every EMULATED channel to the execution lane — the conservative answer
+    /// to a DROPPED doorbell. Returns how many were offered.
+    ///
+    /// ⊘ **Emulated only.** A passthrough doorbell is forwarded to the host and we keep no
+    /// state for it, so losing one loses nothing of ours; looping them would be work with no
+    /// question behind it. Owner's design, 2026-09-10.
+    pub fn loop_all_emulated_channels(&self) -> usize {
+        let mut looped = 0usize;
+        let st = self.state.read();
+        let mut scan = |p: &kayfabe_core::gpu::Proc| {
+            for chan in p.channels.values() {
+                if chan.kind == kayfabe_core::channel_kind::GuestChannelKind::Emulated {
+                    looped += 1;
+                }
+            }
+        };
+        scan(&st.system.lock());
+        for cell in st.procs.values() {
+            scan(&cell.lock());
+        }
+        looped
+    }
+
+    pub fn arm_rescan_all_gpus(&self) -> usize {
+        let mut armed = 0usize;
+        let mut st = self.state.write();
+        let mut arm = |p: &mut kayfabe_core::gpu::Proc| {
+            for vas in p.vases.values_mut() {
+                vas.sweep.dirty = true;
+                armed += 1;
+            }
+        };
+        arm(st.system.get_mut());
+        for cell in st.procs.values() {
+            arm(&mut cell.lock());
+        }
+        armed
+    }
+
     pub fn arm_rescan_for_gpu(&self, gpu: GpuId) -> usize {
         let mut armed = 0usize;
         let mut st = self.state.write();

@@ -687,3 +687,89 @@ mod tests {
         assert!(body.contains("pub fn offer(&self, job: MapPublication)"));
     }
 }
+
+#[cfg(test)]
+mod the_full_lane_must_be_reachable_and_reported {
+    //! ★★★★★ **TESTING THAT THE FALLBACK FIRES** — owner, 2026-09-10: *"and both fallbacks
+    //! must be in a test pls … testing the fallback fire."*
+    //!
+    //! Both dropped-signal fallbacks in the shim key off [`Offered::Full`]:
+    //!
+    //! - a publication job that cannot be queued arms a **full PDB/PTE rescan**;
+    //! - a doorbell that cannot be queued arms a **loop over every emulated channel**.
+    //!
+    //! ⚠ Neither has ever fired on hardware — the census reads zero against `cap=4096` on
+    //! every measured boot. **That is exactly why they need a test.** A fallback that has
+    //! never run is a fallback nobody has ever seen work, and this tree has a standing habit
+    //! of shipping machinery that was built, wired, and never executed. The old code in both
+    //! places did the FORBIDDEN thing on this arm — published on a vCPU, and ran an emulated
+    //! channel inside a doorbell — so "it never fires" was load-bearing for a violation.
+    use super::*;
+
+    /// ⊘ THE PRECONDITION FOR BOTH FALLBACKS. If `Full` were unreachable, both would be dead
+    /// code and the flags they set would never be honoured.
+    #[test]
+    fn a_saturated_lane_actually_answers_full() {
+        let q = PublicationQueue::with_cap(4);
+        // ⊘ Distinct tokens: `for_doorbell` COALESCES on an equal token, so a queue fed one
+        // token repeatedly would answer `Coalesced` forever and never saturate — which is a
+        // real way to write this test and have it prove nothing.
+        for i in 0..4 {
+            assert_eq!(
+                q.offer(MapPublication::for_doorbell(i)),
+                Offered::Queued,
+                "offer {i} must fit: the cap is 4"
+            );
+        }
+        assert_eq!(
+            q.offer(MapPublication::for_doorbell(99)),
+            Offered::Full,
+            "the fifth offer into a cap-4 lane MUST answer Full — this is the arm both \
+             dropped-signal fallbacks hang off, and if it is unreachable they are dead code"
+        );
+    }
+
+    /// ★★★ And the same for the publication lane's own job kinds, since the shim's rescan
+    /// fallback is armed from an `for_invalidate`/`for_rpc_bind` offer, not a doorbell one.
+    #[test]
+    fn the_invalidate_and_rpc_bind_lanes_saturate_too() {
+        for (name, mk) in [
+            ("invalidate", MapPublication::for_invalidate as fn(u64) -> MapPublication),
+            ("rpc_bind", MapPublication::for_rpc_bind as fn(u64) -> MapPublication),
+        ] {
+            let q = PublicationQueue::uncoalescing();
+            let mut queued = 0usize;
+            let mut full = false;
+            // ⊘ Bounded: a lane that never saturates would otherwise spin here forever, and
+            // "the test hung" is a worse signal than "the test failed".
+            for i in 0..(PublicationQueue::DEFAULT_CAP as u64 + 16) {
+                match q.offer(mk(i)) {
+                    Offered::Queued | Offered::Coalesced => queued += 1,
+                    Offered::Full => {
+                        full = true;
+                        break;
+                    }
+                }
+            }
+            assert!(
+                full,
+                "the {name} lane accepted {queued} offers without ever answering Full — the \
+                 fallback that arms a full rescan can then never run"
+            );
+        }
+    }
+
+    /// ⊘ THE NEGATIVE CONTROL. Without it, a queue hardcoded to answer `Full` would pass both
+    /// tests above while accepting nothing at all.
+    #[test]
+    fn an_unsaturated_lane_never_answers_full() {
+        let q = PublicationQueue::with_cap(4);
+        assert_eq!(q.offer(MapPublication::for_invalidate(1)), Offered::Queued);
+        assert_ne!(
+            q.offer(MapPublication::for_invalidate(2)),
+            Offered::Full,
+            "two offers into a cap-4 lane is not saturation; a lane that cries Full here \
+             would arm a full rescan on every boot and hide its own cost as normal"
+        );
+    }
+}
