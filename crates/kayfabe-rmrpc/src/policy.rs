@@ -620,6 +620,32 @@ pub trait ObjectModel: Send {
     /// [`kayfabe_core::gpu::GpuError`] — the graph's own refusal, unchanged.
     fn apply(&mut self, ev: kayfabe_core::rmgraph::RmEvent) -> Result<(), GpuError>;
 
+    /// ★★★★★ **ONE NUMBER OVER EVERY VAS'S ADDRESS TABLE** — `(Σ generation, VAS count)`.
+    ///
+    /// Used by [`CommandPolicy::holds_for_refresh`] to answer *"did servicing this command
+    /// move the address space"* by comparing the value across the servicing. Owner,
+    /// 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call or the
+    /// kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."*
+    ///
+    /// ⊘ **Derived, never declared.** The alternative was a list of "map-ish" control ids,
+    /// which is a second source of truth that goes stale the first time RM grows a binding
+    /// control. A table whose generation moved has rows to publish, whichever control moved
+    /// it — and `AddressTable::generation` moves on a bind and an unbind and NOT on a
+    /// refused bind (`taddr_generation_moves_exactly_on_a_content_change`, w318).
+    ///
+    /// ⚠ The COUNT is not decoration: a VAS created and one destroyed can leave the sum
+    /// flat. It is a fingerprint and not a proof — two worlds can collide on one `u64` — and
+    /// a collision costs one early reply. The exact per-VAS comparison lives in
+    /// `PublicationWatermark`, where a walk per publication is affordable and a walk per RPC
+    /// would not be.
+    ///
+    /// The default is `(0, 0)`, i.e. *"never moves"*: a model that has not implemented it
+    /// must not accidentally hold a reply, because a held reply nobody releases is a hang.
+    fn table_fingerprint(&self) -> (u64, usize) {
+        (0, 0)
+    }
+
     /// Apply one context promotion.
     ///
     /// # Errors
@@ -849,6 +875,21 @@ pub trait ObjectModel: Send {
 /// The bare-[`Gpu`] implementation — the one this crate had inline before E2 made the
 /// model a port. Every arm is the call `Bridge::deliver` used to make directly.
 impl ObjectModel for Gpu {
+    fn table_fingerprint(&self) -> (u64, usize) {
+        let (mut sum, mut n) = (0u64, 0usize);
+        let mut scan = |p: &kayfabe_core::gpu::Proc| {
+            for vas in p.vases.values() {
+                sum = sum.wrapping_add(vas.table.generation());
+                n += 1;
+            }
+        };
+        scan(&self.system);
+        for p in self.procs.values() {
+            scan(p);
+        }
+        (sum, n)
+    }
+
     fn apply(&mut self, ev: kayfabe_core::rmgraph::RmEvent) -> Result<(), GpuError> {
         Gpu::apply(self, ev)
     }
@@ -1761,6 +1802,9 @@ impl GraphPolicy<'_> {
 /// borrowing is right the moment the doorbell path and the projection also want it, and
 /// the day either exists this type hands its `Gpu` to whatever owns them.
 pub struct ObjectPolicy {
+    /// ★★★★★ Did servicing the LAST command move any VAS's address table? Read by
+    /// [`CommandPolicy::holds_for_refresh`]; see [`ObjectModel::table_fingerprint`].
+    bound_rows_last: bool,
     bridge: Bridge,
     /// ★★★ **E2** — the object model as a **port**, not as a `Gpu` by value. See
     /// [`ObjectModel`] for why the sentence two paragraphs up ("that is a stage fact, not a
@@ -2050,6 +2094,7 @@ impl ObjectPolicy {
         // does hold zero isolates, and this is the value that says so.
         gpu.publish_isolate_census(&isolates);
         ObjectPolicy {
+            bound_rows_last: false,
             bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
             isolates,
@@ -3374,6 +3419,27 @@ impl CommandPolicy for ObjectPolicy {
     /// (`kayfabe_gsp::GspFsm::answer`). Both are correct answers for a verb this port does
     /// not model; an `NV_OK` would not be.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★★ Fingerprint the address tables around the servicing, so `holds_for_refresh`
+        // answers from what HAPPENED rather than from what the command was called.
+        // ⊘ THIS IS THE POLICY THE DEVICE ACTUALLY RUNS. The same hook went into
+        // `GraphPolicy` first and fired ZERO times in a boot, because `GraphPolicy` is not
+        // in the production chain — `kayfabe_device::ObjectLinks` builds it from
+        // `SetPageDirPolicy`, `InertPolicy`, these object links and the ledger. A hook in a
+        // type that compiles is not a hook in a path that runs.
+        let before = self.gpu.table_fingerprint();
+        let out = self.respond_serviced(cmd);
+        self.bound_rows_last = self.gpu.table_fingerprint() != before;
+        out
+    }
+
+    /// ⊘ Any VAS whose table moved means rows to publish, so ANY move holds the reply.
+    fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
+        self.bound_rows_last
+    }
+}
+
+impl ObjectPolicy {
+    fn respond_serviced(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         // ★★★★★ **R1 / C1 — THE GSP-RPC BLOCKAGE POINT.**
         //
         // `docs/design/REQUIREMENTS_TARGET.md` R1: the guest issued this command through
