@@ -4989,6 +4989,32 @@ fn doorbell_publish_loop(
                      returned NO LINE — the trigger fired and the publication did not run"
                 );
             }
+            // ★★★★★ **AND NOW THE GUEST MAY PROCEED.** The rows this command bound are on
+            // the host, so post the reply that was held for them.
+            //
+            // Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map
+            // call or the kernel emulated channel for UVM after the PTE/PDB page table
+            // refresh function finished."*
+            //
+            // ⊘ Unconditional once the publication has run — including when it published
+            // nothing. A held reply is the guest BLOCKED; a publication that found no work
+            // does not make the guest's wait correct, it makes it pointless. The only thing
+            // that must never happen here is an early return between the publication and
+            // this call.
+            if let Some(plane) = port.plane.upgrade() {
+                match plane.release_held_replies() {
+                    Ok(0) => {}
+                    Ok(n) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE posted={n} ⇒ the guest may proceed; its \
+                         rows are on the host"
+                    ),
+                    Err(e) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE ⊘ REFUSED {e:?} — {} reply/replies still \
+                         held. ⚠ A guest is polling for one of them.",
+                        plane.held_replies()
+                    ),
+                }
+            }
             continue;
         }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
@@ -5012,6 +5038,32 @@ fn doorbell_publish_loop(
             }
             if let Some(plane) = port.plane.upgrade() {
                 plane.mmu_inval().complete(plane.clock_now_us());
+            }
+            // ★★★★★ **AND NOW THE GUEST MAY PROCEED.** The rows this command bound are on
+            // the host, so post the reply that was held for them.
+            //
+            // Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map
+            // call or the kernel emulated channel for UVM after the PTE/PDB page table
+            // refresh function finished."*
+            //
+            // ⊘ Unconditional once the publication has run — including when it published
+            // nothing. A held reply is the guest BLOCKED; a publication that found no work
+            // does not make the guest's wait correct, it makes it pointless. The only thing
+            // that must never happen here is an early return between the publication and
+            // this call.
+            if let Some(plane) = port.plane.upgrade() {
+                match plane.release_held_replies() {
+                    Ok(0) => {}
+                    Ok(n) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE posted={n} ⇒ the guest may proceed; its \
+                         rows are on the host"
+                    ),
+                    Err(e) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE ⊘ REFUSED {e:?} — {} reply/replies still \
+                         held. ⚠ A guest is polling for one of them.",
+                        plane.held_replies()
+                    ),
+                }
             }
             continue;
         }
@@ -14505,11 +14557,40 @@ impl Regs {
             // the refresh worker is done. That is what `MmuInvalidate::complete` already does
             // for the invalidate (hold `TRIGGER`, complete off-thread); the map call needs the
             // same shape and does not have it yet. Until it does, this offers and returns.
-            let _ = self
+            // ⚠⚠ **AND IF NOBODY TOOK THE JOB, RELEASE ANYWAY.** A reply held for a
+            // publication that will never run is a guest parked in `rpcRecvPoll` until the
+            // driver's RPC timeout, with nothing in the log saying why.
+            //
+            // ⊘ `Coalesced` is fine: another job is queued and its worker pass releases
+            // ours too, because the release is FIFO over the whole held queue and any
+            // publication means rows moved. `Full` is NOT fine — it means no pass is
+            // coming.
+            //
+            // ★ Releasing early is a correctness RISK; never releasing is a correctness
+            // FAILURE. Take the risk, and say so in the log rather than let it be
+            // rediscovered as a hang.
+            let offered = self
                 .pubqueue
                 .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(
                     changed as u64,
                 ));
+            if matches!(offered, kayfabe_device::pubqueue::Offered::Full)
+                && self.plane.held_replies() > 0
+            {
+                let n = self.plane.held_replies();
+                match self.plane.release_held_replies() {
+                    Ok(_) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE ⚠ FORCED n={n} — the publication queue \
+                         REFUSED the job, so no worker pass is coming. The reply goes out \
+                         AHEAD of its rows: an early reply is a risk, a never-sent one is a \
+                         hang."
+                    ),
+                    Err(e) => eprintln!(
+                        "kayfabe: HELD-REPLY-RELEASE ⊘ FORCED RELEASE ALSO REFUSED {e:?} — \
+                         n={n} still held. ⚠ THE GUEST IS PARKED."
+                    ),
+                }
+            }
         }
         let _ = promoted;
         kft.mark("rpcbind_offer");

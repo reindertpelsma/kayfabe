@@ -1694,7 +1694,6 @@ impl GspFsm {
         let payload_max = (self.abi.element_size_max as usize)
             .saturating_sub(self.abi.element.hdr_size())
             .saturating_sub(RpcEnvelope::SIZE);
-        let held_this_command = policy.holds_for_refresh(cmd);
         let out = match policy.respond(cmd) {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
@@ -1708,6 +1707,12 @@ impl GspFsm {
                 cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
+        // ⊘ ASKED **AFTER** `respond`, and the order is the whole point. The question is
+        // *"did servicing this command move the address space"*, which is only answerable
+        // once it has been serviced. Asked before, a policy could only pattern-match on the
+        // function id — and the function that binds rows is `RmControl`, which is also the
+        // function for a hundred controls that bind nothing.
+        let held_this_command = policy.holds_for_refresh(cmd);
         // ★★★ THE HOLD. `held` is a queue of ONE-per-command replies whose rows are not on
         // the host yet; `release_held` posts them. ⊘ The `UnloadingGuestDriver` arm below is
         // deliberately not reachable through it: a teardown reply must never wait on a

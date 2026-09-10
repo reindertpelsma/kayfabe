@@ -1099,6 +1099,18 @@ impl Bridge {
 pub struct GraphPolicy<'a> {
     bridge: Bridge,
     gpu: &'a mut Gpu,
+    /// ★★★★★ Did servicing the LAST command move any VAS's address table?
+    ///
+    /// Read by [`CommandPolicy::holds_for_refresh`] to decide whether this command's reply
+    /// must wait for the publication to reach the host. Owner, 2026-09-10: *"You should only
+    /// return from a TLB invalidate, the RPC map call or the kernel emulated channel for UVM
+    /// after the PTE/PDB page table refresh function finished."*
+    ///
+    /// ⊘ **Derived, never declared.** The alternative was a list of "map-ish" control ids,
+    /// and that list is a second source of truth that goes stale the first time RM grows a
+    /// binding control — the failure mode this tree has paid for repeatedly. A table whose
+    /// generation moved has rows to publish, whichever control moved it.
+    bound_rows_last: bool,
 }
 
 impl<'a> GraphPolicy<'a> {
@@ -1119,6 +1131,7 @@ impl<'a> GraphPolicy<'a> {
         limits: ReasmLimits,
     ) -> GraphPolicy<'a> {
         GraphPolicy {
+            bound_rows_last: false,
             bridge: Bridge::new(*abi, guest_os, limits),
             gpu,
         }
@@ -1645,6 +1658,47 @@ impl CommandPolicy for GraphPolicy<'_> {
     /// side arranging it, which is worth saying because it means a change to *either*
     /// breaks a guest silently.
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ★★★ Fingerprint the address tables around the servicing, so
+        // `holds_for_refresh` can answer from what HAPPENED rather than from what the
+        // command was called. See `GraphPolicy::bound_rows_last`.
+        let before = self.table_fingerprint();
+        let out = self.respond_inner(cmd);
+        self.bound_rows_last = self.table_fingerprint() != before;
+        out
+    }
+
+    /// ⊘ Any VAS whose table moved means rows to publish, so ANY move holds the reply.
+    fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
+        self.bound_rows_last
+    }
+}
+
+impl GraphPolicy<'_> {
+    /// ★★★ One number over every VAS's `AddressTable::generation`, plus the VAS COUNT.
+    ///
+    /// ⚠ The count is not decoration. Generations are per-table, so a VAS that is created
+    /// and one that is destroyed can leave the sum unchanged; including how many there are
+    /// makes that visible. ⊘ It is still a fingerprint and not a proof — two different
+    /// worlds can collide on one `u64` — but the alternative is a per-VAS map rebuilt on
+    /// every command, and a collision costs one early reply where the map costs a walk per
+    /// RPC. See `PublicationWatermark` for where the exact per-VAS comparison DOES live.
+    fn table_fingerprint(&self) -> (u64, usize) {
+        let mut sum = 0u64;
+        let mut n = 0usize;
+        let mut scan = |p: &kayfabe_core::gpu::Proc| {
+            for vas in p.vases.values() {
+                sum = sum.wrapping_add(vas.table.generation());
+                n += 1;
+            }
+        };
+        scan(&self.gpu.system);
+        for p in self.gpu.procs.values() {
+            scan(p);
+        }
+        (sum, n)
+    }
+
+    fn respond_inner(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         // ★★★★★ **R1 / C1 — THE GSP-RPC BLOCKAGE POINT.** Same declaration and same
         // argument as `ObjectPolicy::respond`'s; see there for the whole of it. It is
         // repeated rather than factored because a `CommandPolicy` is the *unit* that answers

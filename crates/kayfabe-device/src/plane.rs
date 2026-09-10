@@ -2988,6 +2988,40 @@ impl RegPlane {
 
     /// The FSM's current boot phase, so a test can assert the guest moved it.
     #[must_use]
+    /// ★★★★★ **POST THE REPLIES THAT WERE WAITING ON THE PUBLICATION** — the release half
+    /// of `CommandPolicy::holds_for_refresh`.
+    ///
+    /// Owner, 2026-09-10: *"You should only return from a TLB invalidate, the RPC map call
+    /// or the kernel emulated channel for UVM after the PTE/PDB page table refresh function
+    /// finished."*
+    ///
+    /// ⊘ **Called from the publication worker, never from a vCPU.** The vCPU serviced the
+    /// command, held the reply and returned from its trap; the guest is spinning in its own
+    /// `rpcRecvPoll`. This is the moment the rows are on the host and the guest may proceed.
+    ///
+    /// ⚠ Takes the plane lock, which a trap path also takes — so it must stay what it is: a
+    /// bounded copy of already-encoded bytes into the guest's ring. No host I/O, no syscall,
+    /// nothing that can block. `[w395]` a lock a worker held across a blocking call is what
+    /// produced the 1.79 s trap this campaign misattributed to inline servicing.
+    ///
+    /// Returns how many replies were posted, or the fault that stopped it.
+    ///
+    /// # Errors
+    ///
+    /// Whatever `GspFsm::release_held` refuses with; the unposted replies stay queued.
+    pub fn release_held_replies(&self) -> Result<usize, kayfabe_gsp::GspFault> {
+        let mut s = self.state.lock();
+        let PlaneState { fsm, ram, .. } = &mut *s;
+        fsm.release_held(&mut **ram)
+    }
+
+    /// How many replies are waiting on a publication. ⊘ Non-zero at teardown means a guest
+    /// was left polling for a reply we never sent.
+    #[must_use]
+    pub fn held_replies(&self) -> usize {
+        self.state.lock().fsm.held_len()
+    }
+
     pub fn phase(&self) -> kayfabe_gsp::BootPhase {
         let s = self.state.lock();
         s.fsm.phase()
