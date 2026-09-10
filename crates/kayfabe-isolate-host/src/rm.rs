@@ -2609,6 +2609,40 @@ impl RmConnection {
     /// Not [`RmBackend::alloc_sysmem`]: that verb asks for `MAPPING_NO_MAP`, which makes
     /// the object deliberately un-CPU-mappable. See
     /// `kayfabe_abi::submit::NV01_MEMORY_LOCAL_USER`.
+    /// ★★★★★ **RESERVE THE GUEST'S WHOLE VIDEO MEMORY AS ONE OBJECT** —
+    /// `docs/design/gpga_is_one_reserved_object.md`.
+    ///
+    /// Differs from [`Self::alloc_device_local`] in exactly the two ways a multi-gigabyte
+    /// request needs, and both were wrong for it:
+    ///
+    /// 1. **Non-contiguous.** A contiguous multi-gigabyte request is a far stronger demand
+    ///    and fails on merely *fragmented* free memory — refusing the boot for a reason that
+    ///    is not capacity. Contiguity buys nothing: an object is addressed by OFFSET, so
+    ///    slicing GPGA is arithmetic and the physical layout is RM's business.
+    /// 2. **Page-aligned, not `len`-aligned.** `alloc_device_local` passes `alignment: len`,
+    ///    which for an 8 GiB request demands an 8 GiB-aligned base. Nothing needs that.
+    ///
+    /// # Errors
+    /// Whatever RM refused with. ⊘ A refusal here means **the VM does not start** — that is
+    /// the design's central promise, and it is what makes an out-of-memory on the refresh
+    /// path (where we cannot recover) impossible rather than unlikely.
+    pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
+        let mut params = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams {
+            owner: self.client.raw(),
+            kind: 0,
+            attr: kayfabe_abi::submit::ATTR_NONCONTIGUOUS_VIDMEM,
+            size: len,
+            alignment: 4096,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
     fn alloc_device_local(&self, len: u64) -> Result<u32, RmError> {
         let mut params = [0u8; NvMemoryAllocationParams::SIZE];
         NvMemoryAllocationParams {
@@ -10037,6 +10071,31 @@ impl HostRmBackend {
 
     /// Free exactly one RM object — the body [`RmBackend::free`] had before a channel
     /// became six of them.
+    /// ★★★ **The largest reservation that actually succeeds**, in MiB, by halving down from
+    /// `start_mb`. This is how the guest's advertised framebuffer size should be DERIVED —
+    /// `docs/design/gpga_is_one_reserved_object.md`: *"the advertised size is derived from the
+    /// reservation that succeeded, never asserted ahead of it."*
+    ///
+    /// ⚠ The constant today is 12288 MiB, the whole card, while a real RTX 3060 reports
+    /// **11910 MiB free**. So the advertised number has never been reservable, and asserting
+    /// it would refuse every boot under this design — a fact only a probe like this one
+    /// surfaces before it costs a five-minute boot to discover.
+    ///
+    /// ⊘ Frees each successful attempt: this measures capacity, it does not take it.
+    pub fn largest_reservable_mb(&mut self, start_mb: u64) -> u64 {
+        let mut mb = start_mb;
+        while mb >= 256 {
+            match self.conn.reserve_gpga(mb << 20) {
+                Ok(h) => {
+                    let _ = self.free_one(h);
+                    return mb;
+                }
+                Err(_) => mb /= 2,
+            }
+        }
+        0
+    }
+
     fn free_one(&mut self, raw: u32) -> Result<(), RmError> {
         // ★ The port's `free` carries no parent and RM needs one — see `Objects::parents`.
         // A handle we never minted is refused HERE, which is stricter than the host: RM

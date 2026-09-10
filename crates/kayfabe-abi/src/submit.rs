@@ -1387,6 +1387,21 @@ impl NvMemoryAllocationParams {
 /// a pushbuffer are addressed as flat spans by hardware.
 pub const ATTR_CONTIGUOUS_VIDMEM: u32 = 2 << 27;
 
+/// ★★★★★ **Video memory, NON-contiguous** — `NVOS32_ATTR_PHYSICALITY_NONCONTIGUOUS` (1) in
+/// field `28:27`, with `NVOS32_ATTR_LOCATION_VIDMEM` (0) in `26:25`.
+///
+/// ⊘ **This is the attribute the whole-framebuffer reservation must use, and contiguity is
+/// the reason.** `docs/design/gpga_is_one_reserved_object.md` reserves the guest's entire
+/// video memory as ONE object at start. A multi-gigabyte *contiguous* request is a far
+/// stronger demand than a multi-gigabyte one, and it can fail on a card whose free memory is
+/// merely fragmented — which would refuse the boot for a reason that has nothing to do with
+/// capacity.
+///
+/// ★ And contiguity buys nothing here. An RM memory object is addressed **by offset**:
+/// `MapMemoryDma` maps `offset..offset+len` whatever the physical layout underneath. Slicing
+/// GPGA is offset arithmetic, so the physical arrangement is RM's business and not ours.
+pub const ATTR_NONCONTIGUOUS_VIDMEM: u32 = 1 << 27;
+
 // =====================================================================================
 // USERD, the GPFIFO ring, and the doorbell
 // =====================================================================================

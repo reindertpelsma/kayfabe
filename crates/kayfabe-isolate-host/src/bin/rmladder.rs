@@ -11518,6 +11518,8 @@ fn main() -> std::process::ExitCode {
     let mut want_binapi: Option<Vec<(u32, usize)>> = None;
     let mut want_gpu_info = false;
     let mut want_bus_info = false;
+    let mut want_gpga_probe = false;
+    let mut want_gpga_probe = false;
     let mut want_atomics = false;
     let mut want_pce_mask = false;
     let mut want_osdesc: Option<OsDescSeed> = None;
@@ -11629,6 +11631,10 @@ fn main() -> std::process::ExitCode {
             "--doorbell-census" => want_census = true,
             "--gpu-info-sweep" => want_gpu_info = true,
             "--bus-info-sweep" => want_bus_info = true,
+            // ★★★ `docs/design/gpga_is_one_reserved_object.md` step 1's gate: can the whole
+            // guest framebuffer be reserved as ONE object, and how fast is it to READ over
+            // PCIe? Both answers decide the design before a five-minute boot can.
+            "--gpga-reserve-probe" => want_gpga_probe = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
@@ -12096,6 +12102,47 @@ fn main() -> std::process::ExitCode {
     // ★ R23 runs here and RETURNS, for R18's reason: eight controls on the bare Subdevice,
     // nothing allocated, so a refusal is the request's or the object's and cannot be a
     // channel's from three rungs earlier — which is the whole variable under test.
+    // ★★★★★ GPGA RESERVATION PROBE — the host-side gate for
+    // `docs/design/gpga_is_one_reserved_object.md` step 1. Answers, without a VM, the two
+    // questions the design turns on: is the whole framebuffer reservable as ONE object, and
+    // what does it cost to READ over PCIe.
+    if want_gpga_probe {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        // ⊘ Starts at the advertised 12288 MiB deliberately: the design says the guest's size
+        // must be DERIVED from what succeeds, and this prints the gap between the number we
+        // advertise and the number the card will actually give.
+        let mb = rm.largest_reservable_mb(12288);
+        println!("GPGA_LARGEST_RESERVABLE_MB={mb}  (advertised today: 12288)");
+        if mb == 0 {
+            println!("GPGA_PROBE=(F) ⊘ nothing down to 256 MiB reserved — the design's premise fails here");
+        } else {
+            // The PCIe read cost, on a slice the size of the page tables a 12 GiB mapping
+            // needs (~24 MiB), which is the quantity the refresh would re-read.
+            let probe_len: u64 = 24 << 20;
+            match rm.time_vidmem_read(probe_len) {
+                Ok((took, _acc)) => {
+                    let mbps = (probe_len as f64 / (1 << 20) as f64) / took.as_secs_f64();
+                    println!(
+                        "GPGA_VIDMEM_READ={:.1} MiB/s over {} MiB in {:.1} ms  ⇒ a full \
+                         page-table re-read costs ~{:.0} ms, and 1178 refreshes would cost \
+                         ~{:.1} s if NOT promoted",
+                        mbps,
+                        probe_len >> 20,
+                        took.as_secs_f64() * 1e3,
+                        took.as_secs_f64() * 1e3,
+                        took.as_secs_f64() * 1178.0
+                    );
+                    println!("GPGA_PROBE=(P) ★ reserved {mb} MiB and measured the read cost");
+                }
+                Err(e) => println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}"),
+            }
+        }
+        return std::process::ExitCode::SUCCESS;
+    }
+
     if want_atomics {
         println!(
             "REV_UNDER_TEST={}",
