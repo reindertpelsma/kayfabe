@@ -4529,6 +4529,41 @@ impl HostRmBackend {
         Ok((took, acc))
     }
 
+    /// ★★★ **Throughput at one buffer size, repeated to a fixed total** — the owner's sweep.
+    ///
+    /// Allocates `chunk` bytes, maps once, and reads it `reps` times, returning the elapsed
+    /// time for `chunk * reps` bytes. ⊘ The mapping is made ONCE and reused: mapping cost is a
+    /// per-object constant and folding it into a throughput figure would make small chunks
+    /// look worse for a reason that is not the transfer.
+    ///
+    /// # Errors
+    /// Whatever the allocation or mapping refused with.
+    pub fn time_vidmem_chunked(
+        &self,
+        chunk: u64,
+        reps: u64,
+    ) -> Result<(std::time::Duration, u64), RmError> {
+        let raw = self.conn.alloc_device_local(chunk)?;
+        let (node, map) = self.conn.map_cpu(raw, chunk, CachePolicy::WriteCombining)?;
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        for _ in 0..reps {
+            let mut off = 0u64;
+            while off + 8 <= chunk {
+                acc = acc.wrapping_add(
+                    map.load_u64(HostOffset::new(off))
+                        .map_err(|e| region_error(&e))?,
+                );
+                off += 8;
+            }
+        }
+        let took = start.elapsed();
+        drop(map);
+        drop(node);
+        let _ = raw;
+        Ok((took, acc))
+    }
+
     /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
     /// over ordinary host memory.
     ///

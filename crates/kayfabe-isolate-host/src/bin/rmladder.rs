@@ -12149,6 +12149,24 @@ fn main() -> std::process::ExitCode {
                 Err(e) => println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}"),
             }
         }
+        // ★★★ The owner's size sweep: same total bytes, different buffer sizes, so a
+        // size-dependent effect separates from a per-access one.
+        println!("--- GPGA read sweep (1 GiB total per row, 8-byte accesses) ---");
+        for (chunk_mb, reps) in [(1u64, 1024u64), (10, 102), (100, 10), (1024, 1)] {
+            let chunk = chunk_mb << 20;
+            match rm.time_vidmem_chunked(chunk, reps) {
+                Ok((took, _)) => {
+                    let total = (chunk * reps) as f64 / (1u64 << 20) as f64;
+                    println!(
+                        "GPGA_SWEEP chunk={chunk_mb:>4} MiB x{reps:<5} total={total:>7.0} MiB \
+                         in {:>7.2} s => {:>7.1} MiB/s",
+                        took.as_secs_f64(),
+                        total / took.as_secs_f64()
+                    );
+                }
+                Err(e) => println!("GPGA_SWEEP chunk={chunk_mb} MiB ⊘ REFUSED {e:?}"),
+            }
+        }
         return std::process::ExitCode::SUCCESS;
     }
 
