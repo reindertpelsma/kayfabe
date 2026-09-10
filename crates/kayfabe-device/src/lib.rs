@@ -71,6 +71,7 @@ pub mod nonstall;
 pub mod osevent;
 pub mod plane;
 pub mod pubmark;
+pub mod promotion;
 pub mod pubqueue;
 pub mod setpagedir;
 pub mod staticinfo;
