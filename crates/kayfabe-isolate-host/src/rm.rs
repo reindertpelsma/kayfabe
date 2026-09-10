@@ -4452,6 +4452,45 @@ impl HostRmBackend {
     /// # Errors
     /// Whatever the mapping or the loads refuse with; [`RmError::BadHandle`] for a
     /// `memory` this connection never minted.
+    /// ★★★★★ **HOW FAST CAN THE CPU READ VIDEO MEMORY?** — the number that decides whether
+    /// page tables can live in the one big reservation, or whether a RAM-side copy is
+    /// load-bearing rather than an optimisation.
+    ///
+    /// Owner, 2026-09-10: *"it might mean that we may need a fake fb directly in the first
+    /// boot, to even boot, if the half a minute is an issue. Which means the fake fb
+    /// optimization is load bearing to implement to get a product, not some small % gain."*
+    ///
+    /// ⊘ Reads `len` bytes sequentially as `u32`s through a fresh mapping and returns the
+    /// elapsed time. The caller divides. It is deliberately a **read** benchmark: writes to
+    /// write-combining memory are buffered and fast, reads are not, and the sweep is a
+    /// reader.
+    ///
+    /// ⚠ Uses the same `WriteCombining` policy every other vidmem mapping here uses, so the
+    /// answer describes the mapping we would actually get rather than a better one.
+    ///
+    /// # Errors
+    /// Whatever the allocation, mapping or a load refuses with.
+    pub fn time_vidmem_read(&self, len: u64) -> Result<(std::time::Duration, u64), RmError> {
+        let raw = self.conn.alloc_device_local(len)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 4 <= len {
+            acc = acc.wrapping_add(u64::from(
+                map.load_u32(HostOffset::new(off)).map_err(|e| region_error(&e))?,
+            ));
+            off += 4;
+        }
+        let took = start.elapsed();
+        drop(map);
+        drop(node);
+        // ⊘ Leaked deliberately: this is a one-shot probe in a process that exits, and a free
+        // path here would need &mut self, which the read-only shape of this helper avoids.
+        let _ = raw;
+        Ok((took, acc))
+    }
+
     pub fn read_words_independently(
         &self,
         memory: HostHandle,

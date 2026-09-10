@@ -764,7 +764,11 @@ pub enum WaitKind {
     ///
     /// ⊘ Unbounded on a [`ThreadClass::Coordinator`] **by design**: that is a coordinator's
     /// whole job, and time spent here is availability, not latency.
-    Responsive { wakes_on: &'static str },
+    Responsive {
+        /// What can interrupt this wait. ⊘ A wait that cannot name its wake source is not
+        /// responsive, it is optimistic — see the variant's own docs.
+        wakes_on: &'static str,
+    },
     /// A wait that must run to completion — an `ioctl`, a lock held by a long operation, a
     /// write to a full pipe. **Nothing can wake it early**, so everything behind it queues.
     /// This is the currency the census actually measures.
@@ -1014,6 +1018,8 @@ mod the_vcpu_allowlist {
 // ★★★★★ OWNER INVARIANT (2), 2026-09-09 — "no blocking calls in a lock in any thread
 // unless needed", made measurable. WAIT accuses the HOLDER; only the HOLD names it.
 // =====================================================================================
+/// Lock cost, split by who pays it: WAIT accuses the holder, HOLD names it. See the banner
+/// above for the owner invariant this makes measurable.
 pub mod lockcost {
     use super::LockRank;
     use std::sync::atomic::{AtomicU64, Ordering};
