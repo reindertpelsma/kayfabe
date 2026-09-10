@@ -55,6 +55,7 @@ pub mod bar2;
 pub mod census;
 pub mod ceresolve;
 pub mod cpuintr;
+pub mod dbtable;
 pub mod doorbell;
 pub mod dropped;
 pub mod faultbuffer;
