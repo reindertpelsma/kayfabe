@@ -60,7 +60,34 @@ pub trait FbRead {
     /// [`WalkFault::Unbacked`]. It must never be spelled as "zeros": a zero-filled page
     /// decodes as a full page of invalid entries, which is a page that legitimately maps
     /// nothing, and the two are opposite facts.
-    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool;
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.read_in(phys, Aperture::Vidmem, buf)
+    }
+
+    /// ★★★★★ **READ `phys` IN `aperture`. The aperture is part of the ADDRESS, not a hint.**
+    ///
+    /// **Owner, 2026-09-10:** *"FbRead should ignore backing … branching on aperture should not
+    /// be in that much code."* ⇒ exactly one implementation branches; every caller passes the
+    /// aperture it decoded and stops caring.
+    ///
+    /// # ⊘ Why the old signature was a bug and not a simplification
+    ///
+    /// [`PtPage`] has carried an `aperture` all along and `read` took only `phys`, so the
+    /// walker **decoded an aperture and then threw it away**. Every page-table page was read as
+    /// though it lived in the framebuffer. `[measured w411]` the user proc's `pdb=0x201000`
+    /// took **37 sweep tasks and yielded nothing**, because its tables are not where we looked;
+    /// its four GR context VAs stayed invisible and `P3 rpc-bind` stayed red through four
+    /// correct upstream fixes, each of which made the walk happen more often while it read the
+    /// wrong memory.
+    ///
+    /// ⚠ And it failed SILENTLY, in the way this trait's own doc already warned: `truncated=0`,
+    /// the reads *succeeded*, and a zero-filled page decodes as a page of invalid entries. *"The
+    /// tables say nothing is mapped"* and *"we cannot see the tables"* arrived as one answer.
+    ///
+    /// ⊘ The default body preserves the old behaviour for implementations that genuinely have
+    /// one aperture (a synthetic FB image in tests), so this is additive — but production
+    /// sources MUST override it, or they keep the bug with a new signature.
+    fn read_in(&mut self, phys: u64, aperture: Aperture, buf: &mut [u8]) -> bool;
 
     /// ★★★★ **WHO first wrote the page at `phys`, if this source can say at all** — a short
     /// tag and a monotonic sequence number, exactly `kayfabe_device::FbPageOrigin`'s pair.
@@ -570,7 +597,8 @@ pub fn decode_page(
     }
 
     let mut image = vec![0u8; bytes];
-    if !fb.read(page.phys, &mut image) {
+    // ★ The page's OWN aperture, decoded from its parent's PDE — not an assumption.
+    if !fb.read_in(page.phys, page.aperture, &mut image) {
         return Err(WalkFault::Unbacked {
             phys: page.phys,
             level: page.level,

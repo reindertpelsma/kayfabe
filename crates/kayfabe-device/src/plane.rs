@@ -1331,6 +1331,36 @@ pub struct PlanePtBytes<'a> {
 }
 
 impl FbRead for PlanePtBytes<'_> {
+    /// ★★★★★ **THE ONE PLACE THAT BRANCHES ON APERTURE.**
+    ///
+    /// Owner, 2026-09-10: *"FbRead should ignore backing … branching on aperture should not be
+    /// in that much code."* Every caller passes the aperture it decoded from the parent PDE and
+    /// stops caring; this resolves it to a byte source exactly once.
+    ///
+    /// `[measured w411]` before this, the walker read EVERY page-table page from the
+    /// framebuffer regardless of the aperture it had just decoded — so a VAS whose tables live
+    /// in sysmem took 37 sweep tasks and yielded nothing, and `P3 rpc-bind` stayed red through
+    /// four correct upstream fixes.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        use kayfabe_arch::Aperture;
+        let mut s = self.plane.state.lock();
+        match aperture {
+            // Device-local: the (fake) framebuffer.
+            Aperture::Vidmem => s.fb.read(phys, buf).is_ok(),
+            // ★ System memory. A GMMU PDE may point at a next-level table in sysmem, and the
+            // guest's own address for it is a GPA — so this is a guest-RAM read, not an FB one.
+            // Reading it out of the framebuffer is what produced a page of "invalid" entries.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
+                s.ram.read(phys, buf).is_ok()
+            }
+            // ⊘ Peer memory has no plane here, and INVALID is the absence of an aperture. Both
+            // are `false` = "this source cannot serve the range", which the walker turns into
+            // `WalkFault::Unbacked`. ⚠ NEVER zeros: a zero page decodes as a full page of
+            // invalid entries — "the tables map nothing" — and that is the opposite fact.
+            _ => false,
+        }
+    }
+
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         let mut s = self.plane.state.lock();
         s.fb.read(phys, buf).is_ok()
@@ -1345,6 +1375,17 @@ impl FbRead for PlanePtBytes<'_> {
 }
 
 impl FbRead for FbStoreReader<'_> {
+    /// ⊘ This reader holds ONLY a framebuffer store — it has no guest-RAM source at all. So a
+    /// sysmem or peer aperture is `false` ("cannot serve"), never a silent framebuffer read of
+    /// the same number. Answering from the wrong aperture is precisely the defect this
+    /// signature exists to prevent, and a reader with one source must say so rather than guess.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        match aperture {
+            kayfabe_arch::Aperture::Vidmem => self.fb.read(phys, buf).is_ok(),
+            _ => false,
+        }
+    }
+
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.fb.read(phys, buf).is_ok()
     }

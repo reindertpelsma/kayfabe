@@ -96,6 +96,12 @@ pub struct IsolateFb<'a> {
     transport: Option<RmError>,
     reads: usize,
     misses: usize,
+    /// ★★★ Page-table reads refused because this source has **only the fabricated FB
+    /// aperture** and the entry named system memory. `[measured w411]` reading such a page out
+    /// of the framebuffer anyway is what made a whole VAS decode as "maps nothing".
+    /// ⊘ Counted, and reported, because the alternative is the silence that hid it: a wrong-
+    /// aperture read SUCCEEDS and returns a page of invalid entries.
+    sysmem_refused: usize,
 }
 
 impl core::fmt::Debug for IsolateFb<'_> {
@@ -104,6 +110,9 @@ impl core::fmt::Debug for IsolateFb<'_> {
             .field("transport", &self.transport)
             .field("reads", &self.reads)
             .field("misses", &self.misses)
+            // ⊘ Reported, because a silent zero here and a silent thousand look identical in a
+            // boot log — and the thousand is the whole bug.
+            .field("sysmem_refused", &self.sysmem_refused)
             .finish()
     }
 }
@@ -117,6 +126,7 @@ impl<'a> IsolateFb<'a> {
             transport: None,
             reads: 0,
             misses: 0,
+            sysmem_refused: 0,
         }
     }
 
@@ -143,6 +153,18 @@ impl<'a> IsolateFb<'a> {
 }
 
 impl FbRead for IsolateFb<'_> {
+    /// ⊘ This source is the isolate's **fabricated FB aperture** and nothing else. A page-table
+    /// page in system memory cannot be served from it, so it is refused BY COUNT rather than
+    /// read from the framebuffer at the same number — which is the defect this signature
+    /// exists to end.
+    fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
+        if aperture == kayfabe_arch::Aperture::Vidmem {
+            return self.read(phys, buf);
+        }
+        self.sysmem_refused += 1;
+        false
+    }
+
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.reads += 1;
         match self.worker.fb_read(phys, buf) {
