@@ -342,6 +342,13 @@ pub struct Reply {
     pub body: Vec<u8>,
 }
 
+/// ★★★ One reply the FSM is holding until the page-table refresh that its command triggered
+/// has reached the host. See [`Reply::hold_for_refresh`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HeldReply {
+    rpc: OutgoingRpc,
+}
+
 /// How a command is answered — the seam the forwarding plane implements.
 ///
 /// `Send` (not `Sync`), like every other seam reached exclusively through `&mut`: the
@@ -353,6 +360,35 @@ pub trait CommandPolicy: Send {
     /// "no reply": the FSM posts the acknowledgement anyway, because an unanswered fn-47
     /// blocks the guest's `rmmod` for the full RPC timeout (§7-G8).
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply>;
+
+    /// ★★★★★ **MAY THIS COMMAND'S REPLY BE DELIVERED YET?**
+    ///
+    /// `true` means *"this command changed the address space; hold its reply until the
+    /// page-table refresh has reached the host"*. Owner, 2026-09-10: *"You should only
+    /// return from a TLB invalidate, the RPC map call or the kernel emulated channel for
+    /// UVM after the PTE/PDB page table refresh function finished."*
+    ///
+    /// ⊘ **A separate question from [`CommandPolicy::respond`], deliberately.** `respond`
+    /// says WHAT the answer is; this says WHEN it may be delivered. Folding it into `Reply`
+    /// would have put a delivery concern in 54 construction sites that have no opinion on
+    /// it, and every one of them would have had to say `false` to stay silent.
+    ///
+    /// ⊘ **This is not the vCPU waiting.** The vCPU posts nothing and returns from its trap;
+    /// the guest is already spinning in its own `rpcRecvPoll`, which is what an RPC reply is
+    /// for. [`GspFsm::release_held`] posts it from the publication worker — the same shape
+    /// as the invalidate, which holds `TRIGGER` and completes off-thread.
+    ///
+    /// ⚠ **Why, measured `[w402]`.** Six host faults in one boot, all `FAULT_PDE`, all at
+    /// addresses our table already declared: four worker threads' copy sources, `P3`'s
+    /// release semaphore, and the fault this campaign had called a harmless bystander. Every
+    /// one IS published — after the engine touched it. Five failures, one cause: a map call
+    /// returned before its rows existed on the host.
+    ///
+    /// The default is `false`: a policy that has not thought about it must not accidentally
+    /// hold a reply, because a held reply nobody releases is a guest hang.
+    fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
+        false
+    }
 }
 
 /// ★★★ **A link that SEES every command and cannot answer one** — the seam for a fact the
@@ -563,6 +599,13 @@ impl CommandPolicy for PolicyChain {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         self.links.iter_mut().find_map(|p| p.respond(cmd))
     }
+
+    /// ⊘ ANY link may hold. The chain's `respond` is a `find_map` and stops at the first
+    /// answerer, but an observer seated ahead of it can be the one that knows the address
+    /// space moved — so this is an `any`, not a "whoever answered".
+    fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+        self.links.iter().any(|p| p.holds_for_refresh(cmd))
+    }
 }
 
 /// The faked GSP: one resettable value.
@@ -572,6 +615,10 @@ impl CommandPolicy for PolicyChain {
 /// process**, with no QEMU restart and no bench slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GspFsm {
+    /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
+    /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
+    /// and the order replies are posted in is the order the guest asked for them.
+    held: Vec<HeldReply>,
     abi: GspAbi,
     phase: BootPhase,
     queue: QueueState,
@@ -685,6 +732,7 @@ impl GspFsm {
     #[must_use]
     pub fn new(abi: GspAbi) -> GspFsm {
         GspFsm {
+            held: Vec::new(),
             abi,
             phase: BootPhase::Cold,
             queue: QueueState::Unbound,
@@ -1646,6 +1694,7 @@ impl GspFsm {
         let payload_max = (self.abi.element_size_max as usize)
             .saturating_sub(self.abi.element.hdr_size())
             .saturating_sub(RpcEnvelope::SIZE);
+        let held_this_command = policy.holds_for_refresh(cmd);
         let out = match policy.respond(cmd) {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
@@ -1659,7 +1708,15 @@ impl GspFsm {
                 cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
-        self.post(ram, &out)?;
+        // ★★★ THE HOLD. `held` is a queue of ONE-per-command replies whose rows are not on
+        // the host yet; `release_held` posts them. ⊘ The `UnloadingGuestDriver` arm below is
+        // deliberately not reachable through it: a teardown reply must never wait on a
+        // publication, and it changes no address space, so it never sets the flag.
+        if held_this_command {
+            self.held.push(HeldReply { rpc: out });
+        } else {
+            self.post(ram, &out)?;
+        }
 
         if cmd.function == RpcFunction::UnloadingGuestDriver {
             // ★ E9 — reply first, **then** suspend. `MAILBOX0` must report the suspend
@@ -1773,6 +1830,50 @@ impl GspFsm {
     ///
     /// [`GspFault::NotRunning`] before the guest has drained `GSP_INIT_DONE`, plus
     /// whatever [`GspFsm::post`] refuses with.
+    /// ★★★★★ **POST THE REPLIES WHOSE REFRESH HAS FINISHED** — the other half of
+    /// [`Reply::hold_for_refresh`].
+    ///
+    /// Called by the publication worker once the rows are on the host, never by a vCPU. That
+    /// split is the owner's rule and its constraint at the same time: *"only return from a
+    /// TLB invalidate, the RPC map call or the kernel emulated channel for UVM after the
+    /// PTE/PDB page table refresh function finished"*, and *"vCPU thread no allowance for
+    /// such blocking things"*. The guest spends the interval in its own `rpcRecvPoll`, which
+    /// is what it does for every RPC anyway.
+    ///
+    /// Returns how many were posted.
+    ///
+    /// ⊘ **No deadline here, and that is not an omission.** This crate has no clock (§8.3),
+    /// and a deadline invented from a counter would be a second, disagreeing notion of time.
+    /// The caller has the clock and owns the bound: it watches [`GspFsm::held_len`] and is
+    /// the one that can say *"this has been held too long"*. ⚠ A held reply nobody releases
+    /// is a guest hang, so a non-zero `held_len` at teardown is a defect, not a statistic.
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`GspFsm::post`] refuses with. ⊘ A refused post leaves the remaining held
+    /// replies in place rather than dropping them: a dropped reply is a guest hang, and the
+    /// next call will try again.
+    pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+        let mut posted = 0usize;
+        while let Some(h) = self.held.first() {
+            // ⊘ Cloned before the post and removed only AFTER it succeeds. `post` can refuse
+            // (an unbound queue, a full ring), and a reply removed by a FAILED post is a
+            // reply nobody will ever send — which is a guest hang, not a dropped message.
+            let rpc = h.rpc.clone();
+            self.post(ram, &rpc)?;
+            self.held.remove(0);
+            posted += 1;
+        }
+        Ok(posted)
+    }
+
+    /// How many replies are waiting on a refresh right now. ⊘ A non-zero value at teardown
+    /// means a refresh never completed and the guest was left polling.
+    #[must_use]
+    pub fn held_len(&self) -> usize {
+        self.held.len()
+    }
+
     pub fn post_event(
         &mut self,
         ram: &mut dyn GuestRam,
@@ -1956,3 +2057,90 @@ kayfabe_util::assert_send!(dyn CommandPolicy);
 /// surface: the decode path returns it, and a change that drops it from the API would
 /// otherwise only fail at a test.
 const _: fn(&IncomingRpc) -> u32 = |m| m.seq_num;
+
+#[cfg(test)]
+mod holding_a_reply_until_the_refresh_lands {
+    //! ★★★★★ **w402 — the mechanism for the owner's ordering rule.**
+    //!
+    //! > *"You should only return from a TLB invalidate, the RPC map call or the kernel
+    //! > emulated channel for UVM after the PTE/PDB page table refresh function finished."*
+    //!
+    //! The measurement that forced it: six host faults in one boot, every one `FAULT_PDE`,
+    //! every one at an address our table already declared — four worker threads' copy
+    //! sources, `P3`'s release semaphore, and the fault this campaign had spent weeks calling
+    //! a harmless bystander. All of them ARE published, *after* the engine touched them.
+    //!
+    //! ⚠ These test the part that can hang a guest. A reply that is held and never released
+    //! is worse than a wrong reply: the guest sits in `rpcRecvPoll` until the driver's own
+    //! RPC timeout, and nothing in our logs says why.
+    use super::*;
+
+    struct Never;
+    impl CommandPolicy for Never {
+        fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
+            None
+        }
+    }
+
+    struct Holds;
+    impl CommandPolicy for Holds {
+        fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
+            None
+        }
+        fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
+            true
+        }
+    }
+
+    fn cmd() -> RpcCommand {
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 1,
+            sequence: 7,
+            payload: Vec::new(),
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    /// ⊘ THE DEFAULT IS THE SAFE ONE. A policy that has never heard of this mechanism must
+    /// not hold a reply — a held reply nobody releases is a guest hang, so silence has to
+    /// mean "deliver now".
+    #[test]
+    fn a_policy_that_says_nothing_never_holds() {
+        assert!(
+            !Never.holds_for_refresh(&cmd()),
+            "the default must be false: an unheld reply is at worst early, a held one that \
+             nobody releases is a hang"
+        );
+    }
+
+    /// ★★★ ANY LINK MAY HOLD — the chain is a `find_map` for the ANSWER and an `any` for the
+    /// HOLD, and conflating them is the bug this pins.
+    ///
+    /// A link seated ahead of the answerer exists precisely to observe facts the answerer
+    /// does not own (`CommandObserver`'s whole rationale). The link that knows the address
+    /// space moved is often NOT the link that produces the reply, so asking only the
+    /// answerer would silently deliver early.
+    #[test]
+    fn a_holding_link_ahead_of_the_answerer_still_holds() {
+        let chain = PolicyChain::new(vec![Box::new(Holds), Box::new(Never)]);
+        assert!(
+            chain.holds_for_refresh(&cmd()),
+            "the FIRST link holds; it does not matter that a later one would answer"
+        );
+        let chain = PolicyChain::new(vec![Box::new(Never), Box::new(Holds)]);
+        assert!(
+            chain.holds_for_refresh(&cmd()),
+            "and the other order too — this is an `any`, not 'whoever answered'"
+        );
+    }
+
+    /// ⊘ And the negative control: a chain of non-holders holds nothing. Without this, a
+    /// `holds_for_refresh` hardcoded to `true` would pass the test above.
+    #[test]
+    fn a_chain_of_non_holders_holds_nothing() {
+        let chain = PolicyChain::new(vec![Box::new(Never), Box::new(Never)]);
+        assert!(!chain.holds_for_refresh(&cmd()));
+    }
+}
