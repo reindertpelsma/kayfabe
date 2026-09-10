@@ -49,6 +49,11 @@ echo "[client] $(grep -a 'THREADS ' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)
 echo "[client] $(grep -a 'MEAN_FALSIFIER' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "--- THE LADDER (P1..Pn), which is what this change is graded on ---"
 grep -aE '^\s+P[0-9]+ ' "$D" | sed 's/^ */[ladder] /' | cut -c1-120
+echo "--- ★ THE GUEST-SIDE CLIENT, which is the rung the owner asked for ---"
+echo "[guest]  $(grep -a 'W392D_MEAN_CONFIG' "$D" | tail -1 | sed 's/^ *//' | cut -c1-100)"
+echo "[guest]  $(grep -a 'W392D_GUEST_OUTCOME' "$D" | tail -1 | sed 's/^ *//' | cut -c1-110)"
+echo "[guest]  $(grep -a 'W392D_GUEST_RC' "$D" | tail -1 | sed 's/^ *//' | cut -c1-40)"
+grep -aE 'VERIFIED|CONTENT MISMATCH|REFUSED at|THREADS |MEAN_FALSIFIER' "$D" | tail -12 | sed 's/^ */[guest]  /' | cut -c1-118
 echo "--- ★★★ THE ORDERING, WHICH IS THE WHOLE GRADE ---"
 # The bug was never coverage: the row WAS published, six lines after the host was rung.
 # So the grade is a COMPARISON OF LINE NUMBERS, not a count of publications.

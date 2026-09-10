@@ -75,8 +75,22 @@ $G 'chmod +x /tmp/rmladder' >/dev/null 2>&1
 echo "--- guest preconditions (a missing node is NOT a UVM result) ---"
 $G 'ls -la /dev/nvidia-uvm 2>&1; lsmod | grep -c nvidia_uvm' 2>&1 | sed 's/^/    /'
 
-echo "--- rmladder --uvm-mean --mean-falsify (in guest) ---"
-OUT=$($G "echo W392D_GUEST_STARTED=\$(date -u +%FT%TZ); timeout $TMO sudo /tmp/rmladder --gpu 0 --uvm-mean --mean-falsify 2>&1; echo W392D_GUEST_RC=\$?" 2>&1 | tr -d '\r')
+echo "--- rmladder --uvm-mean (FULL: threads/rounds above) --mean-falsify (in guest) ---"
+# ★★★ THE FULL MEAN TEST, not the smoke configuration — owner, 2026-09-10:
+# *"raw client with the full mean teast, not just the simple one."*
+#
+# The client's own defaults are `threads 4 / p1_rounds 4`, and every run this campaign has
+# graded used them by omission. They are the SMOKE shape: four threads is not a concurrency
+# test on a box with more cores than that, and four rounds barely exercises the stale-mapping
+# path the rounds exist for (`--mean-rounds` refuses < 2 by name, *"cannot see a stale
+# mapping"*, so rounds are the axis that makes the test mean anything).
+#
+# ⊘ Overridable, but the DEFAULT here is the full shape — a knob whose default is the weak
+# setting is a knob that measures the weak setting forever, which is the leg-8 lesson.
+MEAN_THREADS=${MEAN_THREADS:-8}
+MEAN_ROUNDS=${MEAN_ROUNDS:-8}
+echo "    W392D_MEAN_CONFIG=threads:$MEAN_THREADS rounds:$MEAN_ROUNDS falsify:on (⊘ client defaults are 4/4)"
+OUT=$($G "echo W392D_GUEST_STARTED=\$(date -u +%FT%TZ); timeout $TMO sudo /tmp/rmladder --gpu 0 --uvm-mean --mean-threads $MEAN_THREADS --mean-rounds $MEAN_ROUNDS --mean-falsify 2>&1; echo W392D_GUEST_RC=\$?" 2>&1 | tr -d '\r')
 echo "$OUT" | sed 's/^/    /'
 
 pick() { echo "$OUT" | sed -n "s/.*W392D $1 *= *//p" | tail -1; }
