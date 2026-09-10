@@ -12111,6 +12111,22 @@ fn main() -> std::process::ExitCode {
             "REV_UNDER_TEST={}",
             option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
         );
+        // ★★★ ONE object, ONE mapping, random-filled, real copies of varying size.
+        println!("--- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy per row ---");
+        match rm.sweep_vidmem_reads(256 << 20, &[64, 512, 4096, 64 << 10, 1 << 20, 16 << 20]) {
+            Ok(rows) => {
+                for (chunk, took, _) in rows {
+                    let mib = (256u64 << 20) as f64 / (1u64 << 20) as f64;
+                    println!(
+                        "GPGA_SWEEP copy={chunk:>9} B  256 MiB in {:>7.3} s => {:>8.1} MiB/s",
+                        took.as_secs_f64(),
+                        mib / took.as_secs_f64()
+                    );
+                }
+            }
+            Err(e) => println!("GPGA_SWEEP ⊘ REFUSED {e:?}"),
+        }
+
         // ⊘ Starts at the advertised 12288 MiB deliberately: the design says the guest's size
         // must be DERIVED from what succeeds, and this prints the gap between the number we
         // advertise and the number the card will actually give.
@@ -12148,21 +12164,6 @@ fn main() -> std::process::ExitCode {
                 }
                 Err(e) => println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}"),
             }
-        }
-        // ★★★ ONE object, ONE mapping, random-filled, real copies of varying size.
-        println!("--- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy per row ---");
-        match rm.sweep_vidmem_reads(256 << 20, &[64, 512, 4096, 64 << 10, 1 << 20, 16 << 20]) {
-            Ok(rows) => {
-                for (chunk, took, _) in rows {
-                    let mib = (256u64 << 20) as f64 / (1u64 << 20) as f64;
-                    println!(
-                        "GPGA_SWEEP copy={chunk:>9} B  256 MiB in {:>7.3} s => {:>8.1} MiB/s",
-                        took.as_secs_f64(),
-                        mib / took.as_secs_f64()
-                    );
-                }
-            }
-            Err(e) => println!("GPGA_SWEEP ⊘ REFUSED {e:?}"),
         }
         return std::process::ExitCode::SUCCESS;
     }
