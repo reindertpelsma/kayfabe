@@ -4505,7 +4505,7 @@ impl HostRmBackend {
     /// # Errors
     /// Whatever the allocation, mapping or a load refuses with.
     pub fn time_vidmem_read(&self, len: u64) -> Result<(std::time::Duration, u64), RmError> {
-        let raw = self.conn.alloc_device_local(len)?;
+        let raw = self.conn.reserve_gpga(len)?;
         let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
         // ⊘ `load_u64`, the widest single access `VolatileRegion` offers. That type has no
         // bulk read ON PURPOSE — it is the register-access type, where one call must be one
@@ -4557,7 +4557,11 @@ impl HostRmBackend {
         object_len: u64,
         chunks: &[u64],
     ) -> Result<Vec<(u64, std::time::Duration, u64)>, RmError> {
-        let raw = self.conn.alloc_device_local(object_len)?;
+        // ⊘⊘ `reserve_gpga`, NOT `alloc_device_local`. The latter demands CONTIGUOUS memory
+        // aligned to its own length, so a 256 MiB request needs a 256 MiB-aligned contiguous
+        // run and answers `NoMemory` on a merely fragmented card. `[measured 2026-09-11]` it
+        // did exactly that here, in the same session that added `reserve_gpga` to avoid it.
+        let raw = self.conn.reserve_gpga(object_len)?;
         let (node, map) = self.conn.map_cpu(raw, object_len, CachePolicy::WriteCombining)?;
 
         // ⊘ Fill with randomness, in page-sized bursts. Writes to write-combining memory are
