@@ -77,13 +77,26 @@ breakout, which is the correct bar.
 `[measured w422]` 1872 resident page-table pages, ~7.3 MiB, 784 sweeps on one address space,
 1178 refreshes a boot. Uncached video-memory reads run in the low hundreds of MB/s.
 
+`[measured 2026-09-11, bare metal, RTX 3060]` — the copy-width sweep over one 64 MiB
+reservation, mapped once, filled with `splitmix64`:
+
+| copy size | 64 B | 512 B | **4 KiB** | 64 KiB | 1 MiB | 16 MiB |
+|---|---|---|---|---|---|---|
+| MiB/s | 47.0 | 35.7 | **48.2** | 45.9 | 44.5 | 34.8 |
+
+★ **Flat.** Across eight orders of magnitude of transfer size the answer never leaves the
+mid-forties, which rules out per-call overhead and per-mapping locality. That is simply what the
+bus gives for CPU reads of video memory. ⊘ Word-at-a-time reads give **13–15 MiB/s**, so bulk
+copies are worth ~3.5x and that is the *entire* available improvement — not the hundredfold an
+earlier draft of this file allowed for. The identical loop over ordinary memory: **3674 MiB/s**.
+
 | | PCIe traffic per boot |
 |---|---|
-| re-read every refresh | tens of seconds — would present as a **hang** |
-| promote once per page | **~40 ms total** |
+| re-read every refresh, at the measured 48 MiB/s | ~500 ms per full re-read × 1178 ⇒ **~10 minutes** |
+| promote once per page | **~150 ms total** |
 
 ⇒ Promotion converts a per-sweep cost into a **per-page-once** cost. It is load-bearing for the
-product, not a percentage gain.
+product, not a percentage gain — the difference between booting and not.
 
 ★ And the footprint is small enough that wasting the video memory behind a promoted page is
 irrelevant: the whole hierarchy is **one part in five hundred** of what it maps (a 4 KiB leaf
