@@ -66,19 +66,17 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "GPFIFO_ENTRIES",
-        5,
-        "★★ **4 → 5 at `8cca3502` (w287), ADMITTED 2026-08-14 (w296).** The fifth is the \
-         THIRD unit-test assert, `GPFIFO_OFFSET + GPFIFO_ENTRIES*8 <= USERD_OFFSET_IN_RING` \
-         (`src/rm.rs:8896`) — w287 moved USERD into the ring object, making it a fourth \
-         tenant of a layout that had three, so the layout test gained the no-overlap check. \
-         ⊘ It is a LAYOUT INVARIANT, not a submission path: the row's own falsifier below \
-         is still armed, because a sixth would be one. \
-         ★ The definition, the ONE use (the `RingSource::Ours` arm of `alloc_channel_in`, \
-         which is the only place our own 64-entry ring is described), and THREE in the unit \
-         test that checks it is a power of two, fits, and does not overlap USERD. ⊘ A sixth \
-         is a submission path \
-         that went back to assuming every ring is ours — invisible on our own channels, \
-         64-against-4096 wrong on the guest's.",
+        16,
+        "★★ **5 → 16 at `8d74b11d` (w393), ADMITTED 2026-09-10 (w407).** Eleven of the new \
+         ones are ONE feature: `KAYFABE_LADDER_GPFIFO_ENTRIES`, an override for the entry \
+         count of OUR OWN ring (`:754`-`:805` — constant, env name, read, default return, the \
+         power-of-two-and-in-range guard, two log strings, the fallback). Its guard is what \
+         keeps it harmless: it refuses anything ABOVE the default, because larger would push \
+         the GPFIFO past USERD. Plus the definition and three unit-test asserts. ⊘ NOT ONE of \
+         them reads a GUEST ring's geometry, which is the only thing this row forbids — \
+         `:6966` keeps the distinction explicit and `:8144` states it as a rule (the modulus \
+         is READ FROM THE CHANNEL). ⚠ A seventeenth that is not an arm of that override, or \
+         ANY use of this constant on a `Guest` path, is the regression.",
     ),
     (
         "src/rm.rs",
@@ -92,28 +90,26 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "GPFIFO_OFFSET",
-        7,
-        "★★ **4 → 7 at `8cca3502` (w287), ADMITTED 2026-08-14 (w296).** The three new ones \
-         are all about OUR object's internal layout, which is what this row already \
-         quantifies over: `PUSHBUFFER_SLOTS`'s DERIVATION (`:760` — how many push slots fit \
-         BEFORE the GPFIFO, derived rather than restated, which is the shape this file \
-         wants), and two more layout asserts in the unit test (`:8894`, `:8896`) that came \
-         with USERD becoming a fourth tenant of the ring object. ⊘ None is a read of a \
-         GUEST ring's geometry, which is the only thing this row exists to forbid. \
-         The definition, `PUSHBUFFER_SLOTS`'s derivation, the `Ours` layout, \
-         `submit_entry`'s slot address, and three in the unit \
-         test. ⊘ Every one of them is about OUR ring object's internal layout. The guest's \
-         ring has its own, which is why `submit_entry` refuses a handed-in ring by name \
-         before it computes an offset at all.",
+        8,
+        "★★ **7 → 8 at `8d74b11d` (w393), ADMITTED 2026-09-10 (w407).** The eighth is a \
+         SECOND ours-family layout arm: `RingSource::OursPlaced` (`:6869`) beside the original \
+         `Ours` (`:6855`). Both compute OUR ring object's layout and differ only in who chose \
+         the base address. So: the definition, `PUSHBUFFER_SLOTS`'s derivation, the TWO \
+         ours-family layouts, `submit_entry`'s slot address, three in the unit test. ⊘ Every \
+         one is about OUR ring object; the guest's has its own, which is why `submit_entry` \
+         refuses a handed-in ring BY NAME before it computes an offset at all.",
     ),
     (
         "src/rm.rs",
         "alloc_device_local(RING_OBJECT_BYTES)",
-        2,
-        "★★★ G1, as a count: the ring (on the `Ours` arm ONLY) and USERD (on both arms, \
-         because USERD is ours on every channel we allocate). A third is a ring allocated \
-         for a channel that was handed one — the exact blocker this rung removed, growing \
-         back.",
+        3,
+        "★★★ G1, as a count. **2 → 3, ADMITTED 2026-09-10 (w407):** the ring on the `Ours` arm \
+         (`:6711`), our USERD when a `Guest` ring hands us none (`:6762` — USERD is ours on \
+         every channel we allocate and may NOT sit inside the guest's object), and the public \
+         `alloc_ring_object` helper (`:6139`). ⚠ The third is the OPPOSITE of the blocker this \
+         rung removed: a CALLER minting a ring to hand IN, not us allocating one for a channel \
+         that already came with one. ⊘ THAT is still the regression — a fourth call reached \
+         from the `Guest` arm's ring path.",
     ),
     (
         "src/rm.rs",
@@ -242,18 +238,23 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     // from somewhere new: the decision count in `alloc_channel_in` is unchanged at four.
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        6,
-        "`RingSource::Guest` is constructed or matched somewhere new. ⊘ SIX is the ruling \
-         (three before leg B, five before w288) and each one is a different job: TWO \
-         constructions — `alloc_channel_over_guest_ring` and its \
-         `_with_error_notifier` twin — TWO arms in `alloc_channel_in` deciding the RING — one \
-         provenance (allocate, or do not), one layout (our offsets, or the caller's) — and TWO \
-         more deciding the USERD, in the same shape and for the same reason. ★ They are \
-         deliberately not one arm each: the ring arms straddle a failure that must unwind \
-         between them, and the USERD arms are a second axis entirely — a channel can adopt the \
-         guest's ring and keep a USERD of ours, which is what every leg-A boot before this one \
-         did. A seventh site means one of the two guest arms is reachable from a path that did \
-         not state it."
+        7,
+        "`RingSource::Guest` is constructed or matched somewhere new. **SEVEN is the ruling \
+         (three before leg B, five before w288, six before w393), ADMITTED 2026-09-10 \
+         (w407)**, and each is a different job: TWO constructions — \
+         `alloc_channel_over_guest_ring` and its `_with_error_notifier` twin — TWO arms in \
+         `alloc_channel_in` deciding the RING (one provenance: allocate, or do not; one \
+         layout: our offsets, or the caller's) — TWO more deciding the USERD, in the same \
+         shape and for the same reason — and ONE space lookup (`:6693`) where `Ours` and \
+         `Guest` deliberately SHARE an arm. ★ That sharing is correct because the axis \
+         there is a different one: `OursPlaced` carries an externally-owned VA space whose \
+         handle the caller passes directly, while both other kinds resolve their space \
+         through `space_of(range)`. The guest/ours distinction that matters is untouched. \
+         ★ The ring arms are deliberately not one arm each: they straddle a failure that \
+         must unwind between them, and the USERD arms are a second axis entirely — a \
+         channel can adopt the guest's ring and keep a USERD of ours, which is what every \
+         leg-A boot before this one did. ⚠ An EIGHTH site means one of the two guest arms \
+         is reachable from a path that did not state it."
     );
 }
 
