@@ -80,3 +80,17 @@ the whole time while I read the QEMU log, the serial log, the host GPU and the d
 
 ⚠ **The client is the only gate that means anything and it has a measured 1-in-5 false-negative
 rate on a single boot.** n=1 is not a grade.
+
+## ⚠ The rented box and its deadman switch
+
+Instance **50376491**, label `kayfabe-w393`, RTX 3060, `ssh w393`.
+
+A deadman switch runs locally at `.deadman/watch.sh`: it destroys the instance if
+`.deadman/beat` goes **3 hours** stale, and logs to `.deadman/beat.log`. ⊘ Touch the beat file
+while working — a short window would kill the box mid-measurement (a boot is 5 minutes, an LLM
+run 20+), which is worse than an hour of billing.
+
+```
+touch /workspace/kf-master/.deadman/beat        # postpone
+vastai destroy instance 50376491 -y             # ★ -y skips the confirmation prompt
+```
