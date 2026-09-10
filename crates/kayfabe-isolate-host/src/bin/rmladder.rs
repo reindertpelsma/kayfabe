@@ -12113,12 +12113,16 @@ fn main() -> std::process::ExitCode {
         );
         // ★★★ ONE object, ONE mapping, random-filled, real copies of varying size.
         println!("--- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy per row ---");
-        match rm.sweep_vidmem_reads(256 << 20, &[64, 512, 4096, 64 << 10, 1 << 20, 16 << 20]) {
+        // ⊘ 64 MiB, not 256: a CPU view of vidmem goes through BAR1, which is 256 MiB TOTAL on
+        // this card and already partly held. 256 MiB refused with NoMemory while a 6144 MiB
+        // RESERVATION succeeded in the same process — the allocation is bounded by vidmem, the
+        // mapping by the aperture.
+        match rm.sweep_vidmem_reads(64 << 20, &[64, 512, 4096, 64 << 10, 1 << 20, 16 << 20]) {
             Ok(rows) => {
                 for (chunk, took, _) in rows {
-                    let mib = (256u64 << 20) as f64 / (1u64 << 20) as f64;
+                    let mib = (64u64 << 20) as f64 / (1u64 << 20) as f64;
                     println!(
-                        "GPGA_SWEEP copy={chunk:>9} B  256 MiB in {:>7.3} s => {:>8.1} MiB/s",
+                        "GPGA_SWEEP copy={chunk:>9} B   64 MiB in {:>7.3} s => {:>8.1} MiB/s",
                         took.as_secs_f64(),
                         mib / took.as_secs_f64()
                     );

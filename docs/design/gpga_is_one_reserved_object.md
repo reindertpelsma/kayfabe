@@ -89,6 +89,35 @@ product, not a percentage gain.
 irrelevant: the whole hierarchy is **one part in five hundred** of what it maps (a 4 KiB leaf
 table covers 2 MiB), so 12 GiB fully mapped at small pages costs 24 MiB of tables.
 
+## ⚠ CPU VIEWS ARE BOUNDED BY BAR1; GPU VIEWS ARE NOT
+
+`[measured 2026-09-11]` on the bench RTX 3060, from `lspci`:
+
+| aperture | size |
+|---|---|
+| BAR0, registers | 16 MiB |
+| **BAR1, the CPU window into video memory** | **256 MiB** |
+| BAR2 | 32 MiB |
+
+A **6144 MiB reservation succeeds** and a **256 MiB CPU mapping of it REFUSES with
+`NoMemory`** — in the same process, the mapping failing while the far larger allocation
+succeeds. The allocation is bounded by video memory; the CPU mapping is bounded by **BAR1**,
+which is 256 MiB in total for every client on the card, not per client.
+
+⇒ **A design that kept one persistent CPU view of the whole reservation would fail at boot.**
+Slicing CPU views is forced, not optional, and the ceiling is BAR1 minus whatever the host
+driver already holds. ★ This is also what PRAMIN is *for* — a small window that gets re-pointed
+— and why the hardware has one at all.
+
+⊘ **GPU virtual mappings are NOT affected.** They consume page tables, not aperture. So:
+
+- *"the scratchpad maps the whole object"* — **holds**, it is a GPU VA mapping.
+- *"the VMM keeps a CPU view of the whole object"* — **does not hold**, and never could.
+
+★ It also strengthens promotion a third time: reading page tables from video memory needs both
+a scarce aperture window **and** a 13 MiB/s bus. Promoting them into host memory removes both,
+for single-digit megabytes.
+
 ## What promotion actually costs
 
 Not the copy. The **re-pointing**. A promoted page must stay reachable by the copy engine, which
