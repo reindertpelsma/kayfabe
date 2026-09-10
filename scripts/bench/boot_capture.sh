@@ -71,8 +71,35 @@ PROBE=${LOG}_probe.log
 HOSTD=${LOG}_hostdmesg.log
 BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
 
+# ★★★★★ **STAMP THE BINARY, BY CONTENT, INTO ITS OWN ARTEFACT — w401, 2026-09-10.**
+#
+# Every bench log on this box was written WITHOUT one, and it cost a full day. `P3 rpc-bind`
+# was diagnosed as a regression from a specific commit on the strength of *"run w398c was
+# green"* — and `grep -ao 'kayfabe-rev:[0-9a-f]*'` over every historical `run_*_qemu.log`
+# returns **empty**. There was no green-at-a-revision to regress FROM. Three hypotheses were
+# built on that non-comparison before the clock refuted it: the run credited as the last green
+# ran two minutes after the one credited as the first red, which is less than a boot.
+#
+# ⚠ The stamp is taken from the BINARY'S OWN STRING TABLE, never from `git rev-parse`. The
+# working tree can be any revision while the bench serves a binary built from another — this
+# box did exactly that for weeks (`CLAUDE.md`, "the bench silently served a binary built from
+# 862c7c2"). A stamp derived from the source tree would have looked right the whole time.
+#
+# ⊘ `MISSING` is printed rather than an empty string, and it is not fatal: a boot that cannot
+# name its binary should still run, and should be UNCITABLE rather than silently unattributed.
+QBIN=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
+REV=$(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]\{8,40\}' | sort -u | head -1)
+REV=${REV:-kayfabe-rev:MISSING}
+printf '%s\n' "$REV" > "${LOG}_rev.txt"
+
 say() { printf '[boot_capture:%s] %s\n' "$TAG" "$*"; }
 die() { printf '[boot_capture:%s] ★ FAILED (%s): %s\n' "$TAG" "$1" "${*:2}"; exit "${DIE_RC:-2}"; }
+
+say "BINARY $REV  ($QBIN)  ⇒ every claim from this boot cites THIS revision"
+if [ "$REV" = "kayfabe-rev:MISSING" ]; then
+  say "⚠ THIS BOOT CANNOT NAME ITS BINARY. Its result is UNCITABLE as a before/after — do not"
+  say "  compare it against another run to attribute a change to a commit."
+fi
 
 # ---- phase 0: nothing else may own the bench ----------------------------------------
 if pgrep -x qemu-system-x86 >/dev/null 2>&1; then
