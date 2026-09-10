@@ -663,3 +663,43 @@ page-table walker is the first consumer that needs it, and the reason it needs i
 tidiness: it is reading the wrong memory today.
 ⊘ And `read` must distinguish unbacked from zero, or the fix is invisible for the same reason
 the bug was.
+
+---
+
+# ★★★★★ THE ROOT'S APERTURE IS HARDCODED TO VIDMEM — and the ABI already decodes the real one
+```rust
+// kayfabe-fwd/src/ptdecode.rs, plan_pt_sweep
+page: PtPage {
+    phys: pdb.0 & !0xfff,
+    aperture: kayfabe_arch::Aperture::Vidmem,   // ← HARDCODED
+    level: 0,
+```
+Every sweep begins by reading the page-directory base **out of the framebuffer**, wherever the
+guest actually put it. A VAS whose PDB lives in sysmem is read from the wrong memory, decodes as
+a page of entirely invalid entries, and yields nothing reachable — permanently, because no PDE
+is ever decoded to say otherwise. The walk never gets past entry zero.
+
+## ⊘ THE DATA WAS NEVER MISSING — IT WAS DISCARDED
+`kayfabe_abi::view::PdbAperture` exists, carries `SysmemCoherent` / `SysmemNonCoherent` /
+`Undefined(n)`, and `mean_wire.rs:1488` asserts we decode `PdbAperture::SysmemCoherent` off the
+wire **correctly**. Then `Vas` stores only `pdb: Pdb` — an address — and the aperture is dropped
+three layers before the walker needs it.
+⇒ Not a missing capability. A **decoded fact thrown away**, and then defaulted to the wrong
+value at the point of use.
+
+## ⊘ WHY EVERY EARLIER FIX WAS CORRECT AND CHANGED NOTHING
+Six boots, each fixing something genuinely broken, none of them this:
+| fix | real defect | why it could not help |
+|---|---|---|
+| circular `publish_epoch` | keyed on OUR table to decide whether to read the GUEST's | made the sweep *arm*; the walk still read the wrong page |
+| empty scan retiring `NeverSwept` | a scan that visited nothing closed the question | same |
+| barrier-armed rescan | `dirty` could only be set by pages we already knew | got 37 tasks for the VAS; all read the wrong page |
+| `FbRead::read_in(aperture)` | the aperture was decoded then thrown away at the read | correct and necessary — but the ROOT still passed `Vidmem` |
+★ Each made the walk happen **more**, and the walk was reading the wrong bytes and reporting
+success — because a wrong-aperture read *succeeds* and a zero page decodes as "maps nothing".
+**More triggering of a wrong read is still a wrong read.**
+
+## ⇒ THE FIX
+Carry the guest's published `PdbAperture` on `Vas` beside `pdb`, and use it for the root
+`PtPage`. ⊘ `Undefined(n)` must NOT default to vidmem — it is the case where we do not know, and
+guessing is what this whole chase was.
