@@ -12135,6 +12135,15 @@ fn main() -> std::process::ExitCode {
                         took.as_secs_f64() * 1e3,
                         took.as_secs_f64() * 1178.0
                     );
+                    let (h_took, _) =
+                        kayfabe_isolate_host::rm::HostRmBackend::time_hostmem_read(probe_len);
+                    let h_mbps =
+                        (probe_len as f64 / (1 << 20) as f64) / h_took.as_secs_f64();
+                    println!(
+                        "GPGA_HOSTMEM_READ={h_mbps:.0} MiB/s (the SAME loop over ordinary RAM) \
+                         ⇒ ratio {:.0}x — if this is fast, the cost is the BUS, not the wrapper",
+                        h_mbps / mbps
+                    );
                     println!("GPGA_PROBE=(P) ★ reserved {mb} MiB and measured the read cost");
                 }
                 Err(e) => println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}"),

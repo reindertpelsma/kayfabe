@@ -4507,22 +4507,48 @@ impl HostRmBackend {
     pub fn time_vidmem_read(&self, len: u64) -> Result<(std::time::Duration, u64), RmError> {
         let raw = self.conn.alloc_device_local(len)?;
         let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        // ⊘ `load_u64`, the widest single access `VolatileRegion` offers. That type has no
+        // bulk read ON PURPOSE — it is the register-access type, where one call must be one
+        // instruction. So this measures an ACCESS RATE, not a memcpy bandwidth, and the
+        // caller must say so. A true bulk read of video memory needs a non-volatile mapping,
+        // which `map_cpu` does not hand out.
         let mut acc = 0u64;
         let start = std::time::Instant::now();
         let mut off = 0u64;
-        while off + 4 <= len {
-            acc = acc.wrapping_add(u64::from(
-                map.load_u32(HostOffset::new(off)).map_err(|e| region_error(&e))?,
-            ));
-            off += 4;
+        while off + 8 <= len {
+            acc = acc.wrapping_add(
+                map.load_u64(HostOffset::new(off))
+                    .map_err(|e| region_error(&e))?,
+            );
+            off += 8;
         }
         let took = start.elapsed();
         drop(map);
         drop(node);
-        // ⊘ Leaked deliberately: this is a one-shot probe in a process that exits, and a free
-        // path here would need &mut self, which the read-only shape of this helper avoids.
         let _ = raw;
         Ok((took, acc))
+    }
+
+    /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
+    /// over ordinary host memory.
+    ///
+    /// ⊘ Without it, a slow result is unattributable: it could be the PCIe round trip, or it
+    /// could be the per-access wrapper (bounds check, error construction, a non-inlined
+    /// volatile read). Those need opposite fixes, and this tree has a standing habit of
+    /// attributing a cost to the mechanism it was looking at.
+    #[must_use]
+    pub fn time_hostmem_read(len: u64) -> (std::time::Duration, u64) {
+        let buf = vec![0u8; usize::try_from(len).unwrap_or(0)];
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0usize;
+        while off + 8 <= buf.len() {
+            let mut w = [0u8; 8];
+            w.copy_from_slice(&buf[off..off + 8]);
+            acc = acc.wrapping_add(u64::from_le_bytes(w));
+            off += 8;
+        }
+        (start.elapsed(), acc)
     }
 
     pub fn read_words_independently(
