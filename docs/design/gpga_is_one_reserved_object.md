@@ -131,6 +131,89 @@ driver already holds. ★ This is also what PRAMIN is *for* — a small window t
 a scarce aperture window **and** a 13 MiB/s bus. Promoting them into host memory removes both,
 for single-digit megabytes.
 
+## The promote / demote protocol
+
+★★★★★ **The CPU never reads video memory on our path. The copy engine does.** Measured: the
+processor reads video memory at **48 MiB/s**; an engine reads it at **hundreds of GB/s** and
+crosses the link at **12.33 GB/s**. So every promotion copy is a **CE copy on the scratchpad
+channel**, never a `memcpy`.
+
+⇒ And the rule is **absolute, not a common case**: a child page is promoted *before* it is read,
+because we learn it is a page table from its **parent**, which is already promoted. There is no
+first sight that requires an aperture read. Absolutes survive refactoring; common cases do not.
+
+### The scratchpad's address space
+
+| range | contents |
+|---|---|
+| `X .. X + |GPGA|` | **the whole of GPGA**, so an address is `X + gpga_offset`. Initially all the reserved object; portions become host-memory regions as promotions land. |
+| above it | the **fake range** — every promoted buffer, at `fake_base + gpga_offset`. Sparse, so no free list and no block tracking: the offset IS the key. |
+
+⊘ Both must be mapped at once, because a promotion copy has a source in one and a destination in
+the other. ★ And GPGA is *always* live and correct in this one GPU VA, which is what makes a
+scrubber or a kernel CE copy pure offset arithmetic.
+
+### Promote
+
+1. allocate the host buffer
+2. map it into the **fake range** (DMA)
+3. **CE copy** vidmem → fake
+4. map it over the GPGA range, so that offset now reads the fake buffer — it is authoritative
+5. update every other view: PRAMIN, BAR1, BAR2, any channel, from the mapping registry
+6. force dirty, so the entry read that triggered this actually re-reads
+
+### Demote — at the END of the refresh, never during
+
+1. unmap from the GPGA range, so the reserved object shows through again
+2. **CE copy** fake → vidmem
+3. update every other view
+4. unmap from the fake range
+5. free the host buffer
+
+★★★ **Two conditions, both residuals over a FINISHED walk** — which is why demotion is last:
+
+1. the range is no longer reachable as any valid PDB/PDE/PTB/PTE. Detectable **without a
+   sweep**: a dirty page showing a PDB that no longer references a PTB, plus our own table
+   saying no other PDB did, means the PTB is dead.
+2. no older PTE still maps that range — nothing remains of earlier VA-space allocations, for the
+   case where a PTE maps a table's own memory.
+
+⊘ **PRAMIN and BAR2 referencing it do NOT block demotion.** The driver touches a range through
+those only during allocation and deallocation, and that is forbidden during an invalidate. What
+*does* block it is the range being mapped into an unrelated channel that may be using it.
+
+### ★★★ Two properties that make this affordable
+
+**Getting demotion wrong costs CHURN, not correctness.** The copy-back happens before the buffer
+is released, so the bytes survive either way; a wrongly demoted page is simply promoted again
+next refresh. ⇒ Conditions (1) and (2) may be **conservative approximations**, the reference
+table behind (1) need not be perfect, and the safe bias is *not* to demote when unsure.
+
+**Promotion is a FIXPOINT and needs its termination said out loud.** A newly promoted directory
+reveals table addresses we did not know, so it iterates. It terminates because each round
+promotes at least one new page and the page set is finite, and because the walk already refuses
+cycles and dangling pointers. ⚠ An unbounded loop here hangs the invalidate the guest is waiting
+on — the one place we cannot afford one.
+
+### Exclusion, not protection
+
+One refresh runs at a time, under a lock that **a vCPU never takes** and that may block. ⊘ It
+excludes a second refresh; it protects no data. It cannot: the guest does not participate in our
+locking, so a lock over guest memory is a claim we are not entitled to make.
+
+⚠ **The unmapped window is real and the code must say so.** Steps promote-4 and demote-1 unmap
+before they map, so the GPGA range is briefly absent from the scratchpad. That is safe **only**
+because the sole engine work against the scratchpad is ours and we are inside the exclusive
+refresh. State it at the site: it is exactly the kind of premise a later change breaks silently.
+
+### Batching is mandatory
+
+A CE copy completes asynchronously against a semaphore, so each promotion is a submit and a
+wait. At the **1872** page-table pages measured in `w422`, per-page submission means 1872 round
+trips and the round trip — not the bytes — becomes the cost, which is the same shape as the
+48 MiB/s finding one level up. ⇒ One submission carrying the whole batch, then one wait. Order
+within the batch is preserved; the batch boundary is not an optimisation to add later.
+
 ## What promotion actually costs
 
 Not the copy. The **re-pointing**. A promoted page must stay reachable by the copy engine, which
