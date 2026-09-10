@@ -2439,3 +2439,70 @@ fn an_untouched_vas_is_enumerated_as_empty_rather_than_omitted() {
         "an untouched VAS is PRESENT and EMPTY, never absent: {rows:?}"
     );
 }
+
+/// ★★★★★ **w406 — THE GUEST'S PAGE TABLE MAY DESCRIBE THE RANGE FIRST, AND THAT IS NOT A
+/// COLLISION.**
+///
+/// `[measured w406, run_w406_qemu.log]` once the sweep ran at the TLB invalidate and at the
+/// UVM channel's completion, the ctx-buffer leaves were in the table — as 4 KiB / 64 KiB
+/// page-table rows at the promote's own physical — before `UVM_REGISTER_CHANNEL` drove the
+/// promote's VA half. `bridge refusal PromoteFault::Collides x3`, `PROMOTE-BOUND … joined=0`
+/// (four prior boots: `joined=4`), and RM handed the `0x56` straight to the client.
+///
+/// A leaf that maps the VA to the SAME memory the promote names is the same mapping arriving
+/// through the second transport: `already`, nothing rebound. A leaf naming DIFFERENT memory
+/// still collides — the relaxation is about which source got there first, never what it says.
+#[test]
+fn a_range_the_guests_own_tables_already_describe_is_already_not_a_collision() {
+    let mut gpu = world();
+    let pid = pid_of(&gpu, A_PDB);
+    // The sweep got there first: two page-table leaves inside the range, at the promote's
+    // own physical, offset for offset.
+    let phys = 0x2_ef94_6000u64;
+    {
+        let vas = gpu
+            .procs
+            .get_mut(&pid)
+            .expect("proc")
+            .vases
+            .get_mut(&(GpuId::ZERO, A_PDB))
+            .expect("vas");
+        for off in [0u64, 0x1000] {
+            vas.table
+                .bind(
+                    A_PDB,
+                    GpuVa(GR_VA.0 + off),
+                    0x1000,
+                    kayfabe_mmu::Binding::declared_by_guest(phys + off, Aperture::Vidmem)
+                        .expect("vidmem leaf"),
+                )
+                .expect("the sweep's leaf binds");
+        }
+    }
+    let join = gpu
+        .promote_ctx(&promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![gr_range(GR_VA, phys)],
+        ))
+        .expect("★ the promote is CORROBORATED by the guest's tables, not refused");
+    assert_eq!(join.already, 1, "counted as already there, from the other transport");
+    assert_eq!(join.bound, 0, "and nothing was rebound over the sweep's leaves");
+    assert_eq!(
+        resolve_in(&gpu, A_PDB, GpuVa(GR_VA.0 + 0x1000)),
+        Ok(phys + 0x1000),
+        "the sweep's leaves still translate"
+    );
+    // ⊘ The same VA naming DIFFERENT memory is still a collision, by name.
+    assert_eq!(
+        gpu.promote_ctx(&promotion(
+            A_CLIENT,
+            H_GR_CHANNEL,
+            vec![gr_range(GR_VA, 0x4_0000_0000)]
+        )),
+        Err(PromoteFault::Collides {
+            va: GR_VA,
+            len: GR_LEN
+        }),
+    );
+}

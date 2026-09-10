@@ -1123,20 +1123,39 @@ pub fn apply_promote_ctx(
         }
     }
 
-    // Which ranges are already there, byte-identically, from a previous promotion.
+    // Which ranges are already there — byte-identically from a previous promotion, or
+    // CORROBORATED by the guest's own page tables.
+    //
+    // ★★★★★ **w406 — THE GUEST'S PAGE TABLE IS A CO-EQUAL SOURCE, AND IT MAY ARRIVE FIRST.**
+    // `mode2_address_table.md` names two populate sources for one table: the bind-time RPC
+    // (this control) and the observed page-table write (the sweep). Until w406 the sweep
+    // ran only at the doorbell, so this control always bound first and the sweep's leaves
+    // inside a promoted range were refused as straddles (`[measured w405,
+    // run_w405_qemu.log:1535]` `refusals=494 … StraddlesLiveBinding … SameMemory`). w406
+    // runs the sweep at the TLB invalidate and at the UVM channel's completion — BEFORE
+    // `UVM_REGISTER_CHANNEL` drives this control — so the SAME rows now sit in the table as
+    // 4 KiB / 64 KiB / 2 MiB page-table leaves when the promote's VA half lands.
+    // `[measured w406, run_w406_qemu.log]` `bridge refusal PromoteFault::Collides x3`,
+    // `PROMOTE-BOUND … joined=0` (four prior boots: `joined=4`), and RM handed the 0x56
+    // straight to `UVM_REGISTER_CHANNEL`.
+    //
+    // ⇒ A leaf that maps the promote's VA to the promote's OWN physical is not a collision;
+    // it is the guest describing the same mapping twice, through two transports. Such a
+    // range is `already` — nothing is rebound, nothing is revoked, and the leaves stay the
+    // sweep's (they are revocable when the guest unmaps them, which a promote row is not).
+    // ⊘ A binding that maps the VA to a DIFFERENT physical, or aperture, still collides:
+    // the only thing relaxed here is *which source got there first*, never *what it says*.
     let mut already: BTreeSet<u64> = BTreeSet::new();
     for r in p.ranges.iter().chain(completed.iter().map(|(r, _)| r)) {
         let mut covered = false;
         for (start, _len, binding) in vas.table.spans(r.va, r.len) {
-            // The span's offset into the binding is unread here: this asks whether an
-            // IDENTICAL range is already bound, and an identical range starts at the
-            // binding's base by definition (`start == r.va.0` below).
-            let Some((b, _within)) = binding else {
+            // `within` is the span's offset into its binding, so `b.phys() + within` is the
+            // physical the guest's table names at `start`; the promote names
+            // `r.phys + (start - r.va)` there. Equal ⇒ the same memory, described twice.
+            let Some((b, within)) = binding else {
                 continue;
             };
             covered = true;
-            // An identical re-promote is the ONE overlap that is not a conflict: same
-            // start, same length, same contents, and previously bound by this source.
             let identical = start == r.va.0
                 && vas.promote_bound.contains(&r.va.0)
                 && b.phys() == r.phys
@@ -1146,7 +1165,10 @@ pub fn apply_promote_ctx(
                     .table
                     .iter()
                     .any(|(va, len, _)| va == r.va.0 && len == r.len);
-            if !identical {
+            let corroborated = b.aperture() == r.aperture
+                && start >= r.va.0
+                && b.phys().checked_add(within) == r.phys.checked_add(start - r.va.0);
+            if !identical && !corroborated {
                 return Err(PromoteFault::Collides {
                     va: r.va,
                     len: r.len,
@@ -1158,7 +1180,6 @@ pub fn apply_promote_ctx(
         }
     }
 
-    // ── PASS 2: apply. Nothing below can fail. ───────────────────────────────────────
     let mut bound = 0u32;
     let mut joined = 0u32;
     for (r, from_join, from_global) in p
