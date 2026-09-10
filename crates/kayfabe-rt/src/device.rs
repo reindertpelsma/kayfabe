@@ -4057,6 +4057,30 @@ impl SharedDevice {
     /// ⚠ Runs on a vCPU, so it does exactly the work the invariants allow under a lock: a walk
     /// over single-digit-to-tens of VASes reading one `u64` each. No syscall, no allocation of
     /// consequence, nothing blocking. The publication itself is still the worker's job.
+    /// ★★★ `(Σ AddressTable::generation, VAS count)` over every proc — the non-consuming
+    /// read behind [`kayfabe_rmrpc::ObjectModel::table_fingerprint`].
+    ///
+    /// ⊘ Distinct from [`Self::take_table_changes`], which CONSUMES: that one re-watermarks
+    /// and is the publication trigger. This one only looks, because it is called twice
+    /// around a single command and a consuming read would make the second call always say
+    /// "unchanged".
+    #[must_use]
+    pub fn table_fingerprint(&self) -> (u64, usize) {
+        let (mut sum, mut n) = (0u64, 0usize);
+        let st = self.state.read();
+        let mut scan = |p: &kayfabe_core::gpu::Proc| {
+            for vas in p.vases.values() {
+                sum = sum.wrapping_add(vas.table.generation());
+                n += 1;
+            }
+        };
+        scan(&st.system.lock());
+        for cell in st.procs.values() {
+            scan(&cell.lock());
+        }
+        (sum, n)
+    }
+
     pub fn take_table_changes(&self) -> usize {
         // ⊘ Two passes, deliberately NOT nested. Collecting under `state` and then comparing
         // under the watermark means the two locks are never held at once, so no ordering

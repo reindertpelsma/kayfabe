@@ -3133,6 +3133,23 @@ fn report_channel_birth_drain(
 }
 
 impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
+    /// ★★★★★ **THE OVERRIDE THAT MAKES THE HOLD REACHABLE AT ALL.**
+    ///
+    /// ⊘⊘ Without this the trait's DEFAULT applies — `(0, 0)`, *"never moves"* — and
+    /// `holds_for_refresh` is then permanently false. `[measured w404]` it was, and the
+    /// mechanism fired **zero** times in a full boot while every line of it was correct and
+    /// tested. The default was chosen to be safe (a model that has not thought about this
+    /// must not hold a reply and hang a guest) and safe-by-default is exactly what made the
+    /// omission SILENT.
+    ///
+    /// ⚠ **THIS is the production port.** The shell passes `SharedObjectModel`, not a `Gpu`
+    /// — the hook went into `GraphPolicy` first (not in the chain), then `ObjectPolicy`
+    /// (in the chain, but reading a port that inherited the default). Three placements, two
+    /// of them unreachable, and only the log line saying `0` distinguished them.
+    fn table_fingerprint(&self) -> (u64, usize) {
+        self.0.table_fingerprint()
+    }
+
     fn apply(
         &mut self,
         ev: kayfabe_core::rmgraph::RmEvent,
