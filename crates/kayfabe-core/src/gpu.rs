@@ -2250,8 +2250,8 @@ pub enum ReapPolicy {
     /// **Hold a proc back while it still has drainable staged work**
     /// ([`Proc::has_drainable_releases`]), so the burst above can never happen.
     ///
-    /// For the one caller where clause (b) *does* bind: `Regs::write` runs with the QEMU BQL
-    /// held, so a blocking disposal there halts **every vCPU and QEMU's main loop**, and
+    /// For the one caller where clause (b) *does* bind: `Regs::write` runs with the VMM's global lock
+    /// held, so a blocking disposal there halts **every vCPU and the VMM's dispatch loop**, and
     /// w314 measured that burst at **2.65–3.70 s** against `scrubberDestruct`'s 4 000 ms.
     /// Pair this with `SharedDevice::drain_retired_budgeted`, which is what actually empties
     /// the queue a bounded slice per trap; on its own this arm only defers.
@@ -4918,7 +4918,7 @@ impl Spine {
     /// exists for exactly this shape.
     ///
     /// ★ **Deliberately ONE turn, not a loop.** The budget that matters is *wall-clock time
-    /// with the BQL held*, and this crate has no clock (§8.3). Splitting the loop out to the
+    /// with the VMM's global lock held*, and this crate has no clock (§8.3). Splitting the loop out to the
     /// caller is what lets the shell spend a real time budget while this stays a pure
     /// function of state — and it is what makes the budget testable offline with a counting
     /// closure instead of a sleep.

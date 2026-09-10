@@ -2424,7 +2424,7 @@ impl VerbPlan {
 ///
 /// ⚠ **AND IT CORRECTS A FIX I HAD ALREADY NAMED.** I proposed moving this phase off the
 /// trap thread to drive `inline_exceptions` to 0. But `qemu/hw/misc/nvkvm/nvkvm.c:931` calls
-/// `memory_region_enable_lockless_io` on **every** nvkvm region, so the BQL is **not held**
+/// `the adapter's lockless-MMIO opt-in` on **every** nvkvm region, so the VMM's global lock is **not held**
 /// during a doorbell trap — the inline execution blocks no other vCPU, and the calling vCPU
 /// must wait for the reply regardless because `commit_phase` consumes it. Moving the phase
 /// would therefore have bought **no latency at all**. The question is not *where* the work

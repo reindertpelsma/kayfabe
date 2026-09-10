@@ -83,7 +83,7 @@ const MAX_ENTRIES_PER_DOORBELL: u32 = 8;
 ///
 /// ★ **It is a divide-by-zero guard first and a modulus second.** `entries` is the divisor in
 /// `cursor.next % entries` three lines into both walks; with `ring_entries == 0` that is an
-/// integer division by zero — a **panic on a vCPU thread beneath the BQL**, which is a worse
+/// integer division by zero — a **panic on a vCPU thread beneath the VMM's global lock**, which is a worse
 /// outcome than any wrong index. So it cannot simply be deleted.
 ///
 /// ⊘ **Can it fire?** The decode is all-or-nothing: `decode_channel_alloc_facts` refuses a

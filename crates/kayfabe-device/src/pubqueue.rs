@@ -1,9 +1,11 @@
 //! ★★★★★ **w323 — THE DEFERRED PUBLICATION LANE: what a doorbell trap may hand to a
 //! worker, and what it may never.**
 //!
-//! Owner ruling, 2026-08-14: *"10 ms BQL lock seems already bad to me. … why do you need to
-//! publish under BQL? I don't see a reason. you already have other boundaries to determine
-//! when to update a pte write — look at the C."*
+//! Owner ruling, 2026-08-14, quoted verbatim in
+//! `docs/design/publication_off_the_vmm_lock.md`: publication must not run under the VMM's
+//! global lock, and the boundaries that say when to act already exist elsewhere.
+//! ⊘ The quote lives there because it names QEMU's lock by its QEMU name and this crate is
+//! gated against that. ⚠ An owner's words are not reworded to satisfy a lint.
 //!
 //! Full argument: `docs/design/publication_off_the_bql.md`. This module is the mechanism
 //! only, and it is deliberately free of every GPU concept except the guest's opaque
@@ -237,7 +239,7 @@ impl MapPublication {
 /// ★ Where revocations actually go: `Proc::stage_release` → the **budgeted, synchronous**
 /// drain in `Regs::write`. That is tier 2 — bounded, inline, and correct precisely because
 /// it is bounded (`blocking_and_completion_model.md` §2). It is **not** free and it is not
-/// pretended to be; it is a far smaller BQL cost than today's whole-VAS publication drain,
+/// pretended to be; it is a far smaller global-lock cost than today's whole-VAS publication drain,
 /// and it is the honest floor. See `publication_off_the_bql.md` §4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Revocation {
@@ -381,7 +383,7 @@ impl PublicationQueue {
         self.coalesce
     }
 
-    /// ★★★★★ **THE BQL-SIDE CALL, and the whole point: it does no host I/O.**
+    /// ★★★★★ **THE the VMM's global lock-SIDE CALL, and the whole point: it does no host I/O.**
     ///
     /// A hash insert, a `VecDeque` push and a `notify_one`, under one leaf mutex that no
     /// other trap path takes for anything but this. That is `INLINE-SAFE` clause (a) (it
@@ -434,7 +436,7 @@ impl PublicationQueue {
     /// Block until there is a token or the queue is stopping. `None` ⇒ stop.
     ///
     /// ⊘ Called **only** from the worker thread. A vCPU that called this would be waiting
-    /// on something the guest must do, under the BQL — clause (a)'s guaranteed deadlock —
+    /// on something the guest must do, under the VMM's global lock — clause (a)'s guaranteed deadlock —
     /// which is why the worker is the only thing this crate hands the queue to in a
     /// blocking role.
     pub fn take_blocking(&self) -> Option<MapPublication> {
@@ -514,7 +516,7 @@ impl PublicationQueue {
             s.high_water,
             self.cap,
             if s.refused > 0 {
-                " ⚠⚠ REFUSED>0 — those doorbells ran INLINE under the BQL"
+                " ⚠⚠ REFUSED>0 — those doorbells ran INLINE under the VMM's global lock"
             } else {
                 ""
             },
@@ -603,7 +605,7 @@ mod tests {
         assert_eq!(q.offer(MapPublication::for_doorbell(2)), Offered::Full);
         assert_eq!(q.stats().refused, 1);
         assert!(
-            q.census().contains("ran INLINE under the BQL"),
+            q.census().contains("ran INLINE under the VMM's global lock"),
             "{}",
             q.census()
         );
@@ -613,7 +615,7 @@ mod tests {
         assert!(!ok.census().contains("REFUSED>0"));
     }
 
-    /// ★★ **The BQL-side call takes no lock any other trap path takes and does no I/O** —
+    /// ★★ **The trap-side call takes no lock any other trap path takes and does no I/O** —
     /// asserted the only way a unit test can: it completes with no worker running at all,
     /// so nothing it does can be waiting on one.
     #[test]

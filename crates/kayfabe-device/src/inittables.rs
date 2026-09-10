@@ -2402,7 +2402,7 @@ impl CommandPolicy for InitTablePolicy {
             // guest that asks a different shape gets a refusal and not an invention.
             //
             // ⚠ Forwarding to the host is the better answer and is BUILT
-            // (`VerbPlan::SubdeviceControl`), but it is gated off until an off-BQL execution
+            // (`VerbPlan::SubdeviceControl`), but it is gated off until an off-lock execution
             // site exists — a synchronous host verb from `respond` trips R1. This table is
             // what makes the runtime work in the meantime, and it carries its own expiry
             // conditions in `kayfabe_abi::cudartinit`.

@@ -62,7 +62,7 @@
 //!
 //! Forwarding is the better long-term answer and is built (`VerbPlan::SubdeviceControl`), but
 //! it is **gated off**: a synchronous host round-trip from `CommandPolicy::respond` trips the
-//! R1 no-blocking-under-lock guard, and the off-BQL execution site does not exist yet.
+//! R1 no-blocking-under-lock guard, and the off-lock execution site does not exist yet.
 //!
 //! These four are also **not derivable from chip facts**. Three carry the GSS-legacy bit and
 //! have no `#define` in any open header, SDK or NVOC table; they are opaque by construction.

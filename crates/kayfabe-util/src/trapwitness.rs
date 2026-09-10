@@ -9,7 +9,7 @@
 //! > means they will be violated by a well-meaning patch."*
 //!
 //! Three measured instances of exactly that, all after the prose was written:
-//! **w317** — a 3.70 s teardown disposal on the vCPU thread under the BQL;
+//! **w317** — a 3.70 s teardown disposal on the vCPU thread under the VMM's global lock;
 //! **w319** — 13 313 serialized cross-process round trips on one drain;
 //! **w306** — an isolate call reachable only from the vCPU trap path.
 //!
@@ -177,7 +177,7 @@ pub fn off_trap_claims() -> u64 {
 ///
 /// # ⊘ Why a lock-free table and not a `Mutex<BTreeMap>`
 ///
-/// [`OffTrap::inline_under_bql`] is minted **on the trap thread, under the BQL**, which is
+/// [`OffTrap::inline_under_bql`] is minted **on the trap thread, under the VMM's global lock**, which is
 /// exactly where `l1_concurrency.md` R1 forbids a potentially-blocking site. A mutex here
 /// would put the instrument inside the hazard it exists to measure. So: a fixed table of
 /// atomics, linear-probed, no allocation, no lock, no syscall.
@@ -202,7 +202,7 @@ static INLINE_REASON_HITS: [AtomicU64; INLINE_REASON_SLOTS] =
 /// complicated, and read as if it had not.
 static INLINE_REASON_OVERFLOW: AtomicU64 = AtomicU64::new(0);
 
-/// Record one inline mint against its reason. Lock-free; safe under the BQL.
+/// Record one inline mint against its reason. Lock-free; safe under the VMM's global lock.
 fn note_inline_reason(what: &'static str) {
     let ptr = what.as_ptr() as usize;
     for i in 0..INLINE_REASON_SLOTS {
@@ -422,8 +422,8 @@ impl OffTrap {
     ///
     /// # Panics
     /// If this thread is currently inside a [`TrapGuard`]. That is not a recoverable
-    /// condition: it means a host round trip was about to run with the BQL held, freezing
-    /// every vCPU and QEMU's main loop — the failure `blocking_and_completion_model.md` §0
+    /// condition: it means a host round trip was about to run with the VMM's global lock held, freezing
+    /// every vCPU and the VMM's dispatch loop — the failure `blocking_and_completion_model.md` §0
     /// exists to describe.
     #[must_use]
     pub fn claim(what: &'static str) -> Self {
@@ -431,8 +431,8 @@ impl OffTrap {
             !in_trap(),
             "INLINE-SAFE violation (blocking_and_completion_model.md §1 clause (a)/(b)): \
              `{what}` asked for an off-trap witness while this thread is {depth} guest-trap \
-             dispatch(es) deep. Every guest MMIO write arrives with the QEMU BQL held, so \
-             this call would stall EVERY vCPU and QEMU's main loop, not just the ringing \
+             dispatch(es) deep. Every guest MMIO write arrives with the VMM's global lock held, so \
+             this call would stall EVERY vCPU and the VMM's dispatch loop, not just the ringing \
              one. Move the work to a worker and return to VM entry, or — if and only if it \
              is bounded and guest-independent — declare it with \
              `OffTrap::inline_under_bql`, which counts itself.",

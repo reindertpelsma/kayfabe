@@ -3166,7 +3166,7 @@ impl ObjectPolicy {
         // ⇒ The wiring is CORRECT and COMPLETE; a synchronous host round-trip from a
         // `CommandPolicy::respond` is not permissible under the current locking. That is not
         // a defect of this verb — it is `blocking_and_completion_model.md:106` verbatim:
-        // *"The missing mechanism is not a completion transport. It is an off-BQL execution
+        // *"The missing mechanism is not a completion transport. It is an off-lock execution
         // site for host verbs."* This is the first code to actually walk that path;
         // `relay_channel_control`'s host call is a fault-info read these boots never trigger,
         // so the template compiled and shipped without ever exercising it.
@@ -3176,7 +3176,7 @@ impl ObjectPolicy {
         // `lockwitness::assert_lock_free`, which DOES panic. Two guards, similar roles,
         // opposite failure modes — and only a boot told them apart.
         //
-        // ⇒ Default OFF until the off-BQL site exists. `KAYFABE_SUBDEV_FWD=on` arms it for
+        // ⇒ Default OFF until the off-lock site exists. `KAYFABE_SUBDEV_FWD=on` arms it for
         // whoever builds that site, so the plumbing is one env var from being testable
         // rather than needing to be rebuilt.
         if std::env::var("KAYFABE_SUBDEV_FWD").as_deref() != Ok("on") {

@@ -1859,8 +1859,8 @@ impl SharedDevice {
     /// # The number this exists for
     ///
     /// `[measured 2026-08-14 (w314), bench vh, real GA106, n=4 per arm, non-overlapping
-    /// ranges]` `Regs::write`'s reap halted **every vCPU and QEMU's main loop** — they all
-    /// serialise on the BQL — for **2.65–2.92 s** on clean master and up to **3.70 s** with
+    /// ranges]` `Regs::write`'s reap halted **every vCPU and the VMM's dispatch loop** — they all
+    /// serialise on the VMM's global lock — for **2.65–2.92 s** on clean master and up to **3.70 s** with
     /// w310's pin release, against `scrubberDestruct`'s **4 000 ms**
     /// (`ce_utils.c:349`). That is `INLINE-SAFE` clause (b)
     /// (`blocking_and_completion_model.md` §1) failing at 92.6 % of budget on a *green* boot
@@ -2658,8 +2658,8 @@ impl SharedDevice {
             // this rung. `at_a_host_verb` takes the honest branch: a `claim` on the
             // publication worker, a **counted** `inline_under_bql` on a vCPU inside a guest
             // trap. ⇒ `kayfabe_util::trapwitness::inline_exceptions()` is a boot-visible
-            // count of how many host verbs still ran with the BQL held, and driving it to
-            // zero is what "publication is off the BQL" means, measured rather than claimed.
+            // count of how many host verbs still ran with the VMM's global lock held, and driving it to
+            // zero is what "publication is off the VMM's global lock" means, measured rather than claimed.
             let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
                 "kayfabe_rt::SharedDevice::verb_op — the execute phase",
             );
