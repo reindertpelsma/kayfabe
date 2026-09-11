@@ -79,6 +79,11 @@ if ! command -v grep >/dev/null 2>&1; then
   echo "R34_GUEST_OUTCOME=(E) ⊘ UNMEASURED — no grep to check the binary's content with"
   exit 0
 fi
+# ★★ The marker is a string the rung PRINTS, never a flag name it parses. `[measured w420]`
+# `grep -ac guest-ram-dst-vidmem` returns **0** on a binary where that flag demonstrably
+# changes behaviour — rustc compiles an argument `match` to length-and-byte comparisons and
+# the full literal need not survive. A content gate keyed on a flag name would refuse every
+# correct binary. `refused at` is in a `println!`, so it is really there (10 occurrences).
 if ! grep -aq 'refused at' "$BIN"; then
   echo "R34_GUEST_OUTCOME=(N) ⊘ UNMEASURED — this binary predates the step-attributed refusal"
   echo "  ⊘ the marker 'refused at' is ABSENT from $BIN — this is the binary's age, not a tool"
