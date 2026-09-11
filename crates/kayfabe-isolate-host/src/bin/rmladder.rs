@@ -12077,8 +12077,12 @@ fn main() -> std::process::ExitCode {
                 }
                 moved
             }
-            Err(e) => {
-                println!("FAIL  R34 guest-RAM CE   = refused by name: {e:?}");
+            Err((step, e)) => {
+                // ★ The STEP, not just the status. `[measured w417]` `Other(31)`
+                // (`NV_ERR_INVALID_ARGUMENT`) on its own could have come from any of six RM
+                // calls, and a refusal that cannot be attributed to a call is not a
+                // measurement — least of all one that would indict kayfabe.
+                println!("FAIL  R34 guest-RAM CE   = refused at `{step}` by name: {e:?}");
                 false
             }
         };

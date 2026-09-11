@@ -9118,10 +9118,15 @@ impl HostRmBackend {
         vas: HostHandle,
         pattern: u32,
         decoys: usize,
-    ) -> Result<(CeEvidence, usize), RmError> {
+        // ⊘⊘ `[measured w417, in the live guest]` this returned a bare `RmError` and the rung
+        // printed `refused by name: Other(31)` — `NV_ERR_INVALID_ARGUMENT` from ONE of six RM
+        // calls, with nothing saying which. A refusal that cannot be attributed to a call is
+        // not a measurement, and *"refuse by name"* means the NAME IS TRUE: `Other(31)` names
+        // the status, never the step. The step is now part of the error.
+    ) -> Result<(CeEvidence, usize), (&'static str, RmError)> {
         const BYTES: u64 = 4096;
         const WORDS: u64 = BYTES / 4;
-        let range = self.narrow(vas)?;
+        let range = self.narrow(vas).map_err(|e| ("narrow(vas)", e))?;
         let sentinel = !pattern;
 
         // ★ The decoys come FIRST, so the operands below are the freshest rows in the table —
@@ -9148,7 +9153,10 @@ impl HostRmBackend {
         let declared = decoy_rows.len();
 
         #[allow(clippy::cast_possible_truncation)]
-        let src = self.alloc_notifier_mem(BYTES)?.raw() as u32;
+        let src = self
+            .alloc_notifier_mem(BYTES)
+            .map_err(|e| ("alloc_sysmem(src) — NV01_MEMORY_SYSTEM", e))?
+            .raw() as u32;
         #[allow(clippy::cast_possible_truncation)]
         let dst = match self.alloc_notifier_mem(BYTES) {
             Ok(h) => h.raw() as u32,
@@ -9158,29 +9166,39 @@ impl HostRmBackend {
                     let _ = self.unmap_dma_both(range, va);
                     let _ = self.free(self.stamp(h));
                 }
-                return Err(e);
+                return Err(("alloc_sysmem(dst) — NV01_MEMORY_SYSTEM", e));
             }
         };
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
-        let mut go = || -> Result<CeEvidence, RmError> {
-            let src_va = self.map_dma_both(range, src, BYTES, None)?;
+        let mut go = || -> Result<CeEvidence, (&'static str, RmError)> {
+            let src_va = self
+                .map_dma_both(range, src, BYTES, None)
+                .map_err(|e| ("map_dma_both(src) — the GUEST-RAM operand's GPU VA", e))?;
             cleanup[0].1 = Some(src_va);
-            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            let dst_va = self
+                .map_dma_both(range, dst, BYTES, None)
+                .map_err(|e| ("map_dma_both(dst)", e))?;
             cleanup[1].1 = Some(dst_va);
 
-            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
-            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let (src_node, src_map) = self
+                .conn
+                .map_cpu(src, BYTES, CachePolicy::WriteCombining)
+                .map_err(|e| ("map_cpu(src)", e))?;
+            let (dst_node, dst_map) = self
+                .conn
+                .map_cpu(dst, BYTES, CachePolicy::WriteCombining)
+                .map_err(|e| ("map_cpu(dst)", e))?;
             for i in 0..WORDS {
                 src_map
                     .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
-                    .map_err(|e| region_error(&e))?;
+                    .map_err(|e| ("cpu store/load", region_error(&e)))?;
                 dst_map
                     .store_u32(HostOffset::new(i * 4), sentinel)
-                    .map_err(|e| region_error(&e))?;
+                    .map_err(|e| ("cpu store/load", region_error(&e)))?;
             }
             let before = dst_map
                 .load_u32(HostOffset::new(0))
-                .map_err(|e| region_error(&e))?;
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
             release_fence();
             drop(dst_map);
             drop(dst_node);
@@ -9196,15 +9214,19 @@ impl HostRmBackend {
                     by: CeExecutor::HostCe,
                     guest_release: None,
                 },
-            )?;
+            )
+            .map_err(|e| ("ce_copy_outcome — the CE submit itself", e))?;
 
-            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let (node, second) = self
+                .conn
+                .map_cpu(dst, BYTES, CachePolicy::WriteCombining)
+                .map_err(|e| ("map_cpu(dst) readback", e))?;
             let after = second
                 .load_u32(HostOffset::new(0))
-                .map_err(|e| region_error(&e))?;
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
             let after_last = second
                 .load_u32(HostOffset::new((WORDS - 1) * 4))
-                .map_err(|e| region_error(&e))?;
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
             drop(second);
             drop(node);
             Ok(CeEvidence {
