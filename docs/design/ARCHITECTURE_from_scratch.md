@@ -141,10 +141,66 @@ does. **Transient overlap is noise; the same page in both images across consecut
 is the signal**, because that is what a genuinely shared allocation looks like and churn does
 not.
 
-★ **What still needs verifying, and it is a reading task, not a runtime one:** whether the
-driver ever *depends* on seeing the same bytes through BAR1 and BAR2. If it never does, the
-two stores holding different content at the same framebuffer offset is acceptable, and the
-split is sound even when the images overlap. ⚠ Unverified as of this writing.
+### ⊘⊘⊘ VERIFIED, AND THE ANSWER IS **YES** — the split is NOT by aperture
+
+`[read out of ogkm 580, 2026-09-11]` The question *"does the driver ever depend on seeing the
+same bytes through BAR1 and BAR2?"* was asked because the answer decides this design. **It
+does, on the CUDA path, by default, on GA10x.**
+
+**Channel notifiers.** `kchannelUpdateNotifierMem` (`kernel_channel.c:1738`) writes the
+client's notifier through **BAR2** — it tries `memdescGetKernelMapping()` first, but that is
+*always* NULL for vidmem (`mem.c:269-272` refuses a kernel mapping for anything that is not
+sysmem), so the vidmem path always falls to the `memmgrMemBeginTransfer` branch, which for FB
+is a BAR2 mapping. The memdesc it writes is **the client's own**
+(`kernel_channel.c:1965/1971/1950`), and the client's CPU view of those same pages is
+**BAR1** (`mapping_cpu.c:516`). It is reached by
+`kchannelCtrlCmdGpfifoGetWorkSubmitToken` → `kchannelNotifyWorkSubmitToken_IMPL`, which every
+Volta+ user-mode driver calls, **including UVM** (`nv_gpu_ops.c:5713-5719`, and UVM reads the
+token back at `:5732-5735`).
+⇒ **Written through BAR2, read through BAR1, same bytes, and a disagreement is a permanent
+hang** on the work-submit token and a silently-missed error notifier.
+
+**And RM keeps both mappings alive deliberately.** For a `KERNEL_MAPPING_ENABLE` DMA mapping
+of vidmem it holds a persistent BAR1 kernel address (`virtual_mem.c:1088`) *and* hands the same
+memdesc to the BAR2 writer — and it **requires the BAR1 mapping to already exist** before doing
+so (`kernel_channel.c:1947-1953`, which errors out with *"Kernel VA addr mapping not present
+for notifier"*). A vidmem ContextDma notifier is the sharpest case: index 0 of one array is
+written through BAR1 and index 1 of **the same array** through BAR2
+(`method_notification.c:95` vs `kernel_channel.c:1786-1796`).
+
+⊘ RM states the two-aperture design outright — *"fill notifier **through BAR1** when you have
+GPU VA"* / *"**through BAR2** when you have memory info"* (`method_notification.c:365, 487`) —
+and there is **no flush anywhere whose purpose is to reconcile the two**, because RM treats
+"the CPU-visible view of this FB page" as one thing regardless of aperture.
+
+★ **The hypothesis that RM's own helper channels were the risk was WRONG in the safe
+direction.** On Turing and later the scrubber channel is BAR2-only (`mem_mgr.c:4131-4134` sets
+`NO_BAR1_USE`, so `pChannel->bUseBar1` is false), its pushbuffer and notifier default to
+**sysmem**, and the one BAR1 branch in that path is dead code — `bUseRmApiForBar1` has **zero
+assignments** in the tree. The danger was somewhere else entirely.
+
+### ⇒ THE REPAIR: split by CONSUMER, not by APERTURE
+
+The organising principle of §1 survives; the shortcut taken from it does not. *"BAR2 ⇒ store
+A, BAR1 ⇒ store B"* was a convenient proxy for *"we read it / the hardware reads it"*, and the
+notifier is the case where the proxy and the principle disagree. A notifier is written by the
+guest's RM and read by the guest's userspace: **both ends are guest CPU**, the host GPU never
+touches it, and it therefore belongs wholly in store A — reachable **through BAR1 as well**.
+
+So the rule becomes:
+
+- **A page lives in exactly one store**, chosen by its consumer: mapped into a channel VA
+  space ⇒ the hardware reads it ⇒ store B; otherwise ⇒ store A.
+- **Either aperture may map either store.** BAR1 and BAR2 are views, not owners.
+
+⚠ This costs the design its prettiest property and keeps the load-bearing one. What is lost:
+"BAR2 only ever touches store A" is false, so a BAR2 slice is not unconditionally a fake-FB
+slice. What is kept: **no page has two backings**, so nothing can diverge, and the
+classification is still read off the guest's own tables rather than guessed — which is the
+whole reason promotion disappears.
+
+⊘ The overlap census of the previous section is now *more* important, not less: it is the
+thing that would have caught this at runtime, and it must ship.
 
 ⇒ **What this deletes outright:** promotion, depromotion, the aperture-ownership decision, the
 shadow/join/alias machinery, and every refusal predicate that exists to police them. Nothing
