@@ -804,3 +804,39 @@ fn the_publication_capability_is_minted_in_exactly_one_place() {
          thread it runs on and why it is not a vCPU."
     );
 }
+
+/// ★★★★★ **THE WORKER'S ARM MUST REACH THE GUEST-RAM PIN PASS.**
+///
+/// `[measured w415llm]` the publication worker forced `VasPublishArm::Publish`, whose
+/// `measures_pin_rate()` is **false** — so `measure_guest_ram_pin_rate`, the only pass that pins
+/// guest-RAM rows for anything but a channel's ring, **never ran**. The boot logged `NO DRAIN`
+/// zero times. The LLM's operand address was then `ABSENT-FROM-ROOT-TABLE` and `CE3_PBDMA0`
+/// faulted reading it.
+///
+/// ⊘ A source census, because the property is *"which arm does the worker choose"* and no unit
+/// test reaches that line without a device. ⚠ If a later change needs `Publish` there, it must
+/// also give guest-RAM rows another route — and change this test in the same commit.
+#[test]
+fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
+    )
+    .expect("shim.rs is readable");
+    let code: String = src
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        code.matches("ctx.vas_publish = VasPublishArm::Publish;").count(),
+        0,
+        "the worker must NOT force `Publish`: it publishes framebuffer leaves and nothing else, \
+         and its measures_pin_rate() is false, so it silently disables the only pass that pins \
+         guest-RAM operand rows"
+    );
+    assert_eq!(
+        code.matches("ctx.vas_publish = VasPublishArm::Drain;").count(),
+        2,
+        "both worker lanes (rpc-bind and invalidate) must use an arm that publishes AND pins"
+    );
+}

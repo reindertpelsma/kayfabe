@@ -5080,7 +5080,23 @@ fn doorbell_publish_loop(
             // returned, and what remains is getting the rows onto the host before the engine
             // that uses them runs.
             let mut ctx = port.publish_ctx();
-            ctx.vas_publish = VasPublishArm::Publish;
+            // ⊘⊘ `Drain`, NOT `Publish` — and the difference is a whole publication PASS.
+            //
+            // `VasPublishArm::Publish` publishes framebuffer leaves and **nothing else**.
+            // `measures_pin_rate()` is false for it, so forcing it here silently disabled
+            // `measure_guest_ram_pin_rate` — the ONLY pass that pins guest-RAM rows for
+            // anything other than a channel's ring.
+            //
+            // `[measured w415llm]` that is the LLM wall: `proc=2 pdb=0x201000` declares 13 348
+            // rows of which **13 313 are guest RAM**, `already_host=34`, and the boot logged
+            // `NO DRAIN` **zero** times — the pass never ran. The guest's own pushbuffer then
+            // pointed at `0x202e00000`, our decode said `ABSENT-FROM-ROOT-TABLE`, and
+            // `CE3_PBDMA0` took `FAULT_PDE ACCESS_TYPE_VIRT_READ` reading it.
+            //
+            // ⚠ The override was added so the worker would publish regardless of the env arm.
+            // That intent is right; the arm chosen was too narrow. `Drain` both publishes AND
+            // measures-and-pins, which is what the doorbell path used to reach.
+            ctx.vas_publish = VasPublishArm::Drain;
             // ⊘ `token` here is the number of VAS TABLES that changed since the last
             // publication — not a doorbell token. Printed by name because a count of
             // publications cannot, on its own, separate *"the trigger fired and found
@@ -5174,7 +5190,23 @@ fn doorbell_publish_loop(
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
             let mut ctx = port.publish_ctx();
-            ctx.vas_publish = VasPublishArm::Publish;
+            // ⊘⊘ `Drain`, NOT `Publish` — and the difference is a whole publication PASS.
+            //
+            // `VasPublishArm::Publish` publishes framebuffer leaves and **nothing else**.
+            // `measures_pin_rate()` is false for it, so forcing it here silently disabled
+            // `measure_guest_ram_pin_rate` — the ONLY pass that pins guest-RAM rows for
+            // anything other than a channel's ring.
+            //
+            // `[measured w415llm]` that is the LLM wall: `proc=2 pdb=0x201000` declares 13 348
+            // rows of which **13 313 are guest RAM**, `already_host=34`, and the boot logged
+            // `NO DRAIN` **zero** times — the pass never ran. The guest's own pushbuffer then
+            // pointed at `0x202e00000`, our decode said `ABSENT-FROM-ROOT-TABLE`, and
+            // `CE3_PBDMA0` took `FAULT_PDE ACCESS_TYPE_VIRT_READ` reading it.
+            //
+            // ⚠ The override was added so the worker would publish regardless of the env arm.
+            // That intent is right; the arm chosen was too narrow. `Drain` both publishes AND
+            // measures-and-pins, which is what the doorbell path used to reach.
+            ctx.vas_publish = VasPublishArm::Drain;
             let published = ctx.publish_vas_rows(token, None, off_vcpu);
             // ★ One line per firing, and it carries the COUNT: the refresh's three fragments
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
