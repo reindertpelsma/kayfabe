@@ -114,3 +114,49 @@ a STEP is what made it readable — `Other(31)` names a status and never a call.
 ⇒ All three shared one shape: **the failure was upstream of the measurement and every signal
 downstream of it looked healthy.** Gate on the ARTEFACT (binary mtime, `rev-parse`, a string
 census), never on a step's reported status.
+
+
+---
+
+# w419 — TWO HYPOTHESES DEAD, ONE VARIABLE LEFT
+
+`[measured w419, in the guest, rev 485a40cd]` R34 is **green in the guest**:
+
+    depth 0     ★ src 0x120000000 dst 0x120001000  dst[0] 0xc0ffee34  dst[last] 0xc0fff233
+    depth 2000  ★ src 0x1207d0000 dst 0x1207d1000  dst[0] 0xc0ffee34  dst[last] 0xc0fff233
+
+A CE copy whose source and destination are both `NV01_MEMORY_SYSTEM` moves its bytes inside
+the guest, with 2000 further guest-RAM rows declared ahead of the operand. Bare metal is green
+at the same depths.
+
+⊘ **Dead, both with evidence:**
+- *"There is no general operand path; guest-RAM operands are unreachable."* They are reachable.
+- *"Scale is the discriminator — 110 client rows vs the LLM's 13 313."* Green at 2000, which is
+  18× the client and the same order as the LLM.
+
+## ★ The one variable left: the ADDRESS
+
+R34's operands sit at `0x1_2000_0000` — our operand space, RM-placed. The LLM faults at
+`0x7cac_3360_0000`, a process-VA-shaped address ~137 TB up, which is what CUDA's unified
+addressing hands out for a device pointer. Same aperture, same engine (`CE2 HUBCLIENT_CE0`),
+same direction (`ACCESS_TYPE_VIRT_WRITE`), one difference.
+
+⇒ `--guest-ram-at <hex>` dictates the operands' GPU VA so the two can be compared with one
+variable moved. **Run the sweep first**: RM-placed (control), `0x120000000`, `0x7cac33600000`,
+`0x768327600000`, `0x7f0000000000`, `0x400000000`, all at `decoys=0`, bare metal and guest.
+
+## ⚠ Harness traps paid for in w418/w419 — all three were INVERSIONS
+
+1. **`strings "$B" | grep -q X` returns 141 when X IS PRESENT.** `grep -q` exits on match,
+   `strings` takes SIGPIPE, `pipefail` reports 141. Finding the string faster is what makes the
+   check fail. Use `grep -a X "$B"`. ⊘ My first reading blamed a missing `strings`; it is at
+   `/usr/bin/strings`.
+2. **`timeout N sudo CMD` does not bound `CMD`.** The signal goes to `sudo`, which does not
+   forward it. The wrapper dies, the work runs on as root, the ssh pipe never closes and the
+   boot reads as WEDGED. `pgrep -a` prints `[rmladder]` in brackets, which reads as a kernel
+   thread. Use `sudo timeout N CMD`. Eleven sites fixed, including `w392d_mean_hook.sh` — the
+   mean-client hook the whole client is graded on.
+3. **Three of the five inherited red CI gates were firing on PROSE** — a comment saying a file
+   avoids `unsafe`, a doc line naming `RmEvent`. A permanently red gate is a gate nobody reads,
+   so those were one defect, not three, and it had been protecting nothing. ⊘ The CLAIM-LEDGER
+   pair is NOT of this kind: it is working correctly against a real documentation backlog.
