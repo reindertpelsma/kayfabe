@@ -136,8 +136,24 @@ UD
     -serial file:"$BENCH/provision_serial.log" -daemonize -pidfile "$BENCH/prov.pid"
   say "B2: qemu pid=$(cat $BENCH/prov.pid 2>/dev/null)"
 
-  GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -o LogLevel=ERROR -o ConnectTimeout=8 ubuntu@127.0.0.1"
+  # ⊘⊘⊘ **`timeout` AND `-n`, because `ConnectTimeout` BOUNDS NOTHING HERE.**
+  #
+  # `[measured w443]` this loop wedged for **55 minutes** on a guest that was up, idle and
+  # answering an interactive ssh the whole time. Provisioning had reached `TRACK_A done` and
+  # then produced no output for 45 minutes; killing the one hung session by hand let the script
+  # finish in seconds.
+  #
+  # ⚠ `ConnectTimeout` bounds the TCP CONNECT, and under slirp `hostfwd` the host side accepts
+  # immediately whether or not anything is listening in the guest. So the connect always
+  # succeeds and the SESSION is what hangs — the timeout it looks like it has is not a timeout
+  # on the thing that failed. ⊘ And `-n` because an ssh sharing the script's stdin can block on
+  # it forever; both are needed and neither is sufficient.
+  #
+  # ⇒ Bound the WHOLE session. A guest step that legitimately takes longer than this should say
+  # so with its own longer bound, not by removing the bound.
+  GS="timeout 120 ssh -n -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 \
+      -o ServerAliveInterval=15 -o ServerAliveCountMax=3 ubuntu@127.0.0.1"
   # ★ a guest needs ~20-25s to a login prompt and -serial output LAGS. A slow boot is not a crash.
   for i in $(seq 1 40); do
     $GS true >/dev/null 2>&1 && { say "B2: guest ssh up after $((i*10))s"; break; }
