@@ -11700,8 +11700,21 @@ impl PublishContext {
                     }
                 }
                 rows.push(format!(
-                    "[proc={} pdb=0x{:x} {} asked={} pinned={} refused={} in {vas_ms} ms \
+                    // ★★★ w417 — AN ABSOLUTE WALL CLOCK, so a pin can be ORDERED against a
+                    // host Xid. `[measured w417llm]` `asked=1331 pinned=1331 refused=0` covers
+                    // exactly the range `CE2 HUBCLIENT_CE0` then faulted on
+                    // (`0x7cac33600000+0x533000`, `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`). A
+                    // successful pin and a fault on the same range are only contradictory if
+                    // the pin happened FIRST — and neither log could say which came first,
+                    // because our line carried only a DURATION. `dmesg -T` stamps the Xid to
+                    // the second; this stamps the pin the same way, so the two join.
+                    // ⊘ One-second granularity settles "before or after", never a race inside
+                    // one second. Do not read it as finer than it is.
+                    "[at={} proc={} pdb=0x{:x} {} asked={} pinned={} refused={} in {vas_ms} ms \
                      last_pinned_va={} degrade[{vas_degrade}]{}{} {}]",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_secs()),
                     pid.0,
                     pdb.0,
                     if doorbelled {
