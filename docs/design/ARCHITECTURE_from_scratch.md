@@ -39,6 +39,7 @@ comment.
 |---|---|---|
 | I1 | No blocking call on a vCPU thread. | An assert at every blocking door, fatal in CI |
 | I2 | No blocking call while holding a lock. | The same door, rank witness |
+| I2b | A vCPU can never *wait* on a blocked thread. | Lock partition (§3): the one lock a vCPU takes is never held across a blocking call |
 | I3 | A vCPU MMIO write does bounded O(1) work and returns. | I1 + the write handler's shape (§5) |
 | I4 | Page-table and mapping state changes only at a synchronization point. | Refresh owns the writes; nothing else has the handle |
 | I5 | A completion is written only when the state it claims is true. | The completion is written *by* refresh, after it finishes |
@@ -56,13 +57,35 @@ Exactly three kinds, and the rules are total.
 **vCPU threads.** Run guest code, and our code only inside an MMIO trap. May: classify a
 write against a table, update one word of shadow state, push to a bounded queue, wake a
 coordinator, write one value to an already-mapped host doorbell, return. May not do anything
-else — no syscall, no allocation that can fault, no ranked lock, no host verb, no page walk,
-no process spawn.
+else — no syscall, no allocation that can fault, no host verb, no page walk, no process spawn.
+
+★★★ **And it may take exactly ONE lock: the queue's.** That lock covers the queue and the
+shadow words, and nothing else in the system. It is held for a push and released — a handful
+of instructions, no call out of the critical section, ever.
+
+⊘ Every other structure — the address table, the page-table shadows, the isolate registry, the
+store maps — lives behind locks **a vCPU thread cannot take, because no code path it can reach
+names them**.
+
+⇒ **This is what makes the transitive-blocking rule structural instead of a discipline.** The
+danger is never "a vCPU blocked"; it is "a vCPU waited on a lock held by a thread that
+blocked". If the only lock a vCPU can acquire is one nobody ever holds across a blocking call,
+that cannot happen, and it cannot be reintroduced by someone adding a call six frames down. An
+earlier draft of this section said *"no ranked lock"*, which is both wrong and weaker: the vCPU
+does take a lock. The point is **which one, and for how long**.
+
+⊘⊘ **Do NOT make the shadow lock-free to avoid that lock.** `[measured w466/w469]` that is
+exactly what was tried: the deferred-doorbell count was mirrored into an atomic so the hot path
+need not take the plane lock, the mirror was refreshed on the write path only, and it went
+stale the moment the coordinator serviced one — after which every MMIO write enqueued a
+spurious token and slow traps went 169 → 6776. **The lock was not the problem; the second
+source of truth was.** One short lock over queue-and-shadow together has no staleness question
+to get wrong.
 
 **The coordinator.** One thread. Owns everything that is not O(1) shadow. Drains the queues,
 runs refresh, issues host RM calls, performs mmaps, spawns isolates, writes completions into
-guest memory. It is allowed to block, because nothing waits on it except the guest's own wait
-primitives.
+guest memory. It is allowed to block freely, because the only lock it shares with a vCPU is
+the queue's, and it never holds that across anything.
 
 **Host isolate processes.** One per guest process. Exist for **virtual-address identity**: the
 host GPU must see the guest's addresses, and one address space per process is the only way to
