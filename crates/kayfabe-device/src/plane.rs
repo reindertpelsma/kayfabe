@@ -1082,6 +1082,12 @@ pub trait FbMirrorPort: Send + Sync + core::fmt::Debug {
     fn resume(&self, phys: u64, len: u64);
     /// Retire every memslot the mirror holds, naming why (a device reset).
     fn retire_all(&self, why: &'static str);
+    /// ★★★★★ **w468 — run any revalidation the vCPU deferred.** The trap path only
+    /// *requests* a revalidation (one atomic bump); the walk over every live slot is
+    /// O(live) page walks plus a memslot ioctl per drop, which is milliseconds and may
+    /// never run inside an MMIO exit. Called on the publication worker, before the
+    /// invalidate's completion is written.
+    fn revalidate_pending(&self);
 }
 
 /// ★★★★★ **w393 — one translated-window page, resolved for the mirror**: where it lands in
@@ -1721,6 +1727,15 @@ impl RegPlane {
     /// pre-w393 behaviour; the shell retires its own slots before calling this.
     pub fn clear_fb_mirror(&self) {
         *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// ★★★★★ **w468 — the off-vCPU half of the BAR mirror's flush.** The worker calls
+    /// this before completing an invalidate, so the guest's spin is released only after
+    /// every stale mirror slot is gone. ⊘ Never call this from a vCPU thread.
+    pub fn drain_mirror_revalidation(&self) {
+        if let Some(m) = self.fb_mirror() {
+            m.revalidate_pending();
+        }
     }
 
     fn fb_mirror(&self) -> Option<std::sync::Arc<dyn FbMirrorPort>> {

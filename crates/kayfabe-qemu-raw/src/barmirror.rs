@@ -293,6 +293,14 @@ pub struct BarMirror {
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
     /// change and revalidates the BAR2 half.
     last_bar_pde_updates: AtomicU64,
+    /// ★★★★★ **w468 — the deferred-revalidation counters.** The vCPU bumps `reval_req`
+    /// and returns; the publication worker runs the walk and raises `reval_done` to the
+    /// value it observed. A request is outstanding exactly while `req > done`.
+    reval_req: AtomicU64,
+    reval_done: AtomicU64,
+    /// Which reason armed the outstanding request, for the log line only. Bit 0 =
+    /// `mmu-invalidate`, bit 1 = `bar-pde-update`.
+    reval_why: AtomicU64,
 }
 
 fn idx(w: FbWindow) -> Option<usize> {
@@ -395,6 +403,9 @@ impl BarMirror {
         }
         let m = Arc::new(BarMirror {
             last_bar_pde_updates: AtomicU64::new(plane.bar_pde_counts().0),
+            reval_req: AtomicU64::new(0),
+            reval_done: AtomicU64::new(0),
+            reval_why: AtomicU64::new(0),
             plane,
             machine,
             arena,
@@ -720,16 +731,59 @@ impl BarMirror {
     /// The trap-path hook for a completed register write: an invalidate trigger
     /// revalidates everything; a moved `UPDATE_BAR_PDE` count revalidates too (BAR2's root
     /// is a value the guest can re-publish at any time).
+    /// ⊘⊘⊘ **w468 — THIS RUNS ON THE vCPU, SO IT MUST NOT WALK ANYTHING.** Until w468 it
+    /// called [`BarMirror::revalidate`] inline, which is one page walk per live slot plus a
+    /// memslot ioctl per drop — with BAR1 passthrough armed that is tens of thousands of
+    /// slots and tens of milliseconds, *inside the guest's MMIO exit*. It now only records
+    /// the request; [`BarMirror::revalidate_pending`] does the work on the publication
+    /// worker, and the invalidate's completion is withheld until it has.
+    ///
+    /// ★ Why deferring is safe: the guest is spinning on the invalidate's completion, and
+    /// that completion is not written until the worker has revalidated. A stale slot can
+    /// therefore only be observed by a guest thread that raced its own invalidate — and it
+    /// names a translation that same guest had legitimately mapped a moment earlier, so the
+    /// exposure is guest self-corruption, never cross-process leakage. A translation to
+    /// memory the guest does not own cannot appear this way: a *new* key is only installed
+    /// on a fresh fault, which takes the ownership check.
     pub fn after_write(&self, out: &kayfabe_device::WriteOutcome) {
-        if let Some(inv) = &out.invalidate {
-            if inv.trigger {
-                self.revalidate("mmu-invalidate");
-            }
+        let mut why = 0u64;
+        if out.invalidate.as_ref().is_some_and(|inv| inv.trigger) {
+            why |= 1;
         }
         let u = self.plane.bar_pde_counts().0;
         if self.last_bar_pde_updates.swap(u, Ordering::Relaxed) != u {
-            self.revalidate("bar-pde-update");
+            why |= 2;
         }
+        if why == 0 {
+            return;
+        }
+        // ★ w468 A/B, one binary: `KAYFABE_MIRROR_REVAL_INLINE=1` restores the pre-w468
+        // inline walk, so the deferral can be attributed against itself on one build.
+        static INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *INLINE.get_or_init(|| std::env::var("KAYFABE_MIRROR_REVAL_INLINE").is_ok()) {
+            self.revalidate(if why == 1 { "mmu-invalidate" } else { "bar-pde-update" });
+            return;
+        }
+        self.reval_why.fetch_or(why, Ordering::Relaxed);
+        self.reval_req.fetch_add(1, Ordering::Release);
+    }
+
+    /// ★★★★★ **w468 — the worker's half.** Runs the walk `after_write` deferred, if any is
+    /// outstanding. ⊘ Never call from a vCPU thread.
+    pub fn revalidate_pending(&self) {
+        let req = self.reval_req.load(Ordering::Acquire);
+        if req == self.reval_done.load(Ordering::Relaxed) {
+            return;
+        }
+        let why = match self.reval_why.swap(0, Ordering::Relaxed) {
+            1 => "mmu-invalidate",
+            2 => "bar-pde-update",
+            _ => "mmu-invalidate+bar-pde-update",
+        };
+        self.revalidate(why);
+        // ★ Raise to the value read BEFORE the walk: a request that arrived during it is
+        // still outstanding and the next pass runs again.
+        self.reval_done.store(req, Ordering::Release);
     }
 
     /// The census, one line per armed window plus one for the mechanism.
@@ -795,6 +849,11 @@ impl BarMirror {
 }
 
 impl FbMirrorPort for BarMirror {
+    fn revalidate_pending(&self) {
+        BarMirror::revalidate_pending(self);
+    }
+
+
     fn quiesce(&self, phys: u64, len: u64) {
         let gone = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());

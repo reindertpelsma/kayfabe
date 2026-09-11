@@ -5238,6 +5238,15 @@ fn doorbell_publish_loop(
                     line.replace("\nkayfabe: ", "  ⏎  ")
                 );
             }
+            // ★★★★★ **w468 — the BAR mirror's flush, off the vCPU and BEFORE the
+            // completion.** `BarMirror::after_write` only *requests* this; the walk is
+            // O(live slots) page walks plus a memslot ioctl per drop, which is milliseconds
+            // and must never run inside the guest's MMIO exit. Ordering it here is what
+            // keeps deferral honest: the guest's spin is released only once every stale
+            // mirror slot is gone.
+            if let Some(plane) = plane_ref.as_ref() {
+                plane.drain_mirror_revalidation();
+            }
             if let Some(plane) = plane_ref
                 && !plane
                     .mmu_inval()
