@@ -825,7 +825,24 @@ impl GspFsm {
     /// reset is field-by-field at four separate sites (`C:2471-2475`, `C:4257-4258`,
     /// `C:9393-9399`, `C:3484-3485`) and they disagree.
     pub fn device_reset(&mut self) -> Transition {
+        // ★★★★★ **w472b — DEFERRAL IS SHELL WIRING AND SURVIVES A RESET.**
+        //
+        // ⊘ `*self = GspFsm::new(..)` is the right shape for DEVICE state — that is this
+        // method's whole argument, and `a_power_on_reset_puts_the_emulated_gsp_back_to_cold`
+        // asserts it as a whole value so it stays total. But `defer_commands` is not device
+        // state: it records that a publication worker EXISTS to service command doorbells,
+        // which the shim arms once, at `attach_ram`, inside the `Ok(join)` that proves the
+        // thread is up. It belongs with the RAM port, the framebuffer port and the policy,
+        // which `RegPlane::device_reset` already keeps for exactly this reason.
+        //
+        // ⚠ What clearing it COST: a guest power-on reset silently disarmed the deferral, so
+        // every `NV_PGSP_QUEUE_HEAD` write after the driver's own reset went back to
+        // servicing its RPC INLINE ON THE vCPU — the 1.79 s trap w432 was written to remove.
+        // The arm survived only until the guest's first reset, and the boot log's
+        // `GSP-ASYNC ARMED` line kept saying it was on.
+        let defer_commands = self.defer_commands;
         *self = GspFsm::new(self.abi);
+        self.defer_commands = defer_commands;
         Transition::E11
     }
 
