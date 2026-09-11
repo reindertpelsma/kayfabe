@@ -155,7 +155,11 @@ done
 echo "R34_OPEN_ORDINAL_FIRST_FAIL =${ord_first_fail:-none-in-$ORDINALS}"
 # ⊘ `none-in-N` is not "there is no wedge" — it is "not within N opens". Say which.
 
-echo "--- ★★★★★ ADDRESS SWEEP (decoys=0 on every arm; `rm` = RM-placed control) ---"
+# ⊘ No backticks in this banner: inside double quotes they are COMMAND SUBSTITUTION. The
+# first version said "`rm` = RM-placed control" and bash ran `rm`, printing
+# "rm: missing operand" into the middle of the ledger. Same defect as the H2D banner's
+# `.to('cuda')`, which killed that whole block with a syntax error.
+echo "--- ★★★★★ ADDRESS SWEEP (decoys=0 on every arm; arm 'rm' = RM-placed control) ---"
 at_verdicts=""
 for a in $ATS; do
   if [ "$a" = "rm" ]; then arg=""; else arg="--guest-ram-at $a"; fi
