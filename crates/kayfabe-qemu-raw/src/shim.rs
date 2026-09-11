@@ -5696,6 +5696,60 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
     }
 }
 
+/// ★★★★★ **SYNCHRONIZATION POINT (3) — the hypervisor half.**
+///
+/// The device decodes the guest's channel `MEM_OP MMU_TLB_INVALIDATE` and asks here. This side
+/// owns what backing needs: the VMM that resolves a guest-physical address to a mappable file
+/// offset, and the backing the guest's RAM lives in. See [`kayfabe_fwd::InvalidateRefresh`].
+///
+/// ⚠ **Runs on the publication worker, never a vCPU** — the caller is `forward_ring`, and it
+/// calls this BEFORE forwarding the guest's ring. That ordering is the block: the guest's
+/// completion semaphore is in the same pushbuffer as the invalidate, so the engine cannot
+/// reach it until the forward, and the forward waits for this.
+impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
+    fn refresh_pdb(&self, pid: kayfabe_core::ProcId, pdb: kayfabe_rt::Pdb) -> (usize, usize) {
+        let Some(backing) = self.guest_ram_backing else {
+            // ⊘ UNMEASURED, not zero: with no hypervisor layout there is nothing to resolve a
+            // GPA against, so nothing was ASKED of the host. Reporting (0, 0) would read as
+            // "the guest declared nothing", which is a different fact.
+            return (0, 0);
+        };
+        // ⊘ Uncapped, deliberately. A barrier names a scope and we honour the whole of it. The
+        // 256-row sample this replaces existed only to bound a pass that ran on a vCPU, and
+        // `[measured w416]` it left `covered_pct=95.0577% COVERED=false` on a 1331-page range
+        // whose base an engine then faulted writing.
+        let rows = self
+            .device
+            .vas_guest_ram_rows(pid, DOORBELL_TARGET_GPU, pdb, usize::MAX);
+        let mut backed = 0usize;
+        let mut refused = 0usize;
+        for (va, gpa, len) in rows {
+            let resolved = {
+                let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                held.as_ref()
+                    .map(|vmm| vmm.resolve_guest_ram(backing, gpa, len))
+            };
+            let Some(Ok(run)) = resolved else {
+                refused += 1;
+                continue;
+            };
+            let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                run.file_offset,
+                len,
+                kayfabe_vmm::Prot::ReadWrite,
+            );
+            match self
+                .device
+                .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(va), grant)
+            {
+                Ok(_) => backed += 1,
+                Err(_) => refused += 1,
+            }
+        }
+        (backed, refused)
+    }
+}
+
 impl SharedDoorbell {
     /// ★★★★★ **The doorbell body — every leg, in the order that has always been
     /// load-bearing.** Reached from the vCPU trap on the disarmed arm and from the
@@ -13655,6 +13709,27 @@ impl Regs {
             doorbell_async,
         };
         plane.set_doorbell(Box::new(doorbell_port.clone()));
+
+        // ★★★★★ **INSTALL SYNCHRONIZATION POINT (3)'s SEAM, BESIDE THE DOORBELL PORT.**
+        //
+        // ⊘ Here, and not later, because `forward_ring` consults it between parsing a ring and
+        // forwarding it. Any window between the first forward and this call is a window where
+        // the guest's channel TLB invalidates are decoded and thrown away — which is precisely
+        // the state this seam ends, and it would be invisible except for the `NO SEAM
+        // INSTALLED` line the device prints.
+        //
+        // ⚠ This is the step that has been missed FOUR times this session in other
+        // mechanisms: built, wired, tested, never reached. The device says so out loud when
+        // the seam is absent rather than silently forwarding unbacked work.
+        if device
+            .set_invalidate_refresh(std::sync::Arc::new(doorbell_port.clone()))
+            .is_err()
+        {
+            eprintln!(
+                "kayfabe: MEMOP-REFRESH ⊘ a seam was ALREADY installed — keeping the first. \
+                 Two devices sharing one `SharedDevice` is not a shape this supports."
+            );
+        }
         // ★★★★★ **w383 — THE ARM, ECHOED, on both arms and unconditionally.** A selector
         // that prints only when it is on makes *"the lane was disarmed"* and *"the build
         // does not have the lane"* the same log — the exact shape every other arm in this

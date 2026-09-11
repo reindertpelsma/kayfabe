@@ -840,3 +840,57 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
         "both worker lanes (rpc-bind and invalidate) must use an arm that publishes AND pins"
     );
 }
+
+/// ★★★★★ **SYNCHRONIZATION POINT (3) MUST BE CONSUMED, INSTALLED, AND ORDERED BEFORE THE
+/// FORWARD.**
+///
+/// The guest's UVM announces every page-table change it makes as a channel
+/// `MEM_OP MMU_TLB_INVALIDATE`. `[measured w428]` we decoded it into `out.invalidates` and read
+/// it in **no production code** — only four tests — so the rows were found later by a sweep,
+/// and `[measured w425]` the pin of the LLM's faulting range landed in the SAME SECOND as the
+/// `FAULT_PDE ACCESS_TYPE_VIRT_WRITE` that hit it.
+///
+/// ⊘ A source census over THREE properties, because each has failed on its own this session:
+/// a mechanism can be written (1), never installed (2) — four times — or installed but
+/// consulted after the thing it was meant to gate (3).
+#[test]
+fn the_channel_invalidate_is_consumed_installed_and_ordered_before_the_forward() {
+    let dev = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../kayfabe-rt/src/device.rs"),
+    )
+    .expect("device.rs is readable");
+    let shim = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
+    )
+    .expect("shim.rs is readable");
+
+    // (1) CONSUMED — the decoded invalidate drives a refresh.
+    assert!(
+        dev.contains("refresh.refresh_pdb(pid, *pdb)"),
+        "`parsed.invalidates` must drive a refresh; decoding it and dropping it is the bug \
+         this replaced"
+    );
+
+    // (2) INSTALLED — a seam nobody installs is the session's most-repeated failure.
+    assert!(
+        shim.contains("set_invalidate_refresh("),
+        "the shim must INSTALL the refresh seam: four mechanisms this session were built, \
+         wired, tested and never reached"
+    );
+
+    // (3) ORDERED — the refresh must precede the forward in the SAME function, or it does not
+    // block anything. ⚠ This is the assertion that makes the other two mean something.
+    let at_refresh = dev
+        .find("refresh.refresh_pdb(pid, *pdb)")
+        .expect("checked above");
+    let at_forward = dev
+        .find("let fwd = self.forward_ce(pid, cid, &parsed.ce_spans)?;")
+        .expect("the ring forward is still where it was");
+    assert!(
+        at_refresh < at_forward,
+        "the refresh must come BEFORE the forward. The guest's completion semaphore is in the \
+         same pushbuffer as the invalidate, so the engine cannot reach it until we forward — \
+         that ordering IS the block, and reversing it removes the barrier while leaving every \
+         other line in place"
+    );
+}

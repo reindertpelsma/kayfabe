@@ -6571,6 +6571,47 @@ pub trait FbBytes {
 /// ([`VidmemRoute::Refuse`]), because [`read_gpfifo_ring`] derives the route from whether it
 /// was handed a reader. ⇒ *A default-off flag that is not off by construction is a
 /// default-on flag with a comment.*
+/// ★★★★★ **SYNCHRONIZATION POINT (3) — BACK WHAT A CHANNEL'S TLB INVALIDATE NAMES.**
+///
+/// The guest's UVM writes its own page tables and then announces the change as a pushbuffer
+/// method — `MEM_OP_A`/`_D` with `OPERATION = MMU_TLB_INVALIDATE` (`ogkm-580:
+/// uvm_mmu.c:722/:806/:1210/:1335` → `uvm_ampere_host.c:45-70`). We decode it into
+/// [`PushOutcome::invalidates`] and, until this seam existed, **read it nowhere**.
+///
+/// ⊘ **Why a seam and not a method on the device.** Backing a row needs the VMM to resolve a
+/// guest-physical address to a mappable file offset, and that is the hypervisor's knowledge,
+/// not the device model's. `resolve_guest_ram` is inherent to the QEMU VMM and deliberately
+/// not on the `Vmm` trait. So the device asks, and whoever owns the hypervisor answers — the
+/// same shape as [`FbSource`].
+///
+/// ## ⚠ The contract, and it is the whole point
+///
+/// The implementation MUST have completed the backing before it returns. The caller orders
+/// this **before it forwards the guest's ring**, which is what makes the guest block: the
+/// completion semaphore lives in the same pushbuffer as the invalidate, and the engine cannot
+/// reach it until we forward. ⇒ *"refresh, then forward"* IS the barrier, and it needs no wait
+/// object and no guarantee from the guest.
+///
+/// ⊘ It must NOT be called on a vCPU. The caller runs on the publication worker.
+pub trait InvalidateRefresh: Send + Sync + core::fmt::Debug {
+    /// Back every row of `pdb`'s address space that the guest has declared and we have not
+    /// yet made reachable to the host. Returns `(backed, refused)`.
+    ///
+    /// ⚠ A refusal must be REPORTED, never swallowed: the caller forwards the guest's work
+    /// immediately afterwards, so a row this did not back is a row an engine is about to read.
+    /// ⊘ No `GpuId`: the device knows the `pdb` the guest named, and WHICH GPU serves it is
+    /// the hypervisor side's own business — the implementer already holds that. Passing one
+    /// from here would be the device guessing at something it does not own.
+    /// ⊘ `pid` is not redundant with `pdb`: a page-directory base names an address space,
+    /// and address spaces live inside procs. Looking one up without the proc would either
+    /// guess or search, and both are wrong when two procs are live.
+    ///
+    /// ⊘ No `GpuId`: WHICH GPU serves this is the hypervisor side's own business and the
+    /// implementer already holds it. Passing one from the device would be a guess at
+    /// something it does not own.
+    fn refresh_pdb(&self, pid: ProcId, pdb: Pdb) -> (usize, usize);
+}
+
 pub trait FbSource: Send + Sync + core::fmt::Debug {
     /// Fill `buf` from framebuffer-physical address `phys`; `false` if unbacked.
     fn read(&self, phys: u64, buf: &mut [u8]) -> bool;

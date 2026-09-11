@@ -890,6 +890,12 @@ pub struct SharedDevice {
     /// ⚠ **Read outside the ranked locks only** (§16.87): the production source takes the
     /// plane's rank-0 mutex, which may not be acquired beneath ranks 1-2.
     fb: std::sync::OnceLock<Arc<dyn kayfabe_fwd::FbSource>>,
+    /// Synchronization point (3)'s backing seam. See [`kayfabe_fwd::InvalidateRefresh`].
+    ///
+    /// ⊘ `None` until the shim installs it, and `forward_ring` then says so by name rather
+    /// than silently forwarding unbacked work — an absent seam is a different fact from a
+    /// refresh that found nothing.
+    invalidate_refresh: std::sync::OnceLock<Arc<dyn kayfabe_fwd::InvalidateRefresh>>,
     /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
     /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
     pb_vidmem: std::sync::atomic::AtomicBool,
@@ -1236,6 +1242,7 @@ impl SharedDevice {
         let spawner = spine.isolate_factory();
         SharedDevice {
             fb: std::sync::OnceLock::new(),
+            invalidate_refresh: std::sync::OnceLock::new(),
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
@@ -3145,6 +3152,21 @@ impl SharedDevice {
         self.fb.set(src)
     }
 
+    /// Install synchronization point (3)'s backing seam.
+    ///
+    /// ⚠ Install it BEFORE any ring is forwarded. Between the first forward and this call,
+    /// every channel TLB invalidate the guest pushes is decoded and discarded, which is the
+    /// state this seam exists to end.
+    ///
+    /// # Errors
+    /// The seam it was handed, if one was already installed.
+    pub fn set_invalidate_refresh(
+        &self,
+        src: Arc<dyn kayfabe_fwd::InvalidateRefresh>,
+    ) -> Result<(), Arc<dyn kayfabe_fwd::InvalidateRefresh>> {
+        self.invalidate_refresh.set(src)
+    }
+
     /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**
     ///
     /// `w279`'s result ruled this explicitly: *"widen it — as its **own** flag, never folded
@@ -3498,6 +3520,62 @@ impl SharedDevice {
 
         // ---- PARSE, then FORWARD. Each half takes and releases its own locks.
         let parsed = self.parse_pushbuffer(vmm, pid, cid, &fresh)?;
+
+        // ★★★★★ **SYNCHRONIZATION POINT (3) — REFRESH BEFORE WE FORWARD.**
+        //
+        // The guest's UVM writes its own page tables and announces the change here, as a
+        // `MEM_OP MMU_TLB_INVALIDATE` in this very pushbuffer. ⊘ Until now that was decoded
+        // into `parsed.invalidates` and read by NOTHING, so the rows were found later by a
+        // sweep — `[measured w425]` the pin of the LLM's faulting range and the
+        // `FAULT_PDE ACCESS_TYPE_VIRT_WRITE` that hit it landed in the SAME SECOND.
+        //
+        // ★★★ **This IS the block the owner asked for, and it needs no wait object.** The
+        // guest's completion semaphore is in the SAME pushbuffer as the invalidate, so the
+        // engine cannot reach it until we forward — and we do not forward until this returns.
+        // The vCPU is not involved: `forward_ring` runs on the publication worker.
+        //
+        // ⚠ An ABSENT seam is not an empty refresh, and saying so is the difference between
+        // "nothing needed backing" and "nobody was listening". The former is a fact about the
+        // guest; the latter is the bug this replaced.
+        if !parsed.invalidates.is_empty() {
+            match self.invalidate_refresh.get() {
+                Some(refresh) => {
+                    let mut backed = 0usize;
+                    let mut refused = 0usize;
+                    let mut seen: Vec<Pdb> = Vec::new();
+                    for (pdb, _membar) in &parsed.invalidates {
+                        // ⊘ One refresh per DISTINCT pdb: a push may invalidate the same
+                        // address space several times and each pass would re-walk it.
+                        if seen.contains(pdb) {
+                            continue;
+                        }
+                        seen.push(*pdb);
+                        let (b, r) = refresh.refresh_pdb(pid, *pdb);
+                        backed += b;
+                        refused += r;
+                    }
+                    if backed > 0 || refused > 0 {
+                        eprintln!(
+                            "kayfabe: MEMOP-REFRESH proc={} chan={} invalidates={} pdbs={}                              backed={backed} refused={refused} — synchronization point (3),                              done BEFORE the forward below",
+                            pid.0,
+                            cid.0,
+                            parsed.invalidates.len(),
+                            seen.len(),
+                        );
+                    }
+                    if refused > 0 {
+                        eprintln!(
+                            "kayfabe: MEMOP-REFRESH ⊘⊘ {refused} ROW(S) REFUSED and we are                              about to forward anyway. ⚠ Each is a row an engine may read                              within microseconds."
+                        );
+                    }
+                }
+                None => eprintln!(
+                    "kayfabe: MEMOP-REFRESH ⊘⊘ NO SEAM INSTALLED — {} channel TLB                      invalidate(s) decoded and DISCARDED, and the ring forwards below                      regardless. This is the pre-w437 behaviour and it is a bug, not a                      configuration.",
+                    parsed.invalidates.len()
+                ),
+            }
+        }
+
         let spans = parsed.ce_spans.len();
         if !parsed.ce_spans.is_empty() {
             // ★★★ THE OBSERVER. `forward_ce` → `plan_ce` → `Worker::execute`'s `CeSplit`
