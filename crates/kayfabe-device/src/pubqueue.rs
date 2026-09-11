@@ -160,6 +160,16 @@ use std::sync::{Condvar, Mutex};
 pub enum PublicationKind {
     /// The guest rang a doorbell; publish what its submission needs, then forward.
     Doorbell,
+    /// ★★★★★ **w472 — a pure WAKE for the BAR mirror's fill queue.** Carries no work of its
+    /// own: the worker drains the queue and that is all.
+    ///
+    /// ⊘ A fill is a PREFETCH — the plane already served the access that missed, and
+    /// installing the slot only stops the NEXT access to that page from exiting. So this
+    /// token is the one kind that is **safe to drop**: losing it costs extra exits on one
+    /// page and can never produce a wrong value. ⚠ It must still be SENT, though: without a
+    /// wake the queue drains only at the next invalidate, and a page that keeps trapping is
+    /// how BAR1 went back to tens of thousands of exits.
+    MirrorFill,
     /// ★★★ The guest wrote the **TLB invalidate trigger**. Publish, then signal completion so
     /// the guest's own poll of the trigger register clears.
     ///
@@ -210,6 +220,15 @@ impl MapPublication {
         Self {
             token: val,
             kind: PublicationKind::Invalidate,
+        }
+    }
+
+    /// A wake for the BAR mirror's deferred page fills. See [`PublicationKind::MirrorFill`].
+    #[must_use]
+    pub const fn for_mirror_fill(seq: u64) -> Self {
+        Self {
+            token: seq,
+            kind: PublicationKind::MirrorFill,
         }
     }
 

@@ -303,7 +303,22 @@ pub struct BarMirror {
     reval_why: AtomicU64,
     /// Whether a publication worker exists to drain the deferral. See [`BarMirror::arm`].
     defer_reval: bool,
+    /// ★★★★★ **w472 — the fill queue, SMALL AND LOSSY ON PURPOSE.**
+    ///
+    /// A fill is a **prefetch**: the plane has already served the access that missed, and
+    /// installing the slot only stops the NEXT access to that page from exiting. ⇒ dropping
+    /// one is always safe — the page simply keeps trapping until it is requested again. That
+    /// is what lets this queue be small and lock-cheap instead of unbounded: the vCPU pushes
+    /// under a tiny mutex held for a `push_back`, and never waits for anything.
+    fills: Mutex<std::collections::VecDeque<(FbWindow, u64)>>,
+    fills_queued: AtomicU64,
+    fills_dropped: AtomicU64,
+    fills_run: AtomicU64,
 }
+
+/// How many pending fills the queue holds before it starts dropping. ⊘ A prefetch queue
+/// that grows without bound is a memory leak that pretends to be a cache.
+const FILL_QUEUE_CAP: usize = 256;
 
 fn idx(w: FbWindow) -> Option<usize> {
     match w {
@@ -417,6 +432,10 @@ impl BarMirror {
             reval_done: AtomicU64::new(0),
             reval_why: AtomicU64::new(0),
             defer_reval,
+            fills: Mutex::new(std::collections::VecDeque::new()),
+            fills_queued: AtomicU64::new(0),
+            fills_dropped: AtomicU64::new(0),
+            fills_run: AtomicU64::new(0),
             plane,
             machine,
             arena,
@@ -475,7 +494,58 @@ impl BarMirror {
     /// 2. reserve a ticket in the table, resolve the descriptor, install the memslot —
     ///    lock-free;
     /// 3. re-resolve, and commit the slot only if nothing moved and the ticket survived.
+    /// ★★★★★ **w472 — THE FRONT DOOR. On a vCPU this only enqueues.**
+    ///
+    /// `[measured w471]` the three syscalls one fill makes — `mmap` to create the window,
+    /// `mmap MAP_FIXED` to place the backing, `KVM_SET_USER_MEMORY_REGION` to install the
+    /// slot — are three of the five blocking doors a vCPU thread reached, out of 1239
+    /// reaches in one boot. None of them may run inside an MMIO exit.
+    ///
+    /// ⊘ Deferring is safe *because a fill is a prefetch*: the plane already served the
+    /// access that missed, and `fill` only stops the NEXT access to that page from exiting.
+    /// Nothing the guest can observe depends on when it happens, or on whether it happens
+    /// at all — which is also why a full queue DROPS rather than blocks.
     pub fn fill(&self, w: FbWindow, off: u64) {
+        if !self.defer_reval || !kayfabe_util::lockwitness::on_vcpu_thread() {
+            self.fill_now(w, off);
+            return;
+        }
+        let mut q = self.fills.lock().unwrap_or_else(|e| e.into_inner());
+        if q.len() >= FILL_QUEUE_CAP {
+            self.fills_dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        q.push_back((w, off));
+        self.fills_queued.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// ★★★★★ **w472 — the worker's half.** Runs every queued fill. ⊘ Never call from a vCPU.
+    pub fn drain_fills(&self) {
+        loop {
+            let Some((w, off)) = ({
+                let mut q = self.fills.lock().unwrap_or_else(|e| e.into_inner());
+                q.pop_front()
+            }) else {
+                return;
+            };
+            self.fills_run.fetch_add(1, Ordering::Relaxed);
+            self.fill_now(w, off);
+        }
+    }
+
+    /// The census for the fill queue, one line.
+    #[must_use]
+    pub fn fill_census(&self) -> String {
+        format!(
+            "BAR-MIRROR FILLS queued={} run={} dropped={} (a dropped fill is a page that \
+             keeps trapping, never a wrong value)",
+            self.fills_queued.load(Ordering::Relaxed),
+            self.fills_run.load(Ordering::Relaxed),
+            self.fills_dropped.load(Ordering::Relaxed),
+        )
+    }
+
+    fn fill_now(&self, w: FbWindow, off: u64) {
         let Some(arm) = self.arm_for(w) else {
             return;
         };
@@ -864,6 +934,10 @@ impl BarMirror {
 impl FbMirrorPort for BarMirror {
     fn revalidate_pending(&self) {
         BarMirror::revalidate_pending(self);
+    }
+
+    fn drain_fills(&self) {
+        BarMirror::drain_fills(self);
     }
 
 

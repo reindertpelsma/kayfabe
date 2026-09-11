@@ -5025,6 +5025,9 @@ static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::
 /// ★ A monotonic sequence for `GspSubmit` jobs. ⊘ NOT a doorbell token and NOT a register
 /// value: the worker only needs *"the queue moved since you last looked"*, and the queue state
 /// itself lives in guest RAM where the FSM reads it.
+/// w472 — sequence for the mirror-fill wake tokens; only needs to be distinct.
+static MIRROR_FILL_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 static GSP_SUBMIT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// ★★★ GSP submissions whose job the lane refused. ⊘ Non-zero does NOT mean work was lost —
@@ -5081,6 +5084,21 @@ fn doorbell_publish_loop(
     let off_vcpu = OffVcpu::for_publication_worker();
     while let Some(job) = queue.take_blocking() {
         let token = job.token();
+        // ★★★★★ **w472 — DRAIN THE MIRROR'S FILL QUEUE ON EVERY WAKE, whatever woke us.**
+        //
+        // A `MirrorFill` token carries no work of its own; it exists so a vCPU that queued a
+        // fill can WAKE this thread instead of waiting for the next invalidate. ⊘ Draining
+        // unconditionally rather than only on that kind is deliberate: a fill queued just
+        // before a doorbell would otherwise sit until the token after it, and a page that
+        // keeps trapping is exactly how BAR1 went back to tens of thousands of exits.
+        if let Some(plane) = port.plane.upgrade() {
+            plane.drain_mirror_revalidation();
+        }
+        if job.kind() == kayfabe_device::pubqueue::PublicationKind::MirrorFill {
+            // Nothing else to do: the drain above IS the work.
+            queue.note_completed();
+            continue;
+        }
         // ★★★ **THE INVALIDATE ARM — publish, THEN complete.**
         //
         // The guest is polling its trigger register (`kgmmuCheckPendingInvalidates_TU102`
@@ -14528,6 +14546,17 @@ impl Regs {
     /// analyser's `UNACCOUNTED` row and is bounded by `exits × per-exit cost`, never by a
     /// segment here. See `crate::kftime::segment_shape`.
     #[must_use]
+    /// ★★★★★ **w472 — wake the worker for a queued mirror fill.** One bounded offer and
+    /// return; a full queue DROPS, because the token is a prefetch wake and losing it costs
+    /// extra exits on one page, never a wrong value.
+    #[cfg(feature = "host-isolates")]
+    fn wake_for_mirror_fill(&self) {
+        let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = self
+            .pubqueue
+            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+    }
+
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
         let mut kft = crate::kftime::Segs::start();
         let out = self.plane.read(clamp_bar(bar), off, clamp_size(size));
@@ -14542,6 +14571,7 @@ impl Regs {
         {
             if let Some(m) = self.bar_mirror.get() {
                 m.fill(*w, off);
+                self.wake_for_mirror_fill();
             }
         }
         let v = out.value();
@@ -15009,6 +15039,7 @@ impl Regs {
                 };
                 if let Some(w) = w {
                     m.fill(w, off);
+                    self.wake_for_mirror_fill();
                 }
             }
             m.after_write(&out);

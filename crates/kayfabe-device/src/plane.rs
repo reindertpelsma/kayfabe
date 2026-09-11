@@ -1088,6 +1088,10 @@ pub trait FbMirrorPort: Send + Sync + core::fmt::Debug {
     /// never run inside an MMIO exit. Called on the publication worker, before the
     /// invalidate's completion is written.
     fn revalidate_pending(&self);
+    /// ★★★★★ **w472 — run the page fills the vCPU deferred.** A fill is a prefetch that
+    /// costs three syscalls (`mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION`), which
+    /// is three of the five blocking doors `[measured w471]` found on vCPU threads.
+    fn drain_fills(&self);
 }
 
 /// ★★★★★ **w393 — one translated-window page, resolved for the mirror**: where it lands in
@@ -1734,6 +1738,10 @@ impl RegPlane {
     /// every stale mirror slot is gone. ⊘ Never call this from a vCPU thread.
     pub fn drain_mirror_revalidation(&self) {
         if let Some(m) = self.fb_mirror() {
+            // ⊘ Fills FIRST, then the revalidation: a fill installs a slot and the
+            // revalidation decides which installed slots are still true, so running them the
+            // other way round would revalidate a table the very next call adds to.
+            m.drain_fills();
             m.revalidate_pending();
         }
     }
