@@ -5022,6 +5022,22 @@ static DEFERRED_LOCAL_SERVINGS: std::sync::atomic::AtomicU64 = std::sync::atomic
 /// the worker faster — it does NOT mean the vCPU should do the work.
 static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// ★ A monotonic sequence for `GspSubmit` jobs. ⊘ NOT a doorbell token and NOT a register
+/// value: the worker only needs *"the queue moved since you last looked"*, and the queue state
+/// itself lives in guest RAM where the FSM reads it.
+static GSP_SUBMIT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ GSP submissions whose job the lane refused. ⊘ Non-zero does NOT mean work was lost —
+/// `DROPPED.arm_gsp_drain()` is armed alongside, and the worker drains the FSM's pending count
+/// to zero at the end of every job regardless of kind. It means the lane is too small or the
+/// worker too slow, and it never means the vCPU should do the work.
+static GSP_LANE_FULL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ Command doorbells serviced on the publication worker rather than on a vCPU. This is the
+/// number that says the 1.79 s trap moved: it should track the boot's RPC submissions, and a
+/// boot where it is ZERO while the guest is making progress means deferral is not armed.
+static GSP_SERVICED_OFF_VCPU: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// ★★★ Set when a publication job could not be queued. The next refresh in the worker treats
 /// **every** page directory and page table as dirty, so a dropped notification costs time and
 /// never coverage. Owner's design, 2026-09-10.
@@ -5313,6 +5329,46 @@ fn doorbell_publish_loop(
                         );
                     }
                 }
+            }
+        }
+        // ★★★★★ **w432 — DRAIN THE GSP COMMAND QUEUE, AT THE END OF EVERY JOB, WHATEVER
+        // THE JOB WAS.**
+        //
+        // `[measured]` servicing this inside the guest's `NV_PGSP_QUEUE_HEAD` store held a
+        // vCPU for **1.79 s** — the worst trap in the device. Here it is off the vCPU, and
+        // `OffVcpu` is already minted for this thread.
+        //
+        // ⊘ **Not gated on `job.kind()`, and that is the whole robustness argument.** The
+        // count in the FSM is what carries the work; the job is only a wake. So a `GspSubmit`
+        // job the lane refused is picked up by the next pass of ANY kind, and there is no
+        // inline-on-a-vCPU fallback anywhere — which is the failure mode the obvious design
+        // would have reintroduced on the rarest path.
+        //
+        // ⚠ `raise_status_irq` is the half that hangs a guest if dropped. The guest polls the
+        // message queue for its reply and the interrupt is how it learns to look; a worker
+        // that services the RPC and swallows the flag leaves it polling forever, which reads
+        // as a slow GPU rather than as a bug.
+        if DROPPED.take_gsp_drain() || port.pending_command_doorbells() > 0 {
+            match port.service_deferred_commands() {
+                Ok((0, _)) => {}
+                Ok((serviced, owed)) => {
+                    GSP_SERVICED_OFF_VCPU.fetch_add(serviced as u64, std::sync::atomic::Ordering::Relaxed);
+                    if owed {
+                        if let Err(e) =
+                            kayfabe_vmm::Vmm::raise_irq(&mut vmm, kayfabe_vmm::IrqSpec::Msix(0))
+                        {
+                            eprintln!(
+                                "kayfabe: GSP-SUBMIT ⊘ VECTOR REFUSED after serviced={serviced}: \
+                                 {e:?} — the replies are posted and no message went out. The \
+                                 guest finds them on its next poll or not at all."
+                            );
+                        }
+                    }
+                }
+                Err(e) => eprintln!(
+                    "kayfabe: GSP-SUBMIT ⊘⊘ SERVICING REFUSED {e:?} — the guest's RPCs are \
+                     unanswered. ⚠ This is a hang in the making, not a slow path."
+                ),
             }
         }
         queue.note_completed();
@@ -6271,6 +6327,26 @@ impl SharedDoorbell {
     /// *could not* leave the trap thread; the call site above is still synchronous.
     /// Arm a re-walk of every VAS on the doorbell target GPU. See
     /// [`kayfabe_rt::device::SharedDevice::arm_rescan_for_gpu`].
+    /// How many command doorbells the FSM is holding for a worker, or 0 if the plane is gone.
+    ///
+    /// ⊘ `Weak`, so a teardown that drops the plane answers 0 rather than panicking. A worker
+    /// that outlives its device has nothing to service, which is the truthful answer.
+    fn pending_command_doorbells(&self) -> u32 {
+        self.plane
+            .upgrade()
+            .map_or(0, |p| p.pending_command_doorbells())
+    }
+
+    /// Service the deferred GSP command doorbells. See [`RegPlane::service_deferred_commands`].
+    ///
+    /// # Errors
+    /// Whatever servicing refused, by name. `Ok((0, false))` if the plane is gone.
+    fn service_deferred_commands(&self) -> Result<(usize, bool), kayfabe_gsp::GspFault> {
+        self.plane
+            .upgrade()
+            .map_or(Ok((0, false)), |p| p.service_deferred_commands())
+    }
+
     fn arm_rescan_for_gpu(&self) -> usize {
         self.device.arm_rescan_for_gpu(DOORBELL_TARGET_GPU)
     }
@@ -13828,6 +13904,30 @@ impl Regs {
             .spawn(move || doorbell_publish_loop(port, &queue_for_thread, vmm))
         {
             Ok(join) => {
+                // ★★★★★ **w432 — ARM COMMAND DEFERRAL ONLY NOW, WITH THE WORKER PROVEN UP.**
+                //
+                // Deferral and its drain are one mechanism in two halves, and arming the half
+                // that stops doing work before the half that does it is a guest hang by
+                // construction: the FSM would bank doorbells nothing ever services.
+                //
+                // ⊘ So it is armed HERE, inside `Ok(join)` — after the thread exists — and
+                // never at construction. The `Err` arm below leaves it off, so a box that
+                // cannot spawn a thread keeps the synchronous behaviour and boots slowly
+                // rather than not at all.
+                if let Some(plane) = self.doorbell_port.plane.upgrade() {
+                    plane.set_defer_commands(true);
+                    eprintln!(
+                        "kayfabe: GSP-ASYNC ARMED — `NV_PGSP_QUEUE_HEAD` writes now RECORD \
+                         that the queue moved and return; this worker services the RPCs. \
+                         ⊘ `[measured]` that store previously held a vCPU for 1.79 s, the \
+                         worst trap in the device."
+                    );
+                } else {
+                    eprintln!(
+                        "kayfabe: GSP-ASYNC ⊘ NOT ARMED — no plane handle at worker start, so \
+                         command servicing stays INLINE on the vCPU. Slower and correct."
+                    );
+                }
                 eprintln!(
                     "kayfabe: DOORBELL-ASYNC worker STARTED — one thread, one coalescing \
                      lane, cap={}. ⊘ The trap now offers and returns; the publication legs \
@@ -14762,9 +14862,36 @@ impl Regs {
         let mut kft = crate::kftime::Segs::start();
         let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
         kft.mark("plane");
-        // ★★★★★ w393 — the mirror's two trap-path hooks, plane lock released (R1):
-        // a landed translated-window write is a miss to fill; an invalidate trigger or a
-        // BAR2 root publication is a flush to revalidate against.
+
+        // ★★★★★ **w432 — WAKE THE COORDINATOR. The store did not do the work.**
+        //
+        // With command deferral armed, a write to `NV_PGSP_QUEUE_HEAD` records that the queue
+        // moved and returns. `[measured]` doing the work here instead held a vCPU for
+        // **1.79 s** — the worst trap in the device — because one store drains and services
+        // every queued RPC, host verbs included.
+        //
+        // ⊘ Asked of the PLANE, not inferred from the offset. Which register means *"the
+        // command queue moved"* is the chip profile's business, and an offset test here would
+        // be a second copy of that knowledge, free to diverge quietly.
+        //
+        // ⊘⊘ **There is no inline fallback here, deliberately.** The obvious one — service it
+        // on the vCPU when the lane is full — reintroduces exactly the 1.79 s trap this commit
+        // exists to remove, on the rarest and least tested path. Instead a refused offer arms
+        // `DROPPED`, and the worker drains `pending_command_doorbells` to ZERO at the end of
+        // every job it runs, whatever that job's kind was. So the work is picked up by the
+        // next pass of any kind, and the count is what carries it, not the job.
+        if self.plane.pending_command_doorbells() > 0 {
+            let seq = GSP_SUBMIT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if matches!(
+                self.pubqueue
+                    .offer(kayfabe_device::pubqueue::MapPublication::for_gsp_submit(seq)),
+                kayfabe_device::pubqueue::Offered::Full
+            ) {
+                GSP_LANE_FULL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                DROPPED.arm_gsp_drain();
+            }
+        }
+
         #[cfg(feature = "host-isolates")]
         if let Some(m) = self.bar_mirror.get() {
             if out.fb_landed.is_some() {
@@ -15594,6 +15721,36 @@ impl Regs {
         // above there is nothing to switch on: this census counts a decode that either
         // happened or did not. A zero therefore has THREE causes, and the census line
         // names all three rather than letting a reader pick the flattering one.
+        // ★★★★★ **w432 — THE LANE CENSUS, because four counters were incremented and NONE
+        // was ever read.**
+        //
+        // `LANE_FULL_INVALIDATES` and `LANE_FULL_DOORBELLS` have been counted since the
+        // deferral lanes were built and appear in exactly one place each: the `fetch_add`.
+        // Nothing printed them, so *"is the lane big enough"* was unanswerable from any boot's
+        // artefact — and a lane that silently fills degrades into the slow path forever.
+        //
+        // ⊘ `gsp_off_vcpu` is the one that says the 1.79 s trap actually MOVED. Zero there,
+        // on a boot where the guest made progress, means deferral is not armed and every RPC
+        // was still serviced inside a guest store.
+        {
+            use std::sync::atomic::Ordering::Relaxed;
+            let (inv, db, gspfull, gspoff) = (
+                LANE_FULL_INVALIDATES.load(Relaxed),
+                LANE_FULL_DOORBELLS.load(Relaxed),
+                GSP_LANE_FULL.load(Relaxed),
+                GSP_SERVICED_OFF_VCPU.load(Relaxed),
+            );
+            eprintln!(
+                "kayfabe: LANE-CENSUS full[invalidate={inv} doorbell={db} gsp={gspfull}] \
+                 gsp_off_vcpu={gspoff} AT=teardown{}",
+                if gspoff == 0 {
+                    " ⊘ gsp_off_vcpu=0 — either the guest submitted no RPC, or command \
+                     deferral was NOT armed and every RPC was serviced inside a guest store"
+                } else {
+                    ""
+                }
+            );
+        }
         eprintln!(
             "kayfabe: {} AT=teardown",
             kayfabe_fwd::memop_census::census()

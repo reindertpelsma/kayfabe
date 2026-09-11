@@ -30,6 +30,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[derive(Debug, Default)]
 pub struct DroppedSignals {
     full_rescan: AtomicBool,
+    /// See [`DroppedSignals::arm_gsp_drain`].
+    gsp_drain: AtomicBool,
     sweep_emulated: AtomicBool,
     rescans_armed: AtomicU64,
     sweeps_armed: AtomicU64,
@@ -41,6 +43,7 @@ impl DroppedSignals {
     pub const fn new() -> Self {
         Self {
             full_rescan: AtomicBool::new(false),
+            gsp_drain: AtomicBool::new(false),
             sweep_emulated: AtomicBool::new(false),
             rescans_armed: AtomicU64::new(0),
             sweeps_armed: AtomicU64::new(0),
@@ -68,11 +71,26 @@ impl DroppedSignals {
     /// on the assumption the other has it, or — worse — both clear a flag that was re-armed
     /// between the read and the write. The classic lost-wakeup, and it would present as a
     /// silently missing rescan under exactly the load that armed it.
+    /// ★★★ Arm *"a GSP command-queue submission lost its job"*.
+    ///
+    /// ⊘ Armed when the publication lane refuses a `GspSubmit` job. It does NOT mean work was
+    /// lost: the FSM's `pending_command_doorbells` count is what carries the work, and the
+    /// worker drains it to zero at the end of every job. This exists so the worker is WOKEN
+    /// even if no other job happens to arrive.
+    pub fn arm_gsp_drain(&self) {
+        self.gsp_drain.store(true, Ordering::Release);
+    }
+
     pub fn take_full_rescan(&self) -> bool {
         self.full_rescan.swap(false, Ordering::AcqRel)
     }
 
     /// Consume the emulated-sweep latch.
+    /// Take and clear the GSP-drain signal. See [`Self::arm_gsp_drain`].
+    pub fn take_gsp_drain(&self) -> bool {
+        self.gsp_drain.swap(false, Ordering::AcqRel)
+    }
+
     pub fn take_emulated_sweep(&self) -> bool {
         self.sweep_emulated.swap(false, Ordering::AcqRel)
     }

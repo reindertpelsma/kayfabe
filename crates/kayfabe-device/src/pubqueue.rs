@@ -175,6 +175,16 @@ pub enum PublicationKind {
     /// polls. The RPC has already returned; what remains is getting its rows onto the host
     /// before the engine that uses them runs.
     RpcBind,
+    /// ★★★★★ **w432 — the GSP command queue moved and a worker must service it.**
+    ///
+    /// `[measured]` servicing it inside the guest's `NV_PGSP_QUEUE_HEAD` store held a vCPU for
+    /// **1.79 s** — the worst trap in the device. This job is what that store leaves behind
+    /// instead of doing the work.
+    ///
+    /// ⊘ Its token is a monotonic SEQUENCE, not a doorbell token and not a register value:
+    /// what the worker needs to know is *"the queue moved since you last looked"*, and the
+    /// queue state itself lives in guest RAM where the FSM reads it.
+    GspSubmit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -200,6 +210,15 @@ impl MapPublication {
         Self {
             token: val,
             kind: PublicationKind::Invalidate,
+        }
+    }
+
+    /// A GSP command-queue submission waiting for a worker. See [`PublicationKind::GspSubmit`].
+    #[must_use]
+    pub const fn for_gsp_submit(seq: u64) -> Self {
+        Self {
+            token: seq,
+            kind: PublicationKind::GspSubmit,
         }
     }
 
