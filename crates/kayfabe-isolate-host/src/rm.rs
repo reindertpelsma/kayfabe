@@ -9084,6 +9084,156 @@ impl HostRmBackend {
         out
     }
 
+    /// ★★★★★ **R34 — A CE COPY WHOSE SOURCE IS GUEST RAM, BEHIND `decoys` OTHER GUEST-RAM ROWS.**
+    ///
+    /// ⊘⊘ **This is the shape [`Self::prove_ce_copy`] CANNOT express, and that gap is why a
+    /// green raw client coexisted with a dead LLM for a whole campaign.** `prove_ce_copy`
+    /// allocates both operands with `alloc_device_local` — **vidmem** — so no engine in that
+    /// rung ever reads a guest-RAM row. `[measured w415llm]` the raw client declares **110**
+    /// guest-RAM rows against the LLM's **13 313**, and the defect that killed the LLM
+    /// (`measure_guest_ram_pin_rate` never running, so `pins=0`) was invisible to every client
+    /// rung for exactly that reason: nothing the client asked an engine to read lived there.
+    ///
+    /// This rung closes it. The source operand is `alloc_sysmem` — **guest RAM when this runs
+    /// inside the guest** — and before the copy it declares `decoys` further guest-RAM rows in
+    /// the same VAS, so the operand the engine reads sits *behind* a queue of rows that any
+    /// rate-limited backing pass must work through first.
+    ///
+    /// ## What a PASS establishes
+    ///
+    /// The bytes moved, and they moved out of a **guest-RAM** source at a VA the engine had to
+    /// resolve through the host's own page tables. ⊘ It does not establish an ordering: a pass
+    /// at `decoys = 0` and a pass at `decoys = 13000` are different claims, and only the second
+    /// speaks to scale. Run both — the pair is the measurement, either alone is not.
+    ///
+    /// ## ⚠ What a FAILURE means, and why it is worth more than the pass
+    ///
+    /// `FAULT_PDE ACCESS_TYPE_VIRT_READ` here reproduces the LLM's wall in a program with no
+    /// CUDA runtime in it, which is the whole reason to have a raw client.
+    ///
+    /// # Errors
+    /// Whatever the allocation, the mapping, or the copy refused — by its own name.
+    pub fn prove_ce_copy_from_guest_ram(
+        &mut self,
+        vas: HostHandle,
+        pattern: u32,
+        decoys: usize,
+    ) -> Result<(CeEvidence, usize), RmError> {
+        const BYTES: u64 = 4096;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas)?;
+        let sentinel = !pattern;
+
+        // ★ The decoys come FIRST, so the operands below are the freshest rows in the table —
+        // the ones a bounded sample reaches last. Allocating them after would put the operand
+        // at the front of the queue and quietly make the rung easy.
+        let mut decoy_rows: Vec<(u32, u64)> = Vec::new();
+        for _ in 0..decoys {
+            let Ok(hh) = self.alloc_notifier_mem(BYTES) else {
+                // ⊘ Not a failure of the rung: the box ran out. Report how far we got and let
+                // the caller decide — a partial decoy queue still tests SOME depth, and
+                // pretending otherwise would discard a real measurement.
+                break;
+            };
+            #[allow(clippy::cast_possible_truncation)]
+            let h = hh.raw() as u32;
+            match self.map_dma_both(range, h, BYTES, None) {
+                Ok(va) => decoy_rows.push((h, va)),
+                Err(_) => {
+                    let _ = self.free(self.stamp(h));
+                    break;
+                }
+            }
+        }
+        let declared = decoy_rows.len();
+
+        #[allow(clippy::cast_possible_truncation)]
+        let src = self.alloc_notifier_mem(BYTES)?.raw() as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let dst = match self.alloc_notifier_mem(BYTES) {
+            Ok(h) => h.raw() as u32,
+            Err(e) => {
+                let _ = self.free(self.stamp(src));
+                for (h, va) in decoy_rows.into_iter().rev() {
+                    let _ = self.unmap_dma_both(range, va);
+                    let _ = self.free(self.stamp(h));
+                }
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
+        let mut go = || -> Result<CeEvidence, RmError> {
+            let src_va = self.map_dma_both(range, src, BYTES, None)?;
+            cleanup[0].1 = Some(src_va);
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
+            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                src_map
+                    .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
+                    .map_err(|e| region_error(&e))?;
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+            drop(src_map);
+            drop(src_node);
+
+            let (submit, payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(src_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                    guest_release: None,
+                },
+            )?;
+
+            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            let after_last = second
+                .load_u32(HostOffset::new((WORDS - 1) * 4))
+                .map_err(|e| region_error(&e))?;
+            drop(second);
+            drop(node);
+            Ok(CeEvidence {
+                before,
+                after,
+                after_last,
+                expect_after: pattern,
+                expect_after_last: pattern.wrapping_add(WORDS as u32 - 1),
+                bytes: BYTES,
+                submit,
+                payload,
+                src_va,
+                dst_va,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            let _ = self.free(self.stamp(h));
+        }
+        for (h, va) in decoy_rows.into_iter().rev() {
+            let _ = self.unmap_dma_both(range, va);
+            let _ = self.free(self.stamp(h));
+        }
+        out.map(|e| (e, declared))
+    }
+
     /// ★★★★★ **R29 — the SAME proof as [`Self::prove_os_descriptor`], but through the
     /// PRODUCTION verbs**: the guest-RAM plane, the port's `describe_guest_ram`, and a
     /// fixed `map_dma` at an address the caller dictates.

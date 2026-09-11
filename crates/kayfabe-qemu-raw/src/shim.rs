@@ -10788,7 +10788,7 @@ impl PublishContext {
         // printed as separate clauses and never summed into one counter — they are different
         // chains over disjoint populations, and one number could not see the substitution.
         let pin_clause = if self.vas_publish.measures_pin_rate() {
-            let line = self.measure_guest_ram_pin_rate(&head, seen);
+            let line = self.measure_guest_ram_pin_rate(&head, seen, true);
             if !self.vas_publish.publishes() {
                 return Some(line);
             }
@@ -11205,6 +11205,9 @@ impl PublishContext {
         &self,
         head: &str,
         seen: Option<&kayfabe_rt::device::CeChannelFacts>,
+        // ★ Not a style bool: it is the *reason* the unbounded cap is permitted, and a caller
+        // running on a vCPU cannot truthfully pass `true`. See the cap decision below.
+        off_vcpu_pass: bool,
     ) -> String {
         let Some(backing) = self.guest_ram_backing else {
             return format!(
@@ -11417,7 +11420,27 @@ impl PublishContext {
                     pin_scoped_out += 1;
                     continue;
                 }
-                let cap = if doorbelled {
+                // ★★★★★ **w416 — A BARRIER FINISHES ITS VAS; A HINT SAMPLES IT.**
+                //
+                // `[measured w416llm]` the `else` arm below read `VAS_PINRATE_ROWS` (256) for
+                // every VAS the drain could not name, and the log says what that cost:
+                // `asked=256 pinned=256 refused=0 in 80 ms last_pinned_va=0x7683276ff000`
+                // over a range declared `0x768327600000+0x533000` — **1331 pages**. The boot
+                // ended at `covered_pct=95.0577% GUEST⊆PUBLISHED COVERED=false`, and `CE2
+                // HUBCLIENT_CE0` took `FAULT_PDE ACCESS_TYPE_VIRT_WRITE` at that range's base.
+                //
+                // ⊘ 256 was never a correctness choice. It bounded a pass that ran on the
+                // **vCPU inside its own MMIO exit**, where a 13 000-row drain is a ~4 s trap and
+                // violates *"a trap may not take longer than a millisecond"*. That pass now runs
+                // on the publication worker, and the invalidate that triggers it is a
+                // synchronization point we are ALLOWED to block — *"you should only return from
+                // it after the PTE/PDB page table refresh function finished"*. A sample cannot
+                // honour that; only completion can.
+                //
+                // ⚠ Total pinning work is UNCHANGED — pinned rows are excluded from the next
+                // pass either way. What changes is that it completes before the engine runs,
+                // instead of converging over ~52 later passes that may never arrive.
+                let cap = if doorbelled || off_vcpu_pass {
                     // ★ w319: `vas_drain_row_limit()` IS `VAS_DRAIN_ROW_CAP` unless the
                     // instrument env var is set, so master's behaviour is unchanged.
                     vas_drain_row_limit()
