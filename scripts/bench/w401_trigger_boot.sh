@@ -108,8 +108,16 @@ echo "[bar]    bar1 touches: $(grep -aoc 'bar1' "$Q" 2>/dev/null) ⊘ w431 flipp
 # still ran inside a guest store — the 1.79 s trap. The census says so in its own words.
 echo "[vcpu]   $(grep -ao 'LANE-CENSUS[^|]\{0,120\}' "$Q" 2>/dev/null | tail -1)"
 echo "[vcpu]   $(grep -ao 'GSP-ASYNC [A-Z ]\{0,40\}' "$Q" 2>/dev/null | tail -1)"
-echo "[vcpu]   $(grep -ao 'inline_exceptions=[0-9]*' "$Q" 2>/dev/null | tail -1) ⊘ w394 measured 166; falling toward 0 is the grade"
-echo "[vcpu]   $(grep -ao 'worst_trap[_a-z]*=[0-9]*' "$Q" 2>/dev/null | tail -1) ⊘ w394 measured 1 771 955 us"
+# ⊘⊘⊘ **THIS LINE READ THE TARGET, NOT THE MEASUREMENT.** `TRAPWITNESS` ends with the literal
+# text `(target: inline_exceptions=0)`, so `grep -o 'inline_exceptions=[0-9]*' | tail -1`
+# returned **the goal string** — a hardcoded `0` — on every boot, whatever the real value.
+# `[measured w448]` it printed `inline_exceptions=0` while the same line said
+# `TRAPWITNESS … inline_exceptions=24`. I reported that 0 to the owner twice.
+# ⚠ A metric whose GOAL is written beside it in the same format is a metric a lazy grep will
+# read as already met. Anchor on the whole row.
+echo "[vcpu]   $(grep -ao 'TRAPWITNESS[^|]\{0,160\}' "$Q" 2>/dev/null | tail -1 | cut -c1-170)"
+echo "[vcpu]   ⊘ w394 measured inline_exceptions=166, worst_trap=1 771 955us — read the row above, not a bare number"
+
 
 # ⊘ NO SEAM INSTALLED is a different fact from an empty refresh, and the device prints it by
 # name. MEMOP-CENSUS seen=0 on a boot whose P2 passes means the invalidates never reached the
