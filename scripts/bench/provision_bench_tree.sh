@@ -258,4 +258,25 @@ wait $A; say "TRACK_A done"
 wait $B; say "TRACK_B done"
 echo "----- TRACK A -----"; cat /tmp/trackA.out
 echo "----- TRACK B -----"; cat /tmp/trackB.out
+# ★★★★★ **BUILD THE GUEST-SIDE CLIENT, or the rung that grades this whole project cannot run.**
+#
+# `[measured w443]` a fully provisioned bench — driver verified, guest booting, MODPROBE_RC=0,
+# all three invariants reporting real numbers — produced
+# `W392D_GUEST_OUTCOME=(N) ⊘ UNMEASURED_NO_BINARY`. The mean client is a **musl** binary
+# (`kayfabe-rm-ladder`, static, copied into the guest) and provisioning added the musl TARGET
+# without ever building it.
+#
+# ⊘ The hook is honest about it — `(N)` is UNMEASURED, not a failure — which is exactly why it
+# is easy to miss: a boot that measured NOTHING and a boot that measured a pass differ by one
+# letter in one line, and every other line in that ledger was full of real numbers.
+say "B4: building the guest-side mean client (musl)"
+( cd "${KAYFABE_REPO:-/root/kayfabe}" \
+  && cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder 2>&1 | tail -2 )
+GUEST_LADDER="${KAYFABE_REPO:-/root/kayfabe}/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
+if [ -x "$GUEST_LADDER" ]; then
+  say "B4: guest ladder built: $(stat -c %s "$GUEST_LADDER") bytes"
+else
+  say "⊘ B4: guest ladder MISSING — every later boot will report UNMEASURED_NO_BINARY"
+fi
+
 say "BENCH_TREE_DONE"
