@@ -160,3 +160,54 @@ variable moved. **Run the sweep first**: RM-placed (control), `0x120000000`, `0x
    avoids `unsafe`, a doc line naming `RmEvent`. A permanently red gate is a gate nobody reads,
    so those were one defect, not three, and it had been protecting nothing. ⊘ The CLAIM-LEDGER
    pair is NOT of this kind: it is working correctly against a real documentation backlog.
+
+
+---
+
+# w420 — THE RUNG'S THIRD INSTRUMENT DEFECT, AND THE ARM THAT MATTERS
+
+## ★ R34's blind spot was its own operand pair
+
+R33 could not see guest RAM because **both** its operands are `alloc_device_local`. R34 could
+not see an H2D write because **both** of its operands are `NV01_MEMORY_SYSTEM`.
+
+⇒ **A rung's blind spot is whatever its operands have in COMMON**, and both rungs had a
+uniform pair. The LLM's fault is `CE2 HUBCLIENT_CE0 … ACCESS_TYPE_VIRT_**WRITE**` — a copy
+engine writing its destination — and `.to('cuda')` is an H2D upload: **source guest RAM,
+destination device memory**. Neither rung had that pair until `--guest-ram-dst-vidmem`.
+
+## ⊘ And the first H2D result was the rung again
+
+`[measured w420, BARE METAL, decoys=0]`:
+
+    dst aperture   address            result
+    vidmem         RM-placed          (P)  src 0x120000000  dst 0x120010000   (+64 KiB)
+    vidmem         0x7cac33600000     (F)  refused at map_dma_both(dst): NoMemory
+    sysmem         0x7cac33600000     (P)  src 0x7cac33600000 dst 0x7cac33601000
+
+*"Device memory cannot be mapped at a high VA"* would have been a striking finding. **RM's own
+placement refutes it**: `+0x10000` for vidmem against `+0x1000` for sysmem. Device-local is
+**64 KiB big-page** granular here, and the rung offset the destination a flat 4 KiB, so it was
+asking RM to host a 64 KiB-page mapping at a 4 KiB-aligned VA. `NoMemory` is the right answer.
+
+⚠ The sysmem arm passing **at the same address** is what makes the page-size reading provable
+and the VA-range reading false. A single failing arm would have supported both.
+
+## ★★★ Three instrument defects in one rung, one shape
+
+A notifier allocator used as a general one · a gpu-node CPU map of a ctl-node object · a 4 KiB
+offset for a 64 KiB-page aperture. **Every refusal was real, correct, and about the probe**, and
+each looked like a product finding until a control ran. ⇒ Never report a rung's first red.
+
+## The command surface now
+
+    --guest-ram-decoys N      rows declared ahead of the operand (scale)
+    --guest-ram-at 0xHEX      dictate the operands' GPU VA (address)
+    --guest-ram-dst-vidmem    destination in device memory — the real H2D shape (aperture)
+
+Three dimensions, movable one at a time. `scripts/bench/w418_r34_boot.sh` runs depth, address
+and H2D sweeps in the guest; bare metal is the control for every arm.
+
+⊘ **Still open:** the guest arms of the address and H2D sweeps. Bare metal is green for
+address (sysmem) and for RM-placed H2D; the aligned high-VA H2D bare-metal arm has NOT been
+re-run since the alignment fix.
