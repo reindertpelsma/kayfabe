@@ -9129,6 +9129,18 @@ impl HostRmBackend {
         // `Some(va)` dictates the placement so the two can be compared with one variable
         // changed. ⊘ `None` keeps the byte-identical committed behaviour.
         at: Option<u64>,
+        // ★★★★★ **w420 — THE DESTINATION'S APERTURE, and this is the LLM's actual shape.**
+        //
+        // The LLM's fault is `CE2 HUBCLIENT_CE0 … ACCESS_TYPE_VIRT_**WRITE**` — a copy engine
+        // writing its DESTINATION. That copy is `.to('cuda')`: an H2D upload, so its source is
+        // host/guest RAM and its destination is **device memory**. R34 as first written put
+        // BOTH operands in `NV01_MEMORY_SYSTEM`, so its engine never wrote to vidmem at all —
+        // the same blind spot R33 had in mirror image, and the reason R34 can be green while
+        // the LLM dies.
+        //
+        // `true` makes the destination `alloc_device_local`, which is the real H2D shape.
+        // ⊘ `false` is the byte-identical committed behaviour.
+        dst_vidmem: bool,
         decoys: usize,
         // ⊘⊘ `[measured w417, in the live guest]` this returned a bare `RmError` and the rung
         // printed `refused by name: Other(31)` — `NV_ERR_INVALID_ARGUMENT` from ONE of six RM
@@ -9170,7 +9182,12 @@ impl HostRmBackend {
             .map_err(|e| ("alloc_sysmem(src) — NV01_MEMORY_SYSTEM", e))?
             .raw() as u32;
         #[allow(clippy::cast_possible_truncation)]
-        let dst = match self.alloc_sysmem(BYTES) {
+        let dst = match if dst_vidmem {
+            // ⊘ Returns a raw `u32` already, unlike `alloc_sysmem`'s `HostHandle`.
+            self.conn.alloc_device_local(BYTES).map(|h| self.stamp(h))
+        } else {
+            self.alloc_sysmem(BYTES)
+        } {
             Ok(h) => h.raw() as u32,
             Err(e) => {
                 let _ = self.free(self.stamp(src));
@@ -9178,7 +9195,7 @@ impl HostRmBackend {
                     let _ = self.unmap_dma_both(range, va);
                     let _ = self.free(self.stamp(h));
                 }
-                return Err(("alloc_sysmem(dst)", e));
+                return Err((if dst_vidmem { "alloc_device_local(dst)" } else { "alloc_sysmem(dst)" }, e));
             }
         };
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
@@ -9205,10 +9222,19 @@ impl HostRmBackend {
                 .conn
                 .map_cpu_on(MapNode::Ctl, src, BYTES, CachePolicy::WriteBack)
                 .map_err(|e| ("map_cpu_on(Ctl, src)", e))?;
+            // ⊘ The NODE follows the APERTURE, not the variable name: sysmem maps through
+            // `Ctl`, device-local through `Gpu`. Getting this wrong is `Other(31)`, which is
+            // exactly how R34's first version failed.
+            let dst_node_kind = if dst_vidmem { MapNode::Gpu } else { MapNode::Ctl };
+            let dst_cache = if dst_vidmem {
+                CachePolicy::WriteCombining
+            } else {
+                CachePolicy::WriteBack
+            };
             let (dst_node, dst_map) = self
                 .conn
-                .map_cpu_on(MapNode::Ctl, dst, BYTES, CachePolicy::WriteBack)
-                .map_err(|e| ("map_cpu_on(Ctl, dst)", e))?;
+                .map_cpu_on(dst_node_kind, dst, BYTES, dst_cache)
+                .map_err(|e| ("map_cpu_on(dst)", e))?;
             for i in 0..WORDS {
                 src_map
                     .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
@@ -9240,8 +9266,8 @@ impl HostRmBackend {
 
             let (node, second) = self
                 .conn
-                .map_cpu_on(MapNode::Ctl, dst, BYTES, CachePolicy::WriteBack)
-                .map_err(|e| ("map_cpu_on(Ctl, dst) readback", e))?;
+                .map_cpu_on(dst_node_kind, dst, BYTES, dst_cache)
+                .map_err(|e| ("map_cpu_on(dst) readback", e))?;
             let after = second
                 .load_u32(HostOffset::new(0))
                 .map_err(|e| ("cpu store/load", region_error(&e)))?;

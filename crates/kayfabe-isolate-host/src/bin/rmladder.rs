@@ -11609,6 +11609,11 @@ fn main() -> std::process::ExitCode {
     /// (`0x1_2000_0000`); the LLM faults at `0x7cac_3360_0000`, which is where CUDA's unified
     /// addressing puts a device pointer. This is how those two are compared.
     let mut guest_ram_at: Option<u64> = None;
+    /// ★ `--guest-ram-dst-vidmem` — put the DESTINATION in device memory, which is the real
+    /// H2D shape. `[measured w416-w419]` the LLM's fault is a copy engine WRITING its
+    /// destination, and `.to('cuda')` uploads guest RAM into vidmem. With both operands in
+    /// sysmem, R34's engine never writes to vidmem at all.
+    let mut guest_ram_dst_vidmem = false;
     let mut want_ce_client_fault = false;
     // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
     let mut want_ce_client_fault_shared_vas = false;
@@ -11886,6 +11891,10 @@ fn main() -> std::process::ExitCode {
             // the sandbox rung or a second channel along.
             "--ce-client" => want_ce_client = true,
             "--ce-client-guest-ram" => want_ce_guest_ram = true,
+            "--guest-ram-dst-vidmem" => {
+                guest_ram_dst_vidmem = true;
+                want_ce_guest_ram = true;
+            }
             "--guest-ram-at" => {
                 let Some(v) = args.next() else {
                     eprintln!("--guest-ram-at needs a hex address");
@@ -12070,7 +12079,13 @@ fn main() -> std::process::ExitCode {
             println!("FAIL  R34 guest-RAM CE   = could not allocate a VAS — UNMEASURED");
             return std::process::ExitCode::from(1);
         };
-        let ok = match rm.prove_ce_copy_from_guest_ram(vas, 0xC0FF_EE34, guest_ram_at, guest_ram_decoys) {
+        let ok = match rm.prove_ce_copy_from_guest_ram(
+            vas,
+            0xC0FF_EE34,
+            guest_ram_at,
+            guest_ram_dst_vidmem,
+            guest_ram_decoys,
+        ) {
             Ok((e, declared)) => {
                 let moved = e.after == e.expect_after && e.after_last == e.expect_after_last;
                 println!(
