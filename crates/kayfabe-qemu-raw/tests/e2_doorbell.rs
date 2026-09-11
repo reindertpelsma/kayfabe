@@ -935,6 +935,18 @@ fn all_three_synchronization_points_consume_their_barrier() {
          in microcode, so this handler is the only thing that knows"
     );
 
+    // ⚠ (2) REACHABILITY, not just presence. `promote_ctx` exists on BOTH `Gpu` and
+    // `SharedDevice`, and `[w404]` recorded that production passes `SharedObjectModel` — the
+    // hook went into the wrong one of those twice before. An edit to the unreached copy would
+    // satisfy the assertion above and change nothing at runtime, which is this session's
+    // single most-repeated failure.
+    assert!(
+        shim.contains("fn promote_ctx(")
+            && shim.contains("self.0.promote_ctx(p)"),
+        "the production `SharedObjectModel` must delegate promote_ctx to the `SharedDevice` \
+         whose handler does the backing; without that delegation the refresh above is dead code"
+    );
+
     // (1) the invalidate register — its lane refreshes on the worker and only then completes.
     assert!(
         shim.contains("refresh_page_tables(off_vcpu)"),
