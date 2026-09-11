@@ -2981,6 +2981,96 @@ const ENGINE_FWD_DRAIN_BUDGET: std::time::Duration = std::time::Duration::from_s
 /// ★★★★★ **w288 — `err_notifier_grants` is the VMM's half**, derived by
 /// [`Regs::pending_err_notifier_grants`] before this call and applied by key inside the
 /// drain. ⊘ Passed through untouched: this function reports, it does not decide.
+/// ★★★★★ **w480 — a FREE function so the vCPU and the worker call the SAME code.**
+/// It reads only the three things the doorbell port already holds, which is what makes
+/// moving the drain off the vCPU a move rather than a duplication.
+fn pending_err_notifier_grants_of(
+    device: &kayfabe_rt::device::SharedDevice,
+    ce: &CeShellState,
+    guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+) -> Vec<kayfabe_rt::device::EngineNotifierGrant> {
+        // ⊘ Silent and free when the crossing is not armed, for `err_notifier_grant`'s
+        // reason: a control's log must not contain a line the armed run's does not.
+        if guest_ram_backing.is_none() {
+            return Vec::new();
+        }
+        let pending = device.peek_pending_engine_forwards();
+        if pending.is_empty() {
+            // The overwhelmingly common case — this runs on every register write.
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (client, parent, class) in pending {
+            // ⊘ A latch this port cannot route is NOT a miss and is NOT reported here: the
+            // drain refuses it too, and by its own name. Printing a second refusal for one
+            // cause is how one defect comes to read as two.
+            let Ok(facts) = device
+                .engine_object_channel_facts(client, parent, class)
+            else {
+                continue;
+            };
+            if let Some(grant) = err_notifier_grant(
+                ce,
+                guest_ram_backing,
+                facts.error_notifier,
+                &format!(
+                    "latch client={:#x} parent={:#x} class={:#06x} proc={} chan={}",
+                    client.0, parent.0, class.0, facts.proc.0, facts.chan.0
+                ),
+            ) {
+                out.push(kayfabe_rt::device::EngineNotifierGrant {
+                    client,
+                    parent,
+                    class,
+                    grant,
+                });
+            }
+        }
+        out
+    }
+/// ★★★★★ **w480 — a FREE function so the vCPU and the worker call the SAME code.**
+/// It reads only the three things the doorbell port already holds, which is what makes
+/// moving the drain off the vCPU a move rather than a duplication.
+fn pending_birth_notifier_grants_of(
+    device: &kayfabe_rt::device::SharedDevice,
+    ce: &CeShellState,
+    guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+) -> Vec<kayfabe_rt::ChannelBirthGrant> {
+        if guest_ram_backing.is_none() {
+            return Vec::new();
+        }
+        let pending = device.peek_pending_channel_births();
+        if pending.is_empty() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for (client, channel) in pending {
+            let Ok(facts) = device.channel_birth_facts(client, channel) else {
+                continue;
+            };
+            // ⊘ Silent for `Emulated`: not this site's birth, and the drain skips it silently.
+            if facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough {
+                continue;
+            }
+            if let Some(grant) = err_notifier_grant(
+                ce,
+                guest_ram_backing,
+                facts.error_notifier,
+                &format!(
+                    "birth client={:#x} channel={:#x} proc={} chan={}",
+                    client.0, channel.0, facts.proc.0, facts.chan.0
+                ),
+            ) {
+                out.push(kayfabe_rt::ChannelBirthGrant {
+                    client,
+                    channel,
+                    grant,
+                });
+            }
+        }
+        out
+    }
+
 fn report_engine_forward_drain(
     device: &kayfabe_rt::device::SharedDevice,
     err_notifier_grants: &[kayfabe_rt::device::EngineNotifierGrant],
@@ -5028,6 +5118,11 @@ static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::
 /// w472 — sequence for the mirror-fill wake tokens; only needs to be distinct.
 static MIRROR_FILL_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// w479/w480 — ONE arm for both deferrals, read once. ⊘ Two independent `OnceLock`s over the
+/// same variable would let a later edit arm half the move, which is the shape that produced
+/// w466's regression.
+static MATERIALIZE_INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
 static GSP_SUBMIT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// ★★★ GSP submissions whose job the lane refused. ⊘ Non-zero does NOT mean work was lost —
@@ -5098,6 +5193,15 @@ fn doorbell_publish_loop(
         // idempotent when nothing is latched: one rank-1 acquisition that moves an empty
         // `Vec` and returns.
         port.device.materialize_pending();
+        // w480 — and the two drains that used to run at the tail of every register write. The
+        // grant computations are free functions reading only what this port already holds, so
+        // this is a MOVE and not a second implementation.
+        let birth_grants =
+            pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
+        report_channel_birth_drain(&port.device, &birth_grants);
+        let err_grants =
+            pending_err_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
+        report_engine_forward_drain(&port.device, &err_grants);
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::MirrorFill {
             // Nothing else to do: the drain above IS the work.
             queue.note_completed();
@@ -14666,45 +14770,7 @@ impl Regs {
     /// plane's rank-0 mutex is taken and released inside `err_notifier_grant`, around one
     /// layout resolution and nothing else.
     fn pending_err_notifier_grants(&self) -> Vec<kayfabe_rt::device::EngineNotifierGrant> {
-        // ⊘ Silent and free when the crossing is not armed, for `err_notifier_grant`'s
-        // reason: a control's log must not contain a line the armed run's does not.
-        if self.guest_ram_backing.is_none() {
-            return Vec::new();
-        }
-        let pending = self.device.peek_pending_engine_forwards();
-        if pending.is_empty() {
-            // The overwhelmingly common case — this runs on every register write.
-            return Vec::new();
-        }
-        let mut out = Vec::new();
-        for (client, parent, class) in pending {
-            // ⊘ A latch this port cannot route is NOT a miss and is NOT reported here: the
-            // drain refuses it too, and by its own name. Printing a second refusal for one
-            // cause is how one defect comes to read as two.
-            let Ok(facts) = self
-                .device
-                .engine_object_channel_facts(client, parent, class)
-            else {
-                continue;
-            };
-            if let Some(grant) = err_notifier_grant(
-                &self.ce,
-                self.guest_ram_backing,
-                facts.error_notifier,
-                &format!(
-                    "latch client={:#x} parent={:#x} class={:#06x} proc={} chan={}",
-                    client.0, parent.0, class.0, facts.proc.0, facts.chan.0
-                ),
-            ) {
-                out.push(kayfabe_rt::device::EngineNotifierGrant {
-                    client,
-                    parent,
-                    class,
-                    grant,
-                });
-            }
-        }
-        out
+        pending_err_notifier_grants_of(&self.device, &self.ce, self.guest_ram_backing)
     }
 
     /// ★★★★★ **w393 — the VMM's half of a latched BIRTH's error notifier**, keyed by the
@@ -14713,39 +14779,7 @@ impl Regs {
     /// crossing is unarmed, same refusal to print a second line for a latch the drain will
     /// refuse by its own name.
     fn pending_birth_notifier_grants(&self) -> Vec<kayfabe_rt::ChannelBirthGrant> {
-        if self.guest_ram_backing.is_none() {
-            return Vec::new();
-        }
-        let pending = self.device.peek_pending_channel_births();
-        if pending.is_empty() {
-            return Vec::new();
-        }
-        let mut out = Vec::new();
-        for (client, channel) in pending {
-            let Ok(facts) = self.device.channel_birth_facts(client, channel) else {
-                continue;
-            };
-            // ⊘ Silent for `Emulated`: not this site's birth, and the drain skips it silently.
-            if facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough {
-                continue;
-            }
-            if let Some(grant) = err_notifier_grant(
-                &self.ce,
-                self.guest_ram_backing,
-                facts.error_notifier,
-                &format!(
-                    "birth client={:#x} channel={:#x} proc={} chan={}",
-                    client.0, channel.0, facts.proc.0, facts.chan.0
-                ),
-            ) {
-                out.push(kayfabe_rt::ChannelBirthGrant {
-                    client,
-                    channel,
-                    grant,
-                });
-            }
-        }
-        out
+        pending_birth_notifier_grants_of(&self.device, &self.ce, self.guest_ram_backing)
     }
 
     #[cfg(feature = "host-isolates")]
@@ -15247,8 +15281,7 @@ impl Regs {
         // a different vCPU site. That is a real risk and it is why this lands behind an arm
         // with a census rather than as a claim: `VCPU-BLOCKING` names the doors, so one boot
         // says whether the spawn moved or merely relocated.
-        static INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if *INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
+        if *MATERIALIZE_INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
             || !self.doorbell_async.defers()
         {
             self.device.materialize_pending();
@@ -15387,10 +15420,37 @@ impl Regs {
         // ⊘ Before the engine drain: an engine object latched on the same write must find
         // the channel already born with its USERD, not birth it itself without one.
         // ⊘ `Emulated` channels pass through this drain silently — not their birth site.
-        let birth_grants = self.pending_birth_notifier_grants();
-        report_channel_birth_drain(&self.device, &birth_grants);
-        kft.mark("birth_drain");
-        report_engine_forward_drain(&self.device, &err_notifier_grants);
+        // ★★★★★ **w480 — THE LAST TWO DRAINS, OFF THE vCPU.**
+        //
+        // `[measured w479]` `VCPU-BLOCKING` reported **25 x "issuing a host RM verb"** and
+        // `VERBCOST` put `EngineObject` at **mean 8.12 ms, worst 10.27 ms**. These two drains
+        // are where they run. w479 moved the isolate spawn and killed the 2.24 s trap; this
+        // is what is left in the millisecond band.
+        //
+        // ★★★ And the reason it should matter beyond its own 25 traps: a guest MMIO exit
+        // holds the hypervisor's global lock, so a vCPU sitting in an 8 ms host verb stalls
+        // **every other vCPU's trap behind it**. That is the standing candidate for why
+        // `bar0+0x110094` — a register with NO HANDLER ANYWHERE in this tree — measured
+        // 3.4 ms. Code that does not exist cannot be slow; waiting for a lock can.
+        // ⊘ Stated with its falsifier: if `0x110094` does not fall when these move, the lock
+        // was not what it was waiting on and I was wrong again.
+        //
+        // ⚠ The owner's reason for caring, which is the one that counts: a vCPU stall does
+        // not merely delay GPU work, it freezes **all** guest CPU work for its duration.
+        if *MATERIALIZE_INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
+            || !self.doorbell_async.defers()
+        {
+            let birth_grants = self.pending_birth_notifier_grants();
+            report_channel_birth_drain(&self.device, &birth_grants);
+            kft.mark("birth_drain");
+            report_engine_forward_drain(&self.device, &err_notifier_grants);
+        } else {
+            let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let _ = self
+                .pubqueue
+                .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+            kft.mark("birth_drain");
+        }
         kft.mark("fwd_drain");
         // ★★★★★ **w303 — THE REAP, AND THIS LINE IS THE WHOLE OF FIX A.**
         //
