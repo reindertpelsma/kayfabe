@@ -13,7 +13,7 @@ the deferred walk. Both arms in ONE binary, at `7be0cc9b`.
 |---|---|---|
 | `slow_traps(>1000us)` | **134** | 179 |
 | `by_decade` 1-10ms / 10-100ms / >1s | 116 / 17 / 1 | 155 / 23 / 1 |
-| `bar0+0xb830b0` (`NV_PFB_PRI_MMU_INVALIDATE`) | **absent from the table** | **53, worst 42 518 us** |
+| `bar0+0xb830b0` (`NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE`) | **absent from the table** | **53, worst 42 518 us** |
 | `worst_trap` | 1 620 938 us @ `bar0+0x110c00` | 1 916 348 us @ `bar0+0x110c00` |
 
 The same A/B at `aa7165ce` — identical code except w469 — reads **6055 / 6889**. So

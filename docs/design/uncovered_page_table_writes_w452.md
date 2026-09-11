@@ -46,7 +46,7 @@ that bit and the received set falls out — no enumeration to go stale.
 
 - **B1–B4**: the whole BAR2 bootstrap writes PDEs/PTEs through the BAR0 window with no
   invalidate; only PDE3[0] later leaves as `UPDATE_BAR_PDE` (fn 70).
-- **V1–V6**: UVM never writes `NV_PFB_PRI_MMU_INVALIDATE` at all — zero occurrences under
+- **V1–V6**: UVM never writes `NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` at all — zero occurrences under
   `kernel-open/nvidia-uvm/`. Its root PDB is CE-written before anything names it (**V1**); a
   newly allocated table is host-shadow only and never initialised in a release build (**V2**);
   and 16 sites deliberately pass `tlb_batch == NULL` (**V3**) ⇒ **an invalidate naming a 2M/big

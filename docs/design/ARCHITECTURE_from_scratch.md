@@ -246,7 +246,7 @@ the three points where the guest tells us it has changed something:
 
 | # | Point | How the guest waits |
 |---|---|---|
-| S1 | TLB invalidate (`NV_PFB_PRI_MMU_INVALIDATE`) | Spins on the trigger register, which lives in the BAR0 shadow |
+| S1 | TLB invalidate (`NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE`) | Spins on the trigger register, which lives in the BAR0 shadow |
 | S2 | RM call (`GPU_PROMOTE_CTX`) | Waits for the RPC reply, which refresh writes |
 | S3 | UVM kernel channel (`MEM_OP_A`/`_D`) | Waits on the push's semaphore |
 

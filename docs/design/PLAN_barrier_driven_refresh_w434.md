@@ -37,7 +37,7 @@ barrier names, when it names it**, and there is nothing to race.
 > what I thought. my suspicion is that a real bare metal gsp does that in microcode, but since
 > we impersonate that we must implement all 3 entrypoints"*
 
-I verified that RM's `vaspaceInvalidateTlb` lowers to `NV_PFB_PRI_MMU_INVALIDATE` and concluded
+I verified that RM's `vaspaceInvalidateTlb` lowers to `NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` and concluded
 *"one barrier, two transports"*. **That conclusion is wrong, and the error is specific:** what
 I traced is the path the guest's **kernel GMMU** owns. On a GSP part the mapping work itself
 happens **inside the GSP** — which is us — and a real GSP does its invalidate in **microcode**.
@@ -49,7 +49,7 @@ below is a table of OUR obligations rather than of the guest's transports.
 
 | # | entry point | who tells us | our obligation |
 |---|---|---|---|
-| 1 | **TLB invalidate** — `NV_PFB_PRI_MMU_INVALIDATE` | the guest, by writing a BAR0 register | handled; needs SCOPING to what the register names |
+| 1 | **TLB invalidate** — `NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` | the guest, by writing a BAR0 register | handled; needs SCOPING to what the register names |
 | 2 | **RM call** — a map/unmap RPC we service | **nobody — we are the GSP** | refresh inside the handler, before the reply |
 | 3 | **UVM kernel channel** — `MEM_OP MMU_TLB_INVALIDATE` | the guest, as a pushbuffer method | consume `out.invalidates`; today it is DROPPED |
 

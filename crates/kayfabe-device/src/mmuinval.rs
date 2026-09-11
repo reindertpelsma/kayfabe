@@ -14,6 +14,16 @@
 //! a complete enumeration of the **two transports somebody thought to instrument**, and RM's
 //! actual transport on GA106 is **neither**:
 //!
+// ⊘⊘⊘ **NAME CORRECTED w476, and the old one was wrong for a REASON worth keeping.**
+// This register was called `NV_PFB_PRI_MMU_INVALIDATE` throughout this tree. That symbol is
+// real but it is **`0x00100CBC`** (`ogkm-580: maxwell/gm107/dev_fb.h:35`) — a different
+// register in a different unit. On Turing and later the driver ABANDONED the PFB register
+// for the VF-aperture one, and the only `.c` files naming the VF symbol are
+// `kern_gmmu_tu102.c` and `kern_gmmu_gb100.c`. ⇒ `0xB830B0` is
+// `NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` (`turing/tu102/dev_vm.h:131`), reached as
+// `0xB8_0000 + 0x30B0`. The behaviour we implement was always right; the name was not, and a
+// wrong name in a register model is the kind of thing nobody re-checks because it looks
+// checked.
 //! > `GPU_VREG_WR32(pGpu, NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE, pParams->regVal);`
 //! > (`ogkm-580: src/nvidia/src/kernel/gpu/mmu/arch/turing/kern_gmmu_tu102.c:117`)
 //!
@@ -128,7 +138,7 @@ pub const PDB_ADDR_ALIGNMENT: u32 = 12;
 /// ⊘⊘⊘ **WAS `INVALIDATE_HOLD_CEILING_US = 40_000`. THAT NUMBER WAS ROT, AND THE HARMFUL KIND.**
 ///
 /// > **Owner, 2026-09-11:** *"why is there a hold budget?"* · *"is this old debugging stuf that
-/// > you left behind rot"* · *"the only thing NV_PFB_PRI_MMU_INVALIDATE should do is queue the
+/// > you left behind rot"* · *"the only thing NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE should do is queue the
 /// > work and wake, then return … takes microseconds"* · *"I think no GPU MMIO write on
 /// > baremetal takes a ms"*
 ///
