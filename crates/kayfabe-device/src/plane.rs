@@ -1127,6 +1127,24 @@ pub struct RegPlane {
     /// Held here for `unserviced`'s two reasons and one of its own: the guest polls this
     /// register in a tight loop, so answering it must never take the FSM's lock.
     mmu_inval: crate::mmuinval::MmuInvalidateLog,
+    /// ★★★★★ **The FSM's pending-doorbell count, readable WITHOUT the big lock.**
+    ///
+    /// ⊘⊘ `[measured w462]` w432 put `pending_command_doorbells()` at the tail of **every**
+    /// MMIO write, and that accessor read the count through `self.state.lock()` — the lock
+    /// holding `fsm`, `ram` and `policy`, which the worker takes for whole RPCs. So every vCPU
+    /// register write queued behind the worker's servicing. `bar0+0xb830b0` took **48 slow
+    /// traps, worst 54 053 us**, on a path whose own arm returns before any lock is taken.
+    ///
+    /// ⚠ **That was my own regression, in the commit that moved the work OFF the vCPU.**
+    /// Moving work off a thread and then reading its state through a shared lock puts the wait
+    /// straight back — the owner's rule, stated as a mechanism: *"a blocking call in vcpu also
+    /// counts if the lock its waiting on to acquire is hold by a thread that has a blocking
+    /// call"*.
+    ///
+    /// ⊘ Mirrored, not moved: the FSM keeps the authoritative `u32` (it derives `Eq`, which an
+    /// atomic cannot). This is written under the lock the writer already holds, and read with
+    /// no lock at all.
+    pending_cmd_doorbells: std::sync::atomic::AtomicU32,
     /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
     /// (`crate::faultbuffer`). Recorded, never answered.
     fault_buffer: crate::faultbuffer::FaultBufferLog,
@@ -1637,6 +1655,7 @@ impl RegPlane {
             unserviced,
             census,
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
+            pending_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
             fault_buffer,
             bar_pdes,
             fb_mirror: RwLock::new(None),
@@ -2798,6 +2817,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            pending_cmd_doorbells: _,
             chip: _,
             model: _,
             rom: _,
@@ -3139,7 +3159,8 @@ impl RegPlane {
     /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
     #[must_use]
     pub fn pending_command_doorbells(&self) -> u32 {
-        self.state.lock().fsm.pending_command_doorbells()
+        self.pending_cmd_doorbells
+            .load(std::sync::atomic::Ordering::Acquire)
     }
 
     /// Arm or disarm command-doorbell deferral on the FSM.
@@ -4010,6 +4031,13 @@ impl RegPlane {
             val,
         ) {
             Ok(report) => {
+                // ⊘ Mirror the FSM's pending count into the lock-free atomic, under the
+                // lock we already hold. The hot path reads it on every MMIO write and must
+                // never take this lock to do so — see `pending_cmd_doorbells`.
+                self.pending_cmd_doorbells.store(
+                    fsm.pending_command_doorbells(),
+                    std::sync::atomic::Ordering::Release,
+                );
                 if report.raise_status_irq {
                     self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
                 }

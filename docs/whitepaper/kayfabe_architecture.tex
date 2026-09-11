@@ -222,7 +222,15 @@ the thing this project exists to do, and it is done for one workload shape on on
 \smallskip
 \textbf{What is not established, and it is the larger half.}
 \begin{itemize}\small
-\item \textbf{Nothing above a hand-written CUDA kernel runs.} The CUDA runtime now initialises
+\item ⊘⊘⊘ \textbf{CORRECTED 2026-09-11 --- the model RUNS, and the honest replacement bullet is
+  about rate and reproducibility rather than capability.} \measured{} 2026-09-09, rev
+  \code{c8fe67d6}: 16 tokens, \textbf{text byte-identical to the same-boot CPU oracle}, host
+  \code{Xid} 0 (\S\ref{sec:llmwall}). \textbf{What is not established} is that it holds:
+  \textbf{45\,s per token}, a harness grade that is a \emph{count} rather than a content
+  assertion (the project's own requirements mark that RED and demand $n \geq 3$ boots), $n = 1$--2
+  boots, no native baseline on the same box, a \measured{} race under other arms, and \textbf{no
+  run at all under the three blocking constraints of \S\ref{sec:blocking}}. The superseded bullet
+  follows. \emph{"Nothing above a hand-written CUDA kernel runs.} The CUDA runtime now initialises
   and \code{torch.cuda.is\_available()} is \code{True} — \textbf{and the model still does not
   run}: torch's full CUDA init raises \emph{"CUDA unknown error"} and produces \textbf{zero
   tokens} (\S\ref{sec:llmwall}). The LLM workload is this project's own definition of a useful
@@ -4732,6 +4740,30 @@ what a test is supposed to look like & \file{tests/tests/l1\_mean.rs} (the arbit
   row 29.
 \end{enumerate}
 
+\begin{claimbox}\small
+\textbf{★ ADDED 2026-09-11 --- the list above is three weeks old, and four documents now sit
+ahead of most of it.} Read these first, in this order:
+\begin{enumerate}[itemsep=0.2ex]
+\item \file{docs/design/PLAN\_barrier\_driven\_refresh\_w434.md} --- \textbf{the current
+  architectural plan}, with the owner's rulings verbatim. ⚠ \textbf{Read its own \code{⊘⊘⊘
+  CORRECTED} block first}: the plan's original unification hypothesis was wrong, and the
+  correction is what makes the count three rather than one.
+\item \file{docs/design/uncovered\_page\_table\_writes\_w452.md} --- the source audit of what the
+  three points do \emph{not} cover, and the one-bit predicate that generates the covered set
+  mechanically. Read to the end: the correction there withdraws one of its own rows.
+\item \file{docs/MILESTONE\_raw\_client\_under\_constraints.md} --- the current measured state,
+  and it is the rare status document that \textbf{lists what it does not claim.} ⚠ Its
+  \code{inline\_exceptions = 0} column is a grep artefact (\S\ref{sec:corrections} row 51).
+\item \file{docs/design/what\_i\_think\_is\_rotten\_w433.md} --- an honest assessment of the
+  tree's failure mode, written because the owner asked for pushback. It is the shortest route to
+  understanding why a line count in \S\ref{sec:crates} is not a capability claim.
+\end{enumerate}
+⊘ \textbf{And \file{RESUME\_HERE\_2026\_08\_15.md}, item 5 above, has three successors} ending at
+\file{RESUME\_HERE\_w417.md}, which is itself 40-odd commits stale: its open question was answered
+two rungs later and its framing superseded a rung after that. \textbf{There is no current resume
+document.} The commit ledger plus the four files above is the handoff.
+\end{claimbox}
+
 \begin{warnbox}\small
 \textbf{★★ One rule that applies to every document in that list, and the project states it about
 itself.} Design documents here open with a dated \code{STATUS} block — and the convention's own
@@ -4758,7 +4790,10 @@ Rows 1--14 are from the first revision, at \code{0b78102}; rows 15--20 from the 
 \code{f33e1c8}; \textbf{rows 35--42 (and 41b) are new at \code{5c367a38}}; \textbf{rows 43--45
 were added after this document was pinned, at \code{56dc01f3}, without a new revision being
 written} --- they correct claims in the text above rather than in a predecessor, and rows 43 and
-44 are this paper's \emph{headline} claims. \textbf{Eleven of the first
+44 are this paper's \emph{headline} claims. \textbf{Rows 46--52 were added on 2026-09-11 at
+\code{5f323dd5}}, three weeks after the pin and again without a new revision; five of the seven
+are claims that went stale, and \textbf{two (rows 47 and 51) are reasoning defects rather than
+drift}. \textbf{Eleven of the first
 fourteen were fixed or superseded within four days}, and each row says which — that is the loop
 working, and it is the single most encouraging measurement in this paper. Row 9 is the
 instructive exception: it was fixed \emph{in one document}, which then recorded four further
@@ -5215,10 +5250,88 @@ committed &
   design docs. \emph{Found while correcting rows 43 and 44; not found by any gate, because no
   gate covers prose.} \\
 \addlinespace
+46 & \textbf{\S\ref{sec:contact} and \S\ref{sec:risks}:} \emph{"No LLM has ever produced a token
+in this guest"}, and \emph{"Nothing anyone would actually run works"} &
+  \textbf{False from 2026-09-06 and decisively false from 2026-09-09.} \code{LLM\_TOKENS=16} with
+  degenerate text on the first date; on the second, rev \code{c8fe67d6},
+  \code{W392\_OUTCOME=(P)} with the \textbf{output byte-identical to the same-boot CPU oracle} and
+  host \code{Xid} 0. ★ \textbf{The cause of the garbage was ours}: a \code{!is\_remap} guard meant
+  a re-mapped joined row was never revoked, so the stale binding kept translating and the guest
+  read the \emph{previous} tensor. ⊘ \textbf{The replacement sentence is not a victory lap}: 45\,s
+  per token, graded on a count the project's own requirements mark RED, $n = 1$--2 boots, never
+  run under the three blocking constraints (\S\ref{sec:blocking}). \\
+\addlinespace
+47 & \textbf{\S\ref{sec:trust}:} \emph{"round 6 of the \#14 investigation measured zero occurrences
+of both invalidate transports \dots\ a design that had encoded 'read at the invalidate' as the
+Layer-2 rule would have had no synchronisation point at all on the path that matters most"} &
+  \textbf{★★★ The most consequential row on this list, because a normative rule was built on it.}
+  Both zeros are real and both are artefacts: \code{INVALIDATE\_TLB} \code{fn=200} cannot fire
+  (its caller needs \code{IS\_VIRTUAL}), and \code{MEM\_OP} is \emph{UVM's} transport, not RM's.
+  \textbf{The census had no row for the transport RM uses}, a raw BAR0 store. ⇒ \emph{A census
+  over transports is only as complete as its list} --- the paper's own recorded lesson, applied to
+  the paper. There are \textbf{three} synchronisation points and the architecture now uses all
+  three (\S\ref{sec:blocking}). \\
+\addlinespace
+48 & \textbf{\S\ref{sec:perf}, \S\ref{sec:contact}, \S\ref{sec:risks}:} the doorbell trap as the
+launch floor, and the device's blocking model generally &
+  \textbf{Restructured since 2026-08-21.} The doorbell defaults to \emph{deferred} with no inline
+  fallback; the GSP command queue is serviced off the vCPU (\textbf{561} RPCs, \code{w447});
+  BAR1/BAR2 default to \emph{untrapped} (BAR1 traps \textbf{88\,193 $\to$ 91}). The 86.7\,ms
+  breakdown is a correct measurement of a design that has been replaced, and
+  \textbf{no successor breakdown exists.} ⊘ \textbf{And the wait did not follow the work}:
+  \code{worst\_trap = 1.78\,s} at the GSP queue head, unmoved by two lock fixes. \\
+\addlinespace
+49 & \textbf{\S\ref{sec:crates}:} \code{kayfabe-mmu} listed as \built{} with \code{gpga.rs} named
+beside the walker &
+  \textbf{\code{gpga.rs} has zero production callers}, and so does \file{refresh.rs}, whose own doc
+  calls itself \emph{"the model of that rule \dots\ a pure fixpoint over mocked page tables."}
+  Both are \textbf{DESIGN-ONLY}. ⊘ \textbf{This is the paper committing the defect it diagnoses}:
+  a line count cannot see reachability, and the tree's own assessment of itself names
+  \emph{"mechanism without consumers"} as the single shape of its rot. \code{promotion.rs} (332
+  lines, zero referrers) has since been deleted; \code{dbtable.rs} (316) survives, unwired. \\
+\addlinespace
+50 & \textbf{\S\ref{sec:questions} Q2:} \emph{"where does a slow host RM verb run"}, with three
+facts offered as closing the obvious escapes &
+  \textbf{Answered, and two of the three facts were wrong.} The reply need not be synchronous
+  (the guest \emph{polls}); a second thread posting is not an inversion once the queue leaves the
+  state lock. What survives is the third: a host RM verb is one call with one latency and no
+  budget splits it, which is why \code{verb\_op}'s execute phase is still inline and
+  \textbf{counted} (\code{inline\_exceptions = 24}) rather than moved. \\
+\addlinespace
+51 & \textbf{The milestone document \S\ref{sec:blocking} reads, and this pass's own first draft:}
+\emph{"declared inline vCPU blocking: 166 $\to$ 0"} &
+  \textbf{The 0 is a grep artefact and the real value is 24.} The ledger's
+  \code{grep -o 'inline\_exceptions=[0-9]*'} piped to \code{tail -1} was matching the harness's own
+  goal string, \code{(target: inline\_exceptions=0)}. ⚠ \textbf{It was reported to the owner twice
+  and still stands in the milestone document's table.} ⊘ \textbf{Second defect in the same metric,
+  and the more interesting one}: \code{inline\_exceptions} fell from 166 while the wait it proxied
+  for did not move at all. \emph{A metric can stop measuring its purpose and keep reporting.} \\
+\addlinespace
+52 & \textbf{\S\ref{sec:pcd7}'s title:} \emph{"the fifth device open wedges the GPU"} &
+  \textbf{The ordinal is a sample, not a constant.} \measured{} \code{w423} in the guest, one
+  configuration repeated so the ordinal is the only variable: opens 1--3 pass and \textbf{open 4}
+  fails with \code{EIO} on \code{openat}, permanently. The driver's own reason is now captured (an
+  internal CeUtils scrubber channel failing adapter init), and the wedge is \emph{not} the LLM's
+  blocker. \\
+\addlinespace
 \bottomrule
 \end{longtable}}
 
 \subsection{What this paper could not verify}
+
+\begin{claimbox}\small
+\textbf{★ ADDED 2026-09-11, for the correction pass at \code{5f323dd5}.} What that pass
+\emph{did} execute, on this box: the line, crate and commit counts re-derived at \code{5f323dd5};
+a read of \file{qemu/hw/misc/nvkvm/nvkvm.c}, \file{shim.rs}, \file{trapwitness.rs},
+\file{kayfabe-rt/src/device.rs} and \file{crates/kayfabe-mmu/src/} for every structural claim in
+\S\ref{sec:blocking}; a caller census for \code{gpga.rs} and \file{refresh.rs}; and the PDF build.
+\textbf{Nothing else was run} --- no \code{cargo test}, no boot, no GPU. \textbf{Every hardware
+number added in that pass} (\code{w383}, \code{w392}, \code{w393}, \code{w423}--\code{w426},
+\code{w447}--\code{w460}) \textbf{is read out of a committed design document or commit message and
+was not re-measured.} ⚠ And two of them are \emph{explicitly} unmeasured: the \code{w457} lock
+split is landed and unmeasured, and the \code{w459} slow-trap histogram \textbf{has never run},
+so this paper quotes no bucket figures for it.
+\end{claimbox}
 
 \begin{itemize}
 \item \textbf{★ What changed at this revision: some things \emph{were} run, and the list of which
