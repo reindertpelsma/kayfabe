@@ -13891,7 +13891,13 @@ impl Regs {
         #[cfg(feature = "host-isolates")]
         {
             match self.bar_mirror.get() {
-                Some(m) => m.report(at),
+                Some(m) => {
+                    m.report(at);
+                    // ★ w478 — the fill queue's own line. w477 added the counters and never
+                    // printed them, so the one number that says how much memslot churn a boot
+                    // did was collected and thrown away.
+                    eprintln!("kayfabe: {}", m.fill_census());
+                }
                 None => eprintln!(
                     "kayfabe: BAR-MIRROR AT {at}: NOT ARMED — neither QOM row answered \
                      unbacked (bar1-passthrough / bar2-passthrough off), so every BAR1/BAR2 \
