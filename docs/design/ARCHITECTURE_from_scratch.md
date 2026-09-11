@@ -100,10 +100,28 @@ whose only reader is us; BAR1 and the channels carry bytes whose only reader is 
 Two stores cannot diverge when no byte has two readers. This is §1's observation cashed in.
 
 ⊘ **The one case that would break it** is a single allocation both CPU-mapped internally by RM
-and mapped by a client, which would want to live in both stores. Both images are enumerable
-from their own page tables at every refresh, so the design **checks** it: a physical page
-appearing in both is a named refusal on its first occurrence, not a silent drift. ⚠ Measured,
-not assumed — the check is cheap and it is the difference between a caveat and an invariant.
+and mapped by a client, which would want to live in both stores.
+
+⊘⊘ **AND IT IS OBSERVED, NOT REFUSED.** An earlier draft of this document made an overlapping
+physical page a named refusal. That was wrong twice over, and the second reason is the serious
+one:
+
+- **Overlap is not by itself a defect.** Free-then-reallocate legitimately puts a page in both
+  images for the width of a window — the tables are guest-controlled and we read a snapshot of
+  something mid-update. Nothing has leaked and nothing has diverged yet.
+- **★★★ A fatal check on a guest-observable condition is a guest-triggerable DoS.** The guest
+  writes both page tables. If overlap aborts the VMM, the guest can abort the VMM at will. A
+  diagnostic that an attacker can fire is not a diagnostic; it is the bug.
+
+⇒ the design **counts** it and surfaces a census line, exactly as the vCPU-blocking witness
+does. **Transient overlap is noise; the same page in both images across consecutive refreshes
+is the signal**, because that is what a genuinely shared allocation looks like and churn does
+not.
+
+★ **What still needs verifying, and it is a reading task, not a runtime one:** whether the
+driver ever *depends* on seeing the same bytes through BAR1 and BAR2. If it never does, the
+two stores holding different content at the same framebuffer offset is acceptable, and the
+split is sound even when the images overlap. ⚠ Unverified as of this writing.
 
 ⇒ **What this deletes outright:** promotion, depromotion, the aperture-ownership decision, the
 shadow/join/alias machinery, and every refusal predicate that exists to police them. Nothing
