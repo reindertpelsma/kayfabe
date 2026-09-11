@@ -73,6 +73,45 @@ guest MUST emit one after any change it wants the GPU to see — which makes the
 this collapses to "discover late" again for that path and the sweep must survive as a
 backstop for it — scoped to that path, not as the primary mechanism.
 
+## ★★★★★ COMPLETION — all three must BLOCK until the refresh is done, and none on a vCPU
+
+> **Owner, 2026-09-11:** *"ensure all 3 entrypoints **block** until the refresh is done, which
+> also does all publishes. I dont mean with block inline in vcpu, all three have
+> semaphores/wait bits the guest is spinning on or maybe interrupt fallback to signal
+> completion, those only fire if the refresh thats off vcpu completes."*
+
+The vCPU **never** blocks. The **guest's own wait primitive** blocks, and the off-vCPU refresh
+is the only thing that releases it. Each entry point already has such a primitive — this is not
+a new mechanism, it is three existing ones being honoured.
+
+| # | entry point | the guest's wait primitive | released by |
+|---|---|---|---|
+| 1 | TLB invalidate | it **spins on the trigger register** (`kgmmuCheckPendingInvalidates_HAL`) | `complete()` clearing it, AFTER the worker's refresh — **already correct** |
+| 2 | RM call | it **polls the message queue** for the reply, with an interrupt to tell it to look | posting the held reply AFTER the refresh — `HeldReply` exists and **fires 0 times** |
+| 3 | UVM channel | it **waits on the push's semaphore / tracker** (`uvm_push_end_and_wait`) | the semaphore release is IN the pushbuffer we forward — so **refresh, then forward** |
+
+### ⊘ Why (3) needs no new primitive, and this is the load-bearing observation
+
+The MEM_OP and the completion semaphore are **in the same pushbuffer**, and we parse it before
+we forward it. The guest cannot observe the semaphore until the engine executes the push, and
+the engine cannot start until **we** forward. ⇒ Ordering our own refresh before our own forward
+IS the block. It needs no guarantee from the guest and no new wait object.
+
+★ This is the C's invariant stated from the other side (`nvkvm_gpu_emul.c:582`): *"a mapping is
+always backed before the engine that uses it runs."*
+
+### ⚠ The failure mode each one has if we get it wrong
+
+- **(1) released early** ⇒ the guest proceeds against a half-refreshed table. This is the bug
+  Fable fixed in w406: the invalidate completed after only ARMING the rescan.
+- **(2) released early** ⇒ the guest submits work against mappings we have not made. This is
+  live today: the hold fires **0** times against **304** row-binding RPCs.
+- **(3) forwarded early** ⇒ the engine runs into unbacked rows. This is the LLM, measured: the
+  pin of the faulting range and the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE` land in the **same
+  second**.
+- **Any of them released LATE and never** ⇒ a parked guest. Every lane needs a path that
+  releases on refusal, or the guest waits forever on a primitive nothing will touch.
+
 ## The work, in order
 
 1. **[VERIFY]** Do all three transports converge on a TLB invalidate? Census each on a real
