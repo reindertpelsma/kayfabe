@@ -887,10 +887,26 @@ jobs:
       # the moment someone adds one.
       - name: Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
         run: |
+          # ⊘⊘ `[measured w418]` this was `grep -lw unsafe` and it had been RED for three
+          # files whose only `unsafe` is IN PROSE:
+          #   trapwitness.rs:193  `/// forbids \`unsafe\`, and rebuilding a &'static str …`
+          #   rmladder.rs:13267   `/// forbids \`unsafe\`, so that is not available; …`
+          #   shim.rs:18979       `/// unsafe past the ring's first lap.`
+          # Every one of them is a comment SAYING the file avoids unsafe. A gate that fires
+          # on its own subject being discussed is noise, and a gate that is always red stops
+          # being read — which is how the other four reds in this suite survived.
+          #
+          # The three sibling vocabulary gates above already filter comment-only lines with
+          # exactly this expression; this one never did. ⚠ It does weaken the gate by
+          # precisely one case: a real `unsafe` sitting alone on a line that begins with a
+          # comment marker, which is not expressible in Rust. A trailing comment after real
+          # code is still caught, because the line does not START with the marker.
           offenders=$(find . -name '*.rs' -not -name '*_unsafe.rs' \
                         -not -path './target/*' -not -path './*/target/*' \
                         -not -path './mutants.out/*' \
-                        -exec grep -lw unsafe {} + || true)
+                        -exec grep -nw unsafe {} + 2>/dev/null \
+                      | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' \
+                      | cut -d: -f1 | sort -u || true)
           if [ -n "$offenders" ]; then
             echo "$offenders"
             echo ""
