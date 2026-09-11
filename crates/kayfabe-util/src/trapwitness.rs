@@ -203,6 +203,109 @@ pub fn off_trap_claims() -> u64 {
 /// so pointer identity is exact and needs no comparison of bytes on a trap thread. ⊘ Two
 /// distinct literals with identical text would occupy two slots, which is honest (they are
 /// two sites) and is why the report prints the text beside each count.
+/// ★★★★★ **SLOW TRAPS BY SITE — which register, not just how many.**
+///
+/// `[measured w461]` the by-decade histogram split the population in two: **one** trap over a
+/// second and **169** in the 1-100 ms band, with a clean zero between them. That killed the
+/// headline number as a target and left a real one — but `worst_trap` carries a site and the
+/// buckets do not, so *"which 169"* was unanswerable.
+///
+/// ⊘ 32 slots, keyed on the trap's site value (a BAR + offset). A site that does not fit is
+/// counted in the overflow rather than displacing one — losing a site silently is how a census
+/// starts lying, and this file already carries that lesson for inline reasons.
+const SLOW_SITE_SLOTS: usize = 32;
+static SLOW_SITE_KEY: [AtomicU64; SLOW_SITE_SLOTS] =
+    [const { AtomicU64::new(u64::MAX) }; SLOW_SITE_SLOTS];
+static SLOW_SITE_HITS: [AtomicU64; SLOW_SITE_SLOTS] =
+    [const { AtomicU64::new(0) }; SLOW_SITE_SLOTS];
+static SLOW_SITE_WORST: [AtomicU64; SLOW_SITE_SLOTS] =
+    [const { AtomicU64::new(0) }; SLOW_SITE_SLOTS];
+/// Slow traps whose site found no free slot. ⊘ Non-zero means the census is INCOMPLETE, which
+/// is a different statement from "these are all the sites".
+static SLOW_SITE_OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+/// Record one slow trap against its site. Lock-free; called from a `Drop` on a vCPU.
+fn note_slow_site(site: u64, us: u64) {
+    for i in 0..SLOW_SITE_SLOTS {
+        let k = SLOW_SITE_KEY[i].load(Ordering::Relaxed);
+        if k == site {
+            SLOW_SITE_HITS[i].fetch_add(1, Ordering::Relaxed);
+            SLOW_SITE_WORST[i].fetch_max(us, Ordering::Relaxed);
+            return;
+        }
+        if k == u64::MAX
+            && SLOW_SITE_KEY[i]
+                .compare_exchange(u64::MAX, site, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+        {
+            SLOW_SITE_HITS[i].fetch_add(1, Ordering::Relaxed);
+            SLOW_SITE_WORST[i].fetch_max(us, Ordering::Relaxed);
+            return;
+        }
+    }
+    SLOW_SITE_OVERFLOW.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Render the slow-trap sites as one line, busiest first.
+///
+/// ⊘ Busiest, NOT worst. `[measured w461]` the single worst trap is one event in a whole boot
+/// and the 169 that recur are the work; sorting by duration would put the irrelevant one at
+/// the top, which is the mistake this census exists to stop repeating.
+#[must_use]
+pub fn slow_sites_census() -> String {
+    let sites = slow_sites();
+    if sites.is_empty() {
+        return "SLOW-SITES none — no trap exceeded the ceiling, or none was recorded".to_owned();
+    }
+    let rows: Vec<String> = sites
+        .iter()
+        .take(8)
+        .map(|(site, hits, worst)| {
+            format!(
+                "bar{}+{:#x}={hits}(worst {worst}us)",
+                site >> 56,
+                site & 0x00ff_ffff_ffff_ffff
+            )
+        })
+        .collect();
+    let over = slow_site_overflow();
+    format!(
+        "SLOW-SITES {}{}",
+        rows.join(" "),
+        if over > 0 {
+            format!(" ⊘ OVERFLOW={over} — this list is INCOMPLETE")
+        } else {
+            String::new()
+        }
+    )
+}
+
+/// The slow-trap sites, worst-first: `(site, hits, worst_us)`.
+#[must_use]
+pub fn slow_sites() -> Vec<(u64, u64, u64)> {
+    let mut out: Vec<(u64, u64, u64)> = (0..SLOW_SITE_SLOTS)
+        .filter_map(|i| {
+            let k = SLOW_SITE_KEY[i].load(Ordering::Acquire);
+            if k == u64::MAX {
+                return None;
+            }
+            Some((
+                k,
+                SLOW_SITE_HITS[i].load(Ordering::Relaxed),
+                SLOW_SITE_WORST[i].load(Ordering::Relaxed),
+            ))
+        })
+        .collect();
+    out.sort_by_key(|(_, hits, _)| core::cmp::Reverse(*hits));
+    out
+}
+
+/// Slow traps whose site did not fit the table. ⊘ Non-zero ⇒ the site list is incomplete.
+#[must_use]
+pub fn slow_site_overflow() -> u64 {
+    SLOW_SITE_OVERFLOW.load(Ordering::Relaxed)
+}
+
 const INLINE_REASON_SLOTS: usize = 16;
 static INLINE_REASON_PTR: [AtomicUsize; INLINE_REASON_SLOTS] =
     [const { AtomicUsize::new(0) }; INLINE_REASON_SLOTS];
@@ -412,6 +515,7 @@ impl Drop for TrapGuard {
                 if self.site != 0 {
                     SLOW_TRAP_SITE_LAST.store(self.site, Ordering::Relaxed);
                 }
+                note_slow_site(self.site, us);
             }
             // `fetch_max` returns the PREVIOUS value: we won iff it was smaller than ours.
             if WORST_TRAP_US.fetch_max(us, Ordering::Relaxed) < us {

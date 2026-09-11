@@ -15845,6 +15845,10 @@ impl Regs {
         }
         eprintln!(
             "kayfabe: {} AT=teardown",
+            kayfabe_util::trapwitness::slow_sites_census()
+        );
+        eprintln!(
+            "kayfabe: {} AT=teardown",
             kayfabe_fwd::memop_census::census()
         );
         // ★★★★★ w326 — did the revocation drain get a driver that is not the guest?
