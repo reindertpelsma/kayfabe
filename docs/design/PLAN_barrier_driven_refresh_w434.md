@@ -30,7 +30,34 @@ barrier names, when it names it**, and there is nothing to race.
    guest **corrupting itself**. ⇒ Validate that what we read cannot make us touch memory we do
    not own or act for another proc; do NOT try to make a lying guest's own mappings coherent.
 
-## ★★★ The unification to verify FIRST (owner's hypothesis, and it collapses the design)
+## ⊘⊘⊘ CORRECTED 2026-09-11 — **DO NOT UNIFY. THERE ARE THREE ENTRY POINTS AND WE OWN ALL THREE.**
+
+> **Owner, correcting both me and their own earlier speculation:** *"no the driver doesn't
+> unif[y] them in one call, thats why we have 3 entrypoints. dont take that assumption. this is
+> what I thought. my suspicion is that a real bare metal gsp does that in microcode, but since
+> we impersonate that we must implement all 3 entrypoints"*
+
+I verified that RM's `vaspaceInvalidateTlb` lowers to `NV_PFB_PRI_MMU_INVALIDATE` and concluded
+*"one barrier, two transports"*. **That conclusion is wrong, and the error is specific:** what
+I traced is the path the guest's **kernel GMMU** owns. On a GSP part the mapping work itself
+happens **inside the GSP** — which is us — and a real GSP does its invalidate in **microcode**.
+Nothing crosses the guest boundary for it, so no barrier ever arrives.
+
+⇒ **For the RM path there is nobody to hear from. We serviced the map, so we are the one who
+knows it happened.** That is exactly why the count is three and not one, and why the table
+below is a table of OUR obligations rather than of the guest's transports.
+
+| # | entry point | who tells us | our obligation |
+|---|---|---|---|
+| 1 | **TLB invalidate** — `NV_PFB_PRI_MMU_INVALIDATE` | the guest, by writing a BAR0 register | handled; needs SCOPING to what the register names |
+| 2 | **RM call** — a map/unmap RPC we service | **nobody — we are the GSP** | refresh inside the handler, before the reply |
+| 3 | **UVM kernel channel** — `MEM_OP MMU_TLB_INVALIDATE` | the guest, as a pushbuffer method | consume `out.invalidates`; today it is DROPPED |
+
+⚠ **The trap in the wrong reading:** it would have had us *waiting for a barrier* on path 2.
+None is coming. A boot would look correct on the client (whose P1 is `rm-invalidate` via path 1)
+and silently never refresh for anything the GSP mapped on the guest's behalf.
+
+## ⊘ Superseded: the unification hypothesis
 
 On real hardware the GPU re-reads page tables only after a **TLB invalidate**. So a correct
 guest MUST emit one after any change it wants the GPU to see — which makes the invalidate the
