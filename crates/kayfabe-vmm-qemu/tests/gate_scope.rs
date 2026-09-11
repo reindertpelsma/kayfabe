@@ -432,3 +432,37 @@ fn the_adapter_crate_that_holds_the_logic_is_still_forbidden_the_relaxation() {
          out of `forbid` without ever saying so"
     );
 }
+
+/// ★★★★★ **BOTH BARs MUST DEFAULT TO UNTRAPPED.**
+///
+/// Owner, 2026-09-11: *"bar1/bar2 should not be trapped at all"*. The passthrough code has
+/// been in master since `w393-bar-passthrough` merged, and both properties still defaulted to
+/// `false` — so every ordinary boot ran with both BARs fully trapped and the feature was
+/// reachable only from one A/B script. **An arm nobody arms is not a feature.**
+///
+/// ⊘ A source census, because the property is a C default in the QOM shim and no Rust test
+/// can reach it. ⚠ If a future change needs one of these off by default, it must say why HERE,
+/// in the same commit — the last time this defaulted off, it stayed off unnoticed for weeks.
+#[test]
+fn both_bars_default_to_passthrough() {
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../qemu/hw/misc/nvkvm/nvkvm.c"),
+    )
+    .expect("the QOM shim is readable");
+    for bar in ["bar1", "bar2"] {
+        let on = format!("DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, true),");
+        let off = format!("DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, false),");
+        assert_eq!(
+            src.matches(&off).count(),
+            0,
+            "{bar}-passthrough defaults to FALSE — every boot traps {bar}, and the owner's \
+             ruling is that it should not be trapped at all"
+        );
+        assert_eq!(
+            src.matches(&on).count(),
+            1,
+            "{bar}-passthrough must be declared exactly once, defaulting to true"
+        );
+    }
+}

@@ -3495,9 +3495,30 @@ static const Property nvkvm_properties[] = {
     /* ★★★★★ w393 — the BAR1 passthrough arm.  See NvkvmState::bar1_passthrough.  Default
      * OFF is the control; ON changes one answer (nvkvm_op_bar_is_unbacked_reservation for
      * BAR1) and turns every access that still traps into a NAMED miss. */
-    DEFINE_PROP_BOOL("bar1-passthrough", NvkvmState, bar1_passthrough, false),
+    /*
+     * ★★★★★ w431 — DEFAULT ON. Owner: *"bar1/bar2 should not be trapped at all"*, and
+     * *"w393-bar-passthrough merge if needed"* — the branch is already an ancestor of master,
+     * so the code was here and only the default was wrong. An arm nobody arms is not a
+     * feature, and every ordinary boot (the LLM boot, the trigger boot, the client boot) was
+     * running with both BARs fully trapped.
+     *
+     * `[measured w393 (2), fa9d6395, the COUNTER-FIX revision, n=2]` one binary, three arms,
+     * the mean client on each:
+     *     control  88,070 BAR1 traps   (three independent counts agree exactly)
+     *     bar1     89 / 90             client (P) 4 of 4
+     *     both     BAR1 90, BAR2 374   client (P) 4 of 4
+     * Host Xid 0 on every arm.
+     *
+     * ⊘ The 857334e5 numbers (88,193 -> 91) came BEFORE that counter fix and under-counted by
+     * lost increments on a lockless path; fa9d6395 exists precisely to re-measure them. Both
+     * revisions agree on the ratio, which is why this flip rests on the later one.
+     *
+     * ⚠ This changes what every boot does. The falsifier is the mean client itself: if it
+     * stops passing 8/8 with these on, revert the default rather than explain it.
+     */
+    DEFINE_PROP_BOOL("bar1-passthrough", NvkvmState, bar1_passthrough, true),
     /* ★★★★★ w393 (2) — the BAR2 passthrough arm.  See NvkvmState::bar2_passthrough. */
-    DEFINE_PROP_BOOL("bar2-passthrough", NvkvmState, bar2_passthrough, false),
+    DEFINE_PROP_BOOL("bar2-passthrough", NvkvmState, bar2_passthrough, true),
     NVKVM_PROP_TERMINATOR
 };
 
