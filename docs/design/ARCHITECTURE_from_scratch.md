@@ -178,10 +178,21 @@ Refresh holds **one lock, used by nothing else in the system**. It may block fre
 no vCPU can ever wait on that lock — which is how I2 is satisfied without care being required.
 A refresh arriving while one runs waits for it. That is contention we accept and can measure.
 
-One pass does, in order: re-walk the BAR1 tables and update that mapping; re-walk the BAR2
-tables and update store A's slices; re-walk the channel page tables and update the address
-table; **then** release whichever of S1/S2/S3 asked. The release is last, always, so I5 holds
-by construction rather than by review.
+One pass does, in order: bring the BAR1 mapping up to date; bring store A's BAR2 slices up to
+date; bring the address table up to date; **then** release whichever of S1/S2/S3 asked. The
+release is last, always, so I5 holds by construction rather than by review.
+
+★★★ **And none of those three is a full re-walk.** Every page table in the system — BAR1's,
+BAR2's and the channels' — lives in **store A, which is ordinary RAM we own**. Ordinary RAM
+has dirty tracking. ⇒ a refresh reads which pages were written since the last one and re-walks
+only those subtrees, so its cost tracks **what changed**, not how large the tables are. A
+guest that maps nothing new between two invalidates costs a bitmap read.
+
+⊘ This is why the two-store split pays a second time. The reason the tables are cheap to
+watch is the same reason they are safe to hold apart: they are RAM with exactly one reader.
+⚠ Dirty tracking is not free — the mechanisms that provide it write-protect the pages, so the
+first write after each read takes a fault. That is a cost per *modified page*, which is the
+right shape, but it is a real cost and it is unmeasured.
 
 ## 7. Addresses
 
@@ -243,9 +254,10 @@ an absent problem.
 - **The BAR0 read-shadow is the least proven piece.** It rests on the set of read-side-effect
   registers being small and enumerable. That is checkable against the register model and has
   not been checked.
-- **Refresh's cost is unmeasured.** Re-walking BAR1 and BAR2 tables on every synchronization
-  point is work nobody has timed. It is off the vCPU, so it cannot violate I1, but it can still
-  be too slow.
+- **Refresh's cost is unmeasured.** Dirty tracking bounds it to what changed rather than to
+  table size (§6), which is the right shape, but the write-protect fault it costs per modified
+  page has not been timed. It is off the vCPU, so it cannot violate I1, but it can still be
+  too slow.
 - **It says nothing about display, multi-GPU, or driver-version breadth.** Those are real
   product requirements and this document does not address them.
 
