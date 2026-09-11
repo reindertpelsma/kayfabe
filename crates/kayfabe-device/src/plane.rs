@@ -3052,15 +3052,42 @@ impl RegPlane {
         // pending ones, which is the part that scaled with the queue.
         let mut total = 0usize;
         let mut owed = false;
+        // ★★★ w449 — TIME ONE COMMAND, because w448's hypothesis was WRONG and I need the
+        // distribution rather than another guess.
+        //
+        // `[measured w448]` bounding the lock hold to ONE doorbell did NOT move the worst trap:
+        // `1 884 058us at=bar0+0x110c00`, `slow_traps` 194 → 178. So *"the drain holds the lock
+        // across all pending doorbells"* was not the dominant cause.
+        //
+        // ⊘ The live hypothesis is the one w448's own commit message already conceded: a single
+        // command that drives a host verb is as long as that verb, and one such command under
+        // this lock parks a vCPU for its whole duration. This measures that directly — if the
+        // max single-command time is ~1.8 s, the fix is getting host verbs out from under the
+        // plane lock, not batching differently.
+        let mut worst_us = 0u128;
         loop {
+            let t0 = std::time::Instant::now();
             let one = self.service_one_deferred_command()?;
+            let dt = t0.elapsed().as_micros();
             match one {
                 None => break,
                 Some(irq) => {
                     total += 1;
                     owed |= irq;
+                    if dt > worst_us {
+                        worst_us = dt;
+                    }
                 }
             }
+        }
+        if worst_us > 1000 {
+            // ⚠ Printed only above 1 ms, which is the owner's own trap ceiling. A line per
+            // fast command would bury the one that matters.
+            eprintln!(
+                "kayfabe: GSP-DRAIN serviced={total} worst_single_command={worst_us}us \
+                 ⊘ the plane lock is held for this long, and a vCPU's queue-head write waits \
+                 on it — compare with `worst_trap … at=bar0+0x110c00`"
+            );
         }
         Ok((total, owed))
     }
