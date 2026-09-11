@@ -34,6 +34,14 @@ DEPTHS=${R34_DEPTHS:-"0 2000"}
 # it is located to one address, with no CUDA runtime anywhere near it.
 # ⊘ `rm` = RM-placed, the control. Every arm runs at decoys=0 so depth cannot confound.
 ATS=${R34_ATS:-"rm 0x120000000 0x400000000 0x7cac33600000 0x768327600000 0x7f0000000000"}
+# ★★★★★ w420 — THE DESTINATION'S APERTURE, which is the LLM's ACTUAL shape.
+#
+# The LLM's fault is a copy engine WRITING its destination, and `.to('cuda')` is an H2D
+# upload: source guest RAM, destination **device memory**. R34's default puts both operands
+# in sysmem, so its engine never writes to vidmem — R33's blind spot in mirror image.
+# ⊘ A rung's blind spot is whatever its operands have in COMMON, and both rungs had a
+# uniform pair. This arm breaks the pair.
+H2D=${R34_H2D:-"1"}
 
 echo "=== ★★★★★ w418 — R34 GUEST-RAM CE, IN THE GUEST ==="
 
@@ -121,6 +129,23 @@ for a in $ATS; do
   at_verdicts="$at_verdicts $a:${av#R34_OUTCOME=}"
 done
 echo "R34_AT_VERDICTS =$at_verdicts"
+
+if [ "$H2D" = "1" ]; then
+  echo "--- ★★★★★ H2D SHAPE: source GUEST RAM, destination DEVICE MEMORY (`.to('cuda')`) ---"
+  h2d_verdicts=""
+  for a in rm 0x7cac33600000; do
+    if [ "$a" = "rm" ]; then arg=""; else arg="--guest-ram-at $a"; fi
+    printf "  h2d %-16s " "$a"
+    hout=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 --guest-ram-dst-vidmem $arg 2>&1" \
+           | grep -oE 'src 0x[0-9a-f]+ dst 0x[0-9a-f]+|R34_OUTCOME=\([A-Z]\)|refused at .[^`]*. by name: [A-Za-z0-9()]*' \
+           | tr '\n' ' ')
+    echo "$hout" | cut -c1-170
+    hv=$(echo "$hout" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
+    [ -z "$hv" ] && hv="R34_OUTCOME=(E)"
+    h2d_verdicts="$h2d_verdicts h2d-$a:${hv#R34_OUTCOME=}"
+  done
+  echo "R34_H2D_VERDICTS =$h2d_verdicts"
+fi
 # ⊘ The `src 0x…` echoed above is not decoration: a dictated address that is silently ignored
 # would pass every arm identically and read as "the address does not matter". Check that the
 # printed src MATCHES the arm before believing any row of this sweep.
