@@ -24,9 +24,28 @@ if [ -r /proc/sys/kernel/yama/ptrace_scope ]; then
   [ "$(id -u)" -ne 0 ] && echo "⚠ not root with yama on — attaches to non-descendants WILL fail"
 fi
 echo "STACKSHOT start $(date -Is) n=$N gap=${GAP}s -> $OUT"
+# ⊘⊘ **WAIT for the process, do not race it.** `[measured w453]` the sampler reported
+# `samples with a backtrace: 0` AND `samples refused: 0` — it never found a process at all,
+# because it started sampling the instant the boot was launched and the boot spends its first
+# minute on content checks before QEMU exists. Zero attaches and zero refusals is the
+# signature of a sampler that ran at the wrong time, and it prints the same as "nothing was
+# ever in that state".
+WAIT=${STACKSHOT_WAIT:-300}
+echo "STACKSHOT waiting up to ${WAIT}s for qemu-system-x86 to appear"
+for _ in $(seq 1 "$WAIT"); do
+  pgrep -x qemu-system-x86 >/dev/null && break
+  sleep 1
+done
+if ! pgrep -x qemu-system-x86 >/dev/null; then
+  echo "⊘⊘ STACKSHOT: qemu never appeared in ${WAIT}s — NOTHING was sampled. This is a"
+  echo "   harness result, not a finding about the device."
+  exit 3
+fi
+echo "STACKSHOT qemu is up; sampling"
 for i in $(seq 1 "$N"); do
   pid=$(pgrep -x qemu-system-x86 | head -1)
-  [ -z "$pid" ] && { sleep "$GAP"; continue; }
+  # ⊘ The process going away mid-run is the END of the window, not a sample to skip.
+  [ -z "$pid" ] && { echo "[$i] qemu exited — sampling window over" >> "$OUT"; break; }
   # ⊘ `-batch` stops the process, dumps, and detaches. The stop is what the owner's SIGSTOP
   # does, with the backtrace we actually want on top of it.
   # ⊘⊘ **stderr is KEPT.** The first version had `2>/dev/null` here and produced a ZERO-BYTE
