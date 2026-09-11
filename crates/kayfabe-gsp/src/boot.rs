@@ -1937,24 +1937,25 @@ impl GspFsm {
     ///
     /// # Errors
     /// Whatever servicing the queue refused, by name, on the first doorbell that faults.
-    pub fn service_deferred_commands(
+    pub fn service_one_deferred_command(
         &mut self,
         ram: &mut dyn GuestRam,
         policy: &mut dyn CommandPolicy,
-    ) -> Result<(usize, ServiceReport), GspFault> {
+    ) -> Result<ServiceReport, GspFault> {
         let mut report = ServiceReport::default();
-        let mut serviced = 0usize;
-        while self.pending_command_doorbells > 0 {
-            self.pending_command_doorbells -= 1;
-            let (t, mut r) = self.doorbell(ram, policy)?;
-            report.transitions.push(t);
-            report.transitions.append(&mut r.transitions);
-            report.commands.extend(r.commands);
-            report.unserviced.extend(r.unserviced);
-            report.raise_status_irq |= r.raise_status_irq;
-            serviced += 1;
+        if self.pending_command_doorbells == 0 {
+            return Ok(report);
         }
-        Ok((serviced, report))
+        // ⚠ Decrement BEFORE servicing, not after. If servicing faults we must not re-enter
+        // the same doorbell on every later wake; the inline path lost it to `?` the same way.
+        self.pending_command_doorbells -= 1;
+        let (t, mut r) = self.doorbell(ram, policy)?;
+        report.transitions.push(t);
+        report.transitions.append(&mut r.transitions);
+        report.commands.extend(r.commands);
+        report.unserviced.extend(r.unserviced);
+        report.raise_status_irq |= r.raise_status_irq;
+        Ok(report)
     }
 
     /// How many command doorbells are waiting for [`Self::service_deferred_commands`].

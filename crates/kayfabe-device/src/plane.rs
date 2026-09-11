@@ -3027,12 +3027,60 @@ impl RegPlane {
     /// # Errors
     /// Whatever servicing refused, by name.
     pub fn service_deferred_commands(&self) -> Result<(usize, bool), kayfabe_gsp::GspFault> {
+        // ⊘⊘⊘ **ONE DOORBELL PER LOCK ACQUISITION. THE DRAIN MUST NOT HOLD THIS ACROSS ALL OF
+        // THEM.**
+        //
+        // `[measured w447, n=2]` moving the work off the vCPU was NOT enough: with
+        // `inline_exceptions=0` and `gsp_off_vcpu=561`, the worst trap was **unchanged** at
+        // `worst_trap=1 779 094us at=bar0+0x110c00` — `NV_PGSP_QUEUE_HEAD(0)`, the very
+        // register whose servicing had just been deferred — with `slow_traps(>1000us)=194`.
+        //
+        // The reason is this lock. A vCPU's queue-head write takes `self.state.lock()` to
+        // record the doorbell; the worker took the SAME lock and held it for the whole drain.
+        // ⇒ **The vCPU still waited for the work, just through the lock instead of through the
+        // call.** That is the owner's second invariant, and it is the one I broke:
+        //
+        // > *"a trap may not take longer than a millisecond. no blocking calls in vcpu, no
+        // >  blocking calls in lock, especially the one shared with vcpus"*
+        //
+        // ⚠ Moving work off a thread does not move the WAIT off that thread. A censusdd that
+        // counts only declared inline exceptions cannot see this: nothing is inline, nothing
+        // is declared, and the vCPU is parked anyway.
+        //
+        // ⊘ This does not make a single command's servicing short — one RPC that drives a host
+        // verb is still as long as that verb. It bounds the hold to ONE command instead of all
+        // pending ones, which is the part that scaled with the queue.
+        let mut total = 0usize;
+        let mut owed = false;
+        loop {
+            let one = self.service_one_deferred_command()?;
+            match one {
+                None => break,
+                Some(irq) => {
+                    total += 1;
+                    owed |= irq;
+                }
+            }
+        }
+        Ok((total, owed))
+    }
+
+    /// Service exactly ONE deferred command doorbell, taking and releasing the plane lock.
+    ///
+    /// Returns `None` when none is pending, `Some(raise_status_irq)` otherwise.
+    ///
+    /// # Errors
+    /// Whatever servicing refused, by name.
+    fn service_one_deferred_command(&self) -> Result<Option<bool>, kayfabe_gsp::GspFault> {
         let mut s = self.state.lock();
         let PlaneState {
             fsm, ram, policy, ..
         } = &mut *s;
-        match fsm.service_deferred_commands(ram.as_mut(), policy.as_mut()) {
-            Ok((serviced, report)) => {
+        if fsm.pending_command_doorbells() == 0 {
+            return Ok(None);
+        }
+        match fsm.service_one_deferred_command(ram.as_mut(), policy.as_mut()) {
+            Ok(report) => {
                 if report.raise_status_irq {
                     self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
                 }
@@ -3049,7 +3097,7 @@ impl RegPlane {
                         .status_irq_cleared
                         .fetch_add(opened as u64, Ordering::Relaxed);
                 }
-                Ok((serviced, report.raise_status_irq))
+                Ok(Some(report.raise_status_irq))
             }
             Err(f) => {
                 self.c.faults.fetch_add(1, Ordering::Relaxed);
