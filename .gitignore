@@ -28,3 +28,7 @@ docs/whitepaper/*.aux
 docs/whitepaper/*.log
 docs/whitepaper/*.out
 docs/whitepaper/*.toc
+
+# The deadman heartbeat is wall-clock state, not source. Committing it makes every
+# `git add -A` carry a timestamp and turns a rebase into a conflict over a number.
+.deadman/beat
