@@ -14966,11 +14966,12 @@ mod mean {
     const P3_CHANRES: u64 = 0x0000_0092_0000_0000;
     /// 256 MiB — comfortably more than a GA10x GR context's buffer set.
     const P3_CHANRES_LEN: u64 = 0x1000_0000;
-    /// `AMPERE_COMPUTE_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7c0.h:32`). ⚠ A
-    /// GA10x constant, named here rather than derived: this row runs on the bench's GA106
-    /// and a different part would refuse it **loudly** (`NV_ERR_INVALID_CLASS`), which is the
-    /// failure mode to prefer over a silent substitution.
-    const AMPERE_COMPUTE_B: u32 = 0xC7C0;
+    // ⊘ The class id is NOT named here any more. It was `const AMPERE_COMPUTE_B: u32 =
+    // 0xC7C0`, which is one chip's fact sitting in a logic crate — the GENERATION-NAME gate's
+    // whole subject, and it had been red on this line. It now comes from the chips crate
+    // through `HostClasses::compute_object`, which answers `None` for any generation whose
+    // compute class this tree has never measured; the caller below refuses by name in that
+    // case rather than allocating a number nobody has seen a board accept.
     /// `NV_GR_ALLOCATION_PARAMETERS.version` (`ogkm-580: nvos.h:2717`, *"set to 0x2"*).
     const GR_ALLOC_VERSION: u32 = 2;
     /// `sizeof(NV_GR_ALLOCATION_PARAMETERS)` — four `NvU32`.
@@ -15083,15 +15084,29 @@ mod mean {
         let mut gr_params = [0u8; 16];
         gr_params[0..4].copy_from_slice(&GR_ALLOC_VERSION.to_ne_bytes());
         gr_params[8..12].copy_from_slice(&GR_ALLOC_SIZE.to_ne_bytes());
-        if let Err(e) = rm.alloc(gr_chan, ClassId(AMPERE_COMPUTE_B), &gr_params) {
+        let Some(compute) = kayfabe_chips::pinned_host_classes().compute_object() else {
+            println!(
+                "FAIL  W392D P3 gr object  = this build's pinned host classes declare NO \
+                 compute object for their generation. ⊘ UNMEASURED, not absent: the class \
+                 exists on every part and this tree has a verified constant for one of them. \
+                 Refusing to invent an id"
+            );
+            // ⊘ `Unexercised`, NOT `Refused`: nothing was asked of RM. A `Refused` here
+            // would read as the board turning us down, which is a different fact.
+            return PathState::Unexercised(
+                "the pinned host classes declare no compute object for their generation"
+                    .to_owned(),
+            );
+        };
+        if let Err(e) = rm.alloc(gr_chan, compute.compute_object_id(), &gr_params) {
             let _ = rm.free(gr_chan);
             return PathState::Refused {
-                step: "alloc AMPERE_COMPUTE_B on the GR channel",
+                step: "alloc the generation's compute object on the GR channel",
                 status: format!("{e:?}"),
             };
         }
         println!(
-            "ok    W392D P3 gr object  = AMPERE_COMPUTE_B allocated — the channel now has a context"
+            "ok    W392D P3 gr object  = the compute object allocated — the channel now has a context"
         );
 
         // 3 ── ARM A: THE NEGATIVE CONTROL. No promote has happened, so RM must refuse.

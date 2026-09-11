@@ -72,7 +72,7 @@
 
 use kayfabe_abi::generated::classes as nv;
 use kayfabe_arch::ids::ClassId;
-use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
+use kayfabe_arch::{ComputeObjectClass, CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 
 /// The GA10x host-class profile — the **bench** part, and the only one any of this has
 /// been measured on.
@@ -97,6 +97,12 @@ impl HostClasses for Ga10xHostClasses {
     }
     fn ce_object(&self) -> CeObjectClass {
         CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
+    }
+
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        // `ogkm-580: src/common/sdk/nvidia/inc/class/clc7c0.h:32`. ★ The one compute class
+        // this tree has a verified constant for, and the one the bench's GA106 accepts.
+        Some(ComputeObjectClass::new(ClassId(nv::AMPERE_COMPUTE_B)))
     }
 }
 
@@ -130,6 +136,13 @@ impl HostClasses for Ad10xHostClasses {
     }
     fn ce_object(&self) -> CeObjectClass {
         CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
+    }
+
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        // ⊘ UNMEASURED, not absent. `ADA_COMPUTE_A` is a NAME in this tree's capability
+        // tables and `kayfabe-abi` carries no value for it. Guessing one here would be a
+        // fabricated hardware fact, so the caller refuses by name instead.
+        None
     }
 }
 
@@ -178,6 +191,12 @@ impl HostClasses for Gh100HostClasses {
     fn ce_object(&self) -> CeObjectClass {
         CeObjectClass::new(ClassId(nv::HOPPER_DMA_COPY_A))
     }
+
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        // ⊘ UNMEASURED, not absent — see the Ada arm. `HOPPER_COMPUTE_A` has a name and no
+        // value in this tree.
+        None
+    }
 }
 
 /// ★★★ **The profile the host isolate is PINNED to** — and the word is `pinned`, not
@@ -203,3 +222,55 @@ pub fn pinned_host_classes() -> &'static dyn HostClasses {
 }
 
 kayfabe_util::assert_send_sync!(Ga10xHostClasses, Ad10xHostClasses, Gh100HostClasses);
+
+#[cfg(test)]
+mod compute_object_tests {
+    use super::*;
+
+    /// ★★★ The pinned generation MUST declare a compute object, or `--w392` P3 cannot run.
+    ///
+    /// ⊘ This is not a tautology over the constant: it asserts that the generation the build
+    /// actually pins (`pinned_host_classes`) is one we have a measured compute class for. A
+    /// future re-pin to a generation whose class is unmeasured would silently turn P3 into
+    /// `Unexercised` — a rung that stops testing and still prints a state.
+    #[test]
+    fn the_pinned_generation_declares_a_compute_object() {
+        assert!(
+            pinned_host_classes().compute_object().is_some(),
+            "the pinned host classes must name a compute object: without one, `--w392` P3 \
+             degrades to Unexercised and stops being a test"
+        );
+    }
+
+    /// ⊘ An UNMEASURED generation must answer `None` — never a guessed id.
+    ///
+    /// ⚠ The failure this guards is specific: inventing a plausible class id for Ada or
+    /// Hopper would make the refusal disappear and replace it with `NV_ERR_INVALID_CLASS`
+    /// from a real board, or worse, silent acceptance of the wrong object. *"An empty
+    /// capture is evidence of NOTHING, not evidence of emptiness"* — and a fabricated
+    /// value is worse than an empty one, because it reads as measured.
+    #[test]
+    fn an_unmeasured_generation_answers_none_rather_than_a_guess() {
+        assert!(
+            Ad10xHostClasses.compute_object().is_none(),
+            "this tree has no verified Ada compute class; answering Some() would be a \
+             fabricated hardware fact"
+        );
+        assert!(
+            Gh100HostClasses.compute_object().is_none(),
+            "this tree has no verified Hopper compute class"
+        );
+    }
+
+    /// ★ Compute and copy are DIFFERENT ENGINES, and the types must not let them merge.
+    #[test]
+    fn the_compute_object_is_not_the_copy_object() {
+        let hc = pinned_host_classes();
+        assert_ne!(
+            hc.compute_object().expect("pinned generation declares one").compute_object_id(),
+            hc.ce_object().ce_object_id(),
+            "a compute object and a copy object are different engines; equal ids would mean \
+             one of the two tables is wrong"
+        );
+    }
+}

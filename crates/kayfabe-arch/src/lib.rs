@@ -1685,6 +1685,30 @@ impl CeObjectClass {
     }
 }
 
+/// The **compute** engine object class — the object a client allocates under a GR channel
+/// to make that channel speak compute, and the number the pushbuffer's `SET_OBJECT` then
+/// carries.
+///
+/// ⊘ Separate from [`CeObjectClass`] because they are different engines: a copy engine
+/// moves bytes, this one runs a shader. Conflating them was never possible in the class
+/// ids and must not become possible in the type.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct ComputeObjectClass(ClassId);
+
+impl ComputeObjectClass {
+    /// Tag a raw class id as this generation's compute object.
+    #[must_use]
+    pub const fn new(id: ClassId) -> Self {
+        Self(id)
+    }
+
+    /// Untag — see [`ChannelClass::channel_id`].
+    #[must_use]
+    pub const fn compute_object_id(self) -> ClassId {
+        self.0
+    }
+}
+
 /// # `HostClasses` — the class ids the HOST forwarding path allocates
 ///
 /// Three NVIDIA class ids that the unprivileged host isolate passes to a real
@@ -1773,6 +1797,19 @@ pub trait HostClasses: Send + Sync + core::fmt::Debug {
     /// The copy-engine **object** class, allocated under a CE channel — and the same
     /// number the pushbuffer's `SET_OBJECT` carries in its `NVCLASS` field.
     fn ce_object(&self) -> CeObjectClass;
+
+    /// The **compute** object class, allocated under a GR channel.
+    ///
+    /// ## ⊘ `None` means UNMEASURED, never "this generation has none"
+    ///
+    /// Every generation has a compute class. We only have a verified constant for one of
+    /// them, and `kayfabe-abi` carries exactly one (`AMPERE_COMPUTE_B`); the other names
+    /// appear in capability *tables* without a value. Returning a guessed id here would be
+    /// a fabricated hardware fact wearing a type — the failure this tree has paid for
+    /// repeatedly under *"an empty capture is evidence of NOTHING, not evidence of
+    /// emptiness"*. So an unmeasured generation answers `None` and its caller refuses BY
+    /// NAME, rather than allocating a class nobody has seen a board accept.
+    fn compute_object(&self) -> Option<ComputeObjectClass>;
 }
 
 // The concurrency contract, compile-time-asserted (decision #17): every public type
