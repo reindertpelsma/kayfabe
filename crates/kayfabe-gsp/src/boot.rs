@@ -615,6 +615,32 @@ impl CommandPolicy for PolicyChain {
 /// process**, with no QEMU restart and no bench slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GspFsm {
+    /// ★★★★★ **w432 — HOW MANY COMMAND DOORBELLS ARE WAITING FOR A WORKER.**
+    ///
+    /// `[measured]` servicing the GSP command queue is the **worst trap in the device**:
+    /// `at=bar0+0x110c00` — `NV_PGSP_QUEUE_HEAD(0)` — held a vCPU for **1.79 s**, because one
+    /// guest register write drains and services every queued RPC, host verbs included, before
+    /// the store returns.
+    ///
+    /// Owner: *"MMIO writes primarily touch a queue to register that a write happened there
+    /// and wake a coordinator"*, and *"a trap may not take longer than a millisecond"*. So
+    /// when [`Self::defer_commands`] is set, [`BootStep::CommandDoorbell`] increments this
+    /// instead of servicing, and a worker calls [`Self::service_deferred_commands`].
+    ///
+    /// ⊘ A COUNT, not a flag. Two writes before the worker runs are two queue states to
+    /// drain, and collapsing them to a bool would service once and leave the second guest
+    /// submission in a queue nothing looks at again.
+    ///
+    /// ⚠ The guest misses nothing by waiting: it POLLS the message queue for its reply, which
+    /// is what real GSP makes it do. What changes is that it polls in its own loop rather
+    /// than inside one held store.
+    pending_command_doorbells: u32,
+    /// Whether [`BootStep::CommandDoorbell`] defers instead of servicing inline.
+    ///
+    /// ⊘ Defaults to `false`, so every existing test keeps the synchronous behaviour it
+    /// asserts; the device turns it on at construction. A test wanting the deferred shape
+    /// asks for it by name.
+    defer_commands: bool,
     /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
     /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
@@ -732,6 +758,8 @@ impl GspFsm {
     #[must_use]
     pub fn new(abi: GspAbi) -> GspFsm {
         GspFsm {
+            pending_command_doorbells: 0,
+            defer_commands: false,
             held: Vec::new(),
             abi,
             phase: BootPhase::Cold,
@@ -991,6 +1019,22 @@ impl GspFsm {
                 report.raise_status_irq = true;
             }
             BootStep::CommandDoorbell => {
+                // ★★★★★ **THE WORST TRAP IN THE DEVICE, MOVED OFF THE vCPU.**
+                //
+                // `[measured]` this arm serviced the whole command queue inside the guest's
+                // register store and held a vCPU for **1.79 s** at `bar0+0x110c00`. Owner:
+                // *"no blocking calls in vcpu"*, *"a trap may not take longer than a
+                // millisecond"*, *"MMIO writes primarily touch a queue … and wake a
+                // coordinator"*.
+                //
+                // ⊘ The register state has ALREADY been stored by the time we get here — this
+                // arm is the SERVICING, and only the servicing is deferred. A read-back of the
+                // queue head still answers what the guest wrote.
+                if self.defer_commands {
+                    self.pending_command_doorbells =
+                        self.pending_command_doorbells.saturating_add(1);
+                    return Ok(());
+                }
                 let (t, mut r) = self.doorbell(ram, policy)?;
                 report.transitions.push(t);
                 report.transitions.append(&mut r.transitions);
@@ -1874,6 +1918,61 @@ impl GspFsm {
     /// Whatever [`GspFsm::post`] refuses with. ⊘ A refused post leaves the remaining held
     /// replies in place rather than dropping them: a dropped reply is a guest hang, and the
     /// next call will try again.
+    /// ★★★★★ **w432 — DRAIN THE DEFERRED COMMAND DOORBELLS. CALL THIS OFF A vCPU.**
+    ///
+    /// Services every command doorbell that [`BootStep::CommandDoorbell`] deferred while
+    /// [`Self::defer_commands`] was set, and returns how many it serviced together with the
+    /// merged report — the caller still has to act on `raise_status_irq` and the commands,
+    /// exactly as the inline path's caller did.
+    ///
+    /// ⊘ **Drains to zero rather than servicing one.** A doorbell is a statement that the
+    /// queue moved, and two writes before the worker wakes are two queue states; servicing
+    /// one and leaving the count at one would strand the guest's second submission behind a
+    /// wake that never comes again.
+    ///
+    /// ⚠ The count is decremented BEFORE each `doorbell` call, not after. If servicing
+    /// returns an error we must not re-enter that same doorbell forever on every later wake —
+    /// a fault is reported to the caller and the slot is gone, which is the same thing the
+    /// inline path did with `?`.
+    ///
+    /// # Errors
+    /// Whatever servicing the queue refused, by name, on the first doorbell that faults.
+    pub fn service_deferred_commands(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+    ) -> Result<(usize, ServiceReport), GspFault> {
+        let mut report = ServiceReport::default();
+        let mut serviced = 0usize;
+        while self.pending_command_doorbells > 0 {
+            self.pending_command_doorbells -= 1;
+            let (t, mut r) = self.doorbell(ram, policy)?;
+            report.transitions.push(t);
+            report.transitions.append(&mut r.transitions);
+            report.commands.extend(r.commands);
+            report.unserviced.extend(r.unserviced);
+            report.raise_status_irq |= r.raise_status_irq;
+            serviced += 1;
+        }
+        Ok((serviced, report))
+    }
+
+    /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
+    #[must_use]
+    pub const fn pending_command_doorbells(&self) -> u32 {
+        self.pending_command_doorbells
+    }
+
+    /// Turn command-doorbell deferral on or off.
+    ///
+    /// ⊘ Off by default so every existing test keeps the synchronous behaviour it asserts.
+    /// ⚠ Turning it ON without a worker that calls [`Self::service_deferred_commands`] parks
+    /// the guest by construction: nothing will ever service its RPCs. The device arms both
+    /// together or neither.
+    pub const fn set_defer_commands(&mut self, on: bool) {
+        self.defer_commands = on;
+    }
+
     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
         let mut posted = 0usize;
         while let Some(h) = self.held.first() {
@@ -2171,3 +2270,4 @@ mod holding_a_reply_until_the_refresh_lands {
         assert!(!chain.holds_for_refresh(&cmd()));
     }
 }
+

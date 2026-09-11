@@ -3009,6 +3009,71 @@ impl RegPlane {
     /// # Errors
     ///
     /// Whatever `GspFsm::release_held` refuses with; the unposted replies stay queued.
+    /// ★★★★★ **w432 — SERVICE THE GSP COMMAND QUEUE OFF THE vCPU.**
+    ///
+    /// The guest's write to `NV_PGSP_QUEUE_HEAD` only RECORDS that the queue moved; this does
+    /// the work. `[measured]` doing it inside that write held a vCPU for **1.79 s**, the worst
+    /// trap in the device, because one store drains and services every queued RPC — host verbs
+    /// included — before returning.
+    ///
+    /// Returns `(serviced, raise_status_irq)`. ⚠ **The caller MUST act on the flag.** The
+    /// inline path's `WriteOutcome.raise_status_irq` was consumed by the trap's caller; moving
+    /// the work here moves that duty here, and a worker that drops it leaves the guest polling
+    /// a reply whose interrupt never arrives — a hang that looks exactly like a slow GPU.
+    ///
+    /// ⊘ Counters are bumped identically to the inline path, so a boot's census does not
+    /// change meaning when the work moves threads.
+    ///
+    /// # Errors
+    /// Whatever servicing refused, by name.
+    pub fn service_deferred_commands(&self) -> Result<(usize, bool), kayfabe_gsp::GspFault> {
+        let mut s = self.state.lock();
+        let PlaneState {
+            fsm, ram, policy, ..
+        } = &mut *s;
+        match fsm.service_deferred_commands(ram.as_mut(), policy.as_mut()) {
+            Ok((serviced, report)) => {
+                if report.raise_status_irq {
+                    self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
+                }
+                self.c
+                    .commands
+                    .fetch_add(report.commands.len() as u64, Ordering::Relaxed);
+                let opened = report
+                    .transitions
+                    .iter()
+                    .filter(|t| **t == kayfabe_gsp::Transition::E10)
+                    .count();
+                if opened > 0 {
+                    self.c
+                        .status_irq_cleared
+                        .fetch_add(opened as u64, Ordering::Relaxed);
+                }
+                Ok((serviced, report.raise_status_irq))
+            }
+            Err(f) => {
+                self.c.faults.fetch_add(1, Ordering::Relaxed);
+                if matches!(f, GspFault::GuestRam(_)) {
+                    self.c.ram_refusals.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(f)
+            }
+        }
+    }
+
+    /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
+    #[must_use]
+    pub fn pending_command_doorbells(&self) -> u32 {
+        self.state.lock().fsm.pending_command_doorbells()
+    }
+
+    /// Arm or disarm command-doorbell deferral on the FSM.
+    ///
+    /// ⚠ Arming this without a worker that drains it parks the guest by construction.
+    pub fn set_defer_commands(&self, on: bool) {
+        self.state.lock().fsm.set_defer_commands(on);
+    }
+
     pub fn release_held_replies(&self) -> Result<usize, kayfabe_gsp::GspFault> {
         let mut s = self.state.lock();
         let PlaneState { fsm, ram, .. } = &mut *s;
