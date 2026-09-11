@@ -3141,7 +3141,24 @@ impl RegPlane {
         if fsm.pending_command_doorbells() == 0 {
             return Ok(None);
         }
-        match fsm.service_one_deferred_command(ram.as_mut(), policy.as_mut()) {
+        let serviced = fsm.service_one_deferred_command(ram.as_mut(), policy.as_mut());
+        // ⊘⊘⊘ **w469 — REFRESH THE MIRROR HERE TOO, AND DO IT ON EVERY OUTCOME.** w466 added
+        // the lock-free `pending_cmd_doorbells` mirror and stored it on the WRITE path only.
+        // Servicing decrements the FSM's real count and left the mirror stale, so
+        // `RegPlane::pending_command_doorbells` read nonzero until the guest's next register
+        // write — and the shim gates its GSP-submit enqueue on exactly that value. ⇒ every
+        // MMIO write enqueued a spurious pubqueue token.
+        //
+        // `[measured w467, one binary, two arms]` that is the whole of the 40x difference the
+        // A/B found: `slow_traps` 169 (lock, true count) vs 6776 (atomic, stale mirror).
+        // ⊘ It is NOT that the big lock was throttling the guest — that was my reading before
+        // `an_armed_queue_head_write_records_and_returns` (which had been red since w466)
+        // named the defect exactly.
+        self.pending_cmd_doorbells.store(
+            fsm.pending_command_doorbells(),
+            std::sync::atomic::Ordering::Release,
+        );
+        match serviced {
             Ok(report) => {
                 if report.raise_status_irq {
                     self.c.irq_requests.fetch_add(1, Ordering::Relaxed);
