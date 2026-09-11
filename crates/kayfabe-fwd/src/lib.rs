@@ -7139,6 +7139,33 @@ pub enum Representability {
     Untracked,
 }
 
+/// w477 — how many CE operand runs the address table knew NOTHING about and were handed to a
+/// real copy engine anyway. ⊘ Not a refusal: this records the size of an exposure that is
+/// already live, so a fix can be aimed at measured traffic instead of at a guess.
+static UNTRACKED_TO_HOST_CE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// w477 — the same count for runs the table DID bind, so the ratio is readable. A bare
+/// "untracked=N" cannot be judged without its denominator.
+static TRACKED_TO_HOST_CE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// One line for the boot log. ⊘ Prints its zero arm explicitly — "no line" and "never
+/// happened" must not read the same, which is this tree's most repeated instrument defect.
+#[must_use]
+pub fn untracked_ce_census() -> String {
+    let u = UNTRACKED_TO_HOST_CE.load(core::sync::atomic::Ordering::Relaxed);
+    let t = TRACKED_TO_HOST_CE.load(core::sync::atomic::Ordering::Relaxed);
+    if u == 0 {
+        return format!(
+            "UNTRACKED-CE none — every CE run sent to a real engine was bound in the address \
+             table (tracked={t}); the #14 gate would have had nothing to refuse"
+        );
+    }
+    format!(
+        "UNTRACKED-CE ⊘ {u} run(s) the address table bound NOTHING for were handed to a real \
+         copy engine (tracked={t}) — the #14 working-set gate is vacuous in production, so \
+         nothing refused them"
+    )
+}
+
 impl Representability {
     /// Which engine may be pointed at an address of this kind.
     ///
@@ -7148,8 +7175,30 @@ impl Representability {
     /// §12's ruling.
     #[must_use]
     pub fn executor(self) -> CeExecutor {
+        // ★★★★★ **w477 — COUNT THE UNTRACKED ONES, BEFORE ANYONE ARMS A GATE.**
+        //
+        // `Untracked` means *the address table binds nothing for this VA* — and it is routed
+        // to a REAL copy engine anyway, on the strength of knowing nothing about it. The
+        // comment above this impl says exactly that, and names the #14 working-set gate as
+        // the only thing standing behind it. ⊘⊘ `[audited w476]` **that gate has never
+        // executed in a boot**: `VerbPlan::gated_doorbell` checks every VA in `working_set`,
+        // and the only production caller of `SharedDevice::doorbell` passes `&[]`
+        // (`shim.rs:6238`); `gate_working_set` has test callers only and `arm_fence` has
+        // none.
+        //
+        // ⚠ So the first question is not "how do we close it" but **"how often does it
+        // fire"** — a census answers that in one boot, and arming a predicate nobody has
+        // measured would refuse traffic on a guess. Same order that took the vCPU-blocking
+        // doors from 1239 to 31: witness first, fix second.
+        if matches!(self, Representability::Untracked) {
+            UNTRACKED_TO_HOST_CE.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        }
         match self {
-            Representability::HostBacked | Representability::Untracked => CeExecutor::HostCe,
+            Representability::HostBacked => {
+                TRACKED_TO_HOST_CE.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+                CeExecutor::HostCe
+            }
+            Representability::Untracked => CeExecutor::HostCe,
             Representability::Fabricated | Representability::PhysicalOperand => CeExecutor::Ours,
         }
     }

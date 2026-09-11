@@ -452,6 +452,9 @@ pub fn census() -> String {
         + &crate::lockwitness::vcpu_blocking_census()
 }
 
+/// ★ w477 — re-exported here only so the boot log has ONE place that prints the censuses.
+/// ⊘ The count itself lives in `kayfabe-fwd`, beside the decision it measures.
+
 /// ★★★ **The RAII marker installed at every guest-trap entry.**
 ///
 /// Install it at the *outermost* boundary the guest can cross — the MMIO dispatch — and
