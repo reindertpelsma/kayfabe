@@ -77,7 +77,28 @@ freshest row a bounded pass reaches last. Prints `R34_OUTCOME=(P)/(F)`, and says
 ⚠ **Why this was missing and why it mattered:** `prove_ce_copy` allocates BOTH operands with
 `alloc_device_local` — **vidmem**. No engine in any existing client rung read guest RAM at
 all. That is how a green client (110 guest-RAM rows) coexisted with a dead LLM (13 313) for
-the whole of w415. ⊘ **R34 has not yet been run**, on bare metal or in the guest.
+the whole of w415. ★ **R34 IS GREEN ON BARE METAL** at depth 0 and depth 2000 (`[measured w417]`): 4096 bytes
+moved byte-correct, semaphore released. So the *pass* half of
+`BARE-METAL PASS + GUEST FAIL ⇒ KAYFABE BUG` now exists, and `w418_r34_boot.sh` supplies the
+guest half in a boot that costs seconds rather than an hour.
+
+⊘⊘ **Getting there cost two defects IN THE RUNG, and both looked like kayfabe defects.**
+
+1. R34 allocated with `alloc_notifier_mem`, which sets `NVOS02_FLAGS_MAPPING_NO_MAP`, then
+   called `map_cpu` on it. `Other(31)` = `NV_ERR_INVALID_ARGUMENT`. **The guest and bare metal
+   refused identically**, which is the only reason it was not filed as a kayfabe bug — I had
+   already written a commit titled *"R34 REPRODUCES THE LLM FAULT"*, and the control refuted
+   it.
+2. The "fix" — dropping `_NO_MAP` — produced `Other(0x8000_0016)` = **errno 22, EINVAL from
+   the ioctl**, because RM then builds an mmap context on our `fd: -1`
+   (`ogkm-580: escape.c:341-359`, `nv-usermap.c:44-46`). ⊘ `rm.rs:6604` has carried that
+   citation since `w288nc1`. Both primitives I wrote already existed, correct, in the same
+   file: `alloc_sysmem` and `map_cpu_on(MapNode::Ctl, …)` — a sysmem object maps through the
+   **ctl** node, not the **gpu** node.
+
+⚠ Transferable: **the wrong allocator returned `Ok`.** The refusal surfaced several calls
+later, on a call that was correct, against a handle that was valid. Attributing the error to
+a STEP is what made it readable — `Other(31)` names a status and never a call.
 
 ## Harness traps paid for in this window
 
