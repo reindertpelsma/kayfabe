@@ -6197,6 +6197,54 @@ impl SharedDevice {
             // lock.
             self.promote_binds
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // ★★★★★ **SYNCHRONIZATION POINT (2) — THE RM CALL, AND NOBODY WILL TELL US.**
+            //
+            // ⊘⊘ The comment two lines up says *"Latch, do not publish … getting them onto the
+            // host is the drain's job"*. **That is the lazy discovery this replaces.** The
+            // drain is a sweep that races the engine, and `[measured w425]` it loses: the pin
+            // of the LLM's faulting range and the fault that hit it landed in the same second.
+            //
+            // `GPU_PROMOTE_CTX` is the guest declaring where each context resource lives. On a
+            // GSP part the mapping happens **inside the GSP** — which is us — and a real GSP
+            // invalidates in **microcode**, so nothing crosses the guest boundary and no
+            // barrier is coming. We serviced the map; we are the one who knows. That is why
+            // the owner counts three entry points and not one.
+            //
+            // ⚠ This is the rung the client grades as **P3 `rpc-bind`**, and all three entry
+            // points must work for the client to pass. Binding rows without BACKING them
+            // leaves P3 declaring addresses no engine can reach.
+            //
+            // ⊘ Safe here only because w432 moved RPC servicing onto the publication worker.
+            // Before that this ran inside the guest's `NV_PGSP_QUEUE_HEAD` store, where a
+            // refresh would be a multi-second vCPU stall — the trap w432 removed. And safe
+            // from the lock side because `drop(st)` above released the proc lock.
+            if let Ok(join) = out.as_ref() {
+                if join.bound > 0 {
+                    if let Some(refresh) = self.invalidate_refresh.get() {
+                        let (backed, refused) = refresh.refresh_pdb(route.proc, route.pdb);
+                        eprintln!(
+                            "kayfabe: PROMOTE-REFRESH proc={} pdb={:#x} bound={} \
+                             backed={backed} refused={refused} — synchronization point (2), \
+                             done BEFORE this RPC's reply",
+                            route.proc.0, route.pdb.0, join.bound,
+                        );
+                        if refused > 0 {
+                            eprintln!(
+                                "kayfabe: PROMOTE-REFRESH ⊘⊘ {refused} ROW(S) REFUSED — the \
+                                 guest is about to be told this promote SUCCEEDED. ⚠ Each is a \
+                                 declared context resource an engine may read."
+                            );
+                        }
+                    } else {
+                        eprintln!(
+                            "kayfabe: PROMOTE-REFRESH ⊘⊘ NO SEAM INSTALLED — {} row(s) bound \
+                             and NONE backed; the guest will be told this promote succeeded.",
+                            join.bound
+                        );
+                    }
+                }
+            }
             // ★★★★★ **WHAT THE CAPTURE ACTUALLY BOUND** — `[w401]` the RPC-bind publication
             // fired 4× and published 3 rows once and 0 three times, while `P3 rpc-bind` stayed
             // red. Two readings fit that equally: the capture binds P3's context and the

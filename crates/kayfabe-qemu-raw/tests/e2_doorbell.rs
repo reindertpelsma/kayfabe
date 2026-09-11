@@ -894,3 +894,56 @@ fn the_channel_invalidate_is_consumed_installed_and_ordered_before_the_forward()
          other line in place"
     );
 }
+
+/// ★★★★★ **ALL THREE ENTRY POINTS MUST CONSUME, AND THE CLIENT GRADES ON ALL THREE.**
+///
+/// > **Owner, 2026-09-11:** *"remember all three entrypoints need to work to get raw client
+/// > passing"*
+///
+/// The mean client's ladder IS the three entry points:
+///
+/// ```text
+///   P1 rm-invalidate  -> (1) the TLB-invalidate register
+///   P2 uvm-memop      -> (3) the channel MEM_OP
+///   P3 rpc-bind       -> (2) GPU_PROMOTE_CTX, which nobody announces because we ARE the GSP
+/// ```
+///
+/// ⊘ (2) is the one with no barrier coming: on a GSP part the mapping happens inside the GSP
+/// and a real one invalidates in microcode, so the only thing that knows is the handler.
+#[test]
+fn all_three_synchronization_points_consume_their_barrier() {
+    let dev = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../kayfabe-rt/src/device.rs"),
+    )
+    .expect("device.rs is readable");
+    let shim = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
+    )
+    .expect("shim.rs is readable");
+
+    // (3) the channel MEM_OP — consumed in forward_ring, before the forward.
+    assert!(
+        dev.contains("refresh.refresh_pdb(pid, *pdb)"),
+        "entry point (3): the channel TLB invalidate must drive a refresh"
+    );
+
+    // (2) the RM call — consumed in promote_ctx, before the reply.
+    assert!(
+        dev.contains("refresh.refresh_pdb(route.proc, route.pdb)"),
+        "entry point (2): GPU_PROMOTE_CTX must BACK the rows it binds. Nothing will announce \
+         them — on a GSP part the mapping happens inside the GSP and a real one invalidates \
+         in microcode, so this handler is the only thing that knows"
+    );
+
+    // (1) the invalidate register — its lane refreshes on the worker and only then completes.
+    assert!(
+        shim.contains("refresh_page_tables(off_vcpu)"),
+        "entry point (1): the invalidate lane must refresh off the vCPU before completing"
+    );
+
+    // ⚠ And the seam they all share must be installed, or all three are inert at once.
+    assert!(
+        shim.contains("set_invalidate_refresh("),
+        "one uninstalled seam disables ALL THREE entry points together"
+    );
+}
