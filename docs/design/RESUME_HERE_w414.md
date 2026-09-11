@@ -1,3 +1,10 @@
+# ⊘⊘⊘ SUPERSEDED BY `RESUME_HERE_w417.md` (2026-09-11) — read that first
+
+Its central claim, *"there is NO general operand path"*, is **half right, and the other half
+was the bug**: the path exists (`measure_guest_ram_pin_rate`) and was switched OFF by the
+publication worker forcing `VasPublishArm::Publish`, then rate-limited to a 256-row sample.
+Both fixed (w415 `05df1d6b`, w416 `cfd6db36`), with the fault changing kind each time.
+
 # RESUME — w414, overnight 2026-09-11
 
 **STATUS: LIVE.** Written for a compacted session. Read this first, then
