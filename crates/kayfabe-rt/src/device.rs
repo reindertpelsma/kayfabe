@@ -427,13 +427,6 @@ pub enum LockMode {
 struct DeviceState {
     /// Device-global spine (graph, routing maps, targets, delivery, sources).
     spine: Spine,
-    /// ★ Address spaces a GSP RPC changed, waiting for the worker to re-back them.
-    ///
-    /// ⊘ Pushed under the rank-0 lock, drained off it. See `latch_vas_refresh_after_apply`.
-    /// ⚠ A `Vec` and not a set: it is single-digit per pass in every measured boot, and the
-    /// drain deduplicates. A set here would buy nothing and cost a hash under a vCPU's lock.
-    pending_vas_refresh: Vec<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)>,
-    /// The system proc's rank-1 cell (kernel RM / scrubber / CeUtils traffic).
     system: RankedMutex<Proc>,
     /// One rank-1 cell per derived user proc.
     procs: BTreeMap<ProcId, RankedMutex<Proc>>,
@@ -639,19 +632,15 @@ pub struct ChannelBirthRun {
 ///
 /// ⊘ This is a `push` under a rank-0 lock. It must stay O(1) and allocation-light; the refresh
 /// itself happens on the worker.
-fn latch_vas_refresh_after_apply(st: &mut DeviceState, ev: RmEvent) {
-    let key = match ev {
+fn vas_refresh_key(ev: RmEvent) -> Option<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)> {
+    match ev {
         // A page-directory swap re-roots the address space. `[ogkm-580: gpu_vaspace.c:3221]`
         // the guest's invalidate fires BEFORE the migrate and never after, and the
-        // hardware-commit callback is a no-op on a GSP client
-        // (`gmmu_walk.c:665-669`) — so nothing at all reaches us afterwards.
+        // hardware-commit callback is a no-op on a GSP client (`gmmu_walk.c:665-669`) — so
+        // nothing at all reaches us afterwards.
         RmEvent::SetPageDir { client, vaspace, .. } => Some((client, vaspace)),
         _ => None,
-    };
-    let Some((client, vaspace)) = key else {
-        return;
-    };
-    st.pending_vas_refresh.push((client, vaspace));
+    }
 }
 
 fn latch_channel_birth_after_apply(st: &mut DeviceState, ev: RmEvent) {
@@ -878,6 +867,19 @@ enum RingPlanned {
 
 /// phase holds which lock.
 pub struct SharedDevice {
+    /// ★★★★★ **The address spaces a GSP RPC changed, under their OWN small lock.**
+    ///
+    /// > **Owner:** *">99% of the operation is not under that lock, my idea is that only the
+    /// > lock is over the small queue that vcpu and the worker/coordinater shares"*
+    ///
+    /// ⊘ Deliberately NOT a field of `DeviceState`. Putting it there made both sides take the
+    /// big `state` lock — the vCPU to push and, worse, the **worker to drain** — so a worker
+    /// checking for work contended with the vCPUs it exists to stay out of. This is the only
+    /// thing the two threads share, so it is the only thing that needs a lock, and the lock is
+    /// held for a `push` or a `take` and nothing else.
+    ///
+    /// ⚠ The refresh itself — a host RM round-trip per row — happens with this NOT held.
+    vas_refresh_q: std::sync::Mutex<Vec<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)>>,
     mode: LockMode,
     state: RankedRwLock<DeviceState>,
     pool: PoolGate,
@@ -1275,6 +1277,7 @@ impl SharedDevice {
         // cost a rank-0 acquisition (see [`SharedDevice::spawner`]).
         let spawner = spine.isolate_factory();
         SharedDevice {
+            vas_refresh_q: std::sync::Mutex::new(Vec::new()),
             fb: std::sync::OnceLock::new(),
             invalidate_refresh: std::sync::OnceLock::new(),
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
@@ -1289,7 +1292,6 @@ impl SharedDevice {
             state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
-                    pending_vas_refresh: Vec::new(),
                     spine,
                     system: RankedMutex::new(LockRank::Proc, system),
                     procs: procs
@@ -1330,8 +1332,6 @@ impl SharedDevice {
     pub fn into_gpu(self) -> Gpu {
         let SharedDevice { state, .. } = self;
         let DeviceState {
-            // ⊘ Not this op's business: the latch is drained by the worker, not here.
-            pending_vas_refresh: _,
             spine,
             system,
             procs,
@@ -1481,9 +1481,16 @@ impl SharedDevice {
     }
 
     pub fn drain_vas_refresh(&self) -> (usize, usize, usize) {
+        // ⊘ Clear the flag BEFORE taking the queue. A push that lands between the two leaves
+        // the flag set and its entry in the queue, so the next wake drains it — the safe
+        // direction. Clearing after the take could drop a wake for an entry we did not take.
+        // ⊘ ONLY the small queue lock, never `state`. Held for a `take` and nothing else.
         let pending = {
-            let mut g = self.state.write();
-            core::mem::take(&mut g.pending_vas_refresh)
+            let mut q = self
+                .vas_refresh_q
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            core::mem::take(&mut *q)
         };
         if pending.is_empty() {
             return (0, 0, 0);
@@ -1528,6 +1535,7 @@ impl SharedDevice {
     }
 
     pub fn apply_deferring(&self, ev: RmEvent) -> Result<(), GpuError> {
+        let mut vas_refresh = None;
         let (out, cancels) = {
             let mut g = self.state.write();
             let st = &mut *g;
@@ -1561,10 +1569,18 @@ impl SharedDevice {
                 // second invariant, *"no blocking calls in lock, especially the one shared
                 // with vcpus"* — and w448 measured what that costs. This is a `push` and
                 // nothing more.
-                latch_vas_refresh_after_apply(st, ev);
+                vas_refresh = vas_refresh_key(ev);
             }
             (out, st.spine.take_pending_cancels())
         };
+        // ⊘ The big `state` guard is DOWN by here. The push takes only the small queue lock,
+        // which is the only thing the vCPU and the worker share.
+        if let Some(k) = vas_refresh {
+            self.vas_refresh_q
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(k);
+        }
         cancels.discharge_all();
         out
     }
@@ -1899,8 +1915,6 @@ impl SharedDevice {
         let surplus = {
             let mut g = self.state.write();
             let DeviceState {
-                // ⊘ Not this op's business: the latch is drained by the worker, not here.
-                pending_vas_refresh: _,
                 spine,
                 system,
                 procs,
@@ -2471,7 +2485,6 @@ impl SharedDevice {
             LockMode::Degenerate => {
                 let mut g = self.state.write();
                 let DeviceState {
-                    pending_vas_refresh: _,
                     spine,
                     system,
                     procs,
@@ -2523,7 +2536,6 @@ impl SharedDevice {
             LockMode::Degenerate => {
                 let mut g = self.state.write();
                 let DeviceState {
-                    pending_vas_refresh: _,
                     spine,
                     system,
                     procs,
