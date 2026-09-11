@@ -179,6 +179,28 @@ UD
     && say "B2: seed marker present" \
     || { say "⊘ B2: BENCH_SEED_OK missing -- the seed's runcmd did not complete"; return 4; }
 
+  # ★★★★★ **THE GUEST'S APT NEEDS THE SAME MIRROR FIX AS THE HOST'S, AND FOR THE SAME REASON.**
+  #
+  # `[measured w443]` this step ran for **55 minutes** and then failed with
+  # `ERROR: Unable to find the development tool \`cc\` in your path`. The guest had no
+  # compiler because THIS apt never finished: the cloud image ships `archive.ubuntu.com`, and
+  # on this box that mirror served **13 kB/s** while another served **2.5 MB/s** — the same
+  # 190x gap `provision_box.sh` already races around on the host side.
+  #
+  # ⊘ The failure surfaced as *"the driver installer wants gcc"*, which reads as a missing
+  # package list, not as a slow mirror two layers down. And the boot AFTER it failed with
+  # `MODPROBE_RC=1`, which reads as a driver/kernel mismatch. Three symptoms, one cause.
+  #
+  # ⚠ Fix the guest the same way, and MEASURE rather than hardcode — mirror speed is a
+  # property of where the box is, not of the mirror.
+  say "B2: picking the guest's apt mirror (the host's fix, applied one layer down)"
+  $GS "for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu mirrors.edge.kernel.org/ubuntu; do
+         s=\$(timeout 12 curl -s -o /dev/null -w '%{speed_download}' http://\$m/dists/noble/Release 2>/dev/null || echo 0)
+         echo \"guest mirror \$m -> \${s%%.*} B/s\"
+       done" 2>&1 | sed 's/^/    /'
+  $GS "sudo sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.edge.kernel.org/ubuntu|g' \
+         /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null; true"
+
   say "B2: installing guest driver (kernel-open)"
   $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
   scp -i "$BENCH/guest_key" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -218,7 +240,10 @@ UD
   #    completed phase, and the next step boots a guest with no driver in it.
   case "$MI" in
     *580.159.04*) say "B2: guest driver VERIFIED on content" ;;
-    *) say "⊘ B2: guest driver NOT verified -- leaving the guest UP for inspection"; return 5 ;;
+    *) say "⊘ B2: guest driver NOT verified -- leaving the guest UP for inspection"
+    say "   ⚠ FIRST check the guest has a COMPILER: \`cc\` missing means this step's apt never"
+    say "     finished, which on a fresh cloud image is almost always the mirror. The next boot"
+    say "     will report MODPROBE_RC=1, which reads as a kernel mismatch and is not one."; return 5 ;;
   esac
   $GS "sudo poweroff" >/dev/null 2>&1 &
   sleep 20
