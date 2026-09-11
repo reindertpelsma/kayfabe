@@ -88,9 +88,21 @@ done
 echo "R34_GUEST_VERDICTS =$verdicts"
 # ⊘ One line the ledger can grade. A depth that did not report is `(E)` UNMEASURED, never a
 # pass — an absent verdict has been read as a green in this tree before.
-if echo "$verdicts" | grep -q '(F)\|(E)'; then
-  echo "R34_GUEST_OUTCOME=(F) ⊘ at least one depth did not pass — and R34 passes on BARE METAL"
+# ⊘⊘ A TIMEOUT IS NOT A REFUSAL, and grading them together would misattribute.
+#
+# `[measured w419]` depth 13000 declares 13 000 guest-RAM rows one RM call at a time inside
+# the guest and ran past `R34_TIMEOUT` with no verdict line. The first version of this block
+# folded that `(E)` in with `(F)` and printed *"BARE-METAL PASS + GUEST FAIL ⇒ indicts
+# kayfabe"* — an indictment built on a stopwatch. `(F)` means an RM call said no, which is a
+# claim about kayfabe; `(E)` means we ran out of time, which is a claim about the harness.
+if echo "$verdicts" | grep -q '(F)'; then
+  echo "R34_GUEST_OUTCOME=(F) ⊘ a depth was REFUSED in the guest — and R34 passes on BARE METAL"
   echo "  ⇒ BARE-METAL PASS + GUEST FAIL. Per the owner's ruling that indicts kayfabe, not the client."
+elif echo "$verdicts" | grep -q '(E)'; then
+  echo "R34_GUEST_OUTCOME=(E) ⊘ UNMEASURED — a depth produced no verdict inside R34_TIMEOUT=${TMO}s."
+  echo "  ⊘ That is a HARNESS fact, not a kayfabe fact: nothing refused. Raise R34_TIMEOUT or"
+  echo "  lower R34_DEPTHS, and do not read this as a failure. The depths that DID report are"
+  echo "  above and each of them stands on its own."
 else
   echo "R34_GUEST_OUTCOME=(P) ★ every depth moved its bytes"
 fi
