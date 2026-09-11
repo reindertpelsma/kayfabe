@@ -301,6 +301,8 @@ pub struct BarMirror {
     /// Which reason armed the outstanding request, for the log line only. Bit 0 =
     /// `mmu-invalidate`, bit 1 = `bar-pde-update`.
     reval_why: AtomicU64,
+    /// Whether a publication worker exists to drain the deferral. See [`BarMirror::arm`].
+    defer_reval: bool,
 }
 
 fn idx(w: FbWindow) -> Option<usize> {
@@ -347,7 +349,15 @@ impl BarMirror {
     ///
     /// ⊘ Lock-free context required (an `mmap` and a `memfd_create`): the composition
     /// root's `attach_ram`, on the hypervisor's own thread.
-    pub fn arm(plane: Arc<RegPlane>, machine: QemuMachine) -> Option<Arc<BarMirror>> {
+    /// `defer_reval` is the shim's `DoorbellAsyncArm::defers()`. ⊘ It is not a preference:
+    /// the deferred walk is drained by the publication worker, and on the `off` control
+    /// there is no worker, so deferring there would leave every stale slot live forever.
+    /// The control keeps the pre-w468 inline walk, which is what `off` means.
+    pub fn arm(
+        plane: Arc<RegPlane>,
+        machine: QemuMachine,
+        defer_reval: bool,
+    ) -> Option<Arc<BarMirror>> {
         let mut arms = [None, None];
         for (i, bar, w) in [(0usize, BarId::Bar1, "bar1"), (1, BarId::Bar2, "bar2")] {
             let unbacked = machine.bar_is_unbacked_reservation(bar);
@@ -406,6 +416,7 @@ impl BarMirror {
             reval_req: AtomicU64::new(0),
             reval_done: AtomicU64::new(0),
             reval_why: AtomicU64::new(0),
+            defer_reval,
             plane,
             machine,
             arena,
@@ -760,7 +771,9 @@ impl BarMirror {
         // ★ w468 A/B, one binary: `KAYFABE_MIRROR_REVAL_INLINE=1` restores the pre-w468
         // inline walk, so the deferral can be attributed against itself on one build.
         static INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if *INLINE.get_or_init(|| std::env::var("KAYFABE_MIRROR_REVAL_INLINE").is_ok()) {
+        if !self.defer_reval
+            || *INLINE.get_or_init(|| std::env::var("KAYFABE_MIRROR_REVAL_INLINE").is_ok())
+        {
             self.revalidate(if why == 1 { "mmu-invalidate" } else { "bar-pde-update" });
             return;
         }

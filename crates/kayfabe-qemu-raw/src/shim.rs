@@ -13849,7 +13849,11 @@ impl Regs {
             return;
         }
         if let Some(m) =
-            crate::barmirror::BarMirror::arm(Arc::clone(&self.plane), shim.machine().vmm().machine())
+            crate::barmirror::BarMirror::arm(
+                Arc::clone(&self.plane),
+                shim.machine().vmm().machine(),
+                self.doorbell_async.defers(),
+            )
         {
             self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
             let _ = self.bar_mirror.set(m);
