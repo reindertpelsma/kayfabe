@@ -165,8 +165,20 @@ say "applying $(basename "$PATCHFILE")"
 # patched, and `set -e` would catch that here — but only because of the `||` above.
 # Assert the absence of rejects DIRECTLY: a .rej left behind means some hooks are
 # in and some are not, which is the one failure that still builds and still loads.
-if find "$BUILD" -name '*.rej' | grep -q .; then
-  die "patch left rejects: $(find "$BUILD" -name '*.rej')"
+# ⊘⊘ `[measured w418]` this read `find ... | grep -q .`, and that composition can INVERT
+# under `set -o pipefail`: `grep -q` exits on its first match, `find` — still walking a build
+# tree — takes SIGPIPE and dies 141, and the pipeline reports 141. The `if` then reads FALSE.
+#
+# ⚠ Note the polarity. A false read here means *"no rejects"*, so the one failure this check
+# exists to catch — some hooks patched in and some not, which still builds and still loads —
+# would sail through **precisely when there are rejects to find**. Measured in the sibling
+# case: `strings "$B" | grep -q <present-string>` returns 141, i.e. finding the string faster
+# is what makes the check fail.
+#
+# Capturing first has no pipe and no signal, and the count is reusable in the message.
+rejects=$(find "$BUILD" -name '*.rej')
+if [ -n "$rejects" ]; then
+  die "patch left rejects: $rejects"
 fi
 
 # ★ Prove the hooks are where the constraint says they are, on the real post-patch

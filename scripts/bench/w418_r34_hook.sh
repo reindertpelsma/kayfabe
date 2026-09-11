@@ -38,8 +38,31 @@ if [ -z "$BIN" ]; then
 fi
 # ⚠ CONTENT, never a stamp: the step-attributed error is what makes a refusal readable, and
 # a binary that predates it reports `Other(31)` with no call attached.
-if ! strings "$BIN" | grep -q 'refused at'; then
+# ⊘⊘⊘ `grep -a`, NOT `strings | grep -q` — and the reason is a MEASURED INVERSION, not style.
+#
+# `[measured w418, on the bench]` the first version of this check read
+# `if ! strings "$BIN" | grep -q 'refused at'`, and it refused a binary that CONTAINS the
+# marker 10 times. Reproduced directly:
+#
+#     set -uo pipefail
+#     strings "$B" | grep -q "refused at"   => rc 141
+#     grep -aq "refused at" "$B"            => rc 0, FOUND
+#
+# `grep -q` exits the instant it matches. `strings` is still writing, takes **SIGPIPE**, and
+# dies with 141. Under `set -o pipefail` the PIPELINE reports 141 — so **finding the string
+# faster is what makes the check fail.** The more certainly the marker is present, the more
+# reliably it reports absent.
+#
+# ⚠ This is the sibling of *"a pipe eats the exit status"* and it is worse: that one LOSES a
+# failure, this one MANUFACTURES one out of a success. Any `<producer> | grep -q` under
+# pipefail has it. `grep -a` reads the binary directly — no pipe, no signal, no inversion.
+if ! command -v grep >/dev/null 2>&1; then
+  echo "R34_GUEST_OUTCOME=(E) ⊘ UNMEASURED — no grep to check the binary's content with"
+  exit 0
+fi
+if ! grep -aq 'refused at' "$BIN"; then
   echo "R34_GUEST_OUTCOME=(N) ⊘ UNMEASURED — this binary predates the step-attributed refusal"
+  echo "  ⊘ the marker 'refused at' is ABSENT from $BIN — this is the binary's age, not a tool"
   exit 0
 fi
 echo "info  R34 bin           = $BIN"
