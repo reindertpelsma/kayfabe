@@ -12,6 +12,16 @@
 # ⚠ Sample, do not single-shot: the trap is ~1.8 s inside a boot of tens of seconds, so one
 # well-timed look is luck. This takes N stacks and keeps the ones sitting in an MMIO write.
 set -uo pipefail
+# ⊘⊘⊘ **ONE MATCHER, AND NOT `pgrep`.** `[measured w455]` `pgrep -x qemu-system-x86` waited
+# the full 300 s and never matched, on a boot that demonstrably ran and whose client PASSED.
+# `pgrep -x` matches `/proc/PID/comm`, which is truncated to 15 characters — the exact trap
+# this ledger already records for `qemu-system-x86_64` — and `pgrep -f` matches the asker's own
+# command line. Both fail, in opposite directions, and both print as "no process".
+#
+# `ps -eo pid,comm` + an anchored awk match avoids both: comm is read as data, and our own
+# shell is not named `qemu-system*`.
+qemu_pid() { ps -eo pid=,comm= | awk '$2 ~ /^qemu-system/ { print $1; exit }'; }
+
 N=${STACKSHOT_N:-60}
 GAP=${STACKSHOT_GAP:-1}
 OUT=${STACKSHOT_OUT:-/workspace/bench/stackshots.txt}
@@ -33,17 +43,17 @@ echo "STACKSHOT start $(date -Is) n=$N gap=${GAP}s -> $OUT"
 WAIT=${STACKSHOT_WAIT:-300}
 echo "STACKSHOT waiting up to ${WAIT}s for qemu-system-x86 to appear"
 for _ in $(seq 1 "$WAIT"); do
-  pgrep -x qemu-system-x86 >/dev/null && break
+  [ -n "$(qemu_pid)" ] && break
   sleep 1
 done
-if ! pgrep -x qemu-system-x86 >/dev/null; then
+if [ -z "$(qemu_pid)" ]; then
   echo "⊘⊘ STACKSHOT: qemu never appeared in ${WAIT}s — NOTHING was sampled. This is a"
   echo "   harness result, not a finding about the device."
   exit 3
 fi
 echo "STACKSHOT qemu is up; sampling"
 for i in $(seq 1 "$N"); do
-  pid=$(pgrep -x qemu-system-x86 | head -1)
+  pid=$(qemu_pid)
   # ⊘ The process going away mid-run is the END of the window, not a sample to skip.
   [ -z "$pid" ] && { echo "[$i] qemu exited — sampling window over" >> "$OUT"; break; }
   # ⊘ `-batch` stops the process, dumps, and detaches. The stop is what the owner's SIGSTOP

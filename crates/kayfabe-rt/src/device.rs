@@ -427,6 +427,12 @@ pub enum LockMode {
 struct DeviceState {
     /// Device-global spine (graph, routing maps, targets, delivery, sources).
     spine: Spine,
+    /// ★ Address spaces a GSP RPC changed, waiting for the worker to re-back them.
+    ///
+    /// ⊘ Pushed under the rank-0 lock, drained off it. See `latch_vas_refresh_after_apply`.
+    /// ⚠ A `Vec` and not a set: it is single-digit per pass in every measured boot, and the
+    /// drain deduplicates. A set here would buy nothing and cost a hash under a vCPU's lock.
+    pending_vas_refresh: Vec<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)>,
     /// The system proc's rank-1 cell (kernel RM / scrubber / CeUtils traffic).
     system: RankedMutex<Proc>,
     /// One rank-1 cell per derived user proc.
@@ -620,6 +626,34 @@ pub struct ChannelBirthRun {
 /// latch its birth. Kind (`Emulated`/`Passthrough`) and adoptability are decided by the
 /// drain under the proc lock — ⊘ not re-derived here from `proc == SYSTEM_PROC`, which is
 /// the re-derivation `Channel::kind`'s doc records the cost of.
+/// ★★★★★ **Latch that an address space needs re-backing after a GSP RPC changed it.**
+///
+/// See the call site for the owner's ruling. The short version: on a GSP part the driver
+/// expects the GSP to have invalidated internally, so an RPC that changes an address space
+/// announces **nothing**. We serviced it; we are the only thing that knows.
+///
+/// ⊘ Which events qualify is a judgement about REACHABILITY, not about bytes: we latch when
+/// the set of addresses an engine can reach may have changed. `SetPageDir` re-roots a whole
+/// address space; `Free` of a virtual object can revoke mappings. ⚠ We do NOT latch on every
+/// event — a latch that always fires is a sweep with extra steps, which is what this replaces.
+///
+/// ⊘ This is a `push` under a rank-0 lock. It must stay O(1) and allocation-light; the refresh
+/// itself happens on the worker.
+fn latch_vas_refresh_after_apply(st: &mut DeviceState, ev: RmEvent) {
+    let key = match ev {
+        // A page-directory swap re-roots the address space. `[ogkm-580: gpu_vaspace.c:3221]`
+        // the guest's invalidate fires BEFORE the migrate and never after, and the
+        // hardware-commit callback is a no-op on a GSP client
+        // (`gmmu_walk.c:665-669`) — so nothing at all reaches us afterwards.
+        RmEvent::SetPageDir { client, vaspace, .. } => Some((client, vaspace)),
+        _ => None,
+    };
+    let Some((client, vaspace)) = key else {
+        return;
+    };
+    st.pending_vas_refresh.push((client, vaspace));
+}
+
 fn latch_channel_birth_after_apply(st: &mut DeviceState, ev: RmEvent) {
     let RmEvent::Alloc { client, handle, .. } = ev else {
         return;
@@ -1255,6 +1289,7 @@ impl SharedDevice {
             state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
+                    pending_vas_refresh: Vec::new(),
                     spine,
                     system: RankedMutex::new(LockRank::Proc, system),
                     procs: procs
@@ -1295,6 +1330,8 @@ impl SharedDevice {
     pub fn into_gpu(self) -> Gpu {
         let SharedDevice { state, .. } = self;
         let DeviceState {
+            // ⊘ Not this op's business: the latch is drained by the worker, not here.
+            pending_vas_refresh: _,
             spine,
             system,
             procs,
@@ -1400,6 +1437,96 @@ impl SharedDevice {
     ///
     /// ⚠ The caller **must** drain with [`Self::materialize_pending`] once its own locks are
     /// down, or the spawn waits for the next register write that does.
+    /// ★★★★★ **Drain the address spaces a GSP RPC changed, and re-back them. OFF the vCPU.**
+    ///
+    /// The companion of `latch_vas_refresh_after_apply`. That side pushes under the plane's
+    /// rank-0 lock and does nothing else; this side does the work with no lock held.
+    ///
+    /// Returns `(spaces, backed, refused)`.
+    ///
+    /// ⊘ Deduplicates: one RPC burst can re-root the same address space several times, and
+    /// re-walking it per event would turn a barrier back into a sweep.
+    ///
+    /// ⚠ Call this from the publication worker only. The refresh reaches `pin_guest_ram`,
+    /// which is a host RM round-trip; on a vCPU it would be the blocking call the whole
+    /// design exists to remove.
+    /// Resolve a `(client, vaspace)` to the `(proc, pdb)` a refresh is keyed on.
+    ///
+    /// ⊘ `None` is not an error and must not be logged as one: `SetPageDir` can arrive before
+    /// anything is bound under that space, and an address space with no page-directory base
+    /// yet has nothing to re-back.
+    fn resolve_vas_pdb(
+        &self,
+        client: kayfabe_arch::ids::HClient,
+        vaspace: kayfabe_arch::ids::HObject,
+    ) -> Option<(ProcId, Pdb)> {
+        let g = self.state.read();
+        let pdb = g
+            .spine
+            .rmgraph
+            .pdb_of(kayfabe_core::rmgraph::NodeKey::new(client, vaspace))?;
+        // ⊘ `by_pdb` is the spine's own (gpu, pdb) -> proc map, the same hop
+        // `route_promote_ctx` takes (`promote.rs:755-762`). Using it here rather than
+        // inventing a second lookup keeps one answer to "who owns this address space".
+        // ⊘ Scan rather than assume a GPU id: `by_pdb` is keyed on `(gpu, pdb)` and this
+        // device serves one GPU, but hardcoding which one here would be a second source of
+        // truth for something the map already knows.
+        let pid = *g
+            .spine
+            .by_pdb
+            .iter()
+            .find(|((_, p), _)| *p == pdb)
+            .map(|(_, pid)| pid)?;
+        Some((pid, pdb))
+    }
+
+    pub fn drain_vas_refresh(&self) -> (usize, usize, usize) {
+        let pending = {
+            let mut g = self.state.write();
+            core::mem::take(&mut g.pending_vas_refresh)
+        };
+        if pending.is_empty() {
+            return (0, 0, 0);
+        }
+        let Some(refresh) = self.invalidate_refresh.get() else {
+            eprintln!(
+                "kayfabe: VAS-REFRESH ⊘⊘ NO SEAM INSTALLED — {} address space(s) changed by an \
+                 RPC and NONE re-backed. The guest has already been told those RPCs succeeded.",
+                pending.len()
+            );
+            return (pending.len(), 0, 0);
+        };
+        // ⊘ Resolve each (client, vaspace) to the (proc, pdb) the refresh is keyed on. A
+        // vaspace whose pdb we cannot name yet is not an error: `SetPageDir` can arrive before
+        // anything is bound under it, and re-backing an empty space is a no-op we skip rather
+        // than log as a failure.
+        let mut seen: Vec<(ProcId, Pdb)> = Vec::new();
+        for (client, vaspace) in pending {
+            let Some((pid, pdb)) = self.resolve_vas_pdb(client, vaspace) else {
+                continue;
+            };
+            if seen.contains(&(pid, pdb)) {
+                continue;
+            }
+            seen.push((pid, pdb));
+        }
+        let mut backed = 0usize;
+        let mut refused = 0usize;
+        for (pid, pdb) in &seen {
+            let (b, r) = refresh.refresh_pdb(*pid, *pdb);
+            backed += b;
+            refused += r;
+        }
+        if backed > 0 || refused > 0 {
+            eprintln!(
+                "kayfabe: VAS-REFRESH spaces={} backed={backed} refused={refused} — \
+                 synchronization point (2), off the vCPU",
+                seen.len()
+            );
+        }
+        (seen.len(), backed, refused)
+    }
+
     pub fn apply_deferring(&self, ev: RmEvent) -> Result<(), GpuError> {
         let (out, cancels) = {
             let mut g = self.state.write();
@@ -1413,6 +1540,28 @@ impl SharedDevice {
             // register-write tail, lock-free. See [`SharedDevice::latch_channel_birth`].
             if out.is_ok() {
                 latch_channel_birth_after_apply(st, ev);
+                // ★★★★★ **SYNCHRONIZATION POINT (2), GENERALISED — owner, 2026-09-11:**
+                //
+                // > *"first many GSP commands probably internally do the invalidate, its just
+                // >  that kernel module expects GSP to do it rather than doing it through that
+                // >  register, in that case for those RPC commands we should do the refresh as
+                // >  part of the GSP function implementation (that runs off vcpu ofcourse
+                // >  without blocking a vcpu)"*
+                //
+                // `GPU_PROMOTE_CTX` (w441) was ONE instance; this is the rule. An RPC that
+                // changes an address space is a change **nobody will ever announce**, because
+                // on a GSP part the driver expects the GSP — us — to have invalidated
+                // internally. The audit in `uncovered_page_table_writes_w452.md` lists what
+                // that silence covers: a PDB swap whose invalidate fires BEFORE the write and
+                // never after, a destruct that frees page levels with no invalidate at all.
+                //
+                // ⊘⊘ **LATCH here, REFRESH elsewhere.** This runs with the plane's rank-0
+                // mutex held six crates up (see `SharedObjectModel::apply`). A refresh here
+                // would be a blocking call under the lock a vCPU takes — the owner's own
+                // second invariant, *"no blocking calls in lock, especially the one shared
+                // with vcpus"* — and w448 measured what that costs. This is a `push` and
+                // nothing more.
+                latch_vas_refresh_after_apply(st, ev);
             }
             (out, st.spine.take_pending_cancels())
         };
@@ -1750,6 +1899,8 @@ impl SharedDevice {
         let surplus = {
             let mut g = self.state.write();
             let DeviceState {
+                // ⊘ Not this op's business: the latch is drained by the worker, not here.
+                pending_vas_refresh: _,
                 spine,
                 system,
                 procs,
@@ -2320,6 +2471,7 @@ impl SharedDevice {
             LockMode::Degenerate => {
                 let mut g = self.state.write();
                 let DeviceState {
+                    pending_vas_refresh: _,
                     spine,
                     system,
                     procs,
@@ -2371,6 +2523,7 @@ impl SharedDevice {
             LockMode::Degenerate => {
                 let mut g = self.state.write();
                 let DeviceState {
+                    pending_vas_refresh: _,
                     spine,
                     system,
                     procs,

@@ -5348,6 +5348,18 @@ fn doorbell_publish_loop(
         // message queue for its reply and the interrupt is how it learns to look; a worker
         // that services the RPC and swallows the flag leaves it polling forever, which reads
         // as a slow GPU rather than as a bug.
+        // ★★★★★ **DRAIN THE ADDRESS SPACES A GSP RPC CHANGED — off the vCPU, before the
+        // GSP drain below posts any more replies.**
+        //
+        // Owner: *"for those RPC commands we should do the refresh as part of the GSP function
+        // implementation (that runs off vcpu ofcourse without blocking a vcpu)"*.
+        //
+        // The latch is pushed inside `apply`, which runs under the plane's rank-0 lock; this
+        // is the other half, with no lock held. ⊘ BEFORE the command drain, not after: a
+        // command serviced below may post a reply, and a reply is the guest's licence to use
+        // the space the previous RPC just changed.
+        port.drain_vas_refresh();
+
         if DROPPED.take_gsp_drain() || port.pending_command_doorbells() > 0 {
             match port.service_deferred_commands() {
                 Ok((0, _)) => {}
@@ -6381,6 +6393,11 @@ impl SharedDoorbell {
     /// *could not* leave the trap thread; the call site above is still synchronous.
     /// Arm a re-walk of every VAS on the doorbell target GPU. See
     /// [`kayfabe_rt::device::SharedDevice::arm_rescan_for_gpu`].
+    /// Drain the address spaces a GSP RPC changed. See `SharedDevice::drain_vas_refresh`.
+    fn drain_vas_refresh(&self) -> (usize, usize, usize) {
+        self.device.drain_vas_refresh()
+    }
+
     /// How many command doorbells the FSM is holding for a worker, or 0 if the plane is gone.
     ///
     /// ⊘ `Weak`, so a teardown that drops the plane answers 0 rather than panicking. A worker
