@@ -3553,6 +3553,86 @@ impl RegPlane {
 
     /// The walk half of [`RegPlane::bar1_phys`]: `(phys, read_only)`, with the write check
     /// left to the caller so the mirror can ask about a page without choosing a direction.
+    /// ★★★★★ **w473 — EVERY LEAF THE GUEST'S BAR PAGE TABLE DECLARES, not one VA.**
+    ///
+    /// # ⊘ Why this has to exist before the single big memslot can
+    ///
+    /// Today the BAR mirror learns which pages to map by **trapping**: a guest access
+    /// misses, the trap resolves one VA with [`RegPlane::bar1_translate`], and a slot is
+    /// installed. The moment one memslot covers the whole window, that discovery is **gone**
+    /// — an unfilled page inside a RAM slot reads zeros from the anonymous mapping
+    /// underneath instead of exiting, so nothing ever learns it was touched.
+    ///
+    /// ⇒ complete population is a **precondition** of the big-slot design, not a later
+    /// optimisation of it. Landing the slot first would silently serve zeros for every page
+    /// the guest had not already happened to touch.
+    ///
+    /// ★ Owner's contract (2026-09-11): *"no traps in bar1/bar2 at all, ever, only for a
+    /// fault. Never to serve data"* and *"promote/depromote is only allowed in refresh"*.
+    /// Enumerating here is what makes refresh authoritative rather than reactive.
+    ///
+    /// `budget` bounds the walk the way [`kayfabe_mmu::walker::decode_subtree`] means it: a
+    /// guest-built cycle or a vast sparse tree costs at most that many entries. ⊘ An
+    /// exhausted budget is an ERROR, never a short list — a truncated enumeration would read
+    /// as "the guest mapped fewer pages", which is the one wrong answer that looks right.
+    ///
+    /// # Errors
+    /// Whatever the window refuses, by name, plus a budget exhaustion.
+    pub fn window_leaves(
+        &self,
+        w: FbWindow,
+        budget: u32,
+    ) -> Result<Vec<kayfabe_mmu::walker::DecodedLeaf>, WindowRefusal> {
+        let mut s = self.state.lock();
+        let PlaneState { mmu, fb, .. } = &mut *s;
+        let Some(fmt) = mmu.as_deref() else {
+            return Err(WindowRefusal::Translated {
+                va: 0,
+                why: NO_MMU_PORT,
+            });
+        };
+        // ⊘ The two windows are rooted DIFFERENTLY and the difference is load-bearing:
+        // BAR1's directory is a chip constant the GSP client patches
+        // (`kbusPatchBar1Pdb_GSPCLIENT`), while BAR2's root is a value the guest republishes
+        // at any time through `UPDATE_BAR_PDE` — which is why the mirror revalidates on a
+        // moved `bar_pde_counts`.
+        let root = match w {
+            FbWindow::FbAperture => self.chip.bar1_pde_base,
+            FbWindow::InstanceWindow => self.bar_pdes.pdes().bar2.unwrap_or(0),
+            _ => 0,
+        };
+        if root == 0 {
+            return Err(WindowRefusal::Translated {
+                va: 0,
+                why: BAR2_UNROOTED,
+            });
+        }
+        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let decoded = kayfabe_mmu::walker::decode_subtree(
+            fmt,
+            &mut src,
+            PtPage {
+                phys: root,
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
+            budget,
+        )
+        .map_err(|f| WindowRefusal::Translated {
+            va: 0,
+            why: f.why(),
+        })?;
+        // ⊘ Vidmem only, exactly as `bar1_translate` refuses a foreign aperture: a BAR
+        // window entry naming sysmem is not something this mirror can back, and dropping it
+        // silently here would be the same lie the single-VA path refuses to tell.
+        Ok(decoded
+            .leaves
+            .into_iter()
+            .filter(|l| l.aperture == Aperture::Vidmem)
+            .collect())
+    }
+
     fn bar1_translate(&self, va: u64, s: &mut PlaneState) -> Result<(u64, bool), WindowRefusal> {
         let PlaneState { mmu, fb, .. } = s;
         let Some(fmt) = mmu.as_deref() else {
