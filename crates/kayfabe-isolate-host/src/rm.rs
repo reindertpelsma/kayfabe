@@ -6530,66 +6530,6 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// Whatever RM refused.
-    /// ★★★★★ **A CPU-MAPPABLE SYSMEM ALLOCATION — `NV01_MEMORY_SYSTEM` without `NO_MAP`.**
-    ///
-    /// ⊘⊘ **This exists because reusing [`Self::alloc_notifier_mem`] for it FAILED, and the
-    /// failure looked exactly like a kayfabe defect.** `[measured w417, in the live guest]`
-    /// R34 reported `refused by name: Other(31)` — `NV_ERR_INVALID_ARGUMENT` — and the
-    /// tempting reading was *"a guest-RAM CE source does not work"*. It was the rung:
-    /// `alloc_notifier_mem` sets `NVOS02_FLAGS_MAPPING_NO_MAP` (a notifier is written by the
-    /// GPU and read through its own path, never CPU-mapped), and R34 then asked `map_cpu` for
-    /// a handle whose own allocation flags say it may not be mapped.
-    ///
-    /// ⚠ Note what made it dangerous: the wrong allocator returned `Ok`. The refusal arrived
-    /// several calls later, on a call that was correct, against a handle that was valid. That
-    /// is why R34's error now carries the STEP — *"refuse by name"* means the name is true,
-    /// and `Other(31)` names a status, never a step.
-    ///
-    /// `NVOS02_FLAGS_MAPPING_DEFAULT` is `0` (`ogkm-580: nvos.h:276`), so mappability is the
-    /// ABSENCE of the flag rather than a flag of its own — which is precisely why copying the
-    /// notifier allocator and deleting nothing produced an unmappable buffer.
-    ///
-    /// # Errors
-    /// Whatever RM answered, by name; `NoMemory` for a zero length.
-    fn alloc_mappable_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
-        if len == 0 {
-            return Err(RmError::NoMemory);
-        }
-        let want = self.conn.mint();
-        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
-        Nvos02ParametersWithFd {
-            h_root: self.conn.client.raw(),
-            h_object_parent: self.conn.device,
-            h_object_new: want,
-            h_class: NV01_MEMORY_SYSTEM,
-            // ⊘ The notifier allocator's flags MINUS `NVOS02_FLAGS_MAPPING_NO_MAP`. Kept
-            // otherwise identical on purpose: the one measured-good sysmem shape in this
-            // file is that one, and changing a second thing at the same time would make a
-            // failure unattributable between the two changes.
-            flags: NVOS02_FLAGS_LOCATION_PCI
-                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
-                | NVOS02_FLAGS_COHERENCY_CACHED,
-            p_memory: 0,
-            pad1: 0,
-            limit: len - 1,
-            status: 0,
-            fd: -1,
-        }
-        .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        self.conn
-            .gpu
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
-        let out =
-            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-        status_check(out.status)?;
-        self.conn.remember(out.h_object_new, self.conn.device);
-        Ok(self.stamp(out.h_object_new))
-    }
-
     fn alloc_notifier_mem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         if len == 0 {
             return Err(RmError::NoMemory);
@@ -9194,7 +9134,7 @@ impl HostRmBackend {
         // at the front of the queue and quietly make the rung easy.
         let mut decoy_rows: Vec<(u32, u64)> = Vec::new();
         for _ in 0..decoys {
-            let Ok(hh) = self.alloc_mappable_sysmem(BYTES) else {
+            let Ok(hh) = self.alloc_sysmem(BYTES) else {
                 // ⊘ Not a failure of the rung: the box ran out. Report how far we got and let
                 // the caller decide — a partial decoy queue still tests SOME depth, and
                 // pretending otherwise would discard a real measurement.
@@ -9218,7 +9158,7 @@ impl HostRmBackend {
             .map_err(|e| ("alloc_sysmem(src) — NV01_MEMORY_SYSTEM", e))?
             .raw() as u32;
         #[allow(clippy::cast_possible_truncation)]
-        let dst = match self.alloc_mappable_sysmem(BYTES) {
+        let dst = match self.alloc_sysmem(BYTES) {
             Ok(h) => h.raw() as u32,
             Err(e) => {
                 let _ = self.free(self.stamp(src));
@@ -9226,7 +9166,7 @@ impl HostRmBackend {
                     let _ = self.unmap_dma_both(range, va);
                     let _ = self.free(self.stamp(h));
                 }
-                return Err(("alloc_mappable_sysmem(dst)", e));
+                return Err(("alloc_sysmem(dst)", e));
             }
         };
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
@@ -9240,14 +9180,20 @@ impl HostRmBackend {
                 .map_err(|e| ("map_dma_both(dst)", e))?;
             cleanup[1].1 = Some(dst_va);
 
+            // ⊘⊘ `map_cpu_on(MapNode::Ctl, …)`, NOT `map_cpu`. `[measured w417]` a plain
+            // `map_cpu` on these handles answers `Other(31)`
+            // (`NV_ERR_INVALID_ARGUMENT`): it maps through the **gpu** node, and an
+            // `NV01_MEMORY_SYSTEM` object is mapped through the **ctl** node. That is what
+            // `MapNode::for_notifier(NotifierAperture::Sysmem)` already resolves to, and
+            // what `zero_notifier` / `read_error_notifier` have always used.
             let (src_node, src_map) = self
                 .conn
-                .map_cpu(src, BYTES, CachePolicy::WriteCombining)
-                .map_err(|e| ("map_cpu(src)", e))?;
+                .map_cpu_on(MapNode::Ctl, src, BYTES, CachePolicy::WriteBack)
+                .map_err(|e| ("map_cpu_on(Ctl, src)", e))?;
             let (dst_node, dst_map) = self
                 .conn
-                .map_cpu(dst, BYTES, CachePolicy::WriteCombining)
-                .map_err(|e| ("map_cpu(dst)", e))?;
+                .map_cpu_on(MapNode::Ctl, dst, BYTES, CachePolicy::WriteBack)
+                .map_err(|e| ("map_cpu_on(Ctl, dst)", e))?;
             for i in 0..WORDS {
                 src_map
                     .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
@@ -9279,8 +9225,8 @@ impl HostRmBackend {
 
             let (node, second) = self
                 .conn
-                .map_cpu(dst, BYTES, CachePolicy::WriteCombining)
-                .map_err(|e| ("map_cpu(dst) readback", e))?;
+                .map_cpu_on(MapNode::Ctl, dst, BYTES, CachePolicy::WriteBack)
+                .map_err(|e| ("map_cpu_on(Ctl, dst) readback", e))?;
             let after = second
                 .load_u32(HostOffset::new(0))
                 .map_err(|e| ("cpu store/load", region_error(&e)))?;
