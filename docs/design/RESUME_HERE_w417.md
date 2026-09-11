@@ -208,6 +208,28 @@ each looked like a product finding until a control ran. ⇒ Never report a rung'
 Three dimensions, movable one at a time. `scripts/bench/w418_r34_boot.sh` runs depth, address
 and H2D sweeps in the guest; bare metal is the control for every arm.
 
-⊘ **Still open:** the guest arms of the address and H2D sweeps. Bare metal is green for
-address (sysmem) and for RM-placed H2D; the aligned high-VA H2D bare-metal arm has NOT been
-re-run since the alignment fix.
+## ★★★ BARE METAL IS GREEN ON ALL THREE DIMENSIONS
+
+`[measured w421, BARE METAL]`, destination aligned to its own page size:
+
+    RM-placed        src 0x120000000     dst 0x120010000     (P)
+    0x7cac33600000   src 0x7cac33600000  dst 0x7cac33610000  (P)   <- the LLM's faulting VA
+    0x768327600000   src 0x768327600000  dst 0x768327610000  (P)
+    0x7f0000000000   src 0x7f0000000000  dst 0x7f0000010000  (P)
+
+⇒ Confirms w420's page-size reading and kills the VA-range one: the identical arms that failed
+at a 4 KiB offset all pass at 64 KiB. Green on **scale** (0 and 2000 decoys), **address** (six
+VAs including the LLM's own) and **aperture** (sysmem and device-local destinations).
+
+⇒ **Every bare-metal half of `BARE-METAL PASS + GUEST FAIL ⇒ KAYFABE BUG` now exists.** The
+guest arms are the entire remaining question.
+
+## ⊘ Still open, and how to read it
+
+The guest's address sweep passed `rm`, `0x120000000`, `0x400000000` and produced **no verdict**
+for the three high addresses. ⚠ Do NOT read that as *"high addresses fail in the guest"*:
+- The hook piped each arm into `grep -oE` and kept only matches, so the three blank arms'
+  output was **discarded**. Fixed — it now captures raw first and prints the tail.
+- That boot logged **0 host Xid lines**, `covered_pct=100.0000%`, no guest panic, and a clean
+  `reboot: Power down`. Nothing faulted and nothing crashed.
+⇒ `(E)` means UNMEASURED. Re-run with the fixed hook before drawing anything from it.
