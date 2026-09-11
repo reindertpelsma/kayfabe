@@ -443,6 +443,13 @@ pub fn census() -> String {
             )
         }
     }
+        // ★★★★★ **w471 — the vCPU-blocking census rides the SAME line.** It is the other
+        // half of `inline_exceptions`: that counts host verbs minted without an honest
+        // off-trap claim, this names every door to a BLOCKING operation a vCPU reached at
+        // all. ⊘ Emitted unconditionally, including its explicit empty arm — a census that
+        // prints nothing when it found nothing is indistinguishable from one that never ran.
+        + " | "
+        + &crate::lockwitness::vcpu_blocking_census()
 }
 
 /// ★★★ **The RAII marker installed at every guest-trap entry.**

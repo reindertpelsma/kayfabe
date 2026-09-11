@@ -1363,6 +1363,14 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     let Some(regs) = borrow_regs(handle) else {
         return;
     };
+    // w471 — the read path crosses on the same thread; mark it too, or a blocking door
+    // reached from a READ would be invisible to the census that exists to find them.
+    kayfabe_util::lockwitness::mark_vcpu_thread();
+    // ★★★★★ **w471 — DECLARE THIS THREAD A vCPU, at the same outermost boundary.**
+    // `assert_lock_free` — which every door to a potentially-blocking operation already
+    // calls — asks this, so the owner's first invariant is enforced by the mechanism that
+    // already enforces its twin instead of by stack sampling. Idempotent and thread-local.
+    kayfabe_util::lockwitness::mark_vcpu_thread();
     // ★★★★★ **w323 — THE TRAP MARK, AT THE ONE PLACE THE GUEST CROSSES INTO US.**
     //
     // Every guest MMIO write arrives here with the QEMU BQL held, so everything beneath

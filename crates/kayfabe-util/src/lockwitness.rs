@@ -132,6 +132,110 @@ pub fn acquisitions(rank: u8) -> u64 {
     ACQUIRED.with(Cell::get)[rank as usize]
 }
 
+/// ★★★★★ **w471 — THE vCPU ROLE, AND WHY IT LIVES ON THE SAME DOOR AS R1.**
+///
+/// R1 ("no blocking call under any lock") and the owner's first invariant ("no blocking
+/// call on a vCPU thread") are two halves of one rule, and this tree enforced only the
+/// first. ⇒ `SharedDevice::materialize_pending` was moved OUT from under the plane's rank-0
+/// lock and drained at the tail of `Regs::write` instead — which satisfies `assert_lock_free`
+/// completely and still forks a process and blocks in `recv()` **on the vCPU**
+/// (`[measured w470]`, `worst_trap=1.62 s`). The assert was green the whole time.
+///
+/// ⊘ The defect this fixes is not the spawn. It is that **finding a blocking call on a vCPU
+/// required sampling stacks at 10 Hz and getting lucky**, four separate times in one session,
+/// each time on a different call. Every door to a potentially-blocking operation already
+/// calls [`assert_lock_free`]; asking the vCPU question at that same door makes the whole
+/// class report itself in one boot, by name, instead of being discovered one at a time.
+///
+/// ⚠ **Census by default, fatal only when armed.** Flipping straight to a panic would abort
+/// the boot on the first known-bad door and hide every other one — the census has to come
+/// first, or the list is one entry long by construction. `KAYFABE_VCPU_BLOCK_FATAL=1` makes
+/// it a panic once the list is empty.
+mod vcpu {
+    use core::cell::Cell;
+    use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
+    thread_local! {
+        static IS_VCPU: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// 32 slots, keyed by the `&'static str`'s pointer, exactly like the trap witness's
+    /// inline-reason table: lock-free, and safe to touch from a trap.
+    const SLOTS: usize = 32;
+    static KEY: [AtomicUsize; SLOTS] = [const { AtomicUsize::new(0) }; SLOTS];
+    static HITS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    static TEXT: [std::sync::OnceLock<&'static str>; SLOTS] =
+        [const { std::sync::OnceLock::new() }; SLOTS];
+    static OVERFLOW: AtomicU64 = AtomicU64::new(0);
+    static TOTAL: AtomicU64 = AtomicU64::new(0);
+
+    /// Declare the calling thread a vCPU. Idempotent; called at the MMIO trap entry.
+    pub fn mark() {
+        IS_VCPU.with(|c| c.set(true));
+    }
+
+    #[must_use]
+    pub fn is_vcpu() -> bool {
+        IS_VCPU.with(Cell::get)
+    }
+
+    /// Record one blocking door reached on a vCPU thread. Returns the running total.
+    pub fn note(what: &'static str) -> u64 {
+        let ptr = what.as_ptr() as usize;
+        let mut placed = false;
+        for i in 0..SLOTS {
+            let cur = KEY[i].load(Ordering::Relaxed);
+            if cur == ptr
+                || (cur == 0
+                    && KEY[i]
+                        .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
+                        .is_ok())
+            {
+                let _ = TEXT[i].set(what);
+                HITS[i].fetch_add(1, Ordering::Relaxed);
+                placed = true;
+                break;
+            }
+        }
+        if !placed {
+            OVERFLOW.fetch_add(1, Ordering::Relaxed);
+        }
+        TOTAL.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// One line naming every blocking door a vCPU reached, most-hit first. ⊘ Says so
+    /// explicitly when the list is EMPTY, because "no line printed" and "nothing happened"
+    /// must not read the same.
+    #[must_use]
+    pub fn census() -> String {
+        let mut rows: Vec<(u64, &'static str)> = (0..SLOTS)
+            .filter_map(|i| {
+                let h = HITS[i].load(Ordering::Relaxed);
+                let t = *TEXT[i].get()?;
+                (h > 0).then_some((h, t))
+            })
+            .collect();
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        let total = TOTAL.load(Ordering::Relaxed);
+        if rows.is_empty() {
+            return "VCPU-BLOCKING none — no blocking door was reached on a vCPU thread \
+                    (the owner's first invariant holds by measurement, not by assumption)"
+                .to_string();
+        }
+        let mut out = format!("VCPU-BLOCKING total={total} doors={}", rows.len());
+        for (h, t) in rows {
+            out.push_str(&format!(" [{h} × {t}]"));
+        }
+        let of = OVERFLOW.load(Ordering::Relaxed);
+        if of > 0 {
+            out.push_str(&format!(" (+{of} unnamed, table full)"));
+        }
+        out
+    }
+}
+
+pub use vcpu::{census as vcpu_blocking_census, is_vcpu as on_vcpu_thread, mark as mark_vcpu_thread};
+
 /// ★ **The R1 assert.** Panics — naming R1 — unless this thread holds zero **ranked**
 /// locks.
 ///
@@ -148,6 +252,7 @@ pub fn acquisitions(rank: u8) -> u64 {
 /// # Panics
 /// If any rank bit is set for the current thread.
 pub fn assert_lock_free(what: &str) {
+    assert_not_on_vcpu(what);
     let mask = held_mask();
     assert!(
         mask == 0,
@@ -175,6 +280,7 @@ pub fn assert_lock_free(what: &str) {
 /// # Panics
 /// If this thread holds any rank outside `permitted`.
 pub fn assert_only_ranks(what: &str, permitted: u8) {
+    assert_not_on_vcpu(what);
     let held = held_mask();
     let undeclared = held & !permitted;
     assert!(
@@ -188,6 +294,47 @@ pub fn assert_only_ranks(what: &str, permitted: u8) {
         declared = held_ranks(permitted),
         held_r = held_ranks(held),
     );
+}
+
+/// ★★★★★ **w471 — the owner's FIRST invariant, asserted at the same door as R1.**
+///
+/// ⚠ `what` is `&str`, not `&'static str`, because that is what the two public doors take.
+/// The census keys on a `&'static str`, so a non-static name is folded into one bucket
+/// rather than dropped — a door reached with a dynamic name still COUNTS, it just does not
+/// get its own row. ⊘ Counted rather than skipped: a census that silently ignores the
+/// awkward cases reads as clean exactly where it is blind.
+fn assert_not_on_vcpu(what: &str) {
+    if !vcpu::is_vcpu() {
+        return;
+    }
+    // ⊘ Leak-free static naming: the overwhelmingly common case is a literal, and the
+    // fallback bucket keeps a dynamic name visible without allocating per call.
+    let key: &'static str = match what {
+        "spawn a host isolate" => "spawn a host isolate",
+        other => {
+            if other.is_empty() {
+                "(unnamed blocking door)"
+            } else {
+                "(dynamically-named blocking door — see the boot log)"
+            }
+        }
+    };
+    let n = vcpu::note(key);
+    static FATAL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let fatal = *FATAL.get_or_init(|| std::env::var("KAYFABE_VCPU_BLOCK_FATAL").is_ok());
+    assert!(
+        !fatal,
+        "R0 no-blocking-on-vCPU violation: `{what}` was reached on a vCPU thread. A vCPU \
+         MMIO trap may only classify, update O(1) shadow state, enqueue and wake — the work \
+         belongs on a worker, and the guest blocks on ITS OWN wait primitive."
+    );
+    // Census mode: say it once per door, then only count.
+    if n <= 64 {
+        eprintln!(
+            "kayfabe: ⊘ VCPU-BLOCKING `{what}` on a vCPU thread (#{n}) — this trap cannot \
+             be microseconds; the work belongs on a worker"
+        );
+    }
 }
 
 #[cfg(test)]
