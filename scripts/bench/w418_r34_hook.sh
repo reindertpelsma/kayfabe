@@ -120,6 +120,41 @@ done
 
 echo "R34_GUEST_VERDICTS =$verdicts"
 
+# ★★★★★ w422 — THE OPEN ORDINAL, WHICH CONFOUNDS EVERY OTHER SWEEP IN THIS HOOK.
+#
+# `[measured w422, in the guest]` the address sweep read as *"the three HIGH addresses fail"*.
+# They do not. With the raw output kept, all three say the same thing and it is not about an
+# address at all:
+#
+#     FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: 5 }
+#
+# EIO on opening the device node — the rung never reached a map. Count the processes: depth 0
+# is the 1st open, then `rm`, `0x120000000`, `0x400000000`, and the arm that "failed" is the
+# **5th**. That is the ledger's own [[the_harness_stopped_where_the_bug_starts]]: *"the 5th
+# DEVICE-OPEN wedges the GPU"*.
+#
+# ⚠ **Every arm of this hook is a fresh process, so every arm is a device open.** Any sweep
+# longer than four arms measures the wedge and attributes it to whatever the 5th arm varied.
+# This block runs ONE fixed configuration N times so the ordinal is the only variable, and it
+# is printed FIRST so later sweeps can be read knowing where the wall is.
+ORDINALS=${R34_ORDINALS:-7}
+echo "--- ★★★★★ OPEN-ORDINAL PROBE (one fixed config, repeated; the ONLY variable is the Nth open) ---"
+ord_first_fail=""
+for i in $(seq 1 "$ORDINALS"); do
+  printf "  open #%-2s " "$i"
+  oraw=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 2>&1")
+  ov=$(printf '%s' "$oraw" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
+  if [ -z "$ov" ]; then
+    line=$(printf '%s' "$oraw" | grep -oE 'R1 openat[^}]*}|FAIL[^|]{0,90}' | tail -1)
+    echo "(E) ${line:-no output}" | cut -c1-170
+    [ -z "$ord_first_fail" ] && ord_first_fail="$i"
+  else
+    echo "${ov#R34_OUTCOME=}"
+  fi
+done
+echo "R34_OPEN_ORDINAL_FIRST_FAIL =${ord_first_fail:-none-in-$ORDINALS}"
+# ⊘ `none-in-N` is not "there is no wedge" — it is "not within N opens". Say which.
+
 echo "--- ★★★★★ ADDRESS SWEEP (decoys=0 on every arm; `rm` = RM-placed control) ---"
 at_verdicts=""
 for a in $ATS; do
