@@ -118,7 +118,7 @@ fi
 echo "W384_GUEST_ARGS=$ARGS"
 
 echo "=== run it x$RUNS, under its OWN deadline, with a START marker and an RC terminator ==="
-$G "echo STARTED \$(date -Is) > /tmp/w384.started; : > $OUT; for i in \$(seq 1 $RUNS); do echo \"--- guest run \$i/$RUNS ---\" >> $OUT; timeout $TMO sudo /tmp/kayfabe-rm-ladder $ARGS >> $OUT 2>&1; echo W384_RC=\$? >> $OUT; done"
+$G "echo STARTED \$(date -Is) > /tmp/w384.started; : > $OUT; for i in \$(seq 1 $RUNS); do echo \"--- guest run \$i/$RUNS ---\" >> $OUT; sudo timeout $TMO /tmp/kayfabe-rm-ladder $ARGS >> $OUT 2>&1; echo W384_RC=\$? >> $OUT; done"
 LOCAL=/tmp/w384guest_${TAG}.out
 $G "cat $OUT" > "$LOCAL" 2>/dev/null
 echo "--- the rung's own output, verbatim ---"
@@ -183,7 +183,7 @@ echo "=== ★★★★★ THE WRAP BISECTION — same boot, two extra invocation
 #   does not own.
 for N in $BISECT; do
   echo "--- wrap bisection n=$N reps=1 entries=${ENTRIES:-default} ---"
-  $G "timeout 120 sudo env ${ENTRIES:+KAYFABE_LADDER_GPFIFO_ENTRIES=$ENTRIES} /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency=|LADDER_GPFIFO_ENTRIES'" | sed 's/^/    /'
+  $G "sudo timeout 120 env ${ENTRIES:+KAYFABE_LADDER_GPFIFO_ENTRIES=$ENTRIES} /tmp/kayfabe-rm-ladder --doorbell-latency --doorbell-latency-n $N --doorbell-latency-reps 1 ${FLOOR:+--doorbell-latency-native-us $FLOOR} 2>&1 | grep -aE '^DBL_DIST|^DBL_DRAIN|^DBL_STALL|^DBL_RATIO_X|R6 control|^RUNG_doorbell_latency=|^RUNGCTL_doorbell_latency=|LADDER_GPFIFO_ENTRIES'" | sed 's/^/    /'
 done
 
 echo ""
@@ -201,7 +201,7 @@ if [ "$WANT_MP" != "1" ]; then
   echo "    ⊘ SKIPPED by KAYFABE_W384_MISSING_PAGE=0 — the device-open budget was spent above."
   echo "    ⊘ This is a SKIP, not a pass and not a failure."
 else
-$G "timeout 180 sudo /tmp/kayfabe-rm-ladder --missing-page-fault --probe-launch-dma > $MPOUT 2>&1; echo W384_MP_RC=\$? >> $MPOUT"
+$G "sudo timeout 180 /tmp/kayfabe-rm-ladder --missing-page-fault --probe-launch-dma > $MPOUT 2>&1; echo W384_MP_RC=\$? >> $MPOUT"
 $G "grep -aE 'R3 notifier|R3 NAMED|R3 SILENT|R3 CONTAINED|R3 NOT CONTAINED|^RUNG_missing_page=|^RUNGCTL_missing_page=|^W384_MP_RC=' $MPOUT" | sed 's/^/    /'
 fi
 

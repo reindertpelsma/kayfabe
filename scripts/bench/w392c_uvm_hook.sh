@@ -76,7 +76,7 @@ echo "--- guest preconditions (a missing node is NOT a UVM result) ---"
 $G 'ls -la /dev/nvidia-uvm 2>&1; lsmod | grep -c nvidia_uvm' 2>&1 | sed 's/^/    /'
 
 echo "--- rmladder --uvm-invalidate (in guest) ---"
-OUT=$($G "echo W392C_GUEST_STARTED=\$(date -u +%FT%TZ); timeout $TMO sudo /tmp/rmladder --gpu 0 --uvm-invalidate 2>&1; echo W392C_GUEST_RC=\$?" 2>&1 | tr -d '\r')
+OUT=$($G "echo W392C_GUEST_STARTED=\$(date -u +%FT%TZ); sudo timeout $TMO /tmp/rmladder --gpu 0 --uvm-invalidate 2>&1; echo W392C_GUEST_RC=\$?" 2>&1 | tr -d '\r')
 echo "$OUT" | sed 's/^/    /'
 
 pick() { echo "$OUT" | sed -n "s/.*W392C $1 *= *//p" | tail -1; }

@@ -86,7 +86,7 @@ $G "cat > /tmp/kayfabe-rm-ladder && chmod +x /tmp/kayfabe-rm-ladder" < "$BIN" ||
 $G 'echo "GUEST_MD5=$(md5sum < /tmp/kayfabe-rm-ladder | cut -d" " -f1)"'
 
 echo "=== run it, under its OWN deadline, with a START marker and an RC terminator ==="
-$G "echo STARTED \$(date -Is) > /tmp/w381.started; timeout $TMO sudo /tmp/kayfabe-rm-ladder $ARGS > $OUT 2>&1; echo W381_RC=\$? >> $OUT"
+$G "echo STARTED \$(date -Is) > /tmp/w381.started; sudo timeout $TMO /tmp/kayfabe-rm-ladder $ARGS > $OUT 2>&1; echo W381_RC=\$? >> $OUT"
 echo "--- the battery's own output, verbatim ---"
 $G "cat $OUT"
 echo "--- end of the battery's output ---"

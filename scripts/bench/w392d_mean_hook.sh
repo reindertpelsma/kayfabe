@@ -90,7 +90,7 @@ echo "--- rmladder --uvm-mean (FULL: threads/rounds above) --mean-falsify (in gu
 MEAN_THREADS=${MEAN_THREADS:-8}
 MEAN_ROUNDS=${MEAN_ROUNDS:-8}
 echo "    W392D_MEAN_CONFIG=threads:$MEAN_THREADS rounds:$MEAN_ROUNDS falsify:on (⊘ client defaults are 4/4)"
-OUT=$($G "echo W392D_GUEST_STARTED=\$(date -u +%FT%TZ); timeout $TMO sudo /tmp/rmladder --gpu 0 --uvm-mean --mean-threads $MEAN_THREADS --mean-rounds $MEAN_ROUNDS --mean-falsify 2>&1; echo W392D_GUEST_RC=\$?" 2>&1 | tr -d '\r')
+OUT=$($G "echo W392D_GUEST_STARTED=\$(date -u +%FT%TZ); sudo timeout $TMO /tmp/rmladder --gpu 0 --uvm-mean --mean-threads $MEAN_THREADS --mean-rounds $MEAN_ROUNDS --mean-falsify 2>&1; echo W392D_GUEST_RC=\$?" 2>&1 | tr -d '\r')
 echo "$OUT" | sed 's/^/    /'
 
 pick() { echo "$OUT" | sed -n "s/.*W392D $1 *= *//p" | tail -1; }

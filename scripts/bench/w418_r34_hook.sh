@@ -78,7 +78,16 @@ $G 'chmod +x /tmp/rmladder' >/dev/null 2>&1
 verdicts=""
 for d in $DEPTHS; do
   echo "--- depth $d ---"
-  out=$($G "timeout $TMO sudo /tmp/rmladder --gpu 0 --guest-ram-decoys $d 2>&1" | grep -E 'R34' || true)
+  # ⊘⊘ `sudo timeout`, NOT `timeout sudo`. `[measured w419]` depth 13000 ran ~370 s past
+  # `R34_TIMEOUT=300` and the hook hung with it. `timeout` signals the process it STARTED —
+  # `sudo` — and sudo does not forward the signal to its child by default. So the timeout
+  # kills the wrapper, the real work keeps running as root, and the ssh session blocks
+  # forever on a pipe that will not close. Putting `timeout` INSIDE the privilege change
+  # makes it the parent of the thing it is supposed to bound.
+  #
+  # ⚠ The symptom was maximally misleading: `pgrep -a` showed `[rmladder]` in brackets, which
+  # reads as a kernel thread or a zombie, and the boot looked wedged rather than waiting.
+  out=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys $d 2>&1" | grep -E 'R34' || true)
   echo "$out" | sed 's/^/  /' | cut -c1-200
   v=$(echo "$out" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
   [ -z "$v" ] && v="R34_OUTCOME=(E)"
