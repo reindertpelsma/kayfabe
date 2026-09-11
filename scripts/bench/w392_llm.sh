@@ -71,6 +71,28 @@ XID_BEFORE=$(xids); echo "HOST_XID_BEFORE=$XID_BEFORE"
 # ⊘ Runs BEFORE the model load so it cannot be contaminated by a poisoned context, and its
 #   own Xid delta is read separately so "it failed AND faulted" is distinguishable from
 #   "it failed cleanly".
+# ★★★★★ w424 — THE OPEN ORDINAL, and why this discriminator can now COST the thing it is
+# diagnosing.
+#
+# `[measured w423/w424]` the guest's device node stops opening after a small number of
+# processes: opens #1-#3 succeed and **#4 fails with EIO, permanently**, because RM's own
+# CeUtils scrubber channel cannot initialise its copy engine on that adapter init
+# (`ce_utils.c:304`). ⊘ Every python process below is a device open. This 4x4 run is one, the
+# GPU run is the next, and the provisioning that precedes us has already spent some.
+#
+# ⇒ `LLM_SKIP_4X4=1` moves the GPU run one open earlier. If the GPU arm gets further with the
+# discriminator skipped, then the discriminator was consuming the budget that the workload
+# needed — a diagnostic that causes the failure it is there to characterise.
+#
+# ⚠ Skipping it is NOT free: `MINMM_SUM` is what separates *"the arithmetic path is wrong"*
+# from *"the small path is right and something else is"*. The grader already reports
+# `MINMM_SUM=ABSENT`, and an absent discriminator must be read as UNMEASURED, never as a pass.
+if [ "${LLM_SKIP_4X4:-0}" = "1" ]; then
+  echo "--- 4x4 scale discriminator ⊘ SKIPPED (LLM_SKIP_4X4=1) — one fewer device open before the GPU run ---"
+  echo "    ⊘ MINMM_SUM will read ABSENT below. That is UNMEASURED, not 64 and not a pass."
+  MIN=""
+  XID_AFTER_MIN=$(xids); echo "HOST_XID_AFTER_MINMM=$XID_AFTER_MIN (no 4x4 was run)"
+else
 echo "--- 4x4 scale discriminator (before any weight transfer) ---"
 MIN=$($G "timeout 300 $PY - <<'PYEOF' 2>&1
 import torch
@@ -85,6 +107,7 @@ PYEOF" 2>&1 | tr -d '\r')
 echo "$MIN" | sed 's/^/    /'
 MINSUM=$(echo "$MIN" | sed -n 's/^MINMM_SUM=//p' | tail -1)
 XID_AFTER_MIN=$(xids); echo "HOST_XID_AFTER_MINMM=$XID_AFTER_MIN"
+fi
 
 # ---- 1. THE WORKLOAD ON THE GPU (this is the thing under test) -------------------------
 echo "--- GPU run ---"
