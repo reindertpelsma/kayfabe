@@ -25,6 +25,10 @@ FAIL=0; WRONG=0
 ok(){ printf '  ✔ %s\n' "$*"; }
 bad(){ printf '  ✘ HOST FAULT: %s\n' "$*"; FAIL=1; }
 wrong(){ printf '  ⊘ WRONG BOX: %s\n' "$*"; WRONG=1; }
+# ⊘ A WARNING is neither a fault nor a wrong box: it is a fact the reader needs and the
+# verdict does not change. The suite had no such level, so anything worth saying had to be
+# promoted to a failure or dropped — and 'dropped' is how a 13 kB/s mirror passed.
+warn(){ printf '  ⚠ %s\n' "$*"; }
 
 echo "=== kayfabe host preflight $(date -Is) on $(hostname) ==="
 
@@ -70,6 +74,28 @@ CORES=$(nproc)
 
 # 5. Network egress. A host that cannot fetch cannot be provisioned, and the failure
 #    otherwise appears much later as a mysteriously missing dependency.
+# ★★★★★ **MEASURE THE APT MIRROR, NOT JUST REACHABILITY.**
+#
+# `[measured w439, vast 50585481]` this box passed every check below, and then
+# `apt-get install build-essential …` ran **44 minutes and installed nothing**: its
+# `archive.ubuntu.com` served **13 344 B/s** while GitHub on the same box served
+# **1 434 152 B/s**. Not an egress problem — one slow mirror.
+#
+# ⊘ A reachability check cannot tell a usable mirror from one that will never finish, and this
+# is the preflight whose entire job is *"destroy it rather than provision it"*. Any check that
+# passes an unprovisionable box has failed at that job.
+#
+# ⚠ A WARNING, not a fault: `provision_box.sh` races mirrors and switches, so a slow default is
+# survivable. It is reported so a human reading the log knows why provisioning took a while.
+APT_SPEED=$(timeout 15 curl -s -o /dev/null -w "%{speed_download}" \
+            http://archive.ubuntu.com/ubuntu/dists/jammy/Release 2>/dev/null || echo 0)
+APT_SPEED=${APT_SPEED%%.*}
+if [ "${APT_SPEED:-0}" -ge 200000 ]; then
+  ok "apt mirror ${APT_SPEED} B/s"
+else
+  warn "apt mirror only ${APT_SPEED:-0} B/s — provision_box.sh will switch mirrors; if it \
+cannot find one over 200 kB/s this box is not provisionable"
+fi
 if timeout 25 curl -fsSL -o /dev/null https://github.com 2>/dev/null; then ok "https egress works"
 else bad "cannot reach github over https"; fi
 

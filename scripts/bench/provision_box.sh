@@ -17,6 +17,46 @@ echo "PROVISION_START $(date -Is)"
 
 export DEBIAN_FRONTEND=noninteractive
 
+# ★★★★★ **PICK A MIRROR THAT CAN ACTUALLY SERVE US, AND MEASURE RATHER THAN ASSUME.**
+#
+# `[measured w439, vast 50585481]` the box's default `archive.ubuntu.com` served
+# **13 344 B/s** while GitHub on the SAME box served **1 434 152 B/s** — a 107x gap, and not a
+# general egress problem. `apt-get install build-essential …` ran for **44 minutes** and had
+# installed nothing; `/opt/qemu-src`, `~/.cargo` and `/workspace/bench` did not exist.
+#
+# ⊘ The host preflight passed that box: it checks that https egress WORKS, not how fast. A
+# reachability check cannot distinguish a usable mirror from one that will never finish.
+#
+# ⚠ Do not hardcode a favourite. Mirror speed is a property of where the box IS, and this
+# session measured `azure.archive.ubuntu.com` at 2.5 MB/s and `mirror.enzu.com` at 295 kB/s
+# from one machine. Race a few and take the winner; keep the default in the list so a box
+# where it is genuinely fastest is unaffected.
+pick_apt_mirror() {
+  local best="" best_speed=0 m speed
+  for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu \
+           mirrors.edge.kernel.org/ubuntu; do
+    speed=$(timeout 12 curl -s -o /dev/null -w "%{speed_download}" \
+            "http://$m/dists/jammy/Release" 2>/dev/null || echo 0)
+    speed=${speed%%.*}
+    echo "   mirror $m -> ${speed:-0} B/s"
+    if [ "${speed:-0}" -gt "$best_speed" ]; then best_speed=$speed; best=$m; fi
+  done
+  # ⊘ A floor, not a preference: below this, provisioning does not finish in any timeout we
+  # would sanely set, and the honest move is to say so rather than run for an hour.
+  if [ "$best_speed" -lt 200000 ]; then
+    echo "⊘⊘ NO USABLE APT MIRROR — fastest was $best at ${best_speed} B/s (< 200 kB/s)."
+    echo "   Provisioning this box will not finish. Destroy it and rent another."
+    return 1
+  fi
+  if [ "$best" != "archive.ubuntu.com/ubuntu" ]; then
+    echo "== switching apt to $best (${best_speed} B/s)"
+    sed -i "s|http://archive.ubuntu.com/ubuntu|http://$best|g" /etc/apt/sources.list
+    sed -i "s|http://archive.ubuntu.com/ubuntu|http://$best|g" \
+        /etc/apt/sources.list.d/*.list 2>/dev/null || true
+  fi
+}
+pick_apt_mirror || exit 1
+
 # ★★★★ DO THIS FIRST, BEFORE ANYTHING ELSE, AND UNDERSTAND WHY IT IS USUALLY TOO LATE.
 # A freshly rented box starts `unattended-upgrade` AT BOOT. By the time you can ssh in, it
 # is already running -- so masking the timers (below) prevents the NEXT run and does nothing
