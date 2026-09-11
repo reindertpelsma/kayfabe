@@ -9204,11 +9204,23 @@ impl HostRmBackend {
                 .map_dma_both(range, src, BYTES, at)
                 .map_err(|e| ("map_dma_both(src) — the GUEST-RAM operand's GPU VA", e))?;
             cleanup[0].1 = Some(src_va);
-            // ⊘ One page above the source when a placement is dictated, so the pair stays
-            // inside the same page-directory subtree — the thing under test is the ADDRESS
-            // RANGE, and scattering the two operands would change a second variable.
+            // ⊘⊘ **THE OFFSET FOLLOWS THE DESTINATION'S PAGE SIZE, and getting it wrong
+            // reads as a VA-RANGE LIMIT.** `[measured w420, BARE METAL]` this offset was a
+            // flat `+BYTES` (4 KiB) and the vidmem arm failed
+            // `refused at map_dma_both(dst) by name: NoMemory` at `0x7cac33600000` and
+            // `0x768327600000`, while the SYSMEM destination passed at the same addresses.
+            // The tempting reading — *"device memory cannot be mapped high"* — is not what
+            // was measured: device-local memory on this part is **64 KiB big-page**
+            // granular, which is why RM's own placement put the vidmem destination at
+            // `0x120010000` (+64 KiB) and the sysmem one at `0x120001000` (+4 KiB). A
+            // 4 KiB-aligned VA cannot host a 64 KiB-page mapping.
+            //
+            // ⚠ The rung was asking an impossible question and reporting the answer as a
+            // property of the address. Same class as R34's first two defects: the refusal was
+            // real, correct, and about the probe.
+            let dst_step = if dst_vidmem { 0x1_0000 } else { BYTES };
             let dst_va = self
-                .map_dma_both(range, dst, BYTES, at.map(|a| a + BYTES))
+                .map_dma_both(range, dst, BYTES, at.map(|a| a + dst_step))
                 .map_err(|e| ("map_dma_both(dst)", e))?;
             cleanup[1].1 = Some(dst_va);
 
