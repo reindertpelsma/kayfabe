@@ -117,3 +117,22 @@ echo "[vcpu]   $(grep -ao 'worst_trap[_a-z]*=[0-9]*' "$Q" 2>/dev/null | tail -1)
 echo "[barrier] $(grep -ao 'MEMOP-REFRESH[^|]\{0,110\}' "$Q" 2>/dev/null | tail -1)"
 echo "[barrier] refresh passes: $(grep -aoc 'MEMOP-REFRESH proc=' "$Q" 2>/dev/null)   ⊘ NO-SEAM lines: $(grep -aoc 'NO SEAM INSTALLED' "$Q" 2>/dev/null)"
 echo "[barrier] $(grep -ao 'MEMOP-CENSUS[^|]\{0,90\}' "$Q" 2>/dev/null | tail -1)"
+
+# ★★★★★ w443 — **THE FOURTH TRANSPORT QUESTION, MADE ANSWERABLE.**
+#
+# Owner: *"but weren't there also map calls that came from pte updates?"* — yes, and the
+# recorded answer is a ZERO that this tree has already flagged as untrustworthy.
+# `kayfabe-device/src/mmuinval.rs` §1 says it in its own words:
+#
+#   `INVALIDATE_TLB` fn=200 = 0 · `MEM_OP` method = 0 · `DMA_FILL_PTE_MEM` = 0
+#   "Every one of those numbers is correct. They are also a complete enumeration of the two
+#    transports somebody thought to instrument, and RM's actual transport on GA106 is neither."
+#
+# ⇒ **A zero from an incomplete list reads identical to a zero from a complete one.** So do not
+# rest on it: print what this boot actually served, and let the number be attributable.
+echo "--- ★ PTE/PDE-CARRYING CONTROLS (is there a FOURTH entry point we never consumed?) ---"
+echo "[pte]    DMA/PDE/PTE controls served: $(grep -aoiE 'DMA_(FILL_PTE_MEM|UPDATE_PDE_2)|FILL_PTE|UPDATE_PDE' "$Q" 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+echo "[pte]    UpdateBarPde RPCs: $(grep -aoc 'UPDATE_PDE_BAR\|UpdateBarPde' "$Q" 2>/dev/null) ⊘ that is BAR2's own aperture root, NOT a guest mapping — a different fact"
+echo "[pte]    unserviced controls: $(grep -ao 'UNSERVICED[^|]\{0,60\}' "$Q" 2>/dev/null | tail -1)"
+echo "[pte]    ⊘ ZERO here is only trustworthy WITH the served-control census beside it: an"
+echo "[pte]      absent transport and an uninstrumented one print the same 0."
