@@ -233,3 +233,66 @@ for the three high addresses. ⚠ Do NOT read that as *"high addresses fail in t
 - That boot logged **0 host Xid lines**, `covered_pct=100.0000%`, no guest panic, and a clean
   `reboot: Power down`. Nothing faulted and nothing crashed.
 ⇒ `(E)` means UNMEASURED. Re-run with the fixed hook before drawing anything from it.
+
+---
+
+# w424–w426 — THE WALL IS A RACE AT SYNCHRONIZATION POINT (2)
+
+## ★★★ The measurement that reframes everything
+
+`[measured w425llm]`, joining our log to `dmesg -T` through the `at=` stamp:
+
+    pin of the faulting range   at=1789096791   asked=1331 pinned=1331   in 383 ms
+    CE2 HUBCLIENT_CE0 Xid       1789096791      FAULT_PDE ACCESS_TYPE_VIRT_WRITE @ 0x73c8_cf600000
+
+**Same second**, with the pin consuming 383 ms of it. `last_pinned_va=0x73c8cfb32000` covers
+the declared range `0x73c8cf600000+0x533000` exactly; every row says `placed_as_asked=true`.
+
+⇒ **The engine ran while the pin was in flight.** *"We never back it"* is dead. ⊘ One-second
+granularity cannot order two events inside one second — this establishes concurrency, not
+which came first.
+
+## ⊘ Three readings killed, each with its own control
+
+- **The device-open wedge is not the LLM's blocker.** `LLM_SKIP_4X4=1` moved the GPU run one
+  open earlier; it ran and produced the Xid itself (`XIDS=150/150/151`).
+- **Not the address.** R34 passes on bare metal at the LLM's exact faulting VA.
+- **Not the aperture.** R34 passes with a device-memory destination too, once the destination
+  is aligned to its own 64 KiB page size.
+
+## ★★★★★ THE SEPARATE, CHEAPER BUG: the guest wedges on the 4th device open
+
+`[measured w423/w424]` opens #1–#3 pass, **#4 fails EIO, permanently**. The guest's own dmesg,
+captured at the first failure:
+
+    NVRM: Assertion failed: status == NV_OK @ ce_utils.c:304
+      <- objCreate(&pScrubber->pCeUtils, ...)  NV_ERR_GENERIC (0xFFFF)
+      <- scrubberConstruct -> memmgrScrubHandlePostSchedulingEnable_HAL
+    NVRM: RmInitAdapter failed! (0x25:0xffff:1249)
+
+`ce_utils.c:304` is the assert after `memmgrMemUtilsCopyEngineInitialize_HAL`, and inside it
+`_memUtilsAllocCe_GM107` begins **`if (!pChannel->hTdCopyClass) return NV_ERR_GENERIC;`**.
+`hTdCopyClass` comes from `memmgrMemUtilsGetCopyEngineClass_GM107`, which loops every CE
+engine calling `gpuGetClassList(..., ENG_CE(eng))` and takes the first with `numClasses > 0`.
+
+⇒ **On the 4th adapter init, no CE engine reports any class.** That is an engine/class
+enumeration our GSP emulation serves, and it degrades across adapter inits. Repro is
+`rmladder --guest-ram-decoys 0` four times — seconds, no CUDA.
+
+⚠ It CONFOUNDS every multi-arm sweep: each arm is a process, hence an open. My address sweep
+read as *"CUDA-shaped addresses fail"* when those arms never reached a map. **Run the
+open-ordinal probe first** — it is now the first block in `w418_r34_hook.sh`.
+
+## The live thread
+
+The RPC-map path already has the right mechanism — `holds_for_refresh` → `HeldReply` →
+released once the worker published. That IS synchronization point (2), which the owner's
+ruling says may block.
+
+⚠ It was SILENT: `self.held.push(...)` wrote no line, so a boot's log carrying no held-reply
+record proves nothing. w425 adds `HELD-REPLY` and `HELD-REPLY-POSTED`. **Read them as a
+pair** — holds without releases is a parked guest, neither is a guest that never waited.
+
+⇒ **Next: read those two counters in the w426 boot.** If the hold never fires for the RPC that
+declares the LLM's operand range, that is the defect and the fix is to make it fire. If it
+fires and the fault still happens, the reply is being released before the pin finishes.
