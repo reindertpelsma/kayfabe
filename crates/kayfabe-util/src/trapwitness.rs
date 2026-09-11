@@ -128,6 +128,23 @@ static WORST_TRAP_SITE: AtomicU64 = AtomicU64::new(u64::MAX);
 /// How many traps exceeded [`SLOW_TRAP_US`] — the rule's violation count, not its extreme.
 /// ⊘ A maximum is one event and can be dismissed as an outlier; a COUNT cannot.
 static SLOW_TRAPS: AtomicU64 = AtomicU64::new(0);
+
+/// ★ Slow traps by decade: `1-10ms`, `10-100ms`, `100ms-1s`, `>1s`.
+///
+/// ⊘ Four buckets and not a percentile: the owner's rule is a hard ceiling — *"a trap may not
+/// take longer than a millisecond"* — so what matters is HOW FAR over, not where the median
+/// sits. A boot with 187 traps in the 1-10 ms bucket and one over a second is a different
+/// problem from 187 traps over a second, and `worst`+`count` cannot tell them apart.
+static SLOW_TRAP_BUCKETS: [AtomicU64; 4] = [
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+];
+
+/// The site of the most recent slow trap — survives a larger trap elsewhere taking the global
+/// maximum with it.
+static SLOW_TRAP_SITE_LAST: AtomicU64 = AtomicU64::new(0);
 /// A trap holding longer than this is a violation of the owner's 2026-09-09 rule. 1 ms is
 /// deliberately generous: real MMIO posts in nanoseconds, so anything at millisecond scale is
 /// already the wrong shape, and a threshold set at the hardware's own cost would report every
@@ -288,14 +305,19 @@ pub fn census() -> String {
         } else {
             let site = WORST_TRAP_SITE.load(Ordering::Relaxed);
             format!(
-                "{worst}us{} slow_traps(>{}us)={}",
+                "{worst}us{} slow_traps(>{}us)={} by_decade[1-10ms={} 10-100ms={} \
+                 100ms-1s={} >1s={}]",
                 if site == u64::MAX {
                     " at=UNATTRIBUTED".to_string()
                 } else {
                     format!(" at=bar{}+{:#x}", site >> 56, site & 0x00ff_ffff_ffff_ffff)
                 },
                 SLOW_TRAP_US,
-                SLOW_TRAPS.load(Ordering::Relaxed)
+                SLOW_TRAPS.load(Ordering::Relaxed),
+                SLOW_TRAP_BUCKETS[0].load(Ordering::Relaxed),
+                SLOW_TRAP_BUCKETS[1].load(Ordering::Relaxed),
+                SLOW_TRAP_BUCKETS[2].load(Ordering::Relaxed),
+                SLOW_TRAP_BUCKETS[3].load(Ordering::Relaxed)
             )
         },
     ) + &{
@@ -370,6 +392,26 @@ impl Drop for TrapGuard {
             let us = u64::try_from(self.start.elapsed().as_micros()).unwrap_or(u64::MAX);
             if us >= SLOW_TRAP_US {
                 SLOW_TRAPS.fetch_add(1, Ordering::Relaxed);
+                // ★★★ w459 — a HISTOGRAM, because a maximum is one event and a count is a
+                // total, and neither tells you the shape.
+                //
+                // `[measured w447-w458]` `worst_trap` sat at ~1.87 s and `slow_traps` at ~187
+                // across six boots, and from those two numbers alone I could not tell whether
+                // this is **one pathological trap plus 186 merely-slow ones** or **187 traps
+                // that are all seconds long**. Those demand opposite fixes, and the ledger has
+                // already recorded that *a count and a total cannot recover a distribution*.
+                let b = match us {
+                    ..=9_999 => 0,          // 1-10 ms
+                    ..=99_999 => 1,         // 10-100 ms
+                    ..=999_999 => 2,        // 100 ms - 1 s
+                    _ => 3,                 // over a second
+                };
+                SLOW_TRAP_BUCKETS[b].fetch_add(1, Ordering::Relaxed);
+                // ⊘ And the worst-per-site, so "which register" survives a later, larger trap
+                // elsewhere overwriting the global maximum.
+                if self.site != 0 {
+                    SLOW_TRAP_SITE_LAST.store(self.site, Ordering::Relaxed);
+                }
             }
             // `fetch_max` returns the PREVIOUS value: we won iff it was smaller than ours.
             if WORST_TRAP_US.fetch_max(us, Ordering::Relaxed) < us {
