@@ -3880,6 +3880,21 @@ GSP-PUBLISH gpa=0x23200000 gpa\_same=true seq\_last=Some(1) cmd\_seq=162 $\Right
 event-notification failure --- which an independent analysis had pre-registered as a separate bug
 that this fix would not touch. \textbf{The wall moved; it did not fall.}
 
+\begin{warnbox}\small
+\textbf{⊘ UPDATED 2026-09-11, on two points.} \textbf{(1) The ordinal is not five.} \measured{}
+\code{w423}, in the guest, one fixed configuration repeated so the ordinal is the only variable:
+opens 1--3 pass and \textbf{open 4 fails with \code{EIO} on \code{openat("/dev/nvidia0")}},
+permanently, with no CUDA, no map and no engine anywhere in it
+(\code{R34\_OPEN\_ORDINAL\_FIRST\_FAIL = 4}). The earlier 5 is not refuted --- a different boot
+with different preceding opens --- but \textbf{"five" is a sample, not a constant}, and this
+paper's section title reads as a constant. \textbf{(2) The guest driver's own reason is now
+captured}, and it confirms the pre-registration rather than a new guess: RM's internal CeUtils
+\textbf{scrubber} channel fails, \code{RmInitAdapter failed!}, with left-over IOVAS mappings
+reported on teardown. ★ \textbf{And it is not the LLM's blocker}: skipping the diagnostic that
+consumes opens leaves the LLM failing identically. ⇒ \emph{the wedge and the LLM race are two
+bugs, and the cheap probe now runs first so no later sweep is read through it.}
+\end{warnbox}
+
 ★★ \textbf{Two rejected fixes are recorded at the source site so they are not retried.} The
 obvious one --- releasing the instance identity at the driver-life boundary --- fails an existing
 test that encodes the C artifact's own expensive lesson, because that boundary serves both a real
@@ -5386,6 +5401,52 @@ reproduction (refuse the fatal pair on bare metal, get the guest's exact failure
 % --------------------------------------------------------------------------
 \subsection*{Q2 --- Where does a slow host RM verb run, when every entry point is a vCPU trap under the big lock?}
 
+\begin{warnbox}\small
+\textbf{★★★★★ ⊘⊘⊘ ANSWERED 2026-09-11, AND THE ANSWER IS NOT THE ONE THE QUESTION EXPECTED.} The
+question is kept in full below because the \emph{reasoning} in it was wrong in an instructive way,
+and because the part of it that is still open is now much sharper.
+
+\smallskip
+\textbf{What was built.} The GSP command queue is \textbf{serviced entirely off the vCPU}. A
+guest write to \code{NV\_PGSP\_QUEUE\_HEAD} records that a write happened, offers a job, and
+returns; a worker services the RPCs and raises the interrupt. \textbf{There is no inline
+fallback, deliberately} --- a full lane counts itself rather than running on a vCPU.
+\measured{} \code{w447}, $n=2$: \textbf{561} RPCs serviced off the vCPU, declared inline blocking
+\textbf{166 $\to$ 24} (\S\ref{sec:blocking}).
+
+\smallskip
+⊘ \textbf{Both "escapes" the question ruled out were wrong.} \textbf{(a)} \emph{"The reply must be
+produced synchronously by type"} --- it must not. The guest \textbf{polls} the message queue, so
+a reply posted on a later poll is a reply the guest's own protocol already tolerates; the
+deferred-reply objection priced the reply as a push when it is a pull. \textbf{(b)} \emph{"A
+second thread posting a reply is a lock-order inversion by construction"} --- it is not, once the
+shared queue stops being a field of the state lock and gets its own.
+
+\smallskip
+★★★ \textbf{And the honest half: the work moved and THE WAIT DID NOT.} \measured{} \code{w447}:
+\code{worst\_trap = 1\,779\,094\,\textmu s at bar0+0x110c00} --- \emph{the very register that had
+just been deferred}. The worker took the \emph{same} lock the vCPU takes and held it across the
+whole drain, so the wait moved from the call into the lock. \textbf{That is the owner's second
+rule} (\S\ref{sec:blocking}): no blocking work under a lock a vCPU takes, and transitive blocking
+counts. Two fixes since have not moved the number; a stack sampler then found no vCPU in the MMIO
+path at all during steady-state running, so \textbf{where the 1.8\,s actually happens is open.}
+
+\smallskip
+\textbf{⇒ The question that replaces Q2, and it is a better one.} \emph{Not} "where does the slow
+verb run" --- it runs on a worker --- but: \textbf{for a device model whose guest-visible protocol
+is request/reply over a memory ring, what is the correct lock discipline such that a worker
+draining the ring never serialises against the vCPUs it exists to stay out of?} And the specific
+sub-question we cannot answer from inside: \textbf{is a 1.8\,s hold at the GSP queue head during
+bring-up harmless because no guest timer is running yet, or is it a soft-lockup waiting for a
+slower box?}
+
+\smallskip
+⊘ \textbf{One escape the question ruled out is still correctly ruled out}: a host RM verb is one
+call with one latency and no budget can split it. \textbf{That is why \code{verb\_op}'s execute
+phase is still inline and counted rather than moved} --- the remaining open item, and the one the
+text below describes accurately.
+\end{warnbox}
+
 \textbf{The constraint, which we believe is structural rather than a wiring gap.} Every guest MMIO
 write into our emulated device arrives on a vCPU thread holding QEMU's Big QEMU Lock. Blocking
 there freezes \emph{every vCPU and QEMU's main loop} — so the binding constraint is not any
@@ -5525,6 +5586,26 @@ its own budget. ⚠ \textbf{A separate defect of the same shape was found in the
 a join left behind by an \emph{exited} process, named by no address-table row at all, which the
 per-address-space takeover could not reach by construction. That one is now reclaimed when nothing
 names the frame. \emph{Both are workarounds for the missing event this question asks about.}
+
+\begin{warnbox}\small
+\textbf{⊘⊘ CORRECTED 2026-09-11: THE PREMISE OF THE QUESTION BELOW IS AN INSTRUMENT DEFECT, AND
+THE QUESTION SURVIVES ANYWAY --- SMALLER AND SHARPER.} \emph{"Both transports counted zero"} is
+true and means nothing: \code{INVALIDATE\_TLB} RPC \code{fn=200} \emph{cannot} fire (its caller is
+gated on a vGPU predicate false for us by construction) and the \code{MEM\_OP} method is UVM's
+transport, not RM's. \textbf{The census had no row for the transport RM actually uses}, a raw BAR0
+store. \S\ref{sec:trust}, \S\ref{sec:blocking}.
+
+\smallskip
+★ \textbf{And a 2026-09-11 source audit answers part of the question with a rule.} A release
+\emph{is} sometimes signalled: an unmap that \emph{sparsifies instead of unmapping} is a genuine
+revocation, and its caller supplies the invalidate. ⇒ \textbf{The observable is not "a page-table
+entry changed" but "real backing appeared or disappeared."} ⊘ \textbf{What remains uncovered is
+specific and worse than the original question assumed}: a VA-space \emph{destruct} releases
+page-table levels with \textbf{no invalidate anywhere in it}, and
+\code{VASPACE\_RELEASE\_ENTRIES} is a downgrade with no invalidate that frees PDE memory for reuse
+\emph{while our host mappings stand}. \textbf{Those are release events that emit nothing}, which
+is the question below, now with named instances.
+\end{warnbox}
 
 \textbf{The question.} \emph{Is there any protocol-visible event, on a GSP-client part, that means
 "this GPU VA range's backing is no longer referenced"?} We have measured that TLB invalidates do
