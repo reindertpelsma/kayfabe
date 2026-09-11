@@ -1005,6 +1005,13 @@ pub const NO_MMU_PORT: &str = "the register plane has no page-table format insta
      will not invent a stride";
 
 /// The aperture has no published root.
+/// w473 — the subtree decode refused: a malformed table, a guest-built cycle, or a budget
+/// that ran out. ⊘ All three are the same answer to the caller — **the list is not
+/// complete** — and a partial list must never be returned as if it were.
+pub const WINDOW_ENUMERATION_REFUSED: &str =
+    "the BAR page-table enumeration did not complete (unbacked page, malformed entry, or \
+     exhausted budget); a PARTIAL list is refused because it reads as a shorter mapping";
+
 pub const BAR2_UNROOTED: &str = "the guest has not published a root page-directory entry for this aperture \
      (UPDATE_BAR_PDE); on the firmware-offload model that entry is the ONLY fact this \
      port ever receives about that page-table tree";
@@ -3591,14 +3598,20 @@ impl RegPlane {
                 why: NO_MMU_PORT,
             });
         };
-        // ⊘ The two windows are rooted DIFFERENTLY and the difference is load-bearing:
-        // BAR1's directory is a chip constant the GSP client patches
-        // (`kbusPatchBar1Pdb_GSPCLIENT`), while BAR2's root is a value the guest republishes
-        // at any time through `UPDATE_BAR_PDE` — which is why the mirror revalidates on a
-        // moved `bar_pde_counts`.
+        // ⊘⊘ **BAR1 ONLY, AND THE REASON IS STRUCTURAL, NOT LAZINESS.** The two windows are
+        // rooted DIFFERENTLY. BAR1's directory is a chip constant the GSP client patches
+        // (`kbusPatchBar1Pdb_GSPCLIENT`), so it names a PAGE and `decode_subtree` can start
+        // there. BAR2's root is a raw PDE **entry** the guest republishes through
+        // `UPDATE_BAR_PDE`, which is why `bar2_translate` uses `translate_from_entry` rather
+        // than a page walk — and `decode_subtree` takes a `PtPage`, not an entry.
+        //
+        // ⇒ enumerating BAR2 needs an entry-rooted subtree decode that does not exist yet.
+        // Refused BY NAME here rather than papered over by decoding the entry into a page
+        // and hoping the level is right: a wrong root yields a plausible, WRONG list of
+        // leaves, and a wrong list is exactly the failure the budget rule below exists to
+        // prevent.
         let root = match w {
             FbWindow::FbAperture => self.chip.bar1_pde_base,
-            FbWindow::InstanceWindow => self.bar_pdes.pdes().bar2.unwrap_or(0),
             _ => 0,
         };
         if root == 0 {
@@ -3619,9 +3632,9 @@ impl RegPlane {
             },
             budget,
         )
-        .map_err(|f| WindowRefusal::Translated {
+        .map_err(|_| WindowRefusal::Translated {
             va: 0,
-            why: f.why(),
+            why: WINDOW_ENUMERATION_REFUSED,
         })?;
         // ⊘ Vidmem only, exactly as `bar1_translate` refuses a foreign aperture: a BAR
         // window entry naming sysmem is not something this mirror can back, and dropping it
