@@ -11599,6 +11599,11 @@ fn main() -> std::process::ExitCode {
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_bar1_crossing = false;
     let mut want_ce_client = false;
+    // ★ R34 — see `--ce-client-guest-ram`. Default decoy depth is the LLM's own order of
+    // magnitude (`[measured w415llm]` 13 313 guest-RAM rows), not a round number chosen for
+    // looking like one; a depth below the real workload's tests nothing the client already did.
+    let mut want_ce_guest_ram = false;
+    let mut guest_ram_decoys: usize = 13_000;
     let mut want_ce_client_fault = false;
     // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
     let mut want_ce_client_fault_shared_vas = false;
@@ -11875,6 +11880,15 @@ fn main() -> std::process::ExitCode {
             // a program small enough to push into a guest, so it must not drag the isolate,
             // the sandbox rung or a second channel along.
             "--ce-client" => want_ce_client = true,
+            "--ce-client-guest-ram" => want_ce_guest_ram = true,
+            "--guest-ram-decoys" => {
+                let Some(v) = args.next().and_then(|v| v.trim().parse::<usize>().ok()) else {
+                    eprintln!("--guest-ram-decoys needs a count");
+                    return std::process::ExitCode::from(2);
+                };
+                guest_ram_decoys = v;
+                want_ce_guest_ram = true;
+            }
             // ⊘ Arm 4, opt-in: it provokes a real `Xid 31 FAULT_PDE` and kills its channel.
             "--ce-client-fault" => {
                 want_ce_client = true;
@@ -12022,6 +12036,57 @@ fn main() -> std::process::ExitCode {
     // it — the second channel, the isolate, the sandbox rung — would put ioctls in the
     // census that the client does not need, and a sandboxed child in a guest that may not
     // have one.
+    if want_ce_guest_ram {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        println!(
+            "info  R34 guest-RAM CE   = GPU {gpu} — a CE copy whose SOURCE is \
+             NV01_MEMORY_SYSTEM (guest RAM, run inside the guest), placed behind \
+             {guest_ram_decoys} further guest-RAM rows declared FIRST so the operand is the \
+             freshest row a bounded backing pass reaches LAST. ⊘ R33 cannot express this: both \
+             its operands are `alloc_device_local`, so no engine in it reads guest RAM at all"
+        );
+        let Ok(vas) = rm.alloc_vaspace() else {
+            println!("FAIL  R34 guest-RAM CE   = could not allocate a VAS — UNMEASURED");
+            return std::process::ExitCode::from(1);
+        };
+        let ok = match rm.prove_ce_copy_from_guest_ram(vas, 0xC0FF_EE34, guest_ram_decoys) {
+            Ok((e, declared)) => {
+                let moved = e.after == e.expect_after && e.after_last == e.expect_after_last;
+                println!(
+                    "{}  R34 guest-RAM CE   = declared {declared} decoy guest-RAM rows (asked \
+                     {guest_ram_decoys}), src {:#018x} dst {:#018x}, dst[0] {:#010x} (want \
+                     {:#010x}), dst[last] {:#010x} (want {:#010x}), semaphore {:#010x}",
+                    if moved { "★    " } else { "FAIL " },
+                    e.src_va,
+                    e.dst_va,
+                    e.after,
+                    e.expect_after,
+                    e.after_last,
+                    e.expect_after_last,
+                    e.submit.semaphore,
+                );
+                if declared < guest_ram_decoys {
+                    println!(
+                        "⚠     R34 SHALLOW        = only {declared} of {guest_ram_decoys} decoy \
+                         rows were declared, so this run probed LESS depth than asked. A pass \
+                         here is a pass at {declared}, and nothing more"
+                    );
+                }
+                moved
+            }
+            Err(e) => {
+                println!("FAIL  R34 guest-RAM CE   = refused by name: {e:?}");
+                false
+            }
+        };
+        println!("R34_OUTCOME={}", if ok { "(P)" } else { "(F)" });
+        let _ = rm.free(vas);
+        return std::process::ExitCode::from(u8::from(!ok));
+    }
+
     if want_ce_client {
         println!(
             "REV_UNDER_TEST={}",
