@@ -863,8 +863,13 @@ built of it, and the three places where it is stated but not enforced.
   call during a doorbell write, quickly re-enter the VM. Instead if you need to do mappings, run
   the doorbell asynchronously. \textbf{There is no guarantee that a real GPU gives either} ---
   the doorbell runs immediately in-line, it's a schedule."}
-\item \textbf{No blocking work under a lock a vCPU takes.} Transitive blocking counts: a worker
-  that holds the vCPU's lock across a slow call has moved the work and kept the wait.
+\item \textbf{No blocking work under a lock a vCPU takes.} Transitive blocking counts, and the
+  owner states it as a mechanism rather than a principle: \emph{"a blocking call in vcpu also
+  counts if the lock its waiting on to acquire is hold by a thread that has a blocking call"} ---
+  and, on the register plane specifically, \emph{"big lock for work should never be taken on the
+  vcpu thread"} and \emph{"the mmio trap should return long before the refresh finished"}
+  (2026-09-11). A worker that holds the vCPU's lock across a slow call has moved the work and kept
+  the wait.
 \item \textbf{A trap may not exceed 1\,ms.}
 \end{enumerate}
 \end{claimbox}
@@ -1005,9 +1010,12 @@ Host RM verb off the vCPU & ⊘ \textbf{NOT DONE --- counted, not prevented} &
   \measured{} \code{w449}: \code{inline\_exceptions=24}. \\
 \addlinespace
 The 1\,ms trap budget & ⊘ \textbf{MEASURED, NEVER ENFORCED} &
-  \code{SLOW\_TRAP\_US = 1\_000} feeds three counters in the outermost trap guard
-  (\code{SLOW\_TRAPS}, \code{WORST\_TRAP\_US}, \code{WORST\_TRAP\_SITE}). \textbf{No abort, no
-  panic, no cap.} A budget that only counts is a metric, not an invariant. \\
+  \code{SLOW\_TRAP\_US = 1\_000} feeds counters in the outermost trap guard
+  (\code{SLOW\_TRAPS}, \code{WORST\_TRAP\_US}, \code{WORST\_TRAP\_SITE}, and a per-site census).
+  \textbf{No abort, no panic, no cap.} A budget that only counts is a metric, not an invariant.
+  ★ \textbf{2026-09-11: the invalidate lane's own constant was re-derived and renamed} from
+  \code{INVALIDATE\_HOLD\_BUDGET\_US = 40\_000} to \code{INVALIDATE\_HOLD\_CEILING\_US = 1\_000}
+  --- \emph{"a budget says this much is fine, a ceiling says past this is a bug"}. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -1044,9 +1052,34 @@ quoted today would be invented.}
 \code{inline\_exceptions} fell from 166 while the thing it proxied for did not move at all ---
 \emph{a metric that stopped measuring its purpose}, findable only because \code{worst\_trap}
 carries its \emph{site}. Second, the figure it fell \emph{to} was wrong: the ledger's
-\code{grep -o 'inline\_exceptions=[0-9]*' | tail -1} was matching the harness's own goal string
-\code{(target: inline\_exceptions=0)}. \textbf{The real value is 24, not 0}, and the \code{0} was
-reported to the owner twice and still appears in the milestone document's own table.
+\code{grep -o 'inline\_exceptions=[0-9]*'} piped to \code{tail -1} was matching the harness's own
+goal string \code{(target: inline\_exceptions=0)}. \textbf{The real value is 24, not 0}, and the
+\code{0} was reported to the owner twice and still appears in the milestone document's own table.
+
+\smallskip
+★★★★★ \textbf{⊘⊘⊘ UPDATED LATER THE SAME DAY, AND THE ANSWER IS THE WORST POSSIBLE ONE: THE
+SECOND-WORST TRAP WAS INTRODUCED BY THE COMMIT THAT MOVED THE WORK OFF THE vCPU.} A \emph{per-site}
+slow-trap census replaced the sampler and named both offenders outright: \code{bar0+0x110c00}
+(\textbf{12} slow traps) and \code{bar0+0xb830b0} --- \textbf{the TLB invalidate trigger} ---
+with \textbf{48 slow traps, worst 54\,053\,\textmu s} \measured{} \code{w462}. \textbf{The
+invalidate arm's own path was clean}: it touches only a small dedicated lock whose doc says
+\emph{"the guest polls this register in a tight loop, so answering it must never take the FSM's
+lock"}, and it returns before any big lock. ⊘ \textbf{Then the GSP deferral put one back after
+it, on every MMIO write}, by reading a pending-count through the very lock the worker holds for
+whole RPCs. ⇒ \emph{Moving work off a thread and then reading its state through a lock that
+thread holds puts the wait straight back}, which is rule 2 stated as a consequence rather than a
+principle. The fix mirrors the count into a lock-free atomic; ⊘ \textbf{it is not yet measured},
+and the falsifier is \code{bar0+0xb830b0} leaving the slow-site list entirely. ⚠ And
+\code{RegPlane::write} still takes that lock \textbf{five times} on the vCPU path.
+
+\smallskip
+★★ \textbf{Note which instrument found it, because the paper's own doctrine is on trial here.} It
+was invisible to \code{inline\_exceptions} (nothing is inline), invisible to \code{worst\_trap}
+alone (the 1.86\,s at the other register dominated it), and invisible to the stack sampler, which
+failed \textbf{six times} --- five of them harness defects and the sixth a timeout too short for
+symbol loading on a 100\,MB binary --- before being abandoned. \textbf{A per-site count with 48
+hits on one register is what made it findable.} ⇒ \emph{The cheaper instrument answered the
+question outright, and was reached last.}
 \end{warnbox}
 
 \subsubsection*{The threat model this narrows, and it is narrower than the paper's}
@@ -1101,6 +1134,8 @@ in any design document in this tree, which is itself a gap worth closing.
   constraints says so in its own words: \emph{"The LLM. Untouched since this landed."}
 \item \textbf{Rule 3 is not enforced anywhere}, and rule 1's exception for host verbs is counted
   rather than closed.
+\item \textbf{The 1.86\,s hold at the GSP queue head is still unexplained}, and the atomic-mirror
+  fix for the 54\,ms invalidate hold beside it is landed and \textbf{unmeasured}.
 \end{itemize}
 
 \subsection{The isolation model}
@@ -5543,6 +5578,10 @@ whole drain, so the wait moved from the call into the lock. \textbf{That is the 
 rule} (\S\ref{sec:blocking}): no blocking work under a lock a vCPU takes, and transitive blocking
 counts. Two fixes since have not moved the number; a stack sampler then found no vCPU in the MMIO
 path at all during steady-state running, so \textbf{where the 1.8\,s actually happens is open.}
+★ A per-site census has since named a \emph{second} offender and explained it: the TLB invalidate
+trigger at \code{bar0+0xb830b0}, \textbf{48 slow traps, worst 54\,ms}, caused by this very
+deferral reading a pending-count through the lock the worker holds (\S\ref{sec:blocking}).
+\textbf{The queue head's own 1.8\,s is still unexplained.}
 
 \smallskip
 \textbf{⇒ The question that replaces Q2, and it is a better one.} \emph{Not} "where does the slow

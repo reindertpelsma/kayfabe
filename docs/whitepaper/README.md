@@ -21,7 +21,7 @@ wall named in earlier revisions turned out not to exist.
 >    the project's own requirements mark RED, n=1–2 boots, and **never run under
 >    the three blocking constraints**.
 > 2. **The blocking model is three owner rules** — nothing blocking in a vCPU trap,
->    nothing blocking under a lock a vCPU takes, and a 1 ms trap budget. New §3.5.
+>    nothing blocking under a lock a vCPU takes, and a 1 ms trap budget. New §4.4.
 >    Two of the three are met; the budget is *counted, never enforced*.
 > 3. **BAR1 and BAR2 default to untrapped.** BAR1 traps 88,193 → 91.
 > 4. **The doorbell defaults to deferred, and a doorbell is a hint, not a barrier.**
