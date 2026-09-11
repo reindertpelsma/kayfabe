@@ -92,3 +92,28 @@ echo "[trig]   PROMOTE-BOUND lines:    $(grep -ac 'PROMOTE-BOUND' "$Q")"
 echo "[xid]    host Xid lines: $(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
 echo "[boot]   arming banners: $(grep -ao 'GUEST-RING arm=[a-z]*\|FB-JOIN arm=[a-z]*\|GR-ROUTE arm=[a-z]*\|PT-SWEEP arm=[a-z]*' "$Q" | sort -u | tr '\n' ' ')"
 echo "--- END LEDGER tag=$tag ---"
+
+# ★★★★★ w440 — THE THREE INVARIANTS, IN ONE PLACE, SO ONE BOOT ANSWERS ALL OF THEM.
+#
+# Three changes landed unmeasured (w431 BAR defaults, w432 GSP deferral, w437 the channel
+# invalidate). Each has a counter; none was on the ledger, so reading this boot would have
+# meant three greps a reader has to know to run. ⊘ A signal nobody prints is the failure mode
+# this whole session has been counting — SEVEN mechanisms built, wired and never reached.
+echo "--- ★★★★★ THE THREE INVARIANTS (w431 BARs · w432 vCPU · w437 the barrier) ---"
+
+echo "[bar]    $(grep -ao 'BAR1-PASSTHROUGH[^|]\{0,70\}' "$Q" 2>/dev/null | tail -1)"
+echo "[bar]    bar1 touches: $(grep -aoc 'bar1' "$Q" 2>/dev/null) ⊘ w431 flipped BOTH defaults to untrapped; a boot where these are HIGH means the flip did not take"
+
+# ⚠ `gsp_off_vcpu=0` with a guest that made progress means deferral is NOT armed and every RPC
+# still ran inside a guest store — the 1.79 s trap. The census says so in its own words.
+echo "[vcpu]   $(grep -ao 'LANE-CENSUS[^|]\{0,120\}' "$Q" 2>/dev/null | tail -1)"
+echo "[vcpu]   $(grep -ao 'GSP-ASYNC [A-Z ]\{0,40\}' "$Q" 2>/dev/null | tail -1)"
+echo "[vcpu]   $(grep -ao 'inline_exceptions=[0-9]*' "$Q" 2>/dev/null | tail -1) ⊘ w394 measured 166; falling toward 0 is the grade"
+echo "[vcpu]   $(grep -ao 'worst_trap[_a-z]*=[0-9]*' "$Q" 2>/dev/null | tail -1) ⊘ w394 measured 1 771 955 us"
+
+# ⊘ NO SEAM INSTALLED is a different fact from an empty refresh, and the device prints it by
+# name. MEMOP-CENSUS seen=0 on a boot whose P2 passes means the invalidates never reached the
+# decoder at all — a parsing question, not a consumption one.
+echo "[barrier] $(grep -ao 'MEMOP-REFRESH[^|]\{0,110\}' "$Q" 2>/dev/null | tail -1)"
+echo "[barrier] refresh passes: $(grep -aoc 'MEMOP-REFRESH proc=' "$Q" 2>/dev/null)   ⊘ NO-SEAM lines: $(grep -aoc 'NO SEAM INSTALLED' "$Q" 2>/dev/null)"
+echo "[barrier] $(grep -ao 'MEMOP-CENSUS[^|]\{0,90\}' "$Q" 2>/dev/null | tail -1)"
