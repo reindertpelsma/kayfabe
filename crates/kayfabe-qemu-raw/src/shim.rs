@@ -14870,10 +14870,21 @@ impl Regs {
                     // ⊘ Refused, so nothing will publish and nothing will complete. Do it
                     // inline rather than hang the guest — and SAY SO, because this is the one
                     // path that still blocks the vCPU and it must never be silent.
+                    // ⊘⊘ `[audited w430]` this line used to say *"publishing INLINE on the
+                    // vCPU and completing here … a boot that prints this has a vCPU held for
+                    // a publication"*. **It does not, and has not since the branch below was
+                    // rewritten to arm a rescan instead.** The code under this arm increments
+                    // a counter, arms `DROPPED.arm_full_rescan()`, and returns — no
+                    // publication runs here and no vCPU is held.
+                    //
+                    // ⚠ A log line that overstates a violation is as bad as one that hides
+                    // it: this one would have made a reader conclude the vCPU-blocking census
+                    // was under-counting, and send them auditing a path that is already clean.
                     eprintln!(
-                        "kayfabe: MMUINVAL-PUBLISH ⊘⊘ LANE FULL — publishing INLINE on the vCPU \
-                         and completing here. This is the fallback, not the design; a boot that \
-                         prints this has a vCPU held for a publication."
+                        "kayfabe: MMUINVAL-PUBLISH ⊘ LANE FULL — the job was REFUSED, so this \
+                         invalidate publishes nothing here. A full rescan is armed below and \
+                         the next refresh treats every PDB/PTE as dirty. ⊘ Nothing runs inline \
+                         on the vCPU on this path."
                     );
                     // ★★★★★ **DECLARED, so the census can see it.** An inline publication on
                     // a vCPU is precisely the violation `VCPU-BLOCKING` exists to name — and
