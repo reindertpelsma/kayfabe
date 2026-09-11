@@ -33,6 +33,22 @@ if [ -n "$FEATURES" ]; then
   FEATARGS=(--features "$(echo "$FEATURES" | tr ' ' ',')")
   echo "== archive features: $FEATURES"
 fi
+# ⊘⊘ `[measured w416]` PREFLIGHT, because the failure this catches is INVISIBLE downstream.
+# A non-login `ssh host '...'` does not source `~/.cargo/env`, so `cargo` is absent and this
+# script dies at 127 — correctly, `set -e` is on. But a CALLER that pipes us (`... | tail -3`)
+# reads **tail's** status, prints `SHIM_RC=0`, and boots on the PREVIOUS binary. That is two
+# documented traps composing: *a pipe eats the exit status* and *the boot proceeds on the old
+# binary*. The build then measures a tree that does not contain the change under test.
+# ⚠ We cannot fix the caller from here. We CAN make the reason unmistakable in the log, and
+# say what to do about it.
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "⊘⊘ FATAL: \`cargo\` is not on PATH." >&2
+  echo "   A non-interactive ssh does not source ~/.cargo/env. Prefix the command with" >&2
+  echo "   \`export PATH=\$HOME/.cargo/bin:\$PATH\` (or source ~/.cargo/env) and re-run." >&2
+  echo "   ⚠ If your caller PIPES this script, it will read the pipe's status, not ours," >&2
+  echo "   and will happily boot the PREVIOUS binary. Check the binary's mtime, not our rc." >&2
+  exit 127
+fi
 echo "== building the archive"
 ( cd "$REPO" && cargo build --release -p kayfabe-qemu-raw "${FEATARGS[@]}" )
 # ★★★ ASK CARGO WHERE IT PUT THE ARCHIVE — never assume `$REPO/target`.
