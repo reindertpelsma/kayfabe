@@ -22,8 +22,26 @@ set -uo pipefail
 # shell is not named `qemu-system*`.
 qemu_pid() { ps -eo pid=,comm= | awk '$2 ~ /^qemu-system/ { print $1; exit }'; }
 
-N=${STACKSHOT_N:-60}
-GAP=${STACKSHOT_GAP:-1}
+# ★★★★★ **w470 — SAMPLE WITH `eu-stack`, NOT `gdb`, AND THE REASON IS NOT SPEED ALONE.**
+# A `gdb -p` attach STOPS EVERY THREAD for as long as it takes to load symbols (seconds on a
+# QEMU binary). If a trap is in flight during that stop, the stop is ADDED TO THAT TRAP'S
+# MEASURED DURATION. ⇒ sampling with gdb MANUFACTURES the slow traps it is supposed to
+# explain, and the run's `worst_trap` can no longer be read at all.
+#
+# `eu-stack` (elfutils) attaches, unwinds from CFI and detaches in milliseconds, so the
+# perturbation is small enough to sample at 10 Hz — and at 10 Hz a 1.6 s hang is ~16
+# CONSECUTIVE samples with one thread parked on one frame. ⊘ That is a far better detector
+# than a well-timed single look: it does not depend on luck, and a run of identical stacks
+# cannot be confused with a thread that merely passes through a frame often.
+SNAP=${STACKSHOT_SNAP:-auto}
+if [ "$SNAP" = auto ]; then
+  if command -v eu-stack >/dev/null 2>&1; then SNAP=eu; else SNAP=gdb; fi
+fi
+echo "STACKSHOT unwinder=$SNAP"
+[ "$SNAP" = gdb ] && echo "⚠ gdb sampling PERTURBS trap durations — do not read worst_trap from this run"
+
+N=${STACKSHOT_N:-600}
+GAP=${STACKSHOT_GAP:-0.1}
 OUT=${STACKSHOT_OUT:-/workspace/bench/stackshots.txt}
 : > "$OUT"
 # ⚠ `yama/ptrace_scope=1` lets a process attach only to its own DESCENDANTS, and the QEMU we
@@ -63,11 +81,15 @@ for i in $(seq 1 "$N"); do
   # when it actually meant *"gdb told us why and we threw it away"*. Third time this session a
   # redirect has eaten the evidence; the ledger's own rule is that an empty artefact is not
   # benign.
-  timeout 25 gdb -p "$pid" -batch \
-      -ex "set pagination off" \
-      -ex "thread apply all bt 18" 2>&1 \
-    | awk -v n="$i" '{print "[" n "] " $0}' >> "$OUT"
-  echo "---- sample $i $(date -Is) ----" >> "$OUT"
+  echo "---- sample $i t=$(date +%s.%N) ----" >> "$OUT"
+  if [ "$SNAP" = eu ]; then
+    timeout 10 eu-stack -p "$pid" 2>&1 | awk -v n="$i" '{print "[" n "] " $0}' >> "$OUT"
+  else
+    timeout 25 gdb -p "$pid" -batch \
+        -ex "set pagination off" \
+        -ex "thread apply all bt 18" 2>&1 \
+      | awk -v n="$i" '{print "[" n "] " $0}' >> "$OUT"
+  fi
   sleep "$GAP"
 done
 echo "STACKSHOT done $(date -Is)"
@@ -77,5 +99,52 @@ echo "STACKSHOT done $(date -Is)"
 echo "=== attach outcome ==="
 echo "  samples with a backtrace: $(grep -ac '^\[[0-9]*\] #' "$OUT")"
 echo "  samples refused:          $(grep -acE 'ptrace|Operation not permitted|No such process' "$OUT")"
+# ★★★★★ **THE VERDICT THAT DOES NOT NEED LUCK.** Find, per thread, the longest run of
+# CONSECUTIVE samples whose top in-our-code frame is unchanged. A thread that merely calls a
+# function often shows it in scattered samples; a thread PARKED in it shows a run. At 10 Hz a
+# run of 16 is 1.6 s.
+python3 - "$OUT" <<'PYEOF'
+import re, sys, collections
+samples = collections.defaultdict(dict)   # sample index -> {tid: frame}
+cur = None
+tid = None
+for line in open(sys.argv[1], errors="replace"):
+    m = re.match(r"---- sample (\d+) ", line)
+    if m:
+        cur = int(m.group(1)); tid = None; continue
+    m = re.match(r"\[(\d+)\] TID (\d+)", line)
+    if m:
+        tid = m.group(2); continue
+    if cur is None or tid is None:
+        continue
+    if tid in samples[cur]:
+        continue
+    # first frame naming our own code is the interesting one
+    m = re.search(r"(kayfabe[A-Za-z0-9_]*(?:::[A-Za-z0-9_<>{}\.]+)+|nvkvm_[a-z0-9_]+)", line)
+    if m:
+        samples[cur][tid] = m.group(1)
+
+runs = []   # (length, tid, frame, first_sample)
+state = {}  # tid -> (frame, start, length)
+for i in sorted(samples):
+    seen = samples[i]
+    for t, f in seen.items():
+        prev = state.get(t)
+        if prev and prev[0] == f and prev[2] + prev[1] == i:
+            state[t] = (f, prev[1], prev[2] + 1)
+        else:
+            if prev and prev[2] >= 3:
+                runs.append((prev[2], t, prev[0], prev[1]))
+            state[t] = (f, i, 1)
+for t, (f, st, ln) in state.items():
+    if ln >= 3:
+        runs.append((ln, t, f, st))
+runs.sort(reverse=True)
+print("=== longest CONSECUTIVE runs on one frame (>=3 samples) ===")
+if not runs:
+    print("  (none — no thread stayed on one of our frames across 3+ samples)")
+for ln, t, f, st in runs[:12]:
+    print(f"  {ln:4d} samples  tid={t}  from sample {st}  {f}")
+PYEOF
 echo "=== frames seen inside kayfabe MMIO/trap paths ==="
 grep -aoE "kayfabe[a-z_]*::[a-zA-Z_:]+|nvkvm_[a-z_]+" "$OUT" | sort | uniq -c | sort -rn | head -25
