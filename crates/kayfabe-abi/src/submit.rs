@@ -4665,7 +4665,7 @@ pub static INPUT_ONLY_CONTROLS: &[InputOnlyControl] = &[
              better off than RM would have, and nothing observable differs.",
         ),
         authority: "C cap3 SERVED NV_OK psize=4 dlen=4 COMPLETE; native GA106 NV_OK @425. \
-                    ★ THE ONE THAT ENDS cuCtxCreate. ogkm: RM-internal event filter, no \
+                    ★ THE ONE THAT ENDS cuCtxCreate. ogkm-580: RM-internal event filter, no \
                     hardware write, default when never called is _ALL (more permissive \
                     than the 0x3a the guest asks for)",
     },

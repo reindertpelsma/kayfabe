@@ -131,7 +131,7 @@
 //! author a host PTE. Every host mapping change of ours is an RM ioctl
 //! (`NV_ESC_RM_MAP_MEMORY_DMA` / `NV_ESC_RM_UNMAP_MEMORY_DMA`), and RM invalidates inside
 //! it — `dmaUnmapBuffer` → `vaspaceInvalidateTlb(pVAS, pGpu, PTE_DOWNGRADE)`
-//! (`ogkm: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:899`, again `:1010`), `PTE_UPGRADE` on
+//! (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:899`, again `:1010`), `PTE_UPGRADE` on
 //! the map side (`.../arch/maxwell/virt_mem_allocator_gm107.c:3032`).
 //!
 //! ⚠ **The consequence for this design, and it is the reason the asymmetry above is not
