@@ -40,7 +40,7 @@ that bit and the received set falls out — no enumeration to go stale.
 | **R8** ★★★ | `gpu_vaspace.c:3237/:3361/:3481` migrate | `SET/UNSET_PAGE_DIRECTORY`, `SET_VA_SPACE_SIZE` | **the invalidate fires BEFORE the write and never after** (`:3221/:3342/:3479`), and the HW-commit callback is a no-op on a GSP client (`gmmu_walk.c:665-669`) |
 | **R9** ★★ | — | `gvaspaceInvalidateTlb_IMPL:2329-2332` | a PTE write on a VAS whose walker root is not materialised emits **zero MMIO** — no `else`, no assert |
 | **R10** ★★ | any page table in **sysmem** | `memmgrGetMemTransferType` → `TRANSFER_TYPE_PROCESSOR` | **nothing at any level** — plain guest-RAM stores, not even a BAR write |
-| **R12** ★★ | `gpu_vaspace.c:258` `mmuWalkSparsify` | BAR1 VA-space construct, guard `!RMCFG_FEATURE_PLATFORM_GSP` is TRUE in the guest | **nothing**; ⊘ **once per state-load cycle** — see below |
+| ~~**R12**~~ ⊘ | `gpu_vaspace.c:258` `mmuWalkSparsify` | BAR1 VA-space construct | **nothing** — and **nothing is needed**: see *Why we do not want sparse ranges* below |
 
 ## The uncovered set — BAR2 / instance memory, and UVM
 
@@ -98,3 +98,38 @@ writer anywhere, so `bFillPteMem` is always FALSE. ⇒ the project's measured
    only differentiator is a Turing-only membar WAR (`g_kern_gmmu_nvoc.c:578-585`). ⇒ do not read
    map-vs-unmap direction out of the trapped value. What IS readable: `_ALL_PDB=FALSE` means
    `0x00B830A0/A4` name the VAS; `_HUBTLB_ONLY=TRUE` means a BAR VAS.
+
+
+---
+
+# ⊘⊘ CORRECTION — *"why do you want sparse ranges?"* (owner). **We do not.**
+
+I listed R12 as an uncovered gap. That was the wrong classification, and the owner's question is
+what exposed it.
+
+**What sparse IS.** A sparse PTE is *valid but unbacked*: a GPU access to it returns zeros and
+is **dropped instead of faulting**. It exists to make a stray access to a declared-but-unmapped
+range benign **on the guest's own GPU**. It is a statement about FAULT BEHAVIOUR, not about
+memory.
+
+**Why that means nothing to us.** Our job is to make the guest's real mappings reachable on the
+host. A sparse entry maps **nothing**, so there is nothing to make real — it is precisely the
+row we would skip. ⇒ A bulk sparsify at construction declares *"this whole range is unbacked"*
+over a range that was never backed. **There is no work, so there is no gap.**
+
+**Where sparse DOES matter, and it is the other direction.** `gvaspaceUnmap_IMPL:2279-2285`
+sparsifies *instead of* unmapping when the range was originally sparse, or whenever the VAS is
+BAR1 — *"Return back to Sparse if that was the original state of this allocation."* That is a
+**REVOCATION**: a range we may have backed on the host is being taken away, and a stale host
+mapping that outlives it is a real defect. ⊘ Covered — its caller (`dmaFreeMapping`) supplies
+the invalidate.
+
+⇒ **The rule, and it generalises past this one entry:** what we must observe is not *"a
+page-table entry changed"* but *"real backing appeared or disappeared"*. Sparsify-at-construct
+is neither. Sparsify-at-unmap is a disappearance, and it is signalled.
+
+⚠ This is the second time in this audit that reading a write as *"a page-table change we
+missed"* was the wrong frame. The first was B4, where the residue in a freshly parented page
+table looked like a hazard **to us** and is in fact a hazard **from us** — a sweep that decodes
+raw bytes would invent mappings the guest never authored. Both errors share a shape: **treating
+a byte-level write as the event, when the event is a change in what is REACHABLE.**
