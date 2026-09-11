@@ -143,7 +143,7 @@ not.
 
 ### ⊘⊘⊘ VERIFIED, AND THE ANSWER IS **YES** — the split is NOT by aperture
 
-`[read out of ogkm 580, 2026-09-11]` The question *"does the driver ever depend on seeing the
+`[read out of research_clones/ogkm, which is 610.43.02 — re-verified against the 580.159.04 checkout, 2026-09-11]` The question *"does the driver ever depend on seeing the
 same bytes through BAR1 and BAR2?"* was asked because the answer decides this design. **It
 does, on the CUDA path, by default, on GA10x.**
 
