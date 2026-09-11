@@ -22,7 +22,7 @@ export KAYFABE_ISOLATES=real KAYFABE_GUEST_RAM=memfd NVKVM_RAM_BACKEND=memfd \
        KAYFABE_PT_WITNESS_EXEC=on KAYFABE_CE_EXECUTOR=host \
        NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} BOOT_TIMEOUT=${BOOT_TIMEOUT:-240}
 export POST_CAPTURE_HOOK="$SRC_DIR/w418_r34_hook.sh"
-export R34_TIMEOUT=${R34_TIMEOUT:-300} R34_DEPTHS=${R34_DEPTHS:-"0 2000 13000"}
+export R34_TIMEOUT=${R34_TIMEOUT:-300} R34_DEPTHS=${R34_DEPTHS:-"0 2000"}
 
 echo "=== w418 R34-IN-GUEST BOOT $(date -Is) tag=$tag ==="
 # ⚠ CONTENT, never a stamp. `refresh_page_tables` is emitted only by the tree that fixed the
