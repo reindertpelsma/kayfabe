@@ -1065,8 +1065,20 @@ jobs:
           for d in crates/*/src; do
             crate=$(basename "$(dirname "$d")")
             case "$crate" in kayfabe-rmrpc) continue;; esac
-            names_cmd=$(grep -rlw RpcCommand "$d" || true)
-            names_ev=$(grep -rlw RmEvent "$d" || true)
+            # ⊘⊘ `[measured w418]` these were `grep -rlw`, and the gate had been RED on
+            # `kayfabe-device` for ONE line — `setpagedir.rs:139`, a `//!` doc comment reading
+            # *"…can already carry it across the alias without a new mechanism:
+            # `RmEvent::SetPageDir…`"*. Every `RpcCommand` in that crate is real code; the
+            # single `RmEvent` is prose ABOUT the seam. The rule (§1.2: one crate translates
+            # between the two vocabularies) is not violated by a sentence naming the other
+            # side, and a crate is not allowed to STOP DESCRIBING the design it participates
+            # in just to keep a grep quiet.
+            #
+            # ⚠ It weakens the gate by one case only: a real use sitting alone on a line that
+            # BEGINS with a comment marker, which is not expressible in Rust. A trailing
+            # comment after real code still counts, because the line does not start with one.
+            names_cmd=$(grep -rnw RpcCommand "$d" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' | cut -d: -f1 | sort -u || true)
+            names_ev=$(grep -rnw RmEvent "$d" 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|/\*|\*)' | cut -d: -f1 | sort -u || true)
             if [ -n "$names_cmd" ] && [ -n "$names_ev" ]; then
               offenders="$offenders $crate"
             fi
