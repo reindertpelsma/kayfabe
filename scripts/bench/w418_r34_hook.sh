@@ -147,7 +147,22 @@ for i in $(seq 1 "$ORDINALS"); do
   if [ -z "$ov" ]; then
     line=$(printf '%s' "$oraw" | grep -oE 'R1 openat[^}]*}|FAIL[^|]{0,90}' | tail -1)
     echo "(E) ${line:-no output}" | cut -c1-170
-    [ -z "$ord_first_fail" ] && ord_first_fail="$i"
+    if [ -z "$ord_first_fail" ]; then
+      ord_first_fail="$i"
+      # ★★★★★ THE GUEST DRIVER'S OWN REASON, captured at the FIRST failure and nowhere else.
+      #
+      # `openat` returning EIO is the guest kernel's summary of something NVRM decided, and
+      # `errno 5` carries none of it. ⊘ This must be taken at the first failure: the ledger
+      # already records that guest `dmesg` goes to whoever ran `modprobe` and NOWHERE else
+      # (`run_*_serial.log` contains no NVRM at all), so if it is not read here it does not
+      # exist afterwards — and by the next boot the wedge is gone with the guest.
+      echo "      ★ guest dmesg at the FIRST failing open (#$i):"
+      $G "sudo dmesg | grep -aiE 'nvrm|nvidia|nvkvm' | tail -12" 2>/dev/null \
+        | sed 's/^/        /' | cut -c1-190
+      echo "      ★ guest device nodes + module state:"
+      $G "ls -la /dev/nvidia* 2>&1 | head -4; lsmod | grep -E '^nvidia' | head -3" 2>/dev/null \
+        | sed 's/^/        /' | cut -c1-150
+    fi
   else
     echo "${ov#R34_OUTCOME=}"
   fi
