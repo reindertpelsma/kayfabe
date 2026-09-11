@@ -22,7 +22,18 @@ KEY=/workspace/bench/guest_key
 SCP_OPTS=(-i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o LogLevel=ERROR -o ConnectTimeout=5)
 TMO=${R34_TIMEOUT:-300}
-DEPTHS=${R34_DEPTHS:-"0 2000 13000"}
+DEPTHS=${R34_DEPTHS:-"0 2000"}
+# ★★★★★ w419 — THE ADDRESS SWEEP, which is the whole question now.
+#
+# `[measured w419]` R34 passes in the guest at RM's own placement and passes on BARE METAL at
+# every address below INCLUDING `0x7cac33600000` — the exact VA at which `CE2 HUBCLIENT_CE0`
+# took `FAULT_PDE ACCESS_TYPE_VIRT_WRITE` under the LLM. Verified the dictation is not
+# ignored: the rung reports `src 0x00007cac33600000`, not RM's `0x120000000`.
+#
+# ⇒ If any of these FAILS in the guest and passes on bare metal, the defect is kayfabe's and
+# it is located to one address, with no CUDA runtime anywhere near it.
+# ⊘ `rm` = RM-placed, the control. Every arm runs at decoys=0 so depth cannot confound.
+ATS=${R34_ATS:-"rm 0x120000000 0x400000000 0x7cac33600000 0x768327600000 0x7f0000000000"}
 
 echo "=== ★★★★★ w418 — R34 GUEST-RAM CE, IN THE GUEST ==="
 
@@ -95,6 +106,24 @@ for d in $DEPTHS; do
 done
 
 echo "R34_GUEST_VERDICTS =$verdicts"
+
+echo "--- ★★★★★ ADDRESS SWEEP (decoys=0 on every arm; `rm` = RM-placed control) ---"
+at_verdicts=""
+for a in $ATS; do
+  if [ "$a" = "rm" ]; then arg=""; else arg="--guest-ram-at $a"; fi
+  printf "  %-16s " "$a"
+  aout=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 $arg 2>&1" \
+         | grep -oE 'src 0x[0-9a-f]+ dst 0x[0-9a-f]+|R34_OUTCOME=\([A-Z]\)|refused at .[^`]*. by name: [A-Za-z0-9()]*' \
+         | tr '\n' ' ')
+  echo "$aout" | cut -c1-170
+  av=$(echo "$aout" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
+  [ -z "$av" ] && av="R34_OUTCOME=(E)"
+  at_verdicts="$at_verdicts $a:${av#R34_OUTCOME=}"
+done
+echo "R34_AT_VERDICTS =$at_verdicts"
+# ⊘ The `src 0x…` echoed above is not decoration: a dictated address that is silently ignored
+# would pass every arm identically and read as "the address does not matter". Check that the
+# printed src MATCHES the arm before believing any row of this sweep.
 # ⊘ One line the ledger can grade. A depth that did not report is `(E)` UNMEASURED, never a
 # pass — an absent verdict has been read as a green in this tree before.
 # ⊘⊘ A TIMEOUT IS NOT A REFUSAL, and grading them together would misattribute.
