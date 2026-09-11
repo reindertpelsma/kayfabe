@@ -22,6 +22,47 @@ test code}, and a C QOM shim that links the whole thing into a stock QEMU. Devel
 today. \textbf{This document is pinned to Rust HEAD \code{5c367a38} (2026-08-20).}
 
 \smallskip
+⊘⊘⊘ \textbf{RE-STAMPED 2026-09-11 AT \code{5f323dd5}, AND SEVEN CLAIMS BELOW ARE NOW FALSE.}
+\textbf{477 commits} landed between the pin and this pass. Structural counts re-derived here, at
+\code{5f323dd5}: \textbf{1\,898 commits}, \textbf{231\,993 lines of implementation},
+\textbf{163\,998 lines of test code}, \textbf{23 crates} (24 workspace members counting
+\file{tests/}). \textbf{Every other number in this document is still \measured{} at
+\code{5c367a38}} unless a correction block beside it says otherwise. The seven reversals, each
+folded in place at the section that carries it:
+\begin{enumerate}\small
+\item \textbf{\emph{"No LLM has ever produced a token in this guest"} is FALSE, twice over.}
+  \measured{} 2026-09-06 (\code{w383llmgate}): \code{LLM\_TOKENS=16}, \emph{degenerate} text,
+  45\,s/token. \measured{} 2026-09-09, rev \code{c8fe67d6}: \code{W392\_OUTCOME=(P)},
+  \textbf{16 tokens whose text is byte-identical to the same-boot CPU oracle}, host \code{Xid}
+  \textbf{0}. The garbage-text cause was our own: \file{reach.rs} carried
+  \code{qualifies = \dots\ \&\& !is\_remap}, so a re-mapped joined row was never revoked and the
+  stale binding kept translating --- the guest read the \emph{previous} tensor.
+  ⊘ \textbf{It is not a stable pass}: \S\ref{sec:llmwall}'s correction block has the scope.
+\item \textbf{The blocking model is three owner rules now, and only two of them are met.} No
+  blocking work in a vCPU trap; \textbf{no blocking work under a lock a vCPU takes} (transitive
+  blocking counts); and a trap may not exceed \textbf{1\,ms}. \S\ref{sec:blocking} is new and
+  states what is built, what is only counted, and what is not enforced at all.
+\item \textbf{BAR1 and BAR2 default to UNTRAPPED} (\code{w431}, \file{qemu/hw/misc/nvkvm/nvkvm.c}
+  \code{:3519}/\code{:3521}, both props now \code{true}). \measured{} \code{w393},
+  \code{fa9d6395}: BAR1 traps \textbf{88\,193 $\to$ 91}, a 969$\times$ reduction, client
+  \code{(P)} on all arms, $n=2$, \code{Xid} 0. \S\ref{sec:blocking}.
+\item \textbf{The doorbell defaults to DEFERRED, and a doorbell is a HINT rather than a barrier.}
+  Owner, 2026-09-06: \emph{"there is no guarantee that a real GPU gives either --- the doorbell
+  runs immediately in-line, it's a schedule."} Nothing may gate on one.
+\item \textbf{\emph{"Both invalidate transports measured zero on the compute path"} was a CENSUS
+  GAP, not a property of the path}, and this paper built a normative rule on it
+  (\S\ref{sec:trust}). The census had no row for the transport RM actually uses.
+\item \textbf{\S\ref{sec:questions} Q2 is ANSWERED} --- the GSP command queue is serviced off the
+  vCPU entirely, with no inline fallback. ⊘ And the wait it was asked about \emph{did not move}.
+\item \textbf{\code{gpga.rs} (1\,391 lines) has ZERO production callers}, and this paper listed it
+  in a \built{} crate without saying so (\S\ref{sec:crates}). So does \file{refresh.rs} (583).
+\end{enumerate}
+⚠ \textbf{The reversals are not the whole delta and this pass does not claim they are.} It
+re-read the tree for the seven items above and for what \S\ref{sec:blocking} describes; it did
+not re-derive \S\ref{sec:testing}, \S\ref{sec:mutgate}, \S\ref{sec:qemu} or
+\S\ref{sec:multitenant}, whose sources report no change since the pin.
+
+\smallskip
 ⊘ \textbf{SUPERSEDED IN PART BEFORE ITS FIRST READING --- 2026-08-20 20:32, at \code{56dc01f3},
 and the superseded claim is this document's own headline blocker.} Twelve commits landed after
 this pin (boots \code{w357}--\code{w367}, all on the same real GA106). Two of them retire claims
@@ -794,6 +835,266 @@ the wire — see \S\ref{sec:bridge}) or downstream (\S\ref{sec:llmwall}).}
 \label{fig:datapath}
 \end{figure}\end{landscape}
 
+\subsection{\texorpdfstring{★★★★★ NEW 2026-09-11: the blocking model, and the three synchronisation points}{NEW 2026-09-11: the blocking model, and the three synchronisation points}}
+\label{sec:blocking}
+
+\begin{warnbox}\small
+\textbf{★★★★★ This subsection did not exist at the pin, and it replaces the design the rest of
+\S\ref{sec:perf} measures.} Everything above describes a device whose work happens \emph{inside}
+the guest's MMIO traps: a doorbell trap that publishes page tables, a GSP reply produced
+synchronously inside the trap that asked for it, BAR1 and BAR2 fully trapped. \textbf{All three
+have been restructured since 2026-08-21.} What follows is the current model, what is actually
+built of it, and the three places where it is stated but not enforced.
+\end{warnbox}
+
+\subsubsection*{The three rules}
+
+\begin{claimbox}\small
+\begin{enumerate}[itemsep=0.3ex]
+\item \textbf{No blocking work in a vCPU trap.} Owner, 2026-09-06: \emph{"Never do a blocking
+  call during a doorbell write, quickly re-enter the VM. Instead if you need to do mappings, run
+  the doorbell asynchronously. \textbf{There is no guarantee that a real GPU gives either} ---
+  the doorbell runs immediately in-line, it's a schedule."}
+\item \textbf{No blocking work under a lock a vCPU takes.} Transitive blocking counts: a worker
+  that holds the vCPU's lock across a slow call has moved the work and kept the wait.
+\item \textbf{A trap may not exceed 1\,ms.}
+\end{enumerate}
+\end{claimbox}
+
+\textbf{Rule 1 makes the doorbell a hint rather than a barrier, and that is the important
+half.} A real GPU gives no guarantee that work has not already been scheduled before the doorbell
+write lands, so \textbf{nothing in this system may gate on a doorbell.} The tree had already said
+so in a type before the ruling arrived: \code{GuestChannelKind::Emulated} declares
+\code{TrapContract::ScheduleAndReturn}, whose own doc reads \emph{"the handler must not run on the
+vCPU thread"}, and \code{SharedDoorbell::try\_ce\_submission} \emph{reported that contract as
+violated in the same breath} rather than enforcing it. ★ The distinction is now written into the
+code that does the work: \emph{a barrier finishes its VAS; a hint samples it} --- the
+doorbell-driven pass takes a row-count sample, the barrier paths drain to completion.
+⇒ The owner's publish-trigger preference ordering (2026-08-14) puts the doorbell \textbf{third}:
+\emph{"exact GPU boundary (TLB invalidate) $>$ trap the PTE write, as little as possible $>$
+deferred publish on doorbell $>$ work under the BQL."}
+
+\subsubsection*{★★★ Why there are THREE synchronisation points, and not one}
+
+This is the load-bearing correction to \S\ref{sec:trust}, and it took two wrong answers to reach.
+Page-table state can only change at a point where an honest guest is holding its own locks, and
+there are exactly three such points. The obvious unification --- \emph{"all three eventually
+lower to a hardware TLB invalidate, so there is really one barrier with three transports"} ---
+was written down, verified as far as RM's \code{vaspaceInvalidateTlb} lowering to
+\code{NV\_PFB\_PRI\_MMU\_INVALIDATE}, and then \textbf{refuted by the owner on the same day}:
+
+\begin{claimbox}\small
+\textbf{Owner, 2026-09-11, correcting both the author and their own earlier speculation:}
+\emph{"no the driver doesn't unif[y] them in one call, thats why we have 3 entrypoints. dont take
+that assumption. this is what I thought. my suspicion is that a real bare metal gsp does that in
+microcode, but since we impersonate that we must implement all 3 entrypoints"}
+\hfill \src{docs/design/PLAN\_barrier\_driven\_refresh\_w434.md}
+\end{claimbox}
+
+\textbf{The reason is the whole thesis of this project pointed at itself.} On a GSP part the
+mapping work happens \emph{inside the GSP}, and the GSP \textbf{is us}. A real GSP does its
+invalidate in microcode; nothing crosses the guest boundary for it. \textbf{So for that path no
+barrier will ever arrive, because there is nobody to hear from: we serviced the map, so we are
+the one who knows it happened.} A design that waits for a barrier on that path would look correct
+on any workload whose first synchronisation point is the register write, and would silently never
+refresh anything the GSP mapped on the guest's behalf.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}cl>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{\#} & \textbf{entry point} & \textbf{who tells us} & \textbf{our obligation, and its state} \\
+\midrule
+1 & \textbf{TLB invalidate} --- a BAR0 store to \code{0x00B8\_30B0} &
+  the guest, by writing the register & handled; wants scoping to what the register names.
+  ⚠ We \emph{must} clear bit 31 (\code{\_TRIGGER}) or the guest wedges: CPU-RM spin-polls it with
+  only a timeout check in the loop. \\
+\addlinespace
+2 & \textbf{RM call} --- a map/unmap RPC we service &
+  \textbf{nobody. We are the GSP.} & refresh inside our own handler, before the reply.
+  \built{} for \code{GPU\_PROMOTE\_CTX} (\code{w441}) and \textbf{generalised to every GSP RPC
+  that changes an address space} (\code{w456}): latch under the lock, refresh off it, drain
+  before the command drain so a posted reply is the guest's licence to use the space. \\
+\addlinespace
+3 & \textbf{UVM kernel channel} --- \code{MEM\_OP} \code{MMU\_TLB\_INVALIDATE} &
+  the guest, as a pushbuffer method & consume it and refresh \emph{before} we forward.
+  ⊘ \textbf{Wired (\code{w437}) and NEVER EXECUTED}: \code{MEMOP-CENSUS seen=0},
+  \code{refresh passes: 0} on both runs of the \code{w447} milestone. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{★ Point 3 needs no new wait object, and that is the cleanest argument in the plan.} The
+\code{MEM\_OP} and the completion semaphore are in the \emph{same} pushbuffer, we parse it before
+we forward it, and the engine cannot start until \emph{we} forward. \textbf{Ordering our own
+refresh before our own forward IS the block}, and it needs no guarantee from the guest. That is
+the C artifact's invariant stated from the other side
+(\file{src/qemu/nvkvm\_gpu\_emul.c:582}): \emph{"a mapping is always backed before the engine that
+uses it runs."}
+
+\textbf{And none of the three blocks a vCPU.} Owner, 2026-09-11: \emph{"ensure all 3 entrypoints
+block until the refresh is done \dots\ I dont mean with block inline in vcpu, all three have
+semaphores/wait bits the guest is spinning on \dots\ those only fire if the refresh thats off
+vcpu completes."} The guest's own wait primitive blocks; the off-vCPU refresh is the only thing
+that releases it. Each point already has one: the invalidate's trigger register, the message
+queue's reply, and the pushbuffer's own semaphore. ⚠ Every lane therefore needs a path that
+releases \emph{on refusal} too, or a refused refresh parks the guest forever.
+
+\subsubsection*{⊘ The three points are NOT sufficient, and the gap was found in NVIDIA's source rather than in a census}
+
+\measured{} by source audit of \code{ogkm-580.159.04}, 2026-09-11
+(\file{docs/design/uncovered\_page\_table\_writes\_w452.md}). ★ The useful result is a
+\emph{predicate} rather than a list, so it cannot go stale the way an enumeration does: routing to
+us is generic, so \textbf{the complete set of controls we can ever receive is exactly those whose
+NVOC export flags carry \code{RMCTRL\_FLAGS\_ROUTE\_TO\_PHYSICAL} (\code{0x40})}.
+\code{GPU\_PROMOTE\_CTX} has it; \textbf{every uncovered write below lacks it.} The sharpest of
+the uncovered set: a VA-space \emph{destruct} releases page-table levels with no invalidate
+anywhere in it; \code{VASPACE\_RELEASE\_ENTRIES} is a downgrade with no invalidate, freeing PDE
+memory for reuse while our host mappings stand; \code{DMA\_GET\_PDE\_INFO} is a \emph{read}
+control that materialises page tables; a PDB swap invalidates \emph{before} the write and never
+after, and its hardware-commit callback is a no-op on a GSP client; and page tables in sysmem are
+written as plain guest-RAM stores that emit nothing at any level.
+
+\textbf{⚠ And the audit's second finding points the opposite way from how it reads.} The BAR2
+bootstrap writes uninitialised PTE bytes that arrive as PRAMIN writes we trap. \textbf{A sweep
+triggered on the raw page-table byte write would decode framebuffer residue as PTEs and make
+mappings real on the host that the guest never authored} --- manufacturing an illegal mapping out
+of a benign guest transient. ⇒ \textbf{Publish on the invalidate or the doorbell. Never on the raw
+page-table byte write.}
+
+\textbf{★ The generalising rule the audit produced, and it retired one of its own rows.} Sparse
+ranges were first listed as an uncovered gap and then \textbf{withdrawn}: a sparse PTE maps
+\emph{nothing}, so there is no backing to make real and no work to miss. What matters is the
+mirror image --- an unmap that \emph{sparsifies instead of unmapping} is a \textbf{revocation},
+and a host mapping outliving it is a real defect. ⇒ \emph{What we must observe is not "a
+page-table entry changed" but "real backing appeared or disappeared."}
+
+\subsubsection*{What is built, what is only counted, and what is not enforced at all}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{4.4cm}l>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{mechanism} & \textbf{state} & \textbf{evidence} \\
+\midrule
+Doorbell deferred to a worker & \built{}, \textbf{default on} &
+  \code{DoorbellAsyncArm} maps an unset variable to \code{On}; the trap validates, enqueues and
+  returns, and a publication thread runs the identical body. ★ \textbf{There is no inline
+  fallback}: a full lane counts itself and arms a sweep rather than running on the vCPU. \\
+\addlinespace
+GSP command queue off the vCPU & \built{}, \textbf{no inline fallback} &
+  \code{NV\_PGSP\_QUEUE\_HEAD} writes record and return; a worker services the RPCs and raises
+  the interrupt. \measured{} \code{w447}, $n=2$: \textbf{561} RPCs serviced off the vCPU. \\
+\addlinespace
+BAR1 / BAR2 untrapped & \built{}, \textbf{default on} &
+  Both QEMU props default \code{true}. ⊘ \textbf{The mechanism is indirect and worth knowing}:
+  the regions are still constructed as pure MMIO, and the untrapping is a demand-driven
+  first-touch memslot mirror placed over the range; anything that still reaches the trap is
+  counted as a named miss. \measured{} \code{w393}: BAR1 traps \textbf{88\,193 $\to$ 91}. \\
+\addlinespace
+Host RM verb off the vCPU & ⊘ \textbf{NOT DONE --- counted, not prevented} &
+  \code{SharedDevice::verb\_op}'s execute phase still blocks the calling thread on an isolate
+  worker. \code{OffTrap::at\_a\_host\_verb} takes \emph{"the honest branch"}: a claim on the
+  worker, or a \textbf{counted} inline exception on a vCPU. It cannot panic in production.
+  \measured{} \code{w449}: \code{inline\_exceptions=24}. \\
+\addlinespace
+The 1\,ms trap budget & ⊘ \textbf{MEASURED, NEVER ENFORCED} &
+  \code{SLOW\_TRAP\_US = 1\_000} feeds three counters in the outermost trap guard
+  (\code{SLOW\_TRAPS}, \code{WORST\_TRAP\_US}, \code{WORST\_TRAP\_SITE}). \textbf{No abort, no
+  panic, no cap.} A budget that only counts is a metric, not an invariant. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{warnbox}\small
+\textbf{★★★★★ Moving the work off the vCPU did not move the WAIT, and the metric built to watch
+it stopped measuring its own purpose.} \measured{} \code{w447}, $n=2$: with the GSP queue
+deferred and \code{gsp\_off\_vcpu = 561}, \textbf{\code{worst\_trap = 1\,779\,094\,\textmu s at
+bar0+0x110c00}} --- which is \code{NV\_PGSP\_QUEUE\_HEAD(0)}, \emph{the exact register that had
+just been deferred} --- with \code{slow\_traps(>1000\textmu s) = 194}. The cause was rule 2: the
+vCPU's queue-head write takes the register plane's state lock, and the worker took \emph{the
+same} lock and held it across the whole drain. \textbf{The work moved into the worker and the
+wait moved into the lock.}
+
+\smallskip
+⊘ \textbf{Two fixes, neither of which moved it.} Bounding the hold to one command per acquire
+(\code{w448}) gave \code{1\,884\,058\,\textmu s}, \code{slow\_traps} 194 $\to$ 178. Giving the
+shared queue its own small mutex instead of riding the big state lock (\code{w457}) is landed and
+unmeasured. \measured{} \code{w449}: \textbf{no single command even reached 1\,ms}, so the 1.8\,s
+is a wait, not a computation.
+
+\smallskip
+★★★ \textbf{And a stack sampler then moved the question rather than answering it.} \measured{}
+\code{w460}, eight samples across 16\,s of steady-state client running: the publication worker is
+parked in its queue's blocking take \emph{every time}, and \textbf{no vCPU thread is anywhere in
+the MMIO write path.} ⇒ \textbf{\code{worst\_trap = 1.87\,s} is not a steady-state property; it
+does not happen while the workload runs.} Where it \emph{does} happen is unknown; the live
+hypothesis is GSP bring-up, once, before the client starts. ⊘ \textbf{A by-decade histogram was
+built for exactly this question (\code{w459}) and no boot has run with it, so any bucket figure
+quoted today would be invented.}
+
+\smallskip
+⚠ \textbf{The instrument lesson is the transferable part, and it bit twice.} First,
+\code{inline\_exceptions} fell from 166 while the thing it proxied for did not move at all ---
+\emph{a metric that stopped measuring its purpose}, findable only because \code{worst\_trap}
+carries its \emph{site}. Second, the figure it fell \emph{to} was wrong: the ledger's
+\code{grep -o 'inline\_exceptions=[0-9]*' | tail -1} was matching the harness's own goal string
+\code{(target: inline\_exceptions=0)}. \textbf{The real value is 24, not 0}, and the \code{0} was
+reported to the owner twice and still appears in the milestone document's own table.
+\end{warnbox}
+
+\subsubsection*{The threat model this narrows, and it is narrower than the paper's}
+
+\begin{claimbox}\small
+\textbf{Owner, 2026-09-11:} \emph{"thats only safe with locks in a honest guest, still remember
+that a malicious guest can write data underneath so for them protect a breakout/illegal action
+not a self corruption of the guest."}
+\end{claimbox}
+
+Reading page-table memory only inside a barrier's handler is safe \textbf{for an honest guest},
+because that is the one window in which the guest is holding its own locks. A malicious guest can
+write page-table memory underneath us and there is no window that prevents it. \textbf{The
+obligation is therefore asymmetric, and \S\ref{sec:trust} does not state it this way:} validate
+that what we read cannot make us touch memory we do not own or act on behalf of another
+\code{Proc}; \textbf{do not try to make a lying guest's own mappings coherent.} A guest that
+corrupts its own page tables gets its own work faulted, which is self-harm and not our problem
+--- and it gains nothing by it, because an unpublished mapping means \emph{our} host address
+space lacks the row and \emph{the guest's own} work faults.
+
+⇒ \textbf{The genuinely security-relevant boundary is object lifetime and our retire path, which
+we mediate directly. It is not the TLB.} That is a real narrowing of I1--I4's scope and it should
+be read alongside them, not instead of them.
+
+\subsubsection*{Two standing directives that have no design-doc home in this tree}
+
+\textbf{Stated here because they constrain every design above and a reader will not find them in
+\file{docs/design/}.} \textbf{(a) A VMM address may never be guest-chosen or guest-visible}, and
+may appear only inside the two audited \code{unsafe} crates, bounds-checked (owner, 2026-09-10,
+strict). \textbf{GPU VA identity with the guest is separately \emph{required}} --- the guest's
+VA is the key, and it is the one address that must match. \textbf{(b) Avoid blocking calls
+outside the isolate workers}, whose blocking is justified because NVIDIA's ioctls are blocking
+and most cannot be polled; elsewhere prefer a resumable call and a multiplexed wait, because
+\emph{"each blocking call is an unusable thread"} (owner, 2026-09-10). ★ The refinement in (b) is
+the useful one: the question is not \emph{how long did you sleep} but \textbf{could new work have
+woken you}, so \emph{a wait must name what can wake it} --- and a wait for one operation to
+complete and a multiplexed wait that includes it \emph{look identical in a stack trace and behave
+oppositely}. \unver{} in this document: (a) is carried from the owner's ruling and is not recorded
+in any design document in this tree, which is itself a gap worth closing.
+
+\subsubsection*{⊘ What this model has NOT yet bought}
+
+\begin{itemize}\small
+\item \textbf{Synchronisation point 3 has never executed.} \code{MEMOP-CENSUS seen=0} on both
+  milestone runs, \emph{while \code{P2 uvm-memop} verified}. A green P2 is not evidence for it.
+  Whether those channels emit anything we can observe is an open source question.
+\item \textbf{The sweep is still there.} The barrier plan's step 5 is to delete the pin-rate
+  sampling path, most of the publication-arm machinery and the convergence logic \emph{once} the
+  three points hold. None of that deletion has happened, so the tree currently carries both
+  designs.
+\item \textbf{The LLM has not been run under any of it.} The milestone that established the three
+  constraints says so in its own words: \emph{"The LLM. Untouched since this landed."}
+\item \textbf{Rule 3 is not enforced anywhere}, and rule 1's exception for host verbs is counted
+  rather than closed.
+\end{itemize}
+
 \subsection{The isolation model}
 
 \begin{landscape}\begin{figure}[p]
@@ -1230,7 +1531,8 @@ has been settled by doing it.} There are three (\code{kayfabe-chips}), and the p
 partly favourable and partly not: Ada needed no seam, Hopper needed one, and \emph{the seam it
 needed was in this crate}.
 
-\crate{kayfabe-mmu}{5\,128}{table \built{}; \textbf{walker built; GPGA new}}
+\crate{kayfabe-mmu}{5\,128 (\textbf{7\,006} at \code{5f323dd5})}{table \built{}; \textbf{walker
+built}; \textbf{GPGA and refresh are DESIGN-ONLY}}
 \code{AddressTable} is complete and is the enforcement point for the project's most-cited
 directive: forward-populate only, unbind eagerly, and \textbf{a miss is a fault} — no reverse
 resolve, no heuristic pick, no MRU fallback exists anywhere in the codebase.
@@ -1240,8 +1542,33 @@ gap that closed.} It read: \emph{"the \code{walker} module is 41 lines containin
 one enum, with no walk function of any kind."} The module is now 863 lines with \code{translate},
 \code{translate\_from\_entry}, \code{decode\_page}, \code{decode\_subtree},
 \code{leaf\_disposition} and \code{populate}, and \code{FbRead} has two implementors. It sits
-beside \code{gpga.rs} (1\,390 lines), the guest-physical address space, and \code{reach.rs}, the
+beside \code{gpga.rs} (1\,391 lines), the guest-physical address space, and \code{reach.rs}, the
 reachability-on-transition machinery.
+
+\begin{warnbox}\small
+\textbf{⊘⊘ CORRECTED 2026-09-11, AND IT IS THE EXACT DEFECT THIS PAPER NAMES ELSEWHERE AS THE
+TREE'S FAILURE MODE.} The paragraph above lists \code{gpga.rs} inside a \built{} crate and says
+nothing about whether anything calls it. \textbf{It has zero production callers.} Its only
+non-test consumer is a \code{viewer\_install} module that itself has zero production callers; the
+composition root depends on that crate and never names either. \file{refresh.rs} (583 lines) is
+the same: \textbf{no caller outside its own crate}, and its own doc says it is \emph{"the
+\textbf{model} of that rule \dots\ a pure fixpoint over mocked page tables."} ⇒ \textbf{Read
+both as DESIGN-ONLY.} \code{blockage.rs}, \code{reach.rs} and \code{walker.rs} do have production
+callers and are correctly described.
+
+\smallskip
+★ \textbf{The project's own assessment of this pattern is blunter than the paper's, and it is
+worth quoting against the paper.} \emph{"Mechanism without consumers. Built, wired, unit-tested,
+never reached."} Counted in one night: a 634-line production backing path still named
+\code{measure\_guest\_ram\_pin\_rate} after the measurement it used to be; a hold that fires
+\textbf{0} times against \textbf{304} row-binding RPCs; a decoded guest barrier read by
+\textbf{no production code and four tests}; and \textbf{648 lines across two modules with zero
+production referrers}. ⊘ One of those two modules, \code{promotion.rs}, was \textbf{deleted}
+(2026-09-11, 332 lines); \code{dbtable.rs} (316 lines) survives, unwired. ⇒ \textbf{Every
+crate-size figure in this section counts lines, and a line count cannot see whether a boot can
+reach the code.} \S\ref{sec:blocking} states which mechanisms have fired on hardware and which
+have not.
+\end{warnbox}
 
 \subsection*{\texttt{tests/} --- the conformance suite}
 158\,170 lines of test code against 198\,122 lines of implementation. There are \textbf{106} files
@@ -1407,6 +1734,47 @@ stable, and reading it under a perfect lock yields a perfectly-locked wrong answ
 
 The consequence — \emph{a shared table is evidence, never authority} — is why the address table
 is forward-populated and why a miss is a fault.
+
+★ \textbf{ADDED 2026-09-11: what Layer 1 is defending, stated narrowly.} The owner's ruling on
+the barrier-driven refresh scopes this model tighter than anything above says. \textbf{We defend
+against breakout and illegal action. We do not defend a guest against corrupting itself.} A
+malicious guest can write its own page-table memory underneath any window we read it in; the
+obligation is to validate that what we read cannot make us touch memory we do not own or act for
+another \code{Proc}, \emph{not} to make a lying guest's own mappings coherent. \S\ref{sec:blocking}
+has the ruling verbatim and the consequence: the security-relevant boundary is object lifetime and
+our retire path, which we mediate directly, and it is not the TLB.
+
+\begin{warnbox}\small
+\textbf{⊘⊘⊘ CORRECTED 2026-09-11, AND THIS IS THE MOST CONSEQUENTIAL STALE CLAIM IN THE
+DOCUMENT.} The paragraph below reads two measured zeros as a fact about the GSP-emulated compute
+path. \textbf{Both zeros were real and both were useless}, and the reason is the same one this
+paper records elsewhere as its own recurring defect: \emph{a census over transports is only as
+complete as its list.}
+\begin{itemize}\small
+\item \code{INVALIDATE\_TLB} RPC \code{fn=200} measured \textbf{0} because it \emph{cannot} fire:
+  its only caller is gated on a vGPU predicate that requires \code{IS\_VIRTUAL}, which is false
+  for us by construction.
+\item The \code{MEM\_OP} \code{MMU\_TLB\_INVALIDATE} pushbuffer method measured \textbf{0} because
+  \textbf{that is UVM's transport, not RM's.} RM never reaches the copy-engine path for page
+  tables at all.
+\item ⇒ \textbf{The census had no row for the transport RM actually uses}, which is a raw BAR0
+  store to \code{0x00B8\_30B0}. The zero was a property of the instrument.
+\end{itemize}
+\smallskip
+⇒ \textbf{"Read at the invalidate" is not refuted. It is one of THREE synchronisation points, and
+the current architecture is built on all three} (\S\ref{sec:blocking}). ★★★ And the third point
+is the sharpest thing this correction buys: \textbf{on a GSP part the mapping work happens inside
+the GSP, which is us, so for RM's own map calls no barrier is coming at all} --- we serviced the
+map, so we are the one who knows it happened, and the refresh has to live inside our own
+implementation of the RPC. ⚠ \textbf{Neither the old reading nor the new one is complete}: a
+source audit of the 580 open driver (2026-09-11) found page-table writes that none of the three
+points covers, and \S\ref{sec:blocking} enumerates them.
+\smallskip
+
+⊘ \textbf{The original paragraph is kept below, because a reader who acted on it needs to see
+which half was wrong.} Its general rule --- \emph{the Layer-2 edge is whichever edge the protocol
+commits at} --- is right, and is exactly what forces the count to three. Its instance was wrong.
+\end{warnbox}
 
 \textbf{And the C's measurement sharpened it in a way worth carrying.} The Layer-2 edge is
 \emph{whichever} edge the protocol commits at, not a favourite one. On the kernel/UVM/RM paths
@@ -2132,6 +2500,28 @@ before every submission is what makes our doorbell handler the dominant term in 
 \label{sec:perf}
 
 \begin{warnbox}\small
+\textbf{⊘⊘⊘ CORRECTED 2026-09-11: THE ARCHITECTURE THIS SECTION MEASURES HAS BEEN
+RESTRUCTURED, AND THE HEADLINE FINDING IS NOW A HISTORICAL ONE.} Everything below measures a
+device that published page tables \emph{inside} the guest's doorbell trap, on the vCPU. It no
+longer does. \textbf{The doorbell defaults to deferred, the GSP command queue is serviced off the
+vCPU with no inline fallback, and BAR1/BAR2 default to untrapped} (\S\ref{sec:blocking}). The
+\textbf{86.7\,ms trap} and its 91.5\,\% page-table share remain a correct and useful
+\measured{} decomposition of \emph{that} design; they are not a description of the current one.
+
+\smallskip
+★★★ \textbf{And the successor measurement says the binding constraint moved to a place nobody
+predicted.} \measured{} \code{w447}, $n=2$: \code{worst\_trap = 1\,779\,094\,\textmu s at
+bar0+0x110c00}, which is the \textbf{GSP queue-head register}, not a doorbell ---
+\code{slow\_traps(>1000\textmu s) = 194}. \textbf{Deferring the work off the vCPU did not move
+it}, because the worker held the same lock the vCPU takes; two lock fixes since have not moved it
+either. ⊘ \textbf{And a stack sampler (\code{w460}) then found no vCPU in the MMIO write path at
+all across 16\,s of steady-state running}, so the 1.87\,s is \emph{not} a steady-state property
+and where it happens is currently unknown. \textbf{No successor breakdown of that trap exists};
+the histogram built to produce one has never been run, so this paper quotes no bucket figures.
+\emph{The launch-floor arithmetic below should be read as pinned to the old design.}
+\end{warnbox}
+
+\begin{warnbox}\small
 \textbf{★★★★★ READ THIS BEFORE QUOTING ANY NUMBER IN THIS SECTION.} \measured{} 2026-08-19: the
 guest's \code{submit\_ms} for the \emph{same workload, same binary, same box} was \textbf{85.32,
 9.41 and 64.39\,ms} on three consecutive boots — \textbf{a 9.1$\times$ spread with the middle boot
@@ -2351,6 +2741,54 @@ the expense is our own work.
 
 \subsection{\texorpdfstring{★★★★★ The LLM wall: a ladder of controls, a fatal PAIR, and a milestone graded on a proxy}{The LLM wall: a ladder of controls, a fatal PAIR, and a milestone graded on a proxy}}
 \label{sec:llmwall}
+
+\begin{warnbox}\small
+\textbf{★★★★★ ⊘⊘⊘ CORRECTED 2026-09-11: THE WALL BROKE. THE LLM GENERATES, AND ITS OUTPUT IS
+CORRECT.} This whole section, and every bullet elsewhere in the paper that says \emph{"no LLM has
+ever produced a token in this guest"}, is \textbf{false as of 2026-09-06 and decisively false as
+of 2026-09-09}. It is folded in above rather than rewritten, because the sequence of wrong
+answers below is the record of how it fell.
+
+\smallskip
+\begin{itemize}\small
+\item \measured{} \textbf{2026-09-06}, \code{w383llmgate}, real GA106, pre-registered arm:
+  \code{LLM\_OK=1 LLM\_TOKENS=16 LLM\_MS=722820.0}, \code{MINMM\_SUM=64} intact, host
+  \code{Xid} \textbf{0}. That is \textbf{45\,s per token}, which is an optimisation problem rather
+  than a wall. ⊘ \textbf{And the text was degenerate.} The milestone was graded on a
+  \emph{count}, and \emph{a count cannot see a substitution} --- the same species of proxy grade
+  this paper already records twice.
+\item \measured{} \textbf{2026-09-09}, rev \code{c8fe67d6}: \code{W392\_OUTCOME=(P)}, \textbf{16
+  tokens whose text is byte-identical to the same-boot CPU oracle}, both \code{LLM\_DEVICE=cuda}
+  and \code{=cpu} printed with \code{RC=0}, host \code{Xid} \textbf{0}. \textbf{The content grade
+  passes.}
+\item ★★★ \textbf{And the cause of the garbage text was ours, not NVIDIA's.} \file{reach.rs}
+  carried \code{qualifies = \dots\ \&\& !is\_remap}, so a re-mapped joined row was never revoked
+  and \textbf{the old binding kept translating: the guest was reading the previous tensor.} The
+  guard itself had been a workaround for a release path that dropped bytes, fixed the same night
+  --- so an earlier fix is what made the later one safe.
+\end{itemize}
+
+\smallskip
+⊘ \textbf{WHAT THIS DOES NOT ESTABLISH, and the scope is as important as the result.}
+\textbf{(a)} It is \emph{not} a stable pass. The same workload fails under other arms, and the
+failure is now characterised as a \textbf{race rather than a missing mapping}: \measured{}
+\code{w425}, the pin of the faulting range and the \code{FAULT\_PDE ACCESS\_TYPE\_VIRT\_WRITE}
+land in the \textbf{same second}. ⇒ \emph{"we never backed it"} is false; \emph{"we backed it too
+late"} is the live reading. \textbf{(b)} \measured{} \code{w426}: the LLM boot issues
+\textbf{zero} \code{MAP\_MEMORY\_DMA}-family controls, so synchronisation point (2) cannot cover
+those rows however it is keyed --- the rows are \textbf{discovered by our sweep, not announced by
+the guest} (\S\ref{sec:blocking}). \textbf{(c)} It has \textbf{not been run under the three
+blocking constraints} at all: the milestone that established them says so in its own words,
+\emph{"The LLM. Untouched since this landed."} \textbf{(d)} The grade remains a count in the
+harness; the project's own requirements document marks that \textbf{RED} and demands a
+deterministic content assertion at $n \geq 3$ boots. \textbf{16 tokens at 45\,s/token on
+$n = 1$--2 boots is not a product.}
+
+\smallskip
+⚠ \textbf{Read everything below as the history of a wall that has since fallen}, and note that
+\emph{this section's own prediction that it would be wrong by the time it was read has now been
+correct twice.}
+\end{warnbox}
 
 \begin{claimbox}\small
 \textbf{This section was rewritten three times while this paper was being written}, as five
@@ -3484,7 +3922,17 @@ context sequentially in one boot still hangs"} — \textbf{false}; three sequent
 \textbf{What is still true, and it is now a different list rather than a shorter one.}
 
 \begin{itemize}
-\item \textbf{No LLM has ever produced a token in this guest.} The \code{cudart}
+\item ⊘⊘⊘ \textbf{FALSE AS OF 2026-09-06, AND THIS BULLET IS KEPT ONLY TO SHOW WHICH WAY IT
+  WAS WRONG: THE LLM GENERATES.} \measured{} 2026-09-09, rev \code{c8fe67d6}:
+  \code{W392\_OUTCOME=(P)}, 16 tokens, \textbf{text byte-identical to the same-boot CPU oracle},
+  host \code{Xid} 0 (\S\ref{sec:llmwall}). ⊘ \textbf{What is still true is a much narrower
+  sentence}: it is \textbf{45\,s per token}, the harness grade is still a \emph{count} and the
+  project's own requirements mark that RED, $n$ is 1--2 boots, the same workload still fails
+  under other arms on a \measured{} \textbf{race} (the pin and the \code{FAULT\_PDE} land in the
+  same second), and it \textbf{has never been run under the three blocking constraints}
+  (\S\ref{sec:blocking}). \emph{Nobody would run this yet; "it has never produced a token" is no
+  longer the reason.} The superseded original follows, kept rather than deleted.
+  \newline \emph{"No LLM has ever produced a token in this guest.} The \code{cudart}
   \emph{initialisation} wall is broken (\S\ref{sec:llmwall}); torch's full CUDA init raises
   \emph{"CUDA unknown error"}. ⚠ \code{Xid} 0 — \emph{a refusal we issue, not a fault.}
   ⊘ \textbf{This bullet used to name the cause} — \emph{"the failure moved one rung, into our own
@@ -3509,11 +3957,21 @@ context sequentially in one boot still hangs"} — \textbf{false}; three sequent
   (\S\ref{sec:ladder}), and no rung has yet removed them one at a time to see which the 43
   survives.
 \item \textbf{Performance is not close.} \S\ref{sec:perf}: 22--81$\times$ off native on large
-  kernels, our own doorbell handler dominating small ones, and operands in host system memory at
-  \textbf{2.51\,GB/s} against VRAM's 313.5.
+  kernels and operands in host system memory at \textbf{2.51\,GB/s} against VRAM's 313.5.
+  ⊘ \textbf{The clause "our own doorbell handler dominating small ones" is now historical}: the
+  doorbell defaults to deferred and the publication runs on a worker (\S\ref{sec:blocking}).
+  \textbf{No successor breakdown exists}, and the one number that replaced it points at a
+  different register: \code{worst\_trap = 1.78\,s at bar0+0x110c00}, the GSP queue head, which two
+  lock fixes did not move and which a stack sampler then showed does \emph{not} occur during
+  steady-state running. \emph{The floor moved and has not been re-measured.}
 \item \textbf{Reclamation is modelled on an event that does not occur.} \measured{} 2026-08-19:
   CUDA's suballocator \emph{does not unmap on \code{cuMemFree}}, so the shipped release trigger
   fires \textbf{zero times} on this workload and is behaviourally identical to \code{off}.
+  ⊘ \textbf{Refined 2026-09-11, and the refinement is a rule rather than a new trigger}: a source
+  audit of the 580 driver found that an unmap which \emph{sparsifies instead of unmapping} is a
+  genuine \textbf{revocation} and \emph{is} signalled, while the bulk sparsify at construction that
+  looked like a missed event is not an event at all. ⇒ \emph{what must be observed is not "a
+  page-table entry changed" but "real backing appeared or disappeared"} (\S\ref{sec:blocking}).
 \item \textbf{The trace vocabulary still does not emit.} A grep for the emit call over
   \code{crates/*/src} hits only the crate that defines it.
 \item \textbf{One part, one driver, one guest.} GA106, 580.159.04 open. The second architecture
@@ -4047,7 +4505,15 @@ knew it was second-hand. The claim that did not survive was marked \textbf{RESOL
 \label{sec:risks}
 
 \begin{itemize}
-\item \textbf{★★★★★ Nothing anyone would actually run works.} \S\ref{sec:llmwall}. The
+\item ⊘⊘⊘ \textbf{CORRECTED 2026-09-11 --- "Nothing anyone would actually run works" is no
+  longer the right sentence, and the right one is worse in a different way.} The model runs:
+  \measured{} 2026-09-09, 16 tokens, \textbf{output byte-identical to the same-boot CPU oracle},
+  0 \code{Xid} (\S\ref{sec:llmwall}). ⊘ \textbf{At 45\,s per token, on a grade the project's own
+  requirements mark RED because it is a count rather than a content assertion, at $n = 1$--2
+  boots, on a workload that has never been run under the three blocking constraints, and that
+  still fails under other arms on a measured race.} ⇒ \emph{The risk is no longer "it does not
+  work"; it is "it worked once, slowly, and nothing holds it there."} The superseded original
+  follows. \emph{"Nothing anyone would actually run works.} \S\ref{sec:llmwall}. The
   \code{cudart} initialisation wall is broken ($n = 2$ workloads) and \textbf{the model still
   produces zero tokens}. ⊘ \textbf{This bullet used to continue} \emph{"the failure moved one rung
   into our object graph"} \textbf{--- refuted at \code{129dd316}}, three minutes after this paper
@@ -4068,9 +4534,14 @@ knew it was second-hand. The claim that did not survive was marked \textbf{RESOL
 \item \textbf{★★ Performance is not close, and the two problems bind at different sizes.}
   \S\ref{sec:perf}. Operands sit in host system memory read at \textbf{2.51\,GB/s} against VRAM's
   313.5; compute is \textbf{22--81$\times$} off native at large kernel sizes, while at small ones
-  our own doorbell handler is the launch. \textbf{No tokens/second figure exists for this port at
-  all} ($n = 0$), and the one in circulation is arithmetic over a floor that has since moved by
-  ${\sim}20\times$.
+  our own doorbell handler is the launch. ⊘ \textbf{CORRECTED 2026-09-11 on both halves.} The
+  doorbell no longer runs the publication on the vCPU (\S\ref{sec:blocking}), so the second clause
+  describes a design that has been replaced and \textbf{no successor breakdown has been measured}.
+  And \emph{"no tokens/second figure exists at all ($n = 0$)"} is now false in the narrowest
+  possible way: \measured{} 2026-09-06, \code{LLM\_MS=722820.0} for 16 tokens is
+  \textbf{45\,s/token}. ⚠ \textbf{That is a number, not a parity figure} --- there is still no
+  native baseline on the same box, and the project records that anything computed from it is
+  \emph{"for the legacy arming"} and must say so.
 \item \textbf{The mocks are still the only implementation of \code{Device}, and a mock is where
   an invariant hid for an unknown number of commits.} \S\ref{sec:r1} is the measured
   demonstration that this is not a theoretical concern: 1\,975 green tests over a live R1 breach,

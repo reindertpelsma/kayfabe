@@ -17212,7 +17212,7 @@ pub const DOORBELL_ASYNC_ENV: &str = "KAYFABE_DOORBELL_ASYNC";
 /// # ⚠ AND THE HOLD IS A LIVENESS OBLIGATION, NOT A COST
 ///
 /// Every microsecond between `note_trigger` and `complete` is a microsecond the guest spins.
-/// [`kayfabe_device::mmuinval::INVALIDATE_HOLD_BUDGET_US`] bounds it and
+/// [`kayfabe_device::mmuinval::INVALIDATE_HOLD_CEILING_US`] bounds it and
 /// `worst_hold_us`/`over_budget` report it, so the boot measures its own damage. ⊘ The
 /// completion is taken in a `Drop` guard, never on the success path: a publication that
 /// panics, returns early or is refused **still clears**, because a guest hang must not be

@@ -102,7 +102,7 @@
 //! `timeoutInitializeGpuDefault` when the compute refcount crosses 0↔1 (`gpu.c:303-343`), so
 //! a `cup3` guest is on **4 s** until it allocates its first compute object and **30 s**
 //! after. ⇒ **design against 4 s**, which is the same bound `w317` budgets against, and take
-//! this tree's existing 1 % convention as the ceiling: [`INVALIDATE_HOLD_BUDGET_US`].
+//! this tree's existing 1 % convention as the ceiling: [`INVALIDATE_HOLD_CEILING_US`].
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -125,15 +125,31 @@ pub const MMU_INVALIDATE_UPPER_PDB_OFF: u64 = 0x30A4;
 /// (`ogkm-580: turing/tu102/dev_vm.h:127`).
 pub const PDB_ADDR_ALIGNMENT: u32 = 12;
 
-/// ★★ **`INLINE-SAFE` clause (b)'s bound for this plane**, and it is derived rather than
-/// chosen: 1 % of the **4 s** `gpuCheckTimeout` the guest arms before it starts polling
-/// (module docs §3). Deliberately the same number as `w317`'s `RETIRED_DRAIN_BUDGET_US`,
-/// because it is the same 1 %-of-4 s convention applied to a different 4 s.
+/// ⊘⊘⊘ **WAS `INVALIDATE_HOLD_CEILING_US = 40_000`. THAT NUMBER WAS ROT, AND THE HARMFUL KIND.**
 ///
-/// ⊘ It is a **diagnostic** ceiling, not an enforcement: nothing here can interrupt a
-/// publication that overruns. What it buys is that an overrun is *named* in the census
-/// instead of showing up three rungs later as an unexplained guest stall.
-pub const INVALIDATE_HOLD_BUDGET_US: u64 = 40_000;
+/// > **Owner, 2026-09-11:** *"why is there a hold budget?"* · *"is this old debugging stuf that
+/// > you left behind rot"* · *"the only thing NV_PFB_PRI_MMU_INVALIDATE should do is queue the
+/// > work and wake, then return … takes microseconds"* · *"I think no GPU MMIO write on
+/// > baremetal takes a ms"*
+///
+/// Yes. Three things were wrong with it and they compound:
+///
+/// 1. **It was derived against the GUEST'S TOLERANCE, not against hardware.** 1 % of the 4 s
+///    `gpuCheckTimeout` the guest arms before polling. *"The guest will not time out"* is a far
+///    weaker standard than *"a bare-metal MMIO write is sub-microsecond"*, and it licensed a
+///    **40 ms** hold as normal.
+/// 2. **It encoded the OLD design**, where the invalidate published INLINE on the vCPU. A hold
+///    was expected then, so budgeting it made sense. Publication moved to the worker, and a
+///    hold of tens of milliseconds became a bug rather than a budget — but the constant stayed
+///    and kept saying the bug was fine.
+/// 3. **It only ever fed a counter** (`over_budget`), never an enforcement, so it could tick
+///    quietly forever. `[measured w462]` it has been: `bar0+0xb830b0` took **48 slow traps,
+///    worst 54 053 us**, and nothing shouted because 54 ms is only just over a 40 ms "budget".
+///
+/// ⇒ It is now the owner's hard ceiling, and it is named a CEILING rather than a budget: a
+/// budget says *"this much is fine"*, a ceiling says *"past this is a bug"*. Every hold over
+/// **1 ms** is now counted, which is the whole population rather than its tail.
+pub const INVALIDATE_HOLD_CEILING_US: u64 = 1_000;
 
 /// The three BAR0 offsets, for one chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -271,7 +287,7 @@ pub struct MmuInvalidateSnapshot {
     pub doorbells: u64,
     /// The longest a single armed publication held `TRIGGER` set, in microseconds.
     pub worst_hold_us: u64,
-    /// Publications whose hold exceeded [`INVALIDATE_HOLD_BUDGET_US`].
+    /// Publications whose hold exceeded [`INVALIDATE_HOLD_CEILING_US`].
     pub over_budget: u64,
     /// ⚠ Non-zero means a trigger arrived while one was still pending. RM serialises these
     /// under its own lock, so a non-zero here is either a second RM client or our own
@@ -466,7 +482,7 @@ impl MmuInvalidateLog {
         if let Some(since) = g.pending_since_us.take() {
             let held = now_us.saturating_sub(since);
             g.snap.worst_hold_us = g.snap.worst_hold_us.max(held);
-            if held > INVALIDATE_HOLD_BUDGET_US {
+            if held > INVALIDATE_HOLD_CEILING_US {
                 g.snap.over_budget += 1;
             }
         }
@@ -655,7 +671,15 @@ mod tests {
         assert_eq!(log.read_trigger(), 0, "★★★ and now it proceeds");
         let s = log.snapshot();
         assert_eq!(s.worst_hold_us, 2_000);
-        assert_eq!(s.over_budget, 0);
+        // ⊘⊘ **THIS ASSERTED `0` AND THAT WAS THE ROT SPEAKING.** A 2 000 us hold was "within
+        // budget" only because the budget was 40 ms — a number derived from the guest's 4 s
+        // timeout rather than from hardware. Under the owner's real ceiling (1 ms, against a
+        // bare-metal MMIO write that is sub-microsecond) a 2 ms hold is a **violation**, and
+        // the counter must say so. The test failing on this line is the fix working.
+        assert_eq!(
+            s.over_budget, 1,
+            "a 2 ms hold is 2x the ceiling; counting it as compliant is what let              `bar0+0xb830b0` sit at 48 slow traps / worst 54 ms without anything shouting"
+        );
         assert_eq!(s.triggers, 1);
     }
 
@@ -723,7 +747,7 @@ mod tests {
         let log = MmuInvalidateLog::new();
         log.arm();
         log.note_trigger(0x8000_0001, 0);
-        log.complete(INVALIDATE_HOLD_BUDGET_US + 1);
+        log.complete(INVALIDATE_HOLD_CEILING_US + 1);
         assert_eq!(log.snapshot().over_budget, 1);
     }
 
