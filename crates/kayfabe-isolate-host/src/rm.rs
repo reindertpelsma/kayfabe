@@ -10412,17 +10412,56 @@ impl HostRmBackend {
     ///
     /// ⊘ Frees each successful attempt: this measures capacity, it does not take it.
     pub fn largest_reservable_mb(&mut self, start_mb: u64) -> u64 {
-        let mut mb = start_mb;
-        while mb >= 256 {
-            match self.conn.reserve_gpga(mb << 20) {
+        // ⊘⊘⊘ **THIS HALVED ON FAILURE AND REPORTED THE FIRST SUCCESS AS "THE LARGEST".**
+        //
+        // `[measured w426]` it printed `GPGA_LARGEST_RESERVABLE_MB=6144 (advertised today:
+        // 12288)` on an idle 12 GiB board, and that number went into a design note saying the
+        // GPGA reservation would **halve the VRAM the guest sees**. It is not a measurement of
+        // the card. `12288` failed, `6144` succeeded, and nothing between them was ever tried
+        // — the old loop's only step was `mb /= 2`.
+        //
+        // ⚠ The round number was the tell and I wrote it down instead of chasing it. Exactly
+        // one half is what a halving search returns when the first step down succeeds; it is
+        // an artefact of the step, not a property of the board. Same class as the ledger's
+        // *"a probe's private constant is the caller's trap"*.
+        //
+        // Now: halve only to find a FLOOR, then bisect the bracket to `GRAIN`, and report the
+        // largest size actually observed to succeed.
+        const GRAIN_MB: u64 = 64;
+        let mut hi = start_mb; // known-or-assumed FAIL
+        let mut lo = 0; // known PASS (0 always "passes")
+        // Phase 1 — find any success, halving. This is the old loop, kept only for the floor.
+        let mut probe = start_mb;
+        while probe >= 256 {
+            match self.conn.reserve_gpga(probe << 20) {
                 Ok(h) => {
                     let _ = self.free_one(h);
-                    return mb;
+                    lo = probe;
+                    break;
                 }
-                Err(_) => mb /= 2,
+                Err(_) => {
+                    hi = probe;
+                    probe /= 2;
+                }
             }
         }
-        0
+        if lo == 0 {
+            return 0;
+        }
+        // Phase 2 — bisect (lo, hi) to GRAIN_MB. ⊘ `hi` is a size that FAILED, `lo` one that
+        // SUCCEEDED, and the invariant holds at every step, so the returned value is always a
+        // size this process actually reserved and freed.
+        while hi - lo > GRAIN_MB {
+            let mid = lo + (hi - lo) / 2;
+            match self.conn.reserve_gpga(mid << 20) {
+                Ok(h) => {
+                    let _ = self.free_one(h);
+                    lo = mid;
+                }
+                Err(_) => hi = mid,
+            }
+        }
+        lo
     }
 
     fn free_one(&mut self, raw: u32) -> Result<(), RmError> {
