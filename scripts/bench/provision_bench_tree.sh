@@ -154,6 +154,27 @@ UD
   GS="timeout 120 ssh -n -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 \
       -o ServerAliveInterval=15 -o ServerAliveCountMax=3 ubuntu@127.0.0.1"
+  # ★★★★★ **AND HERE IS THE STEP THAT NEEDED ITS OWN BOUND AND DID NOT HAVE ONE.**
+  #
+  # `[measured w474, 2026-09-11]` the driver install below ran under the 120 s `$GS` and was
+  # **KILLED MID-INSTALL**. `/var/log/nvidia-installer.log` in the guest ended at
+  #     -> Kernel module compilation complete.
+  #     -> Unable to determine if Secure Boot is enabled: No such file or directory
+  # with **zero ERROR lines** — the modules BUILT and were never INSTALLED, because the
+  # installer's next phase (sign + copy into /lib/modules + depmod) is where the ssh died.
+  # Re-run detached and timed on the same box: **~3.5 minutes**, `EXIT_STATUS=0`.
+  #
+  # ⊘ Every downstream signal misdirects. `modinfo nvidia` is EMPTY, which reads as "the build
+  # failed"; the next boot reports `MODPROBE_RC=1`, which reads as a kernel mismatch; and the
+  # phase's own hint says to check for `cc` — but `cc`, `gcc`, `make` and the headers were all
+  # present and the compile had SUCCEEDED. A clean log with no error line is the signature of a
+  # KILL, not of a failure: **look at where the log stops, not at what it says.**
+  #
+  # ⇒ A long guest step gets a LONG bound, per the rule three lines up. It does not get to
+  # inherit the interactive one, and it does not get to have none.
+  GSL="timeout ${GUEST_LONG_TIMEOUT:-1800} ssh -n -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 \
+      -o ServerAliveInterval=15 -o ServerAliveCountMax=3 ubuntu@127.0.0.1"
   # ★ a guest needs ~20-25s to a login prompt and -serial output LAGS. A slow boot is not a crash.
   for i in $(seq 1 40); do
     $GS true >/dev/null 2>&1 && { say "B2: guest ssh up after $((i*10))s"; break; }
@@ -202,10 +223,18 @@ UD
          /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null; true"
 
   say "B2: installing guest driver (kernel-open)"
-  $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
+  $GSL "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
+  # ⚠ assert the COMPILER before spending five minutes finding out it is missing. `cc` absent
+  # here means the apt above never finished, which on a fresh cloud image is the mirror.
+  CCOK=$($GS "command -v cc >/dev/null && echo CC_PRESENT || echo CC_MISSING" 2>/dev/null | tr -d '\r')
+  say "B2: guest compiler = $CCOK"
+  [ "$CCOK" = "CC_PRESENT" ] || { say "⊘ B2: no \`cc\` in the guest -- the apt above did not finish (mirror)"; return 5; }
+  # ⊘ /tmp is a tmpfs on this image: a 400 MB .run there competes with the guest's RAM and does
+  # not survive a reboot. /var/tmp is on disk.
   scp -i "$BENCH/guest_key" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/tmp/nv.run >/dev/null 2>&1
-  $GS "sudo sh /tmp/nv.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j8" 2>&1 | tail -5
+      -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/var/tmp/nv.run >/dev/null 2>&1
+  # ⚠ ~3.5 min on a fast box, longer on a slow one -- this is the step w474 found truncated.
+  $GSL "sudo sh /var/tmp/nv.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j8; echo NVRUN_RC=\$?" 2>&1 | tail -5
   # ⚠ verify on CONTENT, not the installer's exit code
   # ★★ cuda.h — bench_rebuild_notes.md §D item 2. cup3/cup8 compile against <cuda.h> IN THE
   # GUEST; without it the workload never builds and w297 reports (D) UNMEASURED. Omitting this
@@ -243,7 +272,14 @@ UD
     *) say "⊘ B2: guest driver NOT verified -- leaving the guest UP for inspection"
     say "   ⚠ FIRST check the guest has a COMPILER: \`cc\` missing means this step's apt never"
     say "     finished, which on a fresh cloud image is almost always the mirror. The next boot"
-    say "     will report MODPROBE_RC=1, which reads as a kernel mismatch and is not one."; return 5 ;;
+    say "     will report MODPROBE_RC=1, which reads as a kernel mismatch and is not one."
+    say "   ★★ SECOND -- and this is what actually happened in w474 -- read WHERE the guest's"
+    say "     /var/log/nvidia-installer.log STOPS, not what it says. It ends at"
+    say "     \`Kernel module compilation complete\` with ZERO error lines when the driving ssh"
+    say "     was killed mid-install: the modules built and were never installed. A clean log"
+    say "     with no error line is the signature of a KILL, not of a failure."
+    $GS "tail -3 /var/log/nvidia-installer.log" 2>&1 | sed 's/^/     installer-log-tail: /'
+    return 5 ;;
   esac
   $GS "sudo poweroff" >/dev/null 2>&1 &
   sleep 20
@@ -270,6 +306,12 @@ echo "----- TRACK B -----"; cat /tmp/trackB.out
 # is easy to miss: a boot that measured NOTHING and a boot that measured a pass differ by one
 # letter in one line, and every other line in that ledger was full of real numbers.
 say "B4: building the guest-side mean client (musl)"
+# ⊘ `[measured w474]` this step failed with `cargo: command not found` and the script CARRIED ON
+# to print BENCH_TREE_DONE. cargo lives in ~/.cargo/bin, which a NON-INTERACTIVE ssh does not
+# have on PATH (~/.bashrc returns early before the cargo env line). Export it here rather than
+# relying on the caller's shell being interactive.
+export PATH="$HOME/.cargo/bin:$PATH"
+command -v cargo >/dev/null || say "⊘ B4: cargo is not on PATH even after \$HOME/.cargo/bin -- the ladder cannot build"
 ( cd "${KAYFABE_REPO:-/root/kayfabe}" \
   && cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder 2>&1 | tail -2 )
 GUEST_LADDER="${KAYFABE_REPO:-/root/kayfabe}/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
