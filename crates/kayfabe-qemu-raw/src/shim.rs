@@ -5094,6 +5094,10 @@ fn doorbell_publish_loop(
         if let Some(plane) = port.plane.upgrade() {
             plane.drain_mirror_revalidation();
         }
+        // ★★★★★ **w479 — and the isolate spawn, on the worker where it belongs.** Cheap and
+        // idempotent when nothing is latched: one rank-1 acquisition that moves an empty
+        // `Vec` and returns.
+        port.device.materialize_pending();
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::MirrorFill {
             // Nothing else to do: the drain above IS the work.
             queue.note_completed();
@@ -15222,7 +15226,38 @@ impl Regs {
         //
         // ⊘ `materialize_pending` asserts lock-freedom, so if any of the above is wrong this
         // is refused **by name, here**, rather than by a spawn six crates away.
-        self.device.materialize_pending();
+        // ★★★★★ **w479 — THE 2.24 s TRAP, MOVED OFF THE vCPU.**
+        //
+        // `[attributed w395, confirmed w470]` this call IS the worst trap in the device.
+        // w395's segment timer read `materialize max_us=1877849` against
+        // `worst_trap=1877907us`; w470's 10 Hz stack sample caught the vCPU parked inside it
+        // at `spawn_host → proto::read_frame → UnixStream::read → __recv` — **forking a
+        // sandbox process and blocking on its handshake, inside the guest's MMIO exit.**
+        // ⊘ w395 labelled it the memslot install; the stack says process spawn. Same
+        // function, different reason, and the reason is what decides the fix.
+        //
+        // §16.96 moved this OUT from under the plane's rank-0 lock and drained it here
+        // instead, which satisfied `assert_lock_free` completely and left it on the vCPU.
+        // That is R1 and R0 being two halves of one rule (see `lockwitness`).
+        //
+        // ⚠ **The ordering this gives up, stated plainly.** The old comment's argument was
+        // that a forward later in this same write finds the isolate already installed. With
+        // the spawn on the worker it may not, and `verb_op`'s `FwdFault::IsolatePending` arm
+        // materialises **on whatever thread hit it** — so the spawn could simply reappear at
+        // a different vCPU site. That is a real risk and it is why this lands behind an arm
+        // with a census rather than as a claim: `VCPU-BLOCKING` names the doors, so one boot
+        // says whether the spawn moved or merely relocated.
+        static INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
+            || !self.doorbell_async.defers()
+        {
+            self.device.materialize_pending();
+        } else {
+            let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let _ = self
+                .pubqueue
+                .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+        }
         kft.mark("materialize");
         // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
         //
