@@ -1433,3 +1433,67 @@ fn a_refused_counter_write_leaves_the_counter_readable_and_advancing() {
         "the clock must still be advancing across a refused write"
     );
 }
+
+/// ★★★★★ **w432 — A QUEUE-HEAD WRITE MUST RECORD AND RETURN, NOT SERVICE.**
+///
+/// `[measured]` servicing the GSP command queue inside this store is the worst trap in the
+/// device: `at=bar0+0x110c00` held a vCPU for **1.79 s**, because one guest register write
+/// drains and services every queued RPC, host verbs included, before returning.
+///
+/// With deferral armed the store must leave a COUNT behind and do none of that work.
+///
+/// ⊘ Two halves, and the second is the one that matters: it is not enough that the count
+/// rises — the write must ALSO not have serviced anything, or deferral would just be extra
+/// bookkeeping on top of the trap it is meant to remove.
+#[test]
+fn an_armed_queue_head_write_records_and_returns() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    plane.set_defer_commands(true);
+    assert_eq!(plane.pending_command_doorbells(), 0);
+
+    let w = plane.write(0, 0x0011_0c00, 4, 0);
+    assert!(w.claimed, "the register model still owns the write");
+    assert_eq!(w.fault, None, "deferring is not a refusal");
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        1,
+        "an armed queue-head write must leave exactly one doorbell for the worker"
+    );
+
+    // ★ TWO writes are TWO queue states. A bool here would service once and strand the
+    // guest's second submission behind a wake that never comes again.
+    let _ = plane.write(0, 0x0011_0c00, 4, 0);
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        2,
+        "deferral must COUNT, not latch"
+    );
+
+    // ⊘ And the drain must take them ALL, leaving nothing banked.
+    let (serviced, _owed) = plane
+        .service_deferred_commands()
+        .expect("a cold queue services cleanly");
+    assert_eq!(serviced, 2, "the drain must service every banked doorbell");
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        0,
+        "the drain must leave nothing banked, or the next wake services stale state"
+    );
+}
+
+/// ⊘ UNARMED, the write keeps servicing inline — so no existing boot changes meaning until
+/// the device arms deferral alongside a worker that drains it.
+#[test]
+fn an_unarmed_queue_head_write_still_services_inline() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    let w = plane.write(0, 0x0011_0c00, 4, 0);
+    assert!(w.claimed);
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        0,
+        "without deferral armed nothing may be banked: the work was done inline"
+    );
+    assert_eq!(w.transitions, 1, "the inline path still reports its transition");
+}
