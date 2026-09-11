@@ -296,3 +296,41 @@ pair** — holds without releases is a parked guest, neither is a guest that nev
 ⇒ **Next: read those two counters in the w426 boot.** If the hold never fires for the RPC that
 declares the LLM's operand range, that is the defect and the fix is to make it fire. If it
 fires and the fault still happens, the reply is being released before the pin finishes.
+
+
+---
+
+# ⊘⊘ STOPPED FOR AN OWNER DECISION — 2026-09-11, ~06:20
+
+The diagnosis is complete and the identified fix needs a call that is not mine to make.
+
+## The decision
+
+The fix for the race is the owner's own GPGA design — reserve guest VRAM as one RM object at
+boot so backing is eager rather than lazy, and derive the advertised size from a successful
+reservation. **Re-measured tonight on the bench:**
+
+    GPGA_LARGEST_RESERVABLE_MB = 6144      (advertised today: 12288)
+
+⇒ Implementing the design as written **halves the VRAM the guest sees**, on a 12 GiB card.
+The doc already says the advertised size follows the reservation, so this is that rule
+arriving with a number attached — but it is a product-visible change and it should be yours.
+
+Options, as I see them:
+1. **Advertise 6144.** Simplest, matches the doc, costs the guest half the card.
+2. **Find out why only half is reservable first.** `6144` is exactly half, which smells like a
+   per-client or contiguity limit rather than real occupancy. ⊘ `reserve_gpga` is already
+   NON-contiguous and page-aligned, so the obvious cause is already excluded.
+3. **Reserve lazily in chunks** — keeps the advertised size, loses "refuse to boot on failure",
+   which is the property that makes the design safe.
+
+## Also open, and cheaper than the above
+
+- **`PT-DECODE latched=0 requeued=1903 rounds=0`** on the w426 boot (w416 latched 53 in 2
+  rounds). The earliest discovery point did nothing all boot. `EXEC-WITNESS` on the same boot
+  says `⊘SKIPPED(w318 dirty gate …)` — check that gate first.
+- **The 4th-device-open wedge** (`ce_utils.c:304`, no CE class enumerated on the 4th adapter
+  init). Separate from the LLM, seconds to reproduce, and it confounds any sweep past 4 arms.
+- **`holds_for_refresh` fires 0 times against 304 row-binding RPCs** — a real bug in
+  synchronization point (2), irrelevant to the LLM (that boot issues zero map RPCs) but wrong
+  for every path that does use one.
