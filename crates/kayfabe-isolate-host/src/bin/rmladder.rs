@@ -11604,6 +11604,11 @@ fn main() -> std::process::ExitCode {
     // looking like one; a depth below the real workload's tests nothing the client already did.
     let mut want_ce_guest_ram = false;
     let mut guest_ram_decoys: usize = 13_000;
+    /// ★ `--guest-ram-at <hex>` — dictate the operands' GPU VA. `None` = RM places them, the
+    /// committed behaviour. `[measured w419]` R34 passes in the guest at RM's own placement
+    /// (`0x1_2000_0000`); the LLM faults at `0x7cac_3360_0000`, which is where CUDA's unified
+    /// addressing puts a device pointer. This is how those two are compared.
+    let mut guest_ram_at: Option<u64> = None;
     let mut want_ce_client_fault = false;
     // ★ w305 — see `--ce-client-fault-shared-vas`. Default false ⇒ byte-identical default arm.
     let mut want_ce_client_fault_shared_vas = false;
@@ -11881,6 +11886,19 @@ fn main() -> std::process::ExitCode {
             // the sandbox rung or a second channel along.
             "--ce-client" => want_ce_client = true,
             "--ce-client-guest-ram" => want_ce_guest_ram = true,
+            "--guest-ram-at" => {
+                let Some(v) = args.next() else {
+                    eprintln!("--guest-ram-at needs a hex address");
+                    return std::process::ExitCode::from(2);
+                };
+                let t = v.trim().trim_start_matches("0x");
+                let Ok(a) = u64::from_str_radix(t, 16) else {
+                    eprintln!("--guest-ram-at: `{v}` is not hex");
+                    return std::process::ExitCode::from(2);
+                };
+                guest_ram_at = Some(a);
+                want_ce_guest_ram = true;
+            }
             "--guest-ram-decoys" => {
                 let Some(v) = args.next().and_then(|v| v.trim().parse::<usize>().ok()) else {
                     eprintln!("--guest-ram-decoys needs a count");
@@ -12052,7 +12070,7 @@ fn main() -> std::process::ExitCode {
             println!("FAIL  R34 guest-RAM CE   = could not allocate a VAS — UNMEASURED");
             return std::process::ExitCode::from(1);
         };
-        let ok = match rm.prove_ce_copy_from_guest_ram(vas, 0xC0FF_EE34, guest_ram_decoys) {
+        let ok = match rm.prove_ce_copy_from_guest_ram(vas, 0xC0FF_EE34, guest_ram_at, guest_ram_decoys) {
             Ok((e, declared)) => {
                 let moved = e.after == e.expect_after && e.after_last == e.expect_after_last;
                 println!(

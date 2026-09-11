@@ -9117,6 +9117,18 @@ impl HostRmBackend {
         &mut self,
         vas: HostHandle,
         pattern: u32,
+        // ★★★★★ **w419 — THE ADDRESS, which is now the ONLY difference left.**
+        //
+        // `[measured w419]` R34 PASSES in the guest at depth 0 and depth 2000, byte-correct.
+        // So *"a guest-RAM CE operand does not work"* is refuted, and so is the scale story
+        // that motivated the decoys. What still differs from the LLM is the **VA**: R34's
+        // operands land at `0x1_2000_0000` (our operand space, RM-placed), and the LLM faults
+        // at `0x7cac_3360_0000` — a process-VA-shaped address ~137 TB up, which is what
+        // CUDA's unified addressing hands out.
+        //
+        // `Some(va)` dictates the placement so the two can be compared with one variable
+        // changed. ⊘ `None` keeps the byte-identical committed behaviour.
+        at: Option<u64>,
         decoys: usize,
         // ⊘⊘ `[measured w417, in the live guest]` this returned a bare `RmError` and the rung
         // printed `refused by name: Other(31)` — `NV_ERR_INVALID_ARGUMENT` from ONE of six RM
@@ -9172,11 +9184,14 @@ impl HostRmBackend {
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
         let mut go = || -> Result<CeEvidence, (&'static str, RmError)> {
             let src_va = self
-                .map_dma_both(range, src, BYTES, None)
+                .map_dma_both(range, src, BYTES, at)
                 .map_err(|e| ("map_dma_both(src) — the GUEST-RAM operand's GPU VA", e))?;
             cleanup[0].1 = Some(src_va);
+            // ⊘ One page above the source when a placement is dictated, so the pair stays
+            // inside the same page-directory subtree — the thing under test is the ADDRESS
+            // RANGE, and scattering the two operands would change a second variable.
             let dst_va = self
-                .map_dma_both(range, dst, BYTES, None)
+                .map_dma_both(range, dst, BYTES, at.map(|a| a + BYTES))
                 .map_err(|e| ("map_dma_both(dst)", e))?;
             cleanup[1].1 = Some(dst_va);
 
