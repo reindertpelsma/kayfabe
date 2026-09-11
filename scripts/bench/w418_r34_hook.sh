@@ -125,28 +125,51 @@ at_verdicts=""
 for a in $ATS; do
   if [ "$a" = "rm" ]; then arg=""; else arg="--guest-ram-at $a"; fi
   printf "  %-16s " "$a"
-  aout=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 $arg 2>&1" \
+  # ⊘⊘ Capture RAW first, filter second. `[measured w421]` three arms printed a BLANK line and
+  # graded `(E)`, and the evidence for why was discarded by this very `grep -oE` before anyone
+  # could read it — an unmeasured arm is exactly the arm whose output you need.
+  raw=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 $arg 2>&1")
+  aout=$(printf '%s' "$raw" \
          | grep -oE 'src 0x[0-9a-f]+ dst 0x[0-9a-f]+|R34_OUTCOME=\([A-Z]\)|refused at .[^`]*. by name: [A-Za-z0-9()]*' \
          | tr '\n' ' ')
   echo "$aout" | cut -c1-170
   av=$(echo "$aout" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
-  [ -z "$av" ] && av="R34_OUTCOME=(E)"
+  if [ -z "$av" ]; then
+    av="R34_OUTCOME=(E)"
+    # ⚠ Three DIFFERENT facts arrive as the same blank: the guest went away, the rung died on
+    # a signal, or it printed something the filter does not know. Tell them apart.
+    if ! $G true >/dev/null 2>&1; then
+      echo "      ⊘ GUEST UNREACHABLE at this arm — the run was not made; says NOTHING about the address"
+    else
+      echo "      ⊘ no verdict, guest is UP ⇒ this is the rung's own output:"
+      printf '%s\n' "$raw" | tail -6 | sed 's/^/        /' | cut -c1-190
+    fi
+  fi
   at_verdicts="$at_verdicts $a:${av#R34_OUTCOME=}"
 done
 echo "R34_AT_VERDICTS =$at_verdicts"
 
 if [ "$H2D" = "1" ]; then
-  echo "--- ★★★★★ H2D SHAPE: source GUEST RAM, destination DEVICE MEMORY (`.to('cuda')`) ---"
+  echo "--- ★★★★★ H2D SHAPE: source GUEST RAM, destination DEVICE MEMORY (a .to(cuda) upload) ---"
   h2d_verdicts=""
   for a in rm 0x7cac33600000; do
     if [ "$a" = "rm" ]; then arg=""; else arg="--guest-ram-at $a"; fi
     printf "  h2d %-16s " "$a"
-    hout=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 --guest-ram-dst-vidmem $arg 2>&1" \
+    hraw=$($G "sudo timeout $TMO /tmp/rmladder --gpu 0 --guest-ram-decoys 0 --guest-ram-dst-vidmem $arg 2>&1")
+    hout=$(printf '%s' "$hraw" \
            | grep -oE 'src 0x[0-9a-f]+ dst 0x[0-9a-f]+|R34_OUTCOME=\([A-Z]\)|refused at .[^`]*. by name: [A-Za-z0-9()]*' \
            | tr '\n' ' ')
     echo "$hout" | cut -c1-170
     hv=$(echo "$hout" | grep -oE 'R34_OUTCOME=\([A-Z]\)' | tail -1)
-    [ -z "$hv" ] && hv="R34_OUTCOME=(E)"
+    if [ -z "$hv" ]; then
+      hv="R34_OUTCOME=(E)"
+      if ! $G true >/dev/null 2>&1; then
+        echo "      ⊘ GUEST UNREACHABLE at this arm — the run was not made"
+      else
+        echo "      ⊘ no verdict, guest is UP ⇒ the rung's own output:"
+        printf '%s\n' "$hraw" | tail -6 | sed 's/^/        /' | cut -c1-190
+      fi
+    fi
     h2d_verdicts="$h2d_verdicts h2d-$a:${hv#R34_OUTCOME=}"
   done
   echo "R34_H2D_VERDICTS =$h2d_verdicts"
