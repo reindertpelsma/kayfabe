@@ -153,21 +153,29 @@ pub fn acquisitions(rank: u8) -> u64 {
 /// it a panic once the list is empty.
 mod vcpu {
     use core::cell::Cell;
-    use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+    use core::sync::atomic::{AtomicU64, Ordering};
+    use std::collections::BTreeMap;
+    use std::sync::{Mutex, OnceLock, PoisonError};
 
     thread_local! {
         static IS_VCPU: Cell<bool> = const { Cell::new(false) };
     }
 
-    /// 32 slots, keyed by the `&'static str`'s pointer, exactly like the trap witness's
-    /// inline-reason table: lock-free, and safe to touch from a trap.
-    const SLOTS: usize = 32;
-    static KEY: [AtomicUsize; SLOTS] = [const { AtomicUsize::new(0) }; SLOTS];
-    static HITS: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
-    static TEXT: [std::sync::OnceLock<&'static str>; SLOTS] =
-        [const { std::sync::OnceLock::new() }; SLOTS];
-    static OVERFLOW: AtomicU64 = AtomicU64::new(0);
     static TOTAL: AtomicU64 = AtomicU64::new(0);
+    static OVERFLOW: AtomicU64 = AtomicU64::new(0);
+    /// ⊘⊘ **KEYED ON CONTENT, NOT ON A POINTER.** The first cut keyed on a `&'static str`'s
+    /// address, like the trap witness's inline-reason table — and the two public doors take
+    /// `&str`, so `[measured w471]` all **1239** hits folded into ONE bucket named
+    /// *"(dynamically-named blocking door)"*, while the five real door names existed only in
+    /// capped `eprintln` lines. A census whose rows are unnamed is a count, not a census, and
+    /// the print cap means a door first reached late in a boot would not appear at all.
+    /// ⊘ A `Mutex` is acceptable here precisely because this is reached only when the
+    /// invariant is ALREADY violated — it is not on a path that is supposed to exist.
+    static TABLE: OnceLock<Mutex<BTreeMap<String, u64>>> = OnceLock::new();
+
+    fn table() -> &'static Mutex<BTreeMap<String, u64>> {
+        TABLE.get_or_init(|| Mutex::new(BTreeMap::new()))
+    }
 
     /// Declare the calling thread a vCPU. Idempotent; called at the MMIO trap entry.
     pub fn mark() {
@@ -180,25 +188,14 @@ mod vcpu {
     }
 
     /// Record one blocking door reached on a vCPU thread. Returns the running total.
-    pub fn note(what: &'static str) -> u64 {
-        let ptr = what.as_ptr() as usize;
-        let mut placed = false;
-        for i in 0..SLOTS {
-            let cur = KEY[i].load(Ordering::Relaxed);
-            if cur == ptr
-                || (cur == 0
-                    && KEY[i]
-                        .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
-                        .is_ok())
-            {
-                let _ = TEXT[i].set(what);
-                HITS[i].fetch_add(1, Ordering::Relaxed);
-                placed = true;
-                break;
+    pub fn note(what: &str) -> u64 {
+        {
+            let mut g = table().lock().unwrap_or_else(PoisonError::into_inner);
+            if g.len() < 256 || g.contains_key(what) {
+                *g.entry(what.to_string()).or_insert(0) += 1;
+            } else {
+                OVERFLOW.fetch_add(1, Ordering::Relaxed);
             }
-        }
-        if !placed {
-            OVERFLOW.fetch_add(1, Ordering::Relaxed);
         }
         TOTAL.fetch_add(1, Ordering::Relaxed) + 1
     }
@@ -208,20 +205,19 @@ mod vcpu {
     /// must not read the same.
     #[must_use]
     pub fn census() -> String {
-        let mut rows: Vec<(u64, &'static str)> = (0..SLOTS)
-            .filter_map(|i| {
-                let h = HITS[i].load(Ordering::Relaxed);
-                let t = *TEXT[i].get()?;
-                (h > 0).then_some((h, t))
-            })
+        let mut rows: Vec<(u64, String)> = table()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .map(|(k, v)| (*v, k.clone()))
             .collect();
-        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-        let total = TOTAL.load(Ordering::Relaxed);
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         if rows.is_empty() {
             return "VCPU-BLOCKING none — no blocking door was reached on a vCPU thread \
                     (the owner's first invariant holds by measurement, not by assumption)"
                 .to_string();
         }
+        let total = TOTAL.load(Ordering::Relaxed);
         let mut out = format!("VCPU-BLOCKING total={total} doors={}", rows.len());
         for (h, t) in rows {
             out.push_str(&format!(" [{h} × {t}]"));
@@ -307,19 +303,7 @@ fn assert_not_on_vcpu(what: &str) {
     if !vcpu::is_vcpu() {
         return;
     }
-    // ⊘ Leak-free static naming: the overwhelmingly common case is a literal, and the
-    // fallback bucket keeps a dynamic name visible without allocating per call.
-    let key: &'static str = match what {
-        "spawn a host isolate" => "spawn a host isolate",
-        other => {
-            if other.is_empty() {
-                "(unnamed blocking door)"
-            } else {
-                "(dynamically-named blocking door — see the boot log)"
-            }
-        }
-    };
-    let n = vcpu::note(key);
+    let n = vcpu::note(what);
     static FATAL: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let fatal = *FATAL.get_or_init(|| std::env::var("KAYFABE_VCPU_BLOCK_FATAL").is_ok());
     assert!(
@@ -328,11 +312,24 @@ fn assert_not_on_vcpu(what: &str) {
          MMIO trap may only classify, update O(1) shadow state, enqueue and wake — the work \
          belongs on a worker, and the guest blocks on ITS OWN wait primitive."
     );
-    // Census mode: say it once per door, then only count.
-    if n <= 64 {
+    // ⊘ Census mode prints each door once; the COUNT is the census line, not these.
+    // `[measured w471]` a per-hit print at 1239 hits is a second workload, and a global cap
+    // would hide a door first reached late in a boot — which is why the table above is
+    // keyed on content and printed in full at teardown.
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<std::collections::BTreeSet<String>>> =
+        std::sync::OnceLock::new();
+    let seen = SEEN.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeSet::new()));
+    let first = {
+        let mut g = seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.insert(what.to_string())
+    };
+    if first {
         eprintln!(
-            "kayfabe: ⊘ VCPU-BLOCKING `{what}` on a vCPU thread (#{n}) — this trap cannot \
-             be microseconds; the work belongs on a worker"
+            "kayfabe: ⊘ VCPU-BLOCKING (door #{}) `{what}` reached on a vCPU thread — this \
+             trap cannot be microseconds; the work belongs on a worker (hit {n} overall)",
+            vcpu::census().matches(" × ").count()
         );
     }
 }
