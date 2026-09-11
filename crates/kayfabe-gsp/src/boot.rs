@@ -1718,6 +1718,22 @@ impl GspFsm {
         // deliberately not reachable through it: a teardown reply must never wait on a
         // publication, and it changes no address space, so it never sets the flag.
         if held_this_command {
+            // ⊘⊘ `[measured w425]` this push was SILENT, and the silence read as absence: a
+            // whole boot's log carried no held-reply line and I concluded the mechanism never
+            // fired. That is the ledger's *"no counter fired is NOT no record exists"* one
+            // level up — nothing here ever wrote a counter to begin with.
+            //
+            // ⚠ This is the RPC-map synchronization point. Whether a map reply waits for its
+            // rows is the difference between the guest submitting work against a backed range
+            // and against an unbacked one, and `[measured w425]` the pin of the LLM's faulting
+            // range completed in the SAME SECOND as the `FAULT_PDE ACCESS_TYPE_VIRT_WRITE`
+            // that hit it. So "did the hold run" must be legible FROM the artefact, never
+            // inferred from the absence of some other line.
+            eprintln!(
+                "kayfabe: HELD-REPLY fn={:?} depth={} — this map reply WAITS for its rows",
+                cmd.function,
+                self.held.len() + 1
+            );
             self.held.push(HeldReply { rpc: out });
         } else {
             self.post(ram, &out)?;
@@ -1868,6 +1884,12 @@ impl GspFsm {
             self.post(ram, &rpc)?;
             self.held.remove(0);
             posted += 1;
+        }
+        if posted > 0 {
+            // ★ The pair of the HELD-REPLY line. Two counters that must be read together:
+            // a boot with holds and no releases is a PARKED GUEST, and a boot with neither
+            // is a guest that never waited for its rows at all. Neither is visible from one.
+            eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
         }
         Ok(posted)
     }
