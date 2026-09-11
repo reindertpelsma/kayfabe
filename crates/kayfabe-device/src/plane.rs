@@ -3159,6 +3159,19 @@ impl RegPlane {
     /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
     #[must_use]
     pub fn pending_command_doorbells(&self) -> u32 {
+        // ⊘⊘ **A/B ARM, w467.** `KAYFABE_PENDING_VIA_LOCK=1` restores w432's behaviour — read
+        // the count through the big `state` lock — so the two can be compared in ONE binary.
+        //
+        // `[measured w466]` removing that lock acquisition coincided with `slow_traps`
+        // **166 -> 6863** and `bar0+0xb830b0` **48 -> 853**. That is the opposite of the
+        // intended effect, and I have already been wrong three times about this trap's cause.
+        // ⚠ An A/B in one binary is the only thing that separates *"my change did it"* from
+        // *"something else did, and my change is merely innocent"* — two boots of different
+        // binaries cannot.
+        static VIA_LOCK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *VIA_LOCK.get_or_init(|| std::env::var("KAYFABE_PENDING_VIA_LOCK").is_ok()) {
+            return self.state.lock().fsm.pending_command_doorbells();
+        }
         self.pending_cmd_doorbells
             .load(std::sync::atomic::Ordering::Acquire)
     }
