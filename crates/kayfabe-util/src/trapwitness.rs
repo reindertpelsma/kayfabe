@@ -105,6 +105,54 @@ static INLINE_EXCEPTIONS: AtomicU64 = AtomicU64::new(0);
 /// and monotonic: it answers *"has clause (b) ever been at risk"*, never *"what is the
 /// current hold"*.
 static WORST_TRAP_US: AtomicU64 = AtomicU64::new(0);
+
+/// w481 — how many one-second buckets the phase profile keeps. 1024 s is longer than any
+/// boot this bench runs, so in practice nothing wraps.
+const PHASE_BUCKETS: usize = 1024;
+/// The worst trap seen in each one-second bucket since the first trap.
+static PHASE_WORST_US: [AtomicU64; PHASE_BUCKETS] =
+    [const { AtomicU64::new(0) }; PHASE_BUCKETS];
+/// How many traps exceeded [`SLOW_TRAP_US`] in each bucket.
+static PHASE_SLOW: [AtomicU64; PHASE_BUCKETS] = [const { AtomicU64::new(0) }; PHASE_BUCKETS];
+/// The highest bucket index reached, so the census knows where the profile ends.
+static PHASE_HIGH_SEC: AtomicU64 = AtomicU64::new(0);
+
+/// The instant the first trap closed — the origin of the phase profile. ⊘ Deliberately the
+/// first TRAP and not process start: everything before the guest touches a register is
+/// irrelevant to a trap profile and would only pad the front with empty buckets.
+fn trap_epoch() -> &'static std::time::Instant {
+    static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    EPOCH.get_or_init(std::time::Instant::now)
+}
+
+/// ★★★ **w481 — the phase profile, one line.** Worst trap per 10-second window, so the
+/// device bring-up and the workload can be told apart at a glance.
+///
+/// ⊘ Prints the window INDEX with each figure. A bare series of numbers cannot be aligned
+/// against anything the harness logged, and a profile nobody can locate in time is a shape
+/// without a story.
+#[must_use]
+pub fn phase_profile() -> String {
+    let high = PHASE_HIGH_SEC.load(Ordering::Relaxed) as usize;
+    if high == 0 && PHASE_WORST_US[0].load(Ordering::Relaxed) == 0 {
+        return "TRAP-PHASES none — no trap has closed".to_string();
+    }
+    let mut out = String::from("TRAP-PHASES worst_us/slow per 10s window [");
+    let mut w = 0usize;
+    while w * 10 <= high {
+        let (mut worst, mut slow) = (0u64, 0u64);
+        for sec in w * 10..(w * 10 + 10).min(high + 1) {
+            worst = worst.max(PHASE_WORST_US[sec % PHASE_BUCKETS].load(Ordering::Relaxed));
+            slow += PHASE_SLOW[sec % PHASE_BUCKETS].load(Ordering::Relaxed);
+        }
+        if worst > 0 || slow > 0 {
+            out.push_str(&format!("{}s:{worst}/{slow} ", w * 10));
+        }
+        w += 1;
+    }
+    out.push(']');
+    out
+}
 /// ★★★★★ **WHICH trap held the longest — because a scalar names no site to fix.**
 ///
 /// **Owner ruling 2026-09-09**: *"no inline blocking executions in mmio traps. just general
@@ -449,6 +497,8 @@ pub fn census() -> String {
         // all. ⊘ Emitted unconditionally, including its explicit empty arm — a census that
         // prints nothing when it found nothing is indistinguishable from one that never ran.
         + " | "
+        + &phase_profile()
+        + " | "
         + &crate::lockwitness::vcpu_blocking_census()
 }
 
@@ -528,6 +578,22 @@ impl Drop for TrapGuard {
                 note_slow_site(self.site, us);
             }
             // `fetch_max` returns the PREVIOUS value: we won iff it was smaller than ours.
+            // ★★★★★ **w481 — WHEN, not just how big.** `worst_trap` over a whole boot is
+            // dominated by device bring-up, and the owner's bar is on the WORKLOAD:
+            // *"44.8ms during boot can be acceptable. measure worst trap during the raw
+            // client. that should be sub ms."* A single scalar cannot answer that, so this
+            // keeps the worst trap per one-second bucket since the first trap. The client
+            // phase is the tail of the profile, and it is readable directly off the line.
+            // ⊘ Wrapping rather than growing: a fixed table cannot leak, and a boot longer
+            // than the window folds onto itself visibly rather than silently reallocating
+            // under a vCPU.
+            {
+                let sec = trap_epoch().elapsed().as_secs() as usize;
+                PHASE_WORST_US[sec % PHASE_BUCKETS].fetch_max(us, Ordering::Relaxed);
+                PHASE_SLOW[sec % PHASE_BUCKETS]
+                    .fetch_add(u64::from(us >= SLOW_TRAP_US), Ordering::Relaxed);
+                PHASE_HIGH_SEC.fetch_max(sec as u64, Ordering::Relaxed);
+            }
             if WORST_TRAP_US.fetch_max(us, Ordering::Relaxed) < us {
                 WORST_TRAP_SITE.store(self.site, Ordering::Relaxed);
             }
