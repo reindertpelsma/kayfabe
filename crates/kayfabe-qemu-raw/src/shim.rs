@@ -5791,6 +5791,58 @@ struct PtDecodeTally {
     first_fault: Option<String>,
 }
 
+/// ★★★★★ **w555 — WHAT THE OPERAND PASS FOUND, as a VERDICT and not only as prose.**
+///
+/// # ⊘⊘ The line it replaces said of itself: *"it returns a `String` and gates nothing"*
+///
+/// That was deliberate — the pass was built for A/B comparability, so it reported and never
+/// branched. `[measured w554, bench boot]` here is what reporting and not gating costs, in
+/// one boot, end to end:
+///
+/// ```text
+/// OPERAND-SOURCE-CE  token=0x3 proc=2 chan=11 engine=Ce  [W@0xa080000000+0x4 R@0xa000000000+0x4]
+/// OPERAND-JOIN-TABLE 2 page(s) asked, 1 MISS [va=0xa000000000:Miss{pdb:0}], 1 ALREADY JOINED
+/// ⊘ NOTHING TO JOIN.
+/// DOORBELL-XLATE     guest_token=0x3 → host_token=0x5      ⇐ forwarded ANYWAY
+/// DOORBELL-STORE #115 host_token=0x5 ★★★ WROTE
+/// ```
+/// and then, in the HOST's dmesg:
+/// ```text
+/// Xid 31, channel 0x00000005, MMU Fault: ENGINE CE0 faulted @ 0xa0_00000000,
+///         type FAULT_PDE ACCESS_TYPE_VIRT_READ
+/// ```
+///
+/// ⇒ Same channel, same address, same access direction as the read operand we had just
+/// declared unresolvable. We knew the copy's source was bound nowhere the engine could see
+/// it, we said so, and we rang the bell.
+///
+/// ⚠ `[measured w554]` **27 of 107** operand tables in that boot carry a MISS, so this is a
+/// quarter of the copy-engine traffic and not a corner.
+#[derive(Debug, Default)]
+struct OperandVerdict {
+    /// The census line, exactly as before.
+    line: Option<String>,
+    /// Operand pages this channel's VAS binds nowhere. ⊘ Kept as addresses rather than a
+    /// count: the refusal has to name one, and a count cannot.
+    unresolved: Vec<u64>,
+}
+
+impl OperandVerdict {
+    /// A census line and nothing to stop: every operand resolved, or the pass had no
+    /// question to ask.
+    fn say(line: String) -> Self {
+        Self {
+            line: Some(line),
+            unresolved: Vec::new(),
+        }
+    }
+}
+
+/// ★ w555 — doorbells refused because an operand was bound nowhere. Counted, because the
+/// refusal replaces an Xid and the two populations have to be comparable across boots.
+static OPERAND_UNRESOLVED_REFUSALS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 /// One refused doorbell report, so the three refusal sites in [`SharedDoorbell`] cannot
 /// come to disagree about the shape of a refusal.
 fn refused(
@@ -6390,12 +6442,43 @@ impl SharedDoorbell {
         //
         // ⊘ Silent — not merely quiet — on the disarmed arm. See `SharedDoorbell::operand_join`.
         crate::kftime::maybe_inject("operand_join");
-        if let Some(line) = self.join_operand_fb_leaves(token, seen.as_ref()) {
-            kft.mark("operand_join");
+        let operands = self.join_operand_fb_leaves(token, seen.as_ref());
+        kft.mark("operand_join");
+        if let Some(line) = &operands.line {
             eprintln!("kayfabe: {line}");
             kft.mark("log_operand_join");
-        } else {
-            kft.mark("operand_join");
+        }
+        // ★★★★★ **w555 — THE GATE. An operand bound nowhere is a GPU fault we are about to
+        // ask for, so it is refused BY NAME instead of rung.**
+        //
+        // See [`OperandVerdict`] for the boot that is quoted address for address: we declared
+        // the copy's source unresolvable, logged it, forwarded anyway, and the host's engine
+        // faulted on that exact address with that exact access direction.
+        //
+        // ⊘ This is not a new policy. It is `mode2_address_table.md` §6 — *"miss = fault"* —
+        // finally being ACTED on at the one site that can act on it. The line above already
+        // said "miss = fault"; what it did was ring the bell.
+        //
+        // ⚠ A refusal is not a fix and must not be read as one. The submission still does not
+        // happen — the guest is told by name instead of by Xid, the host channel stays alive,
+        // and `[measured w554]` the population is 27 of 107 operand tables, which is the size
+        // of the real gap this makes visible.
+        if !operands.unresolved.is_empty() {
+            let n = operands.unresolved.len();
+            let first = operands.unresolved[0];
+            OPERAND_UNRESOLVED_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            kft.mark("operand_refused");
+            return refused(
+                token,
+                kayfabe_device::FaultTag("OperandBoundNowhere"),
+                format!(
+                    "this copy names {n} operand page(s) that this channel's VA space binds \
+                     nowhere — the first is 0x{first:x}. Forwarding it would ring a host \
+                     channel whose engine must then fault on that address (`Xid 31 … \
+                     FAULT_PDE`), so the doorbell is refused here instead. ⊘ `miss = fault` \
+                     (mode2_address_table.md §6) applied at the site that can apply it."
+                ),
+            );
         }
         // ★★★★★ **LEG 8 — w290's publication**, and its position is the C's own invariant:
         // *"a mapping is always backed before the engine that uses it runs."* It is ordered
@@ -9179,7 +9262,7 @@ impl SharedDoorbell {
         &self,
         token: u64,
         facts: Option<&kayfabe_rt::device::CeChannelFacts>,
-    ) -> Option<String> {
+    ) -> OperandVerdict {
         // ⊘ SILENT only on `off`. ★★★ On `assert` the pass RUNS and joins nothing — see
         // the removed `KAYFABE_OPERAND_JOIN` arm for the defect this rung's own control found in the two-arm
         // draft: with `#255` inside the armed path, the control printed zero `#255` lines and
@@ -9189,13 +9272,13 @@ impl SharedDoorbell {
             "OPERAND-JOIN token={token:#010x}"
         );
         let Some(f) = facts else {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{head} → NO CHANNEL (the token routed to no channel, so there is no VA space \
                  to join INTO)"
             ));
         };
         let Some(pdb) = f.vas_pdb else {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{head} proc={} chan={} → NO PDB (this channel's VA space did not resolve, so \
                  there is no address space to join into; ⊘ not a miss — nothing was asked)",
                 f.proc.0, f.chan.0
@@ -9213,7 +9296,7 @@ impl SharedDoorbell {
         // so the mapping arm is irrelevant and aborting here would cost the control the very
         // `#255` verdict it exists to produce.
         if !self.fb_join.armed() {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{who} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. The join's mapping arm is what \
                  makes the guest's window and the host object ONE memory; with it disarmed this \
                  pass could only map PRIVATE ANONYMOUS pages, which is the two-memories state \
@@ -9222,7 +9305,7 @@ impl SharedDoorbell {
             ));
         }
         let Some(plane) = self.plane.upgrade() else {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{who} → ⊘ NO PLANE (the register plane is gone). ⊘ Nothing was asked of the \
                  host and no leaf was touched"
             ));
@@ -9232,7 +9315,7 @@ impl SharedDoorbell {
         let exports = match self.exports.as_ref() {
             Some(e) => Some(e),
             None => {
-                return Some(format!(
+                return OperandVerdict::say(format!(
                     "{who} → ⊘ NOT ARMABLE: exports_directory=false — this build has no route \
                      from a backing token to a descriptor. ⊘ Nothing was asked of the host and \
                      no leaf was touched"
@@ -9240,7 +9323,7 @@ impl SharedDoorbell {
             }
         };
         let Some(vaspace) = f.vaspace else {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{who} → NO VASPACE (there is no address space handle to root the walk at)"
             ));
         };
@@ -9249,13 +9332,13 @@ impl SharedDoorbell {
         let root = match SharedDoorbell::doorbell_root(&plane, f.client, vaspace, Some(pdb.0)) {
             DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
             DoorbellRoot::Absent => {
-                return Some(format!(
+                return OperandVerdict::say(format!(
                     "{who} → NO ROOT (this channel has no VA space root, so no operand VA can \
                      be walked to a leaf)"
                 ));
             }
             DoorbellRoot::Underivable(p, why) => {
-                return Some(format!(
+                return OperandVerdict::say(format!(
                     "{who} → ROOT UNDERIVABLE from pdb 0x{p:x}: {}",
                     why.kind()
                 ));
@@ -9268,7 +9351,7 @@ impl SharedDoorbell {
         let (source, pages) = self.ce_operand_pages(token, f, page);
         let source = format!("{who}\n    {source}");
         if pages.is_empty() {
-            return Some(format!(
+            return OperandVerdict::say(format!(
                 "{source}\n    ⊘ NO OPERAND PAGE TO JOIN. ⚠ Read the counters on the line above \
                  before reading this as an absence — `release_only = launches`, `physical > 0` \
                  and `opaque = methods` are three different facts and none of them is *the \
@@ -9290,6 +9373,7 @@ impl SharedDoorbell {
         let mut n_guest_ram = 0usize;
         let mut n_already = 0usize;
         let mut misses: Vec<String> = Vec::new();
+        let mut unresolved: Vec<u64> = Vec::new();
         let mut fb: Vec<String> = Vec::new();
         for &pva in &pages {
             // ★★★ PER-VAS KEYING #2 — `pdb` is this channel's, and `resolve` has no arm that
@@ -9300,6 +9384,9 @@ impl SharedDoorbell {
             {
                 Err(e) => {
                     n_miss += 1;
+                    // ★ Every one, not a sample: this list is what the gate refuses on, and
+                    // a truncated one would forward the submissions it could not fit.
+                    unresolved.push(pva);
                     if misses.len() < PUSHBUF_REPORT {
                         misses.push(format!("va=0x{pva:x}:{e:?}"));
                     }
@@ -9338,13 +9425,16 @@ impl SharedDoorbell {
             pushbuffer_sample(&fb, n_already + candidates.len()),
         );
         if candidates.is_empty() {
-            return Some(format!(
+            return OperandVerdict {
+                unresolved,
+                line: Some(format!(
                 "{table}\n    ⊘ NOTHING TO JOIN. ⚠ The four counts above are FOUR DIFFERENT \
                  FACTS: a `MISS` says this VAS does not bind that VA at all (§6 — not found, \
                  never denied); `in guest RAM` says leg 6 owns it; `ALREADY JOINED` says a \
                  previous doorbell did this work; and only a zero in ALL of them would mean \
                  the decode found nothing"
-            ));
+                )),
+            };
         }
         // ---- PHASE 2: WALK each candidate to its leaf, per-VAS, sessions dropped ------------
         //
@@ -9479,13 +9569,16 @@ impl SharedDoorbell {
                 Err(_) => {}
             }
         }
-        Some(format!(
+        OperandVerdict {
+            unresolved,
+            line: Some(format!(
             "{table}\n    WALK: {}\n    JOINED {joined} leaf/leaves, {refused} REFUSED, over {} \
              distinct leaf/leaves\n    {}",
             walk_lines.join("\n          "),
             leaves.len(),
             Self::fake_fb_in_userspace_vas(f, &now_host_backed, &still_fabricated),
-        ))
+            )),
+        }
     }
 
     /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT** — `adopt_pending_channel_rings`'
@@ -9497,9 +9590,9 @@ impl SharedDoorbell {
         &self,
         token: u64,
         _facts: Option<&kayfabe_rt::device::CeChannelFacts>,
-    ) -> Option<String> {
+    ) -> OperandVerdict {
         // ⊘ w536 — always observed; see the sibling guard.
-        Some(format!(
+        OperandVerdict::say(format!(
             "OPERAND-JOIN token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT JOIN A \
              LEAF AT ALL. The arm was requested and this build has no isolate plane, so leg 7 \
              is a no-op — ⚠ do NOT grade a boot from this binary as `armed and nothing moved`"
@@ -16308,6 +16401,29 @@ impl Regs {
         // was still serviced inside a guest store.
         {
             use std::sync::atomic::Ordering::Relaxed;
+            // ★★★★★ w555 — the doorbells that would have faulted the host's engine.
+            //
+            // ⊘ Printed on its OWN line and not folded into the lane census, because it is a
+            // different kind of number: the lane counts are about capacity, this one is about
+            // COMPLETENESS of the address table. `[measured w554]` a boot of the raw client
+            // carried 27 such submissions out of 107 and forwarded every one of them, each
+            // producing a host `Xid 31 … FAULT_PDE` on the address we had just declared
+            // unresolvable.
+            //
+            // ⚠ ZERO HERE IS TWO STATES and the sentence says which: no copy named an operand
+            // this archive could not resolve, or no copy was forwarded at all. Read it beside
+            // the doorbell census's `arrived`.
+            {
+                let n = OPERAND_UNRESOLVED_REFUSALS.load(Relaxed);
+                eprintln!(
+                    "kayfabe: OPERAND-GATE refused={n} AT=teardown — doorbells NOT forwarded \
+                     because the copy named an operand page this channel's VA space binds \
+                     nowhere. ⊘ Each is a host `Xid 31 … FAULT_PDE` that did not happen, and \
+                     a guest submission that did not happen either: a refusal is visibility, \
+                     never a fix. ⚠ Zero means EITHER nothing was unresolvable OR nothing was \
+                     forwarded — read it beside `doorbells: N arrived`."
+                );
+            }
             let (inv, db, gspfull, gspoff) = (
                 LANE_FULL_INVALIDATES.load(Relaxed),
                 LANE_FULL_DOORBELLS.load(Relaxed),
