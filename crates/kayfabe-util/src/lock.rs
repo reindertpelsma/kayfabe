@@ -1203,8 +1203,64 @@ pub mod lockcost {
         note_wait(rank, d);
     }
 
+    /// Ranked acquisitions taken by a thread that is INSIDE AN MMIO TRAP, at a rank above
+    /// the plane's — counted per site, so the contract can be checked instead of audited.
+    static IN_TRAP_ACQ: AtomicU64 = AtomicU64::new(0);
+    /// The site of the first such acquisition, +1. ⊘ The FIRST and not the last: the first
+    /// one is the one a reader can still reach by reasoning about a cold boot.
+    static IN_TRAP_FIRST: AtomicUsize = AtomicUsize::new(0);
+
+    /// ★★★★★ **w517 — THE CONTRACT, CHECKED RATHER THAN AUDITED.**
+    ///
+    /// The owner's rule is that a vCPU's MMIO trap touches at most a small queue lock, never
+    /// the structures behind it: *"the data structures like the VA tables and other data is
+    /// just a separate lock vcpu doesn't touch."* Two violations of it were found this
+    /// session, each costing a boot and a backtrace to locate:
+    /// `[measured w510]` `ce_session_with_root` (rank 0, 8.2 ms) and
+    /// `[measured w516]` `take_table_changes` (rank 2, via every `Proc` cell).
+    ///
+    /// ⊘ Both were found by a stall alarm firing on the ONE trap that happened to be slowest.
+    /// That instrument names a violation only when it also stalls — so a site that takes the
+    /// Proc lock and usually gets it uncontended is invisible until the day it is not. This
+    /// counts the acquisition itself, contended or not.
+    ///
+    /// ⚠ It counts, it does not refuse. A panic here would turn a latent contract violation
+    /// into a dead guest at the worst possible moment, and the point is to enumerate the
+    /// sites, not to lose the boot that would have named them.
+    fn note_if_in_trap(rank: LockRank, site: &'static core::panic::Location<'static>) {
+        if rank <= LockRank::Plane || !crate::trapwitness::in_trap() {
+            return;
+        }
+        IN_TRAP_ACQ.fetch_add(1, Ordering::Relaxed);
+        let i = claim_site(site);
+        if i != usize::MAX {
+            let _ = IN_TRAP_FIRST.compare_exchange(
+                0,
+                i + 1,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            );
+        }
+    }
+
+    /// Whether any vCPU took a lock above the plane's rank while inside an MMIO trap, and
+    /// where it first did. ⊘ Renders its own zero in words: "none" is a RESULT here, and this
+    /// tree has read an unmeasured zero as a healthy one three times in one night.
+    #[must_use]
+    pub fn in_trap_census() -> String {
+        let n = IN_TRAP_ACQ.load(Ordering::Relaxed);
+        if n == 0 {
+            return "IN-TRAP-LOCKS none — no thread inside an MMIO trap took a lock above                     rank0 (⊘ this counter is armed; zero is a measurement)"
+                .to_string();
+        }
+        let first = name_of(IN_TRAP_FIRST.load(Ordering::Relaxed))
+            .map_or_else(|| "UNATTRIBUTED".to_string(), |(f, l)| format!("{f}:{l}"));
+        format!("IN-TRAP-LOCKS ⊘ {n} acquisition(s) above rank0 from inside an MMIO trap, first at {first}")
+    }
+
     /// Publish `site` as the current holder of `rank`. Called once per acquisition.
     pub(super) fn note_holder(rank: LockRank, site: &'static core::panic::Location<'static>) {
+        note_if_in_trap(rank, site);
         CURRENT_HOLDER[slot(rank)].store(claim_site(site) + 1, Ordering::Relaxed);
     }
 
@@ -1840,6 +1896,71 @@ mod a_diagnostic_may_not_block_a_lock {
         assert!(
             c.contains("the lines are gone, the count is not"),
             "the census must say what a nonzero `dropped` MEANS: {c}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod the_contract_is_checked_not_audited {
+    use super::lockcost::in_trap_census;
+    use super::{LockRank, RankedMutex};
+
+    /// ★★★★★ **A TRAP THAT TAKES A LOCK ABOVE THE PLANE'S IS NAMED, CONTENDED OR NOT.**
+    ///
+    /// Two violations of the owner's rule — *"the data structures like the VA tables and
+    /// other data is just a separate lock vcpu doesn't touch"* — were found this session, and
+    /// each cost a boot and a backtrace: `[measured w510]` `ce_session_with_root` holding
+    /// rank 0 for 8.2 ms, and `[measured w516]` `take_table_changes` taking every `Proc`
+    /// cell's rank-2 lock to read a counter.
+    ///
+    /// ⊘ Both were found by a stall alarm firing on whichever trap happened to be slowest.
+    /// That instrument names a violation only when it ALSO stalls, so a site that takes the
+    /// Proc lock and usually gets it uncontended stays invisible until the day it does not.
+    /// This counts the acquisition itself.
+    #[test]
+    fn an_acquisition_from_inside_a_trap_is_counted_and_named() {
+        let m = RankedMutex::new(LockRank::Proc, 0u64);
+        {
+            let _trap = crate::trapwitness::TrapGuard::enter_at(0xdead_beef);
+            let _g = m.lock();
+        }
+        let c = in_trap_census();
+        assert!(
+            !c.contains("none"),
+            "an acquisition above rank0 from inside a trap must be REPORTED: {c}"
+        );
+        assert!(
+            c.contains("lock.rs:"),
+            "and named by file:line, or it cannot be fixed: {c}"
+        );
+        the_allowed_acquisitions_are_not_reported();
+    }
+
+    /// ⊘ **The negative control, in the SAME test.** Without it a census that always reported
+    /// a violation would pass the assertions above and be useless.
+    ///
+    /// ⚠ It cannot be its own `#[test]`: the counter is process-global and `cargo test` runs
+    /// test functions in parallel, so a second test's "did my actions change it?" comparison
+    /// races the first test's increment. That is not a flake to retry — a shared counter
+    /// read from two threads is simply not a per-test measurement.
+    fn the_allowed_acquisitions_are_not_reported() {
+        // Rank 0 inside a trap is the CONTRACT, not a violation: the queue lock is exactly
+        // what a trap is allowed to take.
+        let plane = RankedMutex::new(LockRank::Plane, 0u64);
+        let before = in_trap_census();
+        {
+            let _trap = crate::trapwitness::TrapGuard::enter_at(0x1234);
+            let _g = plane.lock();
+        }
+        // And a high rank taken with no trap in flight is ordinary worker work.
+        let proc_lock = RankedMutex::new(LockRank::Proc, 0u64);
+        {
+            let _g = proc_lock.lock();
+        }
+        assert_eq!(
+            in_trap_census(),
+            before,
+            "neither the plane rank inside a trap nor a high rank outside one is a violation"
         );
     }
 }
