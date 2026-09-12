@@ -620,6 +620,31 @@ pub struct PlaneResidue {
 }
 
 /// The mutable half — everything that needs the lock.
+/// ★★★★★ **w522 — THE PLANE'S MEMORY, UNDER ITS OWN LOCK.**
+///
+/// Exactly the two fields a copy-engine session needs (`resolve_locked`, `CePlane::fb`) and
+/// nothing else. `[measured w510-w521]` `RegPlane::ce_session_with_root` holds the plane's
+/// FSM mutex for **5-8 ms** at a stretch — it wraps an arbitrary caller closure, and the shim
+/// passes it the whole CE submission — while a vCPU's `RegPlane::read`/`write` blocks on that
+/// same mutex. The lock census named the waiter and the holder as the **same line**, boot
+/// after boot.
+///
+/// ⊘ The submission does not touch the FSM, the command policy, the BAR0 window latch, the
+/// unclaimed list or the interrupt tree. The two paths were sharing a lock over data neither
+/// needs from the other — the owner's complaint, verbatim: *"locks taking over data
+/// structures that protect 90% of the data completely irrelevant for the vcpu mmio handler."*
+///
+/// ⚠ [`LockRank::PlaneMem`] sorts between `Plane` and `Device`, and that is forced: a register
+/// path may take the FSM and then reach the framebuffer (PRAMIN, the BAR0 framebuffer window),
+/// so `Plane → PlaneMem` must be legal; and the CE session calls into the core inside its
+/// closure, so `PlaneMem → Device` must be too.
+struct PlaneMem {
+    /// The emulated framebuffer store.
+    fb: Box<dyn FbStore>,
+    /// The GMMU format installed for this device, if the guest has published one.
+    mmu: Option<Box<dyn GmmuFmt>>,
+}
+
 struct PlaneState {
     fsm: GspFsm,
     ram: Box<dyn GuestRam>,
@@ -647,12 +672,7 @@ struct PlaneState {
     /// [`crate::cpuintr`].
     /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
     /// installs one — the exact shape [`PlaneState::ram`] already has.
-    fb: Box<dyn FbStore>,
-    /// ★★★ The page-table format this chip's GMMU uses, as a port. `None` until a shell
-    /// installs one, and `None` is a **refusal**: a translated aperture with no format
-    /// answers *"this port has no page-table format"* by name rather than guessing a
-    /// stride. See [`RegPlane::set_mmu`].
-    mmu: Option<Box<dyn GmmuFmt>>,
+
     /// ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT.** Framebuffer pages the **guest's
     /// own CPU** wrote through one of this plane's windows, deduped to the 4 KiB page.
     ///
@@ -1124,6 +1144,9 @@ pub struct RegPlane {
     /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
     clock: Box<dyn NanoClock>,
     state: RankedMutex<PlaneState>,
+    /// See [`PlaneMem`] — the framebuffer and the GMMU format, under their own lock so a CE
+    /// submission and a register write stop contending over data neither needs.
+    mem: kayfabe_util::lock::RankedMutex<PlaneMem>,
     /// ★★★★★ **w507 — HOW MANY vCPUs ARE INSIDE AN MMIO TRAP RIGHT NOW.**
     ///
     /// Not a lock and not a count of lock waiters — a count of threads that are *in* a trap
@@ -1496,10 +1519,13 @@ impl FbRead for PlanePtBytes<'_> {
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         use kayfabe_arch::Aperture;
         self.breathe();
+        // ⊘ BOTH locks, in rank order: `ram` is guest RAM and stays with the FSM, `fb` moved
+        // to [`PlaneMem`] at w522. This is the one reader that needs each.
         let mut s = self.plane.state.lock();
+        let mut m = self.plane.mem.lock();
         match aperture {
             // Device-local: the (fake) framebuffer.
-            Aperture::Vidmem => s.fb.read(phys, buf).is_ok(),
+            Aperture::Vidmem => m.fb.read(phys, buf).is_ok(),
             // ★ System memory. A GMMU PDE may point at a next-level table in sysmem, and the
             // guest's own address for it is a GPA — so this is a guest-RAM read, not an FB one.
             // Reading it out of the framebuffer is what produced a page of "invalid" entries.
@@ -1516,15 +1542,15 @@ impl FbRead for PlanePtBytes<'_> {
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.breathe();
-        let mut s = self.plane.state.lock();
-        s.fb.read(phys, buf).is_ok()
+        let mut m = self.plane.mem.lock();
+        m.fb.read(phys, buf).is_ok()
     }
 
     /// The same per-address first-writer answer [`FbStoreReader`] gives, so a decode and a
     /// `walk:` line read the identical fact about a page.
     fn page_writer(&self, phys: u64) -> Option<(&'static str, u64)> {
-        let s = self.plane.state.lock();
-        s.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
+        let m = self.plane.mem.lock();
+        m.fb.page_origin(phys).map(|o| (o.by.tag(), o.seq))
     }
 }
 
@@ -1592,7 +1618,7 @@ impl PublishedVaRead {
 /// shell's own `Vmm`, so that a copy's bytes and a completion's bytes cannot travel by two
 /// different descriptions of one memory plane.
 pub struct CePlane<'a> {
-    state: &'a mut PlaneState,
+    state: &'a mut PlaneMem,
     chip: &'static ChipProfile,
     root: crate::ceresolve::VasRoot,
     demand: crate::ceresolve::Demand,
@@ -1662,7 +1688,7 @@ impl CePlane<'_> {
 /// [`RegPlane::resolve_published_va`] and [`RegPlane::read_published_va`] share, so the two
 /// entry points cannot come to disagree about which format or which framebuffer answers.
 fn resolve_locked(
-    s: &mut PlaneState,
+    s: &mut PlaneMem,
     chip: &'static ChipProfile,
     root: &crate::ceresolve::VasRoot,
     va: u64,
@@ -1677,7 +1703,7 @@ fn resolve_locked(
         // fabricated bound would be worse than a stated absence.
         gpa_limit: None,
     };
-    let PlaneState { mmu, fb, .. } = s;
+    let PlaneMem { mmu, fb } = s;
     let Some(fmt) = mmu.as_deref() else {
         return crate::ceresolve::CeResolve::NoMmuPort;
     };
@@ -1781,6 +1807,13 @@ impl RegPlane {
                 kayfabe_util::lock::LockRank::Leaf,
                 CpuIntrTree::new(),
             ),
+            mem: kayfabe_util::lock::RankedMutex::new(
+                kayfabe_util::lock::LockRank::PlaneMem,
+                PlaneMem {
+                    fb: Box::new(RefusingFb),
+                    mmu: None,
+                },
+            ),
             state: RankedMutex::new(
                 LockRank::Plane,
                 PlaneState {
@@ -1805,8 +1838,6 @@ impl RegPlane {
                     unclaimed: Vec::new(),
                     fb_window: Vec::new(),
                     bar0_window: Bar0Window::new(),
-                    fb: Box::new(RefusingFb),
-                    mmu: None,
                     pt_witness: std::collections::BTreeSet::new(),
                     pt_witness_refused: 0,
                     pt_witness_writes: 0,
@@ -1867,7 +1898,7 @@ impl RegPlane {
     /// answering registers acquires memory without being rebuilt and without an interval in
     /// which it answers something else.
     pub fn set_fb(&self, fb: Box<dyn FbStore>) {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         s.fb = fb;
     }
 
@@ -1913,7 +1944,7 @@ impl RegPlane {
         &self,
         arena: Box<dyn FbPageArena>,
     ) -> Result<(), Box<dyn FbPageArena>> {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         s.fb.install_page_arena(arena)
     }
 
@@ -1937,10 +1968,13 @@ impl RegPlane {
         materialise: bool,
     ) -> Result<WindowPageResolution, WindowRefusal> {
         let page_off = off & !(crate::fbwin::FB_PAGE - 1);
-        let mut s = self.state.lock();
+        // ⊘ BOTH, in rank order. The window LATCH is FSM state; the framebuffer it points
+        // into moved to [`PlaneMem`] at w522.
+        let st = self.state.lock();
+        let mut s = self.mem.lock();
         let (phys, read_only) = match w {
             FbWindow::Pramin => (
-                s.bar0_window
+                st.bar0_window
                     .fb_addr(page_off.wrapping_sub(self.chip.pramin_window.base)),
                 false,
             ),
@@ -2013,7 +2047,7 @@ impl RegPlane {
             m.quiesce(phys, len);
         }
         let (out, displaced) = {
-            let mut s = self.state.lock();
+            let mut s = self.mem.lock();
             match s.fb.install_join(phys, region) {
                 Ok(est) => (Ok(est), None),
                 Err((why, back)) => (Err(why), Some(back)),
@@ -2052,7 +2086,7 @@ impl RegPlane {
         // carry it; a range that turns out to hold no join quiesces nothing.
         let quiesced = self.quiesce_mirror_over_join(phys);
         let released = {
-            let mut s = self.state.lock();
+            let mut s = self.mem.lock();
             s.fb.release_join(phys)
         };
         self.resume_mirror(quiesced);
@@ -2071,7 +2105,7 @@ impl RegPlane {
     /// the caller to release a range it did not name.
     #[must_use]
     pub fn fb_join_installed_at(&self, phys: u64) -> bool {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.joined_ranges().iter().any(|(b, _)| *b == phys)
     }
 
@@ -2082,7 +2116,7 @@ impl RegPlane {
     /// same base, which then had no `memfd` of its length to alias.
     #[must_use]
     pub fn fb_join_extent_at(&self, phys: u64) -> Option<u64> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb
             .joined_ranges()
             .iter()
@@ -2114,7 +2148,7 @@ impl RegPlane {
         // would be lost, and the whole point of this verb is that no byte is.
         let quiesced = self.quiesce_mirror_over_join(phys);
         let (out, released) = {
-            let mut s = self.state.lock();
+            let mut s = self.mem.lock();
             match s.fb.release_join_carrying_bytes(phys) {
                 Ok((region, carried)) => (Ok(carried), Some(region)),
                 Err(why) => (Err(why), None),
@@ -2134,7 +2168,7 @@ impl RegPlane {
     ) -> Option<(std::sync::Arc<dyn FbMirrorPort>, u64, u64)> {
         let m = self.fb_mirror()?;
         let len = {
-            let s = self.state.lock();
+            let s = self.mem.lock();
             s.fb
                 .joined_ranges()
                 .iter()
@@ -2154,7 +2188,7 @@ impl RegPlane {
     /// Every joined framebuffer range this plane's store holds, `(phys, len)`, ascending.
     #[must_use]
     pub fn joined_fb_ranges(&self) -> Vec<(u64, u64)> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.joined_ranges()
     }
 
@@ -2175,7 +2209,7 @@ impl RegPlane {
     /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_fb`] and
     /// [`RegPlane::set_ram`].
     pub fn set_mmu(&self, mmu: Box<dyn GmmuFmt>) {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         s.mmu = Some(mmu);
     }
 
@@ -2465,7 +2499,7 @@ impl RegPlane {
         else {
             return crate::ceresolve::CeResolve::NoPublication;
         };
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         resolve_locked(&mut s, self.chip, &root, va, demand)
     }
 
@@ -2504,7 +2538,7 @@ impl RegPlane {
                 crate::ceresolve::CeResolve::NoPublication,
             ));
         };
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         let r = resolve_locked(&mut s, self.chip, &root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
             return Err(PublishedVaRead::Unresolved(r));
@@ -2515,7 +2549,12 @@ impl RegPlane {
                     .map(|()| r)
                     .map_err(|e| PublishedVaRead::Store(e.why))
             }
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => s
+            // ⊘ Guest RAM stayed with the FSM at w522; only the framebuffer moved. Taken
+            // here rather than beside the `mem` guard above so the state lock is held for
+            // one read instead of for the whole walk.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => self
+                .state
+                .lock()
                 .ram
                 .read(phys, buf)
                 .map(|()| r)
@@ -2541,8 +2580,8 @@ impl RegPlane {
         else {
             return " walk=NO-PUBLICATION".to_string();
         };
-        let mut s = self.state.lock();
-        let PlaneState { mmu, fb, .. } = &mut *s;
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
@@ -2557,7 +2596,7 @@ impl RegPlane {
     /// sparse store's page map can.
     #[must_use]
     pub fn fb_residency(&self) -> Option<crate::fbwin::FbResidency> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.residency()
     }
 
@@ -2575,7 +2614,7 @@ impl RegPlane {
     #[must_use]
     pub fn fb_page_standing(&self, phys: u64) -> crate::fbwin::FbPageStanding {
         use crate::fbwin::FbPageStanding;
-        let s = self.state.lock();
+        let s = self.mem.lock();
         // ★★★ THE JOIN, FIRST — for the same reason `FbStore::read` and `write_tagged`
         // check it first: after `install_join` this store's own page for the range is gone
         // by design, so every question answered from `pages` is answered about memory that
@@ -2599,7 +2638,7 @@ impl RegPlane {
     /// converse of `is_resident` is now the question, and why it is a **forward** search.
     #[must_use]
     pub fn fb_resident_frames(&self) -> Option<Vec<u64>> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.resident_frames()
     }
 
@@ -2607,7 +2646,7 @@ impl RegPlane {
     /// cannot say **or** nothing is resident there. See [`crate::fbwin::FbWriter`].
     #[must_use]
     pub fn fb_page_origin(&self, phys: u64) -> Option<crate::fbwin::FbPageOrigin> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.page_origin(phys)
     }
 
@@ -2616,7 +2655,7 @@ impl RegPlane {
     /// arm on `None`, never skip. See [`crate::fbwin::FbStore::writes_by`].
     #[must_use]
     pub fn fb_writes_by(&self, by: crate::fbwin::FbWriter) -> Option<u64> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         s.fb.writes_by(by)
     }
 
@@ -2644,7 +2683,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         s.fb.read(phys, buf).map_err(|e| e.why)
     }
 
@@ -2665,7 +2704,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_poke(&self, phys: u64, bytes: &[u8]) -> Result<(), &'static str> {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         s.fb.write(phys, bytes).map_err(|e| e.why)
     }
 
@@ -2694,7 +2733,7 @@ impl RegPlane {
         &self,
         pdb_phys: u64,
     ) -> Result<crate::ceresolve::VasRoot, crate::ceresolve::CeResolve> {
-        let s = self.state.lock();
+        let s = self.mem.lock();
         let Some(fmt) = s.mmu.as_deref() else {
             return Err(crate::ceresolve::CeResolve::NoMmuPort);
         };
@@ -2714,7 +2753,7 @@ impl RegPlane {
         va: u64,
         demand: crate::ceresolve::Demand,
     ) -> crate::ceresolve::CeResolve {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         resolve_locked(&mut s, self.chip, root, va, demand)
     }
 
@@ -2732,7 +2771,7 @@ impl RegPlane {
         buf: &mut [u8],
         demand: crate::ceresolve::Demand,
     ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         let r = resolve_locked(&mut s, self.chip, root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
             return Err(PublishedVaRead::Unresolved(r));
@@ -2743,7 +2782,12 @@ impl RegPlane {
                     .map(|()| r)
                     .map_err(|e| PublishedVaRead::Store(e.why))
             }
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => s
+            // ⊘ Guest RAM stayed with the FSM at w522; only the framebuffer moved. Taken
+            // here rather than beside the `mem` guard above so the state lock is held for
+            // one read instead of for the whole walk.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => self
+                .state
+                .lock()
                 .ram
                 .read(phys, buf)
                 .map(|()| r)
@@ -2760,8 +2804,8 @@ impl RegPlane {
     /// and therefore takes no [`crate::ceresolve::Demand`].
     #[must_use]
     pub fn walk_trace_from_root(&self, root: &crate::ceresolve::VasRoot, va: u64) -> String {
-        let mut s = self.state.lock();
-        let PlaneState { mmu, fb, .. } = &mut *s;
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
@@ -2826,7 +2870,7 @@ impl RegPlane {
         demand: crate::ceresolve::Demand,
         f: impl FnOnce(&mut CePlane<'_>) -> R,
     ) -> R {
-        let mut s = self.state.lock();
+        let mut s = self.mem.lock();
         let mut ce = CePlane {
             state: &mut s,
             chip: self.chip,
@@ -2996,6 +3040,7 @@ impl RegPlane {
         let RegPlane {
             cpu_intr: _,
             mmio_in_flight: _,
+            mem: _,
             pending_cmd_doorbells: _,
             chip: _,
             model: _,
@@ -3048,11 +3093,9 @@ impl RegPlane {
             // because it cannot hold anything across a life.
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
             // device state and is carried out as `fb_resident_bytes` just below.
-            fb,
-            // ★ Also the shell's wiring: an immutable encoding table installed once
-            // through `set_mmu`. Two lives of the same chip cannot differ here, and it
-            // holds no guest bytes.
-            mmu: _,
+            // ⊘ `fb` and `mmu` left this struct at w522 — see [`PlaneMem`]. The framebuffer's
+            // contribution is still carried out below as `fb_resident_bytes`, read through
+            // the plane's own accessor rather than destructured here.
             // ★★★★ G1's set IS guest-driven device state — the pages the guest's CPU wrote
             // and nothing has yet attributed — so it is carried out, like `fb_window` and
             // the census. ⊘ As a count and not as the addresses: the residue is a
@@ -3083,7 +3126,10 @@ impl RegPlane {
             bar_pdes: bar_pdes.pdes(),
             gvas_pub: gvas_pub.snapshot(),
             set_page_dir: set_page_dir.latest(),
-            fb_resident_bytes: fb.resident_bytes(),
+            // ⊘ Read through the plane's own lock rather than destructured from the FSM
+            // state: `fb` moved to [`PlaneMem`] at w522. Taken AFTER the state guard is
+            // gone, in rank order, so this census cannot itself become a stall.
+            fb_resident_bytes: self.mem.lock().fb.resident_bytes(),
             doorbell,
         }
     }
@@ -3432,7 +3478,7 @@ impl RegPlane {
         let mut s = self.state.lock();
         s.fsm.device_reset();
         s.bar0_window = Bar0Window::new();
-        s.fb.device_reset();
+        self.mem.lock().fb.device_reset();
         // ★★★ **AND THE INTERRUPT TREE** — `#151`'s state, and §14.18 is what made leaving
         // it out dangerous rather than merely untidy.
         //
@@ -3636,10 +3682,14 @@ impl RegPlane {
         w: FbWindow,
         off: u64,
         write: bool,
-        s: &mut PlaneState,
+        // ⊘ BOTH halves, because this one function spans them: PRAMIN resolves through the
+        // BAR0 window LATCH (FSM state), while BAR1/BAR2 resolve through the GMMU and the
+        // framebuffer, which moved to [`PlaneMem`] at w522.
+        st: &PlaneState,
+        s: &mut PlaneMem,
     ) -> Result<u64, WindowRefusal> {
         match w {
-            FbWindow::Pramin => Ok(s.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
+            FbWindow::Pramin => Ok(st.bar0_window.fb_addr(off - self.chip.pramin_window.base)),
             // ★★★★ §16.18. Was `NoAddressModel` unconditionally, and the comment that stood
             // here said BAR1's root *"arrives through the same command"* as BAR2's. ⊘ **That
             // was false**, and it is why nobody built this: `NV_RM_RPC_UPDATE_BAR_PDE` has
@@ -3696,7 +3746,7 @@ impl RegPlane {
     /// Named, never zero, for [`RegPlane::bar2_phys`]'s reason: a zero-filled entry is a
     /// well-formed *"maps nothing"* and a zero-filled data read is a well-formed *"the guest
     /// wrote nothing"*, and a guest acts on both.
-    fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+    fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
         let (phys, read_only) = self.bar1_translate(va, s)?;
         if write && read_only {
             return Err(WindowRefusal::Translated {
@@ -3739,8 +3789,8 @@ impl RegPlane {
         w: FbWindow,
         budget: u32,
     ) -> Result<Vec<kayfabe_mmu::walker::DecodedLeaf>, WindowRefusal> {
-        let mut s = self.state.lock();
-        let PlaneState { mmu, fb, .. } = &mut *s;
+        let mut s = self.mem.lock();
+        let PlaneMem { mmu, fb } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
             return Err(WindowRefusal::Translated {
                 va: 0,
@@ -3795,8 +3845,8 @@ impl RegPlane {
             .collect())
     }
 
-    fn bar1_translate(&self, va: u64, s: &mut PlaneState) -> Result<(u64, bool), WindowRefusal> {
-        let PlaneState { mmu, fb, .. } = s;
+    fn bar1_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {
+        let PlaneMem { mmu, fb } = s;
         let Some(fmt) = mmu.as_deref() else {
             return Err(WindowRefusal::Translated {
                 va,
@@ -3857,7 +3907,7 @@ impl RegPlane {
     /// Every arm is a **named** refusal and none of them reads zero, because a zero-filled
     /// page-table entry is a well-formed *"this maps nothing"* and a zero-filled data read
     /// is a well-formed *"the guest wrote nothing"*. Both are answers a guest acts on.
-    fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneState) -> Result<u64, WindowRefusal> {
+    fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
         let (phys, read_only) = self.bar2_translate(va, s)?;
         if write && read_only {
             return Err(WindowRefusal::Translated {
@@ -3870,11 +3920,11 @@ impl RegPlane {
 
     /// The walk half of [`RegPlane::bar2_phys`]: `(phys, read_only)` — see
     /// [`RegPlane::bar1_translate`] for why the write check is the caller's.
-    fn bar2_translate(&self, va: u64, s: &mut PlaneState) -> Result<(u64, bool), WindowRefusal> {
+    fn bar2_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {
         // ★ Destructured so the format and the byte store can be borrowed at once. They
         // are different fields and the borrow checker knows it; a method call on `s`
         // would not let it.
-        let PlaneState { mmu, fb, .. } = s;
+        let PlaneMem { mmu, fb } = s;
         let Some(fmt) = mmu.as_deref() else {
             return Err(WindowRefusal::Translated {
                 va,
@@ -3933,8 +3983,9 @@ impl RegPlane {
 
     /// Serve one framebuffer-window read.
     fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
-        let mut s = self.state.lock();
-        let phys = match self.window_phys(w, off, false, &mut s) {
+        let st = self.state.lock();
+        let mut s = self.mem.lock();
+        let phys = match self.window_phys(w, off, false, &st, &mut s) {
             Ok(p) => p,
             Err(WindowRefusal::NoAddressModel) => return ReadOutcome::FbWindow(w),
             Err(WindowRefusal::Translated { va, why }) => {
@@ -3966,11 +4017,18 @@ impl RegPlane {
     /// ([`WriteOutcome::fb_refusal`], with the address and the reason). The `Result` from
     /// [`FbStore::write`] is matched, never discarded.
     fn fb_write(&self, w: FbWindow, off: u64, size: u8, val: u64) -> WriteOutcome {
-        let mut s = self.state.lock();
-        let phys = match self.window_phys(w, off, true, &mut s) {
+        let mut st = self.state.lock();
+        let mut s = self.mem.lock();
+        let phys = match self.window_phys(w, off, true, &st, &mut s) {
             Ok(p) => p,
             Err(WindowRefusal::NoAddressModel) => {
+                // ⊘ BOTH guards, and `st` is the one that matters: `note_fb_window` takes the
+                // FSM lock itself, and a `RankedMutex` is not reentrant — holding it here is
+                // an R3 violation that the rank discipline catches by name rather than a
+                // deadlock at 3am. Caught by `bar0_window.rs` the moment w522 gave `fb_write`
+                // a state guard it had not held before.
                 drop(s);
+                drop(st);
                 self.note_fb_window(w, off);
                 self.c.fb_window_writes.fetch_add(1, Ordering::Relaxed);
                 return WriteOutcome {
@@ -3980,6 +4038,8 @@ impl RegPlane {
             }
             Err(WindowRefusal::Translated { va, why }) => {
                 drop(s);
+                // ⊘ As above: `note_fb_window` re-takes the FSM lock, which is not reentrant.
+                drop(st);
                 self.note_fb_window(w, off);
                 // ★★★★ The tag names the window that actually refused. Reusing BAR2's
                 // sentence for a BAR1 refusal would send a reader to `UPDATE_BAR_PDE` for a
@@ -4052,20 +4112,20 @@ impl RegPlane {
                 // ⊘ It records a PAGE, never a value and never a claim that the page is a
                 // page table. `Spine::pt_page_owner` decides ownership at the drain, and a
                 // page nothing owns is requeued, not guessed at.
-                s.pt_witness_writes = s.pt_witness_writes.saturating_add(1);
+                st.pt_witness_writes = st.pt_witness_writes.saturating_add(1);
                 // ★ BOTH pages when the access straddles, because `FbStore::write` really
                 // does land bytes in two frames (`SparseFb::runs`). A witness that recorded
                 // only the first would leave the second page written-and-unwitnessed, which
                 // is the one state that binds nothing and looks like nothing happened.
                 let last = phys.saturating_add(n as u64 - 1);
                 for page in [phys & !0xfff, last & !0xfff] {
-                    if s.pt_witness.contains(&page) {
+                    if st.pt_witness.contains(&page) {
                         continue;
                     }
-                    if s.pt_witness.len() < MAX_PT_WITNESS_PAGES {
-                        s.pt_witness.insert(page);
+                    if st.pt_witness.len() < MAX_PT_WITNESS_PAGES {
+                        st.pt_witness.insert(page);
                     } else {
-                        s.pt_witness_refused = s.pt_witness_refused.saturating_add(1);
+                        st.pt_witness_refused = st.pt_witness_refused.saturating_add(1);
                     }
                 }
                 WriteOutcome {
@@ -4086,6 +4146,10 @@ impl RegPlane {
             }
         };
         drop(s);
+        // ⊘ The FSM guard too — `note_fb_window` re-takes it and a `RankedMutex` is not
+        // reentrant. w522 gave this function a state guard it had not held before, and the
+        // rank discipline named all three sites by panic rather than letting one deadlock.
+        drop(st);
         self.note_fb_window(w, off);
         outcome
     }
