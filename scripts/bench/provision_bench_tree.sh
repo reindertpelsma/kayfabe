@@ -214,12 +214,33 @@ UD
   #
   # ⚠ Fix the guest the same way, and MEASURE rather than hardcode — mirror speed is a
   # property of where the box is, not of the mirror.
+  # ⊘⊘ **THIS MEASURED AND THEN IGNORED THE MEASUREMENT** — fixed 2026-09-12 (w537).
+  #
+  # It benchmarked three mirrors, printed the speeds, and then rewrote the guest's sources to
+  # `mirrors.edge.kernel.org` **unconditionally**, whichever won. `[measured w537]` on a fresh
+  # box that host was UNREACHABLE (`Unable to connect`) while `archive.ubuntu.com` — the one
+  # being replaced — was fastest at 527 kB/s. The result: `build-essential` had no candidate,
+  # the guest had no `cc`, the kernel-open driver never built, and the first graded boot came
+  # back with an EMPTY guest dmesg and `do not grade this boot`.
+  #
+  # ⚠ A check that reports is not a check that gates. The host half of this provisioning
+  # (`provision_box.sh:pick_apt_mirror`) has always picked the winner and refused below a
+  # floor; this half printed the same numbers as decoration.
   say "B2: picking the guest's apt mirror (the host's fix, applied one layer down)"
-  $GS "for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu mirrors.edge.kernel.org/ubuntu; do
+  GUEST_MIRROR=$($GS "best=''; best_s=0
+       for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu mirrors.edge.kernel.org/ubuntu; do
          s=\$(timeout 12 curl -s -o /dev/null -w '%{speed_download}' http://\$m/dists/noble/Release 2>/dev/null || echo 0)
-         echo \"guest mirror \$m -> \${s%%.*} B/s\"
-       done" 2>&1 | sed 's/^/    /'
-  $GS "sudo sed -i 's|http://archive.ubuntu.com/ubuntu|http://mirrors.edge.kernel.org/ubuntu|g' \
+         s=\${s%%.*}
+         echo \"guest mirror \$m -> \${s:-0} B/s\" >&2
+         if [ \"\${s:-0}\" -gt \"\$best_s\" ]; then best_s=\$s; best=\$m; fi
+       done
+       [ \"\$best_s\" -ge 100000 ] && echo \"\$best\" || echo ''" 2>&1 | tee /dev/stderr | tail -1 | tr -d '\r')
+  if [ -z "$GUEST_MIRROR" ]; then
+    say "⊘ B2: NO USABLE GUEST APT MIRROR (best under 100 kB/s). The driver cannot build in the guest."
+    return 5
+  fi
+  say "B2: guest apt mirror = $GUEST_MIRROR"
+  $GS "sudo sed -i 's|http://[a-z0-9.]*\.ubuntu\.com/ubuntu|http://$GUEST_MIRROR|g; s|http://mirrors\.edge\.kernel\.org/ubuntu|http://$GUEST_MIRROR|g' \
          /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null; true"
 
   say "B2: installing guest driver (kernel-open)"
