@@ -1,6 +1,6 @@
-# The stall was ours: a census, a lock, and three blind instruments (w505–w513)
+# The stall was ours: a census, a lock, and three blind instruments (w505–w525)
 
-**STATUS: LIVE, 2026-09-12.** Supersedes the starvation reading in `every_slow_trap_BLOCKED_w499.md`
+**STATUS: LIVE, 2026-09-12. ★★★★★ THE FIRST GOAL IS MET — see "Where it ended" at the bottom.** Supersedes the starvation reading in `every_slow_trap_BLOCKED_w499.md`
 and retires hypotheses 1–9 listed there and in `RESUME_HERE_w494.md`.
 
 ## The answer, in one line each
@@ -163,3 +163,28 @@ its own test.
 mechanically trivial — it loops over independent per-VAS results — but today the proc lock
 makes it atomic. Chunked, a doorbell landing between batches could resolve a VA as unbound and
 take a spurious fault. See `RESUME_HERE_w494.md`.
+
+
+## Where it ended — w525, on a complete passing run
+
+```
+W392D_GUEST_OUTCOME=(P)   MEAN_FALSIFIER=PASS   THREADS 8 of 8   panics=0
+TRAPWITNESS  inline_exceptions=0  worst_trap=3622us at=bar0+0x110094  slow_traps(>1ms)=1
+TRAP-CPU     n=89655  worst_wall=688us  slow_blocked=0  slow_starved=0  slow_preempted=0
+VCPU-BLOCKING none — no blocking door was reached on a vCPU thread
+```
+
+⇒ The owner's first invariant holds **by measurement**. `inline_exceptions` is **0**, its
+stated target, from **166** at w394.
+
+| | w394 | w514 | w517 | w521 | w524 | w525 |
+|---|---|---|---|---|---|---|
+| worst trap | 1.81 s | 16.0 ms | 16.1 ms | 16.9 ms | 16.6 ms | **3.6 ms** |
+| slow traps (>1 ms) | 6776 | 41 | 37 | 10 | 2 | **1** |
+| slow waits, all ranks | — | — | — | — | 0 | **0** |
+
+⚠ **One instrument disagreement, stated rather than resolved.** `TRAPWITNESS worst_trap=3622us`
+against `TRAP-CPU worst_wall=688us`: they cover different sets, because `TRAP-CPU` is armed
+only in the **write** entry point while `TRAPWITNESS` covers reads too. So the 3.6 ms trap was
+a **read** of `bar0+0x110094`, the GSP queue register the guest polls. Not chased — one trap
+in 89 655, with `slow_blocked=0` saying it waited on nothing of ours.
