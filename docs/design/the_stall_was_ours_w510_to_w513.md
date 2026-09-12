@@ -109,6 +109,54 @@ that.
   log and `armed=62631 refused=0`. Same shape as the ranked-lock guards: one arm instrumented,
   the other not, and an unmeasured path renders exactly like a healthy one.
 
+## w522–w525: the split, and the two failures it caused
+
+The plane's single mutex covered the GSP state machine, the command policy, the BAR0 window
+latch, guest RAM, the framebuffer and the page-table format. The copy-engine session needs
+**two** of those, so `fb` and `mmu` moved to `PlaneMem` under a rank between `Plane` and
+`Device` — a placement that is forced, not preferred, because a register path may take the
+state machine and then reach the framebuffer, while the session calls into the core inside
+its closure.
+
+**Measured on complete, passing runs** (`(P)`, `MEAN_FALSIFIER=PASS`, `THREADS 8/8`):
+
+| | w514 | w517 | w521 | w524 |
+|---|---|---|---|---|
+| slow traps (>1 ms) | 41 | 37 | 10 | **2** |
+| rank-0 worst wait (µs) | 8834 | — | 8834 | **687** |
+| slow waits, **all** ranks | — | — | — | **0** |
+
+⚠ **Two failures, both mine.**
+
+1. **A rank inversion killed w523's boot.** `read_published_va` and `read_va_from_root` walk
+   under `PlaneMem` and then read guest RAM — which stayed with the state machine — so they
+   took rank 1 and reached for rank 0. The doorbell worker panicked by name, poisoned both
+   locks and ended QEMU mid-run.
+   ⊘ **The truncated run's census looked BETTER** (`slow_traps 10 → 1`) and was worthless:
+   60 875 traps instead of 89 310. A shorter run has fewer slow traps for free. Read
+   `W392D_GUEST_RC` and the "NO CENSUS" line before reading any number from a log.
+   ★ Those two functions had **no test at all** — which is why an inversion reached a boot
+   rather than a `cargo test`. `published_va_lock_order.rs` covers them now, verified by
+   re-introducing the bug.
+2. **A diagnostic aborted the VM at teardown.** The deferred-notes sink and the rank witness
+   touch a thread-local on every lock release; on a departing thread that panics inside an
+   `extern "C"` frame, which cannot unwind and becomes a process abort. ⇒ **A diagnostic may
+   never be the thing that kills the process it is describing.**
+
+## The last bad number, and what it was
+
+`worst_trap` sat at ~16 ms on `bar0+0xb81208` for seven consecutive boots while every lock
+rank read `slow_waits=0`. The alarm, aimed at that one register, named it:
+
+```
+drain_retired_budgeted -> dispose_on -> ProxyRmBackend::free -> read_frame -> recv
+```
+
+A blocking socket round-trip to the isolate, inside an MMIO trap. The reap moved to the
+doorbell worker at w525. ⊘ That is a **contract change**, not a bug fix — two reap tests
+assert the trap does it, and they now pin the arm with no worker while the shipping arm gets
+its own test.
+
 ## Open, and needing the owner
 
 **Must a page-table sweep commit land atomically?** Chunking `commit_pt_sweep_revoking` is
