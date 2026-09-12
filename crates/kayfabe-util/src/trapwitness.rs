@@ -529,6 +529,190 @@ pub fn census() -> String {
 /// ★ w477 — re-exported here only so the boot log has ONE place that prints the censuses.
 /// ⊘ The count itself lives in `kayfabe-fwd`, beside the decision it measures.
 
+/// ⊘⊘⊘ **TEMPORARY — THE OVER-BUDGET WATCHDOG. DELETE BEFORE SHIPPING.**
+///
+/// Owner, 2026-09-12: *"crash when a trap exceeds 1ms. then you know where it happened, why,
+/// with dump, and iterate to fix it."*
+///
+/// ★ Why a crash and not a log line: the census already says WHICH register is slow and has
+/// said so all session. What it cannot say is **where the time goes**, because by the time a
+/// `TrapGuard` drops the trap is over and a backtrace taken there names the drop site. A
+/// watchdog that aborts while the trap is still running freezes the stuck thread in place,
+/// so the core carries the answer instead of being sampled for.
+///
+/// ⊘ `[measured w470]` the alternative — 10 Hz stack sampling — found one 0.4 s park and
+/// never once caught the multi-second event. Luck is not an instrument.
+///
+/// Armed only by `KAYFABE_TRAP_FATAL_US`; absent, `watchdog_arm` returns before doing
+/// anything and no thread is spawned.
+mod watchdog {
+    use super::SLOW_TRAP_US;
+    use core::sync::atomic::{AtomicU64, Ordering};
+
+    pub(super) const SLOTS: usize = 64;
+    /// Micros-since-epoch at which the trap in this slot started; 0 = free.
+    pub(super) static START_US: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    /// The site of the trap in this slot, for the abort message.
+    pub(super) static SITE: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+
+    pub(super) fn now_us() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_micros() as u64)
+    }
+
+    fn budget_us() -> Option<u64> {
+        static B: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+        *B.get_or_init(|| {
+            std::env::var("KAYFABE_TRAP_FATAL_US")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .or_else(|| {
+                    std::env::var("KAYFABE_TRAP_FATAL")
+                        .is_ok()
+                        .then_some(SLOW_TRAP_US)
+                })
+        })
+    }
+
+    #[must_use]
+    pub(super) fn armed() -> bool {
+        budget_us().is_some()
+    }
+
+    /// ★★★ **PRAMIN is the enumerated exception and must not trip the watchdog.**
+    /// Owner, 2026-09-12: *"just exclude the pramin one"* — and the reason is in the
+    /// architecture: the BAR0 window base has **no completion for the guest to wait on**, so
+    /// the next read must observe the new window and the remap has to finish inline. It is
+    /// bring-up only, so the stall is bounded. Watching it would only ever report the one
+    /// stall we have already agreed to.
+    ///
+    /// Exempt: the window-base register `NV_PBUS_BAR0_WINDOW` (`0x001700`) and the PRAMIN
+    /// aperture itself (`0x700000..0x800000`), both on BAR0.
+    #[must_use]
+    pub(super) fn is_exempt(site: u64) -> bool {
+        if site == u64::MAX {
+            return false;
+        }
+        let (bar, off) = (site >> 56, site & 0x00ff_ffff_ffff_ffff);
+        bar == 0 && (off == 0x0017_00 || (0x0070_0000..0x0080_0000).contains(&off))
+    }
+
+    /// Whether to STOP rather than abort. ⊘ Default is STOP: the owner allowed either, and a
+    /// stopped process keeps the stuck thread attachable with `eu-stack -p` while every other
+    /// thread is frozen too — an abort would demand core handling for the same information.
+    #[must_use]
+    fn pause_not_abort() -> bool {
+        !std::env::var("KAYFABE_TRAP_FATAL_ABORT").is_ok()
+    }
+
+    /// Spawn the watchdog once, if armed.
+    pub(super) fn arm() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        let Some(budget) = budget_us() else {
+            return;
+        };
+        ONCE.call_once(|| {
+            std::thread::Builder::new()
+                .name("kayfabe-trap-watchdog".into())
+                .spawn(move || {
+                    eprintln!(
+                        "kayfabe: ⊘⊘⊘ TRAP WATCHDOG ARMED at {budget}us — THIS IS A DEBUG \
+                         BUILD. It ABORTS the process while the offending trap is still on \
+                         the stack, so the core names where the time went. Never ship this."
+                    );
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_micros(200));
+                        let now = now_us();
+                        for i in 0..SLOTS {
+                            let st = START_US[i].load(Ordering::Relaxed);
+                            if st == 0 || now.saturating_sub(st) < budget {
+                                continue;
+                            }
+                            let site = SITE[i].load(Ordering::Relaxed);
+                            eprintln!(
+                                "kayfabe: ⊘⊘⊘ TRAP OVER BUDGET — {}us at {} (budget {budget}us). \
+                                 ABORTING WITH THE TRAP STILL RUNNING; the stuck thread is in \
+                                 the core. `eu-stack --core <core> -e <binary>` or `gdb -c`.",
+                                now.saturating_sub(st),
+                                if site == u64::MAX {
+                                    "UNATTRIBUTED".to_string()
+                                } else {
+                                    format!(
+                                        "bar{}+{:#x}",
+                                        site >> 56,
+                                        site & 0x00ff_ffff_ffff_ffff
+                                    )
+                                },
+                            );
+                            // ⊘ Flush before aborting: a message lost to buffering would make
+                            // the core the ONLY evidence, and a core with no line saying why
+                            // reads as an unrelated crash.
+                            use std::io::Write;
+                            let _ = std::io::stderr().flush();
+                            if pause_not_abort() {
+                                // ⊘ SIGSTOP freezes EVERY thread, including the one still
+                                // inside the trap, and leaves the process attachable.
+                                // `SIGSTOP` cannot be caught or ignored, so nothing in the
+                                // process can decline it.
+                                // ⊘ Via `kill(1)` rather than `libc::kill`: this crate
+                                // forbids `unsafe` and carries no libc dependency, and a
+                                // temporary debug instrument is the last thing that should
+                                // weaken either. Spawning a process from the watchdog is
+                                // acceptable precisely because this never ships.
+                                let _ = std::process::Command::new("kill")
+                                    .args(["-STOP", &std::process::id().to_string()])
+                                    .status();
+                                // If somebody continues us, do not re-fire on the same trap.
+                                START_US[i].store(0, Ordering::Release);
+                            } else {
+                                std::process::abort();
+                            }
+                        }
+                    }
+                })
+                .ok();
+        });
+    }
+}
+
+/// ⊘ TEMPORARY — see [`watchdog`].
+fn watchdog_arm() {
+    if watchdog::armed() {
+        watchdog::arm();
+    }
+}
+
+/// ⊘ TEMPORARY — an in-flight trap's slot, held for the duration of the trap.
+struct InFlight;
+
+impl InFlight {
+    fn claim(site: u64) -> Option<usize> {
+        if !watchdog::armed() || watchdog::is_exempt(site) {
+            return None;
+        }
+        let now = watchdog::now_us().max(1);
+        for i in 0..watchdog::SLOTS {
+            if watchdog::START_US[i]
+                .compare_exchange(0, now, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+            {
+                watchdog::SITE[i].store(site, Ordering::Relaxed);
+                return Some(i);
+            }
+        }
+        // ⊘ Every slot busy: do not block and do not grow. A trap that cannot be watched is
+        // simply unwatched, which is the right failure for a debug instrument.
+        None
+    }
+
+    fn release(slot: Option<usize>) {
+        if let Some(i) = slot {
+            watchdog::START_US[i].store(0, Ordering::Release);
+        }
+    }
+}
+
 /// ★★★ **The RAII marker installed at every guest-trap entry.**
 ///
 /// Install it at the *outermost* boundary the guest can cross — the MMIO dispatch — and
@@ -538,6 +722,9 @@ pub fn census() -> String {
 /// ⊘ Not `Send`: a guard is a statement about the stack it sits on.
 #[derive(Debug)]
 pub struct TrapGuard {
+    /// The in-flight slot this trap holds while it runs, released on drop. ⊘ TEMPORARY:
+    /// exists only for the over-budget watchdog and goes when that does.
+    inflight: Option<usize>,
     /// `(bar << 56) | offset` of the trapped access, or `u64::MAX` if unattributed.
     site: u64,
     start: std::time::Instant,
@@ -555,9 +742,16 @@ impl TrapGuard {
     /// for "unattributed". See [`WORST_TRAP_SITE`].
     #[must_use]
     pub fn enter_at(site: u64) -> Self {
+        // ⊘⊘⊘ **TEMPORARY DEBUG INSTRUMENT — DELETE BEFORE SHIPPING.** Owner, 2026-09-12:
+        // *"only during debug ensure this is OFF/deleted later and in prod (temporary to
+        // test dont leave it in code), is crash when a trap exceeds 1ms."* Default-off, and
+        // `watchdog_arm()` is a no-op unless `KAYFABE_TRAP_FATAL_US` is set.
+        watchdog_arm();
+        let inflight = InFlight::claim(site);
         TRAP_DEPTH.with(|d| d.set(d.get() + 1));
         TRAP_ENTRIES.with(|c| c.set(c.get() + 1));
         Self {
+            inflight,
             start: std::time::Instant::now(),
             site,
             _not_send: PhantomData,
@@ -567,6 +761,7 @@ impl TrapGuard {
 
 impl Drop for TrapGuard {
     fn drop(&mut self) {
+        InFlight::release(self.inflight);
         // ⊘ Only the OUTERMOST guard publishes a duration: an inner one measures a
         // sub-interval, and reporting it as "a trap hold" would understate the worst case
         // by exactly the nesting.
