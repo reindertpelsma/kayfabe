@@ -1859,15 +1859,31 @@ pub mod notes {
             eprintln!("{line}");
             return;
         }
-        DEFERRED.fetch_add(1, Ordering::Relaxed);
-        PENDING.with(|p| {
-            let mut p = p.borrow_mut();
-            if p.len() >= CAP {
-                DROPPED.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-            p.push(line);
-        });
+        // ⊘⊘ `try_with`, NEVER `with`. `[measured w524]` a thread exiting mid-run hit
+        // *"cannot access a Thread Local Storage value during or after destruction"* inside
+        // `kayfabe_shim_regs_audit` — an `extern "C"` frame that CANNOT UNWIND, so the panic
+        // became `fatal runtime error`, i.e. an abort of the whole VM at teardown. A
+        // diagnostic may never be the thing that kills the process it is describing.
+        //
+        // ⚠ When the buffer is gone the line is printed IMMEDIATELY instead of dropped: the
+        // thread is on its way out, so there will be no outermost release to flush it, and a
+        // silently discarded diagnostic is worse than one that prints under a lock once.
+        let stored = PENDING
+            .try_with(|p| {
+                let mut p = p.borrow_mut();
+                if p.len() >= CAP {
+                    DROPPED.fetch_add(1, Ordering::Relaxed);
+                    return true;
+                }
+                p.push(line.clone());
+                true
+            })
+            .unwrap_or(false);
+        if stored {
+            DEFERRED.fetch_add(1, Ordering::Relaxed);
+        } else {
+            eprintln!("{line}");
+        }
     }
 
     /// Print and clear whatever this thread deferred. Called when the last rank is released.
@@ -1875,7 +1891,11 @@ pub mod notes {
         // ⊘ Taken out of the cell FIRST, so an `eprintln!` that itself re-entered `emit`
         // could not borrow the same `RefCell` twice. Nothing does that today; a panic here
         // would be a confusing way to find out that something started.
-        let lines = PENDING.with(|p| std::mem::take(&mut *p.borrow_mut()));
+        // ⊘ `try_with` for the same reason as `emit` — see there. A thread whose TLS is
+        // already destroyed has nothing buffered to flush, and asking would abort the VM.
+        let Ok(lines) = PENDING.try_with(|p| std::mem::take(&mut *p.borrow_mut())) else {
+            return;
+        };
         for l in lines {
             eprintln!("{l}");
         }
@@ -2022,5 +2042,47 @@ mod the_contract_is_checked_not_audited {
             before,
             "neither the plane rank inside a trap nor a high rank outside one is a violation"
         );
+    }
+}
+
+#[cfg(test)]
+mod a_diagnostic_may_not_kill_the_process {
+    use super::notes;
+
+    /// ★★★★★ **A THREAD ON ITS WAY OUT MUST NOT ABORT THE VM.**
+    ///
+    /// `[measured w524]` the run graded `(P)`, `THREADS 8 of 8` — and then aborted at
+    /// teardown:
+    ///
+    /// > *cannot access a Thread Local Storage value during or after destruction:
+    /// > AccessError* … *panic in a function that cannot unwind* … *fatal runtime error*
+    ///
+    /// The frame was `kayfabe_shim_regs_audit`, an `extern "C"` boundary. A panic there
+    /// cannot unwind, so it becomes an abort of the whole process. ⊘ The deferred-notes sink
+    /// (w514) and the rank witness both reach for a thread-local on every lock release, and
+    /// a thread whose TLS is already destroyed makes `with` panic.
+    ///
+    /// ⚠ **A diagnostic may never be the thing that kills the process it is describing.**
+    /// Both now use `try_with`, and `emit` prints immediately rather than dropping the line —
+    /// a departing thread has no outermost release left to flush it, and a silently discarded
+    /// diagnostic is worse than one printed under a lock once.
+    ///
+    /// ⊘ This test cannot enter real TLS destruction from safe code, so it checks the
+    /// property that makes the fix work: emit and flush are callable from any thread, at any
+    /// time, without a lock held, and neither panics. The teardown case is covered by the
+    /// `try_with` itself, which cannot panic by construction.
+    #[test]
+    fn emitting_and_flushing_from_a_bare_thread_never_panics() {
+        let t = std::thread::spawn(|| {
+            for i in 0..4 {
+                crate::lock_safe_eprintln!("kayfabe: TEST bare-thread line {i}");
+            }
+            // Exercised with no rank held, which is the state a departing thread is in.
+            assert!(
+                notes::note_census().contains("deferred="),
+                "the census must remain readable from any thread"
+            );
+        });
+        t.join().expect("a thread that only emits diagnostics must exit cleanly");
     }
 }

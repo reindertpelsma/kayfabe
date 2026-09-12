@@ -89,7 +89,7 @@ pub fn bit(rank: u8) -> u8 {
 /// wrappers **after** the underlying acquire succeeded, so a failed/poisoned acquire
 /// never leaks a phantom held bit.
 pub fn note_acquired(rank: u8) {
-    HELD.with(|h| h.set(h.get() | bit(rank)));
+    let _ = HELD.try_with(|h| h.set(h.get() | bit(rank)));
     ACQUIRED.with(|c| {
         let mut a = c.get();
         a[rank as usize] += 1;
@@ -100,13 +100,16 @@ pub fn note_acquired(rank: u8) {
 /// Record that this thread released its rank-`rank` lock (guard `Drop` — runs on
 /// unwind too, so a panic under a lock leaves the thread-local consistent).
 pub fn note_released(rank: u8) {
-    HELD.with(|h| h.set(h.get() & !bit(rank)));
+    let _ = HELD.try_with(|h| h.set(h.get() & !bit(rank)));
 }
 
 /// The set of ranks THIS thread currently holds, as a bit mask (bit = rank).
 #[must_use]
 pub fn held_mask() -> u8 {
-    HELD.with(Cell::get)
+    // ⊘ `try_with`: a thread whose TLS is already being destroyed holds no ranked lock by
+    // construction, and `with` would PANIC there. `[measured w524]` that panic landed inside
+    // an `extern "C"` frame that cannot unwind and aborted the whole VM at teardown.
+    HELD.try_with(Cell::get).unwrap_or(0)
 }
 
 /// How many locks THIS thread currently holds (0..=[`MAX_RANKS`]). A leaked guard
