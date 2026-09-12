@@ -92,3 +92,43 @@ lazily. ⚠ TWO paths reach it: this one and `verb_op`'s `FwdFault::IsolatePendi
 Every step: client `W392D_GUEST_OUTCOME=(P)` with `THREADS 8 of 8` and
 `MEAN_FALSIFIER=PASS`, plus `VCPU-BLOCKING` strictly shrinking and `slow_traps` strictly
 shrinking. ⊘ A step that improves a number and loses the client is not progress.
+
+
+---
+
+## The order of work, and what "done" means at each step (owner, 2026-09-12)
+
+> *"after raw client slow trap free, get llm slow trap free and only then iterate for llm to
+> parity for perf overhead that remains"*
+
+| # | milestone | done when |
+|---|---|---|
+| 1 | **raw client slow-trap free** | no trap over 1 ms during the client phase, read off `TRAP-PHASES` rather than off a whole-boot maximum; client still `(P)` 8/8 |
+| 2 | **LLM slow-trap free** | same bar under the LLM workload, which drives ~190 launches per token and is a different trap regime entirely |
+| 3 | **LLM to parity** | only then chase the residual overhead |
+
+⊘ The order matters and is not arbitrary: a trap profile taken under the raw client is a
+different distribution from one taken under the LLM. `[measured w331]` `submit_ms` varied
+**9.1x across three consecutive boots at one build** — so a regime that has not been measured
+has not been characterised, whatever the other regime says.
+
+★ **Parity will likely need a properly concurrent plane** (owner): one worker is enough to get
+work off the vCPU, and is not enough to keep a real workload fed. That is the point at which
+the thread model of §3 has to grow past one coordinator — and the wake design is already
+chosen for it (an eventfd composes with the isolates' own descriptors in one epoll set; a
+mutex does not).
+
+## Testing, as a standing requirement (owner, 2026-09-12)
+
+- **A bug worth finding is a bug worth a test.** Two of tonight's real defects were caught by
+  tests that already existed and were simply not run (`an_armed_queue_head_write_records_and_returns`
+  for the stale mirror, `a_power_on_reset_puts_the_emulated_gsp_back_to_cold` for the lost
+  deferral arm). Two others have **no test and need one**: the vacuous working-set gate, and
+  the silent write-back truncation that returns `NV_OK` with the guest's own request bytes in
+  the tail.
+- **Integration coverage wherever it does not need a GPU.** Most of the register model, the
+  policy chain, the wire protocol and the address table are testable without hardware, and a
+  test that needs a rented box is a test that runs once a day instead of every commit.
+- **The mutation gate should be green with a good score.** A suite that passes while the
+  mutants live is measuring its own existence, not the code — which is the same family as the
+  green tests that held walls in place all through this campaign.
