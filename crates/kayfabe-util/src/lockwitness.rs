@@ -55,7 +55,11 @@ use std::cell::Cell;
 /// How many distinct ranks the witness tracks. Three are used today (device / proc /
 /// leaf); the extra slot is headroom, not an invitation — a fourth rank is a design
 /// change (§3.3 declares the order), never an implementation detail.
-pub const MAX_RANKS: u8 = 4;
+/// ⚠ Raised from 4 to 5 at w521, when `LockRank::PlaneMem` was inserted between `Plane`
+/// and `Device`. ⊘ The witness panics by name on an undeclared rank rather than silently
+/// dropping it — which is why adding a variant without this line failed loudly in three
+/// test crates instead of quietly under-counting in a boot.
+pub const MAX_RANKS: u8 = 5;
 
 thread_local! {
     /// Bit `r` set ⇔ this thread currently holds a lock of rank `r`. A bit, not a

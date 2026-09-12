@@ -78,14 +78,38 @@ pub enum LockRank {
     /// partner already ships, on another vCPU's trap. **A guest could build the deadlock by
     /// ringing a doorbell on one vCPU while touching a register on another.**
     Plane = 0,
+    /// ★★★★★ **Rank 1 — the register plane's MEMORY** (`kayfabe_device::RegPlane::mem`):
+    /// the emulated framebuffer store and the installed GMMU format, and nothing else.
+    ///
+    /// # ⊘ Why it is a SECOND lock and not a field of the one above
+    ///
+    /// `[measured w510-w520]` the plane's FSM mutex is held for **5-8 ms** at a stretch by
+    /// `RegPlane::ce_session_with_root`, which wraps an ARBITRARY CALLER CLOSURE — and the
+    /// closure the shim passes it is the whole CE submission. A vCPU's `RegPlane::write` and
+    /// `RegPlane::read` block on that same mutex for that whole time, and the lock census
+    /// names the waiter and the holder as the same line, boot after boot.
+    ///
+    /// ★ The CE session needs exactly TWO fields: `mmu` and `fb` (`resolve_locked` and
+    /// `CePlane::fb`). It does not touch the FSM, the policy chain, the BAR0 window latch or
+    /// the interrupt tree. So the register path and the submission path were sharing a lock
+    /// over data neither needs from the other — the owner's complaint, verbatim: *"locks
+    /// taking over data structures that protect 90% of the data completely irrelevant for
+    /// the vcpu mmio handler."*
+    ///
+    /// ⚠ It sorts **between `Plane` and `Device`**, and that placement is forced, not
+    /// preferred: a register path may take the FSM and then reach the framebuffer (PRAMIN,
+    /// the BAR0 framebuffer window), so `Plane → PlaneMem` must be legal; and the CE session
+    /// calls into the core (`with_pushbuffer`) inside its closure, so `PlaneMem → Device`
+    /// must be legal too. Only a rank strictly between them permits both.
+    PlaneMem = 1,
     /// Rank 1 — the device `RwLock` guarding the spine (`Gpu::apply`, projection
     /// refresh, routing maps, delivery pump/poll/drained, target minting).
-    Device = 1,
+    Device = 2,
     /// Rank 2 — a per-`Proc` `Mutex` (µs bookkeeping only: publications, the
     /// doorbell act phase, worker checkout/commit — never a blocking call, R1).
-    Proc = 2,
+    Proc = 3,
     /// Rank 3 — leaf structures: the executor inbox, the recorder.
-    Leaf = 3,
+    Leaf = 4,
 }
 
 impl LockRank {
@@ -144,6 +168,7 @@ fn note_released(rank: LockRank) {
 fn held_ranks_in(mask: u8) -> Vec<LockRank> {
     [
         LockRank::Plane,
+        LockRank::PlaneMem,
         LockRank::Device,
         LockRank::Proc,
         LockRank::Leaf,
@@ -1466,9 +1491,13 @@ mod lock_cost_separates_wait_from_hold {
         // touched concurrently by sibling tests and a legitimate `slow_holds=0` on one of them
         // is not this test's business — the first version of this assertion scanned the whole
         // line and failed on rank1's honest zero.
+        // ⊘ The rank NUMBER is derived from the enum, never written out. w521 inserted
+        // `PlaneMem` between `Plane` and `Device`, every later rank shifted by one, and a
+        // hardcoded `rank3` here then asserted about a rank this test never touched.
+        let want = format!("rank{} ", LockRank::Leaf as u8);
         let mine = line
             .split('[')
-            .find(|seg| seg.starts_with("rank3 "))
+            .find(|seg| seg.starts_with(&want))
             .unwrap_or_else(|| panic!("the LEAF rank must be named: {line}"));
         assert!(
             !mine.contains("slow_holds=0"),
