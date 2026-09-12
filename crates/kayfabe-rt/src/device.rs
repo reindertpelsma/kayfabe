@@ -2114,6 +2114,11 @@ impl SharedDevice {
     /// Deliberately `&Proc` and deliberately a closure: the borrow cannot escape the
     /// guard, so this cannot become a back door for holding proc state across a lock
     /// boundary (which is how a "just for a moment" accessor turns into an R5 violation).
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     pub fn with_proc<R>(&self, pid: ProcId, f: impl FnOnce(&Proc) -> R) -> Option<R> {
         let mut out = None;
         let _ = self.route_act(
@@ -2133,6 +2138,11 @@ impl SharedDevice {
     /// processes' page tables. `None` means the proc is gone (retired or never existed),
     /// which every caller treats as "the state this would have touched died with it",
     /// never as an error.
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     pub fn with_proc_mut<R>(&self, pid: ProcId, f: impl FnOnce(&mut Proc) -> R) -> Option<R> {
         let mut out = None;
         let _ = self.route_act(
@@ -2149,6 +2159,11 @@ impl SharedDevice {
     /// rank 0 held, so it may take **no** proc lock (R3). Added for the conformance suite's
     /// birth-at-alloc fixture, which needs a channel's declared `gpFifoOffset` off its own
     /// graph node — a fact that lives on the spine, not on the proc.
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     pub fn with_spine<R>(&self, f: impl FnOnce(&Spine) -> R) -> R {
         let st = self.state.read();
         f(&st.spine)
@@ -2269,6 +2284,11 @@ impl SharedDevice {
     /// ⚠ **Lock order.** This takes rank 0. A caller holding the register plane's mutex may
     /// call it (plane→core is the established order, set by the command-policy chain); a
     /// caller holding a rank-1 proc lock may not — that is the rank order, unchanged.
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     pub fn with_pushbuffer<R>(&self, f: impl FnOnce(&dyn kayfabe_arch::PushbufferAbi) -> R) -> R {
         // ⊘⊘⊘ **THIS HELD THE DEVICE LOCK ACROSS THE CALLER'S CLOSURE, AND THE CLOSURE IS
         // UNBOUNDED.** `[measured w492]` this acquisition was the worst hold in the device —
@@ -2345,6 +2365,11 @@ impl SharedDevice {
     /// **Spine op** (read guard), and no proc lock: a vacated proc has left the lock
     /// cells and is a bare value inside the spine. Needed by the §12.35 teardown audit,
     /// which cannot state "reachable or queued" without seeing the corpses' queues.
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     pub fn with_retired<R>(&self, f: impl FnOnce(&[Proc]) -> R) -> R {
         let st = self.state.read();
         f(st.spine.retired_procs())
@@ -2485,6 +2510,11 @@ impl SharedDevice {
     /// proc only**. Sharded = device read (rank 0) + that proc's mutex (rank 1);
     /// Degenerate = one device write guard reaching the proc via `get_mut`. The mode
     /// never leaks into the caller.
+    /// ⊘ `#[track_caller]` (w494): this combinator takes a ranked lock and runs a
+    /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
+    /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
+    /// the attribution resolves to whoever called THIS instead.
+    #[track_caller]
     fn route_act<T, R>(
         &self,
         route: impl FnOnce(&Spine) -> Result<(ProcId, T), FwdFault>,
