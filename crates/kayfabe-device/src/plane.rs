@@ -645,7 +645,6 @@ struct PlaneState {
     /// `TOP` and `LEAF` from one vCPU while another may still be inside the trigger write
     /// that set them, and a torn view of that pair is a lost interrupt. See
     /// [`crate::cpuintr`].
-    cpu_intr: CpuIntrTree,
     /// The framebuffer this device advertises, as a port. [`RefusingFb`] until a shell
     /// installs one — the exact shape [`PlaneState::ram`] already has.
     fb: Box<dyn FbStore>,
@@ -1139,6 +1138,22 @@ pub struct RegPlane {
     /// to; narrowing it to "a vCPU is blocked on this exact mutex" would re-open the same race
     /// one level down, because the bump would land after the sweep had already re-won.
     mmio_in_flight: AtomicU32,
+    /// ★★★★★ **w513 — THE CPU INTERRUPT TREE, OUT FROM UNDER THE BIG LOCK.**
+    ///
+    /// `[measured w510]` the worst MMIO trap of the whole boot was **15 982 us at
+    /// `bar0+0xb81208`** — a register in this very block (`0x00B8_1000`-`0x00B8_1643`). It
+    /// waited that long because `PlaneState`'s mutex ALSO covers `fb`, `ram`, `mmu` and the
+    /// page-table witness, and `ce_session_with_root` holds it for **8.2 ms** across a whole
+    /// CE submission on the worker.
+    ///
+    /// An interrupt-enable write has nothing to do with any of that data. The owner, before
+    /// any of it was measured: *"locks taking over data structures that protect 90% of the
+    /// data completely irrelevant for the vcpu mmio handler"*.
+    ///
+    /// ⊘ Its own lock, at [`LockRank::Leaf`], and **never taken under the plane's**: all four
+    /// uses took `state.lock()` for this field and nothing else, so there is no site where
+    /// the two are held together and no order to establish.
+    cpu_intr: kayfabe_util::lock::RankedMutex<CpuIntrTree>,
     c: PlaneCounters,
     /// ★★ The list of commands nothing answered. Held here as well as inside the chain's
     /// terminal link because a caller that replaces the policy with
@@ -1676,6 +1691,15 @@ impl RegPlane {
         self.mmio_in_flight.load(Ordering::Acquire)
     }
 
+    /// Hold the plane's own state lock across `f`, so a test can prove another path makes
+    /// progress while it is held. ⊘ Exists because the alternative — asserting a DURATION —
+    /// measures the box the test runs on, not the lock.
+    #[doc(hidden)]
+    pub fn hold_plane_state_for_test<R>(&self, f: impl FnOnce() -> R) -> R {
+        let _g = self.state.lock();
+        f()
+    }
+
     /// Hold [`RegPlane::mmio_in_flight`] up without being a real trap, so a test can drive
     /// [`PlanePtBytes::breathe`]'s bound deterministically instead of racing a second thread.
     #[doc(hidden)]
@@ -1753,6 +1777,10 @@ impl RegPlane {
             rom,
             clock,
             mmio_in_flight: AtomicU32::new(0),
+            cpu_intr: kayfabe_util::lock::RankedMutex::new(
+                kayfabe_util::lock::LockRank::Leaf,
+                CpuIntrTree::new(),
+            ),
             state: RankedMutex::new(
                 LockRank::Plane,
                 PlaneState {
@@ -1777,7 +1805,6 @@ impl RegPlane {
                     unclaimed: Vec::new(),
                     fb_window: Vec::new(),
                     bar0_window: Bar0Window::new(),
-                    cpu_intr: CpuIntrTree::new(),
                     fb: Box::new(RefusingFb),
                     mmu: None,
                     pt_witness: std::collections::BTreeSet::new(),
@@ -2967,6 +2994,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            cpu_intr: _,
             mmio_in_flight: _,
             pending_cmd_doorbells: _,
             chip: _,
@@ -3018,7 +3046,6 @@ impl RegPlane {
             // — see [`RegPlane::device_reset`], which now rebuilds the tree for exactly
             // that reason. The field is excluded because it is reported as counters, not
             // because it cannot hold anything across a life.
-            cpu_intr: _,
             // ★ The PORT is the shell's wiring, like `ram` and `policy`; what it HOLDS is
             // device state and is carried out as `fb_resident_bytes` just below.
             fb,
@@ -3425,7 +3452,7 @@ impl RegPlane {
         // `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_LEAF_VALUE_INIT` and both `_EN_*_VALUE_INIT`
         // are `0x00000000` (`ogkm-580: ampere/ga102/dev_vm.h:52,56,60`), so a device that
         // came back from a power-on reset with pending bits is not modelling silicon.
-        s.cpu_intr = CpuIntrTree::new();
+        *self.cpu_intr.lock() = CpuIntrTree::new();
         // ★★★★ **AND G1'S WITNESS** — for `BarPdeLog::device_reset`'s reason, sharpened by
         // what this one feeds. An undrained page here is handed to `Spine::pt_page_owner`
         // and then **decoded as page-table bytes** into whichever address space claims it.
@@ -3546,8 +3573,8 @@ impl RegPlane {
         if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
             && let Some(reg) = crate::cpuintr::decode(off)
         {
-            let s = self.state.lock();
-            return ReadOutcome::CpuIntr(mask(u64::from(s.cpu_intr.read(reg)), size));
+            // ⊘ No plane lock — see the matching write arm. w513.
+            return ReadOutcome::CpuIntr(mask(u64::from(self.cpu_intr.lock().read(reg)), size));
         }
         // ★★★★★ **THE INVALIDATE COMPLETION** (w326) — and it is the EIGHTH arm.
         //
@@ -4208,9 +4235,11 @@ impl RegPlane {
             && let Some(reg) = crate::cpuintr::decode(off)
         {
             self.c.cpu_intr_accesses.fetch_add(1, Ordering::Relaxed);
-            let mut s = self.state.lock();
-            let fired = s.cpu_intr.write(reg, val as u32);
-            drop(s);
+            // ⊘ The plane lock is NOT taken here, and that is the whole point of w513: this
+            // write reaches only the interrupt tree, and the plane's mutex also covers `fb`,
+            // `ram`, `mmu` and the page-table witness — which `ce_session_with_root` holds
+            // for 8.2 ms across a CE submission on the worker.
+            let fired = self.cpu_intr.lock().write(reg, val as u32);
             // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
             // not have, so no pending bit was latched, and a vector delivered with nothing
             // pending would send the guest's ISR looking for an interrupt that is not
@@ -4516,10 +4545,12 @@ impl RegPlane {
         // after it — the same shape `announce_completion` uses one statement up.
         let raise_os_event = if matches!(report, DoorbellReport::ServedLocally { .. }) {
             let mut s = self.state.lock();
-            let PlaneState {
-                fsm, ram, cpu_intr, ..
-            } = &mut *s;
-            self.deliver_os_events(fsm, ram.as_mut(), cpu_intr)
+            let PlaneState { fsm, ram, .. } = &mut *s;
+            // ⊘ The interrupt tree now has its own lock, and this is the ONLY place the two
+            // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
+            // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
+            let mut intr = self.cpu_intr.lock();
+            self.deliver_os_events(fsm, ram.as_mut(), &mut intr)
         } else {
             false
         };
@@ -4559,10 +4590,12 @@ impl RegPlane {
         let raise_cpu_intr = self.announce_completion(engine);
         let raise_os_event = {
             let mut s = self.state.lock();
-            let PlaneState {
-                fsm, ram, cpu_intr, ..
-            } = &mut *s;
-            self.deliver_os_events(fsm, ram.as_mut(), cpu_intr)
+            let PlaneState { fsm, ram, .. } = &mut *s;
+            // ⊘ The interrupt tree now has its own lock, and this is the ONLY place the two
+            // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
+            // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
+            let mut intr = self.cpu_intr.lock();
+            self.deliver_os_events(fsm, ram.as_mut(), &mut intr)
         };
         raise_cpu_intr || raise_os_event
     }
@@ -4694,9 +4727,8 @@ impl RegPlane {
             self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
             return false;
         };
-        let mut s = self.state.lock();
-        let outcome = s.cpu_intr.latch(vector);
-        drop(s);
+        // ⊘ No plane lock — the latch touches only the interrupt tree. w513.
+        let outcome = self.cpu_intr.lock().latch(vector);
         if outcome.out_of_range {
             // A vector the captured table publishes but this chip's `LEAF` family has no
             // row for. Nothing was latched, so nothing may be delivered — and it is the

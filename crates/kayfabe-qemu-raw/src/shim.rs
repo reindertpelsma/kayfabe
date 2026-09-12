@@ -6138,7 +6138,29 @@ impl SharedDoorbell {
         //   tell "the census ran and found nothing" from "the sweep was not armed".
         let pt_sweep = self.sweep_cpu_pt_tables();
         kft.mark("pt_sweep");
-        let pt_vascensus = self.vas_census();
+        // ★★★★★ **w513 — THE CENSUS IS AN INSTRUMENT, AND IT WAS THE STALL.**
+        //
+        // `[measured w513]` the stall alarm, armed on the doorbell worker, caught it past
+        // the 3 ms budget here:
+        //   `ring_inline -> SharedDevice::vas_coverage -> ReachShadow::reachable_ranges
+        //    -> quicksort::<(u64, u64)>`
+        // — five frames of sorting range lists, per doorbell, to build a string. This file
+        // already documented the cost at line 3678 (*"`pt_sweep` + `pt_vascensus` | 8.7 |
+        // 10.1 %"*) without anyone reading it as a stall.
+        //
+        // ⊘ It is a pure REPORT: unlike `pt_witness`, `pt_decode` and `pt_sweep` beside it,
+        // nothing downstream depends on it having run. So it is computed only when it will
+        // be read. Default OFF; the boot line's own census still runs, once.
+        //
+        // ⚠ And it says so when off, rather than printing an empty section — a census that
+        // renders as nothing is indistinguishable from a census that found nothing, which is
+        // the failure class that cost this campaign three instruments in one night.
+        let pt_vascensus = if per_doorbell_vas_census() {
+            self.vas_census()
+        } else {
+            " | VAS-CENSUS ⊘ NOT RUN (per-doorbell census off; set KAYFABE_DOORBELL_VAS_CENSUS=1)              — ⊘ NOT 'nothing is mapped'"
+                .to_string()
+        };
         kft.mark("pt_vascensus");
         // ★★★ w318 — the gate's own fire/skip ratio rides HERE, on a line every build emits
         // and every doorbell prints. Pre-registered outcome (B) — *"it fires and the trap does
@@ -17900,6 +17922,15 @@ pub fn doorbell_async_from(
 /// # Errors
 /// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
 /// which takes the `Some` arm, because it was SET and must not read as unset.
+/// Whether the per-doorbell VAS census runs. Default **off** — see the call site in
+/// `ring_inline` for the measurement that turned it off.
+fn per_doorbell_vas_census() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var_os("KAYFABE_DOORBELL_VAS_CENSUS").is_some_and(|v| v != "0" && v != "off")
+    })
+}
+
 fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match std::env::var_os(DOORBELL_ASYNC_ENV) {
         // ⊘ ONE default, not two: delegate to `doorbell_async_from` rather than restate it here.

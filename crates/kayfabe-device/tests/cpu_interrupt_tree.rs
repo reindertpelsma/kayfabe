@@ -349,3 +349,52 @@ fn the_interrupt_tree_is_a_register_aperture_fact_not_an_offset_fact() {
     );
     assert_eq!(p.counters().cpu_intr_raises, 0);
 }
+
+/// ★★★★★ **An interrupt-tree write must not wait on the CE submission's lock (w513).**
+///
+/// `[measured w510]` the worst MMIO trap of the entire boot was **15 982 us at
+/// `bar0+0xb81208`** — a register in this block. It waited because `PlaneState`'s mutex also
+/// covered `fb`, `ram`, `mmu` and the page-table witness, and `ce_session_with_root` holds
+/// that mutex for **8.2 ms** across a whole CE submission on the doorbell worker. An
+/// interrupt-enable write has nothing to do with any of that data.
+///
+/// ⊘ This is a test about LOCKS, so it asserts progress under a held one rather than a
+/// duration: a timing assertion on a shared CI box measures the box. With the tree under its
+/// own lock the write completes while the plane lock is held elsewhere; if the two are ever
+/// merged again this deadlocks or hangs, which is a louder failure than a slow number.
+#[test]
+fn an_interrupt_write_does_not_wait_on_the_plane_lock() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let p = Arc::new(plane());
+    let holder_in = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(AtomicBool::new(false));
+
+    // Stand in for the CE submission: hold the plane's own lock for as long as we like.
+    let holder = {
+        let (p, holder_in, release) = (Arc::clone(&p), Arc::clone(&holder_in), Arc::clone(&release));
+        std::thread::spawn(move || {
+            p.hold_plane_state_for_test(|| {
+                holder_in.store(true, Ordering::Release);
+                while !release.load(Ordering::Acquire) {
+                    std::thread::yield_now();
+                }
+            });
+        })
+    };
+    while !holder_in.load(Ordering::Acquire) {
+        std::thread::yield_now();
+    }
+
+    // The guest's interrupt write, with the plane lock demonstrably held by someone else.
+    let out = p.write(0, TRIGGER, 4, 0x81);
+    assert!(
+        out.claimed,
+        "the interrupt-tree write must be served while the plane lock is held elsewhere — \
+         if this hangs instead, the two locks have been merged again"
+    );
+
+    release.store(true, Ordering::Release);
+    holder.join().expect("the holder thread finished");
+}
