@@ -204,8 +204,10 @@ impl<T> RankedRwLock<T> {
         let site = core::panic::Location::caller();
         check_acquire(self.rank);
         let t0 = std::time::Instant::now();
+        let blocker = lockcost::sample_holder(self.rank);
         let inner = self.inner.read().expect(POISONED);
-        lockcost::note_wait(self.rank, t0.elapsed());
+        lockcost::note_wait_blocked_by(self.rank, blocker, t0.elapsed());
+        lockcost::note_holder(self.rank, site);
         note_acquired(self.rank);
         RankedReadGuard {
             inner,
@@ -228,8 +230,10 @@ impl<T> RankedRwLock<T> {
         // `worst_trap` to 58 us at 1.88 s, while the inline work it was blamed on peaked at
         // 13 ms. The whole 1.9 s was this line, and nothing said who was holding it.
         let t0 = std::time::Instant::now();
+        let blocker = lockcost::sample_holder(self.rank);
         let inner = self.inner.write().expect(POISONED);
-        lockcost::note_wait(self.rank, t0.elapsed());
+        lockcost::note_wait_blocked_by(self.rank, blocker, t0.elapsed());
+        lockcost::note_holder(self.rank, site);
         note_acquired(self.rank);
         RankedWriteGuard {
             inner,
@@ -345,8 +349,12 @@ impl<T> RankedMutex<T> {
         // every firing. Three instruments, one failure: **no way to tell "measured zero" from
         // "not measured".**
         let t0 = std::time::Instant::now();
+        // ⊘ Sampled BEFORE blocking: this names the thread already inside, which is the only
+        // thing that connects a long wait to a long hold. See `lockcost::sample_holder`.
+        let blocker = lockcost::sample_holder(self.rank);
         let inner = self.inner.lock().expect(POISONED);
-        lockcost::note_wait(self.rank, t0.elapsed());
+        lockcost::note_wait_blocked_by(self.rank, blocker, t0.elapsed());
+        lockcost::note_holder(self.rank, site);
         note_acquired(self.rank);
         RankedMutexGuard {
             inner,
@@ -1143,7 +1151,10 @@ pub mod lockcost {
     // ⚠ Lock-free by construction. A `Mutex<HashMap>` here would be a second hammer on the
     // path of the first, and would change the thing it measures.
     // =================================================================================
-    const SITE_SLOTS: usize = 128;
+    /// ⚠ Raised from 128 after `[measured w510]` printed `overflow=41611` — a ranking over
+    /// a truncated table can name a runner-up as the hammer and reads exactly like a correct
+    /// answer.
+    const SITE_SLOTS: usize = 1024;
     /// The `&'static Location` pointer identifying a site, or 0 for an unclaimed slot.
     static ACQ_SITE_KEY: [AtomicUsize; SITE_SLOTS] =
         [const { AtomicUsize::new(0) }; SITE_SLOTS];
@@ -1154,8 +1165,53 @@ pub mod lockcost {
     /// would be wrong.
     static ACQ_SITE_OVERFLOW: AtomicU64 = AtomicU64::new(0);
 
-    /// Charge one acquisition to `site`. Called on every ranked acquisition.
-    fn note_acq_site(rank: LockRank, site: &'static core::panic::Location<'static>) {
+    /// The site-table slot of whoever most recently acquired each rank, +1 so that 0 means
+    /// "nobody". ⊘ Last-writer-wins and deliberately racy: it is a **lead**, not a proof —
+    /// several locks share a rank, and a holder can release between the sample and the read.
+    static CURRENT_HOLDER: [AtomicUsize; RANKS] = [const { AtomicUsize::new(0) }; RANKS];
+
+    /// The longest slow wait seen at each rank, and who held the rank when it began.
+    static WORST_WAIT_BLOCKER: [AtomicUsize; RANKS] = [const { AtomicUsize::new(0) }; RANKS];
+
+    /// ★★★★★ **w507 — WHO WAS HOLDING IT WHEN THE WAITER ARRIVED.**
+    ///
+    /// `worst_wait` says a thread waited; `worst_hold` says some thread held something long.
+    /// Neither says they are the SAME acquisition, and on this tree they repeatedly were not:
+    /// `[measured w509]` rank 1 showed `worst_wait=2425us` beside `worst_hold=5967us` at a
+    /// site on a worker thread, and nothing in the line established that the waiter was
+    /// waiting for THAT holder. Eight hypotheses died in that gap.
+    ///
+    /// Sampled at the moment the wait begins, so it names the thread already inside.
+    #[must_use]
+    pub fn sample_holder(rank: LockRank) -> usize {
+        CURRENT_HOLDER[slot(rank)].load(Ordering::Relaxed)
+    }
+
+    /// Record that a wait of `d` at `rank` began while `blocker` (from [`sample_holder`]) held
+    /// it. Only a wait past [`SLOW_US`] is attributed — a fast wait has no one to accuse.
+    pub fn note_wait_blocked_by(rank: LockRank, blocker: usize, d: Duration) {
+        let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
+        if us >= SLOW_US && blocker != 0 && WORST_WAIT[slot(rank)].load(Ordering::Relaxed) <= us {
+            WORST_WAIT_BLOCKER[slot(rank)].store(blocker, Ordering::Relaxed);
+        }
+        note_wait(rank, d);
+    }
+
+    /// Publish `site` as the current holder of `rank`. Called once per acquisition.
+    pub(super) fn note_holder(rank: LockRank, site: &'static core::panic::Location<'static>) {
+        CURRENT_HOLDER[slot(rank)].store(claim_site(site) + 1, Ordering::Relaxed);
+    }
+
+    /// The file/line of a slot recorded by [`sample_holder`] or [`note_holder`].
+    fn name_of(slot_plus_one: usize) -> Option<(&'static str, u32)> {
+        let i = slot_plus_one.checked_sub(1)?;
+        *ACQ_SITE_NAME.get(i)?
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Find or claim `site`'s slot in the site table. Returns `usize::MAX` on overflow.
+    fn claim_site(site: &'static core::panic::Location<'static>) -> usize {
         let key = std::ptr::from_ref(site) as usize;
         // A pointer's low bits are its alignment; mix the high ones down so distinct sites
         // do not all land in the same probe chain.
@@ -1180,13 +1236,22 @@ pub mod lockcost {
                         true
                     })
             {
-                ACQ_SITE_COUNT[i].fetch_add(1, Ordering::Relaxed);
-                ACQ_SITE_RANK[i].store(slot(rank) as u8 as u64, Ordering::Relaxed);
-                return;
+                return i;
             }
             i = (i + 1) % SITE_SLOTS;
         }
         ACQ_SITE_OVERFLOW.fetch_add(1, Ordering::Relaxed);
+        usize::MAX
+    }
+
+    /// Charge one acquisition to `site`, at `rank`. Called on every ranked release.
+    fn note_acq_site(rank: LockRank, site: &'static core::panic::Location<'static>) {
+        let i = claim_site(site);
+        if i == usize::MAX {
+            return;
+        }
+        ACQ_SITE_COUNT[i].fetch_add(1, Ordering::Relaxed);
+        ACQ_SITE_RANK[i].store(slot(rank) as u64, Ordering::Relaxed);
     }
 
     /// The file/line of each claimed slot, written once at claim time. See [`note_acq_site`].
@@ -1260,12 +1325,17 @@ pub mod lockcost {
             }
             rows.push(format!(
                 "[rank{r} worst_wait={w}us worst_hold={h}us slow_waits={} slow_holds={} \
-                 worst_hold_at={}]",
+                 worst_hold_at={} worst_wait_blocked_by={}]",
                 SLOW_WAITS[r].load(Ordering::Relaxed),
                 SLOW_HOLDS[r].load(Ordering::Relaxed),
                 WORST_HOLD_SITE[r]
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .map_or_else(|| "UNATTRIBUTED".to_string(), |(f, l)| format!("{f}:{l}")),
+                // ★★★★★ w507 — the field that CONNECTS the two beside it. `worst_wait` and
+                // `worst_hold` accuse different threads and nothing said they were the same
+                // acquisition; this names who held the rank when the worst waiter arrived.
+                name_of(WORST_WAIT_BLOCKER[r].load(Ordering::Relaxed))
                     .map_or_else(|| "UNATTRIBUTED".to_string(), |(f, l)| format!("{f}:{l}")),
             ));
         }
@@ -1556,6 +1626,63 @@ mod every_guard_records_both_halves {
             h.contains("lock.rs:"),
             "and every guard type must charge its acquisition to a SITE, so a crowd of short \
              holders can be named at all: {h}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod the_wait_names_its_blocker {
+    use super::lockcost::census;
+    use super::{LockRank, RankedMutex};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// ★★★★★ **A LONG WAIT AND A LONG HOLD ARE NOT EVIDENCE THEY ARE THE SAME ACQUISITION.**
+    ///
+    /// `[measured w509]` rank 1 printed `worst_wait=2425us` beside `worst_hold=5967us` at a
+    /// site on a worker thread, and nothing in that line established that the waiter was
+    /// waiting for **that** holder — only that both numbers were large at the same rank.
+    /// Eight hypotheses about this campaign's stall died in exactly that gap, and one was
+    /// announced as found.
+    ///
+    /// This checks that the census names the **blocker sampled at the moment the wait began**,
+    /// and that the name is the holder's site rather than the waiter's own.
+    #[test]
+    fn the_census_names_who_held_the_lock_when_the_waiter_arrived() {
+        let m = Arc::new(RankedMutex::new(LockRank::Leaf, 0u64));
+        let holder = {
+            let m = Arc::clone(&m);
+            std::thread::spawn(move || {
+                let _g = m.lock(); // ← the blocker's site, on THIS line
+                std::thread::sleep(Duration::from_millis(30));
+            })
+        };
+        // Let the holder get in first; the sample is taken before blocking, so the wait has
+        // to begin while the other thread is inside.
+        std::thread::sleep(Duration::from_millis(5));
+        {
+            let _g = m.lock();
+        }
+        holder.join().expect("the holder thread finished");
+
+        // ⊘ Read THIS rank's row, not the whole line: other ranks legitimately carry
+        // `UNATTRIBUTED` because nothing ever waited on them, and a substring check over the
+        // whole census would be satisfied — or defeated — by a bystander.
+        let c = census();
+        let row = c
+            .split("[rank")
+            .find(|r| r.starts_with(&format!("{} ", LockRank::Leaf as u8)))
+            .unwrap_or_else(|| panic!("the rank that saw a 30ms hold must have a row: {c}"))
+            .to_string();
+        assert!(
+            !row.contains("worst_wait_blocked_by=UNATTRIBUTED"),
+            "a >1ms wait must name the thread that was already inside — `UNATTRIBUTED` here \
+             means the connection this field exists to make was not made: {row}"
+        );
+        assert!(
+            row.contains("worst_wait_blocked_by=crates/kayfabe-util/src/lock.rs:")
+                || row.contains("worst_wait_blocked_by=") && row.contains("lock.rs:"),
+            "and it must name the HOLDER by file:line: {row}"
         );
     }
 }
