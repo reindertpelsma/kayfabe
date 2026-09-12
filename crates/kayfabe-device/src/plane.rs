@@ -1179,6 +1179,9 @@ pub struct RegPlane {
     /// trapping. `None` is the shipping default and means *"publish nothing"*, never *"publish
     /// something stale"*. See [`RegPlane::shadow_write`].
     read_shadow: std::sync::RwLock<Option<std::sync::Arc<dyn ReadShadowPort>>>,
+    /// ★ w565 — the GSP model's register offsets, swept once. See
+    /// [`RegPlane::gsp_register_offsets`].
+    gsp_regs: std::sync::OnceLock<Vec<u64>>,
     /// ★ w554 — one bit per aperture page, set when the cut backs that page with memory.
     /// Built on first use from [`RegPlane::bar0_backable_runs`]; see [`RegPlane::dead_page`].
     dead_pages: std::sync::OnceLock<Box<[u64]>>,
@@ -1849,6 +1852,11 @@ impl RegPlane {
                     || crate::cpuintr::decode(off).is_some()
                     || self.invalidate_regs().is_some_and(|r| r.trigger == off)
                     || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+                    // ★★★★★ w565 — the GSP registers, now that every FSM write republishes
+                    // the whole group. ⊘ `may_read` offsets are NOT included: the boot
+                    // sequence's `on_read` has no republisher, so a page holding one stays
+                    // trapped rather than answering a value nothing updates.
+                    || self.model.decode_reg(0, off).is_some()
             });
             if !shadowable {
                 continue;
@@ -1912,6 +1920,7 @@ impl RegPlane {
     ///
     /// Returns how many bytes were filled.
     pub fn bar0_shadow_fill(&self, off: u64, buf: &mut [u8]) -> usize {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
         let mut filled = 0usize;
         for (i, byte) in buf.iter_mut().enumerate() {
             let at = off.saturating_add(i as u64);
@@ -1944,6 +1953,24 @@ impl RegPlane {
                 let shift = 8 * u32::from((at & 3) as u8);
                 *byte = ((v >> shift) & 0xff) as u8;
                 filled += 1;
+            } else if self.model.decode_reg(BAR, at & !3).is_some() {
+                // ★ w565 — the GSP model's projection of the boot state machine. Read through
+                // `mmio_read_with`, which is `&self` end to end, so filling cannot advance the
+                // machine it is describing.
+                let v = {
+                    let st = self.state.lock();
+                    st.fsm.mmio_read_with(self.model.as_ref(), BAR, at & !3)
+                };
+                match v {
+                    Some(Ok(v)) => {
+                        let shift = 8 * u32::from((at & 3) as u8);
+                        *byte = ((v >> shift) & 0xff) as u8;
+                        filled += 1;
+                    }
+                    // ⊘ A register the model names and cannot encode is NOT filled. The piece
+                    // is then refused rather than published with a hole — see the C caller.
+                    _ => {}
+                }
             } else if self.chip.bar0_window_reg != 0 && (at & !3) == self.chip.bar0_window_reg {
                 let v = u64::from(self.state.lock().bar0_window.raw());
                 let shift = 8 * u32::from((at & 3) as u8);
@@ -2110,6 +2137,7 @@ impl RegPlane {
         census.set_probe_arm(probe_arm);
         Ok(RegPlane {
             read_shadow: std::sync::RwLock::new(None),
+            gsp_regs: std::sync::OnceLock::new(),
             dead_pages: std::sync::OnceLock::new(),
             chip,
             model,
@@ -2715,6 +2743,52 @@ impl RegPlane {
     #[must_use]
     pub fn invalidate_regs(&self) -> Option<crate::mmuinval::InvalidateRegs> {
         crate::mmuinval::invalidate_regs(self.chip)
+    }
+
+    /// ★★★★★ **Every offset in the register aperture the GSP model decodes** — swept once,
+    /// cached, and used to re-publish the whole group after any write the FSM claimed.
+    ///
+    /// ⊘ The sweep uses `decode_reg`, which is state-free, so building this list cannot
+    /// disturb the FSM it is about to describe. It is a property of the CHIP, not of the boot,
+    /// which is why caching it is sound.
+    fn gsp_register_offsets(&self) -> &[u64] {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        self.gsp_regs.get_or_init(|| {
+            (0..self.chip.regs_aperture_len)
+                .step_by(4)
+                .filter(|&off| self.model.decode_reg(BAR, off).is_some())
+                .collect()
+        })
+    }
+
+    /// ★★★★★ **Re-publish every GSP register into the read shadow.**
+    ///
+    /// # ⊘⊘ Why the WHOLE group and not the offset that was written
+    ///
+    /// A GSP register's value is `model.encode(reg, &observe())` — a projection of the boot
+    /// state machine, not a stored word. One write advances that machine, and ANY register's
+    /// projection may move as a result: the queue pointers, the status word and the boot
+    /// progress are all views of the same state. Publishing only the offset the guest named
+    /// would leave every other view stale, and the guest reads those views to decide what to
+    /// do next.
+    ///
+    /// ⚠ Cost is bounded by the chip's register map, not by traffic: it is the same handful of
+    /// offsets every time, and `[measured w561]` they span five pages of a sixteen-megabyte
+    /// aperture.
+    pub fn publish_gsp_registers(&self) {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        if self.read_shadow.read().unwrap_or_else(|e| e.into_inner()).is_none() {
+            return;
+        }
+        for &off in self.gsp_register_offsets() {
+            let v = {
+                let s = self.state.lock();
+                s.fsm.mmio_read_with(self.model.as_ref(), BAR, off)
+            };
+            if let Some(Ok(v)) = v {
+                self.shadow_write(off, v, 4);
+            }
+        }
     }
 
     /// ★★★★★ **Publish the invalidate trigger's current value into the read shadow.**
@@ -3515,6 +3589,7 @@ impl RegPlane {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
             read_shadow: _,
+            gsp_regs: _,
             dead_pages: _,
             cpu_intr: _,
             mmio_in_flight: _,
@@ -4983,13 +5058,23 @@ impl RegPlane {
                 // is defined as *"a batch announced with no newly-served doorbell behind
                 // it"*, and it was 125 237 of 125 251. The number named the defect a rung
                 // before anyone read it that way.
-                WriteOutcome {
+                let out = WriteOutcome {
                     claimed: true,
                     raise_status_irq: report.raise_status_irq,
                     transitions: report.transitions.len(),
                     commands: report.commands.len(),
                     ..WriteOutcome::nothing()
-                }
+                };
+                // ★★★★★ w565 — REPUBLISH THE GSP GROUP, and the `drop` is load-bearing.
+                //
+                // ⊘ `publish_gsp_registers` re-reads the FSM through the plane lock, which
+                // this arm still holds through `s`. Calling it here without releasing first
+                // is a self-deadlock on a vCPU thread inside an MMIO exit — the guest would
+                // simply stop. The borrow ends with the match; `s` does not, so it is dropped
+                // by name rather than by scope.
+                drop(s);
+                self.publish_gsp_registers();
+                out
             }
             Err(f) => {
                 self.c.faults.fetch_add(1, Ordering::Relaxed);
