@@ -5202,6 +5202,21 @@ fn doorbell_publish_loop(
         let err_grants =
             pending_err_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         report_engine_forward_drain(&port.device, &err_grants);
+        // ★★★★★ **w525 — THE RETIRED DRAIN, ON THE WORKER.** See `Regs::write` for the
+        // measurement that moved it: on a vCPU this blocks in `recv()` on the isolate socket
+        // for 16ms inside an MMIO trap. Here the guest is not halted for it.
+        //
+        // ⊘ Gated on the same atomic the trap used, so an idle device costs one relaxed load
+        // per job rather than a Device-lock acquisition. Same chunk and same budget as the
+        // trap used — moving the work and changing how much of it runs per turn would leave
+        // neither measured.
+        if kayfabe_core::gpu::retired_pending() > 0 {
+            let drain_t0 = std::time::Instant::now();
+            let _ = port.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
+                u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+                    >= RETIRED_DRAIN_BUDGET_US
+            });
+        }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::MirrorFill {
             // Nothing else to do: the drain above IS the work.
             queue.note_completed();
@@ -15708,7 +15723,24 @@ impl Regs {
         // `process_churn_does_not_accumulate_toward_the_retired_cap` — two tests that assert
         // exactly the behaviour the move removed, in a configuration with no worker running.
         // They were right and the move was wrong.
-        if kayfabe_core::gpu::retired_pending() > 0
+        // ★★★★★ **w525 — AND THE DRAIN ITSELF COMES OFF THE TRAP.**
+        //
+        // `[measured w522]` the alarm, aimed at `bar0+0xb81208`, caught the vCPU here:
+        //     drain_retired_budgeted -> dispose_on -> Worker::execute
+        //                            -> ProxyRmBackend::free -> read_frame -> recv
+        // A BLOCKING SOCKET ROUND-TRIP TO THE ISOLATE, inside an MMIO trap. That is the whole
+        // of the campaign's last bad number: `worst_trap=16568us` with `cpu_of_that_trap`
+        // ~565us, in seven consecutive boots, while every lock rank reads `slow_waits=0`.
+        //
+        // ⊘ This is a CONTRACT CHANGE, not a bug fix, and it is the owner's contract:
+        // *"no blocking work in any MMIO trap"*. The reap moves to the doorbell worker.
+        //
+        // ⚠ The vCPU keeps doing it when NO WORKER IS RUNNING. Without that, a drain that
+        // never runs is a proc held forever — which is why w520's first attempt at this move
+        // turned two reap tests red. Those tests now pin the arm that has no worker, and the
+        // shipping arm's behaviour is asserted separately.
+        if !self.doorbell_async.defers()
+            && kayfabe_core::gpu::retired_pending() > 0
             && let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap()
         {
             let pins = self.device.pin_reclaim_gone();

@@ -63,6 +63,27 @@ const BAR_REGS: u32 = 0;
 const NOBODYS_OFFSET: u64 = 0x0033_4000;
 
 fn regs() -> Regs {
+    // ★★★★★ **w525 — THIS FILE PINS THE ARM WITH NO WORKER, AND SAYS WHY.**
+    //
+    // `[measured w522]` the stall alarm caught a vCPU inside an MMIO trap at
+    // `drain_retired_budgeted -> dispose_on -> ProxyRmBackend::free -> recv` — a blocking
+    // socket round-trip to the isolate, 16 ms, inside a trap the guest is halted for. That
+    // is the campaign's last bad number, and the owner's contract is *"no blocking work in
+    // any MMIO trap"*, so the reap moved to the doorbell worker.
+    //
+    // ⊘ The vCPU still reaps when NO WORKER IS RUNNING — otherwise a drain that never runs
+    // is a proc held forever. That is the arm this file tests, and it is pinned rather than
+    // inherited, so the tests below keep asserting the thing they are named for.
+    //
+    // ⚠ The cost is stated, not hidden: with the arm pinned, this file no longer exercises
+    // the SHIPPING configuration. That half is
+    // `the_shipping_arm_leaves_the_reap_to_the_worker` at the bottom — without it, "a
+    // register write reaps" would be a claim about a configuration nobody runs.
+    //
+    // SAFETY: single-threaded test setup, before any `Regs::create` in this process.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
+    }
     // `0` selects the chip table's default row (GA106). Reads `KAYFABE_ISOLATES`
     // process-globally; its own test binary, and the default is `stillborn`.
     Regs::create(0).expect("the default chip is servable")
@@ -317,4 +338,62 @@ fn process_churn_does_not_accumulate_toward_the_retired_cap() {
         "★ the high-water mark is ONE — bounded by what is retired between two register \
          writes, not by how many processes the guest has ever run"
     );
+}
+
+
+// =====================================================================================
+// THE OTHER HALF — what the SHIPPING arm does
+// =====================================================================================
+
+/// ★★★★★ **The shipping default must NOT reap on the trap, and this is the only test that
+/// says so.**
+///
+/// Every other test here pins `KAYFABE_DOORBELL_ASYNC=off` so the trap does the reap and the
+/// assertion has something to observe. That pin is safe only while something checks the arm
+/// the bench and the product actually run.
+///
+/// ⊘ `[measured w522]` reaping on the trap means
+/// `drain_retired_budgeted -> dispose_on -> ProxyRmBackend::free -> recv`: a blocking socket
+/// round-trip to the isolate with the guest halted for it, measured at 16 ms in seven
+/// consecutive boots while every lock rank read `slow_waits=0`.
+///
+/// ⚠ The assertion is that the retired proc is STILL THERE after the write — i.e. the trap
+/// did not do the work. It says nothing about the worker doing it, because no worker runs in
+/// this process; that is a boot measurement.
+#[test]
+fn the_shipping_arm_leaves_the_reap_to_the_worker() {
+    use kayfabe_core::rmgraph::RmEvent;
+
+    // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
+    }
+    let r = Regs::create(0).expect("the default chip is servable");
+    let dev = r.object_model();
+
+    let (client, root) = declare_one_proc(&dev);
+    dev.apply(RmEvent::Free {
+        client,
+        handle: root,
+    })
+    .expect("the guest frees its own client root");
+    assert_eq!(
+        dev.retired_len(),
+        1,
+        "the fixture must leave exactly one retired proc for the write to ignore"
+    );
+
+    let _ = r.write(BAR_REGS, NOBODYS_OFFSET, 4, 0);
+    assert_eq!(
+        dev.retired_len(),
+        1,
+        "★ on the shipping arm the trap must NOT reap — that reap is a blocking isolate \
+         round-trip, and the doorbell worker owns it"
+    );
+
+    // Put it back, so a later test in this binary is not silently run on the other arm.
+    // SAFETY: as above.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
+    }
 }
