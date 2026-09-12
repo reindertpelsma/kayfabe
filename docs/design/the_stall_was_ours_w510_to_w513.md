@@ -77,6 +77,38 @@ Fixed:
   `pt_witness*`). Only PRAMIN and the BAR0 framebuffer window need both — and PRAMIN is the
   owner's single enumerated stall exception.
 
+## w515–w516: the second stall, and two more one-armed instruments
+
+★★★★★ **The vCPU's other blocking site, measured:**
+
+```
+nvkvm_bar1_write -> Regs::write -> SharedDevice::take_table_changes
+                 -> RankedMutex<Proc>::lock -> futex_wait
+```
+
+`take_table_changes` takes **every `Proc` cell's lock** — rank 2 — purely to read each address
+space's `AddressTable::generation`, a counter. `[measured w514]` rank 2 is held for **5878 µs**
+by the page-table sweep's COMMIT phase, and w511's `worst_wait_blocked_by` names the waiter
+and the holder as the **same line**, `device.rs:4232`.
+
+⇒ The vCPU never needed the per-VAS detail. It needs one bit — *"is there anything for the
+publication worker to do?"* — so it now reads `any_table_change_epoch()`, one atomic bumped
+beside every generation bump. ⚠ The safety argument is an **asymmetry**, not a count: the
+epoch over-reports and never under-reports, because nothing clears it. A spare publication job
+costs a pass that finds nothing; a missed one leaves a guest mapping unpublished. Never invert
+that.
+
+⊘ **Two more instruments were one-armed, and both cost a boot:**
+- The stall alarm fired on the **worker**, where `Worker::execute` calls `assert_lock_free`
+  before any verb — so the worker blocking in `recv()` on the isolate socket is the design
+  *working*, not a stall. But the handler `_exit(42)`s on its first firing, so one boot yields
+  one backtrace, and this **healthy** path won the race against the sick one every time.
+  **An instrument that fires on a healthy path silences the instrument aimed at the fault.**
+- The alarm was armed only in `kayfabe_shim_regs_write`. A slow **read** trap could never fire
+  it, and that silence read as *"no trap was over budget"* — with a 5747 µs trap in the same
+  log and `armed=62631 refused=0`. Same shape as the ranked-lock guards: one arm instrumented,
+  the other not, and an unmeasured path renders exactly like a healthy one.
+
 ## Open, and needing the owner
 
 **Must a page-table sweep commit land atomically?** Chunking `commit_pt_sweep_revoking` is
