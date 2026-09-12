@@ -1406,6 +1406,8 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     let _stall = kayfabe_linux_raw::stall_alarm::timer::arm();
     #[cfg(feature = "host-isolates")]
     let cpu_t0 = kayfabe_linux_raw::stall_alarm::thread_cpu_nanos().ok();
+    #[cfg(feature = "host-isolates")]
+    let sw_t0 = kayfabe_linux_raw::stall_alarm::thread_switches();
     let wall_t0 = std::time::Instant::now();
     // ★★★★★ **w323 — THE TRAP MARK, AT THE ONE PLACE THE GUEST CROSSES INTO US.**
     //
@@ -1434,9 +1436,15 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     // measurement covers the work and not the caller's own store.
     #[cfg(feature = "host-isolates")]
     if let (Some(c0), Ok(c1)) = (cpu_t0, kayfabe_linux_raw::stall_alarm::thread_cpu_nanos()) {
-        kayfabe_util::trapwitness::trapcpu::note(
+        let (vol, invol) = match (sw_t0, kayfabe_linux_raw::stall_alarm::thread_switches()) {
+            (Some((v0, i0)), Some((v1, i1))) => (v1.saturating_sub(v0), i1.saturating_sub(i0)),
+            _ => (0, 0),
+        };
+        kayfabe_util::trapwitness::trapcpu::note_full(
             u64::try_from(wall_t0.elapsed().as_micros()).unwrap_or(u64::MAX),
             c1.saturating_sub(c0) / 1_000,
+            vol,
+            invol,
         );
     }
     if out.is_null() {

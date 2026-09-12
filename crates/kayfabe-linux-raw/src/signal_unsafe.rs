@@ -446,6 +446,32 @@ pub mod stall_alarm {
         }
     }
 
+    /// ★★★★★ **w498 — THE DISCRIMINATOR: preempted, or BLOCKED?**
+    ///
+    /// `[measured w497]` the worst trap spent **656 us on a CPU and 16 818 us in total**. That
+    /// proves the thread was **not on a CPU**. ⊘⊘ It does **not** prove it was descheduled —
+    /// a thread blocked on a mutex is also not on a CPU and looks identical. I concluded
+    /// "descheduling" from it, which was one step too far, and the owner was right to push:
+    /// *"context switching time is in sub milliseconds, not 26ms right."*
+    ///
+    /// The kernel separates the two and needs no sysctl:
+    /// - **involuntary** switches (`ru_nivcsw`) — the scheduler took the CPU away. Preemption.
+    /// - **voluntary** switches (`ru_nvcsw`) — the thread gave it up. It **blocked**, on a
+    ///   futex, a lock, or I/O.
+    ///
+    /// ⇒ a slow trap carrying involuntary switches is the run queue; one carrying voluntary
+    /// switches is **something in our code waiting**, and then the owner's coarse-lock theory
+    /// is right after all. ⊘ `sched_schedstats` is 0 on this box so runqueue-wait accounting
+    /// reads zero — this path works regardless.
+    #[must_use]
+    pub fn thread_switches() -> Option<(u64, u64)> {
+        let mut ru: libc::rusage = unsafe { std::mem::zeroed() };
+        // SAFETY: `ru` is a writable out-parameter of the right type living on this stack;
+        // `RUSAGE_THREAD` scopes the answer to the calling thread.
+        let rc = unsafe { libc::getrusage(libc::RUSAGE_THREAD, &raw mut ru) };
+        (rc == 0).then(|| (ru.ru_nvcsw as u64, ru.ru_nivcsw as u64))
+    }
+
     /// This thread's consumed CPU time, for the wall-versus-CPU comparison.
     ///
     /// ★ This is the half that needs no crash: `cpu` far below `wall` means the thread was

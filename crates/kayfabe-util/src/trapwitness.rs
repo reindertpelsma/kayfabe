@@ -558,6 +558,29 @@ pub mod trapcpu {
     /// Traps over the slow threshold that really did burn the CPU.
     static SLOW_AND_BUSY: AtomicU64 = AtomicU64::new(0);
 
+    /// Slow traps that carried an INVOLUNTARY context switch — the scheduler preempted them.
+    static SLOW_PREEMPTED: AtomicU64 = AtomicU64::new(0);
+    /// Slow traps that carried a VOLUNTARY context switch — the thread BLOCKED on something.
+    /// ★ This is the number that decides whether the owner's coarse-lock theory is right.
+    static SLOW_BLOCKED: AtomicU64 = AtomicU64::new(0);
+
+    /// Record one trap's wall and CPU cost plus its context switches.
+    ///
+    /// `vol`/`invol` are the deltas across the trap. ⊘ Both can be zero on a slow trap, which
+    /// is itself a finding: neither preempted nor blocked would mean the time went somewhere
+    /// neither the scheduler nor a wait explains.
+    pub fn note_full(wall_us: u64, cpu_us: u64, vol: u64, invol: u64) {
+        if wall_us >= super::SLOW_TRAP_US {
+            if invol > 0 {
+                SLOW_PREEMPTED.fetch_add(1, Ordering::Relaxed);
+            }
+            if vol > 0 {
+                SLOW_BLOCKED.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        note(wall_us, cpu_us);
+    }
+
     /// Record one trap's wall and CPU cost, both in microseconds.
     pub fn note(wall_us: u64, cpu_us: u64) {
         SAMPLES.fetch_add(1, Ordering::Relaxed);
@@ -590,7 +613,11 @@ pub mod trapcpu {
         );
         format!(
             "TRAP-CPU n={n} worst_wall={w}us cpu_of_that_trap={c}us slow_starved={starved} \
-             slow_busy={busy} (starved = wall over 10x cpu ⇒ the thread was NOT RUNNING)"
+             slow_busy={busy} slow_preempted={} slow_blocked={} (starved = wall over 10x cpu \
+             ⇒ NOT RUNNING; preempted = scheduler took the cpu; blocked = the thread WAITED \
+             on something, which is ours)",
+            SLOW_PREEMPTED.load(Ordering::Relaxed),
+            SLOW_BLOCKED.load(Ordering::Relaxed),
         )
     }
 }
