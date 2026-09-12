@@ -9603,7 +9603,7 @@ impl SharedDoorbell {
     const RING_PIN_BYTES: u64 = 4096;
 
     /// ★★★★★ **§16.82 — WITNESS THE PAGES *OUR OWN EXECUTOR* WROTE**, which G1's transport
-    /// cannot see. ⊘ Armed by [`PT_WITNESS_EXEC_ENV`]; **off by default**, so an unarmed boot
+    /// cannot see. ⊘ Always on since w534; the arm that could disable it is deleted
     /// is byte-identical to `b6c5442`'s and is this rung's own negative control.
     ///
     /// # ★★★ The gap, MEASURED, and it is a transport gap and not an ordering one
@@ -9647,16 +9647,12 @@ impl SharedDoorbell {
     /// Returns the line to print. ⊘ It prints on the disarmed arm too, saying so: an
     /// instrument that is silent when off cannot be told from one that is not wired.
     fn witness_executor_fb_pages(&self) -> String {
-        let armed = selected_pt_witness_exec();
+        // ⊘ w534 — the disarm is gone: the executor's framebuffer pages are ALWAYS witnessed.
+        // `THE_PRODUCTION_CONTRACT.md` §2. Its `off` value was never in a graded boot, and the
+        // DEFAULT was `off` while the bench pinned `on`, so neither value was measured.
         let Some(plane) = self.plane.upgrade() else {
             return " | EXEC-WITNESS no-plane".to_string();
         };
-        if !armed {
-            return format!(
-                " | EXEC-WITNESS DISARMED ({PT_WITNESS_EXEC_ENV} unset or `off`) — the \
-                 executor's pages are NOT witnessed, which is `b6c5442`'s behaviour exactly"
-            );
-        }
         // ★★★★★ **w318 — THE DIRTY GATE, and it sits HERE rather than at the decode.**
         //
         // This pass hands `requeue_pt_witness` **every** executor-created framebuffer page,
@@ -18230,50 +18226,6 @@ fn selected_fb_join() -> Result<FbJoinArm, (Status, &'static str)> {
         Some(v) => fb_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
-
-/// ★★★★★ **§16.82** — the environment variable that arms
-/// [`SharedDoorbell::witness_executor_fb_pages`]: witness the framebuffer pages the shell's
-/// **own CPU copy-engine executor** created, which G1's window-only transport cannot see.
-///
-/// ⊘ **Off by default, and refusing an unknown value**, for [`FB_BACKING_ENV`]'s stated
-/// reason: with it unset this port witnesses exactly what `b6c5442` witnessed, so the
-/// disarmed boot **is** the negative control and a typo cannot silently produce one.
-pub const PT_WITNESS_EXEC_ENV: &str = "KAYFABE_PT_WITNESS_EXEC";
-
-/// Whether `value` arms the executor witness — the pure half of [`selected_pt_witness_exec`].
-///
-/// # Errors
-/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it
-/// is `false`.
-pub fn pt_witness_exec_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
-    match value {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
-        Some(_) => Err((
-            Status::Unsupported,
-            "KAYFABE_PT_WITNESS_EXEC does not name a state: the only values are `off` (the \
-             default) and `on`. It is not defaulted, because the disarmed arm IS this \
-             rung's negative control and a typo that silently disarmed it would make the \
-             evidence run and the control indistinguishable.",
-        )),
-    }
-}
-
-/// Whether [`PT_WITNESS_EXEC_ENV`] arms the executor witness.
-///
-/// ⊘ A value that names neither state reads as **disarmed** here rather than aborting the
-/// device: this is a diagnostic-plus-populate flag consulted per doorbell, not a
-/// composition-root decision, and the line it prints states the arm it took either way.
-#[must_use]
-fn selected_pt_witness_exec() -> bool {
-    match std::env::var_os(PT_WITNESS_EXEC_ENV) {
-        None => false,
-        Some(v) => {
-            pt_witness_exec_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false)
-        }
-    }
-}
-
 
 /// ★★★★★ **w318 — arm the DIRTY GATE on the publication pass.** See [`DirtyGate`] for the
 /// measurement, the C's precedent and the correctness argument.
