@@ -65,7 +65,6 @@
 //!   this tree.
 //! - **`ce_copy` with a [`CeSource::Constant`]** — a fill needs `REMAP_ENABLE` and the
 //!   `SET_REMAP_*` method block, which the ABI module does not transcribe.
-//! - **`export_surface`** — a PRIME export.
 //!
 //! Returning a plausible success would be the exact failure `mode2_real_forward_not_fake`
 //! forbids: *"prove compute via HW sema/util, never green-guest-log"*. A named refusal
@@ -145,7 +144,6 @@ use kayfabe_linux_raw::{
     VolatileRegion, ioctl, release_fence,
 };
 use kayfabe_util::leafwitness;
-use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeMap;
 use std::ffi::CString;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -5417,10 +5415,6 @@ impl RmBackend for HostRmBackend {
     /// the same class as the forged completion `mode2_real_forward_not_fake` forbids,
     /// with a longer fuse.
     fn fb_read(&mut self, _phys: u64, _buf: &mut [u8]) -> Result<bool, RmError> {
-        Err(RmError::Other(NOT_ON_THIS_RUNG))
-    }
-
-    fn export_surface(&mut self, _memory: HostHandle) -> Result<SurfaceHandle, RmError> {
         Err(RmError::Other(NOT_ON_THIS_RUNG))
     }
 

@@ -1441,14 +1441,6 @@ pub enum RmVerb {
         /// Whether a declared aperture extent covered the range.
         covered: bool,
     },
-    /// Intent: a host memory object exported as a presentable surface (the display
-    /// seam's producer half, GR-2b — the isolate-side PRIME export).
-    ExportSurface {
-        /// The host memory object (render target) that was exported.
-        memory: HostHandle,
-        /// The minted surface token.
-        surface: SurfaceHandle,
-    },
     /// ★★★ Intent: a backing exported to the VMM for a guest memslot — decision (b)
     /// (`RmBackend::export_backing`).
     ///
@@ -1553,8 +1545,6 @@ pub enum VerbKind {
     CeCopy,
     /// [`RmBackend::fb_read`].
     FbRead,
-    /// [`RmBackend::export_surface`].
-    ExportSurface,
     /// [`RmBackend::export_backing`].
     ExportBacking,
     /// [`RmBackend::join_fb_leaf`].
@@ -3330,24 +3320,6 @@ impl RmBackend for MockRmBackend {
         };
         self.record(RmVerb::FbRead { phys, len, covered });
         Ok(covered)
-    }
-
-    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
-        let _client = self.gate(VerbKind::ExportSurface)?;
-        // An unknown memory object is a LOUD BadHandle — never a silently minted
-        // surface (and cross-isolate render targets are refused by the same check).
-        self.check(memory)?;
-        // Namespaced like host handles (handle_hi | n) so cross-(isolate, GPU)
-        // surface use is visible in assertions.
-        let n = {
-            let mut ns = self.ns.lock().expect("ns");
-            let n = ns.next;
-            ns.next += 1;
-            n
-        };
-        let surface = SurfaceHandle(self.handle_hi() | n);
-        self.record(RmVerb::ExportSurface { memory, surface });
-        Ok(surface)
     }
 
     /// ★★★ Decision (b) in the double — **and the double refuses the device class too.**

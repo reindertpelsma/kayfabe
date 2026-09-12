@@ -40,7 +40,6 @@ use kayfabe_isolate::{
     CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined,
     GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend, RmError,
 };
-use kayfabe_vmm::SurfaceHandle;
 use std::collections::BTreeSet;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
@@ -417,12 +416,6 @@ impl RmBackend for LoopbackRm {
     fn fb_read(&mut self, _phys: u64, _buf: &mut [u8]) -> Result<bool, RmError> {
         self.verb(false)?;
         Ok(false)
-    }
-
-    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
-        self.known(memory)?;
-        let h = self.verb(false)?;
-        Ok(SurfaceHandle(h))
     }
 
     /// ★★★ Decision (b), through the fixture — and it is **real**, not modelled.

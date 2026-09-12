@@ -8642,9 +8642,10 @@ pub fn fence_observed_in(
 // vblank via the OWNING proc's completion queue — never NVKMS.
 // =================================================================================
 
-/// Route proc `pid`'s GR-graphics scanout `buffer` — a [`SurfaceHandle`] minted by
-/// that proc's own isolate (`RmBackend::export_surface`, the host-VRAM PRIME export;
-/// guest-RAM handles do not typecheck here, GR-2a) — to the abstract [`Present`]
+/// Route proc `pid`'s GR-graphics scanout `buffer` — a [`SurfaceHandle`] over host VRAM
+/// (guest-RAM handles do not typecheck here, GR-2a; ⊘ the producer verb that used to mint
+/// one, `RmBackend::export_surface`, was discarded as an orphan on 2026-09-12) — to the
+/// abstract [`Present`]
 /// sink, then feed the present-complete back as a synthetic vblank on that proc's
 /// completion queue (§2.4's graphics arm). Keeps display hypervisor/host-agnostic:
 /// the core names only the [`Present`] seam; the concrete adapter (QEMU/PRIME) is a

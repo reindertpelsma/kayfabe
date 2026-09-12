@@ -273,11 +273,6 @@ pub enum Request {
         /// with a named error rather than truncated.
         len: u64,
     },
-    /// [`kayfabe_isolate::RmBackend::export_surface`].
-    ExportSurface {
-        /// Memory object to export, raw.
-        memory: u64,
-    },
     /// ★★★ [`kayfabe_isolate::RmBackend::export_backing`] — *"perform the mapping and
     /// hand back memory"* (`isolate_vmm_fd_crossing.md` §12).
     ///
@@ -448,8 +443,6 @@ pub enum Reply {
     Payload(Vec<u8>),
     /// A GPU virtual address.
     Va(u64),
-    /// An exported surface.
-    Surface(u64),
     /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
     ///
     /// Two fields, not one, and the second is not a length: `covered == false` means the
@@ -926,10 +919,6 @@ impl Envelope {
                 out.push(11);
                 out.extend_from_slice(&token.to_le_bytes());
             }
-            Request::ExportSurface { memory } => {
-                out.push(12);
-                out.extend_from_slice(&memory.to_le_bytes());
-            }
             Request::CeCopy {
                 vas,
                 dst,
@@ -1198,9 +1187,11 @@ impl Envelope {
             11 => Request::RingDoorbell {
                 token: c.u64("doorbell token")?,
             },
-            12 => Request::ExportSurface {
-                memory: c.u64("export memory")?,
-            },
+            // ⊘ **Tag 12 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`, 2026-09-12).
+            // It carried `ExportSurface`, deleted because no `Worker` wrapper ever existed
+            // and the host impl was a stub returning not-implemented. A peer built from an
+            // older revision may still send it; reusing the number for a new request would
+            // decode those frames as the new verb. Never renumber, and never re-issue 12.
             13 => Request::CeCopy {
                 vas: c.u64("ce vas")?,
                 dst: c.u64("ce dst")?,
@@ -1295,10 +1286,6 @@ impl Reply {
                 out.push(5);
                 out.extend_from_slice(&va.to_le_bytes());
             }
-            Reply::Surface(s) => {
-                out.push(6);
-                out.extend_from_slice(&s.to_le_bytes());
-            }
             Reply::FbBytes { covered, bytes } => {
                 out.push(8);
                 out.push(u8::from(*covered));
@@ -1376,7 +1363,9 @@ impl Reply {
             3 => Reply::Unit,
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
-            6 => Reply::Surface(c.u64("surface")?),
+            // ⊘ **Reply tag 6 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
+            // 2026-09-12). It carried `Reply::Surface`, the answer to the deleted
+            // `Request::ExportSurface`. Never renumber, and never re-issue 6.
             7 => Reply::Failed(match c.u8("error tag")? {
                 1 => WireError::InsufficientPermissions,
                 2 => WireError::BadHandle(c.u64("bad handle")?),
@@ -1636,7 +1625,6 @@ mod tests {
                 gpu_va: 0x200_0000,
             },
             Request::RingDoorbell { token: 0xDEAD },
-            Request::ExportSurface { memory: 11 },
             // Both engine arms and both source kinds, so a wire that dropped either
             // discriminant round-trips WRONG rather than round-tripping short.
             Request::CeCopy {
@@ -1774,7 +1762,6 @@ mod tests {
             Request::RingDoorbell { .. } => "RingDoorbell",
             Request::CeCopy { .. } => "CeCopy",
             Request::FbRead { .. } => "FbRead",
-            Request::ExportSurface { .. } => "ExportSurface",
             Request::ExportBacking { .. } => "ExportBacking",
             Request::MapGuestRam { .. } => "MapGuestRam",
             Request::UnmapGuestRam { .. } => "UnmapGuestRam",
@@ -1805,8 +1792,6 @@ mod tests {
                 "Control",
                 "DescribeGuestRam",
                 "ExportBacking",
-                "ExportDeviceView",
-                "ExportSurface",
                 "FbJoinPeek",
                 "FbRead",
                 "Free",
@@ -1844,7 +1829,6 @@ mod tests {
             Reply::Unit,
             Reply::Payload(vec![7; 100]),
             Reply::Va(0x7f00_0000),
-            Reply::Surface(3),
             Reply::Failed(WireError::InsufficientPermissions),
             Reply::Failed(WireError::BadHandle(0xBAD)),
             Reply::Failed(WireError::NoMemory),

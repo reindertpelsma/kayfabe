@@ -1,13 +1,18 @@
 //! Batch-4 the abstract present/display seam (`execution_plane.md` §2.6/§3.3):
-//! GR-graphics's home. Both halves of the seam (seam audit GR-2):
+//! GR-graphics's home.
 //!
-//! - **producer** — `RmBackend::export_surface`: the OWNING proc's isolate exports a
-//!   host render-target memory object as a [`SurfaceHandle`] (the C-proven
-//!   `PRIME_HANDLE_TO_FD` dma-buf export, `present_path_b_done`);
-//! - **consumer** — `Present::present` takes that [`SurfaceHandle`] (host VRAM —
+//! - **consumer** — `Present::present` takes a [`SurfaceHandle`] (host VRAM —
 //!   guest-RAM `RamHandle`s no longer typecheck into present), and the
 //!   present-complete is fed back as a synthetic vblank on the OWNING proc's
 //!   completion queue — display stays hypervisor/host-agnostic, NEVER NVKMS.
+//!
+//! ⊘⊘ **THE PRODUCER HALF IS GONE** (`ORPHANS_wire_or_discard.md`, 2026-09-12).
+//! `RmBackend::export_surface` — the seam's other half, added by seam audit GR-2b so the
+//! trait would not have to grow a method later — was deleted: no `Worker` wrapper ever
+//! existed, so nothing outside a test could reach it, and the host impl was a stub
+//! returning not-implemented. The two tests that drove it (through the `Worker::with_rm`
+//! escape hatch) went with it. ⚠ So this file now tests ONE half of a seam, and a
+//! `SurfaceHandle` is minted by nothing: the tests construct one directly.
 //!
 //! Invariant/contract tests (decision #15), mock-driven, GPU-free.
 
@@ -19,11 +24,8 @@ use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_fwd::{FwdFault, present_scanout};
-use kayfabe_isolate::{HostHandle, RmError};
-use kayfabe_mocks::{
-    MockArch, MockIsolateFactory, MockPresent, RmVerb, SharedRecorder, mock_classes as mc,
-};
-use kayfabe_tests::{Guarded, ResidueClaim, Scenario, identical_handles};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPresent, SharedRecorder};
+use kayfabe_tests::{Guarded, Scenario, identical_handles};
 use kayfabe_vmm::{FbMeta, PresentError, SurfaceHandle};
 
 const PDB: Pdb = Pdb(0x3401_000);
@@ -83,118 +85,6 @@ fn scanout_routes_to_present_and_feeds_vblank() {
     let (b2, m2) = fb();
     let seq2 = present_scanout(&mut gpu, pid, &mut present, b2, m2).unwrap();
     assert_eq!(seq2, seq + 1, "vblank sequence is monotonic");
-}
-
-/// ★ GR-2, the full seam chain — producer to vblank: a render-target memory object on
-/// the OWNING proc's isolate is exported to a [`SurfaceHandle`]
-/// (`RmBackend::export_surface`, the isolate-side PRIME export), that surface is
-/// presented, and the present-complete lands as a synthetic vblank on the OWNER's
-/// completion queue. The seam has both halves and they plug together — with no
-/// graphics pipeline built.
-#[test]
-fn render_target_exports_to_surface_presents_and_vblanks() {
-    let (mut gpu, recorder) = graphics_gpu();
-    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
-    // ★ §12.35 — DECLARED RESIDUE. The render target below is allocated by driving the
-    // isolate's RM surface DIRECTLY (`rm.alloc`), because the present seam's producer
-    // side has no core-side path yet: `Present` names a `SurfaceHandle`, and nothing in
-    // `Proc` owns the host memory it was exported from. So the object is real, and core
-    // state genuinely cannot name it — which is the honest statement of where the seam
-    // stops today rather than a defect in this test.
-    gpu.declare_residue(
-        ResidueClaim::on(
-            kayfabe_isolate::IsolateId::new(pid.0, GpuId::ZERO),
-            "the graphics producer's render target is allocated straight on the isolate \
-             (`rm.alloc`): the present seam has no core-side owner for host scanout \
-             memory yet, so nothing in `Proc` can name it",
-        )
-        .objects(kayfabe_mocks::VerbKind::Alloc, 1),
-    );
-
-    // Producer: a host render-target memory object, exported by the OWNING proc's
-    // OWN isolate to a presentable surface.
-    let mut worker = gpu
-        .procs
-        .get_mut(&pid)
-        .expect("proc")
-        .isolates
-        .get_mut(&GpuId::ZERO)
-        .unwrap()
-        .checkout()
-        .expect("the isolate's pool has an idle worker");
-    let (target, surface) = worker.with_rm(
-        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
-        |rm| {
-            let target = rm
-                .alloc(HostHandle::NULL, mc::MEMORY, &[])
-                .expect("render-target memory allocs");
-            let surface = rm
-                .export_surface(target)
-                .expect("render target exports to a surface");
-            (target, surface)
-        },
-    );
-    {
-        let log = recorder.lock().unwrap();
-        assert!(
-            log.log.iter().any(|(_, v)| matches!(
-                v,
-                RmVerb::ExportSurface { memory, surface: s } if *memory == target && *s == surface
-            )),
-            "the export ran through the isolate's RM verb surface"
-        );
-    }
-
-    // Consumer: present that surface; the vblank rides the OWNER's completion queue.
-    let mut present = MockPresent::new();
-    let meta = FbMeta {
-        width: 640,
-        height: 480,
-        stride: 640 * 4,
-        format: 0,
-    };
-    let seq = present_scanout(&mut gpu, pid, &mut present, surface, meta)
-        .expect("exported surface presents");
-    assert_eq!(
-        present.presented,
-        vec![(surface, meta)],
-        "the EXPORTED surface was presented"
-    );
-    assert!(
-        gpu.procs[&pid].completion.has_outstanding(),
-        "present-complete = vblank observed"
-    );
-    let batch = gpu.pump_completions(GpuId::ZERO).expect("vblank posts");
-    assert_eq!(
-        batch.events,
-        vec![OsEventRef(seq)],
-        "the vblank rides the owner's batch"
-    );
-}
-
-/// Exporting an unknown/foreign memory object is a LOUD `BadHandle` — a surface is
-/// never silently minted for a render target this isolate does not own.
-#[test]
-fn exporting_an_unknown_render_target_is_a_loud_fault() {
-    let (mut gpu, _rec) = graphics_gpu();
-    let pid = *gpu.spine.by_pdb.get(&(GpuId::ZERO, PDB)).unwrap();
-    let mut worker = gpu
-        .procs
-        .get_mut(&pid)
-        .expect("proc")
-        .isolates
-        .get_mut(&GpuId::ZERO)
-        .unwrap()
-        .checkout()
-        .expect("the isolate's pool has an idle worker");
-    let bogus = HostHandle::new(kayfabe_isolate::IsolateId::new(0, GpuId::ZERO), 0xdead_beef);
-    assert_eq!(
-        worker.with_rm(
-            &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
-            |rm| rm.export_surface(bogus)
-        ),
-        Err(RmError::BadHandle(bogus))
-    );
 }
 
 /// The synthetic vblank flows through the existing completion plane (post + drain):

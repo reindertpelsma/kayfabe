@@ -527,9 +527,17 @@ pub struct RamHandle {
     pub covers: Option<Range<u64>>,
 }
 
-/// An opaque **host-surface** token: a presentable render-target surface minted by
-/// the owning isolate's `RmBackend::export_surface` (the `PRIME_HANDLE_TO_FD`
-/// dma-buf export, C-proven — `present_path_b_done`). Deliberately DISTINCT from
+/// An opaque **host-surface** token: a presentable render-target surface.
+///
+/// ⊘⊘ **NOTHING MINTS ONE ANY MORE** (`ORPHANS_wire_or_discard.md`, 2026-09-12). The
+/// producer was `RmBackend::export_surface` (the `PRIME_HANDLE_TO_FD` dma-buf export,
+/// C-proven — `present_path_b_done`), discarded as an orphan: no `Worker` wrapper ever
+/// existed, so nothing outside a test could reach it, and the host impl was a stub. This
+/// half of the seam — the CONSUMER — is all that is left, and its tests construct a token
+/// directly. Re-adding a producer means re-adding a verb, which is the bolt-on cost seam
+/// audit GR-2b was trying to pay in advance.
+///
+/// Deliberately DISTINCT from
 /// [`RamHandle`]: the proven present path scans out **host VRAM**, not a slice of
 /// guest RAM, so a guest-RAM handle must never typecheck into [`Present::present`]
 /// (seam audit GR-2a).
@@ -578,8 +586,9 @@ pub enum PresentError {
 /// This crate defines only the trait; the QEMU/PRIME adapter is a LATER concrete impl.
 /// `kayfabe-mocks::MockPresent` is the test impl so the seam exists and is exercised now.
 pub trait Present {
-    /// Present the scanout `buffer` — a [`SurfaceHandle`] minted by the owning
-    /// isolate's `RmBackend::export_surface` (host VRAM, never guest RAM) — with
+    /// Present the scanout `buffer` — a [`SurfaceHandle`] over host VRAM, never guest
+    /// RAM (⊘ and see that type: its producer verb is deleted, so today nothing mints
+    /// one outside a test) — with
     /// geometry `meta`. Returns the [`Vblank`] the present completed on — the core
     /// feeds it back as a synthetic vblank via the completion tie-in.
     fn present(&mut self, buffer: SurfaceHandle, meta: FbMeta) -> Result<Vblank, PresentError>;

@@ -723,12 +723,6 @@ impl kayfabe_isolate::RmBackend for Relocating {
     fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError> {
         self.0.fb_read(phys, buf)
     }
-    fn export_surface(
-        &mut self,
-        memory: HostHandle,
-    ) -> Result<kayfabe_vmm::SurfaceHandle, RmError> {
-        self.0.export_surface(memory)
-    }
     fn export_backing(
         &mut self,
         want: kayfabe_isolate::ExportRequest,

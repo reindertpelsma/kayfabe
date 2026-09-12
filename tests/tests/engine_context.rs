@@ -584,7 +584,6 @@ fn host_verb_surface_does_not_grow_per_engine() {
             RmVerb::RingDoorbell { .. } => "RingDoorbell",
             RmVerb::Free { .. } => "Free",
             RmVerb::Control { .. } => "Control",
-            RmVerb::ExportSurface { .. } => "ExportSurface",
             RmVerb::CeCopy { .. } => "CeCopy",
             RmVerb::FbRead { .. } => "FbRead",
             RmVerb::ExportBacking { .. } => "ExportBacking",

@@ -826,10 +826,6 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             _ => failed(RmError::Other(FB_READ_TOO_LARGE)),
         },
         Request::RingDoorbell { token } => unit(rm.ring_doorbell(token)),
-        Request::ExportSurface { memory } => match rm.export_surface(raw(memory)) {
-            Ok(s) => Reply::Surface(s.0),
-            Err(e) => failed(e),
-        },
         // ★ Unreachable: [`serve_one`] intercepts this request, because its reply carries
         // a descriptor and this function's whole contract is `Request -> Reply`. Listed
         // explicitly rather than caught by a wildcard so that a future verb which also

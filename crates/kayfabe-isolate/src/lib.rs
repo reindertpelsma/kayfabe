@@ -105,7 +105,7 @@
 
 pub use kayfabe_arch::ids::ControlCmd;
 use kayfabe_arch::ids::{ClassId, EngineKind, GpuId, GpuVa};
-use kayfabe_vmm::{Prot, SurfaceHandle};
+use kayfabe_vmm::Prot;
 
 /// A host-side RM object handle — **a raw value plus the isolate whose RM client
 /// namespace it lives in** (`l1_concurrency.md` §12.26).
@@ -1159,15 +1159,6 @@ pub trait RmBackend: Send + Sync {
     /// # Errors
     /// Whatever the host or the transport refuses with.
     fn fb_read(&mut self, phys: u64, buf: &mut [u8]) -> Result<bool, RmError>;
-
-    /// Intent verb: export the host memory object `memory` (a render target in host
-    /// VRAM) as a presentable [`SurfaceHandle`] — the **producer half of the display
-    /// seam** (`execution_plane.md` §3.3, seam audit GR-2b). The C proved this runs
-    /// in the ISOLATE (stub `PRIME_HANDLE_TO_FD` dma-buf export, session-owned —
-    /// `present_path_b_done`); the flow is one-way guest→host. The consumer half is
-    /// `Present::present`. Anti-bolt-on note: this is the ONE named display verb —
-    /// the verb surface does not grow per engine.
-    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError>;
 
     /// ★★★ **Perform the mapping HERE, and hand back MEMORY the VMM can install** —
     /// the owner's decision (b) for `#133`/`#128`, made into a verb

@@ -61,7 +61,6 @@ use kayfabe_isolate::{
     RmBackend, RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
-use kayfabe_vmm::SurfaceHandle;
 use std::io::ErrorKind;
 use std::os::fd::AsFd;
 use std::os::fd::OwnedFd;
@@ -927,16 +926,6 @@ impl RmBackend for ProxyRmBackend {
                 buf.copy_from_slice(&bytes);
                 Ok(true)
             }
-            _ => Err(RmError::Wedged),
-        }
-    }
-
-    fn export_surface(&mut self, memory: HostHandle) -> Result<SurfaceHandle, RmError> {
-        let reply = self.call(Request::ExportSurface {
-            memory: memory.raw(),
-        })?;
-        match self.lift(reply)? {
-            Reply::Surface(s) => Ok(SurfaceHandle(s)),
             _ => Err(RmError::Wedged),
         }
     }
