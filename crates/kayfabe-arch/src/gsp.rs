@@ -673,6 +673,29 @@ pub trait BootSequence: Send + Sync {
     /// Consulted only after [`GspModel::decode_reg`] has declined, so it can never shadow
     /// a shared register. `None` means the offset is not this generation's either, and
     /// the caller must **not** default it to zero.
+    /// ★★★★★ **CAN THIS OFFSET BE OURS AT ALL — answered WITHOUT the device's state (w540).**
+    ///
+    /// `[measured w539]` **121 793 of 241 874 BAR0 reads in a boot are UNCLAIMED** — offsets no
+    /// register model decodes. Each one still took the register plane's rank-0 mutex, because
+    /// the only way to learn it was unclaimed was to ask [`Self::on_read`], and that reads boot
+    /// state. Half the read surface paid for a lock to be told "not mine".
+    ///
+    /// This is the state-free half of that question. `false` means [`Self::on_read`] **cannot**
+    /// answer this offset, so a caller may skip the lock entirely.
+    ///
+    /// ⊘ The default is `false`, and that is DERIVED, not chosen for speed: the default
+    /// [`Self::on_read`] returns `None` unconditionally, so a generation that does not
+    /// implement either one claims nothing and saying so costs nothing.
+    ///
+    /// ⚠ **An implementation that returns `false` where `on_read` would have returned `Some`
+    /// turns a served register into an unclaimed one — silently.** The two must be written from
+    /// the same constants, and `boot_sequence_claims_agree_with_its_reads` sweeps offsets to
+    /// check they do.
+    fn may_read(&self, bar: u8, off: u64) -> bool {
+        let _ = (bar, off);
+        false
+    }
+
     fn on_read(
         &self,
         _model: &dyn GspModel,

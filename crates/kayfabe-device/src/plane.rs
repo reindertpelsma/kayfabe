@@ -2973,16 +2973,21 @@ impl RegPlane {
             + c.ptimer_reads
             + c.bar0_window_reads
             + c.cpu_intr_accesses
-            + c.fb_window_reads;
+            + c.fb_window_reads
+            + c.fb_reads;
         format!(
             "BAR0-READS total={} | static[boot_reg={} rom={}] | \
              producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
-             window[fb_window_reads={} fb_window_writes={} bar0_window_writes={}] | \
+             window[SERVED r={} w={} | NO-ADDRESS-MODEL r={} w={} | moves={}] | \
              unclaimed={} residual={} ⊘ `cpu_intr` counts reads AND writes (one counter, two \
-             facts). ★ `window[..]` is the PRAMIN/framebuffer aperture — the one the owner \
-             asks about, because the fake framebuffer is real memory and a MAPPED window needs \
-             no trap in EITHER direction; the `bar0_window_writes` beside it is how often the \
-             window MOVES, which is how often such a mapping would have to be re-pointed",
+             facts). ★ `window[SERVED ..]` is the PRAMIN/framebuffer aperture actually \
+             CARRYING traffic — the one a mapping would remove, in BOTH directions, because \
+             the fake framebuffer is real memory. ⊘⊘ `NO-ADDRESS-MODEL` is the OTHER thing: \
+             window accesses this port has no address model for, i.e. REFUSED, not served. \
+             `[w539]` reporting the refused pair as if it were the traffic made PRAMIN look \
+             COLD (`0/0`) while `moves=42` said the guest was programming it — a contradiction \
+             the owner caught by asking why ogkm would move a window it never used. `moves` is \
+             how often a mapping would need re-pointing.",
             c.reads,
             c.boot_reg_reads,
             c.rom_reads,
@@ -2990,6 +2995,8 @@ impl RegPlane {
             c.bar0_window_reads,
             c.cpu_intr_accesses,
             c.ptimer_reads,
+            c.fb_reads,
+            c.fb_writes,
             c.fb_window_reads,
             c.fb_window_writes,
             c.bar0_window_writes,
