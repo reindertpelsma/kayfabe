@@ -133,7 +133,7 @@
 //! them would have hidden exactly the fact that matters: *how many framebuffer accesses
 //! this boot dropped on the floor*.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 
 use kayfabe_arch::gsp::GspModel;
@@ -1125,6 +1125,20 @@ pub struct RegPlane {
     /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
     clock: Box<dyn NanoClock>,
     state: RankedMutex<PlaneState>,
+    /// ★★★★★ **w507 — HOW MANY vCPUs ARE INSIDE AN MMIO TRAP RIGHT NOW.**
+    ///
+    /// Not a lock and not a count of lock waiters — a count of threads that are *in* a trap
+    /// and may need [`RegPlane::state`] before they can answer the guest. `[measured w506]`
+    /// the census read `worst_wait=3825us` against `worst_hold=0us`: no holder is long, a
+    /// waiter is STARVED. `std::sync::Mutex` is barging, so the page-table sweep — which
+    /// re-locks once per table page in a tight loop — keeps winning the handoff against a
+    /// vCPU parked in `futex_wait`. See [`PlanePtBytes::breathe`], the only reader.
+    ///
+    /// ⊘ Deliberately coarse: bumped across the WHOLE of [`RegPlane::read`]/[`RegPlane::write`],
+    /// not around the acquisition. "A vCPU is in a trap" is the condition the sweep must yield
+    /// to; narrowing it to "a vCPU is blocked on this exact mutex" would re-open the same race
+    /// one level down, because the bump would land after the sweep had already re-won.
+    mmio_in_flight: AtomicU32,
     c: PlaneCounters,
     /// ★★ The list of commands nothing answered. Held here as well as inside the chain's
     /// terminal link because a caller that replaces the policy with
@@ -1367,9 +1381,49 @@ pub struct PlanePtBytes<'a> {
     reads: std::cell::Cell<u32>,
 }
 
+/// Raises [`RegPlane::mmio_in_flight`] for as long as a vCPU is inside an MMIO trap.
+///
+/// ⚠ The decrement is in `Drop`, so an early `return` out of the middle of a trap handler —
+/// and [`RegPlane::write`] has many — cannot leave the count stuck high. A stuck count would
+/// make the sweep yield forever and convert this fix into the stall it exists to prevent.
+struct MmioInFlight<'a>(&'a AtomicU32);
+
+/// Times [`PlanePtBytes::breathe`] hit its yield bound and swept anyway. ⚠ A nonzero value is
+/// not a bug — it is the sweep refusing to be held off forever — but a LARGE one says the
+/// guest traps faster than the sweep can complete, which is a different problem from
+/// starvation and wants a different fix.
+static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
+
+/// Times [`PlanePtBytes::breathe`] actually yielded to an in-flight MMIO trap. ★ This is the
+/// number that says the mechanism is REACHED; `SWEEP_DEFER_GIVEUPS` alone cannot distinguish
+/// "never needed" from "never ran", which is this tree's most expensive recurring instrument
+/// failure.
+static SWEEP_DEFERRALS: AtomicU64 = AtomicU64::new(0);
+
+/// `(deferrals, giveups)` — see [`SWEEP_DEFERRALS`] and [`SWEEP_DEFER_GIVEUPS`].
+pub fn sweep_defer_census() -> (u64, u64) {
+    (
+        SWEEP_DEFERRALS.load(Ordering::Relaxed),
+        SWEEP_DEFER_GIVEUPS.load(Ordering::Relaxed),
+    )
+}
+
+impl<'a> MmioInFlight<'a> {
+    fn enter(n: &'a AtomicU32) -> Self {
+        n.fetch_add(1, Ordering::AcqRel);
+        Self(n)
+    }
+}
+
+impl Drop for MmioInFlight<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 impl PlanePtBytes<'_> {
-    /// How many page reads to take before letting a waiter in.
-    const BREATHE_EVERY: u32 = 32;
+    /// Upper bound on yields spent deferring to one vCPU, so the sweep cannot livelock.
+    const MAX_DEFER_YIELDS: u32 = 2048;
 
     /// ★★★★★ **w507 — LET A WAITING vCPU IN.**
     ///
@@ -1388,13 +1442,26 @@ impl PlanePtBytes<'_> {
     /// fix the census warns about. Yielding periodically keeps every hold as short as it is
     /// now and only stops this thread from re-winning the race forever.
     ///
-    /// ⚠ A yield is a scheduler hint, not a handoff. It bounds the *expected* starvation, it
-    /// does not prove a bound — which is why this is graded on `rank0 worst_wait` falling, not
-    /// on the argument.
+    /// ⊘ And a bare periodic `yield_now()` is NOT enough either, which is why this reads a
+    /// flag instead of a counter. `sched_yield` on a box with idle cores — this one is 24-core
+    /// and ~90% idle — returns immediately with nothing to switch to, so a blind yield is very
+    /// nearly a no-op. The sweep has to defer to a *named* condition, and wait for it to clear.
+    ///
+    /// ⚠ Bounded by [`Self::MAX_DEFER_YIELDS`]. A guest that traps continuously would otherwise
+    /// hold the sweep off forever, and a sweep that never commits is its own stall — the
+    /// page-table mirror is what the next doorbell resolves against.
     fn breathe(&self) {
-        let n = self.reads.get().wrapping_add(1);
-        self.reads.set(n);
-        if n % Self::BREATHE_EVERY == 0 {
+        self.reads.set(self.reads.get().wrapping_add(1));
+        let mut spun = 0u32;
+        while self.plane.mmio_in_flight.load(Ordering::Acquire) != 0 {
+            if spun >= Self::MAX_DEFER_YIELDS {
+                SWEEP_DEFER_GIVEUPS.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            if spun == 0 {
+                SWEEP_DEFERRALS.fetch_add(1, Ordering::Relaxed);
+            }
+            spun += 1;
             std::thread::yield_now();
         }
     }
@@ -1413,6 +1480,7 @@ impl FbRead for PlanePtBytes<'_> {
     /// four correct upstream fixes.
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         use kayfabe_arch::Aperture;
+        self.breathe();
         let mut s = self.plane.state.lock();
         match aperture {
             // Device-local: the (fake) framebuffer.
@@ -1603,6 +1671,18 @@ fn resolve_locked(
 }
 
 impl RegPlane {
+    /// How many vCPU threads are inside an MMIO trap on this plane right now.
+    pub fn mmio_in_flight(&self) -> u32 {
+        self.mmio_in_flight.load(Ordering::Acquire)
+    }
+
+    /// Hold [`RegPlane::mmio_in_flight`] up without being a real trap, so a test can drive
+    /// [`PlanePtBytes::breathe`]'s bound deterministically instead of racing a second thread.
+    #[doc(hidden)]
+    pub fn hold_mmio_in_flight_for_test(&self) -> impl Drop + '_ {
+        MmioInFlight::enter(&self.mmio_in_flight)
+    }
+
     /// Build a plane for one chip and one guest driver version.
     ///
     /// # Errors
@@ -1672,6 +1752,7 @@ impl RegPlane {
             model,
             rom,
             clock,
+            mmio_in_flight: AtomicU32::new(0),
             state: RankedMutex::new(
                 LockRank::Plane,
                 PlaneState {
@@ -2886,6 +2967,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            mmio_in_flight: _,
             pending_cmd_doorbells: _,
             chip: _,
             model: _,
@@ -3380,6 +3462,7 @@ impl RegPlane {
     /// reading a byte of a dword register must not be handed the whole thing.
     pub fn read(&self, bar: u8, off: u64, size: u8) -> ReadOutcome {
         self.c.reads.fetch_add(1, Ordering::Relaxed);
+        let _vcpu = MmioInFlight::enter(&self.mmio_in_flight);
         let out = self.read_inner(bar, off, size);
         match out {
             ReadOutcome::BootReg(_) => self.c.boot_reg_reads.fetch_add(1, Ordering::Relaxed),
@@ -4025,6 +4108,7 @@ impl RegPlane {
     /// ★★★ Serve one register write.
     pub fn write(&self, bar: u8, off: u64, size: u8, val: u64) -> WriteOutcome {
         self.c.writes.fetch_add(1, Ordering::Relaxed);
+        let _vcpu = MmioInFlight::enter(&self.mmio_in_flight);
         // ★★★ THE WINDOW REGISTER IS A LATCH, and it is classified FIRST — before the
         // framebuffer windows, before the GSP model and before the unclaimed arm. A write
         // here that fell through to `unclaimed_writes` would be dropped, and the guest

@@ -6140,8 +6140,18 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
+                // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
+                // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
+                // starved waiter, not a slow holder. The sweep now defers to a vCPU that is
+                // inside an MMIO trap. `deferrals=0` would mean the mechanism was never
+                // REACHED, which looks exactly like "the starvation was already gone"; this
+                // tree has lost three instruments to that ambiguity in one night.
+                {
+                    let (deferrals, giveups) = kayfabe_device::plane::sweep_defer_census();
+                    format!("SWEEP-DEFER deferrals={deferrals} giveups={giveups}")
+                },
                 kayfabe_isolate::verbcost::census(),
                 // ★★★★★ w477 — the size of a LIVE exposure, on the same line as the traps.
                 // An `Untracked` CE run reaches a real copy engine with nothing bound for it
