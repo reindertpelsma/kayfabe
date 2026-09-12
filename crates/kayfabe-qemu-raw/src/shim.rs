@@ -6140,7 +6140,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {}",
+                "{} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 kayfabe_isolate::verbcost::census(),
                 // ★★★★★ w477 — the size of a LIVE exposure, on the same line as the traps.
@@ -6148,7 +6148,10 @@ impl SharedDoorbell {
                 // in the address table, and `[audited w476]` the #14 gate meant to stop that
                 // has never executed in a boot. This says how often it actually happens, so
                 // the fix can be aimed at measured traffic rather than at a guess.
-                kayfabe_fwd::untracked_ce_census()
+                kayfabe_fwd::untracked_ce_census(),
+                // w489 — and whether any forwarded control answered NV_OK over the guest's
+                // own request bytes. Silent until now.
+                kayfabe_fwd::short_writeback_census()
             ),
             // ★★★★★ w383 — THE LANE'S DEPTH, ON THE LINE EVERY DOORBELL PRINTS. A queue
             // whose depth is only readable at teardown cannot answer *"is the worker

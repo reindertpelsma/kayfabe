@@ -5717,9 +5717,94 @@ pub fn commit_subdevice_control(
             gpu: plan.gpu,
         })));
     }
-    let n = payload.len().min(out.len());
+    let n = note_short_writeback(payload.len(), out.len());
     payload[..n].copy_from_slice(&out[..n]);
     Ok(())
+}
+
+/// ★★★★★ **w489 — COUNT THE SHORT WRITE-BACKS. They were silent.**
+///
+/// `[audited w476]` both control commits did `payload.len().min(out.len())` and nothing else.
+/// When the host returns FEWER bytes than the guest declared, the tail of the guest's buffer
+/// keeps **the guest's own request bytes**, and the reply is `NV_OK`. No counter, no log.
+///
+/// ⊘ That is the shape the surrounding file exists to prevent — a reply we composed, answered
+/// as if the host had produced it. It is the house failure of this campaign
+/// (`completion_without_correctness_is_the_house_failure`), and it had no instrument at all.
+///
+/// ⚠ **This does not change behaviour and deliberately so.** What the right answer IS —
+/// refuse, zero the tail, or return the short length — is a semantic decision that needs a
+/// measurement first: nobody knows whether this ever fires. So: count it, surface it, and
+/// decide when a boot says how often. Witness first, fix second, which is the only order that
+/// has worked in this campaign.
+///
+/// Returns the number of bytes that may be copied.
+fn note_short_writeback(want: usize, got: usize) -> usize {
+    if got < want {
+        SHORT_WRITEBACKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        SHORT_WRITEBACK_BYTES
+            .fetch_add((want - got) as u64, core::sync::atomic::Ordering::Relaxed);
+    }
+    want.min(got)
+}
+
+/// How many control write-backs were shorter than the guest's declared buffer.
+static SHORT_WRITEBACKS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// How many bytes of guest request data were therefore left in place, in total.
+static SHORT_WRITEBACK_BYTES: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
+/// One line for the boot log. ⊘ Prints its zero arm explicitly: "no line" and "never
+/// happened" must not read the same.
+#[must_use]
+pub fn short_writeback_census() -> String {
+    let n = SHORT_WRITEBACKS.load(core::sync::atomic::Ordering::Relaxed);
+    if n == 0 {
+        return "SHORT-WRITEBACK none — every forwarded control filled the guest's buffer"
+            .to_string();
+    }
+    format!(
+        "SHORT-WRITEBACK ⊘ {n} control repl(y/ies) were SHORTER than the guest's declared \
+         buffer, leaving {} byte(s) of the guest's OWN REQUEST in the tail, answered NV_OK",
+        SHORT_WRITEBACK_BYTES.load(core::sync::atomic::Ordering::Relaxed)
+    )
+}
+
+#[cfg(test)]
+mod short_writeback_tests {
+    use super::{SHORT_WRITEBACKS, note_short_writeback, short_writeback_census};
+    use core::sync::atomic::Ordering;
+
+    /// ★ The defect, stated as a test: a host reply shorter than the guest's buffer must be
+    /// VISIBLE. Before w489 it was silent, and the guest got `NV_OK` over its own bytes.
+    #[test]
+    fn a_short_host_reply_is_counted_and_named() {
+        let before = SHORT_WRITEBACKS.load(Ordering::Relaxed);
+        assert_eq!(note_short_writeback(104, 40), 40, "copies only what arrived");
+        assert_eq!(
+            SHORT_WRITEBACKS.load(Ordering::Relaxed),
+            before + 1,
+            "a short reply must be counted — silence here is the house failure"
+        );
+        assert!(
+            short_writeback_census().contains("SHORT-WRITEBACK ⊘"),
+            "and it must be named in the census, not merely counted"
+        );
+    }
+
+    /// ⊘ The negative control. A census that fires on a FULL reply would be worse than none,
+    /// because it would train the reader to ignore it.
+    #[test]
+    fn an_exact_or_longer_reply_is_not_counted() {
+        let before = SHORT_WRITEBACKS.load(Ordering::Relaxed);
+        assert_eq!(note_short_writeback(104, 104), 104, "exact fits exactly");
+        assert_eq!(note_short_writeback(104, 200), 104, "never overruns the guest");
+        assert_eq!(
+            SHORT_WRITEBACKS.load(Ordering::Relaxed),
+            before,
+            "neither case is short"
+        );
+    }
 }
 
 /// PLAN (R1) for a Case-1 control forward. The payload is copied into the plan by
@@ -5784,7 +5869,7 @@ pub fn commit_control(
             gpu: plan.gpu,
         })));
     }
-    let n = payload.len().min(out.len());
+    let n = note_short_writeback(payload.len(), out.len());
     payload[..n].copy_from_slice(&out[..n]);
     Ok(())
 }
