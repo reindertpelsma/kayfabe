@@ -658,6 +658,41 @@ fn latch_channel_birth_after_apply(st: &mut DeviceState, ev: RmEvent) {
     let _ = latch_channel_birth_in(st, client, handle);
 }
 
+// =====================================================================================
+// ★★★★★ w519 — THE ONE QUESTION A vCPU MAY ASK ABOUT THE LATCHES.
+// =====================================================================================
+/// Bumped by every push onto either pending latch, anywhere.
+static PENDING_LATCH_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Record that something was latched. Called beside every push.
+fn note_pending_latch() {
+    PENDING_LATCH_EPOCH.fetch_add(1, std::sync::atomic::Ordering::Release);
+}
+
+/// ★★★★★ **"HAS ANYTHING BEEN LATCHED?" — ONE ATOMIC LOAD, NO DEVICE LOCK.**
+///
+/// `[measured w519]` the in-trap counter ranked its sites, and four were called almost
+/// exactly **once per MMIO trap** across 89 310 traps:
+/// `peek_pending_engine_forwards` (178 158 — twice a trap), `peek_pending_channel_births`
+/// (89 079), `drain_retired_budgeted` (89 065) and `pin_reclaim_gone` (89 063). Each takes
+/// the Device read lock, and `[measured w517]` that rank is held for 5 ms at a stretch by the
+/// page-table sweep's commit — which is what a vCPU then waits behind.
+///
+/// ⊘ Every one of those calls is *"is there anything to do?"*, and on a normal trap the
+/// answer is **no**: one boot latches about 12 channel births and 9 engine objects. This
+/// answers the question for one relaxed load.
+///
+/// ⚠ **Monotone, and cleared by nobody** — the same asymmetry as
+/// `kayfabe_mmu::any_table_change_epoch`. A push always moves it, so it can never miss a
+/// latched item; a drain does not move it, so a consumed item still reads as "check again",
+/// costing one wasted peek. ⊘ A length mirror would have the opposite failure: two devices
+/// storing their own lengths into one counter can under-report, and an under-report here is
+/// a latched channel birth that nothing ever runs.
+#[must_use]
+pub fn pending_latch_epoch() -> u64 {
+    PENDING_LATCH_EPOCH.load(std::sync::atomic::Ordering::Acquire)
+}
+
 /// The latch itself, over an already-held `DeviceState`. Refuses by name at the bound —
 /// and says so, because a silently dropped birth is a doorbell refusal with no cause line.
 fn latch_channel_birth_in(
@@ -689,6 +724,7 @@ fn latch_channel_birth_in(
     }
     st.pending_channel_births
         .push(PendingChannelBirth { client, channel });
+    note_pending_latch();
     BirthAdmission::Latched {
         pending: pending + 1,
     }
@@ -1289,7 +1325,7 @@ impl SharedDevice {
                 kayfabe_device::pubmark::PublicationWatermark::new(),
             ),
             spawner,
-            state: RankedRwLock::new(
+                    state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
                     spine,
@@ -1679,6 +1715,7 @@ impl SharedDevice {
             class,
             params: params.to_vec(),
         });
+        note_pending_latch();
         ForwardAdmission::Latched {
             pending: pending + 1,
         }

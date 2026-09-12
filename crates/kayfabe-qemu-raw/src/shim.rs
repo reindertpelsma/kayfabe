@@ -13292,6 +13292,9 @@ pub struct Regs {
     /// on eight vCPU threads. A racing swap costs at most one spare job — see the call site
     /// for why over-reporting is the safe direction.
     last_table_epoch: std::sync::atomic::AtomicU64,
+    /// The [`kayfabe_rt::device::pending_latch_epoch`] this port last drained the two
+    /// pending latches for. See the call site in `Regs::write`.
+    last_latch_epoch: std::sync::atomic::AtomicU64,
     /// ★★★★★ **w390** — which arm of the TLB-invalidate blockage point this boot runs.
     /// Read ONCE at the composition root; see [`MMU_INVAL_ENV`].
     mmu_inval: MmuInvalArm,
@@ -14058,6 +14061,7 @@ impl Regs {
         );
         Ok(Regs {
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
+            last_latch_epoch: std::sync::atomic::AtomicU64::new(0),
             plane,
             mmu_inval,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
@@ -15432,7 +15436,26 @@ impl Regs {
         // `alloc_channel_in`'s guest-ring arm `narrow()`s the ring's memory handle — so the
         // object over the guest's ring has to exist BEFORE this next line, or leg A2 has
         // nothing to name. ⊘ Ordering, not preference.
-        self.adopt_pending_channel_rings();
+        // ★★★★★ **w519 — ASK THE ATOMIC BEFORE TAKING THE DEVICE LOCK.**
+        //
+        // `[measured w519]` this line and `pending_err_notifier_grants` below it took the
+        // Device read lock on EVERY trap — `peek_pending_engine_forwards` 178 158 times and
+        // `peek_pending_channel_births` 89 079 times in one boot of 89 310 traps — to ask
+        // *"is anything latched?"*. `[measured w517]` that rank is held for 5 ms at a stretch
+        // by the page-table sweep's commit, which is what a vCPU then waits behind.
+        //
+        // One boot latches about 12 channel births and 9 engine objects, so the answer is
+        // essentially always no. ⊘ The epoch is monotone and cleared by nobody: a push always
+        // moves it, so nothing latched can be missed; a drain does not, so a consumed item
+        // costs one wasted peek. See `kayfabe_rt::device::pending_latch_epoch`.
+        let latch_epoch = kayfabe_rt::device::pending_latch_epoch();
+        let latch_changed = latch_epoch
+            != self
+                .last_latch_epoch
+                .swap(latch_epoch, std::sync::atomic::Ordering::Relaxed);
+        if latch_changed {
+            self.adopt_pending_channel_rings();
+        }
         kft.mark("ring_adopt");
         // ★★★★★ **DRAIN THE RPC-BIND LATCH — synchronization point (2), off the vCPU.**
         //
@@ -15539,7 +15562,14 @@ impl Regs {
         // reason one field over: the drain births the host channel, and `hObjectError` is a
         // birth parameter. See [`Regs::pending_err_notifier_grants`]. ⊘ Ordering, not
         // preference.
-        let err_notifier_grants = self.pending_err_notifier_grants();
+        // ⊘ Same gate as `ring_adopt` above, and the SAME `latch_changed` value — recomputing
+        // it here would let a push between the two reads give this trap a different answer
+        // from the one the adopt just acted on.
+        let err_notifier_grants = if latch_changed {
+            self.pending_err_notifier_grants()
+        } else {
+            Vec::new()
+        };
         kft.mark("err_grants");
         // ★★★★★ **w393 — THE THIRD DRAIN: channel births, BEFORE the engine forwards.**
         //
