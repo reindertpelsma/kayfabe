@@ -333,6 +333,45 @@ pub mod stall_alarm {
         }
         const _: () = assert!(core::mem::size_of::<SigEvent>() == 64);
 
+        /// ★★★★★ **The handler that names the line.** `SIGALRM`'s default action dumps a
+        /// core, and `[measured w497]` this container refuses to set `core_pattern`, so the
+        /// dump never appeared. Printing the backtrace from the handler is strictly better:
+        /// it lands **in the boot log**, next to the census that says the trap blocked.
+        ///
+        /// ⊘ `Backtrace::force_capture` is not async-signal-safe. That is accepted here and
+        /// nowhere else: this handler exists only to print and then `_exit`, the process is
+        /// already forfeit, and a temporary debug instrument that is merely *likely* to work
+        /// beats a core file that provably does not exist.
+        extern "C" fn on_stall(_: libc::c_int) {
+            let bt = std::backtrace::Backtrace::force_capture();
+            let msg = format!(
+                "\nkayfabe: ⊘⊘⊘ TRAP STALL ALARM — this vCPU thread exceeded the budget \
+                 WHILE STILL INSIDE ITS MMIO TRAP. `[measured w499]` every slow trap carried \
+                 a VOLUNTARY context switch, so the frame below is where it BLOCKED.\n{bt}\n"
+            );
+            // SAFETY: `write(2)` to fd 2 with a pointer and length from a live `String`.
+            // Async-signal-safe by POSIX, unlike the capture above.
+            unsafe {
+                libc::write(2, msg.as_ptr().cast(), msg.len());
+            }
+            // SAFETY: `_exit` performs no cleanup and is async-signal-safe. Deliberately not
+            // `exit`: running atexit handlers from a signal is how a diagnostic turns into a
+            // second, unrelated crash.
+            unsafe { libc::_exit(42) };
+        }
+
+        /// Install the handler once. ⊘ Without this, `SIGALRM` terminates with no output at
+        /// all and the instrument reports nothing — the worst failure it could have.
+        fn install_handler() {
+            static ONCE: std::sync::Once = std::sync::Once::new();
+            ONCE.call_once(|| {
+                // SAFETY: installing a handler for one signal with default flags.
+                unsafe {
+                    libc::signal(libc::SIGALRM, on_stall as libc::sighandler_t);
+                }
+            });
+        }
+
         /// An armed per-trap alarm. Dropping it deletes the timer.
         #[derive(Debug)]
         pub struct Armed(libc::timer_t);
@@ -358,6 +397,7 @@ pub mod stall_alarm {
         #[must_use]
         pub fn arm() -> Option<Armed> {
             let us = budget_us()?;
+            install_handler();
             // SAFETY: `gettid` takes no argument and dereferences nothing.
             let tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
             let mut sev = SigEvent {
