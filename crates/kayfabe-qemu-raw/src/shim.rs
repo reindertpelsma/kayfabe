@@ -16034,6 +16034,9 @@ impl Regs {
             gsp_reads,
             gsp_writes,
             unclaimed_reads,
+            // ⊘ Read where it is produced. This wire struct is the C ABI's audit and adding a
+            // field to it is a version skew; the plane prints this one on its own census line.
+            unclaimed_reads_in_dead_pages: _,
             unclaimed_writes,
             fb_window_reads,
             fb_window_writes,

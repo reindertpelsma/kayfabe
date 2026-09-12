@@ -298,6 +298,15 @@ pub struct Counters {
     /// ★ Reads no source claimed, answered with a defaulted zero. See the module docs for
     /// why this is a counter and not a refusal.
     pub unclaimed_reads: u64,
+    /// ★★★★★ w554 — unclaimed reads that landed in a page the aperture cut backs with
+    /// read-only memory, i.e. reads the cut SHOULD have removed.
+    ///
+    /// ⊘ Its whole job is to separate two readings of the same number. If this is ~0 while
+    /// [`Counters::unclaimed_reads`] is large, the cut is working and the traffic never went
+    /// to the dead pages; if it is large, the pieces are not serving and the reads are
+    /// arriving here anyway. A single "unclaimed" total cannot tell those apart, and the two
+    /// call for opposite next steps.
+    pub unclaimed_reads_in_dead_pages: u64,
     /// Writes no source claimed, dropped.
     pub unclaimed_writes: u64,
     /// ★★★ Reads that landed in a framebuffer window ([`crate::FbWindow`]) this port has
@@ -1144,6 +1153,9 @@ pub struct RegPlane {
     /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
     clock: Box<dyn NanoClock>,
     state: RankedMutex<PlaneState>,
+    /// ★ w554 — one bit per aperture page, set when the cut backs that page with memory.
+    /// Built on first use from [`RegPlane::bar0_backable_runs`]; see [`RegPlane::dead_page`].
+    dead_pages: std::sync::OnceLock<Box<[u64]>>,
     /// See [`PlaneMem`] — the framebuffer and the GMMU format, under their own lock so a CE
     /// submission and a register write stop contending over data neither needs.
     mem: kayfabe_util::lock::RankedMutex<PlaneMem>,
@@ -1316,6 +1328,9 @@ struct PlaneCounters {
     gsp_reads: AtomicU64,
     gsp_writes: AtomicU64,
     unclaimed_reads: AtomicU64,
+    /// ★ w554 — of those, the ones inside a page the cut backs with memory. See the read
+    /// arm for why this is a separate number and not a fraction of the one above.
+    unclaimed_reads_in_dead_pages: AtomicU64,
     unclaimed_writes: AtomicU64,
     fb_window_reads: AtomicU64,
     fb_window_writes: AtomicU64,
@@ -1832,6 +1847,30 @@ impl RegPlane {
             || self.model.boot_sequence().may_read(BAR, off))
     }
 
+    /// ★★★ **Is this offset in a page the aperture cut backs with memory?** — one bit load.
+    ///
+    /// ⊘ A BITMAP and not a scan of the run list, because this is asked on every unclaimed
+    /// read and `[measured w553]` that is 119 797 of them in a boot. The map is built once,
+    /// from the same `bar0_backable_runs` the device cuts with, so the instrument and the cut
+    /// cannot disagree about which pages are dead — which is the whole point of asking.
+    fn dead_page(&self, off: u64) -> bool {
+        const PAGE: u64 = 4096;
+        let bits = self.dead_pages.get_or_init(|| {
+            let n = (self.chip.regs_aperture_len / PAGE).div_ceil(64) as usize;
+            let mut map = vec![0u64; n];
+            for (start, len) in self.bar0_backable_runs() {
+                for page in (start / PAGE)..((start + len) / PAGE) {
+                    map[(page / 64) as usize] |= 1 << (page % 64);
+                }
+            }
+            map.into_boxed_slice()
+        });
+        let page = off / PAGE;
+        bits
+            .get((page / 64) as usize)
+            .is_some_and(|w| w & (1 << (page % 64)) != 0)
+    }
+
     /// Whether the production classifier calls this dword dead — for the test that pins it
     /// against [`RegPlane::read_inner`]'s own answer.
     #[must_use]
@@ -1925,6 +1964,7 @@ impl RegPlane {
         // the fix.
         census.set_probe_arm(probe_arm);
         Ok(RegPlane {
+            dead_pages: std::sync::OnceLock::new(),
             chip,
             model,
             rom,
@@ -3092,7 +3132,8 @@ impl RegPlane {
             "BAR0-READS total={} | static[boot_reg={} rom={}] | \
              producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
              window[SERVED r={} w={} | NO-ADDRESS-MODEL r={} w={} | moves={}] | \
-             unclaimed={} residual={} ⊘ `cpu_intr` counts reads AND writes (one counter, two \
+             unclaimed={} (of which {} IN A PAGE THE CUT BACKS) residual={} ⊘ `cpu_intr` \
+             counts reads AND writes (one counter, two \
              facts). ★ `window[SERVED ..]` is the PRAMIN/framebuffer aperture actually \
              CARRYING traffic — the one a mapping would remove, in BOTH directions, because \
              the fake framebuffer is real memory. ⊘⊘ `NO-ADDRESS-MODEL` is the OTHER thing: \
@@ -3114,8 +3155,23 @@ impl RegPlane {
             c.fb_window_writes,
             c.bar0_window_writes,
             c.unclaimed_reads,
+            c.unclaimed_reads_in_dead_pages,
             c.reads.saturating_sub(named),
         )
+    }
+
+    /// ★★★★★ **How many times the guest has re-pointed the `PRAMIN` window** — ONE atomic
+    /// load, because the mirror asks on every write trap.
+    ///
+    /// ⊘ A count and not the latch value: two writes that restore the original value still
+    /// moved the window in between, and a value comparison would call that no change while a
+    /// slot installed in the middle named a frame that is no longer the window's.
+    ///
+    /// ⊘ Not [`RegPlane::counters`], which loads some forty atomics to build a struct. That
+    /// is a teardown census; this is the trap path.
+    #[must_use]
+    pub fn bar0_window_write_count(&self) -> u64 {
+        self.c.bar0_window_writes.load(Ordering::Relaxed)
     }
 
     pub fn counters(&self) -> Counters {
@@ -3130,6 +3186,7 @@ impl RegPlane {
             gsp_reads,
             gsp_writes,
             unclaimed_reads,
+            unclaimed_reads_in_dead_pages,
             unclaimed_writes,
             fb_window_reads,
             fb_window_writes,
@@ -3174,6 +3231,7 @@ impl RegPlane {
             gsp_reads: g(gsp_reads),
             gsp_writes: g(gsp_writes),
             unclaimed_reads: g(unclaimed_reads),
+            unclaimed_reads_in_dead_pages: g(unclaimed_reads_in_dead_pages),
             unclaimed_writes: g(unclaimed_writes),
             fb_window_reads: g(fb_window_reads),
             fb_window_writes: g(fb_window_writes),
@@ -3251,6 +3309,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            dead_pages: _,
             cpu_intr: _,
             mmio_in_flight: _,
             mem: _,
@@ -3789,6 +3848,21 @@ impl RegPlane {
             }
             ReadOutcome::Unclaimed => {
                 self.note_unclaimed(bar, off);
+                // ★★★★★ w554 — IS THIS READ ONE THE CUT COULD EVER HAVE REMOVED?
+                //
+                // ⊘⊘ Because 87.2% of PAGES being dead does not make 87.2% of READS
+                // removable, and reading it that way is what this counter exists to stop.
+                // A page is backable only when EVERY dword in it is dead, so one live
+                // register keeps its whole 4 KiB trapping — and an unclaimed read inside
+                // such a page reaches the handler no matter how the aperture is cut.
+                // `[measured w553]` the cut landed, the device reported 12 dead pieces over
+                // 87.2% of the aperture, and unclaimed reads moved 121126 → 119797. These
+                // two counters are the only thing that can say whether that is the cut
+                // failing or the traffic simply not living where the dead pages are.
+                if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8 && self.dead_page(off) {
+                    self.c.unclaimed_reads_in_dead_pages
+                        .fetch_add(1, Ordering::Relaxed);
+                }
                 self.c.unclaimed_reads.fetch_add(1, Ordering::Relaxed)
             }
             // ⊘ Counted inside `crate::mmuinval` and NOT here: the poll count and the
