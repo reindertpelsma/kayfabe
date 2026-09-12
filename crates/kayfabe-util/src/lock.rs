@@ -1256,7 +1256,7 @@ pub mod lockcost {
     pub fn in_trap_census() -> String {
         let n = IN_TRAP_ACQ.load(Ordering::Relaxed);
         if n == 0 {
-            return "IN-TRAP-LOCKS none — no thread inside an MMIO trap took a lock above                     rank0 (⊘ this counter is armed; zero is a measurement)"
+            return "IN-TRAP-REACH none — no thread inside an MMIO trap took a lock past rank0 (⊘ this counter is armed; zero here is a measurement, not an absence)"
                 .to_string();
         }
         let first = name_of(IN_TRAP_FIRST.load(Ordering::Relaxed))
@@ -1280,7 +1280,12 @@ pub mod lockcost {
             .collect::<Vec<_>>()
             .join(" ");
         format!(
-            "IN-TRAP-LOCKS ⊘ {n} acquisition(s) above rank0 from inside an MMIO trap across              {sites} site(s), first at {first}, busiest: {top}"
+            // ⚠ "REACHES PAST", not "breaches". Today's architecture deliberately orders
+            // plane→core: the command-policy chain takes core ranks under the plane mutex,
+            // and every GSP command does it. Calling all of these violations would overstate
+            // a DESIGN as a defect. What this honestly measures is the SIZE of the work the
+            // concurrency plane has to move off the trap, and which sites carry it.
+            "IN-TRAP-REACH {n} acquisition(s) past rank0 from inside an MMIO trap across {sites} site(s), first at {first}, busiest: {top} (⊘ 'reaches past', not 'breaches' — plane→core is today's declared order)"
         )
     }
 
@@ -1952,7 +1957,7 @@ mod the_contract_is_checked_not_audited {
         }
         let c = in_trap_census();
         assert!(
-            !c.contains("none"),
+            !c.contains("REACH none"),
             "an acquisition above rank0 from inside a trap must be REPORTED: {c}"
         );
         assert!(
