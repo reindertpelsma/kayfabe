@@ -300,6 +300,23 @@ pub enum Request {
         /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
         prot: u8,
     },
+    /// ★★★★★ **w393** — [`kayfabe_isolate::RmBackend::export_device_view`]: arm a CPU view
+    /// of `[offset, offset+len)` of a host vidmem object and hand the **armed device node**
+    /// up. The host-visible half of `DEVICE_LOCAL | HOST_VISIBLE`; see
+    /// [`kayfabe_isolate::DeviceView`].
+    ///
+    /// ★ The **third** request whose reply may carry a descriptor, and the first whose
+    /// descriptor is a **character device by design**. The parent adopts it asking for
+    /// `DescriptorKind::CharDevice` and nothing else — a child answering with a `memfd` is
+    /// refused exactly as a child answering an `ExportBacking` with a node is.
+    ExportDeviceView {
+        /// The RM object, raw.
+        memory: u64,
+        /// Byte offset within the object.
+        offset: u64,
+        /// Bytes wanted.
+        len: u64,
+    },
     /// ★★★★★ [`kayfabe_isolate::RmBackend::map_guest_ram`] — the VMM instructing the
     /// isolate to map a slice of **guest RAM** (`mode2_isolate_memory_boundary.md` §5).
     ///
@@ -460,6 +477,18 @@ pub enum Reply {
         len: u64,
         /// What the isolate actually granted: `0` = read-write, `1` = read-only.
         prot: u8,
+    },
+    /// ★★★★★ **w393** — the answer to a [`Request::ExportDeviceView`]: the geometry of an
+    /// armed device node whose **descriptor rides this frame's ancillary data**. Same
+    /// no-token rule as [`Reply::Backing`].
+    DeviceView {
+        /// The object the view is over, raw — echoed, and stamped with the connection's
+        /// isolate by the parent.
+        memory: u64,
+        /// Byte offset within the object, as registered.
+        offset: u64,
+        /// The page-rounded `mmap` length the driver will accept.
+        mmap_len: u64,
     },
     /// ★★★★★ The answer to a [`Request::JoinFbLeaf`] — [`Reply::Backing`]'s geometry
     /// **plus the two RM facts**, and its descriptor rides this frame's ancillary data.
@@ -940,6 +969,16 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
             }
+            Request::ExportDeviceView {
+                memory,
+                offset,
+                len,
+            } => {
+                out.push(25);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+            }
             Request::MapGuestRam { offset, len, prot } => {
                 out.push(16);
                 out.extend_from_slice(&offset.to_le_bytes());
@@ -1183,11 +1222,11 @@ impl Envelope {
                 len: c.u64("export len")?,
                 prot: c.u8("export prot")?,
             },
-            // ⊘ **Tag 25 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`, 2026-09-12).
-            // It carried `ExportDeviceView`, deleted for having zero senders of any kind.
-            // A peer built from an older revision may still send it; reusing the number for
-            // a new request would decode those frames as the new verb. Never renumber, and
-            // never re-issue 25.
+            25 => Request::ExportDeviceView {
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                len: c.u64("device view len")?,
+            },
             16 => Request::MapGuestRam {
                 offset: c.u64("guest ram offset")?,
                 len: c.u64("guest ram len")?,
@@ -1270,6 +1309,16 @@ impl Reply {
                 out.extend_from_slice(&offset.to_le_bytes());
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
+            }
+            Reply::DeviceView {
+                memory,
+                offset,
+                mmap_len,
+            } => {
+                out.push(12);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&mmap_len.to_le_bytes());
             }
             Reply::JoinedBacking {
                 offset,
@@ -1355,9 +1404,11 @@ impl Reply {
                 len: c.u64("backing len")?,
                 prot: c.u8("backing prot")?,
             },
-            // ⊘ **Reply tag 12 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
-            // 2026-09-12). It carried `Reply::DeviceView`, the answer to the deleted
-            // `Request::ExportDeviceView`. Never renumber, and never re-issue 12.
+            12 => Reply::DeviceView {
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                mmap_len: c.u64("device view mmap len")?,
+            },
             10 => Reply::JoinedBacking {
                 offset: c.u64("joined offset")?,
                 len: c.u64("joined len")?,
@@ -1690,6 +1741,11 @@ mod tests {
                 poke: 1,
                 pattern: 0xa19a_5a5b,
             },
+            Request::ExportDeviceView {
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                len: 0x1_0000,
+            },
         ]
     }
 
@@ -1726,6 +1782,7 @@ mod tests {
             Request::JoinFbLeaf { .. } => "JoinFbLeaf",
             Request::AliasFbLeaf { .. } => "AliasFbLeaf",
             Request::FbJoinPeek { .. } => "FbJoinPeek",
+            Request::ExportDeviceView { .. } => "ExportDeviceView",
         }
     }
 
@@ -1748,6 +1805,7 @@ mod tests {
                 "Control",
                 "DescribeGuestRam",
                 "ExportBacking",
+                "ExportDeviceView",
                 "ExportSurface",
                 "FbJoinPeek",
                 "FbRead",
@@ -1803,6 +1861,12 @@ mod tests {
             Reply::FbBytes {
                 covered: true,
                 bytes: vec![0xA5; 4096],
+            },
+            // ★ w393 — the armed-node reply. Geometry only; the descriptor is ancillary.
+            Reply::DeviceView {
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                mmap_len: 0x1_0000,
             },
             // ★ The reply whose descriptor is NOT in these bytes. It round-trips as
             // geometry alone, which is the encoding property that matters: the fd travels
