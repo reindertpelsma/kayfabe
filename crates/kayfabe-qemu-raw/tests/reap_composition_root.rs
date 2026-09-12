@@ -178,6 +178,27 @@ fn a_guest_register_write_reaps_a_retired_proc() {
         0,
         "⊘ and a write against an empty retired list neither invents work nor panics"
     );
+    // ★★★★★ **w520 — AND THE GATE THAT LETS IT BE A NO-OP CHEAPLY.**
+    //
+    // `[measured w520]` the three calls in the trap's reclaim block took the Device read
+    // lock on EVERY MMIO trap — about 89 550 times each in a boot of 89 310 — and the lock
+    // census names one of them, `pin_reclaim_gone`, as the BLOCKER of rank 1's worst wait.
+    // The block is now gated on `retired_pending()`, so an empty list costs one atomic load.
+    //
+    // ⚠ The count is EXACT, not monotone, and it has to be: a monotone epoch cannot gate a
+    // BUDGETED drain, because the drain may stop part-way, the epoch would not move again,
+    // and the remainder would never be drained.
+    //
+    // ⊘ Asserted HERE and not in its own test: this file already builds the only fixture in
+    // the tree that retires a proc through the real composition root, and a second fixture
+    // would be a second description of what "retired" means.
+    assert_eq!(
+        kayfabe_core::gpu::retired_pending(),
+        0,
+        "the gate must agree with `retired_len` when nothing is retired — a count that runs \
+         high would make every trap take the Device lock again, and one that runs low would \
+         leave a retired proc unreaped forever"
+    );
 
     // ---- phase 2: the guest tears its process down. `plan_refresh` names the proc
     //      `vanishing`, `Spine::vacate` stages its releases, and it lands on `retired`.

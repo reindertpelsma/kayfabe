@@ -15688,7 +15688,29 @@ impl Regs {
         // ⚠ A BLOCK, not an early return: the `kftime` records below this block must run on
         // EVERY trap. An early return would drop the skipped traps out of the timing census
         // entirely, so the arm that skips more would look like the arm with fewer traps.
-        if let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap() {
+
+        // ★★★★★ **w520 — ASK THE ATOMIC BEFORE TAKING THE DEVICE LOCK.**
+        //
+        // `[measured w520]` the three calls inside this block took the Device read lock on
+        // EVERY MMIO trap — about 89 550 times each in a boot of 89 310 traps:
+        // `reap_retired_held`, `drain_retired_budgeted` and `pin_reclaim_gone`. The census
+        // also names `pin_reclaim_gone` as the BLOCKER of rank 1's worst wait, and that rank
+        // is held for 5 ms at a stretch by the page-table sweep's commit.
+        //
+        // A boot retires a handful of procs, so the answer is almost always zero.
+        //
+        // ⚠ The count is EXACT, not monotone, and it has to be: a monotone epoch cannot gate
+        // a BUDGETED drain, because the drain may stop mid-way, the epoch would not move
+        // again, and the remainder would never drain. See `kayfabe_core::gpu::retired_pending`.
+        //
+        // ⊘ The block STAYS ON THE vCPU. Moving it to the worker broke
+        // `a_guest_register_write_reaps_a_retired_proc` and
+        // `process_churn_does_not_accumulate_toward_the_retired_cap` — two tests that assert
+        // exactly the behaviour the move removed, in a configuration with no worker running.
+        // They were right and the move was wrong.
+        if kayfabe_core::gpu::retired_pending() > 0
+            && let Some(_reclaim_gate) = self.reclaim.try_claim_on_trap()
+        {
             let pins = self.device.pin_reclaim_gone();
             let total = pins.released + pins.refused_no_host_vas + pins.rows_deduped;
             if total

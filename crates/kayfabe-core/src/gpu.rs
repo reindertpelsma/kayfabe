@@ -2678,6 +2678,7 @@ pub struct Spine {
     next_proc: u32,
     /// Procs retired but not yet reaped (awaiting the quiesce point).
     pub retired: Vec<Proc>,
+    // ⊘ See [`retired_pending`] for why the count is mirrored outside this struct at all.
     /// ★ §12.13 — the **condemned components**: client sets whose proc was retired
     /// **out of band** ([`Spine::retire_proc`]) and which must therefore never be
     /// re-derived into a live [`Proc`] again.
@@ -4427,6 +4428,7 @@ impl Spine {
             // use-after-retire.
             self.sources.deregister_proc(id).latched();
             self.retired.push(p);
+        note_retired();
         }
 
         // 3b. ★ MG-5: install each live proc's per-(Proc, GpuId) isolate + arena for
@@ -4740,6 +4742,7 @@ impl Spine {
             self.condemned_by_vchid.insert(k, anchor);
         }
         self.retired.push(p);
+        note_retired();
         true
     }
 
@@ -4860,6 +4863,7 @@ impl Spine {
         let mut orphaned: Vec<(GpuId, core::ops::Range<u64>)> = Vec::new();
         // Order-preserving partition: `retired` is a deterministic sequence and a
         // deferred proc keeps its place in it (decision #27).
+        let taken = self.retired.len();
         for mut p in core::mem::take(&mut self.retired) {
             if !p.is_quiesced() {
                 deferred.push(p);
@@ -4913,6 +4917,10 @@ impl Spine {
             procs.push(p);
         }
         let deferred_count = deferred.len();
+        // ⊘ Decrement by exactly what LEFT the list, never `store` the new length: a retire
+        // landing between reading `self.retired` above and this line would be lost by a
+        // store, and a lost retire is a proc nothing ever reaps. See [`retired_pending`].
+        note_retired_reaped(taken.saturating_sub(deferred_count));
         self.retired = deferred;
         Reclaimed {
             procs,
@@ -5756,4 +5764,41 @@ pub fn format_vas_census(rows: &[VasCensusRow], mark: Option<ChanId>) -> String 
         out.push('}');
     }
     out
+}
+
+
+// =====================================================================================
+// ★★★★★ w520 — THE ONE QUESTION A vCPU MAY ASK ABOUT RETIRED PROCS.
+// =====================================================================================
+/// How many retired procs are waiting to be reaped, mirrored outside the Device lock.
+static RETIRED_PENDING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Record that a proc was retired. Called beside every push onto `Gpu::retired`.
+pub(crate) fn note_retired() {
+    RETIRED_PENDING.fetch_add(1, std::sync::atomic::Ordering::Release);
+}
+
+/// Record that `n` retired procs left the list.
+pub fn note_retired_reaped(n: usize) {
+    RETIRED_PENDING.fetch_sub(n, std::sync::atomic::Ordering::Release);
+}
+
+/// ★★★★★ **"IS THERE ANYTHING TO REAP?" — ONE ATOMIC LOAD, NO DEVICE LOCK.**
+///
+/// `[measured w520]` three calls took the Device read lock on EVERY MMIO trap — about
+/// **89 550 times each** in a boot of 89 310 traps: `reap_retired_held`,
+/// `drain_retired_budgeted` and `pin_reclaim_gone`. `[measured w520]` `pin_reclaim_gone` is
+/// also the site the census names as the blocker of rank 1's worst wait, and that rank is
+/// held for 5 ms at a stretch by the page-table sweep's commit.
+///
+/// A boot retires a handful of procs. The answer is almost always zero.
+///
+/// ⚠ **EXACT, not monotone, and the two ends are why.** A monotone epoch cannot work for a
+/// BUDGETED drain: the drain may stop mid-way, the epoch would not move again, and the
+/// remainder would never be drained. So this is incremented on every retire and decremented
+/// by exactly what leaves the list — never `store`d from a value read earlier, which would
+/// lose a retire that landed in between.
+#[must_use]
+pub fn retired_pending() -> usize {
+    RETIRED_PENDING.load(std::sync::atomic::Ordering::Acquire)
 }
