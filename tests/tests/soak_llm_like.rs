@@ -216,8 +216,7 @@ fn run_soak(iters: u64, n: u64) -> Vec<u64> {
             // routing.
             {
                 let p = gpu.procs.get_mut(&pid).unwrap();
-                if p.vases
-                    .get(&(GpuId::ZERO, infs[idx].pdb))
+                if p.vas_by_pdb(GpuId::ZERO, infs[idx].pdb)
                     .unwrap()
                     .table
                     .resolve(infs[idx].pdb, va)

@@ -531,7 +531,12 @@ impl PtDecodeOutcome {
 /// [`PtDecodePlan::deferred`] — see that field for why that is correct and not a loss.
 pub fn plan_pt_decode(proc: &mut Proc) -> PtDecodePlan {
     let mut plan = PtDecodePlan::default();
-    for (&(gpu, pdb), vas) in &mut proc.vases {
+    for (&(gpu, _origin), vas) in &mut proc.vases {
+        // ⊘ w555 — the space's own base, read off the space. A sweep starts at the root, so
+        // a space with none has nothing to decode and is skipped by name.
+        let Some(pdb) = vas.pdb else {
+            continue;
+        };
         let dirty = std::mem::take(&mut vas.pt_pages);
         // Level 0 is a DECLARED fact: a PDB *is* its own root page. Everything deeper is
         // learned forward, from a decode that reached it.
@@ -642,7 +647,12 @@ pub struct PtSweepPlan {
 /// If a trigger is missed, that must be visible as a wall, not smoothed over.
 pub fn plan_pt_sweep(proc: &mut Proc) -> PtSweepPlan {
     let mut plan = PtSweepPlan::default();
-    for (&(gpu, pdb), vas) in &mut proc.vases {
+    for (&(gpu, _origin), vas) in &mut proc.vases {
+        // ⊘ w555 — the space's own base, read off the space. A sweep starts at the root, so
+        // a space with none has nothing to decode and is skipped by name.
+        let Some(pdb) = vas.pdb else {
+            continue;
+        };
         // ★★ **THE DIRTY TEST IS MADE HERE TOO, AND THAT IS NOT BELT-AND-BRACES.**
         //
         // `plan_pt_decode` sets the same bit when it *drains* a tracked page, which makes the
@@ -871,7 +881,7 @@ fn commit_pt_sweep_inner(
     // leaves and must still leave `truncated` set — a bookkeeping step folded into the success
     // path would arm nothing on exactly the case that needs re-arming.
     for r in results {
-        let Some(vas) = proc.vases.get_mut(&(r.task.gpu, r.task.pdb)) else {
+        let Some(vas) = proc.vas_by_pdb_mut(r.task.gpu, r.task.pdb) else {
             continue;
         };
         match &r.decode {
@@ -961,7 +971,7 @@ fn commit_pt_decode_with(
     // writing.
     let mut touched: BTreeSet<(GpuId, Pdb)> = BTreeSet::new();
     for r in results {
-        let Some(vas) = proc.vases.get_mut(&(r.task.gpu, r.task.pdb)) else {
+        let Some(vas) = proc.vas_by_pdb_mut(r.task.gpu, r.task.pdb) else {
             out.vas_gone += 1;
             continue;
         };
@@ -1021,8 +1031,8 @@ fn commit_pt_decode_with(
     }
 
     // SETTLE + APPLY, once per address space.
-    for key in touched {
-        let Some(vas) = proc.vases.get_mut(&key) else {
+    for (gpu, pdb) in touched {
+        let Some(vas) = proc.vas_by_pdb_mut(gpu, pdb) else {
             // The `Vas` cannot vanish between the loops — no lock is released here — but
             // re-resolving costs nothing and the alternative is an `expect` that would be
             // the only unproven assumption in the pass.
@@ -1042,7 +1052,7 @@ fn commit_pt_decode_with(
             fmt,
             &mut vas.table,
             &mut vas.reach,
-            key.1,
+            pdb,
             &s,
             revoke,
         );
@@ -1050,8 +1060,8 @@ fn commit_pt_decode_with(
         // they left, because a `(host_va, memory)` pair with no `(gpu, pdb)` cannot be unmapped:
         // the unmap needs the host VAS the map was made in, and that is a property of the `Vas`.
         out.revoked.extend(po.revoked.iter().map(|r| RevokedLeaf {
-            gpu: key.0,
-            pdb: key.1,
+            gpu,
+            pdb,
             va: r.va,
             len: r.len,
             phys: r.phys,
@@ -1084,8 +1094,7 @@ fn commit_pt_decode_with(
 /// reaching into core state. Ordered by physical address.
 #[must_use]
 pub fn pt_meta_of(proc: &Proc, gpu: GpuId, pdb: Pdb) -> BTreeMap<u64, PtPage> {
-    proc.vases
-        .get(&(gpu, pdb))
+    proc.vas_by_pdb(gpu, pdb)
         .map(|v| v.pt_meta.clone())
         .unwrap_or_default()
 }

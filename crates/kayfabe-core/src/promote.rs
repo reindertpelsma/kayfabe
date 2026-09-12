@@ -839,8 +839,7 @@ pub fn apply_promote_ctx(
         });
     }
     let vas = proc
-        .vases
-        .get_mut(&(route.gpu, route.pdb))
+        .vas_by_pdb_mut(route.gpu, route.pdb)
         .ok_or(PromoteFault::UnknownVas {
             gpu: route.gpu,
             pdb: route.pdb,

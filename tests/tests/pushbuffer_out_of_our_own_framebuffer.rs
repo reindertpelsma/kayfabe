@@ -195,7 +195,7 @@ fn guest_with_a_vidmem_pushbuffer() -> (Gpu, MockVmm, ProcId, ChanId) {
 
     {
         let proc = gpu.procs.get_mut(&pid).expect("live");
-        let vas = proc.vases.get_mut(&(GPU, PDB0)).expect("the VAS exists");
+        let vas = proc.vas_by_pdb_mut(GPU, PDB0).expect("the VAS exists");
         for (va, phys) in [(PB_VA, PB_FB_PHYS), (BLANK_VA, BLANK_FB_PHYS)] {
             vas.table
                 .bind(

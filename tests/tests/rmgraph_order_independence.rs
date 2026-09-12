@@ -569,10 +569,10 @@ fn two_processes_sharing_one_kernel_client_stay_fully_isolated() {
 
     // No shared host handles: every host handle names the isolate that minted it
     // (§12.26), and the two procs' host VASes name different isolates.
-    let hv_a = gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)]
+    let hv_a = gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
         .host_vas
         .expect("A's host VAS");
-    let hv_b = gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)]
+    let hv_b = gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists")
         .host_vas
         .expect("B's host VAS");
     assert_ne!(hv_a, hv_b);
@@ -712,7 +712,7 @@ fn the_system_proc_has_clients_and_a_vas_and_still_no_data_plane() {
         std::collections::BTreeSet::from([UVM])
     );
     assert!(
-        gpu.system.vases.contains_key(&(GpuId::ZERO, UVM_PDB)),
+        gpu.system.vas_by_pdb(GpuId::ZERO, UVM_PDB).is_some(),
         "the session's own VAS materialized on the system proc"
     );
     assert_eq!(

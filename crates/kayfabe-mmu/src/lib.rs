@@ -1103,6 +1103,19 @@ impl AddressTable {
         self.owner
     }
 
+    /// ★★★★★ **Claim an unclaimed table** — the VA space learned its page-directory base
+    /// after it was created, which `[measured w554]` is the usual order and not an edge case.
+    ///
+    /// ⊘ Claiming a table that is ALREADY claimed by a different base is refused by doing
+    /// nothing rather than by silently re-owning it: the rows in it were bound under the old
+    /// owner, and moving the nameplate would make the identity check pass over them while
+    /// saying something untrue about where they came from.
+    pub fn claim(&mut self, pdb: Pdb) {
+        if self.owner.is_none() {
+            self.owner = Some(pdb);
+        }
+    }
+
     /// ★★★★★ **Is `pdb` the VAS this table belongs to?** — the owner's guarantee, as a
     /// total function, consulted by both entrances.
     ///

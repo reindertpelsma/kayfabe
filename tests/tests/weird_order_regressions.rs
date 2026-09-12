@@ -246,7 +246,7 @@ fn wo_13_multiiter_realloc_same_va_new_backing_each_iter() {
             p.arenas[&GpuId::ZERO].range.contains(&published.gpa),
             "iter {iter}: the realloc lands in THIS proc's own arena"
         );
-        let host = p.vases[&(GpuId::ZERO, PDB)]
+        let host = p.vas_by_pdb(GpuId::ZERO, PDB).expect("the VAS exists")
             .table
             .resolve(PDB, VA)
             .expect("bound")
@@ -345,8 +345,8 @@ fn wo_14_two_proc_identical_va_interleaved_events_disjoint_backing() {
         "identical VA, interleaved order → both host-mapped AT the guest VA"
     );
     assert_ne!(
-        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)].host_vas,
-        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)].host_vas,
+        gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists").host_vas,
+        gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists").host_vas,
         "…in DIFFERENT host VASes, allocated on their own isolates"
     );
 }

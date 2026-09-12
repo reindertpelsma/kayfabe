@@ -104,7 +104,7 @@ fn guest_binds(
 ) {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             vas.table
                 .bind(
                     PDB,
@@ -146,8 +146,7 @@ fn verbs(rec: &SharedRecorder) -> Vec<&'static str> {
 fn tabled(device: &SharedDevice, pid: kayfabe_core::ProcId) -> Option<(u64, u64, Binding)> {
     device
         .with_proc_mut(pid, |p| {
-            p.vases
-                .get(&(GPU, PDB))
+            p.vas_by_pdb(GPU, PDB)
                 .expect("the compute VAS")
                 .table
                 .binding_at(LEAF_VA)

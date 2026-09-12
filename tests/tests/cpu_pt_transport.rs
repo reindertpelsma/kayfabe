@@ -193,7 +193,7 @@ fn owner(d: &SharedDevice) -> kayfabe_core::ProcId {
     d.live_pids()
         .into_iter()
         .find(|&pid| {
-            d.with_proc(pid, |p| p.vases.contains_key(&(GPU, PDB)))
+            d.with_proc(pid, |p| p.vas_by_pdb(GPU, PDB).is_some())
                 .unwrap_or(false)
         })
         .expect("some proc owns the address space")
@@ -427,7 +427,7 @@ fn the_cpu_written_tree_binds_the_rings_va_in_the_cores_address_table() {
         let pid = owner(&d);
         let seen = d
             .with_proc(pid, |proc| {
-                proc.vases[&(GPU, PDB)]
+                proc.vas_by_pdb(GPU, PDB).expect("the VAS exists")
                     .table
                     .binding_at(GpuVa(RING_VA))
                     .map(|(start, len, b)| (start, len, b.phys(), b.aperture()))
@@ -511,7 +511,7 @@ fn only_the_root_witnessed_learns_the_whole_tree_and_binds_nothing() {
             "{mode:?}: and it says so BY NAME rather than by an absence: {out:?}"
         );
         assert_eq!(
-            d.with_proc(pid, |proc| proc.vases[&(GPU, PDB)]
+            d.with_proc(pid, |proc| proc.vas_by_pdb(GPU, PDB).expect("the VAS exists")
                 .table
                 .binding_at(GpuVa(RING_VA))
                 .is_some()),

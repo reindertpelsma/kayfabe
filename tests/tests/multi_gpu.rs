@@ -280,8 +280,14 @@ fn hash14_across_gpu() {
         "identical VAs across GPUs are each host-mapped AT that VA"
     );
     assert_ne!(
-        gpu.procs[&pid_a].vases[&(GpuId(0), SHARED_PDB)].host_vas,
-        gpu.procs[&pid_b].vases[&(GpuId(1), SHARED_PDB)].host_vas,
+        gpu.procs[&pid_a]
+            .vas_by_pdb(GpuId(0), SHARED_PDB)
+            .expect("proc A's VAS on GPU 0")
+            .host_vas,
+        gpu.procs[&pid_b]
+            .vas_by_pdb(GpuId(1), SHARED_PDB)
+            .expect("proc B's VAS on GPU 1")
+            .host_vas,
         "…in disjoint host VASes — THE property, now asserted as itself"
     );
     // Each still resolves to ITS OWN host publication, never the other's.

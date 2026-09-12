@@ -136,7 +136,7 @@ fn device() -> (
 fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, rows: u64) {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             for i in 0..rows {
                 vas.table
                     .bind(
@@ -222,7 +222,7 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
     let descriptor = pinned.memory;
     assert_eq!(
         device
-            .with_proc_mut(pid, |p| p.vases[&(GPU, PDB)].guest_ram_pins.len())
+            .with_proc_mut(pid, |p| p.vas_by_pdb(GPU, PDB).expect("the VAS exists").guest_ram_pins.len())
             .expect("the proc is live"),
         1,
         "★ NON-VACUITY: the pin must actually be recorded, or every count below is a \

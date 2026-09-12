@@ -231,7 +231,7 @@ fn guest_with_a_ring(bind_ring: bool) -> (Gpu, MockVmm, ProcId, ChanId) {
     // the hypothesis every other test in this file is conditioned on.
     if bind_ring {
         let proc = gpu.procs.get_mut(&pid).expect("live");
-        let vas = proc.vases.get_mut(&(GPU, PDB0)).expect("the VAS exists");
+        let vas = proc.vas_by_pdb_mut(GPU, PDB0).expect("the VAS exists");
         vas.table
             .bind(
                 PDB0,

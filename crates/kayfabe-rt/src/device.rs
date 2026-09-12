@@ -3981,7 +3981,7 @@ impl SharedDevice {
         // never-pruned-table aliasing class.
         for w in &out.pt_writes {
             self.with_proc_mut(w.owner, |p| {
-                if let Some(vas) = p.vases.get_mut(&(w.gpu, w.owner_pdb)) {
+                if let Some(vas) = p.vas_by_pdb_mut(w.gpu, w.owner_pdb) {
                     vas.pt_pages.insert(w.page);
                 }
             });
@@ -4456,7 +4456,7 @@ impl SharedDevice {
             let mut scan = |p: &kayfabe_core::gpu::Proc| {
                 for vas in p.vases.values() {
                     observed.push((
-                        (p.id.0, vas.gpu.0, vas.pdb.0),
+                        (p.id.0, vas.gpu.0, vas.pdb.map_or(0, |p| p.0)),
                         vas.table.generation(),
                     ));
                 }
@@ -4542,7 +4542,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let runs = vas.reach.reachable_ranges();
                     let mut covered = 0usize;
                     let mut only = Vec::<u64>::new();
@@ -4590,7 +4593,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let r = vas.reach.reachable_ranges();
                     let shown: Vec<String> = r
                         .iter()
@@ -4654,7 +4660,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let mut runs: Vec<(u64, u64)> = Vec::new();
                     for (va, len, _b) in vas.table.iter() {
                         match runs.last_mut() {
@@ -4752,7 +4761,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let mut runs: Vec<(u64, u64)> = Vec::new();
                     let mut rows = 0usize;
                     for (va, len, b) in vas.table.iter() {
@@ -4896,7 +4908,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let table_rows = vas.table.iter().count();
                     let mut declared = IntervalSetBuilder::with_capacity(table_rows);
                     let mut rows = IntervalSetBuilder::new();
@@ -4961,10 +4976,11 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| VasBlockage {
+                .map(|(&(gpu, _origin), vas)| VasBlockage {
                     proc_id: pid,
                     gpu,
-                    pdb,
+                    // ⊘ w555 — off the space, not off the key.
+                    pdb: vas.pdb.unwrap_or(Pdb(0)),
                     counts: vas.table.blockage_counts(cap),
                 })
                 .collect()
@@ -5008,7 +5024,7 @@ impl SharedDevice {
         cap: usize,
     ) -> Vec<(u64, u64, u64)> {
         self.with_proc_mut(pid, |p| {
-            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+            let Some(vas) = p.vas_by_pdb(gpu, pdb) else {
                 return Vec::new();
             };
             vas.table
@@ -5037,8 +5053,17 @@ impl SharedDevice {
     /// round trip to another process under a rank-0 lock.
     #[must_use]
     pub fn vas_keys(&self, pid: ProcId) -> Vec<(GpuId, Pdb)> {
-        self.with_proc_mut(pid, |p| p.vases.keys().copied().collect())
-            .unwrap_or_default()
+        // ⊘ w555 — the publication pass still walks spaces BY BASE, so a space with none is
+        // not in this list and is not published. ⚠ That is the gap stated, not hidden: it is
+        // the same one `Vas::pdb` documents, and it is now a property of this ONE function
+        // rather than of the whole runtime map.
+        self.with_proc_mut(pid, |p| {
+            p.vases
+                .values()
+                .filter_map(|v| Some((v.gpu, v.pdb?)))
+                .collect()
+        })
+        .unwrap_or_default()
     }
 
     /// ★★★★★ **w318 — THE ARMING EDGE FOR THE PUBLICATION PASS**, read without walking a
@@ -5051,8 +5076,7 @@ impl SharedDevice {
     #[must_use]
     pub fn vas_publish_epoch(&self, pid: ProcId, gpu: GpuId, pdb: Pdb) -> Option<(u64, usize)> {
         self.with_proc_mut(pid, |p| {
-            p.vases
-                .get(&(gpu, pdb))
+            p.vas_by_pdb(gpu, pdb)
                 .map(kayfabe_core::gpu::Vas::publish_epoch)
         })
         .flatten()
@@ -5099,7 +5123,7 @@ impl SharedDevice {
     ) -> PublishCensus {
         self.with_proc_mut(pid, |p| {
             let mut c = PublishCensus::default();
-            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+            let Some(vas) = p.vas_by_pdb(gpu, pdb) else {
                 return c;
             };
             for (va, len, b) in vas.table.iter() {
@@ -5193,7 +5217,7 @@ impl SharedDevice {
             )
             .ok()?;
         self.with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            let vas = p.vas_by_pdb_mut(gpu, pdb)?;
             vas.table.iter().find_map(|(va, _len, b)| {
                 let h = b.host()?;
                 (va != except
@@ -5237,7 +5261,7 @@ impl SharedDevice {
             )
             .ok()?;
         self.with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            let vas = p.vas_by_pdb_mut(gpu, pdb)?;
             vas.table.iter().find_map(|(va, _len, b)| {
                 (va != except
                     && b.aperture() == kayfabe_arch::Aperture::Vidmem
@@ -5280,7 +5304,10 @@ impl SharedDevice {
                 continue;
             }
             self.with_proc(pid, |p| {
-                for ((_gpu, pdb), vas) in &p.vases {
+                for ((_gpu, _origin), vas) in &p.vases {
+                    let Some(pdb) = vas.pdb.as_ref() else {
+                        continue;
+                    };
                     if except_pdb == Some(*pdb) {
                         continue;
                     }
@@ -5362,7 +5389,7 @@ impl SharedDevice {
             )
             .ok()?;
         self.with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(gpu, pdb))?;
+            let vas = p.vas_by_pdb_mut(gpu, pdb)?;
             // ⊘ A scan of THIS address space's own rows for a framebuffer offset, not a
             // reverse resolution of a host address to a guest VA: the join is keyed by
             // `phys` at every other site too (`FbStore::install_join`,
@@ -5447,7 +5474,13 @@ impl SharedDevice {
             let n = corpses.len();
             let mut out = Vec::new();
             for p in corpses {
-                for ((gpu, pdb), vas) in p.vases.iter() {
+                for ((gpu, _origin), vas) in p.vases.iter() {
+                    // ⊘ w555 — a revoked leaf is unmapped through its host VAS, which is
+                    // reached by base. A corpse whose space never declared one holds no
+                    // revocable join, so skipping it drops nothing.
+                    let Some(pdb) = vas.pdb else {
+                        continue;
+                    };
                     for (va, len, b) in vas.table.iter() {
                         let Some(h) = b.host() else { continue };
                         if h.frees_object()
@@ -5455,7 +5488,7 @@ impl SharedDevice {
                         {
                             out.push(kayfabe_fwd::RevokedLeaf {
                                 gpu: *gpu,
-                                pdb: *pdb,
+                                pdb,
                                 va: GpuVa(va),
                                 len,
                                 phys: b.phys(),
@@ -5556,7 +5589,10 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             p.vases
                 .iter()
-                .map(|(&(gpu, pdb), vas)| {
+                .map(|(&(gpu, _origin), vas)| {
+                    // ⊘ w555 — the base is the SPACE's attribute now, read off the space. A
+                    // rootless one renders as 0 in a census line and is not addressable by it.
+                    let pdb = vas.pdb.unwrap_or(Pdb(0));
                     let halves: Vec<String> = vas
                         .promote_halves
                         .iter()
@@ -5620,7 +5656,8 @@ impl SharedDevice {
     pub fn guest_leaf_census(&self, pid: ProcId, va: kayfabe_arch::ids::GpuVa) -> String {
         let Some(rows) = self.with_proc_mut(pid, |p| {
             let mut rows: Vec<String> = Vec::new();
-            for (&(gpu, pdb), vas) in &p.vases {
+            for (&(gpu, _origin), vas) in &p.vases {
+            let pdb = vas.pdb.unwrap_or(Pdb(0));
                 let hit = vas.reach.leaf_covering(va);
                 rows.push(format!(
                     "gpu={} pdb=0x{:x} sweeps={} trunc={} dirty={} pages={} swept_only={} → {}",
@@ -5754,11 +5791,11 @@ impl SharedDevice {
                 proc_vases: p.vases.len(),
                 vas_sample: [None; SAMPLE],
             };
-            let Some(vas) = p.vases.get(&(gpu, pdb)) else {
+            let Some(vas) = p.vas_by_pdb(gpu, pdb) else {
                 // ⊘ Which address spaces this proc DOES have, because "absent" without the
                 // population it is absent from is the `an_absence_from_a_filtered_view` shape.
-                for (slot, (g, d)) in r.vas_sample.iter_mut().zip(p.vases.keys()) {
-                    *slot = Some((g.0, d.0));
+                for (slot, v) in r.vas_sample.iter_mut().zip(p.vases.values()) {
+                    *slot = Some((v.gpu.0, v.pdb.map_or(0, |p| p.0)));
                 }
                 return r;
             };
@@ -5922,7 +5959,7 @@ impl SharedDevice {
                     // A page whose address space died is dropped here rather than
                     // re-attached to whatever inherited the PDB — the C's never-pruned-table
                     // aliasing class, refused the same way `latch_pt_writes` refuses it.
-                    if let Some(vas) = p.vases.get_mut(&(gpu, pdb)) {
+                    if let Some(vas) = p.vas_by_pdb_mut(gpu, pdb) {
                         vas.pt_pages.insert(page);
                         n += 1;
                     }
@@ -6207,7 +6244,7 @@ impl SharedDevice {
         // adopt reads it from, so an unmap can never name a VAS the map was not made in.
         let host_vas = self.route_act(
             |_| Ok((pid, ())),
-            |_spine, proc, ()| proc.vases.get(&(gpu, pdb)).and_then(|v| v.host_vas),
+            |_spine, proc, ()| proc.vas_by_pdb(gpu, pdb).and_then(|v| v.host_vas),
         );
         let orphans = match host_vas {
             Ok(Some(vas)) => kayfabe_isolate::Orphans {
@@ -6457,7 +6494,8 @@ impl SharedDevice {
                 //   so it does not violate the no-blocking-under-a-lock invariant, and the
                 //   parked sets are single digits.
                 let mut redrive = |proc: &mut kayfabe_core::gpu::Proc| {
-                    for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
+                    for (&(gpu, _origin), vas) in proc.vases.iter_mut() {
+                        let pdb = vas.pdb.unwrap_or(Pdb(0));
                         if gpu != route.gpu {
                             continue;
                         }

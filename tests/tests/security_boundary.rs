@@ -1678,7 +1678,7 @@ struct ProcFingerprint {
     arenas: Vec<(GpuId, std::ops::Range<u64>)>,
     isolates: Vec<(GpuId, kayfabe_isolate::IsolateId)>,
     clients: Vec<HClient>,
-    vases: Vec<(GpuId, Pdb)>,
+    vases: Vec<(GpuId, Option<Pdb>)>,
 }
 
 fn proc_fingerprint(gpu: &Gpu, pid: kayfabe_core::ProcId) -> ProcFingerprint {
@@ -1692,7 +1692,10 @@ fn proc_fingerprint(gpu: &Gpu, pid: kayfabe_core::ProcId) -> ProcFingerprint {
             .collect(),
         isolates: p.isolates.iter().map(|(g, i)| (*g, i.id())).collect(),
         clients: p.client_values().into_iter().collect(),
-        vases: p.vases.keys().copied().collect(),
+        // ⊘ w555 — the projected boundary names each space by its GPU and its declared
+        // base, and a space with none projects `None` rather than being dropped: a bystander
+        // losing a VA space from its projection is exactly what this test watches for.
+        vases: p.vases.values().map(|v| (v.gpu, v.pdb)).collect(),
     }
 }
 
@@ -2003,7 +2006,7 @@ fn a_refused_map_sync_restores_the_binding_it_had_already_installed() {
     let pb = gpu.spine.by_pdb[&(GPU0, PDBB)];
 
     let snap = |gpu: &Gpu, pid, pdb| -> Vec<(u64, u64, kayfabe_mmu::Binding)> {
-        gpu.procs[&pid].vases[&(GPU0, pdb)]
+        gpu.procs[&pid].vas_by_pdb(GPU0, pdb).expect("the VAS exists")
             .table
             .iter()
             .map(|(va, len, b)| (va, len, *b))

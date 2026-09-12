@@ -346,7 +346,7 @@ fn assert_device_consistent(gpu: &Gpu) {
     for (&(gpu_t, pdb), &pid) in &gpu.spine.by_pdb {
         let p = gpu.procs.get(&pid).expect("by_pdb points at a live proc");
         assert!(
-            p.vases.contains_key(&(gpu_t, pdb)),
+            p.vas_by_pdb(gpu_t, pdb).is_some(),
             "by_pdb[{pdb:?}] → proc without that Vas"
         );
     }
@@ -375,8 +375,8 @@ fn assert_device_consistent(gpu: &Gpu) {
             kayfabe_isolate::IsolateId::new(p.id.0, GpuId::ZERO),
             "isolate session != (ProcId, GpuId)"
         );
-        for (&(gpu_t, pdb), vas) in &p.vases {
-            assert_eq!(vas.pdb, pdb);
+        for (&(gpu_t, _origin), vas) in &p.vases {
+            let pdb = vas.pdb.expect("the fixture's VAS declares a base");
             assert_eq!(vas.gpu, gpu_t);
             // Host-published bindings landed in THIS proc's arena; every RPC-bound
             // VA is genuinely in the table.
@@ -786,7 +786,10 @@ fn per_proc_parallelism_two_procs_no_shared_lock() {
         // rendezvous it owed the other one must say so, or the survivor blocks forever
         // in a `Barrier` nothing can wake. See `BreakOnPanic` for the R1 argument.
         let _brk = BreakOnPanic(barrier);
-        let (gpu_t, pdb) = *p.vases.keys().next().expect("compute Vas");
+        // ⊘ w555 — the key is the RM object now; `publish_backing` still takes a base, so
+        // the fixture reads the base off the space it picked.
+        let v = p.vases.values().next().expect("compute Vas");
+        let (gpu_t, pdb) = (v.gpu, v.pdb.expect("the fixture's VAS declares a base"));
         barrier.wait(); // start together
         let mut published = Vec::with_capacity(PUBLISHES as usize);
         for k in 0..PUBLISHES {
@@ -870,7 +873,8 @@ fn same_proc_interleaving_is_exact() {
         .procs
         .remove(&pid)
         .expect("take the proc out for direct sharding");
-    let (gpu_t, pdb) = *proc.vases.keys().next().unwrap();
+    let v = proc.vases.values().next().unwrap();
+    let (gpu_t, pdb) = (v.gpu, v.pdb.expect("the fixture's VAS declares a base"));
     let arena_start = proc.arenas[&GpuId::ZERO].range.start;
     let shared = Mutex::new(proc);
 
@@ -895,7 +899,7 @@ fn same_proc_interleaving_is_exact() {
     // the device's, and the audit's question is about the device.
     gpu.procs.insert(pid, shared.into_inner().unwrap());
     let p = &gpu.procs[&pid];
-    let vas = &p.vases[&(GpuId::ZERO, pdb)];
+    let vas = &p.vas_by_pdb(GpuId::ZERO, pdb).expect("the VAS exists");
     let total = THREADS * PER_THREAD;
     // The bump allocator is exact: every alloc distinct, cursor advanced exactly.
     let gpas: BTreeSet<u64> = vas.table.iter().map(|(_, _, b)| b.phys()).collect();

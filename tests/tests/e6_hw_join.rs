@@ -420,7 +420,7 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
     // ARM 2 — the same join, over operands a CPU can see
     // =================================================================================
     let host_vas = dev
-        .with_proc(pid, |p| p.vases[&(GPU, PDB)].host_vas)
+        .with_proc(pid, |p| p.vas_by_pdb(GPU, PDB).expect("the VAS exists").host_vas)
         .expect("live")
         .expect("arm 1's publish materialized the channel's host VAS");
     let p_src = probe
@@ -559,8 +559,8 @@ fn submit_guest_ring(
     let (ring, method_bytes) = ga10x_ring(vmm, &ce_runs(src.0, dst.0, COPY_LEN as u32));
     dev.with_proc_mut(pid, |p| {
         let chan = p.channels.get(&cid).expect("the channel");
-        let key = (chan.gpu, chan.vas_pdb.expect("it declares a VAS"));
-        let vas = p.vases.get_mut(&key).expect("the VAS");
+        let (cgpu, cpdb) = (chan.gpu, chan.vas_pdb.expect("it declares a VAS"));
+        let vas = p.vas_by_pdb_mut(cgpu, cpdb).expect("the VAS");
         kayfabe_tests::bind_ring_in(vas, RING_VA, RING_GPA, method_bytes);
     })
     .expect("live");

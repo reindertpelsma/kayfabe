@@ -283,7 +283,8 @@ fn snapshot(gpu: &Gpu) -> CoreSnapshot {
         procs.insert(anchor, p.client_values());
 
         let mut vs = BTreeMap::new();
-        for (&(gpu, pdb), vas) in &p.vases {
+        for (&(gpu, _origin), vas) in &p.vases {
+            let pdb = vas.pdb.expect("the fixture's VAS declares a base");
             vs.insert((gpu, pdb), vas.origin);
             for (va, _len, b) in vas.table.iter() {
                 let host_published = b.host_va().is_some();
@@ -486,10 +487,17 @@ struct DataPlaneProjection {
 fn materialize(gpu: &mut Gpu) -> DataPlaneProjection {
     // (ProcId, (GpuId, Pdb), anchor) for every live Vas — the target is part of the
     // address identity (MG-3).
+    // ⊘ w555 — a space is keyed by its RM object now, but `publish_backing` still takes a
+    // base, so this reads the base off the space. A rootless one publishes nothing and is
+    // skipped, which is the same statement `Spine::vas_keys` makes.
     let vases: Vec<(kayfabe_core::ProcId, (GpuId, Pdb), ProcAnchor)> = gpu
         .procs
         .iter()
-        .flat_map(|(pid, p)| p.vases.keys().map(move |k| (*pid, *k, p.anchor)))
+        .flat_map(|(pid, p)| {
+            p.vases
+                .values()
+                .filter_map(move |v| Some((*pid, (v.gpu, v.pdb?), p.anchor)))
+        })
         .collect();
 
     let mut published = BTreeMap::new();

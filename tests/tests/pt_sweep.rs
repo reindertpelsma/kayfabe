@@ -277,8 +277,7 @@ fn the_same_descent_committed_as_a_sweep_binds_and_says_the_relaxation_did_it() 
     let va = GpuVa(9 * (1u64 << small.shift));
     let phys = with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get(&(GPU, A_PDB))
+            .vas_by_pdb(GPU, A_PDB)
             .expect("the vas")
             .table
             .binding_at(va)
@@ -320,8 +319,7 @@ fn a_sweep_admits_only_what_it_descended_to() {
     assert_eq!(out.pages_swept, 1, "only the root was walked");
     let swept_only = with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get(&(GPU, A_PDB))
+            .vas_by_pdb(GPU, A_PDB)
             .expect("the vas")
             .reach
             .is_swept(PT_SMALL)
@@ -367,8 +365,7 @@ fn a_write_to_a_swept_page_re_arms_the_sweep_and_a_quiet_address_space_does_not(
     // pass's drain — which is exactly why the two passes are one design.
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PT_SMALL);
@@ -420,8 +417,7 @@ fn a_write_to_a_page_the_sweep_never_saw_does_not_re_arm_it() {
     const UNKNOWN: u64 = 0x1009_0000;
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(UNKNOWN);
@@ -496,8 +492,7 @@ fn a_truncated_sweep_publishes_nothing_and_re_arms_itself() {
     // flag that happens to co-occur with a fresh address space.
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PT_SMALL);
@@ -541,8 +536,7 @@ fn a_page_that_falls_out_of_the_tree_loses_its_sweep_admission() {
     assert_eq!(out.bound, 1);
     assert!(with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get(&(GPU, A_PDB))
+            .vas_by_pdb(GPU, A_PDB)
             .expect("the vas")
             .reach
             .is_swept(PT_SMALL)
@@ -559,8 +553,7 @@ fn a_page_that_falls_out_of_the_tree_loses_its_sweep_admission() {
     );
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PD_DUAL);
@@ -580,8 +573,7 @@ fn a_page_that_falls_out_of_the_tree_loses_its_sweep_admission() {
     assert!(
         !with_gpu(&mut gpu, |g| {
             only_proc(g)
-                .vases
-                .get(&(GPU, A_PDB))
+                .vas_by_pdb(GPU, A_PDB)
                 .expect("the vas")
                 .reach
                 .is_swept(PT_SMALL)
@@ -618,8 +610,7 @@ fn the_guest_leaf_census_answers_present_and_absent_from_the_same_swept_tree() {
     let mapped = GpuVa(9 * (1u64 << small.shift));
     let (hit, miss, runs) = with_gpu(&mut gpu, |g| {
         let r = &only_proc(g)
-            .vases
-            .get(&(GPU, A_PDB))
+            .vas_by_pdb(GPU, A_PDB)
             .expect("the vas")
             .reach;
         (

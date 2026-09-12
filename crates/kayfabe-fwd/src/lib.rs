@@ -1963,8 +1963,7 @@ pub fn plan_pin_guest_ram(
     }
     let pid = proc.id;
     let vas = proc
-        .vases
-        .get(&(gpu, pdb))
+        .vas_by_pdb(gpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
     if !proc.isolates.contains_key(&gpu) {
         return Err(missing_isolate(proc, gpu));
@@ -2129,7 +2128,7 @@ pub fn commit_pin_guest_ram(
             retry: false,
         });
     }
-    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+    let Some(vas) = proc.vas_by_pdb_mut(plan.gpu, plan.pdb) else {
         return Err(Refusal {
             fault: FwdFault::Stale(Stale::Vas {
                 gpu: plan.gpu,
@@ -2300,8 +2299,7 @@ pub fn plan_publish(
     }
     let pid = proc.id;
     let vas = proc
-        .vases
-        .get(&(gpu, pdb))
+        .vas_by_pdb(gpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
     // The arena and the isolate must both exist BEFORE any host verb runs: a target
     // miss is an internal inconsistency, and finding it after the allocs would mean
@@ -2418,7 +2416,7 @@ pub fn commit_publish(
     }
 
     let Proc { vases, arenas, .. } = proc;
-    let Some(vas) = vases.get_mut(&(plan.gpu, plan.pdb)) else {
+    let Some(vas) = kayfabe_core::gpu::vas_by_pdb_in_mut(vases, plan.gpu, plan.pdb) else {
         return Err(Refusal {
             fault: FwdFault::Stale(Stale::Vas {
                 gpu: plan.gpu,
@@ -2920,8 +2918,7 @@ pub fn plan_back_fb_leaf(
     }
     let pid = proc.id;
     let vas = proc
-        .vases
-        .get(&(gpu, pdb))
+        .vas_by_pdb(gpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
     if !proc.arenas.contains_key(&gpu) {
         return Err(FwdFault::NoTarget { proc: pid, gpu });
@@ -3097,7 +3094,7 @@ pub fn commit_back_fb_leaf(
             retry: false,
         });
     }
-    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+    let Some(vas) = proc.vas_by_pdb_mut(plan.gpu, plan.pdb) else {
         return Err(Refusal {
             fault: FwdFault::Stale(Stale::Vas {
                 gpu: plan.gpu,
@@ -3247,7 +3244,7 @@ pub fn adopt_joined_fb_leaf(
             retry: false,
         });
     }
-    let Some(vas) = proc.vases.get_mut(&(plan.gpu, plan.pdb)) else {
+    let Some(vas) = proc.vas_by_pdb_mut(plan.gpu, plan.pdb) else {
         return Err(Refusal {
             fault: FwdFault::Stale(Stale::Vas {
                 gpu: plan.gpu,
@@ -3530,8 +3527,7 @@ pub fn unpublish_backing(
         return Err(FwdFault::NoTarget { proc: pid, gpu });
     }
     let Proc { vases, arenas, .. } = proc;
-    let vas = vases
-        .get_mut(&(gpu, pdb))
+    let vas = kayfabe_core::gpu::vas_by_pdb_in_mut(vases, gpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu, pdb })?;
     // The token FIRST, and only *read* first: a VA this Vas owes nothing at is refused
     // with the table still untouched, so a double free changes nothing at all.
@@ -3600,8 +3596,7 @@ pub fn resolve_in(
     va: GpuVa,
 ) -> Result<(Binding, u64), FwdFault> {
     let vas = proc
-        .vases
-        .get(&(target, pdb))
+        .vas_by_pdb(target, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: target, pdb })?;
     Ok(vas.table.resolve(pdb, va)?)
 }
@@ -4000,8 +3995,7 @@ pub fn plan_doorbell(
     //      `Vas` is absent is a loud refusal here, exactly as before.
     let vas = match chan.vas_pdb {
         Some(pdb) => Some(
-            proc.vases
-                .get(&(cgpu, pdb))
+            proc.vas_by_pdb(cgpu, pdb)
                 .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?,
         ),
         None => None,
@@ -4269,7 +4263,7 @@ pub fn commit_doorbell(
         let pdb = plan
             .vas_pdb
             .expect("materialization requires a declared VAS");
-        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+        let Some(vas) = kayfabe_core::gpu::vas_by_pdb_in_mut(vases, plan.cgpu, pdb) else {
             return refuse(Stale::Vas {
                 gpu: plan.cgpu,
                 pdb,
@@ -4676,8 +4670,7 @@ pub fn plan_engine_object(
         .flatten();
     let host_vas = if channel.is_none() {
         let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
-        proc.vases
-            .get(&(cgpu, pdb))
+        proc.vas_by_pdb(cgpu, pdb)
             .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
             .host_vas
     } else {
@@ -4795,7 +4788,7 @@ fn adopted_guest_ring(
         );
         return None;
     };
-    let Some(vas) = proc.vases.get(&(cgpu, pdb)) else {
+    let Some(vas) = proc.vas_by_pdb(cgpu, pdb) else {
         kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (4) NO VAS for this (gpu, pdb) pair",
             ring.va
@@ -5031,7 +5024,7 @@ pub fn commit_engine_object(
         let pdb = plan
             .vas_pdb
             .expect("materialization requires a declared VAS");
-        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+        let Some(vas) = kayfabe_core::gpu::vas_by_pdb_in_mut(vases, plan.cgpu, pdb) else {
             return refuse(Stale::Vas {
                 gpu: plan.cgpu,
                 pdb,
@@ -5274,8 +5267,7 @@ pub fn plan_channel_birth(
     }
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let host_vas = proc
-        .vases
-        .get(&(cgpu, pdb))
+        .vas_by_pdb(cgpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
         .host_vas;
     // ★ ONE read of the channel's graph node for the two raw declarations this plan carries
@@ -5384,7 +5376,7 @@ pub fn commit_channel_birth(
     };
     if let Some(fresh) = fresh_vas {
         let pdb = plan.vas_pdb.expect("a birth requires a declared VAS");
-        let Some(vas) = vases.get_mut(&(plan.cgpu, pdb)) else {
+        let Some(vas) = kayfabe_core::gpu::vas_by_pdb_in_mut(vases, plan.cgpu, pdb) else {
             return refuse(Stale::Vas {
                 gpu: plan.cgpu,
                 pdb,
@@ -6367,8 +6359,7 @@ pub fn plan_pushbuffer(
     // to the table's ABSENCE too — it is not an invitation to read the number raw.
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let table = &proc
-        .vases
-        .get(&(cgpu, pdb))
+        .vas_by_pdb(cgpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
         .table;
     let route = if vidmem {
@@ -6895,8 +6886,7 @@ pub fn plan_gpfifo_ring(
         return Ok(RingPlanLook::Absent(RingLook::NoAddressSpace));
     };
     let table = &proc
-        .vases
-        .get(&(cgpu, pdb))
+        .vas_by_pdb(cgpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?
         .table;
     // (3) How much of it the guest actually mapped, bounded by our own ceiling. ⊘ The
@@ -7101,8 +7091,7 @@ fn classify_ce(
         // The destination is an address in the issuing channel's VAS. Walk it there.
         let pdb = chan_pdb.ok_or(FwdFault::NoVas(cid))?;
         let vas = proc
-            .vases
-            .get(&(cgpu, pdb))
+            .vas_by_pdb(cgpu, pdb)
             .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
         match vas.table.resolve(pdb, dst) {
             Ok((b, off)) => (b.phys().wrapping_add(off), b.aperture()),
@@ -8011,8 +8000,7 @@ pub fn plan_ce(proc: &Proc, cid: ChanId, spans: &[CeSpan]) -> Result<Planned<CeP
     }
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc
-        .vases
-        .get(&(cgpu, pdb))
+        .vas_by_pdb(cgpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
     let host_vas = vas.host_vas.ok_or(FwdFault::NoHostVas { chan: cid, pdb })?;
     let verbs = plan_ce_split(host_vas, spans);
@@ -8079,7 +8067,7 @@ pub fn commit_ce(
         return Err(Refusal::bare(FwdFault::Stale(Stale::Channel(plan.chan))));
     }
     if let (Some(pdb), Some(host_vas)) = (plan.pdb, plan.host_vas) {
-        match proc.vases.get(&(plan.gpu, pdb)) {
+        match proc.vas_by_pdb(plan.gpu, pdb) {
             Some(vas) if vas.host_vas == Some(host_vas) => {}
             Some(_) | None => {
                 return Err(Refusal::bare(FwdFault::Stale(Stale::Vas {
@@ -8191,7 +8179,7 @@ pub fn apply_pushbuffer(
                 //     Resolved in the ISSUING channel's own Vas — the same table, and
                 //     the same reason, as the capture decision below.
                 let dst_table = chan_pdb
-                    .and_then(|pdb| proc.vases.get(&(cgpu, pdb)))
+                    .and_then(|pdb| proc.vas_by_pdb(cgpu, pdb))
                     .map(|v| &v.table);
                 // ★ §14.15 obstacle 2 — the operand-resolver seam. Here it is the
                 // channel's own address table, which is what every channel with a `Vas`
@@ -8438,7 +8426,7 @@ pub fn latch_pt_writes(gpu: &mut Gpu, writes: &[PtWrite]) {
         if owner.is_retired() {
             continue;
         }
-        if let Some(vas) = owner.vases.get_mut(&(w.gpu, w.owner_pdb)) {
+        if let Some(vas) = owner.vas_by_pdb_mut(w.gpu, w.owner_pdb) {
             vas.pt_pages.insert(w.page);
         }
     }
@@ -8507,8 +8495,7 @@ pub fn gate_working_set_in(
     let chan = proc.channels.get(&cid).ok_or(FwdFault::NoVas(cid))?;
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc
-        .vases
-        .get(&(chan.gpu, pdb))
+        .vas_by_pdb(chan.gpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: chan.gpu, pdb })?;
     gate_vas(&vas.table, pdb, working_set.iter().copied())
 }
@@ -8596,8 +8583,7 @@ pub fn arm_fence_in(
     let cgpu = chan.gpu;
     let pdb = chan.vas_pdb.ok_or(FwdFault::NoVas(cid))?;
     let vas = proc
-        .vases
-        .get(&(cgpu, pdb))
+        .vas_by_pdb(cgpu, pdb)
         .ok_or(FwdFault::UnknownPdb { gpu: cgpu, pdb })?;
     // The fence must be a mapped, host-published address in this channel's OWN Vas.
     gate_vas(&vas.table, pdb, [addr])?;

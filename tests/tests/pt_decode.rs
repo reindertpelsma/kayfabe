@@ -770,7 +770,7 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
     // A decode restates what the guest's page table says; the fixture has to say the same
     // thing for "unchanged" to be the case under test rather than an accident.
     let (kept_decl, moved_backing) = with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
+        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
         let k = t.binding_at(kept).expect("published").2;
         (
             (k.phys(), k.aperture()),
@@ -793,8 +793,7 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
 
     let out = with_gpu(&mut gpu, |g| {
         let t = &mut only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .table;
         populate(
@@ -820,7 +819,7 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
     );
 
     with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
+        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
         assert!(
             t.binding_at(kept).expect("still there").2.host().is_some(),
             "an unchanged declaration must not strip the publication"
@@ -1307,8 +1306,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     );
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PT_SMALL);
@@ -1354,8 +1352,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     );
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(ROOT);
@@ -1384,7 +1381,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     );
 
     with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vases[&(GPU, A_PDB)].table;
+        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
         assert_eq!(
             t.binding_at(GpuVa(9 << small.shift))
                 .map(|(_, _, b)| b.phys()),
@@ -1397,8 +1394,7 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     // #13 fix actually needs, since a root walk cannot reach a page written after it.
     with_gpu(&mut gpu, |g| {
         let p = only_proc(g);
-        p.vases
-            .get_mut(&(GPU, A_PDB))
+        p.vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PT_SMALL);
@@ -1446,8 +1442,7 @@ fn a_vas_that_disappeared_during_the_lock_free_phase_is_skipped_and_not_re_homed
     );
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(ROOT);
@@ -1461,7 +1456,15 @@ fn a_vas_that_disappeared_during_the_lock_free_phase_is_skipped_and_not_re_homed
     };
     // …and while that ran, the address space went away.
     with_gpu(&mut gpu, |g| {
-        only_proc(g).vases.remove(&(GPU, A_PDB));
+        // ⊘ w555 — the map is keyed by RM object now, so the fixture removes the space it
+        // finds BY BASE rather than assuming the base is the key.
+        let key = only_proc(g)
+            .vases
+            .iter()
+            .find(|(_, v)| v.gpu == GPU && v.pdb == Some(A_PDB))
+            .map(|(k, _)| *k)
+            .expect("the A VAS exists");
+        only_proc(g).vases.remove(&key);
     });
     let out = with_gpu(&mut gpu, |g| commit_pt_decode(fmt, only_proc(g), &results));
     assert_eq!(out.vas_gone, 1);
@@ -1473,7 +1476,7 @@ fn a_vas_that_disappeared_during_the_lock_free_phase_is_skipped_and_not_re_homed
     // ★ The survivor is the assertion. A decode belonging to a dead address space must
     // not land in a live one — that is the aliasing class, not a bookkeeping detail.
     with_gpu(&mut gpu, |g| {
-        let b = &only_proc(g).vases[&(GPU, B_PDB)];
+        let b = &only_proc(g).vas_by_pdb(GPU, B_PDB).expect("the VAS exists");
         assert_eq!(b.table.iter().count(), 0, "the surviving Vas is untouched");
         assert!(
             b.pt_meta.is_empty(),
@@ -1494,8 +1497,7 @@ fn planning_consumes_the_dirty_set_so_a_second_pass_has_nothing_to_do() {
             .values_mut()
             .next()
             .expect("one proc")
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas");
         v.pt_pages.insert(ROOT);
         v.pt_pages.insert(PT_SMALL);
@@ -1625,7 +1627,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
         let device = gpu.map(|g| SharedDevice::new(g, mode));
         device
             .with_proc_mut(pid, |p| {
-                let v = p.vases.get_mut(&(GPU, A_PDB)).expect("the vas");
+                let v = p.vas_by_pdb_mut(GPU, A_PDB).expect("the vas");
                 // ★★ EVERY page the guest wrote enters the dirty set, and that is not
                 // bookkeeping — it is the model. `reachability_on_transition.md` §2.2:
                 // a leaf binds only if the guest was SEEN to write its page, so a
@@ -1683,7 +1685,7 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
 
         device.with_proc(pid, |p| {
             assert_eq!(
-                p.vases[&(GPU, A_PDB)]
+                p.vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
                     .table
                     .binding_at(GpuVa(2 << small.shift))
                     .map(|(_, _, b)| (b.phys(), b.host().is_some())),
@@ -1725,7 +1727,7 @@ fn the_page_table_metadata_bound_is_reported_when_it_is_reached() {
     write_fabricated(&mut worker, &rec, vas, PD_L1, &page_at(fmt, 1, &[]));
 
     with_gpu(&mut gpu, |g| {
-        let v = only_proc(g).vases.get_mut(&(GPU, A_PDB)).expect("the vas");
+        let v = only_proc(g).vas_by_pdb_mut(GPU, A_PDB).expect("the vas");
         v.pt_pages.insert(ROOT);
         // Fill the map to its cap with pages that are not in this decode's chain.
         for k in 0..kayfabe_fwd::MAX_PT_META as u64 {

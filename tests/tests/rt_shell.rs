@@ -168,7 +168,7 @@ type ChanSnap = (
 struct ProcSnap {
     anchor: ProcAnchor,
     clients: BTreeSet<HClient>,
-    vases: BTreeMap<(GpuId, Pdb), VasSnap>,
+    vases: BTreeMap<(GpuId, kayfabe_core::rmgraph::ResourceKey), VasSnap>,
     channels: BTreeMap<ChanId, ChanSnap>,
     scheduled: BTreeSet<ChanId>,
     outstanding: usize,

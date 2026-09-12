@@ -117,8 +117,7 @@ fn learn(gpu: &mut Gpu, pid: kayfabe_core::ProcId, pages: &[u64]) {
         .procs
         .get_mut(&pid)
         .expect("live")
-        .vases
-        .get_mut(&(GPU, PDB))
+        .vas_by_pdb_mut(GPU, PDB)
         .expect("the vas");
     for &p in pages {
         vas.pt_meta.insert(p, pt_page(p));
@@ -216,9 +215,9 @@ fn identical_client_and_pdb_in_two_vms_are_two_different_processes() {
         vm_a.procs
             .get(&a)
             .expect("live")
-            .vases
-            .contains_key(&(GPU, PDB)),
-        "VM A's process must own a VAS under the shared key, in VM A's own table"
+            .vas_by_pdb(GPU, PDB)
+            .is_some(),
+        "VM A's process must own a VAS reporting the shared base, in VM A's own table"
     );
 }
 

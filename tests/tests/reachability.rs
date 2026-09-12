@@ -980,7 +980,7 @@ fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
         write_fabricated(&mut worker, &rec, vas, *phys, img);
     }
     with_gpu(&mut gpu, |g| {
-        let v = only_proc(g).vases.get_mut(&(GPU, A_PDB)).expect("the vas");
+        let v = only_proc(g).vas_by_pdb_mut(GPU, A_PDB).expect("the vas");
         for (phys, _) in &chain {
             v.pt_pages.insert(*phys);
         }
@@ -996,7 +996,7 @@ fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
     assert_eq!((out.bound, out.unbound), (1, 0));
     with_gpu(&mut gpu, |g| {
         assert!(
-            only_proc(g).vases[&(GPU, A_PDB)]
+            only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
                 .pt_meta
                 .contains_key(&PT_SMALL),
             "the leaf table's level was learned forward"
@@ -1013,8 +1013,7 @@ fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
     );
     with_gpu(&mut gpu, |g| {
         only_proc(g)
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PD_DUAL);
@@ -1031,12 +1030,11 @@ fn the_pass_drops_the_level_of_a_retired_page_so_its_next_write_is_deferred() {
     with_gpu(&mut gpu, |g| {
         let p = only_proc(g);
         assert!(
-            !p.vases[&(GPU, A_PDB)].pt_meta.contains_key(&PT_SMALL),
+            !p.vas_by_pdb(GPU, A_PDB).expect("the VAS exists").pt_meta.contains_key(&PT_SMALL),
             "the retired page is no longer a page table TO US"
         );
         // Its bytes are recycled and the guest writes something else there.
-        p.vases
-            .get_mut(&(GPU, A_PDB))
+        p.vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .pt_pages
             .insert(PT_SMALL);
@@ -1085,7 +1083,7 @@ fn the_pass_refuses_a_shadow_whose_root_is_not_the_address_spaces() {
         write_fabricated(&mut worker, &rec, vas, phys, &img);
     }
     with_gpu(&mut gpu, |g| {
-        let v = only_proc(g).vases.get_mut(&(GPU, A_PDB)).expect("the vas");
+        let v = only_proc(g).vas_by_pdb_mut(GPU, A_PDB).expect("the vas");
         for phys in [ROOT, PD_L1, PD_L2, PD_DUAL, PT_SMALL] {
             v.pt_pages.insert(phys);
         }
@@ -1111,7 +1109,7 @@ fn the_pass_refuses_a_shadow_whose_root_is_not_the_address_spaces() {
     assert_eq!((out.bound, out.unbound), (0, 0));
     with_gpu(&mut gpu, |g| {
         assert_eq!(
-            only_proc(g).vases[&(GPU, A_PDB)].table.iter().count(),
+            only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table.iter().count(),
             0,
             "nothing was believed"
         );

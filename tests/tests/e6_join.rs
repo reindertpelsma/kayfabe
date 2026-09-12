@@ -248,7 +248,7 @@ fn a_guests_ce_copy_reaches_the_backend_with_the_guests_own_operands() {
     assert_eq!(seen[0].by, CeExecutor::HostCe, "★ on a REAL engine");
 
     // ---- and in the ringing channel's own host VAS, which is #14's boundary
-    let host_vas = gpu.procs[&pid].vases[&(GPU, PDB0)]
+    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB0).expect("the VAS exists")
         .host_vas
         .expect("publishing materialized it");
     assert_eq!(
@@ -410,8 +410,7 @@ fn a_permanently_dead_isolate_is_REFUSED_and_does_not_park_forever() {
     gpu.procs
         .get_mut(&pid)
         .expect("live")
-        .vases
-        .get_mut(&(GPU, PDB0))
+        .vas_by_pdb_mut(GPU, PDB0)
         .expect("the compute VAS")
         .table
         .bind(

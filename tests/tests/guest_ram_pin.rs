@@ -112,7 +112,7 @@ fn device(
 fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, aperture: Aperture) {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             vas.table
                 .bind(
                     PDB,
@@ -263,7 +263,7 @@ fn a_second_pin_at_the_same_va_is_an_idempotent_replay_and_issues_no_verbs() {
 fn guest_binds_range(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa, len: u64) {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             vas.table
                 .bind(
                     PDB,

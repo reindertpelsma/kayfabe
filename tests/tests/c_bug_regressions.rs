@@ -370,7 +370,7 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
         "…and attributed from a DECLARED fact, not a discovered one"
     );
     assert!(
-        gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
             .pt_pages
             .contains(&root)
     );
@@ -395,7 +395,7 @@ fn cb13_pt_write_capture_is_direct_no_root_reachability_needed() {
     let out2 = parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring2).expect("push 2 parses");
     assert_eq!(out2.pt_writes.len(), 1);
     assert_eq!(
-        gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)].pt_pages.len(),
+        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists").pt_pages.len(),
         1,
         "one page, latched idempotently — the latch is an index, not a log"
     );
@@ -478,7 +478,7 @@ fn cbfuzz_ce_physical_dst_near_umax_is_a_loud_fault_never_a_panic() {
     // for the guest's `MAP_MEMORY_DMA` (§8.2.3). A second one would be the CE arm having
     // bound something out of a wrapping destination, which is the crash's own shape.
     assert_eq!(
-        gpu.procs[&pid].vases[&(GpuId::ZERO, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
             .table
             .iter()
             .map(|(va, _, _)| va)
@@ -680,8 +680,8 @@ fn cb14_second_proc_arrives_after_first_is_active_no_arming_window() {
         "both procs host-mapped AT the guest VA they named"
     );
     assert_ne!(
-        gpu.procs[&pid_a].vases[&(GpuId::ZERO, A_PDB)].host_vas,
-        gpu.procs[&pid_b].vases[&(GpuId::ZERO, B_PDB)].host_vas,
+        gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists").host_vas,
+        gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists").host_vas,
         "…in different host VASes — the late arrival got its OWN, not a share of A's"
     );
     let out_b =
@@ -889,8 +889,7 @@ fn cb14_host_vas_touch_alone_blocks_a_late_merge() {
         .procs
         .get_mut(&pid_b)
         .unwrap()
-        .vases
-        .get_mut(&(GpuId::ZERO, B_PDB))
+        .vas_by_pdb_mut(GpuId::ZERO, B_PDB)
         .unwrap();
     vas.host_vas = Some(kayfabe_isolate::HostHandle::new(
         // ★ N3 — proc B's own isolate, for the reason stated at the host-channel twin.

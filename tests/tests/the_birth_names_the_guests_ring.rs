@@ -291,7 +291,7 @@ fn guest_with_a_gr_channel_and_userd(
     };
     {
         let proc = gpu.procs.get_mut(&pid).expect("live");
-        let v = proc.vases.get_mut(&(GPU, PDB0)).expect("the VAS exists");
+        let v = proc.vas_by_pdb_mut(GPU, PDB0).expect("the VAS exists");
         v.table
             .bind(PDB0, RING_VA, LEAF_LEN, binding)
             .expect("the fixture's binding installs");

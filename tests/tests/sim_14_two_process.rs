@@ -175,7 +175,7 @@ fn t14_identical_va_disjoint_backing() {
     // ★ And the identity law holds over a full walk of both tables, not just the two
     // ranges this test happens to look at.
     for (pdb, pid) in [(A_PDB, pid_a), (B_PDB, pid_b)] {
-        gpu.procs[&pid].vases[&(GpuId::ZERO, pdb)]
+        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, pdb).expect("the VAS exists")
             .table
             .audit_identity(pdb)
             .expect("every host-backed binding is bound at its own host VA");

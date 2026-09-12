@@ -417,7 +417,7 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
 
     // ---- non-vacuity: before the guest binds anything, the operand MISSES.
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, CTX_VA),
         Err(AddressFault::Miss {
@@ -430,7 +430,7 @@ fn a_promoted_range_resolves_and_a_ce_copys_operands_are_found() {
     promote_ctx_buffer(&mut gpu);
 
     // ---- ACCEPTANCE (a): a guest VA that WAS bound resolves, at its own offset.
-    let table = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
+    let table = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
     assert_eq!(
         table
             .resolve(A_PDB, GpuVa(CTX_VA.0 + 0x1000))
@@ -531,7 +531,7 @@ fn the_ce_pt_write_source_can_witness_only_a_root_page_today() {
     );
     let leaf_va = leaf_va(fmt);
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, leaf_va),
         Err(AddressFault::Miss {
@@ -665,7 +665,7 @@ fn a_ce_write_into_a_learned_leaf_table_is_witnessed_and_binds_its_leaf() {
     // ---- E5's acceptance, literally: the guest VA that was bound RESOLVES.
     let leaf_va = leaf_va(fmt);
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, leaf_va)
             .map(|(b, off)| (b.phys(), off)),
@@ -691,7 +691,7 @@ fn a_va_that_was_never_bound_faults_at_every_place_the_law_is_enforced() {
 
     // (1) THE ADDRESS TABLE — `mode2_address_table.md`: the table IS the guest's TLB.
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, NEVER_BOUND),
         Err(AddressFault::Miss {
@@ -734,8 +734,7 @@ fn a_va_that_was_never_bound_faults_at_every_place_the_law_is_enforced() {
         gpu.procs
             .get_mut(&pid)
             .expect("live")
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .table
             .unbind(CTX_VA)
@@ -770,7 +769,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
     promote_ctx_buffer(&mut gpu);
 
     let before = {
-        let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
+        let t = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
         pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
@@ -789,8 +788,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
         gpu.procs
             .get_mut(&pid)
             .expect("live")
-            .vases
-            .get_mut(&(GPU, A_PDB))
+            .vas_by_pdb_mut(GPU, A_PDB)
             .expect("the vas")
             .table
             .unbind(CTX_VA)
@@ -807,7 +805,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
     .expect("publishes");
 
     let after = {
-        let t = &gpu.procs[&pid].vases[&(GPU, A_PDB)].table;
+        let t = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
         pc(Some(t), CTX_VA, true, GpuVa(0), true, 0x1000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
@@ -819,7 +817,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
         "★ published ⇒ representable ⇒ the real engine, pointed at the GUEST's number"
     );
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, CTX_VA)
             .map(|(b, _)| b.host_va()),
@@ -830,7 +828,7 @@ fn publishing_a_populated_range_makes_its_operand_host_representable_at_the_same
     // ★ The whole-table audit, not just this binding: a law with only an entry check is
     // one bulk-populate path away from being a law about nothing.
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .audit_identity(A_PDB),
         Ok(()),
@@ -919,14 +917,14 @@ fn a_range_bound_in_one_vas_does_not_resolve_in_another_on_the_same_proc() {
     promote_ctx_buffer(&mut gpu);
 
     assert!(
-        gpu.procs[&pid].vases[&(GPU, A_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
             .table
             .resolve(A_PDB, CTX_VA)
             .is_ok(),
         "the promotion landed in the address space its context object names"
     );
     assert_eq!(
-        gpu.procs[&pid].vases[&(GPU, B_PDB)]
+        gpu.procs[&pid].vas_by_pdb(GPU, B_PDB).expect("the VAS exists")
             .table
             .resolve(B_PDB, CTX_VA),
         Err(AddressFault::Miss {

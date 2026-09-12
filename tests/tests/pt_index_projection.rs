@@ -87,8 +87,7 @@ fn learn(gpu: &mut Gpu, pid: kayfabe_core::ProcId, pdb: Pdb, pages: &[u64]) {
         .procs
         .get_mut(&pid)
         .expect("live")
-        .vases
-        .get_mut(&(GPU, pdb))
+        .vas_by_pdb_mut(GPU, pdb)
         .expect("the vas");
     for &p in pages {
         vas.pt_meta.insert(p, pt_page(p));
@@ -268,8 +267,7 @@ fn the_projection_drops_pages_whose_metadata_is_gone() {
     gpu.procs
         .get_mut(&a)
         .expect("live")
-        .vases
-        .get_mut(&(GPU, A_PDB))
+        .vas_by_pdb_mut(GPU, A_PDB)
         .expect("the vas")
         .pt_meta
         .remove(&A_ONLY);

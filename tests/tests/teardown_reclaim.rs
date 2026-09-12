@@ -1214,7 +1214,7 @@ fn g6_a_long_lived_process_that_maps_and_unmaps_never_exhausts_its_arena() {
     // The host side balances too, to exactly ONE outstanding object: the `Vas`'s own
     // host VAS, which is allocated once and lives as long as the Vas does. Every one of
     // the 4096 backings and every one of their mappings is gone.
-    let host_vas = gpu.procs[&pid].vases[&(GPU, PDB)]
+    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB).expect("the VAS exists")
         .host_vas
         .expect("the Vas materialized its host VAS");
     let led = rec.lock().expect("recorder").ledger();

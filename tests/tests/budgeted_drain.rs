@@ -110,7 +110,7 @@ fn device() -> (
 fn guest_pins_pages(device: &SharedDevice, pid: kayfabe_core::ProcId) -> Vec<HostHandle> {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             for i in 0..PINS {
                 vas.table
                     .bind(

@@ -105,7 +105,7 @@ fn device() -> (
 fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) {
     device
         .with_proc_mut(pid, |p| {
-            let vas = p.vases.get_mut(&(GPU, PDB)).expect("the compute VAS");
+            let vas = p.vas_by_pdb_mut(GPU, PDB).expect("the compute VAS");
             vas.table
                 .bind(
                     PDB,
@@ -123,8 +123,7 @@ fn guest_binds(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) {
 fn tabled(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) -> Option<Binding> {
     device
         .with_proc_mut(pid, |p| {
-            p.vases
-                .get(&(GPU, PDB))
+            p.vas_by_pdb(GPU, PDB)
                 .expect("the compute VAS")
                 .table
                 .binding_at(va)
@@ -192,8 +191,7 @@ fn revoke(device: &SharedDevice, pid: kayfabe_core::ProcId, va: GpuVa) {
     let h = backing_at(device, pid, va).expect("the row is backed");
     device
         .with_proc_mut(pid, |p| {
-            p.vases
-                .get_mut(&(GPU, PDB))
+            p.vas_by_pdb_mut(GPU, PDB)
                 .expect("the compute VAS")
                 .table
                 .unbind(va);

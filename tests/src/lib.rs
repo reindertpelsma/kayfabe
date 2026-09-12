@@ -1027,8 +1027,8 @@ pub fn bind_ring_at(
 ) {
     let proc = gpu.procs.get_mut(&pid).expect("the proc is live");
     let chan = proc.channels.get(&cid).expect("the channel exists");
-    let key = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
-    let vas = proc.vases.get_mut(&key).expect("the VAS exists");
+    let (cgpu, cpdb) = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
+    let vas = proc.vas_by_pdb_mut(cgpu, cpdb).expect("the VAS exists");
     bind_ring_in(vas, va, gpa, len);
 }
 
@@ -1042,7 +1042,10 @@ pub fn bind_ring_in(vas: &mut kayfabe_core::gpu::Vas, va: GpuVa, gpa: u64, len: 
         "an identity ring binding cannot distinguish a translated read from an \
          untranslated one — use `pb_va(gpa)`"
     );
-    let pdb = vas.pdb;
+    // ⊘ w555 — a fixture binds into a space it has just declared, so the base is present.
+    // `expect` rather than a default: a rootless space here would mean the fixture never
+    // declared one, and binding under `Pdb(0)` would silently reintroduce the merge.
+    let pdb = vas.pdb.expect("the fixture's VAS declares a page-directory base");
     if let Some((start, l, b)) = vas.table.binding_at(va)
         && start == va.0
         && l == len
@@ -1126,8 +1129,8 @@ pub fn bind_ring_dev(
     let binds = ring_bindings(ring);
     dev.with_proc_mut(pid, |proc| {
         let chan = proc.channels.get(&cid).expect("the channel exists");
-        let key = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
-        let vas = proc.vases.get_mut(&key).expect("the VAS exists");
+        let (cgpu, cpdb) = (chan.gpu, chan.vas_pdb.expect("the channel declares a VAS"));
+        let vas = proc.vas_by_pdb_mut(cgpu, cpdb).expect("the VAS exists");
         for (va, gpa, len) in binds {
             bind_ring_in(vas, va, gpa, len);
         }
@@ -1313,7 +1316,10 @@ fn ring_binding_in(
         return (start, len, b.phys());
     }
     let gpa = ring_gpa_for(vchid);
-    let pdb = vas.pdb;
+    // ⊘ w555 — a fixture binds into a space it has just declared, so the base is present.
+    // `expect` rather than a default: a rootless space here would mean the fixture never
+    // declared one, and binding under `Pdb(0)` would silently reintroduce the merge.
+    let pdb = vas.pdb.expect("the fixture's VAS declares a page-directory base");
     vas.table
         .bind(
             pdb,
@@ -1420,8 +1426,7 @@ pub fn birth_passthrough_channels(gpu: &mut kayfabe_core::gpu::Gpu) -> BornChann
         let ring_va = ring_declared_by(gpu.spine.rmgraph.node_of_resource(u.key), u.pid, u.cid);
         let proc = gpu.procs.get_mut(&u.pid).expect("the proc is live");
         let vas = proc
-            .vases
-            .get_mut(&(u.gpu, pdb))
+            .vas_by_pdb_mut(u.gpu, pdb)
             .expect("the channel's VAS exists");
         let (start, len, gpa) = ring_binding_in(vas, ring_va, u.vchid);
         expect_pinned(
@@ -1492,8 +1497,7 @@ pub fn pin_passthrough_rings_dev(
         let (start, len, gpa) = dev
             .with_proc_mut(u.pid, |p| {
                 let vas = p
-                    .vases
-                    .get_mut(&(u.gpu, pdb))
+                    .vas_by_pdb_mut(u.gpu, pdb)
                     .expect("the channel's VAS exists");
                 ring_binding_in(vas, ring_va, u.vchid)
             })

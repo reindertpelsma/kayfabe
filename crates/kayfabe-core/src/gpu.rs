@@ -158,12 +158,37 @@ impl From<GpaError> for GpuError {
 /// address spaces and cannot collide. Address ops key HERE, never on [`Proc`].
 pub struct Vas {
     /// ★ MG-4: the GPU target this VAS lives on (graph-derived from its `Device`
-    /// ancestor, never guessed). `Pdb` is a per-GPU namespace, so a `Vas` is keyed by
-    /// `(GpuId, Pdb)` in [`Proc::vases`] and this tag disambiguates identical PDBs on
-    /// different GPUs.
+    /// ancestor, never guessed). A `Vas` is keyed by `(GpuId, ResourceKey)` in
+    /// [`Proc::vases`] and this tag disambiguates the same RM object on different GPUs.
     pub gpu: GpuId,
-    /// The hardware identity (the GPU's CR3), unique only WITHIN [`Self::gpu`].
-    pub pdb: Pdb,
+    /// ★★★★★ **THE PAGE-DIRECTORY BASE, AS AN ATTRIBUTE — never as the identity.**
+    ///
+    /// Owner, 2026-09-12: *"Why would you key on base, I think on rm object/channel is
+    /// correct? Multiple entry tables can exist right against multiple bases?"* — and both
+    /// halves of that are measured facts about this tree.
+    ///
+    /// # ⊘⊘ What keying on the base cost, in BOTH directions
+    ///
+    /// **Many spaces collapsed into one.** `[measured w554, bench boot, the raw client
+    /// PASSING]` the guest published geometry for **12** VA spaces and exactly **one**
+    /// `SET_PAGE_DIRECTORY` reached us. The rooted space learned **286** rows; everything
+    /// else shared a single bucket holding **25**. Two address spaces sharing a row table is
+    /// not merely incomplete — a VA bound in one can resolve to a row from the other, with
+    /// no fault and no counter.
+    ///
+    /// **One space split into many.** Re-binding is protocol-legal — `rmgraph`'s own
+    /// `SetPageDir` arm says so in as many words, *"UNSET/SET_PAGE_DIRECTORY; last
+    /// declaration wins"* — and under a base-keyed map the rebind lands on a NEW key, so
+    /// every row learned under the old base is orphaned while the space looks healthy.
+    ///
+    /// ⊘ And the base is not even singular: `SetPageDir` carries `numEntries` (`[measured
+    /// w554]` **4** on this guest's own declaration), which this tree decodes and then
+    /// discards. A single `Pdb` cannot represent four entries.
+    ///
+    /// ⇒ `None` until a declaration arrives, and a space is nameable, routable and
+    /// populatable before then. ⚠ It still cannot be SWEPT without one — a sweep starts at
+    /// the root — so `None` here is a real limit, just no longer a merge.
+    pub pdb: Option<Pdb>,
     /// The VASpace origin node in the RM graph.
     pub origin: ResourceKey,
     /// The forward-populated VA→backing table (MISS=FAULT).
@@ -519,7 +544,7 @@ pub struct GuestRamPin {
 }
 
 impl Vas {
-    fn new(gpu: GpuId, pdb: Pdb, origin: ResourceKey) -> Self {
+    fn new(gpu: GpuId, pdb: Option<Pdb>, origin: ResourceKey) -> Self {
         Vas {
             gpu,
             pdb,
@@ -529,20 +554,47 @@ impl Vas {
             // the wrong `Vas` is refused by name at both entrances instead of answering
             // confidently and wrongly. ⊘ `AddressTable::new()` here would be the silent
             // no-op, and `tests/tests/operand_join_is_per_vas.rs` asserts this call site.
-            table: AddressTable::owned_by(pdb),
+            // ⊘ An UNCLAIMED table when the root is not known yet. `AddressTable::owns`
+            // answers `Ok(())` for every pdb on an unclaimed table, so the per-VAS identity
+            // check is vacuous until [`Vas::learn_root`] claims it — and that is sound only
+            // because the MAP KEY now carries the identity. Under the old `(GpuId, Pdb)` key
+            // it would not have been: eleven spaces shared one key AND one table.
+            table: match pdb {
+                Some(p) => AddressTable::owned_by(p),
+                None => AddressTable::new(),
+            },
             host_vas: None,
             pt_pages: BTreeSet::new(),
             pt_meta: BTreeMap::new(),
             // Level 0 is a DECLARED fact: a PDB *is* its own root page. The shadow is
             // rooted here and nowhere else, which is what `ReachShadow::audit_root`
             // checks at every commit.
-            reach: kayfabe_mmu::reach::ReachShadow::new(pdb.0 & !0xfff),
+            reach: kayfabe_mmu::reach::ReachShadow::new(
+                pdb.map_or(0, |p| p.0 & !0xfff),
+            ),
             blocks: BTreeMap::new(),
             guest_ram_pins: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
             promote_halves: BTreeMap::new(),
             sweep: PtSweepState::default(),
+        }
+    }
+
+    /// ★★★★★ **The root arrived after the space did** — claim the table and re-root the
+    /// reachability shadow.
+    ///
+    /// ⊘ Idempotent, and it never re-roots to the SAME value: `ReachShadow::new` discards
+    /// the shadow's contents, so doing that on every graph re-derivation would throw away
+    /// the reach audit's state on a space whose root had not moved at all.
+    fn learn_root(&mut self, pdb: Option<Pdb>) {
+        if self.pdb == pdb {
+            return;
+        }
+        self.pdb = pdb;
+        if let Some(p) = pdb {
+            self.table.claim(p);
+            self.reach = kayfabe_mmu::reach::ReachShadow::new(p.0 & !0xfff);
         }
     }
 }
@@ -1633,7 +1685,13 @@ pub struct Proc {
     /// holds several (several VASpaces, and — spanning GPUs — per target); address ops
     /// key on `(GpuId, Pdb)` because a `Pdb` is a per-GPU namespace (two GPUs legally
     /// present identical PDB values).
-    pub vases: BTreeMap<(GpuId, Pdb), Vas>,
+    /// ★★★★★ **KEYED BY THE RM OBJECT, NOT BY THE PAGE-DIRECTORY BASE** — see
+    /// [`Vas::pdb`] for the two opposite failures the old key produced, both measured.
+    ///
+    /// ⊘ The builder already had this key: `GpuGraph::vases` is a map over `ResourceKey`
+    /// and the identity was discarded only here, at the last step, when materializing the
+    /// runtime map. Nothing new had to be learned to fix it.
+    pub vases: BTreeMap<(GpuId, ResourceKey), Vas>,
     /// The exec plane's channels.
     pub channels: BTreeMap<ChanId, Channel>,
     /// Channel node → slot (stable across graph re-derivations).
@@ -2129,6 +2187,81 @@ impl Proc {
                 .vases
                 .values()
                 .all(|v| v.host_vas.is_none() && v.table.iter().all(|(_, _, b)| b.host().is_none()))
+    }
+}
+
+/// ★★★★★ **[`Proc::vas_by_pdb`] over a map that has already been destructured out of its
+/// `Proc`** — the same two refusals, for the call sites that split `Proc`'s fields to borrow
+/// two of them at once.
+#[must_use]
+pub fn vas_by_pdb_in(
+    vases: &BTreeMap<(GpuId, ResourceKey), Vas>,
+    gpu: GpuId,
+    pdb: Pdb,
+) -> Option<&Vas> {
+    let mut it = vases.values().filter(|v| v.gpu == gpu && v.pdb == Some(pdb));
+    let first = it.next()?;
+    if it.next().is_some() {
+        return None;
+    }
+    Some(first)
+}
+
+/// [`vas_by_pdb_in`]'s mutable twin.
+pub fn vas_by_pdb_in_mut(
+    vases: &mut BTreeMap<(GpuId, ResourceKey), Vas>,
+    gpu: GpuId,
+    pdb: Pdb,
+) -> Option<&mut Vas> {
+    let keys: Vec<(GpuId, ResourceKey)> = vases
+        .iter()
+        .filter(|(_, v)| v.gpu == gpu && v.pdb == Some(pdb))
+        .map(|(k, _)| *k)
+        .collect();
+    match keys.as_slice() {
+        [k] => vases.get_mut(k),
+        _ => None,
+    }
+}
+
+impl Proc {
+    /// ★★★★★ **Find the VA space whose declared page-directory base is `pdb`.**
+    ///
+    /// ⊘ A compatibility entrance, and it is deliberately NOT total. Since w555 a `Vas` is
+    /// identified by its RM object; the base is an attribute that may be absent, so a caller
+    /// holding only a base can reach the spaces that declared one and no others. A rootless
+    /// space answering `None` here is the truth — there is nothing to match it against — and
+    /// it is a far better answer than the one the old `(GpuId, Pdb)` key gave, which was to
+    /// hand back a table shared with every other rootless space.
+    ///
+    /// ⚠ Ambiguity answers `None` too. Two live spaces reporting the same base is a fact
+    /// about the guest, and choosing between them is exactly the silent cross-space resolve
+    /// this rekeying exists to remove.
+    #[must_use]
+    pub fn vas_by_pdb(&self, gpu: GpuId, pdb: Pdb) -> Option<&Vas> {
+        let mut it = self
+            .vases
+            .values()
+            .filter(|v| v.gpu == gpu && v.pdb == Some(pdb));
+        let first = it.next()?;
+        if it.next().is_some() {
+            return None;
+        }
+        Some(first)
+    }
+
+    /// [`Proc::vas_by_pdb`]'s mutable twin, with the same two refusals.
+    pub fn vas_by_pdb_mut(&mut self, gpu: GpuId, pdb: Pdb) -> Option<&mut Vas> {
+        let keys: Vec<(GpuId, ResourceKey)> = self
+            .vases
+            .iter()
+            .filter(|(_, v)| v.gpu == gpu && v.pdb == Some(pdb))
+            .map(|(k, _)| *k)
+            .collect();
+        match keys.as_slice() {
+            [k] => self.vases.get_mut(k),
+            _ => None,
+        }
     }
 }
 
@@ -3494,7 +3627,14 @@ impl Spine {
         use kayfabe_arch::Aperture;
         use kayfabe_mmu::Binding;
 
-        for (&(gpu, pdb), vas) in proc.vases.iter_mut() {
+        for (&(gpu, _origin), vas) in proc.vases.iter_mut() {
+            // ⊘ The space's OWN base, read off the space. A space with none binds nothing
+            // from this feed and is skipped by name — the feed is keyed by page-directory
+            // base, so there is nothing here to match it against. ⚠ That is a real gap and
+            // not a tidy-up: it is the same gap `Vas::pdb` documents.
+            let Some(pdb) = vas.pdb else {
+                continue;
+            };
             // Unbind stale RPC bindings (mapping gone), leaving host-backed
             // publish_backing entries (`Binding::host = Some`) alone.
             let stale: Vec<u64> = vas
@@ -3553,16 +3693,29 @@ impl Spine {
         // runtime `Vas`es. ★ DEFER (not yet knowable): an unroutable one materializes
         // nothing and is re-evaluated on the next apply; its USE takes a named
         // `FwdFault::UnknownPdb`, which is where MISS=FAULT bites.
-        let live_keys: BTreeSet<(GpuId, Pdb)> = b
+        // ★★★★★ **A VA SPACE MATERIALIZES ON ITS GPU, NOT ON ITS ROOT.**
+        //
+        // ⊘⊘ This filter used to read `Some((f.gpu?, f.pdb?))`, so a space whose
+        // `SET_PAGE_DIRECTORY` had not arrived materialized NOTHING — and `[measured w554]`
+        // that is eleven of twelve spaces in a passing boot. They did not vanish quietly:
+        // their channels' operands resolved against whatever shared bucket existed, missed,
+        // and the host's copy engine faulted `FAULT_PDE` on the address.
+        //
+        // ★ A root is what lets us SWEEP a space. It is not what lets us NAME one, and
+        // conflating the two is what discarded eleven of them.
+        let live_keys: BTreeSet<(GpuId, ResourceKey)> = b
             .vases
-            .values()
-            .filter_map(|f| Some((f.gpu?, f.pdb?)))
+            .iter()
+            .filter_map(|(origin, f)| Some((f.gpu?, *origin)))
             .collect();
         for (&origin, facts) in &b.vases {
-            if let (Some(gpu), Some(pdb)) = (facts.gpu, facts.pdb) {
+            if let Some(gpu) = facts.gpu {
                 p.vases
-                    .entry((gpu, pdb))
-                    .or_insert_with(|| Vas::new(gpu, pdb, origin));
+                    .entry((gpu, origin))
+                    .or_insert_with(|| Vas::new(gpu, facts.pdb, origin))
+                    // ★ A rebind updates the ATTRIBUTE in place. Under the old key it
+                    // created a second space and orphaned every row the first had learned.
+                    .learn_root(facts.pdb);
             }
         }
         // ★★ T0/G2 — FILL BEFORE YOU DROP (`l1_os_shell.md` §7.6 T0).
@@ -3678,16 +3831,16 @@ impl Spine {
     /// [`GpaArena::free`] ([`crate::gpa::ForeignBlock`], keyed on [`crate::gpa::ArenaId`]'s
     /// generation) and stays out of circulation, which is the safe direction: a stale
     /// range re-entering a live free list is the #14 collision class.
-    fn stage_dropped_vases(p: &mut Proc, live: &BTreeSet<(GpuId, Pdb)>) -> PinReclaim {
+    fn stage_dropped_vases(p: &mut Proc, live: &BTreeSet<(GpuId, ResourceKey)>) -> PinReclaim {
         let mut tally = PinReclaim::default();
-        let doomed: Vec<(GpuId, Pdb)> = p
+        let doomed: Vec<(GpuId, ResourceKey)> = p
             .vases
             .keys()
             .filter(|k| !live.contains(k))
             .copied()
             .collect();
         for key in doomed {
-            let (gpu, _pdb) = key;
+            let (gpu, _origin) = key;
             let mut vas = p.vases.remove(&key).expect("just enumerated");
             let host_vas = vas.host_vas;
             let q = p.pending_release.entry(gpu).or_default();
@@ -4535,7 +4688,14 @@ impl Spine {
         let mut learned: Vec<((GpuId, u64), (ProcId, Pdb))> = Vec::new();
         {
             let mut project = |pid: ProcId, p: &Proc, by_pdb: &BTreeMap<(GpuId, Pdb), ProcId>| {
-                for (&(gpu, pdb), vas) in &p.vases {
+                for (&(gpu, _origin), vas) in &p.vases {
+                    // ⊘ This projection is keyed by page-directory base on BOTH sides — the
+                    // `by_pdb` ownership map and the `learned` claims it feeds. A space with
+                    // no declared base contributes no claim, which is the honest answer: its
+                    // page-table pages cannot be attributed to a root nobody declared.
+                    let Some(pdb) = vas.pdb else {
+                        continue;
+                    };
                     if by_pdb.get(&(gpu, pdb)) != Some(&pid) {
                         continue;
                     }

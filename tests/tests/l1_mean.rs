@@ -112,7 +112,7 @@ use kayfabe_arch::GspReg;
 use kayfabe_arch::ids::{GpuId, GpuVa, HClient, HObject, Pdb, VChid};
 use kayfabe_completion::OsEventRef;
 use kayfabe_core::gpa::GpaSpace;
-use kayfabe_core::gpu::{Gpu, GpuError};
+use kayfabe_core::gpu::{Gpu, GpuError, vas_by_pdb_in};
 use kayfabe_core::project::{NO_CONDEMNED, project};
 use kayfabe_core::reactor::SourceKind;
 use kayfabe_core::rmgraph::ClientKey;
@@ -1852,7 +1852,7 @@ fn sweep_conservation(gpu: &mut Gpu, pids: &[ProcId], recycled: (ProcId, ProcId)
     let mut owner_of: BTreeMap<u64, ProcId> = BTreeMap::new();
     for (&pid, p) in &gpu.procs {
         let lane = pid.0 + 1;
-        for (&(g, _pdb), vas) in &p.vases {
+        for (&(g, _origin), vas) in &p.vases {
             if let Some(h) = vas.host_vas {
                 assert_eq!(
                     handle_lane(h.raw()),
@@ -3199,7 +3199,7 @@ fn a_fresh_client_recovers_from_its_condemned_predecessor() {
         (pid.0 + 1, GPU1.0),
         "★ the recovered component rang a host token minted in its OWN isolate lane"
     );
-    let published = gpu.procs[&pid].vases[&(GPU1, R_PDB)]
+    let published = gpu.procs[&pid].vas_by_pdb(GPU1, R_PDB).expect("the VAS exists")
         .table
         .resolve(R_PDB, GpuVa(VA_CTL))
         .expect("the recovered publication resolves")
@@ -5144,11 +5144,14 @@ fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
         "★★ the successor's own address plane was never materialized"
     );
     let vases = &gpu.procs[&owner].vases;
+    // ⊘ w555 — asserted over the BASES the two spaces REPORT, not over the map's keys.
+    // The keys are RM objects now, so a key comparison would pass even if the two spaces
+    // had collapsed onto one base — which is the collapse this assertion exists to catch.
     assert_eq!(
         vases
-            .keys()
-            .filter(|(g, _)| *g == GPU0)
-            .copied()
+            .values()
+            .filter(|v| v.gpu == GPU0)
+            .filter_map(|v| Some((v.gpu, v.pdb?)))
             .collect::<BTreeSet<_>>(),
         BTreeSet::from([(GPU0, RECYC_OBJ_PDB1), (GPU0, RECYC_OBJ_PDB2)]),
         "★★ two live VASpace resources ⇒ two runtime `Vas`es; a collapse leaves one"
@@ -5156,8 +5159,8 @@ fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
     // The two `Vas`es are DIFFERENT resources, not one resource reported twice — the
     // whole point of the identity. Their origin HANDLE is deliberately identical.
     let (g1, g2) = (
-        vases[&(GPU0, RECYC_OBJ_PDB1)].origin,
-        vases[&(GPU0, RECYC_OBJ_PDB2)].origin,
+        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB1).expect("the VAS exists").origin,
+        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB2).expect("the VAS exists").origin,
     );
     assert_eq!(
         g1.origin, g2.origin,
@@ -6433,7 +6436,10 @@ fn dma_mean_run(mode: LockMode) -> DmaMeanReport {
     let pt_of = |i: usize| {
         device
             .with_proc(pids[i], |p| {
-                p.vases[&(gpu_of(i), lane_of(i).pdb)].pt_pages.len()
+                p.vas_by_pdb(gpu_of(i), lane_of(i).pdb)
+                    .expect("the lane's VAS")
+                    .pt_pages
+                    .len()
             })
             .expect("a live DMA proc")
     };
@@ -6928,7 +6934,7 @@ fn gpa_sweep(dev: &SharedDevice, ram: &GuestRamMap, mode: LockMode) -> (usize, u
                     fragmented += 1;
                 }
             }
-            for (&(g, _pdb), vas) in &p.vases {
+            for (&(g, _origin), vas) in &p.vases {
                 let arena = p
                     .arenas
                     .get(&g)
