@@ -255,8 +255,21 @@ UD
     return 5
   fi
   say "B2: guest apt mirror = $GUEST_MIRROR"
-  $GS "sudo sed -i -E 's|http://[A-Za-z0-9.-]+/ubuntu|http://$GUEST_MIRROR|g' \
-         /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null; true"
+  # ⊘⊘ **REWRITE THE WHOLE `URIs:` LINE, DO NOT PATTERN-MATCH A URL INSIDE IT.**
+  #
+  # The guest disk PERSISTS between provisioning runs, so a run that writes a bad mirror leaves
+  # it there for the next one. `[measured w537b]` the first fix's `2>&1` bug wrote a whole log
+  # line into the file — `URIs: http://guest mirror mirrors.edge.kernel.org/ubuntu -> 603070
+  # B/s` — and the follow-up's URL regex could not match it (spaces), so apt stayed broken with
+  # `Malformed entry 1 … (URI parse)` and the symptom survived TWO fixes.
+  #
+  # ⇒ This must be **idempotent and self-repairing**: whatever the line says, it ends up
+  # correct. ⚠ Security stanzas are left alone — they point at `security.ubuntu.com`, which is
+  # not a mirror of the archive and must not be rewritten to one.
+  $GS "sudo sed -i -E '/security/! s|^URIs:.*|URIs: http://$GUEST_MIRROR|' \
+         /etc/apt/sources.list.d/*.sources 2>/dev/null; \
+       sudo sed -i -E '/security/! s|^deb([[:space:]]+\\[[^]]*\\])?[[:space:]]+\\S+|deb\\1 http://$GUEST_MIRROR|' \
+         /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null; true"
   say "B2: installing guest driver (kernel-open)"
   $GSL "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
   # ⚠ assert the COMPILER before spending five minutes finding out it is missing. `cc` absent
