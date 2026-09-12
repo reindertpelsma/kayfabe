@@ -205,6 +205,39 @@ pub enum CpuIntrReg {
 /// it would be inventing a register block. It falls through to the plane's ordinary
 /// unclaimed arm, which counts it and names it.
 #[must_use]
+/// ★★★★★ **Every offset in this block whose value the guest may read without trapping.**
+///
+/// ⊘ `LEAF_TRIGGER` IS included, and the reasoning that first excluded it was wrong in an
+/// expensive way. [`CpuIntrState::read`] answers it `0` unconditionally, so a shadow byte of
+/// zero is not a default — it is the value. ⚠ And it sits at `0xB81640`, on the SAME page as
+/// the leaves: leaving it out on the argument that its read might one day mean something would
+/// keep that entire page trapping, to guard a change that the byte-for-byte shadow test in
+/// `bar0_backable_pages` would catch on the commit that made it.
+///
+/// ⊘ Derived from the SAME bases and counts `decode` uses, not a second list: a shadow that
+/// enumerated these independently could publish an offset `decode` does not claim, and the two
+/// would drift with nothing to catch it.
+#[must_use]
+pub fn shadowable_regs() -> impl Iterator<Item = (u64, CpuIntrReg)> {
+    let leaves = (0..N_LEAF).flat_map(|i| {
+        let o = (i as u64) * 4;
+        [
+            (LEAF0 + o, CpuIntrReg::Leaf(i)),
+            (LEAF_EN_SET0 + o, CpuIntrReg::LeafEnSet(i)),
+            (LEAF_EN_CLEAR0 + o, CpuIntrReg::LeafEnClear(i)),
+        ]
+    });
+    let tops = (0..N_TOP).flat_map(|i| {
+        let o = (i as u64) * 4;
+        [
+            (TOP0 + o, CpuIntrReg::Top(i)),
+            (TOP_EN_SET0 + o, CpuIntrReg::TopEnSet(i)),
+            (TOP_EN_CLEAR0 + o, CpuIntrReg::TopEnClear(i)),
+        ]
+    });
+    leaves.chain(tops).chain([(LEAF_TRIGGER, CpuIntrReg::LeafTrigger)])
+}
+
 pub fn decode(off: u64) -> Option<CpuIntrReg> {
     // ⚠ `LEAF_TRIGGER` is tested FIRST. It is `0xB81640`, and `TOP_EN_CLEAR0` is
     // `0xB81610`; a range test written as `off >= TOP_EN_CLEAR0 && off < TOP_EN_CLEAR0 +

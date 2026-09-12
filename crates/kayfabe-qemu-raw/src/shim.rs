@@ -5441,7 +5441,21 @@ fn doorbell_publish_loop(
             if let Some(plane) = plane_ref.as_ref() {
                 plane.drain_mirror_revalidation();
             }
-            if let Some(plane) = plane_ref
+            // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
+            // BOTH outcomes.
+            //
+            // ⊘⊘ The guest spin-polls this register, so the shadow is not a convenience — it
+            // IS what the guest is watching. Publishing only on the write that sets TRIGGER
+            // would publish *"pending"* and never *"done"*: the guest would watch a page that
+            // had stopped changing, which is strictly worse than trapping, because a trap at
+            // least asks us.
+            //
+            // ★ On BOTH outcomes deliberately. A WITHHELD completion left the trigger
+            // pending, and publishing that pending value is still the truth — it is what the
+            // read arm would answer at this instant. Publishing only on success would leave
+            // the shadow holding whatever it had before, which is the one thing that is not
+            // an answer.
+            if let Some(plane) = plane_ref.as_ref()
                 && !plane
                     .mmu_inval()
                     .complete_through(seq, plane.clock_now_us())
@@ -5453,6 +5467,9 @@ fn doorbell_publish_loop(
                      behind this one)",
                     plane.mmu_inval().issued()
                 );
+            }
+            if let Some(plane) = plane_ref.as_ref() {
+                plane.publish_invalidate_trigger();
             }
             // ★★★★★ **AND NOW THE GUEST MAY PROCEED.** The rows this command bound are on
             // the host, so post the reply that was held for them.
@@ -16174,6 +16191,8 @@ impl Regs {
             gsp_reads,
             gsp_writes,
             unclaimed_reads,
+            // ⊘ Same reason as the field below: the plane prints it on its own census line.
+            shadow_writes: _,
             // ⊘ Read where it is produced. This wire struct is the C ABI's audit and adding a
             // field to it is a version skew; the plane prints this one on its own census line.
             unclaimed_reads_in_dead_pages: _,

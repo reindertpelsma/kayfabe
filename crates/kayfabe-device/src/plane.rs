@@ -298,6 +298,10 @@ pub struct Counters {
     /// ★ Reads no source claimed, answered with a defaulted zero. See the module docs for
     /// why this is a counter and not a refusal.
     pub unclaimed_reads: u64,
+    /// ★ w564 — register values written through to the guest's read shadow. ⚠ ZERO with a
+    /// sink installed means every shadowed page is answering its REALIZE-TIME bytes and
+    /// nothing has updated since; that is correct only if nothing changed.
+    pub shadow_writes: u64,
     /// ★★★★★ w554 — unclaimed reads that landed in a page the aperture cut backs with
     /// read-only memory, i.e. reads the cut SHOULD have removed.
     ///
@@ -1142,6 +1146,24 @@ pub struct WindowPageResolution {
     pub backing: FbPageBacking,
 }
 
+/// ★★★★★ **WHERE A SHADOWED REGISTER'S BYTES LIVE** — the hypervisor's memory, written
+/// through by [`RegPlane::shadow_write`] and read by the guest with no VM exit.
+///
+/// ⊘ A trait rather than a buffer this crate owns, because the memory is the shell's: it is
+/// the backing of a region the guest has mapped, and a copy here would be a second home for
+/// the same bytes with nothing keeping them equal.
+///
+/// ⚠ Implementations must be safe to call from a vCPU thread inside an MMIO exit: no blocking,
+/// no allocation, no ranked lock.
+pub trait ReadShadowPort: Send + Sync + core::fmt::Debug {
+    /// Place `bytes` at `off` in the register aperture's shadow.
+    ///
+    /// ⊘ Total: an offset the shadow does not cover is DROPPED, not refused. The shadow's
+    /// coverage is decided by the cut, and a producer has no business knowing which pages were
+    /// published — but a dropped byte must never be reported as written.
+    fn write(&self, off: u64, bytes: &[u8]);
+}
+
 /// ★★★ The register plane: the routing stage Q4 adds.
 pub struct RegPlane {
     chip: &'static ChipProfile,
@@ -1153,6 +1175,10 @@ pub struct RegPlane {
     /// serviced. [`NanoClock`] takes `&self` so it needs no lock of ours.
     clock: Box<dyn NanoClock>,
     state: RankedMutex<PlaneState>,
+    /// ★★★★★ w564 — where a producer's new register value goes so the guest reads it without
+    /// trapping. `None` is the shipping default and means *"publish nothing"*, never *"publish
+    /// something stale"*. See [`RegPlane::shadow_write`].
+    read_shadow: std::sync::RwLock<Option<std::sync::Arc<dyn ReadShadowPort>>>,
     /// ★ w554 — one bit per aperture page, set when the cut backs that page with memory.
     /// Built on first use from [`RegPlane::bar0_backable_runs`]; see [`RegPlane::dead_page`].
     dead_pages: std::sync::OnceLock<Box<[u64]>>,
@@ -1328,6 +1354,8 @@ struct PlaneCounters {
     gsp_reads: AtomicU64,
     gsp_writes: AtomicU64,
     unclaimed_reads: AtomicU64,
+    /// ★ w564 — how many register values were written through to the read shadow.
+    shadow_writes: AtomicU64,
     /// ★ w554 — of those, the ones inside a page the cut backs with memory. See the read
     /// arm for why this is a separate number and not a fraction of the one above.
     unclaimed_reads_in_dead_pages: AtomicU64,
@@ -1815,6 +1843,12 @@ impl RegPlane {
                 self.bar0_dword_is_dead(off)
                     || self.chip.boot_regs.iter().any(|r| r.off == off)
                     || self.chip.rom_window.contains(off)
+                    // ★★★★★ w564 — the producer-updated arms, now that `shadow_write` keeps
+                    // them current. `[measured w561]` none of these has a read side effect;
+                    // each is a pure read of state this device owns.
+                    || crate::cpuintr::decode(off).is_some()
+                    || self.invalidate_regs().is_some_and(|r| r.trigger == off)
+                    || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
             });
             if !shadowable {
                 continue;
@@ -1892,6 +1926,28 @@ impl RegPlane {
                     .and_then(|i| self.rom.get(i))
                     .copied()
                     .unwrap_or(0);
+                filled += 1;
+            } else if let Some(reg) = crate::cpuintr::decode(at & !3) {
+                // ★ w564 — the interrupt tree, read under its own leaf-rank lock. Every offset
+                // `shadowable_regs` publishes must fill here, or the piece is refused.
+                let v = self.cpu_intr.lock().read(reg);
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self
+                .invalidate_regs()
+                .is_some_and(|r| r.trigger == (at & !3))
+            {
+                // ★ w564 — one atomic load; see `read_inner`'s eighth arm for why this read
+                // means something and why answering it is safe.
+                let v = self.mmu_inval.read_trigger();
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self.chip.bar0_window_reg != 0 && (at & !3) == self.chip.bar0_window_reg {
+                let v = u64::from(self.state.lock().bar0_window.raw());
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((v >> shift) & 0xff) as u8;
                 filled += 1;
             } else if self.bar0_dword_is_dead(at & !3) {
                 // ⊘ `ReadOutcome::Unclaimed => 0` is the answer this device already gives,
@@ -2053,6 +2109,7 @@ impl RegPlane {
         // the fix.
         census.set_probe_arm(probe_arm);
         Ok(RegPlane {
+            read_shadow: std::sync::RwLock::new(None),
             dead_pages: std::sync::OnceLock::new(),
             chip,
             model,
@@ -2153,6 +2210,46 @@ impl RegPlane {
     /// ★ Takes `&self` and the plane's lock, like [`RegPlane::set_ram`], so a plane already
     /// answering registers acquires memory without being rebuilt and without an interval in
     /// which it answers something else.
+    /// ★★★★★ **INSTALL THE READ SHADOW'S SINK** — where a producer's new register value goes
+    /// so the guest can read it without leaving the vCPU.
+    ///
+    /// ⊘ A port rather than a buffer this crate owns, for `FbMirrorPort`'s reason: the memory
+    /// the guest reads is the hypervisor's, created and placed by the shell, and a copy here
+    /// would be a second home for the same bytes with nothing to keep them equal.
+    ///
+    /// ⚠ Absent is the shipping default and must stay correct: with no sink every shadowable
+    /// page is simply not published, so the guest traps and is served exactly as before.
+    /// A missing sink may never become a silently stale page.
+    pub fn set_read_shadow(&self, port: std::sync::Arc<dyn ReadShadowPort>) {
+        *self.read_shadow.write().unwrap_or_else(|e| e.into_inner()) = Some(port);
+    }
+
+    /// ★★★★★ **THE ONE WAY A REGISTER'S VALUE REACHES THE GUEST'S SHADOW.**
+    ///
+    /// # Why there is exactly one of these
+    ///
+    /// `the_bar0_read_surface.md` §5: a shadowed register has TWO homes — the state it is
+    /// computed from, and the shadow's bytes. A producer that updates one and not the other
+    /// makes the guest read a stale value **with no fault and no counter**, which is the
+    /// failure class this tree is written against.
+    ///
+    /// ⇒ Producers do not write the shadow. They call this, and this is the only caller of the
+    /// port. A second write path would be a second thing to remember, and the reviewer who has
+    /// to notice it is the weakest link.
+    ///
+    /// ⊘ Cheap when unarmed: one `RwLock` read that finds `None` and returns. It is called
+    /// from register writes, which are already the trapping path.
+    pub fn shadow_write(&self, off: u64, val: u64, size: u8) {
+        let guard = self.read_shadow.read().unwrap_or_else(|e| e.into_inner());
+        let Some(port) = guard.as_ref() else {
+            return;
+        };
+        let bytes = val.to_le_bytes();
+        let n = usize::from(size.min(8));
+        port.write(off, &bytes[..n]);
+        self.c.shadow_writes.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn set_fb(&self, fb: Box<dyn FbStore>) {
         let mut s = self.mem.lock();
         s.fb = fb;
@@ -2618,6 +2715,23 @@ impl RegPlane {
     #[must_use]
     pub fn invalidate_regs(&self) -> Option<crate::mmuinval::InvalidateRegs> {
         crate::mmuinval::invalidate_regs(self.chip)
+    }
+
+    /// ★★★★★ **Publish the invalidate trigger's current value into the read shadow.**
+    ///
+    /// ⊘⊘ Called by whoever COMPLETES an invalidate, and it has to be: the guest is spinning
+    /// on this register, and the completion is the edge it is spinning for. A write-through on
+    /// the trigger write alone would publish *"pending"* and never publish *"done"* — the
+    /// guest would spin forever on a shadow that stopped changing, which is strictly worse
+    /// than trapping, because a trap at least asks us.
+    ///
+    /// ⚠ This is the sharpest instance of `the_bar0_read_surface.md` §5 in the whole surface:
+    /// two homes, and the one that matters is the one nobody thinks to update.
+    pub fn publish_invalidate_trigger(&self) {
+        let Some(regs) = self.invalidate_regs() else {
+            return;
+        };
+        self.shadow_write(regs.trigger, self.mmu_inval.read_trigger(), 4);
     }
 
     /// ★★★★★ **The guest's TLB-invalidate log** — the publish plane's trigger and its
@@ -3275,6 +3389,7 @@ impl RegPlane {
             gsp_reads,
             gsp_writes,
             unclaimed_reads,
+            shadow_writes,
             unclaimed_reads_in_dead_pages,
             unclaimed_writes,
             fb_window_reads,
@@ -3320,6 +3435,7 @@ impl RegPlane {
             gsp_reads: g(gsp_reads),
             gsp_writes: g(gsp_writes),
             unclaimed_reads: g(unclaimed_reads),
+            shadow_writes: g(shadow_writes),
             unclaimed_reads_in_dead_pages: g(unclaimed_reads_in_dead_pages),
             unclaimed_writes: g(unclaimed_writes),
             fb_window_reads: g(fb_window_reads),
@@ -3398,6 +3514,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            read_shadow: _,
             dead_pages: _,
             cpu_intr: _,
             mmio_in_flight: _,
@@ -4616,6 +4733,13 @@ impl RegPlane {
             // we do not understand must survive the round trip. Dropping it would be a
             // read-modify-LOSE at a register whose entire job is to be modified in place.
             s.bar0_window.set_raw(val as u32);
+            // ★★★ w564 — WRITE THROUGH. The guest reads this register back (that is the
+            // read-modify-write the comment above is about), so its shadow must carry the
+            // value the moment the state does. ⊘ The RAW word, matching the read arm's
+            // `s.bar0_window.raw()` exactly — a shadow that stored the DECODED fields would
+            // answer a different number than the trap does, which is the silent divergence
+            // the teardown gate checks for.
+            self.shadow_write(off, u64::from(s.bar0_window.raw()), 4);
             return WriteOutcome {
                 claimed: true,
                 ..WriteOutcome::nothing()
@@ -4680,6 +4804,11 @@ impl RegPlane {
             if off == regs.trigger {
                 let now_us = self.clock.now_ns() / 1_000;
                 let (inv, act) = self.mmu_inval.note_trigger(mask(val, size) as u32, now_us);
+                // ★★★ w564 — WRITE THROUGH. The guest spin-polls this register waiting for
+                // TRIGGER to read false, so its shadow is not a convenience: it is the thing
+                // the guest is watching. ⊘ Published from `read_trigger`, the SAME source the
+                // read arm uses, so the two cannot answer differently.
+                self.shadow_write(off, self.mmu_inval.read_trigger(), 4);
                 return WriteOutcome {
                     claimed: true,
                     invalidate: Some(inv),
@@ -4703,7 +4832,21 @@ impl RegPlane {
             // write reaches only the interrupt tree, and the plane's mutex also covers `fb`,
             // `ram`, `mmu` and the page-table witness — which `ce_session_with_root` holds
             // for 8.2 ms across a CE submission on the worker.
-            let fired = self.cpu_intr.lock().write(reg, val as u32);
+            let fired = {
+                let mut t = self.cpu_intr.lock();
+                let fired = t.write(reg, val as u32);
+                // ★★★ w564 — WRITE THROUGH, under the SAME hold as the mutation.
+                //
+                // ⊘ One write may change several registers: a SET and a CLEAR alias are two
+                // write ports onto one enable mask, so writing one changes what the other
+                // reads. Re-publishing only the offset the guest named would leave its alias
+                // stale. ⇒ the whole decoded group is re-read and re-published here, inside
+                // the hold, so no reader can observe the tree and its shadow disagreeing.
+                for (o, r) in crate::cpuintr::shadowable_regs() {
+                    self.shadow_write(o, u64::from(t.read(r)), 4);
+                }
+                fired
+            };
             // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
             // not have, so no pending bit was latched, and a vector delivered with nothing
             // pending would send the guest's ISR looking for an interrupt that is not

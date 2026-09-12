@@ -180,8 +180,25 @@ fn declare_one_proc(
 /// retire the proc, phase 3's zero would be a zero about nothing — the identical shape this
 /// tree names `a_census_zero_needs_a_known_positive`. Phase 2 asserts the **1** that phase 3
 /// drives to **0**, so the transition is what is measured, never the end state alone.
+/// ★★★★★ **THESE THREE TESTS SHARE A PROCESS GLOBAL, so they may not run at once.**
+///
+/// ⊘⊘ `kayfabe_core::gpu::retired_pending()` is production state with process scope — one
+/// retired list for the whole address space, by design, because the reap is a composition-root
+/// concern and not a per-device one. `cargo test` runs a binary's tests on parallel threads,
+/// so each of these asserts `retired_len() == 0` while a SIBLING is mid-cycle with corpses
+/// outstanding.
+///
+/// ⚠ It fails INTERMITTENTLY and passes in isolation, which is the worst shape a test can
+/// have: it was read as a real regression twice during w556–w564 before being run alone.
+/// Serializing is the fix, not widening the assertion — the assertion is the property.
+fn serialized() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn a_guest_register_write_reaps_a_retired_proc() {
+    let _serial = serialized();
     use kayfabe_core::rmgraph::RmEvent;
 
     let r = regs();
@@ -276,6 +293,7 @@ fn a_guest_register_write_reaps_a_retired_proc() {
 /// bounds the *churn* story and says nothing about the *wedge* story.
 #[test]
 fn process_churn_does_not_accumulate_toward_the_retired_cap() {
+    let _serial = serialized();
     use kayfabe_abi::generated::classes as nv;
     use kayfabe_arch::ClientKind;
     use kayfabe_arch::ids::{ClassId, HClient, HObject};
@@ -362,6 +380,7 @@ fn process_churn_does_not_accumulate_toward_the_retired_cap() {
 /// this process; that is a boot measurement.
 #[test]
 fn the_shipping_arm_leaves_the_reap_to_the_worker() {
+    let _serial = serialized();
     use kayfabe_core::rmgraph::RmEvent;
 
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
