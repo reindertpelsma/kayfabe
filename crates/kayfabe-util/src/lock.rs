@@ -327,7 +327,26 @@ impl<T> RankedMutex<T> {
     pub fn lock(&self) -> RankedMutexGuard<'_, T> {
         let site = core::panic::Location::caller();
         check_acquire(self.rank);
+        // ⊘⊘⊘ **THIS `note_wait` WAS MISSING AND IT HID THE ANSWER FOR AN ENTIRE NIGHT.**
+        //
+        // `RankedRwLock::{read,write}` both recorded their wait; the MUTEX path recorded only
+        // the hold. `RegPlane::state` is a `RankedMutex`, so rank 0's waits were **never
+        // measured**. Its holds are short register operations that round to 0 us, and the
+        // census skips a rank when wait AND hold are both zero — so rank 0 was ABSENT from
+        // every census, and I read that as "never contended" through six hypotheses.
+        //
+        // `[measured w504]` the stall alarm then caught a vCPU parked in
+        // `futex_wait -> Mutex::lock_contended -> RankedMutex<PlaneState>::lock ->
+        // RegPlane::write`, which is that lock, with the census still calling it clean.
+        //
+        // ★ An instrument that is silent about one arm reads exactly like an instrument
+        // reporting zero. That is the same defect as `lockcost` printing only from a teardown
+        // path, and as the stall alarm arming 61 072 times while a blocked signal swallowed
+        // every firing. Three instruments, one failure: **no way to tell "measured zero" from
+        // "not measured".**
+        let t0 = std::time::Instant::now();
         let inner = self.inner.lock().expect(POISONED);
+        lockcost::note_wait(self.rank, t0.elapsed());
         note_acquired(self.rank);
         RankedMutexGuard {
             inner,
