@@ -2942,6 +2942,54 @@ impl RegPlane {
     /// added, so *"is this on the wire?"* becomes a question someone must answer rather
     /// than one nobody is asked.
     #[must_use]
+    /// ★★★★★ **THE BAR0 READ MIX — step zero of serving reads from a page (w538).**
+    ///
+    /// `THE_PRODUCTION_CONTRACT.md` §4 commits BAR0 to **write traps only**, with reads served
+    /// from a read-only memslot. Which registers can live in a page is not a matter of opinion:
+    ///
+    /// - **static** — the boot registers and the VBIOS window never change after reset, so a
+    ///   page written once is correct forever;
+    /// - **producer-updated** — the GSP queue, the invalidate completion, the interrupt leaves
+    ///   and the window latch change only when WE change them, so the page can be written at
+    ///   that moment;
+    /// - **live** — the free-running counter advances continuously and no page we write can
+    ///   keep up. ★ The owner's answer is that it is mappable from host userspace, which makes
+    ///   it a mapping problem rather than a shadowing one.
+    ///
+    /// ⊘ **Nothing in this tree printed these numbers**, so every statement about the size of
+    /// the win has been arithmetic over an unmeasured mix. `[measured w537]` the CPU-time
+    /// instrument counts 89 106 traps and is armed **only on writes**, so the read half of the
+    /// MMIO surface was not merely unreported — it was uncounted.
+    ///
+    /// ⚠ Renders every class including the zeros, deliberately. A class that prints nothing
+    /// cannot be told from a class that was never reached, and the whole point of this line is
+    /// to decide which registers are worth a page.
+    #[must_use]
+    pub fn bar0_read_census(&self) -> String {
+        let c = self.counters();
+        let named = c.boot_reg_reads
+            + c.rom_reads
+            + c.gsp_reads
+            + c.ptimer_reads
+            + c.bar0_window_reads
+            + c.cpu_intr_accesses;
+        format!(
+            "BAR0-READS total={} | static[boot_reg={} rom={}] | \
+             producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
+             unclaimed={} ⊘ `cpu_intr` counts reads AND writes (one counter, two facts); \
+             `total` is every BAR read this plane answered, so `total - {named}` is the \
+             framebuffer-window and refusal arms",
+            c.reads,
+            c.boot_reg_reads,
+            c.rom_reads,
+            c.gsp_reads,
+            c.bar0_window_reads,
+            c.cpu_intr_accesses,
+            c.ptimer_reads,
+            c.unclaimed_reads,
+        )
+    }
+
     pub fn counters(&self) -> Counters {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         let PlaneCounters {

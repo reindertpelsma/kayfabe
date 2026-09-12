@@ -6214,7 +6214,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6249,6 +6249,13 @@ impl SharedDoorbell {
                 // buffer ever overflowed. ⊘ A `dropped=0` that was never counted and a real
                 // zero must not look the same.
                 kayfabe_util::lock::notes::note_census(),
+                // ★★★★★ w538 — the BAR0 READ MIX, step zero of serving reads from a page.
+                // Until now the read half of the MMIO surface was UNCOUNTED: `TRAP-CPU` is
+                // armed only on writes. See `RegPlane::bar0_read_census`.
+                self.plane.upgrade().map_or_else(
+                    || "BAR0-READS ⊘ NO PLANE — unmeasured, not zero".to_string(),
+                    |p| p.bar0_read_census(),
+                ),
                 // ★★★★★ w517 — the owner's MMIO contract, CHECKED. A trap may take the
                 // plane's queue lock and nothing above it. Both violations found this session
                 // were found by a stall alarm firing on whichever trap happened to be
