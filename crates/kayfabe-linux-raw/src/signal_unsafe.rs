@@ -448,6 +448,36 @@ pub mod stall_alarm {
             });
         }
 
+        /// ★★★★★ **w518 — ARM ONLY FOR ONE REGISTER, WHEN ASKED.**
+        ///
+        /// The handler `_exit(42)`s, so a boot yields ONE backtrace: **whichever trap goes
+        /// over budget first**, which is not necessarily the one you are hunting. `[measured
+        /// w516]` a BAR1 write won that race while the standing worst trap was
+        /// `bar0+0xb81208` at 16 ms, boot after boot, and the two are different code.
+        ///
+        /// `KAYFABE_STALL_ALARM_AT=0xb81208` arms the timer only when the trap's own offset
+        /// matches, so the one backtrace a boot can produce is the one about the register
+        /// under investigation. ⊘ Unset means arm for every trap, exactly as before.
+        #[must_use]
+        pub fn only_at() -> Option<u64> {
+            static AT: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+            *AT.get_or_init(|| {
+                let v = std::env::var("KAYFABE_STALL_ALARM_AT").ok()?;
+                let t = v.trim();
+                let t = t.strip_prefix("0x").unwrap_or(t);
+                u64::from_str_radix(t, 16).ok()
+            })
+        }
+
+        /// [`arm`], but only if `off` is the register [`only_at`] names (or it names none).
+        #[must_use]
+        pub fn arm_for(off: u64) -> Option<Armed> {
+            match only_at() {
+                Some(want) if (off & 0x00ff_ffff) != (want & 0x00ff_ffff) => None,
+                _ => arm(),
+            }
+        }
+
         /// Arm an alarm on the calling thread for the configured budget.
         #[must_use]
         pub fn arm() -> Option<Armed> {

@@ -1344,7 +1344,7 @@ pub unsafe extern "C" fn kayfabe_shim_regs_read(
             // guards (w505/w507c): one arm instrumented, the other not, and an unmeasured
             // path renders exactly like a healthy one.
             #[cfg(feature = "host-isolates")]
-            let _stall = kayfabe_linux_raw::stall_alarm::timer::arm();
+            let _stall = kayfabe_linux_raw::stall_alarm::timer::arm_for(off);
             let _trap = kayfabe_util::trapwitness::TrapGuard::enter_at(
                 (u64::from(bar) << 56) | (off & 0x00ff_ffff_ffff_ffff),
             );
@@ -1410,7 +1410,7 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     //
     // ⊘ Off unless `KAYFABE_STALL_ALARM_US` is set; with it absent no timer is created.
     #[cfg(feature = "host-isolates")]
-    let _stall = kayfabe_linux_raw::stall_alarm::timer::arm();
+    let _stall = kayfabe_linux_raw::stall_alarm::timer::arm_for(off);
     #[cfg(feature = "host-isolates")]
     let cpu_t0 = kayfabe_linux_raw::stall_alarm::thread_cpu_nanos().ok();
     #[cfg(feature = "host-isolates")]

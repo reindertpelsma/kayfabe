@@ -1234,6 +1234,7 @@ pub mod lockcost {
         IN_TRAP_ACQ.fetch_add(1, Ordering::Relaxed);
         let i = claim_site(site);
         if i != usize::MAX {
+            IN_TRAP_SITE[i].fetch_add(1, Ordering::Relaxed);
             let _ = IN_TRAP_FIRST.compare_exchange(
                 0,
                 i + 1,
@@ -1242,6 +1243,11 @@ pub mod lockcost {
             );
         }
     }
+
+    /// In-trap acquisitions charged to the site with the same index. ⊘ A separate array from
+    /// `ACQ_SITE_COUNT`, because *"this site is busy"* and *"this site is busy ON A vCPU
+    /// INSIDE A TRAP"* are different facts and only the second one is a contract breach.
+    static IN_TRAP_SITE: [AtomicU64; SITE_SLOTS] = [const { AtomicU64::new(0) }; SITE_SLOTS];
 
     /// Whether any vCPU took a lock above the plane's rank while inside an MMIO trap, and
     /// where it first did. ⊘ Renders its own zero in words: "none" is a RESULT here, and this
@@ -1255,7 +1261,27 @@ pub mod lockcost {
         }
         let first = name_of(IN_TRAP_FIRST.load(Ordering::Relaxed))
             .map_or_else(|| "UNATTRIBUTED".to_string(), |(f, l)| format!("{f}:{l}"));
-        format!("IN-TRAP-LOCKS ⊘ {n} acquisition(s) above rank0 from inside an MMIO trap, first at {first}")
+        let mut rows: Vec<(u64, &'static str, u32)> = Vec::new();
+        for i in 0..SITE_SLOTS {
+            let c = IN_TRAP_SITE[i].load(Ordering::Relaxed);
+            if c == 0 {
+                continue;
+            }
+            if let Some((f, l)) = name_of(i + 1) {
+                rows.push((c, f, l));
+            }
+        }
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        let sites = rows.len();
+        rows.truncate(4);
+        let top = rows
+            .iter()
+            .map(|(c, f, l)| format!("{f}:{l}={c}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "IN-TRAP-LOCKS ⊘ {n} acquisition(s) above rank0 from inside an MMIO trap across              {sites} site(s), first at {first}, busiest: {top}"
+        )
     }
 
     /// Publish `site` as the current holder of `rank`. Called once per acquisition.
