@@ -1970,7 +1970,7 @@ impl RegPlane {
         let page_off = off & !(crate::fbwin::FB_PAGE - 1);
         // ⊘ BOTH, in rank order. The window LATCH is FSM state; the framebuffer it points
         // into moved to [`PlaneMem`] at w522.
-        let st = self.state.lock();
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         let (phys, read_only) = match w {
             FbWindow::Pramin => (
@@ -2499,6 +2499,13 @@ impl RegPlane {
         else {
             return crate::ceresolve::CeResolve::NoPublication;
         };
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         resolve_locked(&mut s, self.chip, &root, va, demand)
     }
@@ -2538,6 +2545,13 @@ impl RegPlane {
                 crate::ceresolve::CeResolve::NoPublication,
             ));
         };
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         let r = resolve_locked(&mut s, self.chip, &root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
@@ -2549,12 +2563,9 @@ impl RegPlane {
                     .map(|()| r)
                     .map_err(|e| PublishedVaRead::Store(e.why))
             }
-            // ⊘ Guest RAM stayed with the FSM at w522; only the framebuffer moved. Taken
-            // here rather than beside the `mem` guard above so the state lock is held for
-            // one read instead of for the whole walk.
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => self
-                .state
-                .lock()
+            // ⊘ `st` is the guard taken ABOVE, in rank order — see there for the boot this
+            // cost. Re-acquiring rank 0 here would be the inversion.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => st
                 .ram
                 .read(phys, buf)
                 .map(|()| r)
@@ -2753,6 +2764,13 @@ impl RegPlane {
         va: u64,
         demand: crate::ceresolve::Demand,
     ) -> crate::ceresolve::CeResolve {
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         resolve_locked(&mut s, self.chip, root, va, demand)
     }
@@ -2771,6 +2789,13 @@ impl RegPlane {
         buf: &mut [u8],
         demand: crate::ceresolve::Demand,
     ) -> Result<crate::ceresolve::CeResolve, PublishedVaRead> {
+        // ⊘ Rank order: FSM (0) then memory (1). The sysmem arm below reads guest RAM,
+        // which stayed with the FSM — acquiring it AFTER `mem` is the R3 inversion that took
+        // w523's boot down. `[measured w523]` the doorbell worker panicked with "acquiring a
+        // rank-0 (Plane) lock while already holding [PlaneMem]", poisoned both locks and
+        // ended QEMU mid-run. ⚠ The discipline turned a latent deadlock into a named abort in
+        // one boot — but the inversion was MINE, introduced by the commit that split the lock.
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         let r = resolve_locked(&mut s, self.chip, root, va, demand);
         let crate::ceresolve::CeResolve::Resolved { phys, aperture, .. } = r else {
@@ -2782,12 +2807,9 @@ impl RegPlane {
                     .map(|()| r)
                     .map_err(|e| PublishedVaRead::Store(e.why))
             }
-            // ⊘ Guest RAM stayed with the FSM at w522; only the framebuffer moved. Taken
-            // here rather than beside the `mem` guard above so the state lock is held for
-            // one read instead of for the whole walk.
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => self
-                .state
-                .lock()
+            // ⊘ `st` is the guard taken ABOVE, in rank order — see there for the boot this
+            // cost. Re-acquiring rank 0 here would be the inversion.
+            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => st
                 .ram
                 .read(phys, buf)
                 .map(|()| r)
@@ -3983,7 +4005,7 @@ impl RegPlane {
 
     /// Serve one framebuffer-window read.
     fn fb_read(&self, w: FbWindow, off: u64, size: u8) -> ReadOutcome {
-        let st = self.state.lock();
+        let mut st = self.state.lock();
         let mut s = self.mem.lock();
         let phys = match self.window_phys(w, off, false, &st, &mut s) {
             Ok(p) => p,
