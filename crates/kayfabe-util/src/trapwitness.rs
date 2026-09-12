@@ -606,6 +606,36 @@ mod watchdog {
         !std::env::var("KAYFABE_TRAP_FATAL_ABORT").is_ok()
     }
 
+    /// ⊘ TEMPORARY — the pre-forked stopper. Parks on a pipe so that firing costs a write
+    /// instead of a fork. Held for the life of the process.
+    static STOPPER: std::sync::OnceLock<std::sync::Mutex<Option<std::process::Child>>> =
+        std::sync::OnceLock::new();
+
+    fn stopper_start() {
+        let pid = std::process::id();
+        let child = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("head -c 1 >/dev/null; exec kill -STOP {pid}"))
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .ok();
+        let _ = STOPPER.set(std::sync::Mutex::new(child));
+    }
+
+    pub(super) fn stopper_fire() {
+        use std::io::Write;
+        let Some(m) = STOPPER.get() else { return };
+        let mut g = m.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(c) = g.as_mut()
+            && let Some(stdin) = c.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"x");
+            let _ = stdin.flush();
+        }
+        // ⊘ The STOP lands on us shortly after this returns; nothing here waits for it,
+        // because the thread that waits is the thread that would have to be stopped.
+    }
+
     /// Spawn the watchdog once, if armed.
     pub(super) fn arm() {
         static ONCE: std::sync::Once = std::sync::Once::new();
@@ -613,6 +643,7 @@ mod watchdog {
             return;
         };
         ONCE.call_once(|| {
+            stopper_start();
             std::thread::Builder::new()
                 .name("kayfabe-trap-watchdog".into())
                 .spawn(move || {
@@ -659,14 +690,16 @@ mod watchdog {
                                 // inside the trap, and leaves the process attachable.
                                 // `SIGSTOP` cannot be caught or ignored, so nothing in the
                                 // process can decline it.
-                                // ⊘ Via `kill(1)` rather than `libc::kill`: this crate
-                                // forbids `unsafe` and carries no libc dependency, and a
-                                // temporary debug instrument is the last thing that should
-                                // weaken either. Spawning a process from the watchdog is
-                                // acceptable precisely because this never ships.
-                                let _ = std::process::Command::new("kill")
-                                    .args(["-STOP", &std::process::id().to_string()])
-                                    .status();
+                                // ⊘⊘ **PRE-FORKED, w484.** The first cut spawned `kill(1)`
+                                // here and MISSED: `[measured w484]` it reported 8418us at
+                                // `bar0+0x110094`, and by the time the signal landed every
+                                // vCPU was back inside `KVM_RUN` — i.e. running guest code,
+                                // not trapped. A fork+exec costs milliseconds, which is the
+                                // same order as the trap it is trying to freeze.
+                                //
+                                // ⇒ the stopper is forked ONCE at arm time and parks on a
+                                // pipe; firing is a one-byte write, tens of microseconds.
+                                stopper_fire();
                                 // If somebody continues us, do not re-fire on the same trap.
                                 START_US[i].store(0, Ordering::Release);
                             } else {
