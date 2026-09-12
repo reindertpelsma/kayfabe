@@ -267,6 +267,8 @@ pub struct PtDecodeResult {
 }
 
 /// What the pass did, once committed.
+///
+/// ⊘ See [`PtDecodeOutcome::merge`] for why this type has to be summable at all.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PtDecodeOutcome {
     /// ★★★★★ **w329 — host-published rows this pass REVOKED**, each with everything the shell
@@ -413,6 +415,92 @@ pub struct PtDecodeOutcome {
     /// [`Self::shape_collisions`] so a duplicate cannot read as a contradiction.
     pub duplicate_leaves: usize,
 }
+
+impl PtDecodeOutcome {
+    /// ★★★★★ **w531 — FOLD ONE COMMIT CHUNK INTO THE RUNNING TOTAL.**
+    ///
+    /// Owner ruling, 2026-09-12: *"sweep commit may chunk."* `[measured w517-w524]` the COMMIT
+    /// phase held the Device rank **and** the Proc cell for ~5 ms, ~1066 times a boot, because
+    /// it committed **every address space under one acquisition**. The results are keyed by
+    /// `(gpu, pdb)` and are independent, so the natural chunk is one address space.
+    ///
+    /// ⊘ **Counts add; lists concatenate; the transport error keeps the FIRST.** The first
+    /// error is the one a reader can still reason about — by the time a later chunk fails, the
+    /// state it saw was already shaped by the earlier ones.
+    ///
+    /// ⚠ This makes the sweep's totals a **sum over chunks** rather than one pass's figures.
+    /// Every consumer of them already treats them as per-pass totals, so the arithmetic must
+    /// be exhaustive: a field forgotten here reads as *"the sweep did less"*, silently.
+    /// `the_commit_may_chunk.rs` pins that by round-tripping a fully-populated value.
+    pub fn merge(&mut self, other: Self) {
+        let Self {
+            revoked,
+            revoked_still_desired,
+            remaps_refused,
+            remaps_revoked,
+            bound,
+            unchanged,
+            repointed,
+            dropped,
+            refusals,
+            faults,
+            vas_gone,
+            meta_refused,
+            meta_learned,
+            learned_pages,
+            pages_published,
+            pages_publish_refused,
+            transport,
+            unbound,
+            retired,
+            protection_changes,
+            unwitnessed,
+            unreachable,
+            sparse,
+            reach_faults,
+            swept_binds,
+            sweeps_run,
+            sweeps_truncated,
+            pages_swept,
+            shape_collisions,
+            duplicate_leaves,
+        } = other;
+        self.revoked.extend(revoked);
+        self.revoked_still_desired += revoked_still_desired;
+        self.remaps_refused += remaps_refused;
+        self.remaps_revoked += remaps_revoked;
+        self.bound += bound;
+        self.unchanged += unchanged;
+        self.repointed += repointed;
+        self.dropped.extend(dropped);
+        self.refusals.extend(refusals);
+        self.faults.extend(faults);
+        self.vas_gone += vas_gone;
+        self.meta_refused += meta_refused;
+        self.meta_learned += meta_learned;
+        self.learned_pages.extend(learned_pages);
+        self.pages_published += pages_published;
+        self.pages_publish_refused += pages_publish_refused;
+        // ⊘ FIRST, not last — see the type docs.
+        if self.transport.is_none() {
+            self.transport = transport;
+        }
+        self.unbound += unbound;
+        self.retired.extend(retired);
+        self.protection_changes.extend(protection_changes);
+        self.unwitnessed += unwitnessed;
+        self.unreachable += unreachable;
+        self.sparse += sparse;
+        self.reach_faults.extend(reach_faults);
+        self.swept_binds += swept_binds;
+        self.sweeps_run += sweeps_run;
+        self.sweeps_truncated += sweeps_truncated;
+        self.pages_swept += pages_swept;
+        self.shape_collisions.extend(shape_collisions);
+        self.duplicate_leaves += duplicate_leaves;
+    }
+}
+
 
 impl PtDecodeOutcome {
     /// Did anything go wrong that a caller must look at?

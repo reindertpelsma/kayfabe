@@ -4246,6 +4246,12 @@ impl SharedDevice {
     /// \u{2605}\u{2605}\u{2605}\u{2605}\u{2605} **w329 - [`SharedDevice::sweep_pt_tables_from`] with the
     /// host-published unbind policy as a parameter.** Same obligation on the caller as
     /// [`SharedDevice::decode_pt_writes_revoking`].
+/// How many address spaces one COMMIT acquisition settles. ⊘ `1` is the finest natural grain:
+/// the sweep's results are keyed by `(gpu, pdb)` and a single address space is the smallest
+/// unit `commit_pt_sweep_revoking` can be handed without splitting one VAS's settlement in
+/// half — which the ruling does **not** permit.
+    const PT_COMMIT_CHUNK_VASES: usize = 1;
+
     pub fn sweep_pt_tables_revoking(
         &self,
         pid: ProcId,
@@ -4271,10 +4277,37 @@ impl SharedDevice {
         // reusing the decode pass's run-wide budget would divide the C's number by a
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
-        // COMMIT — rank 1, re-resolving every target (R5).
-        let mut out = self.with_proc_mut(pid, |p| {
-            kayfabe_fwd::commit_pt_sweep_revoking(fmt, p, &results, revoke)
-        })?;
+        // COMMIT — rank 1, re-resolving every target (R5), ★ ONE ADDRESS SPACE AT A TIME.
+        //
+        // Owner ruling, 2026-09-12: *"sweep commit may chunk."* `[measured w517-w524]` this
+        // phase held the Device rank **and** the Proc cell for ~5 ms, ~1066 times a boot,
+        // because it committed **every** address space under a single acquisition. The
+        // results are keyed by `(gpu, pdb)` and are independent, so the natural chunk is one
+        // address space — and `with_proc_mut` releases both ranks between them.
+        //
+        // ⚠ **The guest can now observe a PARTIAL commit**, and that is the ruling, not an
+        // oversight: a doorbell landing between chunks sees some address spaces settled and
+        // others not. ⊘ `PublishedUnbind::Refuse` does NOT make this safe on its own — it
+        // protects host-published rows only, so an unpublished row can still be unbound in a
+        // window where a doorbell could resolve it.
+        //
+        // ⊘ A chunk that returns `None` means the proc VANISHED mid-sweep. Stop and keep what
+        // the earlier chunks did, rather than `?`-ing the whole pass away: those commits
+        // already happened, and reporting them as "the sweep did not run" would be false.
+        let mut out = kayfabe_fwd::PtDecodeOutcome::default();
+        let mut committed_any = false;
+        for batch in results.chunks(Self::PT_COMMIT_CHUNK_VASES) {
+            let Some(part) = self.with_proc_mut(pid, |p| {
+                kayfabe_fwd::commit_pt_sweep_revoking(fmt, p, batch, revoke)
+            }) else {
+                break;
+            };
+            committed_any = true;
+            out.merge(part);
+        }
+        if !committed_any {
+            return None;
+        }
         // PUBLISH — rank 0, from nothing, exactly as the decode pass does. A sweep learns far
         // more pages than a dirty drain, so this is the phase that makes the NEXT guest CE
         // write into any of them classify as a page-table write.
