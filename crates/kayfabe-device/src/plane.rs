@@ -1799,10 +1799,24 @@ impl RegPlane {
         let mut runs: Vec<(u64, u64)> = Vec::new();
         for page in 0..pages {
             let base = page * PAGE;
-            let dead = (base..base + PAGE)
-                .step_by(4)
-                .all(|off| self.bar0_dword_is_dead(off));
-            if !dead {
+            // ★★★★★ w563 — SHADOWABLE, not merely dead.
+            //
+            // A page is backable when every dword in it is a pure function of state that does
+            // not change without this device changing it — the unclaimed default of zero, a
+            // boot-register constant, or a byte of the ROM image. `[measured w561]` widening
+            // from "dead" to "shadowable" adds the 256-page VBIOS aperture, which carries
+            // 4632 reads a boot and whose bytes never move after realize.
+            //
+            // ⊘ It does NOT yet include the eleven pages of producer-updated registers. They
+            // are shadowable in principle — `[measured w561]` none of them has a read side
+            // effect — but only once a producer writes through to the shadow, and a page
+            // published before that would answer a stale value with no fault and no counter.
+            let shadowable = (base..base + PAGE).step_by(4).all(|off| {
+                self.bar0_dword_is_dead(off)
+                    || self.chip.boot_regs.iter().any(|r| r.off == off)
+                    || self.chip.rom_window.contains(off)
+            });
+            if !shadowable {
                 continue;
             }
             match runs.last_mut() {
@@ -1845,6 +1859,49 @@ impl RegPlane {
             || self.chip.fb_window(BAR, off).is_some()
             || self.model.decode_reg(BAR, off).is_some()
             || self.model.boot_sequence().may_read(BAR, off))
+    }
+
+    /// ★★★★★ **FILL A RANGE OF THE READ SHADOW** — what the guest would read from
+    /// `[off, off+buf.len())`, written into `buf`, with **no side effect of any kind**.
+    ///
+    /// # Why this is not `read`
+    ///
+    /// [`RegPlane::read`] is the trapping path: it counts, it may take locks, and for the
+    /// framebuffer window it MATERIALISES store pages. A shadow is filled thousands of dwords
+    /// at a time and at moments the guest is not waiting on; using the trapping path for it
+    /// would drive the device to describe it, which is the w551 defect one layer up.
+    ///
+    /// ⊘ So this serves ONLY the arms that are pure functions of state we own — the boot
+    /// register table, the ROM image, and the unclaimed default of zero. Every other offset is
+    /// left **untouched** in `buf` and reported, so a caller can see exactly which bytes it
+    /// must not publish yet rather than discovering a stale zero in a guest.
+    ///
+    /// Returns how many bytes were filled.
+    pub fn bar0_shadow_fill(&self, off: u64, buf: &mut [u8]) -> usize {
+        let mut filled = 0usize;
+        for (i, byte) in buf.iter_mut().enumerate() {
+            let at = off.saturating_add(i as u64);
+            if let Some(r) = self.chip.boot_regs.iter().find(|r| r.off == (at & !3)) {
+                let shift = 8 * u32::from((at & 3) as u8);
+                *byte = ((r.value >> shift) & 0xff) as u8;
+                filled += 1;
+            } else if self.chip.rom_window.contains(at) {
+                let idx = at - self.chip.rom_window.base;
+                *byte = usize::try_from(idx)
+                    .ok()
+                    .and_then(|i| self.rom.get(i))
+                    .copied()
+                    .unwrap_or(0);
+                filled += 1;
+            } else if self.bar0_dword_is_dead(at & !3) {
+                // ⊘ `ReadOutcome::Unclaimed => 0` is the answer this device already gives,
+                // byte for byte. A shadow byte of zero here is not a default — it is the
+                // value.
+                *byte = 0;
+                filled += 1;
+            }
+        }
+        filled
     }
 
     /// ★★★ **Is this offset in a page the aperture cut backs with memory?** — one bit load.

@@ -1562,3 +1562,38 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
     }
     i64::try_from(total).unwrap_or(i64::MAX)
 }
+
+/// ★★★★★ **Fill a caller's buffer with what the register plane would answer for `[off, off+len)`.**
+///
+/// The device calls this once per backable piece at realize, to put the plane's own bytes into
+/// the memory the guest will read without exiting. ⊘ Side-effect free by construction: it uses
+/// the shadow filler, not the trapping read path, so filling a piece cannot drive the state
+/// machine it is describing (w551's defect, one layer up).
+///
+/// Returns the number of bytes filled, or MINUS a status code. ⚠ A short fill is NOT an error
+/// and must not be treated as one — it means the range contains offsets whose value is not a
+/// pure function of state we own, and the caller must not publish those bytes.
+///
+/// # Safety
+/// `out` must be writable for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_fill(
+    handle: *mut c_void,
+    off: u64,
+    out: *mut u8,
+    len: u64,
+) -> i64 {
+    if out.is_null() || len == 0 {
+        return -i64::from(Status::Malformed.code());
+    }
+    let Some(regs) = borrow_regs(handle) else {
+        return -i64::from(Status::Malformed.code());
+    };
+    let Ok(n) = usize::try_from(len) else {
+        return -i64::from(Status::Malformed.code());
+    };
+    // SAFETY: the caller declares `out` writable for `len` bytes.
+    let buf = unsafe { core::slice::from_raw_parts_mut(out, n) };
+    let filled = regs.plane().bar0_shadow_fill(off, buf);
+    i64::try_from(filled).unwrap_or(i64::MAX)
+}

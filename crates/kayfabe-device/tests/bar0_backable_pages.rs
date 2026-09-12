@@ -149,15 +149,45 @@ fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
         covered / PAGE
     );
 
-    // ★ The load-bearing check: NO live register may fall inside a run. A run that swallowed
-    // one would answer it with zero forever, silently, and the guest would see a defaulted
-    // register rather than a refusal.
+    // ★★★★★ THE LOAD-BEARING CHECK, and w563 CHANGED WHAT IT CHECKS.
+    //
+    // It used to be *"no run may contain anything this device SERVES"* — true while a run was
+    // answered with zeros. A run is now answered from a SHADOW, so the property is stronger
+    // and different: **every byte of every run must be one the shadow can fill**, and the
+    // shadow's bytes must equal what this device would answer.
+    //
+    // ⊘ Asserting "unclaimed" here would now be wrong in the favourable direction: it would
+    // refuse the VBIOS aperture, which the device serves and the shadow reproduces exactly.
+    let mut shadow = vec![0u8; PAGE as usize];
     for (start, len) in &runs {
-        for off in (*start..*start + *len).step_by(4) {
-            assert!(
-                matches!(p.read(0, off, 4), ReadOutcome::Unclaimed),
-                "offset {off:#x} is inside a backable run but this device SERVES it — mapping                  that run would answer a live register with zero, forever, with nothing logged"
+        for page in (*start..*start + *len).step_by(PAGE as usize) {
+            shadow.fill(0xAA);
+            let filled = p.bar0_shadow_fill(page, &mut shadow);
+            assert_eq!(
+                filled,
+                PAGE as usize,
+                "page {page:#x} is inside a backable run and the shadow could fill only \
+                 {filled} of {PAGE} bytes — publishing it would hand the guest 0xAA, or a \
+                 stale value, for the rest"
             );
+            for off in (page..page + PAGE).step_by(4) {
+                let served = p.read(0, off, 4).value();
+                let i = (off - page) as usize;
+                let shadowed = u32::from_le_bytes([
+                    shadow[i],
+                    shadow[i + 1],
+                    shadow[i + 2],
+                    shadow[i + 3],
+                ]);
+                assert_eq!(
+                    u64::from(shadowed),
+                    served,
+                    "offset {off:#x} is inside a backable run and the SHADOW disagrees with \
+                     what this device answers: shadow={shadowed:#x} served={served:#x}. A \
+                     guest reading it would take no exit and get the wrong value, with no \
+                     fault and no counter."
+                );
+            }
         }
     }
 

@@ -1262,6 +1262,34 @@ static bool nvkvm_bar0_cut(NvkvmState *s, MemoryRegion *container, uint64_t size
                                                      piece, name, len, errp)) {
             return false;
         }
+        /*
+         * ★★★★★ w563 — THE PIECE CARRIES THE PLANE'S OWN BYTES, not zeros.
+         *
+         * A fresh mapping is already correct for the 3572 pages that hold no register. It is
+         * NOT correct for the 256-page VBIOS aperture or the boot-register pages, which the
+         * plane serves real values for — so the piece is filled from the plane before the
+         * guest can ever read it.
+         *
+         * ⊘ Refused, not truncated. A short fill means the range holds an offset whose value
+         * is not a pure function of state the plane owns; publishing the part that filled
+         * would hand the guest zeros for the rest, with no exit and no fault — the exact
+         * silent-wrong-value failure this whole surface is built to avoid.
+         */
+        {
+            void *ram = memory_region_get_ram_ptr(&piece->mr);
+            int64_t got = kayfabe_shim_bar0_shadow_fill(s->regs, start, ram, len);
+
+            if (got < 0 || (uint64_t)got != len) {
+                error_setg(errp,
+                           "nvkvm: the register plane filled %" PRId64 " of 0x%" PRIx64
+                           " bytes for the backable run at 0x%" PRIx64 "; a piece that is only "
+                           "partly filled would answer the rest with zeros and take no exit "
+                           "doing it, so this device refuses to present it",
+                           got, len, start);
+                return false;
+            }
+            memory_region_set_dirty(&piece->mr, 0, len);
+        }
 #if NVKVM_HAVE_LOCKLESS_IO
         /* ★★★ A dead piece answers reads out of its own memory, but its WRITES dispatch
          * through `nvkvm_bar0_dead_ops` like any other handler of this device — so it needs
@@ -1278,9 +1306,11 @@ static bool nvkvm_bar0_cut(NvkvmState *s, MemoryRegion *container, uint64_t size
         nvkvm_bar0_add_live(s, container, cursor, size - cursor);
     }
 
-    info_report("nvkvm: BAR0-CUT %u dead pieces (0x%" PRIx64 " bytes, %.1f%% of the aperture) "
-                "answer reads with no exit; %u live pieces still trap. ⊘ Writes to a dead "
-                "piece STILL trap — the runs were measured from the read classifier only.",
+    info_report("nvkvm: BAR0-CUT %u backed pieces (0x%" PRIx64 " bytes, %.1f%% of the aperture) "
+                "answer reads with no exit, carrying the plane's OWN bytes (zeros where no "
+                "register lives, the VBIOS image where it does); %u live pieces still trap. "
+                "⊘ Writes to a backed piece STILL trap — the run list was measured from the "
+                "read classifier only.",
                 s->bar0_n_dead, s->bar0_dead_bytes,
                 100.0 * (double)s->bar0_dead_bytes / (double)size,
                 s->bar0_n_live);

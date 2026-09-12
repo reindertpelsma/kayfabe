@@ -1250,4 +1250,21 @@ int32_t  kayfabe_shim_regs_audit(void *handle, KayfabeRegAudit *out);
  */
 int64_t  kayfabe_shim_bar0_dead_runs(void *handle, KayfabeRange *out, uint64_t max);
 
+/*
+ * ★★★★★ Fill `out[0..len)` with what the register plane answers for `[off, off+len)`, so a
+ * piece of the cut aperture can carry the plane's OWN bytes instead of zeros.
+ *
+ * [measured w563] this is what lets the 256-page VBIOS aperture stop trapping: its bytes never
+ * move after realize, and a guest reading them out of memory reads exactly what the trap would
+ * have returned.
+ *
+ * ⊘ Side-effect free: it uses the plane's shadow filler, never the trapping read path, so
+ * filling a piece cannot drive the state machine it is describing.
+ *
+ * Returns bytes filled, or MINUS a status code.  ⚠ A SHORT FILL IS NOT AN ERROR — it means the
+ * range holds offsets whose value is not a pure function of state the plane owns, and the
+ * caller must refuse to publish that piece rather than publish the part it got.
+ */
+int64_t  kayfabe_shim_bar0_shadow_fill(void *handle, uint64_t off, uint8_t *out, uint64_t len);
+
 #endif /* KAYFABE_SHIM_H */

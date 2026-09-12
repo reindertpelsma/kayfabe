@@ -57,6 +57,25 @@ natively, the doorbell write still exits.
 3. **THE USERMODE PAGE** — `0xbb0000`, mapped read-only from the host so the counter is the
    host's own, and the doorbell write at `+0x90` still exits.
 
+## 3a. THE TARGET, as the owner stated it
+
+> *"get me a raw client pass incl boot in mean test with 0 read traps in entirety of kayfabe"*
+> … *"and write traps only in bar0, so not in bar1/2, except pramin (and more optionally if you
+> can get that)"*
+
+⇒ Three numbers, and a boot that passes while they hold:
+
+| surface | reads | writes |
+|---|---|---|
+| BAR0, except PRAMIN and the usermode page | **0 traps** | traps — the control plane |
+| BAR0 PRAMIN | **0 traps** | **0 traps** |
+| BAR1 / BAR2 | **0 traps** | **0 traps** |
+
+⊘ BAR1/BAR2 are already demand-filled memory slots, so their steady state is trap-free; what is
+NOT yet zero is the FIRST touch of each page, which is one exit per page by construction. Making
+that zero means filling them before the guest arrives, not filling them faster — a different
+change from the shadow below, and the one §7 lists last because it is the least understood.
+
 ## 4. What still exits, and it is the whole point
 
 After this, a guest read of BAR0 **never** leaves the vCPU. Writes exit only where they must:
@@ -100,3 +119,4 @@ from the same mapping or they disagree at 43 ppm (`native_dataplane_cup2_ga106.m
 - [ ] PRAMIN as one re-pointed slot.
 - [ ] the usermode page mapped from the host.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
+- [ ] BAR1/BAR2 first-touch: the last exits on those BARs, and the least understood item here.
