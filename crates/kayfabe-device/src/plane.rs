@@ -1786,7 +1786,7 @@ impl RegPlane {
             let base = page * PAGE;
             let dead = (base..base + PAGE)
                 .step_by(4)
-                .all(|off| matches!(self.read_inner(0, off, 4), ReadOutcome::Unclaimed));
+                .all(|off| self.bar0_dword_is_dead(off));
             if !dead {
                 continue;
             }
@@ -1796,6 +1796,47 @@ impl RegPlane {
             }
         }
         runs
+    }
+
+    /// ★★★★★ **Could ANY arm of [`RegPlane::read_inner`] claim this dword?** — asked as a
+    /// question about the register MAP, touching no state and changing none.
+    ///
+    /// # ⊘⊘ This used to be `read_inner` itself, and that was a defect with teeth
+    ///
+    /// The sweep above called the real read path over the whole sixteen megabytes. Two of
+    /// its arms are **producers, not lookups**: the GSP arm takes the plane lock and steps
+    /// `s.fsm`, and the framebuffer-window arm MATERIALISES store pages. So the sweep did
+    /// not describe the aperture — it **drove the state machine across it**, and then
+    /// described whatever it had left behind.
+    ///
+    /// `[measured w550, bench boot]` the device asks this question twice at realize and
+    /// compares, and the two answers were **4 runs and then 12**. That cross-check is the
+    /// only reason it was seen at all: a single call returns a plausible list either way,
+    /// and the `bar0_backable_pages` test never noticed because a fresh plane swept once
+    /// is exactly the case where the mutation has not happened yet.
+    ///
+    /// ⇒ Every arm is asked by its **claim predicate** instead. All of them are table
+    /// lookups over `chip` or state-free calls into the model, so this function is pure by
+    /// construction rather than by care — and `bar0_dead_set_is_stable` pins that the answer
+    /// does not move when it is asked twice with a sweep of real reads in between.
+    fn bar0_dword_is_dead(&self, off: u64) -> bool {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        !(self.chip.boot_regs.iter().any(|r| r.off == off)
+            || self.ptimer_read(off).is_some()
+            || self.chip.rom_window.contains(off)
+            || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+            || crate::cpuintr::decode(off).is_some()
+            || self.invalidate_regs().is_some_and(|r| r.trigger == off)
+            || self.chip.fb_window(BAR, off).is_some()
+            || self.model.decode_reg(BAR, off).is_some()
+            || self.model.boot_sequence().may_read(BAR, off))
+    }
+
+    /// Whether the production classifier calls this dword dead — for the test that pins it
+    /// against [`RegPlane::read_inner`]'s own answer.
+    #[must_use]
+    pub fn bar0_dword_is_dead_for_test(&self, off: u64) -> bool {
+        self.bar0_dword_is_dead(off)
     }
 
     /// How many vCPU threads are inside an MMIO trap on this plane right now.

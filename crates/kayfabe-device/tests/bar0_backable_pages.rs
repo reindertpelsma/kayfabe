@@ -168,3 +168,72 @@ fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
         "the runs cover ALL of BAR0 — then no register was found anywhere and the check above          is vacuous"
     );
 }
+
+/// ★★★★★ **THE RUN LIST DOES NOT MOVE WHEN THE PLANE IS USED — w550.**
+///
+/// # What this is a regression test for, and how it was found
+///
+/// The sweep this file measures used to call `RegPlane::read_inner`, the real read path. Two
+/// of its arms are **producers**: the GSP arm takes the plane lock and steps the boot state
+/// machine, and the framebuffer-window arm materialises pages in the store. So sweeping the
+/// aperture did not describe it — it drove it, and then described the wreckage.
+///
+/// `[measured w550, bench boot]` the device asks the plane for its run list **twice** at
+/// realize and refuses if the two disagree. They disagreed: **4 runs, then 12**. That refusal
+/// is the only reason this was ever seen, because a single sweep returns a plausible list
+/// either way, and every test in this file swept a FRESH plane exactly once — precisely the
+/// case where the mutation has not happened yet.
+///
+/// ⇒ So the check here is not "sweep twice". It is **sweep, then USE the plane hard, then
+/// sweep again** — the shape a single boot actually has.
+#[test]
+fn the_run_list_is_a_fact_about_the_map_and_not_about_the_traffic() {
+    let p = plane();
+    let before = p.bar0_backable_runs();
+    assert!(!before.is_empty(), "non-vacuity: the chip must have dead runs");
+
+    // Drive the plane the way a boot does: every arm, over the whole aperture.
+    let mut served = 0u64;
+    for off in (0..BAR0_LEN).step_by(4096) {
+        if !matches!(p.read(0, off, 4), ReadOutcome::Unclaimed) {
+            served += 1;
+        }
+    }
+    assert!(served > 0, "non-vacuity: the sweep must have reached live arms");
+
+    let after = p.bar0_backable_runs();
+    assert_eq!(
+        before, after,
+        "the dead-run list moved after the plane was read: it is describing traffic, not the \
+         register map. {} runs became {}.",
+        before.len(),
+        after.len()
+    );
+}
+
+/// ★★★ **The pure classifier and the real read path agree, both ways, on a fresh plane.**
+///
+/// ⊘ This is what lets the production path use the state-free predicate at all. Without it,
+/// "dead" would be two definitions that merely happen to coincide today: the predicate could
+/// drift to call a SERVED register dead, and the only symptom would be a guest reading zero
+/// out of a memory page where a value belongs — silently, with no fault and no counter.
+#[test]
+fn the_state_free_classifier_agrees_with_the_read_path() {
+    let p = plane();
+    let (mut dead, mut live) = (0u64, 0u64);
+    for off in (0..BAR0_LEN).step_by(4) {
+        let pure = p.bar0_dword_is_dead_for_test(off);
+        let real = matches!(p.read(0, off, 4), ReadOutcome::Unclaimed);
+        assert_eq!(
+            pure, real,
+            "offset {off:#x}: the state-free classifier says dead={pure} and the read path \
+             says unclaimed={real}"
+        );
+        if pure {
+            dead += 1;
+        } else {
+            live += 1;
+        }
+    }
+    assert!(dead > 0 && live > 0, "non-vacuity both ways: dead={dead} live={live}");
+}
