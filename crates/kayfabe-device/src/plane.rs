@@ -2972,13 +2972,17 @@ impl RegPlane {
             + c.gsp_reads
             + c.ptimer_reads
             + c.bar0_window_reads
-            + c.cpu_intr_accesses;
+            + c.cpu_intr_accesses
+            + c.fb_window_reads;
         format!(
             "BAR0-READS total={} | static[boot_reg={} rom={}] | \
              producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
-             unclaimed={} ⊘ `cpu_intr` counts reads AND writes (one counter, two facts); \
-             `total` is every BAR read this plane answered, so `total - {named}` is the \
-             framebuffer-window and refusal arms",
+             window[fb_window_reads={} fb_window_writes={} bar0_window_writes={}] | \
+             unclaimed={} residual={} ⊘ `cpu_intr` counts reads AND writes (one counter, two \
+             facts). ★ `window[..]` is the PRAMIN/framebuffer aperture — the one the owner \
+             asks about, because the fake framebuffer is real memory and a MAPPED window needs \
+             no trap in EITHER direction; the `bar0_window_writes` beside it is how often the \
+             window MOVES, which is how often such a mapping would have to be re-pointed",
             c.reads,
             c.boot_reg_reads,
             c.rom_reads,
@@ -2986,7 +2990,11 @@ impl RegPlane {
             c.bar0_window_reads,
             c.cpu_intr_accesses,
             c.ptimer_reads,
+            c.fb_window_reads,
+            c.fb_window_writes,
+            c.bar0_window_writes,
             c.unclaimed_reads,
+            c.reads.saturating_sub(named),
         )
     }
 
