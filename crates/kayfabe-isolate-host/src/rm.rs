@@ -136,7 +136,7 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, DeviceView, ExportRequest, ExportSource, ExportedBacking,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking,
     FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
     IsolateId, RmBackend, RmError,
 };
@@ -2513,7 +2513,7 @@ impl RmConnection {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         // ★ w393 — the registration is its own verb now, because the armed node is a thing
         // this crate hands to ANOTHER process without ever `mmap`ing it here
-        // (`RmBackend::export_device_view`). Everything below this line is the `mmap`.
+        // (`HostRmBackend::export_device_view`). Everything below this line is the `mmap`.
         let node = self.arm_cpu_view(which, h_memory, 0, register_len)?;
 
         // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
@@ -4843,7 +4843,7 @@ impl HostRmBackend {
     }
 
     /// ★ w393 — this backend's export table, for an **in-process** holder that wants to lend
-    /// a token it minted ([`RmBackend::export_device_view`]) to a process it spawned itself.
+    /// a token it minted ([`HostRmBackend::export_device_view`]) to a process it spawned itself.
     /// The child isolate reaches the same table through `crate::child::serve_one`; a probe
     /// that runs the backend directly has no serve loop and needs the door.
     #[must_use]
@@ -5513,53 +5513,6 @@ impl RmBackend for HostRmBackend {
         mint_fabricated(&self.exports, want)
     }
 
-    /// ★★★★★ **w393 — arm a CPU view of one of this connection's vidmem objects and hand
-    /// the ARMED NODE up** ([`kayfabe_isolate::DeviceView`]).
-    ///
-    /// This is the door the correction block on [`RmBackend::export_backing`] above named
-    /// as *"ours"*, opened as a **separate verb** rather than by relaxing that refusal:
-    /// `export_backing(HostDeviceMemory)` still answers `NotExportableAsMemory`, because the
-    /// card's pages are still not *memory* the VMM may place anywhere. What this hands over
-    /// is a `/dev/nvidia<N>` node carrying a one-shot `NV_ESC_RM_MAP_MEMORY` context for
-    /// exactly `[offset, offset+len)` of `memory` — the thing [`ChildExports::mint_armed_node`]
-    /// was built to lend and nothing had asked for.
-    ///
-    /// ⊘ The node is never `mmap`ed **here**. The VMM `mmap`s it once at file offset zero
-    /// and installs a guest memslot over the mapping; this process keeps only the table
-    /// entry, so the descriptor can be lent on the reply. The RM object stays owned by this
-    /// connection and is freed through [`RmBackend::free`] like any other.
-    ///
-    /// # Errors
-    /// [`RmError::BadHandle`] for an object this connection did not mint; otherwise whatever
-    /// `NV_ESC_RM_MAP_MEMORY` refuses with — including a host BAR1 with no room for the view,
-    /// which is the hardware budget the design doc names.
-    fn export_device_view(
-        &mut self,
-        memory: HostHandle,
-        offset: u64,
-        len: u64,
-    ) -> Result<DeviceView, RmError> {
-        if len == 0 {
-            return Err(RmError::NoMemory);
-        }
-        let raw = self.narrow(memory)?;
-        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len)?;
-        // ★ The driver rounds the registered range up to a host page and compares the
-        // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
-        // so the length that crosses is the one the VMM's `mmap` must use.
-        let page = HostPageSize::query().bytes();
-        let mmap_len = len
-            .checked_add(page - 1)
-            .map(|n| n & !(page - 1))
-            .ok_or(RmError::NoMemory)?;
-        let token = self.exports.mint_armed_node(node);
-        Ok(DeviceView {
-            token,
-            memory,
-            offset,
-            mmap_len,
-        })
-    }
 
     /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — `fb_cpu_view.md` §4's chain, and it is
     /// `PinGuestRam`'s chain with the `memfd`'s **owner inverted**.
@@ -5945,7 +5898,79 @@ pub(crate) fn mint_fabricated(
     })
 }
 
+/// ★★★ **The geometry of an armed device node** — [`HostRmBackend::export_device_view`]'s
+/// answer, and the CPU-visible half of `DEVICE_LOCAL | HOST_VISIBLE`.
+///
+/// ⊘⊘ **Moved here from `kayfabe_isolate` on 2026-09-12** (`ORPHANS_wire_or_discard.md`).
+/// It used to be a type on the isolate's verb surface that crossed the wire; the verb, the
+/// wire message and the `Worker` wrapper are deleted for having no sender. It stays because
+/// `rmladder --bar1-crossing` — an in-process bare-metal probe — still arms nodes and needs
+/// to be told how long the `mmap` may be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceView {
+    /// This backend's own index into [`HostRmBackend::exports`] naming the **armed node**.
+    pub token: u64,
+    /// The RM object the view is over — the same handle the caller named.
+    pub memory: HostHandle,
+    /// Byte offset **within the object** the view starts at, as registered.
+    pub offset: u64,
+    /// ★ The `mmap` length the driver will accept — the registered length rounded up to a
+    /// host page (`osapi.c:1976-1986` rounds; `nv-mmap.c:560-565` compares against the
+    /// rounded size). A caller that `mmap`s the unrounded length is refused with `ENXIO`.
+    pub mmap_len: u64,
+}
+
 impl HostRmBackend {
+    /// ★★★ **A BENCH PROBE, NOT A VERB** — arm a CPU view of `[offset, offset+len)` of one
+    /// of this connection's vidmem objects and hand back the **armed node**.
+    ///
+    /// ⊘⊘ **It was an `RmBackend` verb and a wire message, and both are gone**
+    /// (`ORPHANS_wire_or_discard.md`, 2026-09-12): `Request::ExportDeviceView` had **zero
+    /// senders of any kind, tests included**, and the `Worker` wrapper had no caller either.
+    /// What is left is this inherent method, because one caller is real —
+    /// `rmladder --bar1-crossing`, the bare-metal probe `kayfabe_isolate::DeviceView`'s own
+    /// docs named as the thing that would turn two source *readings* into measurements.
+    /// ⚠ It therefore crosses **no process boundary any more**: the isolate cannot be asked
+    /// for a device view, and re-opening that door means re-adding the wire message under a
+    /// **fresh** tag (25 and reply 12 are retired, never reused).
+    ///
+    /// The node carries a one-shot `NV_ESC_RM_MAP_MEMORY` (`0x4E`) context for exactly the
+    /// requested range of `memory` — the thing [`ChildExports::mint_armed_node`] was built
+    /// to lend. It is never `mmap`ed here; the caller `mmap`s it once at file offset zero.
+    /// The RM object stays owned by this connection and is freed through
+    /// [`RmBackend::free`] like any other.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for an object this connection did not mint; otherwise whatever
+    /// `NV_ESC_RM_MAP_MEMORY` refuses with — including a host BAR1 with no room for the view.
+    pub fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+    ) -> Result<DeviceView, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let raw = self.narrow(memory)?;
+        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len)?;
+        // ★ The driver rounds the registered range up to a host page and compares the
+        // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
+        // so the length that crosses is the one the VMM's `mmap` must use.
+        let page = HostPageSize::query().bytes();
+        let mmap_len = len
+            .checked_add(page - 1)
+            .map(|n| n & !(page - 1))
+            .ok_or(RmError::NoMemory)?;
+        let token = self.exports.mint_armed_node(node);
+        Ok(DeviceView {
+            token,
+            memory,
+            offset,
+            mmap_len,
+        })
+    }
+
     /// [`RmBackend::alloc_engine_object`] for the **copy engine**, and — like
     /// [`RmConnection::alloc_gpfifo_channel`] — it exists for the type of `class`
     /// (`#166`).
