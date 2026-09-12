@@ -10124,7 +10124,7 @@ impl SharedDoorbell {
     ///
     /// ⚠ **The correctness residual is unchanged and still stands** — see
     /// [`kayfabe_mmu::reach::ReachShadow::witness_swept`] and the owner ruling of 2026-08-12.
-    /// This is a relaxation, it is armed by [`PT_SWEEP_ENV`], and a boot's log must state
+    /// This is a relaxation, it is armed by `KAYFABE_PT_SWEEP` (removed at w533; the sweep is always on), and a boot's log must state
     /// which arm it ran.
     ///
     /// # Why this exists beside [`Self::decode_cpu_pt_writes`] rather than replacing it
@@ -10158,9 +10158,10 @@ impl SharedDoorbell {
     ///
     /// ⊘ Silent when disarmed, so the control's log stays byte-comparable.
     fn sweep_cpu_pt_tables(&self) -> String {
-        if !selected_pt_sweep() {
-            return String::new();
-        }
+        // ⊘ w533 — the disarm is gone: the whole-VAS sweep is what kayfabe DOES.
+        // `THE_PRODUCTION_CONTRACT.md` §2. Its `off` value was never in a graded boot, and its
+        // DEFAULT was `off` while the bench pinned `on` — so neither value was the one anyone
+        // measured, which is the bidirectional rot the contract names.
         let Some(plane) = self.plane.upgrade() else {
             return " | PT-SWEEP ⊘ NO PLANE (nothing to read page-table bytes out of)".to_string();
         };
@@ -13591,6 +13592,7 @@ impl Regs {
                      instrumentation than its operator believes — refused instead",
                 ),
             })?;
+        refuse_removed_arms()?;
         let chip = chip_for(device_id)?;
         let abi = kayfabe_device::abi::gsp_abi_for(GUEST_DRIVER).map_err(|_| {
             (
@@ -13773,16 +13775,10 @@ impl Regs {
         // (a raw CE client, no libcuda) FAILS with the sweep off, measured one variable per
         // boot at `8d258daa`, and the regression bisects to the deletion merge `d2c58075`.
         eprintln!(
-            "kayfabe: PT-SWEEP arm={} ⇒ the whole-VAS sweep is {} (⊘ when `on`, a leaf may \
-             bind because a descent from the address space's OWN INSTALLED ROOT reached it, \
-             rather than because the guest was seen to write its page — owner ruling \
-             2026-08-12, residual recorded in mode2_address_table.md §6)",
-            if selected_pt_sweep() { "on" } else { "off" },
-            if selected_pt_sweep() {
-                "ARMED"
-            } else {
-                "DISARMED (⊘ and R33 arm 1 does NOT pass on this arm — w313)"
-            },
+            "kayfabe: PT-SWEEP always on ⇒ the whole-VAS sweep runs (⊘ a leaf may bind because \
+             a descent from the address space's OWN INSTALLED ROOT reached it, rather than \
+             because the guest was seen to write its page — owner ruling 2026-08-12, residual \
+             recorded in mode2_address_table.md §6)"
         );
         // ★★★★★ **w304's CENSUS BANNER, KEPT BESIDE THE SWEEP'S — they are two facts.** The
         // census that used to share the sweep's line is unconditional now, and a grader must
@@ -18101,6 +18097,42 @@ fn per_doorbell_vas_census() -> bool {
     })
 }
 
+/// ★★★★★ **ARMS THAT NO LONGER EXIST — and a boot that asks for one MUST FAIL.**
+///
+/// `THE_PRODUCTION_CONTRACT.md` §6: *"once an arm is gone, refuse to start if its variable is
+/// set. A stale script exporting a removed flag must fail loudly, not be ignored while someone
+/// reads the results as though it applied."*
+///
+/// ⊘ This is the whole reason the table exists. The bench pins nine variables on every boot;
+/// when one is deleted, the scripts still export it. Ignoring an unknown variable is the
+/// failure mode that lets someone measure the production path while believing they measured an
+/// arm — a *silent* wrong attribution, which is worse than a refused boot.
+///
+/// ⚠ Each entry says what the behaviour IS now, not merely that the flag is gone. *"Removed"*
+/// sends the reader to `git log`; *"the sweep is always on"* answers the question they had.
+static REMOVED_ARMS: &[(&str, &str)] = &[(
+    "KAYFABE_PT_SWEEP",
+    "The whole-VAS page-table sweep is ALWAYS ON.",
+)];
+
+/// Refuse to realize if any [`REMOVED_ARMS`] variable is set. See there.
+fn refuse_removed_arms() -> Result<(), (Status, &'static str)> {
+    for (var, now) in REMOVED_ARMS {
+        if std::env::var_os(var).is_some() {
+            eprintln!(
+                "kayfabe: ⊘⊘ REFUSING TO START — `{var}` names an arm that no longer exists. \
+                 {now} ⇒ unset it. A boot that ignored this would measure the production path \
+                 while its operator believed it measured an arm."
+            );
+            return Err((
+                Status::Unsupported,
+                "a removed arm's environment variable is set; see the line above",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn selected_doorbell_async() -> Result<DoorbellAsyncArm, (Status, &'static str)> {
     match std::env::var_os(DOORBELL_ASYNC_ENV) {
         // ⊘ ONE default, not two: delegate to `doorbell_async_from` rather than restate it here.
@@ -18242,21 +18274,6 @@ fn selected_pt_witness_exec() -> bool {
     }
 }
 
-/// ★★★★★ **The environment variable that arms the WHOLE-VAS SWEEP** — the C's `enum_gr_sysmem`
-/// (`C: nvkvm_gpu_emul.c:583-591`), driven from the doorbell.
-///
-/// # ⊘⊘ It arms a RELAXED CORRECTNESS GATE, not merely an instrument
-///
-/// Every other arm in this file changes what the port *observes* or *supplies*. This one changes
-/// what the port is willing to **bind**: with it on, a leaf binds because a walk from the address
-/// space's own installed page-directory root reached it, rather than because the guest was seen
-/// to write its page. See [`kayfabe_mmu::reach::ReachShadow::witness_swept`] for the argument and
-/// for the residual the owner accepted on 2026-08-12.
-///
-/// ⊘ **Off by default and refusing an unknown value.** With it unset this port binds exactly what
-/// it bound before the sweep existed, so the disarmed boot **is** the negative control — and a
-/// typo must not be able to produce one silently.
-pub const PT_SWEEP_ENV: &str = "KAYFABE_PT_SWEEP";
 
 /// ★★★★★ **w318 — arm the DIRTY GATE on the publication pass.** See [`DirtyGate`] for the
 /// measurement, the C's precedent and the correctness argument.
@@ -19019,40 +19036,10 @@ fn refusal_kind_va(r: &kayfabe_mmu::walker::PopulateRefusal) -> (&'static str, O
     }
 }
 
-/// Whether `value` arms the whole-VAS sweep — the pure half of [`selected_pt_sweep`].
-///
-/// # Errors
-/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
-/// `false`.
-pub fn pt_sweep_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
-    match value {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
-        Some(_) => Err((
-            Status::Unsupported,
-            "KAYFABE_PT_SWEEP does not name a state: the only values are `off` (the default) \
-             and `on`. It is not defaulted, because the disarmed arm IS this rung's negative \
-             control AND because the armed arm relaxes a correctness gate — a typo that \
-             silently armed it would relax that gate without anyone deciding to.",
-        )),
-    }
-}
-
-/// Whether [`PT_SWEEP_ENV`] arms the whole-VAS sweep.
-///
-/// ⊘ A value naming neither state reads as **disarmed**, which is the safe direction for a flag
-/// that relaxes a gate: an unparseable value must never be able to turn it on.
-#[must_use]
-fn selected_pt_sweep() -> bool {
-    match std::env::var_os(PT_SWEEP_ENV) {
-        None => false,
-        Some(v) => pt_sweep_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))).unwrap_or(false),
-    }
-}
 
 /// ★★★★★ **w329 — arm the RELEASE of a joined framebuffer leaf the guest has unmapped.**
 ///
-/// # ⊘ ON by default, and that is the opposite of [`PT_SWEEP_ENV`]'s default for a reason
+/// # ⊘ ON by default, and the removed `KAYFABE_PT_SWEEP` defaulted the other way
 ///
 /// The dirty gates and the sweep default off because the armed arm **removes work** and a typo
 /// must not silently skip something nobody decided to skip. This one is the other direction:
