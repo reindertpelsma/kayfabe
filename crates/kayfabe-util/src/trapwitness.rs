@@ -120,9 +120,24 @@ static PHASE_HIGH_SEC: AtomicU64 = AtomicU64::new(0);
 /// The instant the first trap closed — the origin of the phase profile. ⊘ Deliberately the
 /// first TRAP and not process start: everything before the guest touches a register is
 /// irrelevant to a trap profile and would only pad the front with empty buckets.
+/// The wall clock at which the phase profile's origin was taken, as seconds since the Unix
+/// epoch. ⊘ Recorded beside the monotonic origin rather than derived from it: a monotonic
+/// instant cannot be compared with anything a harness wrote into a log.
+fn trap_epoch_wall() -> u64 {
+    static WALL: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *WALL.get_or_init(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
+    })
+}
+
 fn trap_epoch() -> &'static std::time::Instant {
     static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-    EPOCH.get_or_init(std::time::Instant::now)
+    EPOCH.get_or_init(|| {
+        let _ = trap_epoch_wall();
+        std::time::Instant::now()
+    })
 }
 
 /// ★★★ **w481 — the phase profile, one line.** Worst trap per 10-second window, so the
@@ -137,7 +152,16 @@ pub fn phase_profile() -> String {
     if high == 0 && PHASE_WORST_US[0].load(Ordering::Relaxed) == 0 {
         return "TRAP-PHASES none — no trap has closed".to_string();
     }
-    let mut out = String::from("TRAP-PHASES worst_us/slow per 10s window [");
+    // ⊘⊘ **SELF-LOCATING, w481b.** The first cut printed window indices relative to an
+    // origin it never disclosed, so the profile could not be aligned against anything the
+    // harness logged — the exact defect its own doc comment warned about. The origin's wall
+    // clock and the current offset are now on the line, so any log timestamp can be mapped
+    // into a window by subtraction.
+    let mut out = format!(
+        "TRAP-PHASES origin={} now=+{}s worst_us/slow per 10s window [",
+        trap_epoch_wall(),
+        trap_epoch().elapsed().as_secs(),
+    );
     let mut w = 0usize;
     while w * 10 <= high {
         let (mut worst, mut slow) = (0u64, 0u64);
