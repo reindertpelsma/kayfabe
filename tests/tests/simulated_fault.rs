@@ -77,7 +77,7 @@ const FN_SET_GUEST_SYSTEM_INFO: u32 = 1;
 /// Two application processes with identical handles and distinct PDBs (the #14 shape),
 /// so "which channel faulted" is a question with a wrong answer available.
 fn two_app_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
@@ -259,7 +259,7 @@ fn an_unmapped_application_va_reaches_the_guest_as_a_channel_fault() {
 /// hardware, and would dress one of *our* defects as one of *its*.
 #[test]
 fn a_guest_kernel_channels_miss_is_escalated_and_builds_no_event() {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

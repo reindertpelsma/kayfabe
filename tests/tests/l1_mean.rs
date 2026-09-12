@@ -391,7 +391,7 @@ fn mean_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, Share
 /// core state directly (arenas, client sets, the source registry) instead of through the
 /// lock shell. Deterministic logic-core testing, §8.2's T1 tier.
 fn mean_gpu() -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
@@ -6623,7 +6623,7 @@ impl GpaAudit {
 /// reclamation is load-bearing rather than incidental. Otherwise identical to
 /// [`mean_gpu`] — same lanes, same identical-handle shape, same two targets.
 fn gpa_world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
@@ -10135,7 +10135,7 @@ fn n3_world(
 /// tier): the isolate identity is a fact of the pure core, so the tests that pin its
 /// accounting read core state directly rather than through the lock shell.
 fn n3_gpu() -> (Guarded<Gpu>, ProcId, ProcId, ProcId, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
@@ -10977,7 +10977,7 @@ fn rb_gpu() -> (Guarded<Gpu>, SharedRecorder) {
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     let gpu = Gpu::new(
-        Box::new(kayfabe_mocks::WireClassArch::new()),
+        std::sync::Arc::new(kayfabe_mocks::WireClassArch::new()),
         Box::new(factory),
         gpa,
     )

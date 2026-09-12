@@ -80,7 +80,7 @@ fn chain() -> Box<dyn CommandPolicy> {
                 &abi(),
                 kayfabe_abi::GuestOs::Linux,
                 kayfabe_core::gpu::Gpu::new(
-                    Box::new(kayfabe_chips::Ga10xArch::new()),
+                    std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
                     Box::new(kayfabe_isolate::StillbornIsolates::new(
                         "admitted_is_served",
                     )),

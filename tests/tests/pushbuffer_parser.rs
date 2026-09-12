@@ -60,7 +60,7 @@ fn script_pushbuffer(
 }
 
 fn one_proc_gpu() -> (Guarded<Gpu>, MockVmm) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),
@@ -389,7 +389,7 @@ fn hostile_ring_never_panics() {
 // ---------------------------------------------------------------------------------
 
 fn two_proc_gpu() -> (Guarded<Gpu>, MockVmm, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

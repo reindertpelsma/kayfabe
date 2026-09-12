@@ -97,7 +97,7 @@ fn one_proc_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
@@ -408,7 +408,7 @@ fn g3b_dropping_an_isolate_with_no_lock_held_is_fine() {
 fn raw_proc_gpu() -> (Gpu, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
@@ -1025,7 +1025,7 @@ fn g7_the_reap_routes_each_arena_home_and_orphans_nothing() {
     // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.
     const GPU1: GpuId = GpuId(1);
     let mut gpu = Gpu::realize(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         gpa,
         &[GpuId::ZERO, GPU1],
@@ -1153,7 +1153,7 @@ fn g7_an_arena_the_reap_cannot_route_home_is_reported_not_dropped() {
 fn one_proc_small_arena() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0010_0000, 0x0008_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
@@ -1340,7 +1340,7 @@ fn g6_no_live_binding_ever_points_outside_its_own_procs_arena() {
 
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x5_0000_0000, 0x1_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     const CB: HClient = HClient(0xB0);
     const PDB_B: Pdb = Pdb(0x3500_0000);
     const UVM: HClient = HClient(0xC0);

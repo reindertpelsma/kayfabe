@@ -58,7 +58,7 @@ const B_PDB: Pdb = Pdb(0x3405_000);
 const SHARED_VA: GpuVa = GpuVa(0x2_0020_0000);
 
 fn two_process_gpu() -> (Guarded<Gpu>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

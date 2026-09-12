@@ -197,7 +197,7 @@ fn fresh_gpu() -> kayfabe_tests::Guarded<Gpu> {
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     kayfabe_tests::Guarded::new(
         "rmrpc_bridge::fresh_gpu",
-        Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes"),
+        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes"),
         rec,
     )
 }

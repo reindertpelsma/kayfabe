@@ -145,7 +145,7 @@ fn guest_with_a_gr_channel_and_userd(
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
     let mut s = Scenario::new();
     let dev = HObject(0x5C00_0002);
     let vas = HObject(0x5C00_0007);

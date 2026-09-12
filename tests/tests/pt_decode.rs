@@ -1222,7 +1222,7 @@ fn a_transport_failure_is_reported_as_ours_and_not_as_a_page_the_guest_got_wrong
 
 /// A device with one compute proc, plus a standalone isolate to read the aperture through.
 fn pass_fixture() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
@@ -1243,7 +1243,7 @@ fn pass_fixture() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder) {
 /// `(gpu, pdb)`" has something it can get wrong.
 fn pass_fixture_two_vases() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder) {
     use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

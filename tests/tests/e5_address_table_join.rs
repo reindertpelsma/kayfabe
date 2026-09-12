@@ -251,7 +251,7 @@ fn fixture() -> (
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
     let mut s = Scenario::new();
     s.compute_process(CLIENT, A_PDB, identical_handles(0x10, 0x11));
     for ev in s.events {
@@ -890,7 +890,7 @@ fn a_range_bound_in_one_vas_does_not_resolve_in_another_on_the_same_proc() {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
     let h = identical_handles(0x10, 0x11);
     let mut s = Scenario::new();
     s.compute_process(CLIENT, A_PDB, h);

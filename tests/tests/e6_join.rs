@@ -84,7 +84,7 @@ fn device() -> (Guarded<Gpu>, MockVmm, SharedRecorder, ProcId, ChanId) {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB0, identical_handles(0x20, 0x21));
     for ev in s.events {
@@ -111,7 +111,7 @@ fn device() -> (Guarded<Gpu>, MockVmm, SharedRecorder, ProcId, ChanId) {
 fn stillborn_device() -> (Gpu, MockVmm, ProcId, ChanId) {
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(StillbornIsolates::new(
             "no forwarding plane in this archive (KAYFABE_ISOLATES unset)",
         )),
@@ -493,7 +493,7 @@ fn checkout_separates_a_dead_isolate_from_a_busy_one() {
     {
         let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
         let mut gpu = Gpu::new(
-            Box::new(MockArch::new()),
+            std::sync::Arc::new(MockArch::new()),
             Box::new(StillbornIsolates::new("no plane")),
             gpa,
         )

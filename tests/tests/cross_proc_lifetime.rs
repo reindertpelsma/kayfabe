@@ -157,7 +157,7 @@ const SYSTEM_ISOLATE: IsolateId = IsolateId::new(0, GPU);
 fn two_proc_gpu() -> (Guarded<Gpu>, ProcId, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     s.compute_process_on_gpu(
@@ -1194,7 +1194,7 @@ fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     let owner_vas = s.compute_process_on_gpu(
@@ -1956,7 +1956,7 @@ fn an_orphaned_kernel_resource_never_becomes_a_user_data_plane() {
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Guarded::new(
         "cross_proc_lifetime::kernel_orphan",
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes"),
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes"),
         rec.clone(),
     );
 
@@ -2113,7 +2113,7 @@ const OWNER_MIDDLE: HObject = HObject(0x5c00_00f0);
 fn uvm_referenced_via_parked_chain_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     let owner_vas = s.compute_process_on_gpu(

@@ -49,7 +49,7 @@ const B_PDB: Pdb = Pdb(0x3405_000);
 /// rather than about a working isolate, because that is what master ships.
 fn stillborn_gpu(why: &'static str) -> Gpu {
     Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(kayfabe_isolate::StillbornIsolates::new(why)),
         GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000),
     )
@@ -62,7 +62,7 @@ fn mock_gpu() -> (
 ) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000),
     )

@@ -58,7 +58,7 @@ fn abi() -> DriverAbiTable {
 fn one_group_gpu() -> (kayfabe_core::gpu::Gpu, HObject) {
     use kayfabe_abi::generated::classes as nv;
     let mut gpu = kayfabe_core::gpu::Gpu::new(
-        Box::new(kayfabe_chips::Ga10xArch::new()),
+        std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
         Box::new(kayfabe_isolate::StillbornIsolates::new(
             "preempt_is_decided",
         )),

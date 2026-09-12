@@ -142,7 +142,7 @@ fn guest_with_a_ring(bind_ring: bool) -> (Gpu, MockVmm, ProcId, ChanId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
 
     let root = HObject(0xC0B_0000);
     let dev = HObject(0xC0B_0001);

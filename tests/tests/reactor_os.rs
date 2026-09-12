@@ -61,7 +61,7 @@ const CLIENT_ROOT: kayfabe_arch::ids::HObject = kayfabe_arch::ids::HObject(0x5c0
 /// Two procs on two GPUs, behind the real shell. Integration, not unit: every signal below
 /// lands in the same `SharedDevice` every other suite drives.
 fn world(mode: LockMode) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::realize(arch, Box::new(factory), gpa, &[GpuId::ZERO, GpuId(1)])

@@ -67,7 +67,7 @@ fn fresh_graph() -> (MockArch, RmGraph) {
 }
 
 fn fresh_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

@@ -101,6 +101,118 @@ use std::path::{Path, PathBuf};
 /// across a policy chain on the MMIO trap. That is a weaker list than it used to be, which is
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
+    // ═══ w541 — SEVEN LOCKS THIS GATE COULD NOT SEE UNTIL ITS REACH WAS FIXED ═══
+    //
+    // ⊘ Six of these predate this session and one is mine. None were hidden by a judgement
+    // call; they were hidden by the gate's SCOPE (three crates) and by its type-walk having
+    // no arm for an ARRAY of locks. The assertion was right and the reach was not.
+    (
+        "crates/kayfabe-util/src/lock.rs",
+        "Mutex<Option<(&'static str, u32)>>",
+        "★★★ MINE, w492–w511. `WORST_HOLD_SITE` and `ACQ_SITE_NAME` — the lock census's \
+         site attribution, an ARRAY of these, which is the shape that evaded the walk. \
+         ⊘ Reached ON THE vCPU by construction: every ranked guard's `Drop` calls \
+         `note_hold_at`, and a vCPU holds ranked guards inside `RegPlane::write`. \
+         ★ NOTHING MAY BLOCK BENEATH IT AND NOTHING CAN: each critical section is one \
+         assignment or one read of an `Option<(&'static str, u32)>` — no allocation, no \
+         second lock, no call out. `ACQ_SITE_NAME` is written ONCE per site, at claim time, \
+         never on the steady-state path. \
+         ⚠ The order is RANKED → this, because it is taken from inside a ranked guard's drop \
+         before the rank bit clears. Nothing takes this and then a ranked lock, and because \
+         it is unranked the witness could not see it if anything did. \
+         ★★★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: giving the census anything to do \
+         beneath the guard — a format!, a map insert, a print. The whole point of the array \
+         is that the hot path is a compare-and-swap and this lock is the cold half.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Table>",
+        "The BAR mirror's own accounting — resident windows, refusal tallies, touch counts. \
+         ⊘ NOTHING MAY BLOCK BENEATH IT. \
+         Reached on the vCPU through `after_write`/`fill` and on the worker through \
+         `drain_fills`. ⊘ Nothing blocks beneath it: `refuse()` takes it in a TIGHT SCOPE \
+         that ends before its `eprintln!` — the count comes out, the guard drops, then the \
+         line prints. ⚠ That scoping is load-bearing and easy to lose: a print moved inside \
+         the braces would put an unbounded write to the QEMU log under a lock a vCPU takes, \
+         which is the 28 ms defect w514 removed elsewhere.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<std::collections::VecDeque<(FbWindow, u64)>>",
+        "The fill QUEUE (w472a): a vCPU enqueues a prefetch, the doorbell worker drains it. \
+         ⊘ Push and pop only, bounded at `FILL_QUEUE_CAP`: NOTHING MAY BLOCK BENEATH IT \
+         AND NOTHING DOES. \
+         ⚠ Its loss policy is the thing to know rather than its locking: a full queue DROPS, \
+         on the argument that a lost prefetch costs an extra exit. `[measured w529]` that \
+         argument fails when there is NO worker — every fill is dropped and the passthrough \
+         plane never engages. See `no_worker_still_drains.rs`.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<HashMap<u64, Arc<OwnedFd>>>",
+        "The mirror's fd registry, keyed by an atomically-minted token. Taken in `register`/ \
+         `forget`/lookup; each critical section is a single map operation on an `Arc<OwnedFd>` \
+         clone. ⊘ NOTHING MAY BLOCK BENEATH IT, and critically the CLOSE happens when the last \
+         `Arc` drops OUTSIDE the guard — a `close(2)` under this lock would be a syscall on \
+         the vCPU's path.",
+    ),
+    (
+        "crates/kayfabe-device/src/plane.rs",
+        "RwLock<Option<std::sync::Arc<dyn FbMirrorPort>>>",
+        "The plane's handle ON the mirror, not the mirror's own state. Read on the vCPU by \
+         `fb_mirror()`, written once at composition. ⊘ Every reader CLONES the `Arc` and drops \
+         the guard before calling through it (`drain_mirror_revalidation` does exactly that), \
+         so the mirror's own locks are taken with this one already released. ⊘ NOTHING \
+         MAY BLOCK BENEATH IT. ★★★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: calling a \
+         `FbMirrorPort` method while still holding the read guard — that nests the \
+         mirror's three locks under this one and neither half is rankable.",
+    ),
+    (
+        "crates/kayfabe-util/src/trapwitness.rs",
+        "Mutex<Option<std::process::Child>>",
+        "⚠ TEMPORARY — goes with `KAYFABE_TRAP_FATAL_US`. The over-budget watchdog's stopper: \
+         a child `sh` parked in `head -c 1`, which `SIGSTOP`s this process when it reads its \
+         byte. ⊘ A WRITE SYSCALL DOES RUN BENEATH THIS LOCK — `stdin.write_all(b\"x\")` — and \
+         it is the one entry in this list where a blocking call is permitted. It is bounded \
+         by construction rather than by care: the reader is blocked waiting for exactly that \
+         byte, so the pipe buffer is empty and a one-byte write cannot fill it. \
+         ★★★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: writing more than the reader consumes, \
+         or reusing the stopper for a second signal — either can fill the pipe and then a \
+         vCPU blocks in `write` under an unranked lock, which is the exact hazard this whole \
+         list exists to name.",
+    ),
+    (
+        "crates/kayfabe-util/src/lockwitness.rs",
+        "Mutex<std::collections::BTreeSet<String>>",
+        "The witness's set of door names already reported, so a door prints once rather than \
+         per trap. ⊘ NOTHING MAY BLOCK BENEATH IT: one set insert. ⚠ Same allocation note as \
+         its sibling table — the `String` is built on first sight of a door and the door list \
+         is static, so it is once per process, not per trap.",
+    ),
+    (
+        "crates/kayfabe-util/src/lockwitness.rs",
+        "Mutex<BTreeMap<String, u64>>",
+        "The witness's per-site tally, behind a `OnceLock`. Reached on the vCPU from the \
+         blocking-door census. ⊘ NOTHING MAY BLOCK BENEATH IT: the critical section is one \
+         `BTreeMap` entry bump. ⚠ The `String` key allocates on a first insert, which is an \
+         allocation under a lock a vCPU can hold — bounded because the key set is the static \
+         door list, so it happens once per door per process, never on the steady path.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>>",
+        "A process-global memo from doorbell token to the isolate that owns it. Single map \
+         operations: ⊘ NOTHING MAY BLOCK BENEATH IT. Process-global rather than per-device, so two devices \
+         in one process share it — which is fine for a memo and would not be for state.",
+    ),
+    (
+        "crates/kayfabe-rt/src/device.rs",
+        "Mutex<Vec<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)>>",
+        "`vas_refresh_q` — the address-space refresh queue, pushed under a trap and drained \
+         by the refresh pass. ⊘ Push and take only; NOTHING MAY BLOCK BENEATH IT. ⚠ It sits on `SharedDevice` BESIDE the \
+         ranked `state`, so the tempting edit is to drain it while holding `state` — that \
+         would put an unranked lock under a ranked one with the witness blind to the pair.",
+    ),
     (
         "crates/kayfabe-qemu-raw/src/shim.rs",
         "Mutex<std::collections::HashMap<u64, (usize, usize)>>",
@@ -509,10 +621,49 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
 /// `kayfabe-device`/`kayfabe-rt` was honest about what it checked and simply did not check
 /// the place the guest arrives. ⊘ Same family as every scoped instrument in this campaign:
 /// the scope, not the assertion, was where the hole was.
-const VCPU_PATH_CRATES: &[&str] = &["kayfabe-device", "kayfabe-rt", "kayfabe-qemu-raw"];
+const VCPU_PATH_CRATES: &[&str] = &[
+    "kayfabe-device",
+    "kayfabe-rt",
+    "kayfabe-qemu-raw",
+    // ★★★★★ **w541 — ADDED, AND IT IS THE SAME HOLE THIS GATE'S OWN DOC DESCRIBES.**
+    //
+    // `kayfabe-util` holds the rank system *and the lock census that runs inside it*. Every
+    // ranked acquisition on a vCPU calls `lockcost::note_holder` -> `claim_site`, and the
+    // w510–w520 campaign added **plain `std::sync::Mutex`es** there (`WORST_HOLD_SITE`,
+    // `ACQ_SITE_NAME`) plus a thread-local in `notes`. Those are unranked locks reachable on
+    // the vCPU path — and this gate could not see one of them, because its SCOPE stopped at
+    // three crates.
+    //
+    // ⊘ So the instrument added to police the vCPU's locks was itself outside the police
+    // line. `[measured w541]` the gate reported six unclassified locks and **none of them
+    // were the ones I had just added** — not because they were fine, but because the walk
+    // never entered the file.
+    //
+    // ⚠ Exactly the failure mode the constant's own doc names one line above: *"the scope,
+    // not the assertion, was where the hole was."*
+    "kayfabe-util",
+];
 
 /// The ranked wrappers' own inners. These ARE the rank system, not holes in it.
 const RANKED_WRAPPER_INNERS: &[&str] = &["crates/kayfabe-rt/src/lock.rs"];
+
+/// ★★★★★ **w541 — the rank system's OWN inners, excluded BY TYPE and not by file.**
+///
+/// `RankedMutex<T>` and `RankedRwLock<T>` wrap a plain lock; that inner IS the rank system,
+/// not a hole in it, so it must not be demanded of the classification list.
+///
+/// ⊘ **Why this is not another entry in [`RANKED_WRAPPER_INNERS`].** That list excludes a
+/// whole FILE, and `kayfabe-util/src/lock.rs` holds the wrappers **and three real unranked
+/// locks beside them** — the census's `WORST_HOLD_SITE` and `ACQ_SITE_NAME`, plus
+/// `lockwitness`'s site table. Excluding the file would bury exactly the locks this gate just
+/// became able to see, which is the blind spot it was widened to remove.
+///
+/// ⚠ So the exclusion is `(file, type)`: precise enough to spare the wrapper, narrow enough
+/// that anything else in the same file still has to be declared.
+const RANKED_WRAPPER_TYPES: &[(&str, &str)] = &[
+    ("crates/kayfabe-util/src/lock.rs", "Mutex<T>"),
+    ("crates/kayfabe-util/src/lock.rs", "RwLock<T>"),
+];
 
 fn repo_root() -> PathBuf {
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -659,6 +810,21 @@ fn collect_locks(text: &str, rel: &str, out: &mut BTreeSet<(String, String)>) {
                     // A single `:` is the field's; a `::` means we are still inside a path.
                     break !(k >= 2 && b[k - 2] == b':');
                 }
+                // ★★★★★ **w541 — AN ARRAY OF LOCKS EVADED THIS WALK.** A declaration shaped
+                // `static X: [std::sync::Mutex<T>; N]` puts a `[` between the field's colon
+                // and the type, and the walk had no arm for it: it saw neither `:` nor `<`
+                // and broke `false`, so the lock was not a field and never reached the
+                // classification list. `[measured w541]` the w510-w520 lock census added
+                // exactly that shape in `kayfabe-util` — `WORST_HOLD_SITE`, `ACQ_SITE_NAME`,
+                // `CURRENT_HOLDER` — unranked locks reachable from every ranked acquisition
+                // on a vCPU, and this gate called the tree clean.
+                //
+                // ⊘ Same family as the scope hole one constant above: the gate's ASSERTION
+                // was right and its REACH was not, twice, for two different reasons.
+                if b[k - 1] == b'[' {
+                    s = k - 1;
+                    continue;
+                }
                 if b[k - 1] != b'<' {
                     break false;
                 }
@@ -717,6 +883,13 @@ fn every_unranked_lock_a_vcpu_thread_can_hold_is_classified() {
     let declared: BTreeSet<(String, String)> = UNRANKED_VCPU_PATH_LOCKS
         .iter()
         .map(|(f, t, _)| ((*f).to_owned(), (*t).to_owned()))
+        // ⊘ The rank system's own inners are excluded BY TYPE, not by file — see
+        // `RANKED_WRAPPER_TYPES` for why the file-level list would bury real locks here.
+        .chain(
+            RANKED_WRAPPER_TYPES
+                .iter()
+                .map(|(f, t)| ((*f).to_owned(), (*t).to_owned())),
+        )
         .collect();
 
     assert!(

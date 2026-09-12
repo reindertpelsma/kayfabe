@@ -37,7 +37,7 @@ const B_PDB: Pdb = Pdb(0x5678_000);
 const CLIENT_ROOT: HObject = HObject(0x5c00_0000);
 
 fn fresh_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x11_0000_0000, 0x1_0000_0000);
     // ★ G9 (§12.21): realized with two physical GPUs — the entitlement.

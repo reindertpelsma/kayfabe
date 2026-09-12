@@ -498,7 +498,7 @@ fn gpu_of(events: &[RmEvent]) -> Guarded<Gpu> {
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
     for &ev in events {
         gpu.apply(ev).expect("the scenario applies");
     }

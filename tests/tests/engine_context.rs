@@ -33,7 +33,7 @@ const GR_VCHID: VChid = VChid(0x10);
 const CE_VCHID: VChid = VChid(0x11);
 
 fn compute_gpu() -> (Guarded<Gpu>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

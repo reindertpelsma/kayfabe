@@ -139,7 +139,7 @@ fn gr_guest() -> (Gpu, MockVmm, SharedRecorder, ProcId, ChanId) {
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
 
     let root = HObject(0xC1D_0000);
     let dev = HObject(0xC1D_0001);

@@ -81,7 +81,7 @@ fn a_vm_after(decoys: u16) -> (Gpu, kayfabe_core::ProcId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
     let mut s = Scenario::new();
     for i in 0..decoys {
         s.compute_process(

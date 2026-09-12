@@ -41,7 +41,7 @@ fn two_process_gpu() -> (
     MockVmm,
     std::sync::Arc<std::sync::Mutex<kayfabe_mocks::RmRecorder>>,
 ) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

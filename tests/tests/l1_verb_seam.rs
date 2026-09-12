@@ -123,7 +123,7 @@ fn device_with_opts(
     mode: LockMode,
     born: bool,
 ) -> (Guarded<Arc<SharedDevice>>, Vec<ProcId>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

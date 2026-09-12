@@ -93,7 +93,7 @@ fn command(msg: &[u8]) -> RpcCommand {
 fn policy() -> ObjectPolicy {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )

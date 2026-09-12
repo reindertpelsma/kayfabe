@@ -126,7 +126,7 @@ const MEM_HANDLES: [HObject; 4] = [
 /// Build the shared device: `n` guest processes with IDENTICAL guest handles,
 /// DISTINCT PDBs/vChids, plus per-proc memory objects for RM-map churn.
 fn stress_gpu(n: usize) -> (Guarded<Gpu>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // Sparse reservations: arenas cost address space, not RAM — be generous.
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);

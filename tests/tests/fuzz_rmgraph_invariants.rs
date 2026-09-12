@@ -582,7 +582,7 @@ proptest! {
     /// asserts arenas stay disjoint no matter what the guest does.
     #[test]
     fn a1b_gpu_spine_never_panics_on_hostile_stream(stream in any_stream()) {
-        let arch = Box::new(MockArch::new());
+        let arch = std::sync::Arc::new(MockArch::new());
         let (factory, rec) = MockIsolateFactory::new();
         let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
         // ★ §12.35 — guarded like every other device: a hostile stream that made the core

@@ -84,7 +84,7 @@ const ELEMENT_PARAMS_AT: usize = 112;
 /// isolate factory, a declared guest-physical window.
 fn port_gpu() -> Gpu {
     Gpu::new(
-        Box::new(Ga10xArch::new()),
+        std::sync::Arc::new(Ga10xArch::new()),
         Box::new(StillbornIsolates::new(
             "alloc_params_echo: no forwarding plane",
         )),

@@ -96,7 +96,7 @@ fn abi() -> &'static DriverAbiTable {
 
 fn port_gpu() -> Gpu {
     Gpu::new(
-        Box::new(Ga10xArch::new()),
+        std::sync::Arc::new(Ga10xArch::new()),
         Box::new(StillbornIsolates::new("test: no forwarding plane")),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
@@ -185,7 +185,7 @@ fn scrubber_params() -> Vec<u8> {
 /// difference between a gate and a wall.
 #[test]
 fn a_doorbell_is_refused_before_the_control_and_planned_after_it() {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, _rec) = MockIsolateFactory::new();
     let mut gpu = Gpu::new(
         arch,
@@ -711,7 +711,7 @@ fn the_triage_row_survives_and_records_the_correction() {
 fn one_tsg_control_lets_every_member_channel_past_the_doorbell_gate() {
     let (factory, _rec) = MockIsolateFactory::new();
     let mut gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
@@ -799,7 +799,7 @@ fn one_tsg_control_lets_every_member_channel_past_the_doorbell_gate() {
 fn the_group_route_refuses_by_name_and_never_with_not_supported() {
     let (factory, _rec) = MockIsolateFactory::new();
     let mut gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )

@@ -62,7 +62,7 @@ use proptest::prelude::*;
 // =================================================================================
 
 fn new_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // A generous window so exhaustion is a deliberate act, not an accident.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0000_0000_0000, 0x1_0000_0000);

@@ -56,7 +56,7 @@ fn abi() -> DriverAbiTable {
 /// same stillborn isolate plane, same GPA window shape.
 fn port_gpu() -> kayfabe_core::gpu::Gpu {
     kayfabe_core::gpu::Gpu::new(
-        Box::new(kayfabe_chips::Ga10xArch::new()),
+        std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
         Box::new(kayfabe_isolate::StillbornIsolates::new(
             "served_chain_seats",
         )),

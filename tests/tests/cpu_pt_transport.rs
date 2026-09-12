@@ -167,7 +167,7 @@ fn build_tree(p: &RegPlane) {
 
 /// A device with one compute proc whose address space is rooted at [`PDB`].
 fn device(mode: LockMode) -> Guarded<SharedDevice> {
-    let arch = Box::new(kayfabe_mocks::MockArch::new());
+    let arch = std::sync::Arc::new(kayfabe_mocks::MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
@@ -551,7 +551,7 @@ fn a_tree_whose_root_belongs_to_no_address_space_binds_nothing_and_is_carried() 
     build_tree(&p);
 
     // A device whose one proc is rooted at a DIFFERENT page.
-    let arch = Box::new(kayfabe_mocks::MockArch::new());
+    let arch = std::sync::Arc::new(kayfabe_mocks::MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

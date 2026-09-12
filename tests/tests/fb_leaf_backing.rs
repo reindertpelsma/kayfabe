@@ -69,7 +69,7 @@ fn device() -> (
 ) {
     let (factory, recorder) = MockIsolateFactory::with_pool_size(2);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);

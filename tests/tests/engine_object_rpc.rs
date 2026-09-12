@@ -116,7 +116,7 @@ fn wire_gpu() -> (Gpu, SharedRecorder) {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     let gpu =
-        Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
+        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
     (gpu, rec)
 }
 

@@ -165,7 +165,7 @@ const VA_AFTER: GpuVa = GpuVa(0x2_0030_0000);
 
 /// One guest proc on GPU0, warmed up, wrapped in the teardown guard.
 fn world(pool: usize, mode: LockMode) -> (Guarded<Arc<SharedDevice>>, ProcId, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::with_pool_size(pool);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

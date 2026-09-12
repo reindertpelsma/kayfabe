@@ -49,7 +49,16 @@ fn abi() -> &'static DriverAbiTable {
 fn fresh_gpu() -> Gpu {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
-    Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes")
+    // ⊘ `Arc`, not `Box`: `Gpu`'s arch handle became shared at w493 so `Spine::arch_handle()`
+    // could hand it out without the device lock. This call site was missed and stopped
+    // compiling THEN — and no gate noticed for forty commits, because the gate ran
+    // `cargo test -p <crate>` over a hand-listed subset that never included this crate.
+    Gpu::new(
+        std::sync::Arc::new(WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("device realizes")
 }
 
 /// ★ The **three commands the C measured**, read off its own source rather than invented:

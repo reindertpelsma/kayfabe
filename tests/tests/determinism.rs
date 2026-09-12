@@ -83,7 +83,7 @@ const MEM_HANDLE: HObject = HObject(0x5c00_0100);
 const NVENC_OBJ: HObject = HObject(0x5c00_0200);
 
 fn new_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // A generous window so arena exhaustion is never an accident of this test.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1_0000_0000_0000, 0x1_0000_0000);

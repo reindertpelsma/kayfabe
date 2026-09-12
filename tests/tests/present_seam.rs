@@ -31,7 +31,7 @@ use kayfabe_vmm::{FbMeta, PresentError, SurfaceHandle};
 const PDB: Pdb = Pdb(0x3401_000);
 
 fn graphics_gpu() -> (Guarded<Gpu>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

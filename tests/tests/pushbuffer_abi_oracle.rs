@@ -964,7 +964,7 @@ fn read_pushbuffer_over_the_drivers_own_bytes_yields_the_runs_where_they_were_wr
         const GPA: u64 = 0x0002_0000;
         const PDB: Pdb = Pdb(0x04a0_1000);
         let mut gpu = Gpu::new(
-            Box::new(kayfabe_chips::Ga10xArch::new()),
+            std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
             Box::new(StillbornIsolates::new("test: no forwarding plane")),
             GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
         )

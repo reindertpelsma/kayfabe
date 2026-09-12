@@ -344,7 +344,7 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
 
     // ---- the device, with a REAL isolate plane
     let mut gpu = Gpu::new(
-        Box::new(kayfabe_chips::Ga10xArch::new()),
+        std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
         Box::new(InProcessIsolates {
             conn: Arc::clone(&conn),
             witness: Arc::clone(&witness),

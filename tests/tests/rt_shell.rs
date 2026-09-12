@@ -94,7 +94,7 @@ const MEM_HANDLE: HObject = HObject(0x6000_0000);
 /// RM-map churn. Returns the realized device plus `pids[i]` resolved via `by_pdb`
 /// (never by assuming mint order).
 fn rt_gpu(n: usize) -> (Guarded<Gpu>, Vec<ProcId>, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

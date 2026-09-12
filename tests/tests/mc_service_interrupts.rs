@@ -104,7 +104,7 @@ const SUBDEVICE: HObject = HObject(0xcafe_0003);
 fn policy() -> ObjectPolicy {
     let (factory, _rec) = MockIsolateFactory::new();
     let mut gpu = Gpu::new(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )

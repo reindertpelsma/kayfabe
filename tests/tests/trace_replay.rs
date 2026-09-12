@@ -83,7 +83,7 @@ const GPU1: GpuId = GpuId(1);
 /// Build the two-process, two-GPU device. A on GPU0, B on GPU1, byte-identical guest
 /// handle values, distinct PDBs and vChids.
 fn world() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, recorder) = MockIsolateFactory::new();
     // ★ w393 — the guest-RAM door is OPEN: a `Passthrough` channel is born at its own
     // alloc over the guest's OWN ring page (`kayfabe_tests::birth_passthrough_channels`),

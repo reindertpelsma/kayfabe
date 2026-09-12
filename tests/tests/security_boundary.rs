@@ -64,7 +64,7 @@ use proptest::prelude::*;
 // =================================================================================
 
 fn fresh_gpu() -> Guarded<Gpu> {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     // A generous window so exhaustion is a deliberate act, not an accident.
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
@@ -1510,7 +1510,7 @@ fn b5_dangling_dup_is_inert_and_unknown_free_is_loud() {
 #[test]
 fn b6_gpa_window_exhaustion_is_graceful() {
     // A tiny window: one arena for the system proc + room for just a couple more.
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x4_0000_0000, 0x1_0000_0000); // 3 arenas total
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("realizes (system takes 1)");
@@ -1729,7 +1729,7 @@ fn a_refused_merge_leaves_the_victim_it_reached_first_bit_identical() {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
 
     const C1: HClient = HClient(0x10);
     const C2: HClient = HClient(0x20);
@@ -1849,7 +1849,7 @@ fn a_refused_arena_carve_returns_every_arena_it_took_and_loses_no_proc() {
     // ★ G9 (§12.21): realized with three physical GPUs — the entitlement this test's
     // `deviceInstance`s are checked against.
     let mut gpu = Gpu::realize(
-        Box::new(MockArch::new()),
+        std::sync::Arc::new(MockArch::new()),
         Box::new(factory),
         gpa,
         &[GpuId::ZERO, GpuId(1), GpuId(2)],

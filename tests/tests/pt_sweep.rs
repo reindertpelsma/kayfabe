@@ -136,7 +136,7 @@ fn only_proc(gpu: &mut Gpu) -> &mut kayfabe_core::gpu::Proc {
 }
 
 fn fixture() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder) {
-    let arch = Box::new(MockArch::new());
+    let arch = std::sync::Arc::new(MockArch::new());
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");

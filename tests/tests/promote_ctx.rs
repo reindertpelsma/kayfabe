@@ -637,7 +637,7 @@ fn world() -> Guarded<Gpu> {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
     let mut gpu =
-        Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
+        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
     let mut s = Scenario::new();
     s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
     s.compute_process(B_CLIENT, B_PDB, identical_handles(0x20, 0x21));
@@ -899,7 +899,7 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
     let mut gpu = {
         let (factory, rec) = MockIsolateFactory::new();
         let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-        let mut g = Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa)
+        let mut g = Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa)
             .expect("device realizes");
         let mut s = Scenario::new();
         s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));

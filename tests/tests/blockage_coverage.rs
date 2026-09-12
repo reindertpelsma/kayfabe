@@ -146,7 +146,7 @@ fn world_user_only() -> Gpu {
 fn bare() -> Gpu {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    Gpu::new(Box::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes")
+    Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes")
 }
 
 fn promotion() -> CtxPromotion {

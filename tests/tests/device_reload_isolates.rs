@@ -116,7 +116,7 @@ fn died(rec: &SharedRecorder) -> Vec<IsolateId> {
 fn device() -> (Gpu, SharedRecorder, ProcId, ProcId, ProcId) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(Box::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     for (i, (client, pdb)) in [

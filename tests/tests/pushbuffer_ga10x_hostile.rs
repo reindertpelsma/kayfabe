@@ -92,7 +92,7 @@ const PB_WINDOW: u64 = 1 << 39;
 /// file would silently stop testing the thing it was written for.
 fn port_gpu() -> (Gpu, ProcId, ChanId) {
     let mut gpu = Gpu::new(
-        Box::new(Ga10xArch::new()),
+        std::sync::Arc::new(Ga10xArch::new()),
         Box::new(StillbornIsolates::new("test: no forwarding plane")),
         GpaSpace::new(0x10_0000_0000..0x20_0000_0000, 0x1_0000_0000),
     )
