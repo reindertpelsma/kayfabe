@@ -615,7 +615,13 @@ mod watchdog {
         let pid = std::process::id();
         let child = std::process::Command::new("sh")
             .arg("-c")
-            .arg(format!("head -c 1 >/dev/null; exec kill -STOP {pid}"))
+            // ⊘⊘ **NO `exec`.** `exec kill` forces an `execve` of /bin/kill, ~1 ms, and
+            // `[measured w485]` that was enough for the trap to end before the signal landed
+            // — twice, with the stack showing the worker mid-`spawn_host` and no vCPU inside
+            // any trap. Without `exec`, `kill` is a shell BUILTIN and the signal is sent from
+            // the already-parked process with no exec at all. The `head` runs BEFORE the
+            // trigger, so its cost is paid at arm time and never on the firing path.
+            .arg(format!("head -c 1 >/dev/null; kill -STOP {pid}"))
             .stdin(std::process::Stdio::piped())
             .spawn()
             .ok();
