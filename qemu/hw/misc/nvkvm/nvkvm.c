@@ -1262,6 +1262,14 @@ static bool nvkvm_bar0_cut(NvkvmState *s, MemoryRegion *container, uint64_t size
                                                      piece, name, len, errp)) {
             return false;
         }
+#if NVKVM_HAVE_LOCKLESS_IO
+        /* ★★★ A dead piece answers reads out of its own memory, but its WRITES dispatch
+         * through `nvkvm_bar0_dead_ops` like any other handler of this device — so it needs
+         * the same global-lock opt-out, and `nvkvm_regions_selfcheck` checks that it got it.
+         * ⊘ The container above deliberately does NOT: nothing dispatches through a
+         * container, and marking it would be a flag set to satisfy a check. */
+        memory_region_enable_lockless_io(&piece->mr);
+#endif
         memory_region_add_subregion(container, start, &piece->mr);
         s->bar0_dead_bytes += len;
         cursor = start + len;
@@ -1502,6 +1510,33 @@ static bool nvkvm_regions_selfcheck(NvkvmState *s, Error **errp)
             return false;
         }
 #if NVKVM_HAVE_LOCKLESS_IO
+        /* ★★★★★ A CUT row's container dispatches NOTHING — every access resolves to a
+         * piece — so the question "is this region marked" has to be asked of the pieces.
+         * ⊘ Asking the container instead is how this check goes vacuous: it would pass on a
+         * flag that no access ever consults, over pieces that might carry none. */
+        if (row->kind == NVKVM_KIND_CUT) {
+            unsigned k;
+
+            if (!s->bar0_trap.lockless_io) {
+                error_setg(errp,
+                           "nvkvm: %s's trapping leaf did not get the global-lock opt-out; "
+                           "every live piece of the cut aliases into it, so this is the "
+                           "region the guest's accesses actually reach",
+                           row->name);
+                return false;
+            }
+            for (k = 0; k < s->bar0_n_dead; k++) {
+                if (!s->bar0_dead[k].mr.lockless_io) {
+                    error_setg(errp,
+                               "nvkvm: %s's dead piece at 0x%" PRIx64 " did not get the "
+                               "global-lock opt-out; its reads take no exit but its WRITES "
+                               "still dispatch through this device",
+                               row->name, s->bar0_dead[k].base);
+                    return false;
+                }
+            }
+            continue;
+        }
         if (row->kind != NVKVM_KIND_MSIX && !s->mr[i].lockless_io) {
             error_setg(errp,
                        "nvkvm: %s did not get the global-lock opt-out; a device with one "
