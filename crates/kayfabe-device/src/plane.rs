@@ -1726,6 +1726,24 @@ fn resolve_locked(
 }
 
 impl RegPlane {
+    /// The state-free filter's verdict for `(bar, off)` — "could this possibly be ours?".
+    /// See the call site in `read_inner` and `state_free_read_filter.rs`.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn model_may_claim_for_test(&self, bar: u8, off: u64) -> bool {
+        self.model.decode_reg(bar, off).is_some() || self.model.boot_sequence().may_read(bar, off)
+    }
+
+    /// What the LOCKED path would conclude for `(bar, off)`: `true` if the boot FSM answers it.
+    /// ⊘ The pair exists so a test can compare the two verdicts; production asks only the first
+    /// and then, if it admits, the second.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn model_would_serve_for_test(&self, bar: u8, off: u64) -> bool {
+        let s = self.state.lock();
+        s.fsm.mmio_read_with(self.model.as_ref(), bar, off).is_some()
+    }
+
     /// How many vCPU threads are inside an MMIO trap on this plane right now.
     pub fn mmio_in_flight(&self) -> u32 {
         self.mmio_in_flight.load(Ordering::Acquire)
@@ -3751,6 +3769,30 @@ impl RegPlane {
         // such a chip at realize, so reaching here means the two really are separate.
         if let Some(w) = self.chip.fb_window(bar, off) {
             return self.fb_read(w, off, size);
+        }
+        // ★★★★★ **w543 — ASK THE STATE-FREE HALF FIRST, AND DO NOT TAKE THE LOCK TO BE TOLD
+        // "NOT MINE".**
+        //
+        // `[measured w539]` **121 793 of 241 874 BAR0 reads in a boot are UNCLAIMED** — half
+        // the read surface. Every one of them reached this line, took the plane's **rank-0
+        // mutex**, asked the FSM, and was told nothing claimed it. That is the lock a vCPU's
+        // `RegPlane::write` waits on, and `[measured w510]` it is the lock the whole w510–w525
+        // campaign was about.
+        //
+        // ⊘ Both halves of `mmio_read_with` dispatch through `model`, which lives OUTSIDE the
+        // lock: `decode_reg` is state-free, and the boot sequence's `on_read` needs state but
+        // now declares its offsets state-free via `may_read`. So "could this possibly be ours"
+        // is answerable without locking anything, and on this workload the answer is no half
+        // the time.
+        //
+        // ⚠ The hazard is a `may_read` that says no where `on_read` would have said yes: that
+        // turns a served register into an unclaimed one SILENTLY, and the guest sees a
+        // defaulted zero instead of a value. `a_state_free_filter_never_hides_a_served_register`
+        // sweeps the offsets to check the two agree.
+        if self.model.decode_reg(bar, off).is_none()
+            && !self.model.boot_sequence().may_read(bar, off)
+        {
+            return ReadOutcome::Unclaimed;
         }
         let s = self.state.lock();
         match s.fsm.mmio_read_with(self.model.as_ref(), bar, off) {
