@@ -14156,6 +14156,15 @@ impl Regs {
 
     /// The plane, for a caller that needs more than this seam exposes.
     #[must_use]
+    /// How many times anything has drained this plane's BAR mirror. See
+    /// `kayfabe_device::plane::mirror_drains` — the counter is on the CALL, not the effect,
+    /// because the caller is what regressed on the no-worker arm.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn plane_mirror_drains_for_test(&self) -> u64 {
+        kayfabe_device::plane::mirror_drains()
+    }
+
     pub fn plane(&self) -> &RegPlane {
         &self.plane
     }
@@ -14812,6 +14821,12 @@ impl Regs {
 
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
         let mut kft = crate::kftime::Segs::start();
+        // ⊘ Reads too, and not only writes — see the note in `Regs::write`. A guest that does
+        // a long run of reads with no intervening write would otherwise never drain its own
+        // queued fills, which is exactly the BAR bring-up sequence.
+        if !self.doorbell_async.defers() {
+            self.plane.drain_mirror_revalidation();
+        }
         let out = self.plane.read(clamp_bar(bar), off, clamp_size(size));
         // ★★★★★ w393 — a translated-window read that the archive served is, under the
         // mirror, a MISS: fill the page so the next access to it takes no exit. Runs with
@@ -15178,6 +15193,28 @@ impl Regs {
         // a GSP RPC poke or some other register, a doorbell-only instrument would report a
         // fast doorbell and a mystery, which is the (D) outcome arriving disguised as (C).
         let mut kft = crate::kftime::Segs::start();
+        // ★★★★★ **w532 — WITHOUT A WORKER, THE vCPU MUST DRAIN THE MIRROR ITSELF.**
+        //
+        // `start_doorbell_publish_worker` returns immediately when `!defers()`, so on the
+        // `off` arm **there is no worker at all** — and `drain_mirror_revalidation` was called
+        // from nowhere else. Both halves it runs are then dead on that arm:
+        //   * `drain_fills()` — w472a made `fill()` enqueue on the vCPU and drain on the
+        //     worker, reasoning that the queue is *"lossy — a dropped prefetch only costs
+        //     extra exits"*. ⊘ That is true of a dropped prefetch. With NO worker **every**
+        //     fill is dropped, so no memslot is ever installed and the BAR passthrough plane
+        //     never engages at all.
+        //   * `revalidate_pending()` — w468 made a write only REQUEST a revalidation. Never
+        //     running it leaves the mirror serving stale bytes.
+        //
+        // `[measured w529]` the `off` boot cannot initialise the adapter, and its log shows
+        // `BAR2-PASSTHROUGH MISS #5, #6, #7 … no memslot covered this page yet` at successive
+        // pages — which is what "fills never install" looks like from outside. w468/w472a both
+        // land AFTER w383, the last boot on which the LLM passed, and w383 ran `off`.
+        //
+        // ⚠ On the shipping arm this costs nothing: the guard is false and the worker owns it.
+        if !self.doorbell_async.defers() {
+            self.plane.drain_mirror_revalidation();
+        }
         let out = self.plane.write(clamp_bar(bar), off, clamp_size(size), val);
         kft.mark("plane");
 

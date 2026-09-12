@@ -1432,6 +1432,20 @@ struct MmioInFlight<'a>(&'a AtomicU32);
 /// starvation and wants a different fix.
 static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
 
+/// How many times [`RegPlane::drain_mirror_revalidation`] has been called, by anyone.
+///
+/// ⊘ Exists because the drain's CALLER is the thing that regressed, not its body: it had one
+/// caller, inside the doorbell worker, and the `off` arm has no worker. A census of what the
+/// drain *did* would have read as healthy on an arm where it never ran at all. See
+/// `no_worker_still_drains.rs`.
+static MIRROR_DRAINS: AtomicU64 = AtomicU64::new(0);
+
+/// See [`MIRROR_DRAINS`].
+#[must_use]
+pub fn mirror_drains() -> u64 {
+    MIRROR_DRAINS.load(Ordering::Relaxed)
+}
+
 /// Times [`PlanePtBytes::breathe`] actually yielded to an in-flight MMIO trap. ★ This is the
 /// number that says the mechanism is REACHED; `SWEEP_DEFER_GIVEUPS` alone cannot distinguish
 /// "never needed" from "never ran", which is this tree's most expensive recurring instrument
@@ -1919,6 +1933,7 @@ impl RegPlane {
     /// this before completing an invalidate, so the guest's spin is released only after
     /// every stale mirror slot is gone. ⊘ Never call this from a vCPU thread.
     pub fn drain_mirror_revalidation(&self) {
+        MIRROR_DRAINS.fetch_add(1, Ordering::Relaxed);
         if let Some(m) = self.fb_mirror() {
             // ⊘ Fills FIRST, then the revalidation: a fill installs a slot and the
             // revalidation decides which installed slots are still true, so running them the
