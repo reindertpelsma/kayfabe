@@ -199,7 +199,9 @@ impl<T> RankedRwLock<T> {
     /// too — read-read reentrancy on one `RwLock` is a writer-starvation deadlock
     /// waiting for the unlucky scheduling, so "at most one lock per rank" is
     /// deliberately not relaxed for shared mode.
+    #[track_caller]
     pub fn read(&self) -> RankedReadGuard<'_, T> {
+        let site = core::panic::Location::caller();
         check_acquire(self.rank);
         let t0 = std::time::Instant::now();
         let inner = self.inner.read().expect(POISONED);
@@ -208,12 +210,15 @@ impl<T> RankedRwLock<T> {
         RankedReadGuard {
             inner,
             rank: self.rank,
+            site,
             held_since: std::time::Instant::now(),
         }
     }
 
     /// Exclusive (write) acquisition. R3-checked as [`RankedRwLock::read`].
+    #[track_caller]
     pub fn write(&self) -> RankedWriteGuard<'_, T> {
+        let site = core::panic::Location::caller();
         check_acquire(self.rank);
         // ★★★★★ **OWNER INVARIANT (2), 2026-09-09: "no blocking calls in a lock in any
         // thread unless needed."** The WAIT is measured separately from the HOLD because
@@ -229,6 +234,7 @@ impl<T> RankedRwLock<T> {
         RankedWriteGuard {
             inner,
             rank: self.rank,
+            site,
             held_since: std::time::Instant::now(),
         }
     }
@@ -248,6 +254,8 @@ impl<T> RankedRwLock<T> {
 pub struct RankedReadGuard<'a, T> {
     inner: RwLockReadGuard<'a, T>,
     rank: LockRank,
+    /// w492 — where this guard was taken, for hold attribution.
+    site: &'static core::panic::Location<'static>,
     /// When the lock was actually acquired — the HOLD, which names the offender.
     held_since: std::time::Instant,
 }
@@ -261,7 +269,7 @@ impl<T> Deref for RankedReadGuard<'_, T> {
 
 impl<T> Drop for RankedReadGuard<'_, T> {
     fn drop(&mut self) {
-        lockcost::note_hold(self.rank, self.held_since.elapsed());
+        lockcost::note_hold_at(self.rank, self.site, self.held_since.elapsed());
         note_released(self.rank);
     }
 }
@@ -271,6 +279,8 @@ impl<T> Drop for RankedReadGuard<'_, T> {
 pub struct RankedWriteGuard<'a, T> {
     inner: RwLockWriteGuard<'a, T>,
     rank: LockRank,
+    /// w492 — where this guard was taken, for hold attribution.
+    site: &'static core::panic::Location<'static>,
     /// When the lock was actually acquired — see [`RankedReadGuard::held_since`].
     held_since: std::time::Instant,
 }
@@ -290,7 +300,7 @@ impl<T> DerefMut for RankedWriteGuard<'_, T> {
 
 impl<T> Drop for RankedWriteGuard<'_, T> {
     fn drop(&mut self) {
-        lockcost::note_hold(self.rank, self.held_since.elapsed());
+        lockcost::note_hold_at(self.rank, self.site, self.held_since.elapsed());
         note_released(self.rank);
     }
 }
@@ -313,13 +323,16 @@ impl<T> RankedMutex<T> {
     }
 
     /// Acquire. R3-checked: strictly-increasing rank, at most one per rank.
+    #[track_caller]
     pub fn lock(&self) -> RankedMutexGuard<'_, T> {
+        let site = core::panic::Location::caller();
         check_acquire(self.rank);
         let inner = self.inner.lock().expect(POISONED);
         note_acquired(self.rank);
         RankedMutexGuard {
             inner,
             rank: self.rank,
+            site,
         }
     }
 
@@ -347,6 +360,8 @@ impl<T> RankedMutex<T> {
 pub struct RankedMutexGuard<'a, T> {
     inner: MutexGuard<'a, T>,
     rank: LockRank,
+    /// w492 — where this guard was taken, for hold attribution.
+    site: &'static core::panic::Location<'static>,
 }
 
 impl<T> Deref for RankedMutexGuard<'_, T> {
@@ -1048,6 +1063,33 @@ pub mod lockcost {
         }
     }
 
+    /// ★★★★★ **w492 — WHICH acquisition, not just which rank.** `note_hold` recorded a rank
+    /// and nothing else, so `rank1 worst_hold=23881us` named a lock and left the site
+    /// unknown. Five of the six hypotheses that died tonight died of acting on a plausible
+    /// mechanism without knowing the site.
+    ///
+    /// ⊘ The caller's location arrives via `#[track_caller]`, so **no call site changes** and
+    /// nothing is passed by hand — a label threaded through hundreds of acquisitions is a
+    /// label that goes stale at the first refactor.
+    pub fn note_hold_at(rank: LockRank, site: &'static core::panic::Location<'static>, d: Duration) {
+        let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
+        let slot = slot(rank);
+        // ⊘ Record the site only when this hold is the new worst for its rank, so the pair
+        // cannot drift apart: a site stored unconditionally would name the LAST hold while
+        // the duration named the WORST.
+        if WORST_HOLD[slot].fetch_max(us, Ordering::Relaxed) < us {
+            let mut g = WORST_HOLD_SITE[slot]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *g = Some((site.file(), site.line()));
+        }
+        note_hold(rank, d);
+    }
+
+    /// Where the worst hold for each rank was taken.
+    static WORST_HOLD_SITE: [std::sync::Mutex<Option<(&'static str, u32)>>; RANKS] =
+        [const { std::sync::Mutex::new(None) }; RANKS];
+
     pub fn note_hold(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         WORST_HOLD[slot(rank)].fetch_max(us, Ordering::Relaxed);
@@ -1076,9 +1118,14 @@ pub mod lockcost {
                 continue;
             }
             rows.push(format!(
-                "[rank{r} worst_wait={w}us worst_hold={h}us slow_waits={} slow_holds={}]",
+                "[rank{r} worst_wait={w}us worst_hold={h}us slow_waits={} slow_holds={} \
+                 worst_hold_at={}]",
                 SLOW_WAITS[r].load(Ordering::Relaxed),
                 SLOW_HOLDS[r].load(Ordering::Relaxed),
+                WORST_HOLD_SITE[r]
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .map_or_else(|| "UNATTRIBUTED".to_string(), |(f, l)| format!("{f}:{l}")),
             ));
         }
         if rows.is_empty() {
