@@ -82,3 +82,33 @@ clean-slate architecture document.
    denominator**, so the classifier never ran — that is not evidence of safety.
 4. Delete the `KAYFABE_TRAP_FATAL_US` watchdog.
 5. Six `e2_doorbell` tests red since w467.
+
+
+---
+
+## w495 — the hypothesis under test now, and a correction to it
+
+**Hypothesis 8: the traps are mostly a DESCHEDULED vCPU, not work.** Every trap figure in this
+campaign is wall clock. The w472 box ran 8 vCPUs plus a coordinator plus isolate processes on
+**11 cores**. `bar0+0x110094` has no decode arm anywhere and still costs milliseconds — code
+that does not exist cannot be slow, so the thread may simply not be running.
+
+⊘ **CORRECTION, owner 2026-09-12:** I argued this partly from *"the Mode-2 C had no isolates
+and no coordinator"*. **That is wrong** — the C's `nvkvm_isolate.c` carries an
+`isolates[NVKVM_ISOLATE_MAX]` array and Mode 2 used them. How many were live during its
+llama.cpp run is unknown. ⇒ the thread-count argument is weaker than I stated, and the
+hypothesis rests on the direct experiment rather than on that comparison.
+
+★ **The owner's ceiling, which is the useful part:** the C reached **49.9 tok/s against 47.5
+host-native** on comparable vast boxes. An LLM at that rate cannot have had 20 ms traps. So
+whatever we are seeing is **not inherent to this architecture** — it is ours, by construction
+or by measurement.
+
+**The experiment, one variable:** box `50685423`, RTX 3090 (GA102), **24 cores** against the
+previous 11, same revision. Plus two instruments (w495, TEMPORARY):
+- `TRAP-CPU` — wall and CPU for the SAME trap. `slow_starved` counts slow traps whose CPU was
+  under a tenth of their wall ⇒ not running.
+- the over-budget watchdog now `tgkill`s the **stuck thread** so its dump names the site.
+
+⇒ If `slow_starved` dominates, or the tail collapses on 24 cores, it is scheduling and no
+amount of lock work will help. If `cpu` tracks `wall`, it is real work and the dump names it.
