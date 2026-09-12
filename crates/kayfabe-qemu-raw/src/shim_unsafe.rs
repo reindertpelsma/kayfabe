@@ -1395,6 +1395,15 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     // ⊘ Both exist because `bar0+0x110094` has NO DECODE ARM ANYWHERE and still costs
     // milliseconds. Seven hypotheses have died looking for what it executes; none asked
     // whether it was running at all.
+    // ★★★★★ **THE PER-TRAP ALARM (w496).** Owner: *"at the mmio trap start you ask the kernel
+    // to send a sig alarm after 2 milliseconds to that vcpu thread … then it will crash dump
+    // at the exact site it was hanging in"* — and the point is precisely that: **the exact
+    // line of our code that is slow.** Armed here, disarmed by `Drop` when this function
+    // returns, so it can only fire while a trap is in flight.
+    //
+    // ⊘ Off unless `KAYFABE_STALL_ALARM_US` is set; with it absent no timer is created.
+    #[cfg(feature = "host-isolates")]
+    let _stall = kayfabe_linux_raw::stall_alarm::timer::arm();
     #[cfg(feature = "host-isolates")]
     let cpu_t0 = kayfabe_linux_raw::stall_alarm::thread_cpu_nanos().ok();
     let wall_t0 = std::time::Instant::now();

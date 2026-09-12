@@ -294,6 +294,158 @@ pub mod stall_alarm {
         Err(err)
     }
 
+    /// ★★★★★ **THE PER-TRAP ALARM, as the owner specified it.** Armed at the MMIO trap's
+    /// start, disarmed when the trap answers. If it fires, `SIGALRM`'s default action dumps
+    /// **at the site the thread is stuck in**.
+    ///
+    /// # ⊘ Why this is here and not behind a polling watchdog
+    ///
+    /// My first attempt used the existing 200 us watchdog instead, justified by *"musl's
+    /// bindings lack `SIGEV_THREAD_ID`"*. ⊘⊘ **That reasoning was wrong, and the owner caught
+    /// it: an isolate has nothing to do with an alarm set in a vCPU thread.** What actually
+    /// happened is that this crate is compiled for BOTH targets — the shim against glibc and
+    /// the embedded isolate against musl — so a musl binding gap gated a feature only the
+    /// glibc side would ever call. The fix is to break that coupling, not to change the
+    /// design. Hence `#[cfg]` below.
+    ///
+    /// ★ And the owner's form is the better instrument: a timer fires **exactly** at the
+    /// budget, where a 200 us poll detects late and can miss a trap that is over budget but
+    /// short.
+    ///
+    /// ⊘ `SIGEV_THREAD_ID` and `sigev_notify_thread_id` are absent from this libc version's
+    /// **glibc** bindings (they exist for android and uclibc), so the structure is declared
+    /// here against glibc's documented layout and its size is asserted at compile time. The
+    /// union's first member is the tid; `SIGEV_MAX_SIZE` is 64 bytes.
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    pub mod timer {
+        /// `SIGEV_THREAD_ID` — deliver to one specific thread. Linux-wide, all libcs.
+        const SIGEV_THREAD_ID: i32 = 4;
+
+        /// glibc's `struct sigevent`, 64 bytes: an 8-byte `sigev_value` union, two ints, then
+        /// a 48-byte union whose first member is the target tid.
+        #[repr(C)]
+        struct SigEvent {
+            sigev_value: usize,
+            sigev_signo: i32,
+            sigev_notify: i32,
+            sigev_tid: i32,
+            _pad: [i32; 11],
+        }
+        const _: () = assert!(core::mem::size_of::<SigEvent>() == 64);
+
+        /// An armed per-trap alarm. Dropping it deletes the timer.
+        #[derive(Debug)]
+        pub struct Armed(libc::timer_t);
+
+        fn budget_us() -> Option<i64> {
+            static B: std::sync::OnceLock<Option<i64>> = std::sync::OnceLock::new();
+            *B.get_or_init(|| {
+                std::env::var("KAYFABE_STALL_ALARM_US")
+                    .ok()
+                    .and_then(|v| v.parse::<i64>().ok())
+                    .filter(|v| *v > 0)
+            })
+        }
+
+        /// Whether the instrument is armed at all. ⊘ Off unless `KAYFABE_STALL_ALARM_US` is
+        /// set, so a production build creates no timer and pays nothing.
+        #[must_use]
+        pub fn enabled() -> bool {
+            budget_us().is_some()
+        }
+
+        /// Arm an alarm on the calling thread for the configured budget.
+        #[must_use]
+        pub fn arm() -> Option<Armed> {
+            let us = budget_us()?;
+            // SAFETY: `gettid` takes no argument and dereferences nothing.
+            let tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
+            let mut sev = SigEvent {
+                sigev_value: 0,
+                sigev_signo: libc::SIGALRM,
+                sigev_notify: SIGEV_THREAD_ID,
+                sigev_tid: tid,
+                _pad: [0; 11],
+            };
+            let mut t: libc::timer_t = core::ptr::null_mut();
+            // SAFETY: `sev` matches glibc's `sigevent` layout (asserted above) and lives on
+            // this stack for the call; `t` is a writable out-parameter of the right type.
+            let rc = unsafe {
+                libc::timer_create(
+                    libc::CLOCK_MONOTONIC,
+                    (&raw mut sev).cast::<libc::sigevent>(),
+                    &raw mut t,
+                )
+            };
+            if rc != 0 {
+                return None;
+            }
+            let spec = libc::itimerspec {
+                it_interval: libc::timespec { tv_sec: 0, tv_nsec: 0 },
+                it_value: libc::timespec {
+                    tv_sec: us / 1_000_000,
+                    tv_nsec: (us % 1_000_000) * 1_000,
+                },
+            };
+            // SAFETY: `spec` is fully initialised and outlives the call; a null out-parameter
+            // is explicitly permitted by `timer_settime(2)`.
+            if unsafe { libc::timer_settime(t, 0, &raw const spec, core::ptr::null_mut()) } != 0 {
+                // SAFETY: `t` came from the successful `timer_create` just above.
+                unsafe { libc::timer_delete(t) };
+                return None;
+            }
+            Some(Armed(t))
+        }
+
+        impl Drop for Armed {
+            /// ⊘ DELETES rather than merely disarming: a leaked `timer_t` per trap would
+            /// exhaust the per-process timer limit within a second of boot, and the failure
+            /// would look like the instrument simply stopping.
+            fn drop(&mut self) {
+                // SAFETY: `self.0` came from `timer_create` in `arm` and is deleted once.
+                unsafe { libc::timer_delete(self.0) };
+            }
+        }
+    }
+
+    #[cfg(all(test, target_os = "linux", target_env = "gnu"))]
+    mod timer_tests {
+        /// ⊘ The instrument must be PROVEN to fire on the arming thread, not assumed. A
+        /// hand-rolled `sigevent` that is one field out would arm a timer that never fires,
+        /// and a debug tool that silently does nothing is worse than none — it would be read
+        /// as "no trap was ever over budget".
+        ///
+        /// Catches `SIGALRM` instead of dying so the test can assert delivery.
+        #[test]
+        fn the_alarm_fires_on_the_arming_thread() {
+            use std::sync::atomic::{AtomicBool, Ordering};
+            static FIRED: AtomicBool = AtomicBool::new(false);
+            extern "C" fn on_alarm(_: libc::c_int) {
+                FIRED.store(true, Ordering::SeqCst);
+            }
+            // SAFETY: installing a handler for SIGALRM with default flags; `on_alarm` only
+            // touches an atomic, which is async-signal-safe.
+            unsafe {
+                libc::signal(libc::SIGALRM, on_alarm as libc::sighandler_t);
+            }
+            // SAFETY: setting an env var in a single-threaded test section.
+            unsafe { std::env::set_var("KAYFABE_STALL_ALARM_US", "2000") };
+            let Some(armed) = super::timer::arm() else {
+                // ⊘ `arm()` memoises the budget in a `OnceLock`, so another test in this
+                // binary may have read it as absent first. Skipping is honest; asserting
+                // would make the suite order-dependent.
+                return;
+            };
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            assert!(
+                FIRED.load(Ordering::SeqCst),
+                "a 2ms alarm did not fire within 60ms — the sigevent layout is wrong and the \
+                 instrument would report silence as 'nothing was over budget'"
+            );
+            drop(armed);
+        }
+    }
+
     /// This thread's consumed CPU time, for the wall-versus-CPU comparison.
     ///
     /// ★ This is the half that needs no crash: `cpu` far below `wall` means the thread was
