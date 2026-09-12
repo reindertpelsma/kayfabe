@@ -237,3 +237,62 @@ fn the_state_free_classifier_agrees_with_the_read_path() {
     }
     assert!(dead > 0 && live > 0, "non-vacuity both ways: dead={dead} live={live}");
 }
+
+/// ★★★★★ **WHICH pages are live, and WHAT makes each one live (w561).**
+///
+/// Owner, on being told the remaining unclaimed reads all sit in live pages: *"which ones"*.
+///
+/// ⊘ This answers the MAP, not the TRAFFIC. It says which of BAR0's 4096 pages hold at least
+/// one register and which arm claims it — computed from the chip table, needing no boot. The
+/// per-page READ COUNT is a different fact and needs a live guest; `[measured w554]` all we
+/// know from traffic is the total, 122 001 unclaimed reads, and that **zero** of them landed
+/// in a page the cut backs.
+#[test]
+fn report_which_pages_are_live_and_why() {
+    let p = plane();
+    let mut by_arm: std::collections::BTreeMap<&'static str, Vec<u64>> =
+        std::collections::BTreeMap::new();
+    for page in 0..(BAR0_LEN / PAGE) {
+        let base = page * PAGE;
+        // The first arm that claims ANY dword in the page is what keeps the page trapping.
+        let mut claim: Option<&'static str> = None;
+        for off in (base..base + PAGE).step_by(4) {
+            if p.bar0_dword_is_dead_for_test(off) {
+                continue;
+            }
+            claim = Some(p.bar0_claim_name_for_test(off));
+            break;
+        }
+        if let Some(c) = claim {
+            by_arm.entry(c).or_default().push(base);
+        }
+    }
+    let total: usize = by_arm.values().map(Vec::len).sum();
+    println!("BAR0-LIVE-PAGES total={total} of {} pages", BAR0_LEN / PAGE);
+    for (arm, pages) in &by_arm {
+        let first = pages.first().copied().unwrap_or(0);
+        let last = pages.last().copied().unwrap_or(0);
+        println!(
+            "  {arm:<16} pages={:<5} span=[{first:#010x}..{last:#010x}]  first_few={:x?}",
+            pages.len(),
+            &pages[..pages.len().min(6)]
+        );
+    }
+    assert!(total > 0, "non-vacuity: some page must be live");
+}
+
+/// ★★★ **Where the doorbell sits, and which page it poisons for WRITES.**
+///
+/// Owner: *"Most of bar0 is constant registers or mappable from userspace except the doorbell
+/// write ofc"*. This prints the page so the write-side surface is a stated address rather than
+/// an assumption.
+#[test]
+fn report_the_doorbell_page() {
+    let p = plane();
+    let db = p.doorbell_reg().expect("GA106 declares a usermode doorbell");
+    println!(
+        "BAR0-DOORBELL reg={db:#010x} page={:#010x} claimed_by={}",
+        db & !(PAGE - 1),
+        p.bar0_claim_name_for_test(db)
+    );
+}

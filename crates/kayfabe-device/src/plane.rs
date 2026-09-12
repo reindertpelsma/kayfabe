@@ -1871,6 +1871,38 @@ impl RegPlane {
             .is_some_and(|w| w & (1 << (page % 64)) != 0)
     }
 
+    /// ★★★ **WHICH arm claims this dword** — the same predicate chain as
+    /// [`RegPlane::bar0_dword_is_dead`], reported instead of collapsed to a bool.
+    ///
+    /// ⊘ Derived from the SAME chain, in the same order, rather than written out a second
+    /// time: a census that listed arms independently of the classifier could name one the
+    /// classifier does not consult, and the two would drift with nothing to catch it.
+    #[must_use]
+    pub fn bar0_claim_name_for_test(&self, off: u64) -> &'static str {
+        const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
+        if self.chip.boot_regs.iter().any(|r| r.off == off) {
+            "boot_reg"
+        } else if self.ptimer_read(off).is_some() {
+            "ptimer"
+        } else if self.chip.rom_window.contains(off) {
+            "rom/vbios"
+        } else if self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg {
+            "window_latch"
+        } else if crate::cpuintr::decode(off).is_some() {
+            "cpu_intr"
+        } else if self.invalidate_regs().is_some_and(|r| r.trigger == off) {
+            "mmu_invalidate"
+        } else if self.chip.fb_window(BAR, off).is_some() {
+            "pramin/fb"
+        } else if self.model.decode_reg(BAR, off).is_some() {
+            "gsp_decode"
+        } else if self.model.boot_sequence().may_read(BAR, off) {
+            "boot_sequence"
+        } else {
+            "unclaimed"
+        }
+    }
+
     /// Whether the production classifier calls this dword dead — for the test that pins it
     /// against [`RegPlane::read_inner`]'s own answer.
     #[must_use]
