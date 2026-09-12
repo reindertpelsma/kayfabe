@@ -6140,7 +6140,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 kayfabe_isolate::verbcost::census(),
                 // ★★★★★ w477 — the size of a LIVE exposure, on the same line as the traps.
@@ -6157,7 +6157,20 @@ impl SharedDoorbell {
                 // printed only from `stop_doorbell_publish_worker` — a teardown path these
                 // boots never reach, so the data was collected and thrown away. `worst_trap`
                 // says a trap WAITED; this is the only thing in the tree that says FOR WHOM.
-                kayfabe_util::lock::lockcost::census()
+                kayfabe_util::lock::lockcost::census(),
+                // w503 — whether the stall alarm is even working. It was SILENT for two
+                // boots and silence read as "no trap was over budget".
+                // ⊘ The crate is optional; the default build has no such module.
+                {
+                    #[cfg(feature = "host-isolates")]
+                    {
+                        kayfabe_linux_raw::stall_alarm::timer::census()
+                    }
+                    #[cfg(not(feature = "host-isolates"))]
+                    {
+                        "STALL-ALARM n/a (built without host-isolates)".to_string()
+                    }
+                }
             ),
             // ★★★★★ w383 — THE LANE'S DEPTH, ON THE LINE EVERY DOORBELL PRINTS. A queue
             // whose depth is only readable at teardown cannot answer *"is the worker

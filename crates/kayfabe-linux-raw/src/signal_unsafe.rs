@@ -321,6 +321,18 @@ pub mod stall_alarm {
         /// `SIGEV_THREAD_ID` — deliver to one specific thread. Linux-wide, all libcs.
         const SIGEV_THREAD_ID: i32 = 4;
 
+        /// ⊘⊘ **NOT `SIGALRM`.** `[measured w501/w502]` the alarm was armed on every write
+        /// trap and **never once fired**, while the census reported 90 slow traps all
+        /// blocking — the handler was in the binary and the variable reached QEMU, so
+        /// DELIVERY was failing. QEMU **blocks signals on its vCPU threads**, and a blocked
+        /// signal stays pending forever instead of running the handler.
+        ///
+        /// `SIGPROF` is not used by QEMU, and `arm` explicitly unblocks it for the calling
+        /// thread. ⊘ Deliberately NOT unblocking `SIGALRM`: QEMU's own timers use it, so
+        /// unblocking that would let an unrelated QEMU alarm kill the process and the dump
+        /// would name an innocent frame.
+        const STALL_SIGNAL: libc::c_int = libc::SIGPROF;
+
         /// glibc's `struct sigevent`, 64 bytes: an 8-byte `sigev_value` union, two ints, then
         /// a 48-byte union whose first member is the target tid.
         #[repr(C)]
@@ -367,7 +379,7 @@ pub mod stall_alarm {
             ONCE.call_once(|| {
                 // SAFETY: installing a handler for one signal with default flags.
                 unsafe {
-                    libc::signal(libc::SIGALRM, on_stall as libc::sighandler_t);
+                    libc::signal(STALL_SIGNAL, on_stall as libc::sighandler_t);
                 }
             });
         }
@@ -393,16 +405,60 @@ pub mod stall_alarm {
             budget_us().is_some()
         }
 
+        /// How many arms succeeded, and how many the kernel refused.
+        pub(crate) static ARMED_OK: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(0);
+        pub(crate) static ARMED_FAIL: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(0);
+
+        /// One line saying whether the instrument is even working. ⊘ Added because it was
+        /// SILENT for two whole boots and silence read as "no trap was over budget" — the one
+        /// failure this tool cannot afford.
+        #[must_use]
+        pub fn census() -> String {
+            use std::sync::atomic::Ordering;
+            let (ok, bad) = (
+                ARMED_OK.load(Ordering::Relaxed),
+                ARMED_FAIL.load(Ordering::Relaxed),
+            );
+            if ok == 0 && bad == 0 {
+                return "STALL-ALARM off (KAYFABE_STALL_ALARM_US unset)".to_string();
+            }
+            format!("STALL-ALARM armed={ok} refused={bad} signal=SIGPROF")
+        }
+
+        /// Unblock the stall signal for this thread, once. QEMU blocks signals on vCPU
+        /// threads; a blocked signal never reaches the handler.
+        fn unblock_once() {
+            thread_local! {
+                static DONE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+            }
+            DONE.with(|d| {
+                if d.get() {
+                    return;
+                }
+                d.set(true);
+                let mut set: libc::sigset_t = unsafe { std::mem::zeroed() };
+                // SAFETY: `set` is a writable out-parameter of the right type.
+                unsafe {
+                    libc::sigemptyset(&raw mut set);
+                    libc::sigaddset(&raw mut set, STALL_SIGNAL);
+                    libc::pthread_sigmask(libc::SIG_UNBLOCK, &raw const set, core::ptr::null_mut());
+                }
+            });
+        }
+
         /// Arm an alarm on the calling thread for the configured budget.
         #[must_use]
         pub fn arm() -> Option<Armed> {
             let us = budget_us()?;
             install_handler();
+            unblock_once();
             // SAFETY: `gettid` takes no argument and dereferences nothing.
             let tid = unsafe { libc::syscall(libc::SYS_gettid) } as i32;
             let mut sev = SigEvent {
                 sigev_value: 0,
-                sigev_signo: libc::SIGALRM,
+                sigev_signo: STALL_SIGNAL,
                 sigev_notify: SIGEV_THREAD_ID,
                 sigev_tid: tid,
                 _pad: [0; 11],
@@ -418,6 +474,7 @@ pub mod stall_alarm {
                 )
             };
             if rc != 0 {
+                ARMED_FAIL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return None;
             }
             let spec = libc::itimerspec {
@@ -434,6 +491,7 @@ pub mod stall_alarm {
                 unsafe { libc::timer_delete(t) };
                 return None;
             }
+            ARMED_OK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Some(Armed(t))
         }
 
@@ -478,7 +536,7 @@ pub mod stall_alarm {
             // the timer under test while letting the test observe delivery.
             // SAFETY: installing a handler for one signal; `on_alarm` touches only an atomic.
             unsafe {
-                libc::signal(libc::SIGALRM, on_alarm as libc::sighandler_t);
+                libc::signal(libc::SIGPROF, on_alarm as libc::sighandler_t);
             }
             std::thread::sleep(std::time::Duration::from_millis(60));
             assert!(
