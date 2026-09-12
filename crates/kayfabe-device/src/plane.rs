@@ -1363,6 +1363,41 @@ struct FbStoreReader<'a> {
 #[derive(Debug)]
 pub struct PlanePtBytes<'a> {
     plane: &'a RegPlane,
+    /// ⊘ w507 — reads since this reader last yielded. See [`PlanePtBytes::breathe`].
+    reads: std::cell::Cell<u32>,
+}
+
+impl PlanePtBytes<'_> {
+    /// How many page reads to take before letting a waiter in.
+    const BREATHE_EVERY: u32 = 32;
+
+    /// ★★★★★ **w507 — LET A WAITING vCPU IN.**
+    ///
+    /// `[measured w506]` the plane lock shows `worst_wait=3825us` against `worst_hold=0us`.
+    /// **No holder is long.** A vCPU is simply starved: `std::sync::Mutex` is *barging*, so a
+    /// loop that unlocks and immediately re-locks keeps winning the handoff against a thread
+    /// parked in `futex_wait`. `lockcost`'s own line names the shape — *"a big wait with a
+    /// small hold is STARVATION or many short holders, not one long one — opposite fixes"*.
+    ///
+    /// This reader is that loop: the page-table sweep drives one acquisition **per page** over
+    /// a whole VAS, and `[measured w504]` the stall alarm caught a vCPU parked in
+    /// `futex_wait -> RankedMutex<PlaneState>::lock -> RegPlane::write`.
+    ///
+    /// ⊘ The fix is NOT to hold the lock longer. One guard across the whole sweep would turn
+    /// starvation into a guaranteed multi-millisecond stall for every waiter — the opposite
+    /// fix the census warns about. Yielding periodically keeps every hold as short as it is
+    /// now and only stops this thread from re-winning the race forever.
+    ///
+    /// ⚠ A yield is a scheduler hint, not a handoff. It bounds the *expected* starvation, it
+    /// does not prove a bound — which is why this is graded on `rank0 worst_wait` falling, not
+    /// on the argument.
+    fn breathe(&self) {
+        let n = self.reads.get().wrapping_add(1);
+        self.reads.set(n);
+        if n % Self::BREATHE_EVERY == 0 {
+            std::thread::yield_now();
+        }
+    }
 }
 
 impl FbRead for PlanePtBytes<'_> {
@@ -1397,6 +1432,7 @@ impl FbRead for PlanePtBytes<'_> {
     }
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        self.breathe();
         let mut s = self.plane.state.lock();
         s.fb.read(phys, buf).is_ok()
     }
@@ -2143,7 +2179,10 @@ impl RegPlane {
     /// the measured population is tens of acquisitions per doorbell, not thousands.
     #[must_use]
     pub fn pt_bytes(&self) -> PlanePtBytes<'_> {
-        PlanePtBytes { plane: self }
+        PlanePtBytes {
+            plane: self,
+            reads: std::cell::Cell::new(0),
+        }
     }
 
     /// ★ **Hold the plane's FSM lock explicitly** — for the rank falsifier only.
