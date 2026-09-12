@@ -521,6 +521,8 @@ pub fn census() -> String {
         // all. ⊘ Emitted unconditionally, including its explicit empty arm — a census that
         // prints nothing when it found nothing is indistinguishable from one that never ran.
         + " | "
+        + &trapcpu::census()
+        + " | "
         + &phase_profile()
         + " | "
         + &crate::lockwitness::vcpu_blocking_census()
@@ -528,6 +530,70 @@ pub fn census() -> String {
 
 /// ★ w477 — re-exported here only so the boot log has ONE place that prints the censuses.
 /// ⊘ The count itself lives in `kayfabe-fwd`, beside the decision it measures.
+
+/// ★★★★★ **w495 — WALL versus CPU, which is the question every other instrument dodged.**
+///
+/// `bar0+0x110094` has **no decode arm anywhere in this tree** — read returns 0, write is
+/// dropped — and it measures milliseconds. Code that does not exist cannot be slow, so the
+/// vCPU is not executing. Seven hypotheses have now died looking for what it executes.
+///
+/// ⊘ Every trap figure in this campaign is **wall clock** (`Instant::elapsed`). If a vCPU
+/// thread is descheduled mid-trap — and the box runs 8 vCPUs plus a coordinator plus isolate
+/// processes on 11 cores — the measured "trap" includes time the thread was not running. A
+/// 20 ms trap could be 50 us of work and the rest waiting for a core.
+///
+/// ⇒ record BOTH. `cpu_us` far below `wall_us` is descheduling and nothing of ours is at
+/// fault; `cpu_us` tracking `wall_us` is real work and the site is worth chasing.
+pub mod trapcpu {
+    use core::sync::atomic::{AtomicU64, Ordering};
+
+    static SAMPLES: AtomicU64 = AtomicU64::new(0);
+    static WORST_WALL_US: AtomicU64 = AtomicU64::new(0);
+    /// The CPU time of the trap that had the worst WALL time — the pair that answers the
+    /// question. ⊘ Not the worst CPU time independently: two independent maxima from
+    /// different traps cannot be compared, which is the mistake this module exists to avoid.
+    static WORST_WALL_CPU_US: AtomicU64 = AtomicU64::new(0);
+    /// Traps over the slow threshold whose CPU time was under a tenth of their wall time.
+    static SLOW_AND_STARVED: AtomicU64 = AtomicU64::new(0);
+    /// Traps over the slow threshold that really did burn the CPU.
+    static SLOW_AND_BUSY: AtomicU64 = AtomicU64::new(0);
+
+    /// Record one trap's wall and CPU cost, both in microseconds.
+    pub fn note(wall_us: u64, cpu_us: u64) {
+        SAMPLES.fetch_add(1, Ordering::Relaxed);
+        if WORST_WALL_US.fetch_max(wall_us, Ordering::Relaxed) < wall_us {
+            WORST_WALL_CPU_US.store(cpu_us, Ordering::Relaxed);
+        }
+        if wall_us >= super::SLOW_TRAP_US {
+            if cpu_us * 10 < wall_us {
+                SLOW_AND_STARVED.fetch_add(1, Ordering::Relaxed);
+            } else {
+                SLOW_AND_BUSY.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// One line. ⊘ Prints its unmeasured arm explicitly rather than a bare zero.
+    #[must_use]
+    pub fn census() -> String {
+        let n = SAMPLES.load(Ordering::Relaxed);
+        if n == 0 {
+            return "TRAP-CPU unmeasured — the wall/CPU pair was never sampled".to_string();
+        }
+        let (w, c) = (
+            WORST_WALL_US.load(Ordering::Relaxed),
+            WORST_WALL_CPU_US.load(Ordering::Relaxed),
+        );
+        let (starved, busy) = (
+            SLOW_AND_STARVED.load(Ordering::Relaxed),
+            SLOW_AND_BUSY.load(Ordering::Relaxed),
+        );
+        format!(
+            "TRAP-CPU n={n} worst_wall={w}us cpu_of_that_trap={c}us slow_starved={starved} \
+             slow_busy={busy} (starved = wall over 10x cpu ⇒ the thread was NOT RUNNING)"
+        )
+    }
+}
 
 /// ⊘⊘⊘ **TEMPORARY — THE OVER-BUDGET WATCHDOG. DELETE BEFORE SHIPPING.**
 ///
@@ -554,6 +620,13 @@ mod watchdog {
     pub(super) static START_US: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
     /// The site of the trap in this slot, for the abort message.
     pub(super) static SITE: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    /// ⊘ w495 — the kernel thread id occupying this slot, so the watchdog can signal THE
+    /// STUCK THREAD rather than the whole process. Supplied by the caller: this crate forbids
+    /// `unsafe` and cannot call `gettid` itself.
+    pub(super) static TID: [AtomicU64; SLOTS] = [const { AtomicU64::new(0) }; SLOTS];
+    /// Set once, by the shim, to a function that signals one thread by tid. `None` leaves the
+    /// old whole-process freeze in place, which is the honest fallback rather than silence.
+    pub(super) static ALARM_THREAD: std::sync::OnceLock<fn(i32)> = std::sync::OnceLock::new();
 
     pub(super) fn now_us() -> u64 {
         std::time::SystemTime::now()
@@ -691,6 +764,19 @@ mod watchdog {
                             // reads as an unrelated crash.
                             use std::io::Write;
                             let _ = std::io::stderr().flush();
+                            // ⊘ w495 — signal THE STUCK THREAD when the shim installed a
+                            // thread-directed alarm: its dump is then taken at the site that
+                            // is actually hanging, instead of wherever the freeze happened to
+                            // land. `[measured w484/w485]` the whole-process freeze arrived
+                            // after the trap had ended, twice, and named nothing.
+                            let tid = TID[i].load(Ordering::Relaxed);
+                            if tid != 0
+                                && let Some(alarm) = ALARM_THREAD.get()
+                            {
+                                START_US[i].store(0, Ordering::Release);
+                                alarm(tid as i32);
+                                continue;
+                            }
                             if pause_not_abort() {
                                 // ⊘ SIGSTOP freezes EVERY thread, including the one still
                                 // inside the trap, and leaves the process attachable.
@@ -729,6 +815,21 @@ fn watchdog_arm() {
 /// ⊘ TEMPORARY — an in-flight trap's slot, held for the duration of the trap.
 struct InFlight;
 
+/// ⊘ TEMPORARY (w495) — how to learn the calling thread's kernel id, supplied by the shim
+/// because this crate forbids `unsafe` and cannot call `gettid` itself.
+static CURRENT_TID: std::sync::OnceLock<fn() -> i32> = std::sync::OnceLock::new();
+
+/// ⊘ TEMPORARY (w495) — install the thread-directed alarm and the tid source. Called once by
+/// the shim, which is where `unsafe` is permitted.
+///
+/// ★ Without this the watchdog falls back to freezing the whole process, which
+/// `[measured w484/w485]` arrived AFTER the trap had ended twice and named nothing. A
+/// thread-directed signal lands on the thread that is actually stuck.
+pub fn install_stall_alarm(alarm: fn(i32), tid_of_current: fn() -> i32) {
+    let _ = watchdog::ALARM_THREAD.set(alarm);
+    let _ = CURRENT_TID.set(tid_of_current);
+}
+
 impl InFlight {
     fn claim(site: u64) -> Option<usize> {
         if !watchdog::armed() || watchdog::is_exempt(site) {
@@ -741,6 +842,10 @@ impl InFlight {
                 .is_ok()
             {
                 watchdog::SITE[i].store(site, Ordering::Relaxed);
+                watchdog::TID[i].store(
+                    crate::trapwitness::CURRENT_TID.get().map_or(0, |f| f() as u64),
+                    Ordering::Relaxed,
+                );
                 return Some(i);
             }
         }

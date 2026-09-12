@@ -326,6 +326,8 @@ pub use procfd::{MemfdCandidate, MemfdCensus, MemfdRefusal};
 pub use scm_unsafe::{
     DescriptorKind, MAX_FDS_PER_FRAME, descriptor_kind, recv_with_fds, require_kind, send_with_fds,
 };
+// ⊘ TEMPORARY (w495) — the stall probe, re-exported for the shim. DELETE BEFORE SHIPPING.
+pub use signal_unsafe::stall_alarm;
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };

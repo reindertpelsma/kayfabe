@@ -233,3 +233,81 @@ mod tests {
         install_break_handler().expect("second");
     }
 }
+
+// ============================================================================================
+// ⊘⊘⊘ TEMPORARY DEBUG INSTRUMENT — DELETE BEFORE SHIPPING (w495)
+// ============================================================================================
+
+/// ★★★★★ **The stall probe.** Owner, 2026-09-12: *"at the mmio trap start you ask the kernel
+/// to send a sig alarm after 2 milliseconds to that vcpu thread … then it will crash dump at
+/// the exact site it was hanging in."*
+///
+/// ⊘ **Not `timer_create`/`SIGEV_THREAD_ID`.** That is the obvious implementation and it does
+/// not build: the embedded isolate is a **musl** binary and musl's bindings carry neither the
+/// constant nor `sigev_notify_thread_id`. Gating the module by target would leave two
+/// different debug builds, which is worse than the problem.
+///
+/// ⇒ the existing over-budget watchdog already scans in-flight traps every 200 us. Giving it
+/// the stuck thread's **tid** lets it `tgkill` that exact thread, which is the same outcome
+/// with no per-trap timer and no target-specific code.
+pub mod stall_alarm {
+    use super::{RawError, last_syscall_error};
+
+    /// This thread's kernel id, for a thread-directed signal.
+    #[must_use]
+    pub fn current_tid() -> i32 {
+        // SAFETY: `gettid` takes no argument and dereferences nothing.
+        unsafe { libc::syscall(libc::SYS_gettid) as i32 }
+    }
+
+    /// Send `SIGALRM` to one thread of this process. Its default action terminates and dumps,
+    /// which is the point: the dump is taken **at the site the thread is stuck in**.
+    ///
+    /// ⊘ Thread-directed (`tgkill`), never process-directed. A process-directed signal can be
+    /// delivered to any thread with it unblocked — including one behaving perfectly — and
+    /// would name the wrong site, which is the one failure this instrument cannot afford.
+    ///
+    /// # Errors
+    /// If `tgkill` refuses; `ESRCH` means the thread already finished, which is not an error
+    /// worth propagating and is reported as `Ok(false)`.
+    pub fn alarm_thread(tid: i32) -> Result<bool, RawError> {
+        // SAFETY: `getpid` takes no argument and dereferences nothing.
+        let tgid = unsafe { libc::getpid() };
+        // SAFETY: three integers by value, no user memory dereferenced. The thread group is
+        // our own, so a stale tid cannot reach another process — the kernel answers ESRCH.
+        let rc = unsafe { libc::syscall(libc::SYS_tgkill, tgid, tid, libc::SIGALRM) };
+        if rc == 0 {
+            return Ok(true);
+        }
+        let err = last_syscall_error("tgkill");
+        if err
+            == (RawError::Syscall {
+                call: "tgkill",
+                errno: Some(libc::ESRCH),
+            })
+        {
+            // ⊘ The thread finished between the scan and the signal. That is the instrument
+            // losing a race, not a fault — and reporting it as one would train the reader to
+            // ignore a real refusal.
+            return Ok(false);
+        }
+        Err(err)
+    }
+
+    /// This thread's consumed CPU time, for the wall-versus-CPU comparison.
+    ///
+    /// ★ This is the half that needs no crash: `cpu` far below `wall` means the thread was
+    /// **descheduled**, and nothing of ours is responsible for the difference.
+    ///
+    /// # Errors
+    /// If `clock_gettime` refuses.
+    pub fn thread_cpu_nanos() -> Result<u64, RawError> {
+        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        // SAFETY: `ts` is a writable out-parameter of the right type, living on this stack.
+        let rc = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut ts) };
+        if rc != 0 {
+            return Err(last_syscall_error("clock_gettime"));
+        }
+        Ok((ts.tv_sec as u64) * 1_000_000_000 + (ts.tv_nsec as u64))
+    }
+}
