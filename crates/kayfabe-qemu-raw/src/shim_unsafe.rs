@@ -1528,11 +1528,19 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
     out: *mut crate::shim::KayfabeRange,
     max: u64,
 ) -> i64 {
-    if out.is_null() {
-        return i64::from(Status::Malformed.code());
+    // ⊘⊘ REFUSALS ARE NEGATIVE HERE, and that is a departure from every sibling in this
+    // file — deliberately, because this function's SUCCESS value is a count and theirs is
+    // `Status::Ok`, which is 0. Returning `Status::Malformed` (4) unchanged made a refusal
+    // decode as *"four dead runs"*: a plausible number, in range, indistinguishable from an
+    // answer. `[measured w551/w552, two bench boots]` that is exactly what happened — the
+    // device probed with a null buffer to size its allocation, this refused with 4, and the
+    // device's own cross-check reported *"said 4 dead runs and then said 12"* and refused to
+    // realize. ⇒ A status vocabulary and a count vocabulary may not share a range.
+    if out.is_null() && max != 0 {
+        return -i64::from(Status::Malformed.code());
     }
     let Some(regs) = borrow_regs(handle) else {
-        return i64::from(Status::Malformed.code());
+        return -i64::from(Status::Malformed.code());
     };
     let runs = regs.plane().bar0_backable_runs();
     // ⚠ The TOTAL is returned, never the truncated count. A caller that sized its buffer
@@ -1540,7 +1548,9 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
     // the aperture (the uncovered remainder simply stays trapped), so the only symptom
     // would be traps nobody could explain.
     let total = runs.len();
-    let n = total.min(max as usize);
+    // ⊘ A null `out` with `max == 0` is the COUNT QUERY, not an error: it is how a caller
+    // sizes the buffer it is about to pass. `n` is then 0 and the loop writes nothing.
+    let n = if out.is_null() { 0 } else { total.min(max as usize) };
     for (i, (off, len)) in runs.iter().take(n).enumerate() {
         // SAFETY: the caller declares `out` writable for `max` pairs, and `i < n <= max`.
         unsafe {

@@ -1234,7 +1234,15 @@ int32_t  kayfabe_shim_regs_audit(void *handle, KayfabeRegAudit *out);
  * correctly: two owners for one guest-physical range and only one wins.  Piecewise subregions
  * have one owner each, which is why the cut belongs HERE and not there.
  *
- * Writes min(total, max) entries and returns the TOTAL, or a negative status.  ⚠ It returns
+ * Writes min(total, max) entries and returns the TOTAL, or MINUS a status code.
+ *
+ * ⊘⊘ Negative, unlike every sibling here, and the asymmetry is the point: this function's
+ * success value is a COUNT and `KAYFABE_OK` is 0, so a refusal returned unchanged would
+ * decode as a small, plausible, in-range number of runs.  `[measured w551/w552]` it did —
+ * a null probe refused with 4, and the caller read "four dead runs".
+ *
+ * ★ `out == NULL` with `max == 0` is the COUNT QUERY, not an error: it is how a caller sizes
+ * the buffer it is about to pass.  ⚠ It returns
  * the total and not what it wrote, so a caller whose buffer was too small can SEE that: a
  * truncated run list still tiles the aperture, and the only symptom would be traps in a
  * range nobody could account for.  ⚠ Zero is a real answer about a chip,
