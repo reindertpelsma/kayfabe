@@ -2270,8 +2270,24 @@ impl SharedDevice {
     /// call it (plane→core is the established order, set by the command-policy chain); a
     /// caller holding a rank-1 proc lock may not — that is the rank order, unchanged.
     pub fn with_pushbuffer<R>(&self, f: impl FnOnce(&dyn kayfabe_arch::PushbufferAbi) -> R) -> R {
-        let g = self.state.read();
-        f(g.spine.arch().pushbuffer())
+        // ⊘⊘⊘ **THIS HELD THE DEVICE LOCK ACROSS THE CALLER'S CLOSURE, AND THE CLOSURE IS
+        // UNBOUNDED.** `[measured w492]` this acquisition was the worst hold in the device —
+        // `rank1 worst_hold=25528us worst_hold_at=crates/kayfabe-rt/src/device.rs:2273` —
+        // against a 24 373 us worst trap in the same boot, because `shim.rs:7797` passes a
+        // closure that runs the **entire CE submission**: ring decode, operand copies,
+        // semaphore writes.
+        //
+        // ★ A `with_*` combinator that hands out a borrowed resource under a lock holds that
+        // lock for as long as the callback runs, and a callback is not a bounded thing. The
+        // shape is the defect, not this one caller.
+        //
+        // ⊘ The arch is an immutable chip descriptor with no interior mutability the spine
+        // relies on, so the lock was accidental. Take a handle, DROP THE GUARD, then call.
+        let arch = {
+            let g = self.state.read();
+            g.spine.arch_handle()
+        };
+        f(arch.pushbuffer())
     }
 
     /// The device-global page-table ownership index's answer for `phys` — **spine op**

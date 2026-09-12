@@ -2423,7 +2423,7 @@ pub struct Spine {
     /// composition `t.arch_name != self.arch.name()` cannot hold. While the field was
     /// `pub`, an out-of-crate assignment was the ONLY thing that could make it hold — so
     /// the guard's unreachability was a convention, not a property. It is a property now.
-    arch: Box<dyn Arch>,
+    arch: std::sync::Arc<dyn Arch>,
     /// ★ Source of truth (decision #14).
     pub rmgraph: RmGraph,
     /// ★ Data-plane routing (derived): `(GpuId, PDB)` → owning proc (MG-3). Keyed on
@@ -2961,6 +2961,23 @@ impl Spine {
     #[must_use]
     pub fn arch(&self) -> &dyn Arch {
         self.arch.as_ref()
+    }
+
+    /// ★★★★★ **w493 — a handle that OUTLIVES THE LOCK.**
+    ///
+    /// `SharedDevice::with_pushbuffer` borrows the arch out of this spine and runs a
+    /// caller-supplied closure **while holding the device lock**. `[measured w492]` the
+    /// closure at `shim.rs:7797` is the whole CE submission, and that acquisition was the
+    /// worst hold in the device: **25 528 us**, named by `worst_hold_at`, against a 24 373 us
+    /// worst trap in the same boot.
+    ///
+    /// ⊘ The arch is an immutable chip descriptor — it is `Send + Sync`, has no interior
+    /// mutability the spine relies on, and nothing about it changes for the life of the
+    /// device. Holding a lock to look at it is accidental, not required. Cloning the handle
+    /// lets the caller drop the guard and do its work unlocked.
+    #[must_use]
+    pub fn arch_handle(&self) -> std::sync::Arc<dyn Arch> {
+        std::sync::Arc::clone(&self.arch)
     }
 
     /// ★★★★★ §16.50 — a **snapshot** of `gpu`'s published global context-buffer physicals,
@@ -5138,7 +5155,7 @@ impl Gpu {
     /// # Errors
     /// See [`Gpu::realize`].
     pub fn new(
-        arch: Box<dyn Arch>,
+        arch: std::sync::Arc<dyn Arch>,
         isolates: Box<dyn IsolateFactory>,
         gpa: GpaSpace,
     ) -> Result<Self, GpuError> {
@@ -5166,7 +5183,7 @@ impl Gpu {
     /// If `gpus` is empty, does not contain [`GpuId::ZERO`], or exceeds
     /// [`crate::rmgraph::MAX_GPUS`] — realize-time configuration, never guest input.
     pub fn realize(
-        arch: Box<dyn Arch>,
+        arch: std::sync::Arc<dyn Arch>,
         isolates: Box<dyn IsolateFactory>,
         gpa: GpaSpace,
         gpus: &[GpuId],

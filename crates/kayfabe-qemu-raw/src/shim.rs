@@ -16470,7 +16470,7 @@ fn object_policy(
     let guest_ram = selected_guest_ram_source()?;
     let (isolates, guest_ram_backing, exports) = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
-        Box::new(kayfabe_chips::Ga10xArch::new()),
+        std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
         isolates,
         kayfabe_core::gpa::GpaSpace::new(OBJECT_GPA_WINDOW, OBJECT_GPA_ARENA),
     )
