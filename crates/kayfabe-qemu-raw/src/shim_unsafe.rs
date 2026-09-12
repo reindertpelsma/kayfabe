@@ -1373,6 +1373,11 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     kayfabe_util::lockwitness::mark_vcpu_thread();
     // ⊘ TEMPORARY (w495) — hand the witness a thread-directed alarm and a tid source once.
     // It lives here because this is where `unsafe` is permitted; `kayfabe-util` forbids it.
+    //
+    // ⚠ `#[cfg(feature = "host-isolates")]`: `kayfabe-linux-raw` is an OPTIONAL dependency
+    // enabled only by that feature. I built solely with it and the DEFAULT build has no such
+    // crate — the provisioning script found that, not me. Build both ways before pushing.
+    #[cfg(feature = "host-isolates")]
     kayfabe_util::trapwitness::install_stall_alarm(
         |tid| {
             let _ = kayfabe_linux_raw::stall_alarm::alarm_thread(tid);
@@ -1390,6 +1395,7 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     // ⊘ Both exist because `bar0+0x110094` has NO DECODE ARM ANYWHERE and still costs
     // milliseconds. Seven hypotheses have died looking for what it executes; none asked
     // whether it was running at all.
+    #[cfg(feature = "host-isolates")]
     let cpu_t0 = kayfabe_linux_raw::stall_alarm::thread_cpu_nanos().ok();
     let wall_t0 = std::time::Instant::now();
     // ★★★★★ **w323 — THE TRAP MARK, AT THE ONE PLACE THE GUEST CROSSES INTO US.**
@@ -1417,10 +1423,8 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
     let o = KayfabeRegWrite::from_outcome(&regs.write(bar, off, size, val));
     // w495 — the wall/CPU pair for this trap, recorded before the reply is written so the
     // measurement covers the work and not the caller's own store.
-    if let (Some(c0), Ok(c1)) = (
-        cpu_t0,
-        kayfabe_linux_raw::stall_alarm::thread_cpu_nanos(),
-    ) {
+    #[cfg(feature = "host-isolates")]
+    if let (Some(c0), Ok(c1)) = (cpu_t0, kayfabe_linux_raw::stall_alarm::thread_cpu_nanos()) {
         kayfabe_util::trapwitness::trapcpu::note(
             u64::try_from(wall_t0.elapsed().as_micros()).unwrap_or(u64::MAX),
             c1.saturating_sub(c0) / 1_000,
