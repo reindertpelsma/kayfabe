@@ -1744,6 +1744,14 @@ impl RegPlane {
         s.fsm.mmio_read_with(self.model.as_ref(), bar, off).is_some()
     }
 
+    /// The register aperture's length, from the chip row. ⊘ Exposed so a caller placing a
+    /// mapping over BAR0 uses the SAME number the arm chain is bounded by, rather than a
+    /// transcription of it that can drift.
+    #[must_use]
+    pub fn regs_aperture_len(&self) -> u64 {
+        self.chip.regs_aperture_len
+    }
+
     /// ★★★★★ **WHICH RUNS OF BAR0 HOLD NO REGISTER AT ALL** — the set a read-only zero
     /// region may cover (w545).
     ///

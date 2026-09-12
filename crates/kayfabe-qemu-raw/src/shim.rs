@@ -13307,6 +13307,10 @@ pub struct Regs {
     /// The [`kayfabe_rt::device::pending_latch_epoch`] this port last drained the two
     /// pending latches for. See the call site in `Regs::write`.
     last_latch_epoch: std::sync::atomic::AtomicU64,
+    /// The sparse read-only `memfd` behind BAR0's dead runs. See `back_bar0_dead_runs`.
+    /// ⊘ Held only to keep the descriptor alive for the slots that name it.
+    #[cfg(feature = "host-isolates")]
+    bar0_zero: std::sync::OnceLock<kayfabe_linux_raw::SharedRam>,
     /// ★★★★★ **w390** — which arm of the TLB-invalidate blockage point this boot runs.
     /// Read ONCE at the composition root; see `KAYFABE_MMU_INVAL` (removed w535; always armed).
     /// ★★★★★ **w326 — the revocation drain's OWN driver** (`crate::reclaimtick`).
@@ -14042,6 +14046,8 @@ impl Regs {
         Ok(Regs {
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
             last_latch_epoch: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(feature = "host-isolates")]
+            bar0_zero: std::sync::OnceLock::new(),
             plane,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
             //   is a boot that can change its mind halfway through.
@@ -14072,6 +14078,81 @@ impl Regs {
 
     /// ★★★★★ **w393 — arm the BAR mirror**, if the hypervisor declares BAR1 and/or BAR2
     /// unbacked. Lock-free context (an `mmap`); called from [`Regs::attach_ram`].
+    /// ★★★★★ **BACK THE PAGES OF BAR0 THAT HOLD NO REGISTER, READ-ONLY (w546).**
+    ///
+    /// `[measured w544]` **3 572 of BAR0's 4 096 pages hold no register**, in **12 contiguous
+    /// runs**, and every read to them answers `ReadOutcome::Unclaimed => 0`. `[measured w542]`
+    /// that is **124 415 of 241 722** BAR0 reads — half the read surface — each one a vmexit
+    /// to be told zero.
+    ///
+    /// ⊘ **Byte-identical, not an approximation.** The device already answers these offsets
+    /// with zero; the mapping answers them with the same zero, from a sparse `memfd` nobody
+    /// ever writes. There is no fallback path because there is nothing to fall back from.
+    ///
+    /// ★ **READ-ONLY, and that is what makes it safe rather than merely fast.** Writes to a
+    /// read-only slot still fault out to this device, so `unclaimed_writes` keeps counting and
+    /// the doorbell — which lives in a page no run covers — is untouched either way. The only
+    /// behaviour that changes is how a read nobody serves is answered.
+    ///
+    /// ⚠ The memfd is never written, so it stays sparse: 14.6 MB of address space and **zero**
+    /// resident pages. A read-only mapping cannot dirty it by construction.
+    ///
+    /// ⊘ Failure is NAMED and non-fatal. A refused placement leaves that run trapping exactly
+    /// as before — the device is correct either way, and the only cost is the exits this was
+    /// meant to remove. Silence here would be the bad outcome: it would look like a win.
+    #[cfg(feature = "host-isolates")]
+    fn back_bar0_dead_runs(&self, shim: &Shim) {
+        let machine = shim.machine().vmm().machine();
+        let Some(p) = machine.bar_placement(kayfabe_vmm::BarId::Bar0) else {
+            eprintln!(
+                "kayfabe: BAR0-ZERO ⊘ NOT PLACED — the hypervisor reports no BAR0 placement, \
+                 so there is no guest address to map at. Every dead page keeps trapping."
+            );
+            return;
+        };
+        let runs = self.plane.bar0_backable_runs();
+        let zero = match kayfabe_linux_raw::SharedRam::create_named(
+            c"kayfabe-bar0-zero",
+            self.plane.regs_aperture_len(),
+        ) {
+            Ok(z) => z,
+            Err(e) => {
+                eprintln!(
+                    "kayfabe: BAR0-ZERO ⊘ NO MEMFD ({e:?}) — every dead page keeps trapping"
+                );
+                return;
+            }
+        };
+        let (mut placed, mut refused, mut bytes) = (0usize, 0usize, 0u64);
+        for (off, len) in &runs {
+            match machine.install_file_window(
+                p.base + off,
+                *len,
+                zero.as_backing_fd(),
+                *off,
+                true,
+            ) {
+                Ok(_) => {
+                    placed += 1;
+                    bytes += *len;
+                }
+                Err(_) => refused += 1,
+            }
+        }
+        eprintln!(
+            "kayfabe: BAR0-ZERO runs={} placed={placed} refused={refused} bytes={bytes} \
+             ⇒ a read of a register NOTHING serves is answered 0 from a sparse read-only \
+             memfd instead of exiting. `[measured w542]` that is 124 415 of 241 722 BAR0 reads. \
+             ⊘ WRITES STILL TRAP (the slot is read-only), so the doorbell and every unclaimed \
+             write are unchanged.",
+            runs.len()
+        );
+        // ⊘ The memfd must OUTLIVE the slots that name it: dropping it here would close the
+        // descriptor while the hypervisor still maps it. Parked on the port for the device's
+        // life, deliberately never read again.
+        let _ = self.bar0_zero.set(zero);
+    }
+
     #[cfg(feature = "host-isolates")]
     fn arm_bar_mirror(&self, shim: &Shim) {
         if self.bar_mirror.get().is_some() {
@@ -14086,6 +14167,7 @@ impl Regs {
         {
             self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
             let _ = self.bar_mirror.set(m);
+            self.back_bar0_dead_runs(shim);
         }
     }
 
