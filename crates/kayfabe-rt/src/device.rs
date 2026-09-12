@@ -4218,6 +4218,12 @@ impl SharedDevice {
     ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
         // PLAN — rank 1.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
+        // ⊘ **PRINTED HERE, WITH BOTH LOCKS RELEASED.** `[measured w510]` this line, when it
+        // lived inside the plan, made the Device read lock and the Proc cell a 28 ms hold
+        // (`slow_holds≈1100`), and vCPUs waited on both. See `PtSweepPlan::notes`.
+        for note in &plan.notes {
+            eprintln!("{note}");
+        }
         if plan.tasks.is_empty() {
             // ⊘ Returned rather than skipped, and with the plan attached: "every address space
             // was current" is a result, and it is the one a reader would otherwise confuse with

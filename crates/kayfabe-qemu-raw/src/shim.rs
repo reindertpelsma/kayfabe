@@ -6185,7 +6185,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6216,6 +6216,10 @@ impl SharedDoorbell {
                 // ★★★★★ **w507 — WHO HAMMERS THE PLANE LOCK.** `worst_hold` names only the
                 // single LONGEST holder, so it structurally cannot name a crowd of short
                 // ones — the exact shape rank 0 measured. This counts acquisitions per site.
+                // w514 — whether any diagnostic was deferred out of a lock, and whether the
+                // buffer ever overflowed. ⊘ A `dropped=0` that was never counted and a real
+                // zero must not look the same.
+                kayfabe_util::lock::notes::note_census(),
                 kayfabe_util::lock::lockcost::hammer_census(
                     kayfabe_util::lock::LockRank::Plane,
                     4,

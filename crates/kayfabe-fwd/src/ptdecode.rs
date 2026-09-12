@@ -520,6 +520,17 @@ pub struct PtSweepPlan {
     /// ⊘ Counted rather than dropped: *"the sweep ran and skipped every VAS"* and *"the sweep
     /// did not run"* produce the same absence of tasks, and only this number separates them.
     pub skipped: usize,
+    /// ★★★★★ **w514 — THE PER-TASK LINES, CARRIED OUT INSTEAD OF PRINTED IN.**
+    ///
+    /// `[measured w510]` `rank1`/`rank2 worst_hold=28491us slow_holds≈1100` at
+    /// `device.rs:4220`, the PLAN phase, holding the Device read lock **and** the Proc cell.
+    /// [`plan_pt_sweep`] used to `eprintln!` once per address space **inside both of them** —
+    /// a write to the QEMU log, which is a pipe to a 5 MB-per-boot file, i.e. an unbounded
+    /// blocking call under a lock a vCPU waits on (`slow_waits=8` and `50`).
+    ///
+    /// ⊘ Owner invariant (2), 2026-09-09: *"no blocking calls in a lock in any thread unless
+    /// needed."* A diagnostic is never needed. The caller prints these after the release.
+    pub notes: Vec<String>,
 }
 
 /// ★★★★★ **PLAN THE WHOLE-VAS SWEEP** (owner's lock, rank 1) — the C's `enum_gr_sysmem`
@@ -578,10 +589,12 @@ pub fn plan_pt_sweep(proc: &mut Proc) -> PtSweepPlan {
         // changed the aggregate (`tasks`, `pages`) without moving `pdb=0x201000`'s coverage,
         // and an aggregate cannot say whether the VAS that matters was ever in the set. Naming
         // the pdb is the difference between "sweeps are happening" and "this one is swept".
-        eprintln!(
+        // ⊘ Formatted here, printed by the caller once the locks are gone. See
+        // [`PtSweepPlan::notes`] for the 28 ms this line cost while it was an `eprintln!`.
+        plan.notes.push(format!(
             "kayfabe: PT-SWEEP-TASK gpu={} pdb={:#x} reason={:?} sweeps={} dirty={}",
             gpu.0, pdb.0, reason, vas.sweep.sweeps, vas.sweep.dirty
-        );
+        ));
         plan.tasks.push(PtDecodeTask {
             gpu,
             pdb,

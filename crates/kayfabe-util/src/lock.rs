@@ -132,6 +132,12 @@ fn note_acquired(rank: LockRank) {
 /// under a lock leaves the thread-local consistent for `#[should_panic]` tests).
 fn note_released(rank: LockRank) {
     lockwitness::note_released(rank as u8);
+    // ★ w514 — the outermost release is the moment a deferred diagnostic becomes free to
+    // print. See [`notes`]. ⊘ Checked AFTER the clear, so the last guard's own release
+    // flushes rather than waiting for a lock this thread may never take again.
+    if lockwitness::held_mask() == 0 {
+        notes::flush();
+    }
 }
 
 /// Decode a held mask into the ranks it names (diagnostics).
@@ -1683,6 +1689,157 @@ mod the_wait_names_its_blocker {
             row.contains("worst_wait_blocked_by=crates/kayfabe-util/src/lock.rs:")
                 || row.contains("worst_wait_blocked_by=") && row.contains("lock.rs:"),
             "and it must name the HOLDER by file:line: {row}"
+        );
+    }
+}
+
+// =====================================================================================
+// ★★★★★ OWNER INVARIANT (2), w514 — A DIAGNOSTIC MAY NEVER BLOCK A LOCK.
+// =====================================================================================
+/// Log lines written under a ranked lock, printed once the thread holds none.
+///
+/// # The measurement this exists for
+///
+/// `[measured w510]` `rank1`/`rank2 worst_hold=28491us slow_holds≈1100` at
+/// `kayfabe-rt/src/device.rs:4220`, the PLAN phase of the page-table sweep. It held the
+/// Device read lock **and** the Proc cell while `plan_pt_sweep` did an `eprintln!` **per
+/// address space** — a write to the QEMU log, which on the bench is a pipe into a file that
+/// reaches 5 MB in one boot. vCPUs waited on both ranks (`slow_waits=8` and `50`).
+///
+/// ⊘ It is not one site. Every `kayfabe_fwd::plan_*` function takes `&mut Proc`, so it runs
+/// under two locks by construction, and `plan_doorbell` — on the hottest path there is —
+/// prints the same way. Fixing sites one at a time leaves the class open.
+///
+/// # What this changes, stated plainly
+///
+/// ⚠ Lines written under a lock now appear **later**, and can interleave differently with
+/// other threads' output. That is a real cost: a reader correlating two threads' lines by
+/// position will be wrong. It is accepted because the alternative is a guest stall, and
+/// because every line carries its own identifiers anyway.
+///
+/// ⚠ Bounded. A pathological hold cannot grow the buffer without limit; past the cap, lines
+/// are DROPPED and counted, never silently lost — [`note_census`] says how many, because
+/// "nothing was dropped" and "the counter does not exist" must not look the same.
+pub mod notes {
+    use std::cell::RefCell;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Most deferred lines one thread may hold. Past this they are dropped and counted.
+    const CAP: usize = 4096;
+
+    thread_local! {
+        static PENDING: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
+
+    static DROPPED: AtomicU64 = AtomicU64::new(0);
+    static DEFERRED: AtomicU64 = AtomicU64::new(0);
+
+    /// Emit `line` — immediately if this thread holds no ranked lock, deferred if it does.
+    ///
+    /// ⊘ The branch is on the **held mask**, not on a caller's opinion about whether it is
+    /// under a lock. A caller that is wrong about that is exactly how the 28 ms hold existed.
+    pub fn emit(line: String) {
+        if super::lockwitness::held_mask() == 0 {
+            eprintln!("{line}");
+            return;
+        }
+        DEFERRED.fetch_add(1, Ordering::Relaxed);
+        PENDING.with(|p| {
+            let mut p = p.borrow_mut();
+            if p.len() >= CAP {
+                DROPPED.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            p.push(line);
+        });
+    }
+
+    /// Print and clear whatever this thread deferred. Called when the last rank is released.
+    pub(super) fn flush() {
+        // ⊘ Taken out of the cell FIRST, so an `eprintln!` that itself re-entered `emit`
+        // could not borrow the same `RefCell` twice. Nothing does that today; a panic here
+        // would be a confusing way to find out that something started.
+        let lines = PENDING.with(|p| std::mem::take(&mut *p.borrow_mut()));
+        for l in lines {
+            eprintln!("{l}");
+        }
+    }
+
+    /// `DEFERRED` and `DROPPED`, for the boot line.
+    #[must_use]
+    pub fn note_census() -> String {
+        format!(
+            "LOCKNOTES deferred={} dropped={} (⊘ dropped>0 means a thread held a lock across \
+             more than {CAP} log lines — the lines are gone, the count is not)",
+            DEFERRED.load(Ordering::Relaxed),
+            DROPPED.load(Ordering::Relaxed),
+        )
+    }
+}
+
+/// Write a log line that is safe to call under a ranked lock: it prints immediately if the
+/// thread holds none, and is deferred to the outermost release if it does. See
+/// [`notes`] for the 28 ms hold that made this necessary.
+#[macro_export]
+macro_rules! lock_safe_eprintln {
+    ($($arg:tt)*) => {
+        $crate::lock::notes::emit(format!($($arg)*))
+    };
+}
+
+#[cfg(test)]
+mod a_diagnostic_may_not_block_a_lock {
+    use super::{LockRank, RankedMutex, lockwitness, notes};
+
+    /// ★★★★★ **A LOG LINE WRITTEN UNDER A LOCK MUST NOT BE WRITTEN UNDER A LOCK.**
+    ///
+    /// `[measured w510]` `rank1`/`rank2 worst_hold=28491us slow_holds≈1100` at the page-table
+    /// sweep's PLAN phase, which held the Device read lock **and** the Proc cell while
+    /// `plan_pt_sweep` did an `eprintln!` **per address space** — a write into the QEMU log,
+    /// a pipe to a file that reaches 5 MB in one boot. vCPUs waited on both ranks.
+    ///
+    /// ⊘ And it is a CLASS, not a site: every `kayfabe_fwd::plan_*` takes `&mut Proc`, so it
+    /// runs under two locks by construction, and `plan_doorbell` — the hottest path there is
+    /// — printed the same way. Fixing sites one at a time leaves the class open.
+    ///
+    /// This asserts the BRANCH, which is the part that can regress: deferred while a rank is
+    /// held, immediate when none is.
+    #[test]
+    fn a_line_is_deferred_under_a_lock_and_immediate_without_one() {
+        let m = RankedMutex::new(LockRank::Proc, 0u64);
+
+        let before = notes::note_census();
+        {
+            let _g = m.lock();
+            assert_ne!(lockwitness::held_mask(), 0, "the test holds a rank");
+            crate::lock_safe_eprintln!("kayfabe: TEST under a lock");
+            assert_ne!(
+                notes::note_census(),
+                before,
+                "a line written under a rank must be DEFERRED — if this is unchanged the \
+                 line went straight to the log, under the lock, which is the 28ms defect"
+            );
+        }
+        // The guard is gone, so the deferred line has been flushed by the outermost release.
+        let after_release = notes::note_census();
+        crate::lock_safe_eprintln!("kayfabe: TEST with no lock held");
+        assert_eq!(
+            notes::note_census(),
+            after_release,
+            "with no rank held the line must print IMMEDIATELY — deferring it would delay \
+             every diagnostic in the tree to the next lock release, which may never come"
+        );
+    }
+
+    /// ⊘ The census must distinguish "nothing was dropped" from "the counter does not exist".
+    /// This tree lost three instruments in one night to exactly that ambiguity.
+    #[test]
+    fn the_census_states_its_own_terms() {
+        let c = notes::note_census();
+        assert!(c.contains("deferred=") && c.contains("dropped="), "{c}");
+        assert!(
+            c.contains("the lines are gone, the count is not"),
+            "the census must say what a nonzero `dropped` MEANS: {c}"
         );
     }
 }

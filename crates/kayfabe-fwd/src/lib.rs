@@ -181,12 +181,12 @@ pub mod memop_census {
         }
         let p = PRINTED.fetch_add(1, Ordering::Relaxed);
         if p < DETAIL_CAP {
-            eprintln!(
+            kayfabe_util::lock_safe_eprintln!(
                 "kayfabe: MEMOP-INVAL #{n} gpu={gpu:?} proc={pid} chan={cid} pdb=0x{pdb:x} \
                  membar={membar} (PDB-targeted — names a VAS)"
             );
         } else if p == DETAIL_CAP {
-            eprintln!(
+            kayfabe_util::lock_safe_eprintln!(
                 "kayfabe: MEMOP-INVAL detail cap {DETAIL_CAP} reached — DETAIL only; \
                  the census still counts every one"
             );
@@ -4100,7 +4100,7 @@ pub fn plan_doorbell(
     if channel.is_none() {
         match chan.kind {
             kayfabe_core::channel_kind::GuestChannelKind::Emulated => {
-                eprintln!(
+                kayfabe_util::lock_safe_eprintln!(
                     "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
                      kind=Emulated ✔ EMULATED — our own ring is CORRECT here: we drive it and \
                      it runs our function bodies",
@@ -4108,7 +4108,7 @@ pub fn plan_doorbell(
                 );
             }
             kayfabe_core::channel_kind::GuestChannelKind::Passthrough => {
-                eprintln!(
+                kayfabe_util::lock_safe_eprintln!(
                     "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
                      kind=Passthrough ⊘⊘ REFUSED PassthroughDoorbellBirth — a passthrough \
                      channel is born at its own channel alloc (w393, BIRTH-AT-ALLOC), and this \
@@ -4175,7 +4175,7 @@ pub fn plan_doorbell(
     // ⊘ `host_token=NONE-YET` is not a failure: it is the lazy-materialization path, where
     // the channel (and therefore its token) is allocated by the verbs this function is about
     // to return. The pairing then appears in `DOORBELL-VERB`.
-    eprintln!(
+    kayfabe_util::lock_safe_eprintln!(
         "kayfabe: DOORBELL-XLATE proc={} chan={} vchid={} engine={:?} guest_token={:#010x} \
          host_token={} schedule={schedule}",
         pid.0,
@@ -4779,24 +4779,24 @@ fn adopted_guest_ring(
     // day of w392d was spent inferring which one fires; the answer is one `eprintln!` per
     // arm. ⊘ Do not collapse these back into `?` — the `?` is what cost the day.
     let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
-        eprintln!("kayfabe: ADOPT-WHY ⊘ (1) NO RMGRAPH NODE for this channel");
+        kayfabe_util::lock_safe_eprintln!("kayfabe: ADOPT-WHY ⊘ (1) NO RMGRAPH NODE for this channel");
         return None;
     };
     let facts = node.facts;
     let Some(ring) = facts.gp_fifo_ring else {
-        eprintln!("kayfabe: ADOPT-WHY ⊘ (2) the channel DECLARED NO GPFIFO RING");
+        kayfabe_util::lock_safe_eprintln!("kayfabe: ADOPT-WHY ⊘ (2) the channel DECLARED NO GPFIFO RING");
         return None;
     };
     let userd = facts.userd;
     let Some(pdb) = chan.vas_pdb else {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (3) the channel names NO VAS PDB",
             ring.va
         );
         return None;
     };
     let Some(vas) = proc.vases.get(&(cgpu, pdb)) else {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (4) NO VAS for this (gpu, pdb) pair",
             ring.va
         );
@@ -4804,14 +4804,14 @@ fn adopted_guest_ring(
     };
     let Some((start, len, binding)) = vas.table.binding_at(kayfabe_arch::ids::GpuVa(ring.va))
     else {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ (5) NO BINDING AT THE RING VA in the address table",
             ring.va
         );
         return None;
     };
     let Some(host) = binding.host() else {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (6) the binding \
              EXISTS but carries NO HOST OBJECT — nothing on the host side to adopt",
             ring.va
@@ -4856,7 +4856,7 @@ fn adopted_guest_ring(
     ) || (matches!(binding.kind(), kayfabe_mmu::RegionKind::GuestPhysDma)
         && matches!(host.bytes(), kayfabe_mmu::BackingBytes::SoleBacking));
     if !guests_own_bytes {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (7) host object \
              PRESENT but these are NOT THE GUEST'S BYTES: kind={:?} bytes={:?}. Adoption \
              needs a JOINED framebuffer leaf (JoinsGuestWindow) or the guest's own RAM pinned \
@@ -4871,7 +4871,7 @@ fn adopted_guest_ring(
     // ⊘ w393 — print WHICH of the two legal shapes matched. This line used to say
     // `JoinsGuestWindow` unconditionally, and the first pinned-ring fixture printed it
     // over a `GuestPhysDma + SoleBacking` row: log prose that names the wrong mechanism.
-    eprintln!(
+    kayfabe_util::lock_safe_eprintln!(
         "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ✔ ADOPTABLE — the guest's \
          own bytes: kind={:?} bytes={:?}",
         ring.va,
@@ -5285,7 +5285,7 @@ pub fn plan_channel_birth(
     let declared_engine_type = node.and_then(|n| n.facts.channel_engine_type);
     // ★★★★★ THE RULE. `adopted_guest_ring` prints `ADOPT-WHY` naming which conjunct failed.
     let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu) else {
-        eprintln!(
+        kayfabe_util::lock_safe_eprintln!(
             "kayfabe: BIRTH-AT-ALLOC proc={:?} chan={:?} vchid={:?} engine={:?} \
              kind=Passthrough ring_va={} ⊘⊘ REFUSED PassthroughRingNotAdoptable — the ADOPT-WHY \
              line above names the conjunct. NO host channel was born and NOTHING fell back to \
@@ -5303,7 +5303,7 @@ pub fn plan_channel_birth(
             ring_va,
         });
     };
-    eprintln!(
+    kayfabe_util::lock_safe_eprintln!(
         "kayfabe: BIRTH-AT-ALLOC proc={:?} chan={:?} vchid={:?} engine={:?} kind=Passthrough \
          ring_va={:#x} entries={} userd={} declared_engine_type={} ✔✔ ADOPTING at creation, \
          before the guest has written a cursor (w233: RM zeroes a taken USERD — harmless HERE, \
