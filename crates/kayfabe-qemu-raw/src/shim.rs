@@ -3628,14 +3628,13 @@ struct SharedDoorbell {
     gr_route: GrRouteArm,
     /// ★★★★★ **w282's arm** — whether a CE operand page that lands in the emulated
     /// framebuffer has its leaf JOINED, so the executor stays `HostCe`. See
-    /// [`OPERAND_JOIN_ENV`] and [`SharedDoorbell::join_operand_fb_leaves`].
+    /// `KAYFABE_OPERAND_JOIN` (removed w536) and [`SharedDoorbell::join_operand_fb_leaves`].
     ///
     /// ★ Read ONCE at the composition root and carried, for `gr_route`'s reason exactly, and
     /// its own **sixth** selector rather than a rider on [`GUEST_OPERAND_ENV`] — the pin and
     /// the join serve **disjoint** operand populations (guest RAM vs framebuffer) and a boot
     /// must be able to arm either alone.
     #[cfg_attr(not(feature = "host-isolates"), allow(dead_code))]
-    operand_join: OperandJoinArm,
     /// ★★★★★ w290 — which arm of the whole-VAS publication this boot runs. See
     /// [`VAS_PUBLISH_ENV`] and [`SharedDoorbell::publish_vas_rows`].
     ///
@@ -9163,15 +9162,12 @@ impl SharedDoorbell {
         facts: Option<&kayfabe_rt::device::CeChannelFacts>,
     ) -> Option<String> {
         // ⊘ SILENT only on `off`. ★★★ On `assert` the pass RUNS and joins nothing — see
-        // [`OperandJoinArm`] for the defect this rung's own control found in the two-arm
+        // the removed `KAYFABE_OPERAND_JOIN` arm for the defect this rung's own control found in the two-arm
         // draft: with `#255` inside the armed path, the control printed zero `#255` lines and
         // the instrument's guaranteed known-positive was unreachable.
-        if !self.operand_join.observes() {
-            return None;
-        }
+        // ⊘ w536 — the `off`/`assert` guard is gone: operands are ALWAYS joined.
         let head = format!(
-            "OPERAND-JOIN token={token:#010x} arm={}",
-            self.operand_join.as_str()
+            "OPERAND-JOIN token={token:#010x}"
         );
         let Some(f) = facts else {
             return Some(format!(
@@ -9197,7 +9193,7 @@ impl SharedDoorbell {
         // ⊘ Enforced only on the arm that would actually join. On `assert` nothing is mapped,
         // so the mapping arm is irrelevant and aborting here would cost the control the very
         // `#255` verdict it exists to produce.
-        if self.operand_join.joins() && !self.fb_join.armed() {
+        if !self.fb_join.armed() {
             return Some(format!(
                 "{who} → ⊘ NOT ARMABLE: KAYFABE_FB_JOIN is `{}`. The join's mapping arm is what \
                  makes the guest's window and the host object ONE memory; with it disarmed this \
@@ -9214,10 +9210,9 @@ impl SharedDoorbell {
         };
         // ⊘ Same scoping: the export directory is the route from a backing token to a
         // descriptor and is needed ONLY to join. `assert` runs without one.
-        let exports = match (self.exports.as_ref(), self.operand_join.joins()) {
-            (Some(e), _) => Some(e),
-            (None, false) => None,
-            (None, true) => {
+        let exports = match self.exports.as_ref() {
+            Some(e) => Some(e),
+            None => {
                 return Some(format!(
                     "{who} → ⊘ NOT ARMABLE: exports_directory=false — this build has no route \
                      from a backing token to a descriptor. ⊘ Nothing was asked of the host and \
@@ -9406,7 +9401,7 @@ impl SharedDoorbell {
         let isolate = kayfabe_isolate::IsolateId::new(f.proc.0, DOORBELL_TARGET_GPU);
         let mut joined = 0usize;
         let mut refused = 0usize;
-        if let Some(exports) = exports.filter(|_| self.operand_join.joins()) {
+        if let Some(exports) = exports {
             for ((phys, _va), leaf) in &leaves {
                 let what = format!("CE-OPERAND(chan={} fb_phys=0x{phys:x})", f.chan.0);
                 match join_one_fb_leaf(
@@ -9484,9 +9479,7 @@ impl SharedDoorbell {
         token: u64,
         _facts: Option<&kayfabe_rt::device::CeChannelFacts>,
     ) -> Option<String> {
-        if !self.operand_join.observes() {
-            return None;
-        }
+        // ⊘ w536 — always observed; see the sibling guard.
         Some(format!(
             "OPERAND-JOIN token={token:#010x} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT JOIN A \
              LEAF AT ALL. The arm was requested and this build has no isolate plane, so leg 7 \
@@ -13685,8 +13678,7 @@ impl Regs {
         // ★★★★★ w282's arm (LEG 7) — read ONCE, here, and its own variable rather than a rider
         // on w270's: the pin and the join serve DISJOINT operand populations (guest RAM vs
         // emulated framebuffer), so a boot must be able to arm either alone. See
-        // [`OPERAND_JOIN_ENV`].
-        let operand_join = selected_operand_join()?;
+        // `KAYFABE_OPERAND_JOIN` (removed w536).
         // ★★★★★ w290 — leg 8's own selector. Parsed here and never re-read, so a boot cannot
         // change arms halfway; echoed below on BOTH arms, because a configuration that only
         // announces itself when enabled makes the control's log indistinguishable from an
@@ -13876,29 +13868,13 @@ impl Regs {
         // (it could then only map private anonymous pages) and it is a compiled no-op without
         // the feature.
         eprintln!(
-            "kayfabe: OPERAND-JOIN arm={} fb_join={} host_isolates={} ⇒ a CE operand page that \
-             lands in OUR EMULATED FRAMEBUFFER is {}",
-            operand_join.as_str(),
+            "kayfabe: OPERAND-JOIN always on, fb_join={} host_isolates={} ⇒ a CE operand page \
+             that lands in OUR EMULATED FRAMEBUFFER is WALKED to its framebuffer leaf and that \
+             leaf is JOINED, so the guest's window and a real host object are ONE memory and \
+             the executor stays HostCe. ⊘ Supply side only: `the operand is host-backed` and \
+             `the submission retired` are different facts",
             fb_join.as_str(),
             cfg!(feature = "host-isolates"),
-            match operand_join {
-                OperandJoinArm::Off =>
-                    "LEFT THERE, SILENTLY — the default, byte-identical to every boot before \
-                     w282. ⊘ Not one OPERAND-JOIN or #255 line and no second read of the ring",
-                OperandJoinArm::Assert =>
-                    "LEFT THERE and SAID SO — ★ THE CONTROL. Every operand is resolved per-VAS \
-                     and classified and #255 states its verdict; NO leaf is joined and NO host \
-                     verb is issued. Expected reading: `#255 … FIRED`, which is a POSITIVE \
-                     observation rather than an absence (exactly w281b_clientsweep's state, \
-                     where both operands resolved to Vidmem with no host object, the \
-                     partitioner answered CeExecutor::Ours and ce_copy refused by name)",
-                OperandJoinArm::Join =>
-                    "WALKED to its framebuffer leaf and that leaf is JOINED — the same four \
-                     steps the ring source and the GR operand census already use — so the \
-                     guest's window and a real host object are ONE memory and the executor \
-                     stays HostCe. ⊘ Supply side only: `the operand is host-backed` and `the \
-                     submission retired` are different facts",
-            },
         );
         // ★★★★★ w290 — leg 8's arming, echoed on BOTH arms beside leg 7's for the same
         // reason: the two legs serve DIFFERENT populations (a pushbuffer's named CE operands
@@ -13980,7 +13956,6 @@ impl Regs {
             fb_join,
             exports,
             gr_route,
-            operand_join,
             vas_publish,
             // ★ w318 — empty. The gate's first consultation on any key always ARMS, so a
             // fresh port cannot skip work it has never done.
@@ -17476,48 +17451,6 @@ pub fn guest_ring_from(value: Option<&str>) -> Result<GuestRingArm, (Status, &'s
     }
 }
 
-/// ★★★★★ **w282 — whether a CE operand page that lands in OUR EMULATED FRAMEBUFFER has its
-/// leaf JOINED, so a real host engine can be pointed at the guest's own number.**
-///
-/// | value | what it does |
-/// |---|---|
-/// | `off` (default) | today's behaviour, byte for byte. Not one `OPERAND-JOIN` line |
-/// | `join` | ★ every operand page [`SharedDoorbell::ce_operand_pages`] decodes that resolves to a **framebuffer** binding has its 64 KiB leaf put through `join_one_fb_leaf` — the SAME four steps the ring source and the GR operand census already use |
-///
-/// # ★★★ WHY, and it is a CALLER GAP rather than a missing primitive
-///
-/// `[measured 2026-08-12, w281_client, real GA106]` with the pushbuffer route on, a real host
-/// copy engine **fetched and executed** the guest's own methods and faulted
-/// `Xid 31 ENGINE CE0 HUBCLIENT_CE1 … FAULT_PTE ACCESS_TYPE_VIRT` at the destination operand
-/// the guest's own pushbuffer declared. `[measured, w281b_clientsweep]` arming the whole-VAS
-/// sweep bound both operand VAs — `2 MISS → 0 MISS` — and they resolved to **`Vidmem`**, our
-/// fabricated framebuffer, which [`kayfabe_fwd::Representability::Fabricated`] routes to
-/// `CeExecutor::Ours`, which `HostRmBackend::ce_copy` refuses by name under a standing owner
-/// ruling. ⇒ **Both reachable configurations are walls**, and both are the same missing thing:
-/// the operand lives in memory no real engine can resolve.
-///
-/// ⊘ **The join that fixes it is already built and is simply not called here.**
-/// `Regs::back_census_framebuffer_leaves` joins exactly these leaves off the **operand
-/// census** — but it is reached only from `SharedDoorbell::declare_gr_completion`, which
-/// `SharedDoorbell::ring` calls on the two **GR** dispositions (`HandToCore` and
-/// `RefuseByRoute`) and on **no CE path at all**. A CE doorbell's operands therefore reach
-/// `Self::pin_operand_guest_ram`, which refuses a framebuffer binding by name with the
-/// sentence *"that memory is ours already and needs no descriptor"* — true of the CPU
-/// executor and, since `w281`, **measured false of a host engine**.
-///
-/// ★ So this arm adds **no primitive, no verb and no new authority**: it presents the CE
-/// plane's operand leaves to the join the GR plane has been using since `w260`.
-///
-/// # ⊘ WHAT AN ARMED LINE STILL DOES NOT MEAN
-///
-/// *"The operand leaf is one memory with a real host object"* and *"the submission retired"*
-/// are different facts. This arm produces the first. ⚠ And the join's own scope is unchanged:
-/// it is per-VAS by construction — the leaf is walked from **this channel's own installed PDB
-/// root** and bound into **this `Pdb`'s** table — so an operand can never name a page reachable
-/// only from another address space's root. That is `mode2_address_table.md` §3/§6 and it is
-/// asserted rather than assumed; see [`SharedDoorbell::join_operand_fb_leaves`].
-pub const OPERAND_JOIN_ENV: &str = "KAYFABE_OPERAND_JOIN";
-
 /// ★★★★★ **w290 — THE WHOLE-VAS PUBLICATION.** See [`VasPublishArm`].
 ///
 /// `[measured, boot w290cup2]` `HOST-PUBLISHED host_rows=4 of 16425` in cup2's own address
@@ -17525,7 +17458,7 @@ pub const OPERAND_JOIN_ENV: &str = "KAYFABE_OPERAND_JOIN";
 /// materialize it, so hardware walks an empty host VAS and misses **above the leaf**
 /// (`FAULT_PDE`). This arm presents **every qualifying row of every live `Vas`** to the same
 /// `join_one_fb_leaf` chain leg 7 already uses — no new primitive, no new verb, no new
-/// authority, exactly as [`OPERAND_JOIN_ENV`]'s own doc argues for its leg.
+/// authority, exactly as `KAYFABE_OPERAND_JOIN` (removed w536)'s own doc argues for its leg.
 ///
 /// # ⚠ TWO CONSEQUENCES, PRE-REGISTERED BECAUSE THEY ARE NOT HYPOTHETICAL
 ///
@@ -17559,108 +17492,6 @@ pub const VAS_PUBLISH_ENV: &str = "KAYFABE_VAS_PUBLISH";
 /// (`w298`'s ruling). `off` is byte-identical to every boot before w383.
 pub const DOORBELL_ASYNC_ENV: &str = "KAYFABE_DOORBELL_ASYNC";
 
-/// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
-///
-/// # ⊘⊘ WHY THERE ARE THREE ARMS AND NOT TWO — a defect this rung's OWN control found
-///
-/// `[measured 2026-08-13, boot `w282_clientoff`]` the first draft had two arms and put the
-/// `#255` assertion **inside** the armed path. The control therefore printed **zero** `#255`
-/// lines — so the instrument's *guaranteed known-positive was unreachable*, and a `QUIET` and
-/// a *"never ran"* were the same observation. That is the exact shape
-/// `a_census_zero_needs_a_known_positive` and `a_feature_gate_with_a_silent_noop_sibling` name,
-/// caught by the control rather than by reading.
-///
-/// ⇒ [`OperandJoinArm::Assert`] exists so the control **runs the instrument and joins
-/// nothing**. It is the control this rung compares against, and its expected reading is
-/// `#255 … FIRED`, which is a POSITIVE observation rather than an absence.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OperandJoinArm {
-    /// The default: **silent**, byte-identical to every boot before `w282`. Not one
-    /// `OPERAND-JOIN` or `#255` line, and no second read of the ring.
-    Off,
-    /// ★★★ **CLASSIFY AND ASSERT, JOIN NOTHING** — the rung's control. Every CE operand page
-    /// is resolved per-VAS and classified, and `#255` states its verdict; no leaf is joined
-    /// and no host verb is issued. ⊘ Behaviourally this is `Off` plus printing, so it
-    /// reproduces `w281b_clientsweep` while making the instrument's known-positive visible.
-    Assert,
-    /// ★ Everything `Assert` does, **and** every framebuffer leaf a CE operand names is
-    /// joined.
-    Join,
-}
-
-impl OperandJoinArm {
-    /// Every arm, so a test can quantify rather than restate.
-    pub const ALL: [OperandJoinArm; 3] = [
-        OperandJoinArm::Off,
-        OperandJoinArm::Assert,
-        OperandJoinArm::Join,
-    ];
-
-    /// One word, for the boot's own log.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            OperandJoinArm::Off => "off",
-            OperandJoinArm::Assert => "assert",
-            OperandJoinArm::Join => "join",
-        }
-    }
-
-    /// Whether the pass runs at all — i.e. whether operands are decoded, classified and
-    /// put to `#255`. ⊘ True on `Assert` as well as `Join`: that is the whole point of the
-    /// third arm.
-    #[must_use]
-    pub fn observes(self) -> bool {
-        self != OperandJoinArm::Off
-    }
-
-    /// Whether a framebuffer-resident CE operand leaf is actually joined on this arm.
-    #[must_use]
-    pub fn joins(self) -> bool {
-        self == OperandJoinArm::Join
-    }
-}
-
-/// Which arm `value` names — the pure half of [`selected_operand_join`].
-///
-/// # Errors
-/// [`Status::Unsupported`] if `value` names no arm. **Absent is not an error**; it is
-/// [`OperandJoinArm::Off`].
-pub fn operand_join_from(value: Option<&str>) -> Result<OperandJoinArm, (Status, &'static str)> {
-    match value {
-        None | Some("off") => Ok(OperandJoinArm::Off),
-        Some("assert") => Ok(OperandJoinArm::Assert),
-        Some("join") => Ok(OperandJoinArm::Join),
-        Some(_) => Err((
-            Status::Unsupported,
-            "KAYFABE_OPERAND_JOIN does not name an arm: the only values are `off` (silent, \
-             byte-identical to every boot before w282), `assert` (THE CONTROL — classify every \
-             CE operand per-VAS and state #255's verdict, join NOTHING, issue no host verb; \
-             its expected reading is `#255 … FIRED`, which is a POSITIVE observation rather \
-             than an absence) and `join` (everything `assert` does, plus the framebuffer leaf \
-             goes through the same four-step join the ring source and the GR operand census \
-             already use, so the guest's window and a real host object are ONE memory and the \
-             executor stays HostCe). It is not defaulted, because a typo that silently \
-             disarmed the join would make an evidence run and its own control \
-             indistinguishable. ⊘ `on`/`1` are not accepted: this is a three-arm experiment, \
-             not a boolean.",
-        )),
-    }
-}
-
-/// Which arm [`OPERAND_JOIN_ENV`] names.
-///
-/// # Errors
-/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
-/// which takes the `Some` arm, because it was SET and must not read as unset.
-fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
-    match std::env::var_os(OPERAND_JOIN_ENV) {
-        // ⊘ ONE default, not two: delegate to `operand_join_from` rather than restate it here.
-        None => operand_join_from(None),
-        Some(v) => operand_join_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
-    }
-}
-
 /// ★★★★★ **w290 — WHICH ARM OF THE WHOLE-VAS PUBLICATION a boot is running.**
 ///
 /// `w290` measured `HOST-PUBLISHED host_rows=4 of 16425` in cup2's own address space, and
@@ -17669,7 +17500,7 @@ fn selected_operand_join() -> Result<OperandJoinArm, (Status, &'static str)> {
 /// within a terabyte of the fault. This arm publishes the guest's declared rows through the
 /// same proven chain the CE-operand join uses.
 ///
-/// ⊘ Three arms, not a boolean, for [`OperandJoinArm`]'s reason exactly: the census is the
+/// ⊘ Three arms, not a boolean, for the removed `KAYFABE_OPERAND_JOIN` arm's reason exactly: the census is the
 /// measurement and it must be readable **without** any host verb having run, or a boot that
 /// publishes nothing and a boot that was never armed are the same log.
 ///
