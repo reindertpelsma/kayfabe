@@ -71,6 +71,28 @@ anywhere in the tree — so this line is a *commitment*, not a description. See 
 wake. ⊘ The lock-free `DoorbellTable` is **built and unwired** (316 lines, 9 green tests, zero
 callers); making it the only path is §4 work.
 
+### Progress, and the evidence the deletions produce as they go
+
+| arm | state | refs in `shim.rs` | test files covering it |
+|---|---|---|---|
+| `KAYFABE_PT_SWEEP` | **deleted** w533 | — | **0** |
+| `KAYFABE_PT_WITNESS_EXEC` | **deleted** w534 | — | **0** |
+| `KAYFABE_OPERAND_JOIN` | pending | 24 | **0** |
+| `KAYFABE_MMU_INVAL` | pending | 22 | **0** |
+| `KAYFABE_GR_ROUTE` | pending | 14 | 2 |
+| `KAYFABE_GUEST_RING` | pending | 21 | 3 |
+| `KAYFABE_VAS_PUBLISH` | pending | 37 | 2 |
+| `KAYFABE_FB_JOIN` | pending | 66 | 2 |
+
+★★★ **`[audited w534]` NOT ONE TEST IN THE TREE EVER COVERED EITHER DELETED ARM.** The only
+reference to them in the whole suite is the refusal test written to bury them. Four of the
+eight have **zero** test files. That is the thesis stated as a measurement: these were
+selectable behaviours with no test and no graded boot on the alternative, which is not a
+choice being offered — it is a branch nobody can vouch for.
+
+⚠ **The ones with test files are the ones to slow down on**, not speed up. A test that pins an
+arm is a test whose subject disappears with it (§5).
+
 ---
 
 ## 3. An arm, a degradation, and a debug flag are three different things
