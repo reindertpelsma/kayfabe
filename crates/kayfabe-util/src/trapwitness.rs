@@ -632,8 +632,12 @@ mod watchdog {
                             let site = SITE[i].load(Ordering::Relaxed);
                             eprintln!(
                                 "kayfabe: ⊘⊘⊘ TRAP OVER BUDGET — {}us at {} (budget {budget}us). \
-                                 ABORTING WITH THE TRAP STILL RUNNING; the stuck thread is in \
-                                 the core. `eu-stack --core <core> -e <binary>` or `gdb -c`.",
+                                 FREEZING THE PROCESS WITH THE TRAP STILL RUNNING. Every \
+                                 thread is stopped and attachable: `eu-stack -p <pid>`, then \
+                                 `kill -CONT <pid>`. ⊘ Says FREEZING, not aborting — the \
+                                 first cut of this line said abort while the code sent \
+                                 SIGSTOP, and a message that names the wrong action sends \
+                                 the reader looking for a core that does not exist.",
                                 now.saturating_sub(st),
                                 if site == u64::MAX {
                                     "UNATTRIBUTED".to_string()
