@@ -1188,10 +1188,19 @@ impl QemuMachine {
     }
 
     /// ★★★★★ **w393 — install a passthrough window over `[gpa, gpa+len)` whose backing is
-    /// an ARMED DEVICE NODE the isolate crossed** (`kayfabe_isolate::DeviceView`): the
+    /// an ARMED DEVICE NODE**: the
     /// guest-side half of `DEVICE_LOCAL | HOST_VISIBLE`. The guest's memslot resolves to
     /// the card's own pages; a guest CPU store into it takes **no VM exit** and lands in
     /// memory the host engine reads natively. No `SparseFb` page, no join, no carry.
+    ///
+    /// ⊘⊘ **NOTHING CALLS THIS, AND ITS PRODUCER IS GONE** (2026-09-12). The node it wants
+    /// used to arrive from `kayfabe_isolate::DeviceView` over the isolate wire; that verb,
+    /// its wire message and the type were discarded as orphans
+    /// (`ORPHANS_wire_or_discard.md`). ⚠ This is the VMM-side half of the same crossing and
+    /// is itself an orphan — it was NOT on that document's discard list and has not been
+    /// adjudicated. Arming a node is now possible only in-process, via
+    /// `kayfabe_isolate_host::rm::HostRmBackend::export_device_view` (the
+    /// `rmladder --bar1-crossing` probe).
     ///
     /// Everything about the slot is [`QemuMachine::install_ram_window`]'s: the BAR must be
     /// one the hypervisor does not back (`bar_is_unbacked_reservation`, which the QOM

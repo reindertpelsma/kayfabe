@@ -1,6 +1,7 @@
 # Orphaned code — wire it or discard it, no third option
 
-**STATUS: LIVE, 2026-09-12.** Owner: *"either planned to be wired and tested or discarded
+**STATUS: LIVE, 2026-09-12.** ★ Three DISCARD rows acted on the same day — see the ✅/⊘⊘
+markers in the table; two carried a factual error each, recorded in place. Owner: *"either planned to be wired and tested or discarded
 later."* Every row below is code that exists, compiles, and has **no production caller**.
 Each gets a decision, not a note.
 
@@ -24,9 +25,9 @@ and is test-only, and the #14 working-set gate has **never executed in a boot**.
 |---|---|---|
 | `VerbPlan::Publish` + `alloc_sysmem` | `kayfabe-isolate/src/lib.rs:1908` | No production caller; `publish_backing` is reachable only from tests. Superseded by `JoinFbLeaf`. |
 | `VerbPlan::PublishVidmem` + `alloc_vidmem` | `:1942` | Dead arm: its only producer is `fwd::backing_for`, whose callers are all in `tests/`. Production `how` is hard-set to `Joined`/`Aliased`. The shim says so itself: *"has no caller"*. |
-| `export_device_view` + wire tag 25 | `kayfabe-isolate/src/lib.rs:3210` | **Zero senders of any kind**, tests included. The newest verb on the wire and the deadest. |
-| `export_surface` | backend verb 17 | No `Worker` wrapper exists; host impl is a stub returning not-implemented. |
-| `Worker::with_rm` | `:4081` | The escape hatch around the single door. Callers are a mock and an in-process ladder binary. An escape hatch nothing uses is a hole nobody is watching. |
+| ✅ **DONE 2026-09-12** `export_device_view` + wire tag 25 | `kayfabe-isolate/src/lib.rs:3210` | **Zero senders of any kind**, tests included. The newest verb on the wire and the deadest. ⊘ **One caller the row missed, and it is not on the wire:** `rmladder --bar1-crossing` calls it on a concrete `HostRmBackend`, in-process. The trait verb, the `Worker` wrapper, `DeviceView`, `Request::ExportDeviceView` (tag 25) and `Reply::DeviceView` (tag 12) are deleted; the **host impl survives as an inherent method** on `HostRmBackend` so the bare-metal probe still builds. Tags 25/12 retired in place, never renumbered. |
+| ✅ **DONE 2026-09-12** `export_surface` | backend verb 17 | No `Worker` wrapper exists; host impl is a stub returning not-implemented. ⊘ **The reasoning had a hole:** `present_seam.rs` reached it anyway, through `Worker::with_rm` — the escape hatch that is the row below. *"No wrapper ⇒ unreachable"* is not sound while a hatch around the wrapper exists. Verdict unchanged (both callers were tests). Deleted with its four impls, `RmVerb`/`VerbKind::ExportSurface`, request tag 12 and reply tag 6 (retired in place), and the two producer-only tests. `SurfaceHandle` + `Present` (the consumer half) kept. |
+| ⊘⊘ **NOT DONE — the row's premise is wrong** `Worker::with_rm` | `:4081` | ~~Callers are a mock and an in-process ladder binary.~~ **Measured 2026-09-12: 22 call sites in 4 files** — 14 in `kayfabe-mocks`' own `#[cfg(test)]` module, 3 in `kayfabe-isolate-host/tests/guest_ram.rs`, 3 in `tests/real_isolate.rs`, 2 in `bin/rmladder.rs`. They reach `alloc_vaspace`, `alloc_sysmem`, `free`, `schedule` and `describe_guest_ram` — **all live production verbs**, and `Worker` has **no wrapper for any of them**, nor does `VerbPlan` have a single-verb plan that isolates one. So removing the hatch means deleting ~20 tests of live code, or adding five new public wrappers (growing the surface this document is pruning). ⇒ Decide the hatch and the missing wrappers together; it is not a delete. |
 
 ## DECIDE WITH A MEASUREMENT — not yet either
 
