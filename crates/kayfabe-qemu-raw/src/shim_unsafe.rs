@@ -1495,3 +1495,55 @@ pub unsafe extern "C" fn kayfabe_shim_regs_audit(
     unsafe { out.write(regs.audit()) };
     Status::Ok.code()
 }
+
+/// ★★★★★ **WHICH RUNS OF BAR0 HOLD NO REGISTER** — so the device can cut the aperture into
+/// non-overlapping pieces instead of shadowing it (w549).
+///
+/// `[measured w544]` 3 572 of BAR0's 4 096 pages hold no register, in **12 contiguous runs**,
+/// and every read to them answers `0`. `[measured w542]` they carry **124 415 of 241 722** BAR0
+/// reads, each one a vmexit to be told zero.
+///
+/// # ⊘ Why the DEVICE does the cutting and not the archive
+///
+/// `[measured w548]` the archive asked to install its own memslot inside BAR0 and was refused,
+/// correctly: *"a window in a BAR the hypervisor BACKS … only one of the two wins."* Two owners
+/// for one guest-physical range is the hazard, and shadowing is what creates it.
+///
+/// Owner's answer, and it dissolves the problem rather than working around it: *"no overlapping
+/// regions, just cut it up."* Piecewise subregions have exactly **one** owner each — and this
+/// device already builds a container with subregions for its MSI-X table, so the shape is not
+/// new to it.
+///
+/// Writes `out[0..n]` as `(offset, length)` pairs and returns `n`, or a negative status code.
+///
+/// ⚠ Returns **`0`, not an error**, when nothing is backable. That is a true answer about a
+/// chip, and a device that read it as a failure would refuse to realize over a fact.
+///
+/// # Safety
+/// `out` must be writable for `max` pairs and correctly aligned; `handle` must be a live plane
+/// as [`kayfabe_shim_regs_read`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
+    handle: *mut c_void,
+    out: *mut crate::shim::KayfabeRange,
+    max: u64,
+) -> i64 {
+    if out.is_null() {
+        return i64::from(Status::Malformed.code());
+    }
+    let Some(regs) = borrow_regs(handle) else {
+        return i64::from(Status::Malformed.code());
+    };
+    let runs = regs.plane().bar0_backable_runs();
+    let n = runs.len().min(max as usize);
+    for (i, (off, len)) in runs.iter().take(n).enumerate() {
+        // SAFETY: the caller declares `out` writable for `max` pairs, and `i < n <= max`.
+        unsafe {
+            out.add(i).write(crate::shim::KayfabeRange {
+                offset: *off,
+                length: *len,
+            });
+        }
+    }
+    i64::try_from(n).unwrap_or(i64::MAX)
+}

@@ -635,6 +635,16 @@ typedef struct KayfabeGvasPublication {
     KayfabePdeLevel levels[KAYFABE_GVAS_MAX_LEVELS];
 } KayfabeGvasPublication;
 
+/*
+ * One half-open range of a register aperture: a byte offset from the aperture's base and a
+ * length.  ⊘ Bytes, not pages — the caller cuts memory regions with these and a page count
+ * would have to be multiplied back at every use.
+ */
+typedef struct KayfabeRange {
+    uint64_t offset;
+    uint64_t length;
+} KayfabeRange;
+
 typedef struct KayfabeRegAudit {
     uint64_t reads;
     uint64_t writes;
@@ -1212,5 +1222,21 @@ void     kayfabe_shim_regs_write(void *handle, uint32_t bar, uint64_t off, uint3
 void     kayfabe_shim_regs_reset(void *handle);
 
 int32_t  kayfabe_shim_regs_audit(void *handle, KayfabeRegAudit *out);
+
+/*
+ * ★★★★★ Which runs of BAR0 hold no register, so this device can CUT the aperture into
+ * non-overlapping pieces instead of letting the archive shadow it.
+ *
+ * [measured w544] 3572 of BAR0's 4096 pages hold no register, in 12 contiguous runs, and every
+ * read to them is answered 0.  [measured w542] they carry 124415 of 241722 BAR0 reads.
+ *
+ * ⊘ [measured w548] the archive asked to install its own memslot inside BAR0 and was refused,
+ * correctly: two owners for one guest-physical range and only one wins.  Piecewise subregions
+ * have one owner each, which is why the cut belongs HERE and not there.
+ *
+ * Writes out[0..n] and returns n, or a negative status.  ⚠ Zero is a real answer about a chip,
+ * not a failure: a device that refused to realize over it would refuse over a fact.
+ */
+int64_t  kayfabe_shim_bar0_dead_runs(void *handle, KayfabeRange *out, uint64_t max);
 
 #endif /* KAYFABE_SHIM_H */

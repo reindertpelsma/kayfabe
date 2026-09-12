@@ -1712,6 +1712,18 @@ impl Default for KayfabeIsolateRefusal {
     }
 }
 
+/// One half-open range of a register aperture, as the device sees it: a byte offset from the
+/// aperture's base and a length. ⊘ Both are byte counts, not pages — the caller cuts memory
+/// regions with them and a page count would have to be multiplied back at every use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KayfabeRange {
+    /// Byte offset from the aperture's base.
+    pub offset: u64,
+    /// Length in bytes. Always a whole number of pages.
+    pub length: u64,
+}
+
 /// The register plane's counters, in the wire shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
