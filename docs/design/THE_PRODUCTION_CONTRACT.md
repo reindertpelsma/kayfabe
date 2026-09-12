@@ -78,7 +78,7 @@ callers); making it the only path is §4 work.
 | `KAYFABE_PT_SWEEP` | **deleted** w533 | — | 0 | **0** |
 | `KAYFABE_PT_WITNESS_EXEC` | **deleted** w534 | — | 0 | **0** |
 | `KAYFABE_MMU_INVAL` | **deleted** w535 | — | 0 | 2 |
-| `KAYFABE_OPERAND_JOIN` | pending | 24 | 0 | yes |
+| `KAYFABE_OPERAND_JOIN` | **deleted** w536 | — | 0 | yes |
 | `KAYFABE_GR_ROUTE` | pending | 14 | 2 | yes |
 | `KAYFABE_GUEST_RING` | pending | 21 | 3 | yes |
 | `KAYFABE_VAS_PUBLISH` | pending | 37 | 2 | yes |
@@ -96,6 +96,23 @@ the arm's **behaviour**. So deleting an arm deletes a parser test for a parser t
 exists, which is correct rather than a loss of coverage. ⊘ And `KAYFABE_MMU_INVAL`'s own test
 doc said it outright: *"`off` remains SPELLABLE … It is scheduled for deletion with that path's
 landing."* The code had already scheduled its own removal.
+
+★★★★★ **GRADED ON HARDWARE, w537 — the four deletions hold.** Fresh box, fully provisioned,
+driver 580.159.04 both sides:
+
+```
+W392D_GUEST_OUTCOME=(P)   MEAN_FALSIFIER=PASS   THREADS 8 of 8   panics=0
+inline_exceptions=0   VCPU-BLOCKING none   worst_trap=1154us   slow_traps=1
+```
+
+⊘ `boot_capture rc=5` is the **evidence-persist** check (*"only 4/3 evidence files reached
+traces/guest_boots"*), not a boot failure — the client ran and graded. ⚠ Read it before reading
+the numbers; `rc=2` on the previous attempt meant the observation was never made at all.
+
+⚠ **The 1154 µs worst trap is NOT attributable to these deletions.** This is a different
+machine from the w525/w530 measurements (16 cores against 24, different CPU), and the trap
+figure moves with the box. What the boot establishes is the thing it was run for: **the client
+still passes and every invariant still holds with four arms removed.**
 
 ⇒ The measured claim, stated correctly: **no arm on this list has a test of its alternative
 BEHAVIOUR, and none has a graded boot on it.** That is a branch nobody can vouch for.
