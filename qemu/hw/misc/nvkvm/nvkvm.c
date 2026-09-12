@@ -49,14 +49,12 @@
 #include "qemu/range.h"
 #include "qemu/units.h"
 #include "qom/object.h"
-/* ★ §16.16 — `get_system_memory()`, for the trap-status table. QEMU 10.2 moved this header
- * from `exec/` to `system/`; the bench tree carries only the `system/` spelling. */
-#include "system/address-spaces.h"
-/* ★ For `RAMBlock::fd_offset`, read as a field in the topology listener. Same justification
- * as `MemoryRegion::rom_device` there: no public accessor answers it, and the alternative
- * is an assumption with nothing to catch it. */
-#include "system/ramblock.h"
-#include "system/system.h"
+/* ⊘ §16.16's three headers — `get_system_memory()` for the trap-status table,
+ * `RAMBlock::fd_offset` for the topology listener, and the machine header — were spelled
+ * `system/…` here UNCONDITIONALLY, which silently moved this device's real build floor to
+ * 10.1 while `nvkvm_compat.h` went on asserting 9.2 and listing 9.2.0 as verified.  Nothing
+ * caught it because nothing in this repository compiles this file against an older tree.
+ * They are detected in the compat header now, beside the two that already were. */
 
 #include "kayfabe_shim.h"
 
@@ -88,6 +86,29 @@ typedef enum NvkvmRegionKind {
      * anywhere else is an omission the count catches.
      */
     NVKVM_KIND_MSIX = 2,
+    /*
+     * ★★★★★ A container this device CUTS ITSELF, because most of the aperture holds no
+     * register and answering zero through a trap costs a guest a vCPU exit per read.
+     *
+     * `[measured w544]` 3572 of the register aperture's 4096 pages have no decode arm and no
+     * boot-sequence claim, in 12 contiguous runs; `[measured w542]` they carry 124415 of
+     * 241722 reads — 51%.  A read-only RAM piece answers those with no exit at all.
+     *
+     * ⊘ Why a CUT and not a shadow.  The archive asked to install its own memslot inside the
+     * aperture at w548 and was refused, correctly: two owners for one guest-physical range,
+     * and only one wins.  Subregions of a container have exactly ONE owner each, which is
+     * why the owner's ruling was *"no overlapping regions, just cut it up"*.
+     *
+     * ⚠ Reads only.  Each dead piece is a ROM DEVICE, so reads resolve in the guest and
+     * WRITES still reach this device — the sweep that found these runs swept the READ
+     * classifier, and a piece that swallowed writes would be claiming something never
+     * measured.
+     *
+     * ★ `nvkvm_op_bar_is_unbacked_reservation` answers NO for this kind without being told,
+     * because it answers yes only for a reservation.  That is the safe direction: the
+     * archive must not put a slot over a range this device now backs itself.
+     */
+    NVKVM_KIND_CUT = 3,
 } NvkvmRegionKind;
 
 typedef struct NvkvmRegionSpec {
@@ -218,6 +239,21 @@ typedef struct NvkvmRegionSpec {
  * *"only these four channels ever advanced a cursor"* when it meant *"only these four fit"*. */
 #define NVKVM_GP_PUT_PAGES 16u
 
+/*
+ * ★★ One dead piece of a cut aperture.
+ *
+ * It carries its own BASE because a subregion's callbacks receive an offset relative to the
+ * SUBREGION, and the archive names registers by their offset within the aperture.  Without
+ * this field every write through a piece would arrive at the archive claiming to be a write
+ * near offset zero — a wrong address that reads as a plausible one, which is the failure this
+ * tree keeps paying for.
+ */
+typedef struct NvkvmBar0Piece {
+    struct NvkvmState *s;
+    uint64_t           base;
+    MemoryRegion       mr;
+} NvkvmBar0Piece;
+
 struct NvkvmState {
     PCIDevice parent_obj;
 
@@ -282,6 +318,20 @@ struct NvkvmState {
 
     /* --- regions ---------------------------------------------------------------- */
     MemoryRegion mr[NVKVM_N_REGIONS];
+    /* ★★★ The cut aperture.  `bar0_trap` is the full-size io leaf and is NEVER added to a
+     * container directly: the live pieces are ALIASES into it, so a callback still receives
+     * the offset within the aperture and every existing decode arm keeps working unchanged.
+     * The dead pieces are rom devices answering zero.  Together they tile the aperture
+     * exactly once — no overlap, no priority, nothing to arbitrate. */
+    MemoryRegion     bar0_trap;
+    MemoryRegion    *bar0_live;
+    unsigned         bar0_n_live;
+    NvkvmBar0Piece  *bar0_dead;
+    unsigned         bar0_n_dead;
+    uint64_t         bar0_dead_bytes;
+    /* ⚠ Writes that landed on a dead piece.  The sweep behind the cut measured READS only,
+     * so this number being nonzero is news about the aperture, not a fault. */
+    uint64_t         bar0_dead_writes;
     /* ★ The constructor-call counter.  Its whole job is to disagree with the table's row
      * count if somebody ever builds a region another way. */
     unsigned     io_inits;
@@ -1012,7 +1062,11 @@ static const MemoryRegionOps nvkvm_bar1_ops = {
  * `nvkvm_regions_selfcheck` derives the expected value from the table instead of assuming
  * it — an assumption that would have hidden exactly this addition. */
 static const NvkvmRegionSpec nvkvm_regions[NVKVM_N_REGIONS] = {
-    { "nvkvm-bar0-regs",   0, 0, NVKVM_KIND_TRAP,        false,
+    /* ★★★★★ CUT, not TRAP.  Most of this aperture holds no register at all — see
+     * NVKVM_KIND_CUT — so it is a container tiled by pieces rather than one trapping leaf.
+     * The `ops` below are still this row's, and they are still what the live pieces reach:
+     * `nvkvm_bar0_cut` builds the leaf with them and aliases into it. */
+    { "nvkvm-bar0-regs",   0, 0, NVKVM_KIND_CUT,         false,
       offsetof(NvkvmState, bar0_size), &nvkvm_trap_ops },
     /* ★★★★ §16.18: TRAP, not RESERVATION — for the reason the row below it says, and for
      * one more.  BAR1 is GMMU-translated, so it cannot be shadowed by a flat memslot; and
@@ -1067,6 +1121,164 @@ static void nvkvm_region_init_io(NvkvmState *s, MemoryRegion *mr,
     s->io_inits++;
 }
 
+/* ===================================================================================
+ * ★★★★★ THE CUT — the register aperture, tiled once
+ * =================================================================================== */
+
+/* ★ The granularity the archive's sweep works in, and the granularity a memory slot can be
+ * installed at.  Written as this device's own constant rather than the host's page size
+ * because the two must AGREE: a run the archive coalesced at 4 KiB cannot become a slot at
+ * any coarser grain, so asking the host would only let the two drift apart silently. */
+#define NVKVM_BAR0_PAGE 0x1000ull
+
+/* A dead piece's callbacks.  ★ The READ one is unreachable while the piece is in its normal
+ * rom mode — the guest resolves those reads against the piece's own memory and never exits —
+ * and it forwards to the archive anyway, so a piece taken out of rom mode degrades to
+ * today's behaviour instead of to a wrong answer. */
+static uint64_t nvkvm_bar0_dead_read(void *opaque, hwaddr addr, unsigned size)
+{
+    NvkvmBar0Piece *piece = opaque;
+
+    return nvkvm_trap_read(piece->s, piece->base + addr, size);
+}
+
+static void nvkvm_bar0_dead_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    NvkvmBar0Piece *piece = opaque;
+
+    piece->s->bar0_dead_writes++;
+    nvkvm_trap_write(piece->s, piece->base + addr, val, size);
+}
+
+static const MemoryRegionOps nvkvm_bar0_dead_ops = {
+    .read       = nvkvm_bar0_dead_read,
+    .write      = nvkvm_bar0_dead_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid      = { .min_access_size = 1, .max_access_size = 8 },
+};
+
+/* Add one aliased live piece, covering [start, start+len) of the aperture. */
+static void nvkvm_bar0_add_live(NvkvmState *s, MemoryRegion *container,
+                                uint64_t start, uint64_t len)
+{
+    MemoryRegion *mr = &s->bar0_live[s->bar0_n_live++];
+    g_autofree char *name = g_strdup_printf("nvkvm-bar0-live@%" PRIx64, start);
+
+    memory_region_init_alias(mr, OBJECT(s), name, &s->bar0_trap, start, len);
+    memory_region_add_subregion(container, start, mr);
+}
+
+/*
+ * ★★★★★ Cut the register aperture into pieces that tile it EXACTLY ONCE.
+ *
+ * The archive owns the question "which runs hold no register" — it answers from the same arm
+ * chain that serves the reads, so the cut cannot drift from what is served.  This function
+ * owns only the complement and the construction.
+ *
+ * ⊘ It does not fail on a chip with no dead runs.  Zero is a real answer about a register
+ * map, and a device that refused to realize over it would be refusing over a fact; the
+ * aperture then ends up as one live piece, which is byte for byte today's behaviour.
+ */
+static bool nvkvm_bar0_cut(NvkvmState *s, MemoryRegion *container, uint64_t size,
+                           Error **errp)
+{
+    g_autofree KayfabeRange *runs = NULL;
+    int64_t total;
+    uint64_t cursor = 0;
+    unsigned i;
+
+    memory_region_init(container, OBJECT(s), "nvkvm-bar0-regs", size);
+    nvkvm_region_init_io(s, &s->bar0_trap, &nvkvm_trap_ops, "nvkvm-bar0-trap", size);
+
+    /* Asked twice on purpose: once for the count, once for the rows.  The archive returns
+     * the TOTAL rather than what it wrote, so a buffer sized from the first call cannot be
+     * silently overrun or silently short. */
+    total = kayfabe_shim_bar0_dead_runs(s->regs, NULL, 0);
+    if (total < 0) {
+        error_setg(errp,
+                   "nvkvm: the register plane refused to describe its dead runs (%" PRId64
+                   "); the aperture cannot be cut without them",
+                   total);
+        return false;
+    }
+    if (total > 0) {
+        int64_t got;
+
+        runs = g_new0(KayfabeRange, (size_t)total);
+        got = kayfabe_shim_bar0_dead_runs(s->regs, runs, (uint64_t)total);
+        if (got != total) {
+            error_setg(errp,
+                       "nvkvm: the register plane said %" PRId64 " dead runs and then said "
+                       "%" PRId64 "; the aperture's map changed between two questions about it",
+                       total, got);
+            return false;
+        }
+    }
+
+    /* One live piece per gap, one dead piece per run, in address order. */
+    s->bar0_live = g_new0(MemoryRegion, (size_t)total + 1);
+    s->bar0_dead = g_new0(NvkvmBar0Piece, (size_t)total + 1);
+
+    for (i = 0; i < (unsigned)total; i++) {
+        uint64_t start = runs[i].offset;
+        uint64_t len = runs[i].length;
+        NvkvmBar0Piece *piece;
+        g_autofree char *name = NULL;
+
+        /*
+         * ★ Refused, not clamped, and this is the check that makes the tiling a FACT rather
+         * than an intention.  Out of order, overlapping, past the end, or not page-aligned
+         * all produce a container whose pieces do not tile it — and QEMU would accept every
+         * one of those silently, resolving the overlap by priority and leaving the guest
+         * reading from whichever piece happened to win.
+         */
+        if (start < cursor || len == 0 ||
+            start > size || len > size - start ||
+            (start & (NVKVM_BAR0_PAGE - 1)) != 0 ||
+            (len & (NVKVM_BAR0_PAGE - 1)) != 0) {
+            error_setg(errp,
+                       "nvkvm: the register plane's dead run %u is [0x%" PRIx64
+                       ", +0x%" PRIx64 ") in an aperture of 0x%" PRIx64 " with the previous "
+                       "run ending at 0x%" PRIx64 "; runs must be page-aligned, ordered, "
+                       "disjoint and inside the aperture or the pieces do not tile it",
+                       i, start, len, size, cursor);
+            return false;
+        }
+
+        if (start > cursor) {
+            nvkvm_bar0_add_live(s, container, cursor, start - cursor);
+        }
+
+        piece = &s->bar0_dead[s->bar0_n_dead++];
+        piece->s = s;
+        piece->base = start;
+        name = g_strdup_printf("nvkvm-bar0-dead@%" PRIx64, start);
+        /* ⊘ `_nomigrate`: this device already installs a migration blocker, and what these
+         * pieces hold is a constant zero derived from the chip's own register map — state
+         * a destination would rebuild from the same table.  Registering it would ship
+         * fourteen megabytes of zeros across a link that is blocked anyway. */
+        if (!memory_region_init_rom_device_nomigrate(&piece->mr, OBJECT(s),
+                                                     &nvkvm_bar0_dead_ops,
+                                                     piece, name, len, errp)) {
+            return false;
+        }
+        memory_region_add_subregion(container, start, &piece->mr);
+        s->bar0_dead_bytes += len;
+        cursor = start + len;
+    }
+    if (cursor < size) {
+        nvkvm_bar0_add_live(s, container, cursor, size - cursor);
+    }
+
+    info_report("nvkvm: BAR0-CUT %u dead pieces (0x%" PRIx64 " bytes, %.1f%% of the aperture) "
+                "answer reads with no exit; %u live pieces still trap. ⊘ Writes to a dead "
+                "piece STILL trap — the runs were measured from the read classifier only.",
+                s->bar0_n_dead, s->bar0_dead_bytes,
+                100.0 * (double)s->bar0_dead_bytes / (double)size,
+                s->bar0_n_live);
+    return true;
+}
+
 static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
 {
     PCIDevice *pci = PCI_DEVICE(s);
@@ -1117,6 +1329,10 @@ static bool nvkvm_bars_realize(NvkvmState *s, Error **errp)
         if (row->kind == NVKVM_KIND_MSIX) {
             /* A plain container.  Its contents are the hypervisor's, added by msix_init. */
             memory_region_init(&s->mr[i], OBJECT(s), row->name, size);
+        } else if (row->kind == NVKVM_KIND_CUT) {
+            if (!nvkvm_bar0_cut(s, &s->mr[i], size, errp)) {
+                return false;
+            }
         } else {
             nvkvm_region_init_io(s, &s->mr[i], row->ops, row->name, size);
         }
@@ -3289,6 +3505,44 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
         return;
     }
 
+    /*
+     * ═══ ★★★ THE REGISTER PLANE ═════════════════════════════════════════════════════
+     *
+     * ★★★★★ BEFORE the regions, and that ordering is now load-bearing rather than
+     * incidental.  `nvkvm_bars_realize` cuts the register aperture using the run list
+     * the plane derives from its own arm chain, so the plane must exist first.  It can:
+     * this constructor depends on two device properties and nothing else — no base
+     * address, no region, no bus.  It sat after the regions only because nothing had
+     * needed it earlier.
+     *
+     * Built HERE, and not from the configuration-space write path the memory plane uses,
+     * because it needs no base-address register: a guest driver's first act is to read
+     * chip-identity registers and the answer is a function of the chip table alone.  Two
+     * planes, two lifetimes — see kayfabe_shim.h.
+     */
+    {
+        const uint8_t *msg = NULL;
+        uint64_t msg_len = 0;
+        void *handle = NULL;
+        const char *probe = s->probe_arm_notifier ? s->probe_arm_notifier : "";
+        int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id,
+                                              (const uint8_t *)probe,
+                                              (uint64_t)strlen(probe),
+                                              &handle, &msg, &msg_len);
+
+        if (rc != KAYFABE_OK) {
+            error_setg(errp, "nvkvm: the register plane refused to build (%d): %.*s",
+                       (int)rc, (int)msg_len, (const char *)msg);
+            return;
+        }
+        s->regs = handle;
+    }
+    /* ★ Armed the instant the handle exists, and no later.  The region construction below
+     * can now refuse — it reads the plane's own run list — and a refusal between the
+     * handle's creation and its teardown hook would leak the plane silently. */
+    s->exit_notifier.notify = nvkvm_exit_notify;
+    qemu_add_exit_notifier(&s->exit_notifier);
+
     if (!nvkvm_bars_realize(s, errp)) {
         return;
     }
@@ -3328,34 +3582,6 @@ static void nvkvm_realize(PCIDevice *pci, Error **errp)
             }
         }
     }
-
-    /*
-     * ═══ ★★★ THE REGISTER PLANE ═════════════════════════════════════════════════════
-     *
-     * Built HERE, and not from the configuration-space write path the memory plane uses,
-     * because it needs no base-address register: a guest driver's first act is to read
-     * chip-identity registers and the answer is a function of the chip table alone.  Two
-     * planes, two lifetimes — see kayfabe_shim.h.
-     */
-    {
-        const uint8_t *msg = NULL;
-        uint64_t msg_len = 0;
-        void *handle = NULL;
-        const char *probe = s->probe_arm_notifier ? s->probe_arm_notifier : "";
-        int32_t rc = kayfabe_shim_regs_create((uint16_t)s->chip_device_id,
-                                              (const uint8_t *)probe,
-                                              (uint64_t)strlen(probe),
-                                              &handle, &msg, &msg_len);
-
-        if (rc != KAYFABE_OK) {
-            error_setg(errp, "nvkvm: the register plane refused to build (%d): %.*s",
-                       (int)rc, (int)msg_len, (const char *)msg);
-            return;
-        }
-        s->regs = handle;
-    }
-    s->exit_notifier.notify = nvkvm_exit_notify;
-    qemu_add_exit_notifier(&s->exit_notifier);
 
     /* ★★★★★ w393 — the arms, stated by the boot itself.  See NvkvmState::bar1_passthrough
      * and ::bar2_passthrough.  Whether the archive actually installs anything is ITS

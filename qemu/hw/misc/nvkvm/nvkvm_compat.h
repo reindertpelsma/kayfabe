@@ -87,6 +87,40 @@
 #  if __has_include("system/kvm.h")
 #    define NVKVM_SYSTEM_KVM_H 1
 #  endif
+/* ★★ Three more, each with its OWN probe, for this file's own reason: they did not move
+ * together before and there is no ground to assume these did.  `nvkvm.c` spelled all three
+ * `system/…` unconditionally, which moved this device's real floor to 10.1 while the
+ * assertion above still said 9.2 — the same shape as the 10.0 defect this block records,
+ * one layer up: a floor is only true if something builds at it. */
+#  if __has_include("system/address-spaces.h")
+#    define NVKVM_SYSTEM_ADDRESS_SPACES_H 1
+#  endif
+#  if __has_include("system/ramblock.h")
+#    define NVKVM_SYSTEM_RAMBLOCK_H 1
+#  endif
+#  if __has_include("system/system.h")
+#    define NVKVM_SYSTEM_SYSTEM_H 1
+#  endif
+#endif
+
+#ifdef NVKVM_SYSTEM_ADDRESS_SPACES_H
+#  include "system/address-spaces.h"
+#else
+#  include "exec/address-spaces.h"
+#endif
+
+/* ★ `RAMBlock::fd_offset` is read as a FIELD in the topology listener: no public accessor
+ * answers it, and the alternative is an assumption with nothing to catch it. */
+#ifdef NVKVM_SYSTEM_RAMBLOCK_H
+#  include "system/ramblock.h"
+#else
+#  include "exec/ramblock.h"
+#endif
+
+#ifdef NVKVM_SYSTEM_SYSTEM_H
+#  include "system/system.h"
+#else
+#  include "sysemu/sysemu.h"
 #endif
 
 #ifdef NVKVM_SYSTEM_HEADERS

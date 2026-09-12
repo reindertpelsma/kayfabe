@@ -1535,7 +1535,12 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
         return i64::from(Status::Malformed.code());
     };
     let runs = regs.plane().bar0_backable_runs();
-    let n = runs.len().min(max as usize);
+    // ⚠ The TOTAL is returned, never the truncated count. A caller that sized its buffer
+    // too small must be able to SEE that it did: a silently truncated run list still tiles
+    // the aperture (the uncovered remainder simply stays trapped), so the only symptom
+    // would be traps nobody could explain.
+    let total = runs.len();
+    let n = total.min(max as usize);
     for (i, (off, len)) in runs.iter().take(n).enumerate() {
         // SAFETY: the caller declares `out` writable for `max` pairs, and `i < n <= max`.
         unsafe {
@@ -1545,5 +1550,5 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
             });
         }
     }
-    i64::try_from(n).unwrap_or(i64::MAX)
+    i64::try_from(total).unwrap_or(i64::MAX)
 }

@@ -1234,7 +1234,10 @@ int32_t  kayfabe_shim_regs_audit(void *handle, KayfabeRegAudit *out);
  * correctly: two owners for one guest-physical range and only one wins.  Piecewise subregions
  * have one owner each, which is why the cut belongs HERE and not there.
  *
- * Writes out[0..n] and returns n, or a negative status.  ⚠ Zero is a real answer about a chip,
+ * Writes min(total, max) entries and returns the TOTAL, or a negative status.  ⚠ It returns
+ * the total and not what it wrote, so a caller whose buffer was too small can SEE that: a
+ * truncated run list still tiles the aperture, and the only symptom would be traps in a
+ * range nobody could account for.  ⚠ Zero is a real answer about a chip,
  * not a failure: a device that refused to realize over it would refuse over a fact.
  */
 int64_t  kayfabe_shim_bar0_dead_runs(void *handle, KayfabeRange *out, uint64_t max);
