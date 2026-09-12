@@ -117,3 +117,54 @@ fn report_how_much_of_bar0_is_backable_by_a_zero_page() {
          backable count is an artefact of a broken probe, not a property of the device"
     );
 }
+
+
+/// ★★★★★ **The production run-list must agree with the exhaustive sweep, and cost nothing.**
+///
+/// `RegPlane::bar0_backable_runs` is what a memslot placement will trust. This checks it
+/// against the sweep above — the same arm chain, asked the slow way — and, separately, that
+/// running it does **not** move the read census.
+///
+/// ⊘ That second half is not hygiene. The run-list sweeps four million offsets; if it went
+/// through `RegPlane::read` instead of the classifier, every figure in `bar0_read_census`
+/// would be poisoned before the guest issued one access, and the number I used to justify this
+/// whole direction — `unclaimed=124415` — would have been measuring the sweep.
+#[test]
+fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
+    let p = plane();
+
+    let before = p.counters().reads;
+    let runs = p.bar0_backable_runs();
+    assert_eq!(
+        p.counters().reads,
+        before,
+        "computing the run list moved the READ COUNTER — it is going through the counting          wrapper, and every number in `bar0_read_census` is then partly this sweep"
+    );
+
+    assert!(!runs.is_empty(), "no backable run at all — nothing to map");
+    let covered: u64 = runs.iter().map(|(_, l)| *l).sum();
+    eprintln!(
+        "BAR0-RUNS n={} covering {covered} bytes ({} pages)",
+        runs.len(),
+        covered / PAGE
+    );
+
+    // ★ The load-bearing check: NO live register may fall inside a run. A run that swallowed
+    // one would answer it with zero forever, silently, and the guest would see a defaulted
+    // register rather than a refusal.
+    for (start, len) in &runs {
+        for off in (*start..*start + *len).step_by(4) {
+            assert!(
+                matches!(p.read(0, off, 4), ReadOutcome::Unclaimed),
+                "offset {off:#x} is inside a backable run but this device SERVES it — mapping                  that run would answer a live register with zero, forever, with nothing logged"
+            );
+        }
+    }
+
+    // ⊘ And the converse as non-vacuity: the runs must not cover everything, or the check
+    // above passed only because the device serves nothing.
+    assert!(
+        covered < BAR0_LEN,
+        "the runs cover ALL of BAR0 — then no register was found anywhere and the check above          is vacuous"
+    );
+}

@@ -1744,6 +1744,52 @@ impl RegPlane {
         s.fsm.mmio_read_with(self.model.as_ref(), bar, off).is_some()
     }
 
+    /// ★★★★★ **WHICH RUNS OF BAR0 HOLD NO REGISTER AT ALL** — the set a read-only zero
+    /// region may cover (w545).
+    ///
+    /// `[measured w544]` **3 572 of BAR0's 4 096 pages hold no register**, in **12 contiguous
+    /// runs**, and every read to them answers `ReadOutcome::Unclaimed => 0`. A read-only
+    /// mapping over those runs is therefore **byte-identical** to what this device answers
+    /// today — not an approximation with a fallback — and `[measured w542]` it carries
+    /// **124 415 of 241 722** BAR0 reads.
+    ///
+    /// # ⊘ Why this SWEEPS instead of reading the chip's declared ranges
+    ///
+    /// The profile declares `boot_regs`, `ptimer`, `rom_window` and `pramin_window` — but the
+    /// interrupt tree, the BAR0 window latch, the invalidate registers and the GSP model's own
+    /// decode live in four other places. A derivation would have to gather all eight and would
+    /// **drift the first time one of them moved**, and the failure is silent: a register inside
+    /// a mapped run stops reaching this device and answers zero forever.
+    ///
+    /// ⇒ So it asks [`RegPlane::read_inner`] — the REAL arm chain, in its real order. Nothing
+    /// can drift from itself.
+    ///
+    /// ⚠ Deliberately `read_inner` and not [`RegPlane::read`]: the wrapper is what counts, and
+    /// a 4-million-read sweep through it would poison every figure in `bar0_read_census` before
+    /// the guest had issued a single access.
+    ///
+    /// ⊘ The unit is the PAGE, because a memslot is: one live register poisons its whole 4 KiB.
+    #[must_use]
+    pub fn bar0_backable_runs(&self) -> Vec<(u64, u64)> {
+        const PAGE: u64 = 4096;
+        let pages = self.chip.regs_aperture_len / PAGE;
+        let mut runs: Vec<(u64, u64)> = Vec::new();
+        for page in 0..pages {
+            let base = page * PAGE;
+            let dead = (base..base + PAGE)
+                .step_by(4)
+                .all(|off| matches!(self.read_inner(0, off, 4), ReadOutcome::Unclaimed));
+            if !dead {
+                continue;
+            }
+            match runs.last_mut() {
+                Some((start, len)) if *start + *len == base => *len += PAGE,
+                _ => runs.push((base, PAGE)),
+            }
+        }
+        runs
+    }
+
     /// How many vCPU threads are inside an MMIO trap on this plane right now.
     pub fn mmio_in_flight(&self) -> u32 {
         self.mmio_in_flight.load(Ordering::Acquire)
