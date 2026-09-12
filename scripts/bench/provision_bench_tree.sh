@@ -226,23 +226,37 @@ UD
   # ⚠ A check that reports is not a check that gates. The host half of this provisioning
   # (`provision_box.sh:pick_apt_mirror`) has always picked the winner and refused below a
   # floor; this half printed the same numbers as decoration.
+  # ⊘⊘ **THIS MEASURED AND THEN IGNORED THE MEASUREMENT** — fixed 2026-09-12 (w537).
+  #
+  # It benchmarked three guest apt mirrors, printed the speeds, and then rewrote the guest's
+  # sources to `mirrors.edge.kernel.org` **unconditionally**, whichever won. `[measured w537]`
+  # on a fresh box that host was UNREACHABLE while `archive.ubuntu.com` — the one being
+  # replaced — was fastest at 527 kB/s. The chain: `build-essential` had no candidate, the
+  # guest had no `cc`, the kernel-open driver never built, and the first graded boot returned
+  # an EMPTY guest dmesg with the capture's own "do not grade this boot".
+  #
+  # ⚠ A check that reports is not a check that gates. The HOST half of this provisioning
+  # (`provision_box.sh:pick_apt_mirror`) has always picked the winner and refused below a
+  # floor; this half printed the identical numbers as decoration.
+  #
+  # ⊘ And the FIRST fix was wrong in its own way: it captured the winner with `2>&1`, which
+  # merged the progress lines back into the value, so the mirror became a whole log line. The
+  # speeds are emitted as parseable `MIRROR <host> <bytes>` rows and the winner is chosen
+  # HERE, on the host, where it can be seen.
   say "B2: picking the guest's apt mirror (the host's fix, applied one layer down)"
-  GUEST_MIRROR=$($GS "best=''; best_s=0
-       for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu mirrors.edge.kernel.org/ubuntu; do
+  MIRROR_ROWS=$($GS "for m in archive.ubuntu.com/ubuntu azure.archive.ubuntu.com/ubuntu mirrors.edge.kernel.org/ubuntu; do
          s=\$(timeout 12 curl -s -o /dev/null -w '%{speed_download}' http://\$m/dists/noble/Release 2>/dev/null || echo 0)
-         s=\${s%%.*}
-         echo \"guest mirror \$m -> \${s:-0} B/s\" >&2
-         if [ \"\${s:-0}\" -gt \"\$best_s\" ]; then best_s=\$s; best=\$m; fi
-       done
-       [ \"\$best_s\" -ge 100000 ] && echo \"\$best\" || echo ''" 2>&1 | tee /dev/stderr | tail -1 | tr -d '\r')
+         echo \"MIRROR \$m \${s%%.*}\"
+       done" 2>/dev/null | tr -d '\r')
+  echo "$MIRROR_ROWS" | sed 's/^/    /'
+  GUEST_MIRROR=$(echo "$MIRROR_ROWS" | awk '$1=="MIRROR" && $3+0 >= 100000 {print $3, $2}' | sort -rn | head -1 | awk '{print $2}')
   if [ -z "$GUEST_MIRROR" ]; then
-    say "⊘ B2: NO USABLE GUEST APT MIRROR (best under 100 kB/s). The driver cannot build in the guest."
+    say "⊘ B2: NO USABLE GUEST APT MIRROR (none reached 100 kB/s). The driver cannot build in the guest."
     return 5
   fi
   say "B2: guest apt mirror = $GUEST_MIRROR"
-  $GS "sudo sed -i 's|http://[a-z0-9.]*\.ubuntu\.com/ubuntu|http://$GUEST_MIRROR|g; s|http://mirrors\.edge\.kernel\.org/ubuntu|http://$GUEST_MIRROR|g' \
+  $GS "sudo sed -i -E 's|http://[A-Za-z0-9.-]+/ubuntu|http://$GUEST_MIRROR|g' \
          /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null; true"
-
   say "B2: installing guest driver (kernel-open)"
   $GSL "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential linux-headers-\$(uname -r)" 2>&1 | tail -3
   # ⚠ assert the COMPILER before spending five minutes finding out it is missing. `cc` absent
