@@ -100,6 +100,24 @@ fn ring_a_gr_doorbell() -> String {
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb, VChid};
     use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
 
+    // ★★★ **w512 — pin the doorbell arm, for the same reason `tests/e2_doorbell.rs` does.**
+    //
+    // This file asserts the GR route's REFUSAL BY NAME. The async doorbell arm became the
+    // default at w467, so `ring` enqueues and answers `Scheduled` and the refusal is
+    // produced later on the worker — the assertion then failed with *"expected a named
+    // refusal, got Scheduled"*, which is a true statement about a test that had stopped
+    // asking its own question.
+    //
+    // ⊘ The route itself is UNCHANGED and shared by both arms (`SharedDoorbell::ring_inline`),
+    // so pinning the arm runs the same code where a test can see its answer. The shipping
+    // arm's own behaviour is asserted in `e2_doorbell.rs`, not here — this file varies
+    // `GR_ROUTE_ENV` and must hold everything else still.
+    //
+    // SAFETY: the child process is single-threaded at this point and this runs before the
+    // only `Regs::create` in it.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
+    }
     let Ok(r) = Regs::create(0) else {
         return REFUSED_TO_REALIZE.to_string();
     };

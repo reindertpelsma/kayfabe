@@ -5414,6 +5414,29 @@ fn doorbell_publish_loop(
             }
             continue;
         }
+        // ★★★★★ **w512 — THE ALARM, POINTED AT THE WORKER.**
+        //
+        // `[measured w510]` `rank0 worst_wait=8279us worst_hold=8209us worst_hold_at=
+        // plane.rs:2802` — `ce_session_with_root`, which holds the plane's rank-0 mutex
+        // across an arbitrary caller closure, and the closure this line passes it is the
+        // whole CE submission. A vCPU's `RegPlane::write` blocks for that whole hold.
+        //
+        // ⊘ The 8.2 ms is measured; WHERE INSIDE the closure it goes is not, and this tree
+        // has spent nine hypotheses on plausible answers to questions it had not measured.
+        // The stall alarm already prints a backtrace at the exact blocking frame — it was
+        // only ever aimed at vCPU threads. Aimed here it names the worker's site instead.
+        //
+        // ⚠ TEMPORARY, like the rest of the alarm. Delete with `KAYFABE_STALL_ALARM_US`.
+        let _worker_alarm = {
+            #[cfg(feature = "host-isolates")]
+            {
+                kayfabe_linux_raw::stall_alarm::timer::arm()
+            }
+            #[cfg(not(feature = "host-isolates"))]
+            {
+                Option::<()>::None
+            }
+        };
         let report = port.ring_inline(token);
         // ★ The plane's own accounting, called from here so `doorbells_served` /
         // `doorbells_refused` keep meaning what they meant. ⊘ A second set of counters on

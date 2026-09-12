@@ -63,6 +63,31 @@ const MALFORMED_TOKEN: u64 = 0x0000_1005;
 const NO_PORT: &str = "Device::NoDoorbellPort";
 
 fn regs() -> Regs {
+    // ★★★★★ **w512 — THESE TESTS ARE ABOUT THE ROUTING CHAIN, SO THEY PIN THE ARM THAT
+    // RUNS IT ON THE CALLER.**
+    //
+    // ⊘ Six tests in this file went red at w467 and stayed red, and the reason is not a
+    // routing regression: the async doorbell arm became the DEFAULT, so `ring` now enqueues
+    // and answers `Scheduled`, and the refusal these tests are named for is produced later,
+    // on the worker. `kind_of` then panicked with *"expected a named refusal, got
+    // Scheduled"* — a true message about a test that had stopped asking its own question.
+    //
+    // ★ The routing chain itself is UNCHANGED and shared: both arms reach it through
+    // `SharedDoorbell::ring_inline`. Pinning the arm off here runs exactly the same code,
+    // synchronously, where a test can see its answer.
+    //
+    // ⚠ And that is a real cost, stated rather than hidden: with the arm pinned, this file
+    // no longer exercises the SHIPPING configuration's trap path. That half is asserted
+    // separately by `the_shipping_arm_enqueues_instead_of_routing_on_the_caller` below — ⊘
+    // without which "the doorbell works" would be a claim about a configuration nobody runs.
+    //
+    // Process-global, and sound for the same reason the `KAYFABE_ISOLATES` note below gives:
+    // this is its own test binary.
+    //
+    // SAFETY: single-threaded test setup, before any `Regs::create` in this process.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
+    }
     // `0` selects the chip table's default row (GA106).
     //
     // ⚠ This reads `KAYFABE_ISOLATES`, process-globally, and the default is `stillborn`.
@@ -958,4 +983,45 @@ fn all_three_synchronization_points_consume_their_barrier() {
         shim.contains("set_invalidate_refresh("),
         "one uninstalled seam disables ALL THREE entry points together"
     );
+}
+
+
+// =====================================================================================
+// THE OTHER HALF — what the SHIPPING arm does
+// =====================================================================================
+
+/// ★★★★★ **The shipping default must NOT route on the caller, and this is the only test
+/// that says so.**
+///
+/// Every other test in this file pins `KAYFABE_DOORBELL_ASYNC=off` so it can observe the
+/// routing chain's answer synchronously. That pin is safe only while something still checks
+/// the arm the bench and the product actually run — otherwise the file would assert a
+/// configuration nobody uses and read as full coverage.
+///
+/// ⊘ The owner's standing invariant is the reason the default moved:
+/// *"a doorbell is only a token + channel ... the vcpu thread doesn't know and shouldn't
+/// care what's inside that channel"*. `[measured w510]` routing on the caller holds the
+/// plane's rank-0 mutex for **8.2 ms** inside `ce_session_with_root`, and a vCPU's
+/// `RegPlane::write` blocks for exactly that long.
+#[test]
+fn the_shipping_arm_enqueues_instead_of_routing_on_the_caller() {
+    // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
+    }
+    let r = Regs::create(0).expect("the shipped chip row realizes");
+    let out = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
+    let report = out
+        .doorbell
+        .as_ref()
+        .expect("★ the write must still be CLASSIFIED as a doorbell on either arm");
+    assert!(
+        report.refusal().is_none(),
+        "the shipping arm must ENQUEUE and return, not route on the caller and refuse:          {report:?}"
+    );
+    // Put it back, so a later test in this binary is not silently run on the other arm.
+    // SAFETY: as above.
+    unsafe {
+        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
+    }
 }
