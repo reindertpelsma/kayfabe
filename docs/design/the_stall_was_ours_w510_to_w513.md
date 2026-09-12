@@ -183,6 +183,11 @@ stated target, from **166** at w394.
 | slow traps (>1 ms) | 6776 | 41 | 37 | 10 | 2 | **1** |
 | slow waits, all ranks | — | — | — | — | 0 | **0** |
 
+★★ **CONFIRMED n=2 at w530**, same tree, both boots complete and passing: `(P) 8/8`,
+`panics=0`, `inline_exceptions=0`, `VCPU-BLOCKING none`, worst trap 2758 µs vs 3622 µs,
+slow traps 3 vs 1. ⊘ That spread is the rented VM's ~10 ms steal noise floor, not a change —
+both worst traps are at the **same register** and both report `slow_blocked=0`.
+
 ⚠ **One instrument disagreement, stated rather than resolved.** `TRAPWITNESS worst_trap=3622us`
 against `TRAP-CPU worst_wall=688us`: they cover different sets, because `TRAP-CPU` is armed
 only in the **write** entry point while `TRAPWITNESS` covers reads too. So the 3.6 ms trap was
