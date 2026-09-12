@@ -13308,8 +13308,7 @@ pub struct Regs {
     /// pending latches for. See the call site in `Regs::write`.
     last_latch_epoch: std::sync::atomic::AtomicU64,
     /// ★★★★★ **w390** — which arm of the TLB-invalidate blockage point this boot runs.
-    /// Read ONCE at the composition root; see [`MMU_INVAL_ENV`].
-    mmu_inval: MmuInvalArm,
+    /// Read ONCE at the composition root; see `KAYFABE_MMU_INVAL` (removed w535; always armed).
     /// ★★★★★ **w326 — the revocation drain's OWN driver** (`crate::reclaimtick`).
     ///
     /// `w323` measured that the drain's only production caller is `Regs::write`, i.e. a
@@ -14040,37 +14039,28 @@ impl Regs {
                      which was never the requirement",
             },
         );
-        // ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT.** See [`MMU_INVAL_ENV`] for why
+        // ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT.** See `KAYFABE_MMU_INVAL` (removed w535; always armed) for why
         // arming and the publish-consumer had to land in one commit.
         //
         // ⊘ Echoed on BOTH arms and unconditionally, for [`DOORBELL_ASYNC_ENV`]'s reason
         // exactly: a selector that prints only when it is on makes *"the lane was disarmed"*
         // and *"this build does not have the lane"* the same log.
-        let mmu_inval = selected_mmu_inval()?;
-        if mmu_inval.publishes() {
+        // ⊘ w535 — the TLB-invalidate blockage point is ALWAYS armed.
+        // `THE_PRODUCTION_CONTRACT.md` §2. `[audited w534]` the `off` value had ZERO test
+        // files and no graded boot; it was a branch nobody could vouch for.
+        {
             plane.mmu_inval().arm();
         }
         eprintln!(
-            "kayfabe: MMUINVAL-ARM arm={} armed={} ⇒ a guest MMU_INVALIDATE trigger {}",
-            mmu_inval.as_str(),
+            "kayfabe: MMUINVAL-ARM always armed={} ⇒ a guest MMU_INVALIDATE trigger HOLDS \\
+             the guest (TRIGGER reads TRUE), runs the whole-VAS publication under that \\
+             halt, and completes in a Drop guard. ★ R1.1's third blockage point.",
             plane.mmu_inval().is_armed(),
-            if mmu_inval.publishes() {
-                "HOLDS the guest (TRIGGER reads TRUE), runs the whole-VAS publication under \
-                 that halt, and completes in a Drop guard. ★ R1.1's third blockage point, \
-                 spending something for the first time. ⚠ Read `worst_hold_us` and \
-                 `over_budget` on the MMUINVAL census line — every microsecond here is a \
-                 microsecond the guest spins"
-            } else {
-                "is RECORDED and answered 0 immediately — the CONTROL, byte-identical to \
-                 every boot before w390. ⊘ `by=[… tlb-invalidate=0 …]` on this arm is the \
-                 arm being off, NOT a measured zero"
-            },
         );
         Ok(Regs {
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
             last_latch_epoch: std::sync::atomic::AtomicU64::new(0),
             plane,
-            mmu_inval,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
             //   is a boot that can change its mind halfway through.
             reclaim: Arc::new(crate::reclaimtick::ReclaimTick::from_env()),
@@ -15295,7 +15285,7 @@ impl Regs {
         // `publish_before_completing` is `true` only when the plane's trigger arm decided
         // [`kayfabe_device::mmuinval::TriggerAction::Publish`], which it can only do while
         // [`kayfabe_device::mmuinval::MmuInvalidateLog::is_armed`] — i.e. only under
-        // [`MMU_INVAL_ENV`] `= on`. On the control this whole block is `if false`.
+        // `KAYFABE_MMU_INVAL` (removed w535; always armed) `= on`. On the control this whole block is `if false`.
         //
         // ⊘ **THE COMPLETION IS A `Drop` GUARD, NOT A STATEMENT AFTER THE PUBLICATION.**
         // From `note_trigger` to `complete` the guest reads `TRIGGER = TRUE` and spins in
@@ -16182,16 +16172,10 @@ impl Regs {
         // opposite findings — one is the lane switched off, the other is the lane on and
         // delivering nothing — and reading them apart is the whole point of printing the
         // selector beside the census rather than only at the composition root, where a
-        // grader tailing the last N lines never sees it. See [`MMU_INVAL_ENV`].
+        // grader tailing the last N lines never sees it. See `KAYFABE_MMU_INVAL` (removed w535; always armed).
         eprintln!(
-            "kayfabe: {} arm={} ⊘{}",
+            "kayfabe: {} ⊘ a `publications=0` here is a MEASURED ZERO — the lane is always armed",
             self.plane.mmu_inval().census(),
-            self.mmu_inval.as_str(),
-            if self.mmu_inval.publishes() {
-                " a `publications=0` here is a MEASURED ZERO — the lane was armed"
-            } else {
-                " a zero here is the ARM BEING OFF, not a measured zero"
-            },
         );
         // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
         // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
@@ -17574,128 +17558,6 @@ pub const VAS_PUBLISH_ENV: &str = "KAYFABE_VAS_PUBLISH";
 /// disarmed from the caller makes an evidence run and its control indistinguishable
 /// (`w298`'s ruling). `off` is byte-identical to every boot before w383.
 pub const DOORBELL_ASYNC_ENV: &str = "KAYFABE_DOORBELL_ASYNC";
-
-/// ★★★★★ **w390 — THE TLB-INVALIDATE BLOCKAGE POINT, WIRED.**
-///
-/// `REQUIREMENTS_TARGET.md` R1.1's third blockage point. The mechanism has existed complete
-/// since w326 — [`kayfabe_device::mmuinval::MmuInvalidateLog`] decodes the trigger, holds
-/// `TRIGGER` set while a publication is outstanding, and the read path already answers from
-/// it (`kayfabe-device/src/plane.rs:2921`). **Two wires were missing and this arm is both**:
-/// `MmuInvalidateLog::arm` had no caller anywhere in the workspace, and
-/// [`kayfabe_device::WriteOutcome::publish_before_completing`] was produced at the plane's
-/// trigger arm and consumed nowhere. ⇒ every boot to date printed `MMUINVAL armed=false`
-/// beside `triggers=377`: the halt was entered and spent nothing.
-///
-/// # ⊘ WHY THE TWO WIRES HAD TO LAND TOGETHER, AND WHY NEITHER IS SAFE ALONE
-///
-/// `arm()` alone is a **guest hang by construction**: from the first trigger the register
-/// reads `TRIGGER = TRUE` forever and `kgmmuCheckPendingInvalidates_TU102`
-/// (`ogkm-580: kern_gmmu_tu102.c:59-84`) spins on it. The consumer alone is dead code —
-/// `note_trigger` returns `Observed` while disarmed, so `publish_before_completing` is never
-/// `true`. That is why `arm` sat callerless rather than half-wired, and it is why this arm
-/// is one selector rather than two.
-///
-/// # ★★★ WHAT IT BUYS, STATED AS THE THING THAT CAN GO RED
-///
-/// The publication currently runs on the **doorbell**, which the owner's 2026-09-06 ruling
-/// forbids (*"never do a blocking call during a doorbell write"*) and which
-/// [`DOORBELL_ASYNC_ENV`] moves off the vCPU without moving it off the doorbell. This moves
-/// the *trigger*: the guest has said its page tables are committed, is **already stopped**
-/// spinning on our answer, and anything published under that halt is published inside a
-/// window the guest itself opened. ⇒ `on` should read `by=[… tlb-invalidate=N …]` with
-/// `N > 0`; a boot that arms and still publishes zero here is a **measured** gap, not an
-/// argument (`a_census_zero_needs_a_known_positive`).
-///
-/// # ⚠ AND THE HOLD IS A LIVENESS OBLIGATION, NOT A COST
-///
-/// Every microsecond between `note_trigger` and `complete` is a microsecond the guest spins.
-/// [`kayfabe_device::mmuinval::INVALIDATE_HOLD_CEILING_US`] bounds it and
-/// `worst_hold_us`/`over_budget` report it, so the boot measures its own damage. ⊘ The
-/// completion is taken in a `Drop` guard, never on the success path: a publication that
-/// panics, returns early or is refused **still clears**, because a guest hang must not be
-/// the punishment for one of our own errors.
-pub const MMU_INVAL_ENV: &str = "KAYFABE_MMU_INVAL";
-
-/// Which arm [`MMU_INVAL_ENV`] names.
-///
-/// ⊘ `off` is the default and is **byte-identical to every boot before w390**: disarmed,
-/// `note_trigger` answers `Observed`, and the census still counts. A value that names no arm
-/// is **refused**, not defaulted, for [`FB_JOIN_ENV`]'s reason — a typo that silently selects
-/// the control makes an evidence run and its control indistinguishable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MmuInvalArm {
-    /// The control. `MmuInvalidateLog` records and answers `0`; nothing publishes here.
-    Off,
-    /// ★ Armed. A `TRIGGER` write holds the guest, publishes, and completes in a `Drop`.
-    On,
-}
-
-impl MmuInvalArm {
-    /// The name this arm was selected by, for the boot echo.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::On => "on",
-        }
-    }
-
-    /// Does this arm hold the guest and publish?
-    #[must_use]
-    pub fn publishes(self) -> bool {
-        matches!(self, Self::On)
-    }
-}
-
-/// Parse one [`MMU_INVAL_ENV`] value.
-///
-/// # Errors
-/// [`Status::Unsupported`] for a value that names no arm.
-fn mmu_inval_from(v: Option<&str>) -> Result<MmuInvalArm, (Status, &'static str)> {
-    match v {
-        // ★★★★★ **OWNER RULING 2026-09-09 — `off` IS A CORRECTNESS BUG, NOT A CONTROL.**
-        //
-        // > *"doing not an invalidate if tlb invalidate is called is a correctness bug, why is
-        // > it relevant?"* … *"The TLB invalidate also should not be able to be turned off,
-        // > these options are not worth building when we eventually get a prod build. Tuning
-        // > only breaks stuff and the alternatives are never useful."*
-        //
-        // Disarmed, this device **records the guest's `MMU_INVALIDATE` and answers it complete
-        // immediately, having published nothing** — it tells the guest its stale translations
-        // are gone when they are not. That is not a baseline; it is a device that lies.
-        //
-        // ⚠ And it was the DEFAULT for this entire campaign, which means the "known-good"
-        // client pass (sweep on, doorbell publication on, invalidate OFF) was **green on an
-        // incorrect device**: the sweep and the doorbell publication re-derived mappings
-        // continuously and masked the missing invalidate semantics. A green run on a device
-        // that lies about invalidates is not a control — it is a test not checking the thing.
-        //
-        // ⇒ Absent is `On`. `off` is still *spellable* only so an explicit, deliberate
-        // A/B against the old behaviour remains possible while the RPC map-call path is
-        // brought up (`P3 rpc-bind`); it is scheduled for deletion with that path's landing,
-        // and it is NOT reachable by omission any more.
-        None | Some("on") => Ok(MmuInvalArm::On),
-        Some("off") => Ok(MmuInvalArm::Off),
-        Some(_) => Err((
-            Status::Unsupported,
-            "KAYFABE_MMU_INVAL names no arm — it is `off` or `on`, and a value that names \
-             neither is REFUSED rather than defaulted to the control",
-        )),
-    }
-}
-
-/// Which arm [`MMU_INVAL_ENV`] names.
-///
-/// # Errors
-/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
-/// which takes the `Some` arm, because it was SET and must not read as unset.
-fn selected_mmu_inval() -> Result<MmuInvalArm, (Status, &'static str)> {
-    match std::env::var_os(MMU_INVAL_ENV) {
-        // ⊘ ONE default, not two: delegate to `mmu_inval_from` rather than restate it here.
-        None => mmu_inval_from(None),
-        Some(v) => mmu_inval_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
-    }
-}
 
 /// Which arm of the CE operand-leaf join a boot is running. See [`OPERAND_JOIN_ENV`].
 ///
@@ -20004,44 +19866,6 @@ mod the_doorbell_default_is_the_ruling {
                 doorbell_async_from(Some(bad)).is_err(),
                 "{bad:?} must not name an arm"
             );
-        }
-    }
-}
-
-#[cfg(test)]
-mod honouring_an_invalidate_is_not_optional {
-    //! ★★★★★ **OWNER, 2026-09-09:** *"doing not an invalidate if tlb invalidate is called is a
-    //! correctness bug, why is it relevant?"*
-    //!
-    //! Exactly right, and it retires an argument I had just made for keeping the switch. With
-    //! the arm off the device records the guest's `MMU_INVALIDATE` and answers it **complete
-    //! immediately, having published nothing** — it reports stale translations gone when they
-    //! are not. A configuration that is wrong by construction cannot serve as a control, and a
-    //! test that passes against it is a test not checking invalidates.
-    //!
-    //! ⚠ It was the default for the whole campaign, so the "known-good" client pass was green
-    //! on a device that lies — the sweep and the doorbell publication re-derived mappings
-    //! continuously and masked it.
-    use super::*;
-
-    #[test]
-    fn absent_means_on_because_ignoring_an_invalidate_is_incorrect_not_a_tuning_choice() {
-        assert_eq!(
-            mmu_inval_from(None).expect("absent is not an error"),
-            MmuInvalArm::On,
-            "a device that acknowledges an invalidate it did not perform is incorrect; that \
-             cannot be what you get by saying nothing"
-        );
-    }
-
-    /// ⊘ `off` remains SPELLABLE — but only deliberately, never by omission — so an explicit
-    /// A/B against the old behaviour is still possible while `P3 rpc-bind` is brought up. It
-    /// is scheduled for deletion with that path's landing.
-    #[test]
-    fn off_is_reachable_only_by_asking_for_it_explicitly() {
-        assert_eq!(mmu_inval_from(Some("off")).expect("off"), MmuInvalArm::Off);
-        for bad in ["1", "true", "yes", "OFF", ""] {
-            assert!(mmu_inval_from(Some(bad)).is_err(), "{bad:?} must not name an arm");
         }
     }
 }

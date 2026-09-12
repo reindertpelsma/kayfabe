@@ -73,25 +73,35 @@ callers); making it the only path is §4 work.
 
 ### Progress, and the evidence the deletions produce as they go
 
-| arm | state | refs in `shim.rs` | test files covering it |
-|---|---|---|---|
-| `KAYFABE_PT_SWEEP` | **deleted** w533 | — | **0** |
-| `KAYFABE_PT_WITNESS_EXEC` | **deleted** w534 | — | **0** |
-| `KAYFABE_OPERAND_JOIN` | pending | 24 | **0** |
-| `KAYFABE_MMU_INVAL` | pending | 22 | **0** |
-| `KAYFABE_GR_ROUTE` | pending | 14 | 2 |
-| `KAYFABE_GUEST_RING` | pending | 21 | 3 |
-| `KAYFABE_VAS_PUBLISH` | pending | 37 | 2 |
-| `KAYFABE_FB_JOIN` | pending | 66 | 2 |
+| arm | state | refs in `shim.rs` | integration tests | parser unit tests |
+|---|---|---|---|---|
+| `KAYFABE_PT_SWEEP` | **deleted** w533 | — | 0 | **0** |
+| `KAYFABE_PT_WITNESS_EXEC` | **deleted** w534 | — | 0 | **0** |
+| `KAYFABE_MMU_INVAL` | **deleted** w535 | — | 0 | 2 |
+| `KAYFABE_OPERAND_JOIN` | pending | 24 | 0 | yes |
+| `KAYFABE_GR_ROUTE` | pending | 14 | 2 | yes |
+| `KAYFABE_GUEST_RING` | pending | 21 | 3 | yes |
+| `KAYFABE_VAS_PUBLISH` | pending | 37 | 2 | yes |
+| `KAYFABE_FB_JOIN` | pending | 66 | 2 | yes |
 
-★★★ **`[audited w534]` NOT ONE TEST IN THE TREE EVER COVERED EITHER DELETED ARM.** The only
-reference to them in the whole suite is the refusal test written to bury them. Four of the
-eight have **zero** test files. That is the thesis stated as a measurement: these were
-selectable behaviours with no test and no graded boot on the alternative, which is not a
-choice being offered — it is a branch nobody can vouch for.
+⊘⊘ **CORRECTED w535, and the correction matters.** I first published *"not one test ever
+covered either deleted arm"* off a grep of `crates/*/tests/*.rs` — which does not see
+**in-crate `#[cfg(test)]` modules**. The gate caught it: deleting `KAYFABE_MMU_INVAL` broke two
+unit tests my audit had said did not exist. **A test-coverage claim is only as wide as the
+places you looked**, which is this tree's census rule pointed at itself.
 
-⚠ **The ones with test files are the ones to slow down on**, not speed up. A test that pins an
-arm is a test whose subject disappears with it (§5).
+★★★ **The re-audit makes the thesis SHARPER, not weaker.** What those tests cover is the
+**parser**: *"`off` parses to `Off`, and `OFF`/`1`/`true` are refused"*. None of them exercises
+the arm's **behaviour**. So deleting an arm deletes a parser test for a parser that no longer
+exists, which is correct rather than a loss of coverage. ⊘ And `KAYFABE_MMU_INVAL`'s own test
+doc said it outright: *"`off` remains SPELLABLE … It is scheduled for deletion with that path's
+landing."* The code had already scheduled its own removal.
+
+⇒ The measured claim, stated correctly: **no arm on this list has a test of its alternative
+BEHAVIOUR, and none has a graded boot on it.** That is a branch nobody can vouch for.
+
+⚠ **The ones with integration tests are the ones to slow down on**, not speed up. Those pin the
+arm to observe something, so the arm's deletion takes their subject with it (§5).
 
 ---
 
