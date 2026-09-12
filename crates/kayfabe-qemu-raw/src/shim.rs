@@ -6140,7 +6140,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {}",
+                "{} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 kayfabe_isolate::verbcost::census(),
                 // ★★★★★ w477 — the size of a LIVE exposure, on the same line as the traps.
@@ -6151,7 +6151,13 @@ impl SharedDoorbell {
                 kayfabe_fwd::untracked_ce_census(),
                 // w489 — and whether any forwarded control answered NV_OK over the guest's
                 // own request bytes. Silent until now.
-                kayfabe_fwd::short_writeback_census()
+                kayfabe_fwd::short_writeback_census(),
+                // ★★★★★ **w491 — WHO HELD THE LOCK, ON THE LINE THAT SAYS A TRAP WAITED.**
+                // `lockcost` has recorded every ranked acquisition all along, ungated, and
+                // printed only from `stop_doorbell_publish_worker` — a teardown path these
+                // boots never reach, so the data was collected and thrown away. `worst_trap`
+                // says a trap WAITED; this is the only thing in the tree that says FOR WHOM.
+                kayfabe_util::lock::lockcost::census()
             ),
             // ★★★★★ w383 — THE LANE'S DEPTH, ON THE LINE EVERY DOORBELL PRINTS. A queue
             // whose depth is only readable at teardown cannot answer *"is the worker
