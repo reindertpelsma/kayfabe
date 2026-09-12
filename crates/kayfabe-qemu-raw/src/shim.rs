@@ -6140,7 +6140,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6168,6 +6168,13 @@ impl SharedDoorbell {
                 // boots never reach, so the data was collected and thrown away. `worst_trap`
                 // says a trap WAITED; this is the only thing in the tree that says FOR WHOM.
                 kayfabe_util::lock::lockcost::census(),
+                // ★★★★★ **w507 — WHO HAMMERS THE PLANE LOCK.** `worst_hold` names only the
+                // single LONGEST holder, so it structurally cannot name a crowd of short
+                // ones — the exact shape rank 0 measured. This counts acquisitions per site.
+                kayfabe_util::lock::lockcost::hammer_census(
+                    kayfabe_util::lock::LockRank::Plane,
+                    4,
+                ),
                 // w503 — whether the stall alarm is even working. It was SILENT for two
                 // boots and silence read as "no trap was over budget".
                 // ⊘ The crate is optional; the default build has no such module.

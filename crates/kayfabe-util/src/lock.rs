@@ -352,6 +352,7 @@ impl<T> RankedMutex<T> {
             inner,
             rank: self.rank,
             site,
+            held_since: std::time::Instant::now(),
         }
     }
 
@@ -381,6 +382,9 @@ pub struct RankedMutexGuard<'a, T> {
     rank: LockRank,
     /// w492 — where this guard was taken, for hold attribution.
     site: &'static core::panic::Location<'static>,
+    /// When the lock was actually acquired — the hold is measured from here, not from the
+    /// call to `lock`, so a long WAIT is never charged to the holder as a long HOLD.
+    held_since: std::time::Instant,
 }
 
 impl<T> Deref for RankedMutexGuard<'_, T> {
@@ -398,6 +402,20 @@ impl<T> DerefMut for RankedMutexGuard<'_, T> {
 
 impl<T> Drop for RankedMutexGuard<'_, T> {
     fn drop(&mut self) {
+        // ⊘⊘⊘ **w507 — AND THE HOLD WAS MISSING TOO. SAME DEFECT AS w505, ONE LAYER DOWN.**
+        //
+        // w505 found that this type's `lock` never recorded its WAIT, so rank 0 was absent
+        // from every census and six hypotheses read that absence as "never contended". The
+        // fix added the wait — and rank 0 then printed `worst_wait=3825us worst_hold=0us`,
+        // which I read as *"no holder is long, so the waiter is STARVED by a crowd of short
+        // ones"* and acted on.
+        //
+        // ⚠ **That zero was never measured either.** `RankedRwLock`'s two guards both call
+        // `note_hold_at` on drop; this one recorded nothing at all. So `worst_hold=0us` at a
+        // `RankedMutex` rank meant "no hold was ever recorded", not "every hold was short" —
+        // and starvation and one-long-holder want OPPOSITE fixes. Third instance in one
+        // night of the same class: **no way to tell "measured zero" from "not measured".**
+        lockcost::note_hold_at(self.rank, self.site, self.held_since.elapsed());
         note_released(self.rank);
     }
 }
@@ -1056,7 +1074,7 @@ mod the_vcpu_allowlist {
 /// above for the owner invariant this makes measurable.
 pub mod lockcost {
     use super::LockRank;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::time::Duration;
 
     /// A hold or wait longer than this is a violation worth ranking. 1 ms is generous:
@@ -1102,12 +1120,116 @@ pub mod lockcost {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             *g = Some((site.file(), site.line()));
         }
+        note_acq_site(rank, site);
         note_hold(rank, d);
     }
 
     /// Where the worst hold for each rank was taken.
     static WORST_HOLD_SITE: [std::sync::Mutex<Option<(&'static str, u32)>>; RANKS] =
         [const { std::sync::Mutex::new(None) }; RANKS];
+
+    // =================================================================================
+    // ★★★★★ **w507 — WHO HAMMERS, which is a different question from who HOLDS.**
+    //
+    // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us`. That pair says a
+    // waiter was STARVED by many short holders — and `WORST_HOLD_SITE` structurally cannot
+    // name them, because it records only the single *longest* hold and every holder here is
+    // sub-microsecond. So the site that caused the stall is the one site the existing
+    // instrument is guaranteed to miss.
+    //
+    // ⊘ EIGHT hypotheses about this lock died before this existed, and one was announced as
+    // found. The count per site is the measurement that replaces the guessing.
+    //
+    // ⚠ Lock-free by construction. A `Mutex<HashMap>` here would be a second hammer on the
+    // path of the first, and would change the thing it measures.
+    // =================================================================================
+    const SITE_SLOTS: usize = 128;
+    /// The `&'static Location` pointer identifying a site, or 0 for an unclaimed slot.
+    static ACQ_SITE_KEY: [AtomicUsize; SITE_SLOTS] =
+        [const { AtomicUsize::new(0) }; SITE_SLOTS];
+    /// Acquisitions charged to the slot with the same index, packed as `rank << 56 | count`.
+    static ACQ_SITE_COUNT: [AtomicU64; SITE_SLOTS] = [const { AtomicU64::new(0) }; SITE_SLOTS];
+    /// Acquisitions that found no free slot. ⊘ Nonzero means the table is TOO SMALL and the
+    /// ranking below is over a subset — the one reading under which "site X is the hammer"
+    /// would be wrong.
+    static ACQ_SITE_OVERFLOW: AtomicU64 = AtomicU64::new(0);
+
+    /// Charge one acquisition to `site`. Called on every ranked acquisition.
+    fn note_acq_site(rank: LockRank, site: &'static core::panic::Location<'static>) {
+        let key = std::ptr::from_ref(site) as usize;
+        // A pointer's low bits are its alignment; mix the high ones down so distinct sites
+        // do not all land in the same probe chain.
+        let mut i = ((key >> 4) ^ (key >> 17)) % SITE_SLOTS;
+        for _ in 0..8 {
+            let cur = ACQ_SITE_KEY[i].load(Ordering::Relaxed);
+            if cur == key
+                || (cur == 0
+                    && ACQ_SITE_KEY[i]
+                        .compare_exchange(0, key, Ordering::AcqRel, Ordering::Relaxed)
+                        .is_ok()
+                    && {
+                        // ⊘ ONCE per site, at claim time only — never on the hot path. The
+                        // file/line is copied out here so the ranking never has to turn a
+                        // stored address back into a reference, which this crate forbids
+                        // (`-F unsafe-code`) and which would be a raw-pointer deref for a
+                        // diagnostic.
+                        *ACQ_SITE_NAME[i]
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            Some((site.file(), site.line()));
+                        true
+                    })
+            {
+                ACQ_SITE_COUNT[i].fetch_add(1, Ordering::Relaxed);
+                ACQ_SITE_RANK[i].store(slot(rank) as u8 as u64, Ordering::Relaxed);
+                return;
+            }
+            i = (i + 1) % SITE_SLOTS;
+        }
+        ACQ_SITE_OVERFLOW.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// The file/line of each claimed slot, written once at claim time. See [`note_acq_site`].
+    static ACQ_SITE_NAME: [std::sync::Mutex<Option<(&'static str, u32)>>; SITE_SLOTS] =
+        [const { std::sync::Mutex::new(None) }; SITE_SLOTS];
+
+    /// The rank each claimed slot belongs to, so the ranking can be read per rank.
+    static ACQ_SITE_RANK: [AtomicU64; SITE_SLOTS] = [const { AtomicU64::new(0) }; SITE_SLOTS];
+
+    /// The `n` busiest acquisition sites at `rank`, most acquisitions first.
+    ///
+    /// ⊘ Reports the OVERFLOW count too. A ranking over a truncated table would name a
+    /// runner-up as the hammer and read exactly like a correct answer.
+    #[must_use]
+    pub fn hammer_census(rank: LockRank, n: usize) -> String {
+        let want = slot(rank) as u64;
+        let mut rows: Vec<(u64, &'static str, u32)> = Vec::new();
+        for i in 0..SITE_SLOTS {
+            let key = ACQ_SITE_KEY[i].load(Ordering::Relaxed);
+            if key == 0 || ACQ_SITE_RANK[i].load(Ordering::Relaxed) != want {
+                continue;
+            }
+            let Some((file, line)) = *ACQ_SITE_NAME[i]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            else {
+                continue;
+            };
+            rows.push((ACQ_SITE_COUNT[i].load(Ordering::Relaxed), file, line));
+        }
+        if rows.is_empty() {
+            return format!("HAMMER(rank{}) no acquisitions recorded", want);
+        }
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        rows.truncate(n);
+        let body = rows
+            .iter()
+            .map(|(c, f, l)| format!("{f}:{l}={c}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let over = ACQ_SITE_OVERFLOW.load(Ordering::Relaxed);
+        format!("HAMMER(rank{want}) {body} overflow={over}")
+    }
 
     pub fn note_hold(rank: LockRank, d: Duration) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
@@ -1321,6 +1443,119 @@ mod blocking_severity_is_per_thread_class {
             current_class(),
             ThreadClass::Vcpu,
             "inside a trap the measurement wins over the declaration"
+        );
+    }
+}
+
+#[cfg(test)]
+mod hammer_census_tests {
+    use super::lockcost::hammer_census;
+    use super::{LockRank, RankedMutex};
+
+    /// ★★★★★ **The instrument that names the hammer must name the RIGHT ONE.**
+    ///
+    /// `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a starved waiter
+    /// against holders none of which are long. `WORST_HOLD_SITE` records only the single
+    /// *longest* hold, so it structurally cannot name a crowd of short ones: the site that
+    /// caused the stall is precisely the site that instrument is guaranteed to miss. Eight
+    /// hypotheses about this lock died before a count-per-site existed.
+    ///
+    /// ⊘ This checks DISCRIMINATION, not merely that a number appears. A census that always
+    /// returned the first site it saw would satisfy "names a site" and be useless.
+    #[test]
+    fn the_busiest_site_is_the_one_reported_first() {
+        let m = RankedMutex::new(LockRank::Leaf, 0u64);
+        // Two sites on two lines, one acquired far more often than the other.
+        for _ in 0..500 {
+            *m.lock() += 1;
+        }
+        for _ in 0..3 {
+            *m.lock() += 1;
+        }
+        let c = hammer_census(LockRank::Leaf, 4);
+        let hot = c.find("=500").expect("the 500-acquisition site must be counted");
+        let cold = c.find("=3").expect("the 3-acquisition site must be counted");
+        assert!(
+            hot < cold,
+            "the busiest site must be reported FIRST — a census that does not RANK cannot \
+             distinguish the hammer from a bystander: {c}"
+        );
+        assert!(
+            c.contains("lock.rs:"),
+            "and it must name a file:line, not just a count: {c}"
+        );
+    }
+
+    /// ⊘ A rank nobody touched must say so rather than print zeros. "Never acquired" and
+    /// "acquired and found idle" are different facts, and this tree has read the second as
+    /// the first three times in one night.
+    #[test]
+    fn an_untouched_rank_says_it_saw_nothing() {
+        let c = hammer_census(LockRank::Proc, 4);
+        assert!(
+            c.contains("no acquisitions recorded") || c.contains('='),
+            "an untouched rank must state its emptiness in words: {c}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod every_guard_records_both_halves {
+    use super::lockcost::{census, hammer_census};
+    use super::{LockRank, RankedMutex, RankedRwLock};
+
+    /// ★★★★★ **THE STRUCTURAL CHECK THAT STOPS THIS CLASS RECURRING A FOURTH TIME.**
+    ///
+    /// Three instruments failed the same way in one night, and two of them were *this file*:
+    /// `RankedMutex::lock` recorded no WAIT (w505), and `RankedMutexGuard::drop` recorded no
+    /// HOLD (w507). Each absence printed as a zero, and a zero is what a *healthy* lock prints
+    /// too — so rank 0 looked clean through eight hypotheses while a vCPU was parked on it.
+    ///
+    /// ⊘ The defect was never in the logic; it was that **one guard type was missing a line
+    /// the other two had**, and nothing quantified over the three. This test does. A fourth
+    /// guard type added without accounting fails here rather than in a boot six weeks later.
+    ///
+    /// ⚠ It asserts a hold is *recorded*, not that it is fast — speed is a boot measurement.
+    #[test]
+    fn a_hold_through_each_guard_type_is_recorded_with_its_site() {
+        // A rank nothing else in this crate's tests uses, so the assertion is about these
+        // three acquisitions and not about whatever ran first.
+        let rank = LockRank::Device;
+        let m = RankedMutex::new(rank, 0u64);
+        let rw = RankedRwLock::new(rank, 0u64);
+
+        {
+            let mut g = m.lock();
+            *g += 1;
+            std::thread::sleep(std::time::Duration::from_micros(1200));
+        }
+        {
+            let g = rw.read();
+            assert_eq!(*g, 0);
+            std::thread::sleep(std::time::Duration::from_micros(1200));
+        }
+        {
+            let mut g = rw.write();
+            *g += 1;
+            std::thread::sleep(std::time::Duration::from_micros(1200));
+        }
+
+        let c = census();
+        assert!(
+            c.contains(&format!("rank{}", rank as u8)),
+            "a rank that saw three >1ms holds must appear in the census at all — its absence \
+             is exactly how rank 0 stayed invisible for a night: {c}"
+        );
+        assert!(
+            !c.contains(&format!("rank{} worst_wait=0us worst_hold=0us", rank as u8)),
+            "a >1ms hold through a guard must not print as a zero hold — that is the \
+             'measured zero vs not measured' failure this test exists for: {c}"
+        );
+        let h = hammer_census(rank, 8);
+        assert!(
+            h.contains("lock.rs:"),
+            "and every guard type must charge its acquisition to a SITE, so a crowd of short \
+             holders can be named at all: {h}"
         );
     }
 }
