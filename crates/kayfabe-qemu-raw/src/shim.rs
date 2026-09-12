@@ -14136,16 +14136,38 @@ impl Regs {
                     placed += 1;
                     bytes += *len;
                 }
-                Err(_) => refused += 1,
+                // ⊘ w547 — the FIRST version discarded this error, and the boot reported
+                // `refused=12` with no reason. A refusal counter without the refusal says
+                // something happened and nothing about what.
+                Err(e) => {
+                    if refused == 0 {
+                        eprintln!(
+                            "kayfabe: BAR0-ZERO ⊘ FIRST REFUSAL at +{off:#x} len {len:#x}: \
+                             {e:?} — later runs refuse silently; this is the one that says why"
+                        );
+                    }
+                    refused += 1;
+                }
             }
         }
+        // ⊘⊘ w547 — STATE THE OUTCOME, NOT THE INTENT. The first version described what a
+        // placement WOULD do and printed it whether or not one happened; the boot read
+        // `placed=0 refused=12` beside a sentence claiming reads were served from a memfd.
+        // A census that narrates the design is not a measurement.
         eprintln!(
-            "kayfabe: BAR0-ZERO runs={} placed={placed} refused={refused} bytes={bytes} \
-             ⇒ a read of a register NOTHING serves is answered 0 from a sparse read-only \
-             memfd instead of exiting. `[measured w542]` that is 124 415 of 241 722 BAR0 reads. \
-             ⊘ WRITES STILL TRAP (the slot is read-only), so the doorbell and every unclaimed \
-             write are unchanged.",
-            runs.len()
+            "kayfabe: BAR0-ZERO runs={} placed={placed} refused={refused} bytes={bytes} ⇒ {}",
+            runs.len(),
+            if placed == 0 {
+                "⊘ NOTHING WAS MAPPED — every dead page still exits exactly as before. The \
+                 device is correct; the 124415 reads [measured w542] are still being paid."
+            } else if refused == 0 {
+                "every dead run is served from a sparse read-only memfd instead of exiting. \
+                 ⊘ WRITES STILL TRAP (read-only slot), so the doorbell and every unclaimed \
+                 write are unchanged."
+            } else {
+                "PARTIAL — placed runs are served from the memfd, refused ones still exit. \
+                 ⚠ A partial mapping is not a partial win: read the first-refusal line."
+            }
         );
         // ⊘ The memfd must OUTLIVE the slots that name it: dropping it here would close the
         // descriptor while the hypervisor still maps it. Parked on the port for the device's
