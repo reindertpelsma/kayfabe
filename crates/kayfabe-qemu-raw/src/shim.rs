@@ -5427,10 +5427,25 @@ fn doorbell_publish_loop(
         // only ever aimed at vCPU threads. Aimed here it names the worker's site instead.
         //
         // ⚠ TEMPORARY, like the rest of the alarm. Delete with `KAYFABE_STALL_ALARM_US`.
+        // ⊘⊘ **OFF BY DEFAULT AS OF w515, AND IT ANSWERED ITS QUESTION FIRST.** Armed here it
+        // caught the worker blocked in `recv()` on the isolate socket, inside
+        // `SharedDevice::doorbell -> Worker::execute -> ProxyRmBackend::call`. ★ That is
+        // CORRECT, not a stall: `Worker::execute` calls `assert_lock_free` before any verb,
+        // so the worker holds NO ranked lock there, and a real host RM call legitimately
+        // outruns a 3 ms budget. R1 is satisfied — the blocking is off the vCPU, which is
+        // the whole point of the async doorbell arm.
+        //
+        // ⚠ But the handler `_exit(42)`s on its FIRST firing, so one boot yields ONE
+        // backtrace — and this legitimate one kept winning the race against the vCPU's,
+        // which is the one still unexplained (`worst_trap=16021us at=bar0+0xb81208`,
+        // `cpu_of_that_trap=637us`). An instrument that fires on a healthy path SILENCES the
+        // instrument aimed at the sick one.
         let _worker_alarm = {
             #[cfg(feature = "host-isolates")]
             {
-                kayfabe_linux_raw::stall_alarm::timer::arm()
+                std::env::var_os("KAYFABE_STALL_ALARM_WORKER")
+                    .filter(|v| v != "0" && v != "off")
+                    .and_then(|_| kayfabe_linux_raw::stall_alarm::timer::arm())
             }
             #[cfg(not(feature = "host-isolates"))]
             {
