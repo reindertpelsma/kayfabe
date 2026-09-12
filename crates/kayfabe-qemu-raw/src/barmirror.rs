@@ -838,12 +838,16 @@ impl BarMirror {
         if why == 0 {
             return;
         }
-        // ★ w468 A/B, one binary: `KAYFABE_MIRROR_REVAL_INLINE=1` restores the pre-w468
-        // inline walk, so the deferral can be attributed against itself on one build.
-        static INLINE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if !self.defer_reval
-            || *INLINE.get_or_init(|| std::env::var("KAYFABE_MIRROR_REVAL_INLINE").is_ok())
-        {
+        // ⊘ **THE w468 A/B IS SETTLED AND ITS LOSING ARM IS GONE.**
+        // `KAYFABE_MIRROR_REVAL_INLINE` compared the inline walk against the deferred one in
+        // a single binary. `[measured w469, one binary, two arms]` deferred: `bar0+0xb830b0`
+        // **absent from the slow-site table entirely**; inline: the **top** site at 53 hits,
+        // worst 42.5 ms. Both arms passed the client. There is nothing left to compare.
+        //
+        // ⚠ `defer_reval` STAYS, and it is not the same thing: it is false when no publication
+        // worker exists to drain the queue, and deferring there would leave every stale slot
+        // live forever. A configuration is not an experiment.
+        if !self.defer_reval {
             self.revalidate(if why == 1 { "mmu-invalidate" } else { "bar-pde-update" });
             return;
         }

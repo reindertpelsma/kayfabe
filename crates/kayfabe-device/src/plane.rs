@@ -3206,19 +3206,19 @@ impl RegPlane {
     /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
     #[must_use]
     pub fn pending_command_doorbells(&self) -> u32 {
-        // ⊘⊘ **A/B ARM, w467.** `KAYFABE_PENDING_VIA_LOCK=1` restores w432's behaviour — read
-        // the count through the big `state` lock — so the two can be compared in ONE binary.
+        // ⊘ **THE w467 A/B IS SETTLED AND ITS LOSING ARM IS GONE.** `KAYFABE_PENDING_VIA_LOCK`
+        // existed to compare this lock-free read against w432's read through the big `state`
+        // lock, because removing that lock coincided with `slow_traps` **166 -> 6863**.
         //
-        // `[measured w466]` removing that lock acquisition coincided with `slow_traps`
-        // **166 -> 6863** and `bar0+0xb830b0` **48 -> 853**. That is the opposite of the
-        // intended effect, and I have already been wrong three times about this trap's cause.
-        // ⚠ An A/B in one binary is the only thing that separates *"my change did it"* from
-        // *"something else did, and my change is merely innocent"* — two boots of different
-        // binaries cannot.
-        static VIA_LOCK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if *VIA_LOCK.get_or_init(|| std::env::var("KAYFABE_PENDING_VIA_LOCK").is_ok()) {
-            return self.state.lock().fsm.pending_command_doorbells();
-        }
+        // `[measured w469]` the A/B was right that the atomic arm caused it and wrong about
+        // why: the mirror was refreshed on the WRITE path only and went stale the moment the
+        // coordinator serviced a doorbell, so every MMIO write enqueued a spurious token. The
+        // lock was never the problem; the second source of truth was. With the refresh fixed,
+        // the lock-free read is simply correct and there is nothing left to compare.
+        //
+        // ★ An arm is an experiment and an experiment has an end. The losing side belongs in
+        // the commit that records the result; leaving it is how 51 flags accumulate, each one
+        // doubling the state space everything else must be correct in.
         self.pending_cmd_doorbells
             .load(std::sync::atomic::Ordering::Acquire)
     }
