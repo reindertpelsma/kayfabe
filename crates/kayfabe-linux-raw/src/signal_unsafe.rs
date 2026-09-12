@@ -463,11 +463,6 @@ pub mod stall_alarm {
             extern "C" fn on_alarm(_: libc::c_int) {
                 FIRED.store(true, Ordering::SeqCst);
             }
-            // SAFETY: installing a handler for SIGALRM with default flags; `on_alarm` only
-            // touches an atomic, which is async-signal-safe.
-            unsafe {
-                libc::signal(libc::SIGALRM, on_alarm as libc::sighandler_t);
-            }
             // SAFETY: setting an env var in a single-threaded test section.
             unsafe { std::env::set_var("KAYFABE_STALL_ALARM_US", "2000") };
             let Some(armed) = super::timer::arm() else {
@@ -476,6 +471,15 @@ pub mod stall_alarm {
                 // would make the suite order-dependent.
                 return;
             };
+            // ⊘⊘ INSTALLED AFTER `arm()`, DELIBERATELY. `arm()` installs the production
+            // handler, which prints a backtrace and `_exit(42)`s — and doing that inside a
+            // test kills the test binary. `[measured w500]` it did exactly that: the suite
+            // exited 42 and I committed past it on an `&&` chain. Overriding afterwards keeps
+            // the timer under test while letting the test observe delivery.
+            // SAFETY: installing a handler for one signal; `on_alarm` touches only an atomic.
+            unsafe {
+                libc::signal(libc::SIGALRM, on_alarm as libc::sighandler_t);
+            }
             std::thread::sleep(std::time::Duration::from_millis(60));
             assert!(
                 FIRED.load(Ordering::SeqCst),
