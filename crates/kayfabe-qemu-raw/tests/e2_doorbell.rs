@@ -861,8 +861,14 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
     );
     assert_eq!(
         code.matches("ctx.vas_publish = VasPublishArm::Drain;").count(),
-        2,
-        "both worker lanes (rpc-bind and invalidate) must use an arm that publishes AND pins"
+        3,
+        "all THREE worker lanes must use an arm that publishes AND pins: rpc-bind, \
+         invalidate, and — since w559 — CHANNEL BIRTH. ⊘ The third was added because a \
+         channel that returns to the guest is a channel the guest may ring, and `[measured \
+         w557, LLM boot]` one did: `CE2_PBDMA0` took `Xid 31 … FAULT_PDE` reading its own \
+         GPFIFO ring at an address our table binds and our own ADOPT-WHY line calls ADOPTABLE \
+         sixty-four times. ⚠ This count is the acknowledgement this test's own doc demands — \
+         a fourth lane must be argued for here, not appear here."
     );
 }
 

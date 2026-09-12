@@ -3209,15 +3209,18 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 /// [`report_engine_forward_drain`]'s twin, with the same budget and the same reason for
 /// living outside the `ObjectModel` impl: that impl runs under the plane's rank-0 mutex and
 /// may only latch; this frame holds nothing and is where a birth's real outcome exists.
+/// Returns how many channels were BORN — so the caller can make the address space they were
+/// born into live before anything releases the guest's reply. See the call site.
 fn report_channel_birth_drain(
     device: &kayfabe_rt::device::SharedDevice,
     err_notifier_grants: &[kayfabe_rt::ChannelBirthGrant],
-) {
+) -> usize {
     let t0 = Instant::now();
     let runs = device.run_pending_channel_births(err_notifier_grants);
     if runs.is_empty() {
-        return;
+        return 0;
     }
+    let born = runs.iter().filter(|r| r.out.is_ok()).count();
     let elapsed = t0.elapsed();
     for r in &runs {
         report_channel_birth(r);
@@ -3232,6 +3235,7 @@ fn report_channel_birth_drain(
             ENGINE_FWD_DRAIN_BUDGET,
         );
     }
+    born
 }
 
 /// ★★★★★ **THE CAPABILITY THAT MAKES THE RULE STRUCTURAL.**
@@ -5209,7 +5213,45 @@ fn doorbell_publish_loop(
         // this is a MOVE and not a second implementation.
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
-        report_channel_birth_drain(&port.device, &birth_grants);
+        let born = report_channel_birth_drain(&port.device, &birth_grants);
+        // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
+        //
+        // Owner, 2026-09-12: *"if a channel is created inheriting a va base, then you can map
+        // at create, of existing known va maps, and only return from rpc if channel is
+        // usable."*
+        //
+        // ⊘ This is the C artifact's invariant, at the one moment it can be kept cheaply:
+        // *"a mapping is always backed before the engine that uses it runs."* A birth is an
+        // RPC — blockable, off the vCPU, and BEFORE the guest can doorbell — so it is a
+        // refresh point, not a fault and not a ring advance.
+        //
+        // `[measured w557, LLM boot]` here is what it costs to skip it: the guest's channel
+        // was born, the guest rang it, and `CE2_PBDMA0` took `Xid 31 … FAULT_PDE
+        // ACCESS_TYPE_VIRT_READ` reading its own GPFIFO ring at `0x2_00218000` — an address
+        // our table binds and our own `ADOPT-WHY` line calls ✔ ADOPTABLE sixty-four times.
+        // The row was known. It was not LIVE in the address space the engine walks.
+        //
+        // ⊘ The whole pass, not a targeted one: the dirty gate makes an unchanged VAS nearly
+        // free, and a targeted publish would need the born channel's VAS key threaded back
+        // through the reporter — a second source of truth about which space a channel is in,
+        // which is the class of bug this whole rung is about.
+        if born > 0 {
+            let mut ctx = port.publish_ctx();
+            ctx.vas_publish = VasPublishArm::Drain;
+            if let Some(line) = ctx.publish_vas_rows(0, None, off_vcpu) {
+                eprintln!(
+                    "kayfabe: BIRTH-PUBLISH (off-vCPU) born={born} {}",
+                    line.replace("\nkayfabe: ", "  ⏎  ")
+                );
+            } else {
+                eprintln!(
+                    "kayfabe: BIRTH-PUBLISH (off-vCPU) born={born} ⊘ the publisher returned NO \
+                     LINE — {born} channel(s) were born and the publication did not run. ⚠ Those \
+                     channels are reachable by the guest and their address spaces are whatever \
+                     they already were."
+                );
+            }
+        }
         let err_grants =
             pending_err_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         report_engine_forward_drain(&port.device, &err_grants);
@@ -15829,7 +15871,12 @@ impl Regs {
             || !self.doorbell_async.defers()
         {
             let birth_grants = self.pending_birth_notifier_grants();
-            report_channel_birth_drain(&self.device, &birth_grants);
+            // ⊘ The count is DISCARDED here and that is the point: this arm runs on a vCPU
+            // inside the guest's MMIO exit, so it may not publish. The worker's copy of this
+            // call does (`BIRTH-PUBLISH`). Written as an explicit discard rather than an
+            // ignored return so the asymmetry reads as a decision.
+            let _born_but_we_may_not_publish_here =
+                report_channel_birth_drain(&self.device, &birth_grants);
             kft.mark("birth_drain");
             report_engine_forward_drain(&self.device, &err_notifier_grants);
         } else {
