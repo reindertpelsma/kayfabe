@@ -1338,6 +1338,13 @@ pub unsafe extern "C" fn kayfabe_shim_regs_read(
         Some(regs) => {
             // ★ Attributed: the owner's 2026-09-09 rule is about MMIO traps in general, and a
             // worst-hold with no site names nothing to fix.
+            // ⊘⊘ **w516 — THE ALARM WAS ARMED ON ONE OF THE TWO TRAP KINDS.** It lived only
+            // in `kayfabe_shim_regs_write`, so a slow READ trap could never fire it — and its
+            // silence read as *"no trap was over budget"*. Same defect as the ranked-lock
+            // guards (w505/w507c): one arm instrumented, the other not, and an unmeasured
+            // path renders exactly like a healthy one.
+            #[cfg(feature = "host-isolates")]
+            let _stall = kayfabe_linux_raw::stall_alarm::timer::arm();
             let _trap = kayfabe_util::trapwitness::TrapGuard::enter_at(
                 (u64::from(bar) << 56) | (off & 0x00ff_ffff_ffff_ffff),
             );

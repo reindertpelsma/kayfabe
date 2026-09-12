@@ -13282,6 +13282,11 @@ fn join_one_fb_leaf(
 /// none — see [`SharedObjectModel`].
 pub struct Regs {
     plane: Arc<RegPlane>,
+    /// The [`kayfabe_mmu::any_table_change_epoch`] value this port last offered a
+    /// publication job for. ⊘ An atomic and not a cell: `Regs::write` takes `&self` and runs
+    /// on eight vCPU threads. A racing swap costs at most one spare job — see the call site
+    /// for why over-reporting is the safe direction.
+    last_table_epoch: std::sync::atomic::AtomicU64,
     /// ★★★★★ **w390** — which arm of the TLB-invalidate blockage point this boot runs.
     /// Read ONCE at the composition root; see [`MMU_INVAL_ENV`].
     mmu_inval: MmuInvalArm,
@@ -14047,6 +14052,7 @@ impl Regs {
             },
         );
         Ok(Regs {
+            last_table_epoch: std::sync::atomic::AtomicU64::new(0),
             plane,
             mmu_inval,
             // ⊘ Read ONCE, here, at the composition root — an arming flag consulted twice
@@ -15447,7 +15453,26 @@ impl Regs {
         // ⊘ The promote latch is still drained, and drained UNCONDITIONALLY — it feeds the
         // `PROMOTE-BOUND` accounting. It is simply no longer what decides to publish.
         let promoted = self.device.take_promote_binds();
-        let changed = self.device.take_table_changes();
+        // ★★★★★ **w516 — ONE ATOMIC LOAD, NOT EVERY `Proc` LOCK.**
+        //
+        // `[measured w516]` the stall alarm caught a vCPU inside a **BAR1 write** parked in
+        // `futex_wait -> RankedMutex<Proc>::lock -> SharedDevice::take_table_changes`.
+        // That function takes EVERY `Proc` cell's lock — rank 2 — purely to read each VAS's
+        // `AddressTable::generation`, a counter. `[measured w514]` rank 2 is held for 5878us
+        // by the page-table sweep's COMMIT phase, and the census names the waiter and the
+        // holder as the SAME LINE (`worst_hold_at` = `worst_wait_blocked_by` =
+        // `device.rs:4232`).
+        //
+        // ⊘ The vCPU never needed the per-VAS detail — only *"is there anything for the
+        // publication worker to do?"*. The worker still does the real comparison under its
+        // own locks; this only decides whether to offer it a job.
+        //
+        // ⚠ The epoch OVER-reports and never under-reports: it is bumped by every content
+        // change and cleared by nobody, so a change the worker already consumed still moves
+        // it. The cost is one spare job that finds nothing; the opposite error would leave a
+        // guest mapping unpublished. Never invert that.
+        let epoch = kayfabe_mmu::any_table_change_epoch();
+        let changed = usize::from(epoch != self.last_table_epoch.swap(epoch, std::sync::atomic::Ordering::Relaxed));
         if changed > 0 {
             // ⊘⊘⊘ **THE INLINE PUBLISH THAT STOOD HERE IS REVERTED — owner, 2026-09-10.**
             //

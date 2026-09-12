@@ -1090,6 +1090,8 @@ impl AddressTable {
 
     /// ★★★★★ **w318 — how many content changes this table has seen.** See
     /// [`AddressTable::generation`] for what a consumer may and may not conclude from it.
+    /// ⊘ Reading it requires the owning `Proc`'s lock; see [`any_table_change_epoch`] for the
+    /// question a vCPU is allowed to ask.
     #[must_use]
     pub const fn generation(&self) -> u64 {
         self.generation
@@ -1188,6 +1190,7 @@ impl AddressTable {
         // blockage census is bumped on exactly the same edge and for exactly the same
         // reason — a publication that did not happen is not a publication.
         self.generation = self.generation.saturating_add(1);
+        note_any_table_change();
         self.blockage.note_bind(publication.point);
         Ok(())
     }
@@ -1205,6 +1208,7 @@ impl AddressTable {
         // doorbell while reporting itself as working (w318 outcome (B)).
         if out.is_some() {
             self.generation = self.generation.saturating_add(1);
+        note_any_table_change();
         }
         out
     }
@@ -1948,5 +1952,83 @@ mod tests {
             );
             assert_eq!(backing.belongs_to(b), backing.memory().belongs_to(b));
         }
+    }
+}
+
+// =====================================================================================
+// ★★★★★ w516 — THE ONE QUESTION A vCPU MAY ASK ABOUT THE TABLES.
+// =====================================================================================
+/// Bumped by every [`AddressTable`] content change, anywhere, on any address space.
+static ANY_TABLE_CHANGE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Record that some table's content changed. Called beside every `generation` bump.
+fn note_any_table_change() {
+    ANY_TABLE_CHANGE.fetch_add(1, std::sync::atomic::Ordering::Release);
+}
+
+/// ★★★★★ **"HAS ANY ADDRESS TABLE CHANGED?" — ONE ATOMIC LOAD, NO LOCK.**
+///
+/// `[measured w516]` the stall alarm caught a vCPU inside a **BAR1 write** parked in
+/// `futex_wait -> RankedMutex<Proc>::lock -> SharedDevice::take_table_changes`. That function
+/// takes **every `Proc` cell's lock** — rank 2 — purely to read each VAS's
+/// `AddressTable::generation`, a counter. `[measured w514]` rank 2 is held for **5878 us** by
+/// the page-table sweep's COMMIT phase (`device.rs:4232`, `slow_holds=1066`), and the census
+/// names the waiter and the holder as the **same line**.
+///
+/// The vCPU does not need the per-VAS detail. It needs one bit: *"is there anything for the
+/// publication worker to do?"* That is what this answers, from a single atomic, and it is the
+/// owner's own prescription — *"the queue is one small lock over only the queue … the data
+/// structures like the VA tables are a separate lock the vcpu doesn't touch"*.
+///
+/// ⊘ **It may over-report and may never under-report**, and that asymmetry is the whole
+/// safety argument. It is bumped by every content change and cleared by nobody, so a change
+/// the worker already consumed still moves it — costing at most one extra publication job,
+/// which finds nothing changed and returns. A missed job would instead leave a guest mapping
+/// unpublished, which is a fault. ⚠ Never invert this; the cheap direction is the safe one.
+#[must_use]
+pub fn any_table_change_epoch() -> u64 {
+    ANY_TABLE_CHANGE.load(std::sync::atomic::Ordering::Acquire)
+}
+
+#[cfg(test)]
+mod the_epoch_a_vcpu_may_read {
+    use super::{AddressTable, Binding, GpuVa, any_table_change_epoch};
+    use kayfabe_arch::Aperture;
+    use kayfabe_arch::ids::Pdb;
+
+    const PDB: Pdb = Pdb(0x4E60_0000);
+
+    /// ★★★★★ **A vCPU MUST BE ABLE TO ASK "DID ANYTHING CHANGE?" WITHOUT A LOCK.**
+    ///
+    /// `[measured w516]` the stall alarm caught a vCPU inside a BAR1 write parked in
+    /// `futex_wait -> RankedMutex<Proc>::lock -> SharedDevice::take_table_changes`, which
+    /// takes EVERY `Proc` cell's lock purely to read each VAS's `generation`. `[measured
+    /// w514]` that rank is held for 5878 us by the page-table sweep's commit, and the census
+    /// names the waiter and the holder as the same line.
+    ///
+    /// ⊘ The property that matters is the ASYMMETRY, not the counting: the epoch may
+    /// over-report and may never under-report. A spare publication job costs a pass that
+    /// finds nothing; a missed one leaves a guest mapping unpublished, which is a fault.
+    #[test]
+    fn a_content_change_moves_the_global_epoch() {
+        let before = any_table_change_epoch();
+        let mut t = AddressTable::owned_by(PDB);
+        assert_eq!(
+            any_table_change_epoch(),
+            before,
+            "constructing a table changes no content, so it must not move the epoch"
+        );
+
+        // The same act `taddr_generation_moves_exactly_on_a_content_change` uses as its
+        // positive control, so the two tests cannot disagree about what a change is.
+        let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
+            .expect("sysmem is kind 4");
+        t.bind(PDB, GpuVa(0x2_0020_0000), 0x10000, b).unwrap();
+        assert_eq!(t.generation(), 1, "the fixture must change the table's content");
+        assert!(
+            any_table_change_epoch() > before,
+            "a content change must move the GLOBAL epoch too — if it does not, a vCPU that \
+             trusts the epoch will skip a publication and leave a mapping unpublished"
+        );
     }
 }
