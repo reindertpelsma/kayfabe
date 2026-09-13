@@ -1422,16 +1422,38 @@ impl QemuMachine {
         // the PRAMIN aperture — an io region that never sets the RAM flag, and so was always
         // safe to place over. The default implementation defers to the per-BAR answer, so a
         // host that does not cut its BARs is unaffected.
-        if !p
-            .host
-            .bar_range_is_unbacked(placement.bar, spec.gpa - placement.base, len)
-        {
-            return Err(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR));
-        }
         p.latch_bar(placement.bar, placement.base)?;
 
         let cuts = self.tier_cuts(spec, read_native)?;
         let spans = slots::spans(len, &cuts).map_err(VmmError::Unsupported)?;
+        // ⊘⊘⊘ **ASKED OF THE SPANS THAT INSTALL A SLOT, NOT OF THE WHOLE WINDOW (w639).**
+        //
+        // The safety argument is about pages we place a MEMSLOT over: the hypervisor must not
+        // already back them, or two owners answer one address. An `Observe` span installs no
+        // slot at all — it keeps trapping — so a backed piece underneath one is untouched and
+        // was never in danger.
+        //
+        // ⚠ `[measured w637a]` asking over the whole window REFUSED the counter page, and the
+        // refusal was CORRECT about what it was asked: the driver demands a 64 KiB `mmap` of an
+        // armed node, so the window spans sixteen pages, of which **only page 0 is live** and
+        // the other fifteen are backed by the cut. We slot page 0 and observe the rest, and one
+        // range for a window with two kinds of page in it cannot express that.
+        //
+        // ★ A REFINEMENT, not a relaxation: for a window slotted end to end (PRAMIN, the BAR
+        // mirror's fills) this asks exactly what it asked before, span by span. It stops
+        // refusing only on account of bytes no slot will ever cover.
+        for s in &spans {
+            if s.tier.readonly_slot().is_none() {
+                continue;
+            }
+            if !p.host.bar_range_is_unbacked(
+                placement.bar,
+                spec.gpa + s.offset - placement.base,
+                s.len,
+            ) {
+                return Err(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR));
+            }
+        }
         // ★★ ONE place decides whether a tier installs a slot, and it is
         // `Tier::readonly_slot`. This used to read `s.tier != Tier::Observe` — a **second
         // evaluation site** for the same rule, and a bite-check proved it: flipping

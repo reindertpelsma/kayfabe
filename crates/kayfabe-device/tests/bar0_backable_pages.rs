@@ -541,3 +541,57 @@ fn the_counter_pages_span_is_derived_and_is_the_page_that_traps() {
          counter — the failure this whole surface is written against"
     );
 }
+
+/// ★★★★★ **BACKING A PAGE FOR READS MUST NEVER MAKE ITS WRITES INVISIBLE (w638).**
+///
+/// Owner, 2026-09-13: *"Any page in bar0 thats not supposed to be writable and backed by ram
+/// page like constant registers, especially those that can also be mapped to guest userspace,
+/// should not be mapped in a writable kvmslot. If you then receive a write trap, and it has no
+/// function, let it be a no-op like bare metal does. Also important for security."*
+///
+/// ⊘ The property holds by construction — the cut's backed pieces are QEMU **ROM devices**, so
+/// reads resolve from their RAM copy with no exit and writes go to the device's ops — but
+/// nothing asserted it, and *"holds by construction"* is exactly the claim this session has
+/// watched fail six times. ⇒ Asserted here in the terms the Rust side can see: a write to a
+/// BACKED page still reaches the plane and is still accounted.
+///
+/// ⚠ The danger this guards is specific. If a backed page were ever placed in a *writable*
+/// slot to save its exits, a guest store would land in OUR shadow copy and be read back by the
+/// guest as though the device had accepted it — a fabricated register value, and on a page that
+/// can be mapped into guest userspace. **Silent acceptance is worse than a refusal**, and worse
+/// than the bare-metal no-op it would be imitating.
+#[test]
+fn a_write_to_a_backed_page_still_reaches_the_plane() {
+    let p = plane();
+    let backed: Vec<u64> = p
+        .bar0_backable_runs()
+        .into_iter()
+        .flat_map(|(b, l)| (b..b + l).step_by(4096))
+        .take(64)
+        .collect();
+    assert!(!backed.is_empty(), "no backed pages: the cut is not doing anything");
+
+    let before = p.counters().writes;
+    for off in &backed {
+        // ⊘ Offset 0 of each page — the address a guest would use to probe a constant register.
+        let _ = p.write(0, *off, 4, 0xdead_beef);
+    }
+    let after = p.counters().writes;
+    assert_eq!(
+        after - before,
+        backed.len() as u64,
+        "a write to a backed page did not reach the plane. If the cut ever serves these pages \
+         from a WRITABLE slot, the guest's store lands in our shadow and reads back as though \
+         the device accepted it — a fabricated register value on a page guest userspace can map."
+    );
+
+    // ★ And the bare-metal behaviour for the ones that mean nothing: a write to an unclaimed
+    // offset is a no-op that is COUNTED, never an error and never a stored value.
+    let unclaimed = p.counters().unclaimed_writes;
+    assert!(
+        unclaimed > 0,
+        "none of {} backed pages counted an unclaimed write, so this test drove only claimed \
+         registers and says nothing about the no-op path",
+        backed.len()
+    );
+}
