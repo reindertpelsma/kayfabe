@@ -429,6 +429,58 @@ impl GuestWindow {
         Ok(())
     }
 
+    /// ★★★★★ **ONE NATURALLY-ALIGNED DWORD STORE — the hardware doorbell ring.**
+    ///
+    /// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker"* and
+    /// *"you need have write access to it, and vmm only read, write is trapped so you can
+    /// translate doorbell token"*.
+    ///
+    /// # ⊘ Why this is a separate door from [`GuestWindow::write_from`]
+    ///
+    /// `write_from` is a `copy_nonoverlapping`, which the compiler may lower to any sequence of
+    /// accesses it likes. A **doorbell is a register**: it must be reached by exactly one
+    /// aligned 32-bit store, because the device samples the word, and a `memcpy` that split it
+    /// into two halves would ring twice with garbage in between. ⇒ `write_volatile` of a `u32`,
+    /// at a checked, **4-byte-aligned** offset.
+    ///
+    /// ⚠ Alignment is **refused, not rounded**. An unaligned register store is a different
+    /// access than the one intended, and silently fixing the caller's offset would hide a
+    /// wrong-offset bug behind a working ring.
+    ///
+    /// ⊘ This is the only write door that may be used from a vCPU thread: it takes no lock,
+    /// allocates nothing, and is a single instruction after the bound. Everything else on this
+    /// type is a copy whose cost is the caller's length.
+    ///
+    /// # Errors
+    /// [`RawError::OutOfRange`] / [`RawError::LengthOverflow`] as [`GuestWindow::write_from`],
+    /// and [`RawError::Unsupported`] for an offset that is not 4-byte aligned.
+    pub fn store_u32(&self, offset: HostOffset, value: u32) -> Result<(), RawError> {
+        let (start, _len) = bounds::checked_span(self.len_bytes(), offset, 4, "register store")?;
+        if start % 4 != 0 {
+            return Err(RawError::Unsupported {
+                what: "an aligned register store",
+                detail: "a device register must be reached by ONE naturally-aligned access; an \
+                         unaligned offset is a different access than the caller intended, and \
+                         rounding it would hide a wrong-offset bug behind a working store",
+            });
+        }
+        // SAFETY: `checked_span` proved `start + 4 <= self.len` (overflow checked before the
+        // bound) against the type invariant's live `self.len`-byte mapping, so `base.add(start)`
+        // satisfies `add`'s precondition and the four bytes at that address are inside the
+        // mapping. `start % 4 == 0` was just checked and `base` is page-aligned by `mmap`, so
+        // the destination is a correctly-aligned `u32`. `write_volatile` is used rather than a
+        // plain store because the destination may be device memory whose write has an effect
+        // the compiler cannot see, and must be neither elided nor split.
+        unsafe {
+            self.base
+                .as_ptr()
+                .add(start)
+                .cast::<u32>()
+                .write_volatile(value);
+        }
+        Ok(())
+    }
+
     /// The host address of `[offset, offset + len)`, as the integer a memslot install
     /// must carry — **bounds-checked here**, where the object that owns the range is.
     ///
@@ -700,4 +752,68 @@ mod tests {
             }
         });
     }
+    /// ★★★★★ **THE DOORBELL STORE — one aligned dword, and a refusal for anything else.**
+    ///
+    /// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker."*
+    /// The whole vCPU-side act is this call, so its bound and its alignment are the only things
+    /// standing between a guest-supplied offset and a write into the VMM's own mapping.
+    #[test]
+    fn an_aligned_dword_lands_exactly_where_it_was_asked_and_nowhere_else() {
+        let p = page();
+        let w = GuestWindow::create(2 * p.bytes(), p).expect("a two-page window");
+        w.store_u32(HostOffset::new(0x90), 0xDEAD_BEEF)
+            .expect("an aligned store inside the window");
+
+        let mut got = [0u8; 16];
+        w.read_into(HostOffset::new(0x88), &mut got).expect("read back");
+        // ⊘ The neighbours matter as much as the target: a store that also disturbed the bytes
+        // around it would ring correctly and corrupt the counter 16 bytes away — which is the
+        // page's actual layout (`TIME_0` at +0x80, `DOORBELL` at +0x90).
+        assert_eq!(&got[..8], &[0u8; 8], "the 8 bytes BELOW the register moved");
+        assert_eq!(
+            u32::from_ne_bytes(got[8..12].try_into().unwrap()),
+            0xDEAD_BEEF
+        );
+        assert_eq!(&got[12..], &[0u8; 4], "the 4 bytes ABOVE the register moved");
+    }
+
+    /// ⚠ **Refused, never rounded.** An unaligned register store is a different access than the
+    /// caller intended; quietly fixing the offset would hide a wrong-offset bug behind a ring
+    /// that appears to work.
+    #[test]
+    fn an_unaligned_register_store_is_refused_by_name() {
+        let p = page();
+        let w = GuestWindow::create(p.bytes(), p).expect("a one-page window");
+        for off in [0x91u64, 0x92, 0x93] {
+            let e = w.store_u32(HostOffset::new(off), 1).expect_err("unaligned");
+            assert!(
+                matches!(e, RawError::Unsupported { what, .. } if what == "an aligned register store"),
+                "{off:#x} refused as {e:?}"
+            );
+        }
+        // ⊘ And the refusal must not have written anything on its way out.
+        let mut got = [0xFFu8; 8];
+        w.read_into(HostOffset::new(0x90), &mut got).expect("read back");
+        assert_eq!(got, [0u8; 8], "a refused store still touched the window");
+    }
+
+    /// ⊘ The bound is the window's own length. A four-byte store whose LAST byte falls outside
+    /// is out of range — the off-by-one that a `offset < len` test would pass.
+    #[test]
+    fn a_dword_that_straddles_the_end_is_out_of_range() {
+        let p = page();
+        let w = GuestWindow::create(p.bytes(), p).expect("a one-page window");
+        let len = p.bytes();
+        w.store_u32(HostOffset::new(len - 4), 7)
+            .expect("the LAST aligned dword is inside");
+        assert!(
+            w.store_u32(HostOffset::new(len), 7).is_err(),
+            "a store starting at the end was accepted"
+        );
+        assert!(
+            w.store_u32(HostOffset::new(u64::MAX - 1), 7).is_err(),
+            "an offset that overflows when 4 is added was accepted"
+        );
+    }
+
 }

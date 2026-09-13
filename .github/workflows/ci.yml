@@ -1558,7 +1558,14 @@ jobs:
           #   - `mprotect` (w598) — asked as a QUESTION, never as a capability: its only
           #     in-tree caller asserts that it FAILS, proving `VM_MAYWRITE` was cleared.
           #   ⊘  49 → 58, same day, same reading: all nine predate this session.
-          AUDITED="kayfabe-linux-raw:123 kayfabe-qemu-raw:58"
+          #   - `write_volatile` of one `u32` (w646) — `GuestWindow::store_u32`, the
+          #     passthrough doorbell ring. ⚠ A SEPARATE door from `write_from` on purpose: a
+          #     `copy_nonoverlapping` may be lowered to any sequence of accesses, and a
+          #     doorbell is a REGISTER — split into two halves it rings twice with garbage in
+          #     between. Bounds-checked AND alignment-checked, and the alignment is **refused,
+          #     never rounded**: rounding would hide a wrong-offset bug behind a working ring.
+          #   ⊘  123 → 124.
+          AUDITED="kayfabe-linux-raw:124 kayfabe-qemu-raw:58"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
