@@ -41,7 +41,13 @@ across `THE_OVERNIGHT_DIRECTIVE.md`, the design docs and agent memory.
 14. **Isolates can have multiple threads** executing several CUDA operations in parallel, as
     `nvkvm-pv` does.
 15. **The two vidmem worlds are disjoint** — see below.
-16. **Host userspace stays UNPRIVILEGED.** Standing, absolute, and it constrains every item above.
+16. **Memslots are a SETUP thing, not a runtime one.** Reserve VMM ranges for BAR0/1/2 **once**,
+    at start. Anything unoccupied is a sparse region if one is needed (mappable from the GPU)
+    unless ogkm genuinely allows it unmapped — and because the range is VMM-**reserved**, no
+    anonymous heap allocation can land in it. At **runtime** you translate a BAR1/BAR2 offset
+    (to GPA where that is not skippable) into a **VMM VA**, and use that VA in `mmap` or in
+    ioctls. ⊘ Never one memslot per published page. Same model as `nvkvm-pv` and the Mode-2 C.
+17. **Host userspace stays UNPRIVILEGED.** Standing, absolute, and it constrains every item above.
 
 ## 15, in full — the split that is easy to get wrong
 
@@ -143,7 +149,33 @@ attacked.
 ⊘ Rung 1 is where constraint 12 starts too — the per-family derivation has somewhere to live only
 once the profile is a value.
 
-## ★ Coalescing the premap (owner's idea, 2026-09-14) — available TODAY, and cheaper than feared
+## ★★★★★ 16 — memslots are SETUP, and the tree already has the rule and breaks it
+
+> Owner, 2026-09-14: *"memslots are largely a setup thing. you do it once reserve vmm ranges for
+> bar0/1/2… so during runtime you actually translate bar1/2 (to gpa if not skippable) to vmm va,
+> and use that in mmap or ioctls using va. same as nvkvm-pv and… mode 2 C."*
+
+⊘ **This is already the tree's documented rule.** `window_unsafe.rs` quotes `l1_os_shell.md` §6.7
+verbatim: **"One memslot per window (or per arena grant) — never one per published object."**
+
+★ And PRAMIN already obeys it. The vCPU door census is that model working: `1 × mmap (creating a
+guest-physical window)`, `1 × KVM_SET_USER_MEMORY_REGION`, then `20 × mmap MAP_FIXED (placing a
+backing inside a window)` — **one** window, **one** memslot, and twenty re-points that touch KVM
+not at all.
+
+⊘⊘ **The BAR1/BAR2 mirror does the opposite.** `install_file_window(gpa, PAGE, …)` goes to
+`install_window_inner`, i.e. **one window and one memslot per 4 KiB page** — each mirrored page is
+exactly the "published object" §6.7 forbids giving its own slot.
+
+`[measured w696ctl/w696h]` `slots peak=954` / `peak=920` for the **raw client**, and the premap
+installs `6135` pages. ⇒ The memslot count scales with the touched working set, which is the
+mechanism that would decide an LLM's fate — not `TRAP_FILLS`, which stays 0 either way.
+
+⇒ **This supersedes the per-leaf coalescing idea below.** Coalescing 16 pages into one slot is a
+16x improvement on a quantity that should be CONSTANT. Reserve the aperture once; place backings
+inside it with `MAP_FIXED`; the slot count stops being a function of the workload at all.
+
+## ⊘ Superseded: per-leaf coalescing (kept because the sub-findings still hold)
 
 > Owner: *"can you not combine pages that are adjacent/consecutive to one single mmap range… that
 > shouldn't be hard during refresh"*
