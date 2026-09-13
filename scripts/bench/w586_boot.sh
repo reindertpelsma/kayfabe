@@ -80,6 +80,8 @@ grep -a 'BAR-MIRROR' "$Q" 2>/dev/null | tail -3 | fold -w 150 | head -12
 echo "--- trap latency, goal 6's standing number ---"
 grep -ao 'TRAPWITNESS[^|]*' "$Q" 2>/dev/null | tail -1
 grep -ao 'SLOW-SITES[^⊘]*' "$Q" 2>/dev/null | tail -1
+# ★ w592 — the discriminator the owner's rule needs: descheduled, or our own work?
+grep -ao 'TRAP-CPU[^⇒]*⇒[^—]*' "$Q" 2>/dev/null | tail -1
 echo "--- ★ the GSP submit path, which is what a hang shows up in ---"
 grep -a 'kayfabe: GSP-SUBMIT' "$Q" 2>/dev/null | tail -1 | cut -c1-400
 grep -ao 'QUEUE coalesce[^|]*' "$Q" 2>/dev/null | tail -1

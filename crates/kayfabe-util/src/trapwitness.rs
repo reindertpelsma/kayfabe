@@ -846,6 +846,74 @@ struct InFlight;
 /// because this crate forbids `unsafe` and cannot call `gettid` itself.
 static CURRENT_TID: std::sync::OnceLock<fn() -> i32> = std::sync::OnceLock::new();
 
+/// ★★★★★ **w592 — THE ONLY THING THAT CAN SETTLE THE OWNER'S RULE ABOUT A SLOW TRAP.**
+///
+/// Owner, on the one trap still over budget: *"the thread wasn't scheduled doesn't count, but
+/// only if that's a vCPU steal, not if it was waiting on a blocking lock in the vCPU thread."*
+///
+/// ⊘⊘ **Wall time cannot tell those apart, and every claim on this subject so far has been an
+/// ARGUMENT.** `[measured w583]` *"the 39.6 ms is not a lock — rank-0 waits measured ZERO and
+/// the worst hold is 330 us, so it falls on the schedulable side"* — true as far as it goes, and
+/// it establishes only that WE were not holding the thread. It does not establish that the
+/// thread was off-CPU rather than spinning in our own code, which is the distinction the rule
+/// turns on.
+///
+/// ★ `wall - thread_cpu` is that distinction, directly: time the trap took minus time the
+/// thread actually RAN. Large ⇒ descheduled (the owner's excuse applies). Near zero ⇒ we burned
+/// the budget executing, and the excuse does not apply.
+///
+/// ⚠ **Default OFF, and site-scoped when on.** `CLOCK_THREAD_CPUTIME_ID` is a real syscall — it
+/// is not in the vDSO — so reading it on every trap would put two syscalls inside every MMIO
+/// exit, which is the very cost this instrument exists to account for. `KAYFABE_TRAP_CPU_SITE`
+/// names ONE offset (hex, e.g. `110c00`), and only traps at that site pay. That the instrument
+/// must not perturb what it measures is the whole lesson of w586.
+static THREAD_CPU_NS: std::sync::OnceLock<fn() -> u64> = std::sync::OnceLock::new();
+
+/// The site `KAYFABE_TRAP_CPU_SITE` selected, as a BAR0 offset. `u64::MAX` = none.
+static CPU_SITE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
+
+/// The worst `(wall_us, cpu_us)` seen at the selected site, packed so one load is consistent.
+static CPU_WORST_WALL: AtomicU64 = AtomicU64::new(0);
+static CPU_WORST_CPU: AtomicU64 = AtomicU64::new(0);
+static CPU_SAMPLES: AtomicU64 = AtomicU64::new(0);
+
+/// Install the thread-CPU-time source. Called once by the shim, where `unsafe` is permitted.
+pub fn install_thread_cpu_clock(f: fn() -> u64) {
+    let _ = THREAD_CPU_NS.set(f);
+    if let Ok(v) = std::env::var("KAYFABE_TRAP_CPU_SITE") {
+        if let Ok(off) = u64::from_str_radix(v.trim_start_matches("0x"), 16) {
+            CPU_SITE.store(off, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+}
+
+/// `(samples, worst wall us, that trap's thread-CPU us)` at the selected site.
+#[must_use]
+pub fn trap_cpu_census() -> String {
+    let n = CPU_SAMPLES.load(Ordering::Relaxed);
+    let site = CPU_SITE.load(std::sync::atomic::Ordering::Relaxed);
+    if site == u64::MAX {
+        return "TRAP-CPU ⊘ NOT ARMED — set KAYFABE_TRAP_CPU_SITE=<hex bar0 offset>.                 ⚠ UNMEASURED, which is not the same as zero off-CPU time."
+            .to_string();
+    }
+    if n == 0 {
+        return format!(
+            "TRAP-CPU site=bar0+0x{site:x} samples=0 ⊘ the site was armed and never trapped              SLOWLY — nothing to attribute, and that is a real answer rather than a missing one."
+        );
+    }
+    let wall = CPU_WORST_WALL.load(Ordering::Relaxed);
+    let cpu = CPU_WORST_CPU.load(Ordering::Relaxed);
+    format!(
+        "TRAP-CPU site=bar0+0x{site:x} slow_samples={n} worst_wall={wall}us          thread_cpu={cpu}us off_cpu={}us ⇒ {} — the owner's rule: time the thread was NOT          SCHEDULED is excusable (a vCPU steal); time it SPENT RUNNING is not.",
+        wall.saturating_sub(cpu),
+        if wall.saturating_sub(cpu) * 4 > wall * 3 {
+            "DESCHEDULED for most of it"
+        } else {
+            "RUNNING for most of it ⊘ this is OUR work, not a steal"
+        }
+    )
+}
+
 /// ⊘ TEMPORARY (w495) — install the thread-directed alarm and the tid source. Called once by
 /// the shim, which is where `unsafe` is permitted.
 ///
@@ -903,6 +971,8 @@ pub struct TrapGuard {
     /// `(bar << 56) | offset` of the trapped access, or `u64::MAX` if unattributed.
     site: u64,
     start: std::time::Instant,
+    /// ★ w592 — thread-CPU nanoseconds at entry, only when this site is the selected one.
+    cpu_start_ns: Option<u64>,
     _not_send: PhantomData<*mut ()>,
 }
 
@@ -925,10 +995,15 @@ impl TrapGuard {
         let inflight = InFlight::claim(site);
         TRAP_DEPTH.with(|d| d.set(d.get() + 1));
         TRAP_ENTRIES.with(|c| c.set(c.get() + 1));
+        // ⊘ Site-scoped: `(bar << 56) | offset`, and only BAR0 is ever selected.
+        let cpu_start_ns = (site == CPU_SITE.load(std::sync::atomic::Ordering::Relaxed))
+            .then(|| THREAD_CPU_NS.get().map(|f| f()))
+            .flatten();
         Self {
             inflight,
             start: std::time::Instant::now(),
             site,
+            cpu_start_ns,
             _not_send: PhantomData,
         }
     }
@@ -970,6 +1045,14 @@ impl Drop for TrapGuard {
                     SLOW_TRAP_SITE_LAST.store(self.site, Ordering::Relaxed);
                 }
                 note_slow_site(self.site, us);
+                // ★ w592 — and for the selected site, how much of it the thread actually RAN.
+                if let (Some(t0), Some(f)) = (self.cpu_start_ns, THREAD_CPU_NS.get()) {
+                    let cpu_us = f().saturating_sub(t0) / 1_000;
+                    CPU_SAMPLES.fetch_add(1, Ordering::Relaxed);
+                    if CPU_WORST_WALL.fetch_max(us, Ordering::Relaxed) < us {
+                        CPU_WORST_CPU.store(cpu_us, Ordering::Relaxed);
+                    }
+                }
             }
             // `fetch_max` returns the PREVIOUS value: we won iff it was smaller than ours.
             // ★★★★★ **w481 — WHEN, not just how big.** `worst_trap` over a whole boot is

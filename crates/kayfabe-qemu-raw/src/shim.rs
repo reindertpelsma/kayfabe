@@ -6337,7 +6337,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6394,6 +6394,10 @@ impl SharedDoorbell {
                 // plane's queue lock and nothing above it. Both violations found this session
                 // were found by a stall alarm firing on whichever trap happened to be
                 // slowest; this names a site whether or not it also stalled.
+                // ★★★★★ w592 — WAS THE SLOW TRAP DESCHEDULED, OR WAS IT US? See
+                // `trapwitness::trap_cpu_census`. ⊘ Prints an explicit NOT-ARMED arm: an
+                // unmeasured off-CPU time and a zero one are different facts.
+                kayfabe_util::trapwitness::trap_cpu_census(),
                 kayfabe_util::lock::lockcost::in_trap_census(),
                 kayfabe_util::lock::lockcost::hammer_census(
                     kayfabe_util::lock::LockRank::Plane,

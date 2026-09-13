@@ -1407,6 +1407,12 @@ pub unsafe extern "C" fn kayfabe_shim_regs_write(
         },
         kayfabe_linux_raw::stall_alarm::current_tid,
     );
+    // ★ w592 — the off-CPU discriminator for goal 6's one remaining slow trap. Default OFF;
+    // `KAYFABE_TRAP_CPU_SITE=<hex bar0 offset>` arms it for exactly one site.
+    #[cfg(feature = "host-isolates")]
+    kayfabe_util::trapwitness::install_thread_cpu_clock(
+        kayfabe_linux_raw::stall_alarm::thread_cpu_ns,
+    );
     // ⊘⊘⊘ **TEMPORARY DEBUG (w495) — DELETE BEFORE SHIPPING.** Two things, both off unless
     // their env arm is set:
     //

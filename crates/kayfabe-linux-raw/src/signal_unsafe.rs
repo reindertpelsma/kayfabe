@@ -260,6 +260,39 @@ pub mod stall_alarm {
         unsafe { libc::syscall(libc::SYS_gettid) as i32 }
     }
 
+    /// ★★★★★ **w592 — nanoseconds this THREAD has actually run on a CPU.**
+    ///
+    /// ⊘ The point of it: subtracted from a trap's WALL duration it gives the time the thread
+    /// was **not scheduled**, which is the exact distinction the owner's rule about a slow trap
+    /// turns on — *"the thread wasn't scheduled doesn't count, but only if that's a vCPU steal,
+    /// not if it was waiting on a blocking lock in the vCPU thread."* Wall time alone cannot
+    /// separate those, and every claim on the subject so far has been an argument.
+    ///
+    /// ⚠ `CLOCK_THREAD_CPUTIME_ID` is **not** in the vDSO — this is a real syscall, ~1 us. The
+    /// caller in `trapwitness` therefore reads it only at a single, explicitly-named trap site,
+    /// and not at all unless armed. An instrument that costs what it is measuring measures
+    /// itself.
+    ///
+    /// Returns `0` if the clock refuses, which the caller sees as "no sample" rather than as a
+    /// zero duration.
+    #[must_use]
+    pub fn thread_cpu_ns() -> u64 {
+        let mut ts = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // SAFETY: `ts` is a live, correctly-typed, exclusively-borrowed `timespec` for the
+        // duration of the call; `clock_gettime` writes only through that pointer and reads
+        // nothing of ours.
+        let rc = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut ts) };
+        if rc != 0 {
+            return 0;
+        }
+        (ts.tv_sec as u64)
+            .saturating_mul(1_000_000_000)
+            .saturating_add(ts.tv_nsec as u64)
+    }
+
     /// Send `SIGALRM` to one thread of this process. Its default action terminates and dumps,
     /// which is the point: the dump is taken **at the site the thread is stuck in**.
     ///
