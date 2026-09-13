@@ -370,6 +370,19 @@ pub struct BarMirror {
     /// installed behind its back, while both endpoints still match. ⇒ **An endpoint comparison
     /// cannot detect a round trip**, and that is the exact shape of the bug it would miss.
     bar0_moves: AtomicU64,
+    /// ★★★★★ **w613 — how many BAR1/BAR2 pages were already needed BEFORE the first channel
+    /// was born.**
+    ///
+    /// ⊘ This decides whether the owner's map-at-create ruling can cover the traffic at all.
+    /// `[measured w608]` 184 distinct pages account for 3 952 trapped accesses, and mapping
+    /// them when a channel is created removes the traps — **but only for pages a channel
+    /// knows about.** BAR2 is the INSTANCE window: RM writes instance blocks and page tables
+    /// through it during the BAR2 bootstrap, which happens long before any channel exists.
+    ///
+    /// ⚠ If most of the 184 are pre-birth, map-at-create is the right ruling applied to the
+    /// wrong half of the traffic, and I would have built it and measured no change. ⇒ Ask
+    /// first. `(bar1, bar2)` distinct pages at the first birth; `u64::MAX` = no birth yet.
+    pages_at_first_birth: Mutex<Option<(usize, usize)>>,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -547,6 +560,7 @@ impl BarMirror {
             pramin_gpa: AtomicU64::new(u64::MAX),
             pramin_marks: Mutex::new(Vec::new()),
             bar0_moves: AtomicU64::new(0),
+            pages_at_first_birth: Mutex::new(None),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1148,6 +1162,18 @@ impl BarMirror {
         )
     }
 
+    /// ★ w613 — called once, at the first channel birth. See `pages_at_first_birth`.
+    pub fn note_first_channel_birth(&self) {
+        let mut g = self
+            .pages_at_first_birth
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            *g = Some((t.pages_ever[0].len(), t.pages_ever[1].len()));
+        }
+    }
+
     pub fn after_write(&self, out: &kayfabe_device::WriteOutcome) {
         // ★ w578 — the latch first: it is synchronous and cheap, and everything below defers.
         if out.claimed {
@@ -1309,6 +1335,26 @@ impl BarMirror {
                 ),
             }
         }
+        // ★ w613 — the pre-birth share, printed beside the totals it qualifies.
+        let birth = {
+            let g = self
+                .pages_at_first_birth
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            match *g {
+                None => " pre_birth_pages=NO-BIRTH (no channel was ever born, so every page here is bring-up)".to_string(),
+                Some((b1, b2)) => format!(
+                    " pre_birth_pages=[bar1={b1} bar2={b2}] of [bar1={} bar2={}] => {}",
+                    pages[0],
+                    pages[1],
+                    if b1 + b2 >= (pages[0] + pages[1]) * 3 / 4 {
+                        "MOST pages were needed BEFORE any channel existed - map-at-create cannot cover them, and would measure no change"
+                    } else {
+                        "most pages arrive AFTER the first birth - map-at-create is aimed at the right traffic"
+                    }
+                ),
+            }
+        };
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
         // the allocator says how many pages it handed out, the store says how many it asked

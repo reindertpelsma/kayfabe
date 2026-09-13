@@ -3214,6 +3214,8 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 fn report_channel_birth_drain(
     device: &kayfabe_rt::device::SharedDevice,
     err_notifier_grants: &[kayfabe_rt::ChannelBirthGrant],
+    #[cfg(feature = "host-isolates")] mirror: Option<&crate::barmirror::BarMirror>,
+    #[cfg(not(feature = "host-isolates"))] mirror: Option<&()>,
 ) -> usize {
     let t0 = Instant::now();
     let runs = device.run_pending_channel_births(err_notifier_grants);
@@ -3221,6 +3223,14 @@ fn report_channel_birth_drain(
         return 0;
     }
     let born = runs.iter().filter(|r| r.out.is_ok()).count();
+    // ★ w613 — snapshot the BAR1/BAR2 working set at the FIRST birth, so the pre-birth share
+    // is a measurement rather than an assumption about when RM touches those apertures.
+    #[cfg(feature = "host-isolates")]
+    if born > 0 {
+        if let Some(m) = mirror {
+            m.note_first_channel_birth();
+        }
+    }
     let elapsed = t0.elapsed();
     for r in &runs {
         report_channel_birth(r);
@@ -5213,7 +5223,10 @@ fn doorbell_publish_loop(
         // this is a MOVE and not a second implementation.
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
-        let born = report_channel_birth_drain(&port.device, &birth_grants);
+        // ⊘ `SharedDoorbell` holds no mirror; the snapshot is taken on the shim's own drain
+        // below, which runs for every birth. Passing `None` here rather than plumbing a second
+        // handle for a one-shot measurement.
+        let born = report_channel_birth_drain(&port.device, &birth_grants, None);
         // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
         //
         // Owner, 2026-09-12: *"if a channel is created inheriting a va base, then you can map
@@ -15927,7 +15940,13 @@ impl Regs {
             // call does (`BIRTH-PUBLISH`). Written as an explicit discard rather than an
             // ignored return so the asymmetry reads as a decision.
             let _born_but_we_may_not_publish_here =
-                report_channel_birth_drain(&self.device, &birth_grants);
+                {
+                    #[cfg(feature = "host-isolates")]
+                    let m = self.bar_mirror.get().map(std::sync::Arc::as_ref);
+                    #[cfg(not(feature = "host-isolates"))]
+                    let m: Option<&()> = None;
+                    report_channel_birth_drain(&self.device, &birth_grants, m);
+                };
             kft.mark("birth_drain");
             report_engine_forward_drain(&self.device, &err_notifier_grants);
         } else {
