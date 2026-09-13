@@ -8897,6 +8897,36 @@ impl SharedDoorbell {
                             // survived: the call site argues at length for `Drain` over
                             // `Publish`, so the ARM is audited and the argument selecting its
                             // TARGET is not. An audited arm pointed at nothing.
+                            // ⊘⊘⊘ **AND `Some(&facts)` IS STILL NOT A DRAIN — w662 measured
+                            // it, and the reason is STRUCTURAL, not a missing argument.**
+                            //
+                            // `[measured w660a → w662a]` the fix moved 150 calls off the
+                            // "resolved NO channel facts" arm (1812 → 1579) and onto the
+                            // "declared NO vas_pdb" arm (0 → 150). `★ DRAIN TARGET` is still
+                            // **0**.
+                            //
+                            // ★ Because `forwarding_plane_owns_ce` (`:18172`) requires
+                            // `has_vas_pdb`, the CPU executor — where this code lives —
+                            // receives exactly the channels that **have no `vas_pdb`**, by
+                            // construction. ⇒ **A page-directory-keyed drain target can never
+                            // exist here.** Arm B is the end state for this channel class, not
+                            // a bug awaiting an argument.
+                            //
+                            // ⇒ What sync point (3) actually provides is `refresh_page_tables`
+                            // plus a **bounded sample of every VAS** — and `[measured w658a,
+                            // w660a, w662a]` that is sufficient: the inline doorbell passes and
+                            // `Xid 31 @ 0x90_80000000` stays at a count of one.
+                            //
+                            // ⚠ **The unstated dependency, stated:** that sufficiency rests on
+                            // `VAS_PINRATE_ROWS`. Tune it down and the inline doorbell breaks
+                            // with nothing naming the connection. A real drain for this class
+                            // would have to key off the root `doorbell_root` already resolved,
+                            // not off a pdb these channels do not declare.
+                            //
+                            // ⊘ `Some(&facts)` is KEPT regardless: it is strictly more
+                            // informative than `None` — it distinguishes "no facts" from "facts
+                            // without a pdb", which is the distinction that produced this
+                            // finding at all.
                             (Some(r), ctx.publish_vas_rows(token, Some(&facts), w))
                         }
                         None => (None, None),
