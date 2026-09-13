@@ -1862,7 +1862,19 @@ impl RegPlane {
                     // them current. `[measured w561]` none of these has a read side effect;
                     // each is a pure read of state this device owns.
                     || crate::cpuintr::decode(off).is_some()
-                    || self.invalidate_regs().is_some_and(|r| r.trigger == off)
+                    // ⊘⊘ w575 — THE INVALIDATE TRIGGER IS **NOT** BACKED, and this is a
+                    // measured refusal rather than an oversight.
+                    //
+                    // The guest SPIN-POLLS this register waiting for TRIGGER to read false.
+                    // Its value is cleared by the WORKER, when a publication job completes —
+                    // so a shadow of it is only as current as the last worker pass. Publish
+                    // "pending" and fail to publish "done" promptly and the guest spins on a
+                    // page that has stopped changing, which is strictly worse than trapping,
+                    // because a trap at least asks us.
+                    //
+                    // ⚠ `[measured w573-w575]` w564 backed it and the boot graded (E):
+                    // `RmInitAdapter failed`. It stays trapped until something makes "done"
+                    // observable at the instant it becomes true, and a boot says so.
                     || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
                     // ★★★★★ w565 — the GSP registers, now that every FSM write republishes
                     // the whole group. ⊘ `may_read` offsets are NOT included: the boot
