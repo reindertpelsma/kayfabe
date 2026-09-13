@@ -452,39 +452,52 @@ fn dropping_a_reactor_with_uncollected_completions_counts_the_leak() {
     );
 }
 
-/// ★★★★★ **ONE ISOLATE, TWO VERBS OPEN AT ONCE — the owner's requirement, as an EDGE.**
+/// ★★★★★ **ONE ISOLATE ACCEPTS TWO VERBS AT ONCE — AND RM's CLIENT LOCK, NOT THE TRANSPORT,
+/// IS WHAT SERIALISES THEM.**
 ///
 /// Owner, 2026-09-13: *"one isolate must be able to allow multiple things in flight by
 /// construction with threads."*
 ///
-/// # ⊘⊘ Why this test did not exist, and why that mattered
+/// # ⊘⊘⊘ I FIRST WROTE THIS TEST TO ASSERT TWO PARKS, AND IT HUNG. THE HANG IS THE FINDING.
 ///
-/// The claim was already true **by construction** and therefore never checked. `proto.rs`
-/// states the architecture outright — *"concurrency comes from channel COUNT, never from
-/// multiplexing one channel"* — so each of the [`kayfabe_isolate::DEFAULT_POOL_WORKERS`] pool
-/// workers owns its own `UnixStream` and each channel is 1-deep. Four sockets, four possible
-/// in-flight verbs, no demux and no pending list.
+/// The transport genuinely allows it: `proto.rs` rules *"concurrency comes from channel COUNT,
+/// never from multiplexing one channel"*, so each of the four pool workers owns its own
+/// `UnixStream` and each channel is 1-deep — four sockets, four possible in-flight verbs, no
+/// demux and no pending list. That half of the claim is real.
 ///
-/// ⚠ But `the_per_worker_policy_gives_one_lane_per_pool_slot` asserts only the POLICY and the
-/// LANE COUNT. Nothing anywhere observed **two verbs open on one isolate at the same instant**,
-/// and "by construction" is exactly the kind of claim that rots without a witness: the transport
-/// can keep the property while the caller quietly serialises it away — which is precisely what
-/// the production worker does today, using one socket while three sit idle.
+/// ⚠ **But the CHILD serialises them, and on purpose.** `loopback.rs`'s `verb()` takes
+/// `self.shared.client.lock()` and holds it **across** the park — its own comment: *"The lock is
+/// held across the park, which is the RM semantic being modelled."* So a second verb on one
+/// isolate blocks on that lock **before** it can announce a park, and a test waiting for two park
+/// witnesses waits forever.
 ///
-/// ⊘ **This is the contrast with `nvkvm-pv`, and both designs are legitimate.** pv reaches the
-/// same place from the other side: *"a dedicated reader thread that multiplexes IOCTL responses
-/// by `txn_id` onto per-caller condvars"* (`src/qemu/nvkvm_isolate.c:1-8`). One socket demuxed,
-/// versus four sockets undemuxed. ⇒ **We do NOT need pv's `txn_id` to get multi-inflight**, and
-/// asserting that we did would have bought a protocol change this test shows is unnecessary.
+/// ★ That is not a fixture artefact. It is the fixture being faithful to what was measured on
+/// real hardware: RM holds the device-global API lock in WRITE across the GSP RPC, which is why
+/// `[measured R12, real GA106, 800 alloc+free pairs]` 1 worker, 1 isolate × 4 workers and
+/// 4 isolates × 1 worker all came in at **1.00x**.
+///
+/// ⇒ So the property worth pinning is the one that is actually ours: **the reactor accepts and
+/// holds two verbs open on ONE isolate** — two lanes, two in flight, the submitting thread
+/// blocked in neither. What happens beyond that is RM's lock, not our transport, and no amount
+/// of epoll changes it.
+///
+/// ⊘ This also settles a claim I had wrong: **we do NOT need pv's `txn_id` for multi-inflight.**
+/// pv reaches the same place from the other side — *"a dedicated reader thread that multiplexes
+/// IOCTL responses by `txn_id` onto per-caller condvars"* (`nvkvm_isolate.c:1-8`) — one socket
+/// demuxed versus four sockets undemuxed. Note pv serialises too, deliberately: its non-IOCTL
+/// commands go through `sync_cmd_lock`, *"a real one-at-a-time gate"*.
 #[test]
-fn one_isolate_holds_two_verbs_open_at_once() {
+fn one_isolate_accepts_two_verbs_and_rm_s_client_lock_serialises_them() {
     let f = factory(ParkVerb::Sysmem);
     let mut a = f.spawn_host(iso(71));
     // ⊘ PerWorker, not the PerIsolate default: a lane PER POOL SLOT is what lets one isolate's
-    // slots run concurrently. Under PerIsolate the second plan would queue behind the first on
-    // that isolate's single lane — correct for ordering, and the wrong policy for this claim.
-    let r = PlanReactor::with_policy(LanePolicy::PerWorker, kayfabe_isolate_host::planreactor::DEFAULT_LANE_CAP)
-        .expect("notify descriptor");
+    // slots be occupied concurrently. Under PerIsolate the second plan would queue behind the
+    // first on that isolate's single lane — correct for ordering, wrong policy for this claim.
+    let r = PlanReactor::with_policy(
+        LanePolicy::PerWorker,
+        kayfabe_isolate_host::planreactor::DEFAULT_LANE_CAP,
+    )
+    .expect("notify descriptor");
 
     let w0 = a.checkout().expect("slot 0");
     let w1 = a.checkout().expect("slot 1 — a second worker on the SAME isolate");
@@ -496,25 +509,24 @@ fn one_isolate_holds_two_verbs_open_at_once() {
     r.submit(w0, publish(), 0x10).expect("first accepted");
     r.submit(w1, publish(), 0x11).expect("second accepted");
 
-    // ★ THE EDGE. The child writes the park witness once per parked verb, so two reads mean two
-    // verbs were genuinely inside a host call on ONE isolate simultaneously.
-    a.wait_for_park(CEILING).expect("first parked");
-    a.wait_for_park(CEILING).expect("second parked");
+    // ★ ONE park witness, not two. The first verb reaches the parked call and announces; the
+    // second is inside the child, blocked on the client lock, which is exactly the modelled RM
+    // semantic. ⚠ Waiting for a second byte here is what hung — kept as a comment because the
+    // next author will be tempted by it.
+    a.wait_for_park(CEILING).expect("the first verb parked");
 
     let mid = r.stats();
-    assert_eq!(
-        mid.peak_in_flight, 2,
-        "two verbs were observed parked on ONE isolate, so the reactor must have counted two \
-         in flight — {}",
-        r.census()
-    );
-    assert_eq!(mid.in_flight, 2);
     assert_eq!(
         mid.lanes_spawned, 2,
         "PerWorker must give one lane per pool slot, not one per isolate — {}",
         r.census()
     );
-    assert_eq!(mid.completed, 0, "both are still parked");
+    assert_eq!(
+        mid.in_flight, 2,
+        "both verbs are open on ONE isolate: one parked in the host call, one inside the child          waiting on RM's client lock. The submitting thread is blocked in neither — with          `Worker::execute` it could not have submitted the second at all — {}",
+        r.census()
+    );
+    assert_eq!(mid.completed, 0, "neither has returned");
     eprintln!("PLANREACTOR-ONE-ISOLATE {}", r.census());
 
     // Release both: one break signal per OUTSTANDING worker slot, not one per isolate.
