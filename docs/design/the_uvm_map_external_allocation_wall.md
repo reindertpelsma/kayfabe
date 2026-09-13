@@ -77,6 +77,34 @@ session** — the sequence is worth keeping, because every one of them looked li
 counter covering two or more causes** — the class this tree already names, encountered three
 times in a single session.
 
+## 4b. ⊘ It is NOT established as a regression — the good end fails too
+
+`[measured w698, 2026-09-13]` Two hypotheses were tested and both died:
+
+1. **"The always-on whole-VAS sweep (w533) broke it."** `KAYFABE_PT_SWEEP=off` had returned
+   `CUP3_VAL=43` twice, and w533 (2026-09-12) deleted the disarm six days after the known-good.
+   ⇒ Restored the disarm on a branch and booted: **cup3 hangs identically with the sweep off.**
+   The sweep is exonerated.
+2. **"It regressed since 2026-09-06."** Booted `0764a990` — the known-good commit — with today's
+   harness overlaid so only the device varied:
+
+       FAIL cuCtxCreate(&ctx,0,d) -> unspecified launch failure (719)
+
+   ⊘⊘ **The known-good does not reproduce on this bench.** `CUP3_VAL=43` was measured on a
+   DIFFERENT machine (vast 50013922, the fifth machine). Here, that same commit fails at
+   `cuCtxCreate` too.
+
+⇒ A `git bisect` over the 576 commits in range would have bisected noise. ★ **Boot the GOOD end
+first**; a bisect that never verifies its good end is measuring nothing.
+
+⚠ Confounder not excluded: this box's `guest.qcow2` has taken many boots including an abrupt
+`pkill`. Guest-side state is a live alternative to host/GPU differences, and a fresh guest would
+separate them.
+
+★ One real change survives: old code fails FAST with a named GPU error; today's HANGS indefinitely
+burning kernel CPU. That is a regression in **debuggability** even where neither configuration
+passes.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
