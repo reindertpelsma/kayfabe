@@ -108,6 +108,27 @@ one refactor, not two.
 largest single vidmem reservation is **6144 MiB against 12288 advertised**. So today the guest is
 told it has twice the video memory we can actually reserve for it.
 
+### ★★★★★ `[measured w696f/w696g]` THE SIZE IS ALREADY A KNOB — one derivation, and it BOOTS
+
+The owner, 2026-09-13: *"the reservation is giving actually as argument when kayfabe starts, how
+much vidmem to give to the guest. manual from cli option is more important than auto detect."*
+
+- Setting `FB_SIZE_MB = 6144` (the size this part can actually reserve) failed at **COMPILE**
+  time, not boot: `assertion failed: GA106_BAR1_PDE_BASE < frts_offset()`. One captured absolute
+  (`0x2_F1CA_C000`, a real RTX 3060's GSP value) did not scale, while the carve-out around it
+  already did.
+- Derived as a **relative** placement (`bar1_pde_base_for`, `0x20C_C000` above the carve-out
+  base), reproducing the captured byte **exactly** at 12288. ⇒ After that single change the whole
+  workspace builds at 6144 with **nothing else to fix**.
+- `[measured w696g, branch `w696g-fb6144`, rev `a6274473`]` booting at **6144 MiB advertised**
+  grades **`(P)`**, `MEAN_FALSIFIER=PASS`, `THREADS 8 of 8`, `TRAP_FILLS=0`.
+
+⇒ **Rung 2 is plumbing, not risk.** What remains is a QEMU `DEFINE_PROP_UINT64` for the size,
+through the shim ABI to a runtime `ChipProfile`, plus the reservation itself and *"if that fails,
+the VM does not start."* ⊘ The `const` assertions did the enumerating for free — each one is a
+per-die absolute declaring itself at compile time, which is also how constraint 12 should be
+attacked.
+
 ### Proposed order (each rung independently green-able)
 
 1. `ChipProfile` becomes a runtime-constructed value; `GA106` becomes a constructor call with
