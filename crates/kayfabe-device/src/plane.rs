@@ -4319,6 +4319,39 @@ impl RegPlane {
     /// get. `masked` is the guest's own doing and is legitimate. Folding them into one number
     /// would hide the defect inside the excuse.
     #[must_use]
+    /// ★★★★★ **DID THE GUEST ARM AN OS-EVENT, AND DID WE EVER POST ONE? (w688)**
+    ///
+    /// ⊘⊘ `OsEventLog` has tracked `registered` / `posted` / `batches` / `overflowed` /
+    /// `malformed` since it was written and **printed none of them** — the same defect as the
+    /// interrupt census one function below, on the other half of the same path.
+    ///
+    /// ⚠ Without this line, widening the delivery gate is unfalsifiable. `[measured w687a]` I
+    /// widened it from `ServedLocally` to `is_served()` and read `unvectored` to judge the
+    /// result — **a counter on a different path**, which moved 40 → 38 and told me nothing. The
+    /// three numbers that actually decide it are here:
+    ///
+    /// - `registered=0` ⇒ the guest never armed anything through our recorder. Delivery is
+    ///   irrelevant and the wall is upstream, in `NV01_EVENT_OS_EVENT` never reaching us.
+    /// - `registered>0, batches=0` ⇒ armed but never delivered — the gate is still wrong.
+    /// - `registered>0, batches>0` ⇒ we are posting; the wall is past the wake.
+    ///
+    /// ★ Three outcomes, three different next steps. That is what a census is for, and why
+    /// reading a neighbouring counter instead cost a boot.
+    #[must_use]
+    pub fn os_event_census(&self) -> String {
+        format!(
+            "OSEVENT-CENSUS registered={} posted={} batches={} overflowed={} malformed={} \
+             ⊘ registered=0 means the guest never armed one through us — delivery is then \
+             irrelevant and the wall is upstream. batches=0 with registered>0 means armed and \
+             never delivered.",
+            self.os_events.registered(),
+            self.os_events.posted(),
+            self.os_events.batches(),
+            self.os_events.overflowed(),
+            self.os_events.malformed(),
+        )
+    }
+
     pub fn intr_census(&self) -> String {
         use Ordering::Relaxed;
         let c = &self.c;

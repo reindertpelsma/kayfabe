@@ -6890,7 +6890,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6967,6 +6967,13 @@ impl SharedDoorbell {
                 self.plane.upgrade().map_or_else(
                     || "INTR-CENSUS ⊘ NO PLANE — unmeasured, not zero".to_string(),
                     |p| p.intr_census(),
+                ),
+                // ⊘ The OTHER half of the interrupt path: did the guest ARM anything, and did we
+                // post it? Printed beside INTR-CENSUS because reading either alone is how w687
+                // judged a gate change by a counter on a different path.
+                self.plane.upgrade().map_or_else(
+                    || "OSEVENT-CENSUS ⊘ NO PLANE — unmeasured, not zero".to_string(),
+                    |p| p.os_event_census(),
                 ),
                 // ★★★★★ **GOAL 4 — what the DoorbellTable WOULD have done**, beside the
                 // numbers the live path actually produced. ⊘ A census with no emitter is the
