@@ -226,6 +226,29 @@ and nothing else — not a relaxation of `call_for_backing`'s.**
    must agree over a bracketed sample. ⊘ Without it *"the counter page is served natively"* is a
    zero nobody drove — and this tree has shipped four of those this session.
 
+## 4d. ★★★★★ LEG P (w634) — the combination nobody had measured is GREEN
+
+`rmladder --bar1-crossing`, GA106, **euid 1002, non-root**, all four legs:
+
+    LEG R  = PROT_READ accepted, PROT_WRITE denied EACCES on an O_RDONLY node
+    LEG R2 = mprotect(PROT_WRITE) on that mapping REFUSED, errno 13
+    LEG P  = an O_RDONLY view PLACES read-only and is REFUSED writable (mmap, errno 13)
+             THROUGH THE PRODUCTION PATH
+    LEG B  = a guest CPU store through a placed device view took NO VM exit
+
+⇒ **The counter page's mapping can exist.** Every step of the chain is now measured rather than
+read, on the code path that will actually run.
+
+⊘⊘ **LEG P exists because R and B were both green while the design could not work.** R proves the
+kernel refuses a writable `mmap` of a read-only node; B proves a device view can be placed and
+served without an exit. But B's node is armed `ReadWrite`, and R/R2 map read-only with their own
+`mmap` rather than through `place_device_view` — which mapped `PROT_READ | PROT_WRITE`
+unconditionally until w633. ⇒ **Each half was measured and the composition was assumed**, and the
+one path the counter page needs was the one path no leg exercised.
+
+★ Its negative control is in the same breath: the SAME node placed WRITABLE must be refused. A
+read-only placement succeeding on its own would show only that we asked for less.
+
 ## 5. Constraints the implementation will hit
 
 - **mmap 64 KiB, slot 4 KiB.** The driver refuses any length but the registered one
