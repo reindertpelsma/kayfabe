@@ -189,6 +189,43 @@ protection. `EACCES` is the only result that means what this design needs.
 ⊘ **Status of §4b is now MEASURED, not read** — which is the bar §3 failed to clear. The verb
 may be built.
 
+## 4c. ★★★★★ THE IMPLEMENTATION IS FULLY SCOPED (w628) — and the transport needs no change
+
+⊘ Every piece exists except the verb itself, and one of them **refuses exactly what this design
+needs**, which is the finding worth writing down before anyone starts.
+
+**The fd transport is built and tested.** `fdcross.rs` — `write_frame_with_fds` /
+`read_frame_with_fds`, with provenance (`CrossedFd`, `FdOrigin`) and two named refusals — and
+its tests already exercise *"the isolate hands a device node to the VMM"*. ⊘ An empty fd list is
+**wire-identical** to `proto::write_frame`: both build `[len:u32 LE][body]` and issue ONE write.
+So no existing reply changes.
+
+**A complete fd-carrying call already exists**: `ProxyRmBackend::call_for_backing`
+(`isolate.rs`) — `max_fds = 1`, the frame refused whole if the count is wrong, and every exit
+path dropping whatever arrived so a refusal closes it.
+
+⚠⚠ **AND IT WOULD REFUSE THIS.** Its kind check exists precisely to reject a character device:
+*"a child answering with a character device has it REFUSED and CLOSED here, before anything in
+this process can `mmap` or `ioctl` it."* A `DeviceView` **is** `/dev/nvidiaN`. ⇒ That is not an
+obstacle to route around; it is the existing verb's security property, and the reason
+`WindowBacking::DeviceView` and the retired tags were ever separate things. **The new call must
+be its own, with its own kind check — accepting a character device of the expected major/minor
+and nothing else — not a relaxation of `call_for_backing`'s.**
+
+### The build order, each step gradeable on its own
+
+1. `Request::ExportUsermodeView` at tag **26**, `Reply::DeviceView { mmap_len }` at tag **13**.
+   ⊘ Tags 25 and 12 stay RETIRED — a peer built from an older revision may still send them.
+2. Child handler: `export_device_view(usermode, 0, USERMODE_WINDOW_SIZE, ViewAccess::ReadOnly)`
+   then `write_frame_with_fds(sock, &reply, &[node.as_fd()])`.
+3. `call_for_device_view`, mirroring `call_for_backing` but with the char-device kind check
+   INVERTED — accept that and only that.
+4. VMM: `mmap` 64 KiB `PROT_READ`, install ONE 4 KiB `Tier::ReadNative` slot at the guest's
+   placement of the usermode base, close the descriptor, link no RM code into the VMM crate.
+5. The bring-up cross-check: the isolate's own PTIMER read and a read through the VMM's mapping
+   must agree over a bracketed sample. ⊘ Without it *"the counter page is served natively"* is a
+   zero nobody drove — and this tree has shipped four of those this session.
+
 ## 5. Constraints the implementation will hit
 
 - **mmap 64 KiB, slot 4 KiB.** The driver refuses any length but the registered one
