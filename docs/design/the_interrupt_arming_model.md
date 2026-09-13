@@ -117,9 +117,54 @@ one of them happened to be right"*.
 
 | kind | today | under this model |
 |---|---|---|
-| **Passthrough** | we announce only if the channel has a bound engine | ⊘ **do not inspect the channel at all.** Forward the guest's interrupt *arming* to eventfd arming on the host; the host's completion drives the wake |
+| **Passthrough** | we announce only if the channel has a bound engine, and drop it otherwise | ⊘ **do not inspect the channel at all** — ogkm's own model for userspace channels. Arm a host eventfd, relay its signal, decode nothing. The per-engine vector is out of scope, not missing |
 | **Emulated (scratchpad wait)** | CPU-polls; `raise_os_event` is gated on `ServedLocally` | must **also** support an eventfd fallback rather than polling forever — the owner names this as required, not optional |
 | **Either, guest-armed** | vector derived from the bind, dropped when absent | ★ **fire what the guest armed, on completion, regardless of channel** |
+
+## ★★★★★ PASSTHROUGH: WE DO NOT INSPECT THE CHANNEL AT ALL
+
+**Owner, 2026-09-13:**
+
+> *"for passthrough: we do not care about semaphores at all, we just forward the eventfd as
+> interrupt assuming the GPU did everything correctly. Its the exact same how the ogkm driver
+> handles userspace channels, it also just registers interrupt for channel and forward of bare
+> metal GPU without inspecting the channels userspace set up"*
+
+★ **This is the real driver's own model**, and it is a deletion rather than a feature. For a
+userspace channel, RM registers an event against the **channel** and relays the GPU's non-stall
+interrupt. It never parses the pushbuffer and never reads the semaphores — **userspace owns what
+it wrote there**, and RM has no business knowing it.
+
+⇒ For a passthrough channel we must:
+- **arm** the host-side event (eventfd) when the guest arms its interrupt — the *"forward the
+  arming"* half;
+- **relay** the host's signal to the guest's event;
+- ⊘ **decode nothing**: no semaphore read, no completion tracking, no per-engine vector derived
+  from a bind we should not need.
+
+⚠ That last line is where today's defect lives. `announce_completion` tries to vector completions
+for **every** channel kind, passthrough included, and gives up when the bind is absent
+(`[measured w682a]` 39 of 43). For passthrough the whole computation is **out of scope** — the
+host GPU completed the work and the host driver knows it; our job is to carry the signal.
+
+★ It also removes an entire failure class by construction: a passthrough completion we cannot see
+is no longer a completion we can fail to announce.
+
+## ★★★ EMULATED: THE COMPLETION IS VISIBLE BEFORE THE INTERRUPT, GUARANTEED
+
+**Owner:** *"for emulated channels: set completion before doing any interrupt, guaranteed."*
+
+The C pins the same order at `nvkvm_gpu_emul.c:4358-4360` — *"write sema THEN signal, so the
+payload is already visible when the guest re-checks"*.
+
+⊘ **Inverted, it is a lost wakeup and not a slow one.** The guest wakes, re-reads the semaphore,
+sees the OLD value, concludes the work is unfinished and blocks again — with no further interrupt
+coming, because the one that would have told it already fired. The symptom is a hang; the cause is
+two stores in the wrong order.
+
+⚠ It is not enough to write them in source order: the completion is a write to **guest memory**
+and the signal is a **device interrupt**, two different paths. The store must be *ordered before*
+the signal, not merely written above it.
 
 ## ⚠ Why this is a CORRECTNESS issue and not a latency one
 
