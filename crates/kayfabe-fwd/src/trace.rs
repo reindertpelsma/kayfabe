@@ -37,7 +37,17 @@ impl Faulted for FwdFault {
     fn fault_tag(&self) -> FaultTag {
         match self {
             FwdFault::MalformedToken { .. } => FaultTag("FwdFault::MalformedToken"),
-            FwdFault::UnknownVchid { .. } => FaultTag("FwdFault::UnknownVchid"),
+            // ⊘ TWO tags, not one, and that is the entire point of `VchidMiss`: a census
+            // keyed on the tag summed an exec-plane miss and a proc-channel miss into a
+            // single number for two sessions, and the number named the wrong stage.
+            FwdFault::UnknownVchid {
+                miss: crate::VchidMiss::ExecPlane,
+                ..
+            } => FaultTag("FwdFault::UnknownVchid/by_vchid"),
+            FwdFault::UnknownVchid {
+                miss: crate::VchidMiss::ProcChannels,
+                ..
+            } => FaultTag("FwdFault::UnknownVchid/proc.channels"),
             FwdFault::RetiredProc(_) => FaultTag("FwdFault::RetiredProc"),
             FwdFault::Condemned { .. } => FaultTag("FwdFault::Condemned"),
             FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),

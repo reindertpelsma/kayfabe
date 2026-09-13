@@ -3317,6 +3317,10 @@ fn channel_facts_from(
                 .ok_or(FwdFault::UnknownVchid {
                     gpu: route.gpu,
                     vchid: route.vchid,
+                    // ⊘ The route already RESOLVED off `by_vchid` to get here — so this is
+                    // never an exec-plane miss, and calling it one sent two sessions at the
+                    // projection while the projection was filing every channel correctly.
+                    miss: kayfabe_fwd::VchidMiss::ProcChannels,
                 })?;
             let node = spine
                 .rmgraph

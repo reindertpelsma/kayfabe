@@ -150,7 +150,7 @@ fn a_guest_write_to_the_doorbell_aperture_reaches_the_core_and_is_named() {
     assert_eq!(report.token(), GOOD_TOKEN);
     assert_eq!(
         kind_of(report),
-        "FwdFault::UnknownVchid",
+        "FwdFault::UnknownVchid/by_vchid",
         "★ the kind must come from kayfabe-fwd's own exhaustive Faulted match, which is \
          unreachable without a real route through a real spine"
     );
@@ -170,7 +170,10 @@ fn a_guest_write_to_the_doorbell_aperture_reaches_the_core_and_is_named() {
     assert_eq!(a.doorbell_last_token_valid, 1);
     assert_eq!(a.doorbell_refusal.present, 1);
     let klen = usize::try_from(a.doorbell_refusal.kind_len).expect("fits");
-    assert_eq!(&a.doorbell_refusal.kind[..klen], b"FwdFault::UnknownVchid");
+    assert_eq!(
+        &a.doorbell_refusal.kind[..klen],
+        b"FwdFault::UnknownVchid/by_vchid"
+    );
 }
 
 /// ★★★ **THE CONTROL.** In the **same run**, on the **same** `Regs`, a set of non-doorbell
@@ -239,7 +242,7 @@ fn a_malformed_token_and_a_routable_one_refuse_differently() {
     let bad = bad.doorbell.as_ref().expect("a doorbell");
     let good = good.doorbell.as_ref().expect("a doorbell");
     assert_eq!(kind_of(bad), "FwdFault::MalformedToken");
-    assert_eq!(kind_of(good), "FwdFault::UnknownVchid");
+    assert_eq!(kind_of(good), "FwdFault::UnknownVchid/by_vchid");
     assert_ne!(kind_of(bad), kind_of(good));
 
     let a = r.audit();
@@ -320,7 +323,7 @@ fn a_device_reset_clears_the_doorbell_report() {
     let out = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
     assert_eq!(
         kind_of(out.doorbell.as_ref().expect("a doorbell")),
-        "FwdFault::UnknownVchid"
+        "FwdFault::UnknownVchid/by_vchid"
     );
 }
 
@@ -380,7 +383,7 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
     let before = r.write(BAR_REGS, DOORBELL, 4, 0);
     assert_eq!(
         kind_of(before.doorbell.as_ref().expect("a doorbell")),
-        "FwdFault::UnknownVchid",
+        "FwdFault::UnknownVchid/by_vchid",
         "★ so the change below is the DECLARATION's doing and not the fixture's"
     );
 
@@ -526,11 +529,17 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
         kind, NO_PORT,
         "the port is the one the composition root installed"
     );
-    assert_ne!(
-        kind, "FwdFault::UnknownVchid",
+    // ⊘⊘⊘ **PREFIX, NOT EQUALITY — and the difference is whether this assertion still
+    // guards anything.** w695c split the tag into `…/by_vchid` and `…/proc.channels`. An
+    // `assert_ne!` against the OLD exact string would have passed **vacuously** from that
+    // commit onward: the debt below would be present, the tag would no longer equal the
+    // literal, and the test would go green while checking nothing. ⚠ A test that stops
+    // failing because a NAME changed is the quietest way to lose a guard.
+    assert!(
+        !kind.starts_with("FwdFault::UnknownVchid"),
         "★★★ THE DEBT. The doorbell still cannot see the channel the bridge declared, \
          which is exactly the shape a SECOND `Gpu` behind the port produces — and it is \
-         invisible to every other test in this crate."
+         invisible to every other test in this crate. (got: {kind})"
     );
     // …and the refusal it DOES give is the NEW contract's: a doorbell never births a
     // passthrough channel (`kayfabe_fwd::plan_doorbell` refuses it BY NAME), so with the

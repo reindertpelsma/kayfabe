@@ -252,6 +252,23 @@ pub use ptdecode::{
 /// interrupt-tree model ports (`kayfabe-regs`-equivalent); the mocks assert on it.
 pub const COMPLETION_VECTOR: IrqSpec = IrqSpec::Msix(0);
 
+/// ★★★★★ **Which namespace missed** in a [`FwdFault::UnknownVchid`] — see that variant's
+/// `miss` field for the two boots this distinction was paid for with.
+///
+/// ⊘ It exists so the fault's NAME can be true. A refusal that names one stage while being
+/// raised by another is worse than an unnamed one: it is a signpost pointing the wrong way,
+/// and a reader who trusts it spends the session upstream of a healthy stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VchidMiss {
+    /// `Spine::by_vchid` had no row for `(gpu, vchid)` — forward-population never filed
+    /// this channel, so the doorbell has nothing to route to. ⇒ Look at the projection.
+    ExecPlane,
+    /// The route RESOLVED (so `by_vchid` DID hold a row) and the owning `Proc` then had no
+    /// such `ChanId`. ⇒ The two tables disagree; look at the proc's channel map, not the
+    /// projection.
+    ProcChannels,
+}
+
 /// Forwarding-plane faults. Loud by design: a routing miss is never resolved by
 /// guessing (no content-pick, no MRU scan — those do not exist in the rewrite).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +287,20 @@ pub enum FwdFault {
         gpu: GpuId,
         /// The decoded vChid.
         vchid: VChid,
+        /// ★★★★★ **WHICH NAMESPACE MISSED — w695c.**
+        ///
+        /// ⊘⊘⊘ `[measured w694a/w695a/w695b]` `DOORBELL-REFUSALS FwdFault::UnknownVchid=492`
+        /// was read for two sessions as *"`by_vchid` has no row"*, because that is what this
+        /// variant's own doc-comment says it means. **Six sites construct it**, and five of
+        /// them are a `Proc::channels` miss — a completely different stage, with a completely
+        /// different fix. The census summed them into one number and the number named the
+        /// wrong one.
+        ///
+        /// ⇒ The two answers are not degrees of the same problem, they are opposite halves of
+        /// the codebase: [`VchidMiss::ExecPlane`] means forward-population never filed the
+        /// channel; [`VchidMiss::ProcChannels`] means it DID — the route resolved off
+        /// `by_vchid` — and the owning proc then had no such `ChanId`.
+        miss: VchidMiss,
     },
     /// The routed proc exists but is retired (cross-teardown consumption refused —
     /// lesson L10).
@@ -3824,7 +3855,11 @@ pub struct DoorbellRoute {
 fn vchid_miss(spine: &Spine, gpu: GpuId, vchid: VChid) -> FwdFault {
     match spine.condemned_vchid(gpu, vchid) {
         Some(anchor) => FwdFault::Condemned { anchor },
-        None => FwdFault::UnknownVchid { gpu, vchid },
+        None => FwdFault::UnknownVchid {
+            gpu,
+            vchid,
+            miss: VchidMiss::ExecPlane,
+        },
     }
 }
 
@@ -3984,6 +4019,7 @@ pub fn plan_doorbell(
     let chan: &Channel = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
         gpu: route.gpu,
         vchid: route.vchid,
+        miss: VchidMiss::ProcChannels,
     })?;
     let cgpu = chan.gpu;
     // ★★★ R1's spawn deferral — see [`missing_isolate`].
@@ -4655,6 +4691,7 @@ pub fn plan_engine_object(
     let chan = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
         gpu: route.gpu,
         vchid: route.vchid,
+        miss: VchidMiss::ProcChannels,
     })?;
     let cgpu = chan.gpu;
     // ★★★ R1's spawn deferral — see [`missing_isolate`].
@@ -5232,6 +5269,7 @@ pub fn plan_channel_birth(
     let chan: &Channel = proc.channels.get(&cid).ok_or(FwdFault::UnknownVchid {
         gpu: route.gpu,
         vchid: route.vchid,
+        miss: VchidMiss::ProcChannels,
     })?;
     let cgpu = chan.gpu;
     let base = ChannelBirthPlan {
@@ -8727,6 +8765,7 @@ pub fn fault_facts(
         .ok_or(FwdFault::UnknownVchid {
             gpu: route.gpu,
             vchid: route.vchid,
+            miss: VchidMiss::ProcChannels,
         })?;
     Ok(kayfabe_core::fault::FaultFacts {
         gpu: route.gpu,
