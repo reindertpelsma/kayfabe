@@ -209,7 +209,11 @@ for i in $(seq 1 "$LIMIT"); do
           echo "      -- which KERNEL function is burning the CPU (settles the fault reading) --"
           if command -v perf >/dev/null 2>&1; then
             sudo timeout 8 perf record -F 499 -g -p $P -o /tmp/cup3.perf >/dev/null 2>&1
-            sudo perf report -i /tmp/cup3.perf --stdio --sort symbol 2>/dev/null | grep -E "^ +[0-9]" | head -12
+            # ⊘ `--sort symbol` alone ranks by CHILDREN, so it printed `_start` at 0.00% SELF
+            # and named nothing. `--no-children -g none` ranks by SELF time, and `dso` separates
+            # nvidia-uvm.ko from the kernel and from userspace - which is the whole question.
+            sudo perf report -i /tmp/cup3.perf --stdio --no-children -g none --sort dso,symbol 2>/dev/null \
+              | grep -E "^ +[0-9]+\.[0-9]+%" | head -14
           else
             echo "      no perf; falling back to the kernel stack sampler"
             for i in 1 2 3; do sudo cat /proc/$P/stack 2>/dev/null | head -6; echo "      --"; done
