@@ -3211,6 +3211,12 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 /// may only latch; this frame holds nothing and is where a birth's real outcome exists.
 /// Returns how many channels were BORN — so the caller can make the address space they were
 /// born into live before anything releases the guest's reply. See the call site.
+/// ★ w615 — the mirror, reachable from the birth drain that holds no handle to it. See the
+/// comment at its `set`. `Weak` by construction: this must never keep the mirror alive.
+#[cfg(feature = "host-isolates")]
+static MIRROR_FOR_BIRTH: std::sync::OnceLock<std::sync::Weak<crate::barmirror::BarMirror>> =
+    std::sync::OnceLock::new();
+
 fn report_channel_birth_drain(
     device: &kayfabe_rt::device::SharedDevice,
     err_notifier_grants: &[kayfabe_rt::ChannelBirthGrant],
@@ -3228,6 +3234,9 @@ fn report_channel_birth_drain(
     #[cfg(feature = "host-isolates")]
     if born > 0 {
         if let Some(m) = mirror {
+            m.note_first_channel_birth();
+        } else if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
+            // ⊘ The `SharedDoorbell` drain's path — see the `MIRROR_FOR_BIRTH` comment.
             m.note_first_channel_birth();
         }
     }
@@ -14399,6 +14408,16 @@ impl Regs {
             )
         {
             self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
+            // ★★★ w615 — a process-global weak handle, for the ONE caller that legitimately
+            // cannot hold a mirror. `[measured w614a]` the birth snapshot reported `NO-BIRTH`
+            // while the same log carried `BIRTH-PUBLISH (off-vCPU) born=1`: births arrive
+            // through `SharedDoorbell`'s drain, which has no mirror field and to which w613
+            // passed `None` **on my assumption that the shim's own drain saw every birth**.
+            // ⊘ That assumption is what the zero was measuring. A `Weak` here costs one atomic
+            // and cannot extend the mirror's life, which is why it is preferable to giving a
+            // doorbell type a handle to the memory plane it exists not to reach.
+            #[cfg(feature = "host-isolates")]
+            let _ = MIRROR_FOR_BIRTH.set(std::sync::Arc::downgrade(&m));
             let _ = self.bar_mirror.set(m);
             self.back_bar0_dead_runs(shim);
         }
