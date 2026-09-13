@@ -1,5 +1,11 @@
 # THE INTERRUPT ARMING MODEL — fire what the guest armed, not what the channel is bound to
 
+> **Read this with:** `the_write_trap_contract.md` (why a vCPU may not block, and the
+> arm-synchronously rule this shares), `completion_observer.md` (what observes a completion at
+> all), `w288n_notifier_over_guest_pages.md` (the notifier's guest-page substrate), and
+> `../../../nvidia-gpu-passthrough/docs/design/mode2_interrupt_delivery.md` (the C-era design this
+> supersedes in part).
+
 > Status: **LIVE, 2026-09-13.** Owner design + the C artifact's mechanism, which implements it.
 > Opened by `[measured w682a]` `INTR-CENSUS nonstall[raises=4 unvectored=39]` — **nine of every
 > ten completions the guest waits for were never announced.**
@@ -202,6 +208,78 @@ channels do not have and, under this model, **do not need**.
 
 ⊘ Note (1) also kills the tempting optimisation of *"only track arms for channels that have
 submitted work"*. That set is not the same set, and the difference is exactly the forty.
+
+## ★★★ HOW `nvkvm-pv` ARMS IT — the half we can copy, and the half it never built
+
+**Owner:** *"nvkvm-pv handles interrupts probably in eventfds in isolates, something like that is
+something you can copy"*. It does, and the mechanism is small:
+
+`/workspace/nvkvm-pv/src/qemu/nvkvm_handle.c:133-143`:
+
+> *"libcuda passes an eventfd to `RM_ALLOC NV01_EVENT_OS_EVENT` — that fd is only valid in the
+> guest userspace process, so we materialise a real eventfd inside QEMU on the same path the
+> nvidia handles use. The same SCM_RIGHTS-to-isolate flow gives the stub a usable fd to hand the
+> driver. Subsequent event delivery back to the guest's eventfd is via VQ_EVT (**TODO**; not
+> needed for `cuCtxCreate` + `cuMemAlloc` to make progress)."*
+
+⇒ The shape, in four steps:
+1. The guest's eventfd is **meaningless to us** — it is an fd in a guest userspace process.
+2. So **materialise a real host eventfd** in the VMM (`eventfd(0, EFD_NONBLOCK|EFD_CLOEXEC)`).
+3. **Hand it to the isolate over SCM_RIGHTS**, on the same path the `/dev/nvidia*` handles take,
+   so the stub can give a usable fd to the real driver for `NV01_EVENT_OS_EVENT`.
+4. Watch it; its readability is the host's *"this completed"*.
+
+⊘ `NVKVM_DEV_EVENTFD = 0xFF` is a device id in pv's open-handle protocol, and the stub can also
+mint one itself (`nvkvm_stub.c:2174`).
+
+### ⚠ WHAT PV DOES NOT GIVE US, IN ITS OWN WORDS
+
+**Delivery back to the guest is marked TODO.** pv arms the HOST side correctly and never needed the
+return leg, because Mode 1's guest driver gets its wake another way. **Mode 2 has no such luxury:
+we must post the guest's event and raise the interrupt ourselves.**
+
+★ So copy step 1–4 (the arming and the SCM_RIGHTS plumbing) and understand that the guest-ward
+half is **ours to build** — exactly the half the C does with `nvkvm_m3_post_event` + SWGEN0. Reading
+pv as a complete solution would leave the loop open at the end nobody measured.
+
+⊘ We already have the transport: three replies carry descriptors today (`ExportBacking`,
+`ExportUsermodeView`, `JoinFbLeaf`), so the SCM_RIGHTS path exists and an eventfd is one more
+`DescriptorKind`.
+
+## ★★★★★ THE TARGET — better than either reference, and here is exactly where each stops
+
+**Owner:** *"you don't have to do exactly what pv does, do the best version. improving is fine, not
+making worse"* / *"use as inspiration, not something you have to copy"*.
+
+⊘ Neither reference is a template, and **both are partial in a way that is easy to inherit by
+accident**:
+
+| | what it gets right | where it stops |
+|---|---|---|
+| **the C** (`nvkvm_gpu_emul.c`) | fires on *"something completed"* rather than on an engine bind; posts what the **guest armed**; pins **sema-then-signal** ordering; retires freed handles | ⊘ **broadcasts** — posts every armed event on any completion, so it fires when nobody asked, and it only *hides* the arm-after-completion race by relying on unrelated later traffic |
+| **nvkvm-pv** (`nvkvm_handle.c:133`) | materialises a **real host eventfd** and hands it to the isolate over **SCM_RIGHTS**, so the real driver gets a usable fd | ⚠ **guest-ward delivery is TODO in its own comment** — Mode 1 never needed the return leg. Copying it wholesale leaves the loop open at the end nobody measured |
+
+### The best version takes three things and adds two
+
+**From the C:** the trigger is a completion, not a bind; the list is what the guest armed; the
+completion is visible **before** the signal.
+**From pv:** a real host eventfd, armed on the host and carried by the existing SCM_RIGHTS path.
+
+**Added, because both are missing it:**
+
+1. ★ **Arm-directed, not broadcast.** Fire the events that are armed *for this completion*, and
+   nothing else. A guest spinning on a semaphore gets no interrupt; a completion nobody armed for
+   costs no exit. ⇒ Strictly less work than the C **and** strictly more correct.
+2. ★ **Fire at ARM time when the work already finished**, with the ordering **register → check**.
+   This is the race the C papers over with unrelated traffic and pv never reaches. It is the
+   common case, not an edge: libcuda's blocking sync **spins first, then arms**.
+
+⇒ The result is *fewer* interrupts than the C raises, *more* completions delivered than either,
+and no dependence on unrelated traffic to rescue a missed wake.
+
+⚠ **The one thing that must not be "improved":** the ordering guarantees. Sema-then-signal, and
+register-then-check. Both are cheap, both are load-bearing, and an inversion of either produces a
+hang with a clean log — the most expensive failure shape this project has.
 
 ## ⚠ Why this is a CORRECTNESS issue and not a latency one
 

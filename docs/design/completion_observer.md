@@ -1,4 +1,12 @@
 # The completion observer — the two severance points, RE-READ at `d9136d7`, and what was built
+> ### ⇒ SEE ALSO, and it CORRECTS part of this doc's scope — `the_interrupt_arming_model.md`
+> (2026-09-13). `[measured w684a]` `nonstall[raises=4 unvectored=40 (no_engine=40 no_vector=0
+> out_of_range=0)]` — **forty of forty-four completions were never announced**, every one because
+> `announce_completion` derives its vector from the channel's **bound engine**. The interrupt must
+> follow **what the guest ARMED**, not what the channel is bound to; passthrough channels must not
+> be inspected at all (ogkm's own model for userspace channels). That doc is the design; this one
+> remains correct about what *observes* a completion.
+
 
 > ### STATUS — 2026-08-11 (w258 doc-hygiene sweep) / **LIVE — and ENFORCED, not merely unrefuted**
 >
