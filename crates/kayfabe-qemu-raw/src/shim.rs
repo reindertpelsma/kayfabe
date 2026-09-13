@@ -3213,6 +3213,12 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 /// born into live before anything releases the guest's reply. See the call site.
 /// ★ w615 — the mirror, reachable from the birth drain that holds no handle to it. See the
 /// comment at its `set`. `Weak` by construction: this must never keep the mirror alive.
+/// ★ w637 — the counter page is placed once. ⊘ A flag rather than asking the mirror every tick:
+/// the mirror's own `Some` check is the authority, and this keeps the worker's hot loop from
+/// taking its lock 1 181 times a boot to be told no.
+#[cfg(feature = "host-isolates")]
+static COUNTER_PAGE_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[cfg(feature = "host-isolates")]
 static MIRROR_FOR_BIRTH: std::sync::OnceLock<std::sync::Weak<crate::barmirror::BarMirror>> =
     std::sync::OnceLock::new();
@@ -5245,6 +5251,45 @@ fn doorbell_publish_loop(
         // idempotent when nothing is latched: one rank-1 acquisition that moves an empty
         // `Vec` and returns.
         port.device.materialize_pending();
+        // ★★★★★ **w637 — the counter page, placed here because this is the ONLY site that
+        // holds all three things it needs** — the device (to reach an isolate), the export
+        // directory (to dup the descriptor into this process), and, through the mirror, the
+        // machine (to install the slot).
+        //
+        // ⊘ It cannot go at realize: BARs are unprogrammed then, and no isolate exists until
+        // the guest's first accepted RM event, which is what `materialize_pending` above is.
+        // ⇒ Immediately after it, on the worker, once.
+        //
+        // ⚠ Reads before this lands are served from a host CPU clock — the wrong clock, drifting
+        // from the GPU's by 43 ppm. That window is real and is the price of the isolate not
+        // existing earlier; it is named here rather than left for someone to discover in a
+        // census.
+        #[cfg(feature = "host-isolates")]
+        if !COUNTER_PAGE_DONE.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
+                // `true` — WE need write, so the doorbell can be rung inline with a translated
+                // token. The guest's containment is the slot's read-only tier, not this.
+                if let Some((iso, token, mmap_len)) = port.device.export_usermode_view(true) {
+                    match port.exports.as_ref().and_then(|e| e.dup(iso, token)) {
+                        Some(fd) => {
+                            use std::os::fd::AsFd;
+                            if m.install_counter_page(fd.as_fd(), mmap_len) {
+                                COUNTER_PAGE_DONE
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
+                        }
+                        // ⊘ Named, not silent: a view we ASKED for and could not adopt is a
+                        // different state from never having asked, and only this line tells
+                        // them apart.
+                        None => eprintln!(
+                            "kayfabe: COUNTER-PAGE ⊘ the view could not be dup'd into this \
+                             process; the page keeps trapping and the counter keeps coming \
+                             from a host CPU clock"
+                        ),
+                    }
+                }
+            }
+        }
         // w480 — and the two drains that used to run at the tail of every register write. The
         // grant computations are free functions reading only what this port already holds, so
         // this is a MOVE and not a second implementation.

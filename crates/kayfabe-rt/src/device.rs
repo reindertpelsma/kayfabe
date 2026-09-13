@@ -2484,6 +2484,44 @@ impl SharedDevice {
     /// How many retired procs are still awaiting a reap — including any a previous
     /// [`SharedDevice::reap_retired`] **deferred** for not being quiesced (§12.16,
     /// G3). **Spine op** (read guard); diagnostics and test assertions.
+    /// ★★★★★ **w637 — the system isolate's usermode view, for the VMM to place over the
+    /// counter page.**
+    ///
+    /// Returns `(isolate, token, mmap_len)`, or `None` if there is no isolate yet — which is
+    /// the ordinary state until the guest's first accepted RM event, not a fault.
+    ///
+    /// ⊘ **The SYSTEM proc's, and the choice is not arbitrary.** Every real isolate opens its
+    /// own usermode object at bring-up, so any would answer; the system proc's is the FIRST to
+    /// exist and lives as long as the device, which are the two properties a mapping placed
+    /// once and never re-pointed needs. ⚠ A per-guest-proc isolate comes and goes with the
+    /// process it serves, and a slot outliving its descriptor is the failure this avoids.
+    ///
+    /// ⚠ `write` decides what THIS PROCESS may do through the mapping, never what the guest
+    /// may do — the guest's containment is the slot's read-only tier. See
+    /// `the_counter_page_and_the_device_view.md` §4b.
+    #[must_use]
+    pub fn export_usermode_view(&self, write: bool) -> Option<(IsolateId, u64, u64)> {
+        let gpu = GpuId::ZERO;
+        let pid = Gpu::SYSTEM_PROC;
+        let mut taken: Option<Worker> = None;
+        let _ = self.route_act(
+            |_| Ok((pid, ())),
+            |_, p, ()| {
+                if let Ok(Some(w)) = kayfabe_fwd::checkout(p, gpu) {
+                    taken = Some(w);
+                }
+            },
+        );
+        let mut worker = taken?;
+        // ⊘ The verb is taken OUTSIDE the spine lock, exactly as every other worker verb is:
+        // it is a socket round-trip to another process, and `Worker::export_usermode_view`
+        // asserts lock-free for that reason.
+        let out = worker.export_usermode_view(write).ok();
+        let isolate = worker.isolate();
+        self.return_worker(pid, gpu, worker);
+        out.map(|v| (isolate, v.token, v.mmap_len))
+    }
+
     #[must_use]
     pub fn retired_len(&self) -> usize {
         self.state.read().spine.retired_len()

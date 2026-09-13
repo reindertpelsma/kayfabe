@@ -385,6 +385,13 @@ pub struct BarMirror {
     /// number's shape. ⇒ Record the access count at each re-point; 22 `u64`s, written once per
     /// move, read once at teardown. The deltas ARE the shape.
     pramin_marks: Mutex<Vec<(u64, u64)>>,
+    /// ★★★★★ **w637 — the counter page's slot, installed ONCE and never re-pointed.**
+    ///
+    /// ⊘ Unlike `pramin`, this names a fixed aperture: the usermode window does not move, so
+    /// there is no latch to follow and no re-point to refuse. `Some` means the guest reads the
+    /// GPU's real clock with no exit; `None` means it is still being served from a host CPU
+    /// clock, which is the state every boot before this landed was in.
+    counter_slot: Mutex<Option<RamRegionId>>,
     /// ★★★★★ **w603 — BAR0 placement CHANGES, not a comparison of endpoints.**
     ///
     /// ⊘⊘ `[measured w602]` `window_off_trap=0` — every residual window access is a genuine
@@ -608,6 +615,7 @@ impl BarMirror {
             pramin_at_install: AtomicU64::new(u64::MAX),
             pramin_gpa: AtomicU64::new(u64::MAX),
             pramin_marks: Mutex::new(Vec::new()),
+            counter_slot: Mutex::new(None),
             bar0_moves: AtomicU64::new(0),
             pages_at_first_birth: Mutex::new(None),
             premap_runs: AtomicU64::new(0),
@@ -1390,6 +1398,59 @@ impl BarMirror {
         if win == FbWindow::InstanceWindow {
             self.premap_bar2_visited
                 .fetch_max(visited as u64, Ordering::Relaxed);
+        }
+    }
+
+    /// ★★★★★ **w637 — place the host's usermode page over the guest's counter page.**
+    ///
+    /// One mapping, two permissions, which is the owner's design and the whole point:
+    ///   - the VMA is **writable**, because ringing the host doorbell with a translated token
+    ///     must be one dword store inline on the vCPU, with no IPC to block on;
+    ///   - the slot is **read-only**, so the guest's doorbell store at `+0x90` still EXITS and
+    ///     we get to translate the token at all.
+    ///
+    /// ⊘ ONE page of the 64 KiB mapping is slotted. `TIME_0`, `TIME_1` and the doorbell all
+    /// live in page 0 and `[measured]` the other fifteen take zero reads; the `mmap` is 64 KiB
+    /// only because the driver refuses any other length. The rest stays `observe`, which keeps
+    /// trapping — the honest default for hardware nobody asked to expose.
+    ///
+    /// ⚠ Idempotent by the `Some` check, because the caller is a worker loop that runs every
+    /// tick and this is a once-only placement.
+    ///
+    /// Returns `true` only when a slot was newly installed.
+    pub fn install_counter_page(&self, fd: std::os::fd::BorrowedFd<'_>, mmap_len: u64) -> bool {
+        let mut slot = self.counter_slot.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return false;
+        }
+        let (Some((off, len)), Some(p)) = (
+            self.plane.usermode_page_span(),
+            self.machine.bar_placement(BarId::Bar0),
+        ) else {
+            return false;
+        };
+        let gpa = p.base + off;
+        match self
+            .machine
+            .install_device_window(gpa, mmap_len, fd, Some(gpa..gpa + len), true)
+        {
+            Ok(region) => {
+                *slot = Some(region);
+                eprintln!(
+                    "kayfabe: COUNTER-PAGE installed at gpa=0x{gpa:x} mmap_len=0x{mmap_len:x} \
+                     slot=0x{len:x} \u{2299} the guest now reads the GPU's OWN clock with no exit, \
+                     and its doorbell store still traps because the slot is read-only."
+                );
+                true
+            }
+            Err(e) => {
+                eprintln!(
+                    "kayfabe: COUNTER-PAGE \u{2298} NOT INSTALLED ({e:?}) — the page keeps trapping \
+                     and the counter keeps being answered from a host CPU clock. \u{26a0} A REFUSAL, \
+                     not a fallback."
+                );
+                false
+            }
         }
     }
 
