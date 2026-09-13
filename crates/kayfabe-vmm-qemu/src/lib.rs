@@ -1227,12 +1227,19 @@ impl QemuMachine {
     ///
     /// # Panics
     /// If called with any ranked lock or any leaf lock held (R1).
+    /// ⚠ **`mmap_len` is the length the DRIVER registered, not the length the guest needs.**
+    /// The NVIDIA driver refuses any `mmap` of an armed node but the registered, page-rounded
+    /// size — 64 KiB for a usermode window — so a caller that passes the 4 KiB it actually
+    /// wants is refused outright. ⇒ The window is `mmap_len`; `native` names the sub-range the
+    /// guest gets a slot for, and **everything outside it is left `observe`**, never
+    /// passthrough. w631 hardcoded `passthrough(gpa, len)` with the whole range read-native,
+    /// which on this page would have handed the guest fifteen extra pages of live hardware.
     pub fn install_device_window(
         &self,
         gpa: u64,
-        len: u64,
+        mmap_len: u64,
         fd: std::os::fd::BorrowedFd<'_>,
-        readonly: bool,
+        native: Option<std::ops::Range<u64>>,
     ) -> Result<RamRegionId, VmmError> {
         // ★★★★★ **w631 — `readonly` is the GUEST's containment, and it is a different
         // containment from the descriptor's.**
@@ -1249,10 +1256,22 @@ impl QemuMachine {
         // `+0x90` shares a 4 KiB page with the counter at `+0x80`, so a writable slot would
         // hand the guest a ring it could drive without us, and a writable descriptor would
         // hand the VMM the same.
-        let whole = gpa..gpa + len;
+        // ⊘ Every page outside `native` is OBSERVE: it keeps trapping, which is the honest
+        // default for hardware nobody asked to expose. `[measured]` the other fifteen pages of
+        // this window take zero reads, so observing them costs nothing and mapping them would
+        // be fifteen pages of live registers handed over for no reason.
+        let mut spec = WindowSpec::passthrough(gpa, mmap_len);
+        if let Some(n) = native.as_ref() {
+            spec.observe = vec![gpa..n.start, n.end..gpa + mmap_len]
+                .into_iter()
+                .filter(|r| r.start < r.end)
+                .collect();
+        } else {
+            spec.observe = vec![gpa..gpa + mmap_len];
+        }
         self.install_window_inner(
-            &WindowSpec::passthrough(gpa, len),
-            if readonly { Some(&whole) } else { None },
+            &spec,
+            native.as_ref(),
             WindowBacking::DeviceView(fd),
             "installing a device-view reservation",
         )
@@ -1451,8 +1470,13 @@ impl QemuMachine {
             // ★ w393 — a device view is placed whole and mints nothing: the pages are the
             // card's, and `shareable_ram` is a statement about guest RAM we author.
             if let WindowBacking::DeviceView(fd) = backing {
+                // ⊘⊘ **w633 — the mapping's protection follows the SLOT's, and it must.** A
+                // node armed `O_RDONLY` refuses a writable `mmap` with `EACCES`, so asking for
+                // one here would make a read-only device view unplaceable — which is exactly
+                // what w631 shipped, because `readonly` selected the KVM tier and left the
+                // mapping alone. ⚠ Each half had been measured and the COMBINATION had not.
                 window
-                    .place_device_view(HostOffset::ZERO, len, fd)
+                    .place_device_view(HostOffset::ZERO, len, fd, read_native.is_none())
                     .map_err(|e| {
                         p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                         host_refused("placing the device view", &e)

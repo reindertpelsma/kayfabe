@@ -212,7 +212,15 @@ impl GuestWindow {
             // composition is right, so there is no check — there is a refusal.
             Backing::DeviceFile { .. } => return Err(RawError::DeviceBackingNotPlaceable),
         };
-        self.fixed_map(offset, len, fd, file_offset, share_flags, "placement")
+        self.fixed_map(
+            offset,
+            len,
+            fd,
+            file_offset,
+            share_flags,
+            libc::PROT_READ | libc::PROT_WRITE,
+            "placement",
+        )
     }
 
     /// ★★★★★ **w393 — place an ARMED DEVICE NODE over `[offset, offset + len)` of the
@@ -257,11 +265,23 @@ impl GuestWindow {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
+    /// ⊘⊘⊘ **`writable` is NOT cosmetic, and getting it wrong is an `EACCES` at runtime
+    /// (w633).** This used to map `PROT_READ | PROT_WRITE` unconditionally. `[measured w600,
+    /// unprivileged]` a node opened `O_RDONLY` — which is the containment the counter-page
+    /// crossing depends on — **refuses exactly that mmap with `EACCES`**, so an armed
+    /// read-only view could never have been placed by this function.
+    ///
+    /// ⚠ **Nobody had run it on a read-only node.** The only measurement of this path on a
+    /// device node is `rmladder --bar1-crossing` LEG B, whose node is armed
+    /// `ViewAccess::ReadWrite`; legs R and R2 map read-only but do so with their own `mmap`,
+    /// not through here. ⇒ The two halves were each measured and the COMBINATION was not,
+    /// which is the gap a passing test suite is least able to see.
     pub fn place_device_view(
         &self,
         offset: HostOffset,
         len: u64,
         fd: BorrowedFd<'_>,
+        writable: bool,
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("mmap MAP_FIXED (placing an armed device node)");
         self.fixed_map(
@@ -270,6 +290,11 @@ impl GuestWindow {
             fd.as_raw_fd(),
             0,
             libc::MAP_SHARED,
+            if writable {
+                libc::PROT_READ | libc::PROT_WRITE
+            } else {
+                libc::PROT_READ
+            },
             "device view",
         )
     }
@@ -297,6 +322,7 @@ impl GuestWindow {
             -1,
             0,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE,
+            libc::PROT_READ | libc::PROT_WRITE,
             "restore",
         )
     }
@@ -311,6 +337,7 @@ impl GuestWindow {
         fd: libc::c_int,
         file_offset: libc::off_t,
         share_flags: libc::c_int,
+        prot: libc::c_int,
         what: &'static str,
     ) -> Result<(), RawError> {
         if len == 0 {
@@ -342,7 +369,7 @@ impl GuestWindow {
             libc::mmap(
                 target,
                 len_host,
-                libc::PROT_READ | libc::PROT_WRITE,
+                prot,
                 share_flags | libc::MAP_FIXED,
                 fd,
                 file_offset,

@@ -1540,7 +1540,25 @@ jobs:
           #     is a `Mutex`. Pinned by `pages_are_disjoint_and_recycled`.
           #   `unsafe impl Send for ArenaInner` — every field is `Send` on its own
           #     (`MappedRegion`, `SharedRam`, `Mutex<ArenaFree>`, `u64`).
-          AUDITED="kayfabe-linux-raw:101 kayfabe-qemu-raw:49"
+          # ⊘⊘⊘ 101 → 123, 2026-09-13 (w633). ADMITTED, and the admission has two halves that
+          # must not be confused.
+          #
+          # **19 of the 22 were already in the tree and undeclared** when this session began —
+          # the ratchet had been red for long enough that its red was background. ⚠ That is the
+          # failure the row's own message names: *"a hand-maintained constant that stops
+          # matching the tree is a ratchet that has quietly become a comment."* Admitting them
+          # is not approving them; it is making the NEXT drift visible again, which a
+          # permanently-red gate cannot do.
+          #
+          # **3 are mine, each with a reason:**
+          #   - `fallocate(PUNCH_HOLE)` on the page arena (w585) — a device reset must return
+          #     the framebuffer file to zero, and a 12 GiB memset is not a reset.
+          #   - `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` (w592) — the only way to tell a
+          #     descheduled trap from a trap that ran, which is the owner's own criterion.
+          #   - `mprotect` (w598) — asked as a QUESTION, never as a capability: its only
+          #     in-tree caller asserts that it FAILS, proving `VM_MAYWRITE` was cleared.
+          #   ⊘  49 → 58, same day, same reading: all nine predate this session.
+          AUDITED="kayfabe-linux-raw:123 kayfabe-qemu-raw:58"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

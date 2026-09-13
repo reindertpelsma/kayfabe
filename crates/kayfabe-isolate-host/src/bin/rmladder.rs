@@ -1498,6 +1498,65 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         Err(e) => println!("FAIL  W393 LEG R        = arming an O_RDONLY view was refused: {e:?}"),
     }
 
+    // ---- P. ★★★★★ **THE COMBINATION NOBODY MEASURED: an O_RDONLY node placed through
+    // `place_device_view`.**
+    //
+    // ⊘ LEG R proves the kernel refuses a writable `mmap` of a read-only node. LEG B proves a
+    // device view can be placed into a guest window and served without an exit. **Both were
+    // green and the design still could not work**, because `place_device_view` mapped
+    // `PROT_READ | PROT_WRITE` unconditionally — so the one path the counter page actually
+    // needs was the one path no leg exercised. ⚠ Each half measured, the composition assumed.
+    match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadOnly) {
+        Ok(v) => match rm.exports().lend(v.token) {
+            Ok(fd) => {
+                use std::os::fd::AsFd;
+                match kayfabe_linux_raw::GuestWindow::create(
+                    v.mmap_len,
+                    kayfabe_linux_raw::HostPageSize::query(),
+                ) {
+                    Ok(win) => {
+                        let ro = win.place_device_view(
+                            HostOffset::ZERO,
+                            v.mmap_len,
+                            fd.as_fd(),
+                            false,
+                        );
+                        // ⊘ And the negative control in the same breath: the SAME node placed
+                        // writable must be refused, or `false` above proves nothing about the
+                        // arming and only that we asked for less.
+                        let rw = win.place_device_view(
+                            HostOffset::ZERO,
+                            v.mmap_len,
+                            fd.as_fd(),
+                            true,
+                        );
+                        match (ro.is_ok(), rw.is_err()) {
+                            (true, true) => println!(
+                                "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605} W393 LEG P        = an O_RDONLY view PLACES read-only and \
+                                 is REFUSED writable ({:?}) through the production path. => the \
+                                 counter page's mapping can exist.",
+                                rw.err()
+                            ),
+                            (false, _) => println!(
+                                "FAIL  W393 LEG P        = \u{2298}\u{2298} a read-only placement was REFUSED ({:?}). \
+                                 The counter page cannot be mapped by this path at all.",
+                                ro.err()
+                            ),
+                            (true, false) => println!(
+                                "FAIL  W393 LEG P        = \u{2298} the WRITABLE placement succeeded on an \
+                                 O_RDONLY node — the arming is not what w600 measured, and the \
+                                 read-only result above proves nothing."
+                            ),
+                        }
+                    }
+                    Err(e) => println!("FAIL  W393 LEG P        = no window to place into: {e:?}"),
+                }
+            }
+            Err(e) => println!("FAIL  W393 LEG P        = could not lend: {e:?}"),
+        },
+        Err(e) => println!("FAIL  W393 LEG P        = arming refused: {e:?}"),
+    }
+
     let Some(va) = arm(rm, "A") else { return false };
     let Some(vb) = arm(rm, "B") else { return false };
     let (fd_a, fd_b) = match (rm.exports().lend(va.token), rm.exports().lend(vb.token)) {
@@ -1669,7 +1728,10 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             return false;
         }
     };
-    if let Err(e) = win.place_device_view(HostOffset::ZERO, vc.mmap_len, fd_c.as_fd()) {
+    // ⊘ `true` — LEG B's node is armed `ViewAccess::ReadWrite`, so a writable placement is the
+    // right protection for it. LEG P below is the read-only combination, which nothing measured
+    // until w633.
+    if let Err(e) = win.place_device_view(HostOffset::ZERO, vc.mmap_len, fd_c.as_fd(), true) {
         println!("FAIL  W393 place C       = {e} (GuestWindow::place_device_view)");
         return false;
     }
