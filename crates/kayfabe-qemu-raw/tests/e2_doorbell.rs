@@ -890,9 +890,20 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
     );
     assert_eq!(
         code.matches("ctx.vas_publish = VasPublishArm::Drain;").count(),
-        3,
-        "all THREE worker lanes must use an arm that publishes AND pins: rpc-bind, \
-         invalidate, and — since w559 — CHANNEL BIRTH. ⊘ The third was added because a \
+        4,
+        "all FOUR worker lanes must use an arm that publishes AND pins: rpc-bind, \
+         invalidate, CHANNEL BIRTH (w559), and — since w656 — THE UVM EMULATED CHANNEL, the \
+         owner's third synchronization point. ⊘ The fourth is argued for HERE, as this test \
+         demands: `[measured w651a]` with the inline passthrough doorbell on, the client took \
+         `Xid 31 ENGINE CE2 faulted @ 0x90_80000000` and the copy NEVER RETIRED, because \
+         `join_operand_fb_leaves` on the doorbell was the ONLY thing carrying a UVM-owned \
+         mapping to the host — nvidia-uvm writes its own PTEs, never touches the BAR0 \
+         invalidate register, and its `MEM_OP` transport is measured unreached \
+         (`MEMOP-CENSUS seen=0`). ⇒ The UVM emulated channel must publish before it writes \
+         the release the guest is polling for, which is the owner's rule of 2026-09-10 \
+         verbatim. ⚠ It runs ONLY with an `OffVcpu` witness in hand, so the vCPU control arm \
+         cannot reach it — the distinction is a parameter now, not a comment. A FIFTH lane \
+         must be argued for here, not appear here. ⊘ The third was added because a \
          channel that returns to the guest is a channel the guest may ring, and `[measured \
          w557, LLM boot]` one did: `CE2_PBDMA0` took `Xid 31 … FAULT_PDE` reading its own \
          GPFIFO ring at an address our table binds and our own ADOPT-WHY line calls ADOPTABLE \

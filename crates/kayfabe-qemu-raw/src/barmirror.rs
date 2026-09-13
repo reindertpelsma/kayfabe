@@ -365,6 +365,23 @@ pub struct BarMirror {
     /// and reads through the aperture immediately after, so a deferred move shows it the OLD
     /// framebuffer. That is a correctness break, not a latency trade — which is exactly why
     /// the number has to exist before anyone argues about the design.
+    ///
+    /// # ★★★★★ RULED SUFFICIENT BY THE OWNER, 2026-09-13 — and the ruling turns on WHEN
+    ///
+    /// `[measured w653a]` `move_ns[worst=296558 mean=74698]` — **297 µs worst, 75 µs mean.**
+    /// Owner: *"297us for a thing that only happens at boot is not bad, thats fine for that
+    /// mmap."*
+    ///
+    /// ⊘ **The load-bearing half of that ruling is "only happens at boot", not "297 µs".** The
+    /// PRAMIN aperture is a bring-up path (`pramin_is_a_bringup_aperture_not_a_running_path`:
+    /// ogkm-580 picks `TRANSFER_TYPE_BAR0` only under `IS_SIMULATION`), so the 22 doors are
+    /// spent before the guest is doing work and cost a running workload nothing.
+    ///
+    /// ⚠ ⇒ **This ruling expires if the moves stop being a boot-time set.** A `moves` count
+    /// that grows with runtime, or a repoint observed after the client starts, is a different
+    /// question with the same latency — re-ask it then rather than citing this line. The
+    /// census prints `moves` beside `move_ns` so that the precondition is checkable and not
+    /// merely remembered.
     pramin_move_ns_total: AtomicU64,
     pramin_move_ns_worst: AtomicU64,
     /// **w593 - PRAMIN traffic that had already happened when the slot went in.**

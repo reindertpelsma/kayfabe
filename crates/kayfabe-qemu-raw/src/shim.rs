@@ -5783,7 +5783,7 @@ fn doorbell_publish_loop(
                 Option::<()>::None
             }
         };
-        let report = port.ring_inline(token);
+        let report = port.ring_inline(token, Some(off_vcpu));
         // ★ The plane's own accounting, called from here so `doorbells_served` /
         // `doorbells_refused` keep meaning what they meant. ⊘ A second set of counters on
         // this side would make every existing grading grep silently stop seeing the
@@ -6329,7 +6329,7 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         }
         self.shadow_route(token);
         if !self.doorbell_async.defers() {
-            return self.ring_inline(token);
+            return self.ring_inline(token, None);
         }
         match self
             .pubqueue
@@ -6617,7 +6617,17 @@ impl SharedDoorbell {
     /// `kayfabe-doorbell-publish` worker on the armed one. ⊘ **Nothing inside it changed
     /// with w383**, deliberately: a rung that moved the work AND reordered it would make
     /// the outcome unattributable.
-    fn ring_inline(&self, token: u64) -> kayfabe_device::DoorbellReport {
+    /// ★★★★★ **`off_vcpu` is the THIRD SYNCHRONIZATION POINT'S PERMISSION SLIP (w656).**
+    ///
+    /// `Some` when this doorbell is being served by the publication worker, `None` when it is
+    /// being served inline on the vCPU (the `KAYFABE_DOORBELL_ASYNC=off` control). The
+    /// distinction was previously a comment; it is now a type, and `try_ce_submission` can run
+    /// the owner's sync-point-(3) refresh **only** on the arm that may block.
+    fn ring_inline(
+        &self,
+        token: u64,
+        off_vcpu: Option<OffVcpu>,
+    ) -> kayfabe_device::DoorbellReport {
         // ★★★★ §16.64 — ⊘ **THIS COMMENT ASSERTED THE OPPOSITE OF THE CODE**, and it is the
         // first sentence a reader of the doorbell path meets.
         //
@@ -6649,7 +6659,7 @@ impl SharedDoorbell {
         // the guest is halted for. See `crate::kftime` for what this may and may not say.
         let mut kft = crate::kftime::Segs::start();
         let mut seen: Option<kayfabe_rt::device::CeChannelFacts> = None;
-        if let Some(report) = self.try_ce_submission(token, &mut seen) {
+        if let Some(report) = self.try_ce_submission(token, &mut seen, off_vcpu) {
             // ⊘ The CE arm returns TERMINALLY, and on the shipping configuration it claims
             // every routed doorbell. A bracket that only closed on the fall-through would
             // therefore measure the path the guest does NOT take, and report `events=0` while
@@ -8288,6 +8298,7 @@ impl SharedDoorbell {
         &self,
         token: u64,
         seen: &mut Option<kayfabe_rt::device::CeChannelFacts>,
+        off_vcpu: Option<OffVcpu>,
     ) -> Option<kayfabe_device::DoorbellReport> {
         // ★★★★ §16.65 — **the census is taken HERE**, at the top of the one function every
         // doorbell passes through (`ring` calls it unconditionally, first), and from the
@@ -8830,18 +8841,77 @@ impl SharedDoorbell {
                     // next author putting it back. `OffVcpu` now does: this function cannot
                     // obtain the witness, so it cannot call either verb.
                     //
-                    // ⊘ **What is NOT solved by deleting it:** sync point (3) now has no
-                    // ordering guarantee at all. That is an honest gap, not a fix — it needs
-                    // its own worker lane carrying the owed releases, the same shape as the
-                    // invalidate's. Recorded rather than papered over.
+                    // ★★★★★ **w656 — SYNC POINT (3) IS WIRED, ON THE ARM THAT MAY BLOCK.**
+                    //
+                    // The gap that stood here read: *"sync point (3) now has no ordering
+                    // guarantee at all. That is an honest gap, not a fix — it needs its own
+                    // worker lane carrying the owed releases."* It has one now: this whole
+                    // frame already RUNS on the publication worker whenever the doorbell is
+                    // deferred, and `off_vcpu` is the proof of it.
+                    //
+                    // ⊘⊘ **Why the refresh was deleted, and why it may come back HERE and
+                    // nowhere else.** It was removed because `try_ce_submission` is reached
+                    // from `ring_inline` — the doorbell handler — and the owner's rule is
+                    // blunt: *"vas publish or any other operation than queing + waking for
+                    // emulated channel looper or forward to host is simply incorrect"*. That
+                    // rule is about the **vCPU**, and the deletion could not tell the two
+                    // callers apart because the distinction was a comment. Now it is a
+                    // parameter: the vCPU arm passes `None` and **cannot** reach these verbs;
+                    // the worker passes `Some` and must.
+                    //
+                    // ★ The owner's own third clause, 2026-09-10: *"You should only return
+                    // from a TLB invalidate, the RPC map call or the kernel emulated channel
+                    // for UVM after the PTE/PDB page table refresh function finished."* UVM
+                    // writes its page tables through the `LAUNCH_DMA`s this executor just
+                    // served, then waits on the release we are about to write. Refresh,
+                    // publish, THEN release.
+                    //
+                    // ⚠ `[measured w651a]` this is also what makes the inline passthrough
+                    // doorbell possible at all: with the refresh absent, `join_operand_fb_leaves`
+                    // on the doorbell was the ONLY thing carrying a UVM-owned mapping to the
+                    // host, and removing the doorbell took `Xid 31 @ 0x90_80000000`.
+                    let (refreshed, published) = match off_vcpu {
+                        Some(w) => {
+                            let r = self.refresh_page_tables(w);
+                            let mut ctx = self.publish_ctx();
+                            // ⊘ `Drain`, not `Publish` — the same argument the invalidate arm
+                            // makes: `Publish` does framebuffer leaves and nothing else, and
+                            // silently disables the only pass that pins guest-RAM rows.
+                            ctx.vas_publish = VasPublishArm::Drain;
+                            (Some(r), ctx.publish_vas_rows(token, None, w))
+                        }
+                        None => (None, None),
+                    };
                     eprintln!(
                         "kayfabe: CE-LOCAL-REFRESH #{n} token={token:#010x} proc={} chan={} \
-                         releases_owed={} bytes={} ⊘ NO REFRESH, NO PUBLISH — a doorbell may \
-                         only queue+wake or forward; sync point (3) needs a worker lane",
+                         releases_owed={} bytes={} {} ★ sync point (3): refresh+publish run \
+                         BEFORE the release the guest is polling for.",
                         facts.proc.0,
                         facts.chan.0,
                         owed.len(),
                         run.bytes,
+                        match (&refreshed, &published) {
+                            (Some(r), Some(p)) => format!(
+                                "refresh_us={} refreshed={} published={}",
+                                r.took.as_micros(),
+                                r.line.replace("\nkayfabe: ", "  ⏎  "),
+                                p.replace("\nkayfabe: ", "  ⏎  ")
+                            ),
+                            (Some(r), None) => format!(
+                                "refresh_us={} refreshed={} published=NONE ⊘ the publisher \
+                                 returned no line — the rows this run described may not be on \
+                                 the host",
+                                r.took.as_micros(),
+                                r.line.replace("\nkayfabe: ", "  ⏎  ")
+                            ),
+                            // ⊘ The vCPU control arm. Named, not silent: on this arm sync
+                            // point (3) genuinely has no ordering guarantee, and a reader must
+                            // be able to tell that from a boot where it ran.
+                            _ => "⊘ ON A vCPU — NO REFRESH, NO PUBLISH (the \
+                                  KAYFABE_DOORBELL_ASYNC=off control; sync point (3) is \
+                                  unordered on this arm by construction)"
+                                .to_string(),
+                        },
                     );
                     // ★★★★★ **AND NOW THE GUEST MAY PROCEED** — the rows its writes described
                     // are on the host, so the release it is polling for is written.
