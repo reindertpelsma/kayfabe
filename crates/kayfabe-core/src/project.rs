@@ -1180,6 +1180,10 @@ pub fn project(
 
     let mut by_pdb: BTreeMap<(GpuId, Pdb), (ProcAnchor, ResourceKey)> = BTreeMap::new();
     let mut by_vchid: BTreeMap<(GpuId, VChid), (ProcAnchor, ResourceKey)> = BTreeMap::new();
+    // ⊘ Channels claimed but NOT filed, for want of a resolvable GPU — see the `else` below.
+    // A zero here and a healthy table look identical without it, which is how 482 refusals
+    // pointed at the wrong stage for a whole session.
+    let mut unrouted_for_want_of_gpu: u32 = 0;
     let mut ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)> = BTreeMap::new();
     // ★ The F1 collision guard's scope tables, keyed on `(Option<GpuId>, id)`: the
     // guard still bites within one target (and within the unresolved-`None` scope),
@@ -1318,6 +1322,42 @@ pub fn project(
                 vchid_claims.insert((gpu, vchid), node.id());
                 if let Some(gpu) = gpu {
                     by_vchid.insert((gpu, vchid), (anchor, node.id()));
+                } else {
+                    // ★★★★★ **A CHANNEL WITH NO RESOLVABLE GPU IS DROPPED FROM THE ROUTING
+                    // TABLE — SILENTLY, UNTIL w695.**
+                    //
+                    // ⊘⊘⊘ `[measured w694a]` `DOORBELL-REFUSALS FwdFault::UnknownVchid=482` with
+                    // **zero** projection errors. The channel IS claimed in `vchid_claims` one
+                    // line above — so it is a real, well-formed channel with a decodable vChid —
+                    // and then omitted from `by_vchid` because `gpu_of_resource` answered `None`.
+                    // Every doorbell on it afterwards refuses as *"forward-population never saw
+                    // its channel-alloc"*, which is **false**: population saw it and declined to
+                    // file it.
+                    //
+                    // ⚠ Two silent steps stacked. `walk_gpu` (`rmgraph.rs:1588`) climbs to a
+                    // `Device` ancestor and returns `device_instance.map(GpuId)` — `None` if
+                    // there is no Device within 64 hops **or** if that Device carries no
+                    // instance. Then this `if let` dropped it with no `else`. Neither step said
+                    // anything, and the symptom surfaced 482 doorbells later under a fault whose
+                    // text points at the wrong stage.
+                    //
+                    // ⇒ Counted and named HERE, at the drop, because that is the only place that
+                    // knows *why*. ⊘ Bounded: the guest controls how many channels exist, and an
+                    // unbounded print is a second workload — the cap is why this is a census and
+                    // not a log.
+                    unrouted_for_want_of_gpu += 1;
+                    if unrouted_for_want_of_gpu <= 8 {
+                        eprintln!(
+                            "kayfabe: PROJECT-UNROUTED channel={:?} vchid={vchid:?} \
+                             userd_flags={:#x} ⊘ a well-formed channel with a decodable vChid, \
+                             DROPPED from `by_vchid` because `gpu_of_resource` answered None \
+                             (no Device ancestor, or that Device has no `device_instance`). \
+                             Every doorbell on it will refuse as UnknownVchid, which names the \
+                             WRONG stage: population saw this channel and declined to file it.",
+                            node.id(),
+                            node.facts.userd_flags,
+                        );
+                    }
                 }
                 // ★★ The context-object index. A channel's own resolved VAS is already
                 // in hand; it enters only when BOTH halves are declared, because a
@@ -1347,6 +1387,18 @@ pub fn project(
         }
     }
 
+
+    // ★ One summary line per projection when any channel was dropped. ⊘ Printed even though the
+    // per-drop lines are capped at 8: the CAP must never hide the TOTAL, which is the mistake
+    // `503 REFUSED by name; (16 logged)` made for a whole session.
+    if unrouted_for_want_of_gpu > 0 {
+        eprintln!(
+            "kayfabe: PROJECT-UNROUTED total={unrouted_for_want_of_gpu} channel(s) claimed but \
+             NOT filed in `by_vchid` — every doorbell on them refuses as UnknownVchid. \
+             ⚠ by_vchid={} rows; if that is 0 the guest cannot submit ANY work.",
+            by_vchid.len()
+        );
+    }
     Ok(Boundaries {
         procs: procs.into_values().collect(),
         system,
