@@ -248,6 +248,16 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// `Result`.
     fn write(&mut self, phys: u64, bytes: &[u8]) -> Result<(), FbRefused>;
 
+    /// `(arena refusals, heap→arena migrations, arena read refusals)`.
+    ///
+    /// ⊘⊘ **On the trait because a census only counts if someone can ASK for it.** w584 hid
+    /// for fifteen commits inside `arena_refusals`, which was incremented correctly the whole
+    /// time on a concrete type nothing downstream could reach. The default is honest for a
+    /// store that has no arena: it refused nothing because it was never asked.
+    fn arena_census_all(&self) -> (u64, u64, u64) {
+        (0, 0, 0)
+    }
+
     /// How many bytes of host memory this store is currently holding on the guest's
     /// behalf.
     ///
@@ -1447,6 +1457,14 @@ impl FbStore for SparseFb {
             done += take;
         }
         Ok(())
+    }
+
+    fn arena_census_all(&self) -> (u64, u64, u64) {
+        (
+            self.arena_refusals,
+            self.arena_migrations,
+            self.arena_read_refusals,
+        )
     }
 
     fn resident_bytes(&self) -> u64 {

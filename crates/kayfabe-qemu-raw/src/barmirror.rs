@@ -897,23 +897,33 @@ impl BarMirror {
         // ★ The first latch write is the right moment and needs no new signal: the guest
         // cannot aim a window in a BAR it has not placed, so by the time this runs BAR0's
         // base is final and is the one the guest is actually using.
-        // ⊘⊘⊘ **w582 — THE INSTALL IS PARKED, and the mechanism below is kept intact.**
+        // ⊘⊘⊘ **w582 PARKED THIS. w585 UN-PARKS IT, and the reason it was parked was wrong.**
         //
         // `[measured w581]` with the aperture placed and heap pages migrated, PRAMIN's traps go
-        // to **ZERO** — `window[SERVED r=0 w=0]`, exactly the target. The guest still fails:
-        // `_kgspBootGspRm` times out (`0x62:0x40:2028`). So the mapping works and something the
-        // GSP bootstrap needs is still not equal on both sides of it.
+        // to **ZERO** — `window[SERVED r=0 w=0]`, exactly the target — and the guest still
+        // failed in `_kgspBootGspRm`. w582 read that as *"the mapping works, so the mapping is
+        // not what is wrong"* and went looking for a semantic difference.
         //
-        // ⚠ The leading hypothesis, UNTESTED: `Bar0Window` carries a TARGET field beside its
-        // base (`fb_addr` is not simply base+offset in every mode), so a window aimed at SYSTEM
-        // memory would be shown the framebuffer arena regardless. A slot cannot express that;
-        // the trap could.
+        // ⊘ **That reading was the mistake, and it cost three commits.** Zero traps proves the
+        // slot INTERCEPTS the access. It says nothing about whether the slot shows the same
+        // BYTES the trap path would have — and it did not:
         //
-        // ⇒ Parked rather than deleted, because the parts below are measured-good: the arena is
-        // address-indexed (w569), the range question is per-piece (w579), the install happens
-        // when the base is final (w580), and heap pages migrate (w581). Each was a real defect
-        // fixed. What is missing is knowing WHICH framebuffer a given window position names.
-        if false && slot.is_none() {
+        //   - **w584**: `fresh_page` handed `alloc_at` a frame NUMBER where it wanted a byte
+        //     ADDRESS, so every store page since w569 was refused and fell back to the heap.
+        //     The slot therefore mapped a file that the store had never written.
+        //   - **w585**: even once that was fixed, the store answered a frame it had no page
+        //     for with ZEROS, and zero-filled each arena page at creation — so it ignored what
+        //     the slot wrote and erased what the slot held.
+        //
+        // ⇒ Three separate reasons the slot and the trap were two different memories, none of
+        // them about *which* framebuffer a window names.
+        //
+        // ⊘ And the hypothesis w582 parked this ON is **refuted**: `Bar0Window::target()` has
+        // **zero call sites** in the tree. There is no TARGET field being ignored, because
+        // nothing reads one. ⚠ I wrote that hypothesis as *"UNTESTED"* and then treated it as
+        // the reason to stop — an untested hypothesis is not a blocker, and checking this one
+        // cost one `grep`.
+        if slot.is_none() {
             let (Some((span_off, span_len)), Some(p)) =
                 (self.plane.pramin_span(), self.machine.bar_placement(BarId::Bar0))
             else {
@@ -1062,12 +1072,17 @@ impl BarMirror {
             }
         }
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
+        // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
+        // the allocator says how many pages it handed out, the store says how many it asked
+        // for and was REFUSED. w584 lived entirely in the gap between them.
+        let (s_ref, s_mig, s_rref) = self.plane.fb_arena_census();
         let refused_s: Vec<String> = refused.iter().map(|(k, v)| format!("{k}={v}")).collect();
         eprintln!(
             "kayfabe: BAR-MIRROR MECHANISM AT {at}: slots live={live} peak={peak} \
              revalidate[runs={} kept={} removed={}] quiesce[calls={} removed={}] \
              retire_all[calls={} removed={}] arena[pages live={a_live} peak={a_peak} \
-             recycled={a_recycled} issued={a_issued}] refused=[{}]{}",
+             recycled={a_recycled} issued={a_issued} store_refused={s_ref} \
+             store_migrated={s_mig} store_read_refused={s_rref}] refused=[{}]{}",
             self.census.reval_runs.load(Ordering::Relaxed),
             self.census.reval_kept.load(Ordering::Relaxed),
             self.census.reval_removed.load(Ordering::Relaxed),

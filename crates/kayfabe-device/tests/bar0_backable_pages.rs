@@ -326,3 +326,70 @@ fn report_the_doorbell_page() {
         p.bar0_claim_name_for_test(db)
     );
 }
+
+/// ★★★★★ **THE HOTSPOT CENSUS MUST NAME A PAGE IT WAS ACTUALLY READ FROM (w586).**
+///
+/// ⊘⊘ A census zero needs a known-positive, and this tree has shipped several that could
+/// never fire. So the instrument is driven: read a page, and require the report to say that
+/// page, with that count, on the correct side of the backed/live split.
+///
+/// ★ It also pins the discrimination the report exists for. `[measured w582]` BAR0 reads
+/// reaching the handler are 161 422 with only 138 unclaimed — a total that cannot point at
+/// any of the remaining work. The two sums here (`reads_from_live_pages` vs
+/// `reads_from_BACKED_pages`) are what turns it into a work list, and they mean OPPOSITE
+/// things: one is a page still to solve, the other is a backing defect.
+#[test]
+fn the_read_hotspot_census_names_the_page_it_was_read_from() {
+    let p = plane();
+
+    // ⊘ Non-vacuity first, and in the direction that matters: an instrument that reports
+    // something before being driven is reporting noise.
+    let before = p.bar0_read_hotspots(8);
+    assert!(
+        before.contains("pages_touched=0"),
+        "the census reported traffic before any read: {before}"
+    );
+
+    // ⊘ Both pages are DERIVED from the cut, not hardcoded. My first draft of this test
+    // named `0x110000` as the live page on the strength of it being the worst trap site —
+    // and the cut BACKS it, so the test failed on my assumption rather than on the
+    // instrument. Asking the classifier is the whole point of having one.
+    let backed_pages: std::collections::BTreeSet<u64> = p
+        .bar0_backable_runs()
+        .into_iter()
+        .flat_map(|(b, l)| (b..b + l).step_by(4096))
+        .collect();
+    let live_page = (0..0x1000u64)
+        .map(|i| i * 4096)
+        .find(|o| !backed_pages.contains(o))
+        .expect("the cut leaves at least one page live, or goal 2 is already done");
+    for _ in 0..7 {
+        let _ = p.read(0, live_page + 0xc00, 4);
+    }
+    // And one from a page the cut DOES back, to prove the two sums separate.
+    let backed = *backed_pages
+        .iter()
+        .next()
+        .expect("GA106 backs at least one page");
+    let _ = p.read(0, backed, 4);
+
+    let after = p.bar0_read_hotspots(8);
+    assert!(
+        after.contains(&format!("+0x{live_page:x}=7")),
+        "the census did not name the page it was read from, or lost the count: {after}"
+    );
+    assert!(
+        after.contains("reads_from_live_pages=7"),
+        "reads from a page the cut leaves live were not summed as such: {after}"
+    );
+    assert!(
+        after.contains("reads_from_BACKED_pages=1"),
+        "a read from a BACKED page must be counted separately — it means the backing is not \
+         working, which is a different defect from a page still to solve: {after}"
+    );
+    assert!(
+        after.contains("!BACKED"),
+        "the backed page's row was not tagged, so a backing defect would read as ordinary \
+         remaining work: {after}"
+    );
+}

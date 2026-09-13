@@ -6337,7 +6337,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6378,6 +6378,17 @@ impl SharedDoorbell {
                 self.plane.upgrade().map_or_else(
                     || "BAR0-READS ⊘ NO PLANE — unmeasured, not zero".to_string(),
                     |p| p.bar0_read_census(),
+                ),
+                // ★★★★★ w586 — and WHERE those reads are, per BAR0 page, worst first.
+                //
+                // ⊘ Printed right beside the total for one reason: `[measured w582]` the total
+                // is 161 422 while `unclaimed` is 138, so the remaining work is entirely in
+                // CLAIMED reads and the total cannot point at any of it. ⚠ And a census with
+                // no emitter is the w584 failure exactly — a number that existed, was correct,
+                // and was read by nobody for fifteen commits.
+                self.plane.upgrade().map_or_else(
+                    || "BAR0-READ-HOTSPOTS ⊘ NO PLANE — unmeasured, not zero".to_string(),
+                    |p| p.bar0_read_hotspots(12),
                 ),
                 // ★★★★★ w517 — the owner's MMIO contract, CHECKED. A trap may take the
                 // plane's queue lock and nothing above it. Both violations found this session

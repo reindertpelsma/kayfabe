@@ -1361,6 +1361,19 @@ impl core::fmt::Debug for RegPlane {
 #[derive(Debug, Default)]
 struct PlaneCounters {
     reads: AtomicU64,
+    /// ★★★★★ **w586 — WHERE THE REMAINING BAR0 READS ARE, one counter per 4 KiB page.**
+    ///
+    /// ⊘ `[measured w582]` BAR0 reads reaching the handler are **161 422**, of which only
+    /// **138** are unclaimed. So 161 284 reads are CLAIMED by a decode arm and trap anyway,
+    /// and no instrument in this tree could say which arm. Goal 2 is *zero* read traps; a
+    /// total with no breakdown cannot be worked down, it can only be guessed at — and the
+    /// candidate everyone reaches for (the spin-polled invalidate trigger) is a hypothesis
+    /// nobody has measured.
+    ///
+    /// ★ One `Relaxed` increment indexed by `off >> 12`, into a fixed array sized at
+    /// construction. No allocation, no lock, no branch beyond the bound — cheap enough for
+    /// the inside of an MMIO exit, which is the only place it can be counted.
+    bar0_read_pages: Box<[AtomicU64]>,
     writes: AtomicU64,
     boot_reg_reads: AtomicU64,
     ptimer_reads: AtomicU64,
@@ -2219,7 +2232,16 @@ impl RegPlane {
                     pt_witness_writes: 0,
                 },
             ),
-            c: PlaneCounters::default(),
+            c: PlaneCounters {
+                // ⊘ Sized from the chip's own aperture, not a constant: a bigger BAR0 on a
+                // later architecture gets a bigger histogram without anyone remembering to
+                // widen it. `derive(Default)` leaves this EMPTY, and the increment below is
+                // written with `get()` so an unsized plane counts nothing rather than panics.
+                bar0_read_pages: (0..(chip.regs_aperture_len / 4096))
+                    .map(|_| AtomicU64::new(0))
+                    .collect(),
+                ..PlaneCounters::default()
+            },
             unserviced,
             census,
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
@@ -3182,6 +3204,21 @@ impl RegPlane {
         s.fb.resident_frames()
     }
 
+    /// ★★★★★ **The store's own arena census — `(refusals, migrations, read refusals)`.**
+    ///
+    /// ⊘⊘ **w584/w585 — this exists because the numbers already existed and nothing read
+    /// them.** `arena_refusals` counted every page the arena turned away for fifteen commits,
+    /// while the store silently fell back to the heap and the bug surfaced as PRAMIN failing.
+    /// A counter with no reader is not an instrument. ⇒ `BAR-MIRROR MECHANISM` prints these.
+    ///
+    /// All three must be **0** in a healthy boot once an arena is installed: a refusal means
+    /// the store and the file disagree about where a frame lives, which is the whole class.
+    #[must_use]
+    pub fn fb_arena_census(&self) -> (u64, u64, u64) {
+        let s = self.mem.lock();
+        s.fb.arena_census_all()
+    }
+
     /// ★★★★ **Who wrote this framebuffer page FIRST, and when** — [`None`] when the store
     /// cannot say **or** nothing is resident there. See [`crate::fbwin::FbWriter`].
     #[must_use]
@@ -3446,6 +3483,60 @@ impl RegPlane {
         s.policy = policy;
     }
 
+    /// ★★★★★ **The BAR0 pages the remaining read traps land in, worst first (w586).**
+    ///
+    /// ⊘ `[measured w582]` 161 422 BAR0 reads reach the handler and only 138 are unclaimed —
+    /// so the work left for goal 2 is entirely in **claimed** reads, and until this existed
+    /// no instrument could say which page they were in. A total is not a work list.
+    ///
+    /// ★ Each row says whether the aperture cut BACKS that page, because that is the actual
+    /// question: a read arriving from a page the cut backs means the backing is not working;
+    /// a read from a page the cut deliberately leaves live is a page still to be solved.
+    #[must_use]
+    pub fn bar0_read_hotspots(&self, top: usize) -> String {
+        let backed: std::collections::BTreeSet<u64> = self
+            .bar0_backable_runs()
+            .into_iter()
+            .flat_map(|(b, l)| (b..b + l).step_by(4096).map(|o| o >> 12))
+            .collect();
+        let mut rows: Vec<(u64, u64)> = self
+            .c
+            .bar0_read_pages
+            .iter()
+            .enumerate()
+            .map(|(i, a)| (a.load(Ordering::Relaxed), i as u64))
+            .filter(|(n, _)| *n > 0)
+            .collect();
+        rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        let live: u64 = rows
+            .iter()
+            .filter(|(_, p)| !backed.contains(p))
+            .map(|(n, _)| n)
+            .sum();
+        let from_backed: u64 = rows
+            .iter()
+            .filter(|(_, p)| backed.contains(p))
+            .map(|(n, _)| n)
+            .sum();
+        let listed: Vec<String> = rows
+            .iter()
+            .take(top)
+            .map(|(n, p)| {
+                format!(
+                    "+0x{:x}={n}{}",
+                    p << 12,
+                    if backed.contains(p) { "!BACKED" } else { "" }
+                )
+            })
+            .collect();
+        format!(
+            "BAR0-READ-HOTSPOTS pages_touched={} live_pages={from_backed_pages}              reads_from_live_pages={live} reads_from_BACKED_pages={from_backed} top[{}]              ⊘ a read tagged `!BACKED` came from a page the aperture cut backs with memory,              so it should never have reached this handler at all — that is a BACKING defect,              not a page still to solve. Everything else is the work list for goal 2.",
+            rows.len(),
+            listed.join(" "),
+            from_backed_pages = rows.iter().filter(|(_, p)| !backed.contains(p)).count(),
+        )
+    }
+
     /// The counters.
     ///
     /// ★★★ **The source is DESTRUCTURED, and the absent `..` is the point.** This is a
@@ -3562,6 +3653,11 @@ impl RegPlane {
     pub fn counters(&self) -> Counters {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         let PlaneCounters {
+            // ⊘ Not a field of [`Counters`]: that struct is `Copy` scalars, and this is a
+            // 4096-entry histogram. It is reported by [`RegPlane::bar0_read_hotspots`], which
+            // is where a breakdown belongs — a total and a breakdown answer different
+            // questions and merging them would make `Counters` allocate.
+            bar0_read_pages: _,
             reads,
             writes,
             boot_reg_reads,
@@ -4201,6 +4297,12 @@ impl RegPlane {
     /// reading a byte of a dword register must not be handed the whole thing.
     pub fn read(&self, bar: u8, off: u64, size: u8) -> ReadOutcome {
         self.c.reads.fetch_add(1, Ordering::Relaxed);
+        // ★ w586 — which BAR0 page this read landed in. See `PlaneCounters::bar0_read_pages`.
+        if bar == 0 {
+            if let Some(slot) = self.c.bar0_read_pages.get((off >> 12) as usize) {
+                slot.fetch_add(1, Ordering::Relaxed);
+            }
+        }
         let _vcpu = MmioInFlight::enter(&self.mmio_in_flight);
         let out = self.read_inner(bar, off, size);
         match out {
