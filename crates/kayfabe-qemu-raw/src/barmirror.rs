@@ -728,18 +728,47 @@ impl BarMirror {
     /// access that missed, and `fill` only stops the NEXT access to that page from exiting.
     /// Nothing the guest can observe depends on when it happens, or on whether it happens
     /// at all — which is also why a full queue DROPS rather than blocks.
-    pub fn fill(&self, w: FbWindow, off: u64) {
+    /// Returns **whether a worker wake is owed** — `true` only when this call actually queued
+    /// a fill for the worker to drain.
+    ///
+    /// # ⊘⊘⊘ THE WAKE WAS UNCONDITIONAL, AND IT WAS 93 % OF THE WORKER'S WORK (w674)
+    ///
+    /// `[measured w674a, one `cuDeviceGet` that took 20 s]`
+    /// `PUBQUEUE by_kind[doorbell=17 mirror_fill=11414 invalidate=306 gsp_submit=420
+    /// rpc_bind=105]` — **11 414 of 12 262 queue jobs were mirror-fill wakes** — beside this
+    /// type's own census on the same boot: `BAR-MIRROR FILLS queued=0 run=0 dropped=0`.
+    ///
+    /// ★ Both numbers are right, and together they name the defect. This function has two
+    /// paths: off the deferred arm it calls `fill_now` **synchronously and queues nothing**;
+    /// only the deferred arm pushes. `queued=0` proves the synchronous path was always taken —
+    /// so every one of those 11 414 wakes told the worker to drain a queue **nothing had been
+    /// put into**, and each wake costs a full worker pass (dbtable rebuild, birth drain,
+    /// publish, mirror drain). ⇒ ~93 % of the passes behind that 20 s were for no work at all.
+    ///
+    /// ⚠ It survived because the two are separate censuses that were never read side by side,
+    /// and because `MirrorFill` is also used as a generic "wake the worker" token elsewhere —
+    /// so a large count looked like the lane being busy rather than the lane spinning.
+    ///
+    /// ⊘ `#[must_use]`: an ignored return puts the unconditional wake straight back, and the
+    /// only symptom would be the worker being busy — which is what this looked like for a
+    /// whole session.
+    #[must_use = "the caller must wake the worker IF AND ONLY IF this returns true; ignoring                   it restores the unconditional wake that cost 93% of the worker's passes"]
+    pub fn fill(&self, w: FbWindow, off: u64) -> bool {
         if !self.defer_reval || !kayfabe_util::lockwitness::on_vcpu_thread() {
+            // ⊘ Done HERE, synchronously. Nothing is queued, so no wake is owed.
             self.fill_now(w, off);
-            return;
+            return false;
         }
         let mut q = self.fills.lock().unwrap_or_else(|e| e.into_inner());
         if q.len() >= FILL_QUEUE_CAP {
+            // ⊘ Dropped, not queued — and a dropped fill is a page that keeps trapping, never
+            // a wrong value. No work is pending, so no wake is owed.
             self.fills_dropped.fetch_add(1, Ordering::Relaxed);
-            return;
+            return false;
         }
         q.push_back((w, off));
         self.fills_queued.fetch_add(1, Ordering::Relaxed);
+        true
     }
 
     /// ★★★★★ **w472 — the worker's half.** Runs every queued fill. ⊘ Never call from a vCPU.

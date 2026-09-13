@@ -451,3 +451,87 @@ fn dropping_a_reactor_with_uncollected_completions_counts_the_leak() {
         "the abandoned worker never came back — that is what `abandoned` means"
     );
 }
+
+/// ★★★★★ **ONE ISOLATE, TWO VERBS OPEN AT ONCE — the owner's requirement, as an EDGE.**
+///
+/// Owner, 2026-09-13: *"one isolate must be able to allow multiple things in flight by
+/// construction with threads."*
+///
+/// # ⊘⊘ Why this test did not exist, and why that mattered
+///
+/// The claim was already true **by construction** and therefore never checked. `proto.rs`
+/// states the architecture outright — *"concurrency comes from channel COUNT, never from
+/// multiplexing one channel"* — so each of the [`kayfabe_isolate::DEFAULT_POOL_WORKERS`] pool
+/// workers owns its own `UnixStream` and each channel is 1-deep. Four sockets, four possible
+/// in-flight verbs, no demux and no pending list.
+///
+/// ⚠ But `the_per_worker_policy_gives_one_lane_per_pool_slot` asserts only the POLICY and the
+/// LANE COUNT. Nothing anywhere observed **two verbs open on one isolate at the same instant**,
+/// and "by construction" is exactly the kind of claim that rots without a witness: the transport
+/// can keep the property while the caller quietly serialises it away — which is precisely what
+/// the production worker does today, using one socket while three sit idle.
+///
+/// ⊘ **This is the contrast with `nvkvm-pv`, and both designs are legitimate.** pv reaches the
+/// same place from the other side: *"a dedicated reader thread that multiplexes IOCTL responses
+/// by `txn_id` onto per-caller condvars"* (`src/qemu/nvkvm_isolate.c:1-8`). One socket demuxed,
+/// versus four sockets undemuxed. ⇒ **We do NOT need pv's `txn_id` to get multi-inflight**, and
+/// asserting that we did would have bought a protocol change this test shows is unnecessary.
+#[test]
+fn one_isolate_holds_two_verbs_open_at_once() {
+    let f = factory(ParkVerb::Sysmem);
+    let mut a = f.spawn_host(iso(71));
+    // ⊘ PerWorker, not the PerIsolate default: a lane PER POOL SLOT is what lets one isolate's
+    // slots run concurrently. Under PerIsolate the second plan would queue behind the first on
+    // that isolate's single lane — correct for ordering, and the wrong policy for this claim.
+    let r = PlanReactor::with_policy(LanePolicy::PerWorker, kayfabe_isolate_host::planreactor::DEFAULT_LANE_CAP)
+        .expect("notify descriptor");
+
+    let w0 = a.checkout().expect("slot 0");
+    let w1 = a.checkout().expect("slot 1 — a second worker on the SAME isolate");
+    assert_ne!(
+        w0.id(),
+        w1.id(),
+        "checkout handed the same pool slot twice; this test would prove nothing"
+    );
+    r.submit(w0, publish(), 0x10).expect("first accepted");
+    r.submit(w1, publish(), 0x11).expect("second accepted");
+
+    // ★ THE EDGE. The child writes the park witness once per parked verb, so two reads mean two
+    // verbs were genuinely inside a host call on ONE isolate simultaneously.
+    a.wait_for_park(CEILING).expect("first parked");
+    a.wait_for_park(CEILING).expect("second parked");
+
+    let mid = r.stats();
+    assert_eq!(
+        mid.peak_in_flight, 2,
+        "two verbs were observed parked on ONE isolate, so the reactor must have counted two \
+         in flight — {}",
+        r.census()
+    );
+    assert_eq!(mid.in_flight, 2);
+    assert_eq!(
+        mid.lanes_spawned, 2,
+        "PerWorker must give one lane per pool slot, not one per isolate — {}",
+        r.census()
+    );
+    assert_eq!(mid.completed, 0, "both are still parked");
+    eprintln!("PLANREACTOR-ONE-ISOLATE {}", r.census());
+
+    // Release both: one break signal per OUTSTANDING worker slot, not one per isolate.
+    let rearm = || {
+        for id in [WorkerId(0), WorkerId(1)] {
+            if let Some(h) = a.cancel_handle(id) {
+                let _ = h.request(CancelReason::GuestSignal).discharge();
+            }
+        }
+    };
+    rearm();
+    let done = collect(&r, 2, rearm);
+    for d in done {
+        let failure = d
+            .outcome
+            .as_ref()
+            .expect_err("a cancelled verb does not succeed");
+        assert_eq!(failure.err, kayfabe_isolate::RmError::Interrupted);
+    }
+}

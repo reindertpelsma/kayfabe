@@ -15813,8 +15813,10 @@ impl Regs {
         } = &out
         {
             if let Some(m) = self.bar_mirror.get() {
-                m.fill(*w, off);
-                self.wake_for_mirror_fill();
+                // ⊘ Wake ONLY if something was queued — see `BarMirror::fill` (w674).
+                if m.fill(*w, off) {
+                    self.wake_for_mirror_fill();
+                }
             }
         }
         let v = out.value();
@@ -16233,8 +16235,10 @@ impl Regs {
                     _ => None,
                 };
                 if let Some(w) = w {
-                    m.fill(w, off);
-                    self.wake_for_mirror_fill();
+                    // ⊘ Wake ONLY if something was queued — see `BarMirror::fill` (w674).
+                    if m.fill(w, off) {
+                        self.wake_for_mirror_fill();
+                    }
                 }
             }
             m.after_write(&out);
