@@ -1201,6 +1201,33 @@ impl BarMirror {
     /// is usable"* means the cost belongs here. The drain's own budget reports an overrun, so
     /// the price is visible rather than hidden.
     pub fn premap_bar1(&self) {
+        // ⊘⊘⊘ **DEFAULT OFF since w618 — THIS FAILED ITS OWN CRITERION AND MADE THINGS WORSE.**
+        //
+        // `[measured w617a, a boot that graded (P)]`, against the criterion fixed before it ran:
+        //
+        //     ALREADY-COVERED-EARLY   2 574 -> 11 480     4.5x WORSE
+        //     bar1 distinct_pages        66 ->    319     253 pages the guest never asked for
+        //     bar1 fills                166 ->    679
+        //     premap runs=30 pages=7811               260 pages per birth for a 66-page set
+        //     BAR1 writes                            NOT reduced
+        //     BAR2 2 / 1 453                          unchanged - the one prediction that held
+        //
+        // ★ The ruling is right and **this implementation maps the wrong set**. `window_leaves`
+        // enumerates every leaf BAR1 has a PTE for — the aperture's whole mapped VA range — not
+        // the pages the CHANNEL needs. So it installed 253 slots nobody touches, re-enumerated
+        // the same tree at each of 30 births, and did not remove the traps it was aimed at.
+        //
+        // ⚠ The owner's words were *"of existing known va maps"* — the maps a channel INHERITS,
+        // not every leaf in the window. I read that as "everything currently mapped", which is
+        // a strictly larger set and the wrong one.
+        //
+        // ⇒ Kept behind a knob rather than deleted, because the machinery is right and only its
+        // INPUT is wrong: a corrected version needs the channel's own VA maps at birth, and it
+        // will want to be graded against this arm. **A change that fails a pre-registered
+        // criterion is turned off, never tuned until it goes green.**
+        if !std::env::var("KAYFABE_PREMAP_BAR1").is_ok_and(|v| v == "1") {
+            return;
+        }
         let Some(arm) = self.arm_for(FbWindow::FbAperture) else {
             return;
         };

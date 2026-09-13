@@ -354,6 +354,37 @@ every test, both graded `(P)`. ⇒ **A field nothing reads and a branch nothing 
 bug in different clothes**, and the only detector for either is reading the output for the thing
 you just added.
 
+## 6g. ⊘⊘⊘ MAP-AT-CREATE, FIRST ATTEMPT — **FAILED ITS CRITERION AND MADE THINGS WORSE (w618)**
+
+`[measured w617a, a boot that graded `(P)`]`, against the criterion fixed BEFORE the boot:
+
+| | before | after | |
+|---|---|---|---|
+| `ALREADY-COVERED-EARLY` | 2 574 | **11 480** | **4.5× worse** |
+| bar1 `distinct_pages` | 66 | **319** | 253 slots nobody touches |
+| bar1 `fills` | 166 | 679 | |
+| BAR1 writes | ~2 300–3 544 | 3 105 | **not reduced** |
+| BAR2 | 2 / 1 453 | 2 / 1 453 | unchanged — the one prediction that held |
+
+    premap[runs=30 pages=7811 refused=0]   -> 260 pages per birth, for a 66-page working set
+
+★ **The ruling is right; my implementation maps the wrong set.** `window_leaves` enumerates every
+leaf BAR1 has a PTE for — the aperture's whole mapped VA range — not the pages a CHANNEL needs.
+The owner's words were *"of existing known va maps"*, meaning the maps a channel INHERITS. I read
+that as *"everything currently mapped"*, which is a strictly larger set and the wrong one.
+
+⊘ It also re-enumerated the same tree at all **30** births, which is where the 11 480 comes from.
+
+⇒ **Default OFF behind `KAYFABE_PREMAP_BAR1=1`, kept rather than deleted**, because only its
+INPUT is wrong: the machinery installs slots correctly and a corrected version — fed the
+channel's own VA maps — will want to be graded against this arm. **A change that fails a
+pre-registered criterion is turned off, not tuned until it goes green.**
+
+★ The criterion is what made this a five-minute result instead of an argument. It named three
+numbers and their directions in advance; two moved the wrong way and the third confirmed the
+model. Without it the honest reading — *"premap installed 7 811 pages, look at it working"* — was
+available and wrong.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
