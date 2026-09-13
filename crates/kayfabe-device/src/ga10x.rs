@@ -1209,7 +1209,38 @@ const _: () = assert!(gsp_fw_wpr_end() < GA106_FB_LENGTH);
 /// capture row **with a body**, which `CLAUDE.md` records as the half that matched real
 /// hardware byte for byte). It lands inside this device's own reserved carve-out and below
 /// the firmware range, which the assertions below pin rather than assume.
-pub const GA106_BAR1_PDE_BASE: u64 = 0x2_F1CA_C000;
+pub const GA106_BAR1_PDE_BASE: u64 = bar1_pde_base_for(FB_SIZE_MB);
+
+/// ★★★★★ **THE SAME BYTE, AS A POSITION RATHER THAN AN ABSOLUTE — w696f.**
+///
+/// ⊘⊘⊘ `[measured w696f]` Halving [`FB_SIZE_MB`] to the 6144 MiB this part can actually reserve
+/// does not fail at boot — it fails to **COMPILE**:
+///
+/// ```text
+/// error[E0080]: assertion failed: GA106_BAR1_PDE_BASE < frts_offset()
+/// ```
+///
+/// The captured absolute is ~11.8 GiB, chosen inside the carve-out at the top of a **12 GiB**
+/// framebuffer. The carve-out itself already scales ([`FW_CARVE_OUT_BASE`] is
+/// `GA106_FB_LENGTH - FW_CARVE_OUT_BYTES`); the absolute does not, so at any smaller advertised
+/// size it lands above the firmware range and the assertion — correctly — refuses the build.
+///
+/// ★ What the capture actually establishes is a **relative placement**: `0x20C_C000` above the
+/// carve-out base, i.e. inside the region this device declares reserved and below
+/// `frts_offset()`. Both of those are properties of the LAYOUT, not of 12 GiB, and the
+/// assertions below already state them. So the derivation preserves the measured byte exactly at
+/// the shipped size and keeps the same relative position at any other — which is what
+/// constraints 12 and 15 need and what an absolute can never give.
+///
+/// ⊘ Not a re-measurement and not a guess: `bar1_pde_base_for(FB_SIZE_MB)` is byte-identical to
+/// the captured `0x2_F1CA_C000`, pinned by a test.
+#[must_use]
+pub const fn bar1_pde_base_for(fb_size_mb: u64) -> u64 {
+    /// How far above the carve-out base a real RTX 3060's GSP placed the BAR1 page directory:
+    /// `0x2_F1CA_C000 - (12288 MiB - FW_CARVE_OUT_BYTES)`.
+    const ABOVE_CARVE_OUT_BASE: u64 = 0x20C_C000;
+    (fb_length_for(fb_size_mb) - FW_CARVE_OUT_BYTES) + ABOVE_CARVE_OUT_BASE
+}
 
 // ★★ The root must be inside the region this device tells the guest is RESERVED, or the
 // guest's heap will allocate over its own BAR1 page directory — the exact defect the zero
@@ -1868,6 +1899,38 @@ mod fb_size_is_a_parameter_tests {
              size, or w696e moved the WPR2 top"
         );
         assert_eq!(GA106_FB_LENGTH, fb_length_for(FB_SIZE_MB));
+    }
+
+    /// ★ **The captured byte, preserved exactly.** `0x2_F1CA_C000` is what a real RTX 3060's
+    /// GSP put there (`C: mode2_gspstaticinfo_ga106.h` offset 1664, a capture row WITH a body).
+    /// Turning it into a derivation must not move it at the shipped size, or w696f silently
+    /// replaced a hardware measurement with arithmetic.
+    #[test]
+    fn the_derived_bar1_pde_base_is_the_captured_byte() {
+        assert_eq!(
+            GA106_BAR1_PDE_BASE, 0x2_F1CA_C000,
+            "the derivation must reproduce the CAPTURED value at the shipped FB size"
+        );
+        assert_eq!(GA106_BAR1_PDE_BASE, bar1_pde_base_for(FB_SIZE_MB));
+    }
+
+    /// ★★★ And at a smaller advertised size it must still satisfy the two properties the
+    /// capture only happened to have — inside the reserved carve-out, below the firmware range.
+    /// ⊘ Those are what the `const` assertions check at the shipped size; this checks the
+    /// derivation keeps them at the size a later rung will actually pass in.
+    #[test]
+    fn the_bar1_pde_base_stays_legal_at_the_reservable_size() {
+        const MEASURED_RESERVABLE_MB: u64 = 6144;
+        let base = bar1_pde_base_for(MEASURED_RESERVABLE_MB);
+        let fb = fb_length_for(MEASURED_RESERVABLE_MB);
+        let carve = fb - FW_CARVE_OUT_BYTES;
+        assert!(base >= carve, "must stay inside the reserved carve-out");
+        assert!(
+            base < gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB),
+            "must stay below the firmware range"
+        );
+        assert!(base < fb, "must stay inside the framebuffer at all");
+        assert!(base.is_multiple_of(4096), "a page directory root is page-granular");
     }
 
     /// ★★★★★ **The SECOND size, and this is the half that matters.**
