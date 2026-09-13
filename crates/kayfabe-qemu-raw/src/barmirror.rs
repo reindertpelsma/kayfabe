@@ -353,7 +353,7 @@ pub struct BarMirror {
     /// ⊘ A total cannot separate them, and I have now been wrong twice guessing at this
     /// number's shape. ⇒ Record the access count at each re-point; 22 `u64`s, written once per
     /// move, read once at teardown. The deltas ARE the shape.
-    pramin_marks: Mutex<Vec<u64>>,
+    pramin_marks: Mutex<Vec<(u64, u64)>>,
     table: Mutex<Table>,
     census: Census,
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
@@ -1005,7 +1005,7 @@ impl BarMirror {
                     self.pramin_at_install
                         .store(c.fb_reads + c.fb_writes, Ordering::Relaxed);
                     self.pramin_gpa.store(p.base + span_off, Ordering::Relaxed);
-                    self.mark_pramin();
+                    self.mark_pramin(base);
                     eprintln!(
                         "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
                          showing fb 0x{base:x}, on the guest's FIRST latch write. ⊘ ONE slot: \
@@ -1035,7 +1035,7 @@ impl BarMirror {
             Ok(()) => {
                 *slot = Some((region, base));
                 self.pramin_moves.fetch_add(1, Ordering::Relaxed);
-                self.mark_pramin();
+                self.mark_pramin(base);
             }
             // ⚠ A refused re-point leaves the slot showing what it showed. That is WRONG for
             // the guest — it will read the old framebuffer — so it is said, not swallowed.
@@ -1048,11 +1048,11 @@ impl BarMirror {
     }
 
     /// ★ w597 — one mark per accepted PRAMIN placement. O(1), bounded by the move count.
-    fn mark_pramin(&self) {
+    fn mark_pramin(&self, base: u64) {
         let c = self.plane.counters();
         let mut m = self.pramin_marks.lock().unwrap_or_else(|e| e.into_inner());
         if m.len() < 64 {
-            m.push(c.fb_reads + c.fb_writes);
+            m.push((c.fb_reads + c.fb_writes, base));
         }
     }
 
@@ -1063,14 +1063,25 @@ impl BarMirror {
         if m.is_empty() {
             return "shape=none (never placed)".to_string();
         }
-        let mut d: Vec<u64> = m.windows(2).map(|w| w[1].saturating_sub(w[0])).collect();
-        d.push(total.saturating_sub(*m.last().unwrap_or(&0)));
+        let mut d: Vec<u64> = m.windows(2).map(|w| w[1].0.saturating_sub(w[0].0)).collect();
+        d.push(total.saturating_sub(m.last().map_or(0, |x| x.0)));
         let zero = d.iter().filter(|n| **n == 0).count();
         let max = d.iter().copied().max().unwrap_or(0);
+        // ★★★ w599 — the BASE each interval was showing. `[measured w597]` 16 of 22 intervals
+        // leak nothing and two account for 3 205 of 3 228 exits, so the leak follows particular
+        // WINDOW POSITIONS rather than the slot mechanism. Which positions is the next fact,
+        // and a delta list cannot carry it.
+        let leaky: Vec<String> = d
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| **n > 0)
+            .map(|(i, n)| format!("fb0x{:x}:{n}", m.get(i).map_or(0, |x| x.1)))
+            .collect();
         format!(
-            "shape[placements={} per_placement_exits={:?} zero_intervals={zero} worst={max}] => {}",
+            "shape[placements={} per_placement_exits={:?} zero_intervals={zero} worst={max}              leaky_bases=[{}]] => {}",
             m.len(),
             &d[..d.len().min(24)],
+            leaky.join(" "),
             if zero * 2 > d.len() {
                 "BURSTY - most intervals leak nothing, so the exits follow particular placements rather than leaking steadily"
             } else {
