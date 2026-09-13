@@ -1312,6 +1312,9 @@ pub struct RegPlane {
     /// it on the way OUT of the FSM's own lock, to hand the batch straight back in — so it
     /// is a plane fact, not merely a report field.
     os_events: crate::osevent::OsEventLog,
+    /// ★ Refused doorbells, counted **by fault name** — see `account_doorbell_report`.
+    /// `[measured w692a]` 503 refusals reached the teardown as one number with 16 samples.
+    doorbell_refusals_by_kind: std::sync::Mutex<std::collections::BTreeMap<String, u64>>,
     /// ★★★ **E2 — the usermode doorbell seam** (`crate::doorbell`).
     ///
     /// ⚠ **Outside [`RegPlane::state`], and that is a requirement rather than a
@@ -2271,6 +2274,7 @@ impl RegPlane {
         // the fix.
         census.set_probe_arm(probe_arm);
         let mut plane = RegPlane {
+            doorbell_refusals_by_kind: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             read_shadow: std::sync::RwLock::new(None),
             gsp_regs: std::sync::OnceLock::new(),
             dead_pages: Box::new([]),
@@ -3937,6 +3941,7 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            doorbell_refusals_by_kind: _,
             read_shadow: _,
             gsp_regs: _,
             dead_pages: _,
@@ -4338,6 +4343,42 @@ impl RegPlane {
     /// ★ Three outcomes, three different next steps. That is what a census is for, and why
     /// reading a neighbouring counter instead cost a boot.
     #[must_use]
+    /// ★★★★★ **REFUSED DOORBELLS, BY NAME (w693).**
+    ///
+    /// ⊘ `[measured w692a]` the teardown said **"503 REFUSED by name … (16 logged)"** and a grep
+    /// for fault names over the entire log found **one**. A total plus a handful of samples
+    /// cannot say whether five hundred refusals are one cause or five — and in the same boot
+    /// **zero** doorbells were forwarded (`0 forwarded (host channel rung)`), so every one of
+    /// them is a submission that never reached the GPU.
+    ///
+    /// ★ Owner: *"if its a passthrough there are only a few things it can be like a passthrough
+    /// doorbell not working (race), logging failed doorbells is useful."* For a passthrough
+    /// channel the failure set is small, so naming the refusal is most of the diagnosis.
+    #[must_use]
+    pub fn doorbell_refusal_census(&self) -> String {
+        let by = self
+            .doorbell_refusals_by_kind
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if by.is_empty() {
+            // ⊘ Said out loud: "no doorbell was refused" and "the counter never ran" are
+            // different facts and must not share a blank line.
+            return "DOORBELL-REFUSALS none — not one doorbell was refused this boot".to_string();
+        }
+        let mut rows: Vec<(&String, &u64)> = by.iter().collect();
+        rows.sort_by(|a, b| b.1.cmp(a.1));
+        let body = rows
+            .iter()
+            .map(|(k, n)| format!("{k}={n}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "DOORBELL-REFUSALS {body} ⊘ every refused doorbell is a submission that never \
+             reached the GPU. Compare with `of the served: N forwarded (host channel rung)` — \
+             if that is 0, nothing ran on the host at all this boot."
+        )
+    }
+
     pub fn os_event_census(&self) -> String {
         format!(
             "OSEVENT-CENSUS registered={} posted={} batches={} overflowed={} malformed={} \
@@ -5655,8 +5696,36 @@ impl RegPlane {
                     DoorbellReport::Refused { .. } | DoorbellReport::Scheduled { .. } => {}
                 }
             }
-            DoorbellReport::Refused { .. } => {
+            DoorbellReport::Refused { refusal, .. } => {
                 self.c.doorbells_refused.fetch_add(1, Ordering::Relaxed);
+                // ★★★★★ **COUNT THE REFUSAL BY NAME (w693).** Owner: *"if its a passthrough
+                // there are only a few things it can be like a passthrough doorbell not working
+                // (race), logging failed doorbells is useful."*
+                //
+                // ⊘⊘ `[measured w692a]` the teardown reported **"503 REFUSED by name; last token
+                // … (16 logged)"** — five hundred refusals, **sixteen printed**, and a grep for
+                // fault names over the whole log found exactly ONE. The cap is correct (a
+                // per-event print at that rate is a second workload) and it means the
+                // DISTRIBUTION is invisible: a total plus one sample cannot say whether 503
+                // refusals are one cause or five.
+                //
+                // ⚠ And zero doorbells were forwarded in that boot — `0 forwarded (host channel
+                // rung)` — so every one of these is a submission that never reached the GPU.
+                // For a passthrough channel the failure set is small; naming it is most of the
+                // diagnosis.
+                let mut by = self
+                    .doorbell_refusals_by_kind
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                // ⊘ Bounded: a guest-driven key space must not grow without limit. Past the cap
+                // the count still rises under a named bucket, so the TOTAL stays honest even
+                // when the breakdown saturates.
+                let k = refusal.kind.0.to_string();
+                if by.len() < 32 || by.contains_key(&k) {
+                    *by.entry(k).or_insert(0u64) += 1;
+                } else {
+                    *by.entry("⊘OTHER(table full)".to_string()).or_insert(0u64) += 1;
+                }
             }
             // ★★★★★ w383 — ACCEPTED, AND COUNTED NOWHERE HERE. The work has not run; the
             // report that says what it did will come back through this same function from

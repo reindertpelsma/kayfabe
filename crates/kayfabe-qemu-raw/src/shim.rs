@@ -6890,7 +6890,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6974,6 +6974,10 @@ impl SharedDoorbell {
                 self.plane.upgrade().map_or_else(
                     || "OSEVENT-CENSUS ⊘ NO PLANE — unmeasured, not zero".to_string(),
                     |p| p.os_event_census(),
+                ),
+                self.plane.upgrade().map_or_else(
+                    || "DOORBELL-REFUSALS ⊘ NO PLANE — unmeasured, not zero".to_string(),
+                    |p| p.doorbell_refusal_census(),
                 ),
                 // ★★★★★ **GOAL 4 — what the DoorbellTable WOULD have done**, beside the
                 // numbers the live path actually produced. ⊘ A census with no emitter is the
