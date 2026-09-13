@@ -68,6 +68,51 @@ if (any_completed) { nvkvm_gsp_deliver_events(s); }
 event, matching on **either** `hEvent` or the client itself. Without it a freed handle keeps being
 posted to — which is a use-after-free of a guest object, not merely noise.
 
+## ★★★★★ THE C IS NOT THE TARGET — arm-directed beats broadcast, and closes a race
+
+**Owner, 2026-09-13, refining it:**
+
+> *"is the C better than what you have? I mean should you interrupt always on every completion,
+> if the guest didn't ask for it, then its spinning on semaphore and we don't interrupt. if the
+> guest asks for interrupt on an already completed channel we immediately interrupt"*
+
+★ **Correct, and it improves on the C.** The C **broadcasts**: `if (any_completed)` posts *every*
+armed event. Two consequences:
+
+1. ⊘ **It fires when nobody asked.** A guest spinning on a semaphore wants no interrupt; posting
+   anyway is an exit per completion with no consumer.
+2. ⚠ **It hides the arm-after-completion race rather than closing it.** An event armed *after* its
+   work finished fires only when some **unrelated** later completion sweeps it up. If none comes,
+   it never fires. ⇒ Same hang as ours, but **load-dependent** — which is strictly worse to debug
+   than a deterministic one.
+
+⊘ And that race is the common case, not an edge: libcuda's blocking sync **spins first, then arms
+and blocks**. The arm therefore lands *after* the work completed much of the time.
+
+### The rule
+
+- **Nothing armed for this completion ⇒ raise nothing.** The guest is polling; a semaphore write
+  it can read is the whole contract.
+- **An arm on an already-completed channel ⇒ fire immediately**, at arm time.
+- **Otherwise ⇒ fire on completion**, to the armed event only.
+
+### ⚠ THE ORDERING, WHICH IS THE WHOLE CORRECTNESS ARGUMENT
+
+**Register the arm FIRST, then check for an already-complete state.**
+
+| order | a completion landing between the two steps | verdict |
+|---|---|---|
+| register → check | seen by the registration **or** by the check — at worst both | ★ **safe**: at most a duplicate wake |
+| check → register | seen by **neither** — the check ran too early, the registration too late | ⊘ **lost wakeup**, and it hangs forever |
+
+★ Same asymmetry every other gate in this tree rests on: **over-report, never under-report.** A
+spurious wake costs the guest one re-check of a semaphore it was going to read anyway; a missed
+wake costs the process.
+
+⊘ It also makes the counters honest. Under a broadcast, `raises` counts sweeps rather than
+answered waits, so it cannot distinguish *"we woke the right waiter"* from *"we woke everyone and
+one of them happened to be right"*.
+
 ## What this means for each channel kind
 
 | kind | today | under this model |
