@@ -222,10 +222,41 @@ const WPR2_VAL_SHIFT: u32 = 4;
 /// sets it (`kgspGetWprEndMargin_IMPL`, `ogkm-580: kernel_gsp.c:5637`), and no MMU lock is
 /// advertised, so `vbiosReservedOffset` is the VGA workspace offset.
 const fn gsp_fw_wpr_end() -> u64 {
-    let fb_size = FB_SIZE_MB << 20;
+    gsp_fw_wpr_end_for(FB_SIZE_MB)
+}
+
+/// ★★★★★ **THE SAME DERIVATION, AS A FUNCTION OF THE ADVERTISED SIZE — w696e.**
+///
+/// # Why this exists before anything calls it with a second value
+///
+/// Constraint 15 (`THE_CONSTRAINTS.md`) says *"the advertised framebuffer size is derived from
+/// the reservation that succeeded, never asserted ahead of it"*, and constraint 12 says no
+/// per-die constants. Both are impossible while every FB-derived value is computed by a
+/// `const fn` closing over [`FB_SIZE_MB`] — so the first, smallest, **behaviour-free** step is to
+/// make the size a PARAMETER and let today's constant be one call of it.
+///
+/// ⊘ `[measured]` the advertised size is already wrong by 2x: the largest single vidmem
+/// reservation on this part is **6144 MiB against 12288 advertised** (bare metal, 2026-09-11),
+/// so the guest is told it has twice the video memory we can reserve. This function is what a
+/// later rung feeds the true number into.
+///
+/// ★ Zero behaviour change **by construction**: [`gsp_fw_wpr_end`] is now one call of this with
+/// [`FB_SIZE_MB`], so the bytes cannot move. The test beside it pins that, and also pins the
+/// derivation at a SECOND size, so a future edit cannot quietly make it size-independent — which
+/// is the failure a one-value test could not see.
+#[must_use]
+pub const fn gsp_fw_wpr_end_for(fb_size_mb: u64) -> u64 {
+    let fb_size = fb_size_mb << 20;
     let vga_workspace_offset = fb_size - PRAMIN_SIZE;
     // NV_ALIGN_DOWN64(x, WPR_ALIGNMENT)
     vga_workspace_offset & !(WPR_ALIGNMENT - 1)
+}
+
+/// The advertised framebuffer length in bytes, as a function of the advertised size.
+/// See [`gsp_fw_wpr_end_for`] for why the parameter exists.
+#[must_use]
+pub const fn fb_length_for(fb_size_mb: u64) -> u64 {
+    fb_size_mb << 20
 }
 
 /// `frtsOffset` (`ogkm-580: kernel_gsp_tu102.c:779`) — the address the driver expects to
@@ -1105,7 +1136,8 @@ pub static GA106_INTR_SUBTREE_MAP: [u64; INTR_CATEGORY_COUNT] = [0x0, 0x8, 0x1, 
 // ---------------------------------------------------------------------------------------
 
 /// The framebuffer this device advertises, in bytes. [`FB_SIZE_MB`], once.
-pub const GA106_FB_LENGTH: u64 = FB_SIZE_MB << 20;
+/// ⊘ One call of [`fb_length_for`], so the two cannot drift.
+pub const GA106_FB_LENGTH: u64 = fb_length_for(FB_SIZE_MB);
 
 /// The contiguous carve-out at the **top** of FB that a GA10x GSP keeps for itself.
 ///
@@ -1819,6 +1851,55 @@ impl kayfabe_arch::fault::MmuFaultCodes for Ga10xFaultCodes {
             // so it reports the strong one rather than choosing at random.
             A::Atomic => 0x2,
         }
+    }
+}
+
+#[cfg(test)]
+mod fb_size_is_a_parameter_tests {
+    use super::*;
+
+    /// ★ **The identity**: making the size a parameter must not move a single byte.
+    #[test]
+    fn todays_constants_are_one_call_of_the_derivation() {
+        assert_eq!(
+            gsp_fw_wpr_end(),
+            gsp_fw_wpr_end_for(FB_SIZE_MB),
+            "the const-fn wrapper and the parameterised derivation must agree at the shipped \
+             size, or w696e moved the WPR2 top"
+        );
+        assert_eq!(GA106_FB_LENGTH, fb_length_for(FB_SIZE_MB));
+    }
+
+    /// ★★★★★ **The SECOND size, and this is the half that matters.**
+    ///
+    /// ⊘ A test that only checks the shipped value passes just as happily if someone later
+    /// makes the derivation ignore its argument and return the constant — which is precisely
+    /// the regression that would silently undo constraint 15. So this pins a size we have
+    /// actually MEASURED: `[measured 2026-09-11, bare metal]` the largest single vidmem
+    /// reservation on this part is **6144 MiB against 12288 advertised**, and 6144 is therefore
+    /// the number a later rung is most likely to feed in.
+    #[test]
+    fn the_derivation_actually_depends_on_its_argument() {
+        const MEASURED_RESERVABLE_MB: u64 = 6144;
+        assert_ne!(
+            gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB),
+            gsp_fw_wpr_end_for(FB_SIZE_MB),
+            "the WPR2 top must MOVE with the advertised size; if these are equal the \
+             derivation is ignoring its argument and constraint 15 cannot be satisfied"
+        );
+        assert_eq!(
+            fb_length_for(MEASURED_RESERVABLE_MB),
+            MEASURED_RESERVABLE_MB << 20
+        );
+        // ⊘ And it must stay a WELL-FORMED derivation at the second size, not merely a
+        // different number: the VGA workspace still comes off the top, and the result is still
+        // WPR-aligned.
+        let end = gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB);
+        assert_eq!(end & (WPR_ALIGNMENT - 1), 0, "WPR2 top must stay aligned");
+        assert!(
+            end <= (MEASURED_RESERVABLE_MB << 20) - PRAMIN_SIZE,
+            "the VGA workspace must still be carved off the top at any advertised size"
+        );
     }
 }
 
