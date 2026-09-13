@@ -86,9 +86,23 @@ every call site. Proposed instead, and the split is then legible from the name a
 | 5 — DoorbellTable | wired | goal 4, w656–w660 |
 | 15 — disjoint worlds | **NOT HONOURED** | one `BarMirror` + one store serves BAR1 **and** BAR2; the real-object join is per-LEAF, not per-BAR (`barmirror.rs:19-21`) |
 | 15 — one reserved object | **designed, not wired** | `gpga_is_one_reserved_object.md` is STATUS: LIVE and says the per-leaf join *"is scheduled for deletion by it"*; `reserve_gpga` has no caller outside its own crate; no GPGA line in any boot |
-| 4, 8 — sub-ms / off-vCPU | **unverified, suspect** | 16 `VCPU-BLOCKING` lines in the control boot (`mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION`) |
+| 4, 8 — sub-ms / off-vCPU | **HOLDS**, with the sanctioned PRAMIN exception | `VCPU-BLOCKING total=22 doors=3` and `PRAMIN-SLOT moves=22` — **the 22 doors ARE the 22 PRAMIN re-points**. `moves=22` is IDENTICAL under the raw client and CUDA (only `skipped` moves: 18439 vs 5448), so it is a BOOT-TIME set and the owner's ruling (*"297us for a thing that only happens at boot… thats fine for that mmap"*, `move_ns[worst=296558 mean=74698]`) is not expired |
 | 7, 14 — epoll / threaded isolates | not built | |
 | 12 — any die | not done | ~20 GA106 `ChipProfile` fields are per-die measurements |
+
+## ⊘ Three false violations in one session, all caught by opening the counter
+
+Recorded because the pattern is the point, not the individual errors:
+
+1. **BAR1/BAR2 "1728 traps"** — `fills` summed premap installs; `TRAP_FILLS` was 0.
+2. **BAR1/BAR2 "5841 traps" on the raw client** — same counter, same error, second workload.
+3. **"22 vCPU blocking doors"** — they are the 22 PRAMIN re-points, already measured at 297 µs
+   worst and already ruled sufficient by the owner **on this same date**, with the ruling's expiry
+   condition written down and NOT met.
+
+★ Each one read as a regression of a goal the directive lists as complete. ⇒ **A violation claim
+is a decision input and earns the same scrutiny as a green.** Two of the three had their answer
+sitting in a doc comment or a dated ruling in the same file as the counter.
 
 ## ⚠ The instrument warning that governs this file
 
