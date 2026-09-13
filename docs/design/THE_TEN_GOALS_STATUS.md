@@ -9,7 +9,7 @@ says so; *"not started"* and *"believed fine"* are different states and are not 
 | # | goal | state | the measurement |
 |---|---|---|---|
 | 1 | Blackwell boots | **not started** | — |
-| 2 | zero read traps; write traps only in BAR0, not PRAMIN, not BAR1/2 | **partly** | below |
+| 2 | zero read traps; write traps only in BAR0, not PRAMIN, not BAR1/2 | **one page short** | `pages_touched=1`, all the counter |
 | 3 | no blocking calls or held locks on the vCPU | **met, with one caveat** | `inline_exceptions=0` every boot; `VCPU-BLOCKING none`; rank-0 `worst_wait=0us slow_waits=0` |
 | 4 | the DoorbellTable wired | **not started** | `dbtable.rs` has ZERO callers; it replaces a 630-line path reaching 14 subsystems |
 | 5 | code rot cleaned or marked | **advanced** | three censuses adjudicated (w605), 16 unrecoverable boot tags grandfathered, full workspace gate green |
@@ -18,6 +18,22 @@ says so; *"not started"* and *"believed fine"* are different states and are not 
 | 8 | TWO raw clients in parallel (needs epoll in workers) | **not started** | — |
 | 9 | the LLM working, then at parity | **not started this session** | last known: `the_llm_fails_on_all_three_doorbell_arms` |
 | 10 | more CUDA apps, then all of it on Blackwell | **not started** | — |
+
+## ★★★★★ GOAL 2, RE-GRADED AT HEAD (w632) — one page touched, and it is the counter
+
+`[measured w631a, rev 9728dbc9, a boot that graded `(P)`]` — **nine commits after the BAR work
+was first measured**, because a result that old is a claim about a tree that no longer exists:
+
+    BAR1 (translated)   0 reads / 0 writes
+    BAR2 (translated)   0 reads / 0 writes
+    PRAMIN-ONLY         0 reads / 0 writes
+    BAR0-READ-HOTSPOTS  pages_touched=1  reads_from_live_pages=129
+                        reads_from_BACKED_pages=0   top[+0xbb0000=129]
+    W392D_GUEST_OUTCOME=(P)
+
+⇒ **`pages_touched=1`.** One page on the entire device produces a read trap, it is the
+free-running counter, and `reads_from_BACKED_pages=0` says nothing leaked out of a page the cut
+is supposed to serve.
 
 ## Goal 2, in detail — the one that moved
 
