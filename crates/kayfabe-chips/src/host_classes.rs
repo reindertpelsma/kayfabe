@@ -139,10 +139,15 @@ impl HostClasses for Ad10xHostClasses {
     }
 
     fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // ⊘ UNMEASURED, not absent. `ADA_COMPUTE_A` is a NAME in this tree's capability
-        // tables and `kayfabe-abi` carries no value for it. Guessing one here would be a
-        // fabricated hardware fact, so the caller refuses by name instead.
-        None
+        // ⊘⊘ THIS REFUSED UNTIL w568, and the refusal's reason was TRUE WHEN WRITTEN and
+        // stale by the time anyone read it: *"`kayfabe-abi` carries no value for it"* was a
+        // statement about the GENERATED table, never about the silicon — `clc9c0.h:27` has
+        // carried `ADA_COMPUTE_A = 0xC9C0` the whole time.
+        //
+        // ★ The fix was to GENERATE it, not to type the number here. A hand-written class id
+        // is exactly the per-model rot the maintainability contract forbids; a generated one
+        // cannot drift from the vendored header it came from.
+        Some(ComputeObjectClass::new(ClassId(nv::ADA_COMPUTE_A)))
     }
 }
 
@@ -193,9 +198,8 @@ impl HostClasses for Gh100HostClasses {
     }
 
     fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // ⊘ UNMEASURED, not absent — see the Ada arm. `HOPPER_COMPUTE_A` has a name and no
-        // value in this tree.
-        None
+        // ⊘ Same correction as the Ada arm — `clcbc0.h:26` carries `HOPPER_COMPUTE_A = 0xCBC0`.
+        Some(ComputeObjectClass::new(ClassId(nv::HOPPER_COMPUTE_A)))
     }
 }
 
@@ -250,16 +254,41 @@ mod compute_object_tests {
     /// capture is evidence of NOTHING, not evidence of emptiness"* — and a fabricated
     /// value is worse than an empty one, because it reads as measured.
     #[test]
-    fn an_unmeasured_generation_answers_none_rather_than_a_guess() {
-        assert!(
-            Ad10xHostClasses.compute_object().is_none(),
-            "this tree has no verified Ada compute class; answering Some() would be a \
-             fabricated hardware fact"
+    fn every_generation_answers_a_class_it_can_cite() {
+        // ⊘⊘ THIS TEST USED TO ASSERT THE OPPOSITE, and both versions were right in turn.
+        //
+        // It pinned `None` for Ada and Hopper on the ground that *"this tree has no verified
+        // compute class"* for them. That was true of the GENERATED table and never true of
+        // the vendored headers — `clc9c0.h:27` and `clcbc0.h:26` have carried the values all
+        // along. w568 generated them, so the premise the assertion rested on is gone.
+        //
+        // ⚠ Rewritten rather than deleted: the property worth keeping is not *"these two
+        // answer None"* but *"nobody answers with a number that has no source"*. So it now
+        // pins that every generation answers a class equal to its own generated constant —
+        // which a fabricated value could not satisfy.
+        assert_eq!(
+            Ad10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Some(nv::ADA_COMPUTE_A),
+            "Ada must answer its own generated constant"
         );
-        assert!(
-            Gh100HostClasses.compute_object().is_none(),
-            "this tree has no verified Hopper compute class"
+        assert_eq!(
+            Gh100HostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Some(nv::HOPPER_COMPUTE_A),
+            "Hopper must answer its own generated constant"
         );
+        // ★ And the three must be DISTINCT — one generation accidentally answering another's
+        // class is the failure a per-generation table exists to prevent, and it would pass
+        // every assertion above if they were all wired to the same constant.
+        let all = [
+            Ga10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Ad10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Gh100HostClasses.compute_object().map(|c| c.compute_object_id().0),
+        ];
+        let mut seen = std::collections::BTreeSet::new();
+        for c in all {
+            let c = c.expect("every generation now declares a compute object");
+            assert!(seen.insert(c), "two generations answer the same compute class {c:#x}");
+        }
     }
 
     /// ★ Compute and copy are DIFFERENT ENGINES, and the types must not let them merge.

@@ -126,6 +126,14 @@ const CLC797_H: &str = "src/common/sdk/nvidia/inc/class/clc797.h";
 const CLC7B5_H: &str = "src/common/sdk/nvidia/inc/class/clc7b5.h";
 const CLC574_H: &str = "src/common/sdk/nvidia/inc/class/clc574.h";
 const CLC7C0_H: &str = "src/common/sdk/nvidia/inc/class/clc7c0.h";
+/// Ada's compute object. ⊘ Added w568 — `host_classes.rs` refused Ada's `compute_object` as
+/// *"a NAME in this tree's capability tables and `kayfabe-abi` carries no value for it"*. That
+/// was true of the GENERATED table and never true of the vendored headers, which have carried
+/// the value all along. Generating it is the fix; hand-writing the number would have been the
+/// per-model rot the owner's maintainability contract forbids.
+const CLC9C0_H: &str = "src/common/sdk/nvidia/inc/class/clc9c0.h";
+/// Hopper's compute object — same reason as [`CLC9C0_H`].
+const CLCBC0_H: &str = "src/common/sdk/nvidia/inc/class/clcbc0.h";
 // ── The HOST-forwarding class axis (#156) ────────────────────────────────────
 //
 // ★★ These four are here for ONE reason and it is not the emulated GPU: the host
@@ -478,6 +486,20 @@ reads as `None` = \"class not in this version\" rather than \"nobody has done it
                 rust_name: "AMPERE_COMPUTE_B",
                 rust_ty: "u32",
                 doc: "`AMPERE_COMPUTE_B` — the compute engine object a CUDA process allocates\non its GR channel. Declares no `AllocFacts`; its whole protocol content is the\nedge (channel -> engine object) that refines the channel's `EngineKind`.",
+            },
+            ConstReq {
+                header: CLC9C0_H,
+                c_name: "ADA_COMPUTE_A",
+                rust_name: "ADA_COMPUTE_A",
+                rust_ty: "u32",
+                doc: "`ADA_COMPUTE_A` — Ada's compute engine object, the generation's counterpart to\n[`AMPERE_COMPUTE_B`].\n\n⊘ **Generated, not transcribed.** `kayfabe_chips::host_classes` refused Ada's compute\nobject on the ground that this crate carried no value for it. That was a true statement\nabout the GENERATED table and never a true statement about the silicon: the value has\nbeen in the vendored header the whole time. ⚠ The refusal was right when written and\nbecame stale without saying so, which is this tree's most expensive recurring failure.",
+            },
+            ConstReq {
+                header: CLCBC0_H,
+                c_name: "HOPPER_COMPUTE_A",
+                rust_name: "HOPPER_COMPUTE_A",
+                rust_ty: "u32",
+                doc: "`HOPPER_COMPUTE_A` — Hopper's compute engine object. See [`ADA_COMPUTE_A`] for why\nthis is generated rather than written down.",
             },
             ConstReq {
                 header: CLC797_H,
