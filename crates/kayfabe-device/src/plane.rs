@@ -4285,6 +4285,44 @@ impl RegPlane {
 
     /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
     #[must_use]
+    /// ★★★★★ **THE INTERRUPT CENSUS — and it had NO CONSUMER AT ALL until w681.**
+    ///
+    /// ⊘⊘⊘ These counters have been incremented on every interrupt path since they were
+    /// written, and **nothing outside tests ever read them**: the only aggregator,
+    /// `Regs::audit()`, is consumed by no production caller and by no C-side printer. A field
+    /// nothing reads cannot fail — sitting on the interrupt path.
+    ///
+    /// ⚠ That is exactly the path `cuCtxCreate` spins on. `[oracle, real GA106]` the guest
+    /// calls `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`) **175 times until killed**,
+    /// and **hardware calls it zero times in the whole program**. A guest servicing interrupts
+    /// in a loop is a guest waiting for one that never arrives — and until this line existed a
+    /// boot could not say whether we raised any at all.
+    ///
+    /// ⊘ `unvectored` is the sharp one: a completion we DECLINED to announce because the
+    /// channel had no bound engine. That is a raise the guest is waiting for and will never
+    /// get. `masked` is the guest's own doing and is legitimate. Folding them into one number
+    /// would hide the defect inside the excuse.
+    #[must_use]
+    pub fn intr_census(&self) -> String {
+        use Ordering::Relaxed;
+        let c = &self.c;
+        format!(
+            "INTR-CENSUS nonstall[raises={} unvectored={} masked={}] cpu[accesses={} raises={} \
+             masked={}] gsp_event[raises={} unvectored={} masked={}] ⊘ `unvectored` is a \
+             completion we refused to announce — the guest is still waiting for it. A non-zero \
+             there beside a spinning guest is the FIRST thing to read.",
+            c.nonstall_raises.load(Relaxed),
+            c.nonstall_unvectored.load(Relaxed),
+            c.nonstall_masked.load(Relaxed),
+            c.cpu_intr_accesses.load(Relaxed),
+            c.cpu_intr_raises.load(Relaxed),
+            c.cpu_intr_masked.load(Relaxed),
+            c.gsp_event_raises.load(Relaxed),
+            c.gsp_event_unvectored.load(Relaxed),
+            c.gsp_event_masked.load(Relaxed),
+        )
+    }
+
     pub fn pending_command_doorbells(&self) -> u32 {
         // ⊘ **THE w467 A/B IS SETTLED AND ITS LOSING ARM IS GONE.** `KAYFABE_PENDING_VIA_LOCK`
         // existed to compare this lock-free read against w432's read through the big `state`

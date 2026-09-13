@@ -6890,7 +6890,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6942,6 +6942,31 @@ impl SharedDoorbell {
                 self.plane.upgrade().map_or_else(
                     || "BAR0-READ-HOTSPOTS ⊘ NO PLANE — unmeasured, not zero".to_string(),
                     |p| p.bar0_read_hotspots(12),
+                ),
+                // ★★★★★ **THE INTERRUPT CENSUS — and it had NO CONSUMER AT ALL (w681).**
+                //
+                // ⊘⊘⊘ `Regs::audit()` has carried `nonstall_raises` / `nonstall_unvectored` /
+                // `nonstall_masked` / `cpu_intr_raises` / `cpu_intr_masked` /
+                // `gsp_event_raises` / `gsp_event_unvectored` since they were written, and
+                // **nothing outside tests ever read the struct.** Incremented on every path,
+                // printed by nobody — the tree's own "a field nothing reads cannot fail",
+                // sitting on the interrupt path.
+                //
+                // ⚠ That is exactly the path `cuCtxCreate` spins on: `[oracle, real GA106]` the
+                // guest calls `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`) **175
+                // times until killed**, and hardware calls it **zero** times in the whole
+                // program. A guest servicing interrupts in a loop is a guest waiting for one
+                // that never arrives — and until this line existed, a boot could not say
+                // whether we raised any at all.
+                //
+                // ⊘ `unvectored` is the sharp one: it counts completions we DECLINED to
+                // announce because the channel had no bound engine, which is a raise the guest
+                // is waiting for and will never get. `masked` counts ones the guest itself
+                // turned off, which is legitimate. Reading them as one number would hide the
+                // defect inside the excuse.
+                self.plane.upgrade().map_or_else(
+                    || "INTR-CENSUS ⊘ NO PLANE — unmeasured, not zero".to_string(),
+                    |p| p.intr_census(),
                 ),
                 // ★★★★★ **GOAL 4 — what the DoorbellTable WOULD have done**, beside the
                 // numbers the live path actually produced. ⊘ A census with no emitter is the

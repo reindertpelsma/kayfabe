@@ -46,7 +46,19 @@ set -uo pipefail
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 G="$SRC_DIR/gssh_nv"
 CUP3_SRC=${KAYFABE_CUP3_SRC:-$SRC_DIR/cup3.c}
-CUP3_TIMEOUT=${KAYFABE_CUP3_TIMEOUT:-300}
+# CUP3 SHOULD FINISH IN UNDER A SECOND. A LONG BOUND WAITS ON THE BUG.
+#
+# Owner, 2026-09-13: "cup3 shouldn't take longer than a second, compared to bare metal, if it
+# does kill it and strace up to that point to decode why. Its not worth waiting minutes every
+# launch thats slow because of the bug itself rather than stopping in the bug."
+#
+# Correct, and the 300s default was costing ~6 minutes per iteration to learn one bit. The bound
+# is now a FAST FAIL: when it blows we capture WHERE the process is, which is the thing that
+# actually decodes the hang, and we get it ~50x sooner.
+#
+# The bound is deliberately generous against a bare-metal reference of milliseconds - it exists
+# to bound the WAIT, not to judge the run. A pass well inside it is still a pass.
+CUP3_TIMEOUT=${KAYFABE_CUP3_TIMEOUT:-10}
 
 die() { echo "★ cup3 hook FAILED: $*"; exit 2; }
 
@@ -172,6 +184,30 @@ RV=$(printf '%s' "$KLINE" | sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p')
 
 echo ""
 echo "CUP3_RC=${RC:-NO_RC_FILE}"
+# WHEN IT DOES NOT FINISH, SAY WHERE IT IS - the hang's location is the finding.
+#
+# A timeout that reports only "it timed out" makes the next run mandatory. These three cheap
+# reads usually make it unnecessary:
+#   - /proc/<tid>/stack and /wchan: kernel-side, names the driver function it is inside;
+#   - /proc/<tid>/syscall: whether it is in a syscall AT ALL - a 100% CPU userspace spin shows
+#     `running`, which already rules out "blocked on us";
+#   - a short `strace -c`: which ioctl it is repeating. `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`
+#     (0x20801702) appearing here is the oracle's known signature for libcuda spinning on a
+#     completion that never arrives - hardware calls that id ZERO times in the whole program.
+if [ ! -f /tmp/cup3.rc ] || [ "${RV:-}" = "" ]; then
+  echo ""
+  echo "=== cup3 did not produce a value within ${CUP3_TIMEOUT}s - WHERE IS IT? ==="
+  $G 'P=$(pgrep -x cup3 | head -1); if [ -n "$P" ]; then
+        echo "CUP3_STILL_RUNNING pid=$P"
+        echo "  state : $(awk "{print \$3}" /proc/$P/stat 2>/dev/null)"
+        echo "  wchan : $(cat /proc/$P/wchan 2>/dev/null || echo unreadable)"
+        echo "  syscall: $(cat /proc/$P/syscall 2>/dev/null | cut -c1-60 || echo unreadable)"
+        echo "  utime/stime: $(awk "{print \$14, \$15}" /proc/$P/stat 2>/dev/null)"
+        sudo timeout 6 strace -c -f -p $P 2>&1 | tail -14
+      else
+        echo "CUP3_GONE - it exited without writing a value"
+      fi' 2>&1 | sed 's/^/    /'
+fi
 echo "CUP3_VAL=${RV:-NO_KERNEL_LINE}"
 echo "CUP3_KERNEL_LINE=${KLINE:-ABSENT}"
 echo "CUP3_JIT_PRESENT=$JIT_OK"
