@@ -5367,15 +5367,6 @@ fn doorbell_publish_loop(
                 }
             }
         }
-        // ★★★★★ **GOAL 4 — REBUILD THE DOORBELL TABLE, every pass, from the projection.**
-        //
-        // ⊘ Here and not at a birth hook: `Spine::by_vchid` is rebuilt wholesale by the
-        // projection, so taking it entire is the only population that cannot be partially
-        // stale. Every pass because the worker already wakes on exactly the events that can
-        // change it — a doorbell, a birth, an invalidate — and the rebuild is 4096 relaxed
-        // stores over a `Vec` the spine handed us. ⚠ Still SHADOW: nothing reads its answer
-        // for a decision yet.
-        port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         // ★★★ **w644 — THIS DEVICE'S MIRROR, not a process-global fallback.**
@@ -5393,6 +5384,23 @@ fn doorbell_publish_loop(
         let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain.as_deref());
         #[cfg(not(feature = "host-isolates"))]
         let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain);
+        // ★★★★★ **GOAL 4 — REBUILD THE DOORBELL TABLE FROM THE PROJECTION.**
+        //
+        // ⊘ Here and not at a birth hook: `Spine::by_vchid` is rebuilt wholesale by the
+        // projection, so taking it entire is the only population that cannot be partially
+        // stale.
+        //
+        // ⊘⊘⊘ **AFTER THE BIRTH DRAIN, AND w645 IS WHY IT HAD TO MOVE.** It ran BEFORE, so a
+        // channel born in pass N only entered the table in pass N+1 — and a doorbell arriving
+        // in that window decodes to a real vChid the table calls `Unallocated`. Under the flip
+        // that is a **live submission dropped**, which is goal 4's one dangerous failure,
+        // introduced by the ordering of two statements.
+        //
+        // ⚠ `[measured w643a, w645a]` `unallocated=0` over 359 doorbells did **not** rule this
+        // out. The window is narrow, so a zero over two boots **bounds the race's rate and
+        // says nothing about whether it exists** — the finding came from reading the loop, not
+        // from the census. ★ A green number is not a proof about a race.
+        port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
         //
         // Owner, 2026-09-12: *"if a channel is created inheriting a va base, then you can map

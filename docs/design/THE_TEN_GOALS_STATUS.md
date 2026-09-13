@@ -136,3 +136,56 @@ Flip the arms only once a boot shows the table and the worker agreeing on every 
 ★ This is the tree's own standing lesson applied before the fact rather than after: a green path
 that has never been contradicted is not evidence, and `dbtable`'s tests pass today while the type
 has never seen a real token.
+
+
+---
+
+# ★★★★★ GOAL 4 — THE TABLE IS WIRED AND MEASURED (w643a, w645a, 2026-09-13)
+
+```
+w643a  DBTABLE-SHADOW consulted=360 [unallocated=0 passthrough=204 emulated=156 malformed=0]
+                      disagree=0  rebuilds=41746  rows=0
+w645a  DBTABLE-SHADOW consulted=359 [unallocated=0 passthrough=204 emulated=155 malformed=0]
+                      rows_peak=11  rebuilds=41713  skipped=41649
+both   MEAN_FALSIFIER=PASS   W392D_GUEST_OUTCOME=(P)   BAR1 0/0   BAR2 0/0
+```
+
+## What the two boots establish
+
+- **`unallocated=0` with `consulted` ≈ 360, twice.** The table would have dropped nothing over a
+  boot whose live path served every doorbell. Both arms exercised (204 / 155), so the zero is not
+  a table nobody asked.
+- **The vCPU cost claim survives its falsifier.** `MEAN_FALSIFIER=PASS` and BAR1/BAR2 at zero with
+  the consult on the doorbell trap path.
+- `rows_peak=11`, `skipped=41649 / 41713` (99.85 %): the table really was populated, and the
+  store pass now runs 64 times instead of 41 713.
+
+## ⊘⊘⊘ WHAT THE ZERO DOES **NOT** ESTABLISH — and this is the load-bearing half
+
+The rebuild ran **before** the birth drain in the same worker pass, so a channel born in pass N
+only entered the table at pass N+1. **A doorbell arriving in that window decodes to a real vChid
+the table calls `Unallocated`** — under the flip, a live submission dropped, which is goal 4's one
+dangerous failure, created by the order of two statements.
+
+⚠ `unallocated=0` over 359 doorbells **did not rule this out.** The window is narrow, so the zero
+**bounds the race's rate and says nothing about whether it exists.** The defect was found by
+reading the loop, not by reading the census.
+
+★ **A green number is not a proof about a race.** Same family as *"a census zero needs a
+known-positive"*, one step further out: here a known-positive would not have helped either,
+because the event is timing-dependent rather than path-dependent.
+
+⇒ Fixed by moving the rebuild **after** the birth drain (w646).
+
+## Before any arm is flipped — the standing preconditions
+
+1. `DBTABLE_SHADOW_*` are `static`s. With two GPUs the line sums both devices and `unallocated=0`
+   stops distinguishing *"this device dropped none"* from *"the other device's traffic swamped
+   it"*. They must become port fields, or the evidence for flipping is a number about two GPUs.
+2. `Unallocated` must **not** mean "drop" on the first flip. A conservative flip short-circuits
+   only `Passthrough` and lets `Unallocated` fall through to today's queue — which costs the same
+   queue slot it costs today, and keeps any residual rebuild race harmless while the census proves
+   it out.
+3. Inline passthrough (the owner's *"no queue, no worker"*) needs a **checked** store accessor
+   into the VMM's writable usermode-page mapping. The mapping exists as of w641; the accessor does
+   not, and safe code may not touch a raw VMM pointer unchecked.
