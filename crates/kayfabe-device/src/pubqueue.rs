@@ -156,10 +156,14 @@ use std::sync::{Condvar, Mutex};
 /// `MapPublication`. Adding a second kind here is what lets the guest's `MMU_INVALIDATE` be
 /// published **off the vCPU** without a second worker thread, which the owner explicitly does
 /// not want: *"You don't have to have a separate doorbell thread (in fact better is not)."*
+/// ⊘ `#[repr(usize)]` with explicit discriminants (w671): `Stats::queued_by_kind` indexes by
+/// `kind as usize`, so the numbering is a **contract**, not an accident of declaration order.
+/// Reordering the variants without touching the array would silently re-label a census.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(usize)]
 pub enum PublicationKind {
     /// The guest rang a doorbell; publish what its submission needs, then forward.
-    Doorbell,
+    Doorbell = 0,
     /// ★★★★★ **w472 — a pure WAKE for the BAR mirror's fill queue.** Carries no work of its
     /// own: the worker drains the queue and that is all.
     ///
@@ -169,7 +173,7 @@ pub enum PublicationKind {
     /// page and can never produce a wrong value. ⚠ It must still be SENT, though: without a
     /// wake the queue drains only at the next invalidate, and a page that keeps trapping is
     /// how BAR1 went back to tens of thousands of exits.
-    MirrorFill,
+    MirrorFill = 1,
     /// ★★★ The guest wrote the **TLB invalidate trigger**. Publish, then signal completion so
     /// the guest's own poll of the trigger register clears.
     ///
@@ -177,14 +181,14 @@ pub enum PublicationKind {
     /// `kgmmuCheckPendingInvalidates_TU102` does on real hardware — so deferring this work
     /// does not make the guest miss it. What changes is only that the wait happens in the
     /// guest's own loop instead of inside one held MMIO store.
-    Invalidate,
+    Invalidate = 2,
     /// ★★★ The guest completed an **RPC map call** (`GPU_PROMOTE_CTX`) — the owner's
     /// synchronization point (2). Publish the rows it bound.
     ///
     /// ⊘ No completion to signal: unlike an invalidate there is no trigger register the guest
     /// polls. The RPC has already returned; what remains is getting its rows onto the host
     /// before the engine that uses them runs.
-    RpcBind,
+    RpcBind = 4,
     /// ★★★★★ **w432 — the GSP command queue moved and a worker must service it.**
     ///
     /// `[measured]` servicing it inside the guest's `NV_PGSP_QUEUE_HEAD` store held a vCPU for
@@ -194,7 +198,7 @@ pub enum PublicationKind {
     /// ⊘ Its token is a monotonic SEQUENCE, not a doorbell token and not a register value:
     /// what the worker needs to know is *"the queue moved since you last looked"*, and the
     /// queue state itself lives in guest RAM where the FSM reads it.
-    GspSubmit,
+    GspSubmit = 3,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -318,6 +322,23 @@ pub struct QueueStats {
     pub queued: u64,
     /// Offers that folded into a pending entry (§2 — a doorbell is a level).
     pub coalesced: u64,
+    /// ★★★★★ **QUEUED, BROKEN DOWN BY KIND (w671) — because the TOTAL cannot say what to fix.**
+    ///
+    /// ⊘⊘ `[measured w670a, one `cuDeviceGet`]` `queued=12268 coalesced=0`, and a `cuDeviceGet`
+    /// that should be microseconds took **20 s**. The vCPU was clean (one trap over 1 ms, 98.9 %
+    /// CPU, `slow_starved=0`) and the isolate verbs totalled **154 ms** — so the cost is neither
+    /// a stalled trap nor a slow verb, it is **~12 000 worker passes at ~1.6 ms each**.
+    ///
+    /// ⚠ And the total is where the diagnosis stopped: counting the log's per-kind MARKERS gave
+    /// ~1 200 events against 12 268 jobs, because those lines are capped and rate-limited. **A
+    /// capped log line is not a census.** The queue is the one place that sees every offer, so
+    /// it is the only place that can answer *"which kind is 12 000 of them"*.
+    ///
+    /// ⊘ `coalesced=0` is NOT a broken optimisation: `for_mirror_fill`/`for_gsp_submit`/
+    /// `for_rpc_bind` are keyed by a **monotonic seq**, so their tokens are distinct by
+    /// construction and can never coalesce. Only `for_doorbell` (keyed by the guest's token)
+    /// can. Reading that zero as a coalescing bug would have been a whole wasted lane.
+    pub queued_by_kind: [u64; 5],
     /// ⊘ Offers refused at the cap. **Non-zero means some doorbell ran inline**, and the
     /// caller owes a line saying so.
     pub refused: u64,
@@ -445,8 +466,14 @@ impl PublicationQueue {
             return Offered::Full;
         }
         g.pending.insert(token);
+        // ⊘ Indexed BEFORE the push, off the job we still own, so the counter cannot drift from
+        // what was actually enqueued.
+        let k = job.kind() as usize;
         g.order.push_back(job);
         g.stats.queued += 1;
+        if let Some(c) = g.stats.queued_by_kind.get_mut(k) {
+            *c += 1;
+        }
         g.stats.high_water = g.stats.high_water.max(g.order.len());
         drop(g);
         self.wake.notify_one();
@@ -542,8 +569,14 @@ impl PublicationQueue {
     pub fn census(&self) -> String {
         let s = self.stats();
         format!(
-            "PUBQUEUE coalesce={} queued={} coalesced={} refused={} taken={} completed={} \
+            "PUBQUEUE by_kind[doorbell={} mirror_fill={} invalidate={} gsp_submit={} \
+             rpc_bind={}] coalesce={} queued={} coalesced={} refused={} taken={} completed={} \
              depth={} high_water={} cap={}{}",
+            s.queued_by_kind[0],
+            s.queued_by_kind[1],
+            s.queued_by_kind[2],
+            s.queued_by_kind[3],
+            s.queued_by_kind[4],
             self.coalesce,
             s.queued,
             s.coalesced,
