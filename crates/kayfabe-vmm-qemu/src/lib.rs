@@ -1353,6 +1353,31 @@ impl QemuMachine {
             })
     }
 
+    /// ★★★★★ **THE RING'S HANDLE, TAKEN ONCE — so the ring itself takes NO LOCK.**
+    ///
+    /// [`QemuMachine::device_window_store_u32`] resolves `region` under the installer lock,
+    /// which the publication worker also holds while it maps and unmaps. ⚠ On a passthrough
+    /// doorbell that would put a **vCPU behind a page-table refresh** — the exact contention
+    /// shape that put 1098 traps over the owner's 1 ms budget, arriving through the fix for it.
+    ///
+    /// ⇒ A caller that will ring repeatedly takes the window handle **once**, at install, and
+    /// stores into it with no lock at all: [`kayfabe_linux_raw::GuestWindow::store_u32`] reads
+    /// two immutable fields and issues one instruction.
+    ///
+    /// ⊘ **The `Arc` is the lifetime**, and that is this file's own established discipline —
+    /// `Resolved::Ours(Arc<GuestWindow>, u64)` exists so *"the copy runs outside the lock, held
+    /// alive by the `Arc`"*. A holder keeps the mapping valid even if the window is later
+    /// retired, which is correct: the alternative is a handle that can dangle between the
+    /// lookup and the store.
+    ///
+    /// ⚠ It does **not** confer the right to write: the VMA's protection decides that, and for
+    /// a device view armed `O_RDONLY` the store fails at the kernel.
+    #[must_use]
+    pub fn device_window_handle(&self, region: RamRegionId) -> Option<WindowHandle> {
+        let (ins, _h) = self.plane.installer();
+        ins.windows.get(&region).map(|w| Arc::clone(&w.window))
+    }
+
     /// ★★★★★ **RING A HARDWARE DOORBELL — one aligned dword into an installed window.**
     ///
     /// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker"* and
@@ -2302,6 +2327,14 @@ impl QemuMachine {
 // =====================================================================================
 // The Vmm impl
 // =====================================================================================
+
+/// ★ A live handle onto one installed window, for a caller that will store into it
+/// repeatedly — see [`QemuMachine::device_window_handle`].
+///
+/// ⊘ An alias rather than a newtype: the `Arc` **is** the contract (it keeps the mapping alive
+/// for the holder's life), and wrapping it would hide exactly the property the caller needs to
+/// reason about.
+pub type WindowHandle = Arc<GuestWindow>;
 
 /// A per-thread handle onto a [`QemuMachine`]'s memory plane.
 #[derive(Debug, Clone)]

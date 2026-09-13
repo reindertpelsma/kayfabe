@@ -3723,6 +3723,19 @@ struct SharedDoorbell {
     dbtable: Arc<kayfabe_device::dbtable::DoorbellTable>,
     /// ★ The shadow census for THIS device — see [`DbtableShadow`].
     dbshadow: Arc<DbtableShadow>,
+    /// ★★★★★ **WHERE THIS DEVICE'S HOST DOORBELL LIVES IN THE VMM** — the installed
+    /// counter-page window and the register's offset inside it, set once the page is placed.
+    ///
+    /// ⊘ `None` until [`install_counter_page`] succeeds, and that is a real state, not a
+    /// startup detail: before the first isolate exists there is no host usermode page to ring,
+    /// and a passthrough doorbell in that window must take the queue rather than pretend.
+    ///
+    /// ⚠ Both halves are **ours**. The guest supplies a token, never an address: the offset is
+    /// the register's fixed place in the window and the region is one we installed.
+    /// ⊘ Gated with the rest of the counter-page path: without `host-isolates` there is no
+    /// isolate to export a host usermode page, so there is nothing to ring.
+    #[cfg(feature = "host-isolates")]
+    ring_target: Arc<std::sync::OnceLock<(kayfabe_vmm_qemu::WindowHandle, u64)>>,
     /// ★★★★★ **w644 — THE BAR MIRROR, PER DEVICE.** Replaces the process-global
     /// `MIRROR_FOR_BIRTH`.
     ///
@@ -5295,7 +5308,26 @@ fn install_counter_page(
         Some(gpa..gpa + len),
         true,
     ) {
-        Ok(_) => {
+        Ok(region) => {
+            // ★★★★★ **KEEP THE RING'S COORDINATES (w649).** The doorbell register sits
+            // `USERMODE_DOORBELL_OFF` into the usermode window, and the window we just
+            // installed starts at that window's base — so the register's offset *within the
+            // installed region* is exactly that constant, on every generation Volta→Blackwell.
+            //
+            // ⊘ Recorded rather than recomputed at ring time: a passthrough doorbell runs on
+            // the vCPU and must not consult a chip table, and an offset derived twice is an
+            // offset that can be derived differently twice.
+            //
+            // ⊘⊘ **THE WINDOW HANDLE, NOT THE REGION ID (w649).** Resolving a `RamRegionId`
+            // takes the installer lock, which the publication worker holds while it maps and
+            // unmaps — so ringing through it would put a **vCPU behind a page-table refresh**,
+            // the exact contention this whole rung exists to remove. The handle is taken once,
+            // here, and the ring is then two field reads and one instruction.
+            if let Some(w) = vmm.machine().device_window_handle(region) {
+                let _ = port
+                    .ring_target
+                    .set((w, kayfabe_device::USERMODE_DOORBELL_OFF));
+            }
             eprintln!(
                 "kayfabe: COUNTER-PAGE installed at gpa=0x{gpa:x} mmap_len=0x{mmap_len:x} \
                  slot=0x{len:x} ⊘ the guest now reads the GPU's OWN clock with no exit, and its \
@@ -14572,6 +14604,8 @@ impl Regs {
             // only ever refuses a MALFORMED one.
             dbtable: Arc::new(kayfabe_device::dbtable::DoorbellTable::new(VCHID_SPACE)),
             dbshadow: Arc::new(DbtableShadow::default()),
+            #[cfg(feature = "host-isolates")]
+            ring_target: Arc::new(std::sync::OnceLock::new()),
             #[cfg(feature = "host-isolates")]
             bar_mirror: Arc::new(std::sync::OnceLock::new()),
         };
