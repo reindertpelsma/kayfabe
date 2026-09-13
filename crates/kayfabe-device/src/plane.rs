@@ -1182,9 +1182,21 @@ pub struct RegPlane {
     /// ★ w565 — the GSP model's register offsets, swept once. See
     /// [`RegPlane::gsp_register_offsets`].
     gsp_regs: std::sync::OnceLock<Vec<u64>>,
-    /// ★ w554 — one bit per aperture page, set when the cut backs that page with memory.
-    /// Built on first use from [`RegPlane::bar0_backable_runs`]; see [`RegPlane::dead_page`].
-    dead_pages: std::sync::OnceLock<Box<[u64]>>,
+    /// ★★★★★ w573 — one bit per aperture page, set when the cut backs that page with memory.
+    ///
+    /// ⊘⊘ **Built at CONSTRUCTION, and w554 built it LAZILY ON THE READ PATH.** `dead_page` is
+    /// called from the unclaimed arm of `read`, so the first unclaimed read a guest issued —
+    /// very early in boot — ran `bar0_backable_runs` inside its own MMIO exit: **4096 pages ×
+    /// 1024 dwords = 4.2 MILLION predicate evaluations, on the vCPU, with the guest halted.**
+    ///
+    /// ⚠ That is the owner's third invariant violated by an INSTRUMENT — the counter added to
+    /// measure the cut was itself the stall. `[measured w573, bench boot]` the tree at w554
+    /// graded `(R)` where w553 graded `(P)`.
+    ///
+    /// ★ It is a pure function of the chip, so there was never a reason to defer it: no guest
+    /// state, no lock, no I/O. Computing it in `new` costs one sweep at realize, where nothing
+    /// is waiting.
+    dead_pages: Box<[u64]>,
     /// See [`PlaneMem`] — the framebuffer and the GMMU format, under their own lock so a CE
     /// submission and a register write stop contending over data neither needs.
     mem: kayfabe_util::lock::RankedMutex<PlaneMem>,
@@ -1995,18 +2007,8 @@ impl RegPlane {
     /// cannot disagree about which pages are dead — which is the whole point of asking.
     fn dead_page(&self, off: u64) -> bool {
         const PAGE: u64 = 4096;
-        let bits = self.dead_pages.get_or_init(|| {
-            let n = (self.chip.regs_aperture_len / PAGE).div_ceil(64) as usize;
-            let mut map = vec![0u64; n];
-            for (start, len) in self.bar0_backable_runs() {
-                for page in (start / PAGE)..((start + len) / PAGE) {
-                    map[(page / 64) as usize] |= 1 << (page % 64);
-                }
-            }
-            map.into_boxed_slice()
-        });
         let page = off / PAGE;
-        bits
+        self.dead_pages
             .get((page / 64) as usize)
             .is_some_and(|w| w & (1 << (page % 64)) != 0)
     }
@@ -2135,10 +2137,10 @@ impl RegPlane {
         // looking armed from the launching shell; the report proving what it ran with is
         // the fix.
         census.set_probe_arm(probe_arm);
-        Ok(RegPlane {
+        let mut plane = RegPlane {
             read_shadow: std::sync::RwLock::new(None),
             gsp_regs: std::sync::OnceLock::new(),
-            dead_pages: std::sync::OnceLock::new(),
+            dead_pages: Box::new([]),
             chip,
             model,
             rom,
@@ -2198,7 +2200,30 @@ impl RegPlane {
             // ⊘ The default is a REFUSAL, not an empty sink — see `crate::RefusingDoorbell`.
             doorbell: RwLock::new(Box::new(RefusingDoorbell)),
             doorbell_log: Mutex::new(DoorbellLog::default()),
-        })
+        };
+        // ★★★★★ w573 — THE BITMAP IS BUILT HERE, at realize, where nothing is waiting.
+        //
+        // ⊘⊘ w554 built it lazily inside `dead_page`, which the READ path calls — so the first
+        // unclaimed read a guest issued swept 4096 pages at dword stride **inside its own MMIO
+        // exit, on the vCPU**. It is a pure function of the chip: no guest state, no lock, no
+        // I/O. There was never a reason to defer it, and deferring it put 4.2 million predicate
+        // evaluations under a halted guest.
+        plane.dead_pages = plane.build_dead_page_bitmap();
+        Ok(plane)
+    }
+
+    /// One bit per aperture page, set when every dword in it is backable. See
+    /// [`RegPlane::dead_pages`] for why this runs at construction and nowhere else.
+    fn build_dead_page_bitmap(&self) -> Box<[u64]> {
+        const PAGE: u64 = 4096;
+        let n = (self.chip.regs_aperture_len / PAGE).div_ceil(64) as usize;
+        let mut map = vec![0u64; n];
+        for (start, len) in self.bar0_backable_runs() {
+            for page in (start / PAGE)..((start + len) / PAGE) {
+                map[(page / 64) as usize] |= 1 << (page % 64);
+            }
+        }
+        map.into_boxed_slice()
     }
 
     /// The chip this plane answers as.

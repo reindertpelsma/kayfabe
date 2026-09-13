@@ -6526,18 +6526,37 @@ impl SharedDoorbell {
             let n = operands.unresolved.len();
             let first = operands.unresolved[0];
             OPERAND_UNRESOLVED_REFUSALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            kft.mark("operand_refused");
-            return refused(
-                token,
-                kayfabe_device::FaultTag("OperandBoundNowhere"),
-                format!(
-                    "this copy names {n} operand page(s) that this channel's VA space binds \
-                     nowhere — the first is 0x{first:x}. Forwarding it would ring a host \
-                     channel whose engine must then fault on that address (`Xid 31 … \
-                     FAULT_PDE`), so the doorbell is refused here instead. ⊘ `miss = fault` \
-                     (mode2_address_table.md §6) applied at the site that can apply it."
-                ),
-            );
+            kft.mark("operand_unresolved");
+            // ⊘⊘⊘ **w555 RETURNED HERE, AND IT BROKE A PASSING CLIENT. MEASURED.**
+            //
+            // `[measured w573, bench boot, RTX 3060]` bisecting the raw client across the
+            // ungraded range: `w554` grades **(P)**, `w555` grades **(R)**. The one thing w555
+            // changed is this return.
+            //
+            // ★ The reasoning that justified refusing was sound and the conclusion was wrong.
+            // Forwarding a copy whose source is bound nowhere DOES fault the host engine —
+            // `Xid 31 … FAULT_PDE` on the address, exactly as predicted. But that fault is
+            // **CONTAINED**: the guest survives it, the channel recovers, and the client
+            // passes. A refusal is not: the submission never happens at all, and the client
+            // waits for a completion that will never come.
+            //
+            // ⇒ **The contained fault is survivable; my refusal was not.** I wrote at the time
+            // that "a refusal is not a fix" — true, and I still let it replace something that
+            // worked. A gate that converts a survivable fault into an unsurvivable stall is
+            // worse than the fault, and only a boot could say so.
+            //
+            // ⊘ So this COUNTS and NAMES and forwards. The number is the value w555 actually
+            // added; the return was the part that had to go. ⚠ Do not re-add the refusal
+            // without a boot showing the client survives it.
+            if OPERAND_UNRESOLVED_REFUSALS.load(std::sync::atomic::Ordering::Relaxed) <= 4 {
+                eprintln!(
+                    "kayfabe: OPERAND-UNRESOLVED token={token:#010x} n={n} first=0x{first:x} \
+                     ⇒ FORWARDING ANYWAY. The host engine will fault on that address \
+                     (`Xid 31 … FAULT_PDE`) and the guest contains it. ⊘ Refusing here instead \
+                     was measured to turn a passing client into a named-gap failure (w555 → \
+                     w573): the submission simply never happens and the guest waits forever."
+                );
+            }
         }
         // ★★★★★ **LEG 8 — w290's publication**, and its position is the C's own invariant:
         // *"a mapping is always backed before the engine that uses it runs."* It is ordered

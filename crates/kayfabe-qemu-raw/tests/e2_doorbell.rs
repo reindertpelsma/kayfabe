@@ -119,8 +119,27 @@ fn kind_of(r: &kayfabe_device::DoorbellReport) -> &'static str {
 /// ★ `UnknownVchid` and not merely "some refusal": it is the fault that can only be reached
 /// **after** a successful token decode and a real lookup in a real spine. A shim that never
 /// called the core cannot produce it, and neither can one whose token decode refused.
+/// ★★★★★ **THESE TESTS SHARE A PROCESS-GLOBAL ENV VAR, so they may not run at once.**
+///
+/// ⊘⊘ Every test here pins `KAYFABE_DOORBELL_ASYNC=off` so it can observe the refusal the
+/// routing chain produces INLINE. One test deliberately flips it to `on` and back
+/// (`the_async_arm_...`). `std::env::set_var` is process-global and cargo runs a binary's
+/// tests on parallel threads, so a sibling reading it mid-flip sees `on`, its doorbell is
+/// QUEUED instead of routed, and `kind_of` panics with *"expected a named refusal, got
+/// Scheduled"*.
+///
+/// ⚠ `[measured w573]` the file fails INTERMITTENTLY on an unchanged tree — three runs gave
+/// FAILED, ok, FAILED. It failed the first time immediately after a real regression fix, which
+/// is the worst possible moment for a flake: it reads as the fix having broken something.
+/// Serializing is the fix; widening the assertion would delete the property.
+fn serialized() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn a_guest_write_to_the_doorbell_aperture_reaches_the_core_and_is_named() {
+    let _serial = serialized();
     let r = regs();
     let out = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
 
@@ -164,6 +183,7 @@ fn a_guest_write_to_the_doorbell_aperture_reaches_the_core_and_is_named() {
 /// models nothing at.
 #[test]
 fn non_doorbell_writes_in_the_same_run_produce_neither() {
+    let _serial = serialized();
     let r = regs();
 
     let controls: &[(u32, u64, &str)] = &[
@@ -210,6 +230,7 @@ fn non_doorbell_writes_in_the_same_run_produce_neither() {
 /// once E5 populates the routing map.
 #[test]
 fn a_malformed_token_and_a_routable_one_refuse_differently() {
+    let _serial = serialized();
     let r = regs();
 
     let bad = r.write(BAR_REGS, DOORBELL, 4, MALFORMED_TOKEN);
@@ -240,6 +261,7 @@ fn a_malformed_token_and_a_routable_one_refuse_differently() {
 /// read at 2am, is indistinguishable from the transport being broken.
 #[test]
 fn a_token_of_zero_is_reported_as_a_ring_not_as_an_absence() {
+    let _serial = serialized();
     let r = regs();
     assert_eq!(r.audit().doorbell_last_token_valid, 0);
 
@@ -259,6 +281,7 @@ fn a_token_of_zero_is_reported_as_a_ring_not_as_an_absence() {
 /// contains ordinary register traffic.
 #[test]
 fn the_counters_are_exact_over_a_mixed_run() {
+    let _serial = serialized();
     let r = regs();
     for i in 0..7u64 {
         let _ = r.write(BAR_REGS, DOORBELL, 4, i);
@@ -281,6 +304,7 @@ fn the_counters_are_exact_over_a_mixed_run() {
 /// carry the previous one's token.
 #[test]
 fn a_device_reset_clears_the_doorbell_report() {
+    let _serial = serialized();
     let r = regs();
     let _ = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
     assert_eq!(r.audit().doorbell_last_token_valid, 1);
@@ -342,6 +366,7 @@ fn a_device_reset_clears_the_doorbell_report() {
 /// fixture exercises one of them.
 #[test]
 fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
+    let _serial = serialized();
     use kayfabe_arch::ClientKind;
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb};
     use kayfabe_core::rmgraph::{AllocFacts, RmEvent};
@@ -551,6 +576,7 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
 /// **one** `SharedDevice::new`, and every consumer built from a clone of that one handle.
 #[test]
 fn the_archive_realizes_exactly_one_object_model() {
+    let _serial = serialized();
     let src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs");
     let text = std::fs::read_to_string(&src).expect("the shim's source is readable");
     // ⊘ Comments are stripped first: this file's own prose says "Gpu::new" and a naive
@@ -628,6 +654,7 @@ fn the_archive_realizes_exactly_one_object_model() {
 /// doorbell rang. That is the difference this test makes visible, on purpose.
 #[test]
 fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
+    let _serial = serialized();
     use kayfabe_abi::generated::classes as nv;
     use kayfabe_arch::ClientKind;
     use kayfabe_arch::ids::{ClassId, HClient, HObject, Pdb, VChid};
@@ -808,6 +835,7 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
 /// assertion can answer that.
 #[test]
 fn the_publication_capability_is_minted_in_exactly_one_place() {
+    let _serial = serialized();
     let src = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
     )
@@ -843,6 +871,7 @@ fn the_publication_capability_is_minted_in_exactly_one_place() {
 /// also give guest-RAM rows another route — and change this test in the same commit.
 #[test]
 fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
+    let _serial = serialized();
     let src = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/shim.rs"),
     )
@@ -886,6 +915,7 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
 /// consulted after the thing it was meant to gate (3).
 #[test]
 fn the_channel_invalidate_is_consumed_installed_and_ordered_before_the_forward() {
+    let _serial = serialized();
     let dev = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../kayfabe-rt/src/device.rs"),
     )
@@ -943,6 +973,7 @@ fn the_channel_invalidate_is_consumed_installed_and_ordered_before_the_forward()
 /// and a real one invalidates in microcode, so the only thing that knows is the handler.
 #[test]
 fn all_three_synchronization_points_consume_their_barrier() {
+    let _serial = serialized();
     let dev = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../kayfabe-rt/src/device.rs"),
     )
@@ -1011,6 +1042,7 @@ fn all_three_synchronization_points_consume_their_barrier() {
 /// `RegPlane::write` blocks for exactly that long.
 #[test]
 fn the_shipping_arm_enqueues_instead_of_routing_on_the_caller() {
+    let _serial = serialized();
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
     unsafe {
         std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
