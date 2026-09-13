@@ -1184,6 +1184,9 @@ pub fn project(
     // A zero here and a healthy table look identical without it, which is how 482 refusals
     // pointed at the wrong stage for a whole session.
     let mut unrouted_for_want_of_gpu: u32 = 0;
+    // ⊘ Counted BESIDE the drop, because `dropped == 0` and *"the arm never ran"* are the same
+    // silence otherwise — which is exactly what w695a's first boot could not tell apart.
+    let mut channels_seen: u32 = 0;
     let mut ctx_vas: BTreeMap<ResourceKey, (GpuId, Pdb)> = BTreeMap::new();
     // ★ The F1 collision guard's scope tables, keyed on `(Option<GpuId>, id)`: the
     // guard still bites within one target (and within the unresolved-`None` scope),
@@ -1320,6 +1323,7 @@ pub fn project(
                     });
                 }
                 vchid_claims.insert((gpu, vchid), node.id());
+                channels_seen += 1;
                 if let Some(gpu) = gpu {
                     by_vchid.insert((gpu, vchid), (anchor, node.id()));
                 } else {
@@ -1391,14 +1395,41 @@ pub fn project(
     // ★ One summary line per projection when any channel was dropped. ⊘ Printed even though the
     // per-drop lines are capped at 8: the CAP must never hide the TOTAL, which is the mistake
     // `503 REFUSED by name; (16 logged)` made for a whole session.
-    if unrouted_for_want_of_gpu > 0 {
-        eprintln!(
-            "kayfabe: PROJECT-UNROUTED total={unrouted_for_want_of_gpu} channel(s) claimed but \
-             NOT filed in `by_vchid` — every doorbell on them refuses as UnknownVchid. \
-             ⚠ by_vchid={} rows; if that is 0 the guest cannot submit ANY work.",
-            by_vchid.len()
-        );
+    // ★★★★★UNCONDITIONAL, AND THAT IS THE WHOLE POINT** — w695a's first boot (`GATE=0`, binary
+    // stamp verified, `UnknownVchid=486` present in the very same log) printed this line **zero
+    // times**, and zero was UNREADABLE.
+    //
+    // ⊘⊘⊘ The first version was `if unrouted_for_want_of_gpu > 0`. That gate cannot distinguish
+    // *"every channel was filed correctly"* from *"the Channel arm never executed"* — and those
+    // two answers point at opposite halves of the codebase. A diagnostic gated on the failure it
+    // is looking for reports nothing in exactly the case where nothing is the alarming answer.
+    //
+    // ⇒ `seen` is the known-positive this census needs. `seen=0` means the arm never ran and the
+    // bug is upstream of projection entirely; `seen=N filed=N` means routing is fine and the
+    // refusal is born on the doorbell-decode side; `seen=N filed=0` means the drop is real.
+    //
+    // ⚠ Bounded WITHOUT re-introducing a gate on the value: printed only when the tuple CHANGES,
+    // so a steady state costs one line and an evolving one shows its trajectory. A projection runs
+    // often enough that an unconditional print would itself be a workload (w586-w588: an
+    // instrument on a hot path broke the boot it was measuring).
+    {
+        static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
+        let rows = by_vchid.len() as u64;
+        let stamp = (u64::from(channels_seen) << 40)
+            | (u64::from(unrouted_for_want_of_gpu) << 20)
+            | (rows & 0xf_ffff);
+        if LAST.swap(stamp, std::sync::atomic::Ordering::Relaxed) != stamp {
+            eprintln!(
+                "kayfabe: PROJECT-VCHID-CENSUS seen={channels_seen} filed={rows} \
+                 dropped_no_gpu={unrouted_for_want_of_gpu} claims={} ⊘ `seen` is the \
+                 known-positive: seen=0 ⇒ the Channel arm never ran and projection is not the \
+                 stage to look at; seen>0 with filed=0 ⇒ every doorbell must refuse as \
+                 UnknownVchid, naming the WRONG stage.",
+                vchid_claims.len(),
+            );
+        }
     }
+
     Ok(Boundaries {
         procs: procs.into_values().collect(),
         system,
