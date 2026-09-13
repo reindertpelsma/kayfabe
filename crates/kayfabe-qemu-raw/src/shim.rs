@@ -3213,12 +3213,6 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 /// born into live before anything releases the guest's reply. See the call site.
 /// ★ w615 — the mirror, reachable from the birth drain that holds no handle to it. See the
 /// comment at its `set`. `Weak` by construction: this must never keep the mirror alive.
-/// ★ w637 — the counter page is placed once. ⊘ A flag rather than asking the mirror every tick:
-/// the mirror's own `Some` check is the authority, and this keeps the worker's hot loop from
-/// taking its lock 1 181 times a boot to be told no.
-#[cfg(feature = "host-isolates")]
-static COUNTER_PAGE_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
 #[cfg(feature = "host-isolates")]
 static MIRROR_FOR_BIRTH: std::sync::OnceLock<std::sync::Weak<crate::barmirror::BarMirror>> =
     std::sync::OnceLock::new();
@@ -5222,6 +5216,70 @@ struct PtRefresh {
 }
 
 #[allow(clippy::needless_pass_by_value)]
+/// ★★★★★ **w640 — place the host's usermode page over this DEVICE's counter page.**
+///
+/// Returns `true` only when a slot was newly installed, so the caller's latch is set once.
+///
+/// ⊘⊘ **Every handle comes from the caller, and none from a global.** One shim is one GPU, and
+/// two emulated GPUs are two device instances **in one process** — so a `static` binds to
+/// whichever realized first and the second GPU's page silently never installs. w637 did exactly
+/// that. The four things this needs are all per-device and all already in the loop's hands:
+/// the device (an isolate), the export directory (dup the descriptor here), the plane (derive
+/// the span from *this* chip's table), and the machine.
+///
+/// ★ One mapping, two permissions: the VMA is WRITABLE so the host doorbell can be rung with a
+/// translated token inline on the vCPU; the slot is READ-ONLY so the guest's doorbell store
+/// still exits and the token can be translated at all.
+#[cfg(feature = "host-isolates")]
+fn install_counter_page(
+    port: &SharedDoorbell,
+    plane: &RegPlane,
+    vmm: &kayfabe_vmm_qemu::QemuVmm,
+) -> bool {
+    use std::os::fd::AsFd;
+    let (Some((off, len)), Some(bar0)) = (
+        plane.usermode_page_span(),
+        vmm.machine().bar_placement(kayfabe_vmm::BarId::Bar0),
+    ) else {
+        return false;
+    };
+    // ⊘ `true` — OURS to write. The guest's containment is the slot's tier, not this.
+    let Some((iso, token, mmap_len)) = port.device.export_usermode_view(true) else {
+        return false; // no isolate yet; the ordinary state before the first RM event.
+    };
+    let Some(fd) = port.exports.as_ref().and_then(|e| e.dup(iso, token)) else {
+        eprintln!(
+            "kayfabe: COUNTER-PAGE ⊘ the view could not be dup'd into this process; the page \
+             keeps trapping and the counter keeps coming from a host CPU clock"
+        );
+        return false;
+    };
+    let gpa = bar0.base + off;
+    match vmm.machine().install_device_window(
+        gpa,
+        mmap_len,
+        fd.as_fd(),
+        Some(gpa..gpa + len),
+        true,
+    ) {
+        Ok(_) => {
+            eprintln!(
+                "kayfabe: COUNTER-PAGE installed at gpa=0x{gpa:x} mmap_len=0x{mmap_len:x} \
+                 slot=0x{len:x} ⊘ the guest now reads the GPU's OWN clock with no exit, and its \
+                 doorbell store still traps because the slot is read-only."
+            );
+            true
+        }
+        Err(e) => {
+            eprintln!(
+                "kayfabe: COUNTER-PAGE ⊘ NOT INSTALLED ({e:?}) — the page keeps trapping and the \
+                 counter keeps being answered from a host CPU clock. ⚠ A REFUSAL, not a fallback."
+            );
+            false
+        }
+    }
+}
+
 fn doorbell_publish_loop(
     port: SharedDoorbell,
     queue: &std::sync::Arc<kayfabe_device::pubqueue::PublicationQueue>,
@@ -5230,6 +5288,9 @@ fn doorbell_publish_loop(
     // ★★★★★ This thread is a WORKER by the owner's 2026-09-09 classification: blocking here
     // is the design working, and the census must not report it as a violation.
     kayfabe_util::lock::declare_thread_class(kayfabe_util::lock::ThreadClass::Worker);
+    // ★ w640 — per-thread, therefore per-device. See the install site below.
+    #[cfg(feature = "host-isolates")]
+    let mut counter_page_done = false;
     // ★★★★★ THE ONE MINT. `grep -n 'for_publication_worker'` is the audit and must return
     // exactly this line plus the constructor. Everything that may publish or refresh takes
     // this witness by value, so the doorbell and the trap CANNOT reach those verbs — not by
@@ -5251,48 +5312,28 @@ fn doorbell_publish_loop(
         // idempotent when nothing is latched: one rank-1 acquisition that moves an empty
         // `Vec` and returns.
         port.device.materialize_pending();
-        // ★★★★★ **w637 — the counter page, placed here because this is the ONLY site that
-        // holds all three things it needs** — the device (to reach an isolate), the export
-        // directory (to dup the descriptor into this process), and, through the mirror, the
-        // machine (to install the slot).
+        // ★★★★★ **w640 — the counter page, placed from THIS LOOP'S OWN HANDLES.**
         //
-        // ⊘ It cannot go at realize: BARs are unprogrammed then, and no isolate exists until
-        // the guest's first accepted RM event, which is what `materialize_pending` above is.
-        // ⇒ Immediately after it, on the worker, once.
+        // ⊘⊘ **w637 reached it through a process-global `OnceLock` and an `AtomicBool`, and
+        // that was a MULTI-GPU BUG.** One shim is one GPU; two emulated GPUs are two device
+        // instances **in one process**, so a global binds to whichever realized first and the
+        // second GPU's page would never install. The tree already states the rule — *"the
+        // target GPU is `GpuId::ZERO`, because this device is one GPU … the day a shim realizes
+        // two, this comes from the device instance and not from a constant"* — and a static is
+        // exactly the shape that cannot follow it.
         //
-        // ⚠ Reads before this lands are served from a host CPU clock — the wrong clock, drifting
-        // from the GPU's by 43 ppm. That window is real and is the price of the isolate not
-        // existing earlier; it is named here rather than left for someone to discover in a
-        // census.
+        // ★ No global is needed: this loop already holds every piece. `port.device` reaches an
+        // isolate, `port.exports` dups the descriptor into this process, `port.plane` derives
+        // the page's span from the chip table, and `vmm` owns the machine. The once-only latch
+        // is a local, which is per-thread and therefore per-device by construction.
         #[cfg(feature = "host-isolates")]
-        if !COUNTER_PAGE_DONE.load(std::sync::atomic::Ordering::Relaxed) {
-            if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
-                // `true` — WE need write, so the doorbell can be rung inline with a translated
-                // token. The guest's containment is the slot's read-only tier, not this.
-                if let Some((iso, token, mmap_len)) = port.device.export_usermode_view(true) {
-                    match port.exports.as_ref().and_then(|e| e.dup(iso, token)) {
-                        Some(fd) => {
-                            use std::os::fd::AsFd;
-                            if m.install_counter_page(fd.as_fd(), mmap_len) {
-                                COUNTER_PAGE_DONE
-                                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                            }
-                        }
-                        // ⊘ Named, not silent: a view we ASKED for and could not adopt is a
-                        // different state from never having asked, and only this line tells
-                        // them apart.
-                        None => eprintln!(
-                            "kayfabe: COUNTER-PAGE ⊘ the view could not be dup'd into this \
-                             process; the page keeps trapping and the counter keeps coming \
-                             from a host CPU clock"
-                        ),
-                    }
+        if !counter_page_done {
+            if let Some(plane) = port.plane.upgrade() {
+                if install_counter_page(&port, &plane, &vmm) {
+                    counter_page_done = true;
                 }
             }
         }
-        // w480 — and the two drains that used to run at the tail of every register write. The
-        // grant computations are free functions reading only what this port already holds, so
-        // this is a MOVE and not a second implementation.
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         // ⊘ `SharedDoorbell` holds no mirror; the snapshot is taken on the shim's own drain
