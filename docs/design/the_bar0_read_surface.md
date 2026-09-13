@@ -271,6 +271,40 @@ about PRAMIN. `pramin_reads`/`pramin_writes` now exist, and the census prints
 ★ **What is actually left is BAR1/BAR2 first touch** — 55/2 300 and 2/1 595 on that boot — which
 §7 already names as *"the last exits on those BARs, and the least understood item here"*.
 
+## 6e. ★★★★★ BAR1/BAR2 IS DEMAND-FILL LATENCY, AND THE ARITHMETIC CLOSES EXACTLY (w608)
+
+`[measured w603a, ONE boot, graded `(P)`]` — every number here comes from an increment site I
+read before using it, which after §6d is the rule rather than a precaution:
+
+    trapped BAR1 + BAR2 accesses   55 + 2 300 + 2 + 1 595 = 3 952
+    BAR-MIRROR FILLS               queued=3952 run=3952 dropped=0
+    refused                        [ALREADY-COVERED=3572]
+    successful fills               166 (bar1) + 214 (bar2) = 380
+    3 572 + 380                    = 3 952            ← closes exactly
+    distinct pages ever needed     63 (bar1) + 121 (bar2) = 184
+    slots peak                     173
+
+⇒ **Every trapped BAR1/BAR2 access queues a fill, and 90.4 % of those fills find the page
+ALREADY COVERED.** The guest touches a page, we queue a slot install, and it touches the same
+page again before the install lands — so the trap count is not measuring distinct pages at all.
+**184 pages are ever needed; 3 952 accesses pay for them.**
+
+★ That is not a bug in the mirror. It is the cost of filling ON DEMAND, and the owner already
+ruled on the alternative:
+
+> *"if a channel is created inheriting a va base, then you can map at create, of existing known
+> va maps, and only return from rpc if channel is usuable."*
+
+⇒ **Mapping at create removes the class, not the tail.** There is no demand fill to race if the
+pages are placed when the channel is created, and the RPC's own completion is the natural point
+to block until they are — which is the owner's *"only return from rpc if channel is usable"*,
+already the rule for the publication path.
+
+⊘ What this replaces: *"BAR1/BAR2 first touch, the last exits on those BARs and the least
+understood item here"* (§7). It is now understood and measured. The remaining work is the map-at-
+create path, and its success criterion is ready-made — `ALREADY-COVERED` should fall to near
+zero, and trapped accesses should approach the distinct-page count rather than exceed it 21×.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -299,4 +333,6 @@ about PRAMIN. `pramin_reads`/`pramin_writes` now exist, and the census prints
 - [x] **PRAMIN: ZERO traps, both directions** (w607, by subtraction on one `(P)` boot, and now
       counted directly). ⇒ Goal 2's PRAMIN clause is met.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
-- [ ] BAR1/BAR2 first-touch: the last exits on those BARs, and the least understood item here.
+- [~] **BAR1/BAR2 — MEASURED and understood (w608), not yet fixed.** `[measured]` 3 952 trapped
+      accesses for **184 distinct pages**; 90.4 % of fills find the page `ALREADY-COVERED`. It
+      is demand-fill latency, and the owner's map-at-create ruling removes the class.
