@@ -191,8 +191,12 @@ pub struct ArenaPort(SharedPageArena);
 struct ArenaPagePort(ArenaPage);
 
 impl FbPageArena for ArenaPort {
-    fn alloc(&mut self) -> Result<Box<dyn FbArenaPage>, &'static str> {
-        self.0.alloc().map(|p| Box::new(ArenaPagePort(p)) as Box<dyn FbArenaPage>)
+    fn alloc_at(&mut self, frame: u64) -> Result<Box<dyn FbArenaPage>, &'static str> {
+        // ★ w569 — the framebuffer address IS the file offset. See `SharedPageArena::alloc_at`
+        // for why that replaced an allocator rather than gaining a parameter.
+        self.0
+            .alloc_at(frame)
+            .map(|p| Box::new(ArenaPagePort(p)) as Box<dyn FbArenaPage>)
     }
 }
 

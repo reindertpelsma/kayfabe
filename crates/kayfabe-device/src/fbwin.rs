@@ -738,12 +738,20 @@ pub trait FbArenaPage: Send + core::fmt::Debug {
 /// take a ranked lock, or make a syscall. The implementation is a bump cursor and a free
 /// list behind a plain mutex over a mapping created before the arena was installed.
 pub trait FbPageArena: Send + core::fmt::Debug {
-    /// One fresh page, or a named refusal when the arena is exhausted. The page's bytes are
-    /// unspecified; the store overwrites the whole page before serving it.
+    /// The page backing framebuffer address `frame`, or a named refusal.
+    ///
+    /// ★★★★★ **`frame` decides the page's FILE OFFSET, and that is the contract.** An
+    /// implementation must place framebuffer address `frame` at fd offset `frame`, so that a
+    /// contiguous run of framebuffer addresses is a contiguous run of the file — which is what
+    /// lets the `PRAMIN` window be one `mmap` instead of 256 (`the_bar0_read_surface.md` §3b).
+    ///
+    /// ⊘ The page's bytes are unspecified; the store overwrites the whole page before serving
+    /// it. ⚠ Calling twice for one `frame` must return the SAME underlying page, not a second
+    /// one — two homes for one framebuffer byte is the failure this whole surface is against.
     ///
     /// # Errors
     /// One sentence naming the limit.
-    fn alloc(&mut self) -> Result<Box<dyn FbArenaPage>, &'static str>;
+    fn alloc_at(&mut self, frame: u64) -> Result<Box<dyn FbArenaPage>, &'static str>;
 }
 
 /// One resident page of a [`SparseFb`]: on the heap, or in the arena.
@@ -1152,9 +1160,18 @@ impl SparseFb {
     /// ★ A fresh page: from the arena when one is installed and willing, else the heap —
     /// counted. `zero` says whether the bytes must read as zero (an arena page's bytes are
     /// unspecified until written; a heap page is zero by construction).
-    fn fresh_page(&mut self) -> FbPage {
+    /// ★★★★★ **w569 — `frame` is now a PARAMETER, and that is the whole PRAMIN unlock.**
+    ///
+    /// The arena used to hand out pages in allocation ORDER, so a page's file offset said
+    /// *when* it was created and nothing about *where in the framebuffer* it lives. A 1 MiB
+    /// PRAMIN window was therefore 256 unrelated offsets, and could not be placed with one
+    /// `mmap` — see `the_bar0_read_surface.md` §3b.
+    ///
+    /// ⊘ Address-indexing REMOVES the allocator rather than adding to it: no free list, no
+    /// bump cursor, no recycling. The address IS the offset.
+    fn fresh_page(&mut self, frame: u64) -> FbPage {
         if let Some(arena) = self.arena.as_mut() {
-            match arena.alloc() {
+            match arena.alloc_at(frame) {
                 Ok(mut p) => {
                     let _ = p.write(0, &[0u8; FB_PAGE as usize]);
                     return FbPage::Arena(p);
@@ -1326,7 +1343,7 @@ impl FbStore for SparseFb {
                     .insert(frame, FbPageOrigin { by, seq: self.seq });
             }
             if !self.pages.contains_key(&frame) {
-                let fresh = self.fresh_page();
+                let fresh = self.fresh_page(frame);
                 self.pages.insert(frame, fresh);
             }
             let page = self.pages.get_mut(&frame).expect("inserted above");
@@ -1560,7 +1577,7 @@ impl FbStore for SparseFb {
                 out.pages += 1;
             }
             if !self.pages.contains_key(&frame) {
-                let fresh = self.fresh_page();
+                let fresh = self.fresh_page(frame);
                 self.pages.insert(frame, fresh);
             }
             let page = self.pages.get_mut(&frame).expect("inserted above");
@@ -1611,7 +1628,7 @@ impl FbStore for SparseFb {
         // ---- MATERIALISE: migrate a heap page, or create a fresh arena page. Both are a
         // 4 KiB copy at most, under the caller's lock, with no syscall.
         if let Some(FbPage::Heap(_)) = self.pages.get(&frame) {
-            let fresh = self.fresh_page();
+            let fresh = self.fresh_page(frame);
             let FbPage::Arena(mut a) = fresh else {
                 // The arena refused (counted in `fresh_page`); the heap page stays.
                 return FbPageBacking::Heap;
@@ -1629,7 +1646,7 @@ impl FbStore for SparseFb {
         if self.resident_bytes() + FB_PAGE > self.cap {
             return FbPageBacking::Refused(RESIDENT_CAP_REACHED);
         }
-        let fresh = self.fresh_page();
+        let fresh = self.fresh_page(frame);
         let FbPage::Arena(a) = fresh else {
             return FbPageBacking::Heap;
         };

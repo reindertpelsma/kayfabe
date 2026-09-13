@@ -64,6 +64,11 @@ const ARENA_NAME: &std::ffi::CStr = c"kayfabe-fb-arena";
 /// ★ The arena refused to hand out a page: every index is live. Named, never silent — the
 /// caller falls back to a heap page and counts it, so the boot's census can say how often
 /// the arena was the binding limit.
+/// A framebuffer address that is not a whole page — refused rather than rounded, because
+/// rounding would put two distinct addresses on one page and give one of them the other's
+/// bytes, silently.
+pub const ARENA_MISALIGNED: &str = "that framebuffer address is not page-aligned";
+
 pub const ARENA_EXHAUSTED: &str = "the framebuffer page arena is exhausted: every 4 KiB index \
      of its fixed extent is owned by a live page";
 
@@ -167,18 +172,36 @@ impl SharedPageArena {
     ///
     /// # Errors
     /// [`ARENA_EXHAUSTED`].
-    pub fn alloc(&self) -> Result<ArenaPage, &'static str> {
-        let mut f = self.inner.free.lock().unwrap_or_else(|e| e.into_inner());
-        let index = if let Some(i) = f.list.pop() {
-            f.recycled += 1;
-            i
-        } else if f.next < self.inner.pages {
-            let i = f.next;
-            f.next += 1;
-            i
-        } else {
+    /// ★★★★★ **w569 — THE PAGE BACKING FRAMEBUFFER ADDRESS `frame`, at fd offset `frame`.**
+    ///
+    /// # ⊘ This REPLACED an allocator, it did not gain a parameter
+    ///
+    /// `alloc()` used to hand out the next free index — a bump cursor plus a recycling free
+    /// list — so a page's file offset recorded WHEN it was created and said nothing about
+    /// WHERE in the framebuffer it lives. A contiguous run of framebuffer addresses was a
+    /// scattered set of file offsets, and the 1 MiB `PRAMIN` window could not be placed with
+    /// one `mmap` (`the_bar0_read_surface.md` §3b).
+    ///
+    /// ★ Address-indexing deletes the allocator: the address IS the offset. No cursor, no
+    /// free list, no recycling — and no way for two framebuffer addresses to collide on one
+    /// page, which the old scheme prevented only by never reusing an index while it was live.
+    ///
+    /// ⊘ Idempotent by construction: asking twice for one `frame` yields the same file
+    /// offset, so the caller cannot mint a second home for one framebuffer byte.
+    ///
+    /// # Errors
+    /// [`ARENA_EXHAUSTED`] when `frame` lies past the arena's extent — which now means *"past
+    /// the framebuffer"* rather than *"we ran out of pages"*, and is a refusal about an
+    /// ADDRESS instead of about a supply.
+    pub fn alloc_at(&self, frame: u64) -> Result<ArenaPage, &'static str> {
+        if !frame.is_multiple_of(ARENA_PAGE) {
+            return Err(ARENA_MISALIGNED);
+        }
+        let index = frame / ARENA_PAGE;
+        if index >= self.inner.pages {
             return Err(ARENA_EXHAUSTED);
-        };
+        }
+        let mut f = self.inner.free.lock().unwrap_or_else(|e| e.into_inner());
         f.live += 1;
         f.peak = f.peak.max(f.live);
         Ok(ArenaPage {
@@ -282,10 +305,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pages_are_disjoint_and_recycled() {
+    fn pages_are_disjoint_and_addressed_by_their_framebuffer_offset() {
         let arena = SharedPageArena::create(HostPageSize::query()).expect("arena");
-        let mut a = arena.alloc().expect("a");
-        let mut b = arena.alloc().expect("b");
+        // ★★★ w569 — the test's own subject changed with the allocator. It used to pin LIFO
+        // RECYCLING of a free list; there is no free list now, because the framebuffer address
+        // IS the file offset. What matters instead is that the offset EQUALS the address, and
+        // that two addresses never share a page.
+        let mut a = arena.alloc_at(0).expect("a");
+        let mut b = arena.alloc_at(ARENA_PAGE).expect("b");
+        assert_eq!(a.file_offset(), 0, "the address is the offset");
+        assert_eq!(b.file_offset(), ARENA_PAGE, "the address is the offset");
         assert_ne!(a.file_offset(), b.file_offset());
         a.write_from(0, &[1, 2, 3, 4]).unwrap();
         b.write_from(0, &[9, 9, 9, 9]).unwrap();
@@ -294,18 +323,28 @@ mod tests {
         assert_eq!(buf, [1, 2, 3, 4]);
         // Out of the page, never into the neighbour.
         assert!(a.read_into(ARENA_PAGE - 2, &mut buf).is_err());
-        let ia = a.index();
+        // ★★★★★ **IDEMPOTENT, which the old allocator could not be.** Asking twice for one
+        // framebuffer address must give the same file offset — otherwise one framebuffer byte
+        // would have two homes, and nothing would keep them equal.
         drop(a);
-        let c = arena.alloc().expect("c");
-        assert_eq!(c.index(), ia, "LIFO recycling of the freed index");
-        let (live, peak, recycled, issued) = arena.census();
-        assert_eq!((live, peak, recycled, issued), (2, 2, 1, 2));
+        let again = arena.alloc_at(0).expect("again");
+        assert_eq!(again.file_offset(), 0, "the same address is the same offset");
+        // ⊘ And the bytes survived, because it is the same page of the same file.
+        let mut buf = [0u8; 4];
+        again.read_into(0, &mut buf).unwrap();
+        assert_eq!(buf, [1, 2, 3, 4], "re-asking returned the SAME page, not a fresh one");
+        // ⊘ Refusals are about an ADDRESS now, not about a supply.
+        assert!(arena.alloc_at(1).is_err(), "a misaligned address is refused, never rounded");
+        assert!(
+            arena.alloc_at(SharedPageArena::LEN).is_err(),
+            "an address past the arena's extent is refused"
+        );
     }
 
     #[test]
     fn a_second_mapping_of_the_same_offset_is_the_same_memory() {
         let arena = SharedPageArena::create(HostPageSize::query()).expect("arena");
-        let mut p = arena.alloc().expect("p");
+        let mut p = arena.alloc_at(3 * ARENA_PAGE).expect("p");
         p.write_from(16, &[0xAB; 8]).unwrap();
         let second = MappedRegion::map(
             Backing::SharedFile {
