@@ -140,14 +140,51 @@ shadowable offset at teardown, comparing the shadow's bytes against the classifi
 from the same mapping or they disagree at 43 ppm (`native_dataplane_cup2_ga106.md` §4).
 ⊘ It says nothing about BAR1/BAR2, which are demand-filled memory slots under their own arms.
 
+## 6a. Measured — 2026-09-13, the first grades on a MATCHING host (RTX 3060, GA106)
+
+★ Every figure below is from a boot that graded `W392D_GUEST_OUTCOME=(P)`.
+
+| BAR0 reads reaching the handler | w553 baseline | w582 |
+|---|---|---|
+| total | 304 189 | 161 422 |
+| **unclaimed** | **104 203** | **138** |
+| VBIOS / ROM | 4 632 | **0** |
+| GSP registers | — | **0** |
+| window latch | — | **0** |
+
+⊘ `cpu_intr` is NOT a read count — that counter deliberately counts reads AND writes in one
+number, so it cannot be read as remaining read traps.
+
+★★ **PRAMIN reached the target and is parked.** With the aperture placed as one slot,
+`window[SERVED r=0 w=0]` — down from 3704 reads and 631 458 writes. The guest's GSP bootstrap
+then times out (`0x62:0x40:2028`), so the mapping is right and something that bootstrap needs is
+not equal on both sides of it. See `barmirror.rs`'s parked install for the open hypotheses.
+
+### Trap latency — goal 6's standing number
+
+    worst_trap = 39 599 us   at bar0+0x110c00 (the GSP RPC submit)
+    slow_traps (>1ms) = 4 in the whole boot
+    VCPU-BLOCKING none   inline_exceptions=0
+    rank0: worst_wait=0us  slow_waits=0  slow_holds=0  worst_hold=330us
+
+⊘ **The 39.6 ms is not a lock.** Rank-0 waits measured ZERO and the worst hold is 330 us, so no
+vCPU waited on anything this device holds. The owner's rule — *"the thread wasn't scheduled
+doesn't count, but only if that's a vCPU steal, not if it was waiting on a blocking lock in the
+vCPU thread"* — puts this on the schedulable side of the line, on an 11-core NESTED guest.
+⚠ That is an argument, not a measurement of steal time, and it is the next thing to measure
+rather than assume. `[w515]` names this exact site as the worst trap and it remains the target.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
       with it: `(P)`, `MEAN_FALSIFIER=PASS`, `THREADS 8 of 8`, `VCPU-BLOCKING none`.
 - [x] w561 — the live-page census and the read-side-effect audit above.
-- [ ] the shadow, its `write_through`, and its teardown gate.
-- [ ] VBIOS bytes into the shadow at realize.
-- [ ] PRAMIN as one re-pointed slot.
+- [x] the shadow and its `write_through` — ⚠ the port had **no caller** until w577, so every
+      producer write was a no-op and the pages held realize-time bytes; see w576.
+- [x] VBIOS bytes into the shadow at realize (w563) — ROM reads 4632 -> **0**.
+- [~] PRAMIN as one re-pointed slot — **built, reaches r=0/w=0, PARKED**: the guest's GSP
+      bootstrap times out with it installed. Four real defects were fixed getting there
+      (w569, w579, w580, w581).
 - [ ] the usermode page mapped from the host.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
 - [ ] BAR1/BAR2 first-touch: the last exits on those BARs, and the least understood item here.
