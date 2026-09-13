@@ -526,7 +526,51 @@ fn serve_one(
             phys,
             prot,
         } => join_fb_leaf(rm, vas, len, at, phys, prot, exports),
+        // ★★★★★ **w629 — the THIRD request whose reply carries a descriptor**, and the only
+        // one that carries a CHARACTER DEVICE. Intercepted here for the other two's reason:
+        // `execute` is a pure `Request -> Reply` function and a resource has no place in
+        // nineteen of its arms.
+        Request::ExportUsermodeView => export_usermode_view(rm, exports),
         other => (execute(rm, other), None),
+    }
+}
+
+/// ★★★★★ **w629 — arm the isolate's OWN usermode page read-only and hand the node up.**
+///
+/// ⊘ The request names nothing, so there is nothing here to validate and nothing a caller can
+/// steer. The backend arms its own object; this function only lends the node and reports the
+/// length the VMM's `mmap` must use.
+///
+/// ⚠ The descriptor returned is a `/dev/nvidiaN` **character device**, which is exactly what
+/// `export_backing`'s twin REFUSES on the far side — deliberately, because a backing must be a
+/// `memfd`. ⇒ The VMM's caller for this verb must be its own, with the opposite kind check.
+/// Sharing one would trade that refusal for a shortcut. See
+/// `the_counter_page_and_the_device_view.md` §4c.
+fn export_usermode_view(
+    rm: &mut dyn RmBackend,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    let view = match rm.export_usermode_view() {
+        Ok(v) => v,
+        Err(e) => return (failed(e), None),
+    };
+    // ⊘ The token is the CHILD's; the parent mints its own when it adopts the descriptor. It
+    // never crosses the wire, exactly as `export_backing`'s does not.
+    match exports.lend(view.token) {
+        Ok(fd) => (
+            Reply::UsermodeView {
+                mmap_len: view.mmap_len,
+            },
+            Some(fd),
+        ),
+        // ⊘ Same reasoning as `export_backing`'s twin: the backend minted a token this table
+        // does not know, which is our bug and not the parent's. Refused rather than answered
+        // with a descriptor-less `UsermodeView`, which would have the parent adopt whatever
+        // descriptor arrived next.
+        Err(_) => (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        ),
     }
 }
 
@@ -831,7 +875,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // explicitly rather than caught by a wildcard so that a future verb which also
         // carries a descriptor cannot be silently routed here and answered with bytes and
         // no fd — which the parent would read as a `Backing` naming nothing.
-        Request::ExportBacking { .. } | Request::JoinFbLeaf { .. } => {
+        Request::ExportBacking { .. }
+        | Request::JoinFbLeaf { .. }
+        | Request::ExportUsermodeView => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
         // ★★★★★ **w380 — the alias, and it is NOT in the line above.** Its reply carries no

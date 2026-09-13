@@ -295,6 +295,23 @@ pub enum Request {
         /// `0` = [`kayfabe_vmm::Prot::ReadWrite`], `1` = [`kayfabe_vmm::Prot::ReadOnly`].
         prot: u8,
     },
+    /// ★★★★★ **w629 — the VMM asking the isolate for a READ-ONLY view of the usermode page.**
+    ///
+    /// ⊘ It carries no parameters, and that is the security property rather than an omission.
+    /// The VMM does not name an object, an offset or a length: the isolate arms **its own**
+    /// usermode object, at offset 0, for the register length it already knows, `O_RDONLY`. A
+    /// verb whose caller could choose the object would be a verb that could ask for any
+    /// mapping the isolate can make.
+    ///
+    /// ★ Why the VMM needs it at all: the free-running counter cannot be shadowed — it changes
+    /// continuously, so no copy keeps up — and it is the last read trap anywhere on this
+    /// device. Mapping the host's own page read-only over it is the only implementation in
+    /// which the guest reads the GPU's real clock rather than a host CPU clock 43 ppm away
+    /// from it. See `the_counter_page_and_the_device_view.md`.
+    ///
+    /// ⚠ **Tag 26, because 25 is RETIRED** — it carried the deleted `ExportDeviceView` and a
+    /// peer built from an older revision may still send it. Never renumber, never re-issue.
+    ExportUsermodeView,
     /// ★★★★★ [`kayfabe_isolate::RmBackend::map_guest_ram`] — the VMM instructing the
     /// isolate to map a slice of **guest RAM** (`mode2_isolate_memory_boundary.md` §5).
     ///
@@ -441,6 +458,24 @@ pub enum Reply {
     /// ★★★ The answer to a [`Request::ExportBacking`] — the geometry of a backing whose
     /// **descriptor rides this frame's ancillary data**.
     ///
+    /// ★★★★★ **w629 — the answer to [`Request::ExportUsermodeView`], and it carries a
+    /// DESCRIPTOR.**
+    ///
+    /// `mmap_len` is the length the VMM's `mmap` must use: the driver rounds the registered
+    /// range up to a host page and compares the mmap length against the ROUNDED size, so the
+    /// number that crosses is the only one it will accept.
+    ///
+    /// ⊘ The descriptor itself rides the frame's first byte via `write_frame_with_fds`; it is
+    /// not in this struct and cannot be. ⚠ A reader that takes this reply with the fd-free
+    /// `read_frame` has the descriptor **silently dropped by the kernel**, which is why its
+    /// caller must be a dedicated call with its own `max_fds` rather than the general one.
+    ///
+    /// ⚠ **Tag 13, because 12 is RETIRED** — it carried the deleted `Reply::DeviceView`, and a
+    /// peer built from an older revision may still send it. Never renumber, never re-issue.
+    UsermodeView {
+        /// The length the VMM's `mmap` must use, rounded as the driver rounds it.
+        mmap_len: u64,
+    },
     /// ⊘ It carries no token. The child's index into its own export table is a child
     /// value, and a parent that adopted it would be letting the peer name a slot in the
     /// parent's registry — the same "the isolate is supplied by the caller, never by the
@@ -929,6 +964,7 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
             }
+            Request::ExportUsermodeView => out.push(26),
             Request::MapGuestRam { offset, len, prot } => {
                 out.push(16);
                 out.extend_from_slice(&offset.to_le_bytes());
@@ -1179,6 +1215,7 @@ impl Envelope {
             // A peer built from an older revision may still send it; reusing the number for
             // a new request would decode those frames as the new verb. Never renumber, and
             // never re-issue 25.
+            26 => Request::ExportUsermodeView,
             16 => Request::MapGuestRam {
                 offset: c.u64("guest ram offset")?,
                 len: c.u64("guest ram len")?,
@@ -1251,6 +1288,10 @@ impl Reply {
                 out.push(8);
                 out.push(u8::from(*covered));
                 put_blob(&mut out, bytes);
+            }
+            Reply::UsermodeView { mmap_len } => {
+                out.push(13);
+                out.extend_from_slice(&mmap_len.to_le_bytes());
             }
             Reply::Backing { offset, len, prot } => {
                 out.push(9);
@@ -1347,6 +1388,9 @@ impl Reply {
             // ⊘ **Reply tag 12 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
             // 2026-09-12). It carried `Reply::DeviceView`, the answer to the deleted
             // `Request::ExportDeviceView`. Never renumber, and never re-issue 12.
+            13 => Reply::UsermodeView {
+                mmap_len: c.u64("usermode view mmap_len")?,
+            },
             10 => Reply::JoinedBacking {
                 offset: c.u64("joined offset")?,
                 len: c.u64("joined len")?,
@@ -1474,6 +1518,10 @@ mod tests {
 
     fn every_request() -> Vec<Request> {
         vec![
+            // ★ w629 — a unit variant still needs a sample: the round-trip gate proves its TAG
+            // decodes to it, which is the only thing that can go wrong for a verb with no body
+            // and is exactly what a renumbering would break.
+            Request::ExportUsermodeView,
             Request::Alloc {
                 parent: 0xC1D0_0001,
                 class: 0x90f1,
@@ -1690,6 +1738,7 @@ mod tests {
     /// coverage test below then fails until the sample exists.
     fn request_tag(r: &Request) -> &'static str {
         match r {
+            Request::ExportUsermodeView => "ExportUsermodeView",
             Request::Alloc { .. } => "Alloc",
             Request::AllocVaSpace => "AllocVaSpace",
             Request::SubdeviceControl { .. } => "SubdeviceControl",
@@ -1735,6 +1784,7 @@ mod tests {
                 "Control",
                 "DescribeGuestRam",
                 "ExportBacking",
+                "ExportUsermodeView",
                 "FbJoinPeek",
                 "FbRead",
                 "Free",

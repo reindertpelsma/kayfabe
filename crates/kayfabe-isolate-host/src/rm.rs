@@ -486,7 +486,7 @@ pub struct RmConnection {
 struct UsermodeWindow {
     /// The RM object handle. Held so a teardown could free it; nothing frees it today
     /// because the connection outlives every channel by construction.
-    _object: u32,
+    object: u32,
     /// The freshly opened per-GPU node the mmap context is registered against.
     _node: CharDevice,
     /// The 64 KiB BAR0 window. [`kayfabe_abi::submit::USERMODE_NOTIFY_CHANNEL_PENDING`]
@@ -1762,7 +1762,7 @@ impl RmConnection {
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
         Ok(UsermodeWindow {
-            _object: object,
+            object,
             _node: node,
             region,
         })
@@ -4899,6 +4899,43 @@ impl HostRmBackend {
 }
 
 impl RmBackend for HostRmBackend {
+    /// ★★★★★ **w629 — the isolate's OWN usermode page, armed READ-ONLY, for the VMM.**
+    ///
+    /// ⊘ No argument is taken and none could be: the object is `self.conn.usermode`'s, which
+    /// the isolate opened for its own doorbell and PTIMER use at bring-up. See the trait method
+    /// for why a caller-chosen object would be a different and much worse verb.
+    ///
+    /// ⚠ `ViewAccess::ReadOnly` opens the node `O_RDONLY`, and that — not the RM access flag —
+    /// is the containment. `[measured w596]` the RM flag does NOT make the mmap read-only;
+    /// `[measured w600, unprivileged]` the open mode does, with `EACCES` on both a writable
+    /// `mmap` and a later `mprotect`.
+    ///
+    /// ⊘ A missing usermode window is REFUSED rather than substituted: `self.conn.usermode` is
+    /// a `Result` precisely so that "we never got one" cannot be confused with "here is one".
+    fn export_usermode_view(&mut self) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let object = self.conn.usermode.as_ref().map_err(|e| *e)?.object;
+        let v = self.export_device_view(
+            HostHandle::new(self.id, u64::from(object)),
+            0,
+            kayfabe_abi::submit::USERMODE_WINDOW_SIZE,
+            ViewAccess::ReadOnly,
+        )?;
+        // ⊘⊘ **CODE ROT, MARKED (goal 5).** `rm::DeviceView` and `kayfabe_isolate::DeviceView`
+        // are the SAME four fields declared twice in two crates, so a trait that returns one
+        // cannot be implemented by a method that returns the other without this transcription.
+        // ⚠ It is mechanical and it is a liability: four fields copied by hand is four chances
+        // to transpose `offset` and `mmap_len`, and nothing would catch it — both are `u64`.
+        // ⇒ The cleanup is to delete `rm::DeviceView` and use the trait's, which is a rename
+        // and no behaviour; it is not done here because this commit is a new verb and a type
+        // deletion in one diff is two reviews pretending to be one.
+        Ok(kayfabe_isolate::DeviceView {
+            token: v.token,
+            memory: v.memory,
+            offset: v.offset,
+            mmap_len: v.mmap_len,
+        })
+    }
+
     /// ★★★★★ w345 — the isolate's OWN subdevice, stamped as a [`HostHandle`].
     ///
     /// ⊘ **No guest handle is consulted and none could be.** This is the object the isolate

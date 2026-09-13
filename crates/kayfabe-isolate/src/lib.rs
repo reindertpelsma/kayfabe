@@ -1238,6 +1238,38 @@ pub trait RmBackend: Send + Sync {
         Err(RmError::NotExportableAsMemory { memory })
     }
 
+    /// ★★★★★ **w629 — a READ-ONLY view of the isolate's OWN usermode page, for the VMM.**
+    ///
+    /// ⊘⊘ **It takes no arguments, and that is the security property rather than an
+    /// omission.** The caller names no object, no offset and no length: the isolate arms the
+    /// usermode object it already holds, at offset 0, for the register length it already
+    /// knows. A verb whose caller could choose the object would be a verb that could ask for
+    /// any mapping the isolate can make, and the VMM is the one peer this boundary exists to
+    /// keep honest.
+    ///
+    /// ★ Why the VMM wants it: the free-running counter cannot be shadowed — it changes
+    /// continuously, so no copy keeps up — and it is the last read trap anywhere on the
+    /// device. Mapping the host's own page read-only over it is also the only implementation
+    /// in which the guest reads the GPU's real clock instead of a host CPU clock that
+    /// `[measured]` drifts from it by 43 ppm.
+    ///
+    /// ⚠ The returned node is armed `O_RDONLY`, and `[measured w600, unprivileged]` that is
+    /// what makes it safe to hand over: the kernel refuses a writable `mmap` of it with
+    /// `EACCES` and refuses `mprotect` back to writable with the same errno. ⊘ The RM access
+    /// flag does NOT do this — `[measured w596]` a node armed `ACCESS_READ_ONLY` still accepts
+    /// a writable `mmap`, because RM decides protection from a range table that leaves the
+    /// usermode block read-write by fiat. See `the_counter_page_and_the_device_view.md` §4a/§4b.
+    ///
+    /// # Errors
+    /// [`RmError`] — and the default REFUSES, so a backend that has no usermode window says so
+    /// rather than answering with something else.
+    fn export_usermode_view(&mut self) -> Result<DeviceView, RmError> {
+        // ⊘ `0x56` is `NV_ERR_NOT_SUPPORTED`, the same refusal the trait's other
+        // capability-shaped defaults use — a backend without a usermode window is not broken,
+        // it simply does not offer this.
+        Err(RmError::Other(0x56))
+    }
+
     /// ★★★★★ **ONE memory for a framebuffer leaf** — mint a fabricated backing, map it
     /// here, describe it to RM, place it at `at`, and hand the **same pages** up to the VMM
     /// (`fb_cpu_view.md` §4).
