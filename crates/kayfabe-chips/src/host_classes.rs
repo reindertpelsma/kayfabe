@@ -203,6 +203,123 @@ impl HostClasses for Gh100HostClasses {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════
+// GB20x — consumer Blackwell. THE ONE PROFILE HERE WITH A HARDWARE MEASUREMENT BEHIND IT
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+/// `BLACKWELL_CHANNEL_GPFIFO_A` (`ogkm-580:
+/// src/common/sdk/nvidia/inc/class/clc96f.h:27`).
+///
+/// ⊘ **Written here rather than taken from `kayfabe_abi::generated::classes`, and that is
+/// a deviation from this module's own rule** — the Ada/Hopper compute arms record that the
+/// fix for a missing id is to GENERATE it, never to type it. `kayfabe-abi`'s generator
+/// input carries no Blackwell row yet and this change may not edit that crate, so the four
+/// ids below are typed **and pinned by an independent oracle instead**:
+/// `crates/kayfabe-chips/tests/host_classes.rs::blackwell_ids_match_the_vendored_capability_table`
+/// looks each one up **by NVIDIA's own name** in `kayfabe_abi::capability`'s vendored
+/// nvproxy table and asserts equality. A fabricated number fails that test, which is the
+/// property the generation rule exists to buy. ★ The proper fix is still to generate them:
+/// add `clc96f.h` / `clc761.h` / `clcab5.h` / `clcec0.h` rows to
+/// `crates/kayfabe-abi/gen/src/main.rs` and re-run the generator, then delete these four
+/// constants.
+const BLACKWELL_CHANNEL_GPFIFO_A: u32 = 0xc96f;
+/// `BLACKWELL_USERMODE_A` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc761.h:27`).
+const BLACKWELL_USERMODE_A: u32 = 0xc761;
+/// `BLACKWELL_DMA_COPY_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clcab5.h:27`).
+const BLACKWELL_DMA_COPY_B: u32 = 0xcab5;
+/// `BLACKWELL_COMPUTE_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clcec0.h:27`).
+const BLACKWELL_COMPUTE_B: u32 = 0xcec0;
+
+/// The GB20x (consumer Blackwell) host-class profile — **all four roles differ from
+/// Ampere**, and two of the four are backed by a trace from a real RTX 5090.
+///
+/// | role | class | `g_gpu_class_list.c` (GB202) | measured? |
+/// |---|---|---|---|
+/// | channel | `BLACKWELL_CHANNEL_GPFIFO_A` (`0xc96f`) | `:2845` | ★ **yes** — see below |
+/// | usermode | `BLACKWELL_USERMODE_A` (`0xc761`) | `:2867` | no |
+/// | CE object | `BLACKWELL_DMA_COPY_B` (`0xcab5`) | `:2855-2862` (`ENG_CE(0..7)`) | ★ **yes** — see below |
+/// | compute | `BLACKWELL_COMPUTE_B` (`0xcec0`) | `:2847-2854` (`ENG_GR(0..7)`) | no |
+///
+/// ## ★★★ The measurement, and it is not this project's
+///
+/// The Mode-1 sibling `nvkvm-pv` runs its 28-check suite at **28/28 on an RTX 5090
+/// (GB202, sm_120) under driver 580.178.04**, reproduced twice
+/// (`/workspace/nvkvm-pv/tests/BOOT_MATRIX.md:1050-1070`). Its guest-side `RM_ALLOC` trace
+/// for the last allocation of `cuCtxCreate` reads:
+///
+/// ```text
+/// alloc hClass=0xc96f ap_size=368  status=0x0
+/// alloc hClass=0xcab5 ap_size=8    status=0x0
+/// ```
+///
+/// ⇒ a **real** host RM accepted `0xc96f` as the channel and `0xcab5` as the copy object,
+/// on real Blackwell silicon. That is more than any other profile in this module has.
+///
+/// ⊘ **It is also all it is.** Mode 1 forwards ioctls; it emulates no register aperture,
+/// no GSP and no doorbell window. The 28/28 says nothing about [`crate::gb20x`]'s offsets
+/// or its boot sequence, and the two halves must not be quoted for each other.
+///
+/// ## ⊘ Where this DEPARTS from the module's selection rule, and why
+///
+/// `findDeviceClasses` takes the numerically largest member of each family
+/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8684-8699`). Applied to GB202's
+/// class list that would choose **`BLACKWELL_CHANNEL_GPFIFO_B` (`0xca6f`, `:2846`)**, not
+/// `_A`. This profile chooses `_A` anyway, because `_A` is the id a real 5090's RM
+/// *accepted* and `_B` is an id nothing has ever sent. ★ Measured beats derived; the
+/// divergence is recorded rather than smoothed, and
+/// `tests/host_classes.rs` asserts **both** facts so neither can be lost.
+///
+/// ## ⊘ And where the selection rule simply DOES NOT ANSWER
+///
+/// `isClassCompute` at 580 lists nothing past `HOPPER_COMPUTE_A`
+/// (`ogkm-580: nv_gpu_ops.c:8584-8603`) — no `ADA_COMPUTE_A`, no `BLACKWELL_COMPUTE_*` —
+/// while GB202's class list contains **no** compute class other than `BLACKWELL_COMPUTE_B`.
+/// So on a Blackwell board `findDeviceClasses` resolves `computeClass` to **zero**. The
+/// compute id below therefore comes from the *class list* alone, which is the same source
+/// the Ada arm uses and a strictly weaker instrument than the CE and channel rows.
+///
+/// ## ⚠ The trap this generation already sprang once, in the other tree
+///
+/// `0xc96f` was **allowlisted but unsized** in `nvkvm-pv`: the class was permitted, the
+/// alloc was forwarded, and **0 bytes of parameters** went with it, so the host RM answered
+/// `NV_ERR_INVALID_ARGUMENT` and `cuCtxCreate` surfaced `CUDA_ERROR_INVALID_VALUE` several
+/// layers away with nothing denied and nothing logged
+/// (`/workspace/nvkvm-pv/src/abi/nvgpu.h:66-77`). A second, latent instance sat behind it:
+/// `BLACKWELL_DMA_COPY_A` had been recorded as `0xcbb5`, **an id NVIDIA does not ship**, so
+/// the real classes had no size entry either (`:104-113`).
+///
+/// ⇒ **The sizes are part of the answer, not a follow-up.** For the two roles measured:
+/// the channel takes `NV_CHANNEL_ALLOC_PARAMS` unchanged — **368 bytes** on the 580 ABI,
+/// the same struct and the same size as Turing/Ampere/Hopper — and the copy object takes
+/// `NVB0B5_ALLOCATION_PARAMETERS`, **8 bytes**
+/// (`/workspace/nvkvm-pv/src/guest/nvkvm_main.c:2522-2557`). Blackwell introduces no new
+/// alloc-param struct for either. This trait carries only ids, so the sizes live here as
+/// a doc obligation on whoever wires the host isolate; they are the first thing to check
+/// if a Blackwell alloc returns `0x1f`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Gb20xHostClasses;
+
+impl HostClasses for Gb20xHostClasses {
+    fn name(&self) -> &'static str {
+        "GB20x host classes (GB202)"
+    }
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(BLACKWELL_CHANNEL_GPFIFO_A))
+    }
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(BLACKWELL_USERMODE_A))
+    }
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(BLACKWELL_DMA_COPY_B))
+    }
+
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        // ⊘ The ONLY compute class GB202's own list carries (`:2847-2854`), and NOT the one
+        // `findDeviceClasses` would return — that rule answers zero here, see the type docs.
+        Some(ComputeObjectClass::new(ClassId(BLACKWELL_COMPUTE_B)))
+    }
+}
+
 /// ★★★ **The profile the host isolate is PINNED to** — and the word is `pinned`, not
 /// `default`, because nothing probes the host and calling it a default would imply
 /// something else was chosen against.
@@ -225,7 +342,12 @@ pub fn pinned_host_classes() -> &'static dyn HostClasses {
     &Ga10xHostClasses
 }
 
-kayfabe_util::assert_send_sync!(Ga10xHostClasses, Ad10xHostClasses, Gh100HostClasses);
+kayfabe_util::assert_send_sync!(
+    Ga10xHostClasses,
+    Ad10xHostClasses,
+    Gh100HostClasses,
+    Gb20xHostClasses
+);
 
 #[cfg(test)]
 mod compute_object_tests {
@@ -276,6 +398,15 @@ mod compute_object_tests {
             Some(nv::HOPPER_COMPUTE_A),
             "Hopper must answer its own generated constant"
         );
+        // ⊘ Blackwell's constant is NOT generated (see `BLACKWELL_COMPUTE_B`'s docs), so
+        // this arm cannot compare against `nv::`. Its value oracle is the vendored
+        // capability table, in `tests/host_classes.rs`; here it only has to be present,
+        // and the distinctness sweep below has to see it.
+        assert!(
+            Gb20xHostClasses.compute_object().is_some(),
+            "Blackwell must declare a compute object: GB202's class list carries exactly \
+             one (`BLACKWELL_COMPUTE_B`), so `None` here would be an omission, not a refusal"
+        );
         // ★ And the three must be DISTINCT — one generation accidentally answering another's
         // class is the failure a per-generation table exists to prevent, and it would pass
         // every assertion above if they were all wired to the same constant.
@@ -283,6 +414,7 @@ mod compute_object_tests {
             Ga10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
             Ad10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
             Gh100HostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Gb20xHostClasses.compute_object().map(|c| c.compute_object_id().0),
         ];
         let mut seen = std::collections::BTreeSet::new();
         for c in all {

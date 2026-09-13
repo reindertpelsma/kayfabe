@@ -56,9 +56,9 @@ use crate::proto::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa};
 use kayfabe_isolate::{
     CancelHandle, CancelReason, CancelSink, CeExecutor, CeSource, CeSubCopy, DEFAULT_POOL_WORKERS,
-    ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined,
-    GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId,
-    RmBackend, RmError, Txn, Worker, WorkerId,
+    ExportRequest, ExportSource, ExportedBacking, FbLeafAliased, FbLeafJoined, GuestRamGrant,
+    GuestRamMapped, HostHandle, HostedObject, Isolate, IsolateFactory, IsolateId, RmBackend,
+    RmError, Txn, Worker, WorkerId,
 };
 use kayfabe_linux_raw::{ChildSpec, FdGrant, ProgramImage, SandboxChild};
 use std::io::ErrorKind;

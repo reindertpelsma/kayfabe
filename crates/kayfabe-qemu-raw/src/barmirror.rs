@@ -350,6 +350,23 @@ pub struct BarMirror {
     /// numbers: *"never moved"* and *"wrote the same value forty times"* are different facts.
     pramin_moves: AtomicU64,
     pramin_skipped: AtomicU64,
+    /// ★★★★★ **w652 — HOW LONG THE REPOINT ACTUALLY TAKES, on the vCPU that trapped.**
+    ///
+    /// ⊘⊘ **Because "not in SLOW-SITES" is a BOUND, not a measurement.** The door census names
+    /// `mmap MAP_FIXED (placing a backing inside a window)` as reached on a vCPU **22 times**
+    /// per boot — this is the caller — and `SLOW-SITES` lists only the one trap over 1 ms. So
+    /// every repoint is under a millisecond and **its real cost is unmeasured**, which is not
+    /// the same as zero. Goal 3 is *"no blocking calls on the vCPU"* and goal 6 is *"every
+    /// write trap sub-millisecond"*; the first is currently violated by name and the second may
+    /// be satisfied by a comfortable margin or by 900 µs, and nothing here could tell them
+    /// apart.
+    ///
+    /// ⚠ The repoint **cannot simply move to a worker**: the guest writes the window register
+    /// and reads through the aperture immediately after, so a deferred move shows it the OLD
+    /// framebuffer. That is a correctness break, not a latency trade — which is exactly why
+    /// the number has to exist before anyone argues about the design.
+    pramin_move_ns_total: AtomicU64,
+    pramin_move_ns_worst: AtomicU64,
     /// **w593 - PRAMIN traffic that had already happened when the slot went in.**
     ///
     /// `[measured w591, arm C]` with the slot live, `window[SERVED r=2 w=3905]` - **not zero**,
@@ -612,6 +629,8 @@ impl BarMirror {
             arms,
             pramin: Mutex::new(None),
             pramin_moves: AtomicU64::new(0),
+            pramin_move_ns_total: AtomicU64::new(0),
+            pramin_move_ns_worst: AtomicU64::new(0),
             pramin_at_install: AtomicU64::new(u64::MAX),
             pramin_gpa: AtomicU64::new(u64::MAX),
             pramin_marks: Mutex::new(Vec::new()),
@@ -1161,10 +1180,16 @@ impl BarMirror {
             self.pramin_skipped.fetch_add(1, Ordering::Relaxed);
             return;
         }
-        match self
+        let t0 = std::time::Instant::now();
+        let outcome = self
             .machine
-            .repoint_file_window(region, self.arena.as_backing_fd(), base)
-        {
+            .repoint_file_window(region, self.arena.as_backing_fd(), base);
+        // ⊘ Timed around the syscall ONLY, and recorded on both outcomes: a refused repoint
+        // still spent the time, and excluding it would flatter the worst case.
+        let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
+        self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
+        match outcome {
             Ok(()) => {
                 *slot = Some((region, base));
                 self.pramin_moves.fetch_add(1, Ordering::Relaxed);
@@ -1586,9 +1611,17 @@ impl BarMirror {
                     }
                 )
             };
+            let moves = self.pramin_moves.load(Ordering::Relaxed);
+            let worst = self.pramin_move_ns_worst.load(Ordering::Relaxed);
+            // A mean over ZERO moves is not 0, it is undefined - and printing 0 would read as
+            // "the repoint is free" for a boot in which it never ran.
+            let mean = if moves == 0 {
+                "n/a (no move)".to_string()
+            } else {
+                format!("{}", self.pramin_move_ns_total.load(Ordering::Relaxed) / moves)
+            };
             eprintln!(
-                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown} window_accesses={total} {split}{placement} {shape} \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
-                self.pramin_moves.load(Ordering::Relaxed),
+                "kayfabe: PRAMIN-SLOT AT {at}: moves={moves} skipped={} showing={shown} window_accesses={total} {split}{placement} {shape} move_ns[worst={worst} mean={mean}] \u{2605} THE REPOINT IS A BLOCKING DOOR ON THE vCPU (goal 3) AND PART OF A WRITE TRAP (goal 6): `worst` is what both are actually worth, and it was UNMEASURED before w652 - absent from SLOW-SITES only proves it is under 1ms. \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
                 self.pramin_skipped.load(Ordering::Relaxed),
             );
         }

@@ -52,7 +52,8 @@
 
 use kayfabe_arch::HostClasses;
 use kayfabe_chips::{
-    Ad10xHostClasses, Ga10xHostClasses, Gh100HostClasses, host_classes::pinned_host_classes,
+    Ad10xHostClasses, Ga10xHostClasses, Gb20xHostClasses, Gh100HostClasses,
+    host_classes::pinned_host_classes,
 };
 
 /// ★★★ **The one place in this file that unwraps a role type** (`#166`).
@@ -96,6 +97,10 @@ const AMPERE_USERMODE_A: u32 = 0x0000_c561; // clc561.h:27
 const HOPPER_USERMODE_A: u32 = 0x0000_c661; // clc661.h:26
 const AMPERE_DMA_COPY_B: u32 = 0x0000_c7b5; // clc7b5.h:33
 const HOPPER_DMA_COPY_A: u32 = 0x0000_c8b5; // clc8b5.h:27
+const BLACKWELL_CHANNEL_GPFIFO_A: u32 = 0x0000_c96f; // clc96f.h:27
+const BLACKWELL_CHANNEL_GPFIFO_B: u32 = 0x0000_ca6f; // clc96f.h:33
+const BLACKWELL_USERMODE_A: u32 = 0x0000_c761; // clc761.h:27
+const BLACKWELL_DMA_COPY_B: u32 = 0x0000_cab5; // clcab5.h:27
 
 /// One chip's class list, as `g_gpu_class_list.c` states it, restricted to the three
 /// families the host-forwarding path allocates from.
@@ -180,6 +185,39 @@ const GH100: ChipClassList = ChipClassList {
     ],
     // :2018-2027 (ENG_CE(0..9))
     ce: &[HOPPER_DMA_COPY_A],
+};
+
+/// GB202 — `gpuGetEngClassDescriptorList_GB202` at `g_gpu_class_list.c:2832`,
+/// `gpuGetNoEngClassList_GB202` at `:2776`.
+///
+/// ★★★ The chip that makes the max-in-family rule and the MEASUREMENT disagree. Its
+/// channel family holds **two** Blackwell members, `_A` (`:2845`) and `_B` (`:2846`), and
+/// a real RTX 5090 was measured allocating `_A` — see
+/// [`the_blackwell_channel_pick_departs_from_the_max_rule_because_a_5090_answered`].
+const GB202: ChipClassList = ChipClassList {
+    chip: "GB202",
+    // :2899, :2784, :2932, :2930, :2839, :2883, :2845, :2846
+    gpfifo: &[
+        NV50_CHANNEL_GPFIFO,
+        GF100_CHANNEL_GPFIFO,
+        VOLTA_CHANNEL_GPFIFO_A,
+        TURING_CHANNEL_GPFIFO_A,
+        AMPERE_CHANNEL_GPFIFO_A,
+        HOPPER_CHANNEL_GPFIFO_A,
+        BLACKWELL_CHANNEL_GPFIFO_A,
+        BLACKWELL_CHANNEL_GPFIFO_B,
+    ],
+    // :2933, :2931, :2840, :2885, :2867
+    usermode: &[
+        VOLTA_USERMODE_A,
+        TURING_USERMODE_A,
+        AMPERE_USERMODE_A,
+        HOPPER_USERMODE_A,
+        BLACKWELL_USERMODE_A,
+    ],
+    // :2855-2862 (ENG_CE(0..7)) — the ONLY CE class GB202 lists. Note what is ABSENT:
+    // no AMPERE_DMA_COPY_B, no HOPPER_DMA_COPY_A, and no BLACKWELL_DMA_COPY_A either.
+    ce: &[BLACKWELL_DMA_COPY_B],
 };
 
 /// `findDeviceClasses`' rule, re-implemented: `NV_MAX` across the family
@@ -340,6 +378,7 @@ fn an_arch_with_no_host_profile_refuses_by_name_rather_than_inventing_one() {
         &kayfabe_chips::Ga10xArch::default() as &dyn Arch,
         &kayfabe_chips::Ad10xArch::default() as &dyn Arch,
         &kayfabe_chips::Gh100Arch::default() as &dyn Arch,
+        &kayfabe_chips::Gb20xArch::default() as &dyn Arch,
     ] {
         assert!(
             a.host_classes().is_some(),
@@ -357,10 +396,11 @@ fn an_arch_with_no_host_profile_refuses_by_name_rather_than_inventing_one() {
 #[test]
 fn each_arch_declares_its_own_profile_and_not_a_composed_ones() {
     use kayfabe_arch::Arch;
-    let pairs: [(&dyn Arch, &dyn HostClasses); 3] = [
+    let pairs: [(&dyn Arch, &dyn HostClasses); 4] = [
         (&kayfabe_chips::Ga10xArch::default(), &Ga10xHostClasses),
         (&kayfabe_chips::Ad10xArch::default(), &Ad10xHostClasses),
         (&kayfabe_chips::Gh100Arch::default(), &Gh100HostClasses),
+        (&kayfabe_chips::Gb20xArch::default(), &Gb20xHostClasses),
     ];
     for (arch, want) in pairs {
         let got = arch.host_classes().expect("declared above");
@@ -375,8 +415,19 @@ fn each_arch_declares_its_own_profile_and_not_a_composed_ones() {
 
 // ── The doorbell decode, no longer `MockArch`'s invention on two generations (`#156`) ──
 
-/// ★★★ All three generations decode a work-submit token **identically**, and none of them
-/// answers with `MockArch`'s invented encoding any more.
+/// ★★★ The three generations RM binds to `kfifoGenerateWorkSubmitTokenHal_GA100` decode a
+/// work-submit token **identically**, and none of them answers with `MockArch`'s invented
+/// encoding any more.
+///
+/// ⊘⊘ **THE NAME OF THIS TEST USED TO SAY "every generation", AND THAT IS NO LONGER TRUE.**
+/// GB202 binds its own encoder, which sets `RUNLIST_DOORBELL` at bit 30, and is therefore
+/// **deliberately absent** from the list below — `kayfabe_chips::Gb20xArch` would fail every
+/// assertion in it, correctly. The counterexample is asserted positively in
+/// `crates/kayfabe-chips/tests/gb20x_doorbell_and_regs.rs::\
+/// the_ampere_decoder_refuses_every_gb202_token_and_that_is_the_whole_point`, because a
+/// sameness test over a list that quietly stops short of the member that breaks it is the
+/// *"gate quantified over a shortened list"* this crate's own docs name. ⚠ If a fifth
+/// generation is added, decide which of the two lists it joins — do not default it here.
 ///
 /// `execution_plane_increments.md` §2.1 names a wrong doorbell decode as the one
 /// execution-plane error that **cannot fail loudly** — on the Mode-2 path we are the GSP,
@@ -391,8 +442,9 @@ fn each_arch_declares_its_own_profile_and_not_a_composed_ones() {
 /// ⊘ Still not a run on Ada or Hopper silicon. It replaces an INVENTED answer with the
 /// implementation the vendored driver binds to those parts.
 #[test]
-fn every_generation_decodes_a_work_submit_token_the_same_way_and_none_uses_the_mocks() {
+fn the_ga100_bound_generations_decode_a_token_the_same_way_and_none_uses_the_mocks() {
     use kayfabe_arch::Arch;
+    // ⊘ GB202 is NOT here, and its absence is the finding — see this test's docs.
     let arches: [&dyn Arch; 3] = [
         &kayfabe_chips::Ga10xArch::default(),
         &kayfabe_chips::Ad10xArch::default(),
@@ -442,5 +494,200 @@ fn every_generation_decodes_a_work_submit_token_the_same_way_and_none_uses_the_m
         disagreement,
         "★ NON-VACUITY: MockArch's INVENTED encoding agrees with RM's on every probe, so \
          switching away from it proves nothing. Pick probes that separate them"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════
+// GB202 — the chip where the class table, the selection rule and a MEASUREMENT disagree
+// ══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★ **The value oracle for the four Blackwell ids, and it is a DIFFERENT artifact.**
+///
+/// The four constants in `host_classes.rs` are typed by hand, because `kayfabe-abi`'s
+/// generated class table carries no Blackwell row and this change may not edit that crate.
+/// A typed class id is exactly the residue that module's own Ada/Hopper arms record as
+/// forbidden — so it is pinned here against a table the profile does not read:
+/// `kayfabe_abi::capability`'s vendored nvproxy surface, looked up **by NVIDIA's own
+/// name**.
+///
+/// ⊘ What this can and cannot catch, stated rather than implied. It catches a **wrong
+/// number** (a typo, a transposition, the `0xcbb5` that `nvkvm-pv` carried for
+/// `BLACKWELL_DMA_COPY_A` for months and that NVIDIA does not ship at all). It cannot
+/// catch two tables sharing one misreading, and it says nothing about whether a Blackwell
+/// board accepts any of it.
+#[test]
+fn blackwell_ids_match_the_vendored_capability_table() {
+    use kayfabe_abi::capability::CAPS_580_65_06;
+
+    let want: [(&str, u32); 4] = [
+        ("BLACKWELL_CHANNEL_GPFIFO_A", BLACKWELL_CHANNEL_GPFIFO_A),
+        ("BLACKWELL_USERMODE_A", BLACKWELL_USERMODE_A),
+        ("BLACKWELL_DMA_COPY_B", BLACKWELL_DMA_COPY_B),
+        // ⊘ The compute id is not one of `roles()`' three, so it is unwrapped through the
+        // trait's own `Option` rather than through the pinned helper.
+        (
+            "BLACKWELL_COMPUTE_B",
+            Gb20xHostClasses
+                .compute_object()
+                .expect("the Blackwell profile declares a compute object")
+                .compute_object_id()
+                .0,
+        ),
+    ];
+
+    let mut checked = 0usize;
+    for (name, ours) in want {
+        let theirs = CAPS_580_65_06
+            .all_classes()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "★ {name} is not in kayfabe_abi::capability's vendored table at all. \
+                     Either the name is wrong or this oracle has stopped covering the \
+                     generation — do NOT weaken the test; find the row"
+                )
+            });
+        assert_eq!(
+            ours, theirs.class,
+            "★ {name}: this crate says {ours:#06x}, the vendored capability table says \
+             {:#06x}. A hand-typed class id drifted — which is the whole reason this \
+             test exists",
+            theirs.class
+        );
+        checked += 1;
+    }
+    assert_eq!(
+        checked, 4,
+        "★ NON-VACUITY: four ids must have been compared, not {checked}"
+    );
+}
+
+/// ★★★ **The deliberate departure from `findDeviceClasses`' max-in-family rule**, asserted
+/// in both directions so neither half can be lost.
+///
+/// GB202's channel family holds two Blackwell members. The rule this file's main test
+/// applies — `NV_MAX` (`ogkm-580: nv_gpu_ops.c:8684-8689`) — selects
+/// `BLACKWELL_CHANNEL_GPFIFO_B` (`0xca6f`, `g_gpu_class_list.c:2846`). The profile answers
+/// `BLACKWELL_CHANNEL_GPFIFO_A` (`0xc96f`, `:2845`) instead, because `_A` is the id a
+/// **real RTX 5090's RM accepted** — `alloc hClass=0xc96f ap_size=368 status=0x0`,
+/// `/workspace/nvkvm-pv/tests/BOOT_MATRIX.md:1050-1062` — and `_B` is an id nothing has
+/// ever sent to a board.
+///
+/// ★ Measured beats derived. But a departure nobody wrote down becomes a bug six months
+/// later, so this test pins **both** the choice and the rule it departs from: if either
+/// changes, it goes red and somebody has to decide again.
+#[test]
+fn the_blackwell_channel_pick_departs_from_the_max_rule_because_a_5090_answered() {
+    let (chan, user, ce) = roles(&Gb20xHostClasses);
+
+    assert_eq!(
+        chan, BLACKWELL_CHANNEL_GPFIFO_A,
+        "★ the profile must answer the MEASURED channel class"
+    );
+    assert_eq!(
+        newest(GB202.gpfifo),
+        BLACKWELL_CHANNEL_GPFIFO_B,
+        "★ NON-VACUITY: if the max rule ever agreed with the measurement, this test would \
+         be recording a departure that no longer exists"
+    );
+    assert_ne!(
+        chan,
+        newest(GB202.gpfifo),
+        "★ the departure is the point — see this test's docs"
+    );
+
+    // The other two roles DO follow the rule, and that is worth asserting: a profile that
+    // departed everywhere would mean the rule had simply been abandoned.
+    assert_eq!(user, newest(GB202.usermode), "usermode follows the max rule");
+    assert_eq!(ce, newest(GB202.ce), "CE object follows the max rule");
+    assert_eq!(
+        ce, BLACKWELL_DMA_COPY_B,
+        "★ …and the CE object is ALSO the measured one — `alloc hClass=0xcab5 ap_size=8 \
+         status=0x0` on the same 5090. Rule and measurement agree here"
+    );
+}
+
+/// ★★ Every Blackwell role differs from Ampere's, and — unlike Hopper — the wrong pick is
+/// **loud in two of the three**, because GB202's CE family carries no Ampere class at all.
+#[test]
+fn the_blackwell_profile_differs_in_every_role_and_the_ce_pick_fails_loudly() {
+    let amp = roles(&Ga10xHostClasses);
+    let bw = roles(&Gb20xHostClasses);
+    assert_ne!(amp.0, bw.0, "channel");
+    assert_ne!(amp.1, bw.1, "usermode");
+    assert_ne!(amp.2, bw.2, "CE object");
+
+    // Same shape as Hopper: the legacy channel and usermode ids ARE listed, so the wrong
+    // pick allocates and carries the wrong notifier geometry with no status to say so.
+    assert!(
+        GB202.gpfifo.contains(&amp.0),
+        "GB202 lists AMPERE_CHANNEL_GPFIFO_A (g_gpu_class_list.c:2839) — the wrong pick \
+         ALLOCATES"
+    );
+    assert!(
+        GB202.usermode.contains(&amp.1),
+        "GB202 lists AMPERE_USERMODE_A (:2840) — the wrong pick ALLOCATES"
+    );
+    assert!(
+        !GB202.ce.contains(&amp.2),
+        "AMPERE_DMA_COPY_B is ABSENT from GB202's list (:2855-2862 carries only \
+         BLACKWELL_DMA_COPY_B) — the CE pick is the one that fails at alloc"
+    );
+    // ⊘ And Hopper's CE class is absent too, so "inherit the previous generation" is wrong
+    // here in a way it was not for Ada.
+    assert!(
+        !GB202.ce.contains(&HOPPER_DMA_COPY_A),
+        "HOPPER_DMA_COPY_A must also be absent from GB202, or 'each generation needs its \
+         own CE class' is not what this table shows"
+    );
+}
+
+/// ⊘ **`findDeviceClasses` cannot answer the compute role on this chip at all** — recorded
+/// so the compute id is never mistaken for a rule-derived one.
+///
+/// `isClassCompute` at 580 enumerates nothing past `HOPPER_COMPUTE_A`
+/// (`ogkm-580: nv_gpu_ops.c:8584-8603`), and GB202's class list carries no compute class
+/// other than `BLACKWELL_COMPUTE_B` (`g_gpu_class_list.c:2847-2854`). So on a Blackwell
+/// board that function leaves `computeClass` at **zero**. The profile's compute id comes
+/// from the class list alone — a strictly weaker instrument than the one behind the
+/// channel and CE rows, and the difference is the reason this test exists rather than a
+/// comment.
+#[test]
+fn the_blackwell_compute_class_comes_from_the_class_list_not_the_selection_rule() {
+    // The 580 `isClassCompute` switch, transcribed. ★ Deliberately a literal list and not
+    // a range: the defect it models is an ENUMERATION that stopped being extended.
+    const IS_CLASS_COMPUTE_580: &[u32] = &[
+        0x0000_b0c0, // MAXWELL_COMPUTE_A
+        0x0000_b1c0, // MAXWELL_COMPUTE_B
+        0x0000_c0c0, // PASCAL_COMPUTE_A
+        0x0000_c1c0, // PASCAL_COMPUTE_B
+        0x0000_c3c0, // VOLTA_COMPUTE_A
+        0x0000_c4c0, // VOLTA_COMPUTE_B
+        0x0000_c5c0, // TURING_COMPUTE_A
+        0x0000_c6c0, // AMPERE_COMPUTE_A
+        0x0000_c7c0, // AMPERE_COMPUTE_B
+        0x0000_cbc0, // HOPPER_COMPUTE_A
+    ];
+    let ours = Gb20xHostClasses
+        .compute_object()
+        .expect("the Blackwell profile declares a compute object")
+        .compute_object_id()
+        .0;
+    assert!(
+        !IS_CLASS_COMPUTE_580.contains(&ours),
+        "★ if BLACKWELL_COMPUTE_B were in `isClassCompute`, the rule WOULD answer and this \
+         test's premise is stale — re-derive it against the current ogkm rather than \
+         deleting it"
+    );
+    // Non-vacuity: the transcribed switch must actually cover the generations it claims to,
+    // or "Blackwell is missing from it" is a statement about an empty list.
+    assert!(
+        IS_CLASS_COMPUTE_580.contains(&0x0000_c7c0),
+        "★ NON-VACUITY: AMPERE_COMPUTE_B must be in the transcribed switch"
+    );
+    assert!(
+        !IS_CLASS_COMPUTE_580.contains(&0x0000_c9c0),
+        "★ ADA_COMPUTE_A is missing from it too — Blackwell is the second instance of this \
+         gap, not the first, and the Ada profile has the same provenance caveat"
     );
 }

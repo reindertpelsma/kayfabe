@@ -135,9 +135,9 @@ use kayfabe_abi::submit::{
 use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
 use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
 use kayfabe_isolate::{
-    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking,
-    FbLeafAliased, FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject,
-    IsolateId, RmBackend, RmError,
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased,
+    FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend,
+    RmError,
 };
 use kayfabe_linux_raw::{
     Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
@@ -2619,10 +2619,8 @@ impl RmConnection {
                 CharDevice::openat_mode(&self.dev, &name, access.dev_access())
                     .map_err(|e| ioctl_error(&e))?
             }
-            MapNode::Ctl => {
-                CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
-                    .map_err(|e| ioctl_error(&e))?
-            }
+            MapNode::Ctl => CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
+                .map_err(|e| ioctl_error(&e))?,
         };
         let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
         Nvos33ParametersWithFd {
@@ -4608,7 +4606,9 @@ impl HostRmBackend {
         // run and answers `NoMemory` on a merely fragmented card. `[measured 2026-09-11]` it
         // did exactly that here, in the same session that added `reserve_gpga` to avoid it.
         let raw = self.conn.reserve_gpga(object_len)?;
-        let (node, map) = self.conn.map_cpu(raw, object_len, CachePolicy::WriteCombining)?;
+        let (node, map) = self
+            .conn
+            .map_cpu(raw, object_len, CachePolicy::WriteCombining)?;
 
         // ⊘ Fill with randomness, in page-sized bursts. Writes to write-combining memory are
         // buffered and fast; it is the READ side this measures.
@@ -4636,7 +4636,9 @@ impl HostRmBackend {
             while at + chunk <= object_len {
                 map.copy_out(HostOffset::new(at), &mut buf)
                     .map_err(|e| region_error(&e))?;
-                acc = acc.wrapping_add(u64::from(buf[0])).wrapping_add(u64::from(buf[buf.len() - 1]));
+                acc = acc
+                    .wrapping_add(u64::from(buf[0]))
+                    .wrapping_add(u64::from(buf[buf.len() - 1]));
                 at += chunk;
             }
             out.push((chunk, start.elapsed(), acc));
@@ -4912,7 +4914,10 @@ impl RmBackend for HostRmBackend {
     ///
     /// ⊘ A missing usermode window is REFUSED rather than substituted: `self.conn.usermode` is
     /// a `Result` precisely so that "we never got one" cannot be confused with "here is one".
-    fn export_usermode_view(&mut self, write: bool) -> Result<kayfabe_isolate::DeviceView, RmError> {
+    fn export_usermode_view(
+        &mut self,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
         let object = self.conn.usermode.as_ref().map_err(|e| *e)?.object;
         let v = self.export_device_view(
             HostHandle::new(self.id, u64::from(object)),
@@ -5602,7 +5607,6 @@ impl RmBackend for HostRmBackend {
         mint_fabricated(&self.exports, want)
     }
 
-
     /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — `fb_cpu_view.md` §4's chain, and it is
     /// `PinGuestRam`'s chain with the `memfd`'s **owner inverted**.
     ///
@@ -6043,7 +6047,9 @@ impl HostRmBackend {
             return Err(RmError::NoMemory);
         }
         let raw = self.narrow(memory)?;
-        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
+        let node = self
+            .conn
+            .arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
         // ★ The driver rounds the registered range up to a host page and compares the
         // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
         // so the length that crosses is the one the VMM's `mmap` must use.
@@ -9310,7 +9316,14 @@ impl HostRmBackend {
                     let _ = self.unmap_dma_both(range, va);
                     let _ = self.free(self.stamp(h));
                 }
-                return Err((if dst_vidmem { "alloc_device_local(dst)" } else { "alloc_sysmem(dst)" }, e));
+                return Err((
+                    if dst_vidmem {
+                        "alloc_device_local(dst)"
+                    } else {
+                        "alloc_sysmem(dst)"
+                    },
+                    e,
+                ));
             }
         };
         let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
@@ -9352,7 +9365,11 @@ impl HostRmBackend {
             // ⊘ The NODE follows the APERTURE, not the variable name: sysmem maps through
             // `Ctl`, device-local through `Gpu`. Getting this wrong is `Other(31)`, which is
             // exactly how R34's first version failed.
-            let dst_node_kind = if dst_vidmem { MapNode::Gpu } else { MapNode::Ctl };
+            let dst_node_kind = if dst_vidmem {
+                MapNode::Gpu
+            } else {
+                MapNode::Ctl
+            };
             let dst_cache = if dst_vidmem {
                 CachePolicy::WriteCombining
             } else {
@@ -9379,17 +9396,18 @@ impl HostRmBackend {
             drop(src_map);
             drop(src_node);
 
-            let (submit, payload) = self.ce_copy_outcome(
-                vas,
-                CeSubCopy {
-                    dst: dst_va,
-                    src: CeSource::Address(src_va),
-                    len: BYTES,
-                    by: CeExecutor::HostCe,
-                    guest_release: None,
-                },
-            )
-            .map_err(|e| ("ce_copy_outcome — the CE submit itself", e))?;
+            let (submit, payload) = self
+                .ce_copy_outcome(
+                    vas,
+                    CeSubCopy {
+                        dst: dst_va,
+                        src: CeSource::Address(src_va),
+                        len: BYTES,
+                        by: CeExecutor::HostCe,
+                        guest_release: None,
+                    },
+                )
+                .map_err(|e| ("ce_copy_outcome — the CE submit itself", e))?;
 
             let (node, second) = self
                 .conn

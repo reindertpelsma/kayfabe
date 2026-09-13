@@ -46,6 +46,29 @@
 //! [`gh100::ARCH_LOCAL_BOOT_EVENTS`] carries the four boot events with no `GspReg` to
 //! hang on, three now served through the seam and **one still unmodelled and saying so**.
 //!
+//!
+//! ## [`gb20x`] — consumer Blackwell (GB202). The generation that BREAKS the family rule
+//!
+//! Blackwell is the member that falsifies *"a later generation is the previous one's
+//! offsets"* in two places, both read out of `ogkm-580` rather than assumed:
+//!
+//! - **the work-submit token changes.** `kfifoGenerateWorkSubmitTokenHal` gains a
+//!   GB202-specific arm that sets a third field, `NV_VIRTUAL_FUNCTION_DOORBELL_
+//!   RUNLIST_DOORBELL = _ENABLE` at bit 30. Every GB202 token has that bit set, and
+//!   [`ga10x::decode_work_submit_token`]'s refusal mask rejects **all** of them. This is
+//!   the seam `execution_plane_increments.md` §2.1 names as unable to fail loudly, and it
+//!   is the first generation where reusing it is actively wrong.
+//! - **`NV_THERM_I2CS_SCRATCH` moves** from `0x000200bc` to `0x00ad00bc`, and it is the
+//!   register RM polls for FSP-boot-complete *before it may send any FSP packet at all*.
+//!
+//! ★ Its boot regime is [`gh100`]'s (GB202 binds `kgspBootstrap_GH100` and the whole
+//! `kfsp*_GH100` transport), so the seam task #121 built is what made this generation a
+//! new file rather than an edit to an existing one. Adding it changed **zero** lines of
+//! `kayfabe_gsp::seq`, `kayfabe_device::ga10x`, [`ad10x`] or [`gh100`].
+//!
+//! ⊘ **No Blackwell board has run any of it.** The one part of the generation with a
+//! hardware measurement behind it is [`host_classes::Gb20xHostClasses`], and the
+//! measurement is the Mode-1 sibling's, not this port's.
 //! [`Arch`]: kayfabe_arch::Arch
 //! [`GspModel`]: kayfabe_arch::gsp::GspModel
 //! [`GspReg`]: kayfabe_arch::gsp::GspReg
@@ -53,6 +76,9 @@
 
 pub mod ad10x;
 pub mod ga10x;
+// ★ #Blackwell — consumer Blackwell (GB202). See the module docs: the first generation
+// whose work-submit token this crate could NOT inherit.
+pub mod gb20x;
 pub mod gh100;
 // ★ #156 — the HOST-forwarding class axis. Not per-chip files, because the axis is one
 // table of three roles and splitting it across three modules would hide that AD10x's
@@ -65,5 +91,8 @@ pub use ad10x::{Ad10xArch, Ad10xGspModel};
 pub use ga10x::{
     Ga10xArch, Ga10xGmmu, Ga10xPushbuffer, Ga10xUserd, UnbuiltGmmu, UnbuiltPushbuffer, UnbuiltUserd,
 };
+pub use gb20x::{Gb20xArch, Gb20xFspBoot, Gb20xGspModel};
 pub use gh100::{Gh100Arch, Gh100GspModel};
-pub use host_classes::{Ad10xHostClasses, Ga10xHostClasses, Gh100HostClasses, pinned_host_classes};
+pub use host_classes::{
+    Ad10xHostClasses, Ga10xHostClasses, Gb20xHostClasses, Gh100HostClasses, pinned_host_classes,
+};

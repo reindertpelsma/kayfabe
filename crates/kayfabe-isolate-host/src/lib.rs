@@ -66,6 +66,10 @@
 //! - [`child`] — what runs inside: a thread per worker, one control thread.
 //! - [`rm`] — the real RM ioctls, and the bring-up ladder.
 //! - [`loopback`] — the transport's fixture, which is emphatically not a model of RM.
+//! - [`planreactor`] — ★★★ the off-thread plan lane: submit a `VerbPlan` with its `Worker`
+//!   and collect it later, so in-flight host work is bounded by outstanding PLANS rather
+//!   than by the caller's thread count. Read its module docs before wiring one — they say
+//!   what ordering a caller loses and what the measurements do and do not support.
 //! - [`export`] — ★ the two ends of `RmBackend::export_backing`: the isolate's minted
 //!   backings and the VMM's registry of what it adopted. **The first consumer of
 //!   [`fdcross`]**, and the answer to that module's standing bound *"no verb uses the
@@ -78,6 +82,7 @@ pub mod fdcross;
 pub mod guestram;
 pub mod isolate;
 pub mod loopback;
+pub mod planreactor;
 pub mod proto;
 pub mod rm;
 
@@ -86,3 +91,7 @@ pub use fbjoin::FbJoinTable;
 pub use fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
 pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
 pub use loopback::ParkVerb;
+pub use planreactor::{
+    DEFAULT_LANE_CAP, LanePolicy, PlanDone, PlanReactor, PlanReactorStats, RejectReason, Rejected,
+    abandoned_completions_total,
+};

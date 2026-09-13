@@ -29,7 +29,16 @@ fn sequences() -> Vec<(&'static str, &'static dyn GspModel)> {
         Box::leak(Box::new(kayfabe_chips::gh100::Gh100GspModel::default()));
     let ad: &'static kayfabe_chips::ad10x::Ad10xGspModel =
         Box::leak(Box::new(kayfabe_chips::ad10x::Ad10xGspModel::default()));
-    vec![("Gh100FspBoot", gh as &dyn GspModel), ("FalconSecureBooterBoot (via Ad10x)", ad)]
+    // ★ GB202 — added the day its sequence was written, not the day it booted. It serves
+    // SEVEN offsets through `on_read` (the six FSP registers Hopper serves, plus
+    // `NV_THERM_I2CS_SCRATCH`), so it is the implementation with the most to forget.
+    let gb: &'static kayfabe_chips::gb20x::Gb20xGspModel =
+        Box::leak(Box::new(kayfabe_chips::gb20x::Gb20xGspModel::default()));
+    vec![
+        ("Gh100FspBoot", gh as &dyn GspModel),
+        ("FalconSecureBooterBoot (via Ad10x)", ad),
+        ("Gb20xFspBoot", gb),
+    ]
 }
 
 /// ★★★★★ **Whatever `on_read` answers, `may_read` must admit — over the whole aperture.**

@@ -6231,11 +6231,11 @@ impl DbtableShadow {
              wholly on the vCPU by one store, and attempts the kernel refused (each fell \
              through to the queue; none was dropped).",
             u + p + e + m,
-            self.inline_rings.load(Relaxed),
-            self.inline_refused.load(Relaxed),
             self.rows_peak.load(Relaxed),
             self.rebuilds.load(Relaxed),
             self.skipped.load(Relaxed),
+            self.inline_rings.load(Relaxed),
+            self.inline_refused.load(Relaxed),
         )
     }
 }
@@ -18631,16 +18631,26 @@ pub const DOORBELL_INLINE_ENV: &str = "KAYFABE_DOORBELL_INLINE";
 
 /// Which arm [`DOORBELL_INLINE_ENV`] names.
 ///
-/// ⊘ Defaults **ON**: the inline ring is the owner's stated design, and the control exists to
-/// be turned off for a measurement, not to be opted into.
+/// ⊘ Defaults **OFF** since w652. The inline ring is the owner's stated design and it is BUILT,
+/// but `[measured w651a]` it regressed the client from `(P)` to `(R)`. Turn it on with
+/// `KAYFABE_DOORBELL_INLINE=on` to reproduce. A default that leaves HEAD red is not a default.
 ///
 /// # Errors
 /// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
 /// which takes the `Some` arm, because it was SET and must not read as unset.
 fn doorbell_inline_from(v: Option<&str>) -> Result<DoorbellInlineArm, (Status, &'static str)> {
     match v {
-        None | Some("on" | "1") => Ok(DoorbellInlineArm::On),
-        Some("off" | "0") => Ok(DoorbellInlineArm::Off),
+        // DEFAULT OFF as of w652 - [measured w651a] the flip REGRESSED the boot.
+        // With the inline ring on, the client went (P) -> (R): "the copy from
+        // 0x0000009080000000 NEVER RETIRED - the completion semaphore never reached
+        // 0x6d000002". 82 inline rings executed and the kernel refused NONE of them, so the
+        // STORE is not the problem: `conn.doorbell` is the identical bare `store_u32` at the
+        // identical offset (rm.rs:1843). Something the worker path does BESIDES the store is
+        // load-bearing, and until it is NAMED this arm must be opt-in.
+        //
+        // A default that leaves HEAD red is not a default.
+        None | Some("off" | "0") => Ok(DoorbellInlineArm::Off),
+        Some("on" | "1") => Ok(DoorbellInlineArm::On),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_DOORBELL_INLINE names no arm; it is `on` (the default) or `off` (the \
