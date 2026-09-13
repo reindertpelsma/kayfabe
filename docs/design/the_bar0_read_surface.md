@@ -200,6 +200,37 @@ backing, and it is independent of how far the guest got.
 `nvidia-smi` enumerates the GPU with 12 288 MiB; w584..w587 fail `RmInitAdapter (0x23:0x65:1206)`
 with `GSP-SUBMIT SERVICING REFUSED PeerWritePtrOutOfRange`. Bisect in progress.
 
+## 6c. ★★★★★ MEASURED 2026-09-13 (w590) — **ONE PAGE IS LEFT, AND THE HARDWARE OWNS IT**
+
+Three arms, **one binary**, differing only by environment variable, on a matching GA106
+(580.159.04). **All three graded `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified`,
+`MEAN_FALSIFIER=PASS`** — so these are same-depth comparisons, not a truncated run flattering
+itself (§6b).
+
+| arm | BAR0 reads reaching the handler | PRAMIN r / w | pages producing traps |
+|---|---|---|---|
+| **B** control (`SHADOW_INVAL=0 PRAMIN_SLOT=0`) | 184 585 | — | 5 |
+| **A** invalidate page backed | **148** | 25 / 71 719 | 4 |
+| **C** + PRAMIN slot — *the default* | **134** | **2 / 3 905** | **1** |
+
+    BAR0-READ-HOTSPOTS pages_touched=1 reads_from_live_pages=132
+                       reads_from_BACKED_pages=0  top[+0xbb0000=132]
+
+⇒ **Every remaining read trap is the free-running counter**, and nothing escaped a page the cut
+backs. The read surface is finished except for a register whose value no copy can hold, which is
+exactly what §3 predicted when it named the usermode page as the third piece.
+
+★ Two counters answered their own questions on this boot:
+- `PRAMIN-SLOT moves=22 skipped=18373` with **no re-point refusal** — the slot followed all 22
+  times the guest re-aimed the window, so the guest never read the wrong framebuffer.
+- `store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0` — the store and the file
+  agreed about every frame, and `device_reset` never punched the arena during a driver load,
+  which was the open risk w587 could not argue away and had to count instead.
+
+⊘ Trap latency is unchanged and remains goal 6's standing item: `inline_exceptions=0`,
+`slow_traps(>1ms)=1`, `worst_trap=14 618 us at bar0+0x110c00` — the GSP RPC submit, as it has
+been since w515.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -208,9 +239,22 @@ with `GSP-SUBMIT SERVICING REFUSED PeerWritePtrOutOfRange`. Bisect in progress.
 - [x] the shadow and its `write_through` — ⚠ the port had **no caller** until w577, so every
       producer write was a no-op and the pages held realize-time bytes; see w576.
 - [x] VBIOS bytes into the shadow at realize (w563) — ROM reads 4632 -> **0**.
-- [~] PRAMIN as one re-pointed slot — **built, reaches r=0/w=0, PARKED**: the guest's GSP
-      bootstrap times out with it installed. Four real defects were fixed getting there
-      (w569, w579, w580, w581).
-- [ ] the usermode page mapped from the host.
+- [x] ⊘ PRAMIN — *was* parked at w582; see the w590 row below. Four real defects were fixed
+      getting there (w569, w579, w580, w581) and three more after (w584, w585, w588).
+- [x] **w588 — the baseline on this box is `(P)`**: `W392D_GUEST_OUTCOME=(P)`,
+      `THREADS 8 of 8 verified`, `MEAN_FALSIFIER=PASS`, with PRAMIN parked. So the target is
+      real and every later grade has something to regress from.
+- [x] **w588 — WHERE THE REMAINING READS ARE, measured on that passing boot.** It was never a
+      long tail: `+0xb83000` (MMU invalidate) is **204 035 of 204 198 = 99.9 %**;
+      `+0xbb0000` (the counter) is **129**; three PRAMIN-latch pages account for **22**.
+      `reads_from_BACKED_pages=0` — nothing escaped a page the cut backs.
+- [x] **w590 — the invalidate page backed.** `[measured]` 184 585 -> 148 reads, client still
+      `(P)`. Both edges publish; `KAYFABE_SHADOW_INVAL=0` is the control arm.
+- [x] **w590 — PRAMIN as one re-pointed slot, UN-PARKED and passing.** `[measured]` PRAMIN
+      writes 631 257 -> 3 905, reads 3 707 -> 2, client `(P)`, and the slot followed all 22
+      window moves. w582's park was on a refuted hypothesis; the real blockers were w584,
+      w585 and w586's own census.
+- [ ] the usermode page mapped from the host — after w590 this is the LAST read source, and it
+      is 129 reads rather than the 135 §3 estimated.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
 - [ ] BAR1/BAR2 first-touch: the last exits on those BARs, and the least understood item here.
