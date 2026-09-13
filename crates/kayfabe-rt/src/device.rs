@@ -2209,7 +2209,9 @@ impl SharedDevice {
     /// ★★★★★ **EVERY ROUTABLE DOORBELL ON ONE GPU, AS A FLAT SNAPSHOT** — what
     /// `kayfabe_device::dbtable::DoorbellTable` is rebuilt from.
     ///
-    /// Returns `(vchid, host_token)` per routable channel: `Some(t)` when the channel has a
+    /// Returns `(vchid, host_token)` per routable channel — the vChid as a **plain integer**,
+    /// the same way `DoorbellReport` carries the core's ids, so the shell never has to learn
+    /// this crate's id types to index a table by one: `Some(t)` when the channel has a
     /// **host** channel behind it (a passthrough ring), `None` when it is ours to execute.
     ///
     /// # ★★★ Why the WHOLE set, and never an incremental hook
@@ -2232,7 +2234,7 @@ impl SharedDevice {
     /// present identical vChids, and a table shared between them would route one's doorbell to
     /// the other's channel. One table per device, like everything else on this axis.
     #[must_use]
-    pub fn doorbell_routes(&self, gpu: GpuId) -> Vec<(VChid, Option<u64>)> {
+    pub fn doorbell_routes(&self, gpu: GpuId) -> Vec<(u16, Option<u64>)> {
         // ⊘ **TWO LOCKS, ONE AT A TIME — never both held.** The routing map is on the spine
         // (rank 1 read) and `host_token` is on the proc (rank 1). R3 refuses two rank-1 holds
         // at once, so the map is copied out first and the guard released before any proc is
@@ -2255,7 +2257,7 @@ impl SharedDevice {
             let host = self
                 .with_proc(pid, |p| p.channels.get(&cid).and_then(|c| c.host_token))
                 .flatten();
-            out.push((vchid, host));
+            out.push((vchid.0, host));
         }
         out
     }

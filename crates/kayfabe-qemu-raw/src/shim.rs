@@ -3211,12 +3211,14 @@ fn report_channel_birth(run: &kayfabe_rt::ChannelBirthRun) {
 /// may only latch; this frame holds nothing and is where a birth's real outcome exists.
 /// Returns how many channels were BORN — so the caller can make the address space they were
 /// born into live before anything releases the guest's reply. See the call site.
-/// ★ w615 — the mirror, reachable from the birth drain that holds no handle to it. See the
-/// comment at its `set`. `Weak` by construction: this must never keep the mirror alive.
-#[cfg(feature = "host-isolates")]
-static MIRROR_FOR_BIRTH: std::sync::OnceLock<std::sync::Weak<crate::barmirror::BarMirror>> =
-    std::sync::OnceLock::new();
-
+/// ★ w644 — the mirror arrives as an ARGUMENT, from the caller's own device. It used to be
+/// reachable through a process-global `OnceLock` fallback, which with two GPUs took the
+/// measurement on the WRONG one; see `SharedDoorbell::bar_mirror`.
+///
+/// ⊘ The stray `#[cfg(feature = "host-isolates")]` that sat here belonged to that static and
+/// was left behind when it was deleted — silently gating this whole function out of the
+/// default build. `cargo build --workspace` caught it; `--features host-isolates` alone would
+/// not have, which is why the gate runs BOTH.
 fn report_channel_birth_drain(
     device: &kayfabe_rt::device::SharedDevice,
     err_notifier_grants: &[kayfabe_rt::ChannelBirthGrant],
@@ -3252,9 +3254,6 @@ fn report_channel_birth_drain(
         // already-covered tree came from. The birth keeps only its measurement.
         #[allow(clippy::option_if_let_else)]
         if let Some(m) = m {
-            m.note_first_channel_birth();
-        } else if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
-            // ⊘ The `SharedDoorbell` drain's path — see the `MIRROR_FOR_BIRTH` comment.
             m.note_first_channel_birth();
         }
     }
@@ -3722,6 +3721,23 @@ struct SharedDoorbell {
     /// channel. Rebuilt on the publication worker from
     /// [`kayfabe_rt::device::SharedDevice::doorbell_routes`].
     dbtable: Arc<kayfabe_device::dbtable::DoorbellTable>,
+    /// ★★★★★ **w644 — THE BAR MIRROR, PER DEVICE.** Replaces the process-global
+    /// `MIRROR_FOR_BIRTH`.
+    ///
+    /// ⊘⊘ **The global was worse than "loses a number".** `OnceLock::set` returns `Err` for the
+    /// second device and the `let _ =` discarded it, so device 1's birth drain fell through to
+    /// `MIRROR_FOR_BIRTH.get()` and called `note_first_channel_birth()` on **device 0's
+    /// mirror** — and its invalidate path called `premap_bars()` on device 0's BARs, leaving
+    /// device 1's trapping while device 0's tree was re-walked for nothing.
+    ///
+    /// ⇒ The measurement was not lost, it was **taken on the wrong GPU**. ★ An absent number
+    /// reads as absent; a wrong number reads as a measurement.
+    ///
+    /// ⊘ `Arc<OnceLock<..>>` and not a bare `OnceLock`: the port is CLONED into the worker
+    /// before `arm_bar_mirror` runs, so a by-value cell would leave every clone empty forever.
+    /// `Weak` because this must never keep the mirror alive.
+    #[cfg(feature = "host-isolates")]
+    bar_mirror: Arc<std::sync::OnceLock<std::sync::Weak<crate::barmirror::BarMirror>>>,
     pubqueue: Arc<kayfabe_device::pubqueue::PublicationQueue>,
     /// ★★★★★ **w383 — the eighth selector: does the doorbell trap RUN the publication, or
     /// SCHEDULE it?** Read once at the composition root and carried, for `vas_publish`'s
@@ -5306,6 +5322,8 @@ fn doorbell_publish_loop(
     // ★ w640 — per-thread, therefore per-device. See the install site below.
     #[cfg(feature = "host-isolates")]
     let mut counter_page_done = false;
+    // ★ Per-thread, therefore per-device — the same argument as the counter-page latch above.
+    let mut last_dbtable_rows: Vec<(u16, Option<u64>)> = Vec::new();
     // ★★★★★ THE ONE MINT. `grep -n 'for_publication_worker'` is the audit and must return
     // exactly this line plus the constructor. Everything that may publish or refresh takes
     // this witness by value, so the doorbell and the trap CANNOT reach those verbs — not by
@@ -5357,13 +5375,24 @@ fn doorbell_publish_loop(
         // change it — a doorbell, a birth, an invalidate — and the rebuild is 4096 relaxed
         // stores over a `Vec` the spine handed us. ⚠ Still SHADOW: nothing reads its answer
         // for a decision yet.
-        port.rebuild_dbtable(&off_vcpu);
+        port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
-        // ⊘ `SharedDoorbell` holds no mirror; the snapshot is taken on the shim's own drain
-        // below, which runs for every birth. Passing `None` here rather than plumbing a second
-        // handle for a one-shot measurement.
-        let born = report_channel_birth_drain(&port.device, &birth_grants, None);
+        // ★★★ **w644 — THIS DEVICE'S MIRROR, not a process-global fallback.**
+        //
+        // ⊘⊘ The old shape passed `None` here and let `report_channel_birth_drain` fall back to
+        // a `OnceLock` the FIRST device had claimed. With two GPUs that is not a lost number,
+        // it is `note_first_channel_birth()` called on **device 0's mirror by device 1's
+        // drain** — device 0's pre-birth BAR working-set snapshot corrupted by device 1's
+        // timing. ★ An absent number reads as absent; a wrong number reads as a measurement.
+        #[cfg(feature = "host-isolates")]
+        let mirror_for_drain = port.bar_mirror.get().and_then(std::sync::Weak::upgrade);
+        #[cfg(not(feature = "host-isolates"))]
+        let mirror_for_drain: Option<&()> = None;
+        #[cfg(feature = "host-isolates")]
+        let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain.as_deref());
+        #[cfg(not(feature = "host-isolates"))]
+        let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain);
         // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
         //
         // Owner, 2026-09-12: *"if a channel is created inheriting a va base, then you can map
@@ -5605,8 +5634,10 @@ fn doorbell_publish_loop(
             // the slots are in. `[measured w608]` all 21 touches per page are PRE-slot, not
             // 1 + 20 — so placing the slot before the first touch removes all 21, and a birth
             // could not remove any of them by construction.
+            // ★ w644 — THIS device's mirror, off the loop's own port. A global here
+            // premapped device 0's BARs when device 1 invalidated.
             #[cfg(feature = "host-isolates")]
-            if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
+            if let Some(m) = port.bar_mirror.get().and_then(std::sync::Weak::upgrade) {
                 m.premap_bars();
             }
             // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
@@ -6092,8 +6123,6 @@ fn refused(
 /// owns this" and would be a dropped submission wearing a legitimate-looking answer.
 const VCHID_SPACE: usize = 1 << 12;
 
-/// Doorbells whose decoded vChid the shadow table and the live path disagreed about.
-static DBTABLE_SHADOW_DISAGREE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// Doorbells the shadow table would have dropped as `Unallocated`.
 static DBTABLE_SHADOW_UNALLOCATED: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
@@ -6108,7 +6137,17 @@ static DBTABLE_SHADOW_MALFORMED: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 /// Rebuilds of the table from the projection, and rows installed by the last one.
 static DBTABLE_REBUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static DBTABLE_ROWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ The **PEAK** number of rows this table has ever held — not the last.
+///
+/// ⊘⊘ `[measured w643a]` the last-value gauge printed **`rows=0`** on a boot where the table
+/// had answered 204 passthrough and 156 emulated routes: every channel is gone by teardown, so
+/// the final rebuild installs nothing. **A last-value gauge cannot tell "never populated" from
+/// "emptied at the end"** — and `rows=0` beside `unallocated=0` reads as a table that was never
+/// built, which is the reading that would have retired this work as broken.
+static DBTABLE_ROWS_PEAK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Rebuilds whose snapshot was byte-identical to the last — the store pass skipped.
+static DBTABLE_REBUILDS_SKIPPED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// The shadow census. ⚠ Read the counts **beside** the total: a table nobody consulted
 /// disagrees with nothing, and the two zeros are indistinguishable.
@@ -6129,14 +6168,13 @@ fn dbtable_shadow_census() -> String {
     );
     format!(
         "DBTABLE-SHADOW consulted={} [unallocated={u} passthrough={p} emulated={e} \
-         malformed={m}] disagree={} rebuilds={} rows={} ⊘ SHADOW: the table decided NOTHING. \
-         ⚠ `unallocated` counts doorbells it WOULD HAVE DROPPED — that must reach 0 against a \
-         live path that served them before any arm is flipped, and `consulted` must be \
-         NON-ZERO or the zero above is a table nobody asked.",
+         malformed={m}] rows_peak={} rebuilds={} skipped={} ⊘ SHADOW: the table decided \
+         NOTHING. ★ `unallocated` is THE number: it counts doorbells this table WOULD HAVE \
+         DROPPED, and it must be 0 with a non-zero `consulted` before any arm is flipped.",
         u + p + e + m,
-        DBTABLE_SHADOW_DISAGREE.load(Relaxed),
+        DBTABLE_ROWS_PEAK.load(Relaxed),
         DBTABLE_REBUILDS.load(Relaxed),
-        DBTABLE_ROWS.load(Relaxed),
+        DBTABLE_REBUILDS_SKIPPED.load(Relaxed),
     )
 }
 
@@ -6356,14 +6394,27 @@ impl SharedDoorbell {
     ///
     /// ⚠ Clears vanished rows. A channel that went away must stop routing, or its vChid keeps
     /// naming a host token that now belongs to somebody else.
-    fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu) {
+    fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu, last: &mut Vec<(u16, Option<u64>)>) {
         use std::sync::atomic::Ordering::Relaxed;
         use kayfabe_device::dbtable::Route;
+        // ⊘ The spine read is UNCONDITIONAL, and that is the completeness argument: the table
+        // is whatever the current projection says, never whatever an event hook remembered.
         let rows = self.device.doorbell_routes(DOORBELL_TARGET_GPU);
+        DBTABLE_REBUILDS.fetch_add(1, Relaxed);
+        // ★★★ **`[measured w643a]` 41 746 rebuilds for 360 doorbells** — the worker wakes for
+        // mirror fills and invalidates too, not only for doorbells, so this runs ~116× per
+        // doorbell. ⊘ The snapshot is what must stay unconditional; the 4096 stores behind it
+        // need not be. An identical snapshot cannot change the table, so skip the write pass
+        // and say how often that happened — a skip count is what makes the claim checkable
+        // instead of an assertion that the common case is cheap.
+        if *last == rows {
+            DBTABLE_REBUILDS_SKIPPED.fetch_add(1, Relaxed);
+            return;
+        }
         let mut live = vec![false; VCHID_SPACE];
         let mut installed = 0u64;
         for (vchid, host) in &rows {
-            let i = usize::from(vchid.0);
+            let i = usize::from(*vchid);
             if i >= VCHID_SPACE {
                 continue; // unreachable for a decoded vChid; refused rather than wrapped.
             }
@@ -6373,21 +6424,26 @@ impl SharedDoorbell {
                 // routing it to the emulated lane is what makes a refusal happen BY NAME on
                 // the worker instead of a submission disappearing on the vCPU.
                 None => Route::Emulated {
-                    chan: u64::from(vchid.0),
+                    chan: u64::from(*vchid),
                 },
             };
-            if self.dbtable.install(u64::from(vchid.0), route) {
+            if self.dbtable.install(u64::from(*vchid), route) {
                 live[i] = true;
                 installed += 1;
             }
         }
+        // ⚠ Clears vanished rows. A channel that went away must stop routing, or its vChid
+        // keeps naming a host token that now belongs to somebody else — a doorbell delivered
+        // to the WRONG channel, which is worse than one dropped.
         for (i, alive) in live.iter().enumerate() {
             if !alive {
                 self.dbtable.install(i as u64, Route::Unallocated);
             }
         }
-        DBTABLE_REBUILDS.fetch_add(1, Relaxed);
-        DBTABLE_ROWS.store(installed, Relaxed);
+        // ⊘ PEAK, not last: every channel is gone by teardown, so a last-value gauge prints 0
+        // for a table that served hundreds of routes. See `DBTABLE_ROWS_PEAK`.
+        DBTABLE_ROWS_PEAK.fetch_max(installed, Relaxed);
+        *last = rows;
     }
 
     /// ★★★★★ **The doorbell body — every leg, in the order that has always been
@@ -14496,6 +14552,8 @@ impl Regs {
             // can produce, so a well-formed token is never past the end and the bounds check
             // only ever refuses a MALFORMED one.
             dbtable: Arc::new(kayfabe_device::dbtable::DoorbellTable::new(VCHID_SPACE)),
+            #[cfg(feature = "host-isolates")]
+            bar_mirror: Arc::new(std::sync::OnceLock::new()),
         };
         plane.set_doorbell(Box::new(doorbell_port.clone()));
 
@@ -14719,8 +14777,13 @@ impl Regs {
             // ⊘ That assumption is what the zero was measuring. A `Weak` here costs one atomic
             // and cannot extend the mirror's life, which is why it is preferable to giving a
             // doorbell type a handle to the memory plane it exists not to reach.
+            // ★ w644 — onto THIS DEVICE's port. `self` is the `Regs` that owns it, so no
+            // global is needed and none is correct: see `SharedDoorbell::bar_mirror`.
             #[cfg(feature = "host-isolates")]
-            let _ = MIRROR_FOR_BIRTH.set(std::sync::Arc::downgrade(&m));
+            let _ = self
+                .doorbell_port
+                .bar_mirror
+                .set(std::sync::Arc::downgrade(&m));
             let _ = self.bar_mirror.set(m);
             self.back_bar0_dead_runs(shim);
         }
