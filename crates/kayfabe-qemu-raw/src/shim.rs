@@ -5787,13 +5787,58 @@ fn doorbell_publish_loop(
                 Option::<()>::None
             }
         };
-        let report = port.ring_inline(token, Some(off_vcpu));
+        // ★★★★★ **RING ONLY WHAT IS ACTUALLY A DOORBELL — w695d.**
+        //
+        // ⊘⊘⊘ `[measured w695c]` **475 rings, 50 real doorbells.** The guest rang fifty
+        // (`doorbells=50`, tokens like `0x00020005` — runlist 2, chid 5). This line rang
+        // **475**, with tokens `0x0, 0x1, 0x2 … 0x1da`: a perfect monotonic sequence, one
+        // per job, starting *before the guest driver had even loaded*.
+        //
+        // Three kinds `continue` above (`MirrorFill`, `RpcBind`, `Invalidate`). `GspSubmit`
+        // does **not** — it has to reach the GSP command-queue drain below — and so it fell
+        // through to here and was **rung as a work-submit token**. Its `token` is
+        // `GSP_SUBMIT_SEQ`, whose own docstring two hundred lines up says exactly what it is:
+        // *"⊘ NOT a doorbell token and NOT a register value: the worker only needs `the queue
+        // moved since you last looked`."*
+        //
+        // ## Why it was invisible, and then expensive
+        //
+        // `decode_work_submit_token` accepts any value with no bits outside `0x007F_0FFF`, so
+        // **every** small sequence number decodes as a perfectly well-formed token for
+        // `vchid = seq & 0xFFF`, runlist 0. Nothing is malformed, nothing faults; the ring
+        // simply misses `by_vchid` and is counted as a refusal **by name**. ⇒ 474 phantom
+        // `FwdFault::UnknownVchid` entries buried the 50 real doorbells, and two sessions
+        // read that census as *"the guest's cuCtxCreate channels are being refused"* and went
+        // looking for a projection bug that does not exist (w695, w695b, w695c).
+        //
+        // ⚠⚠ **And it is not only a reporting defect.** `by_vchid` is keyed `(GpuId, VChid)` —
+        // the runlist is **not** part of the key. The guest's live channel above is
+        // `0x00020005` ⇒ vchid 5; the sequence reaches `seq = 5` ⇒ vchid 5. **The same row.**
+        // A GSP wake would then ring a real guest channel that the guest never rang: a
+        // submission out of nowhere, on the one path where nothing refuses it.
+        //
+        // ⊘ Written as an exhaustive `match` rather than `if kind == Doorbell`, so a sixth
+        // `PublicationKind` is a COMPILE ERROR here instead of a silent sixth phantom ringer.
+        // That is the property this site actually lacked — the fall-through was not a wrong
+        // condition, it was the *absence* of one.
+        let report = match job.kind() {
+            kayfabe_device::pubqueue::PublicationKind::Doorbell => {
+                Some(port.ring_inline(token, Some(off_vcpu)))
+            }
+            // A wake, not a submission. It still falls through to the GSP drain below —
+            // which is the entire reason it is queued — it just does not ring anything.
+            kayfabe_device::pubqueue::PublicationKind::GspSubmit => None,
+            // Handled by their own `continue` arms above; unreachable here.
+            kayfabe_device::pubqueue::PublicationKind::MirrorFill
+            | kayfabe_device::pubqueue::PublicationKind::Invalidate
+            | kayfabe_device::pubqueue::PublicationKind::RpcBind => None,
+        };
         // ★ The plane's own accounting, called from here so `doorbells_served` /
         // `doorbells_refused` keep meaning what they meant. ⊘ A second set of counters on
         // this side would make every existing grading grep silently stop seeing the
         // forwarded arm the moment the lane was armed.
-        if let Some(plane) = port.plane.upgrade() {
-            plane.account_doorbell_report(token, &report);
+        if let (Some(report), Some(plane)) = (report.as_ref(), port.plane.upgrade()) {
+            plane.account_doorbell_report(token, report);
             // ★★★★★ **THE LOCALLY-SERVED ARM, AND IT IS NOT DEAD CODE — it is a guard.**
             //
             // `[measured w380llm2]` the deferred population is the forwarding path, whose
@@ -5803,7 +5848,7 @@ fn doorbell_publish_loop(
             // face. If `try_ce_submission` ever claims a doorbell on this thread, the
             // completion it owes the guest goes out here rather than being silently
             // dropped — and the line says so, once, so a boot can tell.
-            if let kayfabe_device::DoorbellReport::ServedLocally { engine, .. } = &report {
+            if let kayfabe_device::DoorbellReport::ServedLocally { engine, .. } = report {
                 let owed = plane.announce_deferred_local_completion(*engine);
                 // ⊘⊘ **CAPPED, and the cap is a correction of this line's own comment.** It
                 // said *"the line says so, once"* on the belief that a deferred
