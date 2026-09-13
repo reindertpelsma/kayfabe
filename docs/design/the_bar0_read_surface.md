@@ -76,6 +76,37 @@ NOT yet zero is the FIRST touch of each page, which is one exit per page by cons
 that zero means filling them before the guest arrives, not filling them faster — a different
 change from the shadow below, and the one §7 lists last because it is the least understood.
 
+## 3b. PRAMIN, concretely — one mapping, re-pointed by one `mmap`
+
+Owner: *"is just one mmap remap in vmm va, no bql lock, no kvm memslot update"*, and
+*"safe code may not touch raw vmm va pointers unchecked"*.
+
+**The shape.** One memory slot over `[BAR0 + 0x700000, +1 MiB)`, installed once. A VA
+reservation of the same size in this process. Moving the window is `mmap(MAP_FIXED, fd,
+offset = window_base)` over that reservation — the MMU notifier makes KVM drop its own
+entries, so there is no memslot ioctl, no big lock, and nothing for the hypervisor to arbitrate.
+⊘ Synchronous on the vCPU, because RM writes the latch and then uses the window immediately;
+there is no completion to defer behind. It is one syscall, which is what makes that affordable.
+
+**What it requires, and this is the real work.** A single `mmap` can only place the window if
+the framebuffer's backing is CONTIGUOUS BY FRAMEBUFFER ADDRESS in the fd. Today
+`SharedPageArena::alloc` is a bump allocator with a free list (`arena_unsafe.rs:170-177`) —
+fd offset is allocation ORDER, so a 1 MiB window is 256 unrelated offsets.
+
+⇒ **Make the arena address-indexed: fd offset == framebuffer address.** This is a
+SIMPLIFICATION, not an addition — the free list and the bump cursor both disappear, because the
+address IS the offset. A sparse `memfd` the length of the framebuffer costs nothing until a
+page is touched.
+
+⊘ **And it must be the SAME arena, not a second one.** A separate address-indexed backing for
+PRAMIN would give the same framebuffer byte two homes, with nothing keeping them equal — the
+failure this file's §5 is about. The BAR1/BAR2 mirror keeps working unchanged: a per-page slot
+at `fd_offset = frame` is still correct when the offset happens to equal the address.
+
+⚠ `SharedPageArena::LEN` is 1 GiB today, chosen to match a residency ceiling. Address-indexing
+makes the extent a property of the FRAMEBUFFER's length, not of a ceiling, and the two must
+stop being conflated.
+
 ## 4. What still exits, and it is the whole point
 
 After this, a guest read of BAR0 **never** leaves the vCPU. Writes exit only where they must:
