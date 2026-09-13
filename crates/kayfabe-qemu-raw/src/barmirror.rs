@@ -398,6 +398,10 @@ pub struct BarMirror {
     /// the 64 KiB case never arose and the fix below is untested by this boot, while `65536`
     /// means it did — a distinction the page count alone cannot make.
     premap_biggest_leaf: AtomicU64,
+    /// ★ w622 — pages the snapshot filtered out before `fill_now` was called. ⊘ This is the
+    /// number that used to be `ALREADY-COVERED-EARLY`, moved one layer up where it costs one
+    /// `BTreeSet` lookup instead of a mutex acquisition.
+    premap_skipped: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -580,6 +584,7 @@ impl BarMirror {
             premap_pages: AtomicU64::new(0),
             premap_refused: AtomicU64::new(0),
             premap_biggest_leaf: AtomicU64::new(0),
+            premap_skipped: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1255,7 +1260,30 @@ impl BarMirror {
                 return;
             }
         };
+        // ★★★★★ **w622 — TAKE THE TABLE LOCK ONCE PER ENUMERATION, NOT ONCE PER PAGE.**
+        //
+        // `[measured w620a]` BAR1 reached ZERO traps at a cost of **567 312 `fill_now` calls**
+        // across 1 181 invalidates — each one acquiring the table lock for its phase-0
+        // "already covered?" check, and 83 882+ of them answering yes. ⊘ The enumeration cannot
+        // be skipped when the tree is unchanged, because **we cannot tell**: BAR1's page tables
+        // are written by the guest through BAR2, which is slot-served and therefore invisible,
+        // so the invalidate is the only signal we get and it is the one we already use.
+        //
+        // ⇒ What CAN be removed is the per-page locking. Snapshot the covered set once, filter
+        // against it, and call `fill_now` only for pages that are actually missing. 567 312
+        // acquisitions become 1 181.
+        //
+        // ⚠ The snapshot can go stale between the lock and the fill — another thread may
+        // install a page we are about to ask for. That is HARMLESS and already handled:
+        // `fill_now` re-checks under the lock and refuses `ALREADY-COVERED-EARLY`. The snapshot
+        // is an optimisation, never an authority, and the race it loses costs one redundant
+        // call rather than a wrong slot.
+        let covered: std::collections::BTreeSet<u64> = {
+            let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            t.slots.keys().copied().collect()
+        };
         let mut asked = 0u64;
+        let mut skipped = 0u64;
         let mut biggest = 0u64;
         for leaf in leaves {
             // ★ The window OFFSET is the leaf's VA within the aperture, VERIFIED rather than
@@ -1278,12 +1306,17 @@ impl BarMirror {
                 if page >= arm.len {
                     break;
                 }
+                if covered.contains(&(arm.base + page)) {
+                    skipped += 1;
+                    continue;
+                }
                 asked += 1;
                 self.fill_now(FbWindow::FbAperture, page);
             }
         }
         self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);
         self.premap_pages.fetch_add(asked, Ordering::Relaxed);
+        self.premap_skipped.fetch_add(skipped, Ordering::Relaxed);
         self.premap_runs.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -1481,9 +1514,10 @@ impl BarMirror {
             }
         };
         let premap = format!(
-            " premap[runs={} pages={} refused={} biggest_leaf={}]",
+            " premap[runs={} filled={} skipped={} refused={} biggest_leaf={}]",
             self.premap_runs.load(Ordering::Relaxed),
             self.premap_pages.load(Ordering::Relaxed),
+            self.premap_skipped.load(Ordering::Relaxed),
             self.premap_refused.load(Ordering::Relaxed),
             self.premap_biggest_leaf.load(Ordering::Relaxed),
         );
