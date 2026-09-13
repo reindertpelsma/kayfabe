@@ -924,6 +924,22 @@ impl BarMirror {
         // the reason to stop — an untested hypothesis is not a blocker, and checking this one
         // cost one `grep`.
         if slot.is_none() {
+            // ★★★★★ **w587 — THE ARM KNOB, so one binary grades both sides.**
+            //
+            // ⊘ w586 landed FOUR unmeasured commits at once and the boot regressed to (E).
+            // Without a knob, separating "the PRAMIN slot" from "the store residency fixes"
+            // costs a rebuild per arm and a claim about which build was which. With one, the
+            // two arms differ by an environment variable and nothing else — which is the only
+            // form of this comparison that is worth anything.
+            //
+            // ★ Default ON: the slot is the goal, not the experiment. `=0` is the control.
+            if std::env::var("KAYFABE_PRAMIN_SLOT").is_ok_and(|v| v == "0") {
+                eprintln!(
+                    "kayfabe: PRAMIN-WINDOW ⊘ ARM OFF (KAYFABE_PRAMIN_SLOT=0) — the aperture \
+                     keeps trapping, byte for byte as before. This is the CONTROL arm."
+                );
+                return;
+            }
             let (Some((span_off, span_len)), Some(p)) =
                 (self.plane.pramin_span(), self.machine.bar_placement(BarId::Bar0))
             else {
@@ -1036,6 +1052,28 @@ impl BarMirror {
     /// The census, one line per armed window plus one for the mechanism.
     pub fn report(&self, at: &str) {
         self.census.census_lines.fetch_add(1, Ordering::Relaxed);
+        // ★★★★★ **w587 — PRAMIN's move counters, printed. They existed since w577 and nothing
+        // read them**, which is the w584 failure exactly: a number that was correct the whole
+        // time and had no emitter. `[measured w586a]` `moves=42` in `BAR0-READS` says the guest
+        // re-aims this window 42 times a boot, so whether the slot FOLLOWED it is a fact about
+        // whether the guest read the right framebuffer — and it was unanswerable.
+        //
+        // ⊘ `moves` counts INSTALL + every accepted re-point; `skipped` counts latch writes
+        // that named the base already shown. `moves + skipped` should equal the latch writes,
+        // and a gap is re-points that were REFUSED — the one failure on this path that cannot
+        // be contained, since the guest then reads the wrong framebuffer with no fault.
+        {
+            let shown = self
+                .pramin
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .map_or_else(|| "none".to_string(), |(_, b)| format!("0x{b:x}"));
+            eprintln!(
+                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown}                  ⊘ moves+skipped below the guest's latch-write count means a re-point was                  REFUSED and the guest read the wrong framebuffer.",
+                self.pramin_moves.load(Ordering::Relaxed),
+                self.pramin_skipped.load(Ordering::Relaxed),
+            );
+        }
         let (live, peak, pages, frames, refused) = {
             let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
             let mut r: Vec<(&'static str, u64)> = t.refused.iter().map(|(k, v)| (*k, *v)).collect();

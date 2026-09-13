@@ -67,11 +67,22 @@ echo "[client] $(grep -a 'W392D_OUTCOME=' "$D" 2>/dev/null | tail -1 | sed 's/^ 
 echo "[client] $(grep -a 'THREADS ' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "[client] $(grep -a 'MEAN_FALSIFIER' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "--- Q2 THE BAR0 READ SURFACE ---"
-grep -a 'BAR0-READS ' "$Q" 2>/dev/null | tail -1 | fold -w 150 | head -6
+# ⊘ The QEMU log puts every census on ONE 120 KB line, so `grep | fold` shows the line's
+# START and not the field asked for. `grep -o` extracts the field itself.
+grep -ao 'BAR0-READS total=[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*' "$Q" 2>/dev/null | tail -1 | tr '|' '\n' 
 echo "--- ★ WHERE THE REMAINING READS ARE (w586's new instrument) ---"
-grep -a 'BAR0-READ-HOTSPOTS' "$Q" 2>/dev/null | tail -1 | fold -w 150 | head -5
+grep -ao 'BAR0-READ-HOTSPOTS[^⊘]*' "$Q" 2>/dev/null | tail -1
+echo "--- ★ PRAMIN's slot: did it FOLLOW the guest's 42 window moves? (w587) ---"
+grep -ao 'PRAMIN-SLOT AT [^⊘]*' "$Q" 2>/dev/null | tail -1
+grep -ao 'PRAMIN-WINDOW [^⊘]*' "$Q" 2>/dev/null | tail -2
 echo "--- Q3 BAR1/BAR2 + THE STORE CENSUS (fable's prediction: HEAP-PAGE was large, must be 0) ---"
 grep -a 'BAR-MIRROR' "$Q" 2>/dev/null | tail -3 | fold -w 150 | head -12
 echo "--- trap latency, goal 6's standing number ---"
-grep -aE 'worst_trap|VCPU-BLOCKING|slow_traps' "$Q" 2>/dev/null | tail -3 | cut -c1-150
+grep -ao 'TRAPWITNESS[^|]*' "$Q" 2>/dev/null | tail -1
+grep -ao 'SLOW-SITES[^⊘]*' "$Q" 2>/dev/null | tail -1
+echo "--- ★ the GSP submit path, which is what a hang shows up in ---"
+grep -a 'kayfabe: GSP-SUBMIT' "$Q" 2>/dev/null | tail -1 | cut -c1-400
+grep -ao 'QUEUE coalesce[^|]*' "$Q" 2>/dev/null | tail -1
+echo "--- ★ the guest OWN first failure (NOT the last line: a re-boot attempt masks it) ---"
+grep -a 'NVRM' "$BENCH/run_${tag}_dmesg.log" 2>/dev/null | head -12 | cut -c1-170
 echo "=== w586 END $(date -Is) ==="
