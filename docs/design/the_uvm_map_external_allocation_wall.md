@@ -155,6 +155,48 @@ documented in the same idiom. Six calls are missing: 1, 39, 70, 23, 73, 33.
 costs ~6 minutes; once booted, rmladder variants cost seconds. The wall blocks goals 9 and 10, so
 the iteration rate on it is the schedule.
 
+## ★★★★★ 4d. THE ANSWER — it is `DELIVERY_UNBUILT`, and the device prints it every boot
+
+`kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`, carried into `KayfabeRegAudit` and printed beside
+the registration count on **every boot** (verified present in w695m, w698b, w699):
+
+> *"fault DELIVERY is UNBUILT: this port raises no replayable fault and never advances
+> `MMU_FAULT_BUFFER_PUT(1)`, so a fault the guest should have been told about becomes a **HANG
+> inside UVM's replayable-fault service loop, not an error** (`resume_from_fault.md` §7 5b-5d)"*
+
+Every symptom in §1 and §2 is predicted by that sentence: the `<unfinished>` ioctl, the kernel-CPU
+burn (a *service loop*), the `MC_SERVICE_INTERRUPTS` polling, the absence of any Xid or refusal,
+and the fact that the **Nth** map hangs while earlier ones return — only the map that FAULTS hangs.
+
+⊘ `DELIVERY_UNBUILT`'s own docstring says why it names a hang: *"A reader who knows only 'faults
+are unbuilt' will look for an error; **there is none to find.**"*
+
+### Why goal 7 is green over the same code path
+
+`rmladder`'s `p2_uvm_round` — the W392D mean test — **already** calls `create_external_range` +
+`map_external` three times on 8 threads and grades `(P)`. Its own docs say why that proves less
+than it looks:
+
+> *"Not a guest VA. The address is one **we** choose. Whether a host GPU walking a host VAS built
+> from **guest** VAs would miss is not visible from here, and with fault delivery unbuilt such a
+> miss is a hang inside UVM's replayable-fault loop rather than an error."*
+
+⇒ The raw client maps addresses **we** always back, so it cannot fault. Goal 7 is green because
+it avoids the unbuilt half, not because the half works.
+
+### ★ It is buildable, and the prerequisites already exist
+
+Per `faultbuffer.rs`: with Confidential Compute off — this port's target — the replayable-fault
+loop is guest-side and inside interfaces this port already owns. The buffer is **guest RAM we
+already record** (we answer the registration `NV_OK`), `GET`/`PUT` are **BAR0 registers already
+trapped**, and the interrupt is an **MSI-X already raised** (`486 vectors delivered`). What is
+missing is exactly three steps — write a fault record, advance `PUT`, raise the vector —
+`resume_from_fault.md` §7 **5b-5d**.
+
+⚠ **And the lesson is larger than the bug.** This sentence was in every boot log of a day-long
+hunt that rediscovered it by tracing the guest. ⇒ **Read the device's own startup report before
+tracing.** A port that states what it did NOT build has already done the diagnosis.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
