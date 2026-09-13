@@ -50,6 +50,41 @@ export POST_CAPTURE_HOOK="${POST_CAPTURE_HOOK:-$SRC_DIR/w392d_mean_hook.sh}"
 # nowhere in the output.
 echo "POST_CAPTURE_HOOK=$POST_CAPTURE_HOOK"
 
+# ★★★★★ **THE BINARY MUST BE THE TREE YOU THINK YOU ARE TESTING (w672).**
+#
+# ⊘⊘⊘ Four times in one session a run was graded for a change that was not in it:
+#   1. `KAYFABE_SYNC3` absent from the binary — the rebuild had REFUSED (`cargo` not on PATH)
+#      and the boot happily used the previous one.
+#   2. `POST_CAPTURE_HOOK` overwritten by this script, so the mean hook ran instead of cup3.
+#   3. `PUBQUEUE by_kind` missing — this script does not rebuild, and nothing said so.
+#   4. The content-check for (3) matched `by_kind={}` in an UNRELATED census line and reported
+#      the change present. ⚠ A substring is not a witness.
+#
+# ★ All four have ONE detectable signature: **the binary's revision is not the tree's HEAD.**
+# That comparison is cheap, exact, and cannot be fooled by a substring — so it is made here, and
+# it REFUSES rather than warns. A boot that grades the wrong binary is worse than no boot: it
+# produces a number that looks like evidence.
+#
+# ⊘ `KAYFABE_ALLOW_STALE_BINARY=1` is the deliberate escape hatch — re-running an OLD revision
+# on purpose is a legitimate thing to do (it is how a control arm gets measured), but it must be
+# stated rather than defaulted into.
+BIN_REV=$(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null           | sed -n 's/^kayfabe-rev:\([0-9a-f]\{40\}\)$/\1/p' | head -1)
+TREE_REV=$(git -C "${KAYFABE_REPO:-/root/kayfabe}" rev-parse HEAD 2>/dev/null)
+if [ -n "$BIN_REV" ] && [ -n "$TREE_REV" ] && [ "$BIN_REV" != "$TREE_REV" ]; then
+  echo "⊘⊘⊘ STALE BINARY — refusing to grade a run that does not contain the tree."
+  echo "    binary : $BIN_REV"
+  echo "    tree   : $TREE_REV"
+  echo "    Rebuild:  export PATH=\$HOME/.cargo/bin:\$PATH"
+  echo "              KAYFABE_SHIM_FEATURES=host-isolates bash scripts/build_qom_shim.sh \\"
+  echo "                  $BENCH/qemu-10.2.4 $BENCH/qemu-build"
+  echo "    ⚠ The rebuild can REFUSE (cargo off PATH) and leave the old binary in place —"
+  echo "      check the binary's mtime, not the rebuild's exit status."
+  echo "    To measure an older revision ON PURPOSE: KAYFABE_ALLOW_STALE_BINARY=1"
+  [ "${KAYFABE_ALLOW_STALE_BINARY:-0}" = "1" ] || exit 3
+  echo "    ⊘ KAYFABE_ALLOW_STALE_BINARY=1 — proceeding with the stale binary, as asked."
+fi
+echo "BINARY_REV=${BIN_REV:-UNKNOWN} TREE_REV=${TREE_REV:-UNKNOWN}"
+
 echo "=== w586 BOOT $(date -Is) tag=$tag ==="
 
 # ⚠ VERIFY THE BINARY BY CONTENT, never by a stamp. `[measured]` this bench served a binary
