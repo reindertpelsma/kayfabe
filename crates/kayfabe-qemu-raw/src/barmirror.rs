@@ -16,7 +16,7 @@
 //!
 //! | TLB | this |
 //! |---|---|
-//! | fill on miss | a trapped BAR1/BAR2 access ([`BarMirror::fill`]) walks the guest's BAR page table (the same walk the trap performed), asks the store what memory backs the frame, and installs a 4 KiB memslot over **that memory** |
+//! | fill on miss | a trapped BAR1/BAR2 access ([`BarMirror::fill`]) walks the guest's BAR page table (the same walk the trap performed), asks the store what memory backs the frame, and installs a 4 KiB memslot over **that memory**. ⊘ Since w613 `premap_window` installs pages the SAME way with no access at all, so a slot is **not** evidence of an exit — see [`FillOrigin`] and read `TRAP_FILLS`, never a total |
 //! | flush on invalidate | the guest's `MMU_INVALIDATE` trigger ([`BarMirror::revalidate`]) re-walks every live entry and drops the ones whose translation or backing changed — the exact GPU boundary the owner ranks first (`publish_trigger_preference_ordering.md`) |
 //! | entry = one memory | the slot's pages ARE the store's pages (the page arena) or the join's `memfd` — there is never a second copy, so nothing is carried, revoked or merged |
 //!
@@ -61,6 +61,20 @@ use kayfabe_device::{
 use kayfabe_linux_raw::{ArenaPage, HostPageSize, SharedPageArena};
 use kayfabe_vmm::{BarId, RamRegionId, VmmError};
 use kayfabe_vmm_qemu::QemuMachine;
+
+/// ★★★★★ **Why a page got a memslot** — and it is a parameter rather than a guess, because the
+/// two origins answer two different questions and one counter served both until w696.
+///
+/// ⊘ `Trap` is a guest EXIT: the access faulted, we walked, we installed. That is the number
+/// goal 2 is about. `Premap` is us installing ahead of the guest, which costs the guest nothing
+/// and must never be added to an exit count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FillOrigin {
+    /// A trapped guest access — one MMIO exit.
+    Trap,
+    /// Installed ahead of any access by `premap_window`.
+    Premap,
+}
 
 /// The page the mirror deals in — the store's `FB_PAGE`, the arena's `ARENA_PAGE`.
 const PAGE: u64 = 4096;
@@ -324,7 +338,12 @@ struct Table {
 
 #[derive(Debug, Default)]
 struct Census {
+    /// ⊘ **TRAP-DRIVEN fills only** — one guest MMIO exit each. See `FillOrigin`.
     fills: [AtomicU64; 2],
+    /// Pages installed AHEAD of any access by `premap_window`. ⊘ Deliberately a second field
+    /// and not added to `fills`: a premap install costs the guest no exit, and summing the two
+    /// is what made `fills` read as thousands of traps when the trap count was zero.
+    premap_fills: [AtomicU64; 2],
     reval_runs: AtomicU64,
     reval_kept: AtomicU64,
     reval_removed: AtomicU64,
@@ -756,7 +775,7 @@ impl BarMirror {
     pub fn fill(&self, w: FbWindow, off: u64) -> bool {
         if !self.defer_reval || !kayfabe_util::lockwitness::on_vcpu_thread() {
             // ⊘ Done HERE, synchronously. Nothing is queued, so no wake is owed.
-            self.fill_now(w, off);
+            self.fill_now(w, off, FillOrigin::Trap);
             return false;
         }
         let mut q = self.fills.lock().unwrap_or_else(|e| e.into_inner());
@@ -781,7 +800,7 @@ impl BarMirror {
                 return;
             };
             self.fills_run.fetch_add(1, Ordering::Relaxed);
-            self.fill_now(w, off);
+            self.fill_now(w, off, FillOrigin::Trap);
         }
     }
 
@@ -797,7 +816,7 @@ impl BarMirror {
         )
     }
 
-    fn fill_now(&self, w: FbWindow, off: u64) {
+    fn fill_now(&self, w: FbWindow, off: u64, origin: FillOrigin) {
         let Some(arm) = self.arm_for(w) else {
             return;
         };
@@ -978,7 +997,24 @@ impl BarMirror {
             );
             return;
         }
-        let n = self.census.fills[wi].fetch_add(1, Ordering::Relaxed) + 1;
+        // ★★★★★ **TRAP-DRIVEN ONLY — w696.**
+        //
+        // ⊘⊘⊘ This counter used to be bumped by BOTH callers, while the module doc 960 lines up
+        // said *"every fill was ONE trapped access"*. That sentence was TRUE before `premap`
+        // existed and premap broke it without touching it. `[measured w695m/w696ctl]` the
+        // identity is exact and damning: bar1 1728 + bar2 211 = **1939** = `premap[filled=1939]`
+        // (CUDA), and 5841 + 294 = **6135** = `premap[filled=6135]` (raw client). ⇒ EVERY fill
+        // in both workloads was a premap install and the trap count was **zero** — but the
+        // number read as thousands of traps, and it was reported as a goal-2 regression twice.
+        //
+        // ★ Goal 2 asks "how many exits did the guest take", and only this arm answers it.
+        // Premap installs are counted by `premap_pages`, which already exists and is honest.
+        let n = match origin {
+            FillOrigin::Trap => self.census.fills[wi].fetch_add(1, Ordering::Relaxed) + 1,
+            FillOrigin::Premap => {
+                self.census.premap_fills[wi].fetch_add(1, Ordering::Relaxed) + 1
+            }
+        };
         if n % CENSUS_EVERY_FILLS == 0 {
             self.report("RUNNING");
         }
@@ -1459,7 +1495,7 @@ impl BarMirror {
                     continue;
                 }
                 asked += 1;
-                self.fill_now(win, page);
+                self.fill_now(win, page, FillOrigin::Premap);
             }
         }
         self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);
@@ -1689,12 +1725,16 @@ impl BarMirror {
         {
             match self.arms[i] {
                 Some(_) => eprintln!(
-                    "kayfabe: BAR-MIRROR {} AT {at}: arm=on fills={} distinct_pages={} \
-                     distinct_frames={} — ⇒ every fill was ONE trapped access; read fills \
-                     beside the C's bar{}_passthrough_misses (a miss the mirror could not fill \
-                     is in the refusal list below)",
+                    "kayfabe: BAR-MIRROR {} AT {at}: arm=on TRAP_FILLS={} premap_fills={} \
+                     distinct_pages={} distinct_frames={} — ⇒ **TRAP_FILLS is the goal-2 \
+                     number**: one guest MMIO exit each. ⊘ `premap_fills` are installed AHEAD \
+                     of any access and cost the guest NO exit; they were summed into the same \
+                     counter until w696, which made a ZERO trap count read as thousands. Read \
+                     TRAP_FILLS beside the C's bar{}_passthrough_misses (a miss the mirror \
+                     could not fill is in the refusal list below)",
                     name(w),
                     self.census.fills[i].load(Ordering::Relaxed),
+                    self.census.premap_fills[i].load(Ordering::Relaxed),
                     pages[i],
                     frames[i],
                     i + 1,
