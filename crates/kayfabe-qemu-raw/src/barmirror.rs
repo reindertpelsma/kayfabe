@@ -394,6 +394,10 @@ pub struct BarMirror {
     premap_runs: AtomicU64,
     premap_pages: AtomicU64,
     premap_refused: AtomicU64,
+    /// ★ w620 — the largest leaf any enumeration returned. ⊘ Printed because `4096` here means
+    /// the 64 KiB case never arose and the fix below is untested by this boot, while `65536`
+    /// means it did — a distinction the page count alone cannot make.
+    premap_biggest_leaf: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -575,6 +579,7 @@ impl BarMirror {
             premap_runs: AtomicU64::new(0),
             premap_pages: AtomicU64::new(0),
             premap_refused: AtomicU64::new(0),
+            premap_biggest_leaf: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1201,7 +1206,19 @@ impl BarMirror {
     /// is usable"* means the cost belongs here. The drain's own budget reports an overrun, so
     /// the price is visible rather than hidden.
     pub fn premap_bar1(&self) {
-        // ⊘⊘⊘ **DEFAULT OFF since w618 — THIS FAILED ITS OWN CRITERION AND MADE THINGS WORSE.**
+        // ⊘⊘⊘ **w618 FAILED ITS CRITERION; w620 FIXES THE TWO REAL DEFECTS AND MOVES THE
+        // MOMENT. Default ON again, `KAYFABE_PREMAP_BAR1=0` is the control.**
+        //
+        // ⚠ **My w618 self-diagnosis was WRONG and is corrected here.** I wrote that this
+        // *"maps the wrong set"* and needs the channel's own VA maps. It does not: BAR1 is its
+        // own VAS keyed by `bar1_pde_base`, its leaves ARE its known maps, a channel has no
+        // "own" BAR1 subset, and going from a VAS row to an aperture offset would be the
+        // reverse resolution `mode2_address_table.md` forbids. The 253 extra pages were
+        // UNTOUCHED, not wrong. ⇒ Two other things were wrong, both real:
+        //   (a) one 4 KiB fill per leaf while GA10x leaves are 64 KiB — fixed below;
+        //   (b) the MOMENT. See `premap_bar1`'s caller.
+        //
+        // ⊘ Kept as a record of what the old arm measured:
         //
         // `[measured w617a, a boot that graded (P)]`, against the criterion fixed before it ran:
         //
@@ -1225,7 +1242,7 @@ impl BarMirror {
         // INPUT is wrong: a corrected version needs the channel's own VA maps at birth, and it
         // will want to be graded against this arm. **A change that fails a pre-registered
         // criterion is turned off, never tuned until it goes green.**
-        if !std::env::var("KAYFABE_PREMAP_BAR1").is_ok_and(|v| v == "1") {
+        if std::env::var("KAYFABE_PREMAP_BAR1").is_ok_and(|v| v == "0") {
             return;
         }
         let Some(arm) = self.arm_for(FbWindow::FbAperture) else {
@@ -1239,16 +1256,33 @@ impl BarMirror {
             }
         };
         let mut asked = 0u64;
+        let mut biggest = 0u64;
         for leaf in leaves {
-            // ⊘ The window OFFSET is the leaf's VA within the aperture — BAR1's address model
-            // is identity over the window, so a leaf at `va` is reached at `va` in the BAR.
+            // ★ The window OFFSET is the leaf's VA within the aperture, VERIFIED rather than
+            // assumed this time: `window_leaves` roots the decode at `vabase: 0` and
+            // `bar1_translate` walks the identical root with the identical `vabase`, so both
+            // speak the same coordinate. ⊘ w617 asserted this in a comment without checking,
+            // and it happened to be right — which is worse than being wrong, because it made
+            // the real defect look like a coordinate problem.
             let off = leaf.va.0;
-            if off >= arm.len {
-                continue;
+            // ⊘⊘⊘ **A LEAF IS NOT A PAGE, AND THIS WAS THE w617 DEFECT.** `fill_now` installs
+            // exactly one 4 KiB slot, and `[GA10X_PAGE_SIZES]` offers 4 KiB, **64 KiB**, 2 MiB
+            // and 512 MiB. RM caps BAR1 mappings at the big page size and forces 64 KiB on a
+            // BAR1 of 256 MiB or less, so any vidmem object ≥ 64 KiB — a USERD pool, a
+            // pushbuffer — is ONE leaf covering SIXTEEN pages, of which w617 filled the first.
+            // The other fifteen kept demand-filling exactly as before, which is precisely the
+            // "premapping did not reduce the traps" I could not explain.
+            let size = leaf.size.0.max(PAGE);
+            biggest = biggest.max(size);
+            for page in (off..off.saturating_add(size)).step_by(PAGE as usize) {
+                if page >= arm.len {
+                    break;
+                }
+                asked += 1;
+                self.fill_now(FbWindow::FbAperture, page);
             }
-            asked += 1;
-            self.fill_now(FbWindow::FbAperture, off);
         }
+        self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);
         self.premap_pages.fetch_add(asked, Ordering::Relaxed);
         self.premap_runs.fetch_add(1, Ordering::Relaxed);
     }
@@ -1447,10 +1481,11 @@ impl BarMirror {
             }
         };
         let premap = format!(
-            " premap[runs={} pages={} refused={}]",
+            " premap[runs={} pages={} refused={} biggest_leaf={}]",
             self.premap_runs.load(Ordering::Relaxed),
             self.premap_pages.load(Ordering::Relaxed),
             self.premap_refused.load(Ordering::Relaxed),
+            self.premap_biggest_leaf.load(Ordering::Relaxed),
         );
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:

@@ -3242,14 +3242,20 @@ fn report_channel_birth_drain(
             Some(m) => Some(m),
             None => None,
         };
+        // ⊘⊘ **w620 — THE PREMAP MOVED OFF THIS SITE, and the reason is the whole w618 story.**
+        // A BAR1 mapping is made by CPU-RM **locally** (`kbusMapFbAperture_GM107` ->
+        // `dmaAllocMapping_HAL` -> `dmaUpdateVASpace_GF100`), with **no RPC**: its PTE writes
+        // reach us through BAR2, which is slot-served and invisible, and the only thing we
+        // observe is the TLB INVALIDATE. ⇒ A birth enumerates whatever BAR1 held BEFORE it, so
+        // anything mapped after birth N is only seen at birth N+1 — by which time the guest has
+        // already touched and demand-filled it. That is where w618's 30 re-enumerations of an
+        // already-covered tree came from. The birth keeps only its measurement.
         #[allow(clippy::option_if_let_else)]
         if let Some(m) = m {
             m.note_first_channel_birth();
-            m.premap_bar1();
         } else if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
             // ⊘ The `SharedDoorbell` drain's path — see the `MIRROR_FOR_BIRTH` comment.
             m.note_first_channel_birth();
-            m.premap_bar1();
         }
     }
     let elapsed = t0.elapsed();
@@ -5474,6 +5480,24 @@ fn doorbell_publish_loop(
             // mirror slot is gone.
             if let Some(plane) = plane_ref.as_ref() {
                 plane.drain_mirror_revalidation();
+            }
+            // ★★★★★ **w620 — MAP AT THE INVALIDATE. This is the moment BAR1's mapping first
+            // exists, and the only one that can beat the guest's first touch.**
+            //
+            // ⊘ `window_leaves` was WRITTEN for exactly this and had no caller until w617
+            // borrowed it for a channel birth — its own doc (w473) says *"enumerating here is
+            // what makes refresh authoritative rather than reactive."* The owner's contract
+            // above it is blunter: *"no traps in bar1/bar2 at all, ever, only for a fault"* and
+            // *"promote/depromote is only allowed in refresh"*.
+            //
+            // ★ The ordering guarantee is FREE here and unavailable at a birth: this runs
+            // BEFORE `complete()`, so the guest's spin on the invalidate is released only once
+            // the slots are in. `[measured w608]` all 21 touches per page are PRE-slot, not
+            // 1 + 20 — so placing the slot before the first touch removes all 21, and a birth
+            // could not remove any of them by construction.
+            #[cfg(feature = "host-isolates")]
+            if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
+                m.premap_bar1();
             }
             // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
             // BOTH outcomes.

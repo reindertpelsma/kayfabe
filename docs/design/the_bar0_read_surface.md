@@ -309,16 +309,28 @@ ALREADY COVERED.** The guest touches a page, we queue a slot install, and it tou
 page again before the install lands — so the trap count is not measuring distinct pages at all.
 **184 pages are ever needed; 3 952 accesses pay for them.**
 
-★ That is not a bug in the mirror. It is the cost of filling ON DEMAND, and the owner already
-ruled on the alternative:
+★ That is not a bug in the mirror. It is the cost of filling ON DEMAND.
 
-> *"if a channel is created inheriting a va base, then you can map at create, of existing known
-> va maps, and only return from rpc if channel is usuable."*
+⊘⊘⊘ **CORRECTED 2026-09-13 (w620) — THIS SECTION CITED THE WRONG RULING, AND THE MIS-CITATION
+COST TWO IMPLEMENTATIONS.** §6e originally answered this with the owner's *"if a channel is
+created inheriting a va base, then you can map at create, of existing known va maps, and only
+return from rpc if channel is usuable."* ⚠ **That ruling is about VAS ROW PUBLICATION and it is
+already implemented** — `shim.rs`'s `publish_vas_rows`, on the worker after the birth drain and
+before the RPC reply, quoting the ruling verbatim with its date. It fixed an Xid 31 `FAULT_PDE`
+on a GPFIFO ring. **The owner never ruled on BAR memslots at a channel birth**, and reading a
+ruling about one plane as a ruling about another is `a_rulings_date_is_part_of_the_citation`
+in its other form: right quote, wrong subject.
 
-⇒ **Mapping at create removes the class, not the tail.** There is no demand fill to race if the
-pages are placed when the channel is created, and the RPC's own completion is the natural point
-to block until they are — which is the owner's *"only return from rpc if channel is usable"*,
-already the rule for the publication path.
+★ **The moment for BAR1 is the TLB INVALIDATE, not a birth**, and the tree already said so
+before I arrived. `window_leaves` was written for the refresh and had no caller until w617
+borrowed it (*"enumerating here is what makes refresh authoritative rather than reactive"*), and
+the owner's contract quoted beside it is *"no traps in bar1/bar2 at all, ever, only for a fault"*
+with *"promote/depromote is only allowed in refresh"*.
+
+⇒ Why a birth **cannot** work, mechanically: a BAR1 mapping is made by CPU-RM locally
+(`kbusMapFbAperture_GM107` → `dmaAllocMapping_HAL` → `dmaUpdateVASpace_GF100`) with **no RPC**.
+Its PTE writes reach us through BAR2, which is slot-served and invisible; the only thing we
+observe is the invalidate. A birth therefore enumerates whatever BAR1 held BEFORE it.
 
 ⊘ What this replaces: *"BAR1/BAR2 first touch, the last exits on those BARs and the least
 understood item here"* (§7). It is now understood and measured. The remaining work is the map-at-
@@ -368,12 +380,24 @@ you just added.
 
     premap[runs=30 pages=7811 refused=0]   -> 260 pages per birth, for a 66-page working set
 
-★ **The ruling is right; my implementation maps the wrong set.** `window_leaves` enumerates every
-leaf BAR1 has a PTE for — the aperture's whole mapped VA range — not the pages a CHANNEL needs.
-The owner's words were *"of existing known va maps"*, meaning the maps a channel INHERITS. I read
-that as *"everything currently mapped"*, which is a strictly larger set and the wrong one.
+⊘⊘⊘ **MY SELF-DIAGNOSIS HERE WAS WRONG, corrected w620.** I wrote that this *"maps the wrong
+set"* and needs the channel's own VA maps. It does not. **BAR1 is its own VAS keyed by
+`bar1_pde_base`; its leaves ARE its known maps; a channel has no "own" BAR1 subset**; and going
+from a VAS row to an aperture offset would be the reverse resolution `mode2_address_table.md`
+forbids. The 253 extra pages were **untouched, not wrong**.
 
-⊘ It also re-enumerated the same tree at all **30** births, which is where the 11 480 comes from.
+★ The two real defects, both visible in the code I wrote:
+
+1. **A LEAF IS NOT A PAGE.** `fill_now` installs exactly one 4 KiB slot, and GA10x offers 4 KiB,
+   **64 KiB**, 2 MiB and 512 MiB. RM caps BAR1 mappings at the big page size and forces 64 KiB on
+   a BAR1 of ≤ 256 MiB, so any vidmem object ≥ 64 KiB is ONE leaf covering **sixteen** pages — of
+   which w617 filled the first. The other fifteen demand-filled exactly as before. ⇒ **That is
+   the "premapping did not reduce the traps" I could not explain**, and it is not a coordinate
+   problem: `window_leaves` and `bar1_translate` walk the identical root at `vabase: 0`, so the
+   offsets were right all along.
+2. **The moment.** See the correction above §6e.
+
+⊘ And the 11 480 is 30 re-enumerations of an already-covered tree, which follows from (2).
 
 ⇒ **Default OFF behind `KAYFABE_PREMAP_BAR1=1`, kept rather than deleted**, because only its
 INPUT is wrong: the machinery installs slots correctly and a corrected version — fed the
