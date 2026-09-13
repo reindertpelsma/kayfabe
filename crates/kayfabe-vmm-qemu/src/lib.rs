@@ -1422,8 +1422,11 @@ impl QemuMachine {
         // the PRAMIN aperture — an io region that never sets the RAM flag, and so was always
         // safe to place over. The default implementation defers to the per-BAR answer, so a
         // host that does not cut its BARs is unaffected.
-        p.latch_bar(placement.bar, placement.base)?;
-
+        // ⊘⊘ **THE CHECK RUNS BEFORE `latch_bar`, and w639 got that wrong.** `[measured
+        // w639a]` moving it after the latch broke the boot outright — *"The NVIDIA probe
+        // routine failed for 1 device(s)"* — because a refusal then left the BAR latched by a
+        // call that had failed. ⇒ **A check that can refuse must not sit downstream of a
+        // mutation**, and `tier_cuts`/`spans` are pure, so there is no reason for it to.
         let cuts = self.tier_cuts(spec, read_native)?;
         let spans = slots::spans(len, &cuts).map_err(VmmError::Unsupported)?;
         // ⊘⊘⊘ **ASKED OF THE SPANS THAT INSTALL A SLOT, NOT OF THE WHOLE WINDOW (w639).**
@@ -1454,6 +1457,7 @@ impl QemuMachine {
                 return Err(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR));
             }
         }
+        p.latch_bar(placement.bar, placement.base)?;
         // ★★ ONE place decides whether a tier installs a slot, and it is
         // `Tier::readonly_slot`. This used to read `s.tier != Tier::Observe` — a **second
         // evaluation site** for the same rule, and a bite-check proved it: flipping
