@@ -1021,7 +1021,7 @@ impl BarMirror {
                     // w593 - the prefix, latched once, before any post-install access.
                     let c = self.plane.counters();
                     self.pramin_at_install
-                        .store(c.fb_reads + c.fb_writes, Ordering::Relaxed);
+                        .store(c.pramin_reads + c.pramin_writes, Ordering::Relaxed);
                     self.pramin_gpa.store(p.base + span_off, Ordering::Relaxed);
                     self.mark_pramin(base);
                     eprintln!(
@@ -1067,10 +1067,13 @@ impl BarMirror {
 
     /// ★ w597 — one mark per accepted PRAMIN placement. O(1), bounded by the move count.
     fn mark_pramin(&self, base: u64) {
+        // ⊘⊘ w607 — PRAMIN's OWN counters. This sampled `fb_reads + fb_writes`, the union of
+        // BAR1 + BAR2 + PRAMIN, and every number this instrument produced was therefore about
+        // traffic through apertures it does not govern. See `Counters::pramin_reads`.
         let c = self.plane.counters();
         let mut m = self.pramin_marks.lock().unwrap_or_else(|e| e.into_inner());
         if m.len() < 64 {
-            m.push((c.fb_reads + c.fb_writes, base));
+            m.push((c.pramin_reads + c.pramin_writes, base));
         }
     }
 
@@ -1189,7 +1192,7 @@ impl BarMirror {
                 .unwrap_or_else(|e| e.into_inner())
                 .map_or_else(|| "none".to_string(), |(_, b)| format!("0x{b:x}"));
             let c = self.plane.counters();
-            let total = c.fb_reads + c.fb_writes;
+            let total = c.pramin_reads + c.pramin_writes;
             let pre = self.pramin_at_install.load(Ordering::Relaxed);
             // ★ w595 — where the slot went in, against where BAR0 is NOW.
             let at = self.pramin_gpa.load(Ordering::Relaxed);

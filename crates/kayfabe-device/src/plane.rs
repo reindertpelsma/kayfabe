@@ -327,9 +327,16 @@ pub struct Counters {
     /// ★★ The one to watch. A dropped framebuffer write can be a dropped page-table entry,
     /// which does not fail here — it fails much later, as a mapping that is simply absent.
     pub fb_window_writes: u64,
-    /// ★★★ Reads **served** from the device's framebuffer through the BAR0 moving window.
+    /// ★★★ Reads **served** from the device's framebuffer through ANY window.
+    ///
+    /// ⊘⊘⊘ **CORRECTED w607.** This said *"through the BAR0 moving window"* and it is the
+    /// UNION: `BAR1 + BAR2 + PRAMIN`. The `FbWindow::Pramin` arm bumped nothing of its own,
+    /// and this counter is incremented outside the `match window`, for every window. A census
+    /// line printed it as `window[SERVED …]` and six hypotheses were built on reading it as
+    /// PRAMIN's. ⇒ Ask [`Counters::pramin_reads`] for PRAMIN.
     pub fb_reads: u64,
-    /// ★★★ Writes **landed** in the device's framebuffer through the BAR0 moving window.
+    /// ★★★ Writes **landed** in the device's framebuffer through ANY window — the union, as
+    /// [`Counters::fb_reads`] explains at length. Ask [`Counters::pramin_writes`] for PRAMIN.
     ///
     /// ★ "Landed", not "attempted": this counter is incremented only after
     /// [`FbStore::write`] returned `Ok`, so `fb_writes + fb_refusals == attempts` and
@@ -345,6 +352,13 @@ pub struct Counters {
     /// boot in which it is large and the test still fails has a translation that resolves
     /// to the wrong byte. Merging them would make those two indistinguishable.
     pub bar2_reads: u64,
+    /// ★★★★★ **w607 — PRAMIN accesses that reached the handler, on their own.**
+    /// `[measured w603a]` `0` in both directions on a boot that graded `(P)` with the slot
+    /// live: total 57 r / 3895 w, minus BAR1 55/2300, minus BAR2 2/1595, leaves exactly
+    /// nothing. **The PRAMIN aperture takes no traps at all.**
+    pub pramin_reads: u64,
+    /// As [`Counters::pramin_reads`], for writes.
+    pub pramin_writes: u64,
     /// ★★★ Writes **served through the GMMU** into the translated instance/`BAR2` window.
     pub bar2_writes: u64,
     /// ★★★ Translated accesses this port **refused, by name** — an unrooted aperture, an
@@ -1407,6 +1421,20 @@ struct PlaneCounters {
     fb_writes: AtomicU64,
     fb_refusals: AtomicU64,
     bar2_reads: AtomicU64,
+    /// ★★★★★ **w607 — PRAMIN accesses that actually reached this handler.**
+    ///
+    /// ⊘⊘ **It did not exist, and its absence cost six instruments and four boots.** The
+    /// `FbWindow::Pramin` arms of `read`/`write` were literally `{}`, while `fb_reads` and
+    /// `fb_writes` were bumped **unconditionally for every window** just outside the match —
+    /// so `window[SERVED r= w=]` was BAR1 + BAR2 + PRAMIN, and `Counters::fb_reads`'s doc
+    /// called it *"through the BAR0 moving window"*.
+    ///
+    /// ⚠ I checked that doc and reported the counter verified. **The doc was the thing that
+    /// was wrong**, so checking it confirmed the error. `our_census_counts_intent` again, and
+    /// this time the intent was written down in a doc comment and believed.
+    pramin_reads: AtomicU64,
+    /// As [`PlaneCounters::pramin_reads`], for writes.
+    pramin_writes: AtomicU64,
     bar2_writes: AtomicU64,
     bar2_faults: AtomicU64,
     bar1_reads: AtomicU64,
@@ -3641,7 +3669,8 @@ impl RegPlane {
         format!(
             "BAR0-READS total={} | static[boot_reg={} rom={}] | \
              producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
-             window[SERVED r={} w={} | NO-ADDRESS-MODEL r={} w={} | moves={}] | \
+             window[ALL-WINDOWS r={} w={} | PRAMIN-ONLY r={} w={} | NO-ADDRESS-MODEL r={} w={} \
+             | moves={}] | \
              window_off_trap={} ⊘⊘ `window_off_trap` is the discriminator w602 added: a memory \
              slot can only remove accesses the GUEST makes, so window traffic that arrived OFF \
              a trap thread is THIS PROCESS calling the window path and is not a slot failure at \
@@ -3665,6 +3694,8 @@ impl RegPlane {
             c.ptimer_reads,
             c.fb_reads,
             c.fb_writes,
+            self.c.pramin_reads.load(Ordering::Relaxed),
+            self.c.pramin_writes.load(Ordering::Relaxed),
             c.fb_window_reads,
             c.fb_window_writes,
             c.bar0_window_writes,
@@ -3721,6 +3752,8 @@ impl RegPlane {
             // is where a breakdown belongs — a total and a breakdown answer different
             // questions and merging them would make `Counters` allocate.
             bar0_read_pages: _,
+            pramin_reads,
+            pramin_writes,
             // ⊘ Reported by `bar0_read_census` rather than carried in `Counters`, beside the
             // totals it qualifies.
             fb_window_off_trap: _,
@@ -3770,6 +3803,8 @@ impl RegPlane {
             doorbells_refused,
         } = &self.c;
         Counters {
+            pramin_reads: g(pramin_reads),
+            pramin_writes: g(pramin_writes),
             reads: g(reads),
             writes: g(writes),
             boot_reg_reads: g(boot_reg_reads),
@@ -4393,7 +4428,11 @@ impl RegPlane {
                     FbWindow::FbAperture => {
                         self.c.bar1_reads.fetch_add(1, Ordering::Relaxed);
                     }
-                    FbWindow::Pramin => {}
+                    // ★★★★★ w607 — PRAMIN's OWN counter. This arm was `{}` and the totals
+                    // below were read as PRAMIN's for weeks. See `Counters::pramin_reads`.
+                    FbWindow::Pramin => {
+                        self.c.pramin_reads.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 {
                     if !kayfabe_util::trapwitness::in_trap() {
@@ -4951,7 +4990,10 @@ impl RegPlane {
             FbWindow::FbAperture => {
                 self.c.bar1_writes.fetch_add(1, Ordering::Relaxed);
             }
-            FbWindow::Pramin => {}
+            // ★ w607 — the write half of the same counter. See `PlaneCounters::pramin_reads`.
+            FbWindow::Pramin => {
+                self.c.pramin_writes.fetch_add(1, Ordering::Relaxed);
+            }
         }
         let n = usize::from(size.clamp(1, 8));
         let bytes = val.to_le_bytes();

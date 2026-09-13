@@ -231,6 +231,46 @@ exactly what §3 predicted when it named the usermode page as the third piece.
 `slow_traps(>1ms)=1`, `worst_trap=14 618 us at bar0+0x110c00` — the GSP RPC submit, as it has
 been since w515.
 
+## 6d. ★★★★★ CORRECTED 2026-09-13 (w607) — **PRAMIN WAS ALREADY AT ZERO, AND THE NUMBER I
+## SPENT SIX HYPOTHESES ON NEVER CONTAINED A PRAMIN ACCESS**
+
+`[measured w603a, ONE boot, graded `(P)`]` — the arithmetic closes exactly in both directions:
+
+| | reads | writes |
+|---|---|---|
+| `window[SERVED …]`, read as PRAMIN's | 57 | 3 895 |
+| BAR1 (translated) | 55 | 2 300 |
+| BAR2 (translated) | 2 | 1 595 |
+| **PRAMIN, by subtraction** | **0** | **0** |
+
+⇒ **The PRAMIN aperture takes no traps at all, and has not since the slot was un-parked.**
+Goal 2's PRAMIN clause is MET.
+
+⊘⊘⊘ **The instrument was the defect, and I asserted it was not.** The `FbWindow::Pramin` arms of
+`RegPlane::read`/`write` were literally `{}` — no PRAMIN counter existed — while `fb_reads` and
+`fb_writes` were incremented **outside** the `match window`, for every window. So
+`window[SERVED r= w=]` was `BAR1 + BAR2 + PRAMIN`.
+
+⚠ **And `Counters::fb_reads`'s own doc said *"through the BAR0 moving window"*.** w597's commit
+says I *"checked the counter means what I have been claiming"* — I checked the DOC COMMENT, which
+was the thing that was wrong, so checking it CONFIRMED the error. ⇒ A stale doc is worse than no
+doc: it turns verification into corroboration. **Read the code the doc describes, or you have
+checked nothing.**
+
+★ The base correlation was real and had an innocent cause. `kbusSetupBar0WindowBeforeBar2Bootstrap_GM107`
+(`ogkm-580 kern_bus_gm107.c:2163-2198`) parks the BAR0 window on `bar2[GFID_PF].pdeBase` — RM's
+page-level instances at the **top of FB** — for the whole BAR2 bootstrap, and restores it at
+`:1989`. Two caller pairs, two leaky episodes. The bursts are **BAR2 traffic while the latch
+happens to rest there**, and `0x2fff00000` being the memfd's last megabyte is a coincidence of
+where RM puts BAR2's page directory.
+
+⇒ The six refuted hypotheses were all sound about the number they tested; the number was not
+about PRAMIN. `pramin_reads`/`pramin_writes` now exist, and the census prints
+`window[ALL-WINDOWS …| PRAMIN-ONLY …]` so the two can never be confused again.
+
+★ **What is actually left is BAR1/BAR2 first touch** — 55/2 300 and 2/1 595 on that boot — which
+§7 already names as *"the last exits on those BARs, and the least understood item here"*.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -256,5 +296,7 @@ been since w515.
       w585 and w586's own census.
 - [ ] the usermode page mapped from the host — after w590 this is the LAST read source, and it
       is 129 reads rather than the 135 §3 estimated.
+- [x] **PRAMIN: ZERO traps, both directions** (w607, by subtraction on one `(P)` boot, and now
+      counted directly). ⇒ Goal 2's PRAMIN clause is met.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
 - [ ] BAR1/BAR2 first-touch: the last exits on those BARs, and the least understood item here.

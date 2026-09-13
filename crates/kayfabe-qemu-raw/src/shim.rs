@@ -16216,6 +16216,10 @@ impl Regs {
     pub fn audit(&self) -> KayfabeRegAudit {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let kayfabe_device::Counters {
+            // ★ w607 — PRAMIN's own, reported by `bar0_read_census`; see there for why the
+            // union next to them was read as PRAMIN's for six hypotheses.
+            pramin_reads: _,
+            pramin_writes: _,
             reads,
             writes,
             boot_reg_reads,
