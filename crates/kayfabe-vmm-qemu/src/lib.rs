@@ -1262,6 +1262,54 @@ impl QemuMachine {
     ///
     /// # Panics
     /// If called with any ranked lock or any leaf lock held (R1).
+    /// ★★★★★ **RE-POINT AN INSTALLED WINDOW AT A NEW FILE OFFSET — one `mmap`, nothing else.**
+    ///
+    /// Owner, 2026-09-12: *"pramin offset change needs to be synchronous in vcpu thread, is
+    /// just one mmap remap in vmm va, no bql lock, no kvm memslot update"*.
+    ///
+    /// # ⊘ Why the hypervisor is not told
+    ///
+    /// Nothing it knows has changed. The guest-physical range is where it was and the host
+    /// virtual range is where it was; only what lies BEHIND the host range moved. The memory
+    /// slot still names the same host address, so there is no slot to update and no lock to
+    /// take — and the kernel's own MMU notifier retires the guest's stale entries when the
+    /// mapping is replaced.
+    ///
+    /// ⇒ One syscall. That is what makes it affordable **synchronously on a vCPU**, which is
+    /// where it must run: RM writes the window latch and uses the window immediately, with no
+    /// completion to defer behind.
+    ///
+    /// ⊘ `MAP_FIXED` replaces ATOMICALLY, and it must — unmapping first would leave the range
+    /// unmapped for an interval, and ⚠ **the guest's other vCPUs are not halted while one is
+    /// inside an MMIO exit**, so a sibling touching the aperture would fault on a hole with no
+    /// owner. `GuestWindow::place` is that single syscall and is already re-placeable.
+    ///
+    /// # Errors
+    /// [`VmmError`] if the region is not installed, or whatever the placement refuses with.
+    /// ⚠ A refused re-point leaves the window showing what it showed before — never half.
+    pub fn repoint_file_window(
+        &self,
+        region: RamRegionId,
+        fd: std::os::fd::BorrowedFd<'_>,
+        offset: u64,
+    ) -> Result<(), VmmError> {
+        let p = &self.plane;
+        let (ins, _h) = p.installer();
+        let Some(window) = ins.windows.get(&region) else {
+            return Err(VmmError::Unsupported(
+                "that region is not an installed window, so there is nothing to re-point",
+            ));
+        };
+        let len = window.len;
+        window
+            .window
+            .place(HostOffset::ZERO, len, RawBacking::SharedFile { fd, offset })
+            .map_err(|e| {
+                p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                host_refused("re-pointing a file window (the moving aperture)", &e)
+            })
+    }
+
     pub fn install_file_window(
         &self,
         gpa: u64,

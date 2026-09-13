@@ -278,7 +278,6 @@ mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
 mod host_fd_unsafe;
-mod pramin_unsafe;
 pub mod ioctl;
 pub mod kvm_gate;
 mod kvm_unsafe;
@@ -311,8 +310,6 @@ pub mod sandbox {
 }
 
 pub use arena_unsafe::{ARENA_EXHAUSTED, ARENA_PAGE, ArenaPage, SharedPageArena};
-/// ★ w571 — the PRAMIN moving window; see [`pramin_unsafe`].
-pub use pramin_unsafe::{PraminWindow, ReservedVa};
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevDir, Indirect, POINTER_FIELD_WIDTH};
