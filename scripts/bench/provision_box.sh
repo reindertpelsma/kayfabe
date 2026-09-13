@@ -102,8 +102,19 @@ wait_for_dpkg() {
 # them. Waiting for a lock to run an install that would be a no-op is pure dead time, and
 # on a 600s ceiling it can fail the run outright. So probe first and only touch apt if
 # something is genuinely missing.
+# ⊘⊘ `modprobe` and `lspci` are in this list because of a MEASURED failure, not caution.
+# `[measured 2026-09-13, vastai/kvm:ubuntu_cli_22.04-2025-11-21]` that image ships WITHOUT
+# `kmod` and `pciutils`. `provision_box.sh` passed happily — it needs neither — and then
+# `provision_host_driver.sh` downloaded 397 MB, ran the NVIDIA installer, and died on:
+#
+#     ERROR: Unable to find the module utility `modprobe`
+#
+# ⚠ The installer's own exit status is IGNORED_ON_PURPOSE by that script, so the only thing
+# that caught it was its `OPEN_MODULE=no` check at the end. The box looked provisioned and was
+# not. ⇒ A dependency of a LATER step belongs in the FIRST step's list, because the later step
+# is the one that cannot tell a missing tool from a broken swap.
 NEED=""
-for b in gcc pkg-config git curl clang lld python3; do
+for b in gcc pkg-config git curl clang lld python3 modprobe lspci; do
   command -v "$b" >/dev/null 2>&1 || NEED="$NEED $b"
 done
 [ -e /usr/include/openssl/ssl.h ] || NEED="$NEED libssl-dev"
@@ -111,7 +122,8 @@ if [ -n "$NEED" ]; then
   echo "apt needed for:$NEED"
   wait_for_dpkg
   apt-get update -qq
-  apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3
+  apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3 \
+      kmod pciutils
 else
   echo "apt SKIPPED - every dependency already present"
 fi
