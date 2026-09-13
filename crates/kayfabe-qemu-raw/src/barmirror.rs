@@ -474,47 +474,6 @@ impl BarMirror {
             table: Mutex::new(Table::default()),
             census: Census::default(),
         });
-        // ★★★★★ **w578 — INSTALL THE PRAMIN APERTURE: one slot over the whole window.**
-        //
-        // ⊘ Not a mirror. PRAMIN is untranslated, so the aperture is one contiguous run of
-        // framebuffer addresses, and since w569 the arena's file offset IS the framebuffer
-        // address — so one slot at the latch's current base shows the guest exactly the bytes
-        // the plane would serve, for reads AND writes, with no exit either way.
-        //
-        // `[measured w577]` this aperture carried **3704 reads and 631 458 writes** in a boot.
-        if let (Some((span_off, span_len)), Some(base), Some(p)) = (
-            m.plane.pramin_span(),
-            m.plane.pramin_fb_base(),
-            m.machine.bar_placement(BarId::Bar0),
-        ) {
-            match m.machine.install_file_window(
-                p.base + span_off,
-                span_len,
-                m.arena.as_backing_fd(),
-                base,
-                // ⊘ NOT read-only: PRAMIN is the framebuffer, not a register file. The guest's
-                // writes through it ARE the data, and `[measured w577]` they are 631 458 of
-                // the aperture's 635 162 accesses. A read-only slot would remove the reads and
-                // leave every write exiting — the smaller half.
-                false,
-            ) {
-                Ok(region) => {
-                    *m.pramin.lock().unwrap_or_else(|e| e.into_inner()) = Some((region, base));
-                    eprintln!(
-                        "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
-                         showing fb 0x{base:x}. ⊘ ONE slot: every read AND write through this \
-                         aperture resolves in the guest, and a latch move is ONE mmap over the \
-                         same slot — no memslot update, no lock.",
-                        p.base + span_off
-                    );
-                }
-                Err(e) => eprintln!(
-                    "kayfabe: PRAMIN-WINDOW ⊘ NOT INSTALLED ({e:?}) — the aperture keeps \
-                     trapping, byte for byte as before. ⚠ A REFUSAL, not a fallback: nothing \
-                     silently serves stale framebuffer bytes."
-                ),
-            }
-        }
         let (floor, ceiling) = m.machine.slot_range();
         eprintln!(
             "kayfabe: BAR-MIRROR armed: page arena {} MiB (sparse memfd, one mapping), slot \
@@ -912,6 +871,50 @@ impl BarMirror {
             return;
         };
         let mut slot = self.pramin.lock().unwrap_or_else(|e| e.into_inner());
+        // ★★★★★ **w580 — INSTALLED ON FIRST USE, not at arm.**
+        //
+        // ⊘⊘ w579 installed it when the mirror armed, off `bar_placement(Bar0)`. `[measured
+        // w579]` the guest's firmware then REPROGRAMS BAR0, and the device refused every
+        // later base-address write — *"the reservation BAR moved after a memslot was
+        // installed"* — so the boot never reached the client at all.
+        //
+        // ★ The first latch write is the right moment and needs no new signal: the guest
+        // cannot aim a window in a BAR it has not placed, so by the time this runs BAR0's
+        // base is final and is the one the guest is actually using.
+        if slot.is_none() {
+            let (Some((span_off, span_len)), Some(p)) =
+                (self.plane.pramin_span(), self.machine.bar_placement(BarId::Bar0))
+            else {
+                return;
+            };
+            match self.machine.install_file_window(
+                p.base + span_off,
+                span_len,
+                self.arena.as_backing_fd(),
+                base,
+                // ⊘ NOT read-only: PRAMIN is the framebuffer, not a register file. `[measured
+                // w577]` its writes are 631 458 of 635 162 accesses — a read-only slot would
+                // remove the reads and leave the larger half exiting.
+                false,
+            ) {
+                Ok(region) => {
+                    *slot = Some((region, base));
+                    self.pramin_moves.fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
+                         showing fb 0x{base:x}, on the guest's FIRST latch write. ⊘ ONE slot: \
+                         reads AND writes through this aperture resolve in the guest, and a \
+                         later move is ONE mmap over the same slot.",
+                        p.base + span_off
+                    );
+                }
+                Err(e) => eprintln!(
+                    "kayfabe: PRAMIN-WINDOW ⊘ NOT INSTALLED ({e:?}) — the aperture keeps \
+                     trapping, byte for byte as before. ⚠ A REFUSAL, not a fallback."
+                ),
+            }
+            return;
+        }
         let Some((region, shown)) = *slot else {
             return;
         };
