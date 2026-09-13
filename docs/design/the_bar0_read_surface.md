@@ -246,6 +246,20 @@ been since w515.
 ⇒ **The PRAMIN aperture takes no traps at all, and has not since the slot was un-parked.**
 Goal 2's PRAMIN clause is MET.
 
+### ★★★★★ AND THE ZERO IS MEASURED, NOT STRUCTURAL (w609) — the counter against its own control
+
+⊘ A zero from a counter that has never been seen non-zero is w587's trap, and I have walked into
+that family twice today. So the new `pramin_reads`/`pramin_writes` were run against the control
+arm first. **One binary, one environment variable, both arms graded `(P)`:**
+
+| `KAYFABE_PRAMIN_SLOT` | PRAMIN-ONLY r / w | ALL-WINDOWS r / w |
+|---|---|---|
+| `0` (control) | **22 / 67 956** | 34 / 72 314 |
+| default (slot live) | **0 / 0** | 2 / 728 |
+
+⇒ The counter reads **sixty-eight thousand** when the aperture traps and **exactly zero** when
+the slot serves it. That is a known-positive and a measurement, not an absent instrument.
+
 ⊘⊘⊘ **The instrument was the defect, and I asserted it was not.** The `FbWindow::Pramin` arms of
 `RegPlane::read`/`write` were literally `{}` — no PRAMIN counter existed — while `fb_reads` and
 `fb_writes` were incremented **outside** the `match window`, for every window. So
