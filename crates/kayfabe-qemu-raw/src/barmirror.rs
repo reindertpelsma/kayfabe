@@ -354,6 +354,22 @@ pub struct BarMirror {
     /// number's shape. ⇒ Record the access count at each re-point; 22 `u64`s, written once per
     /// move, read once at teardown. The deltas ARE the shape.
     pramin_marks: Mutex<Vec<(u64, u64)>>,
+    /// ★★★★★ **w603 — BAR0 placement CHANGES, not a comparison of endpoints.**
+    ///
+    /// ⊘⊘ `[measured w602]` `window_off_trap=0` — every residual window access is a genuine
+    /// guest exit, so the slot really is failing to serve. And `RE-POINT REFUSED` never fires,
+    /// so the mapping call always succeeds. A slot that is installed, mapped, and still not
+    /// serving is a slot KVM no longer has.
+    ///
+    /// ⚠ **My w595 check cannot see the cause it was built for.** It compares BAR0's placement
+    /// at INSTALL against its placement at TEARDOWN and reports *"BAR0 has not moved"*. If the
+    /// guest's firmware moves BAR0 away and back — and w580 recorded that it reprograms BAR0 at
+    /// all — QEMU's memory listener tears the region down and rebuilds it, dropping a slot we
+    /// installed behind its back, while both endpoints still match. ⇒ **An endpoint comparison
+    /// cannot detect a round trip**, and that is the exact shape of the bug it would miss.
+    bar0_moves: AtomicU64,
+    /// BAR0's placement as last seen, for the transition count above.
+    bar0_last: AtomicU64,
     table: Mutex<Table>,
     census: Census,
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
@@ -528,6 +544,8 @@ impl BarMirror {
             pramin_at_install: AtomicU64::new(u64::MAX),
             pramin_gpa: AtomicU64::new(u64::MAX),
             pramin_marks: Mutex::new(Vec::new()),
+            bar0_moves: AtomicU64::new(0),
+            bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
             census: Census::default(),
@@ -1093,6 +1111,16 @@ impl BarMirror {
     pub fn after_write(&self, out: &kayfabe_device::WriteOutcome) {
         // ★ w578 — the latch first: it is synchronous and cheap, and everything below defers.
         if out.claimed {
+            // ★ w603 — one atomic compare per claimed write, on a path already taken. See
+            // `bar0_moves`: an endpoint comparison cannot see BAR0 move away and back.
+            let now = self
+                .machine
+                .bar_placement(BarId::Bar0)
+                .map_or(u64::MAX, |p| p.base);
+            let was = self.bar0_last.swap(now, Ordering::Relaxed);
+            if was != u64::MAX && was != now {
+                self.bar0_moves.fetch_add(1, Ordering::Relaxed);
+            }
             self.repoint_pramin();
         }
         let mut why = 0u64;
@@ -1171,7 +1199,16 @@ impl BarMirror {
                 .and_then(|p| self.plane.pramin_span().map(|(off, _)| p.base + off));
             let placement = match (at, now) {
                 (u64::MAX, _) => " gpa=none".to_string(),
-                (a, Some(n)) if a == n => format!(" gpa=0x{a:x} (BAR0 has not moved since)"),
+                (a, Some(n)) if a == n => format!(
+                    " gpa=0x{a:x} (BAR0 ends where it started, and it CHANGED {} time(s) in \
+                     between{})",
+                    self.bar0_moves.load(Ordering::Relaxed),
+                    if self.bar0_moves.load(Ordering::Relaxed) > 0 {
+                        " => it moved away and back, so QEMU rebuilt the region and our slot went                          with it. The endpoint comparison this line used to print could not see that"
+                    } else {
+                        ""
+                    }
+                ),
                 (a, Some(n)) => format!(
                     " gpa=0x{a:x} but the aperture is NOW at 0x{n:x} => BAR0 MOVED UNDER THE SLOT;                      the slot is serving an address nothing accesses and every exit follows from                      that, not from the slot being wrong"
                 ),
