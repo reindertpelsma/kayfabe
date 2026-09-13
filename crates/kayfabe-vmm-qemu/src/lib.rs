@@ -765,7 +765,13 @@ enum WindowBacking<'fd> {
     Minted,
     /// ★★★★★ An armed device node the isolate crossed — placed whole by
     /// [`GuestWindow::place_device_view`]; see [`QemuMachine::install_device_window`].
-    DeviceView(std::os::fd::BorrowedFd<'fd>),
+    DeviceView {
+        /// The armed node.
+        fd: std::os::fd::BorrowedFd<'fd>,
+        /// Whether THIS PROCESS may write through the mapping. ⊘ Independent of the slot's
+        /// tier, which is what the GUEST may do — see the placement site.
+        writable: bool,
+    },
     /// ★★★★★ w393 — a `MAP_SHARED` file the caller already holds bytes in (a join's
     /// `memfd`, the framebuffer page arena), placed at `offset`; see
     /// [`QemuMachine::install_file_window`]. Not minted here and not exportable through
@@ -1240,6 +1246,7 @@ impl QemuMachine {
         mmap_len: u64,
         fd: std::os::fd::BorrowedFd<'_>,
         native: Option<std::ops::Range<u64>>,
+        writable: bool,
     ) -> Result<RamRegionId, VmmError> {
         // ★★★★★ **w631 — `readonly` is the GUEST's containment, and it is a different
         // containment from the descriptor's.**
@@ -1272,7 +1279,7 @@ impl QemuMachine {
         self.install_window_inner(
             &spec,
             native.as_ref(),
-            WindowBacking::DeviceView(fd),
+            WindowBacking::DeviceView { fd, writable },
             "installing a device-view reservation",
         )
         .map(|(r, _)| r)
@@ -1469,14 +1476,24 @@ impl QemuMachine {
             })?);
             // ★ w393 — a device view is placed whole and mints nothing: the pages are the
             // card's, and `shareable_ram` is a statement about guest RAM we author.
-            if let WindowBacking::DeviceView(fd) = backing {
-                // ⊘⊘ **w633 — the mapping's protection follows the SLOT's, and it must.** A
-                // node armed `O_RDONLY` refuses a writable `mmap` with `EACCES`, so asking for
-                // one here would make a read-only device view unplaceable — which is exactly
-                // what w631 shipped, because `readonly` selected the KVM tier and left the
-                // mapping alone. ⚠ Each half had been measured and the COMBINATION had not.
+            if let WindowBacking::DeviceView { fd, writable } = backing {
+                // ⊘⊘⊘ **THE MAPPING'S PROTECTION AND THE SLOT'S ARE INDEPENDENT, w636.** w633
+                // derived this from the slot tier and that was wrong — it made the two
+                // adversaries share one knob when the whole design needs them apart:
+                //
+                //   - the **VMA** protection says what THIS PROCESS may do. For the counter
+                //     page we want WRITE, because ringing the host doorbell with a translated
+                //     token is one dword store and it must happen inline on the vCPU.
+                //   - the **slot** tier says what the GUEST may do. It stays read-only, so the
+                //     guest's doorbell store EXITS and we get to translate the token at all.
+                //
+                // ★ Owner, 2026-09-13: *"use 1 doorbell page in vmm thats r/w, but ensure kvm
+                // memslot is read-only so write is trapped."* One mapping, two permissions,
+                // and `KVM_MEM_READONLY` is a slot property that does not consult the VMA.
+                // ⚠ w633's coupling was still a real fix for its own bug — a node armed
+                // `O_RDONLY` cannot be mapped writable — it just tied the wrong two things.
                 window
-                    .place_device_view(HostOffset::ZERO, len, fd, read_native.is_none())
+                    .place_device_view(HostOffset::ZERO, len, fd, writable)
                     .map_err(|e| {
                         p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                         host_refused("placing the device view", &e)
