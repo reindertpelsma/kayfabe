@@ -881,7 +881,23 @@ impl BarMirror {
         // ★ The first latch write is the right moment and needs no new signal: the guest
         // cannot aim a window in a BAR it has not placed, so by the time this runs BAR0's
         // base is final and is the one the guest is actually using.
-        if slot.is_none() {
+        // ⊘⊘⊘ **w582 — THE INSTALL IS PARKED, and the mechanism below is kept intact.**
+        //
+        // `[measured w581]` with the aperture placed and heap pages migrated, PRAMIN's traps go
+        // to **ZERO** — `window[SERVED r=0 w=0]`, exactly the target. The guest still fails:
+        // `_kgspBootGspRm` times out (`0x62:0x40:2028`). So the mapping works and something the
+        // GSP bootstrap needs is still not equal on both sides of it.
+        //
+        // ⚠ The leading hypothesis, UNTESTED: `Bar0Window` carries a TARGET field beside its
+        // base (`fb_addr` is not simply base+offset in every mode), so a window aimed at SYSTEM
+        // memory would be shown the framebuffer arena regardless. A slot cannot express that;
+        // the trap could.
+        //
+        // ⇒ Parked rather than deleted, because the parts below are measured-good: the arena is
+        // address-indexed (w569), the range question is per-piece (w579), the install happens
+        // when the base is final (w580), and heap pages migrate (w581). Each was a real defect
+        // fixed. What is missing is knowing WHICH framebuffer a given window position names.
+        if false && slot.is_none() {
             let (Some((span_off, span_len)), Some(p)) =
                 (self.plane.pramin_span(), self.machine.bar_placement(BarId::Bar0))
             else {
