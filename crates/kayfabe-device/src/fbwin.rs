@@ -1596,6 +1596,50 @@ impl FbStore for SparseFb {
             return Err(arena);
         }
         self.arena = Some(arena);
+
+        // ★★★★★ **w581 — MIGRATE EVERY HEAP PAGE INTO THE ARENA, HERE, AT INSTALL.**
+        //
+        // ⊘⊘ The arena arrives when the memory plane attaches, which is AFTER the guest has
+        // already written framebuffer pages — the GSP's protected region among them. Those
+        // pages are on the heap, and a page on the heap has no file offset, so a memory slot
+        // over the framebuffer shows the arena's zeros where the store holds real bytes.
+        //
+        // `[measured w580, bench boot]` that is what the PRAMIN aperture hit the moment it
+        // became one slot: the window was installed correctly, at the right address, over the
+        // right length — and showed zeros, so `RmInitAdapter` timed out waiting for a GSP that
+        // had written into memory nobody could see (`0x62:0x40:2028`).
+        //
+        // ★ `the_bar0_read_surface.md` §3b already said it — *"it must be the SAME arena … a
+        // second backing would give one framebuffer byte two homes, with nothing keeping them
+        // equal"* — and a heap page beside an arena-backed window is exactly that, arrived at
+        // from the other direction: not two backings, but one backing the window cannot reach.
+        //
+        // ⚠ A page that fails to migrate STAYS on the heap and is counted. It is still correct
+        // for every path that reads the store; it is only invisible to a slot, which is the
+        // honest degradation.
+        let frames: Vec<u64> = self
+            .pages
+            .iter()
+            .filter(|(_, p)| matches!(p, FbPage::Heap(_)))
+            .map(|(f, _)| *f)
+            .collect();
+        for frame in frames {
+            let Some(FbPage::Heap(old)) = self.pages.get(&frame) else {
+                continue;
+            };
+            let bytes = **old;
+            let fresh = self.fresh_page(frame * FB_PAGE);
+            match fresh {
+                FbPage::Arena(mut a) => {
+                    let _ = a.write(0, &bytes);
+                    self.pages.insert(frame, FbPage::Arena(a));
+                    self.arena_migrations += 1;
+                }
+                // ⊘ The arena refused this frame; the heap page stays, and `fresh_page` has
+                // already counted the refusal.
+                FbPage::Heap(_) => {}
+            }
+        }
         Ok(())
     }
 
