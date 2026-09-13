@@ -89,6 +89,8 @@ const R_JOIN_GONE: &str = "JOIN-GONE";
 const R_QUIESCED: &str = "QUIESCED";
 const R_PENDING: &str = "PENDING-ELSEWHERE";
 const R_COVERED: &str = "ALREADY-COVERED";
+/// ★ w611 — the same fact, found BEFORE the plane lock. See the phase-0 check in `fill_now`.
+const R_COVERED_EARLY: &str = "ALREADY-COVERED-EARLY";
 const R_RACED: &str = "RACED-AND-DROPPED";
 const R_INSTALL: &str = "INSTALL-REFUSED";
 
@@ -665,6 +667,41 @@ impl BarMirror {
             return;
         }
         let gpa = arm.base + page_off;
+
+        // ---- 0. ALREADY COVERED? ★★★★★ **ASKED FIRST, w611.**
+        //
+        // ⊘⊘ This question used to be asked in phase 2, **after** phase 1 had taken the PLANE
+        // LOCK, walked the address model and MATERIALISED a store page (`window_page_backing`'s
+        // `true`). `[measured w603a, one boot]` **3 572 of 3 952 fills — 90.4 % — end here**,
+        // so that ordering spent 3 572 plane-lock acquisitions and address-model walks per boot
+        // to discover work that was already done.
+        //
+        // ⚠ The plane lock is the one the vCPU also wants; `[w516]` and `[w522]` are both about
+        // exactly this lock, and the second measured every trap's wait against it. A worker
+        // taking it 3 572 times for nothing is not free merely because it is off the vCPU.
+        //
+        // ★ Hoisting is SOUND, not just cheaper, and the reason is architectural: a slot that
+        // exists but has gone stale is the REVALIDATOR's job (`revalidate[runs=… removed=…]`),
+        // never the fill path's. The fill path asks *"is this page covered"*, and the answer
+        // does not depend on anything phase 1 computes. ⇒ The old order asked a question whose
+        // answer it already had, using the most expensive lock in the device to not find out.
+        //
+        // ⊘ Counted separately from the late arm so the hoist is falsifiable: `COVERED-EARLY`
+        // should absorb essentially all of `ALREADY-COVERED`, and if the late arm stays large
+        // the races are arriving between here and phase 2 and the hoist bought nothing.
+        {
+            let t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            if t.slots.contains_key(&gpa) {
+                drop(t);
+                self.refuse(
+                    w,
+                    off,
+                    R_COVERED_EARLY,
+                    "a slot already covers this page; answered before taking the plane lock",
+                );
+                return;
+            }
+        }
 
         // ---- 1. RESOLVE (plane lock, released on return) --------------------------------
         let res = match self.plane.window_page_backing(w, page_off, true) {
