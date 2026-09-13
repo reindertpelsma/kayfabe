@@ -78,8 +78,9 @@ const REVAL_LIVE: u64 = 8;
 /// carries one.
 const CENSUS_EVERY_FILLS: u64 = 512;
 
-/// ★ w617 — the page-table-page budget for one enumeration pass. `[measured w616]` BAR1's whole
-/// working set is 66 pages, so 2 048 was ~30x headroom for it.
+/// ★ w617 — the enumeration budget for BAR1, in page-table ENTRIES (see `PREMAP_BUDGET_BAR2`
+/// for why that unit matters). ⊘ It has never refused: BAR1's tree is small enough that 2 048
+/// entries reach every leaf, which is why the unit error stayed invisible on this arm.
 const PREMAP_BUDGET_BAR1: u32 = 2048;
 
 /// ★★★★★ **w626 — BAR2 NEEDS ITS OWN, AND 2 048 WAS WHY IT NEVER RAN.**
@@ -90,10 +91,20 @@ const PREMAP_BUDGET_BAR1: u32 = 2048;
 /// for `BudgetExhausted` and for nothing else.** Every other fault is per-branch and comes back
 /// in `SubtreeDecode::faults` with the leaves that did decode.
 ///
-/// ⇒ The budget counts **page-table PAGES visited**, not leaves, and BAR2 maps the instance
-/// blocks and page tables of the whole framebuffer — a far larger tree than BAR1's. ⚠ This
-/// number is a headroom guess and is instrumented as one: `premap[bar2_visited=]` reports the
-/// tree's real size, so the next commit can set it from a measurement instead of from me.
+/// ⊘⊘⊘ **AND I GOT THE UNITS WRONG, corrected w627 by the measurement I asked for.** This said
+/// *"the budget counts page-table PAGES visited"*. It does not: `decode_subtree` charges
+/// `cost = level_shift(level).entries` **per page** — the number of ENTRIES in that page, 512
+/// or 1 024 on GA10x. `[measured w626a]` BAR2's tree is **19 pages**, which would have fit a
+/// 2 048 *page* budget a hundred times over; at ~512–1 024 entries each it needs **~19 000**,
+/// and 2 048 buys two or three pages before it refuses.
+///
+/// ⇒ The diagnosis was right in mechanism and wrong in units, and the instrument caught it:
+/// `bar2_visited=19` beside a budget of 2 048 is a contradiction that had to be explained, not
+/// a confirmation. ⚠ **Third time this session I have asserted what a number counts without
+/// reading the site that consumes it** — after a doc comment that lied (w607) and an identity
+/// assumed in a comment (w617). ⇒ `1 << 20` stays: it is ~50× the measured need, the walk is
+/// bounded by the tree rather than by this, and a right-sized 64 KiB-ish value would buy
+/// nothing but a second chance to be wrong about the unit.
 const PREMAP_BUDGET_BAR2: u32 = 1 << 20;
 
 // ---- refusal names -----------------------------------------------------------------------

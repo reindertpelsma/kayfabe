@@ -435,6 +435,41 @@ million redundant fills is exactly the headroom it needs.
 ★ What remains for goal 2: the counter page (~132 reads) and **BAR2** (2 / 1 434), which needs
 the entry-rooted subtree decode `window_leaves` refuses by name — fable sizes it at ~25 lines.
 
+## 6i. ★★★★★ BOTH BARs AT ZERO (w627) — goal 2 is one page from complete
+
+`[measured w626a, a boot that graded `(P)`]`:
+
+    BAR1 (translated)  0 reads / 0 writes
+    BAR2 (translated)  0 reads / 0 writes
+    premap[runs=2362 filled=6133 skipped=712049 refused=0 biggest_leaf=65536 bar2_visited=19]
+
+⇒ **Every aperture this device owns is now trap-free except one page.**
+
+| surface | reads | writes |
+|---|---|---|
+| BAR0 excluding the counter page | **0** | traps — the control plane, which goal 2 allows |
+| the free-running counter (`+0xbb0000`) | ~132 | — |
+| PRAMIN | **0** | **0** |
+| BAR1 | **0** | **0** |
+| BAR2 | **0** | **0** |
+
+★ BAR2 became reachable at all because `decode_subtree_from_entry` (w624) gave the enumerator a
+root it could start from; it started WORKING when its budget stopped being BAR1's.
+
+⊘⊘⊘ **AND MY REASON FOR THE BUDGET WAS WRONG IN ITS UNITS — caught by the instrument I added to
+avoid guessing twice.** w626 said *"the budget counts page-table PAGES visited"*. It does not:
+`decode_subtree` charges `cost = level_shift(level).entries` **per page** — 512 or 1 024 on
+GA10x. `bar2_visited=19` means BAR2's tree is **19 pages**, which would have fit a 2 048 *page*
+budget a hundred times over; at ~1 000 entries each it needs **~19 000**, and 2 048 buys two or
+three pages. ⇒ Right mechanism, wrong unit, and **`bar2_visited=19` beside a budget of 2 048 is a
+contradiction rather than a confirmation** — it had to be explained, and explaining it is what
+found the error.
+
+⚠ Third time this session I asserted what a number counts without reading the site that consumes
+it, after w607's lying doc comment and w617's assumed identity. The pattern is now explicit
+enough to state: **a unit is part of a number's definition, and neither its name nor its
+docstring is a substitute for the line that changes it.**
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -465,7 +500,9 @@ the entry-rooted subtree decode `window_leaves` refuses by name — fable sizes 
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
 - [x] **BAR1 — ZERO TRAPS (w621)**, by enumerating its leaves at the TLB invalidate and filling
       every page of each leaf. ⊘ At a cost of 567 312 fill calls, fixed next.
-- [~] **BAR1/BAR2 — MEASURED and understood (w608); BAR1 now fixed, BAR2 open.** `[measured]` 3 952 trapped
+- [x] **BAR1 AND BAR2 — ZERO TRAPS (w627)**, by enumerating each aperture's leaves at the TLB
+      invalidate and filling every page of every leaf. ⊘ BAR2 needed its own root decode (w624)
+      and its own budget (w626). `[measured]` 3 952 trapped
       accesses for **184 distinct pages**; 90.4 % of fills find the page `ALREADY-COVERED`. It
       is demand-fill latency, and the owner's map-at-create ruling removes the class.
       `[measured w616]` **89.2 % of that working set is needed only AFTER the first channel
