@@ -1375,7 +1375,7 @@ impl BarMirror {
              revalidate[runs={} kept={} removed={}] quiesce[calls={} removed={}] \
              retire_all[calls={} removed={}] arena[pages live={a_live} peak={a_peak} \
              allocations={a_recycled} span_pages={a_issued} store_refused={s_ref} \
-             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)] refused=[{}]{}",
+             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]{birth} refused=[{}]{}",
             self.census.reval_runs.load(Ordering::Relaxed),
             self.census.reval_kept.load(Ordering::Relaxed),
             self.census.reval_removed.load(Ordering::Relaxed),
