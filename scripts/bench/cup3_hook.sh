@@ -183,9 +183,14 @@ for i in $(seq 1 "$LIMIT"); do
           # ★★★★★ **WHAT IT IS SPINNING ON.** `state=R` with ~100 syscalls says libcuda is
           # polling memory, and nothing above says WHICH memory or from which frame. A
           # userspace backtrace is the only instrument that names it.
-          # ⊘ Attaching to the GUEST's own process, not to QEMU — the campaign's rule that
+          # ⊘ Attaching to the GUEST own own process, not to QEMU — the campaign rule that
           # `gdb` manufactures slow traps is about sampling the vCPU thread, and does not
           # apply here. The process is already stopped-and-resumed by the strace above.
+          # ★★★★★ **WHICH ioctl.** `[measured w695f]` the summary above is 78% ioctl over 71
+          # calls — so this is a REPEATED RM call, not a memory spin, and the repeated call
+          # identity is the whole question. ⊘ The summary counts them and cannot name them.
+          echo "      -- the ioctl stream itself (which call is being repeated) --"
+          sudo timeout 5 strace -e trace=ioctl -p $P 2>&1 | head -14
           echo "      -- userspace backtrace (names the spin, or says why it could not) --"
           # ⊘ Fetch it ONCE if absent rather than spend a whole boot discovering the tool is
           # missing. The guest has network (provisioning apt-installs build-essential over the
