@@ -409,6 +409,32 @@ numbers and their directions in advance; two moved the wrong way and the third c
 model. Without it the honest reading — *"premap installed 7 811 pages, look at it working"* — was
 available and wrong.
 
+## 6h. ★★★★★ BAR1 IS AT ZERO TRAPS (w621) — map-at-INVALIDATE, graded
+
+`[measured w620a, a boot that graded `(P)`]`, against the criterion fable fixed before it ran:
+
+| | before | after | criterion | |
+|---|---|---|---|---|
+| **BAR1 reads / writes** | 0–55 / 2 300–3 544 | **0 / 0** | near 0 | ★ **met** |
+| BAR2 reads / writes | 2 / 1 453 | 2 / 1 434 | unchanged | ✔ held |
+| bar1 `distinct_pages` | 66 | 800 | *may rise, not a failure* | ✔ as stated |
+| `premap runs` | — | **1 181** | ≈ invalidate count | ✔ exactly |
+| `biggest_leaf` | — | **65 536** | 4096 would mean untested | ★ defect 1 was real |
+
+⇒ **Goal 2's BAR1 clause is MET: the aperture takes no traps at all.** Both of fable's defects
+were real and both mattered — the 64 KiB leaf (`biggest_leaf=65536` proves the case arose) and
+the moment (`runs` matches the invalidate count exactly, which a birth never could).
+
+⊘⊘ **AND IT COSTS 567 312 FILL CALLS**, because each of the 1 181 invalidates re-enumerates the
+whole BAR1 tree whether or not it changed. The trap metric is perfect and the WORK metric is far
+worse than the demand-fill it replaced. ⇒ That is the next commit, and it is a cheap one: gate
+the enumeration on the tree having actually changed. ⚠ Recording it as a cost rather than
+rounding it away — goal 8 (two clients in parallel) is a worker-headroom problem, and half a
+million redundant fills is exactly the headroom it needs.
+
+★ What remains for goal 2: the counter page (~132 reads) and **BAR2** (2 / 1 434), which needs
+the entry-rooted subtree decode `window_leaves` refuses by name — fable sizes it at ~25 lines.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -437,7 +463,9 @@ available and wrong.
 - [x] **PRAMIN: ZERO traps, both directions** (w607, by subtraction on one `(P)` boot, and now
       counted directly). ⇒ Goal 2's PRAMIN clause is met.
 - [ ] graded: raw client `(P)` **and** a read-trap census of **zero**.
-- [~] **BAR1/BAR2 — MEASURED and understood (w608), not yet fixed.** `[measured]` 3 952 trapped
+- [x] **BAR1 — ZERO TRAPS (w621)**, by enumerating its leaves at the TLB invalidate and filling
+      every page of each leaf. ⊘ At a cost of 567 312 fill calls, fixed next.
+- [~] **BAR1/BAR2 — MEASURED and understood (w608); BAR1 now fixed, BAR2 open.** `[measured]` 3 952 trapped
       accesses for **184 distinct pages**; 90.4 % of fills find the page `ALREADY-COVERED`. It
       is demand-fill latency, and the owner's map-at-create ruling removes the class.
       `[measured w616]` **89.2 % of that working set is needed only AFTER the first channel
