@@ -155,6 +155,30 @@ documented in the same idiom. Six calls are missing: 1, 39, 70, 23, 73, 33.
 costs ~6 minutes; once booted, rmladder variants cost seconds. The wall blocks goals 9 and 10, so
 the iteration rate on it is the schedule.
 
+## ⊘⊘⊘ 4d-CORRECTION (w701) — READ BEFORE §4d BELOW, WHICH OVERCLAIMS
+
+§4d says the wall **is** `DELIVERY_UNBUILT`. ⊘ **Not established.** That sentence describes what
+happens **IF** a fault occurs; nothing showed one does.
+
+`[measured w701]`, three findings against it:
+
+| measurement | consequence |
+|---|---|
+| **`HOST_DMESG_XID=0`** on every cup3 boot (w699, w695j) — while the PASSING raw-client boot has `XID=1` | no host-side fault is visible at all |
+| the 110 `SystemDataPlane` refusals are **identical in boots that grade (P)** (w696ctl/w696h: same pdbs, same 110/13/8) | they are boot-time kernel mappings, **not** cup3's — the chain in §2 is broken |
+| **cup3 uses `cuMemAlloc`**, not managed memory | `resume_from_fault.md` §7 gates fault-buffer work on *"when, and only when, managed memory is on the roadmap"*, and its acceptance gate says a **correct** program must emit **ZERO** faults |
+
+⇒ Building 5b-5d now would let the guest **recover from our own defect** rather than fix it, and
+the spec says so in its own gate: *"a fault emitter that fires on legitimate traffic turns a
+working forwarder into a broken one."*
+
+**Established:** the hang is in `UVM_MAP_EXTERNAL_ALLOCATION`, burning kernel CPU, polling
+`MC_SERVICE_INTERRUPTS`; delivery IS unbuilt; no host Xid; the refusals are unrelated.
+**NOT established:** that a fault occurs, hence that unbuilt delivery is the cause.
+
+★ The settling measurement is **guest-side**: name the kernel function burning the CPU on the hung
+thread. `uvm_gpu_fault_buffer_*` / `uvm_service_block` confirms; anything else refutes.
+
 ## ★★★★★ 4d. THE ANSWER — it is `DELIVERY_UNBUILT`, and the device prints it every boot
 
 `kayfabe_abi::faultbuffer::DELIVERY_UNBUILT`, carried into `KayfabeRegAudit` and printed beside
