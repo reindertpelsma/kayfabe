@@ -152,8 +152,33 @@ LAST=""
 #   - the label now says when the poll HAPPENED;
 #   - an empty tail is PRINTED as `<no output yet>` rather than skipped, so "nothing has run"
 #     and "something ran between two polls" stop looking identical.
+# SAMPLE THE SPIN WHILE IT IS ALIVE, NOT AFTER IT IS DEAD (w690).
+#
+# The post-mortem block below fires when the bound blows - by which time `timeout` has already
+# killed cup3, so it reported `CUP3_GONE` and captured nothing. `[measured w689a]` exactly that.
+#
+# A hang at 100% CPU is only diagnosable from INSIDE the hang: which syscall is repeating, and
+# whether it is in a syscall at all. So take one short sample on the FIRST poll where cup3 is
+# still running - ~1s in, while it is spinning - and print it whatever happens afterwards.
+#
+# The oracle's known signature for this wall is libcuda repeating
+# NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS (0x20801702), an id hardware calls ZERO times in the
+# whole program. A histogram dominated by ioctl, with that id in the argument, says libcuda is
+# asking RM to service an interrupt tree that never reports progress.
+SPIN_SAMPLED=0
 for i in $(seq 1 "$LIMIT"); do
   AT=$(( (i - 1) * 10 ))
+  if [ "$SPIN_SAMPLED" = "0" ]; then
+    SPIN_SAMPLED=1
+    $G 'P=$(pgrep -x cup3 | head -1)
+        if [ -n "$P" ]; then
+          echo "SPIN-SAMPLE pid=$P state=$(awk "{print \$3}" /proc/$P/stat 2>/dev/null) wchan=$(cat /proc/$P/wchan 2>/dev/null)"
+          echo "SPIN-SAMPLE syscall=$(cut -c1-40 /proc/$P/syscall 2>/dev/null)"
+          sudo timeout 5 strace -c -f -p $P 2>&1 | tail -12
+        else
+          echo "SPIN-SAMPLE cup3 not running at the first poll (finished or never started)"
+        fi' 2>&1 | sed 's/^/    /'
+  fi
   if $G 'test -f /tmp/cup3.rc' 2>/dev/null; then echo "    terminator present at ~${AT}s"; break; fi
   NOW=$($G 'tail -1 /tmp/cup3.out 2>/dev/null' 2>/dev/null | tr -d '\r')
   if [ -z "$NOW" ]; then
