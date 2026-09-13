@@ -3521,6 +3521,30 @@ impl RegPlane {
         )
     }
 
+    /// ★★★★★ **The framebuffer address the `PRAMIN` window currently starts at.**
+    ///
+    /// ⊘ Read through the SAME `fb_addr` the read path uses, at the window's own base offset,
+    /// so the slot the hypervisor points at and the bytes this plane would serve cannot name
+    /// different framebuffer addresses.
+    ///
+    /// `None` when the chip declares no window.
+    #[must_use]
+    pub fn pramin_fb_base(&self) -> Option<u64> {
+        if self.chip.pramin_window.len == 0 {
+            return None;
+        }
+        Some(self.state.lock().bar0_window.fb_addr(0))
+    }
+
+    /// Where the `PRAMIN` aperture sits in the register BAR, as `(offset, length)`.
+    #[must_use]
+    pub fn pramin_span(&self) -> Option<(u64, u64)> {
+        if self.chip.pramin_window.len == 0 {
+            return None;
+        }
+        Some((self.chip.pramin_window.base, self.chip.pramin_window.len))
+    }
+
     /// ★★★★★ **How many times the guest has re-pointed the `PRAMIN` window** — ONE atomic
     /// load, because the mirror asks on every write trap.
     ///

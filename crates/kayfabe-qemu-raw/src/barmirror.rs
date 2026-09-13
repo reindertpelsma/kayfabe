@@ -292,6 +292,13 @@ pub struct BarMirror {
     machine: QemuMachine,
     arena: SharedPageArena,
     arms: [Option<Arm>; 2],
+    /// ★★★★★ w578 — the PRAMIN aperture: one installed slot, and the framebuffer address it
+    /// currently shows. `None` when the chip declares no window or the install was refused.
+    pramin: Mutex<Option<(kayfabe_vmm::RamRegionId, u64)>>,
+    /// How many times the latch moved and how many redundant writes were skipped. ⚠ Two
+    /// numbers: *"never moved"* and *"wrote the same value forty times"* are different facts.
+    pramin_moves: AtomicU64,
+    pramin_skipped: AtomicU64,
     table: Mutex<Table>,
     census: Census,
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
@@ -328,6 +335,17 @@ fn idx(w: FbWindow) -> Option<usize> {
     match w {
         FbWindow::FbAperture => Some(0),
         FbWindow::InstanceWindow => Some(1),
+        // ★★★★★ **w578 — PRAMIN IS DELIBERATELY NOT A MIRRORED WINDOW.**
+        //
+        // The other two are demand-filled page by page because they are GMMU-TRANSLATED: each
+        // guest page resolves to an arbitrary framebuffer frame, so each needs its own slot.
+        // PRAMIN is **untranslated** — the framebuffer address is the latch plus the offset —
+        // so the whole 1 MiB aperture is one contiguous run of framebuffer addresses, and
+        // since w569 that is one contiguous run of the arena's file.
+        //
+        // ⇒ ONE memory slot, re-pointed by ONE `mmap` when the latch moves
+        // (`the_bar0_read_surface.md` §3b). Mirroring it would be 256 slots and 42 re-keys a
+        // boot to do what one slot and 42 `mmap`s do. See `BarMirror::pramin`.
         FbWindow::Pramin => None,
     }
 }
@@ -410,7 +428,13 @@ impl BarMirror {
         if arms.iter().all(Option::is_none) {
             return None;
         }
-        let arena = match SharedPageArena::create(HostPageSize::query()) {
+        // ★ w578 — sized to THIS chip's framebuffer, because since w569 a page's file offset
+        // is its framebuffer ADDRESS. A sparse memfd makes the extent free; residency is still
+        // bounded by the store's own ceiling, which is where that limit belongs.
+        let arena = match SharedPageArena::create_for(
+            plane.chip().fb_length,
+            HostPageSize::query(),
+        ) {
             Ok(a) => a,
             Err(e) => {
                 eprintln!(
@@ -444,9 +468,53 @@ impl BarMirror {
             machine,
             arena,
             arms,
+            pramin: Mutex::new(None),
+            pramin_moves: AtomicU64::new(0),
+            pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
             census: Census::default(),
         });
+        // ★★★★★ **w578 — INSTALL THE PRAMIN APERTURE: one slot over the whole window.**
+        //
+        // ⊘ Not a mirror. PRAMIN is untranslated, so the aperture is one contiguous run of
+        // framebuffer addresses, and since w569 the arena's file offset IS the framebuffer
+        // address — so one slot at the latch's current base shows the guest exactly the bytes
+        // the plane would serve, for reads AND writes, with no exit either way.
+        //
+        // `[measured w577]` this aperture carried **3704 reads and 631 458 writes** in a boot.
+        if let (Some((span_off, span_len)), Some(base), Some(p)) = (
+            m.plane.pramin_span(),
+            m.plane.pramin_fb_base(),
+            m.machine.bar_placement(BarId::Bar0),
+        ) {
+            match m.machine.install_file_window(
+                p.base + span_off,
+                span_len,
+                m.arena.as_backing_fd(),
+                base,
+                // ⊘ NOT read-only: PRAMIN is the framebuffer, not a register file. The guest's
+                // writes through it ARE the data, and `[measured w577]` they are 631 458 of
+                // the aperture's 635 162 accesses. A read-only slot would remove the reads and
+                // leave every write exiting — the smaller half.
+                false,
+            ) {
+                Ok(region) => {
+                    *m.pramin.lock().unwrap_or_else(|e| e.into_inner()) = Some((region, base));
+                    eprintln!(
+                        "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
+                         showing fb 0x{base:x}. ⊘ ONE slot: every read AND write through this \
+                         aperture resolves in the guest, and a latch move is ONE mmap over the \
+                         same slot — no memslot update, no lock.",
+                        p.base + span_off
+                    );
+                }
+                Err(e) => eprintln!(
+                    "kayfabe: PRAMIN-WINDOW ⊘ NOT INSTALLED ({e:?}) — the aperture keeps \
+                     trapping, byte for byte as before. ⚠ A REFUSAL, not a fallback: nothing \
+                     silently serves stale framebuffer bytes."
+                ),
+            }
+        }
         let (floor, ceiling) = m.machine.slot_range();
         eprintln!(
             "kayfabe: BAR-MIRROR armed: page arena {} MiB (sparse memfd, one mapping), slot \
@@ -830,7 +898,50 @@ impl BarMirror {
     /// exposure is guest self-corruption, never cross-process leakage. A translation to
     /// memory the guest does not own cannot appear this way: a *new* key is only installed
     /// on a fresh fault, which takes the ownership check.
+    /// ★★★★★ **w578 — re-point the PRAMIN slot when the guest moves the latch.**
+    ///
+    /// ⊘ Synchronous, on the vCPU, deliberately: RM writes the latch and uses the window
+    /// immediately, with no completion to defer behind. It is ONE `mmap` over a slot that does
+    /// not change — the hypervisor is not told, because nothing it knows has moved.
+    ///
+    /// ⊘ A re-point to the address already shown is SKIPPED and counted. The guest writes this
+    /// register as a read-modify-write, so the same value arrives repeatedly, and each
+    /// redundant `MAP_FIXED` would shoot down every vCPU's TLB for no change.
+    fn repoint_pramin(&self) {
+        let Some(base) = self.plane.pramin_fb_base() else {
+            return;
+        };
+        let mut slot = self.pramin.lock().unwrap_or_else(|e| e.into_inner());
+        let Some((region, shown)) = *slot else {
+            return;
+        };
+        if shown == base {
+            self.pramin_skipped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        match self
+            .machine
+            .repoint_file_window(region, self.arena.as_backing_fd(), base)
+        {
+            Ok(()) => {
+                *slot = Some((region, base));
+                self.pramin_moves.fetch_add(1, Ordering::Relaxed);
+            }
+            // ⚠ A refused re-point leaves the slot showing what it showed. That is WRONG for
+            // the guest — it will read the old framebuffer — so it is said, not swallowed.
+            Err(e) => eprintln!(
+                "kayfabe: PRAMIN-WINDOW ⊘⊘ RE-POINT REFUSED to fb 0x{base:x} ({e:?}); the \
+                 aperture still shows 0x{shown:x} and the guest's next access through it is \
+                 WRONG. This is the one failure on this path that cannot be contained."
+            ),
+        }
+    }
+
     pub fn after_write(&self, out: &kayfabe_device::WriteOutcome) {
+        // ★ w578 — the latch first: it is synchronous and cheap, and everything below defers.
+        if out.claimed {
+            self.repoint_pramin();
+        }
         let mut why = 0u64;
         if out.invalidate.as_ref().is_some_and(|inv| inv.trigger) {
             why |= 1;

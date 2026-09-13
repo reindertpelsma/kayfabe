@@ -118,7 +118,21 @@ pub struct SharedPageArena {
 impl SharedPageArena {
     /// The arena's fixed extent: 1 GiB, matching the framebuffer store's residency ceiling
     /// so the arena is never the tighter of the two limits on a healthy boot.
-    pub const LEN: u64 = 1 << 30;
+    /// ⊘⊘ **w578 — THE EXTENT IS THE FRAMEBUFFER'S, NOT A RESIDENCY CEILING.**
+    ///
+    /// This was 1 GiB, *"matching the framebuffer store's residency ceiling"*. That made sense
+    /// while a page's file offset was its ALLOCATION ORDER — the arena only ever had to hold as
+    /// many pages as were resident at once. Since w569 the offset IS the framebuffer address,
+    /// so the extent has to span every address the guest can name, and the two numbers stopped
+    /// being the same thing.
+    ///
+    /// ★ It costs nothing. A `memfd` is sparse: a page exists when it is first touched, so a
+    /// 16 GiB extent with 300 MiB resident occupies 300 MiB. Residency is still bounded by the
+    /// STORE's own ceiling, which is where that limit belongs.
+    ///
+    /// ⚠ Kept as a default for callers that do not know the chip; `create_for` takes the real
+    /// framebuffer length.
+    pub const LEN: u64 = 16 << 30;
 
     /// Create the `memfd`, seal it, and map it once.
     ///
@@ -129,16 +143,29 @@ impl SharedPageArena {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
+    /// The arena sized for a specific framebuffer. See [`SharedPageArena::LEN`] for why the
+    /// extent is the framebuffer's length and why a larger one is free.
+    ///
+    /// # Errors
+    /// As [`SharedPageArena::create`].
+    pub fn create_for(fb_len: u64, page: HostPageSize) -> Result<Self, RawError> {
+        Self::create_sized(fb_len.max(ARENA_PAGE), page)
+    }
+
     pub fn create(page: HostPageSize) -> Result<Self, RawError> {
+        Self::create_sized(Self::LEN, page)
+    }
+
+    fn create_sized(len: u64, page: HostPageSize) -> Result<Self, RawError> {
         lockwitness::assert_lock_free("memfd_create + mmap (the framebuffer page arena)");
         crate::geometry::require_aligned(ARENA_PAGE, page, "arena page")?;
-        let file = SharedRam::create_named(ARENA_NAME, Self::LEN)?;
+        let file = SharedRam::create_named(ARENA_NAME, len)?;
         let map = MappedRegion::map(
             Backing::SharedFile {
                 fd: file.as_backing_fd(),
                 offset: 0,
             },
-            Self::LEN,
+            len,
             HostProt::ReadWrite,
             CachePolicy::WriteBack,
             page,
@@ -147,7 +174,7 @@ impl SharedPageArena {
             inner: Arc::new(ArenaInner {
                 file,
                 map,
-                pages: Self::LEN / ARENA_PAGE,
+                pages: len / ARENA_PAGE,
                 free: Mutex::new(ArenaFree {
                     next: 0,
                     list: Vec::new(),
