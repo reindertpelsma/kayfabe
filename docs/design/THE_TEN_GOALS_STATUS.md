@@ -82,3 +82,57 @@ site is one-time by shape (`slow_traps=1` while 359 doorbells and 1 181 invalida
 `inline_exceptions=0` and every lock census is clean, so nothing BLOCKS on the vCPU. ⊘ But goal 6's
 17 ms is CPU burned inside an MMIO exit, which is the vCPU stopped for 17 ms without blocking on
 anything. The two goals disagree about whether that is a violation; goal 6 is the one it fails.
+
+
+---
+
+# ★ w642 — MEASURED AFTER THE MULTI-GPU REWORK (2026-09-13)
+
+Boot `w642a` on 50835305, rev `8be6e405`:
+
+```
+COUNTER-PAGE installed at gpa=0xfbbb0000 mmap_len=0x10000 slot=0x1000
+BAR0-READ-HOTSPOTS  pages_touched=1  reads_from_live_pages=33  reads_from_BACKED_pages=0
+                    top[+0xbb0000=33]
+BAR1 (translated)   0 reads / 0 writes
+BAR2 (translated)   0 reads / 0 writes
+W392D_GUEST_OUTCOME=(P)        MEAN_FALSIFIER=PASS
+```
+
+★ **Goals 2 and 7 hold, and the per-GPU rework cost nothing.** The only BAR0 reads left are the
+counter page, now served from the host's own register window with no exit.
+
+## Goal 4 — the DoorbellTable: scoped, not yet wired
+
+`crates/kayfabe-device/src/dbtable.rs` (316 lines, **zero production callers**) already has the
+exact three arms the owner specified on 2026-09-13:
+
+| owner's rule | `Route` arm | status |
+|---|---|---|
+| *"an invalid doorbell write registered in neither channel … ignore"* | `Unallocated` — bounds check, atomic load, return | ⊘ **built, not wired.** Today an unknown token still costs a queue slot and a worker refusal (`FwdFault::UnknownVchid`) |
+| *"if the queue is full … set a flag … telling worker to ignore the doorbell queue and sweep all channels"* | `Emulated { chan }` | ★ **ALREADY LIVE** — `Offered::Full` ⇒ `DROPPED.arm_emulated_sweep()`, `shim.rs` |
+| *"passthrough doorbells are inline in vcpu, no queue, no worker"* | `Passthrough { host_token }` | ⊘ **not wired.** `ring()` defers everything; `Worker::ring_doorbell` is an IPC round-trip |
+
+### ⊘ Two findings that change how it must be wired
+
+**1. The table is indexed by vChid, and a vChid is a PER-GPU namespace.** `route_doorbell` decodes
+a raw token to `{vchid, runlist}` via pure arch math (cheap, lock-free, vCPU-safe), then looks up
+`(GpuId, VChid)`. So the table is **one per device**, which is the same axis w641 just repaired
+across `ViewSpace`, `SlotNumberSpace` and the KVM descriptor. Indexing by raw token would need an
+array the guest's imagination sizes.
+
+**2. Inline passthrough became possible only at w641.** It needs a writable VMM mapping of the
+host's usermode doorbell page — which is exactly what `export_usermode_view(write: true)` +
+`install_device_window` now provide. The owner said so first: *"I think you need same page, to do
+doorbell mmio write in vcpu thread."*
+
+### ⚠ The dangerous failure, and the discipline it demands
+
+An **incomplete** table drops a doorbell for a channel that really is allocated — silently, and
+only under the load that populated it late. ⇒ Wire it in **shadow first**: consult `route()` on
+the vCPU, count its answer, keep today's path making the decision, and print an agreement census.
+Flip the arms only once a boot shows the table and the worker agreeing on every doorbell.
+
+★ This is the tree's own standing lesson applied before the fact rather than after: a green path
+that has never been contradicted is not evidence, and `dbtable`'s tests pass today while the type
+has never seen a real token.
