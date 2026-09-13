@@ -200,6 +200,20 @@ for i in $(seq 1 "$LIMIT"); do
           # ★★★★★ **WHICH ioctl.** `[measured w695f]` the summary above is 78% ioctl over 71
           # calls — so this is a REPEATED RM call, not a memory spin, and the repeated call
           # identity is the whole question. ⊘ The summary counts them and cannot name them.
+          # ★★★★★ WHICH KERNEL FUNCTION IS BURNING THE CPU (w701).
+          # [measured] the hung thread is state=R with ~1200s of SYSTEM time, so it is spinning
+          # IN THE KERNEL. Naming that function settles whether this is the replayable-fault
+          # service loop (uvm_gpu_fault_buffer_* / uvm_service_block) or something else
+          # entirely. (X) w700 asserted the fault reading from a device banner without ever
+          # showing a fault occurs; HOST_DMESG_XID=0 on every cup3 boot argues it does not.
+          echo "      -- which KERNEL function is burning the CPU (settles the fault reading) --"
+          if command -v perf >/dev/null 2>&1; then
+            sudo timeout 8 perf record -F 499 -g -p $P -o /tmp/cup3.perf >/dev/null 2>&1
+            sudo perf report -i /tmp/cup3.perf --stdio --sort symbol 2>/dev/null | grep -E "^ +[0-9]" | head -12
+          else
+            echo "      no perf; falling back to the kernel stack sampler"
+            for i in 1 2 3; do sudo cat /proc/$P/stack 2>/dev/null | head -6; echo "      --"; done
+          fi
           echo "      -- the ioctl stream itself (which call is being repeated) --"
           sudo timeout 5 strace -e trace=ioctl -p $P 2>&1 | head -14
           echo "      -- userspace backtrace (names the spin, or says why it could not) --"
