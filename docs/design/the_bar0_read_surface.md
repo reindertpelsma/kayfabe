@@ -325,6 +325,35 @@ understood item here"* (§7). It is now understood and measured. The remaining w
 create path, and its success criterion is ready-made — `ALREADY-COVERED` should fall to near
 zero, and trapped accesses should approach the distinct-page count rather than exceed it 21×.
 
+## 6f. ★★★★★ MAP-AT-CREATE IS AIMED AT THE RIGHT TRAFFIC — MEASURED (w616)
+
+`[measured w615a, a boot that graded `(P)` with `MEAN_FALSIFIER=PASS`]`:
+
+    pre_birth_pages=[bar1=0 bar2=20] of [bar1=66 bar2=119]
+
+| | pages needed BEFORE the first channel birth | total | post-birth |
+|---|---|---|---|
+| BAR1 | **0** | 66 | **100 %** |
+| BAR2 | 20 | 119 | 83 % |
+| both | **20** | **185** | **89.2 %** |
+
+⇒ **The owner's map-at-create ruling covers 89 % of the working set, and all of BAR1.** My
+concern was that BAR2's bootstrap would dominate — RM writes instance blocks and page tables
+through that window long before any channel exists — and it does not: **20 pages**, a bounded
+and nameable remainder.
+
+★ This check could have gone the other way, and it cost one boot. Had it come back the other
+way, map-at-create would have been built, graded, and measured no change — a correct ruling
+aimed at the wrong half of the traffic, which is the most expensive kind of wrong there is.
+
+⊘ **And the first two attempts to take this measurement both LIED, in opposite directions.**
+w613's field was never printed at all (a format-string edit that silently matched nothing), and
+w614's replacement printed `NO-BIRTH` — a confident, readable, wrong finding — because the hook
+sat on a drain that never fires while the same log carried `born=1`. Both compiled, both passed
+every test, both graded `(P)`. ⇒ **A field nothing reads and a branch nothing takes are the same
+bug in different clothes**, and the only detector for either is reading the output for the thing
+you just added.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed
@@ -356,3 +385,5 @@ zero, and trapped accesses should approach the distinct-page count rather than e
 - [~] **BAR1/BAR2 — MEASURED and understood (w608), not yet fixed.** `[measured]` 3 952 trapped
       accesses for **184 distinct pages**; 90.4 % of fills find the page `ALREADY-COVERED`. It
       is demand-fill latency, and the owner's map-at-create ruling removes the class.
+      `[measured w616]` **89.2 % of that working set is needed only AFTER the first channel
+      birth** (BAR1: 100 %), so the ruling covers it; the pre-birth remainder is 20 BAR2 pages.
