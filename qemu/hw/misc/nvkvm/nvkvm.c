@@ -1748,6 +1748,49 @@ static int32_t nvkvm_op_bar_is_unbacked_reservation(void *dev, uint32_t bar)
     return row->kind == NVKVM_KIND_RESERVATION ? 1 : 0;
 }
 
+/*
+ * ★★★★★ Does this device back [offset, offset+len) inside `bar`?
+ *
+ * ⊘⊘ Per-RANGE, because since the cut the per-BAR question has no answer for BAR0: it is a
+ * container of pieces with one owner each — memory-backed pieces where no register lives, and
+ * trapping ALIASES everywhere else. Answering for the whole BAR refused a memory slot over the
+ * PRAMIN aperture, which is demonstrably an io region and always was.
+ *
+ * ★ Answered from the PIECE TABLE this device built, so it cannot drift from what was actually
+ * installed. A range is unbacked when it overlaps NO backed piece; anything that touches one is
+ * refused, because two owners for one guest-physical page is the hazard the cut exists to
+ * remove.
+ *
+ * ⚠ Zero is the safe answer and is the default for every BAR this function cannot speak for.
+ */
+static int32_t nvkvm_op_bar_range_is_unbacked(void *dev, uint32_t bar, uint64_t offset,
+                                              uint64_t len)
+{
+    NvkvmState *s = dev;
+    const NvkvmRegionSpec *row = nvkvm_row_for_port(bar);
+    unsigned i;
+
+    if (!row || len == 0) {
+        return 0;
+    }
+    /* A row this device does not CUT answers with the per-BAR question, unchanged. */
+    if (row->kind != NVKVM_KIND_CUT) {
+        return nvkvm_op_bar_is_unbacked_reservation(dev, bar);
+    }
+    if (offset > nvkvm_row_size(s, row) || len > nvkvm_row_size(s, row) - offset) {
+        return 0;
+    }
+    for (i = 0; i < s->bar0_n_dead; i++) {
+        uint64_t b = s->bar0_dead[i].base;
+        uint64_t e = b + memory_region_size(&s->bar0_dead[i].mr);
+
+        if (offset < e && b < offset + len) {
+            return 0;   /* overlaps a piece this device backs */
+        }
+    }
+    return 1;
+}
+
 static int32_t nvkvm_op_bar_base(void *dev, uint32_t bar, uint64_t *out_base)
 {
     NvkvmState *s = dev;
@@ -1879,6 +1922,7 @@ static const KayfabeHostOps nvkvm_host_ops = {
     .ram_block_discard_disable   = nvkvm_op_ram_block_discard_disable,
     .register_listener           = nvkvm_op_register_listener,
     .bar_is_unbacked_reservation = nvkvm_op_bar_is_unbacked_reservation,
+    .bar_range_is_unbacked = nvkvm_op_bar_range_is_unbacked,
     .bar_base                    = nvkvm_op_bar_base,
     .ref_region                  = nvkvm_op_ref_region,
     .unref_region                = nvkvm_op_unref_region,

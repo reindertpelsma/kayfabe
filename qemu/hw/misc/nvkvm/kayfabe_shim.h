@@ -81,6 +81,20 @@ typedef struct KayfabeHostOps {
      * constructor and answers non-zero here has put two slots over one range with only one
      * winner. */
     int32_t (*bar_is_unbacked_reservation)(void *dev, uint32_t bar);
+    /*
+     * ★★★★★ Does this device back [offset, offset+len) WITHIN `bar`?
+     *
+     * ⊘⊘ The question above is per-BAR and since the aperture cut that is the wrong shape.
+     * BAR0 is a CONTAINER of pieces with one owner each: memory-backed pieces where no register
+     * lives, and trapping ALIASES everywhere else. "Does the hypervisor back BAR0" has no single
+     * answer, and answering "yes" refuses a memslot over a range that is demonstrably an io
+     * region — which is exactly what stopped the PRAMIN aperture being placed at w578.
+     *
+     * Returns 1 when the archive MAY install its own slot over the range (nothing here sets the
+     * RAM flag), 0 when it may not. ⚠ Zero is the safe answer and must stay the default for any
+     * range this device cannot speak for: two owners for one guest-physical page is the hazard.
+     */
+    int32_t (*bar_range_is_unbacked)(void *dev, uint32_t bar, uint64_t offset, uint64_t len);
 
     /* ★★★ NORMATIVE.  Where `bar` is CURRENTLY programmed.  Returns KAYFABE_OK and writes the
      * base, or KAYFABE_E_UNSUPPORTED while it is unmapped.  This is on the hot path and MUST

@@ -292,6 +292,19 @@ pub trait QemuHost: Send + Sync + core::fmt::Debug {
     /// than trusting that whoever wrote the shim read §1.5.
     fn bar_is_unbacked_reservation(&self, bar: BarId) -> bool;
 
+    /// ★★★★★ Does this device back `[offset, offset+len)` **within** `bar`?
+    ///
+    /// ⊘⊘ Per-RANGE, because a BAR can be a CONTAINER of pieces with one owner each — memory
+    /// where no register lives, trapping regions everywhere else. *"Does the hypervisor back
+    /// this BAR"* then has no single answer, and answering for the whole thing refuses a window
+    /// over a range that is demonstrably unbacked.
+    ///
+    /// ⊘ The default defers to [`Self::bar_is_unbacked_reservation`], so a host that does not
+    /// cut its BARs needs no new code and answers exactly as before.
+    fn bar_range_is_unbacked(&self, bar: BarId, _offset: u64, _len: u64) -> bool {
+        self.bar_is_unbacked_reservation(bar)
+    }
+
     /// ★★★ Where `bar` is **currently** programmed, or `None` while it is unmapped.
     ///
     /// # NORMATIVE — this is a field read, and it is on the hot path

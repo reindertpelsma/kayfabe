@@ -335,6 +335,10 @@ pub struct KayfabeHostOps {
     pub register_listener: Option<unsafe extern "C" fn(*mut c_void) -> i32>,
     /// Non-zero if the register is a pure-MMIO reservation the hypervisor does not back.
     pub bar_is_unbacked_reservation: Option<unsafe extern "C" fn(*mut c_void, u32) -> i32>,
+    /// ★ w579 — the per-RANGE form. `None` on a device whose op table predates it, which then
+    /// answers through the per-BAR question above.
+    pub bar_range_is_unbacked:
+        Option<unsafe extern "C" fn(*mut c_void, u32, u64, u64) -> i32>,
     /// Where the register is currently programmed. [`WIRE_OK`] and the base, or
     /// [`WIRE_UNSUPPORTED`] while it is unmapped.
     pub bar_base: Option<unsafe extern "C" fn(*mut c_void, u32, *mut u64) -> i32>,
@@ -661,6 +665,18 @@ impl QemuHost for ForeignHost {
         // guessing wrong in the other direction is two memslots over one guest-physical
         // range with only one winner.
         unsafe { f(self.dev.0, bar_index(bar)) != 0 }
+    }
+
+    /// ★★★★★ w579 — the per-RANGE question, forwarded to the device's own piece table.
+    ///
+    /// ⊘ A device whose op table predates this answers through the per-BAR question instead,
+    /// which is the trait's own default and byte-for-byte the old behaviour. A missing op is
+    /// never a permissive answer.
+    fn bar_range_is_unbacked(&self, bar: BarId, offset: u64, len: u64) -> bool {
+        let Some(f) = self.ops.bar_range_is_unbacked else {
+            return self.bar_is_unbacked_reservation(bar);
+        };
+        unsafe { f(self.dev.0, bar_index(bar), offset, len) != 0 }
     }
 
     fn bar_base(&self, bar: BarId) -> Option<u64> {

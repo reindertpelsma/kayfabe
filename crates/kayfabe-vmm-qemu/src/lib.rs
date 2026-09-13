@@ -1371,7 +1371,18 @@ impl QemuMachine {
         };
         // ★★★ The reservation BAR must be one the hypervisor does NOT back. This is the
         // whole §1.5 safety argument, asked rather than assumed.
-        if !p.host.bar_is_unbacked_reservation(placement.bar) {
+        // ★★★★★ w579 — asked of the RANGE, not the whole BAR.
+        //
+        // ⊘ Since the aperture cut, BAR0 is a container of pieces with one owner each, so the
+        // per-BAR question has no answer for it: memory-backed pieces where no register lives,
+        // trapping aliases everywhere else. `[measured w578]` asking per-BAR refused a slot over
+        // the PRAMIN aperture — an io region that never sets the RAM flag, and so was always
+        // safe to place over. The default implementation defers to the per-BAR answer, so a
+        // host that does not cut its BARs is unaffected.
+        if !p
+            .host
+            .bar_range_is_unbacked(placement.bar, spec.gpa - placement.base, len)
+        {
             return Err(VmmError::Unsupported(WINDOW_IN_A_BACKED_BAR));
         }
         p.latch_bar(placement.bar, placement.base)?;
