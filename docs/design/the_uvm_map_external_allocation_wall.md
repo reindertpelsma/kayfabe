@@ -53,6 +53,12 @@ side.
   `len & 0xfff = 0`. ★ The criterion was written into the log line **before** the boot, so the
   same line answers it in either direction.
 - **`resolve_guest_ram` is not involved.** Zero of 110.
+- **The doorbell lane is not losing submissions.** `[measured w695m]`
+  `arrived=50 served=44 refused=0 ⇒ UNACCOUNTED=6 | coalesced=6 depth_at_teardown=0 ⇒
+  unexplained=0`. The residue is **entirely coalescing** — a doorbell merged onto a pending
+  token owes no second completion — and the queue drains to empty. ⊘ w695l published that
+  residue as *"submissions that entered the queue and never came out"*; it was not measured, and
+  the boot after the criterion was joined to the number refuted it. Nothing is lost here.
 
 ## 4. ⊘ And what this campaign believed that was wrong
 
