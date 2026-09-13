@@ -17220,18 +17220,33 @@ impl Regs {
         {
             let accounted = doorbells_served + doorbells_refused;
             let residue = doorbells.saturating_sub(accounted);
+            // ⊘⊘ **THE QUEUE'S OWN NUMBERS ON THE SAME LINE, because the residue cannot be
+            // read without them.** w695l printed `UNACCOUNTED=1` and called it a lost
+            // submission. That was not measured: a **coalesced** doorbell is deferred onto an
+            // ALREADY-PENDING token and correctly produces no second completion — the worker
+            // reads `GP_PUT` and processes everything the ring holds. So coalescing raises this
+            // residue **by design**, and the two readings are opposite verdicts on the same
+            // number. ⚠ The `PUBQUEUE` census that holds `coalesced` is published to the audit
+            // sink and NEVER REACHES THE LOG, so a reader had no way to tell them apart.
+            let qs = self.pubqueue.stats();
+            let coalesced = qs.coalesced;
+            let depth = self.pubqueue.depth();
+            let verdict = if residue == 0 {
+                "✔ the books balance: every doorbell that arrived was served or refused."
+            } else if residue <= coalesced {
+                "✔ FULLY EXPLAINED BY COALESCING — a doorbell merged onto a pending token owes \
+                 no second completion (the worker reads GP_PUT and takes everything). Benign."
+            } else {
+                "⊘⊘⊘ EXCEEDS COALESCING — the excess entered the deferred lane and never came \
+                 out. Nothing faulted and nothing refused; the guest is still waiting for work \
+                 it believes it submitted."
+            };
             eprintln!(
                 "kayfabe: DOORBELL-ACCOUNTING arrived={doorbells} served={doorbells_served} \
                  refused={doorbells_refused} scheduled_deferrals={doorbells_scheduled} \
-                 ⇒ UNACCOUNTED={residue} \
-                 {}",
-                if residue == 0 {
-                    "✔ the books balance: every doorbell that arrived was served or refused."
-                } else {
-                    "⊘⊘⊘ NOT ZERO — this many submissions entered the deferred lane and never \
-                     came out. Nothing faulted and nothing refused; the guest is simply still \
-                     waiting for work it believes it submitted."
-                }
+                 ⇒ UNACCOUNTED={residue} | QUEUE coalesced={coalesced} depth_at_teardown={depth} \
+                 ⇒ unexplained={} {verdict}",
+                residue.saturating_sub(coalesced)
             );
         }
         // ★★★★ §16.65 — the per-engine census, read from the SAME shared shell state the
