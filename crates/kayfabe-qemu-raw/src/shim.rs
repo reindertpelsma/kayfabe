@@ -8870,7 +8870,22 @@ impl SharedDoorbell {
                     // doorbell possible at all: with the refresh absent, `join_operand_fb_leaves`
                     // on the doorbell was the ONLY thing carrying a UVM-owned mapping to the
                     // host, and removing the doorbell took `Xid 31 @ 0x90_80000000`.
-                    let (refreshed, published) = match off_vcpu {
+                    // ⊘⊘⊘ **THE CONTROL ARM I SHOULD HAVE SHIPPED WITH w656 (w666).**
+                    //
+                    // I added sync point (3) on the critical path with **no way to turn it
+                    // off**, which is this project's own standing discipline violated — and it
+                    // cost immediately: `[measured w664a/w665a]` the LLM wedges at the 4x4 with
+                    // the worker asleep and the log's last line this very function, in BOTH
+                    // doorbell arms. The inline doorbell is exonerated (`inline_rings=0` and
+                    // the identical shape), and sync point (3) is the prime suspect that
+                    // **cannot be tested** because it has no arm.
+                    //
+                    // ⚠ `KAYFABE_SYNC3=off` restores exactly the w406..w656 behaviour: the
+                    // releases are written with no refresh and no publish, and sync point (3)
+                    // has no ordering guarantee — which is what HEAD did for every boot between
+                    // those two revisions.
+                    let sync3 = !matches!(std::env::var("KAYFABE_SYNC3").as_deref(), Ok("off"));
+                    let (refreshed, published) = match off_vcpu.filter(|_| sync3) {
                         Some(w) => {
                             let r = self.refresh_page_tables(w);
                             let mut ctx = self.publish_ctx();
@@ -8956,6 +8971,12 @@ impl SharedDoorbell {
                             // ⊘ The vCPU control arm. Named, not silent: on this arm sync
                             // point (3) genuinely has no ordering guarantee, and a reader must
                             // be able to tell that from a boot where it ran.
+                            // ⊘ TWO causes, named apart — a single string here would be
+                            // the one-refusal-for-several-causes trap (w625) in the line I
+                            // would be using to grade the control.
+                            _ if !sync3 => "⊘ SYNC3=off — NO REFRESH, NO PUBLISH (the explicit \
+                                            control; this is w406..w656 behaviour)"
+                                .to_string(),
                             _ => "⊘ ON A vCPU — NO REFRESH, NO PUBLISH (the \
                                   KAYFABE_DOORBELL_ASYNC=off control; sync point (3) is \
                                   unordered on this arm by construction)"
