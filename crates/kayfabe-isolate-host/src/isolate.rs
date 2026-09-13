@@ -516,6 +516,67 @@ impl ProxyRmBackend {
         })
     }
 
+    /// ★★★★★ **w630 — the THIRD call that reads with a descriptor allowance, and the only one
+    /// that expects a CHARACTER DEVICE.**
+    ///
+    /// ⊘⊘ **A sibling of [`ProxyRmBackend::call_for_backing`], never a mode of it**, and the
+    /// difference is the whole point. That call passes `DescriptorKind::RegularFile` to
+    /// `adopt` precisely so that *"a child answering with a device node is refused"* — a
+    /// backing must be fabricated memory. This one asks for the opposite and must therefore
+    /// say so itself. ⚠ Relaxing the other call's kind to admit both would delete a real
+    /// refusal to save a function, and the refusal is the property the crossing exists for.
+    ///
+    /// ★ Everything else is identical and deliberately so: `max_fds = 1`, the frame refused
+    /// whole if the count is wrong, a reply of any other shape leaving `fds` owned so `Drop`
+    /// closes what arrived, and the kind checked HERE rather than trusted from the child —
+    /// *"a compromised isolate is inside the threat model."*
+    ///
+    /// ⊘ The node it returns is armed `O_RDONLY` by the child. `[measured w600, unprivileged]`
+    /// that is what makes holding it safe: the kernel refuses a writable `mmap` with `EACCES`
+    /// and refuses `mprotect` back to writable with the same errno. `[measured w596]` the RM
+    /// access flag does NOT do this. ⇒ This process may map the counter and can never ring
+    /// the doorbell that shares its page.
+    ///
+    /// # Errors
+    /// [`RmError::Wedged`] for every refusal, as its two siblings do.
+    fn call_for_usermode_view(&mut self) -> Result<(u64, u64), RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope {
+            txn,
+            request: Request::ExportUsermodeView,
+        }
+        .encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 1) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let mmap_len = match self.lift(reply)? {
+            Reply::UsermodeView { mmap_len } => mmap_len,
+            // ⊘ Any other shape drops `fds`, which closes whatever arrived.
+            _ => return Err(RmError::Wedged),
+        };
+        // ★★ Exactly one, checked here rather than trusted from the allowance: a child that
+        // attaches NONE to a `UsermodeView` is claiming a view it did not hand over.
+        let Ok([fd]) = <[_; 1]>::try_from(fds) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(token) = self.exports.adopt(
+            fd,
+            self.isolate,
+            kayfabe_linux_raw::DescriptorKind::CharDevice,
+        ) else {
+            return Err(RmError::Wedged);
+        };
+        Ok((token, mmap_len))
+    }
+
     /// ★★★★★ The **second** call that reads with a descriptor allowance — the join
     /// (`fb_cpu_view.md` §4).
     ///
@@ -835,6 +896,26 @@ impl RmBackend for ProxyRmBackend {
     /// checked against the kernel before it is reachable. What the VMM ends up holding is
     /// a token into [`ExportRegistry`], which yields a backing it can `mmap` and install;
     /// it never holds anything with an RM `ioctl` handler behind it.
+    /// ★★★★★ **w630 — forward the usermode-view request and adopt its character device.**
+    ///
+    /// ⊘ The request carries nothing, so this forwards nothing: the isolate arms its own
+    /// object. See [`ProxyRmBackend::call_for_usermode_view`] for why the kind check is that
+    /// call's own rather than `call_for_backing`'s.
+    ///
+    /// ⚠ `memory` and `offset` are reported as the values they are — `HostHandle::NULL` and 0 —
+    /// rather than invented. **The VMM never learns which RM object this is and must not**: it
+    /// holds a descriptor for one armed mapping, and a handle it could name would be a handle
+    /// it could ask about.
+    fn export_usermode_view(&mut self) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let (token, mmap_len) = self.call_for_usermode_view()?;
+        Ok(kayfabe_isolate::DeviceView {
+            token,
+            memory: HostHandle::NULL,
+            offset: 0,
+            mmap_len,
+        })
+    }
+
     fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
         let (source, memory) = match want.source {
             ExportSource::Fabricated => (EXPORT_SOURCE_FABRICATED, 0),
