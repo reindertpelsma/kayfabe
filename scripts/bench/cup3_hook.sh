@@ -122,11 +122,35 @@ echo ""
 echo "=== waiting for cup3's terminator (poll ${CUP3_TIMEOUT}s + 60s slack) ==="
 LIMIT=$(( (CUP3_TIMEOUT + 60) / 10 ))
 LAST=""
+# THE LABEL IS THE ELAPSED TIME BEFORE THIS POLL, NOT AFTER IT - and the off-by-one
+# cost hours (w680).
+#
+# The `sleep 10` is at the END of the body, so poll i runs at roughly (i-1)*10 seconds, not
+# i*10. Poll 1 fires ~1s after launch and used to print `[~10s]`; poll 2 fires ~12s in and
+# printed `[~20s]`.
+#
+# An EMPTY tail prints nothing at all (the `-n "$NOW"` test). So a run whose only output is
+# `[~20s] ok cuDeviceGet(&d,0)` means: "at poll 1 the file was still empty; by poll 2 it had
+# reached cuDeviceGet". It attributes NO time to any individual call - and it was read as
+# `cuDeviceGet took 20 seconds`, which sent an entire investigation after a number that does
+# not exist. The real cost was `cuInit` (~6-8s) re-initialising an adapter that nvidia-smi
+# had just closed.
+#
+# Two fixes, both about making the wrong reading unavailable:
+#   - the label now says when the poll HAPPENED;
+#   - an empty tail is PRINTED as `<no output yet>` rather than skipped, so "nothing has run"
+#     and "something ran between two polls" stop looking identical.
 for i in $(seq 1 "$LIMIT"); do
-  if $G 'test -f /tmp/cup3.rc' 2>/dev/null; then echo "    terminator present after ~$((i*10))s"; break; fi
+  AT=$(( (i - 1) * 10 ))
+  if $G 'test -f /tmp/cup3.rc' 2>/dev/null; then echo "    terminator present at ~${AT}s"; break; fi
   NOW=$($G 'tail -1 /tmp/cup3.out 2>/dev/null' 2>/dev/null | tr -d '\r')
-  if [ -n "$NOW" ] && [ "$NOW" != "$LAST" ]; then
-    echo "    [~$((i*10))s] $NOW"
+  if [ -z "$NOW" ]; then
+    NOW="<no output yet>"
+  fi
+  if [ "$NOW" != "$LAST" ]; then
+    # A poll boundary bounds the call only between THIS stamp and the previous one; it never
+    # times a call. Say so in the line itself, because the line outlives the reader.
+    echo "    [at ~${AT}s, i.e. since the previous poll] $NOW"
     LAST="$NOW"
   fi
   sleep 10

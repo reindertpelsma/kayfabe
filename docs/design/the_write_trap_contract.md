@@ -90,6 +90,47 @@ break, not a latency trade — the only trap on this list with that property.
 | **GSP queue head** | records, queues the forward — **but `observe`/`apply` decodes and mutates the object graph inline under `state.write()`** | ⊘ **convertible**: record the written value, queue it, decode and apply on the worker. See below |
 | unclaimed | counted no-op | ★ already correct — bare metal ignores it too |
 
+## ★★★★★ ARM THE COMPLETION SYNCHRONOUSLY, OR THE NEXT REQUEST READS THE LAST ONE'S ANSWER
+
+**Owner, 2026-09-13**, on deferring the TLB invalidate:
+
+> *"the thing that can race is that the next tlb invalidate sees a completed one immediately.
+> This means … when the TLB invalidate is written in the register, is synchronously clear the
+> wait bit before returning from the trap, which is just one memory write still
+> nanoseconds-level."*
+
+⊘ **This is the correctness half of every deferral the guest POLLS, and it is not optional.**
+Without it the sequence is:
+
+1. worker finishes invalidate **N**, writes *done* through to the shadow;
+2. guest issues invalidate **N+1** — the trap records it and queues;
+3. guest spin-reads the shadow **before the worker has dequeued**, sees **N**'s *done*, and
+   proceeds;
+4. ⇒ the guest runs with **stale translations** and nothing anywhere reports a fault.
+
+⚠ That is silent and it is a correctness break, not a latency one. It is also exactly the shape
+that has bitten this tree before — a completion observed that belongs to an earlier request.
+
+★ The fix costs one store. In the trap, **before returning**, write *pending* through to the
+shadow (clear the wait/done bit). After that store the bit can only read *done* if **this**
+request's worker pass set it, so step 3 is unrepresentable. No lock, no allocation, a single
+naturally-aligned store — the contract's shape (3), and the cheapest thing on the permitted list.
+
+⇒ **The general rule: a deferred completion that the guest polls must be ARMED synchronously at
+request time.** And the test for which deferrals need it is exactly *"does the guest read anything
+back?"*:
+
+| deferral | guest reads back? | needs the synchronous arm |
+|---|---|---|
+| USERMODE doorbell | no — fire-and-forget by the GPFIFO contract | ⊘ no |
+| TLB invalidate trigger | **yes** — `kgmmuCheckPendingInvalidates` spin-polls it | ★ **YES** |
+| GSP queue head | no at the register; the reply lands in guest RAM + MSI-X | ⊘ no |
+| CPU interrupt tree | yes — the ISR reads the shadow | ★ yes (already write-through) |
+
+⊘ The mechanism already exists and must be **kept, not invented**: w564 made the trigger a
+write-through precisely because *"the guest spin-polls this register"*. The deferred design
+changes only *what* is written at trap time — **pending**, rather than the completed value.
+
 ## ⊘ THE GSP QUEUE HEAD IS THE BIG ONE, AND THE CODE ALREADY SAYS SO
 
 `RegPlane::service_deferred_commands` prints, in the tree today:
