@@ -719,6 +719,79 @@ pub struct SubtreeDecode {
 /// [`WalkFault::BudgetExhausted`] — and only that. Everything else is per-branch and
 /// lands in [`SubtreeDecode::faults`], because the budget is the one condition under
 /// which the *whole* result is untrustworthy.
+/// ★★★★★ **w624 — `decode_subtree`'s twin for a root that is an ENTRY, not a page.**
+///
+/// ⊘⊘ BAR2 could not be enumerated, and `window_leaves` refused it BY NAME for a real reason:
+/// BAR1's directory is a chip constant that names a **page**, so `decode_subtree` can start
+/// there, while **BAR2's root is a raw PDE entry the guest republishes** through
+/// `UPDATE_BAR_PDE`. `decode_subtree` takes a `PtPage`; there was nothing to hand it.
+///
+/// ★ This is the exact enumeration twin of [`translate_from_entry`], which already walks that
+/// shape for a point query: decode the entry, and for each non-null **vidmem** edge, decode the
+/// subtree it names. Same decode, same edge filter, same aperture refusal — the only difference
+/// is that one follows a single `va` and this one enumerates everything.
+///
+/// ⚠ `vabase: 0` is not an assumption. BAR2 publishes **slot 0 only** — the other slots belong
+/// to the firmware's half of the address space and this port has published none — which is the
+/// same fact `bar2_translate` enforces before it walks, refusing any offset that indexes past
+/// slot 0 rather than answering it out of the one root we hold.
+///
+/// ⊘ A sysmem edge is SKIPPED rather than followed, for `follow`'s reason verbatim: following
+/// one would descend into the framebuffer at the child's GPA and return leaves that look
+/// ordinary and name the wrong memory.
+///
+/// # Errors
+/// As [`decode_subtree`]. ⊘ A root entry that decodes to a LEAF is not an error and not a
+/// subtree: it is one mapping, returned as one leaf.
+pub fn decode_subtree_from_entry(
+    fmt: &dyn GmmuFmt,
+    fb: &mut dyn FbRead,
+    level: u8,
+    entry: u128,
+    budget: u32,
+) -> Result<SubtreeDecode, WalkFault> {
+    let mut out = SubtreeDecode::default();
+    match fmt.decode_entry(level, entry) {
+        PteDecode::Pde { edge, also } => {
+            let mut left = budget;
+            for e in [Some(edge), also].into_iter().flatten() {
+                if e.next == 0 || e.aperture != Aperture::Vidmem {
+                    continue;
+                }
+                let sub = decode_subtree(
+                    fmt,
+                    fb,
+                    PtPage {
+                        phys: e.next,
+                        aperture: e.aperture,
+                        level: e.child_level,
+                        vabase: 0,
+                    },
+                    left,
+                )?;
+                left = left.saturating_sub(sub.visited.len() as u32);
+                out.leaves.extend(sub.leaves);
+                out.visited.extend(sub.visited);
+            }
+        }
+        // ⊘ A leaf AT THE ROOT is a legal one-mapping tree, not a malformed one.
+        PteDecode::Leaf { size, .. } => {
+            if let Ok(t) = translate_from_entry(fmt, fb, level, entry, 0) {
+                out.leaves.push(DecodedLeaf {
+                    va: GpuVa(0),
+                    phys: t.phys,
+                    aperture: t.aperture,
+                    size,
+                    read_only: t.read_only,
+                    level,
+                });
+            }
+        }
+        PteDecode::Invalid | PteDecode::Sparse => {}
+    }
+    Ok(out)
+}
+
 pub fn decode_subtree(
     fmt: &dyn GmmuFmt,
     fb: &mut dyn FbRead,

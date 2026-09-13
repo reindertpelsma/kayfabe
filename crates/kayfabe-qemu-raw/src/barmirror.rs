@@ -1210,7 +1210,19 @@ impl BarMirror {
     /// the owner's three sanctioned synchronization points. *"Only return from rpc if channel
     /// is usable"* means the cost belongs here. The drain's own budget reports an overrun, so
     /// the price is visible rather than hidden.
+    /// ★ w624 — both apertures. BAR2 became enumerable when `decode_subtree_from_entry`
+    /// landed; before that `window_leaves` refused it by name and BAR2's 121 pages stayed on
+    /// demand. ⊘ Ordered BAR1 first so a BAR2 regression cannot be mistaken for a BAR1 one.
+    pub fn premap_bars(&self) {
+        self.premap_bar1();
+        self.premap_window(FbWindow::InstanceWindow);
+    }
+
     pub fn premap_bar1(&self) {
+        self.premap_window(FbWindow::FbAperture);
+    }
+
+    fn premap_window(&self, win: FbWindow) {
         // ⊘⊘⊘ **w618 FAILED ITS CRITERION; w620 FIXES THE TWO REAL DEFECTS AND MOVES THE
         // MOMENT. Default ON again, `KAYFABE_PREMAP_BAR1=0` is the control.**
         //
@@ -1250,10 +1262,10 @@ impl BarMirror {
         if std::env::var("KAYFABE_PREMAP_BAR1").is_ok_and(|v| v == "0") {
             return;
         }
-        let Some(arm) = self.arm_for(FbWindow::FbAperture) else {
+        let Some(arm) = self.arm_for(win) else {
             return;
         };
-        let leaves = match self.plane.window_leaves(FbWindow::FbAperture, PREMAP_BUDGET) {
+        let leaves = match self.plane.window_leaves(win, PREMAP_BUDGET) {
             Ok(l) => l,
             Err(_) => {
                 self.premap_refused.fetch_add(1, Ordering::Relaxed);
@@ -1311,7 +1323,7 @@ impl BarMirror {
                     continue;
                 }
                 asked += 1;
-                self.fill_now(FbWindow::FbAperture, page);
+                self.fill_now(win, page);
             }
         }
         self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);

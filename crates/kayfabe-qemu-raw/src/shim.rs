@@ -5497,7 +5497,7 @@ fn doorbell_publish_loop(
             // could not remove any of them by construction.
             #[cfg(feature = "host-isolates")]
             if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
-                m.premap_bar1();
+                m.premap_bars();
             }
             // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
             // BOTH outcomes.

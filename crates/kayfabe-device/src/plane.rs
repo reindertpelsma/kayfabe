@@ -4726,28 +4726,73 @@ impl RegPlane {
         // and hoping the level is right: a wrong root yields a plausible, WRONG list of
         // leaves, and a wrong list is exactly the failure the budget rule below exists to
         // prevent.
-        let root = match w {
-            FbWindow::FbAperture => self.chip.bar1_pde_base,
-            _ => 0,
-        };
-        if root == 0 {
-            return Err(WindowRefusal::Translated {
-                va: 0,
-                why: BAR2_UNROOTED,
-            });
-        }
+        // ★★★★★ **w624 — BAR2 IS ENUMERABLE NOW, and the refusal above is superseded.**
+        //
+        // The comment above is still TRUE about why `decode_subtree` alone cannot do it: BAR2's
+        // root is a raw PDE **entry**, not a page. What changed is that the entry-rooted twin
+        // now exists — `decode_subtree_from_entry`, the exact enumeration counterpart of
+        // `translate_from_entry`, which has always walked this shape for a point query. Same
+        // decode, same vidmem-only edge filter, same refusal to follow a sysmem edge.
+        //
+        // ⊘ And the level is DERIVED here exactly as `bar2_translate` derives it — from the
+        // shift the guest sent beside the entry (`kbusPatchBar2Pdb_GSPCLIENT` sends
+        // `pRootFmt->virtAddrBitLo` precisely because the entry alone does not say which format
+        // row it belongs to). **That is what makes "a wrong root yields a plausible, WRONG list
+        // of leaves" not apply**: the level is not guessed, it is the guest's own.
         let mut src = FbStoreReader { fb: fb.as_mut() };
-        let decoded = kayfabe_mmu::walker::decode_subtree(
-            fmt,
-            &mut src,
-            PtPage {
-                phys: root,
-                aperture: Aperture::Vidmem,
-                level: 0,
-                vabase: 0,
-            },
-            budget,
-        )
+        let decoded = match w {
+            FbWindow::FbAperture => {
+                let root = self.chip.bar1_pde_base;
+                if root == 0 {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNROOTED,
+                    });
+                }
+                kayfabe_mmu::walker::decode_subtree(
+                    fmt,
+                    &mut src,
+                    PtPage {
+                        phys: root,
+                        aperture: Aperture::Vidmem,
+                        level: 0,
+                        vabase: 0,
+                    },
+                    budget,
+                )
+            }
+            FbWindow::InstanceWindow => {
+                let Some(root) = self.bar_pdes.pdes().bar2 else {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNROOTED,
+                    });
+                };
+                let Some(level) = (0..MAX_FORMAT_LEVELS)
+                    .filter_map(|l| fmt.level_shift(l).map(|g| (l, g)))
+                    .find(|(_, g)| u64::from(g.shift) == root.level_shift)
+                    .map(|(l, _)| l)
+                else {
+                    return Err(WindowRefusal::Translated {
+                        va: 0,
+                        why: BAR2_UNKNOWN_ROOT_LEVEL,
+                    });
+                };
+                kayfabe_mmu::walker::decode_subtree_from_entry(
+                    fmt,
+                    &mut src,
+                    level,
+                    u128::from(root.entry),
+                    budget,
+                )
+            }
+            FbWindow::Pramin => {
+                return Err(WindowRefusal::Translated {
+                    va: 0,
+                    why: BAR2_UNROOTED,
+                });
+            }
+        }
         .map_err(|_| WindowRefusal::Translated {
             va: 0,
             why: WINDOW_ENUMERATION_REFUSED,
