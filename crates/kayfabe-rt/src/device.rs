@@ -2206,6 +2206,60 @@ impl SharedDevice {
         f(&st.spine)
     }
 
+    /// ★★★★★ **EVERY ROUTABLE DOORBELL ON ONE GPU, AS A FLAT SNAPSHOT** — what
+    /// `kayfabe_device::dbtable::DoorbellTable` is rebuilt from.
+    ///
+    /// Returns `(vchid, host_token)` per routable channel: `Some(t)` when the channel has a
+    /// **host** channel behind it (a passthrough ring), `None` when it is ours to execute.
+    ///
+    /// # ★★★ Why the WHOLE set, and never an incremental hook
+    ///
+    /// The dangerous failure for a doorbell table is **incompleteness**: a token that really
+    /// does belong to an allocated channel routed as `Unallocated` is a submission dropped
+    /// silently, under exactly the load that populated the channel late. An installer hooked
+    /// onto births has to be right about every birth site, every teardown and every re-bind —
+    /// and this tree has already paid for *"the hook was on a drain that never fires"* (w615).
+    ///
+    /// ⊘ [`Spine::by_vchid`] is **rebuilt wholesale by the projection**, from the graph, on
+    /// every apply. Taking it entire means the table cannot be partially stale: it either
+    /// matches the projection it was built from or it is replaced by the next one. Complete
+    /// **by construction** rather than by an argument about call sites.
+    ///
+    /// ⚠ **Spine op — takes the rank-1 read guard, so a vCPU may not call this.** It is for
+    /// the publication worker. The vCPU's whole doorbell path is the table's atomic load.
+    ///
+    /// ⊘ Scoped to one `gpu` because a `VChid` is a **per-GPU namespace** — two GPUs legally
+    /// present identical vChids, and a table shared between them would route one's doorbell to
+    /// the other's channel. One table per device, like everything else on this axis.
+    #[must_use]
+    pub fn doorbell_routes(&self, gpu: GpuId) -> Vec<(VChid, Option<u64>)> {
+        // ⊘ **TWO LOCKS, ONE AT A TIME — never both held.** The routing map is on the spine
+        // (rank 1 read) and `host_token` is on the proc (rank 1). R3 refuses two rank-1 holds
+        // at once, so the map is copied out first and the guard released before any proc is
+        // asked. That is also why this is a worker op and not a vCPU one.
+        let routed: Vec<(VChid, ProcId, ChanId)> = self.with_spine(|spine| {
+            spine
+                .by_vchid
+                .iter()
+                .filter(|((g, _), _)| *g == gpu)
+                .map(|((_, vchid), (pid, cid))| (*vchid, *pid, *cid))
+                .collect()
+        });
+        let mut out = Vec::with_capacity(routed.len());
+        for (vchid, pid, cid) in routed {
+            // ⊘ A channel the projection routed but whose proc or record has since gone is
+            // reported as `None` — **ours, not absent**. Routing it to the emulated lane is
+            // the conservative answer: the worker then refuses it by name, where dropping it
+            // would be silent. ⚠ The projection may also have moved on between the two locks;
+            // the same reasoning covers that, and the next rebuild corrects it.
+            let host = self
+                .with_proc(pid, |p| p.channels.get(&cid).and_then(|c| c.host_token))
+                .flatten();
+            out.push((vchid, host));
+        }
+        out
+    }
+
     /// Every proc the device currently holds live, the system proc first. **Spine op**
     /// (read guard); pairs with [`SharedDevice::with_proc`] so a caller can walk the
     /// whole live set one rank-1 lock at a time — never two at once, which R3 would

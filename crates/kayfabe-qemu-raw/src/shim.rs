@@ -3707,6 +3707,21 @@ struct SharedDoorbell {
     /// `Off` — nothing offers to it and nothing takes from it — and its census still
     /// prints, so *"the lane was disarmed"* and *"the lane was armed and never used"* are
     /// distinguishable in a boot log rather than both reading as silence.
+    /// ★★★★★ **GOAL 4 — THE DOORBELL TABLE, in SHADOW.** One atomic word per vChid; the
+    /// whole vCPU-side read path is a bounds check, a `Relaxed` load and a two-bit decode.
+    ///
+    /// ⊘ **Consulted and COUNTED, not yet obeyed.** Today's path still decides. The dangerous
+    /// failure for this table is **incompleteness** — a token that really belongs to an
+    /// allocated channel routed as `Unallocated` is a submission dropped silently, under
+    /// exactly the load that populated the channel late. So the table earns the decision by
+    /// agreeing with the worker on every doorbell of a boot first (`DBTABLE-SHADOW` census),
+    /// rather than by passing tests that have never seen a real token.
+    ///
+    /// ⊘ **Per device.** A `VChid` is a per-GPU namespace; two GPUs legally present identical
+    /// vChids, so a table shared between them would route one's doorbell to the other's
+    /// channel. Rebuilt on the publication worker from
+    /// [`kayfabe_rt::device::SharedDevice::doorbell_routes`].
+    dbtable: Arc<kayfabe_device::dbtable::DoorbellTable>,
     pubqueue: Arc<kayfabe_device::pubqueue::PublicationQueue>,
     /// ★★★★★ **w383 — the eighth selector: does the doorbell trap RUN the publication, or
     /// SCHEDULE it?** Read once at the composition root and carried, for `vas_publish`'s
@@ -5334,6 +5349,15 @@ fn doorbell_publish_loop(
                 }
             }
         }
+        // ★★★★★ **GOAL 4 — REBUILD THE DOORBELL TABLE, every pass, from the projection.**
+        //
+        // ⊘ Here and not at a birth hook: `Spine::by_vchid` is rebuilt wholesale by the
+        // projection, so taking it entire is the only population that cannot be partially
+        // stale. Every pass because the worker already wakes on exactly the events that can
+        // change it — a doorbell, a birth, an invalidate — and the rebuild is 4096 relaxed
+        // stores over a `Vec` the spine handed us. ⚠ Still SHADOW: nothing reads its answer
+        // for a decision yet.
+        port.rebuild_dbtable(&off_vcpu);
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         // ⊘ `SharedDoorbell` holds no mirror; the snapshot is taken on the shim's own drain
@@ -6059,6 +6083,63 @@ fn refused(
     }
 }
 
+/// ★★★ **The vChid space a work-submit token can name** — `NV_CTRL_VF_DOORBELL_VECTOR` is
+/// bits **11:0** (`kayfabe_chips::ga10x::decode_work_submit_token`), so 4096 vectors, and the
+/// same field width on every generation from Volta to Blackwell.
+///
+/// ⊘ Sized from the ENCODING, not from a channel count. A table smaller than the field would
+/// make its bounds check refuse well-formed tokens — which reads identically to "no channel
+/// owns this" and would be a dropped submission wearing a legitimate-looking answer.
+const VCHID_SPACE: usize = 1 << 12;
+
+/// Doorbells whose decoded vChid the shadow table and the live path disagreed about.
+static DBTABLE_SHADOW_DISAGREE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Doorbells the shadow table would have dropped as `Unallocated`.
+static DBTABLE_SHADOW_UNALLOCATED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Doorbells the shadow table would have rung inline as passthrough.
+static DBTABLE_SHADOW_PASSTHROUGH: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Doorbells the shadow table would have queued as emulated.
+static DBTABLE_SHADOW_EMULATED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Tokens that did not decode at all — malformed, and a non-event on either path.
+static DBTABLE_SHADOW_MALFORMED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Rebuilds of the table from the projection, and rows installed by the last one.
+static DBTABLE_REBUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static DBTABLE_ROWS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The shadow census. ⚠ Read the counts **beside** the total: a table nobody consulted
+/// disagrees with nothing, and the two zeros are indistinguishable.
+///
+/// ⊘⊘ **PROCESS-GLOBAL, AND THAT IS A KNOWN MULTI-GPU FLAW.** These counters are `static`s, so
+/// with two emulated GPUs in one process this line sums both devices and `unallocated=0` would
+/// stop distinguishing *"this device never dropped one"* from *"the other device's traffic
+/// swamped it"*. Tolerable **only** because the table decides nothing yet; it must become a
+/// field on the port before any arm is flipped, or the evidence for flipping it is a number
+/// about two GPUs at once. Same class as `SWEEP_DEFER_GIVEUPS` / `MIRROR_DRAINS`.
+fn dbtable_shadow_census() -> String {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (u, p, e, m) = (
+        DBTABLE_SHADOW_UNALLOCATED.load(Relaxed),
+        DBTABLE_SHADOW_PASSTHROUGH.load(Relaxed),
+        DBTABLE_SHADOW_EMULATED.load(Relaxed),
+        DBTABLE_SHADOW_MALFORMED.load(Relaxed),
+    );
+    format!(
+        "DBTABLE-SHADOW consulted={} [unallocated={u} passthrough={p} emulated={e} \
+         malformed={m}] disagree={} rebuilds={} rows={} ⊘ SHADOW: the table decided NOTHING. \
+         ⚠ `unallocated` counts doorbells it WOULD HAVE DROPPED — that must reach 0 against a \
+         live path that served them before any arm is flipped, and `consulted` must be \
+         NON-ZERO or the zero above is a table nobody asked.",
+        u + p + e + m,
+        DBTABLE_SHADOW_DISAGREE.load(Relaxed),
+        DBTABLE_REBUILDS.load(Relaxed),
+        DBTABLE_ROWS.load(Relaxed),
+    )
+}
+
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     /// ★★★★★ **w383 — THE FRONT DOOR: validate, enqueue, return.**
     ///
@@ -6119,6 +6200,13 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
     /// coordinator then loops **every** emulated channel. Nothing is dropped and nothing is
     /// executed on the vCPU.
     fn ring(&self, token: u64) -> kayfabe_device::DoorbellReport {
+        // ★★★★★ **GOAL 4, IN SHADOW — the table is asked and COUNTED, and decides nothing.**
+        //
+        // This is the whole vCPU-side cost of the DoorbellTable: pure arch math to decode the
+        // token, a bounds check, one `Relaxed` load, a two-bit decode. No lock, no allocation,
+        // no device. ⊘ It runs BEFORE the deferral test so the census covers every doorbell,
+        // including the ones the inline arm takes.
+        self.shadow_route(token);
         if !self.doorbell_async.defers() {
             return self.ring_inline(token);
         }
@@ -6217,6 +6305,91 @@ impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
 }
 
 impl SharedDoorbell {
+    /// ★★★★★ **THE SHADOW CONSULT — what the vCPU's doorbell path WILL be, measured against
+    /// what it IS.**
+    ///
+    /// Owner, 2026-09-13, the three rules this table exists to implement:
+    /// > *"i hope if you trap an invalid doorbell write thats registered in neither channel
+    /// > that you ignore"* · *"if for emulated channels the queue is full then you set a flag
+    /// > … telling worker to ignore the doorbell queue and sweep all channels"* · *"passthrough
+    /// > doorbells are inline in vcpu, no queue, no worker"*
+    ///
+    /// # ⊘ Why this counts instead of acting
+    ///
+    /// An **incomplete** table drops a doorbell for a channel that really is allocated —
+    /// silently, and only under the load that populated it late. `dbtable`'s own tests pass
+    /// today and the type **has never seen a real token**; a green path that has never been
+    /// contradicted is not evidence. So it agrees with the live path for a whole boot first.
+    ///
+    /// ⚠ The census must be read for **`disagree=0` AND a non-zero total** — this tree's
+    /// standing lesson that a zero and a healthy zero look identical. A table nobody consulted
+    /// disagrees with nothing.
+    fn shadow_route(&self, token: u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        use kayfabe_device::dbtable::Route;
+        // ⊘ Pure arch math — no spine, no lock. A malformed token is a non-event on both
+        // paths, so it is counted apart rather than folded into `Unallocated`: they are
+        // different diagnoses ("RM could not have written this" vs "nobody owns this").
+        let Some(target) = kayfabe_chips::ga10x::decode_work_submit_token(token) else {
+            DBTABLE_SHADOW_MALFORMED.fetch_add(1, Relaxed);
+            return;
+        };
+        match self.dbtable.route(u64::from(target.vchid.0)) {
+            Route::Unallocated => {
+                DBTABLE_SHADOW_UNALLOCATED.fetch_add(1, Relaxed);
+            }
+            Route::Passthrough { .. } => {
+                DBTABLE_SHADOW_PASSTHROUGH.fetch_add(1, Relaxed);
+            }
+            Route::Emulated { .. } => {
+                DBTABLE_SHADOW_EMULATED.fetch_add(1, Relaxed);
+            }
+        }
+    }
+
+    /// ★★★ **REBUILD THE TABLE FROM THE PROJECTION** — on the worker, never a vCPU.
+    ///
+    /// Takes [`kayfabe_rt::device::SharedDevice::doorbell_routes`] entire and installs it, so
+    /// the table cannot be partially stale: it either matches the projection it was built from
+    /// or is replaced by the next one. ⊘ **Complete by construction rather than by an argument
+    /// about call sites** — this tree has already paid for a hook on a drain that never fires.
+    ///
+    /// ⚠ Clears vanished rows. A channel that went away must stop routing, or its vChid keeps
+    /// naming a host token that now belongs to somebody else.
+    fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu) {
+        use std::sync::atomic::Ordering::Relaxed;
+        use kayfabe_device::dbtable::Route;
+        let rows = self.device.doorbell_routes(DOORBELL_TARGET_GPU);
+        let mut live = vec![false; VCHID_SPACE];
+        let mut installed = 0u64;
+        for (vchid, host) in &rows {
+            let i = usize::from(vchid.0);
+            if i >= VCHID_SPACE {
+                continue; // unreachable for a decoded vChid; refused rather than wrapped.
+            }
+            let route = match host {
+                Some(t) => Route::Passthrough { host_token: *t },
+                // ⊘ No host channel ⇒ OURS. Never `Unallocated`: the channel exists, and
+                // routing it to the emulated lane is what makes a refusal happen BY NAME on
+                // the worker instead of a submission disappearing on the vCPU.
+                None => Route::Emulated {
+                    chan: u64::from(vchid.0),
+                },
+            };
+            if self.dbtable.install(u64::from(vchid.0), route) {
+                live[i] = true;
+                installed += 1;
+            }
+        }
+        for (i, alive) in live.iter().enumerate() {
+            if !alive {
+                self.dbtable.install(i as u64, Route::Unallocated);
+            }
+        }
+        DBTABLE_REBUILDS.fetch_add(1, Relaxed);
+        DBTABLE_ROWS.store(installed, Relaxed);
+    }
+
     /// ★★★★★ **The doorbell body — every leg, in the order that has always been
     /// load-bearing.** Reached from the vCPU trap on the disarmed arm and from the
     /// `kayfabe-doorbell-publish` worker on the armed one. ⊘ **Nothing inside it changed
@@ -6481,7 +6654,7 @@ impl SharedDoorbell {
             // WHICH ONES AND HOW LONG. A count without a duration cannot distinguish many
             // cheap verbs from few expensive ones, and those have opposite fixes.
             format!(
-                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
+                "{} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {}",
                 kayfabe_util::trapwitness::census(),
                 // ★★★★★ **w507 — DID THE ANTI-STARVATION FIX EVEN RUN?**
                 // `[measured w506]` rank 0 read `worst_wait=3825us worst_hold=0us` — a
@@ -6534,6 +6707,10 @@ impl SharedDoorbell {
                     || "BAR0-READ-HOTSPOTS ⊘ NO PLANE — unmeasured, not zero".to_string(),
                     |p| p.bar0_read_hotspots(12),
                 ),
+                // ★★★★★ **GOAL 4 — what the DoorbellTable WOULD have done**, beside the
+                // numbers the live path actually produced. ⊘ A census with no emitter is the
+                // w584 failure exactly, and this one exists to be read before a flip.
+                dbtable_shadow_census(),
                 // ★★★★★ w517 — the owner's MMIO contract, CHECKED. A trap may take the
                 // plane's queue lock and nothing above it. Both violations found this session
                 // were found by a stall alarm firing on whichever trap happened to be
@@ -14315,6 +14492,10 @@ impl Regs {
             dirty: Arc::new(DirtyGate::default()),
             pubqueue: Arc::clone(&pubqueue),
             doorbell_async,
+            // ⊘ `VCHID_SPACE` entries — the whole 12-bit vector field `decode_work_submit_token`
+            // can produce, so a well-formed token is never past the end and the bounds check
+            // only ever refuses a MALFORMED one.
+            dbtable: Arc::new(kayfabe_device::dbtable::DoorbellTable::new(VCHID_SPACE)),
         };
         plane.set_doorbell(Box::new(doorbell_port.clone()));
 

@@ -314,3 +314,87 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod the_table_must_cover_the_whole_encoding {
+    //! ★★★★★ **A TABLE TOO SMALL REFUSES WELL-FORMED TOKENS, AND THE REFUSAL LOOKS
+    //! LEGITIMATE.**
+    //!
+    //! [`DoorbellTable::route`]'s bounds check answers [`Route::Unallocated`] for a token past
+    //! the end — which is the right answer for a wild token and a **dropped submission** for a
+    //! real one. The two are indistinguishable from the outside: same variant, same cost, no
+    //! log. ⇒ The table's size is not a capacity choice, it is a **correctness invariant tied
+    //! to the token encoding**, and it needs a test that fails when the two drift apart.
+    use super::*;
+
+    /// `NV_CTRL_VF_DOORBELL_VECTOR` is bits **11:0** — the same field width on every
+    /// generation from Volta to Blackwell.
+    const VCHID_SPACE: usize = 1 << 12;
+
+    #[test]
+    fn every_vchid_the_encoding_can_name_has_a_slot() {
+        let t = DoorbellTable::new(VCHID_SPACE);
+        // ⊘ The whole field, not a sample: the failure is at the TOP of the range, which is
+        // exactly where a sample that walks from zero never reaches.
+        for vchid in 0..VCHID_SPACE as u64 {
+            assert!(
+                t.install(vchid, Route::Emulated { chan: vchid }),
+                "vChid {vchid} has no slot — a well-formed token would read as Unallocated"
+            );
+            assert_eq!(t.route(vchid), Route::Emulated { chan: vchid });
+        }
+        // And one past it is genuinely out of the encoding's reach.
+        assert_eq!(t.route(VCHID_SPACE as u64), Route::Unallocated);
+    }
+
+    /// ★★★ **A REBUILD MUST CLEAR WHAT VANISHED.** The projection is taken entire, so a
+    /// channel that went away is simply absent from the new snapshot — and a table that only
+    /// ever writes the rows it is given keeps routing its vChid to a host token that now
+    /// belongs to somebody else. ⚠ That is a doorbell delivered to the WRONG channel, which is
+    /// worse than one dropped.
+    #[test]
+    fn a_rebuild_clears_rows_the_new_snapshot_does_not_mention() {
+        let t = DoorbellTable::new(16);
+        // First projection: three channels.
+        for (v, h) in [(1u64, 0x11u64), (2, 0x22), (3, 0x33)] {
+            assert!(t.install(v, Route::Passthrough { host_token: h }));
+        }
+        // Second projection: channel 2 is gone. The rebuild writes what it has, then clears
+        // every slot the snapshot did not mention.
+        let snapshot = [(1u64, 0x11u64), (3, 0x99)];
+        let mut live = [false; 16];
+        for (v, h) in snapshot {
+            assert!(t.install(v, Route::Passthrough { host_token: h }));
+            live[v as usize] = true;
+        }
+        for (i, alive) in live.iter().enumerate() {
+            if !alive {
+                t.install(i as u64, Route::Unallocated);
+            }
+        }
+
+        assert_eq!(t.route(1), Route::Passthrough { host_token: 0x11 });
+        assert_eq!(
+            t.route(2),
+            Route::Unallocated,
+            "a vanished channel still routes — its doorbell reaches SOMEBODY ELSE's host token"
+        );
+        assert_eq!(
+            t.route(3),
+            Route::Passthrough { host_token: 0x99 },
+            "a re-bound channel must follow its NEW host token, not the stale one"
+        );
+    }
+
+    /// ⊘ A channel with no host channel behind it is **`Emulated`, never `Unallocated`**. It
+    /// exists; it is ours to run. Routing it to the emulated lane makes the refusal happen BY
+    /// NAME on the worker, where `Unallocated` would make the submission disappear on the vCPU
+    /// with nothing to read afterwards.
+    #[test]
+    fn a_channel_without_a_host_token_is_ours_not_absent() {
+        let t = DoorbellTable::new(4);
+        assert!(t.install(2, Route::Emulated { chan: 2 }));
+        assert_ne!(t.route(2), Route::Unallocated);
+        assert_eq!(t.route(2), Route::Emulated { chan: 2 });
+    }
+}
