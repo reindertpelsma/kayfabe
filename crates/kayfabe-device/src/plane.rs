@@ -1858,10 +1858,28 @@ impl RegPlane {
                 self.bar0_dword_is_dead(off)
                     || self.chip.boot_regs.iter().any(|r| r.off == off)
                     || self.chip.rom_window.contains(off)
-                    // ★★★★★ w564 — the producer-updated arms, now that `shadow_write` keeps
-                    // them current. `[measured w561]` none of these has a read side effect;
-                    // each is a pure read of state this device owns.
-                    || crate::cpuintr::decode(off).is_some()
+                    // ⊘⊘⊘ **w576 — THE PRODUCER-UPDATED ARMS ARE NOT BACKED, because the
+                    // write-through they depend on HAS NO CALLER.**
+                    //
+                    // w564 widened this predicate to the interrupt tree, the invalidate trigger
+                    // and the window latch, on the stated ground that *"`shadow_write` keeps
+                    // them current"*. It does not: `RegPlane::set_read_shadow` is called from
+                    // **nowhere in the workspace**, so the port is always `None` and every
+                    // `shadow_write` returns immediately. The pieces therefore hold their
+                    // REALIZE-TIME bytes for the life of the boot.
+                    //
+                    // ⇒ The guest's ISR read zeros from a page that could never change.
+                    // `[measured w573-w576]` every tree from w564 onward grades **(E)**:
+                    // `RmInitAdapter failed (0x62:0x56:2028)`, no channel, every doorbell
+                    // refused. Three separate fixes to the PRODUCERS (w574, w575) could not
+                    // help, because the producers were never the broken half.
+                    //
+                    // ⚠ The lesson is the shape, not the bug: w564's own message claimed *"one
+                    // write-through entry point"* and that was true — an entry point with no
+                    // exit. **A sink nobody installed and a sink that works are the same code
+                    // until a guest reads one.** The page stays trapped until the port is
+                    // wired AND a boot shows the client passing with it.
+                    || false && crate::cpuintr::decode(off).is_some()
                     // ⊘⊘ w575 — THE INVALIDATE TRIGGER IS **NOT** BACKED, and this is a
                     // measured refusal rather than an oversight.
                     //
@@ -1875,12 +1893,10 @@ impl RegPlane {
                     // ⚠ `[measured w573-w575]` w564 backed it and the boot graded (E):
                     // `RmInitAdapter failed`. It stays trapped until something makes "done"
                     // observable at the instant it becomes true, and a boot says so.
-                    || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
-                    // ★★★★★ w565 — the GSP registers, now that every FSM write republishes
-                    // the whole group. ⊘ `may_read` offsets are NOT included: the boot
-                    // sequence's `on_read` has no republisher, so a page holding one stays
-                    // trapped rather than answering a value nothing updates.
-                    || self.model.decode_reg(0, off).is_some()
+                    || (false && self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+                    // ⊘ w576 — the GSP registers are out for the same reason: their
+                    // republisher writes to the same absent port.
+                    || (false && self.model.decode_reg(0, off).is_some())
             });
             if !shadowable {
                 continue;
