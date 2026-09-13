@@ -36,7 +36,19 @@ export KAYFABE_ISOLATES=real KAYFABE_GUEST_RAM=memfd NVKVM_RAM_BACKEND=memfd \
        KAYFABE_FB_JOIN=shared KAYFABE_GUEST_RING=ring KAYFABE_GR_ROUTE=passthrough \
        KAYFABE_CE_EXECUTOR=host \
        NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} BOOT_TIMEOUT=${BOOT_TIMEOUT:-180}
-export POST_CAPTURE_HOOK="$SRC_DIR/w392d_mean_hook.sh"
+# ⊘⊘⊘ **OVERRIDABLE — it was an UNCONDITIONAL export and that silently discarded the caller's
+# hook (w669).** `PREFIX=w669a POST_CAPTURE_HOOK=.../cup3_hook.sh bash w586_boot.sh` ran the MEAN
+# hook: this line overwrote the caller's value, the boot graded green, and the ladder rung the
+# caller asked for was never executed. ⚠ It is only detectable by noticing the FIELD NAMES in the
+# output belong to a different hook — nothing refuses, and a reader looking for a result sees a
+# complete, healthy ledger for the wrong workload.
+#
+# ★ The default stays the mean hook, because that is what this script is for. `:-` makes it a
+# default rather than a decree.
+export POST_CAPTURE_HOOK="${POST_CAPTURE_HOOK:-$SRC_DIR/w392d_mean_hook.sh}"
+# ⊘ Say which one ran, in the boot's own log. A hook is the whole payload of a boot and it was
+# nowhere in the output.
+echo "POST_CAPTURE_HOOK=$POST_CAPTURE_HOOK"
 
 echo "=== w586 BOOT $(date -Is) tag=$tag ==="
 
