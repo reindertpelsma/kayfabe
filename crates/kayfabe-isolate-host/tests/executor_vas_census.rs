@@ -113,8 +113,17 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.map_dma_both(",
-        9,
-        "★★★★★ **8 → 9 at w380 (2026-09-06), ADMITTED HERE IN THE SAME COMMIT.** The ninth \
+        10,
+        "★★★★★ **9 → 10 at w605 (2026-09-13), ADJUDICATED — the tenth is \
+         `prove_ce_copy_from_guest_ram`'s operand.** It is the SAME admitted class as the \
+         other probes: its copy runs on the ISOLATE's own engine, so the operand must resolve \
+         in the executor's space as well as the guest-facing one, and a mapping that reached \
+         only one would fault on the copy rather than at the omission. ⊘ The row had been RED \
+         since that probe landed, and the test's own message is the right reading of that: \
+         *the census going red is this instrument WORKING; what did not work is that nobody \
+         adjudicated the red.* ⇒ Adjudicated here, with the site named, so the NEXT red is \
+         again a fact about the code rather than about this row being stale. \
+         ★★★★★ **8 → 9 at w380 (2026-09-06), ADMITTED HERE IN THE SAME COMMIT.** The ninth \
          is `alias_fb_leaf`'s `OS_DESCRIPTOR` — the SECOND and every later GPU VA of one \
          already-joined framebuffer frame. It must land in both spaces for the eighth's \
          reason verbatim, and the reason is not weaker for an alias: the isolate's own copy \
@@ -153,9 +162,14 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.unmap_dma_both(",
-        4,
-        "The teardowns that must undo BOTH: `unmap_gpu_va` and the three probes' cleanup \
-         loops (`prove_ce_copy`, `prove_os_descriptor`, `prove_fb_memfd_join`). ⚠ A \
+        7,
+        "★★★ **4 → 7 at w605 (2026-09-13), ADJUDICATED.** The teardowns that must undo BOTH: \
+         `unmap_gpu_va`, and the cleanup loops of every probe that maps — which is now SIX \
+         sites across `prove_ce_copy`, `prove_ce_copy_from_guest_ram`, `prove_os_descriptor` \
+         and `prove_fb_memfd_join`, several of which clean up on more than one path (the \
+         success path and the early-return path both have to undo the map). ⊘ The count grew \
+         with `map_dma_both` and for the same reason; a teardown row that lags its map row is \
+         the dangerous direction, because the gap is exactly a leaked mapping. ⚠ A \
          teardown that unmaps only the guest side frees that VA for reuse while \
          the isolate's engine still resolves it — a use-after-free with a hardware reader.",
     ),

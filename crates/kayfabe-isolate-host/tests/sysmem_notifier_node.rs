@@ -116,13 +116,30 @@ fn both_notifier_readers_choose_their_node() {
 #[test]
 fn the_control_node_is_reached_only_through_the_notifier_derivation() {
     let s = src("src/rm.rs");
-    let uses = s.matches("MapNode::Ctl").count();
+    // ⊘⊘ **CODE ONLY, w605.** This counted every occurrence of the string, including one in a
+    // COMMENT that exists precisely to cite the driver behaviour the row asks for. ⇒ A census
+    // of CLAIMS was counting PROSE, so writing down the justification made the row redder —
+    // the `the_dangerous_spelling_was_the_invisible_one` class, inverted: here the gate's
+    // blind spot punished the thing it wanted.
+    let uses = s
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .map(|l| l.matches("MapNode::Ctl").count())
+        .sum::<usize>();
     assert_eq!(
-        uses, 2,
-        "expected exactly two USES of `MapNode::Ctl` in src/rm.rs: its arm in \
-         `MapNode::for_notifier`, and the `openat(nvidiactl)` arm of \
-         `map_cpu_windowed_on`. Found {uses}. A third is a NEW claim that some other object \
-         is system memory, and it needs the driver citation that claim rests on."
+        uses, 4,
+        "expected exactly four USES of `MapNode::Ctl` in src/rm.rs, in CODE (comments are \
+         excluded — see above): its arm in `MapNode::for_notifier`; the `openat(nvidiactl)` \
+         arm of `arm_cpu_view`; and `prove_ce_copy_from_guest_ram`'s TWO — the source mapping \
+         and the conditional destination node. Found {uses}. \
+         \
+         ★★★ **2 → 4 ADJUDICATED at w605 (2026-09-13).** The probe's two are the claim this \
+         row exists to demand a citation for, and it carries one at its own site: guest RAM \
+         IS system memory, so `MapNode::Ctl` is not merely allowed there, it is REQUIRED — \
+         `[measured w417]` a plain `map_cpu` on the GPU node is refused by RM for a sysmem \
+         backing, and the refusal arrives as `Other(31)` with the ioctl census reading \
+         `failed=0` because RM reports status inside the parameter struct. ⇒ A fifth use is \
+         still a new claim and still needs its own citation."
     );
 }
 
