@@ -189,3 +189,71 @@ because the event is timing-dependent rather than path-dependent.
 3. Inline passthrough (the owner's *"no queue, no worker"*) needs a **checked** store accessor
    into the VMM's writable usermode-page mapping. The mapping exists as of w641; the accessor does
    not, and safe code may not touch a raw VMM pointer unchecked.
+
+
+---
+
+# ★★★★★ w651-w654 — THE INLINE DOORBELL REGRESSED, AND THE CAUSE IS NAMED (2026-09-13)
+
+## The measurement, and its confirming control
+
+| boot | arm | outcome | host dmesg |
+|---|---|---|---|
+| w651a | `KAYFABE_DOORBELL_INLINE=on` | **(R)** — *"the copy from `0x9080000000` NEVER RETIRED"* | `Xid 31 ENGINE CE2 HUBCLIENT_CE0 faulted @ 0x90_80000000`, channel `0x0100000a` |
+| w653a | off (the control) | **(P)**, `MEAN_FALSIFIER=PASS`, `inline_rings=0` | only `@ 0xa0_00000000` — the mean falsifier's own unmapped VA |
+
+★★★★★ **The `0x90_80000000` fault appears in exactly ONE boot of the seven in the host's dmesg
+ring, and it is the one with the arm on.** Every other boot carries only the `0xa0_00000000`
+falsifier fault, which is expected on all of them. ⇒ This is a falsifiable prediction, made by
+fable BEFORE the log was read, confirmed with its own control already in the same log.
+
+## ⊘⊘⊘ THE CAUSE — the commit's premise was false for the workload the bench grades
+
+f27a60eb argued *"the doorbell path does zero publication work for a passthrough channel."*
+`ring_inline` in fact runs, **ungated by channel kind**, before it ever reaches the core doorbell:
+
+1. `witness_executor_fb_pages` → `decode_cpu_pt_writes` → `sweep_cpu_pt_tables` — the pass whose
+   own doc records the raw CE client *"FAILS with this pass deleted and PASSES with it armed."*
+2. **Leg 7, `join_operand_fb_leaves`** — never mentioned in my commit message. It parses the
+   ringing channel's pushbuffer, resolves each operand to its emulated-FB leaf, and **issues host
+   verbs to mint and map a host object at that VA**. Committed evidence it serves P2:
+   `OPERAND-JOIN(P2 token) 2 JOINED` on the boot that first took P2 to VERIFIED.
+
+**Why no other trigger covers it.** P2's object is mapped by **nvidia-uvm**, which writes its own
+PTEs and never touches the BAR0 `MMU_INVALIDATE` register — it emits `MEM_OP` invalidates in its
+push, and the CPU executor that runs those has **no `TlbInvalidate` handling at all**
+(`MEMOP-CENSUS seen=0`). No invalidate, no RPC bind, no birth between round 0's free and round 1's
+copy. **The doorbell was the only publication trigger for a UVM-owned space, and the flip removed
+it.**
+
+⊘ And the failure lands on the **first** inline ring by construction: `exec.scheduled` is set only
+by `commit_doorbell`, so round 0 is tagged `Emulated` and passes through the full worker path;
+round 1 is the first with the tag flipped. The payload `0x6d000002` is that channel's second
+doorbell.
+
+## ⚠ A THIRD TAG CONDITION CANNOT FIX THIS
+
+The missing work is per-**submission** and content-dependent — *which* operands this push names,
+and whether their leaves are joined yet. A per-channel bit cannot express it, and the work itself
+(ring parse, plane locks, host map verbs) may not run on a vCPU.
+
+⇒ **The inline ring is blocked on publication having a trigger that is not the doorbell.** The fix
+is the owner's own 2026-09-10 rule, third clause, still unwired: *"only return from … the kernel
+emulated channel for UVM after the PTE/PDB page table refresh function finished."* Run
+`refresh_page_tables` + `publish_vas_rows(Drain)` in `try_ce_submission`'s emulated arm, after the
+submission runs and **before the deferred completion releases reach the guest**. Once that lands,
+leg 7 becomes redundant for this class and the inline design stands as committed.
+
+## ⊘ A fourth instrument defect, found in my own evidence
+
+I cited `inline_refused=0` as showing the stores succeeded. `GuestWindow::store_u32` can only
+refuse **bounds and alignment** — it cannot observe a kernel or hardware outcome — so that counter
+is **structurally zero on every boot**. It was never evidence of anything.
+
+## ★ What the same boot bought: PRAMIN's repoint cost, previously unmeasured
+
+`move_ns[worst=296558 mean=74698]` — **297 µs worst, 75 µs mean**, on the vCPU, per window move.
+Absence from `SLOW-SITES` only ever proved it was under 1 ms; it is in fact **~30 % of goal 6's
+whole budget in a single `mmap`**, and it is one of the 22 blocking doors goal 3 forbids. ⚠ It
+cannot simply move to a worker: the guest reads through the aperture immediately after writing the
+window register, so a deferred move shows it the OLD framebuffer.
