@@ -262,7 +262,13 @@ pub const fn fb_length_for(fb_size_mb: u64) -> u64 {
 /// `frtsOffset` (`ogkm-580: kernel_gsp_tu102.c:779`) — the address the driver expects to
 /// read back out of `NV_PFB_PRI_MMU_WPR2_ADDR_LO`.
 const fn frts_offset() -> u64 {
-    gsp_fw_wpr_end() - FRTS_SIZE
+    frts_offset_for(FB_SIZE_MB)
+}
+
+/// The same, as a function of the advertised size. See [`gsp_fw_wpr_end_for`].
+#[must_use]
+pub const fn frts_offset_for(fb_size_mb: u64) -> u64 {
+    gsp_fw_wpr_end_for(fb_size_mb) - FRTS_SIZE
 }
 
 /// Pack a byte address into the `_VAL` field of a WPR2 address register.
@@ -301,14 +307,35 @@ pub const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Ga10xGspModel {
     boot: FalconSecureBooterBoot,
+    /// ★★★★★ **The advertised framebuffer size this model answers WPR2 for — w696h.**
+    ///
+    /// ⊘ `Wpr2AddrLo`/`Wpr2AddrHi` are served by [`GspModel::encode`], not from
+    /// [`ChipProfile::boot_regs`], so patching the register TABLE for a new framebuffer size
+    /// would leave these two answering the compiled-in one. Two sources for one fact, silently
+    /// disagreeing — and the guest would read a WPR2 range outside the framebuffer it was told
+    /// it has. ⇒ the size lives here too, and [`Self::new`] keeps the shipped default so no
+    /// existing caller changes.
+    fb_size_mb: u64,
 }
 
 impl Ga10xGspModel {
     /// The model.
     #[must_use]
     pub fn new() -> Ga10xGspModel {
+        Self::with_fb_size_mb(FB_SIZE_MB)
+    }
+
+    /// The model, answering WPR2 for a **given** advertised framebuffer size.
+    ///
+    /// ★ `[measured w696g]` a guest booted against 6144 MiB — half the shipped 12288 and the
+    /// size this part can actually reserve — grades `(P)`. This is the seam that lets the
+    /// operator's `vidmem` argument reach the two registers that would otherwise keep
+    /// answering the compile-time constant.
+    #[must_use]
+    pub fn with_fb_size_mb(fb_size_mb: u64) -> Ga10xGspModel {
         Ga10xGspModel {
             boot: FalconSecureBooterBoot::new(),
+            fb_size_mb,
         }
     }
 
@@ -435,16 +462,19 @@ impl GspModel for Ga10xGspModel {
                     0
                 }
             }
+            // ⊘ Derived from THIS MODEL'S size, not from the compile-time constant — see
+            // `Ga10xGspModel::fb_size_mb`. At the shipped size these are `WPR2_LO_UP` /
+            // `WPR2_HI_UP` exactly, which a test pins.
             GspReg::Wpr2AddrLo => {
                 if obs.wpr2_up {
-                    WPR2_LO_UP
+                    wpr2_reg(frts_offset_for(self.fb_size_mb))
                 } else {
                     0
                 }
             }
             GspReg::Wpr2AddrHi => {
                 if obs.wpr2_up {
-                    WPR2_HI_UP
+                    wpr2_reg(gsp_fw_wpr_end_for(self.fb_size_mb))
                 } else {
                     0
                 }
@@ -1931,6 +1961,57 @@ mod fb_size_is_a_parameter_tests {
         );
         assert!(base < fb, "must stay inside the framebuffer at all");
         assert!(base.is_multiple_of(4096), "a page directory root is page-granular");
+    }
+
+    /// ★★★★★ **THE TWO REGISTERS THAT WOULD HAVE KEPT THE OLD SIZE — w696h.**
+    ///
+    /// `Wpr2AddrLo`/`Wpr2AddrHi` are served by `GspModel::encode`, NOT from
+    /// `ChipProfile::boot_regs`. So a rung that patched the register table for a new
+    /// framebuffer size would leave exactly these two answering the compile-time constant —
+    /// two sources for one fact, silently disagreeing, and the guest reading a WPR2 range
+    /// outside the framebuffer it was told it has.
+    ///
+    /// ⊘ This test exists because the branch it takes is otherwise **taken by nothing**: until
+    /// the CLI property lands, every caller uses `new()` and the new parameter would be dead
+    /// code that cannot fail. Here it is exercised at a size we have actually booted.
+    #[test]
+    fn the_wpr2_registers_follow_the_models_own_fb_size() {
+        use kayfabe_arch::gsp::BootPhase;
+        const MEASURED_RESERVABLE_MB: u64 = 6144;
+        let obs = GspObservation {
+            stage: BootPhase::Running,
+            wpr2_up: true,
+            riscv_active: true,
+            suspended: false,
+            swgen0_pending: false,
+            boot_args_lo: 0,
+            boot_args_hi: 0,
+        };
+        let shipped = Ga10xGspModel::new();
+        let smaller = Ga10xGspModel::with_fb_size_mb(MEASURED_RESERVABLE_MB);
+
+        // ★ The identity: `new()` must still answer exactly what it always did.
+        assert_eq!(
+            shipped.encode(GspReg::Wpr2AddrLo, &obs),
+            Some(WPR2_LO_UP),
+            "new() must keep answering the shipped WPR2 low, or w696h moved a guest-visible \
+             register"
+        );
+        assert_eq!(shipped.encode(GspReg::Wpr2AddrHi, &obs), Some(WPR2_HI_UP));
+
+        // ★★★ And the parameter must actually reach them.
+        assert_ne!(
+            smaller.encode(GspReg::Wpr2AddrHi, &obs),
+            shipped.encode(GspReg::Wpr2AddrHi, &obs),
+            "WPR2 high must MOVE with the advertised size; if it does not, the model is still \
+             answering from the compile-time constant and the two sources disagree"
+        );
+        // ⊘ And it must stay INSIDE the smaller framebuffer, not merely differ.
+        assert!(
+            gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB) < fb_length_for(MEASURED_RESERVABLE_MB),
+            "the WPR2 top must stay inside the framebuffer it is derived from"
+        );
+        assert!(frts_offset_for(MEASURED_RESERVABLE_MB) < gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB));
     }
 
     /// ★★★★★ **The SECOND size, and this is the half that matters.**
