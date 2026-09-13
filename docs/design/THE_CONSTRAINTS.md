@@ -143,6 +143,40 @@ attacked.
 ⊘ Rung 1 is where constraint 12 starts too — the per-family derivation has somewhere to live only
 once the profile is a value.
 
+## ★ Coalescing the premap (owner's idea, 2026-09-14) — available TODAY, and cheaper than feared
+
+> Owner: *"can you not combine pages that are adjacent/consecutive to one single mmap range… that
+> shouldn't be hard during refresh"*
+
+Correct, and the groundwork is already there:
+
+- **The install API already takes a length.** `install_file_window(gpa, PAGE, fd, offset, ro)` —
+  a 64 KiB slot is the same call with `PAGE` replaced by the leaf length.
+- **The backing is already contiguous.** The page arena is **address-indexed**: *"no free list, no
+  bump cursor, no recycling. The address IS the offset."* Its docstring records the very problem
+  this solves, already fixed once for PRAMIN: allocation-ordered offsets made *"a 1 MiB PRAMIN
+  window 256 unrelated offsets, and could not be placed with one `mmap`."*
+- **A leaf is contiguous in guest-phys by construction** — `DecodedLeaf{va, phys, size}`, which is
+  what a 64 KiB large page means.
+
+⇒ One memslot per 64 KiB leaf instead of **16**, with no dependency on the reserved object.
+KVM memslots are a bounded resource with per-slot overhead, so one-slot-per-4-KiB is precisely
+what would not survive an LLM-scale working set.
+
+### ⚠ The one thing that makes it a semantics change, not an edit
+
+`revalidate` iterates the mirror table **per page** (`s.page_off`). A coalesced slot therefore
+needs 16 table entries sharing one slot id — dropping any page must drop the whole slot, and the
+removal must happen once. That is contained, but it is a correctness-sensitive change to the
+mechanism that currently delivers `TRAP_FILLS=0`.
+
+⊘ **Order matters here**: do not touch the green mechanism before the measurement says it is
+needed. The deciding number is `TRAP_FILLS` under an LLM-scale working set, which became
+measurable only at w696 — before that the counter could not tell a trap from a premap install.
+
+★ And when the reserved object lands, coalescing stops being per-leaf: slices of ONE object are
+contiguous across leaves, so a run becomes one slot however long it is.
+
 ## ⊘ Three false violations in one session, all caught by opening the counter
 
 Recorded because the pattern is the point, not the individual errors:
