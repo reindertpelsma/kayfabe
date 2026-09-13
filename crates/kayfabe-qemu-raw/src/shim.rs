@@ -11178,6 +11178,20 @@ impl SharedDoorbell {
     ///
     /// ⊘ Silent when disarmed, so the control's log stays byte-comparable.
     fn sweep_cpu_pt_tables(&self) -> String {
+        // ★★★★★ **BRANCH-ONLY ABLATION (w698) — NOT FOR MASTER.**
+        //
+        // `[measured 2026-08-14, w298 + w304ptsweep]` `KAYFABE_PT_SWEEP=off` returned
+        // **`CUP3_VAL=43`** — the milestone, ladder 8/8, `Xid=0` — and the 2026-09-06 rebuild
+        // that reproduced `43` on a fifth machine pinned the same `off`. w533 (2026-09-12) then
+        // deleted the disarm, making the sweep unconditional, and cup3 has hung since.
+        //
+        // ⊘ This restores ONLY the ability to turn it off, so the hypothesis can be tested with
+        // one variable on TODAY's tree rather than by booting a six-day-old one. If cup3 passes
+        // with this set, w533 is the regression; if it still hangs, the sweep is exonerated and
+        // the branch is deleted.
+        if std::env::var_os("KAYFABE_W698_SWEEP_OFF").is_some() {
+            return " | PT-SWEEP ⊘ DISARMED BY THE w698 ABLATION (branch only)".to_string();
+        }
         // ⊘ w533 — the disarm is gone: the whole-VAS sweep is what kayfabe DOES.
         // `THE_PRODUCTION_CONTRACT.md` §2. Its `off` value was never in a graded boot, and its
         // DEFAULT was `off` while the bench pinned `on` — so neither value was the one anyone
