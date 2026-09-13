@@ -1039,6 +1039,75 @@ impl Reservation {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
+    /// ★★★★★ **The reservation's base address — for the ONE caller that must hand a host
+    /// virtual address to a memory-slot ioctl.**
+    ///
+    /// ⊘ `pub(crate)` deliberately. A raw host address that escapes into safe code is the
+    /// failure this crate's whole shape exists to prevent: an address outliving its mapping,
+    /// or off by a page, is a write into whatever this process mapped next. The only thing
+    /// that leaves the crate is [`crate::pramin_unsafe::ReservedVa`], which borrows the
+    /// window that owns the mapping and cannot be constructed anywhere else.
+    /// ★★★★★ **REPLACE an existing placement covering exactly `[offset, offset+len)`.**
+    ///
+    /// # ⊘ Why this exists beside [`Reservation::map_fixed_in`] rather than relaxing it
+    ///
+    /// `map_fixed_in` refuses to overlap a live placement, and that refusal is load-bearing:
+    /// it is the accounting that stands in for `MAP_FIXED_NOREPLACE`, and an accidental
+    /// overlap is a mapping silently shot out from under whoever held it.
+    ///
+    /// A MOVING WINDOW wants the opposite, deliberately — and it must be the SAME syscall, not
+    /// an unmap followed by a map. `mmap(MAP_FIXED)` replaces atomically; unmapping first
+    /// would open a window in which the range is `PROT_NONE`, and a sibling vCPU touching the
+    /// aperture during it would fault on a hole that is nobody's fault to explain. ⚠ The
+    /// guest's other vCPUs are NOT halted while one of them is in an MMIO exit.
+    ///
+    /// ⊘ EXACTLY, not merely overlapping: the replacement must cover the same range as the
+    /// placement it replaces. A partial replacement would leave the accounting describing a
+    /// range that no longer matches what is mapped, which is the thing the overlap check is
+    /// for in the first place.
+    ///
+    /// # Errors
+    /// [`RawError::OverlappingPlacement`] if some *other* placement overlaps the range, and
+    /// whatever the placement itself refuses with. ⚠ On failure the old placement is left
+    /// in place and still accounted for.
+    pub fn replace_fixed_in(
+        &mut self,
+        offset: HostOffset,
+        len: u64,
+        backing: Backing<'_>,
+        prot: HostProt,
+        cache: CachePolicy,
+    ) -> Result<PlacementId, RawError> {
+        let exact = self
+            .placements
+            .iter()
+            .position(|p| p.offset == offset.get() && p.len == len);
+        if let Some(i) = exact {
+            // ⊘ Dropping the old placement is CORRECT and does not open a hole: a placement's
+            // mapping is `Disposition::InsideReservation`, whose `Drop` deliberately does not
+            // `munmap` (see `impl Drop for Mapping`) — the reservation owns the address space
+            // and tears the whole range down at once. So this discards only our BOOKKEEPING,
+            // and the kernel's `MAP_FIXED` below replaces the mapping atomically.
+            drop(self.placements.remove(i));
+        }
+        self.map_fixed_in(offset, len, backing, prot, cache)
+    }
+
+    /// Read the first `n` bytes of the reservation's current placement — for the window
+    /// tests, which must assert on BYTES rather than on bookkeeping.
+    #[cfg(test)]
+    pub(crate) fn placement_bytes_for_test(&self, n: usize) -> Option<Vec<u8>> {
+        let p = self.placements.last()?;
+        let mut out = vec![0u8; n];
+        p.region.read_into(crate::bounds::HostOffset::ZERO, &mut out).ok()?;
+        Some(out)
+    }
+
+    #[must_use]
+    pub(crate) fn base_addr(&self) -> u64 {
+        self.map.base.as_ptr() as u64
+    }
+
     pub fn new(len: u64, page: HostPageSize) -> Result<Self, RawError> {
         let map = Mapping::anywhere(
             len,
