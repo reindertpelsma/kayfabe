@@ -1415,73 +1415,87 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             None
         }
     };
-    // ---- 0. ★★★★★ **LEG R — DOES `ACCESS_READ_ONLY` ACTUALLY REFUSE A WRITABLE mmap?**
+    // ---- 0. ★★★★★ **LEG R — WHAT ACTUALLY MAKES A PASSED NODE UNWRITABLE.**
     //
-    // ⊘ The whole security argument for handing a device node to the VMM rests on this one
-    // refusal (`the_counter_page_and_the_device_view.md` §3): `0xbb0090` is the PF mirror of
-    // the VF doorbell and its token is `runlist << 16 | chid` for ANY host channel, so a
-    // WRITABLE mapping of that page is a cross-tenant ring. The chain is readable in ogkm —
-    // `NVOS33_FLAGS_ACCESS_READ_ONLY` -> `NV_PROTECT_READABLE` (`mapping_cpu.c:970-982`) ->
-    // `-EACCES` on a writable mmap (`nv-mmap.c:155`) — and **reading a chain is not measuring
-    // it**. This tree has shipped that mistake before: *"citing the oracle is not the oracle
-    // being right."*
+    // ⊘⊘ `[measured w596]` the RM flag does NOT: arming `NVOS33_FLAGS_ACCESS_READ_ONLY` and
+    // then `mmap`ing `PROT_WRITE` **succeeded**. RM picks protection from a RANGE TABLE
+    // (`subdevice_ctrl_gpu_kernel.c:2931-2975`) which gives `NV_PROTECT_READABLE` to the PTIMER
+    // and MC ranges and leaves the **usermode block READ_WRITE by fiat**. No request field
+    // reaches it. ⚠ My first citation for this pointed at `RmGetAllocPrivate`, the SYSMEM
+    // validator — right conclusion, wrong function, which is the shape that sends the next
+    // reader somewhere real and useless.
     //
-    // ⇒ Two arms, and BOTH must hold or the design is unsafe: a read-only node must SERVE a
-    // read, and must REFUSE a write mapping. An arm that only refuses could be refusing for
-    // any reason at all.
+    // ★ The containment is the KERNEL's, one layer up: a node opened `O_RDONLY` has no
+    // `FMODE_WRITE`, so `mmap(PROT_WRITE, MAP_SHARED)` is `-EACCES` and the VMA is built with
+    // `VM_MAYWRITE` cleared, so a later `mprotect(PROT_WRITE)` is refused too. That mode
+    // belongs to the open file DESCRIPTION, which `SCM_RIGHTS` carries intact and `F_SETFL`
+    // cannot change. It is also driver-version-independent, unlike anything read off the RM ABI.
+    //
+    // ⚠⚠ **THE ERRNO IS ASSERTED, and that is the whole lesson of w595/w596.** A refusal is
+    // only protection if it is the RIGHT refusal: LEG R's first run refused the READ map too
+    // (a cache-policy argument of mine), and a two-arm test would have counted that as the
+    // write being blocked. `EACCES` from the mm is the only result that means what we want.
     match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadOnly) {
-        Ok(v) => {
-            let tok = v.token;
-            match rm.exports().lend(tok) {
-                Ok(fd) => {
-                    use std::os::fd::AsFd;
-                    let ro = kayfabe_linux_raw::MappedRegion::map(
+        Ok(v) => match rm.exports().lend(v.token) {
+            Ok(fd) => {
+                use std::os::fd::AsFd;
+                let map = |prot| {
+                    kayfabe_linux_raw::MappedRegion::map(
                         kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
                         v.mmap_len,
-                        kayfabe_linux_raw::HostProt::ReadOnly,
-                        // ⊘ `WriteBack`, and it is not a choice about memory type. This layer
-                        // refuses `WriteCombining` over "a shared file" backing, and the
-                        // ACTUAL type is the driver's: `nv-mmap.c:364-370` sets
-                        // `NV_PGPROT_UNCACHED_DEVICE` on the vma regardless of what we ask.
-                        // ⚠ My first draft asked for `WriteCombining` and the READ map was
-                        // refused — which the third arm below correctly reported as *"the arm
-                        // is broken rather than protective"* instead of counting the write
-                        // refusal as protection. A two-arm test would have passed on a bug.
+                        prot,
                         kayfabe_linux_raw::CachePolicy::WriteBack,
                         kayfabe_linux_raw::HostPageSize::query(),
-                    );
-                    let rw = kayfabe_linux_raw::MappedRegion::map(
-                        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
-                        v.mmap_len,
-                        kayfabe_linux_raw::HostProt::ReadWrite,
-                        kayfabe_linux_raw::CachePolicy::WriteBack,
-                        kayfabe_linux_raw::HostPageSize::query(),
-                    );
-                    match (ro.is_ok(), rw.is_err()) {
-                        (true, true) => println!(
-                            "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605} W393 LEG R        = READ-ONLY IS THE KERNEL'S: PROT_READ accepted, \
-                             PROT_WRITE REFUSED ({:?}). => a node armed ACCESS_READ_ONLY cannot be \
-                             turned into a doorbell by whoever holds it. The refusal is the \
-                             driver's, not ours.",
-                            rw.err()
+                    )
+                };
+                let ro = map(kayfabe_linux_raw::HostProt::ReadOnly);
+                let rw = map(kayfabe_linux_raw::HostProt::ReadWrite);
+                let rw_errno = format!("{:?}", rw.as_ref().err());
+                let denied = rw_errno.contains("13") || rw_errno.contains("EACCES");
+                match (ro.is_ok(), rw.is_err(), denied) {
+                    (true, true, true) => println!(
+                        "★★★★★ W393 LEG R        = THE KERNEL REFUSES IT: PROT_READ accepted, \
+                         PROT_WRITE denied EACCES on an O_RDONLY node. => a descriptor armed this \
+                         way cannot be turned into a doorbell by whoever holds it, under any \
+                         sequence of syscalls. The refusal is the mm's, not RM's and not ours."
+                    ),
+                    (true, true, false) => println!(
+                        "FAIL  W393 LEG R        = PROT_WRITE failed, but NOT with EACCES ({rw_errno}). \
+                         ⊘ A refusal for another reason is not protection, and counting it as \
+                         protection is exactly how w595 nearly passed on a broken probe."
+                    ),
+                    (true, false, _) => println!(
+                        "FAIL  W393 LEG R        = ⊘⊘ PROT_WRITE was ACCEPTED. The doorbell page is \
+                         writable by whoever holds the descriptor — the device-view design has NO \
+                         containment and must not be built."
+                    ),
+                    (false, _, _) => println!(
+                        "FAIL  W393 LEG R        = PROT_READ was refused too ({:?}); the arm is broken \
+                         rather than protective, and a refusal that refuses everything measures nothing.",
+                        ro.as_ref().err()
+                    ),
+                }
+                // ★ And the second kernel arm: `VM_MAYWRITE` must be gone, or a holder could
+                // simply `mprotect` its way back to a doorbell. ⊘ Asked of the LIVE mapping,
+                // because that is the object an attacker would hold.
+                if let Ok(region) = ro {
+                    match region.reprotect(kayfabe_linux_raw::HostProt::ReadWrite) {
+                        Err(e) => println!(
+                            "ok    W393 LEG R2       = mprotect(PROT_WRITE) on the read-only mapping \
+                             REFUSED ({e:?}) — VM_MAYWRITE was cleared, so the open mode cannot be \
+                             escaped after the fact"
                         ),
-                        (true, false) => println!(
-                            "FAIL  W393 LEG R        = \u{2298}\u{2298} PROT_WRITE was ACCEPTED on a node armed \
-                             ACCESS_READ_ONLY. The doorbell page is writable by whoever holds the \
-                             descriptor \u{2014} the device-view design is UNSAFE as written."
-                        ),
-                        (false, _) => println!(
-                            "FAIL  W393 LEG R        = PROT_READ was refused too ({:?}); the arm is \
-                             broken rather than protective, and a refusal that refuses everything \
-                             measures nothing.",
-                            ro.err()
+                        Ok(()) => println!(
+                            "FAIL  W393 LEG R2       = ⊘⊘ mprotect(PROT_WRITE) SUCCEEDED on the \
+                             read-only mapping. The open mode did not take; the containment is a \
+                             single mprotect away from nothing."
                         ),
                     }
                 }
-                Err(e) => println!("FAIL  W393 LEG R        = could not lend the read-only node: {e:?}"),
             }
-        }
-        Err(e) => println!("FAIL  W393 LEG R        = arming ACCESS_READ_ONLY was refused: {e:?}"),
+            Err(e) => println!("FAIL  W393 LEG R        = could not lend the read-only node: {e:?}"),
+        },
+        Err(e) => println!("FAIL  W393 LEG R        = arming an O_RDONLY view was refused: {e:?}"),
     }
 
     let Some(va) = arm(rm, "A") else { return false };

@@ -238,6 +238,12 @@ impl Mapping {
     /// Take ownership of an address the kernel just returned. Safe — *storing* a pointer
     /// is a safe operation, which is exactly §4.2.1's point — but private, with two call
     /// sites, both `mmap` returns validated in the same function.
+    /// The mapping's base. ⊘ Crate-private and used by exactly one caller
+    /// ([`MappedRegion::reprotect`]), which hands it to `mprotect` and dereferences nothing.
+    fn base_ptr(&self) -> NonNull<u8> {
+        self.base
+    }
+
     fn adopt(base: NonNull<u8>, len: usize, disposition: Disposition) -> Mapping {
         Mapping {
             base,
@@ -421,6 +427,39 @@ pub struct MappedRegion {
 unsafe impl Send for MappedRegion {}
 
 impl MappedRegion {
+    /// ★★★★★ **Ask the kernel to change this mapping's protection — as a QUESTION, not a
+    /// capability.**
+    ///
+    /// ⊘ It exists for one measurement. A descriptor opened `O_RDONLY` should produce a VMA
+    /// with `VM_MAYWRITE` cleared, so that `mprotect(PROT_WRITE)` is refused and the holder
+    /// cannot escape the open mode after the fact. That is the second half of the containment
+    /// the device-view design rests on (`the_counter_page_and_the_device_view.md` §4a), and the
+    /// first half — a refused `mmap` — does not imply it.
+    ///
+    /// ⚠ A caller using this to actually GAIN write access to something is using it wrong; the
+    /// only in-tree caller asserts that it FAILS.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] with the kernel's `errno` — which is the point: `EACCES` is the
+    /// answer that means "the open mode holds", and any other refusal means something else.
+    pub fn reprotect(&self, prot: HostProt) -> Result<(), RawError> {
+        // SAFETY: the `Mapping` type invariant says `base` is a live mapping of exactly
+        // `len_bytes()`, so the range handed to `mprotect` is this mapping and nothing else.
+        // `mprotect` reads no memory of ours and writes none; it only changes the VMA's
+        // permissions, and a failure leaves the mapping exactly as it was.
+        let rc = unsafe {
+            libc::mprotect(
+                self.map.base_ptr().as_ptr().cast::<libc::c_void>(),
+                self.map.len_bytes() as usize,
+                prot.bits(),
+            )
+        };
+        if rc != 0 {
+            return Err(crate::error::last_syscall_error("mprotect"));
+        }
+        Ok(())
+    }
+
     /// Map `len` bytes of `backing`, requiring cache policy `cache`.
     ///
     /// `len` must be non-zero and a whole number of **host** pages — stricter than the

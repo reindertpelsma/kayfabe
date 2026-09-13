@@ -312,7 +312,7 @@ pub mod sandbox {
 pub use arena_unsafe::{ARENA_EXHAUSTED, ARENA_PAGE, ArenaPage, SharedPageArena};
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
-pub use chardev_unsafe::{CharDevice, DevDir, Indirect, POINTER_FIELD_WIDTH};
+pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
 pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
 pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};

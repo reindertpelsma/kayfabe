@@ -1561,14 +1561,27 @@ const fn libc_eintr() -> i32 {
 /// construction rather than by promise. See `the_counter_page_and_the_device_view.md` §3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ViewAccess {
-    /// `NVOS33_FLAGS_ACCESS_READ_WRITE` — every pre-existing caller, unchanged.
+    /// `O_RDWR` node, `NVOS33_FLAGS_ACCESS_READ_WRITE` — every pre-existing caller.
     ReadWrite,
-    /// `NVOS33_FLAGS_ACCESS_READ_ONLY`.
+    /// `O_RDONLY` node. ⊘ The RM flag is set too, and it is NOT what does the work.
     ReadOnly,
 }
 
 impl ViewAccess {
+    /// How the device NODE is opened — **this is the containment**, per the type docs.
+    #[must_use]
+    pub fn dev_access(self) -> kayfabe_linux_raw::DevAccess {
+        match self {
+            ViewAccess::ReadWrite => kayfabe_linux_raw::DevAccess::ReadWrite,
+            ViewAccess::ReadOnly => kayfabe_linux_raw::DevAccess::ReadOnly,
+        }
+    }
+
     /// The `NVOS33_PARAMETERS::flags` value. ⊘ `ACCESS` is bits `1:0`; nothing else is set.
+    ///
+    /// ⚠ **Set for honesty, not for protection.** `[measured w596]` it does not make the mmap
+    /// read-only: RM picks protection from a range table that leaves the usermode block
+    /// READ_WRITE by fiat. [`ViewAccess::dev_access`] is the arm that binds.
     #[must_use]
     pub fn os33_flags(self) -> u32 {
         match self {
@@ -2603,10 +2616,12 @@ impl RmConnection {
             MapNode::Gpu => {
                 let name = CString::new(format!("nvidia{}", self.gpu_index))
                     .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-                CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?
+                CharDevice::openat_mode(&self.dev, &name, access.dev_access())
+                    .map_err(|e| ioctl_error(&e))?
             }
             MapNode::Ctl => {
-                CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?
+                CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
+                    .map_err(|e| ioctl_error(&e))?
             }
         };
         let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];

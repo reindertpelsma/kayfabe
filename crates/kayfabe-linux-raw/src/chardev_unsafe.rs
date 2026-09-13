@@ -331,6 +331,25 @@ pub struct CharDevice {
     fd: OwnedFd,
 }
 
+/// How a character device node is opened. See [`CharDevice::openat_mode`] for why `ReadOnly`
+/// is the containment primitive and the RM access flag is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DevAccess {
+    /// `O_RDWR` — every pre-existing caller.
+    ReadWrite,
+    /// `O_RDONLY` — the node cannot be mapped writable by anyone who holds it, ever.
+    ReadOnly,
+}
+
+impl DevAccess {
+    fn open_flags(self) -> libc::c_int {
+        match self {
+            DevAccess::ReadWrite => libc::O_RDWR,
+            DevAccess::ReadOnly => libc::O_RDONLY,
+        }
+    }
+}
+
 impl CharDevice {
     /// Open `name` relative to `dir`, `O_RDWR | O_CLOEXEC`.
     ///
@@ -343,6 +362,37 @@ impl CharDevice {
     /// # Panics
     /// If called with any ranked or adapter-leaf lock held (R1, §4.5).
     pub fn openat(dir: &DevDir, name: &CStr) -> Result<Self, RawError> {
+        Self::openat_mode(dir, name, DevAccess::ReadWrite)
+    }
+
+    /// ★★★★★ **Open with an explicit access mode — and `ReadOnly` is a SECURITY primitive.**
+    ///
+    /// ⊘⊘ `[measured w596]` arming an NVIDIA mapping `NVOS33_FLAGS_ACCESS_READ_ONLY` does NOT
+    /// make its `mmap` read-only. RM decides protection from a **range table**
+    /// (`subdevice_ctrl_gpu_kernel.c:2931-2975`), which gives `NV_PROTECT_READABLE` to the
+    /// PTIMER and MC ranges and leaves the **usermode block READ_WRITE by fiat** — so no
+    /// request field can make that page unwritable.
+    ///
+    /// ★ The containment is the kernel's, one layer up and driver-independent. A file opened
+    /// without `FMODE_WRITE` cannot be `mmap`ed `PROT_WRITE|MAP_SHARED` (`-EACCES`), and the
+    /// VMA is created with `VM_MAYWRITE` cleared, so a later `mprotect(PROT_WRITE)` is refused
+    /// too. The access mode belongs to the open file DESCRIPTION: `F_SETFL` cannot change it,
+    /// and `SCM_RIGHTS` carries the same description to whoever receives the descriptor.
+    /// ⊘ The NVIDIA driver never consults `f_mode`, so an `O_RDONLY` node still arms.
+    ///
+    /// ⚠ This is stronger than the RM primitive it replaces for a second reason: `FMODE_WRITE`
+    /// is the Linux mm's semantics, identical across every driver version this product will
+    /// meet, where an RM-ABI reading is the *"capture-derived table expires as a vendor
+    /// regression"* class.
+    ///
+    /// ⚠ It does NOT cover `MAP_PRIVATE`: the mm accepts `PROT_WRITE|MAP_PRIVATE` on a
+    /// read-only file and gives the writer a COW anonymous page. Harmless to the device and a
+    /// silent-divergence hazard for the mapper, so a layer placing device backing must refuse
+    /// `MAP_PRIVATE` **by name** rather than rely on this.
+    ///
+    /// # Errors
+    /// As [`CharDevice::openat`].
+    pub fn openat_mode(dir: &DevDir, name: &CStr, access: DevAccess) -> Result<Self, RawError> {
         lockwitness::assert_lock_free("openat of a character device");
         leafwitness::assert_leaf_free("openat of a character device");
         // SAFETY: `dir.fd` is a live descriptor owned by `dir` for this borrow; `name` is
@@ -353,7 +403,7 @@ impl CharDevice {
             libc::openat(
                 dir.fd.as_raw_fd(),
                 name.as_ptr(),
-                libc::O_RDWR | libc::O_CLOEXEC,
+                access.open_flags() | libc::O_CLOEXEC,
             )
         };
         Ok(CharDevice {

@@ -91,10 +91,32 @@ this probe reports `euid 0`; the run that matters is the one above, because the 
 ★ §3's security primitive is **absent**, and the chain that predicted it is real but leads
 somewhere else. `NVOS33_FLAGS_ACCESS_READ_ONLY` does lower to `NV_PROTECT_READABLE`
 (`mapping_cpu.c:970-982`) — and that value governs **RM's own mapping bookkeeping**. The
-`mmap` protection comes from a different source entirely: `nv-mmap.c:155` tests
-`mmap_context->prot`, and that field is set from **`RmValidateMmapRequest`**
-(`osapi.c:2494-2503`), which validates the BAR range and never reads the NVOS33 access flags.
-⇒ Two plausible chains, one real, and they meet nowhere.
+`mmap` protection comes from somewhere else entirely.
+
+⊘⊘ **CITATION CORRECTED, same day.** This paragraph first pointed at `osapi.c:2494-2503`. That
+is inside **`RmGetAllocPrivate`**, the **sysmem/EGM** validator for control-node maps, which
+refuses everything else outright — right conclusion, wrong function, and a wrong pointer in the
+load-bearing paragraph sends the next reader somewhere real and useless. The **device-node**
+path is:
+
+    RmCreateMmapContextLocked -> RmValidateMmapRequest (osapi.c:2023-2054)
+      -> NV2080_CTRL_CMD_GPU_VALIDATE_MEM_MAP_REQUEST
+      -> subdevice_ctrl_gpu_kernel.c:2931-2975, a RANGE TABLE
+
+and the table is what decides, **verified against the source**:
+
+| range | protection |
+|---|---|
+| default | `NV_PROTECT_READ_WRITE` |
+| PTIMER (`tmrGetTimerBar0MapInfo`) | `NV_PROTECT_READABLE` |
+| **usermode (`kfifoGetUsermodeMapInfo`)** | **left READ_WRITE — no row sets it** |
+| MC (`kmcGetMcBar0MapInfo`) | `NV_PROTECT_READABLE` |
+
+⇒ **The usermode block is read-write by fiat, and no request field reaches that decision.**
+`nv-mmap.c:760` does clear `VM_MAYWRITE` when the protection lacks WRITEABLE — the enforcement
+is real, its input is just this table. ⚠ And `osIsAdministrator()` short-circuits the whole
+table to READ_WRITE (`osapi.c:2036`), which is one more reason the isolate must never run
+privileged: **as root the probe would have measured the wrong thing.**
 
 ⚠ **This is why the probe ran before the wire verb.** Every step of the refuted argument was a
 correct citation of real code; the conclusion was still false. *"Citing the oracle is not the
@@ -112,9 +134,43 @@ device view as a memslot, and guest access through it takes no exit. The MECHANI
 the containment argument for handing that descriptor to the VMM is gone, and it is the part that
 decided A′ over B.
 
-⊘ OPEN, and not to be guessed at: whether a different arming makes the kernel refuse the write
-map, or whether containment has to come from elsewhere (a VMM sandbox that cannot `open()` the
-node is unaffected by what the descriptor permits, since the descriptor is already open).
+## 4b. ★★★★★ THE CONTAINMENT IS THE KERNEL'S, NOT RM'S — `O_RDONLY` on the node
+
+There is no RM arming that refuses the write map: protection is a property of the BAR **range**,
+decided by RM's own table above. **Stop looking in RM.** The containment is one layer up and is
+driver-version-independent:
+
+- a file opened without `FMODE_WRITE` cannot be `mmap`ed `PROT_WRITE|MAP_SHARED` — `-EACCES`;
+- the VMA is created with `VM_MAYWRITE` cleared, so a later `mprotect(PROT_WRITE)` is refused
+  too, and the holder cannot escape the mode after the fact;
+- the access mode belongs to the open file **description**, which `SCM_RIGHTS` carries intact
+  and `F_SETFL` cannot change;
+- the NVIDIA driver never consults `f_mode`, so an `O_RDONLY` node still arms.
+
+★ It is also **stronger than the primitive it replaces**, because `FMODE_WRITE` is the Linux
+mm's semantics — identical across every driver version this product will meet — where an RM-ABI
+reading is the *"a capture-derived table expires as a vendor regression"* class.
+
+⚠ **Two things it does NOT cover**, each a test arm rather than a footnote:
+- `PROT_WRITE|MAP_PRIVATE` is ACCEPTED by the mm on a read-only file and gives the writer a COW
+  anonymous page. Harmless to the device and a silent-divergence hazard for the mapper ⇒ a layer
+  placing device backing must refuse `MAP_PRIVATE` **by name**, and the test must assert OUR
+  refusal, never the kernel's acceptance.
+- Reopening via `/proc/self/fd/N` makes a NEW description — a bare node with no armed context,
+  i.e. exactly `open("/dev/nvidia0")`. So the passed descriptor adds nothing to the sandbox
+  question, and that question is unchanged.
+
+⊘ **Two adversaries, two containments, and conflating them is how this section went wrong once
+already.** The GUEST is the one the product promises to contain, and its containment is the
+read-only KVM slot: a guest store exits, is emulated, and reaches our trap with the token, so
+the guest never rings hardware directly. The VMM is trusted by architecture — it holds the
+isolate socket — so its containment is defence in depth: the `O_RDONLY` node plus a deployment
+sandbox that denies `open()` on `/dev/nvidia*`. `KVM_MEM_READONLY` constraining the guest and
+not the VMM is the CORRECT scope, not a consolation.
+
+⚠ **This section is a reading of two source trees, exactly the status §3's primitive had before
+LEG R refuted it.** LEG R is re-specified with the ERRNO asserted — `EACCES` from the mm is the
+only result that means what we want — and the verb is not to be built until it is green.
 
 ## 5. Constraints the implementation will hit
 
