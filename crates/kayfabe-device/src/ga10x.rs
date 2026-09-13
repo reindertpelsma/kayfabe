@@ -185,7 +185,7 @@ pub const USABLE_FB_SIZE_IN_MB_ADDR: u64 = 0x0011_83A4;
 /// ★ **A chip/board parameter, and the only free variable in the WPR2 layout.** 12 GiB
 /// matches the C artifact's `NVKVM_FB_SIZE_MB` (`C: src/qemu/mode2_regs_ga10x.h:62`),
 /// which is the RTX 3060 the oracle ran on.
-pub const FB_SIZE_MB: u64 = 12288;
+pub const FB_SIZE_MB: u64 = 6144;
 
 /// `DRF_SIZE(NV_PRAMIN)` — the VGA workspace the driver reserves at the top of FB.
 /// `NV_PRAMIN` is `0x007FFFFF:0x00700000`
