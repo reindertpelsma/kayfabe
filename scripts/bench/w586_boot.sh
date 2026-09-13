@@ -68,7 +68,22 @@ echo "POST_CAPTURE_HOOK=$POST_CAPTURE_HOOK"
 # ⊘ `KAYFABE_ALLOW_STALE_BINARY=1` is the deliberate escape hatch — re-running an OLD revision
 # on purpose is a legitimate thing to do (it is how a control arm gets measured), but it must be
 # stated rather than defaulted into.
-BIN_REV=$(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null           | sed -n 's/^kayfabe-rev:\([0-9a-f]\{40\}\)$/\1/p' | head -1)
+# THE EXTRACTION IS `grep -ao`, NOT AN ANCHORED `sed` - and the first version of this
+# guard was VACUOUS because of it.
+#
+# The stamp is embedded MID-STRING in the binary: `strings` yields
+# `Executorkayfabe-rev:<40 hex>mid > len`, never a line that IS the stamp. An anchored
+# `^kayfabe-rev:...$` matched nothing, BIN_REV came out EMPTY, and the `-n` test below then
+# SKIPPED the comparison - so the guard written to catch a stale binary could not fire on any
+# boot at all.
+#
+# Caught only because the rebuild printed an empty `binary rev` beside a real `tree HEAD`.
+# A guard that CANNOT fire and a guard that PASSES look identical - which is why every check
+# in this file is a refusal that carries its own evidence.
+# `grep -ao` is how boot_capture.sh and assert_boot_evidence.sh already read this stamp: one
+# extraction, not three.
+BIN_REV=$(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null \
+          | grep -ao 'kayfabe-rev:[0-9a-f]\{40\}' | head -1 | cut -d: -f2)
 TREE_REV=$(git -C "${KAYFABE_REPO:-/root/kayfabe}" rev-parse HEAD 2>/dev/null)
 if [ -n "$BIN_REV" ] && [ -n "$TREE_REV" ] && [ "$BIN_REV" != "$TREE_REV" ]; then
   echo "⊘⊘⊘ STALE BINARY — refusing to grade a run that does not contain the tree."
