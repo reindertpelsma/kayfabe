@@ -10,6 +10,7 @@
 # dominated by the torch wheel (~2.5 GB) and the model download.
 set -uo pipefail
 BENCH=/workspace/bench
+SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODEL=${LLM_MODEL:-Qwen/Qwen2-0.5B-Instruct}
 say(){ echo "[$(date -Is)] $*"; }
 say "GUEST_LLM_START model=$MODEL"
@@ -38,11 +39,38 @@ for i in $(seq 1 40); do
 done
 say "guest up"
 
+# ⊘⊘ **PIN THE GUEST KERNEL BEFORE `apt-get update` — [measured w383].** The guest upgraded
+# itself `6.8.0-138 -> -139` during a 25-minute boot and the NEXT boot said
+# `modprobe: FATAL: Module nvidia not found`: the NVIDIA module is built for the running
+# kernel and does not follow it. This provisioner runs `apt-get update` + installs, which is
+# exactly the trigger. ⚠ `MODPROBE_RC != 0` is then UNMEASURED, not a device failure, and the
+# harness cannot yet tell them apart -- so prevent it here rather than diagnose it later.
+# ⇒ [[correct_now_is_not_correct_after_reboot]], seen in the GUEST as well as the host.
+say "pinning the guest kernel (masking unattended-upgrades / apt-daily)"
+$GS "sudo systemctl mask --now unattended-upgrades apt-daily.service apt-daily.timer \
+     apt-daily-upgrade.service apt-daily-upgrade.timer 2>/dev/null; \
+     sudo apt-mark hold linux-generic linux-image-generic linux-headers-generic 2>/dev/null" 2>&1 | tail -2
+KREL_BEFORE=$($GS 'uname -r' 2>&1 | tr -d '\r')
+say "guest kernel before: $KREL_BEFORE"
+
 say "installing python venv + torch (cu124 wheel) — the long pole"
 $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-venv python3-pip" 2>&1 | tail -2
 $GS "python3 -m venv /home/ubuntu/llmvenv 2>/dev/null; /home/ubuntu/llmvenv/bin/pip -q install --upgrade pip" 2>&1 | tail -2
 $GS "/home/ubuntu/llmvenv/bin/pip -q install torch --index-url https://download.pytorch.org/whl/cu124" 2>&1 | tail -3
 $GS "/home/ubuntu/llmvenv/bin/pip -q install transformers accelerate" 2>&1 | tail -3
+
+# ⚠ ASSERT THE IMPORT, not the pip exit status. `pip -q install` through `| tail -3` loses its
+# status to the pipe ([[a_check_that_reports_is_not_a_check_that_gates]]), and a wheel that
+# unpacked but cannot import is a state pip calls success. The CPU control below would also
+# catch this, but ~15 minutes later and with the cause off-screen.
+IMP=$($GS "/home/ubuntu/llmvenv/bin/python -c 'import torch,transformers;print(\"IMPORT_OK\", torch.__version__, transformers.__version__)'" 2>&1 | tr -d '\r')
+say "import check: $IMP"
+case "$IMP" in
+  *IMPORT_OK*) : ;;
+  *) say "⊘ torch/transformers DO NOT IMPORT in the guest venv — provisioning FAILED here."
+     say "   ⇒ this is the harness's problem, not kayfabe's. Do not boot the LLM lane."
+     $GS "sudo poweroff" >/dev/null 2>&1 & sleep 15; say "GUEST_LLM_DONE rc=5"; exit 5 ;;
+esac
 
 # ★ The runner. Prints ONE grading line per fact, each on its own line and each
 #   independently greppable, so a partial run is distinguishable from a failed one.
@@ -99,6 +127,31 @@ case "$CPU" in
   *LLM_OK=1*) say "★ CPU control PASSED — the workload is sound; any GPU failure is OURS" ;;
   *) say "⊘ CPU control FAILED — do not attribute a later GPU failure to the emulator"; $GS "sudo poweroff" >/dev/null 2>&1 & sleep 15; exit 4 ;;
 esac
+
+# ★★★ THE RECEIPT — the whole point of which is that it is readable with the guest POWERED
+# OFF. `/opt/llm` lives inside `guest.qcow2`; without this file the only way to answer *"is
+# the lane provisioned?"* is to boot the guest, which serializes against the bench and costs
+# ~25 minutes to learn a fact that never changes. `llm_lane_preflight.sh` reads it, and
+# compares its mtime against `guest.qcow2` so a rebuilt image invalidates it automatically.
+KREL_AFTER=$($GS 'uname -r' 2>&1 | tr -d '\r')
+cat > "$BENCH/llm_lane.receipt" <<RCPT
+LLM_LANE_PROVISIONED=yes
+date=$(date -Is)
+model=$MODEL
+cpu_control=$CPU
+kernel_before=$KREL_BEFORE
+kernel_after=$KREL_AFTER
+imports=$IMP
+provisioner_rev=$(cd "$SRC_DIR" 2>/dev/null && git rev-parse --short HEAD 2>/dev/null || echo unknown)
+RCPT
+say "receipt written to $BENCH/llm_lane.receipt"
+# ⚠ The kernel is the one thing that can change under us between here and the graded boot.
+if [ "$KREL_BEFORE" != "$KREL_AFTER" ]; then
+  say "⊘⊘ THE GUEST KERNEL MOVED DURING PROVISIONING: $KREL_BEFORE -> $KREL_AFTER."
+  say "   The NVIDIA module in this image was built for the OLD one. The next boot will say"
+  say "   'modprobe: FATAL: Module nvidia not found' and that is UNMEASURED, not a failure."
+  say "GUEST_LLM_DONE rc=6"; exit 6
+fi
 
 $GS "sudo poweroff" >/dev/null 2>&1 &
 sleep 20

@@ -8878,7 +8878,26 @@ impl SharedDoorbell {
                             // makes: `Publish` does framebuffer leaves and nothing else, and
                             // silently disables the only pass that pins guest-RAM rows.
                             ctx.vas_publish = VasPublishArm::Drain;
-                            (Some(r), ctx.publish_vas_rows(token, None, w))
+                            // ⊘⊘⊘ **`Some(&facts)`, NOT `None` — w656 shipped the `None` and it
+                            // made this a SAMPLE, not a drain (w661).**
+                            //
+                            // `seen` is the only thing that names WHICH VA space to drain.
+                            // With `None`, `publish_vas_rows` takes the arm whose own text
+                            // reads *"⊘ DRAIN ARMED BUT NO TARGET … Every VAS got the bounded
+                            // sample — ⚠ THIS LINE IS NOT A DRAIN"*.
+                            //
+                            // `[measured w647a→w660a, six consecutive boots]`
+                            // `CE-LOCAL-REFRESH`=233, `DRAIN ARMED BUT NO TARGET`=1812,
+                            // `★ DRAIN TARGET`=**0**. Zero targets, in every boot, ever.
+                            //
+                            // ⚠ And `facts` was **in scope the whole time** — used two lines
+                            // below, in the log line that reports this very call. ★ This is
+                            // `the_working_set_gate_is_vacuous_in_production` verbatim (w476:
+                            // *"the only production caller passes `&[]`"*), and note how it
+                            // survived: the call site argues at length for `Drain` over
+                            // `Publish`, so the ARM is audited and the argument selecting its
+                            // TARGET is not. An audited arm pointed at nothing.
+                            (Some(r), ctx.publish_vas_rows(token, Some(&facts), w))
                         }
                         None => (None, None),
                     };
