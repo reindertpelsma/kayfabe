@@ -78,6 +78,10 @@ const REVAL_LIVE: u64 = 8;
 /// carries one.
 const CENSUS_EVERY_FILLS: u64 = 512;
 
+/// ★ w617 — the leaf budget for a map-at-create pass. `[measured w616]` BAR1's whole working
+/// set is 66 pages, so this is ~30x headroom and still bounds a pathological tree.
+const PREMAP_BUDGET: u32 = 2048;
+
 // ---- refusal names -----------------------------------------------------------------------
 
 const R_OUT_OF_BAR: &str = "OUT-OF-BAR";
@@ -383,6 +387,13 @@ pub struct BarMirror {
     /// wrong half of the traffic, and I would have built it and measured no change. ⇒ Ask
     /// first. `(bar1, bar2)` distinct pages at the first birth; `u64::MAX` = no birth yet.
     pages_at_first_birth: Mutex<Option<(usize, usize)>>,
+    /// ★ w617 — map-at-create: how many premap passes ran, how many pages they asked for, and
+    /// how many passes the enumerator refused. ⊘ Three numbers because they fail differently:
+    /// `runs=0` means the hook never fired, `refused>0` means BAR1 could not be enumerated, and
+    /// `pages=0` with `runs>0` means it enumerated an empty tree — three causes, one symptom.
+    premap_runs: AtomicU64,
+    premap_pages: AtomicU64,
+    premap_refused: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -561,6 +572,9 @@ impl BarMirror {
             pramin_marks: Mutex::new(Vec::new()),
             bar0_moves: AtomicU64::new(0),
             pages_at_first_birth: Mutex::new(None),
+            premap_runs: AtomicU64::new(0),
+            premap_pages: AtomicU64::new(0),
+            premap_refused: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1162,6 +1176,56 @@ impl BarMirror {
         )
     }
 
+    /// ★★★★★ **w617 — MAP AT CREATE, for BAR1. The owner's ruling, implemented.**
+    ///
+    /// > *"if a channel is created inheriting a va base, then you can map at create, of
+    /// > existing known va maps, and only return from rpc if channel is usuable."*
+    ///
+    /// `[measured w608]` BAR1+BAR2 cost **3 952 trapped accesses for 185 distinct pages** — a
+    /// factor of 21 — because every fill is on DEMAND and the guest re-touches a page many
+    /// times before its slot lands. `[measured w616]` **100 % of BAR1's 66 pages are needed
+    /// only AFTER the first channel birth**, so a birth is the right moment and the ruling is
+    /// aimed at real traffic rather than at bring-up.
+    ///
+    /// ⊘ **BAR1 ONLY, and refused by name for BAR2 rather than approximated.**
+    /// `RegPlane::window_leaves` enumerates BAR1 because its directory is a chip constant that
+    /// names a PAGE; BAR2's root is a raw PDE ENTRY the guest republishes, and the entry-rooted
+    /// subtree decode that would enumerate it **does not exist**. ⇒ BAR2's 99 post-birth pages
+    /// stay on demand until it does. Half the win, honestly bounded, beats a whole win computed
+    /// from a root that might be the wrong level — *"a wrong root yields a plausible, WRONG
+    /// list of leaves"*.
+    ///
+    /// ⚠ **Filling INLINE here is the ruling, not a shortcut.** This runs off the vCPU in the
+    /// birth drain, and the guest is blocked on the RPC that caused the birth — which is one of
+    /// the owner's three sanctioned synchronization points. *"Only return from rpc if channel
+    /// is usable"* means the cost belongs here. The drain's own budget reports an overrun, so
+    /// the price is visible rather than hidden.
+    pub fn premap_bar1(&self) {
+        let Some(arm) = self.arm_for(FbWindow::FbAperture) else {
+            return;
+        };
+        let leaves = match self.plane.window_leaves(FbWindow::FbAperture, PREMAP_BUDGET) {
+            Ok(l) => l,
+            Err(_) => {
+                self.premap_refused.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        };
+        let mut asked = 0u64;
+        for leaf in leaves {
+            // ⊘ The window OFFSET is the leaf's VA within the aperture — BAR1's address model
+            // is identity over the window, so a leaf at `va` is reached at `va` in the BAR.
+            let off = leaf.va.0;
+            if off >= arm.len {
+                continue;
+            }
+            asked += 1;
+            self.fill_now(FbWindow::FbAperture, off);
+        }
+        self.premap_pages.fetch_add(asked, Ordering::Relaxed);
+        self.premap_runs.fetch_add(1, Ordering::Relaxed);
+    }
+
     /// ★ w613 — called once, at the first channel birth. See `pages_at_first_birth`.
     pub fn note_first_channel_birth(&self) {
         let mut g = self
@@ -1355,6 +1419,12 @@ impl BarMirror {
                 ),
             }
         };
+        let premap = format!(
+            " premap[runs={} pages={} refused={}]",
+            self.premap_runs.load(Ordering::Relaxed),
+            self.premap_pages.load(Ordering::Relaxed),
+            self.premap_refused.load(Ordering::Relaxed),
+        );
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
         // the allocator says how many pages it handed out, the store says how many it asked
@@ -1375,7 +1445,7 @@ impl BarMirror {
              revalidate[runs={} kept={} removed={}] quiesce[calls={} removed={}] \
              retire_all[calls={} removed={}] arena[pages live={a_live} peak={a_peak} \
              allocations={a_recycled} span_pages={a_issued} store_refused={s_ref} \
-             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]{birth} refused=[{}]{}",
+             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]{birth}{premap} refused=[{}]{}",
             self.census.reval_runs.load(Ordering::Relaxed),
             self.census.reval_kept.load(Ordering::Relaxed),
             self.census.reval_removed.load(Ordering::Relaxed),

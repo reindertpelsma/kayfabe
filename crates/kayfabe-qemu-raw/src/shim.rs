@@ -3233,11 +3233,23 @@ fn report_channel_birth_drain(
     // is a measurement rather than an assumption about when RM touches those apertures.
     #[cfg(feature = "host-isolates")]
     if born > 0 {
-        if let Some(m) = mirror {
+        // ★★★★★ w617 — MAP AT CREATE. The owner: *"if a channel is created inheriting a va
+        // base, then you can map at create, of existing known va maps, and only return from rpc
+        // if channel is usuable."* ⊘ Inline here on purpose: the guest is blocked on the RPC
+        // that caused this birth, which is one of the three sanctioned synchronization points,
+        // so the cost belongs at this moment rather than spread over 21 traps per page.
+        let m = match mirror {
+            Some(m) => Some(m),
+            None => None,
+        };
+        #[allow(clippy::option_if_let_else)]
+        if let Some(m) = m {
             m.note_first_channel_birth();
+            m.premap_bar1();
         } else if let Some(m) = MIRROR_FOR_BIRTH.get().and_then(std::sync::Weak::upgrade) {
             // ⊘ The `SharedDoorbell` drain's path — see the `MIRROR_FOR_BIRTH` comment.
             m.note_first_channel_birth();
+            m.premap_bar1();
         }
     }
     let elapsed = t0.elapsed();
