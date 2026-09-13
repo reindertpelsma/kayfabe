@@ -1382,6 +1382,19 @@ struct PlaneCounters {
     gsp_reads: AtomicU64,
     gsp_writes: AtomicU64,
     unclaimed_reads: AtomicU64,
+    /// ★★★★★ **w602 — of the BAR0-window accesses, how many arrived OFF a trap thread.**
+    ///
+    /// ⊘⊘ `[measured w601]` with the PRAMIN slot live, at the correct GPA, with BAR0 unmoved
+    /// and the re-point accepted, 2 316 window accesses still reach this plane — **all at one
+    /// window base**. Four readings of that number have now been refuted, and the fifth
+    /// possibility is the one this tree has a name for: **`our_census_counts_intent`** — that
+    /// they are not guest exits at all, but THIS PROCESS calling the window path internally.
+    ///
+    /// ★ A memory slot can only remove accesses the GUEST makes. An internal caller reaches
+    /// `RegPlane::write` directly and would be counted identically, which is exactly how a
+    /// working slot could look like a broken one. `trapwitness::in_trap()` separates them, and
+    /// it is a thread-local `Cell` read — no lock, no syscall, safe on the trap path.
+    fb_window_off_trap: AtomicU64,
     /// ★ w564 — how many register values were written through to the read shadow.
     shadow_writes: AtomicU64,
     /// ★ w554 — of those, the ones inside a page the cut backs with memory. See the read
@@ -3629,6 +3642,10 @@ impl RegPlane {
             "BAR0-READS total={} | static[boot_reg={} rom={}] | \
              producer[gsp={} bar0_window={} cpu_intr={}] | live[ptimer={}] | \
              window[SERVED r={} w={} | NO-ADDRESS-MODEL r={} w={} | moves={}] | \
+             window_off_trap={} ⊘⊘ `window_off_trap` is the discriminator w602 added: a memory \
+             slot can only remove accesses the GUEST makes, so window traffic that arrived OFF \
+             a trap thread is THIS PROCESS calling the window path and is not a slot failure at \
+             all. | \
              unclaimed={} (of which {} IN A PAGE THE CUT BACKS) residual={} ⊘ `cpu_intr` \
              counts reads AND writes (one counter, two \
              facts). ★ `window[SERVED ..]` is the PRAMIN/framebuffer aperture actually \
@@ -3651,6 +3668,7 @@ impl RegPlane {
             c.fb_window_reads,
             c.fb_window_writes,
             c.bar0_window_writes,
+            self.c.fb_window_off_trap.load(Ordering::Relaxed),
             c.unclaimed_reads,
             c.unclaimed_reads_in_dead_pages,
             c.reads.saturating_sub(named),
@@ -3703,6 +3721,9 @@ impl RegPlane {
             // is where a breakdown belongs — a total and a breakdown answer different
             // questions and merging them would make `Counters` allocate.
             bar0_read_pages: _,
+            // ⊘ Reported by `bar0_read_census` rather than carried in `Counters`, beside the
+            // totals it qualifies.
+            fb_window_off_trap: _,
             reads,
             writes,
             boot_reg_reads,
@@ -4374,7 +4395,12 @@ impl RegPlane {
                     }
                     FbWindow::Pramin => {}
                 }
-                self.c.fb_reads.fetch_add(1, Ordering::Relaxed)
+                {
+                    if !kayfabe_util::trapwitness::in_trap() {
+                        self.c.fb_window_off_trap.fetch_add(1, Ordering::Relaxed);
+                    }
+                    self.c.fb_reads.fetch_add(1, Ordering::Relaxed)
+                }
             }
             ReadOutcome::TranslationRefused { window, .. } => {
                 self.note_fb_window(window, off);
@@ -4946,6 +4972,9 @@ impl RegPlane {
         // derivation of the window would be a second projection auditing the first.
         let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
             Ok(()) => {
+                if !kayfabe_util::trapwitness::in_trap() {
+                    self.c.fb_window_off_trap.fetch_add(1, Ordering::Relaxed);
+                }
                 self.c.fb_writes.fetch_add(1, Ordering::Relaxed);
                 // ★★★★ **G1 — THE WITNESS FOR THE CPU TRANSPORT, taken at the one line that
                 // stamps `/byBAR2`.**
