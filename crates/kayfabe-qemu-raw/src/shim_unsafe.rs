@@ -905,16 +905,10 @@ pub unsafe extern "C" fn kayfabe_shim_realize(
         Ok(h) => Arc::new(h),
         Err(m) => return fail(Status::Malformed, m),
     };
-    let slots = match KvmSlotPlane::discover() {
+    let slots = match KvmSlotPlane::discover_or_reason() {
         Ok(s) => Arc::new(s),
-        Err(_) => {
-            return fail(
-                Status::Refused,
-                "could not find exactly one accelerator machine in this process; the memory \
-                 plane installs its own slots and will not guess which machine to install \
-                 them in",
-            );
-        }
+        // ⊘ The library tells "no machine" apart from "several"; say which one fired (w641).
+        Err(why) => return fail(Status::Refused, why),
     };
     match Shim::realize(&shim_cfg, host, slots) {
         Ok(shim) => {

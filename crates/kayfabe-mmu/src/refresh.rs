@@ -122,6 +122,17 @@ pub enum WalkOutcome {
     /// the sites needing to change are greppable rather than indistinguishable from ranges the
     /// guest never mapped.
     ///
+    /// ⊘⊘ **CORRECTED 2026-09-13 (w641) — THE SENTENCE BELOW WAS FALSE WHEN IT WAS WRITTEN,
+    /// AND IS TRUE NOW ONLY BECAUSE THE TYPE IT CITES WAS CHANGED TO MATCH IT.** At the time of
+    /// writing `ViewSpace` had **no GPU axis at all**: `Scratchpad` and `GuestMmio` were unit
+    /// variants and `Isolate` carried a bare proc id, so the type could tell two procs apart on
+    /// one GPU and could not tell two GPUs apart anywhere. ⇒ *"is what `ViewSpace` models"* was
+    /// a claim about a neighbour that nobody asked the neighbour to confirm — this tree's
+    /// standing lesson that **a citation checks a claim is SOURCED, never that the source says
+    /// what the claim says**, this time pointing at our own code rather than at a capture. The
+    /// axis was added when the owner observed the scratchpad must be per-GPU; keep this note,
+    /// because the repaired sentence otherwise reads as though it was always right.
+    ///
     /// ★ The structure already anticipates it: a peer mapping is a **view of one GPU's memory
     /// in another GPU's space**, which is what `kayfabe_device::gpgaview::ViewSpace` models —
     /// and the tree already keys isolates per `(ProcId, GpuId)` with a separate completion path

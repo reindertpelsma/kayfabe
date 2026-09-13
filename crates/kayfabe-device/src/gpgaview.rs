@@ -24,23 +24,87 @@
 //! Keeping the registry separate from the mapper is deliberate: the registry is pure and
 //! testable without a VMM, an isolate, or a GPU.
 
+use kayfabe_arch::ids::GpuId;
 use std::collections::BTreeMap;
 
 /// Where a view lives. The same GPGA may be viewed in several of these at once, and several
 /// times within one of them.
+///
+/// # ⊘⊘⊘ THREE OF THESE FOUR SPACES ARE PER-GPU, AND ONLY ONE IS NOT
+///
+/// **Owner, 2026-09-13, on the counter/doorbell page being per-GPU:** *"this means you also
+/// have scratchpad probably per gpu."* ★ Correct, and it generalises past the scratchpad.
+/// A GPU's framebuffer address space starts at its own zero, so **GPGA `0x1000` on GPU 0 and
+/// GPGA `0x1000` on GPU 1 name different memory**. A space that cannot say *which* GPU is a
+/// space in which those two collide.
+///
+/// - [`ViewSpace::Vmm`] is the ONE genuinely GPU-blind space. There is one VMM process and one
+///   host virtual address space; a view in it is located by a host VA that is unique on its own.
+/// - [`ViewSpace::Scratchpad`] stages work **on a specific host GPU**.
+/// - [`ViewSpace::GuestMmio`] is **BAR1**, and the owner's standing requirement is that *"each
+///   gpu has its own bar0/1/2"*.
+/// - [`ViewSpace::Isolate`] is a sandbox for **one `(proc, gpu)` pair** — that is exactly what
+///   `kayfabe_isolate::IsolateId` is, and an isolate bound to `nvidia0` is a different process
+///   from the same proc's isolate bound to `nvidia1`.
+///
+/// ⊘ **The pre-2026-09-13 shape gave the discriminator to the one axis that needed it least.**
+/// `Isolate` carried a bare proc id and the other three were unit variants, so the table could
+/// tell two procs apart on one GPU and could not tell two GPUs apart at all.
+///
+/// ⚠ And this type was **cited as the multi-GPU model while lacking a GPU axis**:
+/// `kayfabe_mmu::refresh::WalkOutcome::Unsupported` argued peer memory was already structurally
+/// anticipated because *"a peer mapping is a view of one GPU's memory in another GPU's space,
+/// which is what `kayfabe_device::gpgaview::ViewSpace` models"*. It did not model it. ★ That is
+/// this tree's recurring shape — **a citation checks that a claim is SOURCED, never that the
+/// source says what the claim says** — arriving as a type that had been vouched for by a
+/// neighbour and never asked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ViewSpace {
     /// The VMM's own address space (a CPU-side view — fake FB returns host RAM; real FB maps
     /// the MMIO window).
+    ///
+    /// ⊘ **Deliberately GPU-blind.** One VMM process, one host VA space, shared by every
+    /// emulated device. Adding a GPU here would make two names for one place.
     Vmm,
-    /// One isolate's address space. Isolates are separate processes, so `Isolate(1)` and
-    /// `Isolate(2)` are unrelated spaces that may both view one range.
-    Isolate(u32),
-    /// The scratchpad — where real GPU work is staged.
-    Scratchpad,
-    /// The guest's own MMIO aperture (BAR1). ⊘ Fake FB may legitimately appear here at several
-    /// addresses at once; that is the aliasing the census exists to print.
-    GuestMmio,
+    /// One isolate's address space. Isolates are separate processes, so two isolates are
+    /// unrelated spaces that may both view one range.
+    ///
+    /// ⊘ Keyed by `(proc, gpu)` — the pair `kayfabe_isolate::IsolateId` carries. Spelled as
+    /// fields rather than that type because this crate sits below `kayfabe-isolate`; the pair
+    /// must match it, and [`ViewSpace::isolate`] is the constructor that keeps them aligned.
+    Isolate {
+        /// The owning proc's `kayfabe_core::ProcId` value.
+        proc: u32,
+        /// Which GPU this isolate is the sandbox for.
+        gpu: GpuId,
+    },
+    /// The scratchpad — where real GPU work is staged, **on one host GPU**.
+    Scratchpad(GpuId),
+    /// The guest's own MMIO aperture (BAR1) **of one emulated GPU**. ⊘ Fake FB may legitimately
+    /// appear here at several addresses at once; that is the aliasing the census exists to print.
+    GuestMmio(GpuId),
+}
+
+impl ViewSpace {
+    /// An isolate's space, by the same `(proc, gpu)` pair `kayfabe_isolate::IsolateId` carries.
+    #[must_use]
+    pub const fn isolate(proc: u32, gpu: GpuId) -> Self {
+        Self::Isolate { proc, gpu }
+    }
+
+    /// Which GPU this space belongs to, or `None` for the one space that is shared by all of
+    /// them.
+    ///
+    /// ⊘ `None` means **"belongs to every GPU"**, not "unknown". The VMM's address space is
+    /// genuinely one space; a caller filtering views by GPU must therefore decide what to do
+    /// with VMM views deliberately rather than have them silently fall on one side.
+    #[must_use]
+    pub const fn gpu(self) -> Option<GpuId> {
+        match self {
+            Self::Vmm => None,
+            Self::Isolate { gpu, .. } | Self::Scratchpad(gpu) | Self::GuestMmio(gpu) => Some(gpu),
+        }
+    }
 }
 
 /// A live view of a GPGA range. Dropping it releases the view.
@@ -278,17 +342,19 @@ mod one_gpga_many_views {
     use super::*;
 
     const G: u64 = 0x9200_a900_0000;
+    const G0: GpuId = GpuId(0);
+    const G1: GpuId = GpuId(1);
 
     #[test]
     fn one_range_viewed_in_every_space_at_once() {
         let mut t = GpgaViews::new();
         let a = t.map(G, 0x1000, ViewSpace::Vmm, 0x7f00_0000).unwrap();
         let b = t.map(G, 0x1000, ViewSpace::Vmm, 0x7f10_0000).unwrap();
-        let c = t.map(G, 0x1000, ViewSpace::Isolate(1), 0x40_0000).unwrap();
-        let d = t.map(G, 0x1000, ViewSpace::Isolate(1), 0x41_0000).unwrap();
-        let e = t.map(G, 0x1000, ViewSpace::Isolate(2), 0x40_0000).unwrap();
-        let f = t.map(G, 0x1000, ViewSpace::Scratchpad, 0x10_0000).unwrap();
-        let h = t.map(G, 0x1000, ViewSpace::GuestMmio, 0xe000_0000).unwrap();
+        let c = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x40_0000).unwrap();
+        let d = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x41_0000).unwrap();
+        let e = t.map(G, 0x1000, ViewSpace::isolate(2, G0), 0x40_0000).unwrap();
+        let f = t.map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000).unwrap();
+        let h = t.map(G, 0x1000, ViewSpace::GuestMmio(G0), 0xe000_0000).unwrap();
 
         // twice in the VMM, twice in ONE isolate, once in a SECOND isolate, scratchpad, MMIO
         assert_eq!(t.refcount(G), 7);
@@ -331,8 +397,8 @@ mod one_gpga_many_views {
     #[test]
     fn releasing_one_view_leaves_the_others_alone() {
         let mut t = GpgaViews::new();
-        let a = t.map(G, 0x1000, ViewSpace::Isolate(1), 0x1000).unwrap();
-        let b = t.map(G, 0x1000, ViewSpace::Isolate(1), 0x2000).unwrap();
+        let a = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x1000).unwrap();
+        let b = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x2000).unwrap();
         t.release(a);
         assert_eq!(t.refcount(G), 1);
         assert_eq!(t.views_of(G)[0].at, 0x2000, "the survivor must be b, not a");
@@ -343,6 +409,52 @@ mod one_gpga_many_views {
     /// ⊘ A zero-length view is refused BY NAME. It is nearly always a computed length that came
     /// out zero upstream, and silently returning a valid-looking guard over nothing is how such
     /// a bug reaches a memcpy.
+    // ★★★ **THE OWNER'S SIXTH CASE, 2026-09-13** — *"this means you also have scratchpad
+    // probably per gpu"*, generalised: three of the four spaces are per-GPU, and the table
+    // must keep two GPUs' views of the same NUMBER apart.
+
+    #[test]
+    fn the_same_gpga_number_on_two_gpus_is_two_distinct_views() {
+        // ⊘ The whole point: GPGA `G` on GPU 0 and GPGA `G` on GPU 1 are DIFFERENT memory,
+        // because each GPU's framebuffer starts at its own zero. Before the GPU axis existed
+        // these two `map` calls were indistinguishable and the table said "one range, aliased".
+        let mut t = GpgaViews::new();
+        let a = t.map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000).unwrap();
+        let b = t.map(G, 0x1000, ViewSpace::Scratchpad(G1), 0x10_0000).unwrap();
+        assert_ne!(a.space(), b.space(), "two GPUs' scratchpads are not one space");
+
+        let spaces: Vec<_> = t.views_of(G).iter().map(|v| v.space).collect();
+        assert_eq!(spaces, vec![ViewSpace::Scratchpad(G0), ViewSpace::Scratchpad(G1)]);
+    }
+
+    #[test]
+    fn every_per_gpu_space_separates_by_gpu_and_the_vmm_deliberately_does_not() {
+        // Each per-GPU space must distinguish; `Vmm` must NOT, and that asymmetry is a
+        // decision — one VMM process, one host VA space — not an oversight.
+        assert_ne!(ViewSpace::Scratchpad(G0), ViewSpace::Scratchpad(G1));
+        assert_ne!(ViewSpace::GuestMmio(G0), ViewSpace::GuestMmio(G1));
+        assert_ne!(ViewSpace::isolate(7, G0), ViewSpace::isolate(7, G1));
+        assert_eq!(ViewSpace::Vmm, ViewSpace::Vmm);
+
+        assert_eq!(ViewSpace::Scratchpad(G1).gpu(), Some(G1));
+        assert_eq!(ViewSpace::GuestMmio(G1).gpu(), Some(G1));
+        assert_eq!(ViewSpace::isolate(7, G1).gpu(), Some(G1));
+        // ⊘ `None` is "shared by all of them", never "unknown".
+        assert_eq!(ViewSpace::Vmm.gpu(), None);
+    }
+
+    #[test]
+    fn one_procs_two_isolates_on_two_gpus_are_two_spaces() {
+        // `IsolateId` is `(proc, gpu)` precisely because one proc gets a SEPARATE sandbox
+        // process per target GPU — `SandboxPolicy::for_gpu` binds only `nvidia{gpu}`. A view
+        // space keyed on the proc alone would merge two different processes.
+        let mut t = GpgaViews::new();
+        let _a = t.map(G, 0x1000, ViewSpace::isolate(5, G0), 0x40_0000).unwrap();
+        let _b = t.map(G, 0x1000, ViewSpace::isolate(5, G1), 0x40_0000).unwrap();
+        assert_eq!(t.refcount(G), 2, "same proc, same address, two GPUs ⇒ two views");
+        assert_eq!(t.aliased(), vec![(G, 2)]);
+    }
+
     #[test]
     fn a_zero_length_view_is_refused_by_name() {
         let mut t = GpgaViews::new();

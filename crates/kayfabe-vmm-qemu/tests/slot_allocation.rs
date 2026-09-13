@@ -24,6 +24,7 @@ use common::{MOCK_CEILING, config, machine, page, window_gpa, window_len};
 use kayfabe_vmm::VmmError;
 use kayfabe_vmm_qemu::mock_host::{MockPolicy, MockSlotPlane};
 use kayfabe_vmm_qemu::slots::{CEILING_TOO_SMALL, OUR_SLOT_BUDGET, SLOT_BUDGET_EXHAUSTED};
+use kayfabe_vmm_qemu::host::BarPlacement;
 use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, WindowSpec};
 use std::sync::Arc;
 
@@ -243,4 +244,117 @@ fn a_window_that_cannot_get_all_its_numbers_installs_no_slot_at_all() {
     // ...and the two numbers that were available are still available.
     m.install_ram_window(window_gpa() + u64::from(OUR_SLOT_BUDGET) * 4 * p, 2 * p)
         .expect("a refusal must not have consumed the numbers it did not use");
+}
+
+/// ★★★★★ **TWO DEVICES ON ONE MACHINE NEVER SHARE A SLOT NUMBER.**
+///
+/// **Owner, 2026-09-13:** *"there is a doorbell page per gpu, each gpu has its own bar0/1/2 we
+/// need to emulate in kayfabe … ensure this remains possible."*
+///
+/// ⊘⊘⊘ **This is the test that would have caught it.** Before w641 the allocator was minted per
+/// device and every instance started at the kernel's ceiling, so two emulated GPUs handed out
+/// the **same numbers** — and `KVM_SET_USER_MEMORY_REGION` on a live number is a **replace**,
+/// not an error. GPU 1's mirror slot would evict GPU 0's mapping at a different GPA, GPU 0's
+/// guest would exit on an aperture it believes is mapped, and `SLOT_BUDGET_EXHAUSTED` would
+/// never fire because **neither allocator had done anything wrong by its own accounting.**
+///
+/// ⚠ The mock plane counts `replaces` precisely because a replace is silent. Asserting it stays
+/// zero is the difference between "the numbers look disjoint" and "the kernel was never asked
+/// to overwrite a live mapping".
+#[test]
+fn two_devices_on_one_machine_never_hand_out_the_same_slot_number() {
+    let p = page();
+    // ONE plane — one machine, one kernel slot table, exactly as two `nvkvm-gpu` devices in
+    // one QEMU process would see it.
+    let slots = Arc::new(MockSlotPlane::new(MOCK_CEILING, p));
+
+    let gpu0 = QemuMachine::realize(
+        config(),
+        common::host_with(MockPolicy::default()) as Arc<_>,
+        Arc::clone(&slots) as Arc<_>,
+    )
+    .expect("the first device realizes");
+    // ⊘ **A second GPU's BARs live at a DIFFERENT guest-physical base**, and the plane
+    // enforces it: realizing device 1 at device 0's `window_gpa()` is refused `EEXIST`, which
+    // is the mock behaving exactly like the kernel. The GPA axis and the slot-number axis are
+    // separate problems and this test is about the second one.
+    const GPU1_SHIFT: u64 = 0x1_0000_0000;
+    let gpu1 = QemuMachine::realize(
+        MachineConfig {
+            // A whole second device: its own BARs at their own bases, its own window inside
+            // them. That is what "each gpu has its own bar0/1/2" means at this seam.
+            bars: common::bars()
+                .into_iter()
+                .map(|b| BarPlacement {
+                    base: b.base + GPU1_SHIFT,
+                    ..b
+                })
+                .collect(),
+            windows: vec![WindowSpec::passthrough(
+                window_gpa() + GPU1_SHIFT,
+                window_len(),
+            )],
+            ..config()
+        },
+        {
+            // ...and a host that reports GPU 1's BARs where GPU 1's firmware put them. The
+            // device refuses a base that disagrees with the one it was realized with, which
+            // is correct and is why both halves have to move together.
+            let h = Arc::new(kayfabe_vmm_qemu::mock_host::MockQemuHost::with_policy(
+                MockPolicy::default(),
+            ));
+            for b in common::bars() {
+                h.place_bar(b.bar, b.base + GPU1_SHIFT);
+            }
+            h as Arc<_>
+        },
+        Arc::clone(&slots) as Arc<_>,
+    )
+    .expect("the second device realizes — a second GPU must be possible at all");
+
+    // Make each device take a spread of numbers, so the test is about the allocators and not
+    // about realize happening to use one apiece.
+    for i in 0..16 {
+        // Past each device's own realize-time window, inside its own BAR1.
+        let off = window_len() + i * 4 * p;
+        gpu0.install_ram_window(window_gpa() + off, 2 * p)
+            .unwrap_or_else(|e| panic!("gpu0 window {i}: {e:?}"));
+        gpu1.install_ram_window(window_gpa() + GPU1_SHIFT + off, 2 * p)
+            .unwrap_or_else(|e| panic!("gpu1 window {i}: {e:?}"));
+    }
+
+    // ★★★★★ **ASSERT THE REPLACE FIRST — the collision does NOT show up as a duplicate.**
+    //
+    // ⊘⊘ Measured against the pre-w641 behaviour as a known-positive: with both allocators
+    // starting at the ceiling this test fails on **`live.len()` == 17**, not on a repeated
+    // number. That is the whole nature of the bug. `KVM_SET_USER_MEMORY_REGION` on a live
+    // number *replaces*, so the loser's record is **gone** — there is never a moment when two
+    // records share a slot for anyone to notice. The corruption presents as a mapping that
+    // silently stopped existing, which is precisely why it would have been debugged from the
+    // guest's `Xid` rather than from here.
+    //
+    // ⇒ A "no duplicate numbers" assertion alone is **vacuous against the real failure**. The
+    // counter that actually witnesses it is `replaces`.
+    assert_eq!(
+        slots.replaces(),
+        0,
+        "a second device REPLACED the first's live mapping — the silent one"
+    );
+    let live = slots.live();
+    assert!(
+        live.len() >= 32,
+        "a replace makes slots VANISH rather than collide: only {} live",
+        live.len()
+    );
+
+    // ⊘ Kept as well, because it is the property's plain statement and it is cheap: if the
+    // mock ever stops collapsing a replace, this is the check that would catch it instead.
+    let mut seen = std::collections::BTreeSet::new();
+    for r in &live {
+        assert!(
+            seen.insert(r.slot),
+            "slot {} is live for two devices at once",
+            r.slot
+        );
+    }
 }

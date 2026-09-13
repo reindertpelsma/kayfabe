@@ -1069,7 +1069,7 @@ impl QemuMachine {
         let ceiling = slots
             .ceiling()
             .map_err(|e| host_refused("querying the memslot ceiling", &e))?;
-        let alloc = SlotAllocator::for_machine(ceiling).map_err(VmmError::Unsupported)?;
+        let alloc = SlotAllocator::for_machine(slots.number_space(), ceiling).map_err(VmmError::Unsupported)?;
         // 4. Block migration and checkpoint-restart, before anything is mapped (§8.4).
         let blocker = host
             .migrate_add_blocker("this device forwards to a host GPU through process-local state")

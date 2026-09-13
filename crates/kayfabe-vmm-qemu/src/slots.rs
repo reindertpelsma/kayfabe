@@ -35,7 +35,7 @@
 //! cannot quietly stop lying where the kernel does.
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use kayfabe_linux_raw::{GuestWindow, KvmMemslot, KvmVm, RawError};
 
@@ -118,19 +118,37 @@ pub trait SlotPlane: Send + Sync + fmt::Debug {
         len: u64,
         guest_readonly: bool,
     ) -> Result<Box<dyn LiveSlot>, RawError>;
+
+    /// ★★★★★ **This machine's slot-number space** — see [`SlotNumberSpace`].
+    ///
+    /// ⊘⊘ **The cursor belongs to the MACHINE, and that is the whole point (w641).** Slot
+    /// numbers are the kernel's, scoped to one VM; every device on one machine must draw from
+    /// one cursor or two GPUs collide, and two *different* machines must not share one or a
+    /// device that fits is refused a window carved out of someone else's ceiling.
+    ///
+    /// ⚠ A process-wide static would get the first half right and the second half wrong — and
+    /// it did: parking the cursor in a `static` made two integration tests on two independent
+    /// mock machines fight over one frontier, which is the same bug as the one being fixed,
+    /// one level up. **The plane is the machine; the machine owns the numbers.**
+    fn number_space(&self) -> &Arc<SlotNumberSpace>;
 }
 
 /// The real one: memslots in a real machine.
 #[derive(Debug)]
 pub struct KvmSlotPlane {
     vm: Arc<KvmVm>,
+    /// This machine's number space, shared by every device that discovered this plane.
+    space: Arc<SlotNumberSpace>,
 }
 
 impl KvmSlotPlane {
     /// Wrap a machine descriptor — one this process created, adopted, or discovered.
     #[must_use]
     pub fn new(vm: Arc<KvmVm>) -> Self {
-        KvmSlotPlane { vm }
+        KvmSlotPlane {
+            vm,
+            space: Arc::new(SlotNumberSpace::new()),
+        }
     }
 
     /// ★ Find the hypervisor's own machine and wrap it — the door
@@ -141,8 +159,55 @@ impl KvmSlotPlane {
     /// As [`KvmVm::discover_in_this_process`]: no machine, more than one, or a descriptor
     /// that did not confirm.
     pub fn discover() -> Result<Self, RawError> {
-        Ok(KvmSlotPlane {
-            vm: Arc::new(KvmVm::discover_in_this_process()?),
+        // ⊘⊘⊘ **MEMOISED, AND THE SECOND DEVICE IS WHY (w641).** `discover_in_this_process`
+        // requires **exactly one** `/proc/self/fd` entry linking to `anon_inode:kvm-vm`, and it
+        // keeps its dup alive for the device's lifetime. So device 0 realizing leaves a second
+        // descriptor behind, device 1's scan finds two, and the refusal reads *"this process
+        // holds more than one KVM machine"* — **false**: the process holds one machine and two
+        // descriptors to it, the second of which is **ours**. The operator is pointed at their
+        // own invocation for a mess we made.
+        //
+        // ★ There is exactly one machine per QEMU process, so both the descriptor AND the slot
+        // number space it owns are process-wide here — the test being **not "is it a static"
+        // but "is the thing it names process-wide?"**. Every device shares one `Arc` of each,
+        // and the scan runs once, while the count is still one.
+        static PLANE: Mutex<Option<(Arc<KvmVm>, Arc<SlotNumberSpace>)>> = Mutex::new(None);
+        let mut g = PLANE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((vm, space)) = g.as_ref() {
+            return Ok(KvmSlotPlane {
+                vm: Arc::clone(vm),
+                space: Arc::clone(space),
+            });
+        }
+        let vm = Arc::new(KvmVm::discover_in_this_process()?);
+        let space = Arc::new(SlotNumberSpace::new());
+        *g = Some((Arc::clone(&vm), Arc::clone(&space)));
+        Ok(KvmSlotPlane { vm, space })
+    }
+
+    /// [`KvmSlotPlane::discover`], with the refusal already told apart.
+    ///
+    /// ⊘ **The discrimination the library built was being discarded.** The caller in
+    /// `kayfabe-qemu-raw` matched `Err(_)` and printed one sentence, so a log could not say
+    /// whether the process had **no** machine or **several** — and those are different
+    /// problems for whoever reads it. The classification lives here because this is the crate
+    /// that can see [`RawError`]'s variants.
+    ///
+    /// # Errors
+    /// A sentence naming which of the two arms fired.
+    pub fn discover_or_reason() -> Result<Self, &'static str> {
+        Self::discover().map_err(|e| match e {
+            RawError::Unsupported { what, .. } if what == "this process's KVM VM descriptor" => {
+                "found no accelerator machine in this process; the memory plane installs its \
+                 own slots and has nowhere to install them"
+            }
+            _ => {
+                "could not find exactly one accelerator machine in this process; the memory \
+                 plane installs its own slots and will not guess which machine to install \
+                 them in"
+            }
         })
     }
 }
@@ -150,6 +215,10 @@ impl KvmSlotPlane {
 impl SlotPlane for KvmSlotPlane {
     fn ceiling(&self) -> Result<u32, RawError> {
         self.vm.max_memslots()
+    }
+
+    fn number_space(&self) -> &Arc<SlotNumberSpace> {
+        &self.space
     }
 
     fn install(
@@ -219,14 +288,44 @@ pub const CEILING_TOO_SMALL: &str = "the kernel's memslot ceiling is smaller tha
 pub struct SlotAllocator {
     /// The kernel's ceiling. Slot numbers are `< ceiling`.
     ceiling: u32,
+    /// ★ **The top of THIS device's window** (w641). Equals `ceiling` for the first device
+    /// and the previous device's floor for each one after — see [`SlotNumberSpace`].
+    ///
+    /// ⊘ Kept separate from `ceiling` rather than replacing it: `ceiling` is what the KERNEL
+    /// said and is what a census reports, `top` is what this device may use. Collapsing them
+    /// would make `live()` and `budget()` right for device 0 and quietly wrong for every
+    /// device after it — the exact shape of the bug this field exists to close.
+    top: u32,
     /// The lowest number this device will ever hand out.
     floor: u32,
-    /// The next fresh number, descending. Equals `ceiling` before the first allocation.
+    /// The next fresh number, descending. Equals `top` before the first allocation.
     next: u32,
     /// Numbers whose slot has been **cleared in the kernel** and may be re-issued.
     free: Vec<u32>,
     /// Cumulative reuses — the non-vacuity witness for the free list.
     recycled: u64,
+    /// ★ The window this allocator claimed from its machine's [`SlotNumberSpace`], and the
+    /// space to return it to on `Drop`.
+    ///
+    /// ⊘ `None` for an allocator built directly (tests, [`SlotAllocator::new`]) — those never
+    /// took anything from the process cursor and must not give anything back. **A release that
+    /// did not correspond to a claim would hand a second device a window still in use**, which
+    /// is the very collision this whole mechanism exists to prevent.
+    claim: Option<(Arc<SlotNumberSpace>, u32, u32)>,
+}
+
+impl Drop for SlotAllocator {
+    fn drop(&mut self) {
+        // ⊘⊘ **A DEVICE THAT GOES AWAY RETURNS ITS NUMBERS (w641).** Without this the cursor
+        // only ever descends, so a process that realizes devices in sequence — a test binary,
+        // a guest that re-plugs a GPU — exhausts a 32 764-slot space after a handful of them
+        // and the refusal blames the ceiling. ⚠ Caught by three integration tests that realize
+        // several devices in one process and began failing the moment the cursor was added:
+        // **the first thing the per-device window broke was the harness that could see it.**
+        if let Some((space, top, budget)) = self.claim.take() {
+            space.release((top, budget));
+        }
+    }
 }
 
 impl SlotAllocator {
@@ -244,36 +343,77 @@ impl SlotAllocator {
     ///
     /// # Errors
     /// As [`SlotAllocator::new`].
-    pub fn for_machine(ceiling: u32) -> Result<Self, &'static str> {
+    pub fn for_machine(
+        space: &Arc<SlotNumberSpace>,
+        ceiling: u32,
+    ) -> Result<Self, &'static str> {
+        let (top, budget) = space.claim(ceiling)?;
+        match Self::for_machine_below(ceiling, top) {
+            Ok(mut a) => {
+                a.claim = Some((Arc::clone(space), top, budget));
+                Ok(a)
+            }
+            // ⊘ A claim whose allocator then refused must be given straight back, or the
+            // refusal permanently narrows the space for everyone after it.
+            Err(e) => {
+                space.release((top, budget));
+                Err(e)
+            }
+        }
+    }
+
+    /// ★★★ **The same choice, against an explicit top** — what [`SlotAllocator::for_machine`]
+    /// is once the process-wide cursor has said where this device's window begins.
+    ///
+    /// Pure, and public for tests: a process-global cursor cannot be exercised twice in one
+    /// test binary, so the arithmetic that matters is reachable without it.
+    ///
+    /// # Errors
+    /// [`CEILING_TOO_SMALL`] if `top` cannot hold the budget plus a hypervisor's worth
+    /// beneath.
+    pub fn for_machine_below(ceiling: u32, top: u32) -> Result<Self, &'static str> {
         let wide = OUR_SLOT_BUDGET.saturating_add(MIRROR_SLOT_BUDGET);
-        if ceiling >= wide.saturating_mul(2) {
-            Self::with_budget(ceiling, wide)
+        if top >= wide.saturating_mul(2) {
+            Self::with_budget_below(ceiling, top, wide)
         } else {
-            Self::with_budget(ceiling, OUR_SLOT_BUDGET)
+            Self::with_budget_below(ceiling, top, OUR_SLOT_BUDGET)
         }
     }
 
     fn with_budget(ceiling: u32, budget: u32) -> Result<Self, &'static str> {
+        Self::with_budget_below(ceiling, ceiling, budget)
+    }
+
+    fn with_budget_below(ceiling: u32, top: u32, budget: u32) -> Result<Self, &'static str> {
         // The hypervisor starts at 16 slots and doubles (`qemu: kvm-all.c:250-262`), so a
-        // ceiling that leaves it fewer than the budget itself beneath us is one where the
+        // top that leaves it fewer than the budget itself beneath us is one where the
         // two ranges are not credibly disjoint. Stated as arithmetic rather than as a
         // magic minimum.
-        if ceiling < budget.saturating_mul(2) {
+        if top < budget.saturating_mul(2) || top > ceiling {
             return Err(CEILING_TOO_SMALL);
         }
         Ok(SlotAllocator {
             ceiling,
-            floor: ceiling - budget,
-            next: ceiling,
+            top,
+            floor: top - budget,
+            next: top,
             free: Vec::new(),
             recycled: 0,
+            claim: None,
         })
     }
 
     /// How many numbers this allocator may hold at once — `ceiling - floor`.
     #[must_use]
     pub fn budget(&self) -> u32 {
-        self.ceiling - self.floor
+        self.top - self.floor
+    }
+
+    /// The top of this device's window — `ceiling` for the first device, the previous
+    /// device's floor for each one after.
+    #[must_use]
+    pub fn top(&self) -> u32 {
+        self.top
     }
 
     /// The kernel's ceiling this allocator was built from.
@@ -297,7 +437,9 @@ impl SlotAllocator {
     /// How many numbers are currently handed out.
     #[must_use]
     pub fn live(&self) -> u32 {
-        (self.ceiling - self.next) - u32::try_from(self.free.len()).unwrap_or(u32::MAX)
+        // ⊘ `top`, not `ceiling` (w641): for the second device those differ, and using the
+        // kernel's ceiling here would report every number between the two windows as live.
+        (self.top - self.next) - u32::try_from(self.free.len()).unwrap_or(u32::MAX)
     }
 
     /// Take `n` numbers, or refuse **without taking any**.
@@ -460,6 +602,128 @@ pub fn spans(len: u64, cuts: &[(u64, u64, Tier)]) -> Result<Vec<Span>, &'static 
         });
     }
     Ok(out)
+}
+
+
+/// ★★★★★ **THE KERNEL'S SLOT NUMBERS ARE ONE SPACE, AND EVERY EMULATED GPU DRAWS FROM IT.**
+///
+/// **Owner, 2026-09-13:** *"there is a doorbell page per gpu, each gpu has its own bar0/1/2 we
+/// need to emulate in kayfabe … ensure this remains possible."* This is the seam where that was
+/// **not** possible, and the failure was silent.
+///
+/// # ⊘⊘⊘ What went wrong, precisely
+///
+/// [`SlotAllocator`] is minted **per device instance** and every instance set `next = ceiling`.
+/// Two emulated GPUs in one QEMU process therefore handed out the **same numbers** — 32763,
+/// 32762, … — from two allocators that each stayed politely inside their own budget. And
+/// `KVM_SET_USER_MEMORY_REGION` on a live number is not an error, it is a **replace**: GPU 1's
+/// BAR1-mirror slot would evict GPU 0's mapping at a different GPA, GPU 0's guest would start
+/// exiting on an aperture it believes is mapped, and GPU 0's `LiveSlot::drop` would later clear
+/// a slot the kernel had reassigned to GPU 1. `SLOT_BUDGET_EXHAUSTED` never fires, because
+/// **neither allocator has done anything wrong by its own accounting.**
+///
+/// ⚠ The module doc above spends twenty lines on exactly this hazard — *"a number collision is
+/// not an error — it silently REPLACES the hypervisor's own mapping"* — and argues it against
+/// QEMU, against memory hotplug, and against *"several pass-through devices with RAM BARs"*.
+/// It never argued it against **a second instance of ourselves**. ★ The analysis was right and
+/// its quantifier was one case short.
+///
+/// # The rule this encodes
+///
+/// A process-global `static` is the **wrong** home for per-device state — that is the defect
+/// class that also produced `MIRROR_FOR_BIRTH` and `SHADOW_SINK`. It is the **right** home for
+/// a genuinely process-wide kernel resource, and the KVM slot number space is one: one machine,
+/// one slot table, shared by every device in the process. ⇒ The test is not *"is it a static"*
+/// but **"is the thing it names process-wide?"** Here it is, so the cursor lives here and each
+/// device claims a disjoint window below the previous one.
+#[derive(Debug)]
+pub struct SlotNumberSpace {
+    /// The frontier and the returned windows, for ONE machine.
+    state: Mutex<SpaceState>,
+}
+
+#[derive(Debug, Default)]
+struct SpaceState {
+    /// The lowest number claimed so far; the next device's window ends here. `None` means
+    /// nothing has been claimed and the first claimant starts at the kernel's ceiling.
+    frontier: Option<u32>,
+    /// Windows returned by devices that have gone away, as `(top, budget)`. Reused before the
+    /// frontier descends, so a machine that realizes devices in sequence does not exhaust a
+    /// space it is barely using.
+    free: Vec<(u32, u32)>,
+}
+
+impl SlotNumberSpace {
+    /// A fresh space for one machine.
+    #[must_use]
+    pub fn new() -> Self {
+        SlotNumberSpace {
+            state: Mutex::new(SpaceState::default()),
+        }
+    }
+
+    /// Claim the next device's window as `(top, budget)`, given the kernel's ceiling.
+    ///
+    /// The first caller gets `ceiling`; each later caller gets the previous claimant's floor,
+    /// so the windows are disjoint by construction rather than by each device's good behaviour.
+    ///
+    /// # Errors
+    /// [`CEILING_TOO_SMALL`] when the space left beneath would not hold another device's
+    /// minimum budget plus a hypervisor's worth. ⊘ **A refusal, never a wrap** — the whole
+    /// point is that the Nth device is told it cannot fit instead of quietly taking the
+    /// (N−1)th's numbers.
+    pub fn claim(&self, ceiling: u32) -> Result<(u32, u32), &'static str> {
+        let mut g = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // ★ A returned window first — see [`SlotAllocator`]'s `Drop`. Reuse keeps a machine
+        // that realizes devices in sequence from walking the frontier down for no reason.
+        if let Some(w) = g.free.pop() {
+            return Ok(w);
+        }
+        let top = g.frontier.unwrap_or(ceiling);
+        // Every window must still leave a hypervisor's worth beneath it, so the floor of the
+        // narrowest acceptable window is what the next claimant would need.
+        if top < OUR_SLOT_BUDGET.saturating_mul(2) {
+            return Err(CEILING_TOO_SMALL);
+        }
+        let wide = OUR_SLOT_BUDGET.saturating_add(MIRROR_SLOT_BUDGET);
+        let budget = if top >= wide.saturating_mul(2) {
+            wide
+        } else {
+            OUR_SLOT_BUDGET
+        };
+        g.frontier = Some(top - budget);
+        Ok((top, budget))
+    }
+
+    /// Give a window back. Called from [`SlotAllocator`]'s `Drop`, never by hand.
+    fn release(&self, claim: (u32, u32)) {
+        let mut g = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.free.push(claim);
+    }
+
+    /// The next window's top, without claiming it. For census lines and tests.
+    #[must_use]
+    pub fn peek(&self, ceiling: u32) -> u32 {
+        let g = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.free
+            .last()
+            .map_or_else(|| g.frontier.unwrap_or(ceiling), |&(t, _)| t)
+    }
+}
+
+impl Default for SlotNumberSpace {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -687,5 +951,94 @@ mod tests {
         assert_eq!(Tier::Passthrough.readonly_slot(), Some(false));
         assert_eq!(Tier::ReadNative.readonly_slot(), Some(true));
         assert_eq!(Tier::Observe.readonly_slot(), None);
+    }
+}
+
+#[cfg(test)]
+mod two_gpus_draw_from_one_number_space {
+    //! ★★★★★ **THE OWNER'S PER-GPU REQUIREMENT, 2026-09-13** — *"each gpu has its own
+    //! bar0/1/2 we need to emulate in kayfabe … ensure this remains possible."*
+    //!
+    //! ⊘ These test the **arithmetic**, through [`SlotAllocator::for_machine_below`] and a
+    //! local [`SlotNumberSpace`]. A process-global cursor cannot be exercised twice in one
+    //! test binary, and a test that could only run first is a test that stops running.
+    use super::*;
+
+    /// A real kernel's ceiling (`KVM_CAP_NR_MEMSLOTS` on a modern host).
+    const CEILING: u32 = 32764;
+
+    fn fresh() -> SlotNumberSpace {
+        SlotNumberSpace::new()
+    }
+
+    #[test]
+    fn two_devices_get_windows_that_do_not_overlap() {
+        // ⊘⊘ **The defect this exists for:** before w641 both devices set `next = ceiling` and
+        // handed out the SAME numbers, and `KVM_SET_USER_MEMORY_REGION` on a live number is a
+        // **replace**, not an error — so GPU 1 would silently evict GPU 0's mapping and
+        // neither allocator's budget check would fire.
+        let space = fresh();
+        let a = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
+            .expect("device 0 fits");
+        let b = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
+            .expect("device 1 fits");
+
+        assert!(
+            b.top() <= a.floor(),
+            "device 1's window {:?} overlaps device 0's {:?}",
+            (b.floor(), b.top()),
+            (a.floor(), a.top()),
+        );
+    }
+
+    #[test]
+    fn the_numbers_two_devices_actually_hand_out_are_disjoint() {
+        // The window arithmetic is one claim; what the allocators DO is another. Take real
+        // numbers from both and assert the sets never meet — the property a replace violates.
+        let space = fresh();
+        let mut a = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
+            .expect("device 0");
+        let mut b = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
+            .expect("device 1");
+
+        let mine: Vec<u32> = (0..64).map(|_| a.alloc(1).expect("device 0 number")[0]).collect();
+        let theirs: Vec<u32> = (0..64).map(|_| b.alloc(1).expect("device 1 number")[0]).collect();
+
+        for n in &theirs {
+            assert!(!mine.contains(n), "slot {n} handed to BOTH devices");
+        }
+    }
+
+    #[test]
+    fn a_device_that_does_not_fit_is_refused_rather_than_wrapped() {
+        // ⊘ **A refusal, never a wrap.** The Nth device must be told it cannot fit; taking the
+        // (N−1)th's numbers would succeed and corrupt, which is the whole failure mode.
+        let space = fresh();
+        let mut claims = 0u32;
+        loop {
+            match space.claim(CEILING) {
+                Ok(_) => {
+                    claims += 1;
+                    assert!(claims < 10_000, "the cursor never refuses — it is wrapping");
+                }
+                Err(e) => {
+                    assert_eq!(e, CEILING_TOO_SMALL);
+                    break;
+                }
+            }
+        }
+        assert!(claims >= 2, "a real ceiling must fit at least two devices, fit {claims}");
+    }
+
+    #[test]
+    fn the_first_device_still_starts_at_the_kernels_ceiling() {
+        // ⊘ The regression guard for the ORIGINAL property: counting down from
+        // `KVM_CAP_NR_MEMSLOTS` is what keeps us clear of the hypervisor, which allocates
+        // densely upward from zero. Carving per-device windows must not move device 0 down.
+        let space = fresh();
+        assert_eq!(space.peek(CEILING), CEILING);
+        let a = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
+            .expect("device 0");
+        assert_eq!(a.top(), CEILING);
     }
 }

@@ -44,15 +44,26 @@ const FILL_FROM_NOTHING: HostRegion = HostRegion {
 #[test]
 fn a_passthrough_window_is_exactly_one_read_write_slot_over_its_whole_range() {
     let (m, _host, slots) = machine();
+    // ⊘ **The absolute slot NUMBER stopped being a property of this device (w641).** Slot
+    // numbers now come from a per-machine cursor that carves a disjoint window per device, so
+    // "the first number below the ceiling" is what the FIRST device on this machine gets —
+    // and in a test binary that is whichever test ran first. What this test is actually about
+    // is the SHAPE and the POLARITY: exactly one slot, covering the whole window, read-write.
+    // ⚠ Pinning the number here would make the suite order-dependent and would be asserting
+    // the allocator's bookkeeping in a test named for the tiering.
+    let live = slots.live();
+    let [only] = live.as_slice() else {
+        panic!("one slot, the whole window, read-WRITE — got {live:?}");
+    };
     assert_eq!(
-        slots.live(),
-        vec![MockSlotRecord {
-            slot: common::MOCK_CEILING - 1,
-            gpa: window_gpa(),
-            len: window_len(),
-            readonly: false,
-        }],
+        (only.gpa, only.len, only.readonly),
+        (window_gpa(), window_len(), false),
         "one slot, the whole window, read-WRITE"
+    );
+    assert!(
+        only.slot < common::MOCK_CEILING,
+        "the slot must come from beneath the kernel's ceiling, got {}",
+        only.slot
     );
     assert_eq!(slots.read_only_installs(), 0);
     assert_eq!(

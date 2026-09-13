@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use crate::host::{BarPlacement, BlockerId, HostError, MrHandle, QemuHost, SectionDesc};
-use crate::slots::{KERNEL_EEXIST, KERNEL_EINVAL, LiveSlot, SlotPlane};
+use crate::slots::{KERNEL_EEXIST, KERNEL_EINVAL, LiveSlot, SlotNumberSpace, SlotPlane};
 use kayfabe_linux_raw::{GuestWindow, HostPageSize, RawError, geometry};
 use kayfabe_vmm::BarId;
 
@@ -543,6 +543,10 @@ pub struct MockSlotPlane {
     ceiling: u32,
     page: u64,
     state: Arc<Mutex<MockSlotState>>,
+    /// ★ This mock machine's own number space (w641). Fresh per plane, which is what makes
+    /// two mock machines in one test binary independent — a process-wide cursor made them
+    /// fight over one frontier and refused a device that fit.
+    space: Arc<SlotNumberSpace>,
 }
 
 #[derive(Debug, Default)]
@@ -581,6 +585,7 @@ impl MockSlotPlane {
             ceiling,
             page,
             state: Arc::new(Mutex::new(MockSlotState::default())),
+            space: Arc::new(SlotNumberSpace::new()),
         }
     }
 
@@ -631,6 +636,10 @@ impl MockSlotPlane {
 }
 
 impl SlotPlane for MockSlotPlane {
+    fn number_space(&self) -> &Arc<SlotNumberSpace> {
+        &self.space
+    }
+
     fn ceiling(&self) -> Result<u32, RawError> {
         Ok(self.ceiling)
     }
