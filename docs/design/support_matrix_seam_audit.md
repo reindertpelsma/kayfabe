@@ -266,6 +266,14 @@ fixed by `6be9fef`, which is a **descendant** of the doc's own commit `6e4f66f` 
 `git merge-base --is-ancestor` confirms the order). `[read]` The row is right about
 `mmu`/`userd`/`pushbuffer` and wrong about the doorbell.
 
+> ### ★ EXTENDED 2026-09-13 (w566) — `porting_to_any_architecture.md` §4.2, §5.2
+> §2.2's four-families table is **reproduced independently** there and holds. What it adds:
+> `kgmmuFmtInitLevels_GB10X` is `_GH10X` **plus one line** (`ogkm-610:
+> src/nvidia/src/kernel/gpu/mmu/arch/blackwell/kern_gmmu_fmt_gb10x.c:51-61`), and that line is
+> **unreachable on GB202** (`bPageSize256gbSupported` FALSE — `g_kern_gmmu_nvoc.c:322-323`).
+> ⇒ building VER3 lands **Hopper, Blackwell and Rubin at once**, so "Hopper/Blackwell are a
+> different matter" is one bill, not two.
+
 ### 2.2 ★★★ **The declared floor needs a FOURTH page-table format, and it is the one nobody costed**
 
 The owner's floor is Turing. NVIDIA's own dispatch binds the GMMU level builder **five** ways
@@ -345,8 +353,20 @@ row); the defect is the missing key, not a known-wrong number.
 | CE subchannel = 4; UVM binds on 0, fires on 4 | **fixed** | `cla06fsubch.h:30` **byte-identical** 580↔610; `uvm_maxwell_ce.c:29-37`; and `fixed_subch` is a *parameter* at `kayfabe-arch/src/lib.rs:1228-1237`, not a constant |
 | doorbell reg offset `0x90` | **fixed Volta→Blackwell** | `turing/tu102`, `ampere/ga100`, `blackwell/gb100`, `blackwell/gb202` `dev_vm.h` all agree; and it is *derived* from the advertised reg base at `doorbell.rs:225-232` |
 | `RM_ENGINE_TYPE` / `NV2080_ENGINE_TYPE` | **fixed across the band** | `gpu_engine_type.h` **byte-identical** 580↔610 |
-| work-submit token `VECTOR 11:0`, `RUNLIST_ID 22:16` | **fixed TU→GH; refused at GB** | `g_kernel_fifo_nvoc.c:643-662` binds GA100…GH100 to one encoder; Blackwell adds a bit outside our mask so it decodes to `None` — a loud refusal, correct |
+| work-submit token `VECTOR 11:0`, `RUNLIST_ID 22:16` | **fixed TU→GH; refused at GB202 — ⊘ but see the correction below the table** | `g_kernel_fifo_nvoc.c:643-662` binds GA100…GH100 to one encoder; Blackwell adds a bit outside our mask so it decodes to `None` — a loud refusal, correct |
 | class ids (CE/GR/GPFIFO/USERMODE) | **arch-varying, parameterised** | per-chip lists in `g_gpu_class_list.c` are **identical between 580 and 610** ⇒ class ids vary by *silicon*, not by driver version; `HostClasses` is keyed the right way |
+
+> ### ⊘⊘ SCOPED 2026-09-13 (w566) — **"refused at GB" is TRUE of GB202 and FALSE of GB100**, and
+> ### the GB100 half is the quiet failure. `porting_to_any_architecture.md` §5.4.
+> `NV_VIRTUAL_FUNCTION_DOORBELL` is at `0x30090` on both, and the two Blackwell headers define
+> it **contradictorily**: on **GB202** `RUNLIST_DOORBELL` is bit **30** with `_ENABLE = 0x1`
+> (`ogkm-610: src/common/inc/swref/published/blackwell/gb202/dev_vm.h:30-32`); on **GB100** it is
+> bit **22** with `_ENABLE = 0x0`, `_DISABLE = 0x1`, plus a `GSP_DOORBELL` at bit 31
+> (`blackwell/gb100/dev_vm.h:625-632`). Same name, same offset, different bit, opposite polarity.
+> ⇒ `ga10x.rs:470-483` refuses anything outside `0x007F_0FFF`: a **GB202** token sets bit 30 and
+> **is refused, as this row says**. A **GB100** token sets no bit outside the mask — its encoder
+> writes only `RUNLIST_ID` and `VECTOR`, and ENABLE is `0` (`ogkm-610: kernel_fifo_gb100.c:93`) —
+> and is **silently accepted**. The row's reassurance does not generalise across Blackwell.
 
 ⊘ These are **not** "it works on the bench" — each is a cross-header or cross-tree identity.
 

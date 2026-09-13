@@ -248,14 +248,14 @@ pub trait FbStore: Send + core::fmt::Debug {
     /// `Result`.
     fn write(&mut self, phys: u64, bytes: &[u8]) -> Result<(), FbRefused>;
 
-    /// `(arena refusals, heap→arena migrations, arena read refusals)`.
+    /// `(arena refusals, heap→arena migrations, arena read refusals, arena resets)`.
     ///
     /// ⊘⊘ **On the trait because a census only counts if someone can ASK for it.** w584 hid
     /// for fifteen commits inside `arena_refusals`, which was incremented correctly the whole
     /// time on a concrete type nothing downstream could reach. The default is honest for a
     /// store that has no arena: it refused nothing because it was never asked.
-    fn arena_census_all(&self) -> (u64, u64, u64) {
-        (0, 0, 0)
+    fn arena_census_all(&self) -> (u64, u64, u64, u64) {
+        (0, 0, 0, 0)
     }
 
     /// How many bytes of host memory this store is currently holding on the guest's
@@ -1139,6 +1139,8 @@ pub struct SparseFb {
     /// means the store and the file disagree about a frame, which is the shape of bug this
     /// whole change exists to close; it must stay 0 in a healthy boot.
     arena_read_refusals: u64,
+    /// ★ w587 — how many times `device_reset` punched the arena. See there.
+    arena_resets: u64,
     /// How many heap pages were migrated into the arena on demand.
     arena_migrations: u64,
     /// ★★★★ Page frame → who created it and in what order. Parallel to
@@ -1184,6 +1186,7 @@ impl SparseFb {
             pages: HashMap::new(),
             arena: None,
             arena_read_refusals: 0,
+            arena_resets: 0,
             arena_refusals: 0,
             arena_migrations: 0,
             origin: HashMap::new(),
@@ -1459,11 +1462,12 @@ impl FbStore for SparseFb {
         Ok(())
     }
 
-    fn arena_census_all(&self) -> (u64, u64, u64) {
+    fn arena_census_all(&self) -> (u64, u64, u64, u64) {
         (
             self.arena_refusals,
             self.arena_migrations,
             self.arena_read_refusals,
+            self.arena_resets,
         )
     }
 
@@ -1559,15 +1563,33 @@ impl FbStore for SparseFb {
         let mut nonzero = 0u64;
         let mut pages = 0u64;
         for (frame, off, take) in SparseFb::runs(phys, usize::try_from(len).unwrap_or(usize::MAX)) {
-            // ⊘ Only RESIDENT pages are copied. A page this store never held is a page
-            // nothing ever wrote, and the fabricated backing is already zero-filled by its
-            // own `ftruncate` — so copying zeros over it would be work, and *counting* those
-            // zeros as copied bytes would make every establishment report non-vacuous.
-            let Some(page) = self.pages.get(&frame) else {
-                continue;
-            };
-            let whole = page.whole();
+            // ⊘⊘ **w587 — "NOT RESIDENT" STOPPED MEANING "ZERO", and this loop was written
+            // when it still did.** The original reasoning was: *a page this store never held
+            // is a page nothing ever wrote, and the region's own `ftruncate` already zeroed
+            // it, so copying zeros would be work with no effect.* That was true for years.
+            //
+            // ★ w585 made the arena the single source of truth for residency. A frame with no
+            // `pages` entry can now hold bytes **in the file**, written by the guest through a
+            // memory slot with no exit — so skipping it here copies zeros over live guest
+            // memory and hands the isolate a hole. Exactly the two-memories failure w585
+            // closed, re-opened one function over, by a comment that read as settled.
+            //
+            // ⇒ Ask the STORE, which knows about the file, instead of the page map, which does
+            // not. A frame that is genuinely untouched still reads zero and is still skipped,
+            // so the non-vacuity argument above survives intact — it is now a statement about
+            // the BYTES rather than about the map.
+            let mut whole = [0u8; FB_PAGE as usize];
+            match self.pages.get(&frame) {
+                Some(page) => whole.copy_from_slice(&page.whole()),
+                None => match self.arena.as_ref() {
+                    Some(a) if a.read_at(frame * FB_PAGE, 0, &mut whole).is_ok() => {}
+                    _ => continue,
+                },
+            }
             let src = &whole[off..off + take];
+            if src.iter().all(|b| *b == 0) {
+                continue;
+            }
             let at = frame * FB_PAGE + off as u64 - phys;
             if region.write(at, src).is_err() {
                 return Err((refuse(ESTABLISH_FAILED), region));
@@ -1848,7 +1870,14 @@ impl FbStore for SparseFb {
         // by the next guest through the same memory slot, so the map-clear above would be a
         // wipe that wipes nothing — the most dangerous shape a guard can take, because it
         // still reads as one. ⊘ Punching the arena is what `#130` actually asks for now.
+        // ⚠ **w587 — COUNTED, because "does this even fire?" is the question that decides
+        // whether it is safe.** A punch wipes the whole framebuffer file. That is right for a
+        // device reset and catastrophic at any other moment, and nothing in this tree said how
+        // often `device_reset` runs during a driver load. ⇒ `arena_resets` is printed with the
+        // rest of the store census; a number above 1 in a boot is worth reading before
+        // trusting anything else in that boot.
         if let Some(arena) = self.arena.as_mut() {
+            self.arena_resets += 1;
             if arena.reset().is_err() {
                 self.arena_read_refusals += 1;
             }

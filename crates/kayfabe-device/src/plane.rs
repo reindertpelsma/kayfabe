@@ -3211,10 +3211,10 @@ impl RegPlane {
     /// while the store silently fell back to the heap and the bug surfaced as PRAMIN failing.
     /// A counter with no reader is not an instrument. ⇒ `BAR-MIRROR MECHANISM` prints these.
     ///
-    /// All three must be **0** in a healthy boot once an arena is installed: a refusal means
+    /// The first three must be **0** in a healthy boot once an arena is installed: a refusal means
     /// the store and the file disagree about where a frame lives, which is the whole class.
     #[must_use]
-    pub fn fb_arena_census(&self) -> (u64, u64, u64) {
+    pub fn fb_arena_census(&self) -> (u64, u64, u64, u64) {
         let s = self.mem.lock();
         s.fb.arena_census_all()
     }
@@ -3494,11 +3494,20 @@ impl RegPlane {
     /// a read from a page the cut deliberately leaves live is a page still to be solved.
     #[must_use]
     pub fn bar0_read_hotspots(&self, top: usize) -> String {
-        let backed: std::collections::BTreeSet<u64> = self
-            .bar0_backable_runs()
-            .into_iter()
-            .flat_map(|(b, l)| (b..b + l).step_by(4096).map(|o| o >> 12))
-            .collect();
+        // ⊘⊘⊘ **w587 — THIS RE-RAN `bar0_backable_runs()`, AND THAT WAS THE w586 REGRESSION.**
+        //
+        // `[measured w587, bisect]` w584 and w585 both boot clean; w586 fails `RmInitAdapter`
+        // with GSP RPCs taking ~60 ms each. The cause is here: `bar0_backable_runs` is a
+        // **4 194 304-dword predicate sweep** over the whole aperture, and this report is
+        // emitted **15 times in a boot** from the periodic census — not once at teardown, as I
+        // assumed when I wrote it.
+        //
+        // ⚠ **This is w554's lesson, committed again by the person who wrote it down.** w554:
+        // *"`dead_page` built its bitmap on the READ path — 4.2M predicate evaluations inside
+        // an MMIO exit"*, fixed by building it in `new`. ⇒ The fix then produced the very
+        // bitmap this now uses. **An instrument is on a hot path unless someone checked, and
+        // `bar0_read_hotspots` is an instrument.**
+        let backed = |page: u64| self.dead_page(page << 12);
         let mut rows: Vec<(u64, u64)> = self
             .c
             .bar0_read_pages
@@ -3510,12 +3519,12 @@ impl RegPlane {
         rows.sort_unstable_by(|a, b| b.0.cmp(&a.0));
         let live: u64 = rows
             .iter()
-            .filter(|(_, p)| !backed.contains(p))
+            .filter(|(_, p)| !backed(*p))
             .map(|(n, _)| n)
             .sum();
         let from_backed: u64 = rows
             .iter()
-            .filter(|(_, p)| backed.contains(p))
+            .filter(|(_, p)| backed(*p))
             .map(|(n, _)| n)
             .sum();
         let listed: Vec<String> = rows
@@ -3525,7 +3534,7 @@ impl RegPlane {
                 format!(
                     "+0x{:x}={n}{}",
                     p << 12,
-                    if backed.contains(p) { "!BACKED" } else { "" }
+                    if backed(*p) { "!BACKED" } else { "" }
                 )
             })
             .collect();
@@ -3533,7 +3542,7 @@ impl RegPlane {
             "BAR0-READ-HOTSPOTS pages_touched={} live_pages={from_backed_pages}              reads_from_live_pages={live} reads_from_BACKED_pages={from_backed} top[{}]              ⊘ a read tagged `!BACKED` came from a page the aperture cut backs with memory,              so it should never have reached this handler at all — that is a BACKING defect,              not a page still to solve. Everything else is the work list for goal 2.",
             rows.len(),
             listed.join(" "),
-            from_backed_pages = rows.iter().filter(|(_, p)| !backed.contains(p)).count(),
+            from_backed_pages = rows.iter().filter(|(_, p)| !backed(*p)).count(),
         )
     }
 

@@ -174,6 +174,32 @@ vCPU thread"* — puts this on the schedulable side of the line, on an 11-core N
 ⚠ That is an argument, not a measurement of steal time, and it is the next thing to measure
 rather than assume. `[w515]` names this exact site as the worst trap and it remains the target.
 
+## 6b. ⊘⊘⊘ CORRECTION, 2026-09-13 (w587) — **THE §6a NUMBERS ARE A PASSING BOOT'S; MINE WERE NOT,
+## AND I COMPARED THEM ANYWAY.**
+
+`[measured w586a/w587, rev 330a0202, this box]` I reported **BAR0 reads 161 422 → 33** as the
+surface improving. ⊘ **It is not that.** The 33 came from a boot that **failed
+`RmInitAdapter`** — the guest never reached the work that generates reads. On the SAME box, the
+last known-good commit (w583, `316f36e1`) rebuilt and booted measures:
+
+    BAR0-READS total=158964 | producer[cpu_intr=13270] | live[ptimer=129]
+               | window[SERVED r=3707 w=631257]        ← PRAMIN parked, trapping as designed
+
+⇒ **158 964 is this box's baseline, and 33 is a truncated run.** The two are not comparable in
+either direction. ⚠ This tree has recorded that exact trap before — *"a truncated run's census
+looked BETTER and was worthless"* — and the shape it takes is always the same: **every number
+that measures WORK falls when the work stops happening, and falling is what progress looks
+like.** A census is only comparable against a run that got equally far.
+
+★ What DOES survive from that boot, because it is a ratio rather than a total:
+`reads_from_BACKED_pages=0` and `top[+0xbb0000=...]` — of the reads that DID happen, none
+escaped a page the cut backs, and all of them were the counter. That is evidence about the
+backing, and it is independent of how far the guest got.
+
+⊘ **And the regression is mine, not the box's.** w583 rebuilt on this box opens the adapter and
+`nvidia-smi` enumerates the GPU with 12 288 MiB; w584..w587 fail `RmInitAdapter (0x23:0x65:1206)`
+with `GSP-SUBMIT SERVICING REFUSED PeerWritePtrOutOfRange`. Bisect in progress.
+
 ## 7. Status
 
 - [x] w550 — the cut, and the 3572 dead pages backed. `[measured w553]` the raw client passed

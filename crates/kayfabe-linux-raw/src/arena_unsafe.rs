@@ -90,7 +90,13 @@ struct ArenaFree {
     /// The next never-issued index.
     next: u64,
     /// Indices whose page handle was dropped and that may be issued again.
-    list: Vec<u64>,
+    // ⊘⊘ **REMOVED w587.** This was the bump allocator's free list, left behind by w569 when
+    // the framebuffer address became the file offset and recycling stopped existing. Nothing
+    // POPPED from it after w569 — it only grew — and w585's read path made that fatal: every
+    // trapped read of a non-resident frame took a transient page handle whose `Drop` pushed
+    // one `u64` here, under this mutex, **inside an MMIO exit**. An unbounded `Vec` push on
+    // the vCPU's read path, in a device whose governing rule is *no blocking work in any MMIO
+    // trap*. ⇒ Deleted, and `read_at` below no longer allocates a handle at all.
     /// Cumulative reuses — the non-vacuity witness for the free list.
     recycled: u64,
     /// How many pages are live right now.
@@ -177,7 +183,6 @@ impl SharedPageArena {
                 pages: len / ARENA_PAGE,
                 free: Mutex::new(ArenaFree {
                     next: 0,
-                    list: Vec::new(),
                     recycled: 0,
                     live: 0,
                     peak: 0,
@@ -231,10 +236,43 @@ impl SharedPageArena {
         let mut f = self.inner.free.lock().unwrap_or_else(|e| e.into_inner());
         f.live += 1;
         f.peak = f.peak.max(f.live);
+        f.recycled += 1; // ★ w587: allocations, under its old field name — see `census`.
+        f.next = f.next.max(index + 1); // ★ w587: the highest index named, i.e. the span used.
         Ok(ArenaPage {
             arena: Arc::clone(&self.inner),
             index,
         })
+    }
+
+    /// ★★★★★ **Read from a framebuffer address WITHOUT taking a page handle (w587).**
+    ///
+    /// ⊘⊘ w585 needed this and did not have it, so it took a transient [`ArenaPage`] per read
+    /// and dropped it — which meant a mutex acquisition and, until this commit, an unbounded
+    /// `Vec` push **inside an MMIO exit**, on the vCPU. The read itself needs neither: the
+    /// mapping is already there and the bound is arithmetic.
+    ///
+    /// `addr` is a framebuffer BYTE ADDRESS; the page it names is at the same file offset.
+    ///
+    /// # Errors
+    /// [`RawError::OutOfRange`] when the access leaves the named page — refused, never wrapped
+    /// into a neighbour, exactly as [`ArenaPage::read_into`] refuses it.
+    pub fn read_at(&self, addr: u64, off: u64, dst: &mut [u8]) -> Result<(), RawError> {
+        let len = dst.len() as u64;
+        let end = off.checked_add(len).ok_or(RawError::LengthOverflow {
+            offset: off,
+            len,
+        })?;
+        let index = addr / ARENA_PAGE;
+        if end > ARENA_PAGE || !addr.is_multiple_of(ARENA_PAGE) || index >= self.inner.pages {
+            return Err(RawError::OutOfRange {
+                offset: off,
+                len,
+                object_len: ARENA_PAGE,
+            });
+        }
+        self.inner
+            .map
+            .read_into(HostOffset::new(index * ARENA_PAGE + off), dst)
     }
 
     /// The descriptor a memslot placement maps. Borrowed from the arena, which outlives
@@ -287,7 +325,21 @@ impl SharedPageArena {
         Ok(())
     }
 
-    /// `(live, peak, recycled, issued)` — the allocator's census.
+    /// `(live, peak, allocations, distinct indices)` — the allocator's census.
+    ///
+    /// ⊘⊘ **w587 — TWO OF THESE FIELDS COULD ONLY EVER PRINT ZERO, and I read one of them as
+    /// evidence.** They are the bump allocator's `recycled` and `next`, left behind when w569
+    /// replaced the allocator with address indexing: `alloc_at` bumps neither, so
+    /// `recycled=0 issued=0` was printed in every census ever taken, for a reason that has
+    /// nothing to do with the arena's behaviour.
+    ///
+    /// ⚠ `[measured w587]` I read `arena[... recycled=0 issued=0]` off a boot as *"the arena
+    /// issued zero pages"*, and reasoned from it that my own changes were not active — which
+    /// would have exonerated the wrong commits. **A field that is structurally zero is not a
+    /// measurement, and it is indistinguishable from one that is zero because nothing
+    /// happened.** ⇒ `allocations` now counts `alloc_at` calls and `distinct` counts the
+    /// indices they named, both of which are facts about this allocator rather than the one
+    /// it replaced.
     #[must_use]
     pub fn census(&self) -> (u64, u64, u64, u64) {
         let f = self.inner.free.lock().unwrap_or_else(|e| e.into_inner());
@@ -361,11 +413,10 @@ impl ArenaPage {
 
 impl Drop for ArenaPage {
     fn drop(&mut self) {
-        // ★ The index goes back to the free list AFTER this handle can no longer be used to
-        // address it — which is now, by the ownership the allocator hands out. No syscall,
-        // no ranked lock: a `Vec::push` under the same mutex `alloc` takes.
+        // ★ Only the live count moves. ⊘ There is no free list to return the index to: under
+        // address indexing the index IS the framebuffer address, so it is not a resource that
+        // can be recycled — it is a name. See the removed field in `ArenaFree`.
         let mut f = self.arena.free.lock().unwrap_or_else(|e| e.into_inner());
-        f.list.push(self.index);
         f.live = f.live.saturating_sub(1);
     }
 }

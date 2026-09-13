@@ -200,13 +200,17 @@ impl FbPageArena for ArenaPort {
     }
 
     fn read_at(&self, addr: u64, off: u64, buf: &mut [u8]) -> Result<(), &'static str> {
-        // ⊘ A TRANSIENT handle, taken and dropped inside the call. `alloc_at` on the shared
-        // arena is a bump of a live-count under a plain mutex — no syscall, no ranked lock —
-        // and the page it names is the same memory a resident handle would name, because the
-        // address IS the index. So this reads the file without giving the store a page, which
-        // is the whole point: a read must not make a frame resident.
-        let page = self.0.alloc_at(addr).map_err(|_| ARENA_OUT_OF_PAGE)?;
-        page.read_into(off, buf).map_err(|_| ARENA_OUT_OF_PAGE)
+        // ⊘⊘ **w587 — this took a TRANSIENT `ArenaPage` and dropped it, and that was the
+        // regression.** `alloc_at` + `Drop` is two mutex acquisitions and — before w587 removed
+        // the vestigial free list — one unbounded `Vec` push, **per trapped framebuffer read,
+        // on the vCPU inside an MMIO exit.** `[measured w587]` the boot's GSP RPCs went from
+        // microseconds to ~60 ms each and then hung.
+        //
+        // ★ A read needs no handle. `SharedPageArena::read_at` goes straight to the mapping
+        // with an arithmetic bound, which is what "the address IS the file offset" buys.
+        self.0
+            .read_at(addr, off, buf)
+            .map_err(|_| ARENA_OUT_OF_PAGE)
     }
 
     fn reset(&mut self) -> Result<(), &'static str> {
@@ -1113,14 +1117,23 @@ impl BarMirror {
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
         // the allocator says how many pages it handed out, the store says how many it asked
         // for and was REFUSED. w584 lived entirely in the gap between them.
-        let (s_ref, s_mig, s_rref) = self.plane.fb_arena_census();
+        // ⚠ **Only at teardown.** `fb_arena_census` takes the plane's memory lock, and this
+        // report is emitted periodically during the boot — the same "an instrument is on a hot
+        // path unless someone checked" mistake w586 made one crate over, and the same shape as
+        // w516's *"the vCPU read a counter by locking every proc"*. The numbers are cumulative,
+        // so the only emission that carries information is the last one.
+        let (s_ref, s_mig, s_rref, s_rst) = if at.contains("END") {
+            self.plane.fb_arena_census()
+        } else {
+            (0, 0, 0, 0)
+        };
         let refused_s: Vec<String> = refused.iter().map(|(k, v)| format!("{k}={v}")).collect();
         eprintln!(
             "kayfabe: BAR-MIRROR MECHANISM AT {at}: slots live={live} peak={peak} \
              revalidate[runs={} kept={} removed={}] quiesce[calls={} removed={}] \
              retire_all[calls={} removed={}] arena[pages live={a_live} peak={a_peak} \
-             recycled={a_recycled} issued={a_issued} store_refused={s_ref} \
-             store_migrated={s_mig} store_read_refused={s_rref}] refused=[{}]{}",
+             allocations={a_recycled} span_pages={a_issued} store_refused={s_ref} \
+             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)] refused=[{}]{}",
             self.census.reval_runs.load(Ordering::Relaxed),
             self.census.reval_kept.load(Ordering::Relaxed),
             self.census.reval_removed.load(Ordering::Relaxed),
