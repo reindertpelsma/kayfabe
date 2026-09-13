@@ -1911,6 +1911,36 @@ impl RegPlane {
                     // `RmInitAdapter failed`. It stays trapped until something makes "done"
                     // observable at the instant it becomes true, and a boot says so.
                     || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+                    // ★★★★★ **w590 — THE INVALIDATE BLOCK, and this one is MEASURED rather
+                    // than argued.**
+                    //
+                    // `[measured w588, a boot that graded (P)]` the trigger's page is
+                    // **204 035 of 204 198** BAR0 reads reaching the handler — **99.9 %**. The
+                    // whole of goal 2's read half is this one page; everything else together
+                    // is 163 reads, of which 129 are the free-running counter.
+                    //
+                    // ⊘⊘ w575 excluded it deliberately, and the argument was right at the
+                    // time: *"its value is cleared by the WORKER, so a shadow of it is only as
+                    // current as the last worker pass; publish 'pending' and fail to publish
+                    // 'done' and the guest spins on a page that has stopped changing, which is
+                    // strictly worse than trapping."* ⚠ Its EVIDENCE, though, was w564's (E) —
+                    // and `set_read_shadow` had **no caller anywhere** until w577, so every
+                    // shadow write in that experiment was a no-op. **The exclusion outlived the
+                    // measurement that justified it.**
+                    //
+                    // ★ Both edges publish now, and that is exactly what w575 asked for:
+                    // *pending* synchronously on the trigger write (`RegPlane::write`, one
+                    // screen up) and *done* by whoever completes the refresh
+                    // (`publish_invalidate_trigger`, called by the worker immediately after
+                    // `complete_through`). The two latches write through as of this commit.
+                    //
+                    // ⚠ Knobbed, because a change whose failure mode is *the guest spins
+                    // forever* must be gradeable against its own control in one binary —
+                    // w586's lesson, which cost four boots to learn.
+                    || (!Self::shadow_invalidate_disabled()
+                        && crate::mmuinval::invalidate_regs(self.chip).is_some_and(|r| {
+                            off == r.trigger || off == r.pdb || off == r.upper_pdb
+                        }))
                     // ★ w577 — the GSP group republishes on every FSM write and the sink is
                     // now real. ⊘ `may_read` offsets stay out: the boot sequence's `on_read`
                     // has no republisher at all.
@@ -1925,6 +1955,12 @@ impl RegPlane {
             }
         }
         runs
+    }
+
+    /// ★ w590 — `KAYFABE_SHADOW_INVAL=0` keeps the MMU-invalidate page trapping, as the
+    /// control arm for the change above. Read once per sweep, never on an access path.
+    fn shadow_invalidate_disabled() -> bool {
+        std::env::var("KAYFABE_SHADOW_INVAL").is_ok_and(|v| v == "0")
     }
 
     /// ★★★★★ **Could ANY arm of [`RegPlane::read_inner`] claim this dword?** — asked as a
@@ -5095,6 +5131,13 @@ impl RegPlane {
                 // VA space it means.
                 self.mmu_inval
                     .note_pdb_write(regs, off, mask(val, size) as u32);
+                // ★★★ w590 — WRITE THROUGH, for the same reason the trigger does one line
+                // down. These are latches the guest sets immediately before the trigger; on
+                // real hardware they read back what was written. Once this page is BACKED they
+                // are read with no exit, so a shadow that never moved would answer the
+                // realize-time zero. ⊘ `the_bar0_read_surface.md` §5: two homes, and the one
+                // that matters is the one nobody thinks to update.
+                self.shadow_write(off, mask(val, size), 4);
                 return WriteOutcome {
                     claimed: true,
                     ..WriteOutcome::nothing()

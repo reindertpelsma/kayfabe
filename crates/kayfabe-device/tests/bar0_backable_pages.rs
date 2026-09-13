@@ -393,3 +393,112 @@ fn the_read_hotspot_census_names_the_page_it_was_read_from() {
          remaining work: {after}"
     );
 }
+
+/// ★★★★★ **THE INVALIDATE TRIGGER'S BOTH EDGES MUST REACH THE SHADOW (w590).**
+///
+/// ⊘⊘ This page is **204 035 of 204 198** BAR0 reads reaching the handler — 99.9 % of goal 2's
+/// read half — because the guest SPIN-POLLS it. Backing it removes all of them, and the price
+/// of getting it wrong is the worst failure available here: **a guest spinning forever on
+/// memory that stopped changing**, with no trap to ask us and no counter to notice.
+///
+/// ⇒ w575's requirement, stated as a test rather than as prose: *pending* must be observable
+/// the moment the guest arms the trigger, and *done* the moment a completer clears it. A
+/// shadow that gets one and not the other is worse than no shadow at all.
+#[test]
+fn both_edges_of_the_invalidate_trigger_reach_the_read_shadow() {
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug, Default)]
+    struct Spy(Mutex<Vec<(u64, u32)>>);
+    impl kayfabe_device::plane::ReadShadowPort for Spy {
+        fn write(&self, off: u64, bytes: &[u8]) {
+            let mut v = [0u8; 4];
+            v[..bytes.len().min(4)].copy_from_slice(&bytes[..bytes.len().min(4)]);
+            self.0
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((off, u32::from_le_bytes(v)));
+        }
+    }
+
+    let p = plane();
+    let spy = Arc::new(Spy::default());
+    p.set_read_shadow(spy.clone());
+    let regs = kayfabe_device::mmuinval::invalidate_regs(&kayfabe_device::ga10x::GA106)
+        .expect("GA106 names a usermode base, so the invalidate block is derivable");
+
+    // ⊘ The page must actually be backed, or the rest of this test is about a page that still
+    // traps — green, and about nothing.
+    let backed: std::collections::BTreeSet<u64> = p
+        .bar0_backable_runs()
+        .into_iter()
+        .flat_map(|(b, l)| (b..b + l).step_by(4096))
+        .collect();
+    if std::env::var("KAYFABE_SHADOW_INVAL").is_ok_and(|v| v == "0") {
+        // ⊘ The control arm deliberately leaves this page trapping. Say so and stop — a test
+        // that FAILS under its own control arm is a test that forbids running the control.
+        eprintln!("KAYFABE_SHADOW_INVAL=0: the invalidate page traps by request; nothing to check");
+        return;
+    }
+    assert!(
+        backed.contains(&(regs.trigger & !0xfff)),
+        "the invalidate page is not backed, so this test would pass vacuously"
+    );
+
+    // ⊘⊘ **The log must be ARMED, and finding that out was the point of the first run.**
+    // `note_trigger` sets `pending` only when armed; disarmed it answers the guest
+    // immediately — which is CORRECT in both modes, because a disarmed plane defers nothing,
+    // so "done at once" is the true answer whether the page traps or not. ⇒ The hazard this
+    // test exists for only exists in the armed case, so the armed case is what it drives.
+    p.mmu_inval().arm();
+
+    // ARM: the guest sets the two latches, then writes the trigger.
+    p.write(0, regs.pdb, 4, 0xdead_beef);
+    p.write(0, regs.upper_pdb, 4, 0x0000_00ab);
+    p.write(0, regs.trigger, 4, 0x8001_0001);
+
+    let seen = spy.0.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let pending = seen
+        .iter()
+        .rev()
+        .find(|(o, _)| *o == regs.trigger)
+        .map(|(_, v)| *v);
+    assert_eq!(
+        pending.map(|v| v & (1 << 31) != 0),
+        Some(true),
+        "the ARM edge did not publish TRIGGER as set. The guest would read `done` immediately \
+         and proceed before the refresh finished, which is the owner's 2026-09-10 ruling \
+         inverted: {seen:?}"
+    );
+    // ★ And the latches, which a backed page serves with no exit — a stale zero here is a
+    // wrong read-back the guest can never fault on.
+    assert_eq!(
+        seen.iter().rev().find(|(o, _)| *o == regs.pdb).map(|(_, v)| *v),
+        Some(0xdead_beef),
+        "the PDB latch never reached the shadow: {seen:?}"
+    );
+
+    // DONE: the worker's real sequence, in its real order — `complete_through` clears
+    // TRIGGER, then the publish makes the cleared value visible. ⊘ The order is the whole
+    // point: publishing first would publish the value it is about to invalidate, and on a
+    // BACKED page nothing would ever correct it.
+    let issued = p.mmu_inval().issued();
+    assert!(
+        p.mmu_inval().complete_through(issued, 1_000),
+        "the completion was withheld, so the DONE edge below would test nothing"
+    );
+    p.publish_invalidate_trigger();
+    let after = spy.0.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let done = after
+        .iter()
+        .rev()
+        .find(|(o, _)| *o == regs.trigger)
+        .map(|(_, v)| *v)
+        .expect("the completion published nothing at all");
+    assert!(
+        done & (1 << 31) == 0,
+        "the DONE edge published TRIGGER still set (0x{done:08x}). On a BACKED page that is a \
+         guest spinning forever on memory that has stopped changing — strictly worse than \
+         trapping, because a trap at least asks us."
+    );
+}
