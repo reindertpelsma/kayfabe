@@ -174,7 +174,36 @@ for i in $(seq 1 "$LIMIT"); do
         if [ -n "$P" ]; then
           echo "SPIN-SAMPLE pid=$P state=$(awk "{print \$3}" /proc/$P/stat 2>/dev/null) wchan=$(cat /proc/$P/wchan 2>/dev/null)"
           echo "SPIN-SAMPLE syscall=$(cut -c1-40 /proc/$P/syscall 2>/dev/null)"
-          sudo timeout 5 strace -c -f -p $P 2>&1 | tail -12
+          # ⊘⊘⊘ `head`, NOT `tail`. `strace -c` sorts by %time DESCENDING, so `tail` reads
+          # the CHEAPEST calls — the bottom of the table. This exact pipe read as
+          # "the process makes no interesting syscalls" for a whole session, which was a
+          # fact about the sort order, not about the process.
+          echo "      -- strace -c, TOP of a %time-DESCENDING table --"
+          sudo timeout 5 strace -c -f -p $P 2>&1 | head -16
+          # ★★★★★ **WHAT IT IS SPINNING ON.** `state=R` with ~100 syscalls says libcuda is
+          # polling memory, and nothing above says WHICH memory or from which frame. A
+          # userspace backtrace is the only instrument that names it.
+          # ⊘ Attaching to the GUEST's own process, not to QEMU — the campaign's rule that
+          # `gdb` manufactures slow traps is about sampling the vCPU thread, and does not
+          # apply here. The process is already stopped-and-resumed by the strace above.
+          echo "      -- userspace backtrace (names the spin, or says why it could not) --"
+          # ⊘ Fetch it ONCE if absent rather than spend a whole boot discovering the tool is
+          # missing. The guest has network (provisioning apt-installs build-essential over the
+          # same path), and cup3 is spinning meanwhile, so the wait costs nothing it was doing.
+          if ! command -v gdb >/dev/null 2>&1; then
+            echo "      (no gdb in the guest; fetching it once)"
+            sudo DEBIAN_FRONTEND=noninteractive timeout 180 apt-get install -y -qq gdb >/dev/null 2>&1 \
+              || echo "      apt-get gdb FAILED (no network, or no such package)"
+          fi
+          if command -v gdb >/dev/null 2>&1; then
+            sudo timeout 20 gdb -p $P -batch -ex "thread apply all bt 12" 2>&1 \
+              | grep -E "^.#|^Thread" | head -40
+          elif command -v eu-stack >/dev/null 2>&1; then
+            sudo timeout 20 eu-stack -p $P 2>&1 | head -40
+          else
+            echo "      NO BACKTRACE TOOL in the guest (no gdb, no eu-stack) - install one:"
+            echo "      sudo apt-get install -y gdb   # then re-run this hook"
+          fi
         else
           echo "SPIN-SAMPLE cup3 not running at the first poll (finished or never started)"
         fi' 2>&1 | sed 's/^/    /'
