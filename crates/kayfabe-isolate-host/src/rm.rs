@@ -1546,6 +1546,38 @@ const fn libc_eintr() -> i32 {
     4
 }
 
+/// ★★★★★ **How a CPU view is armed — and READ-ONLY is a security primitive here, not a hint.**
+///
+/// `NVOS33_FLAGS_ACCESS` (`ogkm: nvos.h:1724-1727`) lowers through
+/// `mapping_cpu.c:970-982` to `NV_PROTECT_READABLE`, and `nv-mmap.c:155` then refuses a
+/// writable `mmap` of that node with **`-EACCES`**. ⇒ The refusal is the KERNEL DRIVER's, not
+/// ours, which is the only kind that survives a compromised peer.
+///
+/// ⚠ It matters for exactly one page. `0xbb0090` is the PF mirror of the VF doorbell
+/// (`kern_gpu_tu102.c:275-283` — bare metal drives `NV_VIRTUAL_FUNCTION` even on host), and
+/// its token is `runlist << 16 | chid` for **any host channel on the GPU**. A writable mapping
+/// of that page handed to another process is a cross-tenant ring. Read-only makes it
+/// structurally not one, so the VMM cannot become a doorbell it was never given — by
+/// construction rather than by promise. See `the_counter_page_and_the_device_view.md` §3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewAccess {
+    /// `NVOS33_FLAGS_ACCESS_READ_WRITE` — every pre-existing caller, unchanged.
+    ReadWrite,
+    /// `NVOS33_FLAGS_ACCESS_READ_ONLY`.
+    ReadOnly,
+}
+
+impl ViewAccess {
+    /// The `NVOS33_PARAMETERS::flags` value. ⊘ `ACCESS` is bits `1:0`; nothing else is set.
+    #[must_use]
+    pub fn os33_flags(self) -> u32 {
+        match self {
+            ViewAccess::ReadWrite => 0,
+            ViewAccess::ReadOnly => 1,
+        }
+    }
+}
+
 impl RmConnection {
     /// Walk the bring-up ladder against the real driver.
     ///
@@ -2512,7 +2544,7 @@ impl RmConnection {
         // ★ w393 — the registration is its own verb now, because the armed node is a thing
         // this crate hands to ANOTHER process without ever `mmap`ing it here
         // (`HostRmBackend::export_device_view`). Everything below this line is the `mmap`.
-        let node = self.arm_cpu_view(which, h_memory, 0, register_len)?;
+        let node = self.arm_cpu_view(which, h_memory, 0, register_len, ViewAccess::ReadWrite)?;
 
         // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
         // the work: this is memory **hardware writes**, so every access must be a naturally
@@ -2565,6 +2597,7 @@ impl RmConnection {
         h_memory: u32,
         offset: u64,
         len: u64,
+        access: ViewAccess,
     ) -> Result<CharDevice, RmError> {
         let node = match which {
             MapNode::Gpu => {
@@ -2585,7 +2618,7 @@ impl RmConnection {
             length: len,
             p_linear_address: 0,
             status: 0,
-            flags: 0,
+            flags: access.os33_flags(),
             fd: node.fd_number(),
         }
         .encode_into(&mut arg)
@@ -5942,12 +5975,13 @@ impl HostRmBackend {
         memory: HostHandle,
         offset: u64,
         len: u64,
+        access: ViewAccess,
     ) -> Result<DeviceView, RmError> {
         if len == 0 {
             return Err(RmError::NoMemory);
         }
         let raw = self.narrow(memory)?;
-        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len)?;
+        let node = self.conn.arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
         // ★ The driver rounds the registered range up to a host page and compares the
         // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
         // so the length that crosses is the one the VMM's `mmap` must use.

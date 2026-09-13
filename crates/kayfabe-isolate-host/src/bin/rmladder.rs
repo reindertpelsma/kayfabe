@@ -1393,7 +1393,12 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // ---- 1. THREE armed nodes on ONE object: A for the child, B for this process's
     // readback, C for the KVM leg. Each is a fresh `/dev/nvidia<N>` carrying its own
     // one-shot context (`nv-usermap.c:53-57`); the object is mapped once per node.
-    let arm = |rm: &mut HostRmBackend, what: &str| match rm.export_device_view(mem, 0, LEN) {
+    let arm = |rm: &mut HostRmBackend, what: &str| match rm.export_device_view(
+        mem,
+        0,
+        LEN,
+        kayfabe_isolate_host::rm::ViewAccess::ReadWrite,
+    ) {
         Ok(v) => {
             println!(
                 "ok    W393 arm {what}       = node token {} mmap_len {:#x} (NV_ESC_RM_MAP_MEMORY \
@@ -1410,6 +1415,67 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             None
         }
     };
+    // ---- 0. ★★★★★ **LEG R — DOES `ACCESS_READ_ONLY` ACTUALLY REFUSE A WRITABLE mmap?**
+    //
+    // ⊘ The whole security argument for handing a device node to the VMM rests on this one
+    // refusal (`the_counter_page_and_the_device_view.md` §3): `0xbb0090` is the PF mirror of
+    // the VF doorbell and its token is `runlist << 16 | chid` for ANY host channel, so a
+    // WRITABLE mapping of that page is a cross-tenant ring. The chain is readable in ogkm —
+    // `NVOS33_FLAGS_ACCESS_READ_ONLY` -> `NV_PROTECT_READABLE` (`mapping_cpu.c:970-982`) ->
+    // `-EACCES` on a writable mmap (`nv-mmap.c:155`) — and **reading a chain is not measuring
+    // it**. This tree has shipped that mistake before: *"citing the oracle is not the oracle
+    // being right."*
+    //
+    // ⇒ Two arms, and BOTH must hold or the design is unsafe: a read-only node must SERVE a
+    // read, and must REFUSE a write mapping. An arm that only refuses could be refusing for
+    // any reason at all.
+    match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadOnly) {
+        Ok(v) => {
+            let tok = v.token;
+            match rm.exports().lend(tok) {
+                Ok(fd) => {
+                    use std::os::fd::AsFd;
+                    let ro = kayfabe_linux_raw::MappedRegion::map(
+                        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+                        v.mmap_len,
+                        kayfabe_linux_raw::HostProt::ReadOnly,
+                        kayfabe_linux_raw::CachePolicy::WriteCombining,
+                        kayfabe_linux_raw::HostPageSize::query(),
+                    );
+                    let rw = kayfabe_linux_raw::MappedRegion::map(
+                        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+                        v.mmap_len,
+                        kayfabe_linux_raw::HostProt::ReadWrite,
+                        kayfabe_linux_raw::CachePolicy::WriteCombining,
+                        kayfabe_linux_raw::HostPageSize::query(),
+                    );
+                    match (ro.is_ok(), rw.is_err()) {
+                        (true, true) => println!(
+                            "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605} W393 LEG R        = READ-ONLY IS THE KERNEL'S: PROT_READ accepted, \
+                             PROT_WRITE REFUSED ({:?}). => a node armed ACCESS_READ_ONLY cannot be \
+                             turned into a doorbell by whoever holds it. The refusal is the \
+                             driver's, not ours.",
+                            rw.err()
+                        ),
+                        (true, false) => println!(
+                            "FAIL  W393 LEG R        = \u{2298}\u{2298} PROT_WRITE was ACCEPTED on a node armed \
+                             ACCESS_READ_ONLY. The doorbell page is writable by whoever holds the \
+                             descriptor \u{2014} the device-view design is UNSAFE as written."
+                        ),
+                        (false, _) => println!(
+                            "FAIL  W393 LEG R        = PROT_READ was refused too ({:?}); the arm is \
+                             broken rather than protective, and a refusal that refuses everything \
+                             measures nothing.",
+                            ro.err()
+                        ),
+                    }
+                }
+                Err(e) => println!("FAIL  W393 LEG R        = could not lend the read-only node: {e:?}"),
+            }
+        }
+        Err(e) => println!("FAIL  W393 LEG R        = arming ACCESS_READ_ONLY was refused: {e:?}"),
+    }
+
     let Some(va) = arm(rm, "A") else { return false };
     let Some(vb) = arm(rm, "B") else { return false };
     let (fd_a, fd_b) = match (rm.exports().lend(va.token), rm.exports().lend(vb.token)) {

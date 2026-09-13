@@ -330,6 +330,16 @@ pub struct BarMirror {
     /// two answers call for opposite work: a prefix means installing earlier, a remainder means
     /// the slot is not covering something it should. The totals cannot tell them apart.
     pramin_at_install: AtomicU64,
+    /// ★★★★★ **w595 — the GPA the PRAMIN slot was installed AT.**
+    ///
+    /// `[measured w594a]` `before_slot=0 after_slot=2977` — every one of the residual window
+    /// exits happened with the slot LIVE, so it is not the pre-install prefix. The next
+    /// question, and the only one a total cannot answer: **is the slot still where the guest
+    /// is looking?** w580 installs on the first latch write precisely because the guest's
+    /// firmware reprograms BAR0 — if it moves again afterwards, the slot sits at an address
+    /// nothing accesses and every access exits, which looks exactly like "the slot does not
+    /// work".
+    pramin_gpa: AtomicU64,
     table: Mutex<Table>,
     census: Census,
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
@@ -502,6 +512,7 @@ impl BarMirror {
             pramin: Mutex::new(None),
             pramin_moves: AtomicU64::new(0),
             pramin_at_install: AtomicU64::new(u64::MAX),
+            pramin_gpa: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
             census: Census::default(),
@@ -978,6 +989,7 @@ impl BarMirror {
                     let c = self.plane.counters();
                     self.pramin_at_install
                         .store(c.fb_reads + c.fb_writes, Ordering::Relaxed);
+                    self.pramin_gpa.store(p.base + span_off, Ordering::Relaxed);
                     eprintln!(
                         "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
                          showing fb 0x{base:x}, on the guest's FIRST latch write. ⊘ ONE slot: \
@@ -1091,6 +1103,20 @@ impl BarMirror {
             let c = self.plane.counters();
             let total = c.fb_reads + c.fb_writes;
             let pre = self.pramin_at_install.load(Ordering::Relaxed);
+            // ★ w595 — where the slot went in, against where BAR0 is NOW.
+            let at = self.pramin_gpa.load(Ordering::Relaxed);
+            let now = self
+                .machine
+                .bar_placement(BarId::Bar0)
+                .and_then(|p| self.plane.pramin_span().map(|(off, _)| p.base + off));
+            let placement = match (at, now) {
+                (u64::MAX, _) => " gpa=none".to_string(),
+                (a, Some(n)) if a == n => format!(" gpa=0x{a:x} (BAR0 has not moved since)"),
+                (a, Some(n)) => format!(
+                    " gpa=0x{a:x} but the aperture is NOW at 0x{n:x} => BAR0 MOVED UNDER THE SLOT;                      the slot is serving an address nothing accesses and every exit follows from                      that, not from the slot being wrong"
+                ),
+                (a, None) => format!(" gpa=0x{a:x} (BAR0 is unplaced now)"),
+            };
             let split = if pre == u64::MAX {
                 "\u{2298} the slot was never installed, so ALL of it is pre-install by definition".to_string()
             } else {
@@ -1105,7 +1131,7 @@ impl BarMirror {
                 )
             };
             eprintln!(
-                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown} window_accesses={total} {split} \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
+                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown} window_accesses={total} {split}{placement} \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
                 self.pramin_moves.load(Ordering::Relaxed),
                 self.pramin_skipped.load(Ordering::Relaxed),
             );
