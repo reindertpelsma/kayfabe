@@ -402,6 +402,8 @@ pub struct BarMirror {
     /// number that used to be `ALREADY-COVERED-EARLY`, moved one layer up where it costs one
     /// `BTreeSet` lookup instead of a mutex acquisition.
     premap_skipped: AtomicU64,
+    /// ★ w625 — the distinct refusal reasons seen, so 1 181 identical lines become one each.
+    premap_why: Mutex<std::collections::BTreeSet<(bool, &'static str)>>,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -585,6 +587,7 @@ impl BarMirror {
             premap_refused: AtomicU64::new(0),
             premap_biggest_leaf: AtomicU64::new(0),
             premap_skipped: AtomicU64::new(0),
+            premap_why: Mutex::new(std::collections::BTreeSet::new()),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1267,8 +1270,28 @@ impl BarMirror {
         };
         let leaves = match self.plane.window_leaves(win, PREMAP_BUDGET) {
             Ok(l) => l,
-            Err(_) => {
+            Err(e) => {
                 self.premap_refused.fetch_add(1, Ordering::Relaxed);
+                // ⊘⊘ **NAME IT, w625.** `[measured w624a]` `premap[refused=1181]` — the BAR2
+                // enumeration was refused on EVERY invalidate, and the count alone cannot say
+                // which of three things happened: no published root (`BAR2_UNROOTED`), a
+                // `level_shift` matching no format row (`BAR2_UNKNOWN_ROOT_LEVEL`), or the
+                // subtree walk itself faulting (`WINDOW_ENUMERATION_REFUSED`). Three causes,
+                // one symptom, three different fixes — the shape this session has now paid for
+                // four times. ⚠ Printed ONCE per distinct reason, not per refusal: 1 181
+                // identical lines would be the log telling the truth and nobody reading it.
+                let why = match e {
+                    kayfabe_device::WindowRefusal::NoAddressModel => "no address model",
+                    kayfabe_device::WindowRefusal::Translated { why, .. } => why,
+                };
+                let mut seen = self.premap_why.lock().unwrap_or_else(|x| x.into_inner());
+                if seen.insert((win == FbWindow::InstanceWindow, why)) {
+                    eprintln!(
+                        "kayfabe: PREMAP ⊘ {} enumeration REFUSED [{why}] — that aperture stays \
+                         on demand-fill. First occurrence only; the total is `premap[refused=]`.",
+                        if win == FbWindow::InstanceWindow { "bar2" } else { "bar1" }
+                    );
+                }
                 return;
             }
         };
