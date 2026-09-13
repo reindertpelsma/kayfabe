@@ -116,10 +116,21 @@ echo "=== launch cup3 DETACHED under its own ${CUP3_TIMEOUT}s timeout ==="
 echo "    ⊘ NOT comparable to the cup2 baseline of 180s — a different program, a longer bound."
 $G "cat > /tmp/run_cup3_detached.sh" <<GUESTEOF
 #!/bin/sh
-rm -f /tmp/cup3.out /tmp/cup3.rc
+rm -f /tmp/cup3.out /tmp/cup3.rc /tmp/cup3.ioctl
 echo "STARTED \$(date -Is)" > /tmp/cup3.started
-setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
+# ★★★★★ TRACED FROM THE START, not sampled.
+#   [measured w695g] sampling raced its own budget: `strace -c` took 5s of a 10s timeout and
+#   the follow-up ioctl trace attached exactly as `timeout` fired, capturing one SIGTERM and
+#   nothing else. A sampler that needs three tools inside the subject lifetime does not fit.
+#   Tracing from exec captures EVERY ioctl with no race, which is what identifies a repeat.
+# ⊘ Falls back to an untraced run if strace is missing, so the rung still grades.
+if command -v strace >/dev/null 2>&1; then
+  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} strace -f -tt -e trace=ioctl -o /tmp/cup3.ioctl ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
        </dev/null >/dev/null 2>&1 &
+else
+  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
+       </dev/null >/dev/null 2>&1 &
+fi
 sleep 1
 echo "LAUNCHED pid=\$(pgrep -x cup3 | head -1)"
 GUESTEOF
@@ -231,6 +242,15 @@ echo ""
 echo "=== ★ cup3 FINAL OUTPUT, verbatim ==="
 $G 'cat /tmp/cup3.out 2>/dev/null' | sed 's/^/    /'
 $G 'wc -c < /tmp/cup3.out 2>/dev/null | sed "s/^/CUP3_OUT_BYTES=/"'
+
+# ★★★★★ THE IOCTL STREAM, which is where cup3 actually is.
+# [measured w695f] 88% of its time is ioctl over 71 calls. The LAST distinct calls before the
+# timeout name what it was repeating; the histogram names how lopsided the repeat is.
+echo "=== the last ioctls cup3 issued (it dies HERE) ==="
+$G 'tail -14 /tmp/cup3.ioctl 2>/dev/null' | cut -c1-170 | sed 's/^/    /'
+echo "=== ioctl request histogram (the repeat stands out) ==="
+$G 'grep -o "request=0x[0-9a-f]*" /tmp/cup3.ioctl 2>/dev/null | sort | uniq -c | sort -rn | head -8' | sed 's/^/    /'
+echo "    CUP3_IOCTL_LINES=$($G 'wc -l < /tmp/cup3.ioctl 2>/dev/null' 2>/dev/null | tr -d '\r')"
 
 # ---------------------------------------------------------------------------------------
 # ★★★★★ THE TWO GRADED LINES. Emitted anchored at column 0 so the runner's `^` read works,
