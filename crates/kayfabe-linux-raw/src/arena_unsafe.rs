@@ -50,7 +50,7 @@ use crate::cache::CachePolicy;
 use crate::mapping_unsafe::{Backing, HostProt, MappedRegion};
 use crate::page_size::HostPageSize;
 use kayfabe_util::lockwitness;
-use std::os::fd::BorrowedFd;
+use std::os::fd::{AsRawFd, BorrowedFd};
 use std::sync::{Arc, Mutex};
 
 /// The page size this arena deals in — the framebuffer store's `FB_PAGE`, restated here
@@ -242,6 +242,49 @@ impl SharedPageArena {
     #[must_use]
     pub fn as_backing_fd(&self) -> BorrowedFd<'_> {
         self.inner.file.as_backing_fd()
+    }
+
+    /// ★★★★★ **Return every page to zero, and release its memory (w585).**
+    ///
+    /// ⊘ Needed only because the store now treats this file as the **single source of truth
+    /// for residency**: after an arena is installed, a framebuffer address that no store page
+    /// covers is not "unwritten and therefore zero" — it is *whatever the file holds*, because
+    /// a memory slot over this arena lets the guest write it with no trap at all.
+    ///
+    /// ★ That makes a device reset a **content-leak question**. `SparseFb::device_reset`
+    /// clears its page map precisely so one guest's framebuffer bytes cannot be read by the
+    /// next; under the new model clearing the map no longer clears the bytes, so the reset
+    /// must reach the file. ⚠ It could not do that by writing: the arena is framebuffer-sized
+    /// (12 GiB on a GA106), and a `memset` of it on the reset path is not a reset, it is a
+    /// hang.
+    ///
+    /// `FALLOC_FL_PUNCH_HOLE` is the primitive that says exactly this: drop the backing pages,
+    /// keep the length, subsequent reads see zero. It is O(extents), not O(bytes).
+    ///
+    /// ⚠ Existing `MAP_SHARED` mappings — ours, and any memslot the VMM has installed — stay
+    /// valid and start reading zero. That is the wanted semantics for a device reset and the
+    /// reason this is safe to call with placements live.
+    ///
+    /// # Errors
+    /// [`RawError`] from `fallocate`.
+    pub fn punch_all(&self) -> Result<(), RawError> {
+        let len = self.inner.pages * ARENA_PAGE;
+        // SAFETY: `fd` is this arena's own `memfd`, borrowed for the call; the range is the
+        // file's whole declared length; `fallocate` writes no memory of ours.
+        let rc = unsafe {
+            libc::fallocate(
+                self.inner.file.as_backing_fd().as_raw_fd(),
+                libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE,
+                0,
+                len as libc::off_t,
+            )
+        };
+        if rc != 0 {
+            return Err(crate::error::last_syscall_error(
+                "fallocate(PUNCH_HOLE) on the page arena",
+            ));
+        }
+        Ok(())
     }
 
     /// `(live, peak, recycled, issued)` — the allocator's census.

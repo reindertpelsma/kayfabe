@@ -751,7 +751,34 @@ pub trait FbPageArena: Send + core::fmt::Debug {
     ///
     /// # Errors
     /// One sentence naming the limit.
-    fn alloc_at(&mut self, frame: u64) -> Result<Box<dyn FbArenaPage>, &'static str>;
+    /// ⚠ **`addr` is a BYTE ADDRESS, not a frame number** — the name says so because w584 was
+    /// exactly this confusion, silent for fifteen commits. Every parameter on this trait is in
+    /// bytes; the store converts once, at the call site.
+    fn alloc_at(&mut self, addr: u64) -> Result<Box<dyn FbArenaPage>, &'static str>;
+
+    /// Fill `buf` from byte `off` of the page at framebuffer BYTE ADDRESS `addr`, **without
+    /// allocating a store page for it**.
+    ///
+    /// ★★★★★ **w585 — this is what makes the arena the single source of truth.** Once an
+    /// arena is installed, a frame the store has no page for is *not* "unwritten and therefore
+    /// zero": a memory slot over this arena lets the guest write that address with **no trap
+    /// at all**, so the bytes exist and only the file has them. Answering zero there is
+    /// answering from the wrong one of two memories.
+    ///
+    /// # Errors
+    /// One sentence naming the limit.
+    fn read_at(&self, addr: u64, off: u64, buf: &mut [u8]) -> Result<(), &'static str>;
+
+    /// Return every page of the arena to zero, for a device reset.
+    ///
+    /// ⊘ `SparseFb::device_reset` clears its page map so one guest's framebuffer bytes cannot
+    /// be read by the next. Under the residency model above, clearing the map no longer
+    /// clears the **bytes** — so the reset has to reach the file, or the map-clear becomes a
+    /// cross-life content leak that looks exactly like the fix for one.
+    ///
+    /// # Errors
+    /// One sentence naming the limit.
+    fn reset(&mut self) -> Result<(), &'static str>;
 }
 
 /// One resident page of a [`SparseFb`]: on the heap, or in the arena.
@@ -1098,6 +1125,10 @@ pub struct SparseFb {
     /// How many times the arena refused and a heap page was created instead — a named
     /// count, so *"this page is not memslottable"* is a measured fact and not a mystery.
     arena_refusals: u64,
+    /// ★ w585 — arena reads the arena itself refused, served as zero instead. A nonzero value
+    /// means the store and the file disagree about a frame, which is the shape of bug this
+    /// whole change exists to close; it must stay 0 in a healthy boot.
+    arena_read_refusals: u64,
     /// How many heap pages were migrated into the arena on demand.
     arena_migrations: u64,
     /// ★★★★ Page frame → who created it and in what order. Parallel to
@@ -1142,6 +1173,7 @@ impl SparseFb {
             cap,
             pages: HashMap::new(),
             arena: None,
+            arena_read_refusals: 0,
             arena_refusals: 0,
             arena_migrations: 0,
             origin: HashMap::new(),
@@ -1155,6 +1187,12 @@ impl SparseFb {
     #[must_use]
     pub fn arena_census(&self) -> (u64, u64) {
         (self.arena_refusals, self.arena_migrations)
+    }
+
+    /// ★ w585 — reads the arena refused after install, served as zero. See the field.
+    #[must_use]
+    pub fn arena_read_refusals(&self) -> u64 {
+        self.arena_read_refusals
     }
 
     /// ★ A fresh page: from the arena when one is installed and willing, else the heap —
@@ -1191,10 +1229,18 @@ impl SparseFb {
             // ⊘ And `arena_refusals` counted every one of them. `arena_census` has no
             // production caller, so the number existed and nobody printed it.
             match arena.alloc_at(frame * FB_PAGE) {
-                Ok(mut p) => {
-                    let _ = p.write(0, &[0u8; FB_PAGE as usize]);
-                    return FbPage::Arena(p);
-                }
+                // ⊘⊘ **w585 — THE ZERO-FILL THAT USED TO BE HERE WAS THE SECOND HALF OF THE
+                // SAME BUG.** It wrote 4 096 zeros over the arena page at creation. Under
+                // address indexing that page *is* framebuffer address `frame`, and a memory
+                // slot lets the guest write it untrapped — so the first trapped write to a
+                // page the guest had already filled through the slot **erased the rest of
+                // it**. The store was not reading a stale copy; it was destroying the live one.
+                //
+                // ★ Nothing is lost by dropping it. The arena is a freshly-created `memfd`
+                // with no recycling (the address IS the index), so a never-written page reads
+                // zero from the kernel — `SharedPageArena::alloc_at` says so in its own docs.
+                // The fill was re-stating a guarantee the file already gives.
+                Ok(p) => return FbPage::Arena(p),
                 Err(_) => self.arena_refusals += 1,
             }
         }
@@ -1293,15 +1339,46 @@ impl FbStore for SparseFb {
             });
         }
         let mut done = 0usize;
+        let mut refused = 0u64;
         for (frame, off, take) in SparseFb::runs(phys, buf.len()) {
             match self.pages.get(&frame) {
-                // ★ Memory we advertised and nobody has written. Zero, and `Ok` — the
-                // module docs argue why that is a statement rather than an invention.
-                None => buf[done..done + take].fill(0),
+                // ★★★★★ **w585 — WHO OWNS A FRAME THIS STORE HAS NO PAGE FOR.**
+                //
+                // With no arena: memory we advertised and nobody has written. Zero, and `Ok` —
+                // the module docs argue why that is a statement rather than an invention.
+                //
+                // ⊘ With an arena installed the same frame means something else entirely. The
+                // arena is address-indexed, so the guest can reach that exact address through
+                // a memory slot and write it **without ever trapping** — no trap, no store
+                // page, bytes in the file. Filling zeros there answers from the wrong one of
+                // two memories, and it is the read half of the bug the zero-fill in
+                // `fresh_page` was the write half of.
+                //
+                // ⇒ **After an arena is installed, every frame inside the framebuffer is
+                // implicitly resident in the file**, and `pages` is a cache over it rather
+                // than the memory itself.
+                None => {
+                    let dst = &mut buf[done..done + take];
+                    // ⚠ A refused arena read falls back to zero rather than refusing the whole
+                    // access: the pre-arena answer is the one that was correct for years, and
+                    // a bounds refusal must not turn a legal guest read into a device error.
+                    // It is COUNTED, so the fallback cannot be a silent second memory.
+                    let served = match self.arena.as_ref() {
+                        Some(a) => a.read_at(frame * FB_PAGE, off as u64, dst).is_ok(),
+                        None => false,
+                    };
+                    if !served {
+                        dst.fill(0);
+                        if self.arena.is_some() {
+                            refused += 1;
+                        }
+                    }
+                }
                 Some(p) => p.read(off, &mut buf[done..done + take]),
             }
             done += take;
         }
+        self.arena_read_refusals += refused;
         Ok(())
     }
 
@@ -1748,6 +1825,16 @@ impl FbStore for SparseFb {
         // state, and this is device state.
         self.origin.clear();
         self.seq = 0;
+        // ★★★★★ **w585 — AND THE BYTES ARE NO LONGER IN THE MAP.** Clearing `pages` used to
+        // BE the content wipe. With an arena installed the frames live in the file, reachable
+        // by the next guest through the same memory slot, so the map-clear above would be a
+        // wipe that wipes nothing — the most dangerous shape a guard can take, because it
+        // still reads as one. ⊘ Punching the arena is what `#130` actually asks for now.
+        if let Some(arena) = self.arena.as_mut() {
+            if arena.reset().is_err() {
+                self.arena_read_refusals += 1;
+            }
+        }
     }
 }
 

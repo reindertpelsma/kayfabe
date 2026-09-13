@@ -191,14 +191,30 @@ pub struct ArenaPort(SharedPageArena);
 struct ArenaPagePort(ArenaPage);
 
 impl FbPageArena for ArenaPort {
-    fn alloc_at(&mut self, frame: u64) -> Result<Box<dyn FbArenaPage>, &'static str> {
+    fn alloc_at(&mut self, addr: u64) -> Result<Box<dyn FbArenaPage>, &'static str> {
         // ★ w569 — the framebuffer address IS the file offset. See `SharedPageArena::alloc_at`
         // for why that replaced an allocator rather than gaining a parameter.
         self.0
-            .alloc_at(frame)
+            .alloc_at(addr)
             .map(|p| Box::new(ArenaPagePort(p)) as Box<dyn FbArenaPage>)
     }
+
+    fn read_at(&self, addr: u64, off: u64, buf: &mut [u8]) -> Result<(), &'static str> {
+        // ⊘ A TRANSIENT handle, taken and dropped inside the call. `alloc_at` on the shared
+        // arena is a bump of a live-count under a plain mutex — no syscall, no ranked lock —
+        // and the page it names is the same memory a resident handle would name, because the
+        // address IS the index. So this reads the file without giving the store a page, which
+        // is the whole point: a read must not make a frame resident.
+        let page = self.0.alloc_at(addr).map_err(|_| ARENA_OUT_OF_PAGE)?;
+        page.read_into(off, buf).map_err(|_| ARENA_OUT_OF_PAGE)
+    }
+
+    fn reset(&mut self) -> Result<(), &'static str> {
+        self.0.punch_all().map_err(|_| ARENA_PUNCH_REFUSED)
+    }
 }
+
+const ARENA_PUNCH_REFUSED: &str = "the arena refused to return its pages to zero";
 
 const ARENA_OUT_OF_PAGE: &str = "that access falls outside the arena page";
 
@@ -1171,5 +1187,110 @@ mod arena_unit_tests {
         let mut buf = [0u8; 8];
         fb.read(0, &mut buf);
         assert_eq!(buf, [0xAB; 8], "the arena page holds what the store wrote");
+    }
+
+    /// ★★★★★ **THE FILE IS THE MEMORY — a write that never trapped must still be READ (w585).**
+    ///
+    /// ⊘ This is what a memory slot over the arena does: the guest writes a framebuffer
+    /// address with **no exit**, so the bytes land in the `memfd` and the store never learns
+    /// the frame exists. Simulated here by writing through the arena directly, which is the
+    /// same memory the slot would map.
+    ///
+    /// Before w585 the store answered that read with ZEROS, because "no page" meant "nobody
+    /// wrote it". That is the read half of the two-memories bug, and it is why PRAMIN over a
+    /// slot could not work no matter how correctly the slot was placed.
+    #[test]
+    fn a_frame_written_only_through_the_file_reads_back_through_the_store() {
+        const FB: u64 = 64 << 20;
+        let arena = SharedPageArena::create_for(FB, HostPageSize::query()).expect("arena");
+        let mut fb = SparseFb::new(FB);
+        fb.install_page_arena(Box::new(ArenaPort(arena.clone())))
+            .expect("install");
+
+        // The untrapped write: straight into the file at the framebuffer address.
+        const ADDR: u64 = 777 * FB_PAGE;
+        let mut page = arena.alloc_at(ADDR).expect("the arena places it by address");
+        page.write_from(0x40, &[0xC5; 16]).expect("file write");
+        drop(page);
+
+        let mut buf = [0u8; 16];
+        fb.read(ADDR + 0x40, &mut buf);
+        assert_eq!(
+            buf,
+            [0xC5; 16],
+            "the store answered a frame it has no page for from the wrong memory. With an arena \
+             installed every frame inside the framebuffer is implicitly resident IN THE FILE — \
+             a memory slot lets the guest write it untrapped, so zeros here are an invention."
+        );
+        assert_eq!(fb.arena_read_refusals(), 0, "the arena refused the read");
+    }
+
+    /// ★★★★★ **A TRAPPED WRITE MUST NOT ERASE THE REST OF THE PAGE (w585).**
+    ///
+    /// ⊘ The write half of the same bug. `fresh_page` used to zero-fill a newly allocated
+    /// arena page; under address indexing that page already held whatever the guest had put
+    /// there through the slot, so the **first trapped write to it destroyed everything else in
+    /// it**. Not a stale read — an active erase, by the store, of live guest memory.
+    #[test]
+    fn a_trapped_write_does_not_erase_what_the_file_already_held() {
+        const FB: u64 = 64 << 20;
+        let arena = SharedPageArena::create_for(FB, HostPageSize::query()).expect("arena");
+        let mut fb = SparseFb::new(FB);
+        fb.install_page_arena(Box::new(ArenaPort(arena.clone())))
+            .expect("install");
+
+        const ADDR: u64 = 1234 * FB_PAGE;
+        let mut page = arena.alloc_at(ADDR).expect("place by address");
+        page.write_from(0x800, &[0x77; 32]).expect("file write");
+        drop(page);
+
+        // Now the guest traps a write elsewhere in the SAME page — this is what creates the
+        // store's page, and what used to zero the whole thing.
+        fb.write(ADDR + 0x10, &[0x11; 4]).expect("trapped write");
+
+        let mut far = [0u8; 32];
+        fb.read(ADDR + 0x800, &mut far).expect("read the far half");
+        assert_eq!(
+            far,
+            [0x77; 32],
+            "the trapped write erased 4 KiB of guest memory it was not addressed to"
+        );
+        let mut near = [0u8; 4];
+        fb.read(ADDR + 0x10, &mut near).expect("read the written half");
+        assert_eq!(near, [0x11; 4], "the trapped write itself did not land");
+    }
+
+    /// ★★★★★ **A DEVICE RESET MUST REACH THE FILE (w585).**
+    ///
+    /// ⊘ `device_reset` clears the page map so one guest's framebuffer cannot be read by the
+    /// next. Once the file is the memory, that clear wipes **nothing** — and a guard that
+    /// still reads as a guard is worse than none. The arena is punched instead.
+    #[test]
+    fn a_device_reset_returns_the_file_to_zero() {
+        const FB: u64 = 64 << 20;
+        let arena = SharedPageArena::create_for(FB, HostPageSize::query()).expect("arena");
+        let mut fb = SparseFb::new(FB);
+        fb.install_page_arena(Box::new(ArenaPort(arena.clone())))
+            .expect("install");
+
+        const ADDR: u64 = 4000 * FB_PAGE;
+        fb.write(ADDR, &[0xEE; 64]).expect("the first guest writes");
+        let mut buf = [0u8; 64];
+        fb.read(ADDR, &mut buf).expect("read");
+        assert_eq!(buf, [0xEE; 64], "non-vacuity: the bytes were there to leak");
+
+        fb.device_reset();
+
+        // ⊘ Asked through the FILE, not through the store — the store's map is empty either
+        // way, and the map being empty is precisely the thing that used to look like proof.
+        let page = arena.alloc_at(ADDR).expect("place by address");
+        let mut leaked = [0u8; 64];
+        page.read_into(0, &mut leaked).expect("file read");
+        assert_eq!(
+            leaked,
+            [0u8; 64],
+            "the previous device life's framebuffer bytes are still in the file, readable by \
+             the next guest through the same memory slot"
+        );
     }
 }
