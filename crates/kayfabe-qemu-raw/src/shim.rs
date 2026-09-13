@@ -17199,7 +17199,41 @@ impl Regs {
             doorbells_served_locally,
             doorbells_served_forwarded,
             doorbells_refused,
+            doorbells_scheduled,
         } = self.plane.counters();
+        // ★★★★★ **THE DOORBELL ARITHMETIC, STATED AND CHECKED — w695l.**
+        //
+        // ⊘⊘⊘ `[measured w695j]` the C census printed `doorbells: 48 arrived, 42 served,
+        // 2 REFUSED by name`. **48 != 44.** Four doorbells arrived and were accounted nowhere.
+        // `Counters::doorbells`' own doc states `doorbells == served + refused` as an invariant
+        // holding "at all times", and `account_doorbell_report`'s `Scheduled` arm was `=> {}` —
+        // directly beneath a comment warning that *"a third arm that counted as neither would
+        // break it silently."* It did, for as long as the deferred lane has existed.
+        //
+        // ★ A `Scheduled` doorbell is deferred to the publication worker, which accounts it
+        // again as served/refused when it completes. So the residue below is the count of
+        // submissions that **entered the queue and never came out** — a lost submission, which
+        // is precisely what a hung guest looks like from our side.
+        //
+        // ⊘ Printed unconditionally, including when it is zero, because "the books balance" and
+        // "nobody checked" are the same silence otherwise.
+        {
+            let accounted = doorbells_served + doorbells_refused;
+            let residue = doorbells.saturating_sub(accounted);
+            eprintln!(
+                "kayfabe: DOORBELL-ACCOUNTING arrived={doorbells} served={doorbells_served} \
+                 refused={doorbells_refused} scheduled_deferrals={doorbells_scheduled} \
+                 ⇒ UNACCOUNTED={residue} \
+                 {}",
+                if residue == 0 {
+                    "✔ the books balance: every doorbell that arrived was served or refused."
+                } else {
+                    "⊘⊘⊘ NOT ZERO — this many submissions entered the deferred lane and never \
+                     came out. Nothing faulted and nothing refused; the guest is simply still \
+                     waiting for work it believes it submitted."
+                }
+            );
+        }
         // ★★★★ §16.65 — the per-engine census, read from the SAME shared shell state the
         // routing decision tallies into (`SharedDoorbell::try_ce_submission`). ⊘ Not
         // re-derived from the object model here: a second walk of the channel table could

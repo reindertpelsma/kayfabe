@@ -538,6 +538,20 @@ pub struct Counters {
     /// default [`crate::RefusingDoorbell`], which is what a build with no forwarding plane
     /// answers every ring with.
     pub doorbells_refused: u64,
+    /// ★★★★★ **DEFERRED, AND COUNTED NOWHERE UNTIL w695l.**
+    ///
+    /// ⊘⊘⊘ `[measured w695j]` `doorbells: 48 arrived, 42 served, 2 REFUSED` — **48 != 44**.
+    /// Four doorbells arrived and were neither served nor refused, against the invariant stated
+    /// four fields up. `DoorbellReport::Scheduled` took the publication queue and its accounting
+    /// arm was literally `=> {}`, directly below a comment warning that *"a third arm that
+    /// counted as neither would break it silently."*
+    ///
+    /// ⇒ A `Scheduled` doorbell is counted HERE on deferral, and counted again as
+    /// served/refused if the worker ever completes it. So `served + refused + scheduled` is the
+    /// arrival total, and `scheduled - (later served or refused)` is the number of submissions
+    /// that **went into the queue and never came out** — which is exactly what a hung guest
+    /// looks like from our side, and exactly what nothing could see before.
+    pub doorbells_scheduled: u64,
     /// Commands decoded off the guest's command queue.
     pub commands: u64,
     /// ★★ Of those, the ones **no policy answered** — refused by name by the FSM. See
@@ -1475,6 +1489,7 @@ struct PlaneCounters {
     doorbells_served_locally: AtomicU64,
     doorbells_served_forwarded: AtomicU64,
     doorbells_refused: AtomicU64,
+    doorbells_scheduled: AtomicU64,
 }
 
 /// How many level rows [`RegPlane::bar2_phys`] will ask a format about when it maps a
@@ -3843,6 +3858,7 @@ impl RegPlane {
             doorbells_served_locally,
             doorbells_served_forwarded,
             doorbells_refused,
+            doorbells_scheduled,
             // ⊘ Named here because the destructuring is EXHAUSTIVE on purpose: a `..` would let
             // a new counter be added and never reported, which is the failure this whole line
             // of work is about. They are surfaced through `intr_census`, not `Counters`.
@@ -3898,6 +3914,7 @@ impl RegPlane {
             doorbells_served_locally: g(doorbells_served_locally),
             doorbells_served_forwarded: g(doorbells_served_forwarded),
             doorbells_refused: g(doorbells_refused),
+            doorbells_scheduled: g(doorbells_scheduled),
         }
     }
 
@@ -5731,7 +5748,12 @@ impl RegPlane {
             // report that says what it did will come back through this same function from
             // the worker. Counting it as `served` would make the queue's depth read as
             // progress.
-            DoorbellReport::Scheduled { .. } => {}
+            // ⊘ NOT an empty arm any more. See `Counters::doorbells_scheduled`: this is the
+            // third arm the invariant's own comment warned about, and it broke it silently for
+            // as long as the deferred lane has existed.
+            DoorbellReport::Scheduled { .. } => {
+                self.c.doorbells_scheduled.fetch_add(1, Ordering::Relaxed);
+            }
         }
         {
             let mut log = self.doorbell_log.lock().unwrap_or_else(|e| e.into_inner());
