@@ -311,7 +311,23 @@ pub enum Request {
     ///
     /// ⚠ **Tag 26, because 25 is RETIRED** — it carried the deleted `ExportDeviceView` and a
     /// peer built from an older revision may still send it. Never renumber, never re-issue.
-    ExportUsermodeView,
+    ExportUsermodeView {
+        /// `0` = read-only (the guest's slot), `1` = read-write (OURS, for the ring).
+        ///
+        /// ⊘⊘ **Two views of ONE page, and the asymmetry is the design.** Owner, 2026-09-13:
+        /// *"you need have write access to it, and vmm only read, write is trapped so you can
+        /// translate doorbell token."*
+        ///   - the **read-only** view is placed in the guest's window: the counter at `+0x80`
+        ///     resolves natively with no exit, and the doorbell store at `+0x90` EXITS because
+        ///     the slot is read-only, which is what lets us see the token at all;
+        ///   - the **read-write** view is never given to the guest. It is how we ring the host
+        ///     doorbell with the TRANSLATED token, inline on the vCPU, as one dword store.
+        ///
+        /// ⚠ The access is a REQUEST FIELD rather than two verbs because the two differ in
+        /// exactly this one bit and nothing else; two verbs would be two things to keep in
+        /// step. ⊘ But the isolate still chooses the OBJECT — see the variant's own docs.
+        write: u8,
+    },
     /// ★★★★★ [`kayfabe_isolate::RmBackend::map_guest_ram`] — the VMM instructing the
     /// isolate to map a slice of **guest RAM** (`mode2_isolate_memory_boundary.md` §5).
     ///
@@ -964,7 +980,10 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.push(*prot);
             }
-            Request::ExportUsermodeView => out.push(26),
+            Request::ExportUsermodeView { write } => {
+                out.push(26);
+                out.push(*write);
+            }
             Request::MapGuestRam { offset, len, prot } => {
                 out.push(16);
                 out.extend_from_slice(&offset.to_le_bytes());
@@ -1215,7 +1234,9 @@ impl Envelope {
             // A peer built from an older revision may still send it; reusing the number for
             // a new request would decode those frames as the new verb. Never renumber, and
             // never re-issue 25.
-            26 => Request::ExportUsermodeView,
+            26 => Request::ExportUsermodeView {
+                write: c.u8("usermode view write")?,
+            },
             16 => Request::MapGuestRam {
                 offset: c.u64("guest ram offset")?,
                 len: c.u64("guest ram len")?,
@@ -1521,7 +1542,8 @@ mod tests {
             // ★ w629 — a unit variant still needs a sample: the round-trip gate proves its TAG
             // decodes to it, which is the only thing that can go wrong for a verb with no body
             // and is exactly what a renumbering would break.
-            Request::ExportUsermodeView,
+            Request::ExportUsermodeView { write: 0 },
+            Request::ExportUsermodeView { write: 1 },
             Request::Alloc {
                 parent: 0xC1D0_0001,
                 class: 0x90f1,
@@ -1738,7 +1760,7 @@ mod tests {
     /// coverage test below then fails until the sample exists.
     fn request_tag(r: &Request) -> &'static str {
         match r {
-            Request::ExportUsermodeView => "ExportUsermodeView",
+            Request::ExportUsermodeView { .. } => "ExportUsermodeView",
             Request::Alloc { .. } => "Alloc",
             Request::AllocVaSpace => "AllocVaSpace",
             Request::SubdeviceControl { .. } => "SubdeviceControl",

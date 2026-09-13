@@ -4912,13 +4912,23 @@ impl RmBackend for HostRmBackend {
     ///
     /// ⊘ A missing usermode window is REFUSED rather than substituted: `self.conn.usermode` is
     /// a `Result` precisely so that "we never got one" cannot be confused with "here is one".
-    fn export_usermode_view(&mut self) -> Result<kayfabe_isolate::DeviceView, RmError> {
+    fn export_usermode_view(&mut self, write: bool) -> Result<kayfabe_isolate::DeviceView, RmError> {
         let object = self.conn.usermode.as_ref().map_err(|e| *e)?.object;
         let v = self.export_device_view(
             HostHandle::new(self.id, u64::from(object)),
             0,
             kayfabe_abi::submit::USERMODE_WINDOW_SIZE,
-            ViewAccess::ReadOnly,
+            if write {
+                // ⊘⊘ **OURS, never the guest's.** This node is opened `O_RDWR`, so whoever
+                // holds it can ring the host doorbell — which is the point: the VMM translates
+                // the guest's token and stores the host one INLINE on the vCPU, as a single
+                // dword, with no IPC and nothing to block on. ⚠ It must never reach a guest
+                // slot; the guest's view is the read-only one, whose whole job is to make its
+                // doorbell store EXIT so the token can be translated at all.
+                ViewAccess::ReadWrite
+            } else {
+                ViewAccess::ReadOnly
+            },
         )?;
         // ⊘⊘ **CODE ROT, MARKED (goal 5).** `rm::DeviceView` and `kayfabe_isolate::DeviceView`
         // are the SAME four fields declared twice in two crates, so a trait that returns one

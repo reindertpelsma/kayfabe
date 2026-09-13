@@ -539,11 +539,13 @@ impl ProxyRmBackend {
     ///
     /// # Errors
     /// [`RmError::Wedged`] for every refusal, as its two siblings do.
-    fn call_for_usermode_view(&mut self) -> Result<(u64, u64), RmError> {
+    fn call_for_usermode_view(&mut self, write: bool) -> Result<(u64, u64), RmError> {
         let txn = self.cancel.current_txn().unwrap_or(0);
         let body = Envelope {
             txn,
-            request: Request::ExportUsermodeView,
+            request: Request::ExportUsermodeView {
+                write: u8::from(write),
+            },
         }
         .encode();
         let mut sock = &*self.sock;
@@ -906,8 +908,11 @@ impl RmBackend for ProxyRmBackend {
     /// rather than invented. **The VMM never learns which RM object this is and must not**: it
     /// holds a descriptor for one armed mapping, and a handle it could name would be a handle
     /// it could ask about.
-    fn export_usermode_view(&mut self) -> Result<kayfabe_isolate::DeviceView, RmError> {
-        let (token, mmap_len) = self.call_for_usermode_view()?;
+    fn export_usermode_view(
+        &mut self,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let (token, mmap_len) = self.call_for_usermode_view(write)?;
         Ok(kayfabe_isolate::DeviceView {
             token,
             memory: HostHandle::NULL,

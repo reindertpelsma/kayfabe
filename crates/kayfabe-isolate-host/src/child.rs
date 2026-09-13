@@ -530,7 +530,7 @@ fn serve_one(
         // one that carries a CHARACTER DEVICE. Intercepted here for the other two's reason:
         // `execute` is a pure `Request -> Reply` function and a resource has no place in
         // nineteen of its arms.
-        Request::ExportUsermodeView => export_usermode_view(rm, exports),
+        Request::ExportUsermodeView { write } => export_usermode_view(rm, exports, write != 0),
         other => (execute(rm, other), None),
     }
 }
@@ -549,8 +549,9 @@ fn serve_one(
 fn export_usermode_view(
     rm: &mut dyn RmBackend,
     exports: &ChildExports,
+    write: bool,
 ) -> (Reply, Option<OwnedFd>) {
-    let view = match rm.export_usermode_view() {
+    let view = match rm.export_usermode_view(write) {
         Ok(v) => v,
         Err(e) => return (failed(e), None),
     };
@@ -877,7 +878,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // no fd — which the parent would read as a `Backing` naming nothing.
         Request::ExportBacking { .. }
         | Request::JoinFbLeaf { .. }
-        | Request::ExportUsermodeView => {
+        | Request::ExportUsermodeView { .. } => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
         // ★★★★★ **w380 — the alias, and it is NOT in the line above.** Its reply carries no

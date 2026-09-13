@@ -1263,7 +1263,8 @@ pub trait RmBackend: Send + Sync {
     /// # Errors
     /// [`RmError`] — and the default REFUSES, so a backend that has no usermode window says so
     /// rather than answering with something else.
-    fn export_usermode_view(&mut self) -> Result<DeviceView, RmError> {
+    fn export_usermode_view(&mut self, write: bool) -> Result<DeviceView, RmError> {
+        let _ = write;
         // ⊘ `0x56` is `NV_ERR_NOT_SUPPORTED`, the same refusal the trait's other
         // capability-shaped defaults use — a backend without a usermode window is not broken,
         // it simply does not offer this.
@@ -3244,6 +3245,32 @@ impl Worker {
             });
         }
         self.backend.export_device_view(memory, offset, len)
+    }
+
+    /// ★★★★★ **w635 — the door for the counter page's view.**
+    ///
+    /// ⊘ **No foreign-handle gate, because there is no handle to gate.** Every other door here
+    /// checks `memory.belongs_to(self.isolate)` — the `#14` breach this isolate exists to
+    /// prevent. This verb names no memory at all: the backend arms its OWN usermode object, so
+    /// there is nothing a caller could pass from a sibling's namespace. ⚠ That is a stronger
+    /// property than the gate, not a missing one, and it is stated here rather than left as an
+    /// absence a reader has to notice.
+    ///
+    /// ★ What the VMM does with it: maps it read-only over the guest's free-running counter,
+    /// which is the last read trap on the device. `[measured w634, unprivileged]` every step of
+    /// that chain — the arming, the kernel's refusal of a writable `mmap`, the placement
+    /// through the production path, and a guest access taking no exit — is green on the code
+    /// path that runs.
+    ///
+    /// # Errors
+    /// Whatever [`RmBackend::export_usermode_view`] refuses with; the default REFUSES, so a
+    /// backend with no usermode window says so rather than answering with something else.
+    ///
+    /// # Panics
+    /// If this thread holds any ranked lock (R1) — a syscall in another process over a socket.
+    pub fn export_usermode_view(&mut self, write: bool) -> Result<DeviceView, RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("exporting the usermode view to the VMM");
+        self.backend.export_usermode_view(write)
     }
 
     /// ★★★★★ Carry the VMM's guest-RAM grant to this worker's isolate.
