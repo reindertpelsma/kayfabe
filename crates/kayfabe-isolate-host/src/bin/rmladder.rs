@@ -1439,14 +1439,22 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                         kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
                         v.mmap_len,
                         kayfabe_linux_raw::HostProt::ReadOnly,
-                        kayfabe_linux_raw::CachePolicy::WriteCombining,
+                        // ⊘ `WriteBack`, and it is not a choice about memory type. This layer
+                        // refuses `WriteCombining` over "a shared file" backing, and the
+                        // ACTUAL type is the driver's: `nv-mmap.c:364-370` sets
+                        // `NV_PGPROT_UNCACHED_DEVICE` on the vma regardless of what we ask.
+                        // ⚠ My first draft asked for `WriteCombining` and the READ map was
+                        // refused — which the third arm below correctly reported as *"the arm
+                        // is broken rather than protective"* instead of counting the write
+                        // refusal as protection. A two-arm test would have passed on a bug.
+                        kayfabe_linux_raw::CachePolicy::WriteBack,
                         kayfabe_linux_raw::HostPageSize::query(),
                     );
                     let rw = kayfabe_linux_raw::MappedRegion::map(
                         kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
                         v.mmap_len,
                         kayfabe_linux_raw::HostProt::ReadWrite,
-                        kayfabe_linux_raw::CachePolicy::WriteCombining,
+                        kayfabe_linux_raw::CachePolicy::WriteBack,
                         kayfabe_linux_raw::HostPageSize::query(),
                     );
                     match (ro.is_ok(), rw.is_err()) {
