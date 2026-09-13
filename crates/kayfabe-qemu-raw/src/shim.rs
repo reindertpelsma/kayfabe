@@ -3721,6 +3721,8 @@ struct SharedDoorbell {
     /// channel. Rebuilt on the publication worker from
     /// [`kayfabe_rt::device::SharedDevice::doorbell_routes`].
     dbtable: Arc<kayfabe_device::dbtable::DoorbellTable>,
+    /// ★ The shadow census for THIS device — see [`DbtableShadow`].
+    dbshadow: Arc<DbtableShadow>,
     /// ★★★★★ **w644 — THE BAR MIRROR, PER DEVICE.** Replaces the process-global
     /// `MIRROR_FOR_BIRTH`.
     ///
@@ -6131,60 +6133,69 @@ fn refused(
 /// owns this" and would be a dropped submission wearing a legitimate-looking answer.
 const VCHID_SPACE: usize = 1 << 12;
 
-/// Doorbells the shadow table would have dropped as `Unallocated`.
-static DBTABLE_SHADOW_UNALLOCATED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
-/// Doorbells the shadow table would have rung inline as passthrough.
-static DBTABLE_SHADOW_PASSTHROUGH: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
-/// Doorbells the shadow table would have queued as emulated.
-static DBTABLE_SHADOW_EMULATED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
-/// Tokens that did not decode at all — malformed, and a non-event on either path.
-static DBTABLE_SHADOW_MALFORMED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
-/// Rebuilds of the table from the projection, and rows installed by the last one.
-static DBTABLE_REBUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-/// ★★★ The **PEAK** number of rows this table has ever held — not the last.
+/// ★★★★★ **THE SHADOW CENSUS, PER DEVICE (w648).**
 ///
-/// ⊘⊘ `[measured w643a]` the last-value gauge printed **`rows=0`** on a boot where the table
-/// had answered 204 passthrough and 156 emulated routes: every channel is gone by teardown, so
-/// the final rebuild installs nothing. **A last-value gauge cannot tell "never populated" from
-/// "emptied at the end"** — and `rows=0` beside `unallocated=0` reads as a table that was never
-/// built, which is the reading that would have retired this work as broken.
-static DBTABLE_ROWS_PEAK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-/// Rebuilds whose snapshot was byte-identical to the last — the store pass skipped.
-static DBTABLE_REBUILDS_SKIPPED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
-
-/// The shadow census. ⚠ Read the counts **beside** the total: a table nobody consulted
-/// disagrees with nothing, and the two zeros are indistinguishable.
+/// ⊘⊘ **These were `static`s until this commit, and that made the flip's evidence unreadable.**
+/// With two emulated GPUs in one process the line summed both devices, so `unallocated=0` stopped
+/// distinguishing *"this device dropped none"* from *"the other device's traffic swamped it"* —
+/// and `unallocated` is the ONE number the decision to flip an arm rests on. ★ A telemetry static
+/// is usually cosmetic; this one was load-bearing, which is the distinction the multi-GPU audit's
+/// last finding turns on.
 ///
-/// ⊘⊘ **PROCESS-GLOBAL, AND THAT IS A KNOWN MULTI-GPU FLAW.** These counters are `static`s, so
-/// with two emulated GPUs in one process this line sums both devices and `unallocated=0` would
-/// stop distinguishing *"this device never dropped one"* from *"the other device's traffic
-/// swamped it"*. Tolerable **only** because the table decides nothing yet; it must become a
-/// field on the port before any arm is flipped, or the evidence for flipping it is a number
-/// about two GPUs at once. Same class as `SWEEP_DEFER_GIVEUPS` / `MIRROR_DRAINS`.
-fn dbtable_shadow_census() -> String {
-    use std::sync::atomic::Ordering::Relaxed;
-    let (u, p, e, m) = (
-        DBTABLE_SHADOW_UNALLOCATED.load(Relaxed),
-        DBTABLE_SHADOW_PASSTHROUGH.load(Relaxed),
-        DBTABLE_SHADOW_EMULATED.load(Relaxed),
-        DBTABLE_SHADOW_MALFORMED.load(Relaxed),
-    );
-    format!(
-        "DBTABLE-SHADOW consulted={} [unallocated={u} passthrough={p} emulated={e} \
-         malformed={m}] rows_peak={} rebuilds={} skipped={} ⊘ SHADOW: the table decided \
-         NOTHING. ★ `unallocated` is THE number: it counts doorbells this table WOULD HAVE \
-         DROPPED, and it must be 0 with a non-zero `consulted` before any arm is flipped.",
-        u + p + e + m,
-        DBTABLE_ROWS_PEAK.load(Relaxed),
-        DBTABLE_REBUILDS.load(Relaxed),
-        DBTABLE_REBUILDS_SKIPPED.load(Relaxed),
-    )
+/// ⇒ A field on [`SharedDoorbell`], shared across its clones by `Arc`, so the worker and every
+/// vCPU that rings this device count into the same place and no other device's do.
+#[derive(Debug, Default)]
+struct DbtableShadow {
+    /// Doorbells the table would have dropped as `Unallocated` — **the flip criterion**.
+    unallocated: std::sync::atomic::AtomicU64,
+    /// Doorbells it would have rung inline as passthrough.
+    passthrough: std::sync::atomic::AtomicU64,
+    /// Doorbells it would have queued as emulated.
+    emulated: std::sync::atomic::AtomicU64,
+    /// Tokens that did not decode at all — malformed, and a non-event on either path. ⊘ Counted
+    /// apart from `unallocated`: *"RM could not have written this"* and *"nobody owns this"* are
+    /// different diagnoses with different fixes.
+    malformed: std::sync::atomic::AtomicU64,
+    /// Rebuilds attempted.
+    rebuilds: std::sync::atomic::AtomicU64,
+    /// Rebuilds whose snapshot was identical to the last — the store pass skipped.
+    skipped: std::sync::atomic::AtomicU64,
+    /// ★ The **PEAK** rows the table has held, not the last.
+    ///
+    /// ⊘⊘ `[measured w643a]` the last-value gauge printed **`rows=0`** on a boot where the table
+    /// answered 360 routes: every channel is gone by teardown, so the final rebuild installs
+    /// nothing. **A last-value gauge cannot tell "never populated" from "emptied at the end"**,
+    /// and `rows=0` beside `unallocated=0` reads as a table that was never built — the reading
+    /// that retires this work as broken.
+    rows_peak: std::sync::atomic::AtomicU64,
 }
+
+impl DbtableShadow {
+    /// ⚠ Read the counts **beside** the total: a table nobody consulted disagrees with nothing,
+    /// and the two zeros are indistinguishable.
+    fn census(&self) -> String {
+        use std::sync::atomic::Ordering::Relaxed;
+        let (u, p, e, m) = (
+            self.unallocated.load(Relaxed),
+            self.passthrough.load(Relaxed),
+            self.emulated.load(Relaxed),
+            self.malformed.load(Relaxed),
+        );
+        format!(
+            "DBTABLE-SHADOW consulted={} [unallocated={u} passthrough={p} emulated={e} \
+             malformed={m}] rows_peak={} rebuilds={} skipped={} ⊘ SHADOW: the table decided \
+             NOTHING. ★ `unallocated` is THE number: it counts doorbells this table WOULD HAVE \
+             DROPPED, and it must be 0 with a non-zero `consulted` before any arm is flipped. \
+             ⊘ PER DEVICE since w648 — as a process-global it summed two GPUs and the criterion \
+             stopped meaning anything.",
+            u + p + e + m,
+            self.rows_peak.load(Relaxed),
+            self.rebuilds.load(Relaxed),
+            self.skipped.load(Relaxed),
+        )
+    }
+}
+
 
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     /// ★★★★★ **w383 — THE FRONT DOOR: validate, enqueue, return.**
@@ -6377,18 +6388,18 @@ impl SharedDoorbell {
         // paths, so it is counted apart rather than folded into `Unallocated`: they are
         // different diagnoses ("RM could not have written this" vs "nobody owns this").
         let Some(target) = kayfabe_chips::ga10x::decode_work_submit_token(token) else {
-            DBTABLE_SHADOW_MALFORMED.fetch_add(1, Relaxed);
+            self.dbshadow.malformed.fetch_add(1, Relaxed);
             return;
         };
         match self.dbtable.route(u64::from(target.vchid.0)) {
             Route::Unallocated => {
-                DBTABLE_SHADOW_UNALLOCATED.fetch_add(1, Relaxed);
+                self.dbshadow.unallocated.fetch_add(1, Relaxed);
             }
             Route::Passthrough { .. } => {
-                DBTABLE_SHADOW_PASSTHROUGH.fetch_add(1, Relaxed);
+                self.dbshadow.passthrough.fetch_add(1, Relaxed);
             }
             Route::Emulated { .. } => {
-                DBTABLE_SHADOW_EMULATED.fetch_add(1, Relaxed);
+                self.dbshadow.emulated.fetch_add(1, Relaxed);
             }
         }
     }
@@ -6408,7 +6419,7 @@ impl SharedDoorbell {
         // ⊘ The spine read is UNCONDITIONAL, and that is the completeness argument: the table
         // is whatever the current projection says, never whatever an event hook remembered.
         let rows = self.device.doorbell_routes(DOORBELL_TARGET_GPU);
-        DBTABLE_REBUILDS.fetch_add(1, Relaxed);
+        self.dbshadow.rebuilds.fetch_add(1, Relaxed);
         // ★★★ **`[measured w643a]` 41 746 rebuilds for 360 doorbells** — the worker wakes for
         // mirror fills and invalidates too, not only for doorbells, so this runs ~116× per
         // doorbell. ⊘ The snapshot is what must stay unconditional; the 4096 stores behind it
@@ -6416,7 +6427,7 @@ impl SharedDoorbell {
         // and say how often that happened — a skip count is what makes the claim checkable
         // instead of an assertion that the common case is cheap.
         if *last == rows {
-            DBTABLE_REBUILDS_SKIPPED.fetch_add(1, Relaxed);
+            self.dbshadow.skipped.fetch_add(1, Relaxed);
             return;
         }
         let mut live = vec![false; VCHID_SPACE];
@@ -6449,8 +6460,8 @@ impl SharedDoorbell {
             }
         }
         // ⊘ PEAK, not last: every channel is gone by teardown, so a last-value gauge prints 0
-        // for a table that served hundreds of routes. See `DBTABLE_ROWS_PEAK`.
-        DBTABLE_ROWS_PEAK.fetch_max(installed, Relaxed);
+        // for a table that served hundreds of routes. See `DbtableShadow::rows_peak`.
+        self.dbshadow.rows_peak.fetch_max(installed, Relaxed);
         *last = rows;
     }
 
@@ -6774,7 +6785,7 @@ impl SharedDoorbell {
                 // ★★★★★ **GOAL 4 — what the DoorbellTable WOULD have done**, beside the
                 // numbers the live path actually produced. ⊘ A census with no emitter is the
                 // w584 failure exactly, and this one exists to be read before a flip.
-                dbtable_shadow_census(),
+                self.dbshadow.census(),
                 // ★★★★★ w517 — the owner's MMIO contract, CHECKED. A trap may take the
                 // plane's queue lock and nothing above it. Both violations found this session
                 // were found by a stall alarm firing on whichever trap happened to be
@@ -14560,6 +14571,7 @@ impl Regs {
             // can produce, so a well-formed token is never past the end and the bounds check
             // only ever refuses a MALFORMED one.
             dbtable: Arc::new(kayfabe_device::dbtable::DoorbellTable::new(VCHID_SPACE)),
+            dbshadow: Arc::new(DbtableShadow::default()),
             #[cfg(feature = "host-isolates")]
             bar_mirror: Arc::new(std::sync::OnceLock::new()),
         };

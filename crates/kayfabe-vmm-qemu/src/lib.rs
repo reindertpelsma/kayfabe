@@ -1353,6 +1353,58 @@ impl QemuMachine {
             })
     }
 
+    /// ★★★★★ **RING A HARDWARE DOORBELL — one aligned dword into an installed window.**
+    ///
+    /// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker"* and
+    /// *"you need have write access to it, and vmm only read, write is trapped so you can
+    /// translate doorbell token."*
+    ///
+    /// # ⊘ The two permissions this depends on, and why neither substitutes for the other
+    ///
+    /// The counter/doorbell page is installed by [`QemuMachine::install_device_window`] with a
+    /// **writable VMA** and a **read-only memslot**. The VMA is what makes this call legal at
+    /// all; the slot tier is what makes the guest's own store EXIT so there is a token to
+    /// translate. ⚠ A writable slot would hand the guest a ring it could drive without us, and
+    /// a read-only VMA would refuse this store — both permissions are load-bearing and they
+    /// point at different adversaries.
+    ///
+    /// # ⚠ What a caller may pass
+    ///
+    /// `offset` is **ours**, never the guest's. The guest supplies a doorbell *token*, which is
+    /// translated through the routing table into a host token that becomes the `value`; the
+    /// offset is the register's fixed place in the window. ⊘ Nothing here can make a
+    /// guest-chosen number into an address — see `the_vmm_address_may_never_be_guest_chosen_or_visible`.
+    ///
+    /// ★ Safe to call from a vCPU thread: no lock beyond the installer's own read, no
+    /// allocation, and one instruction after the bound. That is the entire point — this is what
+    /// replaces an IPC round-trip to a worker.
+    ///
+    /// # Errors
+    /// [`VmmError::Unsupported`] if `region` is not an installed window; otherwise as
+    /// [`kayfabe_linux_raw::GuestWindow::store_u32`] — out of range, or an offset that is not
+    /// 4-byte aligned (**refused, never rounded**).
+    pub fn device_window_store_u32(
+        &self,
+        region: RamRegionId,
+        offset: u64,
+        value: u32,
+    ) -> Result<(), VmmError> {
+        let p = &self.plane;
+        let (ins, _h) = p.installer();
+        let Some(window) = ins.windows.get(&region) else {
+            return Err(VmmError::Unsupported(
+                "that region is not an installed window, so there is no register to store into",
+            ));
+        };
+        window
+            .window
+            .store_u32(HostOffset::new(offset), value)
+            .map_err(|e| {
+                p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                host_refused("storing one dword into a device window (a doorbell ring)", &e)
+            })
+    }
+
     pub fn install_file_window(
         &self,
         gpa: u64,

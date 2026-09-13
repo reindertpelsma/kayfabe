@@ -742,3 +742,60 @@ fn every_memory_plane_door_refuses_after_unrealize() {
     );
     assert_eq!(BAR1_BASE, common::BAR1_BASE);
 }
+
+/// ★★★★★ **THE DOORBELL RING — one aligned dword, refused for anything else.**
+///
+/// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker."* The
+/// whole vCPU-side act of a passthrough doorbell is
+/// [`QemuMachine::device_window_store_u32`], so its refusals are the only thing between an
+/// offset computed upstream and a write into the VMM's own mapping.
+///
+/// ⊘ Tested through an ordinary RAM window rather than a device view: the store path, the bound
+/// and the alignment rule are the same code, and a device view needs a real `/dev/nvidia*`
+/// descriptor this suite must not require. ⚠ What that does NOT cover is the *permission* pair
+/// (writable VMA, read-only slot) — that is `the_counter_page_and_the_device_view.md`'s LEG P,
+/// measured unprivileged on the bench, and it is a different claim from this one.
+#[test]
+fn a_doorbell_ring_stores_one_dword_and_refuses_an_unaligned_or_out_of_range_offset() {
+    let p = page();
+    let (m, _host, _slots) = machine();
+    let region = m
+        .install_ram_window(window_gpa() + window_len(), 2 * p)
+        .expect("a two-page window to ring into");
+
+    m.device_window_store_u32(region, 0x90, 0xDEAD_BEEF)
+        .expect("an aligned dword inside the window");
+
+    // ⚠ Refused, never rounded: quietly fixing the offset would hide a wrong-offset bug behind
+    // a ring that appears to work.
+    for off in [0x91u64, 0x92, 0x93] {
+        assert!(
+            m.device_window_store_u32(region, off, 1).is_err(),
+            "{off:#x} was accepted — an unaligned register store is a DIFFERENT access"
+        );
+    }
+
+    // ⊘ The bound is the window's length, and the last byte is what must fall inside — the
+    // off-by-one an `offset < len` test passes.
+    m.device_window_store_u32(region, 2 * p - 4, 7)
+        .expect("the LAST aligned dword is inside");
+    assert!(
+        m.device_window_store_u32(region, 2 * p, 7).is_err(),
+        "a store starting at the end was accepted"
+    );
+
+    // ⊘ And a region nobody installed is refused BY NAME rather than resolving to whatever the
+    // map happens to hold. ⚠ This is the arm that matters most for a store: a lookup that
+    // silently found the *wrong* window would write a dword into somebody else's mapping and
+    // return `Ok`.
+    let bogus = kayfabe_vmm::RamRegionId(0xDEAD_BEEF_DEAD_BEEF);
+    match m.device_window_store_u32(bogus, 0x90, 1) {
+        Err(kayfabe_vmm::VmmError::Unsupported(why)) => {
+            assert!(
+                why.contains("not an installed window"),
+                "refused, but not by the reason that makes it safe: {why}"
+            );
+        }
+        other => panic!("a store into a region nobody installed returned {other:?}"),
+    }
+}
