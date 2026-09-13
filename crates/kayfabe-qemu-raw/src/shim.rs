@@ -15805,6 +15805,29 @@ impl Regs {
     /// extra exits on one page, never a wrong value.
 
     /// ★★★★★ **HAS ANYTHING BEEN LATCHED SINCE WE LAST WOKE THE WORKER? (w677)**
+///
+/// # ⊘⊘⊘ IT WORKED, AND IT DID NOT FIX THE 20 SECONDS — w678 refuted the causal claim
+///
+/// `[measured w678a]` the gate does exactly what it was built to do:
+/// ```text
+/// mirror_fill  11430 -> 28     wakes_skipped=11402     28 + 11402 = 11430   EXACT
+/// queued       12277 -> 891
+/// cuDeviceGet   ~20s -> ~20s   UNCHANGED
+/// ```
+/// The arithmetic closes perfectly, so the model of **where** the wakes came from was right.
+/// The model of **what they cost** was wrong: deleting 93 % of the worker's jobs moved the wall
+/// clock not at all.
+///
+/// ⇒ **Keep this gate** — 11 402 needless worker passes is real waste and removing it is correct
+/// on its own terms. ⚠ But do NOT let the commit message that introduced it stand as an
+/// explanation of the 20 s `cuDeviceGet`: it is not one, and treating a true optimisation as a
+/// solved bug is how the next person stops looking.
+///
+/// ⊘ What the same boot rules out, with numbers: `TRAP-CPU n=5715 slow_traps=1 slow_starved=0`
+/// (not inline vCPU work), `VERBCOST total=163058us over 14 plans` (not the isolate), `queued=891`
+/// (not the queue). The guest spins at 100 % CPU throughout — it is polling for a value, on a
+/// page that takes no exit, and something takes 20 s to become true.
+
     ///
     /// `[measured w674a/w676a]` the deferral sites queued a `MirrorFill` wake **unconditionally**,
     /// twice per trap: `n=5715` traps ⇒ `mirror_fill=11430` wakes, an EXACT 2× — and each wake costs
