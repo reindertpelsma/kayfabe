@@ -166,6 +166,43 @@ two stores in the wrong order.
 and the signal is a **device interrupt**, two different paths. The store must be *ordered before*
 the signal, not merely written above it.
 
+## ★★★★★ THE ARM IS INDEPENDENT OF THE WORK — measured, all 40
+
+**Owner, 2026-09-13:**
+
+> *"emulated channels remain function bodies, so a scratchpad operation is independent of it. Even
+> channels that just didn't execute anything blocking can an interrupt be registered and
+> triggered. And for scratchpad channels, when we execute work on host, if it takes too long, we
+> ask eventfd to arm an interrupt for ourself"*
+
+`[measured w684a]`, with the counter split into its three causes:
+
+```
+nonstall[raises=4 unvectored=40 (no_engine=40 no_vector=0 out_of_range=0) masked=4]
+```
+
+★ **All forty are `no_engine`.** Not one is a missing `intr_table` row, not one is an out-of-range
+vector. ⇒ The defect is **not** a gap to fill in a table — it is that we ask the wrong question.
+`announce_completion` derives the interrupt from the channel's **bound engine**, a property these
+channels do not have and, under this model, **do not need**.
+
+### What follows, and it simplifies the design rather than complicating it
+
+1. **An interrupt may be armed on a channel that never ran anything blocking.** So an arm cannot be
+   conditioned on work existing, on a completion being pending, or on the channel having an
+   engine. ⊘ The arm is the whole contract; the channel is only where it is addressed.
+2. **Emulated channels remain function bodies.** A scratchpad operation is *independent* of the
+   channel: executing one does not imply an interrupt, and arming one does not imply a scratchpad
+   operation. Binding those two together is what produced `no_engine=40`.
+3. **Long host work re-uses the same mechanism, pointed at ourselves.** When a scratchpad channel's
+   work runs on the host and takes too long, we **arm an eventfd for our own worker** rather than
+   polling. ⇒ One mechanism serves both directions: the guest arms and we signal it; we arm and the
+   host signals us. ⚠ And it is the same rule as the write-trap contract — *never spin where an
+   event will do*, because a spinning worker is a worker not serving other isolates.
+
+⊘ Note (1) also kills the tempting optimisation of *"only track arms for channels that have
+submitted work"*. That set is not the same set, and the difference is exactly the forty.
+
 ## ⚠ Why this is a CORRECTNESS issue and not a latency one
 
 A completion we decline to announce is not slow — it is **lost**. The guest's blocking-sync path
