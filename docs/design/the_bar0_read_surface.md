@@ -255,7 +255,13 @@ arm first. **One binary, one environment variable, both arms graded `(P)`:**
 | `KAYFABE_PRAMIN_SLOT` | PRAMIN-ONLY r / w | ALL-WINDOWS r / w |
 |---|---|---|
 | `0` (control) | **22 / 67 956** | 34 / 72 314 |
-| default (slot live) | **0 / 0** | 2 / 728 |
+| default (slot live) | **0 / 0** | 32 / 3 727 |
+
+⊘ The `ALL-WINDOWS` figure for the slot arm was first written down as `2 / 728`, read from a log
+while that boot was still running. It is `32 / 3 727` at teardown. ⚠ A counter sampled mid-run is
+not the run's number, and the two look identical on the page — the same shape as §6b's truncated
+census, caught here within the minute rather than after three commits. ★ `PRAMIN-ONLY` was `0`
+at both samples, so the conclusion is untouched.
 
 ⇒ The counter reads **sixty-eight thousand** when the aperture traps and **exactly zero** when
 the slot serves it. That is a known-positive and a measurement, not an absent instrument.
