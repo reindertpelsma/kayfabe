@@ -1451,6 +1451,16 @@ struct PlaneCounters {
     cpu_intr_masked: AtomicU64,
     nonstall_raises: AtomicU64,
     nonstall_unvectored: AtomicU64,
+    /// ⊘⊘ **THE THREE CAUSES OF `nonstall_unvectored`, SPLIT (w682).** `[measured w682a]`
+    /// `nonstall[raises=4 unvectored=39]` — nine of every ten completions the guest waits for
+    /// were never announced, and ONE counter covered three defects with three different fixes:
+    /// a channel with **no bound engine** (we never recorded the bind), an engine with **no
+    /// vector** in this chip's `intr_table` (a table gap), and a vector **out of range** (a
+    /// decode bug). ★ The w625 lesson — a refusal counter covering several causes reads as one
+    /// problem and is several.
+    nonstall_no_engine: AtomicU64,
+    nonstall_no_vector: AtomicU64,
+    nonstall_out_of_range: AtomicU64,
     nonstall_masked: AtomicU64,
     gsp_event_raises: AtomicU64,
     gsp_event_unvectored: AtomicU64,
@@ -3829,6 +3839,12 @@ impl RegPlane {
             doorbells_served_locally,
             doorbells_served_forwarded,
             doorbells_refused,
+            // ⊘ Named here because the destructuring is EXHAUSTIVE on purpose: a `..` would let
+            // a new counter be added and never reported, which is the failure this whole line
+            // of work is about. They are surfaced through `intr_census`, not `Counters`.
+            nonstall_no_engine: _,
+            nonstall_no_vector: _,
+            nonstall_out_of_range: _,
         } = &self.c;
         Counters {
             pramin_reads: g(pramin_reads),
@@ -4307,12 +4323,16 @@ impl RegPlane {
         use Ordering::Relaxed;
         let c = &self.c;
         format!(
-            "INTR-CENSUS nonstall[raises={} unvectored={} masked={}] cpu[accesses={} raises={} \
+            "INTR-CENSUS nonstall[raises={} unvectored={} (no_engine={} no_vector={} \
+             out_of_range={}) masked={}] cpu[accesses={} raises={} \
              masked={}] gsp_event[raises={} unvectored={} masked={}] ⊘ `unvectored` is a \
              completion we refused to announce — the guest is still waiting for it. A non-zero \
              there beside a spinning guest is the FIRST thing to read.",
             c.nonstall_raises.load(Relaxed),
             c.nonstall_unvectored.load(Relaxed),
+            c.nonstall_no_engine.load(Relaxed),
+            c.nonstall_no_vector.load(Relaxed),
+            c.nonstall_out_of_range.load(Relaxed),
             c.nonstall_masked.load(Relaxed),
             c.cpu_intr_accesses.load(Relaxed),
             c.cpu_intr_raises.load(Relaxed),
@@ -5869,11 +5889,13 @@ impl RegPlane {
         let Some(rm_engine_type) = engine else {
             // The guest never sent `NVA06F_CTRL_CMD_BIND` for this channel, so there is no
             // engine to name a vector — counted, never guessed.
+            self.c.nonstall_no_engine.fetch_add(1, Ordering::Relaxed);
             self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
             return false;
         };
         let Ok(vector) = crate::nonstall::non_stall_vector(self.chip.intr_table, rm_engine_type)
         else {
+            self.c.nonstall_no_vector.fetch_add(1, Ordering::Relaxed);
             self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
             return false;
         };
@@ -5890,6 +5912,7 @@ impl RegPlane {
             // A vector the captured table publishes but this chip's `LEAF` family has no
             // row for. Nothing was latched, so nothing may be delivered — and it is the
             // same broken promise as the two above, so it is counted the same way.
+            self.c.nonstall_out_of_range.fetch_add(1, Ordering::Relaxed);
             self.c.nonstall_unvectored.fetch_add(1, Ordering::Relaxed);
             return false;
         }
