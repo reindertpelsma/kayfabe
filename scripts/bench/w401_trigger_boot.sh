@@ -47,7 +47,7 @@ echo "boot_capture rc=$? (⊘ rc=5 is the evidence-persist check; read the artef
 
 Q="$BENCH/run_${tag}_qemu.log"; D="$BENCH/run_${tag}_probe.log"
 echo "--- LEDGER tag=$tag ---"
-echo "[client] $(grep -a 'W392D_OUTCOME=' "$D" | tail -1 | sed 's/^ *//' | cut -c1-90)"
+echo "[client] $(grep -a 'W392D_GUEST_OUTCOME=' "$D" | tail -1 | sed 's/^ *//' | cut -c1-90)"
 echo "[client] $(grep -a 'THREADS ' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "[client] $(grep -a 'MEAN_FALSIFIER' "$D" | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "--- THE LADDER (P1..Pn), which is what this change is graded on ---"

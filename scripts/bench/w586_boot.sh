@@ -13,7 +13,7 @@
 #
 # ## ★★ PRE-REGISTERED OUTCOMES — written before the boot, so none reads as the good one
 #
-#   Q1 THE CLIENT. `W392D_OUTCOME=(P)` with `THREADS 8 of 8`. ⊘ Anything else and Q2/Q3 are
+#   Q1 THE CLIENT. `W392D_GUEST_OUTCOME=(P)` with `THREADS 8 of 8`. ⊘ Anything else and Q2/Q3 are
 #      facts about a failed boot, not about the surface. Graded FIRST for that reason.
 #
 #   Q2 PRAMIN, now UN-PARKED (w586). `window[SERVED r=0 w=0]` in `BAR0-READS`.
@@ -26,7 +26,7 @@
 #      so no memslot could be installed and both BARs kept trapping) and should now be **0**.
 #      ⇒ If it is 0 here, w584 was a BAR1/BAR2 fix as well as a PRAMIN one, and nobody knew.
 #
-#   (E) no `W392D_OUTCOME` line at all => UNMEASURED. Say where it stopped. Not a failure value.
+#   (E) no `W392D_GUEST_OUTCOME` line at all => UNMEASURED. Say where it stopped. Not a failure value.
 set -uo pipefail
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}
@@ -63,7 +63,7 @@ echo "boot_capture rc=$?"
 
 Q="$BENCH/run_${tag}_qemu.log"; D="$BENCH/run_${tag}_probe.log"
 echo "--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---"
-echo "[client] $(grep -a 'W392D_OUTCOME=' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-90)"
+echo "[client] $(grep -a 'W392D_GUEST_OUTCOME=' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-90)"
 echo "[client] $(grep -a 'THREADS ' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "[client] $(grep -a 'MEAN_FALSIFIER' "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-80)"
 echo "--- Q2 THE BAR0 READ SURFACE ---"
