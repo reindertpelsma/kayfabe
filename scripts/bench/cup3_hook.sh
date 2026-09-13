@@ -248,6 +248,16 @@ $G 'wc -c < /tmp/cup3.out 2>/dev/null | sed "s/^/CUP3_OUT_BYTES=/"'
 # timeout name what it was repeating; the histogram names how lopsided the repeat is.
 echo "=== the last ioctls cup3 issued (it dies HERE) ==="
 $G 'tail -14 /tmp/cup3.ioctl 2>/dev/null' | cut -c1-170 | sed 's/^/    /'
+# ★★★★★ THE UVM CALL SEQUENCE, IN ORDER — the spec for porting this failure into rmladder.
+# [measured w695i] cup3 dies inside UVM ioctl 0x21 = UVM_MAP_EXTERNAL_ALLOCATION. To reproduce
+# that in the raw client (the owner directive: extend rmladder until IT fails the same way) the
+# PRECEDING calls have to be right, and guessing them means a failure-to-reproduce proves
+# nothing. ⊘ fd 9 is /dev/nvidia-uvm, whose ioctls are raw integers with no size encoding.
+echo "=== the UVM call sequence in order (the port spec) ==="
+$G 'grep -o "ioctl(9, _IOC(_IOC_NONE, 0, 0x[0-9a-f]*" /tmp/cup3.ioctl 2>/dev/null | sed "s/.*0x/0x/" | awk "!seen[\$0]++ || \$0 != prev {print} {prev=\$0}" | head -30 | tr "\n" " "' | sed 's/^/    /'
+echo
+echo "    (decode: 0x21=33 MAP_EXTERNAL_ALLOCATION, 0x25=37 REGISTER_GPU, 0x19=25 REGISTER_GPU_VASPACE,"
+echo "             0x49=73 CREATE_EXTERNAL_RANGE, 0x17=23 CREATE_RANGE_GROUP, 0x46=70 PAGEABLE_MEM_ACCESS)"
 echo "=== ioctl request histogram (the repeat stands out) ==="
 $G 'grep -o "ioctl([0-9]*, [^,]*" /tmp/cup3.ioctl 2>/dev/null | sort | uniq -c | sort -rn | head -10' | sed 's/^/    /'
 echo "    CUP3_IOCTL_LINES=$($G 'wc -l < /tmp/cup3.ioctl 2>/dev/null' 2>/dev/null | tr -d '\r')"
