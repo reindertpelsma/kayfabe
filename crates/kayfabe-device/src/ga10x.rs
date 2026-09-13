@@ -1776,6 +1776,77 @@ pub static GA106_GMMU_STATIC: GmmuStaticRow = GmmuStaticRow {
 /// The PCI identity is deliberately *incomplete* here: the vendor id and class code are
 /// read from this device id's [`kayfabe_abi::vbios::VbiosProfile`] instead, so the ROM this
 /// device serves and the identity it claims cannot disagree. See [`crate::identity_for`].
+/// ★★★★★ **THE PROFILE FOR AN OPERATOR-CHOSEN FRAMEBUFFER SIZE — w696i.**
+///
+/// The owner, 2026-09-13: *"the reservation is giving actually as argument when kayfabe starts,
+/// how much vidmem to give to the guest. manual from cli option is more important than auto
+/// detect here."* This is where that argument lands.
+///
+/// # Why `Box::leak` and not a `LazyLock`, a generic, or 131 edits
+///
+/// Every consumer already holds `&'static ChipProfile` (`RegPlane::chip`), and every table
+/// inside it is `&'static [T]`. So a profile built at **realize** and leaked is *exactly* the
+/// type the tree already passes around: **zero consumer churn**, no `Deref` juggling, no
+/// lifetime parameter threaded through the device. One leak per VM start, for a struct that
+/// lives as long as the VM.
+///
+/// # ⊘ The shipped size returns the static UNTOUCHED
+///
+/// `fb_size_mb == FB_SIZE_MB` returns `&GA106` — the same bytes, no allocation, no leak. So the
+/// shipping configuration cannot drift from this function, because it does not go through it.
+///
+/// # ⚠ The patch is COUNTED
+///
+/// `boot_regs` is patched by matching an offset. A patch that matches nothing is this tree's
+/// w614 failure — a string replace that silently did nothing — so the count is asserted. ⊘ If
+/// `USABLE_FB_SIZE_IN_MB_ADDR` ever stops appearing in the table, this panics at realize instead
+/// of quietly advertising the old size to the guest.
+///
+/// ★ `[measured w696g]` a guest booted against `fb_size_mb = 6144` grades `(P)`,
+/// `MEAN_FALSIFIER=PASS`, `THREADS 8 of 8`.
+#[must_use]
+pub fn ga106_profile(fb_size_mb: u64) -> &'static ChipProfile {
+    if fb_size_mb == FB_SIZE_MB {
+        return &GA106;
+    }
+    let fb_length = fb_length_for(fb_size_mb);
+    let carve_out_base = fb_length - FW_CARVE_OUT_BYTES;
+
+    // ⊘ The usable region ends where the carve-out begins, and the reserved region runs to the
+    // top. Both bounds move with the size; nothing else in the row does.
+    let mut regions: Vec<FbRegion> = GA106_FB_REGIONS.to_vec();
+    assert_eq!(
+        regions.len(),
+        2,
+        "the FB region table is expected to be [usable, reserved]; a new shape needs this \
+         function updated rather than silently mis-patched"
+    );
+    regions[0].limit = carve_out_base - 1;
+    regions[1].base = carve_out_base;
+    regions[1].limit = fb_length - 1;
+
+    let mut regs: Vec<BootReg> = GA106_BOOT_REGS.to_vec();
+    let mut patched = 0usize;
+    for r in &mut regs {
+        if r.off == USABLE_FB_SIZE_IN_MB_ADDR {
+            r.value = u32::try_from(fb_size_mb).expect("advertised FB size fits 32 bits of MiB");
+            patched += 1;
+        }
+    }
+    assert_eq!(
+        patched, 1,
+        "exactly one boot register carries NV_USABLE_FB_SIZE_IN_MB; patching none would \
+         advertise the COMPILED size to a guest told otherwise, and patching several would mean \
+         two sources for one fact"
+    );
+
+    let mut p = GA106;
+    p.fb_length = fb_length;
+    p.fb_regions = Box::leak(regions.into_boxed_slice());
+    p.boot_regs = Box::leak(regs.into_boxed_slice());
+    Box::leak(Box::new(p))
+}
+
 pub static GA106: ChipProfile = ChipProfile {
     // GA106 is a consumer GeForce die: no chip-to-chip fabric exists on it.
     has_c2c: false,
@@ -2012,6 +2083,51 @@ mod fb_size_is_a_parameter_tests {
             "the WPR2 top must stay inside the framebuffer it is derived from"
         );
         assert!(frts_offset_for(MEASURED_RESERVABLE_MB) < gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB));
+    }
+
+    /// ★★★★★ **The operator-chosen profile — the whole knob, end to end in Rust.**
+    #[test]
+    fn the_profile_follows_an_operator_chosen_fb_size() {
+        const N: u64 = 6144;
+
+        // ⊘ The shipped size must return the STATIC ITSELF, not a copy of it. Pointer identity,
+        // because "equal bytes" would also pass for a leaked duplicate — and a duplicate is a
+        // second source for every fact in the profile.
+        assert!(
+            std::ptr::eq(ga106_profile(FB_SIZE_MB), &GA106),
+            "the shipped size must return &GA106 itself, allocating nothing"
+        );
+
+        let p = ga106_profile(N);
+        assert_eq!(p.fb_length, fb_length_for(N));
+
+        // The guest is told the size twice — once as a register, once as a region table — and
+        // the entire point of this function is that the two cannot disagree.
+        let advertised = p
+            .boot_regs
+            .iter()
+            .find(|r| r.off == USABLE_FB_SIZE_IN_MB_ADDR)
+            .expect("NV_USABLE_FB_SIZE_IN_MB must be present")
+            .value;
+        assert_eq!(u64::from(advertised), N, "the register must advertise N MiB");
+
+        assert_eq!(p.fb_regions.len(), 2);
+        let carve = fb_length_for(N) - FW_CARVE_OUT_BYTES;
+        assert_eq!(p.fb_regions[0].base, 0);
+        assert_eq!(p.fb_regions[0].limit, carve - 1, "usable ends at the carve-out");
+        assert_eq!(p.fb_regions[1].base, carve, "reserved starts there — no gap, no overlap");
+        assert_eq!(
+            p.fb_regions[1].limit,
+            fb_length_for(N) - 1,
+            "reserved runs to the top of the framebuffer"
+        );
+
+        // ⊘ And the firmware layout must still land inside the region declared reserved, which
+        // is the invariant the shipped size gets from `const` assertions and this size cannot.
+        assert!(gsp_fw_wpr_end_for(N) <= fb_length_for(N));
+        assert!(gsp_fw_wpr_end_for(N) > carve, "WPR2 must sit in the RESERVED region");
+        assert!(bar1_pde_base_for(N) >= carve);
+        assert!(bar1_pde_base_for(N) < frts_offset_for(N));
     }
 
     /// ★★★★★ **The SECOND size, and this is the half that matters.**
