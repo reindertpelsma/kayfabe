@@ -125,7 +125,7 @@ echo "STARTED \$(date -Is)" > /tmp/cup3.started
 #   Tracing from exec captures EVERY ioctl with no race, which is what identifies a repeat.
 # ⊘ Falls back to an untraced run if strace is missing, so the rung still grades.
 if command -v strace >/dev/null 2>&1; then
-  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} strace -f -tt -e trace=ioctl -o /tmp/cup3.ioctl ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
+  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} strace -f -tt -e trace=ioctl -o /tmp/cup3.ioctl stdbuf -oL -eL ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
        </dev/null >/dev/null 2>&1 &
 else
   setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
@@ -249,7 +249,7 @@ $G 'wc -c < /tmp/cup3.out 2>/dev/null | sed "s/^/CUP3_OUT_BYTES=/"'
 echo "=== the last ioctls cup3 issued (it dies HERE) ==="
 $G 'tail -14 /tmp/cup3.ioctl 2>/dev/null' | cut -c1-170 | sed 's/^/    /'
 echo "=== ioctl request histogram (the repeat stands out) ==="
-$G 'grep -o "request=0x[0-9a-f]*" /tmp/cup3.ioctl 2>/dev/null | sort | uniq -c | sort -rn | head -8' | sed 's/^/    /'
+$G 'grep -o "ioctl([0-9]*, [^,]*" /tmp/cup3.ioctl 2>/dev/null | sort | uniq -c | sort -rn | head -10' | sed 's/^/    /'
 echo "    CUP3_IOCTL_LINES=$($G 'wc -l < /tmp/cup3.ioctl 2>/dev/null' 2>/dev/null | tr -d '\r')"
 
 # ---------------------------------------------------------------------------------------
