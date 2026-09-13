@@ -1,8 +1,9 @@
 # The counter page, and the armed device node that serves it
 
-**STATUS: LIVE but its SECURITY ARGUMENT IS REFUTED, 2026-09-13 (w596) — see §4a before
-building anything.** The mechanism is measured and works; `ACCESS_READ_ONLY` does NOT make the
-mmap read-only, so the containment argument that chose this design over the alternative is gone. Supersedes nothing; extends `the_bar0_read_surface.md` §3 piece 3.
+**STATUS: LIVE, 2026-09-13 (w600). Mechanism AND containment both MEASURED unprivileged; the
+wire verb is not yet built.** ⊘ §3's original primitive (`ACCESS_READ_ONLY`) was REFUTED by
+measurement — see §4a. The containment that replaced it is `O_RDONLY` on the node, §4b, and it
+is green on both arms with `EACCES` asserted. Supersedes nothing; extends `the_bar0_read_surface.md` §3 piece 3.
 
 ## 1. Why this page is the last one
 
@@ -168,9 +169,25 @@ isolate socket — so its containment is defence in depth: the `O_RDONLY` node p
 sandbox that denies `open()` on `/dev/nvidia*`. `KVM_MEM_READONLY` constraining the guest and
 not the VMM is the CORRECT scope, not a consolation.
 
-⚠ **This section is a reading of two source trees, exactly the status §3's primitive had before
-LEG R refuted it.** LEG R is re-specified with the ERRNO asserted — `EACCES` from the mm is the
-only result that means what we want — and the verb is not to be built until it is green.
+### ★★★★★ MEASURED 2026-09-13 (w600) — **BOTH ARMS GREEN, UNPRIVILEGED, `EACCES` BY NAME**
+
+`rmladder --bar1-crossing`, GA106, **euid 1002, non-root**:
+
+    LEG R  = THE KERNEL REFUSES IT: PROT_READ accepted, PROT_WRITE denied EACCES on an
+             O_RDONLY node.
+    LEG R2 = mprotect(PROT_WRITE) on the read-only mapping REFUSED
+             (Syscall { call: "mprotect", errno: Some(13) }) - VM_MAYWRITE was cleared.
+
+⇒ **A descriptor armed this way cannot be turned into a doorbell by whoever holds it, under any
+sequence of syscalls.** Both refusals are `EACCES` (errno 13) and both are the **mm's**, not
+RM's and not ours.
+
+★ The errno is asserted by name, and that is load-bearing: w595's LEG R first refused the READ
+map too, for a reason of mine, and a test that accepted any refusal would have reported that as
+protection. `EACCES` is the only result that means what this design needs.
+
+⊘ **Status of §4b is now MEASURED, not read** — which is the bar §3 failed to clear. The verb
+may be built.
 
 ## 5. Constraints the implementation will hit
 
