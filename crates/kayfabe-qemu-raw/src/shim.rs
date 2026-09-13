@@ -3757,6 +3757,9 @@ struct SharedDoorbell {
     /// ★★★★★ **w383 — the eighth selector: does the doorbell trap RUN the publication, or
     /// SCHEDULE it?** Read once at the composition root and carried, for `vas_publish`'s
     /// reason exactly.
+    /// ★ Whether a tagged passthrough doorbell rings inline on the vCPU — see
+    /// [`DoorbellInlineArm`]. Present on both arms; the control makes the queue the only path.
+    doorbell_inline: DoorbellInlineArm,
     doorbell_async: DoorbellAsyncArm,
 }
 
@@ -5357,7 +5360,7 @@ fn doorbell_publish_loop(
     #[cfg(feature = "host-isolates")]
     let mut counter_page_done = false;
     // ★ Per-thread, therefore per-device — the same argument as the counter-page latch above.
-    let mut last_dbtable_rows: Vec<(u16, Option<u64>)> = Vec::new();
+    let mut last_dbtable_rows: Vec<(u16, Option<u64>, bool)> = Vec::new();
     // ★★★★★ THE ONE MINT. `grep -n 'for_publication_worker'` is the audit and must return
     // exactly this line plus the constructor. Everything that may publish or refresh takes
     // this witness by value, so the doorbell and the trap CANNOT reach those verbs — not by
@@ -5418,23 +5421,6 @@ fn doorbell_publish_loop(
         let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain.as_deref());
         #[cfg(not(feature = "host-isolates"))]
         let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain);
-        // ★★★★★ **GOAL 4 — REBUILD THE DOORBELL TABLE FROM THE PROJECTION.**
-        //
-        // ⊘ Here and not at a birth hook: `Spine::by_vchid` is rebuilt wholesale by the
-        // projection, so taking it entire is the only population that cannot be partially
-        // stale.
-        //
-        // ⊘⊘⊘ **AFTER THE BIRTH DRAIN, AND w645 IS WHY IT HAD TO MOVE.** It ran BEFORE, so a
-        // channel born in pass N only entered the table in pass N+1 — and a doorbell arriving
-        // in that window decodes to a real vChid the table calls `Unallocated`. Under the flip
-        // that is a **live submission dropped**, which is goal 4's one dangerous failure,
-        // introduced by the ordering of two statements.
-        //
-        // ⚠ `[measured w643a, w645a]` `unallocated=0` over 359 doorbells did **not** rule this
-        // out. The window is narrow, so a zero over two boots **bounds the race's rate and
-        // says nothing about whether it exists** — the finding came from reading the loop, not
-        // from the census. ★ A green number is not a proof about a race.
-        port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
         //
         // Owner, 2026-09-12: *"if a channel is created inheriting a va base, then you can map
@@ -5473,6 +5459,25 @@ fn doorbell_publish_loop(
                 );
             }
         }
+        // ★★★★★ **GOAL 4 — REBUILD THE DOORBELL TABLE FROM THE PROJECTION.**
+        //
+        // ⊘ From `Spine::by_vchid` taken ENTIRE, because the projection rebuilds it wholesale.
+        // Complete by construction, not by an argument about call sites — an installer hooked
+        // onto births has to be right about every birth site, teardown and re-bind, and this
+        // tree has already paid for a hook on a drain that never fires (w615).
+        //
+        // ⊘⊘⊘ **AFTER `BIRTH-PUBLISH`, AND w646 MOVED IT ONLY HALF FAR ENOUGH.** It first ran
+        // before the birth drain; w646 moved it after the drain and **still left it before the
+        // publish**. A channel born in this pass would therefore have been tagged routable
+        // while its address space had not yet been drained — the identical defect, one
+        // statement later, in the commit that fixed it.
+        //
+        // ⚠ `[measured w643a/w645a/w647a]` `unallocated=0` across three boots did not see
+        // either version. The window is narrow, so the zero **bounds the race's rate and says
+        // nothing about whether it exists.** Both were found by reading the loop. ★ A green
+        // number is not a proof about a race — and the second time, the loop I was reading was
+        // one I had just edited for exactly this reason.
+        port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         let err_grants =
             pending_err_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         report_engine_forward_drain(&port.device, &err_grants);
@@ -6192,6 +6197,10 @@ struct DbtableShadow {
     rebuilds: std::sync::atomic::AtomicU64,
     /// Rebuilds whose snapshot was identical to the last — the store pass skipped.
     skipped: std::sync::atomic::AtomicU64,
+    /// Doorbells served ENTIRELY on the vCPU by one dword store — no queue, no worker.
+    inline_rings: std::sync::atomic::AtomicU64,
+    /// Inline attempts the kernel refused; each fell through to the queue, none was dropped.
+    inline_refused: std::sync::atomic::AtomicU64,
     /// ★ The **PEAK** rows the table has held, not the last.
     ///
     /// ⊘⊘ `[measured w643a]` the last-value gauge printed **`rows=0`** on a boot where the table
@@ -6218,9 +6227,12 @@ impl DbtableShadow {
              malformed={m}] rows_peak={} rebuilds={} skipped={} ⊘ SHADOW: the table decided \
              NOTHING. ★ `unallocated` is THE number: it counts doorbells this table WOULD HAVE \
              DROPPED, and it must be 0 with a non-zero `consulted` before any arm is flipped. \
-             ⊘ PER DEVICE since w648 — as a process-global it summed two GPUs and the criterion \
-             stopped meaning anything.",
+             ⊘ PER DEVICE since w648. ★ inline_rings={} inline_refused={} — doorbells served \
+             wholly on the vCPU by one store, and attempts the kernel refused (each fell \
+             through to the queue; none was dropped).",
             u + p + e + m,
+            self.inline_rings.load(Relaxed),
+            self.inline_refused.load(Relaxed),
             self.rows_peak.load(Relaxed),
             self.rebuilds.load(Relaxed),
             self.skipped.load(Relaxed),
@@ -6295,6 +6307,26 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
         // token, a bounds check, one `Relaxed` load, a two-bit decode. No lock, no allocation,
         // no device. ⊘ It runs BEFORE the deferral test so the census covers every doorbell,
         // including the ones the inline arm takes.
+        // ★★★★★ **GOAL 4 — THE PASSTHROUGH SHORT-CIRCUIT. Owner: *"passthrough doorbells are
+        // inline in vcpu, no queue, no worker."***
+        //
+        // The whole act: decode (pure arch math), one bounds check, one `Relaxed` load, a
+        // two-bit decode, one aligned volatile dword into a mapping we already hold. No lock,
+        // no allocation, no IPC, no worker wake. It replaces a round-trip to a worker thread.
+        //
+        // ⊘⊘ **The tag ALREADY carries the precondition, so there is nothing to check here.**
+        // `Route::Passthrough` is installed only for a channel with a host token that is
+        // **already on the host runlist** — see `rebuild_dbtable`. A channel's first doorbell
+        // is tagged `Emulated` on purpose and takes the queue, because the host-side runlist
+        // submit is deferred to it and an inline store would ring a channel that is not
+        // scheduled: **dropped silently, and libcuda waits forever.**
+        //
+        // ⚠ `ring_target` absent is a REAL state, not a startup detail: before the first
+        // isolate there is no host usermode page, so the doorbell takes the queue rather than
+        // pretend. Same for a store that the kernel refuses.
+        if let Some(rung) = self.try_ring_passthrough_inline(token) {
+            return rung;
+        }
         self.shadow_route(token);
         if !self.doorbell_async.defers() {
             return self.ring_inline(token);
@@ -6413,6 +6445,61 @@ impl SharedDoorbell {
     /// ⚠ The census must be read for **`disagree=0` AND a non-zero total** — this tree's
     /// standing lesson that a zero and a healthy zero look identical. A table nobody consulted
     /// disagrees with nothing.
+    /// ★★★★★ **THE INLINE PASSTHROUGH RING** — `Some` when this doorbell was fully served
+    /// here, `None` when the caller must fall through to the queue.
+    ///
+    /// ⊘ Every `None` arm is a **fall-through, never a drop**: an unrouted token, a channel
+    /// that is not yet scheduled, no host page installed yet, or a store the kernel refused.
+    /// A doorbell this function declines is still served, just more slowly — which is the only
+    /// safe polarity for a fast path.
+    #[cfg(feature = "host-isolates")]
+    fn try_ring_passthrough_inline(&self, token: u64) -> Option<kayfabe_device::DoorbellReport> {
+        use kayfabe_device::dbtable::Route;
+        use std::sync::atomic::Ordering::Relaxed;
+        if !self.doorbell_inline.on() {
+            return None;
+        }
+        let target = kayfabe_chips::ga10x::decode_work_submit_token(token)?;
+        let Route::Passthrough { host_token } = self.dbtable.route(u64::from(target.vchid.0))
+        else {
+            return None;
+        };
+        let (window, off) = self.ring_target.get()?;
+        let host32 = u32::try_from(host_token).ok()?;
+        match window.store_u32(kayfabe_linux_raw::HostOffset::new(*off), host32) {
+            Ok(()) => {
+                self.dbshadow.inline_rings.fetch_add(1, Relaxed);
+                Some(kayfabe_device::DoorbellReport::Served {
+                    token,
+                    // ⊘ `proc`/`chan` are not resolved here and must not be: resolving them
+                    // needs the spine, which is the lock this path exists to avoid. The report
+                    // carries what the fast path KNOWS. A census that needed the pair would be
+                    // asking the vCPU to do the work the table removed.
+                    proc: u32::MAX,
+                    chan: u32::MAX,
+                    host_token,
+                    // ⊘ FALSE, and it is a fact rather than a default: this arm is reachable
+                    // only for a channel already on the runlist, so this dispatch is by
+                    // construction not the one that scheduled it.
+                    scheduled_now: false,
+                })
+            }
+            // ⚠ A refused store is NOT a served doorbell. Fall through to the queue and let
+            // the worker's path produce the outcome and the diagnosis.
+            Err(_) => {
+                self.dbshadow.inline_refused.fetch_add(1, Relaxed);
+                None
+            }
+        }
+    }
+
+    /// Without `host-isolates` there is no isolate to export a host usermode page, so there is
+    /// nothing to ring and the queue is the only path.
+    #[cfg(not(feature = "host-isolates"))]
+    fn try_ring_passthrough_inline(&self, _token: u64) -> Option<kayfabe_device::DoorbellReport> {
+        None
+    }
+
     fn shadow_route(&self, token: u64) {
         use std::sync::atomic::Ordering::Relaxed;
         use kayfabe_device::dbtable::Route;
@@ -6445,7 +6532,7 @@ impl SharedDoorbell {
     ///
     /// ⚠ Clears vanished rows. A channel that went away must stop routing, or its vChid keeps
     /// naming a host token that now belongs to somebody else.
-    fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu, last: &mut Vec<(u16, Option<u64>)>) {
+    fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu, last: &mut Vec<(u16, Option<u64>, bool)>) {
         use std::sync::atomic::Ordering::Relaxed;
         use kayfabe_device::dbtable::Route;
         // ⊘ The spine read is UNCONDITIONAL, and that is the completeness argument: the table
@@ -6464,17 +6551,45 @@ impl SharedDoorbell {
         }
         let mut live = vec![false; VCHID_SPACE];
         let mut installed = 0u64;
-        for (vchid, host) in &rows {
+        for (vchid, host, scheduled) in &rows {
             let i = usize::from(*vchid);
             if i >= VCHID_SPACE {
                 continue; // unreachable for a decoded vChid; refused rather than wrapped.
             }
-            let route = match host {
-                Some(t) => Route::Passthrough { host_token: *t },
+            // ★★★★★ **THE TAG IS THE PRECONDITION — there is no second check on the vCPU.**
+            //
+            // `Route::Passthrough` is installed ONLY for a channel that has a host token
+            // **and is already on the host runlist**. So the tag does not mean *"this is a
+            // passthrough channel"*, it means **"this channel can be rung by a bare store,
+            // right now"** — born, scheduled, birth-published. A vCPU that reads the tag has
+            // nothing further to verify, which is what keeps the ring to one atomic load and
+            // one instruction.
+            //
+            // ⊘⊘ **Why `scheduled` and not a spare bit:** the host-side runlist submit is
+            // deferred to the first doorbell (`Gpu::gpfifo_schedule`), and the isolate runs
+            // `rm.schedule(chan)` immediately before `rm.ring_doorbell` on that submission.
+            // An inline store on a channel's FIRST doorbell would ring a host channel that is
+            // not on the runlist: **dropped silently, and libcuda waits forever.** Nothing
+            // faults — the guest simply never retires, which is the worst shape a bug can have
+            // here because there is no event to debug from.
+            //
+            // ★ So a channel's first doorbell deliberately routes `Emulated` → the queue →
+            // the worker's `ring_inline`, which schedules AND rings. The next rebuild sees
+            // `scheduled` and flips the tag; every later doorbell on that channel is inline.
+            // The slow path is taken exactly once per channel, by construction.
+            let route = match (host, scheduled) {
+                (Some(t), true) => Route::Passthrough { host_token: *t },
+                // ⊘ Has a host channel but is NOT yet scheduled ⇒ still ours to queue. This
+                // is the arm that makes the first doorbell safe, and it is deliberately
+                // indistinguishable at the vCPU from a genuinely emulated channel: both need
+                // the worker, and the vCPU has no business knowing which.
+                (Some(_), false) => Route::Emulated {
+                    chan: u64::from(*vchid),
+                },
                 // ⊘ No host channel ⇒ OURS. Never `Unallocated`: the channel exists, and
                 // routing it to the emulated lane is what makes a refusal happen BY NAME on
                 // the worker instead of a submission disappearing on the vCPU.
-                None => Route::Emulated {
+                (None, _) => Route::Emulated {
                     chan: u64::from(*vchid),
                 },
             };
@@ -14325,6 +14440,7 @@ impl Regs {
         // once, beside the other seven, and carried by value into both the port and `Regs`
         // so no consumer can re-read the environment and get a different answer.
         let doorbell_async = selected_doorbell_async()?;
+        let doorbell_inline = selected_doorbell_inline()?;
         // ★★ PRINTED, because both arms of a two-arm experiment must be distinguishable
         // from the boot's own on-disk evidence. `boot_nvkvm.sh` sends this stderr to
         // `run_<tag>_qemu.log`, which `boot_capture.sh` phase 6 carries into the repository
@@ -14599,6 +14715,7 @@ impl Regs {
             dirty: Arc::new(DirtyGate::default()),
             pubqueue: Arc::clone(&pubqueue),
             doorbell_async,
+            doorbell_inline,
             // ⊘ `VCHID_SPACE` entries — the whole 12-bit vector field `decode_work_submit_token`
             // can produce, so a well-formed token is never past the end and the bounds check
             // only ever refuses a MALFORMED one.
@@ -18471,6 +18588,79 @@ pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &
         )),
     }
 }
+
+/// ★★★★★ **GOAL 4's FLIP — whether a passthrough doorbell is rung INLINE on the vCPU.**
+///
+/// Owner, 2026-09-13: *"passthrough doorbells are inline in vcpu, no queue, no worker."*
+///
+/// ⊘ An arm rather than a hard-coded behaviour, because this tree's rule is that a change
+/// which can move a measurement needs an **off control** measured on the same boot. The
+/// question this arm answers is *"is the inline ring what changed the number"*, and without
+/// it the only way to ask is to rebuild.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoorbellInlineArm {
+    /// ★ THE CONTROL. Every doorbell takes the queue, exactly as before goal 4.
+    Off,
+    /// ★★★★★ A doorbell the table tags `Passthrough` is served by one aligned dword store on
+    /// the vCPU: no queue, no worker, no IPC.
+    ///
+    /// ⊘ The tag already encodes the precondition (host token **and** on the host runlist), so
+    /// this arm adds no check of its own — see `SharedDoorbell::try_ring_passthrough_inline`.
+    On,
+}
+
+impl DoorbellInlineArm {
+    /// Whether a tagged passthrough doorbell rings on the vCPU.
+    #[must_use]
+    pub const fn on(self) -> bool {
+        matches!(self, DoorbellInlineArm::On)
+    }
+
+    /// The arm's name, for the boot's own report.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            DoorbellInlineArm::Off => "off",
+            DoorbellInlineArm::On => "on",
+        }
+    }
+}
+
+/// The environment variable naming [`DoorbellInlineArm`].
+pub const DOORBELL_INLINE_ENV: &str = "KAYFABE_DOORBELL_INLINE";
+
+/// Which arm [`DOORBELL_INLINE_ENV`] names.
+///
+/// ⊘ Defaults **ON**: the inline ring is the owner's stated design, and the control exists to
+/// be turned off for a measurement, not to be opted into.
+///
+/// # Errors
+/// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
+/// which takes the `Some` arm, because it was SET and must not read as unset.
+fn doorbell_inline_from(v: Option<&str>) -> Result<DoorbellInlineArm, (Status, &'static str)> {
+    match v {
+        None | Some("on" | "1") => Ok(DoorbellInlineArm::On),
+        Some("off" | "0") => Ok(DoorbellInlineArm::Off),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_DOORBELL_INLINE names no arm; it is `on` (the default) or `off` (the \
+             control). ⊘ Refused rather than defaulted: a typo that silently took the default \
+             would make a control arm measure the thing it was meant to exclude.",
+        )),
+    }
+}
+
+/// Which arm [`DOORBELL_INLINE_ENV`] names, from the environment.
+///
+/// # Errors
+/// As [`doorbell_inline_from`].
+fn selected_doorbell_inline() -> Result<DoorbellInlineArm, (Status, &'static str)> {
+    match std::env::var_os(DOORBELL_INLINE_ENV) {
+        None => doorbell_inline_from(None),
+        Some(v) => doorbell_inline_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+    }
+}
+
 
 /// ★★★★★ **w383 — where the doorbell's publication and forward RUN.** See
 /// [`DOORBELL_ASYNC_ENV`].

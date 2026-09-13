@@ -2209,7 +2209,7 @@ impl SharedDevice {
     /// ★★★★★ **EVERY ROUTABLE DOORBELL ON ONE GPU, AS A FLAT SNAPSHOT** — what
     /// `kayfabe_device::dbtable::DoorbellTable` is rebuilt from.
     ///
-    /// Returns `(vchid, host_token)` per routable channel — the vChid as a **plain integer**,
+    /// Returns `(vchid, host_token, scheduled)` per routable channel — the vChid as a **plain integer**,
     /// the same way `DoorbellReport` carries the core's ids, so the shell never has to learn
     /// this crate's id types to index a table by one: `Some(t)` when the channel has a
     /// **host** channel behind it (a passthrough ring), `None` when it is ours to execute.
@@ -2234,7 +2234,7 @@ impl SharedDevice {
     /// present identical vChids, and a table shared between them would route one's doorbell to
     /// the other's channel. One table per device, like everything else on this axis.
     #[must_use]
-    pub fn doorbell_routes(&self, gpu: GpuId) -> Vec<(u16, Option<u64>)> {
+    pub fn doorbell_routes(&self, gpu: GpuId) -> Vec<(u16, Option<u64>, bool)> {
         // ⊘ **TWO LOCKS, ONE AT A TIME — never both held.** The routing map is on the spine
         // (rank 1 read) and `host_token` is on the proc (rank 1). R3 refuses two rank-1 holds
         // at once, so the map is copied out first and the guard released before any proc is
@@ -2254,10 +2254,29 @@ impl SharedDevice {
             // the conservative answer: the worker then refuses it by name, where dropping it
             // would be silent. ⚠ The projection may also have moved on between the two locks;
             // the same reasoning covers that, and the next rebuild corrects it.
-            let host = self
-                .with_proc(pid, |p| p.channels.get(&cid).and_then(|c| c.host_token))
-                .flatten();
-            out.push((vchid.0, host));
+            // ★★★★★ **BOTH FACTS, FROM ONE LOCK ACQUISITION — and the second one is the
+            // whole reason an inline ring is safe.**
+            //
+            // ⊘⊘ **The host-side runlist submit is LAZY.** `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`
+            // is *"deferred to the first doorbell"* (`Gpu::gpfifo_schedule`'s own doc), and
+            // the isolate calls `rm.schedule(chan)` immediately BEFORE `rm.ring_doorbell` on
+            // that first submission. ⇒ A doorbell that skipped the queue and stored straight
+            // into the host register would ring a channel **that is not on the runlist**: the
+            // submission is dropped silently and libcuda waits forever. Nothing faults; the
+            // guest simply never retires.
+            //
+            // ★ So `scheduled` is not bookkeeping, it is the precondition for ringing inline
+            // at all, and it must travel beside `host_token` or the two can be read a lock
+            // apart and disagree.
+            let facts = self
+                .with_proc(pid, |p| {
+                    (
+                        p.channels.get(&cid).and_then(|c| c.host_token),
+                        p.exec.scheduled.contains(&cid),
+                    )
+                })
+                .unwrap_or((None, false));
+            out.push((vchid.0, facts.0, facts.1));
         }
         out
     }
