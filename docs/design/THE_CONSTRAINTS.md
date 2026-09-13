@@ -90,6 +90,38 @@ every call site. Proposed instead, and the split is then legible from the name a
 | 7, 14 — epoll / threaded isolates | not built | |
 | 12 — any die | not done | ~20 GA106 `ChipProfile` fields are per-die measurements |
 
+## ★ Constraints 12 and 15 share ONE prerequisite (found 2026-09-13, w696d)
+
+`ChipProfile` is a compile-time **`static`** (`ga10x.rs:1686`, `pub static GA106: ChipProfile`),
+and the WPR2 addresses inside it are computed by `const fn` from a hardcoded `FB_SIZE_MB = 12288`
+(`gsp_fw_wpr_end()`, `ga10x.rs:224`).
+
+⇒ **Constraint 15** says *"the advertised framebuffer size is derived from the reservation that
+succeeded, never asserted ahead of it"* — impossible against a `const fn`.
+⇒ **Constraint 12** says no per-die constants — and `FB_SIZE_MB` is one, as are ~20 other
+`ChipProfile` fields.
+
+**Both need the same thing: `ChipProfile` constructed at START, not at compile time.** They are
+one refactor, not two.
+
+⚠ And the advertised number is already wrong by 2x: `[measured 2026-09-11, bare metal]` the
+largest single vidmem reservation is **6144 MiB against 12288 advertised**. So today the guest is
+told it has twice the video memory we can actually reserve for it.
+
+### Proposed order (each rung independently green-able)
+
+1. `ChipProfile` becomes a runtime-constructed value; `GA106` becomes a constructor call with
+   today's constants as inputs. ⊘ **No behaviour change** — the same bytes, computed later. This
+   is the load-bearing rung and the only risky one.
+2. Reserve ONE object at start; refuse to boot if it fails; derive the advertised FB size from
+   what succeeded and feed it into (1).
+3. BAR1 served as SLICES of that object, published in the refresh function only.
+4. BAR2/PRAMIN moved onto `GpgaAperture`; the two worlds disjoint BY TYPE.
+5. Delete `install_join` and the per-leaf machinery.
+
+⊘ Rung 1 is where constraint 12 starts too — the per-family derivation has somewhere to live only
+once the profile is a value.
+
 ## ⊘ Three false violations in one session, all caught by opening the counter
 
 Recorded because the pattern is the point, not the individual errors:
