@@ -469,6 +469,48 @@ impl BootSequence for Gh100FspBoot {
         }
     }
 
+    /// ★★★★★ **w567 — THE HALF THAT WAS MISSING, and it fails SILENTLY.**
+    ///
+    /// `RegPlane::read_inner` refuses an offset before it ever reaches [`Self::on_read`]:
+    ///
+    /// ```text
+    /// if self.model.decode_reg(bar, off).is_none()
+    ///     && !self.model.boot_sequence().may_read(bar, off)
+    /// { return ReadOutcome::Unclaimed; }
+    /// ```
+    ///
+    /// The default `may_read` is `false`, so this sequence served six FSP registers through
+    /// `on_read` that **the plane would never have asked it about**. ⊘ The failure has no
+    /// symptom: an unclaimed BAR0 read answers `0`, so the guest's FSP queue would have read
+    /// "drained" by accident and its EMEM cursor would have read zero forever, with no fault,
+    /// no refusal and no counter.
+    ///
+    /// ⚠ `plane.rs` names this exact hazard three lines above the gate — *"a `may_read` that
+    /// says no where `on_read` would have said yes … turns a served register into an
+    /// unclaimed one SILENTLY"* — and the test that guards it,
+    /// `state_free_read_filter.rs`, builds a plane over **GA106 only**, whose sequence
+    /// overrides neither method. So the guard was vacuous for the one implementation that
+    /// could trip it.
+    ///
+    /// ⊘ Latent today, because `Gh100GspModel` is in no `ChipProfile` — `CHIPS` has one row.
+    /// It would have become live on the first boot of a second generation, which is exactly
+    /// when nobody would be looking for it.
+    ///
+    /// ★ Written as the SAME match arms as `on_read`, in the same order, so the two cannot
+    /// disagree about which offsets this regime owns.
+    fn may_read(&self, bar: u8, off: u64) -> bool {
+        bar == 0
+            && matches!(
+                off,
+                PFSP_QUEUE_HEAD
+                    | PFSP_QUEUE_TAIL
+                    | PFSP_MSGQ_HEAD
+                    | PFSP_MSGQ_TAIL
+                    | PFSP_EMEMC
+                    | PFSP_EMEMD
+            )
+    }
+
     fn on_read(
         &self,
         _model: &dyn GspModel,
