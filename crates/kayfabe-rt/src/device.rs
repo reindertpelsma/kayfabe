@@ -903,6 +903,13 @@ enum RingPlanned {
 
 /// phase holds which lock.
 pub struct SharedDevice {
+    /// ★★★ **This device's Axis-B behaviour, reachable WITHOUT the spine lock.**
+    ///
+    /// ⊘ Cloned at realize, like [`SharedDevice::spawner`], because the one caller that needs
+    /// it is a **vCPU MMIO trap** decoding a doorbell token — and `Spine::arch()` sits behind
+    /// the rank-1 read guard. ⚠ Same `Arc` as the spine's, never a second instance: two arch
+    /// objects is two answers to "what generation is this" that can drift.
+    arch: std::sync::Arc<dyn kayfabe_arch::Arch>,
     /// ★★★★★ **The address spaces a GSP RPC changed, under their OWN small lock.**
     ///
     /// > **Owner:** *">99% of the operation is not under that lock, my idea is that only the
@@ -1312,7 +1319,15 @@ impl SharedDevice {
         // ★ Taken BEFORE the spine goes behind the lock — afterwards, reaching it would
         // cost a rank-0 acquisition (see [`SharedDevice::spawner`]).
         let spawner = spine.isolate_factory();
+        // ★★★★★ **w659 — the arch, taken here for the SAME reason as `spawner`.**
+        //
+        // A vCPU doorbell trap must decode a work-submit token, and `Spine::arch()` is behind
+        // the rank-1 guard. One `Arc` clone at realize makes the decode a virtual call with no
+        // lock at all — and keeps ONE arch per device rather than a second instance that could
+        // disagree with the spine's.
+        let arch = spine.arch_handle();
         SharedDevice {
+            arch,
             vas_refresh_q: std::sync::Mutex::new(Vec::new()),
             fb: std::sync::OnceLock::new(),
             invalidate_refresh: std::sync::OnceLock::new(),
@@ -2200,6 +2215,27 @@ impl SharedDevice {
     /// CALLER-SUPPLIED closure under it, so `lockcost`'s `worst_hold_at` would otherwise name
     /// this line for every caller alike. `#[track_caller]` propagates through the chain, so
     /// the attribution resolves to whoever called THIS instead.
+    /// ★★★★★ **DECODE A WORK-SUBMIT TOKEN TO ITS vChid, WITH NO LOCK TAKEN.**
+    ///
+    /// The one thing a vCPU doorbell trap needs from the arch, returned as a **plain integer**
+    /// so the shell never has to name an architecture — `kayfabe-qemu-raw`'s manifest states
+    /// that rule outright: *"`kayfabe-arch` is not a dependency of this crate and must not
+    /// become one — the shim names no architecture."*
+    ///
+    /// ⊘⊘ **Why this exists at all (w659).** The doorbell fast path called
+    /// `kayfabe_chips::ga10x::decode_work_submit_token` directly, hardcoding Ampere. The
+    /// encoding is **per die group**: GB202 sets `RUNLIST_DOORBELL` at bit 30
+    /// (`gb202/dev_vm.h:30,32`) so the Ampere mask refuses **every** GB202 token, while GB100
+    /// is Ampere-shaped (`gb100/dev_vm.h:620-624`) and the same decoder **silently accepts**
+    /// its tokens. One die group fails loudly, the other quietly.
+    ///
+    /// ⚠ `None` means *"RM's encoder cannot have produced this"* — a necessary condition, not a
+    /// sufficient one. A well-formed token still says nothing about whether a channel owns it.
+    #[must_use]
+    pub fn decode_doorbell_token(&self, token: u64) -> Option<u16> {
+        self.arch.decode_doorbell(token).map(|t| t.vchid.0)
+    }
+
     #[track_caller]
     pub fn with_spine<R>(&self, f: impl FnOnce(&Spine) -> R) -> R {
         let st = self.state.read();

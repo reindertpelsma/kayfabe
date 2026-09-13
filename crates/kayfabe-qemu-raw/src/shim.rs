@@ -6459,8 +6459,8 @@ impl SharedDoorbell {
         if !self.doorbell_inline.on() {
             return None;
         }
-        let target = kayfabe_chips::ga10x::decode_work_submit_token(token)?;
-        let Route::Passthrough { host_token } = self.dbtable.route(u64::from(target.vchid.0))
+        let target = self.device.decode_doorbell_token(token)?;
+        let Route::Passthrough { host_token } = self.dbtable.route(u64::from(target))
         else {
             return None;
         };
@@ -6506,11 +6506,11 @@ impl SharedDoorbell {
         // ⊘ Pure arch math — no spine, no lock. A malformed token is a non-event on both
         // paths, so it is counted apart rather than folded into `Unallocated`: they are
         // different diagnoses ("RM could not have written this" vs "nobody owns this").
-        let Some(target) = kayfabe_chips::ga10x::decode_work_submit_token(token) else {
+        let Some(target) = self.device.decode_doorbell_token(token) else {
             self.dbshadow.malformed.fetch_add(1, Relaxed);
             return;
         };
-        match self.dbtable.route(u64::from(target.vchid.0)) {
+        match self.dbtable.route(u64::from(target)) {
             Route::Unallocated => {
                 self.dbshadow.unallocated.fetch_add(1, Relaxed);
             }
@@ -18701,9 +18701,12 @@ pub const DOORBELL_INLINE_ENV: &str = "KAYFABE_DOORBELL_INLINE";
 
 /// Which arm [`DOORBELL_INLINE_ENV`] names.
 ///
-/// ⊘ Defaults **OFF** since w652. The inline ring is the owner's stated design and it is BUILT,
-/// but `[measured w651a]` it regressed the client from `(P)` to `(R)`. Turn it on with
-/// `KAYFABE_DOORBELL_INLINE=on` to reproduce. A default that leaves HEAD red is not a default.
+/// ⊘ Defaults **ON** as of w658, and the history is the point: it defaulted **off** at w652
+/// because `[measured w651a]` it regressed the client from `(P)` to `(R)`, and it is on again
+/// only because w656 removed the cause. `KAYFABE_DOORBELL_INLINE=off` is the control.
+///
+/// ⚠ The dependency is one-way and load-bearing: **this arm is only safe over sync point (3)**.
+/// Reverting w656 without also turning this off reintroduces `Xid 31 @ 0x90_80000000`.
 ///
 /// # Errors
 /// [`Status::Unsupported`] for a value that names no arm, **including a non-UTF-8 one** —
@@ -18719,8 +18722,20 @@ fn doorbell_inline_from(v: Option<&str>) -> Result<DoorbellInlineArm, (Status, &
         // load-bearing, and until it is NAMED this arm must be opt-in.
         //
         // A default that leaves HEAD red is not a default.
-        None | Some("off" | "0") => Ok(DoorbellInlineArm::Off),
-        Some("on" | "1") => Ok(DoorbellInlineArm::On),
+        // ON as of w658 - the flip is MEASURED GREEN over sync point (3).
+        //
+        // [measured w658a] inline_rings=104 inline_refused=0, W392D_GUEST_OUTCOME=(P),
+        // MEAN_FALSIFIER=PASS, BAR1/BAR2 0/0 - and the fault that defined the w651a
+        // regression, Xid 31 @ 0x90_80000000, stayed at a count of ONE across the whole host
+        // dmesg ring: the boot from before the fix. w658 faulted only at 0xa0_00000000, which
+        // is the mean falsifier's own deliberately unmapped VA and is expected on every boot.
+        //
+        // The difference between w651a and w658a is w656: sync point (3) publishes UVM's
+        // page-table writes at the instant the guest is told its push completed, so a
+        // doorbell no longer has to carry the mapping. Turning this on without that is the
+        // measured regression - the two land together or not at all.
+        None | Some("on" | "1") => Ok(DoorbellInlineArm::On),
+        Some("off" | "0") => Ok(DoorbellInlineArm::Off),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_DOORBELL_INLINE names no arm; it is `on` (the default) or `off` (the \
