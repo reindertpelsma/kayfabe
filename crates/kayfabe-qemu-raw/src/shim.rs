@@ -5218,6 +5218,10 @@ static LANE_FULL_INVALIDATES: std::sync::atomic::AtomicU64 = std::sync::atomic::
 /// itself lives in guest RAM where the FSM reads it.
 /// w472 — sequence for the mirror-fill wake tokens; only needs to be distinct.
 static MIRROR_FILL_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Wakes the epoch gate suppressed. ⊘ Printed beside `mirror_fill=` so the gate's effect is a
+/// NUMBER rather than an inference — a gate whose effect nobody can see is the next silent
+/// regression.
+static WAKES_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// w479/w480 — ONE arm for both deferrals, read once. ⊘ Two independent `OnceLock`s over the
 /// same variable would let a later edit arm half the move, which is the shape that produced
@@ -6977,7 +6981,12 @@ impl SharedDoorbell {
             // teardown the queue is drained by construction.
             format!(
                 "{} deferred_local={}",
-                self.pubqueue.census(),
+                format!(
+                    "{} wakes_skipped={} ⊘ wakes the epoch gate suppressed (w677): each one \
+                     would have cost the worker a FULL pass for nothing",
+                    self.pubqueue.census(),
+                    WAKES_SKIPPED.load(std::sync::atomic::Ordering::Relaxed)
+                ),
                 DEFERRED_LOCAL_SERVINGS.load(std::sync::atomic::Ordering::Relaxed),
             ),
         );
@@ -14185,6 +14194,12 @@ pub struct Regs {
     /// on eight vCPU threads. A racing swap costs at most one spare job — see the call site
     /// for why over-reporting is the safe direction.
     last_table_epoch: std::sync::atomic::AtomicU64,
+    /// ★ The [`kayfabe_rt::device::pending_latch_epoch`] a worker wake was last issued for —
+    /// see `Regs::wake_if_anything_latched`. ⊘ Beside `last_table_epoch` and for the identical
+    /// reason: `Regs::write` takes `&self` on eight vCPU threads, a racing swap costs at most
+    /// one spare wake, and over-reporting is the safe direction.
+    #[cfg(feature = "host-isolates")]
+    last_wake_epoch: std::sync::atomic::AtomicU64,
     /// The [`kayfabe_rt::device::pending_latch_epoch`] this port last drained the two
     /// pending latches for. See the call site in `Regs::write`.
     last_latch_epoch: std::sync::atomic::AtomicU64,
@@ -14937,6 +14952,8 @@ impl Regs {
         );
         Ok(Regs {
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(feature = "host-isolates")]
+            last_wake_epoch: std::sync::atomic::AtomicU64::new(0),
             last_latch_epoch: std::sync::atomic::AtomicU64::new(0),
             #[cfg(feature = "host-isolates")]
             bar0_zero: std::sync::OnceLock::new(),
@@ -15786,6 +15803,48 @@ impl Regs {
     /// ★★★★★ **w472 — wake the worker for a queued mirror fill.** One bounded offer and
     /// return; a full queue DROPS, because the token is a prefetch wake and losing it costs
     /// extra exits on one page, never a wrong value.
+
+    /// ★★★★★ **HAS ANYTHING BEEN LATCHED SINCE WE LAST WOKE THE WORKER? (w677)**
+    ///
+    /// `[measured w674a/w676a]` the deferral sites queued a `MirrorFill` wake **unconditionally**,
+    /// twice per trap: `n=5715` traps ⇒ `mirror_fill=11430` wakes, an EXACT 2× — and each wake costs
+    /// the worker a full pass (dbtable rebuild, birth drain, publish, mirror drain) at ~1.6 ms. That
+    /// is the 20 s `cuDeviceGet`, and **none of it is inline vCPU work**: only 1 of those 5 715 traps
+    /// exceeded 1 ms.
+    ///
+    /// ⊘ The deferral itself is RIGHT — a vCPU must not materialise isolates or drain births inline.
+    /// What was wrong is waking a worker to do **nothing**.
+    ///
+    /// ⚠ The obvious gate is unavailable: `materialize_pending` takes the rank-1 **write** lock just
+    /// to discover the queue is empty, so it cannot be the test on a vCPU. ⇒ This uses the epoch
+    /// `note_pending_latch` already bumps beside every push — the w516 pattern, one `Acquire` load,
+    /// no lock.
+    ///
+    /// ★ It **OVER-reports and never under-reports**: a changed epoch may wake for work another
+    /// thread already drained (a wasted pass, which is what today does 11 430 times), but an
+    /// unchanged epoch means nothing was latched, so nothing can be missed. That asymmetry is the
+    /// whole safety argument, and it is the same one `take_full_rescan` rests on.
+    #[cfg(feature = "host-isolates")]
+    fn wake_if_anything_latched(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let now = kayfabe_rt::device::pending_latch_epoch();
+        // ⊘ `swap`, so two vCPUs racing here produce ONE wake between them, not two.
+        if self.last_wake_epoch.swap(now, Relaxed) == now {
+            WAKES_SKIPPED.fetch_add(1, Relaxed);
+            return;
+        }
+        let seq = MIRROR_FILL_SEQ.fetch_add(1, Relaxed);
+        let _ = self
+            .pubqueue
+            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+    }
+
+    /// Without `host-isolates` there is no publication worker to wake, so the deferral sites
+    /// have nothing to defer TO. ⊘ A no-op with its own arm rather than a cfg at each call site:
+    /// two cfg'd call sites is two places to forget.
+    #[cfg(not(feature = "host-isolates"))]
+    fn wake_if_anything_latched(&self) {}
+
     #[cfg(feature = "host-isolates")]
     fn wake_for_mirror_fill(&self) {
         let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -16435,10 +16494,8 @@ impl Regs {
         {
             self.device.materialize_pending();
         } else {
-            let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let _ = self
-                .pubqueue
-                .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+            // ⊘ Gated (w677): this fired on EVERY trap and cost the worker a full pass each time.
+            self.wake_if_anything_latched();
         }
         kft.mark("materialize");
         // ★★★★★ **§16.96 — THE SECOND DRAIN, and it is the same fix for the same defect.**
@@ -16650,10 +16707,8 @@ impl Regs {
             kft.mark("birth_drain");
             report_engine_forward_drain(&self.device, &err_notifier_grants);
         } else {
-            let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let _ = self
-                .pubqueue
-                .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+            // ⊘ Gated (w677) — the SECOND of the two unconditional wakes per trap.
+            self.wake_if_anything_latched();
             kft.mark("birth_drain");
         }
         kft.mark("fwd_drain");
