@@ -1597,3 +1597,97 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_fill(
     let filled = regs.plane().bar0_shadow_fill(off, buf);
     i64::try_from(filled).unwrap_or(i64::MAX)
 }
+
+/// ★★★★★ **THE READ SHADOW'S SINK — one segment of hypervisor memory the guest reads directly.**
+///
+/// ⊘ The pointer lives HERE, in the `_unsafe` layer, and never crosses into safe code: the
+/// plane sees a `dyn ReadShadowPort` and calls `write`. That is this crate's standing shape for
+/// raw addresses, and it is why `RegPlane` can own a sink it could never fabricate.
+#[derive(Debug)]
+struct ShadowSegment {
+    /// Offset of this segment within the register aperture.
+    off: u64,
+    len: u64,
+    /// The hypervisor's own memory for this piece. ⚠ Owned by the device, which outlives the
+    /// register plane; the plane is torn down at the device's exit notifier.
+    base: *mut u8,
+}
+
+// SAFETY: the segment is written only through `ShadowSink::write`, which bounds every access to
+// `[base, base+len)` — memory the hypervisor allocated for exactly this piece and hands to no
+// one else. The guest reads it concurrently and that is the entire point: a torn read of a
+// 4-byte register is the same hazard real silicon has, and every write below is a single
+// aligned dword.
+unsafe impl Send for ShadowSegment {}
+unsafe impl Sync for ShadowSegment {}
+
+/// Every backed piece of the aperture, as one sink.
+#[derive(Debug, Default)]
+struct ShadowSink {
+    segments: std::sync::Mutex<Vec<ShadowSegment>>,
+}
+
+impl kayfabe_device::plane::ReadShadowPort for ShadowSink {
+    fn write(&self, off: u64, bytes: &[u8]) {
+        let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(seg) = segs
+            .iter()
+            .find(|s| off >= s.off && off + bytes.len() as u64 <= s.off + s.len)
+        else {
+            // ⊘ An offset no piece covers is DROPPED, per the trait's contract. A producer has
+            // no business knowing which pages were backed, and a dropped byte must never be
+            // reported as written.
+            return;
+        };
+        let at = (off - seg.off) as usize;
+        for (i, b) in bytes.iter().enumerate() {
+            // SAFETY: bounded by the `find` above — `off + bytes.len()` lies inside the
+            // segment, so `at + i` is inside `[0, len)`.
+            unsafe { seg.base.add(at + i).write_volatile(*b) };
+        }
+    }
+}
+
+/// ★★★★★ **Attach one backed piece of the register aperture as part of the read shadow.**
+///
+/// Called once per piece, right after [`kayfabe_shim_bar0_shadow_fill`] has put the plane's own
+/// bytes into it. From then on the plane's producers write through to this memory and the guest
+/// reads their values with no VM exit.
+///
+/// # ⊘⊘ Why this ABI exists at all
+///
+/// `[measured w573-w576]` the plane grew a write-through port at w564 and **nothing ever
+/// installed one**, so every `shadow_write` returned at its first line and the backed live pages
+/// held realize-time bytes for the whole boot. The guest's interrupt service routine read zeros
+/// from a page that could not change and the adapter never initialised. ⚠ A sink nobody
+/// installed and a sink that works are identical code until a guest reads one.
+///
+/// # Safety
+/// `ram` must point to at least `len` bytes of memory that outlives this register plane, and
+/// that nothing else writes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_attach(
+    handle: *mut c_void,
+    off: u64,
+    ram: *mut u8,
+    len: u64,
+) -> i32 {
+    if ram.is_null() || len == 0 {
+        return Status::Malformed.code();
+    }
+    let Some(regs) = borrow_regs(handle) else {
+        return Status::Malformed.code();
+    };
+    let sink = SHADOW_SINK.get_or_init(|| std::sync::Arc::new(ShadowSink::default()));
+    sink.segments
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(ShadowSegment { off, len, base: ram });
+    regs.plane().set_read_shadow(sink.clone());
+    Status::Ok.code()
+}
+
+/// The one sink, shared by every piece. ⊘ A `OnceLock` rather than one port per piece: the plane
+/// holds a single port, and a second `set_read_shadow` would silently replace the first — which
+/// is how nine of ten pieces would stop being updated with nothing to say so.
+static SHADOW_SINK: std::sync::OnceLock<std::sync::Arc<ShadowSink>> = std::sync::OnceLock::new();

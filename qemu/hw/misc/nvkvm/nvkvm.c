@@ -1289,6 +1289,24 @@ static bool nvkvm_bar0_cut(NvkvmState *s, MemoryRegion *container, uint64_t size
                 return false;
             }
             memory_region_set_dirty(&piece->mr, 0, len);
+
+            /*
+             * ★★★★★ AND ATTACH IT, so the plane's producers keep it current.
+             *
+             * ⊘⊘ Seeding a piece is only half of it. [measured w573-w576] the plane had a
+             * write-through port that nothing installed, so the backed pages held these
+             * realize-time bytes for the entire boot — correct for a constant, fatal for a
+             * register the device updates. The guest's ISR read zeros from the interrupt
+             * leaves and the adapter never initialised.
+             */
+            if (kayfabe_shim_bar0_shadow_attach(s->regs, start, ram, len) != KAYFABE_OK) {
+                error_setg(errp,
+                           "nvkvm: the register plane refused to attach the backed run at "
+                           "0x%" PRIx64 " to its read shadow; without it the piece would "
+                           "answer realize-time bytes for the life of the boot",
+                           start);
+                return false;
+            }
         }
 #if NVKVM_HAVE_LOCKLESS_IO
         /* ★★★ A dead piece answers reads out of its own memory, but its WRITES dispatch

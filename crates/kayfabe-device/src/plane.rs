@@ -1879,7 +1879,11 @@ impl RegPlane {
                     // exit. **A sink nobody installed and a sink that works are the same code
                     // until a guest reads one.** The page stays trapped until the port is
                     // wired AND a boot shows the client passing with it.
-                    || false && crate::cpuintr::decode(off).is_some()
+                    // ★★★★★ w577 — BACK AGAIN, now that a sink is actually installed
+                    // (`kayfabe_shim_bar0_shadow_attach`). ⊘ The interrupt tree publishes from
+                    // all FIVE of its mutation sites (w574), which is what makes this safe:
+                    // a vector we raise reaches the guest's ISR through the shadow.
+                    || crate::cpuintr::decode(off).is_some()
                     // ⊘⊘ w575 — THE INVALIDATE TRIGGER IS **NOT** BACKED, and this is a
                     // measured refusal rather than an oversight.
                     //
@@ -1893,10 +1897,11 @@ impl RegPlane {
                     // ⚠ `[measured w573-w575]` w564 backed it and the boot graded (E):
                     // `RmInitAdapter failed`. It stays trapped until something makes "done"
                     // observable at the instant it becomes true, and a boot says so.
-                    || (false && self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
-                    // ⊘ w576 — the GSP registers are out for the same reason: their
-                    // republisher writes to the same absent port.
-                    || (false && self.model.decode_reg(0, off).is_some())
+                    || (self.chip.bar0_window_reg != 0 && off == self.chip.bar0_window_reg)
+                    // ★ w577 — the GSP group republishes on every FSM write and the sink is
+                    // now real. ⊘ `may_read` offsets stay out: the boot sequence's `on_read`
+                    // has no republisher at all.
+                    || self.model.decode_reg(0, off).is_some()
             });
             if !shadowable {
                 continue;

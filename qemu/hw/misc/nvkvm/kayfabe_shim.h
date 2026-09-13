@@ -1267,4 +1267,20 @@ int64_t  kayfabe_shim_bar0_dead_runs(void *handle, KayfabeRange *out, uint64_t m
  */
 int64_t  kayfabe_shim_bar0_shadow_fill(void *handle, uint64_t off, uint8_t *out, uint64_t len);
 
+/*
+ * ★★★★★ Attach one backed piece as part of the register plane's READ SHADOW, so the plane's
+ * producers write their new register values straight into the memory the guest reads.
+ *
+ * Call once per piece, immediately after kayfabe_shim_bar0_shadow_fill has seeded it.
+ *
+ * ⊘⊘ [measured w573-w576] the plane grew this write-through port and NOTHING EVER INSTALLED
+ * ONE: every producer's write returned at its first line, the backed live pages held their
+ * realize-time bytes for the whole boot, and the guest's interrupt service routine read zeros
+ * from a page that could not change — `RmInitAdapter failed`. ⚠ A sink nobody installed and a
+ * sink that works are identical code until a guest reads one.
+ *
+ * `ram` must outlive the register plane and must not be written by anything else.
+ */
+int32_t  kayfabe_shim_bar0_shadow_attach(void *handle, uint64_t off, uint8_t *ram, uint64_t len);
+
 #endif /* KAYFABE_SHIM_H */
