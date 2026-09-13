@@ -4705,7 +4705,7 @@ impl RegPlane {
         &self,
         w: FbWindow,
         budget: u32,
-    ) -> Result<Vec<kayfabe_mmu::walker::DecodedLeaf>, WindowRefusal> {
+    ) -> Result<(Vec<kayfabe_mmu::walker::DecodedLeaf>, usize), WindowRefusal> {
         let mut s = self.mem.lock();
         let PlaneMem { mmu, fb } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
@@ -4800,11 +4800,18 @@ impl RegPlane {
         // ⊘ Vidmem only, exactly as `bar1_translate` refuses a foreign aperture: a BAR
         // window entry naming sysmem is not something this mirror can back, and dropping it
         // silently here would be the same lie the single-VA path refuses to tell.
-        Ok(decoded
-            .leaves
-            .into_iter()
-            .filter(|l| l.aperture == Aperture::Vidmem)
-            .collect())
+        // ★ w626 — the tree's real size travels with its leaves. ⊘ The budget counts PAGES
+        // VISITED, and `decode_subtree` errors on exhaustion and on nothing else, so a caller
+        // that guessed a budget has no way to learn the right one from a refusal. Returning
+        // `visited` turns the next budget into a measurement instead of a second guess.
+        Ok((
+            decoded
+                .leaves
+                .into_iter()
+                .filter(|l| l.aperture == Aperture::Vidmem)
+                .collect(),
+            decoded.visited.len(),
+        ))
     }
 
     fn bar1_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {

@@ -78,9 +78,23 @@ const REVAL_LIVE: u64 = 8;
 /// carries one.
 const CENSUS_EVERY_FILLS: u64 = 512;
 
-/// ★ w617 — the leaf budget for a map-at-create pass. `[measured w616]` BAR1's whole working
-/// set is 66 pages, so this is ~30x headroom and still bounds a pathological tree.
-const PREMAP_BUDGET: u32 = 2048;
+/// ★ w617 — the page-table-page budget for one enumeration pass. `[measured w616]` BAR1's whole
+/// working set is 66 pages, so 2 048 was ~30x headroom for it.
+const PREMAP_BUDGET_BAR1: u32 = 2048;
+
+/// ★★★★★ **w626 — BAR2 NEEDS ITS OWN, AND 2 048 WAS WHY IT NEVER RAN.**
+///
+/// ⊘⊘ `[measured w625a]` the BAR2 enumeration was refused on **all 1 181** invalidates with
+/// *"the enumeration did not complete (unbacked page, malformed entry, or exhausted budget)"* —
+/// and `decode_subtree`'s own contract settles which without another boot: **it returns `Err`
+/// for `BudgetExhausted` and for nothing else.** Every other fault is per-branch and comes back
+/// in `SubtreeDecode::faults` with the leaves that did decode.
+///
+/// ⇒ The budget counts **page-table PAGES visited**, not leaves, and BAR2 maps the instance
+/// blocks and page tables of the whole framebuffer — a far larger tree than BAR1's. ⚠ This
+/// number is a headroom guess and is instrumented as one: `premap[bar2_visited=]` reports the
+/// tree's real size, so the next commit can set it from a measurement instead of from me.
+const PREMAP_BUDGET_BAR2: u32 = 1 << 20;
 
 // ---- refusal names -----------------------------------------------------------------------
 
@@ -404,6 +418,9 @@ pub struct BarMirror {
     premap_skipped: AtomicU64,
     /// ★ w625 — the distinct refusal reasons seen, so 1 181 identical lines become one each.
     premap_why: Mutex<std::collections::BTreeSet<(bool, &'static str)>>,
+    /// ★ w626 — the largest BAR2 page-table tree any enumeration walked, so the budget above
+    /// can be set from this rather than from a guess. ⊘ `0` means BAR2 never enumerated at all.
+    premap_bar2_visited: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -588,6 +605,7 @@ impl BarMirror {
             premap_biggest_leaf: AtomicU64::new(0),
             premap_skipped: AtomicU64::new(0),
             premap_why: Mutex::new(std::collections::BTreeSet::new()),
+            premap_bar2_visited: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
@@ -1268,7 +1286,12 @@ impl BarMirror {
         let Some(arm) = self.arm_for(win) else {
             return;
         };
-        let leaves = match self.plane.window_leaves(win, PREMAP_BUDGET) {
+        let budget = if win == FbWindow::InstanceWindow {
+            PREMAP_BUDGET_BAR2
+        } else {
+            PREMAP_BUDGET_BAR1
+        };
+        let (leaves, visited) = match self.plane.window_leaves(win, budget) {
             Ok(l) => l,
             Err(e) => {
                 self.premap_refused.fetch_add(1, Ordering::Relaxed);
@@ -1353,6 +1376,10 @@ impl BarMirror {
         self.premap_pages.fetch_add(asked, Ordering::Relaxed);
         self.premap_skipped.fetch_add(skipped, Ordering::Relaxed);
         self.premap_runs.fetch_add(1, Ordering::Relaxed);
+        if win == FbWindow::InstanceWindow {
+            self.premap_bar2_visited
+                .fetch_max(visited as u64, Ordering::Relaxed);
+        }
     }
 
     /// ★ w613 — called once, at the first channel birth. See `pages_at_first_birth`.
@@ -1549,12 +1576,13 @@ impl BarMirror {
             }
         };
         let premap = format!(
-            " premap[runs={} filled={} skipped={} refused={} biggest_leaf={}]",
+            " premap[runs={} filled={} skipped={} refused={} biggest_leaf={} bar2_visited={}]",
             self.premap_runs.load(Ordering::Relaxed),
             self.premap_pages.load(Ordering::Relaxed),
             self.premap_skipped.load(Ordering::Relaxed),
             self.premap_refused.load(Ordering::Relaxed),
             self.premap_biggest_leaf.load(Ordering::Relaxed),
+            self.premap_bar2_visited.load(Ordering::Relaxed),
         );
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
