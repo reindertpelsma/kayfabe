@@ -2816,6 +2816,32 @@ impl RegPlane {
         }
     }
 
+    /// ★★★★★ **Publish the WHOLE interrupt tree into the read shadow — from inside the hold.**
+    ///
+    /// # ⊘⊘ w574 — this is the fix for a regression that stopped the driver dead
+    ///
+    /// `[measured w573/w574, bench boot]` w564 made the interrupt-leaf page backable and wired
+    /// write-through at **one** site: the guest's own write. The tree is mutated at FOUR more —
+    /// the reset, two raise paths, and the vector latch — and every one of those is the DEVICE
+    /// changing the tree, which is the direction that matters.
+    ///
+    /// ⇒ The guest's ISR read its leaves out of a shadow that only moved when the guest itself
+    /// wrote, so a raised vector was invisible: it was told *"nothing pending"* at the one
+    /// instant the answer decides whether the adapter initialises. `ga10x.rs` says exactly this
+    /// about a defaulted zero here, and I backed the page anyway. The boot graded **(E)** —
+    /// `RmInitAdapter failed`, no channel, every doorbell refused.
+    ///
+    /// ★ Takes the guard, so it CANNOT re-lock and cannot be called from outside a hold. That
+    /// is the property that makes "call it at every mutation" checkable rather than remembered.
+    fn publish_cpu_intr(&self, tree: &crate::cpuintr::CpuIntrTree) {
+        if self.read_shadow.read().unwrap_or_else(|e| e.into_inner()).is_none() {
+            return;
+        }
+        for (off, reg) in crate::cpuintr::shadowable_regs() {
+            self.shadow_write(off, u64::from(tree.read(reg)), 4);
+        }
+    }
+
     /// ★★★★★ **Publish the invalidate trigger's current value into the read shadow.**
     ///
     /// ⊘⊘ Called by whoever COMPLETES an invalidate, and it has to be: the guest is spinning
@@ -4076,7 +4102,12 @@ impl RegPlane {
         // `NV_VIRTUAL_FUNCTION_PRIV_CPU_INTR_LEAF_VALUE_INIT` and both `_EN_*_VALUE_INIT`
         // are `0x00000000` (`ogkm-580: ampere/ga102/dev_vm.h:52,56,60`), so a device that
         // came back from a power-on reset with pending bits is not modelling silicon.
-        *self.cpu_intr.lock() = CpuIntrTree::new();
+        {
+            let mut t = self.cpu_intr.lock();
+            *t = CpuIntrTree::new();
+            // ★ w574 — a RESET is a change too: the shadow must go back to zeros with it.
+            self.publish_cpu_intr(&t);
+        }
         // ★★★★ **AND G1'S WITNESS** — for `BarPdeLog::device_reset`'s reason, sharpened by
         // what this one feeds. An undrained page here is handed to `Spine::pt_page_owner`
         // and then **decoded as page-table bytes** into whichever address space claims it.
@@ -4935,16 +4966,10 @@ impl RegPlane {
             let fired = {
                 let mut t = self.cpu_intr.lock();
                 let fired = t.write(reg, val as u32);
-                // ★★★ w564 — WRITE THROUGH, under the SAME hold as the mutation.
-                //
-                // ⊘ One write may change several registers: a SET and a CLEAR alias are two
-                // write ports onto one enable mask, so writing one changes what the other
-                // reads. Re-publishing only the offset the guest named would leave its alias
-                // stale. ⇒ the whole decoded group is re-read and re-published here, inside
-                // the hold, so no reader can observe the tree and its shadow disagreeing.
-                for (o, r) in crate::cpuintr::shadowable_regs() {
-                    self.shadow_write(o, u64::from(t.read(r)), 4);
-                }
+                // ★★★ w564 — WRITE THROUGH, under the SAME hold as the mutation. One write
+                // may change several registers (a SET and a CLEAR alias are two ports onto one
+                // mask), so the WHOLE group is republished, never just the named offset.
+                self.publish_cpu_intr(&t);
                 fired
             };
             // ⊘ `out_of_range` raises NOTHING: the guest named a leaf row this chip does
@@ -5267,7 +5292,11 @@ impl RegPlane {
             // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
             // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
             let mut intr = self.cpu_intr.lock();
-            self.deliver_os_events(fsm, ram.as_mut(), &mut intr)
+            let r = self.deliver_os_events(fsm, ram.as_mut(), &mut intr);
+            // ★★★★★ w574 — the DEVICE just changed the interrupt tree. Publish inside the
+            // hold, or the guest's ISR reads a shadow that only moves when the guest writes.
+            self.publish_cpu_intr(&intr);
+            r
         } else {
             false
         };
@@ -5312,7 +5341,11 @@ impl RegPlane {
             // are held together. Plane (rank 0) is acquired first and the tree is a Leaf
             // (rank 3), so the ranks are strictly increasing and `check_acquire` accepts it.
             let mut intr = self.cpu_intr.lock();
-            self.deliver_os_events(fsm, ram.as_mut(), &mut intr)
+            let r = self.deliver_os_events(fsm, ram.as_mut(), &mut intr);
+            // ★★★★★ w574 — the DEVICE just changed the interrupt tree. Publish inside the
+            // hold, or the guest's ISR reads a shadow that only moves when the guest writes.
+            self.publish_cpu_intr(&intr);
+            r
         };
         raise_cpu_intr || raise_os_event
     }
@@ -5445,7 +5478,14 @@ impl RegPlane {
             return false;
         };
         // ⊘ No plane lock — the latch touches only the interrupt tree. w513.
-        let outcome = self.cpu_intr.lock().latch(vector);
+        let outcome = {
+            let mut t = self.cpu_intr.lock();
+            let o = t.latch(vector);
+            // ★★★★★ w574 — THE most important of the five: this is a vector being raised, and
+            // the shadow is what the guest's ISR reads to find it.
+            self.publish_cpu_intr(&t);
+            o
+        };
         if outcome.out_of_range {
             // A vector the captured table publishes but this chip's `LEAF` family has no
             // row for. Nothing was latched, so nothing may be delivered — and it is the
