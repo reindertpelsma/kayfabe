@@ -105,6 +105,56 @@ separate them.
 burning kernel CPU. That is a regression in **debuggability** even where neither configuration
 passes.
 
+## 4c. ★★★★★ THE PORT SPEC — the exact UVM call sequence `cuCtxCreate` makes
+
+`[measured w699, 2026-09-13]` cup3 traced from exec, fd 9 = `/dev/nvidia-uvm` (raw-integer
+ioctls, no size encoding), adjacent repeats collapsed:
+
+    0x1  0x27 0x25 0x46 0x17 0x19   then (0x49 0x21) repeated
+
+| # | ioctl | name |
+|---|---|---|
+| 1 | `0x01` = 1 | `UVM_RESERVE_VA` |
+| 2 | `0x27` = 39 | `UVM_PAGEABLE_MEM_ACCESS` |
+| 3 | `0x25` = 37 | `UVM_REGISTER_GPU` ⟵ rmladder HAS this |
+| 4 | `0x46` = 70 | `UVM_PAGEABLE_MEM_ACCESS_ON_GPU` |
+| 5 | `0x17` = 23 | `UVM_CREATE_RANGE_GROUP` |
+| 6 | `0x19` = 25 | `UVM_REGISTER_GPU_VASPACE` ⟵ rmladder HAS this |
+| 7 | `0x49` = 73 | `UVM_CREATE_EXTERNAL_RANGE` ⟶ **loops with 8** |
+| 8 | `0x21` = 33 | `UVM_MAP_EXTERNAL_ALLOCATION` ⟵ **the wall** |
+
+★★★ **The early maps SUCCEED.** `(0x49 0x21)` repeats and only a later `0x21` goes
+`<unfinished ...>`. ⇒ `MAP_EXTERNAL` is not fundamentally broken; the **Nth** one hangs. That is a
+far more tractable target than "the call does not work", and it means the port must LOOP rather
+than issue one map.
+
+### The struct, for the port
+
+`UVM_MAP_EXTERNAL_ALLOCATION_PARAMS` (`uvm_ioctl.h:491-504`), with
+`UVM_MAX_GPUS = NV_MAX_DEVICES(32) * UVM_PARENT_ID_MAX_SUB_PROCESSORS(8) = 256` and
+`UvmGpuMappingAttributes` = 16-byte uuid + five `NvU32` = **36 bytes**:
+
+| field | offset |
+|---|---|
+| `base` u64 | 0 |
+| `length` u64 | 8 |
+| `offset` u64 | 16 |
+| `perGpuAttributes[256]` | 24 .. 9240 |
+| `gpuAttributesCount` u64 | 9240 |
+| `rmCtrlFd` i32 | 9248 |
+| `hClient` u32 | 9252 |
+| `hMemory` u32 | 9256 |
+| `rmStatus` u32 | 9260 |
+| **total** | **9264** |
+
+⊘ `rmladder`'s `uvm_raw` module (`bin/rmladder.rs:13386`) already carries `UVM_INITIALIZE`,
+`UVM_REGISTER_GPU`, `UVM_REGISTER_GPU_VASPACE` and `UVM_MM_INITIALIZE` with their ABI offsets
+documented in the same idiom. Six calls are missing: 1, 39, 70, 23, 73, 33.
+
+★ Why this is worth building (owner directive, `port_the_failure_into_the_raw_client`): a boot
+costs ~6 minutes; once booted, rmladder variants cost seconds. The wall blocks goals 9 and 10, so
+the iteration rate on it is the schedule.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
