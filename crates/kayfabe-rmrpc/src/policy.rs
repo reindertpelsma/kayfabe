@@ -1758,11 +1758,50 @@ impl GraphPolicy<'_> {
                 rpc_result: 0, // NV_OK
                 body: cmd.payload.clone(),
             }),
-            Err(r) => Some(Reply {
-                rpc_result: r.rpc_result(),
-                body: Vec::new(),
-            }),
+            Err(r) => Some(refusal_reply(r)),
         }
+    }
+}
+
+/// ★★★★★ **A REFUSAL THAT NAMES ITSELF WHEN IT HAPPENS — w695e.**
+///
+/// ⊘⊘⊘ Every [`BridgeRefusal`] variant collapses to one status through
+/// `BridgeRefusal::rpc_result` — `NV_ERR_NOT_SUPPORTED` (`0x56`) — at three sites in this
+/// file. Until now **nothing was logged at the moment of refusal**: the class id reached
+/// only a teardown census (`SharedRefusalCensus`), keyed by fault tag, with its detail set
+/// capped at `REFUSAL_DETAIL_CAP = 8` distinct ids.
+///
+/// ⇒ `[measured w695d]` a boot in which the guest's `cuCtxCreate` hung showed six failing
+/// `GspRmAlloc`s in the GUEST's log (`hClass=0x70`, `0x208f`, `0x402c`, `0xc36f`) and **our
+/// side emitted nothing at all** for any of them. The question *"which alloc did we refuse,
+/// and for whom"* was answerable only from the guest's dmesg — i.e. from the one party whose
+/// account we are supposed to be checking.
+///
+/// ⚠ **Capped, and the cap is not a gate on the value.** The guest controls how many RPCs it
+/// issues, so an uncapped print on this path is a second workload (w586-w588: an instrument
+/// on a hot path broke the boot it was measuring). The first `REFUSAL_LOG_MAX` are printed
+/// with full detail and the total rides the existing census — so the cap can never hide the
+/// fact that more happened, only the individual lines.
+static REFUSALS_LOGGED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many refusals get a line of their own. Detail for the opening of a boot, which is
+/// where every wall this campaign has chased actually begins.
+const REFUSAL_LOG_MAX: u64 = 24;
+
+/// One reply, and one line the first [`REFUSAL_LOG_MAX`] times. ⊘ Shared by all three sites
+/// so they cannot drift into disagreeing about whether a refusal is worth naming.
+fn refusal_reply(r: BridgeRefusal) -> Reply {
+    let n = REFUSALS_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if n <= REFUSAL_LOG_MAX {
+        eprintln!(
+            "kayfabe: RPC-REFUSED #{n} {r:?} \u{21d2} answered NV_ERR_NOT_SUPPORTED (0x56). \u{2298} The \
+             guest sees only the status; this line is the only place the REASON exists. \
+             (printing the first {REFUSAL_LOG_MAX}; the total rides the refusal census)"
+        );
+    }
+    Reply {
+        rpc_result: r.rpc_result(),
+        body: Vec::new(),
     }
 }
 
@@ -2979,10 +3018,7 @@ impl ObjectPolicy {
                 rpc_result: kayfabe_abi::NV_ERR_NOT_SUPPORTED,
                 body: Vec::new(),
             }),
-            Err(r) => Some(Reply {
-                rpc_result: r.rpc_result(),
-                body: Vec::new(),
-            }),
+            Err(r) => Some(refusal_reply(r)),
         }
     }
 
@@ -3477,10 +3513,7 @@ impl ObjectPolicy {
                 rpc_result: 0, // NV_OK
                 body: cmd.payload.clone(),
             }),
-            Err(r) => Some(Reply {
-                rpc_result: r.rpc_result(),
-                body: Vec::new(),
-            }),
+            Err(r) => Some(refusal_reply(r)),
         }
     }
 }
