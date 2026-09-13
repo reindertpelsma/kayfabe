@@ -502,3 +502,42 @@ fn both_edges_of_the_invalidate_trigger_reach_the_read_shadow() {
          trapping, because a trap at least asks us."
     );
 }
+
+/// ★★★★★ **THE COUNTER PAGE'S SPAN IS DERIVED, AND IT IS THE PAGE THAT ACTUALLY TRAPS (w631).**
+///
+/// ⊘ Two things, because the span being *derivable* and the span being *right* are different
+/// claims and only the second is useful. `[measured w627]` every remaining read trap on this
+/// device is at `+0xbb0000`; if the derivation named any other page, mapping it would remove
+/// nothing and the census would say so three commits later.
+///
+/// ⚠ The expected value is written here as a LITERAL on purpose. The derivation and the test
+/// must not share an arithmetic — `0xb80000 + 0x30000` computed twice is one belief checked
+/// against itself, which is the shape that let a stale doc comment stand in for a counter
+/// earlier in this session.
+#[test]
+fn the_counter_pages_span_is_derived_and_is_the_page_that_traps() {
+    let p = plane();
+    let (off, len) = p
+        .usermode_page_span()
+        .expect("GA106 advertises a usermode window");
+
+    assert_eq!(
+        off, 0x00bb_0000,
+        "the derived usermode base is not the page the read census names as the last trap \
+         source; mapping this would remove nothing"
+    );
+    assert_eq!(len, 4096, "ONE page — the other fifteen measured zero reads");
+
+    // ⊘ And it must be a page the cut deliberately leaves LIVE. A counter inside a backed page
+    // would be answered from stale memory with no exit, which is worse than trapping.
+    let backed: std::collections::BTreeSet<u64> = p
+        .bar0_backable_runs()
+        .into_iter()
+        .flat_map(|(b, l)| (b..b + l).step_by(4096))
+        .collect();
+    assert!(
+        !backed.contains(&off),
+        "the counter page is BACKED, so the guest reads a frozen copy of a free-running \
+         counter — the failure this whole surface is written against"
+    );
+}

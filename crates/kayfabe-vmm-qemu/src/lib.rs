@@ -1232,10 +1232,27 @@ impl QemuMachine {
         gpa: u64,
         len: u64,
         fd: std::os::fd::BorrowedFd<'_>,
+        readonly: bool,
     ) -> Result<RamRegionId, VmmError> {
+        // ★★★★★ **w631 — `readonly` is the GUEST's containment, and it is a different
+        // containment from the descriptor's.**
+        //
+        // ⊘ Two adversaries, two mechanisms, and conflating them is how this design went wrong
+        // once already (`the_counter_page_and_the_device_view.md` §4b):
+        //   - **the VMM** is contained by the node being opened `O_RDONLY`, which the kernel
+        //     enforces with `EACCES` on a writable `mmap` and on a later `mprotect`;
+        //   - **the guest** is contained by THIS flag. A read-only slot makes a guest store
+        //     exit and be emulated, so it reaches our trap with the token instead of reaching
+        //     hardware. That is the one the product's value proposition rests on.
+        //
+        // ⚠ For the counter page both are required and neither substitutes: the doorbell at
+        // `+0x90` shares a 4 KiB page with the counter at `+0x80`, so a writable slot would
+        // hand the guest a ring it could drive without us, and a writable descriptor would
+        // hand the VMM the same.
+        let whole = gpa..gpa + len;
         self.install_window_inner(
             &WindowSpec::passthrough(gpa, len),
-            None,
+            if readonly { Some(&whole) } else { None },
             WindowBacking::DeviceView(fd),
             "installing a device-view reservation",
         )

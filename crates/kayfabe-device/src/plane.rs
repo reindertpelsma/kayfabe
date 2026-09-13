@@ -3723,6 +3723,34 @@ impl RegPlane {
 
     /// Where the `PRAMIN` aperture sits in the register BAR, as `(offset, length)`.
     #[must_use]
+    /// ★★★★★ **w631 — the counter page's BAR0 span, DERIVED from the chip's own table.**
+    ///
+    /// `(offset, len)` within BAR0, or `None` if this chip advertises no usermode window.
+    ///
+    /// ⊘ **Derived, never a constant**, for the reason `doorbell_reg` gives one file over: the
+    /// base comes from `reg_base::USERMODE` in the table the guest itself is shown, so a chip
+    /// that places it elsewhere is followed rather than mis-decoded. `[the owner]` *"if not,
+    /// then it must be derived"*, and every architecture from Turing to Blackwell computes this
+    /// the same way.
+    ///
+    /// ⚠ **ONE page, not the 64 KiB the mapping covers.** The registers that matter —
+    /// `TIME_0`, `TIME_1` and the doorbell — all live in page 0, and the other fifteen pages
+    /// measured zero reads. A 64 KiB slot would hand the guest fifteen pages of hardware
+    /// nobody asked for; the `mmap` is 64 KiB because the driver refuses any other length, and
+    /// the SLOT is 4 KiB because that is what the guest needs.
+    ///
+    /// ⊘ `None` is a refusal to classify, not a default offset — a chip advertising no
+    /// usermode window told the driver it has no such aperture.
+    #[must_use]
+    pub fn usermode_page_span(&self) -> Option<(u64, u64)> {
+        self.chip
+            .chip_info
+            .reg_bases
+            .iter()
+            .find(|r| r.index == kayfabe_abi::chipinfo::reg_base::USERMODE)
+            .map(|r| (u64::from(r.offset), 4096))
+    }
+
     pub fn pramin_span(&self) -> Option<(u64, u64)> {
         if self.chip.pramin_window.len == 0 {
             return None;
