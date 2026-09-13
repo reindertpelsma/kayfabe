@@ -1118,3 +1118,58 @@ impl FbMirrorPort for BarMirror {
         );
     }
 }
+
+#[cfg(test)]
+mod arena_unit_tests {
+    use super::*;
+    use kayfabe_device::fbwin::{FbStore, SparseFb};
+
+    const FB_PAGE: u64 = 4096;
+
+    /// ★★★★★ **THE STORE AND THE REAL ARENA MUST AGREE ON UNITS (w584).**
+    ///
+    /// ⊘⊘ `SharedPageArena::alloc_at` takes a framebuffer BYTE ADDRESS. Between w569 and w584
+    /// the store passed it a FRAME NUMBER at four of five call sites. `alloc_at` refuses a
+    /// misaligned address, so every store-side page creation was refused `ARENA_MISALIGNED` —
+    /// unless the frame number happened to be a multiple of 4096, i.e. the address a multiple
+    /// of 16 MiB — and fell back to the heap.
+    ///
+    /// ★ It survived the whole suite and a PASSING boot, because the heap fallback is
+    /// functionally CORRECT for the trapping path: right bytes, wrong location. It breaks
+    /// exactly one thing — a memory slot over the framebuffer, which can only see the file —
+    /// so it surfaced as PRAMIN failing, nowhere near its cause.
+    ///
+    /// ⚠ Invisible to every existing test because they drive a MOCK arena, which accepts any
+    /// value. **A unit error between two crates can only be caught by a test that spans both**,
+    /// so this one uses the real `SharedPageArena` through the real `ArenaPort`.
+    #[test]
+    fn the_store_allocates_at_addresses_the_real_arena_accepts() {
+        const FB: u64 = 64 << 20;
+        let arena = SharedPageArena::create_for(FB, HostPageSize::query()).expect("arena");
+        let mut fb = SparseFb::new(FB);
+        fb.install_page_arena(Box::new(ArenaPort(arena.clone())))
+            .expect("the store takes the arena");
+
+        // Frames whose NUMBER is not a multiple of 4096 — every one was refused under w569.
+        for frame in [0u64, 1, 2, 17, 255, 4095, 9001] {
+            fb.write(frame * FB_PAGE, &[0xAB; 8]).expect("write");
+        }
+
+        let (refusals, _migrations) = fb.arena_census();
+        assert_eq!(
+            refusals, 0,
+            "the store asked the arena for {refusals} page(s) it REFUSED — a unit mismatch: \
+             `alloc_at` takes a framebuffer BYTE ADDRESS and the store passed a FRAME NUMBER, \
+             so every page landed on the heap. Correct bytes, wrong location, invisible to any \
+             memory slot over the framebuffer."
+        );
+        // ⊘ Non-vacuity: zero refusals means nothing if nothing was asked.
+        assert!(fb.resident_pages() > 0, "no page was created");
+
+        // ★ And the bytes read back — a page in the right place with the wrong contents is a
+        // different failure, ruled out here because this is the cheapest place to do it.
+        let mut buf = [0u8; 8];
+        fb.read(0, &mut buf);
+        assert_eq!(buf, [0xAB; 8], "the arena page holds what the store wrote");
+    }
+}

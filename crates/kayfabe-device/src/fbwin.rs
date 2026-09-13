@@ -1169,9 +1169,28 @@ impl SparseFb {
     ///
     /// ⊘ Address-indexing REMOVES the allocator rather than adding to it: no free list, no
     /// bump cursor, no recycling. The address IS the offset.
+    /// ⚠ `frame` is a FRAME NUMBER (`addr / FB_PAGE`), and the conversion to the byte address
+    /// the arena wants happens HERE, once. w569 left four callers passing the frame number and
+    /// one passing the byte address to an API that wanted bytes — see the `w584` note below.
     fn fresh_page(&mut self, frame: u64) -> FbPage {
         if let Some(arena) = self.arena.as_mut() {
-            match arena.alloc_at(frame) {
+            // ⊘⊘ **w584 — THE UNIT BUG, and it was silent for a reason worth remembering.**
+            //
+            // `SharedPageArena::alloc_at` takes a framebuffer BYTE ADDRESS; four of the five
+            // callers here passed a FRAME NUMBER. `alloc_at` refuses a misaligned address, so
+            // every store-side page creation was refused `ARENA_MISALIGNED` unless the frame
+            // number happened to be a multiple of 4096 — i.e. unless the address was a multiple
+            // of 16 MiB — and fell back to the HEAP.
+            //
+            // ★ It passed every test and a passing boot, because the heap fallback is
+            // functionally CORRECT for the trapping path: the bytes are right, only their
+            // location is wrong. It breaks exactly one thing — a memory slot over the
+            // framebuffer, which can only see the file — which is why it surfaced as PRAMIN
+            // failing and not as anything nearer the cause.
+            //
+            // ⊘ And `arena_refusals` counted every one of them. `arena_census` has no
+            // production caller, so the number existed and nobody printed it.
+            match arena.alloc_at(frame * FB_PAGE) {
                 Ok(mut p) => {
                     let _ = p.write(0, &[0u8; FB_PAGE as usize]);
                     return FbPage::Arena(p);
@@ -1628,7 +1647,7 @@ impl FbStore for SparseFb {
                 continue;
             };
             let bytes = **old;
-            let fresh = self.fresh_page(frame * FB_PAGE);
+            let fresh = self.fresh_page(frame);
             match fresh {
                 FbPage::Arena(mut a) => {
                     let _ = a.write(0, &bytes);
