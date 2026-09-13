@@ -340,6 +340,20 @@ pub struct BarMirror {
     /// nothing accesses and every access exits, which looks exactly like "the slot does not
     /// work".
     pramin_gpa: AtomicU64,
+    /// ★★★★★ **w597 — WHEN the residual PRAMIN exits arrive, relative to the window moves.**
+    ///
+    /// `[measured w595]` `before_slot=0 after_slot=3405 gpa=0xfb700000 (BAR0 has not moved)`.
+    /// So the slot is live, at the right address, and 3 405 accesses exit anyway. Three
+    /// readings fit that equally well and demand different fixes:
+    ///
+    ///   - a STEADY leak    => the slot is not covering the range it claims to;
+    ///   - a BURST after each re-point => the re-point drops coverage and the guest races it;
+    ///   - a single BLOCK   => the slot is being removed once and never restored.
+    ///
+    /// ⊘ A total cannot separate them, and I have now been wrong twice guessing at this
+    /// number's shape. ⇒ Record the access count at each re-point; 22 `u64`s, written once per
+    /// move, read once at teardown. The deltas ARE the shape.
+    pramin_marks: Mutex<Vec<u64>>,
     table: Mutex<Table>,
     census: Census,
     /// The plane's `UPDATE_BAR_PDE` count at the last check — a moved count is a BAR2 root
@@ -513,6 +527,7 @@ impl BarMirror {
             pramin_moves: AtomicU64::new(0),
             pramin_at_install: AtomicU64::new(u64::MAX),
             pramin_gpa: AtomicU64::new(u64::MAX),
+            pramin_marks: Mutex::new(Vec::new()),
             pramin_skipped: AtomicU64::new(0),
             table: Mutex::new(Table::default()),
             census: Census::default(),
@@ -990,6 +1005,7 @@ impl BarMirror {
                     self.pramin_at_install
                         .store(c.fb_reads + c.fb_writes, Ordering::Relaxed);
                     self.pramin_gpa.store(p.base + span_off, Ordering::Relaxed);
+                    self.mark_pramin();
                     eprintln!(
                         "kayfabe: PRAMIN-WINDOW installed at gpa=0x{:x} len=0x{span_len:x} \
                          showing fb 0x{base:x}, on the guest's FIRST latch write. ⊘ ONE slot: \
@@ -1019,6 +1035,7 @@ impl BarMirror {
             Ok(()) => {
                 *slot = Some((region, base));
                 self.pramin_moves.fetch_add(1, Ordering::Relaxed);
+                self.mark_pramin();
             }
             // ⚠ A refused re-point leaves the slot showing what it showed. That is WRONG for
             // the guest — it will read the old framebuffer — so it is said, not swallowed.
@@ -1028,6 +1045,38 @@ impl BarMirror {
                  WRONG. This is the one failure on this path that cannot be contained."
             ),
         }
+    }
+
+    /// ★ w597 — one mark per accepted PRAMIN placement. O(1), bounded by the move count.
+    fn mark_pramin(&self) {
+        let c = self.plane.counters();
+        let mut m = self.pramin_marks.lock().unwrap_or_else(|e| e.into_inner());
+        if m.len() < 64 {
+            m.push(c.fb_reads + c.fb_writes);
+        }
+    }
+
+    /// `(deltas between successive placements, exits after the last one)` — the SHAPE of the
+    /// residual PRAMIN traffic. See [`BarMirror::pramin_marks`].
+    fn pramin_shape(&self, total: u64) -> String {
+        let m = self.pramin_marks.lock().unwrap_or_else(|e| e.into_inner());
+        if m.is_empty() {
+            return "shape=none (never placed)".to_string();
+        }
+        let mut d: Vec<u64> = m.windows(2).map(|w| w[1].saturating_sub(w[0])).collect();
+        d.push(total.saturating_sub(*m.last().unwrap_or(&0)));
+        let zero = d.iter().filter(|n| **n == 0).count();
+        let max = d.iter().copied().max().unwrap_or(0);
+        format!(
+            "shape[placements={} per_placement_exits={:?} zero_intervals={zero} worst={max}] => {}",
+            m.len(),
+            &d[..d.len().min(24)],
+            if zero * 2 > d.len() {
+                "BURSTY - most intervals leak nothing, so the exits follow particular placements rather than leaking steadily"
+            } else {
+                "STEADY - every interval leaks, so the slot is not covering the range it claims"
+            }
+        )
     }
 
     pub fn after_write(&self, out: &kayfabe_device::WriteOutcome) {
@@ -1117,6 +1166,7 @@ impl BarMirror {
                 ),
                 (a, None) => format!(" gpa=0x{a:x} (BAR0 is unplaced now)"),
             };
+            let shape = self.pramin_shape(total);
             let split = if pre == u64::MAX {
                 "\u{2298} the slot was never installed, so ALL of it is pre-install by definition".to_string()
             } else {
@@ -1131,7 +1181,7 @@ impl BarMirror {
                 )
             };
             eprintln!(
-                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown} window_accesses={total} {split}{placement} \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
+                "kayfabe: PRAMIN-SLOT AT {at}: moves={} skipped={} showing={shown} window_accesses={total} {split}{placement} {shape} \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
                 self.pramin_moves.load(Ordering::Relaxed),
                 self.pramin_skipped.load(Ordering::Relaxed),
             );
