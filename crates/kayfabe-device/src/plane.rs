@@ -5705,7 +5705,31 @@ impl RegPlane {
         // ⊘ The lock is taken HERE and not around the port call above: `ring_doorbell`'s
         // contract is that no plane lock is held across `port.ring(token)`, and this runs
         // after it — the same shape `announce_completion` uses one statement up.
-        let raise_os_event = if matches!(report, DoorbellReport::ServedLocally { .. }) {
+        // ★★★★★ **ANY SERVED COMPLETION, NOT JUST A LOCALLY-SERVED ONE (w686).**
+        //
+        // ⊘⊘⊘ This read `matches!(report, ServedLocally { .. })`, so a **forwarded** doorbell —
+        // every passthrough channel, which is every CUDA channel that matters — **never posted
+        // the guest's armed os-event.** `[measured w684a]`
+        // `nonstall[raises=4 unvectored=40 (no_engine=40 ...)]`: forty of forty-four completions
+        // announced nothing, and the guest sat in `MC_SERVICE_INTERRUPTS` waiting for a wake
+        // that by construction could not come.
+        //
+        // ★ **The arm is what matters, not which executor served it.** `deliver_os_events`
+        // already implements the arm-directed rule correctly — it takes `os_events.batch()` and
+        // returns `false` when nothing is armed, so a guest that is spinning on a semaphore
+        // still gets no interrupt. The bug was never in the delivery, it was in the gate.
+        //
+        // ⊘ The old justification does not survive the evidence: *"a forwarded doorbell's work
+        // finishes on a HOST engine, at an instant this device is not standing at"* is true of
+        // the **semaphore**, and irrelevant to the **event**. The guest asked to be woken when
+        // its work finished; the work finished; we owe it the wake. Withholding it because we
+        // did not personally move the bytes is the reasoning that produced the forty.
+        //
+        // ⚠ The bound the old comment defends is preserved: this still fires **at most once per
+        // served doorbell**, never per claimed register write — which is what produced 125 251
+        // batches and a STUCK `mcEngine 50`. `is_served()` is exhaustive over the report enum,
+        // so a future serving arm is included by the compiler rather than by memory.
+        let raise_os_event = if report.is_served() {
             let mut s = self.state.lock();
             let PlaneState { fsm, ram, .. } = &mut *s;
             // ⊘ The interrupt tree now has its own lock, and this is the ONLY place the two
