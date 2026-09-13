@@ -6447,6 +6447,29 @@ impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
             .vas_guest_ram_rows(pid, DOORBELL_TARGET_GPU, pdb, usize::MAX);
         let mut backed = 0usize;
         let mut refused = 0usize;
+        // ★★★★★ **TWO CAUSES, TWO COUNTERS, AND THE ROW THAT PRODUCED THEM — w695j.**
+        //
+        // ⊘⊘⊘ `[measured w695d-w695i]` `VAS-REFRESH spaces=1 backed=0 refused=110` — a
+        // SYSTEMATIC 110/110 — and the single `refused` counter below was incremented from two
+        // completely different places: `resolve_guest_ram` answering `Err` (the VMM cannot map
+        // that GPA range at all) and `pin_guest_ram` answering `Err` (it resolved, and the
+        // device declined to pin it). Those have different fixes and the number could not tell
+        // them apart. ⚠ Third instance of this exact class in one session.
+        //
+        // ★ Why it matters now: `UVM_MAP_EXTERNAL_ALLOCATION` is where the guest stops
+        // (`[measured w695i]`: the ioctl goes `<unfinished ...>` for 49s while nvidia-uvm burns
+        // 138s of system time polling `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS`). These 110 rows
+        // are the mappings that call is trying to establish.
+        //
+        // ⊘ The `len & 0xfff` is printed because there is a standing hypothesis with a citation:
+        // the C artifact rounds every promote-derived mapping UP to 64 KiB
+        // (`C: src/qemu/nvkvm_gpu_emul.c:7920`, `asize = (size + 0xffff) & ~0xffffull`) while
+        // this port binds at the DECLARED length. If every refused row is non-page-aligned,
+        // that is the mechanism; if they are all aligned, the hypothesis is dead and the number
+        // says so in the same line. Either way the boot answers it.
+        let mut refused_resolve = 0usize;
+        let mut refused_pin = 0usize;
+        let mut logged = 0usize;
         for (va, gpa, len) in rows {
             let resolved = {
                 let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
@@ -6455,6 +6478,16 @@ impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
             };
             let Some(Ok(run)) = resolved else {
                 refused += 1;
+                refused_resolve += 1;
+                if logged < 6 {
+                    logged += 1;
+                    eprintln!(
+                        "kayfabe: VAS-ROW-REFUSED #{logged} at=resolve_guest_ram \
+                         va={va:#x} gpa={gpa:#x} len={len:#x} len&0xfff={:#x} \
+                         ⊘ the VMM could not map this GPA run at all.",
+                        len & 0xfff
+                    );
+                }
                 continue;
             };
             let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
@@ -6467,8 +6500,28 @@ impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
                 .pin_guest_ram(DOORBELL_TARGET_GPU, pdb, kayfabe_rt::GpuVa(va), grant)
             {
                 Ok(_) => backed += 1,
-                Err(_) => refused += 1,
+                Err(e) => {
+                    refused += 1;
+                    refused_pin += 1;
+                    if logged < 6 {
+                        logged += 1;
+                        eprintln!(
+                            "kayfabe: VAS-ROW-REFUSED #{logged} at=pin_guest_ram \
+                             va={va:#x} gpa={gpa:#x} len={len:#x} len&0xfff={:#x} \
+                             err={e:?} ⊘ it RESOLVED; the device declined the pin.",
+                            len & 0xfff
+                        );
+                    }
+                }
             }
+        }
+        if refused > 0 {
+            eprintln!(
+                "kayfabe: VAS-REFRESH-SPLIT pdb={:#x} backed={backed} refused={refused} \
+                 [resolve={refused_resolve} pin={refused_pin}] ⊘ ONE number covered both until \
+                 w695j; they have different fixes.",
+                pdb.0
+            );
         }
         (backed, refused)
     }
