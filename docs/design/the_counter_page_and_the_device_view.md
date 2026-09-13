@@ -1,7 +1,8 @@
 # The counter page, and the armed device node that serves it
 
-**STATUS: LIVE, 2026-09-13 (w594).** Mechanism MEASURED unprivileged on a GA106; the wire verb
-is NOT yet built. Supersedes nothing; extends `the_bar0_read_surface.md` §3 piece 3.
+**STATUS: LIVE but its SECURITY ARGUMENT IS REFUTED, 2026-09-13 (w596) — see §4a before
+building anything.** The mechanism is measured and works; `ACCESS_READ_ONLY` does NOT make the
+mmap read-only, so the containment argument that chose this design over the alternative is gone. Supersedes nothing; extends `the_bar0_read_surface.md` §3 piece 3.
 
 ## 1. Why this page is the last one
 
@@ -80,6 +81,40 @@ cross-tenant ring. Read-only makes it structurally not one, even for a hostile V
 `VM_PFNMAP` device view as a memslot, and guest access through it takes no exit. ⊘ Run as root
 this probe reports `euid 0`; the run that matters is the one above, because the owner's rule is
 *"anything you want to obtain from host userspace must be able unprivileged (non root)"*.
+
+## 4a. ⊘⊘⊘ **REFUTED 2026-09-13 (w596) — `ACCESS_READ_ONLY` DOES NOT MAKE THE mmap READ-ONLY.**
+
+`[measured, GA106, unprivileged euid 1002]`, `rmladder --bar1-crossing` LEG R:
+
+    FAIL W393 LEG R = PROT_WRITE was ACCEPTED on a node armed ACCESS_READ_ONLY.
+
+★ §3's security primitive is **absent**, and the chain that predicted it is real but leads
+somewhere else. `NVOS33_FLAGS_ACCESS_READ_ONLY` does lower to `NV_PROTECT_READABLE`
+(`mapping_cpu.c:970-982`) — and that value governs **RM's own mapping bookkeeping**. The
+`mmap` protection comes from a different source entirely: `nv-mmap.c:155` tests
+`mmap_context->prot`, and that field is set from **`RmValidateMmapRequest`**
+(`osapi.c:2494-2503`), which validates the BAR range and never reads the NVOS33 access flags.
+⇒ Two plausible chains, one real, and they meet nowhere.
+
+⚠ **This is why the probe ran before the wire verb.** Every step of the refuted argument was a
+correct citation of real code; the conclusion was still false. *"Citing the oracle is not the
+oracle being right"* — and a chain read across two files is exactly where that fails.
+
+⇒ **The design as written is UNSAFE and must not be built.** A descriptor armed over the
+usermode register block grants its holder WRITE access to page 0, which contains the doorbell at
+`+0x90` alongside the counter at `+0x80`/`+0x84`. No sub-range excludes one and keeps the other:
+they share a page. The exposure is not the VMM ringing its own guest's doorbells — it already
+does that through the isolate — it is the token space: `runlist << 16 | chid` names **any host
+channel on the GPU**, including other tenants'.
+
+★ What survives: §4's three measurements stand — the node crosses, KVM accepts a `VM_PFNMAP`
+device view as a memslot, and guest access through it takes no exit. The MECHANISM works. Only
+the containment argument for handing that descriptor to the VMM is gone, and it is the part that
+decided A′ over B.
+
+⊘ OPEN, and not to be guessed at: whether a different arming makes the kernel refuse the write
+map, or whether containment has to come from elsewhere (a VMM sandbox that cannot `open()` the
+node is unaffected by what the descriptor permits, since the descriptor is already open).
 
 ## 5. Constraints the implementation will hit
 
