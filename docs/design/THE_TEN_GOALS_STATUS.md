@@ -257,3 +257,43 @@ Absence from `SLOW-SITES` only ever proved it was under 1 ms; it is in fact **~3
 whole budget in a single `mmap`**, and it is one of the 22 blocking doors goal 3 forbids. ⚠ It
 cannot simply move to a worker: the guest reads through the aperture immediately after writing the
 window register, so a deferred move shows it the OLD framebuffer.
+
+
+---
+
+# ★★★★★ GOAL 4 — COMPLETE (w656–w660, 2026-09-13)
+
+```
+w658a (arm forced on)   (P)  MEAN_FALSIFIER=PASS  inline_rings=104  inline_refused=0  BAR1/2 0/0
+w660a (arm by default)  (P)  MEAN_FALSIFIER=PASS  inline_rings=104  inline_refused=0  BAR1/2 0/0
+Xid 31 @ 0x90_80000000, whole host dmesg ring: 1   ← only w651a, from before the fix
+```
+
+The owner's three doorbell rules, all three now live:
+
+| rule | mechanism |
+|---|---|
+| *"an invalid doorbell … ignore"* | `Route::Unallocated` — bounds check, atomic load, return |
+| *"queue full ⇒ flag, sweep all channels"* | `Offered::Full` ⇒ `DROPPED.arm_emulated_sweep()` (predates this work) |
+| *"passthrough doorbells are inline in vcpu, no queue, no worker"* | one `store_u32` into the VMM's writable host usermode page |
+
+⚠ **One-way dependency:** the inline arm is safe **only over sync point (3)**. w651a is the
+measurement of it without.
+
+★ The two boots agreeing at exactly `inline_rings=104` is also the evidence that w659's arch
+refactor is behaviour-preserving.
+
+## Where the remaining goals stand
+
+| goal | state |
+|---|---|
+| 1 Blackwell | GB202 profile written (`gb20x.rs`, 21 tests). ⊘ **No selector** — `Ga10xArch` is constructed unconditionally and `CHIPS` has one row. No `ChipProfile` row (~20 fields are per-die silicon measurements). No VER3 `GmmuFmt`. **Nothing has touched Blackwell silicon.** |
+| 2 | ★ DONE — only the counter page reads, served with no exit |
+| 3 | 22 blocking doors on the vCPU, all PRAMIN repoints at **297 µs worst**; owner ruled this acceptable because they are boot-time only |
+| 4 | ★ DONE |
+| 5 | `code_rot_inventory.md` — 52 verified entries, ranked |
+| 6 | one trap over budget: **18.5 ms at `bar0+0x110c00`**, the GSP RPC submit, `AT=teardown`, 99.4 % CPU |
+| 7 | ★ DONE — five consecutive boots |
+| 8 | `PlanReactor` built + 9 tests against real child isolates; **unused by production** — caller wiring specified, not done. ⊘ Measured: host verbs are 3.1 % of a CUDA launch and RM holds a device-global lock, so expect **liveness isolation, not throughput** |
+| 9 LLM | lane is **unprovisioned** on this box (`/opt/llm` absent); last failure w527/w528 predates the counter page, the DoorbellTable and sync point (3) |
+| 10 | not started |
