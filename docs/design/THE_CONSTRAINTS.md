@@ -94,6 +94,25 @@ and the per-client host MMU fault above.
     ioctls. ⊘ Never one memslot per published page. Same model as `nvkvm-pv` and the Mode-2 C.
 17. **Host userspace stays UNPRIVILEGED.** Standing, absolute, and it constrains every item above.
 
+## ⊘⊘⊘ SUPERSEDED w721 — THERE IS ONE WORLD, NOT TWO. Read this before §15 below.
+
+**Owner, 2026-09-14:** *"One GPGA store, one RM object, no more fake fb, no more bar1/bar2 traps,
+no more populate on fault."*
+
+§15 split framebuffer backing into two worlds because **CPU reads of video memory are 48 MiB/s**
+and page tables had to be re-read every refresh. ⇒ **That premise is gone.** The copy engine reads
+video memory at ~10 GB/s across the link and a GPU kernel reads it at ~360 GB/s *without crossing
+the link at all*, so there is no longer a reason for a second memory.
+
+⇒ **The aperture store (fake fb), the per-leaf join, the demand-fill mirror and the two-world
+classifier are all deleted.** One reserved device-local RM object is all of guest video memory;
+BAR1, BAR2, PRAMIN, channels and engines are all views of **it**.
+
+★ §15's text below is kept because its *sub-findings* remain true and were expensive: that RM
+writes page tables through BAR2 with the CPU, that UVM writes **its** tables with the copy engine
+(w719b), and that a use-keyed rule would have corrupted. ⊘ **Its conclusion — two stores — does
+not survive.** See `gpga_is_one_reserved_object.md` and `dirty_tracking_without_uffd.md`.
+
 ## 15, in full — the split that is easy to get wrong
 
 > Owner: *"the clean split that pramin/bar2 is from fake fb and that bar1 is only mapping from the
@@ -277,6 +296,14 @@ project decision. ⇒ **Before reporting any constraint as violated, open the li
 counter.** A name and a docstring are not substitutes, and this class has now cost w607, w627,
 w695l and w696.
 
+## ✔ 18 IS SATISFIED BY CONSTRUCTION UNDER THE SINGLE STORE (w721)
+
+§18 forbade backing guest video memory with host system memory. Under one reserved device-local
+object **there is no other memory to substitute**, so the constraint stops being a rule that can be
+violated and becomes a property of the design. ⇒ Kept below as the statement of *why*, and as the
+negative control (`the_all_dma_baseline.md`) that proves such a substitution is **correct in value
+and wrong in residence** — now measured at **5.0x** (`the_llm_parity_ratio_is_0_20x`).
+
 ## 18 — GUEST VIDMEM IS VIDMEM: no silent sysmem substitution
 
 > Owner, 2026-09-14: *"if the guest says this is in vidmem then it must be vidmem (our vidmem
@@ -359,6 +386,23 @@ no CE in `gmmu_walk.c`, which was true; the question was never only about that f
 `the_aperture_store_lifetime.md`. ⊘ It **refutes the ~40 MiB bound**: BAR2's dynamic window is
 **16 MiB** on a GA106 and is an **evicting LRU cache**, so residency is not liveness, and 12 GiB
 mapped at 4 KiB needs **24 MiB of small page tables alone**.
+
+## ⊘⊘⊘ SUPERSEDED w721 — NOTHING IS CLASSIFIED, BECAUSE LIVENESS IS DERIVED
+
+§19 built a per-address classifier with revocable leases, because we had to decide which world a
+page belonged to and when that decision expired. ⇒ **With one store there are no worlds to classify
+into, and with a from-root walk each refresh, reachability is RECOMPUTED rather than remembered.**
+
+| §19 needed | why it is gone |
+|---|---|
+| the parent-PDE-invalidate death signal | reachability is recomputed every refresh |
+| the lease + revoke | nothing is remembered, so nothing must be revoked |
+| the hole-punch trigger | *"reachable last refresh, not this one"* **is** the answer, observed |
+| RM's recycle-changes-role hazard | the walk sees what the pointers say **now** |
+
+★ §19's **safe-by-default** argument survives and generalises: the errors were asymmetric
+(misfiled data ⇒ silent corruption; misfiled control ⇒ merely slower). That asymmetry is why the
+design defaults to real video memory everywhere.
 
 ## 19 — CLASSIFY PER ADDRESS, DEFAULT TO VIDMEM, AND LEASE THE CLASSIFICATION
 
@@ -465,3 +509,90 @@ obviously correct.
 ⊘ And unaffected: the **50x bulk-placement defect** (`to_device`, 0.8 host cores for 28 s,
 `the_llm_parity_ratio_is_0_20x`) is the same amplification shape — guest copies memory, we burn
 host CPU — and the single store does not touch it.
+
+## 20 — THE GPU WALKER: one kernel, three structural invariants, a fallback at every layer
+
+**Owner, 2026-09-14:** *"why not let the PTX do the walk? and tell our program what to map?"*
+
+A CUDA kernel in the **scratchpad isolate** walks the guest's page tables from the root each
+refresh and returns the mappings. Built and tested: `cuda/walk/`, **50/50** hostile cases,
+differential-agreeing with `kayfabe-mmu`'s walker on **1212 benign leaves**.
+
+### ★★★ The three invariants — structural, never probable
+
+1. **No loop terminates on guest data.** Depth is format-bounded ⇒ **fixed trip counts**, never a
+   data-dependent `while`. ⇒ A cycle is **harmless, not detected** (`TOO_DEEP` is unreachable by
+   construction, and every hostile case asserts its *absence*).
+2. **Every dereference is preceded by a bounds check** against `gpga_len`. One compare, no
+   exceptions.
+   ⊘⊘⊘ **MEASURED, not assumed:** a negative control (`-DKF_BREAK_BOUNDS`, deleting only the two
+   checks) made one hostile case raise *"an illegal memory access"* — and the other **silently
+   return data from beyond the window**, reporting a mapping at `gpga=0xdead000`. ⇒ **An
+   out-of-bounds read does not reliably fault.** The check is load-bearing, never belt-and-braces.
+3. **Output is capped and truncation is LOUD**, forcing a full resync — never a short report that
+   reads as whole. ★ This is the third hazard class the other two miss: a **legal but enormous**
+   tree (12 GiB at 4 KiB ≈ 3M entries, every pointer valid, no cycles) — what a well-formed
+   hostile guest actually uses.
+
+### Placement, and why it is not the VMM
+
+⊘ **CUDA draws no boundary between a host process and the kernel it launched** — the GPU MMU
+separates *contexts*, not a kernel from its own context's mappings. ⇒ The kernel runs in the
+**scratchpad isolate**, which is **root-in-the-guest, unprivileged-on-host**: exactly the privilege
+of the data it processes, so it **cannot escalate**. `libcuda` is initialised (through
+`cuModuleLoadData`, where the PTX JIT runs) **before** the isolate drops privilege; no other
+isolate loads CUDA. **One walk isolate per VM.**
+
+⊘ It is **not code injection**: the PTX is ours, built at build time. The bug class is **memory
+safety over guest-authored data** in ~200 auditable lines.
+
+### Every layer degrades into the one below
+
+scope hint absent/ambiguous → **full walk** (~67 µs) · kernel unavailable → **batched CE** · no
+range from the invalidate → **whole PDB**. ⇒ The hint can only make the walk **faster, never
+wrong**.
+
+## 21 — ONE CUDA PROGRAM, TURING THROUGH BLACKWELL, WITH THE FORMAT AS DATA
+
+**Owner, 2026-09-14, three times:** *"our ptx must be Turing+ compatible"* … *"you need to support
+both the turing/ada page tables as blackwell table, in same kayfabe, so also in the C walker. I
+would avoid shipping two cuda program."*
+
+| | status |
+|---|---|
+| compile target | `-gencode arch=compute_75,code=compute_75` — **PTX only, no cubin** ✔ |
+| the claim is checked | `make check-ptx` fails if `cuobjdump -sass` finds any `code for sm_` ✔ |
+| arch-specific intrinsics | **none** ✔ |
+| forward-JIT demonstrated | on sm_86 from the `compute_75` target ✔ |
+| **actual Turing silicon (sm_75)** | ⚠ **never run** — the floor we claim |
+| **page-table format** | ⊘ **VER2 only = Turing→Ada. Hopper/Blackwell are VER3** |
+
+⇒ ★★★ **The architecture limit is the FORMAT, not the PTX.** And it decides a sequencing rule:
+the host walker is **format-polymorphic** (`fmt: &dyn GmmuFmt`), the kernel is not. **Add the
+format seam to the kernel BEFORE deleting the host parsing**, or the deletion silently caps the
+product at Ada — with Blackwell being goals 1 and 10 of the directive.
+
+### The format is SETUP DATA, not code
+
+**Owner:** *"that kind of config you already derived from ABI on host and also with runtime
+userspace data is perfect to pass. I would call this setup data alongside table version."*
+
+⇒ **No bit position lives in the kernel.** The host derives the layout from the `GmmuFmt` impls it
+already maintains and uploads it; the kernel holds the **algorithm**, not the layout. One uniform
+branch on `table_version` covers what field offsets cannot (VER3's PCF) — and it is **warp-uniform**,
+so it costs nothing.
+
+- **`KfSetup`** (once per VM, immutable): `abi_version`, `table_version`, `levels[]`,
+  **`gpga_base` / `gpga_len`** (invariant 2's bound, as derived config), `page_sizes`,
+  `max_entries`.
+- **`KfLaunch`** (per refresh): `root_pdb`, `scope[]`, `out`, `run_capacity`, `generation`.
+
+★ This directly serves `derive_per_die_maintain_per_family`: a new die is a new descriptor, **no
+kernel change**; a new format is a descriptor plus one arm in the switch.
+
+⚠ `abi_version` is refused if unknown — a Rust/PTX skew must fail **loudly at launch**, not decode
+garbage field offsets and look like a page-table bug.
+
+⊘ **Keep an independently-written table builder in the TESTS.** `cuda/walk/kf_tables.h` was
+written from `dev_mmu.h` sharing no code with either decoder, which is what made the 1212-leaf
+differential meaningful. Production reads one descriptor; the oracle stays independent.
