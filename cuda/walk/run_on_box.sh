@@ -13,7 +13,7 @@
 #   - a kill goes on a line of its own, in its own ssh invocation, because a
 #     later word on the same command line re-matches the pattern.
 set -u
-HOST="${HOST:-wk}"
+HOST="${HOST:-wk3}"
 REMOTE=/root/kfwalk
 TAG="${1:-run}"
 LOG="/tmp/kfwalk_${TAG}.log"
@@ -34,6 +34,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   timeout 900 ./kf_tests; rc=\$?
   make check-negative; rc_neg=\$?
   make check-closure-negative; rc_cneg=\$?
+  make check-seam-negative; rc_sneg=\$?
   # The Xid instrument, NAMED rather than assumed: dmesg is not readable inside a
   # vast CUDA container, so an empty grep over it is evidence of nothing.
   if dmesg > /tmp/dm.txt 2>/dev/null; then
@@ -42,9 +43,10 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
     echo DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
   fi
   nvidia-smi -L >/dev/null 2>&1 && echo SMI=responsive || echo SMI=UNRESPONSIVE
-  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg\"
+  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg SNEG=\$rc_sneg\"
   if [ \$rc -eq 0 ] && [ \$rc_neg -ne 0 ]; then rc=9; fi
   if [ \$rc -eq 0 ] && [ \$rc_cneg -ne 0 ]; then rc=10; fi
+  if [ \$rc -eq 0 ] && [ \$rc_sneg -ne 0 ]; then rc=11; fi
   echo \"EXIT=\$rc\"
 ' > $REMOTE/out.log 2>&1 &" || exit 1
 
