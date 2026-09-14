@@ -13,7 +13,7 @@
 #   - a kill goes on a line of its own, in its own ssh invocation, because a
 #     later word on the same command line re-matches the pattern.
 set -u
-HOST="${HOST:-wk}"
+HOST="${HOST:-wk4}"
 REMOTE=/root/kfwalk
 TAG="${1:-run}"
 LOG="/tmp/kfwalk_${TAG}.log"
