@@ -14710,13 +14710,19 @@ impl Regs {
         // multi-gigabyte RM ioctl behind an IPC bracket. `Scratchpad::bring_up` claims an
         // `OffTrap` witness, which panics by name if a later edit moves this onto a trap
         // thread.
-        let scratchpad = if crate::scratchpad::selected_scratchpad()? {
+        let scratchpad_arm = crate::scratchpad::selected_scratchpad()?;
+        let scratchpad = if scratchpad_arm.is_armed() {
             let sp = crate::scratchpad::Scratchpad::bring_up(
                 &device.isolate_factory(),
                 kayfabe_rt::GpuId::ZERO,
                 crate::scratchpad::selected_start_mb(),
+                scratchpad_arm,
             );
+            // ⊘ The census is printed BEFORE the refusal is consulted, and that ordering is
+            // the whole reason `on` and `require` are two arms: a `require` boot that
+            // refuses must still leave behind the line saying WHICH step refused.
             sp.census("REALIZE");
+            sp.enforce()?;
             Some(sp)
         } else {
             crate::scratchpad::Scratchpad::census_disarmed("REALIZE");

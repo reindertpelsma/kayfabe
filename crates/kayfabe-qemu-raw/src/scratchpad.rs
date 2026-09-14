@@ -64,14 +64,60 @@ use kayfabe_isolate::{HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError
 use kayfabe_util::trapwitness::OffTrap;
 use crate::shim::Status;
 
-/// ★★★★★ **The gate.** `off` (the default) changes nothing; `on` spawns the VM-lifetime
-/// scratchpad isolate at device realize and reserves the guest's video memory as one object.
+/// ★★★★★ **The gate.** Three arms, and the third is the design's own rule made reachable.
 ///
-/// ⊘ A value naming neither state is **refused**, not defaulted. Both directions of a
+/// | value | what happens |
+/// |---|---|
+/// | unset / `off` | **the default.** Nothing is spawned, nothing is reserved, and the
+/// advertised framebuffer is the compiled one. Byte for byte what shipped. |
+/// | `on` | spawn the VM-lifetime isolate, reserve, **report**. A refused reservation is
+/// recorded in the census and the VM starts anyway. |
+/// | `require` | as `on`, and a reservation that is not held **refuses the device** —
+/// `gpga_is_one_reserved_object.md`: *"If that fails, the VM does not start."* |
+///
+/// # ⊘ Why `on` and `require` are two arms and not one
+///
+/// The design's rule is `require`, and it is right for the product. It is **wrong for the
+/// measurement this increment exists to take**: a device that refuses to realize produces no
+/// teardown census, no guest, and no answer to *"what would the host have given us?"* — it
+/// produces a QEMU that exits with a status. ⇒ `on` is how the question gets asked and
+/// `require` is how the answer gets enforced, and collapsing them would mean the first
+/// failed reservation destroys the evidence about why it failed.
+///
+/// ⊘ A value naming none of the three is **refused**, not defaulted. Both directions of a
 /// silent default are bad here and they are bad in opposite ways: defaulting a typo to `off`
 /// makes a boot the operator believes is armed run the control arm, and defaulting it to
 /// `on` reserves the host's entire framebuffer on a boot nobody asked for it on.
 pub const SCRATCHPAD_ENV: &str = "KAYFABE_SCRATCHPAD";
+
+/// Which arm of [`SCRATCHPAD_ENV`] this boot runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScratchpadArm {
+    /// The default. Nothing is spawned and nothing changes.
+    Off,
+    /// Spawn, reserve, report — and start the VM either way.
+    Measure,
+    /// Spawn, reserve, and refuse the device if the reservation is not held.
+    Require,
+}
+
+impl ScratchpadArm {
+    /// Whether this arm spawns anything at all.
+    #[must_use]
+    pub fn is_armed(self) -> bool {
+        !matches!(self, ScratchpadArm::Off)
+    }
+
+    /// The token this arm prints in the census.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ScratchpadArm::Off => "off",
+            ScratchpadArm::Measure => "on",
+            ScratchpadArm::Require => "require",
+        }
+    }
+}
 
 /// ★★ **Where the reservation probe starts halving from, in MiB.** Only read when
 /// [`SCRATCHPAD_ENV`] is armed.
@@ -95,17 +141,19 @@ pub const DEFAULT_START_MB: u64 = 12_288;
 /// # Errors
 /// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
 /// `false`.
-pub fn scratchpad_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+pub fn scratchpad_from(value: Option<&str>) -> Result<ScratchpadArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
+        None | Some("off") => Ok(ScratchpadArm::Off),
+        Some("on") => Ok(ScratchpadArm::Measure),
+        Some("require") => Ok(ScratchpadArm::Require),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_SCRATCHPAD does not name a state: the only values are `off` (the \
-             default) and `on`. It is not defaulted, because both directions are wrong in \
-             opposite ways — a typo defaulted to `off` runs the control arm on a boot the \
-             operator believes is armed, and one defaulted to `on` reserves the host's whole \
-             framebuffer on a boot nobody asked for it on.",
+             default), `on` (spawn, reserve, report) and `require` (as `on`, and refuse the \
+             device if the reservation is not held). It is not defaulted, because both \
+             directions are wrong in opposite ways — a typo defaulted to `off` runs the \
+             control arm on a boot the operator believes is armed, and one defaulted to `on` \
+             reserves the host's whole framebuffer on a boot nobody asked for it on.",
         )),
     }
 }
@@ -114,7 +162,7 @@ pub fn scratchpad_from(value: Option<&str>) -> Result<bool, (Status, &'static st
 ///
 /// # Errors
 /// Whatever [`scratchpad_from`] refused with.
-pub fn selected_scratchpad() -> Result<bool, (Status, &'static str)> {
+pub fn selected_scratchpad() -> Result<ScratchpadArm, (Status, &'static str)> {
     let raw = std::env::var_os(SCRATCHPAD_ENV);
     let value = raw
         .as_ref()
@@ -230,6 +278,9 @@ impl Reservation {
 /// be dropped under a ranked lock.
 #[derive(Debug)]
 pub struct Scratchpad {
+    /// Which arm of [`SCRATCHPAD_ENV`] this one was brought up under. ⊘ Carried on the
+    /// struct rather than re-read, so the census cannot name an arm the bring-up did not run.
+    arm: ScratchpadArm,
     id: IsolateId,
     /// ⊘ `Option` only so [`Scratchpad::retire`] can take it and drop it deliberately at a
     /// point of our choosing. It is `Some` for the whole ordinary life of the struct.
@@ -257,7 +308,12 @@ impl Scratchpad {
     /// That is not recoverable and must not be: the spawn is a fork plus a blocking socket
     /// read, and inside an MMIO exit it freezes a core of the guest.
     #[must_use]
-    pub fn bring_up(factory: &Arc<dyn IsolateFactory>, gpu: GpuId, start_mb: u64) -> Scratchpad {
+    pub fn bring_up(
+        factory: &Arc<dyn IsolateFactory>,
+        gpu: GpuId,
+        start_mb: u64,
+        arm: ScratchpadArm,
+    ) -> Scratchpad {
         // ⊘ The witness is claimed FIRST, before anything blocking happens, so the assertion
         // fires at the top of the operation rather than partway through one.
         let off = OffTrap::claim("bringing up the VM-lifetime scratchpad isolate");
@@ -320,6 +376,7 @@ impl Scratchpad {
         };
 
         Scratchpad {
+            arm,
             id,
             iso: Some(iso),
             outcome,
@@ -358,9 +415,10 @@ impl Scratchpad {
     pub fn census(&self, at: &str) {
         let mb = self.reserved_mb().unwrap_or(0);
         eprintln!(
-            "kayfabe: SCRATCHPAD AT {at}: arm=on up={up} proc={proc} gpu={gpu} pool={pool} \
+            "kayfabe: SCRATCHPAD AT {at}: arm={arm} up={up} proc={proc} gpu={gpu} pool={pool} \
              reservation={token} RESERVED_MB={mb} spawn_ms={spawn:.3} probe_ms={probe:.3} \
              reserve_ms={reserve:.3}{why} ⇒ {verdict}",
+            arm = self.arm.as_str(),
             up = self.iso.is_some(),
             proc = self.id.proc(),
             gpu = self.id.gpu().0,
@@ -394,6 +452,37 @@ impl Scratchpad {
         );
     }
 
+    /// ★★★ **The `require` arm's refusal** — `gpga_is_one_reserved_object.md`: *"If that
+    /// fails, the VM does not start."*
+    ///
+    /// `Ok(())` on the `on` arm whatever happened, and on the `require` arm only when the
+    /// object is held.
+    ///
+    /// # Errors
+    /// [`Status::Unsupported`] with the reason, when `require` is armed and nothing is held.
+    /// ⊘ The census line has already been printed by the time this is consulted, so the
+    /// refusal never costs the reader the diagnosis of *why* — which is the whole reason
+    /// `on` and `require` are separate arms.
+    pub fn enforce(&self) -> Result<(), (Status, &'static str)> {
+        match (self.arm, &self.outcome) {
+            (ScratchpadArm::Require, Reservation::Held { .. }) | (ScratchpadArm::Measure, _) => {
+                Ok(())
+            }
+            (ScratchpadArm::Require, _) => Err((
+                Status::Unsupported,
+                "KAYFABE_SCRATCHPAD=require and the one reserved video-memory object was NOT \
+                 held. `gpga_is_one_reserved_object.md`: the guest's framebuffer is one host \
+                 RM object or the VM does not start — an allocation that can fail later, on \
+                 a refresh path where nothing can recover, is what reserving up front \
+                 exists to make impossible. The SCRATCHPAD census line printed immediately \
+                 above names which step refused.",
+            )),
+            // ⊘ Unreachable: `Off` never builds a `Scratchpad` at all. Stated rather than
+            // silently folded into an `Ok`, so a future arm cannot inherit permissiveness.
+            (ScratchpadArm::Off, _) => Ok(()),
+        }
+    }
+
     /// Retire and drop the isolate deliberately, before the rest of the shell goes.
     ///
     /// ⚠ Must be called with **no ranked lock held** — `IsolateBox::drop` asserts it. Safe
@@ -425,13 +514,17 @@ mod tests {
 
     #[test]
     fn absent_is_off_and_is_not_an_error() {
-        assert_eq!(scratchpad_from(None), Ok(false));
+        assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
     }
 
     #[test]
-    fn both_states_parse() {
-        assert_eq!(scratchpad_from(Some("off")), Ok(false));
-        assert_eq!(scratchpad_from(Some("on")), Ok(true));
+    fn all_three_arms_parse() {
+        assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
+        assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
+        assert_eq!(scratchpad_from(Some("require")), Ok(ScratchpadArm::Require));
+        assert!(!ScratchpadArm::Off.is_armed());
+        assert!(ScratchpadArm::Measure.is_armed());
+        assert!(ScratchpadArm::Require.is_armed());
     }
 
     /// ⊘ The gate refuses a value it does not recognise rather than defaulting it. A typo

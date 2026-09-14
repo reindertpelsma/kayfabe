@@ -18,7 +18,7 @@
 //! thing: that arming nothing changes nothing. ⊘ That is the claim the sequencing rule
 //! ("deletions come last") rests on, and it is the one that would rot silently.
 
-use kayfabe_qemu_raw::scratchpad::scratchpad_from;
+use kayfabe_qemu_raw::scratchpad::{ScratchpadArm, scratchpad_from};
 use kayfabe_qemu_raw::shim::Regs;
 
 /// The device the shipped configuration realizes, with no environment set.
@@ -69,13 +69,17 @@ fn with_the_gate_unset_the_advertised_framebuffer_is_the_compiled_one() {
 /// explicitly off, and a value naming neither — is the whole of the gate's contract.
 #[test]
 fn the_gates_three_way_contract() {
-    assert_eq!(scratchpad_from(None), Ok(false), "absent is off");
-    assert_eq!(scratchpad_from(Some("off")), Ok(false));
-    assert_eq!(scratchpad_from(Some("on")), Ok(true));
+    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off), "absent is off");
+    assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
+    assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
+    // ★ `require` is the design's own rule — "if that fails, the VM does not start" — and it
+    // is a SEPARATE arm from `on`, because a device that refuses to realize produces no
+    // teardown census and therefore no diagnosis of why the reservation failed.
+    assert_eq!(scratchpad_from(Some("require")), Ok(ScratchpadArm::Require));
     // ★ A typo is refused, in both directions: defaulted to `off` it would run the control
     // arm on a boot the operator believes is armed; defaulted to `on` it would reserve the
     // host's whole framebuffer on a boot nobody asked for it on.
-    for junk in ["1", "0", "true", "ON", "yes", ""] {
+    for junk in ["1", "0", "true", "ON", "yes", "required", "REQUIRE", ""] {
         assert!(
             scratchpad_from(Some(junk)).is_err(),
             "`{junk}` must be refused, never defaulted"
