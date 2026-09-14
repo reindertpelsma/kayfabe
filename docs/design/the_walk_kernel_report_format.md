@@ -217,10 +217,24 @@ VMM state.
    a reason: **a dedicated walk isolate — not the worker, and never the VMM.**
    ⊘ Note this is the isolate pattern used **for security**, where
    `isolate_exists_for_VA_IDENTITY_not_security.md` records it normally is not.
-2. ★★ **Map the GPGA buffer READ-ONLY in that context.** The kernel only reads the tables; GPU
-   PTEs carry a read-only bit and we author the mapping. ⇒ A wild write into guest video memory
-   becomes **impossible rather than unlikely**, deleting the whole "kernel corrupts the guest"
-   branch for free.
+2. ⊘⊘⊘ **SUPERSEDED w720j — DO NOT map the GPGA buffer read-only.** ~~Map it READ-ONLY in that
+   context.~~
+   **Owner, 2026-09-14:** *"I would not map GPGA as read-only, map it as write, its not a problem.
+   Then you do not need a separate maintained channel, just use the same scratchpad one."* …
+   *"because you need write in GPGA to do CE copies, and thats on scratchpad."*
+
+   ★ Two reasons, and the second is mechanical rather than a judgement call:
+   - ⊘ **It is not a boundary.** The same isolate holds a **CE that can already write anywhere in
+     GPGA**, so a read-only CUDA mapping stops nothing an attacker owning that process could not
+     do by another door. It would guard only against a bug in **our own** kernel — for which the
+     hostile-table suite is a better instrument than an Xid in production.
+   - ★★★ **The scratchpad's GPGA mapping MUST be writable, because that is the mapping its CE
+     copies use.** A read-only second mapping would be a duplicate VA range over the same memory,
+     with different permissions, kept in sync — exactly the bookkeeping this redesign exists to
+     delete.
+
+   ⇒ **One mapping, read-write, the scratchpad's existing one.** See the address-space invariant
+   below for what *does* have to be unreachable.
 3. ★ **No host memory mapped into the context at all.** Output lands in device memory and is
    copied out afterwards, so there is **no host page the kernel could name** even with a
    completely wrong address.
@@ -237,3 +251,30 @@ malformed report (**rejected** by 4). **Nothing reaches the host.**
 A hung kernel in a dedicated context **still occupies GPU resources**, and recovering it may need
 a channel or context teardown that briefly disturbs the guest sharing the card. ⇒ Contained, not
 free — but a **liveness** cost, never a confidentiality or integrity one.
+
+## ★★★★★ w720j — THE ISOLATE'S ADDRESS-SPACE INVARIANT, and the one region that must be hidden
+
+GPGA is mapped **read-write** (above). What must be unreachable by the guest is **the shadow**.
+
+⊘⊘⊘ **If the shadow lives anywhere inside GPGA, a hostile guest writes to it directly through its
+own page tables and forges *"unchanged"* for a table it just edited.** ★ That is the **collision
+attack that killed hashing**, arriving by a different route — and strictly worse, because the
+guest does not even have to search for a collision, it just writes the answer it wants.
+
+### The invariant
+
+| region | guest-addressable? | kernel | 
+|---|---|---|
+| **GPGA** | **yes**, by construction | reads |
+| **the shadow** | ⊘ **never** | reads + writes |
+| **the report buffer** | ⊘ **never** | writes |
+| **host memory** | ⊘ **none mapped at all** | — |
+
+The shadow lives in the scratchpad isolate's own VA space — a separate RM allocation, or a region
+of the reserved object deliberately **not** exposed as guest GPGA. Either works; what matters is
+that **no guest page table can name it**.
+
+⚠ **Check it rather than assume it.** A test that walks the guest's own page tables and asserts
+none resolves into the shadow or the report is a direct instrument; the alternative is a
+structural assumption that a future layout change breaks silently — and silently is exactly how
+this one would break, since a forged *"unchanged"* produces no fault and no refusal.
