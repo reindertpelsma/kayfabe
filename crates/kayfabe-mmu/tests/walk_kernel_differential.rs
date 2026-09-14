@@ -114,13 +114,40 @@ const BUDGET: u32 = 4_000_000;
 
 #[test]
 fn walk_kernel_differential_corpus() {
+    decode_corpus("corpus.bin", "rust_leaves.txt", 10, 1200);
+}
+
+/// ★★★★★ **THE SAME DIFFERENTIAL, OVER TABLES A REAL NVIDIA DRIVER WROTE.**
+///
+/// `[w725]` `corpus.bin` above is built by `kf_corpus.cpp` from **our own** reading of
+/// `dev_mmu.h`. Two decoders that share an understanding of the format agree about the
+/// encodings that understanding produces, and say nothing about the ones it does not.
+///
+/// `real_ga106.bin` is five address spaces lifted out of
+/// `traces/cap1b_coldboot_hermetic_d6.rec` — a capture of a **stock, unpatched NVIDIA open
+/// 580.159.04 guest driver** on a real GA106. `cuda/walk/kf_real_tables.py` documents the
+/// extraction and its self-consistency proof: **all 177 856 BAR2 writes in the trace translate
+/// through the reconstructed tables, with zero misses.**
+///
+/// ★★★ **What it found:** 6 986 of 7 008 real leaf PTEs carry a non-zero `KIND` (bits 63:56)
+/// and 6 017 carry a non-zero `COMPTAGLINE` (55:36). `kf_tables.h` can produce **neither** — it
+/// only ever writes bits 0..7 and the address field — so 99.7 % of these entries are encodings
+/// no case in the suite had ever contained. Both decoders mask them off correctly, because
+/// VER2's vidmem address field is 32:8 and sits below both; this test is what makes that a
+/// checked fact rather than a hope.
+#[test]
+fn walk_kernel_differential_real_driver_tables() {
+    decode_corpus("real_ga106.bin", "real_leaves.txt", 5, 6000);
+}
+
+fn decode_corpus(corpus: &str, leaves: &str, min_images: usize, min_leaves: usize) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../cuda/walk/corpus");
-    let imgs = load_corpus(&dir.join("corpus.bin"));
-    assert!(imgs.len() >= 10, "corpus is suspiciously small: {}", imgs.len());
+    let imgs = load_corpus(&dir.join(corpus));
+    assert!(imgs.len() >= min_images, "{corpus} is suspiciously small: {}", imgs.len());
 
     let fmt = Ga10xGmmu::new();
     let mut text = String::new();
-    text.push_str("# kayfabe-mmu::walker decode of cuda/walk/corpus/corpus.bin\n");
+    text.push_str(&format!("# kayfabe-mmu::walker decode of cuda/walk/corpus/{corpus}\n"));
     text.push_str("# image <name> <benign 0|1> <leaf count>\n");
     text.push_str("# leaf <va-hex> <phys-hex> <size-hex> <aperture 0..3> <read_only 0|1>\n");
 
@@ -152,9 +179,9 @@ fn walk_kernel_differential_corpus() {
     }
     // ⚠ A differential that decoded nothing on both sides agrees perfectly and
     // proves nothing.
-    assert!(total > 1200, "the corpus decoded to only {total} leaves");
+    assert!(total > min_leaves, "{corpus} decoded to only {total} leaves");
 
-    let expected = dir.join("rust_leaves.txt");
+    let expected = dir.join(leaves);
     if std::env::var_os("KF_WRITE_EXPECTED").is_some() {
         std::fs::write(&expected, &text).unwrap();
         eprintln!("wrote {} ({total} leaves)", expected.display());
@@ -168,8 +195,8 @@ fn walk_kernel_differential_corpus() {
         for i in 0..a.len().max(b.len()) {
             let x = a.get(i).copied().unwrap_or("<missing>");
             let y = b.get(i).copied().unwrap_or("<missing>");
-            assert_eq!(x, y, "rust_leaves.txt line {}", i + 1);
+            assert_eq!(x, y, "{leaves} line {}", i + 1);
         }
-        panic!("rust_leaves.txt differs in length only");
+        panic!("{leaves} differs in length only");
     }
 }

@@ -1331,10 +1331,12 @@ struct DImg {
     std::vector<DLeaf> rust;
 };
 
-static bool d_load(std::vector<DImg> &out, std::string &err)
+static bool d_load(std::vector<DImg> &out, std::string &err,
+                   const char *corpus_path = "corpus/corpus.bin",
+                   const char *leaves_path = "corpus/rust_leaves.txt")
 {
-    FILE *f = fopen("corpus/corpus.bin", "rb");
-    if (!f) { err = "corpus/corpus.bin missing"; return false; }
+    FILE *f = fopen(corpus_path, "rb");
+    if (!f) { err = std::string(corpus_path) + " missing"; return false; }
     char magic[8];
     if (fread(magic, 1, 8, f) != 8 || memcmp(magic, "KFCORPUS", 8)) { fclose(f); err = "bad magic"; return false; }
     uint32_t n = 0;
@@ -1362,8 +1364,8 @@ static bool d_load(std::vector<DImg> &out, std::string &err)
     }
     fclose(f);
 
-    FILE *e = fopen("corpus/rust_leaves.txt", "r");
-    if (!e) { err = "corpus/rust_leaves.txt missing"; return false; }
+    FILE *e = fopen(leaves_path, "r");
+    if (!e) { err = std::string(leaves_path) + " missing"; return false; }
     char line[256];
     int cur = -1;
     while (fgets(line, sizeof(line), e)) {
@@ -1390,12 +1392,13 @@ static bool d_load(std::vector<DImg> &out, std::string &err)
     return true;
 }
 
-static void t_differential_rust_walker(void)
+static void d_run(const char *corpus_path, const char *leaves_path,
+                  size_t min_images, unsigned long long min_agreed, const char *label)
 {
     std::vector<DImg> imgs;
     std::string err;
-    if (!d_load(imgs, err)) { failf(__LINE__, "loading the differential corpus", err.c_str()); return; }
-    CHECK(imgs.size() >= 10);
+    if (!d_load(imgs, err, corpus_path, leaves_path)) { failf(__LINE__, "loading the differential corpus", err.c_str()); return; }
+    CHECK(imgs.size() >= min_images);
 
     KfWalkCfg c = cfg_default();
     c.runs_per_pdb = 8192;
@@ -1471,10 +1474,40 @@ static void t_differential_rust_walker(void)
         kf_destroy(w);
         cudaFree(dev);
     }
-    printf("      [differential] %zu images, %llu benign leaves agreed exactly, "
-           "%llu hostile leaves within the rust walker's set\n", imgs.size(), agreed, subset_ok);
+    printf("      [%s] %zu images, %llu benign leaves agreed exactly, "
+           "%llu hostile leaves within the rust walker's set\n", label, imgs.size(), agreed, subset_ok);
     /* ⚠ two decoders that both produced nothing agree perfectly. */
-    CHECK_M(agreed > 1200, "the differential decoded almost nothing: it would be vacuous");
+    CHECK_M(agreed > min_agreed, "the differential decoded almost nothing: it would be vacuous");
+}
+
+static void t_differential_rust_walker(void)
+{
+    d_run("corpus/corpus.bin", "corpus/rust_leaves.txt", 10, 1200, "differential");
+}
+
+/* ══ ★★★★★ THE SAME DIFFERENTIAL, OVER TABLES A REAL NVIDIA DRIVER WROTE ═════
+ *
+ * ⊘⊘⊘ Every other case in this file -- all 58 -- builds its tables with
+ * kf_tables.h, OUR OWN builder, encoding OUR OWN understanding of VER2. The
+ * differential against the Rust walker does not close that gap, because both
+ * decoders share the understanding; only tables written by a real driver can.
+ *
+ * corpus/real_ga106.bin is five address spaces lifted out of
+ * traces/cap1b_coldboot_hermetic_d6.rec -- a capture of a STOCK, UNPATCHED
+ * NVIDIA open 580.159.04 guest driver on a real GA106. cuda/walk/kf_real_tables.py
+ * documents the extraction, its self-consistency proof (all 177 856 BAR2 writes
+ * translate, zero misses) and its limits.
+ *
+ * ★★★ AND THE FINDING IT CARRIES: 6 986 of 7 008 real leaf PTEs set KIND
+ * (bits 63:56) and 6 017 set COMPTAGLINE (55:36). `kfb_pte()` can set NEITHER --
+ * it only ever writes bits 0..7 and the address field. So 99.7% of these entries
+ * are encodings no case in this suite had ever contained. The decode is
+ * unaffected (VER2's vidmem address is 32:8, below both), which is exactly what
+ * this case now checks rather than assumes.
+ */
+static void t_differential_real_driver_tables(void)
+{
+    d_run("corpus/real_ga106.bin", "corpus/real_leaves.txt", 5, 6000, "real-driver");
 }
 
 
@@ -2247,6 +2280,7 @@ static const Case CASES[] = {
     { "legal/pte_maps_own_page_table",          t_legal_pte_maps_own_page_table },
 
     { "differential/rust_walker",               t_differential_rust_walker },
+    { "differential/real_driver_tables",        t_differential_real_driver_tables },
 
     { "roundtrip/truncated_is_never_a_delta",   t_truncated_is_never_a_delta },
     { "roundtrip/benign_stream",                t_roundtrip_benign },
