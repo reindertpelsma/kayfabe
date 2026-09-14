@@ -493,3 +493,78 @@ fn the_committed_ptx_is_turing_targeted() {
         );
     }
 }
+
+/// ★★★ **THE `#define`s, DIFFERENTIALLED** — the class the struct test cannot see.
+///
+/// ⊘⊘ `KFWR_MAGIC` was transcribed **byte-reversed** and a real boot is what caught it: the
+/// kernel returned a correct report (`runs=1 entries=1796 refusals=0 sparse=1`) and this
+/// crate's validator refused it as *"not a walk report"*. The layout differential was green
+/// throughout — a `#define` is not a field, so it was outside what that test quantifies over.
+///
+/// ★ The lesson is the shape, not the constant: **a differential is only as wide as the thing
+/// it enumerates.** This one enumerates the constants; if a new `KFWR_*` the Rust side mirrors
+/// is added, add it here too.
+#[test]
+fn the_report_constants_match_the_header() {
+    let root = repo_root();
+    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
+    let parse = |name: &str| -> u64 {
+        let v = extract_define(&h, name);
+        // `0x5257464Bu`, `(1u << 0)`, `0u` — the three spellings the header actually uses.
+        let v = v.trim().trim_end_matches('u');
+        if let Some(rest) = v.strip_prefix("(1u << ") {
+            let sh: u32 = rest.trim_end_matches(')').trim().parse().expect("a shift");
+            return 1u64 << sh;
+        }
+        if let Some(hex) = v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
+            return u64::from_str_radix(hex.trim_end_matches('u'), 16).expect("hex");
+        }
+        v.parse().expect("a decimal")
+    };
+    assert_eq!(
+        parse("KFWR_MAGIC"),
+        u64::from(kayfabe_cuda::abi::KFWR_MAGIC),
+        "★ the report magic differs. It spells \"KFWR\" as BYTES, so as a u32 literal the \
+         characters look reversed — which is exactly how it was got wrong once."
+    );
+    assert_eq!(
+        parse("KFWR_HF_TRUNCATED"),
+        u64::from(kayfabe_cuda::abi::KFWR_HF_TRUNCATED)
+    );
+    assert_eq!(
+        parse("KFWR_HF_RESYNC"),
+        u64::from(kayfabe_cuda::abi::KFWR_HF_RESYNC)
+    );
+    assert_eq!(
+        parse("KF_ABI_VERSION"),
+        u64::from(kayfabe_cuda::abi::KF_ABI_VERSION)
+    );
+    assert_eq!(
+        parse("KF_TBL_VER2"),
+        u64::from(kayfabe_cuda::abi::KF_TBL_VER2)
+    );
+    assert_eq!(
+        parse("KF_TBL_VER3"),
+        u64::from(kayfabe_cuda::abi::KF_TBL_VER3)
+    );
+    assert_eq!(
+        parse("KF_MAX_PDB"),
+        kayfabe_cuda::abi::KF_MAX_PDB as u64
+    );
+    assert_eq!(
+        parse("KF_MAX_SCOPE"),
+        kayfabe_cuda::abi::KF_MAX_SCOPE as u64
+    );
+    for (n, r) in [
+        ("KFWR_AP_VIDMEM", kayfabe_cuda::abi::AP_VID),
+        ("KFWR_AP_PEER", kayfabe_cuda::abi::AP_PEER),
+        ("KFWR_AP_SYSCOH", kayfabe_cuda::abi::AP_SYS),
+        ("KFWR_AP_SYSNONCOH", kayfabe_cuda::abi::AP_SYS_NC),
+        ("KFWR_PS_4K", kayfabe_cuda::abi::PS_4K),
+        ("KFWR_PS_64K", kayfabe_cuda::abi::PS_64K),
+        ("KFWR_PS_2M", kayfabe_cuda::abi::PS_2M),
+        ("KFWR_PS_512M", kayfabe_cuda::abi::PS_512M),
+    ] {
+        assert_eq!(parse(n), u64::from(r), "{n} differs");
+    }
+}

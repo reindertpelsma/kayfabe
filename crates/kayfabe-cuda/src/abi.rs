@@ -57,7 +57,14 @@ pub const KF_TBL_VER2: u32 = 2;
 pub const KF_TBL_VER3: u32 = 3;
 
 /// The report's magic. Mirrors `KFWR_MAGIC`.
-pub const KFWR_MAGIC: u32 = 0x4B46_5752;
+///
+/// ⚠ **`0x5257_464B`, not `0x4B46_5752`.** It spells `"KFWR"` as bytes in memory, so written
+/// as a `u32` literal the characters appear REVERSED — and it was transcribed the other way
+/// round, which a real boot caught: the kernel produced a perfectly good report
+/// (`runs=1 entries=1796 refusals=0`) and this crate's own validator refused it as *"not a
+/// walk report"*. ⊘ **The struct differential could not see this**, because a `#define` is
+/// not a field; that is why `the_report_constants_match_the_header` exists beside it.
+pub const KFWR_MAGIC: u32 = 0x5257_464B;
 
 /// Report header flag: the walk was truncated, so it is **not** a delta and the walker must
 /// not be acked.
