@@ -1308,6 +1308,14 @@ pub struct RegPlane {
     /// installs one. Read on the join/release/reset paths **before** the plane's lock is
     /// taken; a plane with none behaves byte for byte as before w393.
     fb_mirror: RwLock<Option<std::sync::Arc<dyn FbMirrorPort>>>,
+    /// ★★★ **What a trapped BAR1/BAR2 access does** — see [`FbTrapPolicy`], which carries
+    /// this gate's expiry condition.
+    ///
+    /// ⊘ An `AtomicU8` and not a lock: it is read on the vCPU's own trap path, where the
+    /// contract is that nothing blocks, and it is written exactly once at realize.
+    fb_trap_policy: std::sync::atomic::AtomicU8,
+    /// How many trapped accesses [`FbTrapPolicy::RefuseByName`] has refused.
+    fb_trap_refused: std::sync::atomic::AtomicU64,
     /// ★★★ **The VA-space page-directory publications** (`crate::gvaspub`) — the guest
     /// telling us where its page directories live, with the `hObject` that names which VA
     /// space they root. Held here for the two reasons `bar_pdes` is: reading it must not
@@ -1511,6 +1519,57 @@ pub(crate) const MAX_FORMAT_LEVELS: u8 = 16;
 /// ★ Two variants and not one string, because the two are reported differently: one is a
 /// window this port has never modelled (counted as a dropped *window* access, which is
 /// what it has always been), and the other is a window that IS modelled and refused this
+/// ★★★★★ **WHAT THE TRAP PATH DOES** — `SINGLE_STORE_PLAN.md` §w724g's *"make the trap path
+/// refuse by name, boot, confirm the refusal never fires"*.
+///
+/// # ⊘ Why this exists at all, and what it is FOR
+///
+/// `TRAP_FILLS=0` says BAR1/BAR2 traps **do not fire**. It does not say the trap path is
+/// **unreachable**, and §w721b records that those are different claims — *"zero in practice"*
+/// versus *"impossible by construction"*. Today the trap path is the **backstop that makes
+/// premap-completeness a SOFT property**: if publication misses a page, the guest traps and
+/// gets served, and nobody learns that publication was incomplete.
+///
+/// ⇒ [`FbTrapPolicy::RefuseByName`] removes the backstop **without removing the code**. One
+/// boot with it armed converts *"the counter reads zero"* into *"the path is unreachable"* —
+/// which is what licenses deleting the demand-fill mirror in increment 7.
+///
+/// # ⚠ EXPIRY CONDITION — this gate is created WITH the condition under which it is DELETED
+///
+/// §w724g: *"Every gate names, in its own doc comment, the condition under which it is
+/// deleted … it cannot quietly become permanent."*
+///
+/// > **DELETE THIS ENUM, [`RegPlane::set_fb_trap_policy`] and the `KAYFABE_FB_TRAP`
+/// > environment variable when the guest suite (`scripts/bench/rmladder_suite.sh`, all 30
+/// > arms, IN THE GUEST) is green with `KAYFABE_FB_TRAP=refuse`.** At that point the trap
+/// > path is proven unreachable, the demand-fill mirror goes with it (increment 7), and a
+/// > policy switch over a path that no longer exists is exactly the *"unwired but still
+/// > compiling"* cruft §w724g names.
+///
+/// ⊘ *Host*-green is not the condition. §w724g: *"a host-green suite is the easy way to
+/// declare victory early. The gate for unwiring is the GUEST suite."*
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FbTrapPolicy {
+    /// The shipped behaviour: a trapped BAR1/BAR2 access is translated and served out of the
+    /// framebuffer store, exactly as it always has been.
+    #[default]
+    Serve,
+    /// ★ **Refuse, by name.** A trapped BAR1/BAR2 access resolves nothing and returns
+    /// [`WindowRefusal::Translated`] with a sentence saying the trap path is armed to refuse.
+    ///
+    /// ⊘ It is a **refusal**, not a panic and not a zero. A panic inside a QEMU callback is
+    /// non-unwinding and takes the VMM with it, so the measurement would destroy the boot it
+    /// is trying to take; and answering zero would be a silent wrong value, which is the
+    /// failure class this whole tree is organised against.
+    RefuseByName,
+}
+
+/// The sentence a refused trap carries. ⊘ One `&'static str`, so the census can count
+/// occurrences of exactly this refusal and not of translation faults that happen to share a
+/// variant.
+pub const FB_TRAP_REFUSED: &str =
+    "the BAR1/BAR2 trap path is ARMED TO REFUSE (KAYFABE_FB_TRAP=refuse): this access was not      covered by publication, and serving it here is the backstop that makes premap-completeness      a soft property. If you are reading this in a boot log, publication is INCOMPLETE and the      demand-fill mirror may not be deleted.";
+
 /// particular address (counted as a translation fault, with the address).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowRefusal {
@@ -2357,6 +2416,8 @@ impl RegPlane {
             fault_buffer,
             bar_pdes,
             fb_mirror: RwLock::new(None),
+            fb_trap_policy: std::sync::atomic::AtomicU8::new(0),
+            fb_trap_refused: std::sync::atomic::AtomicU64::new(0),
             gvas_pub,
             set_page_dir,
             os_events,
@@ -2474,6 +2535,40 @@ impl RegPlane {
     /// ★★★★★ **w393 — install the BAR mirror's port.** Takes `&self`, like
     /// [`RegPlane::set_fb`]. ⊘ Not under the plane's lock: the port is consulted before that
     /// lock is taken, so it lives behind its own.
+    /// ★★★★★ **Arm or disarm the trap path's refusal** — `SINGLE_STORE_PLAN.md` §w724g.
+    /// See [`FbTrapPolicy`] for what it does and for the condition under which this method is
+    /// **deleted**.
+    ///
+    /// ⚠ Called ONCE, at the composition root, beside every other plane decision. A policy
+    /// consulted twice is a boot that can change its mind halfway through.
+    pub fn set_fb_trap_policy(&self, policy: FbTrapPolicy) {
+        self.fb_trap_policy.store(
+            match policy {
+                FbTrapPolicy::Serve => 0,
+                FbTrapPolicy::RefuseByName => 1,
+            },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    /// What a trapped BAR1/BAR2 access will do.
+    #[must_use]
+    pub fn fb_trap_policy(&self) -> FbTrapPolicy {
+        if self.fb_trap_policy.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+            FbTrapPolicy::Serve
+        } else {
+            FbTrapPolicy::RefuseByName
+        }
+    }
+
+    /// ★★ How many trapped accesses this policy has refused. ⊘ The number the boot exists to
+    /// read: a non-zero here means publication is incomplete and increment 7's deletion is
+    /// **not** licensed.
+    #[must_use]
+    pub fn fb_trap_refusals(&self) -> u64 {
+        self.fb_trap_refused.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub fn set_fb_mirror(&self, port: std::sync::Arc<dyn FbMirrorPort>) {
         *self.fb_mirror.write().unwrap_or_else(|e| e.into_inner()) = Some(port);
     }
@@ -3970,6 +4065,12 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            // ⊘ Neither is residue. The POLICY is set once at realize from the environment and
+            // survives a device reset by design (a reset does not un-arm an experiment the
+            // operator armed); the COUNTER is a census of the whole boot, and zeroing it at a
+            // reset would silently shorten the window the measurement covers.
+            fb_trap_policy: _,
+            fb_trap_refused: _,
             doorbell_refusals_by_kind: _,
             read_shadow: _,
             gsp_regs: _,
@@ -4809,6 +4910,29 @@ impl RegPlane {
             // port has no framebuffer-aperture model for.
             FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
                 Err(WindowRefusal::NoAddressModel)
+            }
+            // ★★★★★ **§w724g's MEASUREMENT, and it is placed HERE deliberately.**
+            //
+            // This is the trap path: `fb_read`/`fb_write`, i.e. a guest BAR1/BAR2 access that
+            // took a VM exit because no memslot covered it. Refusing here — and ONLY here —
+            // removes the backstop while leaving the premap path (`window_page_backing`)
+            // untouched, so a boot with the arm on still publishes normally and the refusal
+            // counts exactly the accesses publication MISSED.
+            //
+            // ⊘ PRAMIN is deliberately NOT refused. It is a control aperture that the guest
+            // reads *through* immediately after re-pointing it, it is the one sanctioned
+            // expensive trap (`the_write_trap_contract`), and it is not what increment 7
+            // deletes. Refusing it would make the boot fail for a reason unrelated to the
+            // question being asked.
+            FbWindow::FbAperture | FbWindow::InstanceWindow
+                if self.fb_trap_policy() == FbTrapPolicy::RefuseByName =>
+            {
+                self.fb_trap_refused
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Err(WindowRefusal::Translated {
+                    va: off,
+                    why: FB_TRAP_REFUSED,
+                })
             }
             FbWindow::FbAperture => self.bar1_phys(off, write, s),
             FbWindow::InstanceWindow => self.bar2_phys(off, write, s),

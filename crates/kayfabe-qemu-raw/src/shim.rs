@@ -14823,6 +14823,28 @@ impl Regs {
         // model one seam over. This root already holds both crates, so it is the one place
         // that can join them without either naming the other.
         plane.set_mmu(Box::new(kayfabe_chips::Ga10xGmmu::new()));
+        // ★★★★★ **§w724g — WHAT A TRAPPED BAR1/BAR2 ACCESS DOES**, decided here and nowhere
+        // else, beside every other plane decision, and read exactly once.
+        //
+        // ⊘ Printed on BOTH arms. A configuration that only announces itself when enabled
+        // makes the control arm's log indistinguishable from an older binary's — the rule this
+        // file already applies to the ring, the join and the doorbell.
+        let fb_trap = selected_fb_trap()?;
+        plane.set_fb_trap_policy(fb_trap);
+        eprintln!(
+            "kayfabe: FB-TRAP {FB_TRAP_ENV}={arm} ⇒ a trapped BAR1/BAR2 access is {what}",
+            arm = match fb_trap {
+                kayfabe_device::plane::FbTrapPolicy::Serve => "serve",
+                kayfabe_device::plane::FbTrapPolicy::RefuseByName => "refuse",
+            },
+            what = match fb_trap {
+                kayfabe_device::plane::FbTrapPolicy::Serve =>
+                    "TRANSLATED AND SERVED out of the framebuffer store (the shipped backstop)",
+                kayfabe_device::plane::FbTrapPolicy::RefuseByName =>
+                    "REFUSED BY NAME. ⚠ Any refusal below means publication is INCOMPLETE and \
+                     increment 7's deletion of the demand-fill mirror is NOT licensed.",
+            },
+        );
         // ★★★ **THE COMPOSITION ROOT'S DOORBELL DECISION** (`execution_plane_increments.md`
         // E2), made here and nowhere else, for exactly the reasons the two decisions above
         // are.
@@ -17428,6 +17450,41 @@ impl Regs {
         // **exit notifier** as well as from device unrealize (and which is idempotent via
         // `s->audit_printed`). A plain machine shutdown never unplugs the device, so an
         // unrealize-only hook would lose the line on exactly the runs that end normally.
+        // ★★★★★ **§w724g's NUMBER.** Printed on BOTH arms and ALWAYS, because "nothing was
+        // refused" and "nobody looked" are the same silence — the rule this file relearns
+        // every few weeks.
+        //
+        // ⊘ On the `serve` arm this is 0 by construction and says nothing; the line still
+        // prints, so a reader can tell "the control arm" from "a binary without the arm".
+        // On the `refuse` arm it is the whole measurement: **0 means the trap path is
+        // unreachable and increment 7 may delete the demand-fill mirror; anything else means
+        // publication is incomplete and names how often.**
+        {
+            let policy = self.plane.fb_trap_policy();
+            let n = self.plane.fb_trap_refusals();
+            eprintln!(
+                "kayfabe: FB-TRAP AT END OF RUN: arm={arm} FB_TRAP_REFUSALS={n} ⇒ {verdict}",
+                arm = match policy {
+                    kayfabe_device::plane::FbTrapPolicy::Serve => "serve",
+                    kayfabe_device::plane::FbTrapPolicy::RefuseByName => "refuse",
+                },
+                verdict = match (policy, n) {
+                    (kayfabe_device::plane::FbTrapPolicy::Serve, _) =>
+                        "the CONTROL arm — the trap path served normally and this number is 0 \
+                         by construction, not by measurement".to_string(),
+                    (kayfabe_device::plane::FbTrapPolicy::RefuseByName, 0) =>
+                        "★★★ THE TRAP PATH WAS NEVER REACHED. Publication covered every \
+                         BAR1/BAR2 access this boot made, so `zero in practice` becomes \
+                         `unreachable` and increment 7's deletion is licensed."
+                            .to_string(),
+                    (kayfabe_device::plane::FbTrapPolicy::RefuseByName, n) => format!(
+                        "⊘⊘ PUBLICATION IS INCOMPLETE — {n} trapped accesses were refused. \
+                         The demand-fill mirror is load-bearing and MUST NOT be deleted; \
+                         these {n} are what it has been quietly covering."
+                    ),
+                }
+            );
+        }
         match &self.scratchpad {
             Some(sp) => sp.census("END OF RUN"),
             None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
@@ -19547,6 +19604,54 @@ fn selected_fb_join() -> Result<FbJoinArm, (Status, &'static str)> {
 /// it. ⚠ An unparseable value still reads as `off`, because this flag's armed direction makes
 /// work **not happen** and a typo must not be able to skip a publication nobody decided to
 /// skip.
+/// ★★★★★ **§w724g's MEASUREMENT ARM** — what a trapped BAR1/BAR2 access does.
+/// `serve` (the default, and what shipped) | `refuse`.
+///
+/// `refuse` makes the trap path return a named refusal instead of translating and serving.
+/// One boot with it armed converts *"`TRAP_FILLS` reads zero"* into *"the trap path is
+/// unreachable"* — which is what licenses deleting the demand-fill mirror in increment 7.
+///
+/// ⚠ **EXPIRY**: this variable, [`selected_fb_trap`] and
+/// `kayfabe_device::plane::FbTrapPolicy` are **deleted when the GUEST suite
+/// (`scripts/bench/rmladder_suite.sh`, all 30 arms) is green with `KAYFABE_FB_TRAP=refuse`**.
+/// See `FbTrapPolicy`'s own doc comment, which states the same condition beside the mechanism.
+pub const FB_TRAP_ENV: &str = "KAYFABE_FB_TRAP";
+
+/// Whether `value` arms the trap-path refusal — the pure half, and the only statement of the
+/// default.
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `Serve`, which is what shipped.
+pub fn fb_trap_from(
+    value: Option<&str>,
+) -> Result<kayfabe_device::plane::FbTrapPolicy, (Status, &'static str)> {
+    use kayfabe_device::plane::FbTrapPolicy;
+    match value {
+        None | Some("serve") => Ok(FbTrapPolicy::Serve),
+        Some("refuse") => Ok(FbTrapPolicy::RefuseByName),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_FB_TRAP does not name a state: the only values are `serve` (the default, \
+             and what shipped) and `refuse`. It is not defaulted, because a typo defaulted to \
+             `serve` would run the CONTROL arm on a boot whose whole purpose is the armed one \
+             — and the armed arm's result is what licenses a deletion.",
+        )),
+    }
+}
+
+/// Which arm this process runs.
+///
+/// # Errors
+/// Whatever [`fb_trap_from`] refused with.
+pub fn selected_fb_trap() -> Result<kayfabe_device::plane::FbTrapPolicy, (Status, &'static str)> {
+    let raw = std::env::var_os(FB_TRAP_ENV);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    fb_trap_from(value)
+}
+
 pub const DIRTY_GATE_PUBLISH_ENV: &str = "KAYFABE_DIRTY_GATE_PUBLISH";
 
 /// ★★★★★ **w318 — arm the DIRTY GATE on the executor page-table witness.** Same defaults and

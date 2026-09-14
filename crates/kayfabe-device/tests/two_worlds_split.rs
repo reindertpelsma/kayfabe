@@ -614,3 +614,85 @@ fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads() {
          catches hundreds of operations after the write that was lost."
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★ §w724g's KNOWN-POSITIVE — the refusal can FIRE, so a boot's zero means something.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **THE ARM ACTUALLY REFUSES.** `SINGLE_STORE_PLAN.md` §w724g asks for one boot with
+/// the trap path armed to refuse, to convert *"`TRAP_FILLS` reads zero"* into *"the trap path
+/// is unreachable"*.
+///
+/// # ⊘⊘ Why a known-positive is not optional here
+///
+/// The boot's whole result is a **zero**. This tree's single most repeated defect is a
+/// diagnostic that prints zero because **its arm never ran** — and a zero from an arm that was
+/// never reached is indistinguishable, in every report anyone reads, from a zero from an arm
+/// that ran and found nothing.
+///
+/// ⇒ This test makes the refusal fire on demand, on the same code path a trapped guest access
+/// takes (`fb_read` → `window_phys`), and asserts it is **that** refusal by its sentence rather
+/// than merely "something was refused".
+#[test]
+fn the_armed_trap_path_refuses_by_name_and_counts_it() {
+    use kayfabe_device::plane::{FB_TRAP_REFUSED, FbTrapPolicy};
+
+    let p = plane();
+    build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
+
+    // ── the control, FIRST: unarmed, this same access resolves. Without it a red below
+    //    could mean "the tree was never built" rather than "the arm refused". ──
+    assert_eq!(p.fb_trap_policy(), FbTrapPolicy::Serve, "default is serve");
+    let (phys, _) = fb_read(&p, BAR_FB, BAR1_VA);
+    assert_eq!(
+        phys, SHARED_PHYS,
+        "unarmed, the trap path must still translate — otherwise the refusal below is not \
+         evidence about the ARM"
+    );
+    assert_eq!(p.fb_trap_refusals(), 0, "nothing refused on the control arm");
+
+    // ── arm it ──
+    p.set_fb_trap_policy(FbTrapPolicy::RefuseByName);
+    let out = p.read(BAR_FB, BAR1_VA, 4);
+    match out {
+        kayfabe_device::plane::ReadOutcome::TranslationRefused { window, va, why } => {
+            assert_eq!(window, kayfabe_device::FbWindow::FbAperture);
+            assert_eq!(va, BAR1_VA);
+            assert_eq!(
+                why, FB_TRAP_REFUSED,
+                "★ it must be THE refusal, by its own sentence. A translation fault that \
+                 happened to share the variant would make a boot's zero mean something else \
+                 entirely."
+            );
+        }
+        other => panic!(
+            "the armed trap path must refuse by name; it answered {other:?}. If this ever \
+             passes silently, `FB_TRAP_REFUSALS=0` in a boot stops being evidence."
+        ),
+    }
+    assert_eq!(
+        p.fb_trap_refusals(),
+        1,
+        "★ and it must be COUNTED — the boot reads the counter, not the log"
+    );
+
+    // ── BAR2 too: both translated windows are armed, and PRAMIN deliberately is not ──
+    let _ = p.read(BAR_INST, BAR2_VA, 4);
+    assert_eq!(p.fb_trap_refusals(), 2, "the instance window is armed as well");
+
+    // ⊘ PRAMIN is NOT armed: it is a control aperture the guest reads through immediately
+    // after re-pointing it, it is the one sanctioned expensive trap, and it is not what
+    // increment 7 deletes. Refusing it would fail the boot for an unrelated reason.
+    pramin_wr32(&p, SHARED_PHYS, CONTROL_SENTINEL);
+    assert_eq!(
+        pramin_rd32(&p, SHARED_PHYS),
+        CONTROL_SENTINEL,
+        "★ PRAMIN must keep working with the arm on, or the measurement boot dies of \
+         something that has nothing to do with BAR1/BAR2 publication"
+    );
+    assert_eq!(
+        p.fb_trap_refusals(),
+        2,
+        "and PRAMIN must not have been counted as a refusal"
+    );
+}
