@@ -221,6 +221,38 @@ missing is exactly three steps — write a fault record, advance `PUT`, raise th
 hunt that rediscovered it by tracing the guest. ⇒ **Read the device's own startup report before
 tracing.** A port that states what it did NOT build has already done the diagnosis.
 
+## 4e. ⊘ THE REFUTATION LEDGER — six hypotheses, each killed by its own measurement
+
+Kept as a ledger because the next reader's first instinct will be one of these, and each cost a
+boot:
+
+| # | hypothesis | killed by |
+|---|---|---|
+| 1 | the always-on whole-VAS sweep (w533) | disarm restored on a branch ⇒ **hangs identically** |
+| 2 | a regression since 2026-09-06 | that commit fails here too (`719`); `CUP3_VAL=43` was a DIFFERENT machine |
+| 3 | the 110 `SystemDataPlane` refusals are cup3's | **identical in boots that grade (P)**, same pdbs, same 110/13/8 |
+| 4 | unbuilt fault delivery (`DELIVERY_UNBUILT`) | `perf` shows **no fault-path function**; `HOST_DMESG_XID=0`; cup3 uses plain `cuMemAlloc` |
+| 5 | the MMU-invalidate TRIGGER never clears | `polls=622 / triggers=309` (cup3) and `polls=2366 / triggers=1181` (raw) — **~2 polls per invalidate in both** |
+| 6 | the advertised FB size drives it | rebuilt at 6144 MiB: `clear_page_rep` **42.27% ⇒ 30.14%**, stall **identical** |
+
+★ #5 and #6 are the instructive pair. Both were *partly* right — the trigger bit IS held while
+`pending`, and the FB size DOES drive a third of the zeroing — and **neither is the blocker**. A
+mechanism being real is not the same as it being the cause.
+
+### What the profile actually says
+
+`perf --no-children` on the hung thread: **`clear_page_rep` 42.27%**, then register access
+(`osDevReadReg032` 4.95%, `osDevWriteReg032` 3.73%, `_regRead` 2.53%, `vgpuDevReadReg032` 3.04%),
+`native_{read,write}_msr` ~9.5%, `timeoutCheck` 2.62%, `kgmmuCheckPendingInvalidates_TU102` 1.49%.
+
+⇒ One `UVM_MAP_EXTERNAL_ALLOCATION` spends 49+ seconds **allocating and zeroing pages**, with no
+fault anywhere. `kgmmuCheckPendingInvalidates` is merely called often (2 polls per invalidate),
+not spinning.
+
+⊘ **The question that must be settled before any fix**: is this STUCK or merely SLOW? Every run so
+far gave cup3 10-60 s. If it completes at 600 s this is a performance problem, not a hang, and
+every "why does it never finish" framing above is the wrong question.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
