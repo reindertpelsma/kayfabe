@@ -5767,7 +5767,10 @@ fn a_superseded_declarations_kernel_held_memory_is_never_freed_by_its_successor(
         kayfabe_fwd::handle_doorbell(&mut gpu, GPU1, MockArch::token_for(GEN2_GR), &[]),
         Err(FwdFault::UnknownVchid {
             gpu: GPU1,
-            vchid: GEN2_GR
+            vchid: GEN2_GR,
+            // ⊘ `ExecPlane` — the assertion's own message already names the stage: the exec
+            // plane died with the root, so `by_vchid` holds no row and routing misses first.
+            miss: kayfabe_fwd::VchidMiss::ExecPlane,
         }),
         "★ …but its EXEC plane died with its root: nothing dup'd its channels, so they \
          were reclaimed per object and their vChid is a named MISS"

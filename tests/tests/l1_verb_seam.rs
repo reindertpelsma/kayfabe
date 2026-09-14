@@ -533,7 +533,10 @@ fn r5_canary_channel_torn_down_in_the_gap_refuses_loudly() {
         device.doorbell(None, GPU, MockArch::token_for(GR), &[], None),
         Err(FwdFault::UnknownVchid {
             gpu: GPU,
-            vchid: GR
+            vchid: GR,
+            // ⊘ `ExecPlane` — the channel was torn down, which retracts the `by_vchid` row, so
+            // the doorbell misses at routing and never reaches the proc's channel map.
+            miss: kayfabe_fwd::VchidMiss::ExecPlane,
         }),
         "no resurrected channel, no half-written host state"
     );

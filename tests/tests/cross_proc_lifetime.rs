@@ -1465,9 +1465,14 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
         kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(OWNER_GR), &[VA]),
         Err(FwdFault::UnknownVchid {
             gpu: GPU,
-            vchid: OWNER_GR
+            vchid: OWNER_GR,
+            // ⊘ `ExecPlane` — this calls `handle_doorbell` directly, so the miss is at ROUTING
+            // and never reaches a proc's channel map. The comment above already says it: the
+            // exec plane is genuinely gone.
+            miss: kayfabe_fwd::VchidMiss::ExecPlane,
         }),
-        "a channel the reference does not cover is unreachable — MISS=FAULT, named",
+        "a channel the reference does not cover is unreachable — MISS=FAULT, named for the \
+         stage that missed",
     );
 
     // ---- 4b. ★ The referenced half is not merely present: it is USABLE. ----
