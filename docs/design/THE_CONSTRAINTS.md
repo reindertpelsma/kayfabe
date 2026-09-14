@@ -665,6 +665,39 @@ memory means what the hardware says it means, where on substituted system memory
      kernel's context and our own channels**. That is a deadlock shape: the guest's views would
      starve the mechanism that publishes them.
 
+   ### ★★★★★ CORRECTED AGAIN, w722c — THE WORKING SET IS ~3.6 MiB, NOT 256 MiB
+
+   **Owner, 2026-09-14:** *"But why do you need 256MiB+ mapped in slow mmio if guest doesn't use
+   it?"* ★ Right, and it makes the ceiling nearly moot.
+
+   ⊘ **We never map the aperture. We map what the guest has actually mapped in its BAR1 page
+   tables.** `[measured, the parity boots]` — **912 distinct BAR1 pages ≈ 3.6 MiB** across a
+   162 000-doorbell LLM workload, all premapped, `TRAP_FILLS=0`.
+
+   | | |
+   |---|---|
+   | usable pool | ~254 MiB |
+   | measured working set | **3.6 MiB** |
+   | utilisation | **1.4%** |
+
+   ⇒ **All-resident is comfortable by ~70x.** No aperture resizing, no recycling design, no
+   sizing gymnastics. ⚠ I reasoned from the **aperture** when the number that matters is the
+   **working set** — the same error twice in one exchange: generalising from a bound instead of
+   from a measurement.
+
+   ### ⇒ What is actually left
+
+   1. **Enforce a budget.** A guest *may* legally fill its aperture, and nothing stops it. Left
+      unbounded it can starve our CUDA context and with it the walker. ⇒ A **checked** bound, not
+      an assumed one — cheap, and it is the whole of the "pathological guest" story.
+   2. ★★★ **CUMULATIVE CHURN is the real reason for the release verb — not capacity.** The
+      instant working set is 3.6 MiB, but the guest **re-points** BAR1 entries over time, so what
+      accumulates without release is **every distinct (BAR1 page, GPGA) pair over the whole boot**.
+      Across 1178 refreshes that can exceed 254 MiB although no instant ever does. ⊘ And the
+      failure is silent: rounds 1–4 got **zero** with `ioctl()` returning 0 and `errno==0`.
+
+   ### ⊘⊘ SUPERSEDED — the sizing argument below, kept for its reasoning
+
    ### ⊘⊘ CORRECTED w722b — "IMPOSSIBLE" WAS AN OVERSTATEMENT, and 256 MiB MUST NOT BE HARDCODED
 
    **Owner, 2026-09-14:** *"Yeah 256MiB is vast limit. Not something to hardcode. Why is it then
