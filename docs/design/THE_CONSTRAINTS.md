@@ -969,3 +969,45 @@ undecided, and it is the one place where a per-GPU walk meets a cross-GPU mappin
 ⊘ Related and unresolved: `the_viewspace_citation_nobody_audited` records peer memory being deferred
 while citing a type that did not model the GPU axis. ⇒ **Do not let the single-store work assume
 peer never appears**; decide it explicitly, even if the decision is a named refusal.
+
+## ⊘⊘⊘ w726 — §w724d's ORDERING IS NECESSARY BUT NOT SUFFICIENT, and §20 needs a third qualification
+
+`[measured w726, increment 4]` Both corrections come from building it.
+
+### 1. The blocker was one layer below where I named it
+
+A static-pie **musl** binary's `dlopen` returns `NULL` with `dlerror()` = **`"Dynamic loading not
+supported"`** — for **`libc.so.6` and `libm.so.6` as much as for `libcuda.so.1`**. ⇒ The refusal is
+**musl's**, and arrives **before CUDA is asked about**. The blocker is *"there is no dynamic linker
+in that process"*, not *"libcuda is the wrong kind of shared object"*. ★ No hardware was needed;
+I proposed a container-hour to establish something a local run settled.
+
+### 2. ★★★ Ordering alone does not work — an isolate is BORN namespaced
+
+`cuInit` refused **`CUDA_ERROR_OPERATING_SYSTEM` (304)** *after* `dlopen` had succeeded. Bisected
+one namespace at a time:
+
+| namespace | alone |
+|---|---|
+| user / mount / net / ipc / uts | **pass** |
+| **pid** | ⊘ **fail** |
+| **pid + a remounted `/proc`** | ✔ **pass** |
+
+⇒ **It is not the PID namespace — it is a PID namespace whose `/proc` is still the parent's.**
+⊘ **No ordering could have fixed this**, because the isolate does not *enter* namespaces after
+running: it is **born** in them. §w724d's *"init before you sandbox"* is necessary and insufficient.
+
+★ The fix is **a mount, not a weakened boundary** — dropping `CLONE_NEWPID` would give one isolate
+permanent visibility of every host process to solve what four syscalls solve — and it is
+**transient**: `sandbox::enter` puts a tmpfs over `/proc` moments later.
+
+### 3. ⚠ §20's PRIVILEGE CLAIM NEEDS A THIRD QUALIFICATION — and it is unmeasured
+
+**`capset` is per-thread on Linux.** CUDA's driver threads exist by the time privilege is dropped,
+and `surrender_privilege`'s read-back reads **`/proc/self/status`** — *the calling thread only*.
+
+⇒ §20 may say *"the thread that dropped did"*. It may **not** say *"the process is unprivileged"*
+without reaching the siblings, which needs a dirfd opened **before** the sandbox. ⊘ **That
+instrument was not built and the sibling threads are unverified.** Recorded as an open gap rather
+than assumed away — this is exactly the shape where a check that covers one thread reads as a check
+that covers the process.
