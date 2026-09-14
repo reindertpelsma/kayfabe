@@ -665,10 +665,35 @@ memory means what the hardware says it means, where on substituted system memory
      kernel's context and our own channels**. That is a deadlock shape: the guest's views would
      starve the mechanism that publishes them.
 
-   ### ⇒ Three consequences for increment 3, none optional
+   ### ⊘⊘ CORRECTED w722b — "IMPOSSIBLE" WAS AN OVERSTATEMENT, and 256 MiB MUST NOT BE HARDCODED
 
-   1. **BAR1 views MUST be recycled, not all-resident.** This is what PRAMIN does and why the
-      hardware has one. The all-resident design is not merely wasteful — it is **impossible**.
+   **Owner, 2026-09-14:** *"Yeah 256MiB is vast limit. Not something to hardcode. Why is it then
+   impossible?"* ★ Both halves are right.
+
+   **(a) 256 MiB is ONE measured board, not a spec.** BAR1 size varies by board and by whether the
+   host enabled **ReBAR**; datacenter parts ship with a large BAR1 natively. ⇒ It is a **queryable
+   property** — `derive_per_die_maintain_per_family`. **Nothing may compare against a literal.**
+
+   **(b) The real relation is a SIZING constraint, not an impossibility:**
+
+       all-resident works  ⟺  advertised_guest_BAR1 + our_headroom  ≤  host_BAR1
+
+   I collapsed that to *"impossible"* because on this box both sides are 256 MiB. ⊘ **But we choose
+   the left-hand side.** The guest's BAR1 aperture is **advertised by us**, not inherited: advertise
+   128 MiB and the same board leaves ~125 MiB of headroom. A 128 MiB-BAR1 GA106 is a real hardware
+   configuration, so that is **a different truthful board, not a lie** — §22 intact.
+
+   ⇒ **Query host BAR1 at startup, size the guest's aperture to fit inside it minus a reserved
+   budget, and all-resident holds by construction.** Recycling is the **fallback** for hosts too
+   small for the aperture we want — not the mandatory design.
+
+   ### ⇒ What survives the correction, unchanged
+
+   1. ★★★ **The release verb is required either way.** Even fully resident, the guest **re-points
+      its BAR1 page tables over time** — the same BAR1 offset names different GPGA as its own RM
+      manages the aperture. So views must be torn down and re-established, and `munmap` + `close`
+      demonstrably returns **nothing** to the pool (rounds 1–4 got **zero**). Without
+      `NV_ESC_RM_UNMAP_MEMORY` we leak until we refuse, **however we size things**.
    2. **Build the release verb FIRST.** `NV_ESC_RM_UNMAP_MEMORY` has no caller; recycling is
       unimplementable until it does, and the failure mode without it is a silent leak followed by
       total refusal.
