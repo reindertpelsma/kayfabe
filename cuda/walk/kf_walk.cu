@@ -1287,7 +1287,9 @@ static const char *kf_format_check(const KfFormat &F)
  * instead launched 32 768 blocks of which ~470 did anything, and the empty ones
  * cost more than the walk. `[measured]` the fixed cost fell from ~700 us to the
  * launch overhead of the launches themselves. */
-#define KF_PAR_GRID     512u
+#ifndef KF_PAR_GRID
+#define KF_PAR_GRID     128u
+#endif
 
 #define KF_ENT_DEAD  0u   /* a root that was refused: contributes nothing      */
 #define KF_ENT_TABLE 1u   /* a page-directory page to expand                   */
