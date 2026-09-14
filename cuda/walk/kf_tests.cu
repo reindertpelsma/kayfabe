@@ -1709,10 +1709,28 @@ static void mutate_hostile(Gpga &g, Vas &v, Rng &r)
 }
 
 struct RtStats {
-    int steps, compared, trunc, changed, nonempty;
+    int steps, compared, trunc, changed, nonempty, dual;
     size_t max_model;
     unsigned long long visited_max;
 };
+
+/* ★ COVERAGE, not a result: how many steps had a 4 KiB and a 64 KiB leaf inside
+ * ONE 2 MiB region, i.e. both halves of a dual PDE live at once. That is the
+ * state the two page-size classes can name the same VA in, and the reason the
+ * diff is per class. Without this census, "the stream covers the dual-PDE case"
+ * would be an assumption. */
+static bool model_has_dual(const Model &m)
+{
+    std::set<std::pair<uint64_t, uint64_t> > small, big;
+    for (Model::const_iterator i = m.begin(); i != m.end(); ++i) {
+        std::pair<uint64_t, uint64_t> r(i->first.pdb, i->first.va >> 21);
+        if (i->first.ps == KFWR_PS_4K) small.insert(r);
+        else if (i->first.ps == KFWR_PS_64K) big.insert(r);
+    }
+    for (std::set<std::pair<uint64_t, uint64_t> >::const_iterator i = small.begin(); i != small.end(); ++i)
+        if (big.count(*i)) return true;
+    return false;
+}
 
 static void rt_full_state(KfWalk *oracle, void *dev, uint64_t len,
                           const std::vector<uint64_t> &roots, Model &out,
@@ -1824,6 +1842,7 @@ static void rt_stream(bool hostile, uint64_t seed, int steps, RtStats &sx)
         if (!ok) continue;
         if (full.size() > sx.max_model) sx.max_model = full.size();
         { std::string wc; if (have_prev_full && !model_eq(full, prev_full, wc)) sx.changed++; }
+        if (model_has_dual(full)) sx.dual++;
         prev_full = full;
         have_prev_full = true;
 
@@ -1857,14 +1876,15 @@ static void rt_run(bool hostile, const char *tag, const uint64_t *seeds, int nse
         RtStats sx;
         rt_stream(hostile, seeds[i], steps, sx);
         tot.steps += sx.steps; tot.compared += sx.compared; tot.trunc += sx.trunc;
-        tot.changed += sx.changed; tot.nonempty += sx.nonempty;
+        tot.changed += sx.changed; tot.nonempty += sx.nonempty; tot.dual += sx.dual;
         if (sx.max_model > tot.max_model) tot.max_model = sx.max_model;
         if (sx.visited_max > tot.visited_max) tot.visited_max = sx.visited_max;
         if (g_fails_here) { printf("      [%s] FAILING SEED %llu\n", tag, (unsigned long long)seeds[i]); break; }
     }
     printf("      [%s] %d steps over %d seeds: %d closures checked, %d non-empty deltas, "
-           "%d steps changed the mapping set, %d truncations, max model %zu, deepest walk %llu\n",
-           tag, tot.steps, nseeds, tot.compared, tot.nonempty, tot.changed, tot.trunc,
+           "%d steps changed the mapping set, %d with BOTH dual-PDE halves live, "
+           "%d truncations, max model %zu, deepest walk %llu\n",
+           tag, tot.steps, nseeds, tot.compared, tot.nonempty, tot.changed, tot.dual, tot.trunc,
            tot.max_model, tot.visited_max);
     /* ⚠ THE VACUITY GUARDS. A stream that scribbled the root would pass every
      * closure check while the model stayed empty and every walk bailed at entry
@@ -1874,6 +1894,8 @@ static void rt_run(bool hostile, const char *tag, const uint64_t *seeds, int nse
     CHECK_M(tot.changed > tot.steps / 5, "the mutations barely changed anything");
     CHECK_M(tot.nonempty > tot.steps / 5, "almost every delta was empty");
     CHECK_M(tot.visited_max > 2000, "no walk ever got past the top levels");
+    CHECK_M(tot.dual > tot.steps / 20,
+            "the stream never had both halves of a dual PDE live: the per-class diff is untested");
 }
 
 static void t_roundtrip_benign(void)
