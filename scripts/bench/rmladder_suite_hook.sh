@@ -31,7 +31,10 @@ $G 'chmod +x /tmp/rmladder_suite.sh'
 
 echo ""
 echo "=== ★★★ THE SUITE IN THE GUEST (host reference: 30/30 PASS) ==="
-$G "RMLADDER_SUITE_LOGDIR=/tmp/suitelogs bash /tmp/rmladder_suite.sh /tmp/rmladder 0 $TMO" 2>&1 | sed 's/^/    /'
+# ⊘ `RMLADDER_ARMS` must be FORWARDED explicitly: `gssh_nv` is an ssh invocation, so the host's
+# environment does not cross into the guest. `[measured w718b]` setting it on the boot command had
+# no effect and all 30 arms ran anyway — the override looked armed and was not.
+$G "RMLADDER_SUITE_LOGDIR=/tmp/suitelogs RMLADDER_ARMS='${RMLADDER_ARMS:-}' bash /tmp/rmladder_suite.sh /tmp/rmladder 0 $TMO" 2>&1 | sed 's/^/    /'
 
 echo ""
 echo "=== ★★★★★ THE DELTA — every non-PASS is a kayfabe defect, the host passes all 30 ==="
