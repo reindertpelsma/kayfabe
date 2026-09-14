@@ -90,8 +90,46 @@ enum ChildBacking {
     /// ⚠ **The context is one-shot per `struct file`** — a second `0x4E` against a node that
     /// already carries one is `NV_ERR_STATE_IN_USE` (`ogkm-580: nv-usermap.c:53-57`), so the
     /// node stored here must be one freshly opened for this mapping and never reused.
-    ArmedNode(CharDevice),
+    ArmedNode {
+        /// The node whose `struct file` carries the armed context.
+        node: CharDevice,
+        /// ★ What [`NV_ESC_RM_UNMAP_MEMORY`] needs to identify this mapping. See
+        /// [`CpuViewRelease`].
+        release: CpuViewRelease,
+    },
+    /// ⊘ A token whose view has been released. **A tombstone, not a removal**: the token IS the
+    /// index, so compacting the vector would silently re-point every later token at the wrong
+    /// backing.
+    Released,
 }
+
+/// ★★★★★ **What it takes to give a CPU view's BAR1 aperture back.**
+///
+/// `[measured w722]` `munmap` + `close` returns **nothing** to the aperture pool — a second round
+/// of mappings at fresh offsets gets **zero**. Only `NV_ESC_RM_UNMAP_MEMORY` (`0x4F`) releases it,
+/// and it identifies the mapping by the **`pLinearAddress` cookie RM minted at map time**, which
+/// therefore has to be captured rather than status-checked and dropped.
+///
+/// ⊘ Held here rather than recomputed because by release time the caller no longer has the
+/// handles: the token is all it carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CpuViewRelease {
+    /// The object the view is of.
+    pub h_memory: u32,
+    /// ★ RM's own cookie for this mapping, from the map's reply. Opaque; never dereferenced.
+    pub p_linear_address: u64,
+}
+
+// ⊘⊘⊘ **`h_client` AND `h_device` ARE DELIBERATELY ABSENT, and the tree's own guard is why.**
+//
+// They were here first, carried from map time. `own_client_invariant.rs` (**F11**) refused it:
+// *"an RM escape in rm.rs names a client that is not this isolate's own minted `OwnClient`"*.
+// ⇒ An escape must name **this isolate's** client, always — a handle carried in a struct is a
+// handle that could have come from somewhere else, and the invariant is that none ever does.
+//
+// ★ So the release reads them from the connection at issue time instead. That is not merely
+// equivalent: it makes the invariant hold **by construction** rather than by every future caller
+// populating this struct correctly.
 
 #[derive(Debug, Default)]
 pub struct ChildExports {
@@ -143,10 +181,40 @@ impl ChildExports {
     /// ⚠ It records **no length**. Length is the caller's, carried in the reply beside the
     /// token, because the `mmap` the VMM performs must use the length RM registered — not a
     /// number this table re-derived. `ogkm-580: nv-mmap.c:562-565` refuses any other.
-    pub fn mint_armed_node(&self, node: CharDevice) -> u64 {
+    pub fn mint_armed_node(&self, node: CharDevice, release: CpuViewRelease) -> u64 {
         let mut t = self.backings.lock().unwrap_or_else(|e| e.into_inner());
-        t.push(ChildBacking::ArmedNode(node));
+        t.push(ChildBacking::ArmedNode { node, release });
         t.len() as u64 - 1
+    }
+
+    /// ★★★ **Retire `token`'s armed node and hand back what its release needs.**
+    ///
+    /// Drops the [`CharDevice`] — which closes the descriptor and frees the armed context via
+    /// `nv_free_file_private` — and leaves a [`ChildBacking::Released`] tombstone so later tokens
+    /// keep their indices.
+    ///
+    /// ⊘ **Closing the node is NOT the release.** The aperture comes back only when the caller
+    /// issues `NV_ESC_RM_UNMAP_MEMORY` with the returned [`CpuViewRelease`]; this table cannot do
+    /// it itself because it holds no control descriptor. ⇒ A caller that takes the key and does
+    /// not issue the ioctl has leaked the aperture, silently.
+    ///
+    /// Returns `None` for an unknown token, or one already released — so a double release is a
+    /// no-op rather than a second ioctl against a stale cookie.
+    pub fn take_cpu_view_release(&self, token: u64) -> Option<CpuViewRelease> {
+        let mut t = self.backings.lock().unwrap_or_else(|e| e.into_inner());
+        let slot = usize::try_from(token).ok().and_then(|i| t.get_mut(i))?;
+        match core::mem::replace(slot, ChildBacking::Released) {
+            ChildBacking::ArmedNode { node, release } => {
+                drop(node);
+                Some(release)
+            }
+            // ⊘ Put back what we took: neither a fabricated backing nor an already-released
+            // token may be turned into a tombstone by asking about it.
+            other => {
+                *slot = other;
+                None
+            }
+        }
     }
 
     /// A duplicate of `token`'s descriptor, for attaching to a reply.
@@ -171,7 +239,7 @@ impl ChildExports {
             // reason, sharper. Closing the isolate's last reference would run
             // `nv_free_file_private` and **tear down the very mmap context the VMM is about
             // to consume**, turning a correct-looking export into a failing `mmap`.
-            ChildBacking::ArmedNode(node) => {
+            ChildBacking::ArmedNode { node, .. } => {
                 node.as_fd()
                     .try_clone_to_owned()
                     .map_err(|e| RawError::Syscall {
@@ -179,6 +247,10 @@ impl ChildExports {
                         errno: e.raw_os_error(),
                     })
             }
+            // ⊘ A released token is not an unknown one, and saying so matters: an unknown token
+            // is a bug in the caller, a released one is a use-after-release. Same refusal type,
+            // but the token is real and the distinction is visible in the message.
+            ChildBacking::Released => Err(RawError::UnknownExport { token }),
         }
     }
 
@@ -315,3 +387,55 @@ impl ExportRegistry {
 // The registries are stored inside an `Isolate`, which the core stores in a `Sync` `Proc`
 // (decision #17). Asserted here so the bound cannot be dropped without this line failing.
 kayfabe_util::assert_send_sync!(ChildExports, ExportRegistry);
+
+#[cfg(test)]
+mod release_tests {
+    use super::*;
+
+    /// ⊘⊘⊘ **ASKING MUST NOT DESTROY.** `take_cpu_view_release` replaces the slot to read it, so
+    /// a token that is *not* an armed node has to be **put back**. Get this wrong and querying a
+    /// fabricated backing silently tombstones it — the export still has a token, the token still
+    /// looks valid, and the bytes are gone. ⚠ Nothing else in this table would report that.
+    #[test]
+    fn asking_a_fabricated_token_for_a_release_does_not_destroy_it() {
+        let t = ChildExports::new();
+        let token = t.mint(4096).expect("mint");
+        assert!(
+            t.take_cpu_view_release(token).is_none(),
+            "a fabricated backing has no CPU view to release"
+        );
+        // ★ The real assertion: it must still be lendable afterwards.
+        assert!(
+            t.lend(token).is_ok(),
+            "asking about a fabricated token destroyed it — the 'put back' arm is missing"
+        );
+        // And asking twice is still harmless.
+        assert!(t.take_cpu_view_release(token).is_none());
+        assert!(t.lend(token).is_ok(), "a second ask destroyed it");
+    }
+
+    /// An unknown token is `None`, not a panic and not an index into somebody else's slot.
+    #[test]
+    fn an_unknown_token_has_nothing_to_release() {
+        let t = ChildExports::new();
+        assert!(t.take_cpu_view_release(0).is_none(), "empty table");
+        let token = t.mint(4096).expect("mint");
+        assert!(t.take_cpu_view_release(token + 1).is_none(), "past the end");
+        assert!(t.take_cpu_view_release(u64::MAX).is_none(), "wildly past the end");
+    }
+
+    /// ★ **The token is the INDEX**, which is why a release tombstones rather than removes.
+    /// This pins the consequence: a release must not shift any other token's meaning.
+    #[test]
+    fn a_release_does_not_renumber_the_tokens_around_it() {
+        let t = ChildExports::new();
+        let a = t.mint(4096).expect("a");
+        let b = t.mint(4096).expect("b");
+        let c = t.mint(4096).expect("c");
+        assert_eq!((a, b, c), (0, 1, 2), "tokens are dense indices");
+        // Nothing here is an armed node, so nothing is released — but the shape is what matters:
+        // every token must still name what it named.
+        let _ = t.take_cpu_view_release(b);
+        assert!(t.lend(a).is_ok() && t.lend(b).is_ok() && t.lend(c).is_ok());
+    }
+}
