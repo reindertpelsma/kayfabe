@@ -44,6 +44,9 @@
 pub mod blockage;
 pub mod gpga;
 pub mod reach;
+/// ★★★★★ `SINGLE_STORE_PLAN.md` §6 step 1 — shadow mode: run both walkers, compare, count
+/// the disagreements by kind. Nothing here changes what is published.
+pub mod walkshadow;
 pub mod walkdiff;
 pub mod walkreport;
 pub mod refresh;
