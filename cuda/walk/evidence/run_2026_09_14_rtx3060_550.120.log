@@ -1,0 +1,77 @@
+START 2026-09-14T14:39:52Z NVIDIA GeForce RTX 3060, 550.120
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no goto, no recursion
+I1 ok: five nested loops, every trip count a format constant
+I3 ok: truncation raised from 5 sites
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -o kf_tests kf_tests.cu kf_walk.cu -lpthread
+jit ok: PTX-only binary
+.target sm_75
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=64 pdb=32 run=32
+pass correctness/single_4k
+pass correctness/large_pages_64k_2m_512m
+pass correctness/coalesce_one_run
+pass correctness/coalesce_split_gpga
+pass correctness/coalesce_split_flags
+pass correctness/no_coalesce_across_pagesize
+pass correctness/sparse_and_invalid_skipped
+pass correctness/flags_decoded
+pass correctness/dual_pde_both_halves
+pass correctness/multiple_pdbs
+pass delta/nothing_changed
+pass delta/add
+pass delta/delete
+pass delta/edit_gpga
+pass delta/edit_flags
+pass delta/extend_and_shrink
+pass delta/move_page_table
+pass delta/change_root_pdb
+pass delta/free_subtree
+pass delta/generation_handshake
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+pass legal/shared_page_table
+pass legal/pte_maps_own_page_table
+      [differential] 15 images, 1212 benign leaves agreed exactly, 2 hostile leaves within the rust walker's set
+pass differential/rust_walker
+      [cpu live] 200 walks in 743 ms, 465278976 edits interleaved, deepest 1828 entries, 2816 runs total
+pass race/cpu_live_edits
+      [gpu live] 200 walks in 949 ms, deepest 1828 entries, 2714 runs total
+pass race/gpu_live_edits
+      [cpu racer] 200 walks in 173 ms, 30781440 host writes interleaved, deepest walk 516 entries, 0 runs total
+pass race/cpu_garbage
+      [gpu racer] 120 walks in 577 ms, deepest walk 516 entries
+pass race/gpu_garbage
+pass scope/covering_the_change
+pass scope/excluding_a_pdb_carries_it
+pass scope/sentinel_is_full_walk
+pass scope/overflow_degrades_to_full
+pass scope/cannot_make_the_walk_wrong
+
+==== 50 passed, 0 failed ====
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_BOUNDS -o kf_tests_broken kf_tests.cu kf_walk.cu -lpthread
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
+SMI=responsive
+INV=0 BUILD=0 PTX=0 NEG=0
+EXIT=0
