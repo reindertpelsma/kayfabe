@@ -359,3 +359,58 @@ no CE in `gmmu_walk.c`, which was true; the question was never only about that f
 `the_aperture_store_lifetime.md`. ⊘ It **refutes the ~40 MiB bound**: BAR2's dynamic window is
 **16 MiB** on a GA106 and is an **evicting LRU cache**, so residency is not liveness, and 12 GiB
 mapped at 4 KiB needs **24 MiB of small page tables alone**.
+
+## 19 — CLASSIFY PER ADDRESS, DEFAULT TO VIDMEM, AND LEASE THE CLASSIFICATION
+
+> Owner, 2026-09-14, on learning UVM CE-writes its page tables: *"if nvidia uses ce for page
+> tables then we can still support. the driver never allocates page tables and data on same
+> address. so the solution is simply to determine per address what the target needs. since its
+> emulated channel only, means that passthrough remains untouched."*
+
+★ Accepted, and it converges with `gpga_is_one_reserved_object.md`'s own rule — *"backing … is
+decided by who reads it"*, learned when a range is mapped into a GPU address space. ⊘ Passthrough
+is genuinely untouched: those channels operate on the reserved object, which is real video memory
+either way.
+
+Two refinements, both from measured facts rather than taste.
+
+### ★★★ (a) The DEFAULT is the reserved object — because the errors are asymmetric
+
+| misclassification | consequence |
+|---|---|
+| data → aperture store | an engine reads memory it cannot reach ⇒ **silent corruption**, no fault, no status |
+| control → reserved object | **correct**, merely slower for CPU reads |
+
+⇒ **Reserved object by default; the aperture store requires POSITIVE EVIDENCE.** The aperture
+store is an optimisation applied where it is provably safe, never the bucket things fall into by
+where they happened to be touched. Every classifier bug then costs milliseconds, not correctness.
+
+⊘ It remains load-bearing as an optimisation, so this is not an argument for dropping it: CPU
+reads of video memory are **48 MiB/s** against **3674 MiB/s** for host memory, and re-reading page
+tables every refresh costs **~10 minutes a boot** versus ~150 ms promoted.
+
+★ Evidence required for the aperture store: reached through BAR2/PRAMIN, **and** never mapped
+into a GPU VAS, **and** never named as a decoded CE operand.
+
+### ★★★ (b) The classification is a LEASE, not a label
+
+The premise *"the driver never allocates page tables and data on same address"* holds **at any
+instant**, which is what matters — but not **over time**. RM recycles page-table pages through a
+packed sub-memdesc cache (`gmmu_walk.c:578`) and a memory pool (`:586-588`), and **non-root levels
+are not scrubbed at allocation** (`gmmu_walk.c:341-343`). ⇒ An address that is a page table now
+can be user data later **with no write in between**.
+
+⇒ A classification must be **revocable at an observable event**, and the event is already known:
+the **parent PDE going invalid**, which strictly precedes the free (`mmu_walk.c:1514-1552`).
+
+★ Conveniently that is **one event doing three jobs** — it retires the classification, punches the
+aperture store's backing (`PageArena::punch_range`), and releases the lease. Actioned at a
+synchronisation point, never mid-walk.
+
+### ⚠ What must be MEASURED before the migration path is designed
+
+If a page is reclassified after it already has bytes in the wrong world, something must move them
+— the **shadow** `gpga_is_one_reserved_object.md` exists to abolish. Whether that is a loud
+refusal-and-reclassify at a synchronisation point or a real migration path depends entirely on how
+often it happens. ⇒ `kayfabe_device::twoworlds` measures exactly that, and it is already wired to
+print at teardown. **Boot first, design second.**
