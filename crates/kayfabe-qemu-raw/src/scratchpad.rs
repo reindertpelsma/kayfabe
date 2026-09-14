@@ -258,12 +258,19 @@ impl Reservation {
     }
 
     /// The refusal text, for the census. Empty when there is nothing to explain.
+    ///
+    /// ⊘ The `RESERVE_REFUSED` arm carries **`probed_mb` as well as the error**, because
+    /// *"reserving 11 808 MiB refused"* and *"reserving 512 MiB refused"* are opposite facts
+    /// about the host and the token alone cannot tell them apart. A refusal line without the
+    /// size attempted is a refusal nobody can act on.
     #[must_use]
-    pub fn why(&self) -> &str {
+    pub fn why(&self) -> String {
         match self {
-            Reservation::NoWorker { why } | Reservation::ProbeRefused { why } => why,
-            Reservation::Refused { why, .. } => why,
-            Reservation::NothingReservable | Reservation::Held { .. } => "",
+            Reservation::NoWorker { why } | Reservation::ProbeRefused { why } => why.clone(),
+            Reservation::Refused { why, probed_mb } => {
+                format!("the probe said {probed_mb} MiB and reserving it refused: {why}")
+            }
+            Reservation::NothingReservable | Reservation::Held { .. } => String::new(),
         }
     }
 }
