@@ -2,7 +2,9 @@
 # ★★★★★ The LLM workload, run INSIDE the Mode-2 guest, against our emulated GPU.
 #
 # ## ★★★ PRE-REGISTERED, BEFORE THE BOOT — every outcome, so none reads as the favourable one
-#   (A) `LLM_TOKENS` > 0 AND `LLM_OK=1`  ⇒ ★★★★★ LLM COMPUTE. A token count is un-forgeable in
+#   (A) `LLM_TOKENS` > 0 AND `LLM_OK=1` AND `LLM_DEVICE=cuda` ⇒ ★★★★★ LLM COMPUTE. ⊘ ALL THREE:
+#       the CPU control returns `LLM_OK=1` with tokens too, so the first two alone grade a CPU run
+#       as a GPU one. A token count is un-forgeable in
 #       the same way `43` is: no copy, fill, or completion we wrote ourselves produces one.
 #       Report the text and EVERY relaxation that was on; it is a relaxed green until they come off.
 #   (B) `LLM_TOKENS=0` with `LLM_EXC=`   ⇒ the workload REACHED the GPU and the GPU leg failed.
@@ -47,14 +49,30 @@ TOKENS=$(echo "$OUT" | sed -n 's/^LLM_TOKENS=//p' | tail -1)
 OK=$(echo "$OUT"     | sed -n 's/^LLM_OK=//p'     | tail -1)
 AVAIL=$(echo "$OUT"  | sed -n 's/^TORCH_CUDA_AVAILABLE=//p' | tail -1)
 EXC=$(echo "$OUT"    | sed -n 's/^LLM_EXC=//p'    | tail -1)
+# ★ The device the runner actually used, which is what "on the GPU" means. `run_llm.py` prints it
+# unconditionally (`print('LLM_DEVICE=' + dev)`), so its ABSENCE is also a finding.
+DEV=$(echo "$OUT"    | sed -n 's/^LLM_DEVICE=//p'  | tail -1)
+echo "    LLM_DEVICE_USED=${DEV:-<absent>}"
 
 echo ""
 echo "=== ★★★★★ THE VERDICT, stated once, in the pre-registered vocabulary"
 if [ -z "$TOKENS" ]; then
   echo "    (D) ⊘ UNMEASURED — no LLM_TOKENS= line. NOT 0, NOT a failure value."
   echo "        last lines above are where the ladder stopped."
+elif [ "$TOKENS" -gt 0 ] 2>/dev/null && [ "${OK:-0}" = 1 ] && [ "${DEV:-}" = "cuda" ]; then
+  echo "    (A) ★★★★★ LLM COMPUTE ON THE EMULATED GPU. tokens=$TOKENS device=$DEV — un-forgeable."
 elif [ "$TOKENS" -gt 0 ] 2>/dev/null && [ "${OK:-0}" = 1 ]; then
-  echo "    (A) ★★★★★ LLM COMPUTE ON THE EMULATED GPU. tokens=$TOKENS — un-forgeable."
+  # ⊘⊘ **(A-) TOKENS WITHOUT A DEVICE CLAIM.** Until w712 the (A) arm tested only
+  # `TOKENS>0 && OK=1` — and the CPU control produces BOTH (`provision_guest_llm.sh` records
+  # `cpu_control=… LLM_OK=1 LLM_TOKENS=8`, same prompt, same text prefix). So (A) would have
+  # graded a CPU run as "COMPUTE ON THE EMULATED GPU".
+  #
+  # ★ The result it graded was in fact sound, because `run_llm.py` has NO fallback — `dev` comes
+  # straight from `LLM_DEVICE` and `model.to(dev)` either works or raises. But a criterion that is
+  # correct only because of how the workload happens to be written is not a criterion; it is a
+  # coincidence with a green light. `LLM_DEVICE=` is printed by the runner — so ASSERT it.
+  echo "    (A-) ⊘ tokens=$TOKENS but LLM_DEVICE=${DEV:-<absent>}, not cuda."
+  echo "         NOT a GPU result: the CPU control also returns LLM_OK=1 with tokens."
 elif [ "${AVAIL:-}" = "False" ]; then
   echo "    (C) libcuda saw NO device (TORCH_CUDA_AVAILABLE=False) — an INIT failure."
   echo "        ⊘ do not read this as the data plane."
