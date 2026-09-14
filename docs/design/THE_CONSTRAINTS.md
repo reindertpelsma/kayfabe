@@ -38,8 +38,24 @@ per-doorbell cap stranding UVM's push burst. The raw client strands **zero**, wh
 was green for weeks over the same code path — and is the known-negative that validates the fix as
 inert where it should be and decisive where it mattered.
 
-**Still open:** 7 and 14 (epoll workers, threaded isolates), 12 (any die), 15 (the two disjoint
-vidmem worlds / one reserved object), 16 (memslots as setup).
+### ★ Goal 8 too — and the reactor turns out NOT to be a prerequisite
+
+`[measured w711]` `TWOCLIENT_OUTCOME=(P)`: two raw clients pass the mean test **concurrently** —
+two independent `W392D_OUTCOME=(P)`, `THREADS 8 of 8` each, **28 overlapping pairs of graded
+intervals**. Goal 8 states a mechanism (*"needs an epoll loop in workers"*) as well as an outcome;
+the outcome is met **without** it. Consistent with the earlier survey: 1 worker / 4 workers /
+4 isolates all measured **1.00x**, because RM holds a device-global API lock across the GSP RPC.
+⇒ the reactor buys **liveness isolation**, not throughput.
+
+⚠ **The pass is not clean, and the grade does not say so.** `HOST_DMESG_XID=2` — one
+`Xid 31 MMU Fault: ENGINE CE0` **per client**, the same fault a single-client boot produces once.
+The clients content-verify and grade `(P)` anyway, so it is contained; but a `(P)` here means
+*"the client's own checks passed"*, not *"the host GPU was never faulted"*. ⊘ Concurrency is not
+its cause — it is present with one client — so the reactor must not be built to fix it.
+
+**Still open:** 7 and 14 (epoll workers, threaded isolates — now an improvement, not a blocker),
+12 (any die), 15 (the two disjoint vidmem worlds / one reserved object), 16 (memslots as setup),
+and the per-client host MMU fault above.
 
 ## The list
 
