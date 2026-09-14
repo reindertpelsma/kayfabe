@@ -12,6 +12,35 @@ across `THE_OVERNIGHT_DIRECTIVE.md`, the design docs and agent memory.
 > ⇒ **Functionality is not the deliverable. Functionality UNDER THESE CONSTRAINTS is.** A green
 > workload that meets none of them is a repeat of work already finished in early September.
 
+## ★★★★★ ANSWERED `[measured w708-w710, 2026-09-14]` — all three pass under the constraints
+
+> Owner: *"So is it possible to get raw, cuda and llms under the constraints?"*
+
+| workload | result | BAR1/BAR2 | vCPU blocking |
+|---|---|---|---|
+| raw client (`--uvm-mean`) | **(P)**, `MEAN_FALSIFIER=PASS`, `THREADS 8 of 8` | `TRAP_FILLS=0` | 22 = PRAMIN moves |
+| cup3 (CUDA) | **`CUP3_VAL=43`** — first compute | `TRAP_FILLS=0` | 22 = PRAMIN moves |
+| LLM (Qwen2-0.5B) | **`LLM_OK=1 LLM_TOKENS=16`** | `TRAP_FILLS=0` | 32 = PRAMIN moves |
+
+At LLM scale: **22 671 doorbells arrived, 22 517 served, 8 refused**; `slots peak=1032`;
+`HOST_DMESG_XID=0`.
+
+⇒ Constraints **1** (no BAR1/BAR2/PRAMIN traps), **2** (BAR0 write-only bar the counter page),
+**4/8** (the only vCPU blocking is the boot-time PRAMIN re-point you ruled sufficient) and **5**
+hold across all three workloads, including the one that generates twenty-two thousand doorbells.
+
+★ **The premap-scaling fear was unfounded.** `distinct_pages=912` for BAR1 under the LLM — the
+SAME as under cup3 — because the BAR1 working set is bounded by the 256 MiB aperture, not by model
+size. "Zero traps is workload-limited" was a real risk and it is now measured false.
+
+⊘ What unblocked all three was ONE bug (`the_uvm_map_external_allocation_wall.md`): the
+per-doorbell cap stranding UVM's push burst. The raw client strands **zero**, which is why goal 7
+was green for weeks over the same code path — and is the known-negative that validates the fix as
+inert where it should be and decisive where it mattered.
+
+**Still open:** 7 and 14 (epoll workers, threaded isolates), 12 (any die), 15 (the two disjoint
+vidmem worlds / one reserved object), 16 (memslots as setup).
+
 ## The list
 
 1. **No traps in BAR1, BAR2 or PRAMIN.**
