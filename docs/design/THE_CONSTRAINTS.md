@@ -1106,3 +1106,31 @@ condition (§w724g).
 *improved* by exactly that (15 and 19 superseded, 18 satisfied by construction, 22 widened to be
 symmetric). The rule is not "never change a constraint". It is **never change one silently, and
 never to make a test go green.**
+
+### ★★★ A NEGATIVE RESULT IS A DELIVERABLE
+
+> **Owner, 2026-09-15:** *"so stopping saying I cannot satisfy these constraints but my alternative
+> that doesn't use it is not better either, has bad performance or is unstable, thats a conclusion
+> also worth tomorrow."*
+
+⇒ **"I could not satisfy the constraints, and the alternative that abandons them is no better —
+here is the measurement"** is a **result**, not a failure to report one. It maps the design space,
+which is the thing that was actually unknown.
+
+★ Stated because the pressure at the end of a long autonomous run points exactly the other way:
+toward arriving with *something* green. ⊘ A green bought by relaxing a constraint (above) is worth
+**less than nothing** — it costs the session *and* leaves a false record. A measured dead end costs
+only the session.
+
+**What makes a negative result good rather than a shrug** — all four, or it is a shrug:
+
+1. **What was tried**, concretely enough to not be retried by accident.
+2. **Where it stopped**, by name — a refusal, a number, a wall — never *"it didn't work"*.
+3. **What the alternative cost**, measured: *"bad performance"* is a claim; **`N ms` against a
+   budget of `M`** is a result.
+4. **What would change the answer** — the measurement, ruling or capability that would reopen it.
+
+⊘ And the alternative's numbers are held to the **same** standard as the constraint-honouring path:
+a comparison against an unmeasured alternative is not a comparison. ⚠ This tree already records the
+shape — *"the CPU path costs ~3 min"* was only meaningful once someone measured the GPU path at
+462 ms and then again at 205 µs.
