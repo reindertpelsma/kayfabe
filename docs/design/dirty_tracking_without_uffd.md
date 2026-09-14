@@ -223,3 +223,66 @@ entirely.
 
 24 MB of tables = 6144 pages ⇒ a **768-byte bitmap**. The kernel reads live + shadow = 48 MB at
 ~360 GB/s ≈ **133 µs**. Only the bitmap crosses the link.
+
+## ★★★★★ w720d — FOUR REFINEMENTS FROM THE OWNER, one of which changes the arithmetic
+
+### 1. The kernel COMPARES AND UPDATES in one pass
+
+> *"the compare PTX also directly writes the old so we don't have to do another slower CE copy."*
+
+One launch: read live, compare against shadow, write changed bytes **into** the shadow, emit the
+bitmap. ⇒ The second CE disappears.
+
+⚠ **The hazard this introduces, and it must be designed in from the start.** The shadow advances
+**whether or not we successfully consume the bitmap**. An error between the kernel completing and
+the changed pages being acted on loses that change **permanently** — the next diff sees
+`shadow == live` and reports clean. ★ This is the classic *dirty bit cleared before the work
+committed*. ⇒ Carry a **generation counter**, and make **any** error on the consume path force a
+full refresh rather than a diff.
+
+### 2. ⊘ NO host-side shadow at all — the Rust model IS the "old"
+
+> *"best if we just rely on our internal table that already contains all va mappings in Rust
+> structures rather than duplicating an old version of the table on the host ram."*
+
+★ We already maintain the decoded VA→GPGA model. Comparing **decoded model vs freshly-read table**
+answers the same question as byte-diffing, without duplicating megabytes of host RAM.
+
+⇒ **The shadow becomes purely a PTX-path artifact, living in vidmem.** The fallback path has no
+shadow to keep coherent, so the two paths never have to agree about one — which removes the
+worst class of bug a dual-path design would otherwise have.
+
+### 3. ★★★ READ FROM A PRIVATE SNAPSHOT — a correctness fix independent of dirty tracking
+
+> *"the CE copy batches it to our VM va (private) and then we use that copied version to act on for
+> reading tables (since its private, the guest cannot change underneath us after copy)."*
+
+Today a walk reads memory **the guest can mutate mid-walk**: two entries read a microsecond apart
+can come from different generations, and the decoded result is a tree **that never existed**.
+Copying into our private VMM VA first makes consistency **structural** rather than a timing
+assumption.
+
+⇒ Worth doing **on its own merits**, before and independently of any of the dirty-tracking layers.
+
+### 4. ⚠ BATCHING IS PER-LEVEL, NOT PER-REFRESH — and this corrects §"Idea 4" above
+
+> *"further copies can be later batched inside a single refresh, for example where leaves are is
+> only possible if you decoded and read the base."*
+
+A refresh **cannot** be one CE batch: the leaf addresses are unknown until the level above is
+decoded. ⇒ **One batch per level, levels serial** — four to five round trips per refresh on Ampere
+(PD3→PD2→PD1→PD0→PT), so ≈5 × 1178 ≈ **6k submissions a boot**, not 1178.
+
+⊘ Still cheap, but it is **5× the figure quoted earlier in this file**, and it is a **hard floor**
+for the CE-only path. Within a level, batch everything.
+
+★★★ **This is where layer 3 earns its place a SECOND time, beyond bandwidth.** A GPU kernel can
+**pointer-chase on the GPU** — root to leaf without returning to the host per level — collapsing
+four or five serial round trips into **one launch**.
+
+⚠ Cost: PTE/PDE field decode moves **into the kernel**. Only bit extraction, but it is real format
+knowledge in a new place, and it is per-format (VER2 here, VER3 on Hopper+).
+⊘ **A cheaper middle exists and should be chosen deliberately, not by default:** the kernel diffs
+only the page set discovered by the **previous** refresh, and newly-appeared tables are picked up
+on the next one — sound because the table set changes slowly, and it keeps all format knowledge on
+the host.
