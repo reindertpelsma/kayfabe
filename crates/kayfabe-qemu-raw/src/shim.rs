@@ -14829,6 +14829,16 @@ impl Regs {
         // ⊘ Printed on BOTH arms. A configuration that only announces itself when enabled
         // makes the control arm's log indistinguishable from an older binary's — the rule this
         // file already applies to the ring, the join and the doorbell.
+        // ★★★★★ **§22 item 3's SIZING RELATION, printed every boot** — queried from the
+        // board, never compared against a literal (§22(b): *"256 MiB is ONE measured board,
+        // not a spec … it is a queryable property"*).
+        //
+        // ⊘ A census and not a gate, today: nothing holds a BAR1 device view yet (increment 3
+        // waits on decision (b)'s ruling), so there is no consumption to bound and a refusal
+        // would refuse every boot for a design that is not switched on. It reports so the
+        // number is on record BEFORE the design depends on it — and so the ruling can be given
+        // against a measurement rather than an estimate.
+        crate::bar1budget::census(chip.pci_bar_len(kayfabe_abi::pcibars::bus_bar::FB));
         let fb_trap = selected_fb_trap()?;
         plane.set_fb_trap_policy(fb_trap);
         eprintln!(
