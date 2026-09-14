@@ -17303,6 +17303,15 @@ impl Regs {
                 residue.saturating_sub(coalesced)
             );
         }
+        // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
+        // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and
+        // `gpga_is_one_reserved_object.md` disagree about it, and neither carries a
+        // measurement. `kayfabe_device::twoworlds` records it; this prints it.
+        //
+        // ⊘ The line states its own verdict rather than a bare count, including refusing to
+        // read a one-sided census as "disjoint" — an empty intersection with an empty side is
+        // vacuous, and a vacuous zero is indistinguishable from a healthy one.
+        eprintln!("{}", kayfabe_device::twoworlds::report());
         // ★★★★ §16.65 — the per-engine census, read from the SAME shared shell state the
         // routing decision tallies into (`SharedDoorbell::try_ce_submission`). ⊘ Not
         // re-derived from the object model here: a second walk of the channel table could
