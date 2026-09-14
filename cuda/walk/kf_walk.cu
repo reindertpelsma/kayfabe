@@ -2054,7 +2054,6 @@ extern "C" void kf_ack(KfWalk *w, uint64_t g)
  * count, so no phase needs a device-to-host synchronisation. Warps past the real
  * frontier read one word and retire; synchronising would cost more than they do.
  */
-static uint32_t kf_min_u32(uint32_t x, uint32_t y) { return x < y ? x : y; }
 
 #ifdef KF_PHASES
 /* ⊘ A measurement, not a feature. `[w726]` the fixed cost of a parallel refresh

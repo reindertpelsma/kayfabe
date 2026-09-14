@@ -2236,6 +2236,53 @@ static void t_format_sparse_is_counted(void)
     if (g_fails_here) dump(f);
 }
 
+
+/* ══ KIND IS PART OF RUN IDENTITY ═══════════════════════════════════════════
+ *
+ * `[found w725, replaying real driver tables]` 6 986 of 7 008 real leaf PTEs set
+ * KIND, and `kf_tables.h` had never written one -- so every synthetic run in
+ * this suite carried a uniform kind and could not have caught a regression here.
+ * The real-table differential is the case that exercises it against a driver;
+ * this is the one that pins it in milliseconds.
+ *
+ * A run is the unit the host publishes as ONE mapping and one mapping carries
+ * one kind. Merging across a change of it makes an engine misread a surface the
+ * guest wrote correctly: no fault, no refusal, wrong data.
+ */
+static void t_kind_joins_run_identity(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    /* 64 pages, contiguous in VA and in GPGA, identical permissions -- and a
+     * change of KIND at the halfway point and nowhere else. */
+    for (uint32_t i = 0; i < 64; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x800000ull + (uint64_t)i * 4096ull,
+                AP_PTE_VID, (i >= 32) ? ((uint64_t)9 << 56) : 0ull);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {
+        {VBASE,                   0x800000ull, 32ull * 4096ull, F4K, KFWR_OP_MAP},
+        {VBASE + 32ull * 4096ull, 0x820000ull, 32ull * 4096ull,
+         F4K | (9u << KFWR_RF_KIND_SHIFT), KFWR_OP_MAP},
+    });
+}
+
+static void t_kind_uniform_is_one_run(void)
+{
+    /* The control. Identical geometry, ONE kind throughout: the two halves must
+     * merge, or the case above would be passing because the walk splits runs for
+     * some other reason. */
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 64; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x800000ull + (uint64_t)i * 4096ull,
+                AP_PTE_VID, (uint64_t)9 << 56);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x800000ull, 64ull * 4096ull,
+                F4K | (9u << KFWR_RF_KIND_SHIFT), KFWR_OP_MAP}});
+}
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
@@ -2243,6 +2290,9 @@ static const Case CASES[] = {
     { "format/refuses_untested_ver3",           t_format_refuses_untested_ver3 },
     { "format/report_is_self_describing",       t_format_report_is_self_describing },
     { "format/sparse_is_counted",               t_format_sparse_is_counted },
+
+    { "correctness/kind_joins_run_identity",    t_kind_joins_run_identity },
+    { "correctness/kind_uniform_is_one_run",    t_kind_uniform_is_one_run },
 
     { "correctness/single_4k",                  t_single_4k },
     { "correctness/large_pages_64k_2m_512m",    t_large_pages },

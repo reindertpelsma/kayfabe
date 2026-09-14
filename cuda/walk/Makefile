@@ -28,6 +28,17 @@ check-invariants:
 	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -q 'while'; then \
 	   echo "I1 FAIL: a while loop on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no while loop in kf_walk_one"
+	@for f in kf_par_decode_slot kf_par_expand_one kf_par_chunks kf_par_leaf_one; do \
+	   if awk "/__device__ __forceinline__ (bool|void) $$f/,/^\}/" kf_walk.cu | grep -q 'while'; then \
+	     echo "I1 FAIL: a while loop on the guest-data path in $$f"; exit 1; fi; \
+	 done; \
+	 echo "I1 ok: no while loop anywhere on the PARALLEL guest-data path"
+	@if ! grep -q 'for (uint32_t k = F.first_dir; k < KF_DIRS; k++)' kf_walk.cu; then \
+	   echo "I1 FAIL: the parallel walk's DEPTH is not a KF_DIRS-bounded host loop"; exit 1; fi; \
+	 echo "I1 ok: the parallel walk's depth is a compile-time-bounded launch loop"
+	@n=`grep -cE '< KF_MAX_FRONTIER &&' kf_walk.cu || true`; \
+	 if [ "$$n" -lt 6 ]; then echo "I1 FAIL: only $$n parallel loops carry the frontier cap, want >= 6"; exit 1; fi; \
+	 echo "I1 ok: $$n parallel loops bounded at compile time by KF_MAX_FRONTIER"
 	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | tail -n +2 | grep -qE '\bgoto\b|kf_walk_one\('; then \
 	   echo "I1 FAIL: a goto or a recursive call on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no goto, no recursion"
@@ -40,6 +51,9 @@ check-invariants:
 	@if grep -nE '^\s*(#define )?(KF_PD3_N|KF_SH_PD3|VER2_ADDR_|0x3f)' kf_walk.cu | grep -v '^\s*\*'; then \
 	   echo "SEAM FAIL: a VER2 geometry constant is still in the kernel"; exit 1; fi; \
 	 echo "seam ok: no VER2 geometry constants left in the kernel"
+	@if ! grep -q 'KFWR_R_FRONTIER_CAP' kf_walk.cu; then \
+	   echo "I3 FAIL: the parallel walk's frontier has no loud cap"; exit 1; fi; \
+	 echo "I3 ok: the frontier and task caps are loud"
 	@n=`grep -c 'KFWR_HF_TRUNCATED' kf_walk.cu || true`; \
 	 if [ "$$n" -lt 3 ]; then echo "I3 FAIL: truncation set from fewer than 3 sites"; exit 1; fi; \
 	 echo "I3 ok: truncation raised from $$n sites"
