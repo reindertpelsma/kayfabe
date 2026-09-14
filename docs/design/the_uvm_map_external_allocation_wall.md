@@ -253,6 +253,40 @@ not spinning.
 far gave cup3 10-60 s. If it completes at 600 s this is a performance problem, not a hang, and
 every "why does it never finish" framing above is the wrong question.
 
+## ★★★★★ 4f. SETTLED: STUCK, NOT SLOW — and it is the SEVENTH map
+
+`[measured w703]` cup3 given a **600-second** budget. Every prior run had 10-60s, so *"why does it
+never finish"* had been asked without ever giving it room to finish.
+
+Sampled from the guest **while still stuck**:
+
+    total_ioctls=122   map_calls=6   unfinished=0
+    last: 23:53:50.611213 ioctl(9, _IOC(_IOC_NONE, 0, 0x21, 0)     <- never returns
+    /proc/PID/stat: state=R  utime=19  stime=58015 ticks = 580 SECONDS
+    /tmp/cup3.out:  still only cuInit / cuDeviceGetCount / cuDeviceGet
+
+⇒ **STUCK.** One `UVM_MAP_EXTERNAL_ALLOCATION` ran ~10 minutes without returning, burning kernel
+CPU throughout. Not deadlocked — looping, doing work, forever.
+
+★★★ **Six maps RETURN; the SEVENTH does not.** The call is not broken; a particular invocation is.
+That is the sharpest fact this wall has produced and it is what any fix must explain.
+
+### Leading hypothesis (untested)
+
+The seventh map's range is built at the wrong page **granularity** — 4 KiB where it should be
+large-page — making the page tree 512x-32768x too large, which is why `clear_page_rep` dominates.
+⊘ Consistent with #6 in the ledger: halving the advertised FB moved the zeroing share 42.27% ⇒
+30.14% *proportionally* while the stall stayed identical — the mark of a range whose size tracks
+what we advertise, built at a granularity that makes it unpayable either way.
+
+### How to read the stuck call's parameters (it is live while it hangs)
+
+`UVM_MAP_EXTERNAL_ALLOCATION_PARAMS` is `{base@0, length@8, offset@16}`, readable from
+`/proc/PID/mem` at the pointer strace prints. ⚠ Take the pointer from the **`0x21` line itself**:
+`cut -c1-100` truncated it and I read the PRECEDING `0x49` call's buffer, getting
+`base=0 length=1 offset=0xc1d0…` — an RM client handle, which is the tell that the offsets were
+not the struct I thought.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
