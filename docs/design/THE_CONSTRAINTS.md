@@ -596,3 +596,48 @@ garbage field offsets and look like a page-table bug.
 ⊘ **Keep an independently-written table builder in the TESTS.** `cuda/walk/kf_tables.h` was
 written from `dev_mmu.h` sharing no code with either decoder, which is what made the 1212-leaf
 differential meaningful. Production reads one descriptor; the oracle stays independent.
+
+## 22 — WE DO NOT LIE ABOUT THE APERTURE
+
+**Owner, 2026-09-14:** *"if the guest says this is now in vidmem, its in vidmem. We don't lie about
+aperture anymore, even PT\*/PD\* aperture in vidmem is correct now. With this, I think it has a
+higher chance that windows boots as its different nvidia code we don't see. We are more close to
+hardware."*
+
+★★★ **Today the guest's own page tables are FALSE.** A PTE says `APERTURE = VIDEO_MEMORY` and the
+bytes are in host RAM behind a DMA mapping. Every consumer of that field — bandwidth expectations,
+coherence rules, atomics behaviour, compression/comptaglines — is being told something untrue.
+§18 named the residence half of this; **22 names the wider one: the aperture field itself.**
+
+⇒ Under one reserved device-local object the field is **true**, for user buffers and for PT\*/PD\*
+pages alike.
+
+### ★ Why this is a STRATEGY argument, not a tidiness one
+
+**Hardware faithfulness is the only approach that does not require having anticipated each check.**
+Every lie must be matched by a place where we noticed the guest would check, and the set of such
+places is only knowable for drivers we have traced. ⇒ For **Windows** — NVIDIA code this project
+has never seen — a lie is a bug we cannot enumerate in advance, while the truth needs no
+enumeration at all.
+
+⊘ It also turns a class of would-be special cases into non-events: a comptagline on real video
+memory means what the hardware says it means, where on substituted system memory it meant nothing.
+
+## ⚠ w721 — THREE THINGS TO SETTLE BEFORE THE SHAPE IS COMMITTED
+
+1. **Deletions come LAST.** reserved object → BAR1/BAR2 device views → walker wired → *then*
+   delete fake fb, join, arena, demand-fill mirror, host parsing. ⊘ If deletion rides along, the
+   tree is broken across a long stretch with no working intermediate and no way to bisect which
+   half broke the raw client.
+2. **"No populate on fault" must be proved, not assumed.** `TRAP_FILLS=0` is measured **with**
+   demand-fill still present as a backstop; removing it needs the premap complete **by
+   construction**. ⇒ Cheap test: make the trap path **refuse by name**, boot, and see whether the
+   refusal ever fires.
+3. ★★★ **HOST BAR1 IS THE BINDING LIMIT, AND IT IS SMALL.** `[measured]` a **256 MiB CPU view
+   refused with `NoMemory` while a 6144 MiB reservation succeeded in the same process.** Host BAR1
+   on a GA106 is **256 MiB total, shared with the host driver**; our advertised guest BAR1 is
+   **also 256 MiB**.
+   ⇒ **The reservation is bounded by video memory; simultaneous CPU views are bounded by BAR1.**
+   Those are different numbers by a factor of ~24, and the design currently assumes only the
+   first. This may force BAR1 views to be **recycled** rather than all-resident — which is what
+   PRAMIN does, and why the hardware has one. **Settle before the reserved object lands.**
