@@ -1388,6 +1388,7 @@ __device__ __forceinline__ void kf_par_abort(KfDev *d, unsigned int bit)
     atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
     atomicOr(&d->walk_trunc, 1u);
     atomicOr(&d->walk_abort, 1u);
+    if (bit == KFWR_R_BUDGET) atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
     kf_par_refuse(d, bit);
 }
 __device__ __forceinline__ bool kf_par_aborted(const KfDev *d) { return d->walk_abort != 0u; }

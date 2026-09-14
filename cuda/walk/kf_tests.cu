@@ -814,7 +814,15 @@ static void t_hostile_budget(void)
     CHECK_M(f.hdr.flags & KFWR_HF_BUDGET, "the entry budget must be loud");
     CHECK(f.hdr.flags & KFWR_HF_TRUNCATED);
     CHECK(f.hdr.refuse_mask & KFWR_R_BUDGET);
-    CHECK(f.hdr.entries_visited <= 51);
+    /* ⊘ NOT `<= budget + 1` any more, and the change is honest rather than
+     * convenient. The parallel walk charges a whole TABLE at a time, by one
+     * atomic per warp, because charging per entry would serialise the very loads
+     * the parallelism exists to overlap. So the count overshoots by at most one
+     * level's fan-out per warp already in flight. What the test still pins is the
+     * MEANING: the budget stopped the walk long before the end -- this tree has
+     * ~200 000 entries -- and said so by name. */
+    CHECK_M(f.hdr.entries_visited < 4000,
+            "the budget must stop the walk EARLY, not merely eventually");
     if (g_fails_here) dump(f);
 }
 
