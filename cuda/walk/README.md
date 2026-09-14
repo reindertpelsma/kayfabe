@@ -10,20 +10,33 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `kf_walk.h` | the report ABI (the format doc's 64/32/32 structs) + the host API |
 | `kf_walk.cu` | the **format descriptor**, the walk, the coalescer, the per-class diff, the report |
 | `kf_tables.h` | a **host-side** GA10x VER2 table builder — test scaffolding |
-| `kf_tests.cu` | 58 cases: **format seam**, correctness, change detection, round-trip closure, hostile, racing, scope, differential |
+| `kf_tests.cu` | 59 cases: **format seam**, correctness, change detection, round-trip closure, hostile, racing, scope, differential (synthetic **and real-driver**) |
 | `kf_corpus.cpp` | builds the differential corpus (host-only, `g++`, no GPU) |
-| `corpus/` | `corpus.bin` (15 images) + `rust_leaves.txt` (the Rust walker's decode) |
+| `kf_real_tables.py` | ★ extracts page tables a **real NVIDIA driver** wrote, out of a `.rec` capture |
+| `kf_report_emit.c` | ★ the C half of the C↔Rust report seam: `offsetof` manifest + a report |
+| `kf_bench.cu` | ★ the walk's **cost**, against the design's own table sizes |
+| `corpus/` | `corpus.bin` (15 synthetic images) + `real_ga106.bin` (5 **real** ones) + each one's `*_leaves.txt` (the Rust walker's decode) |
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
+| `evidence/` | dated run logs, each naming its GPU and driver |
 
 The Rust half of the differential is
-`crates/kayfabe-mmu/tests/walk_kernel_differential.rs`.
+`crates/kayfabe-mmu/tests/walk_kernel_differential.rs`, and the report ABI's own seam test is
+`crates/kayfabe-mmu/tests/walk_report_seam.rs` against `kayfabe-mmu/src/walkreport.rs`.
 
 ## Building
 
 ```
 make check          # invariants, build, PTX-only check, known-positive
 ./kf_tests          # the suite;  ./kf_tests hostile   filters
+make kf_bench && ./kf_bench          # the cost measurement (see THE WALK'S ACTUAL COST)
 ./run_on_box.sh tag # from a workstation, against a disposable CUDA container
+```
+
+The real-driver corpus is regenerated locally, with no GPU:
+
+```
+python3 kf_real_tables.py                                   # -> corpus/real_ga106.bin
+KF_WRITE_EXPECTED=1 cargo test -p kayfabe-mmu --test walk_kernel_differential
 ```
 
 `nvcc -gencode arch=compute_75,code=compute_75` — **PTX only, no cubin**, so the
@@ -155,6 +168,90 @@ and requires failure, with an unbroken control:
 so the flag silently became a no-op and its binary was identical to the control.
 It was caught only because `check-closure-negative` *requires* that control to
 fail. A control that merely reported would have gone on passing.
+
+## ★★★★★ TABLES A REAL NVIDIA DRIVER WROTE — `differential/real_driver_tables`
+
+⊘⊘⊘ Every other case in this suite builds its tables with `kf_tables.h`, **our own builder,
+encoding our own understanding of VER2**. The differential against the Rust walker does not
+close that gap: both decoders share the understanding. Only tables a real driver wrote can.
+
+`corpus/real_ga106.bin` is **five address spaces a stock, unpatched NVIDIA open 580.159.04
+guest driver built on a real GA106**, lifted out of `traces/cap1b_coldboot_hermetic_d6.rec`
+by `kf_real_tables.py`. No new capture was needed — that trace records every trapped MMIO
+access, and the driver builds its tables *in the stream*: the directory spine through the
+**PRAMIN window** (BAR0 `0x700000..`, base latched at `0x1700`), the leaves through the
+**BAR2 self-map**, whose addresses are *virtual* and must be translated through the very
+tables being built.
+
+★★★ **The self-consistency proof: all 177 856 BAR2 writes translate, with ZERO misses.** A
+wrong field position, a wrong fan-out, or the dual PDE's two halves the wrong way round could
+not do that. ★ Independently corroborated: the `UPDATE_BAR_PDE` RPC recorded **inside CPU-RM**
+by a different instrument (`traces/rpctrace_ga106_boot1.bin`, fn 70, `barType=1`,
+`levelShift=47`) carries `entryValue=0x2efbc302` — **bit-identical** to the root PDE
+reconstructed here from MMIO.
+
+`[measured 2026-09-14, RTX 3060]` **7 005 leaves, five images, agreed EXACTLY** between the
+kernel and `kayfabe-mmu`'s Rust walker.
+
+### ⊘⊘⊘ AND THE FINDING — real tables carry two fields our builder cannot produce
+
+| field | real driver | `kfb_pte()` |
+|---|---|---|
+| `KIND` (63:56) | `9` on 6 017, `6` on 959, `0` on **22** | always 0 — unreachable |
+| `COMPTAGLINE` (55:36) | non-zero on 6 017 | always 0 — unreachable |
+
+**99.7 % of real leaf entries are encodings no case in this suite had ever contained.**
+`kfb_pte()` only ever writes bits 0..7 and the address field.
+
+- ✔ **The decode is unaffected**, and that is now checked rather than hoped: VER2's vidmem
+  address field is 32:8, below both, and both decoders mask them off identically.
+- ⊘ **The COALESCER is affected, and nothing had decided it.** Run identity is *(contiguous
+  VA, contiguous GPGA, equal decoded flags)* and the decoded flags carry no `KIND`. On the
+  real 12 GiB address space at root `0x2efa6c000`: **1 run emitted, 3 runs if `KIND` and
+  `COMPTAGLINE` were part of the identity**, with two boundaries at which the guest changed
+  memory kind across contiguous VA *and* contiguous physical addresses under identical
+  permissions. That is very likely the right call — `KIND` is how the *GPU* interprets bytes,
+  not where they live, and the host publishes addresses — but it was a **blind spot, not a
+  decision**, and it should become one.
+
+Everything else matched what the builder already produces: the sparse encoding is exactly
+`VOL` set with `VALID` clear (8 358 occurrences), the dual PDE's big half is the LOW word and
+the small half the HIGH word, every permission-bit combination the driver used is one
+`kfb_pte()` can spell, and the observed PD0 slot shapes are all shapes the corpus already has.
+
+⚠ **Scope.** These are the driver's **BAR2 / GSP-bootstrap** address spaces. They are *not*
+the ~1872-page user/compute working set of w422 — that was a live count on a rented box and
+the pages were never persisted anywhere in this tree. `cap1b` is a hermetic emulator capture,
+so the *physical addresses* are the emulator's FB layout; the **entry encodings are the real
+driver's**, and that is what is under test. `kf_real_tables.py`'s header states the rest.
+
+## ★★★★★ The C↔Rust report seam — `crates/kayfabe-mmu/tests/walk_report_seam.rs`
+
+⊘ Until w725, `grep -rn "ReportHeader\|kf_report" crates/ --include=*.rs` returned **nothing**.
+The report — the struct increment 6 consumes — was declared in `kf_walk.h` and nowhere else,
+and the differential above compares through a *corpus file*, so it never touched the report
+ABI at all.
+
+`kayfabe-mmu/src/walkreport.rs` is the parser (header + `PdbEntry[]` + `MapRun[]`,
+bounds-checked, every refusal named, and **no format-version knowledge** — page size resolves
+through the header's `ps_log2`). `kf_report_emit.c` is the C half: it prints the **C
+compiler's own `offsetof`/`sizeof`/`_Alignof`** and every `KFWR_*` constant, then writes a
+report *and* an independent account of what it put in each field. The test compares the Rust
+pins against that compiler and the Rust parse against that account — neither side is something
+Rust produced.
+
+★ **Why pins and not a round trip:** `NVOS34` (`kayfabe-abi/src/submit.rs`) — a field at +12
+instead of +16 encodes, decodes and round-trips **against itself**, with every byte wrong.
+The known-positive `-DKF_SEAM_BREAK_LAYOUT` transplants that exact defect (a 4-byte hole
+before `MapRun::flags`) and the test requires the catch **and** requires it to name that field
+at +28, so a break caught for the wrong reason still fails.
+
+⊘ **Nothing was at a wrong offset — but two things were wrong anyway.** `kf_walk.h`'s own
+comment still claims the header reaches 64 bytes with `pad`, when it does so with
+`sparse_slots` + `ps_log2[4]`; and **`kf_refresh` does not produce one report buffer at all**
+— it does three `cudaMemcpy`s sized by *count* into three separate host arrays
+(`kf_walk.cu:1286-1290`), so the format doc's *"a small output buffer"* does not yet exist.
+The parser reads both shapes (`parse_parts` and the packed `parse`).
 
 ## ★★★★★ Delta round-trip closure
 
@@ -295,11 +392,68 @@ whole argument for making the check structural rather than probable.
    make the walk faster, never wrong* — is asserted directly by
    `scope/cannot_make_the_walk_wrong`.
 
+## ★★★★★ THE WALK'S ACTUAL COST — measured, and it is not 67 µs
+
+`[measured 2026-09-14, RTX 3060 sm_86, driver 550.107.02, median of 11 after 3 warmups;
+evidence/w725_bench_2026_09_14_rtx3060_550.107.02.log]`
+
+`dirty_tracking_without_uffd.md` and `gpga_is_one_reserved_object.md` size increment 6's
+refresh budget on **"a full walk is ~67 µs"**. `kf_bench.cu` measures it against the two
+sizes those docs name. ⊘ **The number is the deliverable; nothing here asserts a threshold.**
+
+| | entries | runs | refresh | vs 67 µs |
+|---|---:|---:|---:|---:|
+| **measured working set** — 1872 PT pages, 7.3 MiB, 3.66 GiB at 4 KiB | 961 540 | 1 | **462 ms** | **6 894×** |
+| **worst case** — 12 GiB at 4 KiB, 6144 PT pages, 24 MiB | 3 152 900 | 1 | **1.513 s** | **22 586×** |
+| the same 12 GiB at **2 MiB** | 13 316 | 6 144 | **26.8 ms** | 400× |
+| real GA106 driver tables, largest of five | 8 228 | 6 | 4.5 ms | |
+
+⇒ **The refresh budget does not close.** 1178 refreshes a boot × 462 ms = **544 s ≈ 9 minutes
+of GPU time per boot**, for the *measured* working set, not the worst case.
+
+### The cost model, and it fits within 0.5 %
+
+    t  ≈  0.48 µs × entries_visited  +  1.4 µs × runs
+
+Obtained by holding entries constant at 961 540 and fragmenting the tables so the same walk
+produces 1 → 29 952 → 119 808 → 479 232 → 958 464 runs (462 ms → 1.81 s). ⇒ **the descent
+dominates** at any realistic run count; coalescing only becomes comparable when nearly every
+page is its own run.
+
+### ⊘⊘⊘ Three things the measurement kills, and one it opens
+
+- ⊘ **"Most refreshes find nothing changed" does not rescue it.** An *acked* refresh over
+  unchanged tables emits an empty delta and costs **466 ms** — the same. The descent happens
+  regardless of whether anything moved; that is the design's own "liveness is derived from
+  reachability, never tracked", priced.
+- ⊘ **It is not a bandwidth problem, so it is not a hard floor.** 961 540 entries × 8 B =
+  7.7 MB; at the 3060's ~360 GB/s that is **21 µs**. The 67 µs target is ~3× the bandwidth
+  bound — **comfortably achievable in principle**. This implementation misses it by ~6 900×
+  because it uses **one thread of the 43 008** the part can run.
+- ★★★ **And the parallel axis proves exactly that.** One refresh over N address spaces, one
+  thread each: **16× the entries for 1.18× the time** (29.9 ms → 35.2 ms; 448 → 33 ns/entry).
+  The walk is **latency-bound, not bandwidth-bound**: each thread is stalled on a dependent
+  global load almost all of the time. 480 ns at 1.78 GHz is **~854 cycles per 8-byte entry**,
+  which is one full memory round-trip — consistent with `KF_GPGA_DEREF` reading through a
+  `const volatile uint64_t *`, which by construction forbids the compiler from batching or
+  reordering the loads within a page table. ⚠ Named as the mechanism the evidence points at,
+  **not isolated**: no build with the qualifier removed has been measured, and it cannot
+  simply be dropped — the `race/*` cases depend on seeing the guest's concurrent writes.
+
+⇒ **The fix is parallelism, and the measurement says it will work**: the README's own
+"parallel decomposition over (PD3, PD2) subtrees" is the right next step, and the 16-VAS
+result is direct evidence that the hardware has the throughput sitting idle. A second,
+independent lever is **page size** — the same 12 GiB costs 56× less at 2 MiB than at 4 KiB.
+
+⚠ Do not read these as a tuned number. Nothing was tuned; `kf_bench` times the walk exactly as
+`kf_tests` exercises it, which is the point.
+
 ## Deliberate scope limits
 
 - **One thread per address space.** Correctness and a deterministic, already-
   sorted run order came first; the doc's *"a full walk is ~67 µs"* is not a claim
-  this implementation makes. A parallel decomposition over (PD3, PD2) subtrees is
+  this implementation makes — and is now **measured at 6 894× off** for the design's own
+  working set (see above). A parallel decomposition over (PD3, PD2) subtrees is
   the obvious next step and would need a boundary-joining compaction.
 - **The diff is single-threaded**, because it is a linear scan over two sorted
   lists per page-size class, producing a dense report.

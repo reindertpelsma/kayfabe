@@ -11,6 +11,9 @@ CFLAGS ?= -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompile
 
 all: kf_tests
 
+kf_bench: kf_bench.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -o $@ kf_bench.cu kf_walk.cu -lpthread
+
 kf_tests: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
 	$(NVCC) $(ARCH) $(CFLAGS) -o $@ kf_tests.cu kf_walk.cu -lpthread
 
