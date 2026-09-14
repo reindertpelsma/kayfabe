@@ -84,3 +84,69 @@ are dense — then the bytes must cross regardless and batched CE (4) is the ent
 ⊘ It is cheap and needs no new machinery: the refresh already re-reads the tables, so hashing each
 page and counting changes is a small patch on the existing boot path. **One boot answers it.**
 ⇒ Take this number before building any of 1, 2′ or 3.
+
+## ★★★ w720b — THE RESEARCH VERDICT: 2 IS DEAD, 2′ SURVIVES, 1 IS HALF-AVAILABLE
+
+Read from `ogkm 610.43.02`. ⊘ **Idea 2 (a spare bit as an explicit dirty marker) must not be
+built**, and the reason is not aesthetic — it is **two silent false negatives**, the dangerous
+direction:
+
+1. **The read-modify-write path preserves the bit verbatim.**
+   `virt_mem_allocator_gm107.c:1797-1802` — when `bReadPtes` is set (any update that is not
+   `UPDATE_ALL` and not an invalidation, `:2222`) RM `portMemCopy`s the existing entry out,
+   edits fields, writes it back. No masking, no validation. ⇒ **RM changes a PTE meaningfully and
+   our marker survives; the detector reports "unchanged".**
+2. **Table relocation bulk-copies entries** (`_gmmuWalkCBCopyEntries`, `gmmu_walk.c:1009-1010`,
+   raw `memmgrMemCopy`). The bit survives a table move.
+
+And the bit was never safe to begin with:
+- On the **Turing/Ampere** headers the VER2 PTE has **zero unnamed bits** — all 64 are claimed.
+- ⊘ The two `dev_mmu.h` copies in this tree **disagree about bits 54:55**: `gp100/dev_mmu.h:150`
+  gives `COMPTAGLINE (18+35):36` = 53:36, `tu102/dev_mmu.h:636` gives `(20+35):36` = 55:36 — and
+  `uvm_turing_mmu.c:299` comments "53:36" while compiling against 55:36.
+- ⚠ No `_RESERVED`/`_IGNORED`/`_SPARE` field exists in any `dev_mmu.h` here, and the source states
+  the MMU reads fields one would expect it to ignore: *"When VALID == 0, MMU still reads the VOL
+  and PRIV fields"* (`uvm_turing_mmu.c:233-235`). ⇒ **The source cannot certify any bit as
+  hardware-ignored. Do not stake the design on it.**
+
+★ **2′ (per-page hashing) is untouched by all of the above**, because it compares **content**: an
+RMW edit shows up, a relocation shows up, and it assumes nothing about which bits hardware reads.
+⇒ The research turns *"prefer 2′"* into *"2′ is the only safe one of the two."*
+
+### Idea 1 — available for UVM, never for RM
+
+| | targeted range? | detail |
+|---|---|---|
+| **UVM** | **yes** | `tlb_invalidate_va` carries `{base, size, page_size, depth, PDB}` (`uvm_hal.h:141-147`); on the wire `MEM_OP_D[31:27] == 0xa` (`MMU_TLB_INVALIDATE_TARGETED`), addr in `MEM_OP_A[31:12]`+`MEM_OP_B`, log2 size in `MEM_OP_A[5:0]` |
+| **RM** | ⊘ **never** | `kern_gmmu_gm107.c:193-194` sets `_ALL_VA, _TRUE` **unconditionally**: *"Not using range-based invalidate."* Zero hits tree-wide for `MMU_TLB_INVALIDATE_TARGETED` under `src/nvidia/` |
+
+⚠ Two limits on the UVM half: **≤4 ranges per batch** (`UVM_TLB_BATCH_MAX_ENTRIES = 4`,
+`uvm_tlb_batch.h:36`; `max_ranges = 8` on Ampere, `uvm_ampere.c:33`) — the 5th collapses the batch
+to invalidate-all — and the range is **rounded up to a power of two and aligned down**
+(`uvm_ampere_host.c:288-303`). A **superset**, so safe, but not tight.
+
+### ⊘⊘⊘ Q3 — HIERARCHICAL DETECTION IS DEAD
+
+**A child PTE change never causes a parent PDE write.** No accessed bit, no dirty bit, no counter,
+no valid-count anywhere in the VER2 PDE or DUAL_PDE. Both drivers keep that bookkeeping in **host
+CPU structs** — `uvm_page_directory_struct.ref_count` (`uvm_mmu.h:144`), RM's
+`numValid`/`numSparse`/… in `MMU_WALK_LEVEL_INST` (`mmu_walk_private.h:184-209`). A PDE is written
+only on a **structural** change (`mmu_walk.c:1506-1510`: *"If we've changed any sublevel…"*).
+
+⇒ Reading a small directory level tells you **nothing** about which leaves changed. ★ One partial
+exception: at PD0 (and PD1 on Ampere) the 16-byte entry is *either* a dual PDE *or* a 2 MB /
+512 MB PTE (`uvm_turing_mmu.c:47-53`, `gmmu_fmt.c:64-86`), so watching those levels **does** catch
+every large-page mapping change — and nothing about 4 KB or 64 KB.
+
+### ⚠ A correction of my own, recorded because the shape recurs
+
+I briefed this research with *"both invalidate transports measured ZERO"* from the research repo's
+`CLAUDE.md`. **This tree had already corrected that at w326/w476** — `mmuinval.rs` documents RM's
+transport as a BAR0 store at `0xB830B0` and names the old zero as *"a census over transports is
+only as complete as its list of transports"*. ⇒ The agent re-derived a correction we owned.
+**A stale fact in a navigation file costs a subagent's whole run**, and `CLAUDE.md` is the most-read
+file in the other tree.
+
+★ One genuinely new detail from it: **RPC fn=200 is a compile-time STUB on GA106**
+(`g_rpc_private.h:320`, `rpcInvalidateTlb_STUB`), returning `RPC_UNKNOWN_FUNCTION`. ⇒ That
+particular zero was **structurally guaranteed** and could never have been anything else.
