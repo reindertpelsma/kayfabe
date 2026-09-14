@@ -20,7 +20,16 @@ exactly where it is most needed.
 
 ## The increments, in order
 
-### 1. A VM-LIFETIME SCRATCHPAD ISOLATE  ⟵ the foundation, and it does not exist today
+### 1. A VM-LIFETIME SCRATCHPAD ISOLATE  ⟵ **BUILT 2026-09-14, behind `KAYFABE_SCRATCHPAD`**
+
+> ★ `crates/kayfabe-qemu-raw/src/scratchpad.rs`, spawned in `Regs::create_probed` — the
+> composition root, once per device, at PCI realize. **Owned by the shell, not by a `Proc`**:
+> `Spine::install_isolate` is keyed by `(ProcId, GpuId)` and there is no `ProcId` that means
+> *"the VM"*; its `IsolateId` proc field is `u32::MAX` so it can never alias a live proc's.
+> ⊘ It spawns **beside** the device, never through it, so the three tests that keep isolate
+> spawns guest-caused (`tests/tests/isolate_spawn_is_guest_caused.rs` and its two neighbours)
+> stay true rather than being edited to accommodate this.
+
 
 ⊘ `[surveyed w721]` The device model is **entirely per-proc** — `procs: BTreeMap<ProcId,
 RankedMutex<Proc>>` (`kayfabe-rt/src/device.rs:15`) — and isolates are spawned **lazily, on first
@@ -37,10 +46,47 @@ path entirely.
 
 ### 2. THE RESERVED OBJECT
 
-One `alloc_vidmem` of the derived size, owned by the scratchpad isolate. The verb already exists
-(`Request::AllocVidmem`, wire tag 19); `largest_reservable_mb` already derives the size
-(11808 MiB measured on a 12 GiB GA106). ⇒ Advertise **what was reserved**, never assert ahead of
-it (`gpga_is_one_reserved_object.md`).
+> #### ⊘⊘⊘ CORRECTED 2026-09-14 (increment 1, built) — **THE VERB BELOW IS THE WRONG VERB, AND
+> #### IT WOULD HAVE REFUSED THE BOOT FOR A REASON THAT IS NOT CAPACITY.**
+> The paragraph below says *"the verb already exists (`Request::AllocVidmem`, wire tag 19)"*.
+> **It does not.** Read from the two bodies:
+> - `RmBackend::alloc_vidmem` → `RmConnection::alloc_device_local` (`rm.rs:2690`):
+>   **`ATTR_CONTIGUOUS_VIDMEM`, `alignment: len`**.
+> - `RmConnection::reserve_gpga` (`rm.rs:2673`) — written *for* `gpga_is_one_reserved_object.md`
+>   and, until increment 1, reachable only from the ladder binary **inside the child**:
+>   **`ATTR_NONCONTIGUOUS_VIDMEM`, `alignment: 4096`**.
+>
+> ⇒ A contiguous, **11.8 GiB-aligned** 11.8 GiB request fails on merely *fragmented* free
+> memory. ⚠ The failure is the dangerous kind: the boot is refused, and the refusal **means
+> something other than what it says** — the one call whose refusal is supposed to read as
+> *"there is not enough video memory"* would instead be reporting fragmentation and alignment.
+> `reserve_gpga`'s own doc comment already said both differences "were wrong for it"; nobody
+> had joined that to this plan.
+>
+> ★ And note what made it survivable: `largest_reservable_mb` probes with `reserve_gpga`, so a
+> probe-then-`alloc_vidmem` implementation would have **measured 11 808 MiB as available and
+> then failed to allocate it** — a mismatch between the size advertised and the size held, which
+> is exactly the shape this design exists to remove.
+>
+> ⊘ **Neither verb was on the wire.** `largest_reservable_mb` is an inherent method on
+> `HostRmBackend`, not on the `RmBackend` trait, so the parent could not call it either. ⇒
+> increment 1 adds two trait methods with named-refusal defaults, wire tags **27
+> `ReserveGpga`** and **28 `LargestReservableMb`**, and reply tag **14 `Megabytes`**.
+> ★ The probe runs in the **child**, one round trip: it is ~8-13 real multi-gigabyte RM
+> alloc/free pairs, and driving the bisection from the parent would put a dozen IPC brackets
+> where one belongs.
+
+One reservation of the derived size, owned by the scratchpad isolate. `largest_reservable_mb`
+already derives the size (11808 MiB measured on a 12 GiB GA106). ⇒ Advertise **what was
+reserved**, never assert ahead of it (`gpga_is_one_reserved_object.md`).
+
+**⊘ The rule is enforced by an ARM, not by default.** `gpga_is_one_reserved_object.md` says
+*"If that fails, the VM does not start."* That is right for the product and wrong for the
+measurement: a device that refuses to realize produces **no teardown census, no guest, and no
+answer to what the host would have given us** — it produces a QEMU that exits with a status.
+⇒ `KAYFABE_SCRATCHPAD=on` asks the question and `=require` enforces the answer, and the census
+line is printed **before** the refusal is consulted so a refusing boot still names which step
+refused.
 
 ### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ blocked on an open measurement
 
