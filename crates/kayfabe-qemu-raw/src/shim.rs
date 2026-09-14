@@ -17224,8 +17224,10 @@ impl Regs {
         // because "the cap stranded nothing" and "nobody looked" are the same silence.
         {
             let (events, entries) = kayfabe_rt::ceutils::stranded_census();
+            let (ring, gp_put, took, first) = kayfabe_rt::ceutils::first_stranded();
             eprintln!(
                 "kayfabe: GPFIFO-STRANDED-CENSUS events={events} entries={entries} \
+                 first[ring=0x{ring:x} gp_put={gp_put} took={took} stranded={first}] \
                  {}",
                 if events == 0 {
                     "✔ the per-doorbell cap never stopped a walk with entries still ahead."

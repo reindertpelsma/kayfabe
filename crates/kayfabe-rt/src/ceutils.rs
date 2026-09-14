@@ -77,6 +77,24 @@ const MAX_ENTRIES_PER_DOORBELL: u32 = 8;
 /// count site for why a non-zero value is a HANG in the guest rather than a deferral.
 static STRANDED_TOTAL: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static STRANDED_EVENTS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// The FIRST stranding, identified. ⊘ The first is the one that matters: it is the doorbell whose
+/// remainder the guest is still waiting on, and every later one is downstream of it.
+static FIRST_RING: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_GP_PUT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_TOOK: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static FIRST_STRANDED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// `(ring_va, gp_put, took, stranded)` of the FIRST stranding, or all zeros if none.
+#[must_use]
+pub fn first_stranded() -> (u64, u64, u64, u64) {
+    use core::sync::atomic::Ordering::Relaxed;
+    (
+        FIRST_RING.load(Relaxed),
+        FIRST_GP_PUT.load(Relaxed),
+        FIRST_TOOK.load(Relaxed),
+        FIRST_STRANDED.load(Relaxed),
+    )
+}
 
 /// `(events, entries)` the per-doorbell cap has stranded. ⊘ Reported at teardown so a boot can
 /// say whether the cap's stated assumption held for the guest actually under test.
@@ -791,17 +809,18 @@ fn run_submission_timed(
         if stranded > 0 {
             STRANDED_TOTAL.fetch_add(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
             let n = STRANDED_EVENTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
-            if n <= 8 {
-                #[cfg(feature = "std")]
-                eprintln!(
-                    "kayfabe: GPFIFO-STRANDED #{n} chan_ring=0x{:x} gp_put={gp_put} \
-                     cursor={} took={} STRANDED={stranded} ⊘ the cap stopped the walk with \
-                     entries still ahead. CeUtils rings again; UVM does NOT — it waits in \
-                     uvm_tracker_wait for releases that will never be written.",
-                    chan.ring_va,
-                    run.cursor.next % entries,
-                    run.entries,
-                );
+            // ⊘⊘ **CARRIED IN ATOMICS, NOT PRINTED HERE (w705b).** The first version used
+            // `eprintln!` behind `#[cfg(feature = "std")]` — which is NOT enabled for this crate
+            // in the shipping shim, so the counter incremented and **every identifying detail
+            // was compiled away**. `[measured w705]` the census read `events=1 entries=13` with
+            // not one detail line to say WHICH channel. ⇒ a `cfg` that silences an instrument is
+            // the same defect as a branch nothing takes: the number survived, the meaning did
+            // not. The shim (which has `std`) prints these.
+            if n == 1 {
+                FIRST_RING.store(chan.ring_va, core::sync::atomic::Ordering::Relaxed);
+                FIRST_GP_PUT.store(u64::from(gp_put), core::sync::atomic::Ordering::Relaxed);
+                FIRST_TOOK.store(run.entries as u64, core::sync::atomic::Ordering::Relaxed);
+                FIRST_STRANDED.store(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
             }
         }
     }
