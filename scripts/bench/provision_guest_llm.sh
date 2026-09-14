@@ -56,7 +56,10 @@ say "guest kernel before: $KREL_BEFORE"
 say "installing python venv + torch (cu124 wheel) — the long pole"
 $GS "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-venv python3-pip" 2>&1 | tail -2
 $GS "python3 -m venv /home/ubuntu/llmvenv 2>/dev/null; /home/ubuntu/llmvenv/bin/pip -q install --upgrade pip" 2>&1 | tail -2
-$GS "/home/ubuntu/llmvenv/bin/pip -q install torch --index-url https://download.pytorch.org/whl/cu124" 2>&1 | tail -3
+# ⊘ The VERSION is pinned, not only the index — see provision_host_llm.sh's note: the two sides of
+# a parity ratio must run the same runtime, and "latest on this index" drifts independently at each
+# site. w720 measured a 2x error in the flattering direction from exactly this.
+$GS "/home/ubuntu/llmvenv/bin/pip -q install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124" 2>&1 | tail -3
 $GS "/home/ubuntu/llmvenv/bin/pip -q install transformers accelerate" 2>&1 | tail -3
 
 # ⚠ ASSERT THE IMPORT, not the pip exit status. `pip -q install` through `| tail -3` loses its

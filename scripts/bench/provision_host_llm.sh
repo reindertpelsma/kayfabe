@@ -45,8 +45,24 @@ if [ ! -x "$ROOT/venv/bin/python" ]; then
   python3 -m venv "$ROOT/venv" || { echo "HOSTLLM_RC=2 ⊘ venv failed"; exit 2; }
   # ⊘ CUDA wheels, not CPU: a CPU torch here would produce a baseline that never touches the GPU
   # and a ratio that flatters kayfabe by comparing it against a slower thing.
+  #
+  # ⊘⊘⊘ **PINNED, AND TO THE SAME WHEEL THE GUEST GETS — the ratio is meaningless otherwise.**
+  # `[measured w720]` this line was `pip install torch ...` **unpinned**, which resolved to
+  # **2.14.0+cu130**, while `provision_guest_llm.sh` pins the guest to the **cu124** index and gets
+  # **2.6.0+cu124**. Two different runtimes on the two sides of a ratio.
+  #
+  # ⚠ And it was not a small error: torch 2.14's first-`generate()` path is ~2x slower cold while
+  # its *warm* rate is identical (22.29 vs 23.08 tok/s), and `run_llm.py` grades **cold**. ⇒ The
+  # harness reported **0.40** where a version-matched pair measures **0.20** — a 2x error in the
+  # single number this whole campaign exists to produce, in the flattering direction.
+  # The w720 parity run had to match them **by hand**; this makes the provisioner do it.
+  #
+  # ★ The exact version is pinned, not just the index: "latest on the cu124 index" drifts too, and
+  # a benchmark whose runtime changes underneath it is not a benchmark. A version that cannot be
+  # installed fails **loudly here** rather than silently producing a different number later.
   "$ROOT/venv/bin/pip" -q install --upgrade pip >/dev/null 2>&1
-  "$ROOT/venv/bin/pip" -q install torch transformers accelerate 2>&1 | tail -3
+  "$ROOT/venv/bin/pip" -q install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124 2>&1 | tail -3
+  "$ROOT/venv/bin/pip" -q install transformers accelerate 2>&1 | tail -3
 fi
 
 # ★ THE SAME RUNNER THE GUEST USES. Installed, never re-written.
