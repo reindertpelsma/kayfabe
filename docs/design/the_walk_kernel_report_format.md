@@ -318,3 +318,47 @@ that **no guest page table can name it**.
 none resolves into the shadow or the report is a direct instrument; the alternative is a
 structural assumption that a future layout change breaks silently — and silently is exactly how
 this one would break, since a forged *"unchanged"* produces no fault and no refusal.
+
+## ★★★★★ w723 — SETTLED: THE KERNEL RETURNS CURRENT STATE, NOT DELTAS
+
+The choice left open at w720f/w720j is decided. **The kernel walks and emits the current run set.
+kayfabe diffs it against the Rust model it already maintains.**
+
+### Why
+
+1. ★★★ **The diff had a real closure bug, in C.** `[w722]` the whole-run merge join emitted, for
+   one new run covering several old ones, a `REMAP` followed by `UNMAP`s of the runs it had just
+   replaced — **applying that in order deleted the mapping just made.** All nine single-step
+   `delta/*` cases passed against it. ⇒ **Diff logic is subtle enough to get wrong**, and it
+   belongs in safe Rust beside the model and the existing tests, not in the place where a missed
+   check returns silent garbage.
+2. **No shadow ⇒ no forge-unchanged attack.** The last descendant of the hashing-collision problem
+   disappears: the guest cannot write a shadow that does not exist.
+3. **No generation handshake for shadow coherence**, and no *"the shadow advanced but the host
+   never consumed it"* hazard.
+4. **The kernel becomes stateless**, composing with the from-root walk already being stateless:
+   in goes a root, a scope and setup data; out comes *what the tables currently say*. Nothing
+   persists on the GPU between launches.
+5. **The cost is nothing.** ~1000 runs × 32 B ≈ **32 KB** a refresh, ~38 MB a boot — against 28 GB
+   for raw tables. The delta is cheaper and the difference does not matter.
+
+### What this changes in the format above
+
+- `MapRun::op` is **not filled by the kernel**. It is either dropped, or filled by the host as the
+  product of its own diff. ⊘ Pick one; do not leave a field the kernel ignores and the host
+  believes.
+- `PdbEntry::vas_flags` keeps `NEW_VAS`/`GONE` only if the host cannot derive them — it can, so
+  prefer deriving.
+- **`acked_generation` and the resync handshake survive**, for a different reason: a report that
+  arrives torn or truncated must still be refused as a whole. ⇒ The handshake now protects the
+  *report*, not a shadow.
+- ⊘ **`TRUNCATED` still forces a full refresh** and is still never applied — unchanged.
+
+### ⊘ The w722 diff work is NOT discarded
+
+The per-page-size-class, segment-granularity algorithm — `UNMAP` where old covers and new does
+not, `MAP` where new covers and old does not, `REMAP` where both differ, with the two sets
+**disjoint in `(va, class)` by construction** so apply order cannot matter — is **exactly what the
+host side must implement**. It moves languages, not designs. ★ And `cuda/walk`'s round-trip
+harness was deliberately built uncoupled from the shadow (*"a fresh full walk is a second walker
+that is never acked"*), so the same 2000-step closure property tests the **host** diff unchanged.
