@@ -88,7 +88,50 @@ answer to what the host would have given us** — it produces a QEMU that exits 
 line is printed **before** the refusal is consulted so a refusing boot still names which step
 refused.
 
-### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ **BLOCKED ON AN OWNER RULING, NOT ON A MEASUREMENT**
+> ## ⊘⊘⊘ THE ORDER IS WRONG — **6 MUST PRECEDE 3** (found 2026-09-14, building the switch)
+>
+> `RegPlane::window_leaves` — the BAR1/BAR2 walk both the premap and the mirror depend on —
+> builds an `FbStoreReader { fb }` over `PlaneMem::fb` and hands it to
+> `kayfabe_mmu::walker::decode_subtree`. ⇒ **the page tables are read out of the same
+> `FbStore` the switch replaces.**
+>
+> So the moment that store becomes the reserved object, **every page-table read is a CPU read
+> of video memory** — `[measured]` 48 MiB/s, through a BAR1 aperture §22 item 3 showed is
+> scarce. That is the *"~10 minutes per boot"* cost w721 cites as the whole reason the
+> two-world split existed. **Flipping the store before the walk moves GPU-side re-creates the
+> problem the single store exists to remove.** §7 (w723b) already says it from the other side:
+> the BAR1 capacity worry *"dissolves once our own PT reads move GPU-side"*.
+>
+> ⊘ **And the intuitive reason for the dependency is wrong**, which is worth naming because it
+> points the arrow the other way: *"the kernel needs the tables in GPU memory"* — no. They are
+> in a host **memfd** today, which reads at ~3.7 GB/s, so the kernel can be fed by uploading
+> them. **Residence is not the constraint.** The constraints are the walk's byte source *after*
+> the flip, and §6's own shape mismatch.
+>
+> ⇒ **§6 (route (a): the report also carries the visited page list) first, then §3.**
+
+### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ **UNBLOCKED 2026-09-14; the CROSSING is built and proven**
+
+> ✔ **The ruling landed and the crossing is working code.** `Request::ExportDeviceView` is back
+> on the wire (request tag **30**, reply tag **15**; 25/12 stay retired) with
+> `ReleaseDeviceView` (31), and `[measured, rev 814c02c1]` a real boot reports
+> **`DEVICE_VIEW=OK mmap_len=0x1000 sentinel_roundtrip=true released=true`** — the scratchpad
+> isolate armed a view of the **reserved object**, the node crossed by `SCM_RIGHTS`, the VMM
+> mapped it, **closed the descriptor**, and the mapping survived. Evidence:
+> `traces/single_store_crossing/`.
+>
+> ★ Condition 2 of the ruling is **measured** rather than asserted: the sentinel round-trip runs
+> through a mapping whose descriptor is already gone.
+>
+> ⊘ **What remains for this increment** (none of it blocked, all of it real work): a new
+> `FbStore` over the reserved object; a third memslottable arm of `FbPageBacking` (today
+> `Arena` implies the arena's memfd and `Joined` implies the join registry — a reserved-object
+> page is neither); `barmirror` calling `install_device_window` instead of
+> `install_file_window`; **both** translate paths; preserving `FbPageArena`'s
+> *"framebuffer address = file offset"* contract, which is what makes PRAMIN one re-pointable
+> slot; and §w727's `Bar1Choice` wired to the chip row so the advertised aperture fits.
+
+### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ ~~BLOCKED ON AN OWNER RULING~~
 
 > #### ⊘⊘⊘ CORRECTED 2026-09-14 (surveyed to build it) — **THE BLOCKER IS NOT THE ONE NAMED
 > #### BELOW.** The measurement it says it waits on has been taken; a **ruling** has not.
