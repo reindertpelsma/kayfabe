@@ -80,6 +80,100 @@ pub const NV_ESC_RM_UNMAP_MEMORY: u8 = 0x4F;
 pub const MMAP_FILE_OFFSET: u64 = 0;
 
 // =====================================================================================
+// NVOS34_PARAMETERS — the CPU-UNmapping request, and the ONLY thing that returns aperture
+// =====================================================================================
+
+/// `NVOS34_PARAMETERS` — `ogkm-610: src/common/sdk/nvidia/inc/nvos.h:1860-1868`, dispatched by
+/// [`NV_ESC_RM_UNMAP_MEMORY`] (`escape.c:313`, `:621-635`).
+///
+/// # ★★★★★ WHY THIS EXISTS — `munmap` DOES NOT RETURN THE APERTURE
+///
+/// `[measured w722, GA106]` A CPU view of video memory consumes **BAR1**, which is a single
+/// global pool (256 MiB on that board, shared with the host driver). Clean A/B over rounds that
+/// map **fresh** offsets each time:
+///
+/// | release path | round 0 | rounds 1–4 |
+/// |---|---|---|
+/// | this ioctl | 224 MiB | **224 MiB each** |
+/// | `munmap` + `close` alone | 224 MiB | ⊘ **zero** |
+///
+/// ⇒ **Dropping a mapping is not a release.** Before this struct existed, `NV_ESC_RM_UNMAP_MEMORY`
+/// appeared in this tree as a constant and three doc comments with **zero call sites**, while the
+/// `_DMA` variant was wired in eight files — so every armed CPU view leaked its aperture for the
+/// life of the process.
+///
+/// ⚠ And the leak is **silent**: the refusal arrives as `status = 0x51 NV_ERR_NO_MEMORY` **inside
+/// the parameter struct**, with `ioctl(2)` returning 0 and `errno` untouched — this tree's
+/// `failed_zero_is_not_nothing_refused` class, live on this path.
+///
+/// # ⊘ Two shape facts that differ from the map
+///
+/// - **No fd wrapper.** The map is `nv_ioctl_nvos33_parameters_with_fd`; the unmap is the plain
+///   SDK struct (`escape.c:313`). Nothing is handed back to the driver by descriptor.
+/// - **Control device only** — `NV_CTL_DEVICE_ONLY(nv)` (`escape.c:631`). It goes on
+///   `/dev/nvidiactl`, never a per-GPU node.
+///
+/// ★ `p_linear_address` is the cookie **RM minted at map time** and is how it identifies the
+/// mapping to tear down. [`Nvos33ParametersWithFd`]'s own doc already said so — *"it is carried
+/// because `NV_ESC_RM_UNMAP_MEMORY` names it"* — which means the map path must **capture** it, not
+/// merely status-check the reply.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Nvos34Parameters {
+    /// `NvHandle hClient` @ +0.
+    pub h_client: u32,
+    /// `NvHandle hDevice` @ +4 — device or subdevice, matching the map.
+    pub h_device: u32,
+    /// `NvHandle hMemory` @ +8 — the object whose view is being torn down.
+    pub h_memory: u32,
+    /// `NvP64 pLinearAddress` @ **+16**, `NV_ALIGN_BYTES(8)` — ⊘ note the 4 bytes of padding
+    /// after `h_memory`; at +12 this would be silently wrong.
+    pub p_linear_address: u64,
+    /// `NvU32 status` @ +24 — `[OUT]`, and **the only place a refusal appears**.
+    pub status: u32,
+    /// `NvU32 flags` @ +28.
+    pub flags: u32,
+}
+
+impl Nvos34Parameters {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NVOS34_PARAMETERS";
+    /// `sizeof`.
+    pub const SIZE: usize = 32;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+
+    /// Encode into a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(bytes, Self::C_NAME, Self::SIZE, 0, &self.h_client.to_le_bytes())?;
+        put(bytes, Self::C_NAME, Self::SIZE, 4, &self.h_device.to_le_bytes())?;
+        put(bytes, Self::C_NAME, Self::SIZE, 8, &self.h_memory.to_le_bytes())?;
+        put(bytes, Self::C_NAME, Self::SIZE, 16, &self.p_linear_address.to_le_bytes())?;
+        put(bytes, Self::C_NAME, Self::SIZE, 24, &self.status.to_le_bytes())?;
+        put(bytes, Self::C_NAME, Self::SIZE, 28, &self.flags.to_le_bytes())?;
+        Ok(())
+    }
+
+    /// Decode from a little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        Ok(Self {
+            h_client: u32_at(bytes, 0)?,
+            h_device: u32_at(bytes, 4)?,
+            h_memory: u32_at(bytes, 8)?,
+            p_linear_address: crate::wire::u64_at(bytes, 16)?,
+            status: u32_at(bytes, 24)?,
+            flags: u32_at(bytes, 28)?,
+        })
+    }
+}
+
+// =====================================================================================
 // NVOS33_PARAMETERS + fd — the CPU-mapping request
 // =====================================================================================
 
@@ -5238,5 +5332,65 @@ mod dma_pde_info_tests {
         let p = DmaGetPdeInfoParams::decode(&[0u8; DmaGetPdeInfoParams::SIZE]).expect("decode");
         assert!(p.page_table().is_none());
         assert!(DmaGetPdeInfoParams::decode(&[0u8; DmaGetPdeInfoParams::SIZE - 1]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod nvos34_tests {
+    use super::*;
+
+    /// ⊘⊘⊘ **THE PADDING IS THE WHOLE TEST.** `pLinearAddress` carries `NV_ALIGN_BYTES(8)`, so
+    /// it sits at **+16**, not at +12 where `h_memory` ends. At the wrong offset this struct
+    /// still encodes, still decodes, and still passes a round trip against itself — and then
+    /// hands RM a cookie it has never minted, which is refused **inside the parameter struct**
+    /// while `ioctl(2)` returns 0. ⇒ Pin the byte positions, not just the round trip.
+    #[test]
+    fn the_unmap_parameters_sit_where_the_sdk_puts_them() {
+        let p = Nvos34Parameters {
+            h_client: 0x1111_1111,
+            h_device: 0x2222_2222,
+            h_memory: 0x3333_3333,
+            p_linear_address: 0x4444_4444_5555_5555,
+            status: 0x6666_6666,
+            flags: 0x7777_7777,
+        };
+        let mut b = [0u8; Nvos34Parameters::SIZE];
+        p.encode_into(&mut b).expect("encode");
+
+        assert_eq!(&b[0..4], &0x1111_1111u32.to_le_bytes(), "hClient @ +0");
+        assert_eq!(&b[4..8], &0x2222_2222u32.to_le_bytes(), "hDevice @ +4");
+        assert_eq!(&b[8..12], &0x3333_3333u32.to_le_bytes(), "hMemory @ +8");
+        assert_eq!(&b[12..16], &[0u8; 4], "★ +12..16 is PADDING and must stay zero");
+        assert_eq!(
+            &b[16..24],
+            &0x4444_4444_5555_5555u64.to_le_bytes(),
+            "★★★ pLinearAddress @ +16 — NV_ALIGN_BYTES(8), NOT +12"
+        );
+        assert_eq!(&b[24..28], &0x6666_6666u32.to_le_bytes(), "status @ +24");
+        assert_eq!(&b[28..32], &0x7777_7777u32.to_le_bytes(), "flags @ +28");
+
+        assert_eq!(Nvos34Parameters::decode(&b).expect("decode"), p, "round trip");
+    }
+
+    /// The driver compares `dataSize != sizeof(*pApi)` and refuses outright
+    /// (`escape.c:625-629`), so a short buffer must be refused here rather than sent.
+    #[test]
+    fn a_short_image_is_refused_in_both_directions() {
+        let short = [0u8; Nvos34Parameters::SIZE - 1];
+        assert!(Nvos34Parameters::decode(&short).is_err());
+        let mut short = [0u8; Nvos34Parameters::SIZE - 1];
+        assert!(Nvos34Parameters::default().encode_into(&mut short).is_err());
+    }
+
+    /// ⊘ `SIZE` is what the driver's dispatch table checks against
+    /// (`_RM_ESC_IOCTL_ENTRY(NV_ESC_RM_UNMAP_MEMORY, NVOS34_PARAMETERS)`), so it is an ABI fact,
+    /// not an implementation detail.
+    #[test]
+    fn the_size_is_the_sdk_struct_not_an_fd_wrapper() {
+        assert_eq!(
+            Nvos34Parameters::SIZE,
+            32,
+            "NVOS34 is the plain SDK struct — unlike the MAP, it takes no fd wrapper"
+        );
     }
 }
