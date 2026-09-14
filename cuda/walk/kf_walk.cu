@@ -571,6 +571,19 @@ __device__ __forceinline__ void kf_seg_emit(KfOut &o, KfDev *d, KfSeg &s, uint16
     s.have = 1u; s.op = op; s.va = va; s.gpga = gpga; s.len = len; s.flags = flags;
 }
 
+/* ⊘ KF_DROP_UNMAP drops every UNMAP and changes nothing else. The MAP/REMAP set
+ * is unaffected, so the report stays order-independent -- and closure breaks,
+ * because a mapping the guest removed lingers in the model for ever. Compiled in
+ * only by `make check-closure-negative`: it is the known-positive for the
+ * `apply(model, delta) != full walk` assertion itself, which the other two break
+ * flags never reach (they trip the stronger order assertion first). */
+#ifdef KF_DROP_UNMAP
+#define KF_EMIT_UNMAP(o, d, s, pi, va, gp, len, fl) ((void)0)
+#else
+#define KF_EMIT_UNMAP(o, d, s, pi, va, gp, len, fl) \
+    kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, va, gp, len, fl)
+#endif
+
 /* ★★★★★ THE DELTA, PER PAGE-SIZE CLASS, AT SEGMENT GRANULARITY.
  *
  * ⊘ The previous shape — one merge join over the combined list, comparing whole
@@ -620,7 +633,7 @@ __device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
         if (!ch && q < cn) { cv = cr[q].va; cg = cr[q].gpga; cl = cr[q].len; cf = cr[q].flags; ch = 1u; }
         if (!ph && !ch) break;
         if (!ch) {
-            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, pl, pf);
+            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, pl, pf);
             ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
         }
         if (!ph) {
@@ -628,7 +641,7 @@ __device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
             ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); continue;
         }
         if (pv + pl <= cv) {
-            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, pl, pf);
+            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, pl, pf);
             ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
         }
         if (cv + cl <= pv) {
@@ -637,7 +650,7 @@ __device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
         }
         if (pv < cv) {                       /* prev-only head */
             uint64_t n = cv - pv;
-            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, n, pf);
+            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, n, pf);
             pv += n; pg += n; pl -= n; continue;
         }
         if (cv < pv) {                       /* cur-only head */

@@ -65,7 +65,10 @@ kf_tests_oldmerge: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
 kf_tests_badorder: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
 	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_ORDER -o $@ kf_tests.cu kf_walk.cu -lpthread
 
-check-closure-negative: kf_tests_oldmerge kf_tests_badorder
+kf_tests_nounmap: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_DROP_UNMAP -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-closure-negative: kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap
 	@./kf_tests_oldmerge roundtrip/ > /tmp/kf_neg3.txt 2>&1; rc=$$?; \
 	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: the superseded whole-run merge PASSED the round-trip"; exit 1; fi; \
 	 if ! grep -qE 'apply\(model, delta\) != full walk|reverse order gives a different model' /tmp/kf_neg3.txt; then \
@@ -80,6 +83,15 @@ check-closure-negative: kf_tests_oldmerge kf_tests_badorder
 	   grep '^    !' /tmp/kf_neg4.txt | head -3; exit 1; fi; \
 	 echo "neg ok: a class emitted out of VA order breaks the round-trip (rc=$$rc), on:"; \
 	 grep -m1 -E 'apply\(model, delta\) != full walk|reverse order gives a different model' /tmp/kf_neg4.txt
+	@./kf_tests_nounmap roundtrip/ > /tmp/kf_neg5.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: dropping every UNMAP PASSED the round-trip"; exit 1; fi; \
+	 if ! grep -q 'apply(model, delta) != full walk' /tmp/kf_neg5.txt; then \
+	   echo "NEG FAIL: dropping UNMAPs failed, but NOT on the closure assertion -- wrong reason:"; \
+	   grep '^    !' /tmp/kf_neg5.txt | head -3; exit 1; fi; \
+	 if grep -q 'reverse order gives a different model' /tmp/kf_neg5.txt; then \
+	   echo "NEG FAIL: dropping UNMAPs must NOT disturb order-independence"; exit 1; fi; \
+	 echo "neg ok: dropping every UNMAP breaks CLOSURE and nothing else (rc=$$rc), on:"; \
+	 grep -m1 'apply(model, delta) != full walk' /tmp/kf_neg5.txt
 	@./kf_tests roundtrip/ > /dev/null 2>&1; rc=$$?; \
 	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL round-trip does not pass on the real binary"; exit 1; fi; \
 	 echo "neg ok: the control round-trip still passes on the unbroken binary"
@@ -94,6 +106,6 @@ check-ptx: kf_tests
 check: check-invariants kf_tests check-ptx check-negative check-closure-negative
 
 clean:
-	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder
+	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap
 
 .PHONY: all check check-invariants check-ptx check-negative check-closure-negative clean
