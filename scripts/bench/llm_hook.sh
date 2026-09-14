@@ -53,6 +53,24 @@ EXC=$(echo "$OUT"    | sed -n 's/^LLM_EXC=//p'    | tail -1)
 # unconditionally (`print('LLM_DEVICE=' + dev)`), so its ABSENCE is also a finding.
 DEV=$(echo "$OUT"    | sed -n 's/^LLM_DEVICE=//p'  | tail -1)
 echo "    LLM_DEVICE_USED=${DEV:-<absent>}"
+# ★★★★★ w713 - THE PARITY NUMBER, which `run_llm.py` HAS PRINTED ALL ALONG.
+#
+# `provision_guest_llm.sh` emits `print('LLM_MS=%.1f' % ms)` around the `generate()` call, and
+# this hook never grepped it. (X) Goal 9 is "the LLM working, THEN AT PARITY" - and parity is a
+# RATIO, so it needs a number on both sides. The guest side has existed since provisioning and
+# went unread through every LLM boot, including the one graded a pass.
+#
+# ⚠ tok/s here is generate() wall time only: it excludes model load and cuInit, which is right
+# for a parity ratio against a host baseline measured the same way, and WRONG as a figure for how
+# long the workload takes. Say which it is, in the line itself.
+MS=$(echo "$OUT"     | sed -n 's/^LLM_MS=//p'      | tail -1)
+if [ -n "$MS" ] && [ -n "$TOKENS" ] && [ "$TOKENS" -gt 0 ] 2>/dev/null; then
+  RATE=$(awk -v t="$TOKENS" -v m="$MS" 'BEGIN{ if (m>0) printf "%.2f", t*1000.0/m; else print "inf" }')
+  echo "    LLM_MS=$MS  LLM_TOK_PER_S=$RATE  (generate() wall only - excludes model load and cuInit)"
+  echo "    ⊘ PARITY needs the SAME number from a host-side baseline; without it this is a rate, not a ratio."
+else
+  echo "    LLM_MS=${MS:-<absent>} ⊘ no rate derivable - parity is unmeasurable from this run."
+fi
 
 echo ""
 echo "=== ★★★★★ THE VERDICT, stated once, in the pre-registered vocabulary"
