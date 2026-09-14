@@ -253,6 +253,133 @@ comment still claims the header reaches 64 bytes with `pad`, when it does so wit
 (`kf_walk.cu:1286-1290`), so the format doc's *"a small output buffer"* does not yet exist.
 The parser reads both shapes (`parse_parts` and the packed `parse`).
 
+
+## ★★★★★ The parallel walk — level-synchronous, one warp per table
+
+`[w725]` the walk was **one thread per address space**, and it cost **450 375 µs**
+for the measured working set: 961 540 entries at 468 ns each — one dependent
+memory round-trip per 8-byte entry, because a single thread cannot have two loads
+in flight. At 1 178 refreshes a boot that is ~9 minutes of GPU time against a
+~152 ms honest CPU path: **the kernel was slower than the thing it replaces**, so
+`SINGLE_STORE_PLAN.md`'s premise did not hold.
+
+**Only the DEPTH of a page-table walk is serial.** PD3 → PD2 → PD1 → PD0 → leaves
+is five levels; the fan-out at each is large, and the leaf level — where
+essentially every entry lives — is embarrassingly parallel once the leaf-table
+addresses are known. So the walk is level-synchronous: **one kernel launch per
+level**, each reading that whole level's tables at once.
+
+```
+seed      → one frontier entry per address space
+per level → EXPAND  one warp per table: stage it in shared memory, all 32 lanes
+                    decode, ballot for the count and for each child's rank
+          → SCAN    exclusive prefix sum over the per-parent counts
+          → COMPACT copy children to scan[parent] + rank  ← ORDER IS RESTORED HERE
+dual      → the same, but the children are TASKS: one per PD0 slot
+leaves    → one warp per task; each lane takes a contiguous range of big-page
+            chunks, forms runs in it, and the warp joins the pieces
+join      → runs that meet across a TASK boundary are re-joined
+```
+
+### `[measured, RTX 3060, median of 11, device-synchronised, same harness]`
+
+| case | serial | parallel | |
+|---|---:|---:|---|
+| **working set** (1 872 PT pages, 961 540 entries) | 450 375 µs | **205.7 µs** | **2 190x** |
+| **worst case** (12 GiB at 4 KiB, 3 152 900 entries) | 1 482 071 µs | **390.3 µs** | **3 797x** |
+| real GA106 address space (2 116 entries) | 2 197 µs | **110.0 µs** | 20x |
+| 16 address spaces in one refresh | 34 157 µs | **204.6 µs** | 167x |
+| **1 178 refreshes a boot** | ~8.8 min | **0.24 s** | |
+
+Phase breakdown of the working set (`-DKF_PHASES`): `seed 3 · expand 6/14/14/15 ·
+scan 4/5/4/4 · compact 4/4/5/8 · leaf 85 · emit+join 18` µs.
+
+⊘ **The fragmented cases are deliberately NOT optimised.** `frag_every2`
+(958 464 runs from 961 540 entries) improved only 1.5x, and that is a choice: the
+`1.4 µs × runs` term was derived by fragmenting on purpose, and **the real 12 GiB
+guest address space from the driver trace emits one run**. Optimising the
+per-entry descent was the whole job; contorting the design to make run-forming
+cheap would trade a real input for a synthetic one.
+
+### How the two measurements that mattered were got — and two wrong guesses
+
+★ The first parallel version was **2 129 µs**, ten times the target, with ~610 µs
+of it *fixed* — a 2 116-entry walk cost as much as a 961 540-entry one. Two
+guesses at why (empty blocks past the real frontier; block-dispatch cost with
+18 KB of shared memory) were **both wrong**: converting every kernel to a
+grid-stride loop moved it by 16 µs, and dropping the grid from 512 blocks to 128
+moved it by nothing.
+
+`-DKF_PHASES` settled it in one run: `cudaEvent`s around each phase showed three
+`expand` launches at **~158 µs each on a frontier of one entry**. That is 275
+cycles per table entry — and `ptxas -v` says **0 bytes of spill**, so it was not
+register pressure. It was simply the throughput one lane gets while thirty-one
+sit idle. The same measurement then showed the leaf phase at 1 741 µs for the
+same reason.
+
+⇒ `__ballot_sync` in the expand (158 → 14 µs) and a warp-split coalescer in the
+leaf phase (1 741 → 85 µs). **Measure before reasoning; the instrument was worth
+more than either hypothesis.**
+
+### How the compaction preserves run identity and ordering
+
+- **Children are written at `scan[parent] + rank_within_parent`.** An `atomicAdd`
+  reservation would have been simpler and would have scrambled the order the
+  per-class diff and `walkdiff` both depend on. The scan is what makes the
+  frontier — and therefore the task array — come out in exactly depth-first
+  order.
+- ⇒ **Concatenating each task's runs in task order reproduces the serial emission
+  stream exactly**, including the big/small interleave inside a dual slot. The
+  only runs the serial walk would have joined and a concatenation would not are
+  those meeting at a boundary, and both boundary levels re-join them by the same
+  rule: *the follower contributes one run fewer and adds its first run's LENGTH
+  to the run its predecessor already wrote.*
+- At the **task** boundary that add is a separate kernel launch; at the **lane**
+  boundary it is after a `__syncwarp()`. Same reason both times: a plain store of
+  `len` and an atomic add to it would otherwise race, and the store would win.
+- An **empty** task or lane breaks a chain, and that is correct rather than
+  convenient — it emits nothing only when its VA range holds no mapping, and a
+  hole in VA breaks contiguity anyway.
+
+⊘ **One known difference from the serial walk, in the hostile direction only.**
+The serial coalescer carries its open run across a task that emitted *nothing*,
+so a mapping either side of an all-refused task could join. That needs every leaf
+in the task refused, which only a misaligned *large* leaf can do. In that one case
+the parallel walk reports one more run. The mapping SET is identical, which is
+what every consumer and every test asserts.
+
+### The invariants, and what changed
+
+**I1 is STRONGER, not weaker.** The depth of the walk is now the host's launch
+loop, bounded by `KF_DIRS`, a compile-time constant: there is no recursion to
+bound because **a level is a kernel launch**. A cycle in the guest's tables
+produces frontier entries at the next level, and there is no level after the
+last. `check-invariants` asserts the loop's exact form, that no `while` appears on
+any parallel guest-data path, and that eight parallel loops carry the
+`KF_MAX_FRONTIER` compile-time cap.
+
+**I2 is unchanged, and now covers more.** `kf_win_load` is the single caller of
+the single dereference, and every path — serial and parallel — goes through it.
+⊘ **The load is still `volatile`.** The `race/*` cases depend on each dereference
+being a real read of current memory, and the parallel walk gets its memory-level
+parallelism from *threads* rather than from letting the compiler batch loads, so
+nothing was given up for speed. All four racing cases pass unchanged.
+
+**I3 gains two caps** — the frontier and the run staging area — both loud
+(`KFWR_R_FRONTIER_CAP`). ⚠ It also gained a distinction it needed: running out of
+**run** slots truncates the report but the walk must still write what fits, while
+running out of **budget or frontier** stops the walk itself. Conflating them made
+a run-cap truncation emit a report of uninitialised runs.
+
+### The count and the write read ONE snapshot
+
+Every table is read from GPGA **once**, into shared memory; the counting sweep and
+the writing sweep both read that snapshot. ⊘ That is not an optimisation, it is
+what makes the walk correct while the guest mutates the tables underneath it: two
+sweeps reading global memory would disagree about how many runs a task has, and
+the writer would then overrun its neighbour or leave a hole. It was the racing
+cases that forced the design, not the benchmark.
+
 ## ★★★★★ Delta round-trip closure
 
     apply(model, deltas_from_walk_N) == full_walk_N        for all N
