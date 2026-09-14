@@ -249,6 +249,7 @@ name = "kayfabe-mmu"
 version = "0.1.0"
 dependencies = [
  "kayfabe-arch",
+ "kayfabe-chips",
  "kayfabe-isolate",
  "kayfabe-util",
 ]
