@@ -1,5 +1,31 @@
 # The `UVM_MAP_EXTERNAL_ALLOCATION` wall
 
+> # ★★★★★ SOLVED (w707/w708) — `CUP3_VAL=43`. READ THIS, THEN THE HUNT BELOW.
+>
+> **The cause:** `MAX_ENTRIES_PER_DOORBELL = 8` documents itself as leaving the remainder *"for
+> its next doorbell"*. That is an assumption **about the guest**: true for CeUtils, which rings
+> once per block, and **false for UVM**, which submits every page-table init and `copy_ptes` push
+> for a range back-to-back, rings **ONCE**, then waits in `uvm_tracker_wait` for all of them.
+> Entries we declined to walk were pushes that never executed, so their semaphores were never
+> released — no fault, no Xid, no refusal, one thread spinning.
+>
+> **The evidence:** every 2 MiB map returned and the first 48 MiB map never did (w704);
+> `GPFIFO-STRANDED events=1 entries=12 ring=0x121010000 gp_put=35 took=8`; and the kernel stack
+> of the burning thread, `uvm_spin_loop <- uvm_tracker_wait` (w707).
+>
+> **The fix:** `CeUtilsRun::stranded` reports what a pass could not take and the doorbell path
+> re-offers the token, so the worker drains the remainder. The cap still bounds one pass against a
+> hostile ring; the continuation is now **ours** rather than a doorbell that never comes.
+>
+> `[measured w708]` `GPFIFO-CONTINUE … re_offered=Queued` x6, 36 entries drained,
+> **`CUP3_RC=0 CUP3_VAL=43`**, with `TRAP_FILLS=0`, `VCPU-BLOCKING total=22` and
+> `HOST_DMESG_XID=0` all unmoved.
+>
+> ⊘ Everything below is the hunt that got here, including **eight refuted hypotheses**. It is kept
+> because the refutations are the expensive part and the next reader's first instinct will be one
+> of them.
+
+
 **STATUS: LIVE, 2026-09-13 (w695i/w695j).** Measured, not inferred. Supersedes every earlier
 account of the `cuCtxCreate` wall in this campaign — in particular the w694 reading
 (*"the projection never files cuCtxCreate's channels"*), which is **refuted**: see §4.
