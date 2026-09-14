@@ -58,6 +58,14 @@ static inline uint64_t kfb_pte(uint64_t phys, uint32_t ap = AP_PTE_VID, uint64_t
 static inline uint64_t kfb_sparse_pte(void) { return PTE_VOL; }
 static inline uint64_t kfb_sparse_pde(void) { return PTE_VOL; }
 
+/* The target of a PTE, decoded the same way the builder encodes it. */
+static inline uint64_t kfb_pte_addr(uint64_t e)
+{
+    uint32_t ap = (uint32_t)((e >> 1) & 3u);
+    uint32_t w = (ap <= AP_PTE_PEER) ? 25u : 46u;
+    return ((e >> 8) & kfb_mask(w)) << 12;
+}
+
 static inline uint64_t kfb_pde_child(uint64_t e)
 {
     uint32_t ap = (uint32_t)((e >> 1) & 3u);

@@ -375,7 +375,10 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                         /* BIG before SMALL inside a 64 KiB chunk. The two leaves
                          * can share a VA, and the report's order must be a TOTAL
                          * order the diff can merge-join on: (va ascending, page
-                         * size DESCENDING). kf_key_cmp is that order. */
+                         * size DESCENDING). The diff does not rely on that
+                         * cross-class order any more -- it diffs each class
+                         * separately -- but it DOES rely on each class being
+                         * ascending in VA, which this ordering gives it. */
                         if (has_b) {
                             uint64_t e;
                             if (!kf_charge(c, 1)) break;
@@ -515,16 +518,136 @@ __device__ __forceinline__ void kf_put(KfOut &o, KfDev *d, const KfMapRun &r, ui
     o.run[o.n++] = x;
 }
 
-__device__ __forceinline__ int kf_key_cmp(const KfMapRun &x, const KfMapRun &y)
+/* The page-size class of a run: 0 = 4 KiB … 3 = 512 MiB. */
+__device__ __forceinline__ uint32_t kf_cls(const KfMapRun &r)
 {
-    if (x.va != y.va) return x.va < y.va ? -1 : 1;
-    uint32_t px = (x.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-    uint32_t py = (y.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-    /* ⚠ page size DESCENDING at an equal VA — the order the walk emits a dual
-     * slot's big and small leaves in. A merge join is only correct over the
-     * producer's own total order. */
-    if (px != py) return px > py ? -1 : 1;
-    return 0;
+    return (r.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
+}
+
+/* The next index at or after `from` whose run is in class `cls`. */
+__device__ __forceinline__ uint32_t kf_next_cls(const KfMapRun *a, uint32_t n, uint32_t from, uint32_t cls)
+{
+    while (from < n && kf_cls(a[from]) != cls) from++;
+    return from;
+}
+
+/* One output run under construction. Segments are produced in ascending VA
+ * within a class, so coalescing them is the same rule the walk uses. */
+struct KfSeg {
+    uint32_t have, op, flags;
+    uint64_t va, gpga, len;
+};
+
+__device__ __forceinline__ void kf_seg_flush(KfOut &o, KfDev *d, KfSeg &s, uint16_t pi)
+{
+    if (!s.have) return;
+    KfMapRun r;
+    r.va = s.va; r.gpga = s.gpga; r.len = s.len; r.flags = s.flags;
+    r.op = (uint16_t)s.op; r.pdb_index = pi;
+    kf_put(o, d, r, s.op, pi);
+    s.have = 0u;
+}
+
+__device__ __forceinline__ void kf_seg_emit(KfOut &o, KfDev *d, KfSeg &s, uint16_t pi,
+                                            uint32_t op, uint64_t va, uint64_t gpga,
+                                            uint64_t len, uint32_t flags)
+{
+    if (s.have && s.op == op && s.flags == flags &&
+        s.va + s.len == va && s.gpga + s.len == gpga) {
+        s.len += len;
+        return;
+    }
+    kf_seg_flush(o, d, s, pi);
+    s.have = 1u; s.op = op; s.va = va; s.gpga = gpga; s.len = len; s.flags = flags;
+}
+
+/* ★★★★★ THE DELTA, PER PAGE-SIZE CLASS, AT SEGMENT GRANULARITY.
+ *
+ * ⊘ The previous shape — one merge join over the combined list, comparing whole
+ * runs on the key (va, page size) — produced deltas that were individually
+ * plausible and did NOT reconstruct. A cur run covering several prev runs
+ * emitted one REMAP followed by UNMAPs of the runs it had just replaced, so
+ * applying the report in order LOST those mappings. It was found by the
+ * round-trip closure test, not by any of the nine single-step delta cases,
+ * because every one of those changes exactly one run.
+ *
+ * The shape below cannot express that. Within one class, prev and cur are each
+ * sorted, disjoint interval sets, and the walk is compared to them SEGMENT by
+ * segment:
+ *
+ *   prev covers, cur does not  ⇒ UNMAP
+ *   cur covers, prev does not  ⇒ MAP
+ *   both, and they differ      ⇒ REMAP
+ *   both, and they agree       ⇒ nothing (and the output run breaks)
+ *
+ * ⇒ **The UNMAP set and the MAP/REMAP set are disjoint in (va, class) by
+ * construction**, so the order a host applies the runs in cannot matter. That is
+ * a much stronger property than "apply them in the order given", and it is the
+ * one the round-trip test actually checks.
+ *
+ * ⚠ Classes are processed separately because a 4 KiB and a 64 KiB leaf can
+ * describe the SAME virtual address (both halves of a dual PDE). They are
+ * different mappings at one VA, so they must be diffed against their own kind;
+ * a single interleaved pass would treat one as replacing the other.
+ */
+__device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
+                              const KfMapRun *pr, uint32_t pn,
+                              const KfMapRun *cr, uint32_t cn)
+{
+    KfSeg s; s.have = 0u; s.op = 0u; s.flags = 0u; s.va = 0ull; s.gpga = 0ull; s.len = 0ull;
+    uint32_t p = kf_next_cls(pr, pn, 0u, cls);
+    uint32_t q = kf_next_cls(cr, cn, 0u, cls);
+    uint64_t pv = 0, pg = 0, pl = 0, cv = 0, cg = 0, cl = 0;
+    uint32_t pf = 0, cf = 0, ph = 0, ch = 0;
+
+    /* A fixed trip count over OUR OWN counts: every iteration either finishes a
+     * run on one side or splits one, and a split's boundary is the other side's
+     * edge, so 3*(pn+cn) bounds it. Tripping the guard is loud. */
+    const uint32_t guard_max = 4u * (pn + cn) + 8u;
+    uint32_t guard = 0u;
+    for (; guard < guard_max; guard++) {
+        if (!ph && p < pn) { pv = pr[p].va; pg = pr[p].gpga; pl = pr[p].len; pf = pr[p].flags; ph = 1u; }
+        if (!ch && q < cn) { cv = cr[q].va; cg = cr[q].gpga; cl = cr[q].len; cf = cr[q].flags; ch = 1u; }
+        if (!ph && !ch) break;
+        if (!ch) {
+            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, pl, pf);
+            ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
+        }
+        if (!ph) {
+            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, cl, cf);
+            ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); continue;
+        }
+        if (pv + pl <= cv) {
+            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, pl, pf);
+            ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
+        }
+        if (cv + cl <= pv) {
+            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, cl, cf);
+            ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); continue;
+        }
+        if (pv < cv) {                       /* prev-only head */
+            uint64_t n = cv - pv;
+            kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, pv, pg, n, pf);
+            pv += n; pg += n; pl -= n; continue;
+        }
+        if (cv < pv) {                       /* cur-only head */
+            uint64_t n = pv - cv;
+            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, n, cf);
+            cv += n; cg += n; cl -= n; continue;
+        }
+        {                                    /* both cover [pv, pv+n) */
+            uint64_t n = pl < cl ? pl : cl;
+            if (pg != cg || pf != cf) kf_seg_emit(o, d, s, pi, KFWR_OP_REMAP, cv, cg, n, cf);
+            else kf_seg_flush(o, d, s, pi);  /* unchanged: nothing, and the run breaks */
+            pv += n; pg += n; pl -= n;
+            cv += n; cg += n; cl -= n;
+            if (!pl) { ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); }
+            if (!cl) { ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); }
+            continue;
+        }
+    }
+    if (guard >= guard_max) { d->refuse_mask |= KFWR_R_DELTA_CAP; d->refusals++; o.trunc = 1u; }
+    kf_seg_flush(o, d, s, pi);
 }
 
 __global__ void kf_diff_kernel(KfArgs a)
@@ -573,7 +696,12 @@ __global__ void kf_diff_kernel(KfArgs a)
             vflags |= resync ? (KFWR_V_NEW | KFWR_V_RESYNC) : KFWR_V_NEW;
             const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
             uint32_t cn = d->tbl_run_count[cur][ic];
-            for (uint32_t k = 0u; k < cn; k++) kf_put(o, d, cr[k], KFWR_OP_MAP, pi);
+            /* Per class, so a RESYNC report carries the SAME ordering rule as a
+             * delta: grouped by page-size class, ascending within a class. */
+            for (uint32_t cls = 0u; cls < 4u; cls++)
+                for (uint32_t k = kf_next_cls(cr, cn, 0u, cls); k < cn;
+                     k = kf_next_cls(cr, cn, k + 1u, cls))
+                    kf_put(o, d, cr[k], KFWR_OP_MAP, pi);
             ic++;
         } else if (take == -1) {
             /* ⊘ GONE carries NO runs. The format doc leaves the choice open; the
@@ -585,30 +713,8 @@ __global__ void kf_diff_kernel(KfArgs a)
             const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
             uint32_t pn = d->tbl_run_count[prv][ip];
             uint32_t cn = d->tbl_run_count[cur][ic];
-            uint32_t p = 0u, q = 0u;
-            while (p < pn || q < cn) {
-                if (q >= cn)      { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
-                if (p >= pn)      { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
-                int k = kf_key_cmp(pr[p], cr[q]);
-                if (k < 0)        { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
-                if (k > 0)        { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
-                KfMapRun P = pr[p], C = cr[q];
-                if (P.gpga == C.gpga && P.len == C.len && P.flags == C.flags) {
-                    /* unchanged — the whole point of the delta */
-                } else if (C.len >= P.len) {
-                    /* ★ REMAP over the WHOLE new extent rather than UNMAP+MAP: the
-                     * host re-points without a window in which the VA is unmapped. */
-                    kf_put(o, d, C, KFWR_OP_REMAP, pi);
-                } else {
-                    kf_put(o, d, C, KFWR_OP_REMAP, pi);
-                    KfMapRun tail = P;
-                    tail.va = C.va + C.len;
-                    tail.gpga = P.gpga + C.len;
-                    tail.len = P.len - C.len;
-                    kf_put(o, d, tail, KFWR_OP_UNMAP, pi);
-                }
-                p++; q++;
-            }
+            for (uint32_t cls = 0u; cls < 4u; cls++)
+                kf_diff_class(o, d, pi, cls, pr, pn, cr, cn);
             ip++; ic++;
         }
 

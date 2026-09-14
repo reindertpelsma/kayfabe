@@ -15,6 +15,8 @@
 #include <atomic>
 #include <chrono>
 #include <algorithm>
+#include <map>
+#include <set>
 
 #include "kf_walk.h"
 #include "kf_tables.h"
@@ -128,14 +130,20 @@ static void validate(Fix &f)
     const char *why = NULL;
     int rc = kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), &why);
     CHECK_M(rc == 0, why);
+    /* ⚠ The REPORT's order is (page-size class ascending, VA ascending within a
+     * class) -- NOT the walk's (va asc, size desc). The diff is computed per
+     * class, because a 4 KiB and a 64 KiB leaf can name the same VA. ⊘ And the
+     * order is no longer load-bearing: the UNMAP set and the MAP/REMAP set are
+     * disjoint in (va, class) by construction, so a host may apply the runs in
+     * any order. The round-trip test asserts exactly that. */
     for (uint32_t p = 0; p < f.hdr.pdb_count; p++) {
         for (uint32_t i = 1; i < f.pe[p].run_count; i++) {
             const KfMapRun &a = f.rn[f.pe[p].first_run + i - 1];
             const KfMapRun &b = f.rn[f.pe[p].first_run + i];
             uint32_t pa = (a.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
             uint32_t pb = (b.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-            bool ok = (a.va < b.va) || (a.va == b.va && pa >= pb);
-            CHECK_M(ok, "runs not in (va asc, page-size desc) order");
+            bool ok = (pa < pb) || (pa == pb && a.va < b.va);
+            CHECK_M(ok, "runs not in (page-size class asc, va asc) order");
         }
     }
 }
@@ -317,8 +325,8 @@ static void t_dual_pde_both_halves(void)
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     expect(f, {
-        {VBASE,             0x400000ull, 64ull << 10, F64K, KFWR_OP_MAP},
         {VBASE,             0x500000ull, 2ull * 4096ull, F4K, KFWR_OP_MAP},
+        {VBASE,             0x400000ull, 64ull << 10, F64K, KFWR_OP_MAP},
     });
 }
 
@@ -434,17 +442,16 @@ static void t_delta_extend_and_shrink(void)
     t.map4k(VBASE + 4 * 4096ull, 0x804000ull);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
-    expect(f, {{VBASE, 0x800000ull, 5 * 4096ull, F4K, KFWR_OP_REMAP}});
+    /* ★ The unchanged prefix is NOT re-pointed. The delta is exactly the new
+     * page -- the per-class segment diff compares coverage, not whole runs. */
+    expect(f, {{VBASE + 4 * 4096ull, 0x804000ull, 4096ull, F4K, KFWR_OP_MAP}});
     f.ack();
     /* shrink: drop the last two. REMAP the survivor + UNMAP the tail. */
     t.unmap4k(VBASE + 4 * 4096ull);
     t.unmap4k(VBASE + 3 * 4096ull);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
-    expect(f, {
-        {VBASE,                  0x800000ull, 3 * 4096ull, F4K, KFWR_OP_REMAP},
-        {VBASE + 3 * 4096ull,    0x803000ull, 2 * 4096ull, F4K, KFWR_OP_UNMAP},
-    });
+    expect(f, {{VBASE + 3 * 4096ull, 0x803000ull, 2 * 4096ull, F4K, KFWR_OP_UNMAP}});
 }
 
 static void t_delta_move_page_table(void)
@@ -1167,7 +1174,7 @@ static void t_scope_covering_the_change(void)
     CHECK(f.hdr.flags & KFWR_HF_SCOPED);
     /* the new page is adjacent to the old one ⇒ the run extends ⇒ REMAP; and
      * region B, which the hint excluded, must NOT be reported as unmapped. */
-    expect(f, {{VBASE, 0x800000ull, 2 * 4096ull, F4K, KFWR_OP_REMAP}});
+    expect(f, {{VBASE + 0x1000ull, 0x801000ull, 4096ull, F4K, KFWR_OP_MAP}});
 }
 
 static void t_scope_excluding_a_pdb_carries_it(void)
@@ -1193,7 +1200,7 @@ static void t_scope_sentinel_is_a_full_walk(void)
     f.upload();
     KfScope sc = { t.root, 0ull, 0ull };     /* va_len == 0: the doc's sentinel */
     CHECK_EQ(f.refresh({t.root}, { sc }), 0);
-    expect(f, {{VBASE, 0x800000ull, 2 * 4096ull, F4K, KFWR_OP_REMAP}});
+    expect(f, {{VBASE + 0x1000ull, 0x801000ull, 4096ull, F4K, KFWR_OP_MAP}});
 }
 
 static void t_scope_overflow_degrades_to_full(void)
@@ -1209,7 +1216,7 @@ static void t_scope_overflow_degrades_to_full(void)
     CHECK_EQ(f.refresh({t.root}, sc), 0);
     validate(f);
     CHECK_M(f.hdr.flags & KFWR_HF_SCOPE_DEGRADED, "too many hints must degrade, loudly");
-    expect(f, {{VBASE, 0x800000ull, 2 * 4096ull, F4K, KFWR_OP_REMAP}});
+    expect(f, {{VBASE + 0x1000ull, 0x801000ull, 4096ull, F4K, KFWR_OP_MAP}});
 }
 
 static void t_scope_cannot_make_the_walk_wrong(void)
@@ -1464,6 +1471,610 @@ static void t_differential_rust_walker(void)
     CHECK_M(agreed > 1200, "the differential decoded almost nothing: it would be vacuous");
 }
 
+
+/* ══ DELTA ROUND-TRIP CLOSURE ════════════════════════════════════════════════
+ *
+ *      apply(model, deltas_from_walk_N) == full_walk_N      for all N
+ *
+ * The nine t_delta_* cases each build ONE change and assert ONE expected delta.
+ * Nothing accumulates, so nothing checks closure -- and a stream of individually
+ * plausible deltas can drift silently. This does the accumulating: start from a
+ * model of the mappings, then mutate / walk / APPLY / compare against a fresh
+ * full walk of the same tables, for hundreds of seeded random steps.
+ *
+ * ⊘ DELIBERATELY NOT COUPLED TO THE SHADOW. "A fresh full walk" is obtained from
+ * a SECOND walker that is never acked, so every one of its reports is a RESYNC,
+ * i.e. the full current state. If the open design question settles on the kernel
+ * returning full state instead of deltas, `rt_full_state` is unchanged and
+ * `model_apply` becomes the host-side diff-and-apply this same loop tests.
+ */
+
+struct MKey { uint64_t pdb, va; uint32_t ps; };
+static bool operator<(const MKey &a, const MKey &b)
+{
+    if (a.pdb != b.pdb) return a.pdb < b.pdb;
+    if (a.va != b.va) return a.va < b.va;
+    return a.ps < b.ps;
+}
+struct MVal { uint64_t gpga; uint32_t flags; };
+typedef std::map<MKey, MVal> Model;
+
+static const uint64_t RT_PSB[4] = { 4ull << 10, 64ull << 10, 2ull << 20, 512ull << 20 };
+
+struct ApplyStat { unsigned map_over_existing, unmap_of_missing; };
+
+static void model_erase_pdb(Model &m, uint64_t pdb)
+{
+    MKey lo = { pdb, 0ull, 0u }, hi = { pdb + 1ull, 0ull, 0u };
+    m.erase(m.lower_bound(lo), m.lower_bound(hi));
+}
+
+static void model_apply_run(Model &m, uint64_t pdb, const KfMapRun &r, ApplyStat &st)
+{
+    uint32_t cls = (r.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
+    uint64_t ps = RT_PSB[cls];
+    for (uint64_t o = 0; o < r.len; o += ps) {
+        MKey k = { pdb, r.va + o, cls };
+        if (r.op == KFWR_OP_UNMAP) {
+            if (!m.erase(k)) st.unmap_of_missing++;
+        } else {
+            if (r.op == KFWR_OP_MAP && m.count(k)) st.map_over_existing++;
+            MVal v = { r.gpga + o, r.flags };
+            m[k] = v;
+        }
+    }
+}
+
+/* `reverse` applies the runs back to front. ★ Both orders must give the same
+ * model: the UNMAP set and the MAP/REMAP set are disjoint in (va, class) by
+ * construction, so a host may apply a report in any order. That is the property
+ * the per-class segment diff exists to provide, and asserting it here is how a
+ * regression to "order matters" gets caught. */
+static bool model_apply(Model &m, const KfReportHeader &h, const KfPdbEntry *pe,
+                        const KfMapRun *rn, ApplyStat &st, bool reverse = false)
+{
+    if (h.flags & KFWR_HF_TRUNCATED) return false;     /* never applied as a delta */
+    if (h.flags & KFWR_HF_RESYNC) m.clear();
+    for (uint32_t p = 0; p < h.pdb_count; p++) {
+        uint64_t pdb = pe[p].pdb;
+        if (pe[p].vas_flags & KFWR_V_GONE) { model_erase_pdb(m, pdb); continue; }
+        if (!(h.flags & KFWR_HF_RESYNC) && (pe[p].vas_flags & KFWR_V_RESYNC))
+            model_erase_pdb(m, pdb);
+        uint32_t n = pe[p].run_count, f0 = pe[p].first_run;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t k = reverse ? (f0 + n - 1 - i) : (f0 + i);
+            model_apply_run(m, pdb, rn[k], st);
+        }
+    }
+    return true;
+}
+
+static bool model_eq(const Model &a, const Model &b, std::string &why)
+{
+    Model::const_iterator ia = a.begin(), ib = b.begin();
+    while (ia != a.end() && ib != b.end()) {
+        char buf[224];
+        if (ia->first < ib->first) {
+            snprintf(buf, sizeof(buf), "model has pdb=%llx va=%llx ps=%u that the full walk does not",
+                     (unsigned long long)ia->first.pdb, (unsigned long long)ia->first.va, ia->first.ps);
+            why = buf; return false;
+        }
+        if (ib->first < ia->first) {
+            snprintf(buf, sizeof(buf), "full walk has pdb=%llx va=%llx ps=%u that the model does not",
+                     (unsigned long long)ib->first.pdb, (unsigned long long)ib->first.va, ib->first.ps);
+            why = buf; return false;
+        }
+        if (ia->second.gpga != ib->second.gpga || ia->second.flags != ib->second.flags) {
+            snprintf(buf, sizeof(buf),
+                     "pdb=%llx va=%llx ps=%u: model gpga=%llx fl=%x, full walk gpga=%llx fl=%x",
+                     (unsigned long long)ia->first.pdb, (unsigned long long)ia->first.va, ia->first.ps,
+                     (unsigned long long)ia->second.gpga, ia->second.flags,
+                     (unsigned long long)ib->second.gpga, ib->second.flags);
+            why = buf; return false;
+        }
+        ++ia; ++ib;
+    }
+    if (ia != a.end() || ib != b.end()) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "sizes differ: model %zu, full walk %zu", a.size(), b.size());
+        why = buf; return false;
+    }
+    return true;
+}
+
+/* ── the arena a mutation stream acts on ─────────────────────────────────────
+ * Every table is allocated ONCE at construction and remembered, so a mutation is
+ * a direct byte write with a known inverse. The ROOT and the PD3/PD2 entries are
+ * never touched -- the coordinator's trap: a stream that scribbles the root makes
+ * every step bail at entry 1 and pass vacuously. `rt_stats` asserts otherwise. */
+struct Vas {
+    uint64_t root, pd1, pd0, base, pd1_word;
+    uint32_t i1, i0;
+    uint64_t pts[4], ptb[4];
+};
+
+static void vas_build(Gpga &g, Vas &v, uint64_t base)
+{
+    Tree t(g);
+    v.root = t.root; v.base = base;
+    v.i1 = vi1(base); v.i0 = vi0(base);
+    v.pd1 = t.pd1(base);
+    v.pd0 = t.pd0(base);
+    for (int k = 0; k < 4; k++) {
+        uint64_t va = base + (uint64_t)k * (1ull << 21);
+        v.pts[k] = t.pts(va);
+        v.ptb[k] = t.ptb(va);
+    }
+    v.pd1_word = g.u64(v.pd1 + (uint64_t)v.i1 * 8);
+}
+
+struct Rng {
+    uint64_t s;
+    explicit Rng(uint64_t seed) : s(seed ? seed : 1ull) {}
+    uint64_t next() { s = s * 6364136223846793005ull + 1442695040888963407ull; return s >> 17; }
+    uint32_t below(uint32_t n) { return (uint32_t)(next() % (uint64_t)n); }
+};
+
+static uint64_t &pd0_lo(Gpga &g, Vas &v, int k) { return g.u64(v.pd0 + (uint64_t)(v.i0 + k) * 16); }
+static uint64_t &pd0_hi(Gpga &g, Vas &v, int k) { return g.u64(v.pd0 + (uint64_t)(v.i0 + k) * 16 + 8); }
+
+/* One benign edit. Returns false if it chose a no-op. */
+static void mutate_benign(Gpga &g, Vas &v, Rng &r)
+{
+    int k = (int)r.below(4);
+    switch (r.below(12)) {
+    case 0: {   /* rewrite a small table: a run, a hole and a gpga discontinuity */
+        memset(g.mem.data() + v.pts[k], 0, 4096);
+        uint32_t st = r.below(300), cnt = 1u + r.below(96);
+        uint64_t gb = 0x2000000ull + (uint64_t)r.below(1024) * 4096ull;
+        uint32_t hole = st + 1u + r.below(cnt);
+        uint32_t jump = st + 1u + r.below(cnt);
+        for (uint32_t i = st; i < st + cnt && i < 512; i++) {
+            if (i == hole) continue;
+            uint64_t gp = gb + (uint64_t)(i - st) * 4096ull + ((i >= jump) ? 0x100000ull : 0ull);
+            g.u64(v.pts[k] + (uint64_t)i * 8) = kfb_pte(gp, AP_PTE_VID, (i & 8u) ? PTE_READ_ONLY : 0);
+        }
+        break;
+    }
+    case 1:  memset(g.mem.data() + v.pts[k], 0, 4096); break;         /* clear small  */
+    case 2: {   /* rewrite a big table -- this is what puts BOTH halves of a dual
+                 * PDE in play, i.e. two page-size classes over one VA range */
+        memset(g.mem.data() + v.ptb[k], 0, 256);
+        uint32_t st = r.below(24), cnt = 1u + r.below(8);
+        uint64_t gb = 0x4000000ull + (uint64_t)r.below(256) * 65536ull;
+        for (uint32_t i = st; i < st + cnt && i < 32; i++)
+            g.u64(v.ptb[k] + (uint64_t)i * 8) = kfb_pte(gb + (uint64_t)(i - st) * 65536ull);
+        break;
+    }
+    case 3:  memset(g.mem.data() + v.ptb[k], 0, 256); break;          /* clear big    */
+    case 4:  pd0_hi(g, v, k) = r.below(2) ? kfb_pde(v.pts[k]) : 0ull; break;
+    case 5:  if (!(pd0_lo(g, v, k) & PTE_VALID))
+                 pd0_lo(g, v, k) = r.below(2) ? kfb_big_pde(v.ptb[k]) : 0ull;
+             break;
+    case 6:  /* a 2 MiB leaf REPLACES the dual PDE for that slot, and back */
+             pd0_lo(g, v, k) = r.below(2)
+                 ? kfb_pte(0x6000000ull + (uint64_t)r.below(8) * (1ull << 21))
+                 : kfb_big_pde(v.ptb[k]);
+             break;
+    case 7: {   /* move a whole page table: a byte-identical copy, reparented */
+        uint64_t nw = g.alloc(4096, 4096);
+        memcpy(g.mem.data() + nw, g.mem.data() + v.pts[k], 4096);
+        memset(g.mem.data() + v.pts[k], 0, 4096);
+        v.pts[k] = nw;
+        pd0_hi(g, v, k) = kfb_pde(nw);
+        break;
+    }
+    case 8: {   /* edit one live PTE: its target, or its flags */
+        uint32_t i = r.below(512);
+        uint64_t &e = g.u64(v.pts[k] + (uint64_t)i * 8);
+        if (e & PTE_VALID) {
+            if (r.below(2)) e = kfb_pte(kfb_pte_addr(e) + 0x10000ull, AP_PTE_VID, e & 0xF8ull);
+            else e ^= PTE_READ_ONLY;
+        }
+        break;
+    }
+    case 9:  g.u64(v.pd1 + (uint64_t)(v.i1 + 1u) * 8) =
+                 r.below(2) ? kfb_pte(0x20000000ull * (1ull + r.below(3))) : 0ull;
+             break;
+    case 10: /* free / restore a whole subtree */
+             g.u64(v.pd1 + (uint64_t)v.i1 * 8) = r.below(2) ? v.pd1_word : 0ull;
+             break;
+    default: {  /* declare a slot sparse, or un-declare it */
+        uint32_t i = r.below(512);
+        g.u64(v.pts[k] + (uint64_t)i * 8) = r.below(2) ? kfb_sparse_pte() : 0ull;
+        break;
+    }
+    }
+}
+
+/* A corruption, and its repair. The root, the PD3 entry and the PD2 entry are
+ * out of scope on purpose: corrupting those makes every later step vacuous. */
+static void mutate_hostile(Gpga &g, Vas &v, Rng &r)
+{
+    int k = (int)r.below(4);
+    switch (r.below(7)) {
+    case 0: pd0_hi(g, v, k) = kfb_pde(v.pd0); break;                       /* cycle      */
+    case 1: pd0_hi(g, v, k) = kfb_pde((uint64_t)g.size() + (2u << 20)); break; /* past end  */
+    case 2: pd0_hi(g, v, k) = kfb_pde(v.pts[k], AP_PDE_SCOH); break;       /* sysmem     */
+    case 3: g.u64(v.pts[k] + (uint64_t)r.below(512) * 8) = ~0ull; break;   /* all ones   */
+    case 4: pd0_lo(g, v, k) = kfb_big_pde((uint64_t)g.size() + (2u << 20)); break;
+    case 5: pd0_hi(g, v, k) = kfb_pde(v.root); break;                      /* type conf. */
+    default:                                                               /* repair     */
+        pd0_hi(g, v, k) = kfb_pde(v.pts[k]);
+        if (!(pd0_lo(g, v, k) & PTE_VALID)) pd0_lo(g, v, k) = kfb_big_pde(v.ptb[k]);
+        break;
+    }
+}
+
+struct RtStats {
+    int steps, compared, trunc, changed, nonempty;
+    size_t max_model;
+    unsigned long long visited_max;
+};
+
+static void rt_full_state(KfWalk *oracle, void *dev, uint64_t len,
+                          const std::vector<uint64_t> &roots, Model &out,
+                          KfReportHeader &h, std::vector<KfPdbEntry> &pe,
+                          std::vector<KfMapRun> &rn, bool &ok)
+{
+    ok = false;
+    if (kf_refresh(oracle, dev, len, roots.data(), (uint32_t)roots.size(), NULL, 0,
+                   &h, pe.data(), rn.data()) != 0) return;
+    if (!(h.flags & KFWR_HF_RESYNC)) { failf(__LINE__, "the oracle walker must always RESYNC", NULL); return; }
+    if (h.flags & KFWR_HF_TRUNCATED) return;      /* caller skips the comparison */
+    out.clear();
+    ApplyStat st = { 0u, 0u };
+    model_apply(out, h, pe.data(), rn.data(), st);
+    ok = true;
+}
+
+
+/* ══ the stream ══════════════════════════════════════════════════════════════ */
+
+static const uint64_t RT_BUF = 64ull << 20;
+
+static void rt_stream(bool hostile, uint64_t seed, int steps, RtStats &sx)
+{
+    Gpga g(RT_BUF);
+    Vas v[3];
+    for (int i = 0; i < 3; i++) vas_build(g, v[i], VBASE);
+
+    KfWalkCfg c = cfg_default();
+    c.runs_per_pdb = 4096;
+    c.run_capacity = 16384;
+    c.pdb_capacity = 8;
+    c.max_pdbs = 8;
+    c.entry_budget = 4000000u;
+
+    void *dev = NULL;
+    CUDA_OK(cudaMalloc(&dev, (size_t)RT_BUF));
+    /* ⊘ Zeroed once, so a hostile pointer that lands past the arena reads a
+     * DEFINED value and the stream is reproducible from its seed alone. */
+    CUDA_OK(cudaMemset(dev, 0, (size_t)RT_BUF));
+    KfWalk *W = kf_create(&c);        /* the delta walker -- acked after each apply */
+    KfWalk *O = kf_create(&c);        /* the oracle -- NEVER acked, so always RESYNC */
+
+    KfReportHeader hw, ho;
+    std::vector<KfPdbEntry> pw(c.pdb_capacity + 4), po(c.pdb_capacity + 4);
+    std::vector<KfMapRun> rw(c.run_capacity + 4), ro(c.run_capacity + 4);
+
+    Model model, full, prev_full;
+    Rng r(seed);
+    memset(&sx, 0, sizeof(sx));
+    sx.steps = steps;
+    bool have_prev_full = false;
+
+    for (int step = 0; step < steps; step++) {
+        /* 1. mutate */
+        int nmut = 1 + (int)r.below(3);
+        for (int i = 0; i < nmut; i++) {
+            Vas &vv = v[r.below(3)];
+            if (hostile && r.below(4) == 0) mutate_hostile(g, vv, r);
+            else mutate_benign(g, vv, r);
+        }
+        std::vector<uint64_t> roots;
+        uint32_t mask = 1u + r.below(7);
+        for (int i = 0; i < 3; i++) if (mask & (1u << i)) roots.push_back(v[i].root);
+        std::sort(roots.begin(), roots.end());
+
+        uint64_t up = (g.bump + 4095ull) & ~4095ull;
+        CUDA_OK(cudaMemcpy(dev, g.mem.data(), (size_t)up, cudaMemcpyHostToDevice));
+
+        /* 2. walk and APPLY */
+        CHECK_EQ(kf_refresh(W, dev, RT_BUF, roots.data(), (uint32_t)roots.size(), NULL, 0,
+                            &hw, pw.data(), rw.data()), 0);
+        const char *why = NULL;
+        CHECK_M(kf_validate_report(&hw, pw.data(), rw.data(), &why) == 0, why);
+        if (hw.entries_visited > sx.visited_max) sx.visited_max = hw.entries_visited;
+
+        bool applied = false;
+        if (hw.flags & KFWR_HF_TRUNCATED) {
+            /* ⊘ NEVER applied as a delta, and NOT acked -- so the next report is a
+             * full resync. That is the format doc's property 1, as behaviour. */
+            model.clear();
+            sx.trunc++;
+        } else {
+            ApplyStat st = { 0u, 0u };
+            Model rev = model;
+            model_apply(model, hw, pw.data(), rw.data(), st);
+            ApplyStat st2 = { 0u, 0u };
+            model_apply(rev, hw, pw.data(), rw.data(), st2, /*reverse=*/true);
+            std::string w2;
+            if (!model_eq(model, rev, w2)) {
+                char b[320];
+                snprintf(b, sizeof(b), "seed=%llu step=%d: %s",
+                         (unsigned long long)seed, step, w2.c_str());
+                failf(__LINE__, "applying the report in reverse order gives a different model", b);
+            }
+            if (st.map_over_existing) {
+                char b[128];
+                snprintf(b, sizeof(b), "seed=%llu step=%d n=%u", (unsigned long long)seed, step, st.map_over_existing);
+                failf(__LINE__, "a MAP landed on a VA the model already had", b);
+            }
+            if (hw.run_count) sx.nonempty++;
+            kf_ack(W, hw.generation);
+            applied = true;
+        }
+
+        /* 3. the same tables, walked from nothing */
+        bool ok = false;
+        rt_full_state(O, dev, RT_BUF, roots, full, ho, po, ro, ok);
+        if (!ok) continue;
+        if (full.size() > sx.max_model) sx.max_model = full.size();
+        if (have_prev_full && !(full == prev_full)) sx.changed++;
+        prev_full = full;
+        have_prev_full = true;
+
+        /* 4. THE PROPERTY */
+        if (applied) {
+            std::string w;
+            if (!model_eq(model, full, w)) {
+                char b[384];
+                snprintf(b, sizeof(b), "seed=%llu step=%d runs=%u flags=0x%x mask=0x%x :: %s",
+                         (unsigned long long)seed, step, hw.run_count, hw.flags, hw.refuse_mask, w.c_str());
+                failf(__LINE__, "apply(model, delta) != full walk", b);
+                break;
+            }
+            sx.compared++;
+        }
+        if (g_fails_here) break;
+        /* keep the arena from outgrowing the buffer across long streams */
+        if (g.bump > RT_BUF - (8ull << 20)) break;
+    }
+
+    kf_destroy(W);
+    kf_destroy(O);
+    cudaFree(dev);
+}
+
+static void rt_run(bool hostile, const char *tag, const uint64_t *seeds, int nseeds, int steps)
+{
+    RtStats tot;
+    memset(&tot, 0, sizeof(tot));
+    for (int i = 0; i < nseeds; i++) {
+        RtStats sx;
+        rt_stream(hostile, seeds[i], steps, sx);
+        tot.steps += sx.steps; tot.compared += sx.compared; tot.trunc += sx.trunc;
+        tot.changed += sx.changed; tot.nonempty += sx.nonempty;
+        if (sx.max_model > tot.max_model) tot.max_model = sx.max_model;
+        if (sx.visited_max > tot.visited_max) tot.visited_max = sx.visited_max;
+        if (g_fails_here) { printf("      [%s] FAILING SEED %llu\n", tag, (unsigned long long)seeds[i]); break; }
+    }
+    printf("      [%s] %d steps over %d seeds: %d closures checked, %d non-empty deltas, "
+           "%d steps changed the mapping set, %d truncations, max model %zu, deepest walk %llu\n",
+           tag, tot.steps, nseeds, tot.compared, tot.nonempty, tot.changed, tot.trunc,
+           tot.max_model, tot.visited_max);
+    /* ⚠ THE VACUITY GUARDS. A stream that scribbled the root would pass every
+     * closure check while the model stayed empty and every walk bailed at entry
+     * one. These are what make the green above mean something. */
+    CHECK_M(tot.compared > (tot.steps * 3) / 4, "too few steps actually checked closure");
+    CHECK_M(tot.max_model > 300, "the mapping set never got large: the stream did nothing");
+    CHECK_M(tot.changed > tot.steps / 5, "the mutations barely changed anything");
+    CHECK_M(tot.nonempty > tot.steps / 5, "almost every delta was empty");
+    CHECK_M(tot.visited_max > 2000, "no walk ever got past the top levels");
+}
+
+static void t_roundtrip_benign(void)
+{
+    static const uint64_t seeds[] = { 1u, 0xC0FFEEull, 0x9E3779B97F4A7C15ull, 42u };
+    rt_run(false, "benign", seeds, 4, 250);
+}
+
+static void t_roundtrip_hostile(void)
+{
+    static const uint64_t seeds[] = { 7u, 0xBADC0DEull, 0x243F6A8885A308D3ull, 99u };
+    rt_run(true, "hostile", seeds, 4, 250);
+}
+
+/* ══ TRUNCATION IS NOT A DELTA -- and the divergence is demonstrated ═════════ */
+static void t_truncated_is_never_a_delta(void)
+{
+    KfWalkCfg c = cfg_default();
+    c.runs_per_pdb = 64;             /* the WALK truncates at 64 runs */
+    c.run_capacity = 16384;
+    Fix f(32u << 20, c);
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 40; i++)                 /* 40 discontiguous runs */
+        t.map4k(VBASE + (uint64_t)i * 8192ull, 0x800000ull + (uint64_t)i * 16384ull);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK(!(f.hdr.flags & KFWR_HF_TRUNCATED));
+    ApplyStat st = { 0u, 0u };
+    Model model;
+    CHECK(model_apply(model, f.hdr, f.pe.data(), f.rn.data(), st));
+    CHECK_EQ(model.size(), 40);
+    f.ack();
+
+    /* now push it past the run cap */
+    for (uint32_t i = 40; i < 140; i++)
+        t.map4k(VBASE + (uint64_t)i * 8192ull, 0x800000ull + (uint64_t)i * 16384ull);
+    f.upload();
+    Model before = model;
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK_M(f.hdr.flags & KFWR_HF_TRUNCATED, "140 runs into a 64-run table must truncate");
+    CHECK_M(!model_apply(model, f.hdr, f.pe.data(), f.rn.data(), st),
+            "a TRUNCATED report must be refused as a delta by the applier itself");
+
+    /* the full current state, from a walker with room */
+    KfWalkCfg oc = cfg_default();
+    oc.runs_per_pdb = 4096;
+    KfWalk *O = kf_create(&oc);
+    KfReportHeader ho;
+    std::vector<KfPdbEntry> po(oc.pdb_capacity + 4);
+    std::vector<KfMapRun> ro(oc.run_capacity + 4);
+    std::vector<uint64_t> roots(1, t.root);
+    Model full;
+    bool ok = false;
+    rt_full_state(O, f.dev, f.g.size(), roots, full, ho, po, ro, ok);
+    CHECK(ok);
+    CHECK_EQ(full.size(), 140);
+
+    /* ★ THE DEMONSTRATION the property rests on: had the truncated report been
+     * applied as a delta anyway, the model would be WRONG. */
+    Model bad = before;
+    ApplyStat st2 = { 0u, 0u };
+    KfReportHeader forced = f.hdr;
+    forced.flags = (uint16_t)(forced.flags & ~(uint32_t)KFWR_HF_TRUNCATED);
+    model_apply(bad, forced, f.pe.data(), f.rn.data(), st2);
+    std::string w;
+    CHECK_M(!model_eq(bad, full, w), "applying the truncated report SHOULD have diverged, and did not");
+
+    /* and the honest path reconciles. No ack was given, so the next report is a
+     * full RESYNC; once the tree fits the cap again, applying that resync
+     * reconstructs the state exactly -- the mapping set is never silently lost,
+     * only deferred to a resync. */
+    for (uint32_t i = 60; i < 140; i++) t.unmap4k(VBASE + (uint64_t)i * 8192ull);
+    f.upload();
+    model.clear();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    CHECK_M(f.hdr.flags & KFWR_HF_RESYNC, "a refused report must be followed by a resync");
+    CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "60 runs must fit a 64-run table");
+    CHECK(model_apply(model, f.hdr, f.pe.data(), f.rn.data(), st));
+    Model full2;
+    ok = false;
+    rt_full_state(O, f.dev, f.g.size(), roots, full2, ho, po, ro, ok);
+    CHECK(ok);
+    CHECK_EQ(full2.size(), 60);
+    CHECK_M(model_eq(model, full2, w), w.c_str());
+    kf_destroy(O);
+}
+
+/* ══ ROUND-TRIP UNDER THE RACER ══════════════════════════════════════════════
+ * ⊘ SCOPED, and the scope is the point. Under concurrent mutation there is no
+ * "the tables at step N" to compare a walk against: a second walk reads different
+ * bytes. So the per-step assertion is only that the report is WELL FORMED, that
+ * both apply orders agree, and that the model stays in bounds. The EXACT claim is
+ * made once, at the end: stop the racer, take one more delta, apply it, and the
+ * model must equal a fresh full walk of the now-quiesced tables. A racing
+ * round-trip that asserted a specific value would be asserting nothing.
+ */
+static void t_roundtrip_under_racer(void)
+{
+    KfWalkCfg c = cfg_default();
+    c.runs_per_pdb = 4096;
+    c.run_capacity = 16384;
+    c.entry_budget = 200000u;
+    Fix f(16u << 20, c, /*mapped=*/true);
+    Vas v;
+    vas_build(f.g, v, VBASE);
+    Rng r0(0x5EEDull);
+    for (int i = 0; i < 24; i++) mutate_benign(f.g, v, r0);
+    f.upload();
+
+    /* the racer writes only VALID encodings, to the leaf tables and to the dual
+     * PDE -- never the root. */
+    MutSet m;
+    m.n = 0;
+    for (int k = 0; k < 4 && m.n < MutSet::N - 1; k++) {
+        for (int i = 0; i < 20 && m.n < MutSet::N - 1; i++, m.n++) {
+            m.off[m.n] = v.pts[k] + (uint64_t)i * 8;
+            uint64_t gp = 0x2000000ull + (uint64_t)(k * 64 + i) * 4096ull;
+            m.alt[m.n][0] = kfb_pte(gp);
+            m.alt[m.n][1] = kfb_pte(gp + 0x200000ull);
+            m.alt[m.n][2] = kfb_pte(gp, AP_PTE_VID, PTE_READ_ONLY);
+            m.alt[m.n][3] = 0ull;
+        }
+        m.off[m.n] = v.pd0 + (uint64_t)(v.i0 + k) * 16 + 8;
+        m.alt[m.n][0] = kfb_pde(v.pts[k]);
+        m.alt[m.n][1] = 0ull;
+        m.alt[m.n][2] = kfb_pde(v.pts[k]);
+        m.alt[m.n][3] = kfb_pde(v.pts[k]);
+        m.n++;
+    }
+
+    std::atomic<bool> stop(false);
+    std::atomic<unsigned long long> writes(0);
+    uint8_t *hp = f.host_ptr;
+    std::thread racer([&]() {
+        uint64_t s = 0xA5A5A5A5ull;
+        while (!stop.load(std::memory_order_relaxed)) {
+            for (int k = 0; k < 2048; k++) {
+                s = s * 6364136223846793005ull + 1442695040888963407ull;
+                int i = (int)((s >> 20) % (uint64_t)m.n);
+                int a = (int)((s >> 13) & 3ull);
+                *(volatile uint64_t *)(hp + m.off[i]) = m.alt[i][a];
+            }
+            writes.fetch_add(2048, std::memory_order_relaxed);
+        }
+    });
+
+    Model model;
+    std::vector<uint64_t> roots(1, v.root);
+    int applied = 0, trunc = 0;
+    unsigned long long deepest = 0;
+    for (int step = 0; step < 150; step++) {
+        CHECK_EQ(f.refresh(roots), 0);
+        const char *why = NULL;
+        CHECK_M(kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), &why) == 0, why);
+        if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
+        if (f.hdr.refuse_mask & ~RACE_ALLOWED) {
+            char b[96];
+            snprintf(b, sizeof(b), "step %d mask=0x%x", step, f.hdr.refuse_mask);
+            failf(__LINE__, "refuse_mask outside the racing-allowed set", b);
+        }
+        if (f.hdr.flags & KFWR_HF_TRUNCATED) { model.clear(); trunc++; continue; }
+        ApplyStat st = { 0u, 0u };
+        Model rev = model;
+        model_apply(model, f.hdr, f.pe.data(), f.rn.data(), st);
+        model_apply(rev, f.hdr, f.pe.data(), f.rn.data(), st, true);
+        std::string w;
+        CHECK_M(model_eq(model, rev, w), w.c_str());
+        f.ack();
+        applied++;
+        if (g_fails_here > 4) break;
+    }
+    stop.store(true);
+    racer.join();
+
+    /* ── the quiesced reconciliation ── */
+    CHECK_EQ(f.refresh(roots), 0);
+    if (f.hdr.flags & KFWR_HF_TRUNCATED) { model.clear(); CHECK_EQ(f.refresh(roots), 0); }
+    ApplyStat st = { 0u, 0u };
+    CHECK_M(model_apply(model, f.hdr, f.pe.data(), f.rn.data(), st),
+            "the final quiesced report must be applicable");
+    f.ack();
+
+    KfWalkCfg oc = c;
+    KfWalk *O = kf_create(&oc);
+    KfReportHeader ho;
+    std::vector<KfPdbEntry> po(oc.pdb_capacity + 4);
+    std::vector<KfMapRun> ro(oc.run_capacity + 4);
+    Model full;
+    bool ok = false;
+    rt_full_state(O, f.dev, f.g.size(), roots, full, ho, po, ro, ok);
+    CHECK(ok);
+    std::string w;
+    CHECK_M(model_eq(model, full, w), w.c_str());
+    kf_destroy(O);
+
+    printf("      [race roundtrip] %d deltas applied, %d truncations, %llu racer writes, "
+           "deepest %llu, final model %zu\n",
+           applied, trunc, (unsigned long long)writes.load(), deepest, full.size());
+    CHECK_M(applied > 50, "too few deltas were applied under the racer");
+    CHECK_M(full.size() > 50, "the final mapping set is trivial: the test proves little");
+    CHECK_M(deepest > 1500, "the walk never reached the leaves");
+}
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
@@ -1511,6 +2122,11 @@ static const Case CASES[] = {
     { "legal/pte_maps_own_page_table",          t_legal_pte_maps_own_page_table },
 
     { "differential/rust_walker",               t_differential_rust_walker },
+
+    { "roundtrip/truncated_is_never_a_delta",   t_truncated_is_never_a_delta },
+    { "roundtrip/benign_stream",                t_roundtrip_benign },
+    { "roundtrip/hostile_stream",               t_roundtrip_hostile },
+    { "roundtrip/under_racer",                  t_roundtrip_under_racer },
 
     { "race/cpu_live_edits",                    t_race_cpu_live_edits },
     { "race/gpu_live_edits",                    t_race_gpu_live_edits },
