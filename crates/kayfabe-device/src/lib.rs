@@ -313,11 +313,25 @@ pub struct ChipProfile {
     /// serving zero rebuilds the exact `RmInitAdapter failed! (0x25:0x1f:1249)` this field
     /// removes (`ogkm-580: mem_desc.c:239-241`), while presenting as an answered control.
     pub ce_fault_method_buffer_size: u32,
-    /// Build this generation's GSP register map.
+    /// Build this generation's GSP register map, **for the framebuffer size this row
+    /// advertises** (in MiB).
     ///
     /// A constructor rather than a value because [`GspModel`] is a trait object and a
     /// `static` table cannot own one without a lifetime that outlives every reader.
-    pub gsp_model: fn() -> Box<dyn GspModel>,
+    ///
+    /// # ⊘⊘⊘ THE PARAMETER IS NOT A CONVENIENCE — IT CLOSES A SECOND SOURCE OF TRUTH
+    ///
+    /// `[found 2026-09-14, building single-store increment 1]` `WPR2_ADDR_LO`/`_HI` are
+    /// served by [`GspModel::encode`] and **not** from [`ChipProfile::boot_regs`], so a
+    /// profile built for a smaller framebuffer (`ga10x::ga106_profile`) patched the register
+    /// table and left those two answering the **compiled-in** size. The guest would then be
+    /// told it has N MiB and read a WPR2 range outside it.
+    ///
+    /// `Ga10xGspModel::with_fb_size_mb` was built (w696h) for exactly that and its own docs
+    /// name the failure — but it was **unreachable from the profile builder**, because a bare
+    /// `fn` pointer cannot capture the size. ⇒ the size is a parameter, and the one call site
+    /// passes `chip.fb_length >> 20`, so the model and the table cannot disagree.
+    pub gsp_model: fn(fb_size_mb: u64) -> Box<dyn GspModel>,
     /// ★★ **The engines this chip advertises to the guest's RM.**
     ///
     /// Rows, not a blob, and on the *chip* row rather than in a logic crate, because an

@@ -1842,6 +1842,15 @@ pub fn ga106_profile(fb_size_mb: u64) -> &'static ChipProfile {
 
     let mut p = GA106;
     p.fb_length = fb_length;
+    // ★★★ **THE FOURTH FACT ABOUT THE SIZE, AND IT WAS BEING LEFT BEHIND.**
+    // `[found 2026-09-14]` `bar1_pde_base` is derived from `FB_SIZE_MB` at compile time, so a
+    // profile built for a smaller framebuffer kept the COMPILED base — a page-directory root
+    // above the top of the framebuffer the guest was told it has.
+    // ⊘ `gpga_is_one_reserved_object.md` names this exact class: *"a wrong root makes every
+    // walk from it read the wrong memory, and no invalidate would ever correct it"*, the
+    // shape that produced the zero-`bar1PdeBase` bug. Patched here, from the same function
+    // the compiled constant is itself defined by.
+    p.bar1_pde_base = bar1_pde_base_for(fb_size_mb);
     p.fb_regions = Box::leak(regions.into_boxed_slice());
     p.boot_regs = Box::leak(regs.into_boxed_slice());
     Box::leak(Box::new(p))
@@ -1879,7 +1888,7 @@ pub static GA106: ChipProfile = ChipProfile {
     // could supply it are in `kayfabe_abi::fmbsize`; the transcripts are in
     // `traces/real_ga106/`.
     ce_fault_method_buffer_size: kayfabe_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
-    gsp_model: || Box::new(Ga10xGspModel::new()),
+    gsp_model: |fb_size_mb| Box::new(Ga10xGspModel::with_fb_size_mb(fb_size_mb)),
     engines: GA106_ENGINES,
     // ★ `[measured 2026-08-09, real GA106 `GPU-d0913685`, driver 580.159.04, rmladder R24,
     // `traces/real_ga106/rmladder_r24_pcemask_real_ga106.txt`]` — at this exact control, at

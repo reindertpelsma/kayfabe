@@ -2272,7 +2272,9 @@ impl RegPlane {
         links: crate::ObjectLinks,
     ) -> Result<RegPlane, ChipError> {
         let rom = crate::rom_for(chip)?;
-        let model = (chip.gsp_model)();
+        // ⊘ The size comes from the ROW, so the model and `boot_regs` cannot name two
+        // different framebuffers. See `ChipProfile::gsp_model`.
+        let model = (chip.gsp_model)(chip.fb_length >> 20);
         assert_disjoint(chip, model.as_ref())?;
         let unserviced = crate::unserviced::UnservicedLog::new();
         let census = crate::census::ControlCensusLog::new();

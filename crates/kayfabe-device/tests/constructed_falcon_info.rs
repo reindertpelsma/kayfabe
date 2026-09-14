@@ -294,7 +294,7 @@ fn no_falcon_the_oracle_names_has_a_register_model_this_port_could_serve() {
     // could honestly advertise.
     //
     // ⊘ Quantified over `ORACLE_FALCONS`, not over a shorter hand-written list.
-    let model = (chip().gsp_model)();
+    let model = (chip().gsp_model)(chip().fb_length >> 20);
     // The published `NV_PFALCON_FALCON_*` block, `0x000..=0x130`
     // (`ogkm-580: dev_falcon_v4.h`), at dword steps.
     let claimed = |base: u64| -> usize {
@@ -622,7 +622,7 @@ const fn copy_of_ga106() -> ChipProfile {
         vbios_wire: kayfabe_abi::vbios::VbiosWire::Tu102Bit,
         msix_vectors: 1,
         ce_fault_method_buffer_size: kayfabe_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
-        gsp_model: || Box::new(ga10x::Ga10xGspModel::new()),
+        gsp_model: |_| Box::new(ga10x::Ga10xGspModel::new()),
         engines: &[],
         intr_table: &[],
         intr_subtree_map: [0; kayfabe_abi::inittables::INTR_CATEGORY_COUNT],
