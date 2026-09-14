@@ -125,6 +125,7 @@ use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
+    NV_ESC_RM_UNMAP_MEMORY, Nvos34Parameters,
     NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
     NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
     PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT, USERD_GP_GET,
@@ -2557,7 +2558,8 @@ impl RmConnection {
         // ★ w393 — the registration is its own verb now, because the armed node is a thing
         // this crate hands to ANOTHER process without ever `mmap`ing it here
         // (`HostRmBackend::export_device_view`). Everything below this line is the `mmap`.
-        let node = self.arm_cpu_view(which, h_memory, 0, register_len, ViewAccess::ReadWrite)?;
+        let (node, _cookie) =
+            self.arm_cpu_view(which, h_memory, 0, register_len, ViewAccess::ReadWrite)?;
 
         // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
         // the work: this is memory **hardware writes**, so every access must be a naturally
@@ -2604,6 +2606,11 @@ impl RmConnection {
     /// `offset` is the offset **within the object** (`NVOS33_PARAMETERS::offset`,
     /// `kayfabe_abi::submit::Nvos33ParametersWithFd::offset`); every pre-existing caller
     /// passes `0` through [`Self::map_cpu_windowed_on`] and is unchanged.
+    /// ⊘ **Returns the `pLinearAddress` cookie beside the node, and that is not cosmetic.**
+    /// `NV_ESC_RM_UNMAP_MEMORY` identifies a mapping by that cookie, so a map path that
+    /// status-checks the reply and drops it has made the view **unreleasable** — and
+    /// `[measured w722]` an unreleased view keeps its BAR1 aperture for the life of the process,
+    /// silently.
     fn arm_cpu_view(
         &self,
         which: MapNode,
@@ -2611,7 +2618,7 @@ impl RmConnection {
         offset: u64,
         len: u64,
         access: ViewAccess,
-    ) -> Result<CharDevice, RmError> {
+    ) -> Result<(CharDevice, u64), RmError> {
         let node = match which {
             MapNode::Gpu => {
                 let name = CString::new(format!("nvidia{}", self.gpu_index))
@@ -2644,7 +2651,43 @@ impl RmConnection {
         let out =
             Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         status_check(out.status)?;
-        Ok(node)
+        Ok((node, out.p_linear_address))
+    }
+
+    /// ★★★★★ **GIVE A CPU VIEW'S BAR1 APERTURE BACK** — `NV_ESC_RM_UNMAP_MEMORY` (`0x4F`).
+    ///
+    /// `[measured w722, GA106]` Over rounds mapping **fresh** offsets each time: with this ioctl,
+    /// 224 MiB every round, 5/5. Without it — `munmap` + `close` alone — round 0 gets 224 MiB and
+    /// rounds 1–4 get **zero**. ⇒ **Closing the node is not a release.**
+    ///
+    /// ⊘ On the **control** device, never a per-GPU node: `NV_CTL_DEVICE_ONLY(nv)`
+    /// (`ogkm-610: escape.c:631`). And the plain SDK struct, **not** an fd wrapper
+    /// (`escape.c:313`) — the map's asymmetry, which would be silent if got wrong.
+    ///
+    /// # Errors
+    /// Whatever RM puts in `status`. ⚠ Which is **the only place a refusal appears**: `ioctl(2)`
+    /// returns 0 and leaves `errno` untouched even when the unmap fails.
+    fn release_cpu_view(&self, r: crate::export::CpuViewRelease) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos34Parameters::SIZE];
+        Nvos34Parameters {
+            // ⊘ F11: this isolate's OWN client and device, read here — never carried in from the
+            // release key. See `CpuViewRelease`'s comment for the invariant that forbids it.
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_memory: r.h_memory,
+            p_linear_address: r.p_linear_address,
+            status: 0,
+            flags: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)
     }
 
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
@@ -6076,7 +6119,9 @@ impl HostRmBackend {
             return Err(RmError::NoMemory);
         }
         let raw = self.narrow(memory)?;
-        let node = self
+        // ⊘ The cookie is captured here, not discarded: it is the ONLY thing that can release
+        // this view's BAR1 aperture later (`RmConnection::release_cpu_view`).
+        let (node, p_linear_address) = self
             .conn
             .arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
         // ★ The driver rounds the registered range up to a host page and compares the
@@ -6087,13 +6132,55 @@ impl HostRmBackend {
             .checked_add(page - 1)
             .map(|n| n & !(page - 1))
             .ok_or(RmError::NoMemory)?;
-        let token = self.exports.mint_armed_node(node);
+        let token = self.exports.mint_armed_node(
+            node,
+            crate::export::CpuViewRelease {
+                h_memory: raw,
+                p_linear_address,
+            },
+        );
         Ok(DeviceView {
             token,
             memory,
             offset,
             mmap_len,
         })
+    }
+
+    /// ★★★★★ **RELEASE A DEVICE VIEW, AND WITH IT ITS BAR1 APERTURE.**
+    ///
+    /// Retires `token`'s armed node and issues `NV_ESC_RM_UNMAP_MEMORY` with the cookie captured
+    /// when the view was armed.
+    ///
+    /// # ⊘⊘⊘ WHY THIS EXISTS — dropping the view is not enough, and the difference is total
+    ///
+    /// `[measured w722, GA106]` A CPU view of video memory holds **BAR1**, one global pool shared
+    /// with the host driver. Over rounds that map **fresh** offsets each time:
+    ///
+    /// | release path | round 0 | rounds 1–4 |
+    /// |---|---|---|
+    /// | this verb | 224 MiB | **224 MiB each** |
+    /// | `munmap` + `close` alone | 224 MiB | ⊘ **zero** |
+    ///
+    /// ⇒ Before this existed, every armed view leaked its aperture for the life of the process,
+    /// and the eventual refusal arrived as `status = 0x51 NV_ERR_NO_MEMORY` **inside the parameter
+    /// struct** with `ioctl(2)` returning 0 — invisible to any check on the syscall.
+    ///
+    /// ⚠ The guest **re-points** its BAR1 page tables as its own RM manages the aperture, so views
+    /// are torn down and re-established continuously. What accumulates without this is **every
+    /// distinct (view, offset) pair over the boot**, not the working set — which is why a 3.6 MiB
+    /// steady state can still exhaust 254 MiB.
+    ///
+    /// ⊘ An unknown or already-released token is **`Ok(())`**, not an error: a double release must
+    /// be a no-op rather than a second ioctl against a stale cookie.
+    ///
+    /// # Errors
+    /// Whatever RM reports in `status`.
+    pub fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        match self.exports.take_cpu_view_release(token) {
+            Some(r) => self.conn.release_cpu_view(r),
+            None => Ok(()),
+        }
     }
 
     /// [`RmBackend::alloc_engine_object`] for the **copy engine**, and — like
