@@ -8,9 +8,9 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | file | what |
 |---|---|
 | `kf_walk.h` | the report ABI (the format doc's 64/32/32 structs) + the host API |
-| `kf_walk.cu` | the walk, the coalescer, the merge-join diff, the report |
+| `kf_walk.cu` | the **format descriptor**, the walk, the coalescer, the per-class diff, the report |
 | `kf_tables.h` | a **host-side** GA10x VER2 table builder — test scaffolding |
-| `kf_tests.cu` | 54 cases: correctness, change detection, **round-trip closure**, hostile, racing, scope, differential |
+| `kf_tests.cu` | 58 cases: **format seam**, correctness, change detection, round-trip closure, hostile, racing, scope, differential |
 | `kf_corpus.cpp` | builds the differential corpus (host-only, `g++`, no GPU) |
 | `corpus/` | `corpus.bin` (15 images) + `rust_leaves.txt` (the Rust walker's decode) |
 | `run_on_box.sh` | ships the source out of a commit, builds and runs, returns a log |
@@ -55,6 +55,106 @@ per address space, entry budget per walk, runs in the report), each setting
 `KFWR_HF_TRUNCATED` and its own `refuse_mask` bit. **A truncated walk does not
 install its table**, so it can never become the baseline a later delta is
 computed against; the next refresh is a full resync.
+
+
+## ★★★★★ The format seam — one program, the layout as data
+
+`THE_CONSTRAINTS.md` §21: *"our ptx must be Turing+ compatible … you need to
+support both the turing/ada page tables as blackwell table, in same kayfabe …
+I would avoid shipping two cuda program"*, and *"that kind of config you already
+derived from ABI on host … I would call this setup data alongside table
+version."*
+
+The compile target was already right (`compute_75`, PTX-only). The **format** was
+not: the kernel hardcoded VER2 bit positions, i.e. Turing→Ada, while Hopper and
+Blackwell are VER3 — so deleting the host's format-polymorphic parsing would have
+capped the product at Ada silently.
+
+**`KfFormat` is now the only place a bit position is written down**, it is host
+code that runs once, and everything below the seam reads it:
+
+| the descriptor carries | e.g. VER2 |
+|---|---|
+| `dir[KF_DIRS]` — per level: `active`, `va_lo`, `entries`, `entry_bytes`, `leaf_ps` | PD3[48:47] … PD0[28:21], 16-byte dual |
+| the two leaf tables: `big_va_lo`/`small_va_lo`, entry counts, widths, page-size codes | 20:16 ×32 and 20:12 ×512 |
+| `valid_bit`, `ap_lo`/`ap_bits`, `pde_ap_invalid`, `pte_ap_map[4]`, `pde_ap_map[4]` | bit 0; 2:1; 0; `{vid,peer,sys,sysnc}` |
+| `addr_sel[4]` + `addr_local`/`addr_sys` + `big_addr_local`/`big_addr_sys` as `{lo,bits,shift}` | `{8,25,12}`, `{8,46,12}`, `{4,29,8}`, `{4,50,8}` |
+| `bit_volatile`, `bit_privilege`, `bit_read_only`, `bit_atomic_disable` | 3, 5, 6, 7 |
+| `pcf` + `pcf_sparse` — the part that is *not* a moved field | unused on VER2 |
+| `ps_log2[4]`, `root_align`, `first_dir`, `abi_version`, `table_version` | |
+
+`make check-invariants` greps that **no VER2 geometry constant is left in the
+kernel**, and the report's header now carries `ps_log2[4]` so the **host's parser
+needs no format knowledge at all** — which is what the format doc asked for.
+
+### ★★★ I1 survives "format as data", and here is why
+
+The nesting is still literal — `KF_DIRS + 1` textually nested `for` loops — and
+every trip count reads `i < KF_MAX_ENT && i < <descriptor>`. **A descriptor can
+only make a loop shorter.** It cannot make one unbounded and it cannot add a
+level, because the nesting depth is a property of the source text, not of the
+data. `check-invariants` asserts both: at least five loops carry the compile-time
+cap, and `KF_DIRS`/`KF_MAX_ENT` are `#define`s rather than descriptor fields.
+
+`KF_DIRS` is **5**, one more directory slot than VER2 needs, because VER3 adds
+`PD4[56]` on top. A shallower format marks the leading slots inactive and they
+cost one pass-through iteration each.
+
+### The two switches, and what they are actually for
+
+⊘ The brief expected VER3's **PCF** to need a switch because it "replaces the
+discrete permission bits". Read against `ogkm` `hopper/gh100/dev_mmu.h:498-530`,
+**that is not what PCF does to the four fields we decode**: the enumerants are a
+bit-field (`REGULAR_RW_ATOMIC_CACHED`=0 → `_UNCACHED`=1 → `PRIVILEGE_`=2 →
+`_RO_`=4 → `_NO_ATOMIC_`=8), so volatile/privilege/read-only/atomic-disable simply
+**moved** from bits 3,5,6,7 to bits 3,4,5,6. Field offsets cover them.
+
+What genuinely is not a moved field is **SPARSE**: VER2 spells it *"valid clear,
+VOLATILE bit set"* (a bit test); VER3 spells it as a **value** of PCF
+(`_PTE_PCF_SPARSE = 1`, an equality against a 5-bit field). That, and the
+"is this directory entry present" predicate, are the two `switch (table_version)`
+sites — and both are **live**, because the report now counts sparse slots.
+
+★ Both branches are **warp-uniform**: every thread of a launch walks the same
+guest's tables in the same format, so `table_version` is the same value in every
+lane and the branch costs a predicate, not a divergence. Divergence is the usual
+objection to branching in a CUDA kernel and it does not apply here. Do not
+"optimise" this into a template or a second kernel — §21 is explicit that we ship
+one program.
+
+### ⚠⚠ VER3 is a SKETCH. It has never run.
+
+There is no Hopper or Blackwell in this project and nothing here has ever decoded
+a VER3 table. `kf_format_ver3_untested()` is read off `ogkm` 610.43.02
+(`hopper/gh100/dev_mmu.h:413-536`, `kern_gmmu_fmt_gh10x.c:33-115`), cited line by
+line, and **`kf_create` refuses it** unless `KF_ALLOW_UNTESTED_VER3` is defined.
+
+The only claim ever asserted about it is `make check-ver3-sketch`: the sketched
+descriptor is **well formed** — its level count, fan-outs, entry widths, root
+alignment and big/small coverage satisfy `kf_format_check`. That says nothing
+about whether a VER3 table decodes correctly; it exists so a typo in the sketch
+fails at build time rather than on Blackwell day one.
+
+⇒ **Adding VER3 for real is a descriptor plus two switch arms**, and the arms are
+already written. Nothing else in the kernel has to move.
+
+### The seam's own known-positives
+
+"The descriptor is used" is unproven until a **wrong** descriptor breaks
+something. `make check-seam-negative` perturbs the setup data by one bit at a time
+and requires failure, with an unbroken control:
+
+| flag | perturbs | must break |
+|---|---|---|
+| `-DKF_BAD_DESCRIPTOR` | `addr_local.lo` 8 → 9 | every decoded address |
+| `-DKF_BAD_GEOMETRY` | `dir[3].va_lo` 29 → 28 | every VA under PD1 |
+| `-DKF_BAD_ABI` | `abi_version` + 1 | `kf_create`, **at launch**, by name |
+
+⚠ **One of the closure known-positives went vacuous during this refactor.**
+`-DKF_BREAK_ORDER`'s injection site lived inside the walk loop the seam replaced,
+so the flag silently became a no-op and its binary was identical to the control.
+It was caught only because `check-closure-negative` *requires* that control to
+fail. A control that merely reported would have gone on passing.
 
 ## ★★★★★ Delta round-trip closure
 
