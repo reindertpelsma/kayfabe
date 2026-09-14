@@ -71,7 +71,7 @@
 //! keeps the 1-deep invariant by *moving the `Worker` in*: while a plan is in flight the
 //! reactor owns it, so no second submitter can exist.
 //!
-//! ★ Second constraint, same family: **three replies carry a descriptor** (`ExportBacking`,
+//! ★ Second constraint, same family: **four replies carry a descriptor** (`ExportBacking`,
 //! `ExportUsermodeView`, `JoinFbLeaf`) and are read by `read_frame_with_fds` with an
 //! `max_fds` allowance, while every other reply is read by `read_frame`, which has **no
 //! control buffer at all**. A reply taken by the wrong reader has its descriptor *silently

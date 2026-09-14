@@ -5113,6 +5113,42 @@ impl RmBackend for HostRmBackend {
     /// The whole body is [`RmConnection::reserve_gpga`], which has existed since
     /// `gpga_is_one_reserved_object.md` was written and — until this verb — had exactly one
     /// caller, the bring-up ladder binary. This is the seam that puts it on the wire.
+    /// ★★★★★ **RE-ISSUED ON THE TRAIT 2026-09-14** — the inherent method has existed since
+    /// the retirement; this is what puts it back on the verb surface, under the ruling in
+    /// `bar1_passthrough_device_local_host_visible.md` §4 item 1.
+    ///
+    /// ⚠ The wire carries a `write` **bool** and the inherent method takes a [`ViewAccess`].
+    /// The mapping is made HERE, once, rather than putting an RM enum on the wire: the wire's
+    /// job is to carry the VMM's intent (*"I will write through this mapping"*), and which RM
+    /// flags and `open` mode that implies is this crate's business.
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let access = if write {
+            ViewAccess::ReadWrite
+        } else {
+            ViewAccess::ReadOnly
+        };
+        let v = HostRmBackend::export_device_view(self, memory, offset, len, access)?;
+        // ⊘ Two `DeviceView` types exist — this crate's and `kayfabe_isolate`'s — and the
+        // duplication is recorded as code rot (goal 5). Converting here rather than changing
+        // either keeps this change to the verb surface.
+        Ok(kayfabe_isolate::DeviceView {
+            token: v.token,
+            memory: v.memory,
+            offset: v.offset,
+            mmap_len: v.mmap_len,
+        })
+    }
+
+    fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        HostRmBackend::release_device_view(self, token)
+    }
+
     fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
         if len == 0 {
             // ⊘ A zero-byte reservation is not "the smallest reservation"; it is a caller

@@ -563,3 +563,29 @@ pub fn read_struct<T: Copy>(bytes: &[u8]) -> T {
         out.assume_init()
     }
 }
+
+/// ★★★★★ **AN ALL-ZERO VALUE, INCLUDING ITS PADDING** — and the padding is the whole point.
+///
+/// # ⊘⊘⊘ WHY THIS EXISTS, AND WHAT IT CAUGHT
+///
+/// `KfFormat` has interior padding (two bytes between `small_ps` and `root_align`, three after
+/// `pcf_sparse`). A Rust struct literal leaves padding **undefined** — so the 216 bytes
+/// [`view_bytes`] hands `cuLaunchKernel` contained whatever was on the stack, and the ABI
+/// differential's byte comparison failed at **byte 58** against a `.cu` that begins its own
+/// builder with `memset(&F, 0, sizeof(F))`.
+///
+/// ⚠ Two separate problems, and the second is the serious one:
+/// 1. the differential could not compare bytes it could not predict;
+/// 2. reading uninitialised padding is **undefined behaviour**, and it was being read on every
+///    launch. The kernel only touches named fields, so nothing misbehaved — which is exactly
+///    why it survived: a defect whose consequence is invisible is one the tests must catch.
+///
+/// ⇒ Every descriptor this crate hands the GPU is built on a zeroed base, as the `.cu`'s is.
+#[must_use]
+pub fn zeroed<T: Copy>() -> T {
+    // SAFETY: the caller's obligation is that the all-zero bit pattern is a valid value of
+    // `T`. Every call site in this crate is a `#[repr(C)]` aggregate of integers and integer
+    // arrays (`abi.rs`), for which it is; the types contain no reference, no `NonZero`, no
+    // enum with a niche, and no pointer Rust tracks.
+    unsafe { core::mem::zeroed() }
+}

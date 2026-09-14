@@ -104,6 +104,19 @@ TARGET_UNIVERSE_FLOOR=80
 #
 #   1. a ```ignore fenced block in `tests/src/teardown.rs`'s module docs, which rustdoc
 #      counts as an ignored doc-test;
+#   2. ⊘⊘⊘ **SUPERSEDED 2026-09-14 (w721) — THIS ENTRY DESCRIBES A DESIGN THE OWNER RETIRED,
+#      AND ITS "goes GREEN when BAR1 moves onto the reserved object" IS BACKWARDS.**
+#      `THE_CONSTRAINTS.md`: *"there is ONE world, not two … BAR1, BAR2, PRAMIN, channels and
+#      engines are all views of IT"*. Under the single store a page written through BAR1 **is**
+#      the page BAR2 reads, so that test asserts the negation of the design being built and
+#      **cannot** go green without re-introducing the second memory the reserved object
+#      deletes. §18, which it cites, now reads *"SATISFIED BY CONSTRUCTION … there is no other
+#      memory to substitute"*.
+#      ⇒ The single store's own falsifier is the INVERSE, and it is in the same file and
+#      PASSING: `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`.
+#      ⚠ The allowance stays 2 until increment 7 deletes the retired tests ("unwire and delete
+#      in the same change"), and the reason is now recorded here rather than being rediscovered.
+#      The stale text is kept below so this entry can be recognised for what it was.
 #   2. ★★★★★ `two_worlds_split::a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads`
 #      (`crates/kayfabe-device/tests/`) — `THE_CONSTRAINTS.md` §18's FALSIFIER. It asserts the
 #      property the two-worlds split must deliver (a framebuffer address reached through BAR1

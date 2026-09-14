@@ -961,6 +961,26 @@ pub trait RmBackend: Send + Sync {
     /// # Errors
     /// [`RmError`]. The default answers a **named absence** rather than refusing, because
     /// *"this backend never ran CUDA"* is an answer a census can print and a refusal is not.
+    /// ★★★ **Give a device view's BAR1 aperture back** — `NV_ESC_RM_UNMAP_MEMORY`.
+    ///
+    /// ⚠ `[measured w722]` `munmap` + `close` returns **NOTHING** to the host's BAR1 pool:
+    /// with fresh offsets each round, *with* this ioctl 224 MiB came back every round 5/5;
+    /// *without* it, round 0 got 224 MiB and rounds 1–4 got **zero** — with `ioctl()` returning
+    /// 0 and `errno == 0`. ⇒ **Dropping a view is not a release**, and the failure is silent.
+    ///
+    /// ★ Cumulative churn, not instant capacity, is why this must be called: the instant BAR1
+    /// working set is ~3.6 MiB, but the guest re-points its BAR1 entries continuously, so what
+    /// accumulates unreleased is every distinct (BAR1 page, GPGA) pair over the whole boot.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ Releasing a token this backend does not know is **`Ok`**, not an error:
+    /// the caller's contract is "this view is finished with", and a double release must be
+    /// idempotent rather than a way to wedge a teardown path.
+    fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        let _ = token;
+        Ok(())
+    }
+
     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
         Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\""
             .to_string())
@@ -1302,6 +1322,42 @@ pub trait RmBackend: Send + Sync {
     /// loopback fixture — must answer *"not crossable here"* and never *"here is some other
     /// descriptor"*. The real backend and the wire proxy override it.
     ///
+    /// # ⊘⊘⊘ RE-ISSUED ON THE WIRE 2026-09-14 — AND THE RULING IS WHAT AUTHORISES IT
+    ///
+    /// `ORPHANS_wire_or_discard.md` discarded `Request::ExportDeviceView` as an orphan and
+    /// marked request tag **25** and reply tag **12** *"never re-issue"*. That note is still
+    /// correct about **those tag numbers** and is **no longer correct about the verb**:
+    ///
+    /// > **Owner, 2026-09-14** — `bar1_passthrough_device_local_host_visible.md` §4 item 1,
+    /// > decision (b) **GRANTED, conditionally**: *"nvkvm-pv also got MMIO mappings work
+    /// > across the isolate, so it is not impossible (use SCM rights maybe)"* ⇒ *"the VMM may
+    /// > hold a `/dev/nvidia<N>` descriptor with an RM escape handler behind it,
+    /// > **transiently**, for the sole purpose of `mmap`ing it into a memslot."*
+    ///
+    /// ⇒ New tags (request **30**, reply **15**) are minted rather than the retired ones
+    /// reused, so a reader who finds only the orphan note does not re-apply the retirement,
+    /// and a peer built before the ruling cannot mistake a new frame for an old one.
+    ///
+    /// ## ⚠ THE RULING IS CONDITIONAL — three conditions, and they ARE the safety argument
+    ///
+    /// 1. **The VMM issues NO escape on the descriptor — only `mmap`.** `secInfo.privLevel` is
+    ///    recomputed *per escape* from the caller (`ogkm-580: escape.c:304`), so a process that
+    ///    never escapes gains nothing. ⊘ A property of **what the VMM does**, so it cannot be
+    ///    enforced from here; it is enforced by the VMM having exactly one use for the
+    ///    descriptor, at a call site that says so.
+    /// 2. **The VMM closes it the moment `mmap` returns.** The VMA keeps the `struct file`, so
+    ///    the mapping outlives the descriptor. `install_device_window`'s *"should close"* is a
+    ///    **MUST** under this ruling.
+    /// 3. **The crossing is `SCM_RIGHTS`** — which is what this verb's reply carries, on the
+    ///    same `sendmsg` as its body.
+    ///
+    /// ⇒ **An implementation that stops satisfying any of these is outside the ruling and
+    /// needs a fresh one.** Stated on the trait because this is what every backend implements.
+    ///
+    /// ⚠ `write` is new since the retirement: the deleted message had no such field, and the
+    /// real backend has taken a `ViewAccess` since w596/w629. It is the **VMA's** protection —
+    /// what this process may do — and is independent of what the guest's memslot tier permits.
+    ///
     /// # Errors
     /// [`RmError::NotExportableAsMemory`] from a backend that cannot cross a device view
     /// (the default); [`RmError::BadHandle`] for an object this connection does not own;
@@ -1312,8 +1368,9 @@ pub trait RmBackend: Send + Sync {
         memory: HostHandle,
         offset: u64,
         len: u64,
+        write: bool,
     ) -> Result<DeviceView, RmError> {
-        let _ = (offset, len);
+        let _ = (offset, len, write);
         Err(RmError::NotExportableAsMemory { memory })
     }
 
@@ -3315,6 +3372,7 @@ impl Worker {
         memory: HostHandle,
         offset: u64,
         len: u64,
+        write: bool,
     ) -> Result<DeviceView, RmError> {
         kayfabe_util::lockwitness::assert_lock_free("exporting a host device view to the VMM");
         if !memory.belongs_to(self.isolate) {
@@ -3323,7 +3381,25 @@ impl Worker {
                 worker_isolate: self.isolate,
             });
         }
-        self.backend.export_device_view(memory, offset, len)
+        self.backend.export_device_view(memory, offset, len, write)
+    }
+
+    /// ★★★ **Give a device view's BAR1 aperture back.** See
+    /// [`RmBackend::release_device_view`] for the measurement that makes this mandatory
+    /// rather than tidy.
+    ///
+    /// ⊘ **No foreign-handle gate, and unlike the usermode view that is not a stronger
+    /// property — it is an absence of one.** The argument is different: a token is this
+    /// isolate's own index into its own export table, minted by it and meaningless elsewhere,
+    /// so there is no sibling's namespace to reach into. A token from another isolate names a
+    /// different table's row and is answered `Ok` (the idempotent arm), never another
+    /// isolate's view.
+    ///
+    /// # Errors
+    /// [`RmError`], from the backend.
+    pub fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        kayfabe_util::lockwitness::assert_lock_free("releasing a host device view");
+        self.backend.release_device_view(token)
     }
 
     /// ★★★★★ **w635 — the door for the counter page's view.**

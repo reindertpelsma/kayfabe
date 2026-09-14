@@ -152,3 +152,41 @@ fn the_scratchpad_proc_id_agrees_across_the_seam() {
          scratchpad; the CUDA image would go to the wrong isolate, or to none"
     );
 }
+
+/// ★★★ **THE DEVICE-VIEW CROSSING'S GATE IS A THIRD PEER, AND IT IS OFF.**
+///
+/// ⊘ Arming it makes this process hold a `/dev/nvidia<N>` descriptor — transiently, and only
+/// under the owner's **conditional** ruling of 2026-09-14
+/// (`bar1_passthrough_device_local_host_visible.md` §4 item 1). A boundary that could move
+/// because of a typo would not be one, so a value naming neither state is refused.
+#[test]
+fn the_device_view_gate_is_off_and_refuses_anything_that_is_not_a_state() {
+    use kayfabe_qemu_raw::scratchpad::device_view_from;
+    assert!(
+        std::env::var_os("KAYFABE_DEVICE_VIEW").is_none(),
+        "this test binary must not have the crossing's gate set"
+    );
+    assert_eq!(device_view_from(None), Ok(false), "absent is off");
+    assert_eq!(device_view_from(Some("off")), Ok(false));
+    assert_eq!(device_view_from(Some("probe")), Ok(true));
+    for junk in ["on", "1", "true", "PROBE", "yes", "require", ""] {
+        assert!(
+            device_view_from(Some(junk)).is_err(),
+            "`{junk}` must be refused, never defaulted — arming this hands this process a \
+             descriptor with an RM escape handler behind it"
+        );
+    }
+}
+
+/// ⊘ **Three independent gates, and none reads another.** The reservation is about video
+/// memory, the CUDA arm is about a process's build and its sandbox ordering, and this one is
+/// about a descriptor crossing a process boundary. A boot must be able to arm any one alone,
+/// and folding them would make a single typo move three things.
+#[test]
+fn the_three_gates_are_independent() {
+    use kayfabe_qemu_raw::scratchpad::device_view_from;
+    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
+    assert_eq!(device_view_from(None), Ok(false));
+    assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
+    assert_eq!(device_view_from(Some("probe")), Ok(true));
+}

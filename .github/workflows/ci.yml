@@ -1605,7 +1605,26 @@ jobs:
           #        extracts the struct definitions from `cuda/walk/kf_walk.cu` by name,
           #        compiles a `g++` program that prints every `sizeof`/`offsetof`, and asserts
           #        it against the Rust mirror. No GPU, no CUDA toolkit, runs in CI.
-          AUDITED="kayfabe-linux-raw:124 kayfabe-qemu-raw:58 kayfabe-cuda:28"
+          # ★ 28 -> 29, 2026-09-14: `zeroed<T>()`, and the block it replaces is the point.
+          #   `KfFormat` has interior PADDING, a Rust struct literal leaves padding UNDEFINED,
+          #   and those bytes are handed to `cuLaunchKernel` verbatim — so every launch was
+          #   reading uninitialised memory. Nothing misbehaved (the kernel reads named fields),
+          #   which is precisely why it survived until the byte-level differential failed at
+          #   byte 58 against a `.cu` that starts with `memset(&F, 0, sizeof(F))`.
+          # ⊘⊘ **124 -> 127, CORRECTED 2026-09-14, and the drift is the finding.** The tree
+          # counted 127 while this constant said 124, so the ratchet had "quietly become a
+          # comment" — which is exactly what `gate_scope.rs`'s own failure text calls it, and
+          # that test was RED for a day before anyone ran the crate that holds it.
+          #
+          # ★ The three are all in `arena_unsafe.rs`, all from `ac86d320` (w719, the two-world
+          # census and the aperture store's range punch), and all reviewable in one look:
+          #   - `fallocate(FALLOC_FL_PUNCH_HOLE | KEEP_SIZE)` — the range punch that returns a
+          #     sparse region's pages without changing its length;
+          #   - two `fstat` (one via `mem::zeroed` for the `libc::stat`, one the call) — reading
+          #     the arena's resident size, which is how the census knows what it holds.
+          # Each carries its own `// SAFETY:` (the crate's `undocumented_unsafe_blocks = deny`
+          # makes that unskippable), and none of the three takes a pointer from outside.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:29"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
