@@ -44,6 +44,7 @@
 pub mod blockage;
 pub mod gpga;
 pub mod reach;
+pub mod walkdiff;
 pub mod refresh;
 pub mod walker;
 
