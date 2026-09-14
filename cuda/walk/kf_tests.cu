@@ -906,6 +906,155 @@ static void build_race_tree(Tree &t)
     t.map512m(VBASE + (1ull << 29), 0x20000000ull);
 }
 
+/* ── the LIVE-EDIT racers ───────────────────────────────────────────────────────
+ * ⊘ A racer that writes pure garbage destroys the tree in microseconds and never
+ * restores it, so every later walk is a walk over noise. `0 runs total` over 200
+ * rounds is what that looks like, and it PASSES every termination assertion —
+ * which is why the garbage racer is kept as its own case and this one exists
+ * beside it. Here the mutations are all VALID encodings of the same tree, so the
+ * walk keeps finding mappings while the entries change under it.
+ */
+struct MutSet {
+    static const int N = 96;
+    uint64_t off[N];
+    uint64_t alt[N][4];
+    int n;
+};
+
+static void build_mut_set(Tree &t, MutSet &m)
+{
+    m.n = 0;
+    uint64_t pts = t.pts(VBASE);
+    for (int i = 0; i < 48 && m.n < MutSet::N; i++, m.n++) {
+        m.off[m.n] = pts + (uint64_t)i * 8;
+        uint64_t gp = 0x800000ull + (uint64_t)i * 4096ull;
+        m.alt[m.n][0] = kfb_pte(gp);                               /* as built   */
+        m.alt[m.n][1] = kfb_pte(gp + 0x400000ull);                 /* re-pointed */
+        m.alt[m.n][2] = kfb_pte(gp, AP_PTE_VID, PTE_READ_ONLY);    /* re-flagged */
+        m.alt[m.n][3] = 0ull;                                      /* unmapped   */
+    }
+    /* a byte-identical copy of the leaf table, so the PARENT can be flipped
+     * between two valid targets while the walk is descending through it */
+    uint64_t copy = t.g->alloc(4096, 4096);
+    memcpy(t.g->mem.data() + copy, t.g->mem.data() + pts, 4096);
+    uint64_t pde_off = t.pd0(VBASE) + (uint64_t)vi0(VBASE) * 16 + 8;
+    m.off[m.n] = pde_off;
+    m.alt[m.n][0] = kfb_pde(pts);
+    m.alt[m.n][1] = kfb_pde(copy);
+    m.alt[m.n][2] = kfb_pde(pts);
+    m.alt[m.n][3] = kfb_pde(copy);
+    m.n++;
+    /* and the grandparent, flipped between the live PD0 and a zeroed one */
+    uint64_t pd0z = t.g->alloc(4096, 4096);
+    uint64_t pd1_off = t.pd1(VBASE) + (uint64_t)vi1(VBASE) * 8;
+    m.off[m.n] = pd1_off;
+    m.alt[m.n][0] = kfb_pde(t.pd0(VBASE));
+    m.alt[m.n][1] = kfb_pde(t.pd0(VBASE));
+    m.alt[m.n][2] = kfb_pde(pd0z);
+    m.alt[m.n][3] = kfb_pde(t.pd0(VBASE));
+    m.n++;
+}
+
+__global__ void kf_live_mut_kernel(uint8_t *base, const uint64_t *off, const uint64_t *alt,
+                                   int n, uint64_t seed, uint32_t iters)
+{
+    uint64_t s = seed + (uint64_t)(blockIdx.x * blockDim.x + threadIdx.x) * 0x9E3779B97F4A7C15ull;
+    for (uint32_t k = 0; k < iters; k++) {
+        s = s * 6364136223846793005ull + 1442695040888963407ull;
+        int i = (int)((s >> 20) % (uint64_t)n);
+        int a = (int)((s >> 13) & 3ull);
+        *(volatile uint64_t *)(base + off[i]) = alt[i * 4 + a];
+    }
+}
+
+static void t_race_cpu_live_edits(void)
+{
+    KfWalkCfg c = cfg_default();
+    c.entry_budget = 20000u;
+    Fix f(8u << 20, c, /*mapped=*/true);
+    Tree t(f.g);
+    build_race_tree(t);
+    MutSet m;
+    build_mut_set(t, m);
+    f.upload();
+
+    std::atomic<bool> stop(false);
+    std::atomic<unsigned long long> writes(0);
+    uint8_t *hp = f.host_ptr;
+    std::thread racer([&]() {
+        uint64_t s = 0x9E3779B9ull;
+        while (!stop.load(std::memory_order_relaxed)) {
+            for (int k = 0; k < 2048; k++) {
+                s = s * 6364136223846793005ull + 1442695040888963407ull;
+                int i = (int)((s >> 20) % (uint64_t)m.n);
+                int a = (int)((s >> 13) & 3ull);
+                *(volatile uint64_t *)(hp + m.off[i]) = m.alt[i][a];
+            }
+            writes.fetch_add(2048, std::memory_order_relaxed);
+        }
+    });
+
+    unsigned long long total_runs = 0, deepest = 0;
+    auto t0 = std::chrono::steady_clock::now();
+    for (int r = 0; r < 200; r++) {
+        CHECK_EQ(f.refresh({t.root}), 0);
+        race_check(f, r);
+        total_runs += f.hdr.run_count;
+        if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
+        if (g_fails_here > 8) break;
+    }
+    auto t1 = std::chrono::steady_clock::now();
+    stop.store(true);
+    racer.join();
+    printf("      [cpu live] 200 walks in %.0f ms, %llu edits interleaved, "
+           "deepest %llu entries, %llu runs total\n",
+           std::chrono::duration<double, std::milli>(t1 - t0).count(),
+           (unsigned long long)writes.load(), deepest, total_runs);
+    CHECK_M(deepest > 1500, "the walk never reached the leaves: vacuous");
+    CHECK_M(total_runs > 0, "no mapping was ever reported: the tree did not survive the racer");
+}
+
+static void t_race_gpu_live_edits(void)
+{
+    KfWalkCfg c = cfg_default();
+    Fix f(8u << 20, c);
+    Tree t(f.g);
+    build_race_tree(t);
+    MutSet m;
+    build_mut_set(t, m);
+    f.upload();
+
+    uint64_t *d_off = NULL, *d_alt = NULL;
+    CUDA_OK(cudaMalloc(&d_off, sizeof(uint64_t) * MutSet::N));
+    CUDA_OK(cudaMalloc(&d_alt, sizeof(uint64_t) * MutSet::N * 4));
+    CUDA_OK(cudaMemcpy(d_off, m.off, sizeof(uint64_t) * m.n, cudaMemcpyHostToDevice));
+    CUDA_OK(cudaMemcpy(d_alt, m.alt, sizeof(uint64_t) * MutSet::N * 4, cudaMemcpyHostToDevice));
+
+    cudaStream_t s2;
+    CUDA_OK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
+    unsigned long long total_runs = 0, deepest = 0;
+    auto t0 = std::chrono::steady_clock::now();
+    for (int r = 0; r < 200; r++) {
+        uint32_t iters = 500u + (uint32_t)(r * 911) % 40000u;   /* varied timing */
+        kf_live_mut_kernel<<<4, 32, 0, s2>>>((uint8_t *)f.dev, d_off, d_alt, m.n,
+                                             0xFEEDull + r, iters);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        race_check(f, r);
+        total_runs += f.hdr.run_count;
+        if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
+        if (g_fails_here > 8) break;
+    }
+    auto t1 = std::chrono::steady_clock::now();
+    CUDA_OK(cudaStreamSynchronize(s2));
+    CUDA_OK(cudaStreamDestroy(s2));
+    cudaFree(d_off); cudaFree(d_alt);
+    CUDA_OK(cudaGetLastError());
+    printf("      [gpu live] 200 walks in %.0f ms, deepest %llu entries, %llu runs total\n",
+           std::chrono::duration<double, std::milli>(t1 - t0).count(), deepest, total_runs);
+    CHECK_M(deepest > 1500, "the walk never reached the leaves: vacuous");
+    CHECK_M(total_runs > 0, "no mapping was ever reported: the tree did not survive the racer");
+}
+
 static void t_race_cpu_mutator(void)
 {
     KfWalkCfg c = cfg_default();
@@ -957,6 +1106,8 @@ static void t_race_cpu_mutator(void)
            ms, (unsigned long long)writes.load(), deepest, total_runs);
     CHECK_M(ms < 120000.0, "the walk must terminate, not merely be bounded in theory");
     CHECK_M(deepest > 500, "the racer never let a walk get anywhere: the test would be vacuous");
+    /* ⊘ NOT asserting runs > 0: over pure garbage a walk finding nothing is the
+     * correct outcome. race/{cpu,gpu}_live_edits is where that is asserted. */
 }
 
 static void t_race_gpu_mutator(void)
@@ -985,6 +1136,8 @@ static void t_race_gpu_mutator(void)
     }
     auto t1 = std::chrono::steady_clock::now();
     CHECK_M(deepest > 500, "the racer never let a walk get anywhere: the test would be vacuous");
+    /* ⊘ NOT asserting runs > 0: over pure garbage a walk finding nothing is the
+     * correct outcome. race/{cpu,gpu}_live_edits is where that is asserted. */
     CUDA_OK(cudaStreamSynchronize(s2));
     CUDA_OK(cudaStreamDestroy(s2));
     CUDA_OK(cudaGetLastError());
@@ -1132,8 +1285,10 @@ static const Case CASES[] = {
     { "legal/shared_page_table",                t_legal_shared_page_table },
     { "legal/pte_maps_own_page_table",          t_legal_pte_maps_own_page_table },
 
-    { "race/cpu_mutator",                       t_race_cpu_mutator },
-    { "race/gpu_mutator",                       t_race_gpu_mutator },
+    { "race/cpu_live_edits",                    t_race_cpu_live_edits },
+    { "race/gpu_live_edits",                    t_race_gpu_live_edits },
+    { "race/cpu_garbage",                       t_race_cpu_mutator },
+    { "race/gpu_garbage",                       t_race_gpu_mutator },
 
     { "scope/covering_the_change",              t_scope_covering_the_change },
     { "scope/excluding_a_pdb_carries_it",       t_scope_excluding_a_pdb_carries_it },
