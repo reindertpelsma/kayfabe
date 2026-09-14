@@ -150,3 +150,76 @@ file in the other tree.
 ★ One genuinely new detail from it: **RPC fn=200 is a compile-time STUB on GA106**
 (`g_rpc_private.h:320`, `rpcInvalidateTlb_STUB`), returning `RPC_UNKNOWN_FUNCTION`. ⇒ That
 particular zero was **structurally guaranteed** and could never have been anything else.
+
+## ★★★★★ w720c — THE SETTLED DESIGN: three layers, each degrading into the one below
+
+**Owner, 2026-09-14:** *"there is probably already cuda on the host, so we can just link against it.
+and if the PTX fails, we fall back to CE copying everything batched."* … *"still using idea 1"*.
+
+### ⊘ Hashing is OUT — and the reason is SECURITY, not correctness
+
+**Owner:** *"I don't think any form of CRC is safe to handle va addresses guest userspace can select
+to try crc to match itself."* ★ Correct, and it is the product's own threat model: guest userspace
+picks VAs ⇒ picks PTE contents ⇒ can **search for a collision** that makes the detector report
+*"unchanged"* about a table it just changed. A hash is **forgeable by the adversary this project
+exists to contain** ([[hostile-guest-isolation-is-the-value-proposition]]).
+
+⇒ **Byte-exact comparison against a shadow the guest cannot address.** Idea 2′ dies with idea 2,
+for a different and better reason.
+
+### The layers
+
+| layer | answers | mechanism |
+|---|---|---|
+| **1 — the invalidate** | *when*, and *where to look* | RM: BAR0 `0xB830B0` ⇒ "this PDB" — **already trapped** (`mmuinval.rs`). UVM: `MEM_OP_D[31:27]==0xa` ⇒ a VA range (≤4/batch, power-of-2 rounded superset) |
+| **3 — the PTX diff** | *what changed*, byte-exact, within that scope | compare live vs shadow in vidmem; emit a **page bitmap** |
+| **4 — batched CE** | moves only the changed pages | **and is the fallback** |
+
+★★★ **Every layer degrades into the one below it**, which is what makes the design safe to build
+incrementally:
+
+- PTX absent / JIT fails → batched CE over the scoped range.
+- RM's invalidate (no range) → scope is the whole PDB; diff it.
+- Everything missing → batched CE of all tables — **the baseline, which is required anyway.**
+
+⇒ **This reorders the build.** The fallback is the floor, not a contingency: build **4** first
+because it is needed under every branch, then **1** (scoping — the BAR0 trap already exists), then
+**3** as pure acceleration. Sparsity stops gating the start; it only decides whether layer 3 earns
+its place, and can be measured *while* layer 4 is built.
+
+### `[measured w720c, bench host 51007398]` The CUDA dependency is DRIVER-ONLY
+
+    libcuda.so.580.159.04                   present
+    libnvidia-ptxjitcompiler.so.580.159.04  present
+    nvcc                                    NOT installed
+
+★ Both ship with the **driver**; the box has no CUDA toolkit at all. ⇒ Nothing new to install
+anywhere we already run. And with no `nvcc`, the PTX is **hand-written or shipped as a string
+constant** (a byte-compare kernel is ~30 lines), so there is **no build-time CUDA dependency
+either**.
+
+### ⚠ Why PTX and not a hand-built launch — the Turing+ requirement decides it
+
+Launching compute at the RM level means constructing a **QMD**, and ogkm publishes **exactly one**
+QMD header in the entire tree: `src/common/sdk/nvidia/inc/class/cla0c0qmd.h` — **Kepler**. Turing,
+Ampere, Hopper and Blackwell QMD layouts are **not in the open driver**; they live in closed CUDA
+userspace and differ per family. ⇒ A hand-built launch is **per-family reverse engineering by
+construction**, which is the opposite of the owner's *"ensure that it works across all families
+(Turing+) we target"*. PTX compiled for `sm_75` JITs forward onto every later architecture.
+
+⊘ Note we have **never allocated a compute class**: we allocate CE (`AMPERE_DMA_COPY_B`) on our own
+channels, and the compute class list exists only in a `kayfabe-chips` **test**, as the allowlist for
+forwarding *the guest's* objects. Our own compute channel is new ground either way.
+
+### ★ A possible sidestep for the interop, worth pricing
+
+CUDA may not need to address our reserved object at all. **CE vidmem→vidmem is LOCAL bandwidth
+(~300 GB/s), not PCIe** — so CE-copy the live tables into a CUDA-owned vidmem buffer (24 MB ≈
+80 µs, no link traffic), diff against a CUDA-owned shadow, and return only the bitmap. That trades
+~80 µs of local copy for deleting `cuImportExternalMemory` and the two-worlds-of-VA problem
+entirely.
+
+### Sizing
+
+24 MB of tables = 6144 pages ⇒ a **768-byte bitmap**. The kernel reads live + shadow = 48 MB at
+~360 GB/s ≈ **133 µs**. Only the bitmap crosses the link.
