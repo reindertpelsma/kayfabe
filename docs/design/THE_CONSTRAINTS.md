@@ -839,13 +839,39 @@ does **not** exercise **error and recovery** paths, which may reopen a device no
 ⇒ Probe specifically: after namespace + drop, (a) can it launch again, (b) can it survive and
 report a deliberately failed launch without reopening anything.
 
-### ⚠ The honest cost
+### ⊘⊘ CORRECTED w724e — THE WINDOW IS NOT A COST, IT IS STRUCTURALLY EMPTY
 
-Sandboxing now happens **later**, so there is a window in which this process has a **full
-filesystem view**. Bounded — only our init and NVIDIA's init run in it, **before any guest data is
-touched**, at the same trust level as VMM startup — but it is a real change from *"sandboxed before
-anything runs"*, and constraint 20's security argument must be read as *"the process ends with the
-same reach"* rather than *"it never had more"*.
+> **Owner, 2026-09-14:** *"the scratchpad channel is started before VM boots (the full init), in
+> that frame before sandboxing it only has run trusted code so it cannot be tainted. Plus, the
+> scratchpad doesn't even run guest ptx code at all, it only runs our trusted ptx program and CE
+> utils like scrub and copy."*
+
+★ I recorded the later sandboxing as a *"bounded but real"* cost. That was over-cautious. The
+isolate is spawned at **PCI realize**, during VM construction, **before the guest's first
+instruction** — so during the unsandboxed frame there is **no guest, no guest data, and nothing
+untrusted has executed.** ⇒ A window is an exposure only if something can exploit it, and the thing
+that would **does not yet exist**.
+
+★★★ **And the running state is tighter still: the scratchpad channel never executes guest code.**
+Our PTX, CE scrub, CE copy — all ours. The guest's kernels run on the guest's **own** channels.
+
+⇒ The threat model collapses to:
+
+| | |
+|---|---|
+| **code** | ours, established when nothing untrusted existed |
+| **data** | the guest's page tables, and only that |
+| **surface** | **memory safety over data** — ~200 auditable lines, 58 hostile cases, three structural invariants |
+
+### ⚠ The one caveat, and it lands where the other risk already does
+
+This holds **as long as CUDA init genuinely precedes the guest**. Anything that re-initialises
+**later** — context recreation after an error, a hot-added second GPU — happens **with a guest
+live**, and neither half of the argument covers it: the frame is no longer untainted, and the
+process is no longer pre-sandbox.
+
+⇒ Same **error/recovery path** already named above for post-drop path lookups. **One probe covers
+both**, and both are reasons to treat CUDA re-initialisation as a refusal rather than a fallback.
 
 ⊘ §20's *"`libcuda` is initialised … before the isolate drops privilege"* stands; what changes is
 that this isolate is a **different build** from the others, and that is now stated rather than
