@@ -286,3 +286,64 @@ knowledge in a new place, and it is per-format (VER2 here, VER3 on Hopper+).
 only the page set discovered by the **previous** refresh, and newly-appeared tables are picked up
 on the next one — sound because the table set changes slowly, and it keeps all format knowledge on
 the host.
+
+## ★★★★★ w720e — LET THE KERNEL DO THE WALK, and what that dissolves
+
+> **Owner, 2026-09-14:** *"why not let the PTX do the walk? and tell our program what to map?
+> instead of hand rolling ptx, write in cuda C and compile with nvcc. Then it follows everything
+> naturally, including when tables moved, there is no tracking of pointers needed (which is also
+> problematic when data is freed, since we then have to tell the scratchpad to stop remembering
+> the old version of it), its just one instruction blob back to us of what to do this refresh."*
+
+### ★★★★★ The deepest consequence: A FROM-ROOT WALK IS STATELESS, SO LIVENESS IS DERIVED
+
+This **dissolves the entire page-table-lifetime problem** the w719b ogkm research went hunting for:
+
+| what we thought we needed | why it is unnecessary |
+|---|---|
+| the parent-PDE-invalidate event as a death signal | reachability is **recomputed** each refresh |
+| constraint 19(b)'s **lease + revoke** | nothing is remembered, so nothing must be revoked |
+| a hole-punch trigger | *reachable last refresh and not this one* **is** the trigger, observed |
+| RM's recycle-changes-role hazard | the walk sees whatever the pointers say **now** |
+| telling the scratchpad to forget freed data | the scratchpad never remembered |
+| tables moving | a non-event — the walk follows the current pointers |
+
+⇒ **Liveness stops being inferred from events and becomes a property we compute.** That is
+strictly stronger than every mechanism considered above it in this file, and it is the argument
+that should decide the design.
+
+### CUDA C + `nvcc`, not hand-rolled PTX
+
+★ `nvcc` is **build-time only**. `[measured w720c]` the host carries `libcuda` **and**
+`libnvidia-ptxjitcompiler` and **no toolkit** — exactly the right split. Commit the generated PTX
+with a regeneration check so the *build* does not require CUDA either.
+
+★ And the scratchpad design already in `gpga_is_one_reserved_object.md` is what makes this cheap:
+it maps **the whole of GPGA at a fixed base**, so dereferencing a GPGA is `base + offset` and
+validating one is `offset < |GPGA|`. Pure arithmetic, no per-page mapping.
+
+### ⊘⊘⊘ THE RISK THIS CREATES — the kernel dereferences GUEST-AUTHORED POINTERS, on the GPU
+
+The guest writes the tables the kernel walks. Two failure modes, both guest-chosen:
+
+- **A cycle** (a PDE pointing at an ancestor) is an **unbounded loop inside the kernel** ⇒ a hung
+  scratchpad channel, far harder to recover from than a refused walk.
+- **An out-of-range or unmapped address** is a **GPU MMU fault — an Xid, potentially channel-fatal**
+  — where the host walk returns a named refusal.
+
+⇒ The host walker's cycle and dangling-pointer refusals must be **reimplemented in the kernel and
+be right**, in security-critical code running where this project has its worst debugging.
+
+★ **Both are tractable, and the invariant must be structural rather than probable:**
+- depth is bounded by the format (≤5 levels) ⇒ a **fixed trip count**, never a data-dependent
+  `while`. **No loop in this kernel may terminate on guest data.**
+- every dereference is preceded by `offset < |GPGA|` — one compare, no exceptions.
+
+⚠ Write these as invariants **before** any CUDA is typed. This is the one place where the guest
+chooses the input and the blast radius is our own engine.
+
+### ⚠ Second, smaller cost
+
+PTE/PDE field decode moves **into the kernel**, and **VER2** (Turing–Ada) differs from **VER3**
+(Hopper+). Per-family, but it is the same field-layout knowledge the host walker already carries —
+**not** QMD-class reverse engineering. Manageable; simply no longer in one place.
