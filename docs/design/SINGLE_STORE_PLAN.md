@@ -187,3 +187,49 @@ consumption down to just the CUDA context.
 write could reach it. ⊘ Bounded, though — it is a buffer the kernel writes **by design**, the host
 **validates it regardless** (format doc §3), and the exposure is one mapping rather than an address
 space. ⇒ **Recommended**: strictly less machinery than a vidmem report plus a readback.
+
+## ★★★★★ w724g — GATES EXPIRE. Don't carry the system you pivoted from
+
+> **Owner, 2026-09-14:** *"you should not build cruft of older systems we have pivoted from like
+> trapped bar1/bar2 if its already untrapped for a while. So during a pivot from A to B you can add
+> a gate to ensure both keep working, and if it then boots and raw client works with the full suite
+> then the older one can be unwired."*
+
+★ Accepted. The sequencing rule (*deletions last*) guards against deleting **before** proving; this
+guards against **never deleting after**. They are not in tension — together they say *prove, then
+delete promptly*.
+
+### ⊘ The cruft trap is not the gate — it is UNWIRED-BUT-STILL-COMPILING
+
+Dead code that builds **looks maintained**. Someone will later "fix" it, or a reviewer will assume
+it is load-bearing and design around it. ⇒ **Unwire and delete in the same change**, never as two.
+
+⊘ And gates cost *during* the pivot: each doubles the state space under test. Two live gates is a
+four-arm matrix, and this tree already grades arms by hand. **Keep the count small.**
+
+### ★★★ THE MECHANISM: a gate is created WITH ITS EXPIRY CONDITION
+
+Every gate names, in its own doc comment, the condition under which it is **deleted** — e.g.
+*"deleted when the guest suite is green with the arm on"*. ⇒ It cannot quietly become permanent,
+and whoever finds it later does not have to guess whether it is still needed. Same discipline this
+tree already applies to rulings, where **a ruling's date and expiry are part of the citation**.
+
+### ⚠ PUSHBACK — trapped BAR1/BAR2 is not yet cruft, and the distinction matters
+
+`TRAP_FILLS=0` says traps **do not fire**. It does not say the trap path is **unreachable**, and
+those are different claims (§w721b's *"zero in practice vs impossible by construction"*).
+
+★ Today the trap path is the **backstop that makes premap-completeness a SOFT property**. Delete it
+and completeness becomes a **hard correctness requirement** — which is exactly the *"no populate on
+fault"* question whose **mechanism** is settled (§w721b) and whose **coverage** is not.
+
+⇒ Delete it, but **deliberately**: make the trap path **refuse by name**, boot, confirm the refusal
+never fires. One boot, and it converts *"zero in practice"* into *"proven unreachable"* — which is
+what licenses the deletion. ⊘ Housekeeping-on-the-assumption-it-is-dead is how a soft property
+becomes a hard one without anyone deciding to make it so.
+
+### ⚠ And "the full suite" means the GUEST suite
+
+`[measured]` host **30/30**; the guest had genuine failures (`--concurrency`, `--engines`, and a
+`--gpu-info-sweep` timeout that wedged the device and cascaded 25 arms). ⇒ A host-green suite is
+the easy way to declare victory early. **The gate for unwiring is the guest suite.**
