@@ -1,0 +1,224 @@
+START 2026-09-14T20:17:03Z NVIDIA GeForce RTX 3060, 550.120
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no while loop anywhere on the PARALLEL guest-data path
+I1 ok: the parallel walk's depth is a compile-time-bounded launch loop
+I1 ok: 8 parallel loops bounded at compile time by KF_MAX_FRONTIER
+I1 ok: no goto, no recursion
+I1 ok: 6 nested loops, each bounded at compile time by KF_MAX_ENT
+I1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields
+seam ok: no VER2 geometry constants left in the kernel
+I3 ok: the frontier and task caps are loud
+I3 ok: truncation raised from 7 sites
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -o kf_tests kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+jit ok: PTX-only binary
+.target sm_75
+kf_create: format descriptor REFUSED: table_version
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=64 pdb=32 run=32
+pass format/refuses_unknown_table_version
+kf_create: format descriptor REFUSED: VER3 is a sketch that has never run; define KF_ALLOW_UNTESTED_VER3 to reach it
+pass format/refuses_untested_ver3
+pass format/report_is_self_describing
+pass format/sparse_is_counted
+pass correctness/kind_joins_run_identity
+pass correctness/kind_uniform_is_one_run
+pass correctness/single_4k
+pass correctness/large_pages_64k_2m_512m
+pass correctness/coalesce_one_run
+pass correctness/coalesce_split_gpga
+pass correctness/coalesce_split_flags
+pass correctness/no_coalesce_across_pagesize
+pass correctness/sparse_and_invalid_skipped
+pass correctness/flags_decoded
+pass correctness/dual_pde_both_halves
+pass correctness/multiple_pdbs
+pass delta/nothing_changed
+pass delta/add
+pass delta/delete
+pass delta/edit_gpga
+pass delta/edit_flags
+pass delta/extend_and_shrink
+pass delta/move_page_table
+pass delta/change_root_pdb
+pass delta/free_subtree
+pass delta/generation_handshake
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+pass legal/shared_page_table
+pass legal/pte_maps_own_page_table
+      [differential] 15 images, 1212 benign leaves agreed exactly, 2 hostile leaves within the rust walker's set
+pass differential/rust_walker
+      [real-driver] 5 images, 7005 benign leaves agreed exactly, 0 hostile leaves within the rust walker's set
+pass differential/real_driver_tables
+pass roundtrip/truncated_is_never_a_delta
+      [benign] 1000 steps over 4 seeds: 1000 closures checked, 554 non-empty deltas, 770 steps changed the mapping set, 239 with BOTH dual-PDE halves live, 0 truncations, max model 392, deepest walk 8748
+pass roundtrip/benign_stream
+      [hostile] 1000 steps over 4 seeds: 1000 closures checked, 551 non-empty deltas, 755 steps changed the mapping set, 177 with BOTH dual-PDE halves live, 0 truncations, max model 303, deepest walk 10380
+pass roundtrip/hostile_stream
+      [race roundtrip] 150 deltas applied, 0 truncations, 20531200 racer writes, deepest 3396, largest model seen 232, final model 227
+pass roundtrip/under_racer
+      [cpu live] 200 walks in 29 ms, 17938432 edits interleaved, deepest 1828 entries, 2747 runs total
+pass race/cpu_live_edits
+      [gpu live] 200 walks in 943 ms, deepest 1828 entries, 2744 runs total
+pass race/gpu_live_edits
+      [cpu racer] 200 walks in 18 ms, 3133440 host writes interleaved, deepest walk 1028 entries, 0 runs total
+pass race/cpu_garbage
+      [gpu racer] 120 walks in 576 ms, deepest walk 1028 entries
+pass race/gpu_garbage
+pass scope/covering_the_change
+pass scope/excluding_a_pdb_carries_it
+pass scope/sentinel_is_full_walk
+pass scope/overflow_degrades_to_full
+pass scope/cannot_make_the_walk_wrong
+
+==== 61 passed, 0 failed ====
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_BOUNDS -o kf_tests_broken kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_OLD_MERGE -o kf_tests_oldmerge kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BREAK_ORDER -o kf_tests_badorder kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_DROP_UNMAP -o kf_tests_nounmap kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+neg ok: the superseded whole-run merge breaks the round-trip (rc=1), on:
+    ! roundtrip/benign_stream:1872  applying the report in reverse order gives a different model  -- seed=12648430 step=183: model has pdb=19000 va=80c0e0ed4000 ps=0 that the full walk does not
+neg ok: a class emitted out of VA order breaks the round-trip (rc=1), on:
+    ! roundtrip/benign_stream:1872  applying the report in reverse order gives a different model  -- seed=12648430 step=224: sizes differ: model 83, full walk 84
+neg ok: dropping every UNMAP breaks CLOSURE and nothing else (rc=1), on:
+    ! roundtrip/benign_stream:1901  apply(model, delta) != full walk  -- seed=1 step=14 runs=1 flags=0x0 mask=0x0 :: sizes differ: model 9, full walk 1
+neg ok: the control round-trip still passes on the unbroken binary
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_DESCRIPTOR -o kf_tests_baddesc kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_GEOMETRY -o kf_tests_badgeom kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_BAD_ABI -o kf_tests_badabi kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+seam ok: addr_local.lo off by one breaks the decode (rc=1), on:
+    ! correctness/kind_joins_run_identity:159  f.hdr.run_count == want.size()  -- 0 != 2 (0x0 != 0x2)
+seam ok: dir[3].va_lo off by one breaks the walk (rc=1), on:
+    ! correctness/kind_joins_run_identity:162  f.rn[i].va == want[i].va  -- 141564011610112 != 141565890658304 (0x80c070a00000 != 0x80c0e0a00000)
+seam ok: an abi_version skew is refused AT LAUNCH (rc=1), on:
+kf_create: format descriptor REFUSED: abi_version
+seam ok: the control passes on the real descriptor
+nvcc -gencode arch=compute_75,code=compute_75 -O2 -std=c++14 -lineinfo -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -Wno-unused-parameter -DKF_ALLOW_UNTESTED_VER3 -o kf_tests_ver3 kf_tests.cu kf_walk.cu -lpthread
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu:305:60: warning: "/*" within comment [-Wcomment]
+  305 |  * kernels there are. ⊘ The load stays `volatile`: the race/* cases depend on each
+      |                                                             
+kf_walk.cu(1671): warning #177-D: variable "nb" was declared but never referenced
+      const uint32_t ns = F.small_entries, nb = F.big_entries;
+                                           ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)
+DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
+SMI=responsive
+INV=0 BUILD=0 PTX=0 NEG=0 CNEG=0 SNEG=0 VER3=0
+EXIT=0
