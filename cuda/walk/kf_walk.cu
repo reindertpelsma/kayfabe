@@ -381,9 +381,19 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                          * ascending in VA, which this ordering gives it. */
                         if (has_b) {
                             uint64_t e;
+                            /* ⊘ KF_BREAK_ORDER walks the big table DOWNWARDS, so the
+                             * 64 KiB class comes out descending in VA. Compiled in
+                             * only by `make check-negative`: the per-class diff needs
+                             * each class ascending, and this is the known-positive
+                             * that the round-trip test can see it when it is not. */
+#ifdef KF_BREAK_ORDER
+                            const uint32_t bb = KF_PTB_N - 1u - b;
+#else
+                            const uint32_t bb = b;
+#endif
                             if (!kf_charge(c, 1)) break;
-                            if (kf_load64(c, ptb + b * 8u, &e) && (e & 1ull))
-                                kf_emit(c, va0 | ((uint64_t)b << KF_SH_PTB),
+                            if (kf_load64(c, ptb + bb * 8u, &e) && (e & 1ull))
+                                kf_emit(c, va0 | ((uint64_t)bb << KF_SH_PTB),
                                         kf_pte_addr(e), 1ull << 16,
                                         kf_leaf_flags(e, KFWR_PS_64K));
                         }
@@ -650,6 +660,52 @@ __device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
     kf_seg_flush(o, d, s, pi);
 }
 
+#ifdef KF_OLD_MERGE
+/* ⊘⊘ THE SUPERSEDED DIFF, compiled in ONLY by `make check-negative`.
+ *
+ * It merge-joins WHOLE RUNS on the key (va, page size). Every one of the nine
+ * single-step delta cases passes against it, and it does not satisfy closure: a
+ * cur run covering several prev runs emits one REMAP and then UNMAPs of the runs
+ * it just replaced. It is kept so that "the round-trip test would have caught
+ * the old diff" is a MEASUREMENT rather than a claim. */
+__device__ __forceinline__ int kf_key_cmp(const KfMapRun &x, const KfMapRun &y)
+{
+    if (x.va != y.va) return x.va < y.va ? -1 : 1;
+    uint32_t px = (x.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
+    uint32_t py = (y.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
+    if (px != py) return px > py ? -1 : 1;
+    return 0;
+}
+
+__device__ void kf_diff_old(KfOut &o, KfDev *d, uint16_t pi,
+                            const KfMapRun *pr, uint32_t pn,
+                            const KfMapRun *cr, uint32_t cn)
+{
+    uint32_t p = 0u, q = 0u;
+    while (p < pn || q < cn) {
+        if (q >= cn) { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
+        if (p >= pn) { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
+        int k = kf_key_cmp(pr[p], cr[q]);
+        if (k < 0)   { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
+        if (k > 0)   { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
+        KfMapRun P = pr[p], C = cr[q];
+        if (P.gpga == C.gpga && P.len == C.len && P.flags == C.flags) {
+            /* unchanged */
+        } else if (C.len >= P.len) {
+            kf_put(o, d, C, KFWR_OP_REMAP, pi);
+        } else {
+            kf_put(o, d, C, KFWR_OP_REMAP, pi);
+            KfMapRun tail = P;
+            tail.va = C.va + C.len;
+            tail.gpga = P.gpga + C.len;
+            tail.len = P.len - C.len;
+            kf_put(o, d, tail, KFWR_OP_UNMAP, pi);
+        }
+        p++; q++;
+    }
+}
+#endif
+
 __global__ void kf_diff_kernel(KfArgs a)
 {
     KfDev *d = a.dev;
@@ -713,8 +769,12 @@ __global__ void kf_diff_kernel(KfArgs a)
             const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
             uint32_t pn = d->tbl_run_count[prv][ip];
             uint32_t cn = d->tbl_run_count[cur][ic];
+#ifdef KF_OLD_MERGE
+            kf_diff_old(o, d, pi, pr, pn, cr, cn);
+#else
             for (uint32_t cls = 0u; cls < 4u; cls++)
                 kf_diff_class(o, d, pi, cls, pr, pn, cr, cn);
+#endif
             ip++; ic++;
         }
 

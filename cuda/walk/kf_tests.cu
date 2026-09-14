@@ -136,6 +136,7 @@ static void validate(Fix &f)
      * order is no longer load-bearing: the UNMAP set and the MAP/REMAP set are
      * disjoint in (va, class) by construction, so a host may apply the runs in
      * any order. The round-trip test asserts exactly that. */
+#if !defined(KF_OLD_MERGE) && !defined(KF_BREAK_ORDER)
     for (uint32_t p = 0; p < f.hdr.pdb_count; p++) {
         for (uint32_t i = 1; i < f.pe[p].run_count; i++) {
             const KfMapRun &a = f.rn[f.pe[p].first_run + i - 1];
@@ -146,6 +147,7 @@ static void validate(Fix &f)
             CHECK_M(ok, "runs not in (page-size class asc, va asc) order");
         }
     }
+#endif
 }
 
 struct ER { uint64_t va, gpga, len; uint32_t flags; uint32_t op; };

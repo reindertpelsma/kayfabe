@@ -56,6 +56,34 @@ check-negative: kf_tests_broken kf_tests
 	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL case does not pass on the unbroken binary"; exit 1; fi; \
 	 echo "neg ok: the control case still passes on the unbroken binary"
 
+# Two more known-positives, for the CLOSURE property. Each restores exactly one
+# superseded decision and nothing else; the round-trip cases must then fail, and
+# must fail with the CLOSURE message rather than some downstream symptom.
+kf_tests_oldmerge: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_OLD_MERGE -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_badorder: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_ORDER -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-closure-negative: kf_tests_oldmerge kf_tests_badorder
+	@./kf_tests_oldmerge roundtrip/ > /tmp/kf_neg3.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: the superseded whole-run merge PASSED the round-trip"; exit 1; fi; \
+	 if ! grep -q 'apply(model, delta) != full walk' /tmp/kf_neg3.txt; then \
+	   echo "NEG FAIL: the old merge failed, but NOT on closure -- wrong reason:"; \
+	   grep '^    !' /tmp/kf_neg3.txt | head -3; exit 1; fi; \
+	 echo "neg ok: the superseded whole-run merge breaks closure (rc=$$rc)"; \
+	 grep -m1 'apply(model, delta) != full walk' /tmp/kf_neg3.txt
+	@./kf_tests_badorder roundtrip/ > /tmp/kf_neg4.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: a class emitted DESCENDING in VA PASSED the round-trip"; exit 1; fi; \
+	 if ! grep -q 'apply(model, delta) != full walk' /tmp/kf_neg4.txt; then \
+	   echo "NEG FAIL: the bad walk order failed, but NOT on closure -- wrong reason:"; \
+	   grep '^    !' /tmp/kf_neg4.txt | head -3; exit 1; fi; \
+	 echo "neg ok: a class emitted out of VA order breaks closure (rc=$$rc)"; \
+	 grep -m1 'apply(model, delta) != full walk' /tmp/kf_neg4.txt
+	@./kf_tests roundtrip/ > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL round-trip does not pass on the real binary"; exit 1; fi; \
+	 echo "neg ok: the control round-trip still passes on the unbroken binary"
+
 # No SASS at all ⇒ the driver JITs from PTX at load time.
 check-ptx: kf_tests
 	@if cuobjdump -sass kf_tests 2>/dev/null | grep -q 'code for sm_'; then \
@@ -63,9 +91,9 @@ check-ptx: kf_tests
 	 echo "jit ok: PTX-only binary"
 	@cuobjdump -ptx kf_tests | grep -m1 '.target' || true
 
-check: check-invariants kf_tests check-ptx check-negative
+check: check-invariants kf_tests check-ptx check-negative check-closure-negative
 
 clean:
-	rm -f kf_tests kf_tests_broken
+	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder
 
-.PHONY: all check check-invariants check-ptx check-negative clean
+.PHONY: all check check-invariants check-ptx check-negative check-closure-negative clean
