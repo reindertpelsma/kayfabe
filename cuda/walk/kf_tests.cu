@@ -2140,12 +2140,22 @@ static void t_format_refuses_unknown_table_version(void)
 
 static void t_format_refuses_untested_ver3(void)
 {
-    /* ⚠ VER3 is a sketch. It must not be reachable by accident: a caller asking
-     * for it gets a refusal, not a walk that LOOKS like Hopper support. */
     KfWalkCfg c = cfg_default();
     c.table_version = KF_TBL_VER3;
     KfWalk *w = kf_create(&c);
+#ifdef KF_ALLOW_UNTESTED_VER3
+    /* ⚠ THE ONLY CLAIM MADE ABOUT VER3 ANYWHERE, and it is deliberately small:
+     * the sketched descriptor is WELL FORMED — its level count, fan-outs, entry
+     * widths, root alignment and big/small coverage satisfy kf_format_check. It
+     * says NOTHING about whether a VER3 table decodes correctly, because no VER3
+     * table has ever existed in this project. It exists so a typo in the sketch
+     * fails at build time rather than on Blackwell day one. */
+    CHECK_M(w != NULL, "with the gate opened, the VER3 descriptor must pass its own validation");
+#else
+    /* ⚠ VER3 is a sketch. It must not be reachable by accident: a caller asking
+     * for it gets a refusal, not a walk that LOOKS like Hopper support. */
     CHECK_M(w == NULL, "VER3 has never run and must be refused unless deliberately enabled");
+#endif
     if (w) kf_destroy(w);
 }
 

@@ -136,6 +136,14 @@ check-seam-negative: kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests
 	 if [ $$rc -ne 0 ]; then echo "SEAM FAIL: the CONTROL does not pass on the real descriptor"; exit 1; fi; \
 	 echo "seam ok: the control passes on the real descriptor"
 
+# ⚠ The ONLY thing ever asserted about VER3: that the SKETCHED descriptor is well
+# formed. Not that it decodes anything — no VER3 table has ever existed here.
+check-ver3-sketch: kf_tests_ver3
+	@./kf_tests_ver3 format/refuses_untested_ver3 > /tmp/kf_ver3.txt 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "VER3 FAIL: the sketched descriptor does not pass kf_format_check:"; \
+	   cat /tmp/kf_ver3.txt; exit 1; fi; \
+	 echo "ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)"
+
 # No SASS at all ⇒ the driver JITs from PTX at load time.
 check-ptx: kf_tests
 	@if cuobjdump -sass kf_tests 2>/dev/null | grep -q 'code for sm_'; then \
@@ -143,7 +151,7 @@ check-ptx: kf_tests
 	 echo "jit ok: PTX-only binary"
 	@cuobjdump -ptx kf_tests | grep -m1 '.target' || true
 
-check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-seam-negative
+check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-seam-negative check-ver3-sketch
 
 clean:
 	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap \

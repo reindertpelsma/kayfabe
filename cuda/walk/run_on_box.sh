@@ -35,6 +35,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   make check-negative; rc_neg=\$?
   make check-closure-negative; rc_cneg=\$?
   make check-seam-negative; rc_sneg=\$?
+  make check-ver3-sketch; rc_v3=\$?
   # The Xid instrument, NAMED rather than assumed: dmesg is not readable inside a
   # vast CUDA container, so an empty grep over it is evidence of nothing.
   if dmesg > /tmp/dm.txt 2>/dev/null; then
@@ -43,10 +44,11 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
     echo DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
   fi
   nvidia-smi -L >/dev/null 2>&1 && echo SMI=responsive || echo SMI=UNRESPONSIVE
-  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg SNEG=\$rc_sneg\"
+  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg SNEG=\$rc_sneg VER3=\$rc_v3\"
   if [ \$rc -eq 0 ] && [ \$rc_neg -ne 0 ]; then rc=9; fi
   if [ \$rc -eq 0 ] && [ \$rc_cneg -ne 0 ]; then rc=10; fi
   if [ \$rc -eq 0 ] && [ \$rc_sneg -ne 0 ]; then rc=11; fi
+  if [ \$rc -eq 0 ] && [ \$rc_v3 -ne 0 ]; then rc=12; fi
   echo \"EXIT=\$rc\"
 ' > $REMOTE/out.log 2>&1 &" || exit 1
 
