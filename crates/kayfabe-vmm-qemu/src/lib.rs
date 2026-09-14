@@ -1199,7 +1199,14 @@ impl QemuMachine {
     /// the card's own pages; a guest CPU store into it takes **no VM exit** and lands in
     /// memory the host engine reads natively. No `SparseFb` page, no join, no carry.
     ///
-    /// ⊘⊘ **NOTHING CALLS THIS, AND ITS PRODUCER IS GONE** (2026-09-12). The node it wants
+    /// ⊘⊘⊘ **THAT PARAGRAPH IS STALE — CORRECTED 2026-09-14.** Two production callers exist
+    /// (the BAR0 counter page, `shim.rs` and `barmirror.rs`), and the producer is **back**:
+    /// `Request::ExportDeviceView` was re-issued under request tag **30** / reply tag **15**
+    /// when the owner granted decision (b) (`bar1_passthrough_device_local_host_visible.md`
+    /// §4 item 1). ⚠ And its *"the caller MAY close it on return — and under decision (b) it
+    /// SHOULD"* is now a **MUST**: condition 2 of that ruling.
+    ///
+    /// ⊘⊘ ~~**NOTHING CALLS THIS, AND ITS PRODUCER IS GONE** (2026-09-12).~~ The node it wants
     /// used to arrive from `kayfabe_isolate::DeviceView` over the isolate wire; that verb,
     /// its wire message and the type were discarded as orphans
     /// (`ORPHANS_wire_or_discard.md`). ⚠ This is the VMM-side half of the same crossing and

@@ -174,6 +174,16 @@ pub struct KfFormat {
     pub pcf_sparse: u8,
     /// Explicit padding.
     pub pad1: [u8; 3],
+    /// ★★★ **The PTE's KIND, which joins RUN IDENTITY** — added to the `.cu` by §w725b
+    /// (*"run identity must include KIND — don't coalesce across a field you don't
+    /// propagate"*). VER2 spells it 63:56, VER3 spells it 11:8; a **moved field**, so the
+    /// descriptor carries it and no switch arm is needed.
+    ///
+    /// ⚠ **This field is why the ABI differential exists.** It was added to `kf_walk.cu` by
+    /// someone else, and this mirror did not move: `KfFormat` grew 116 → 120 bytes and every
+    /// field after offset 112 would have been read at the wrong place. The test named the
+    /// struct, the size and the byte.
+    pub kind: KfField,
     /// Page-size code → `log2(bytes)`. ★ Carried in the report too, so the host's parser
     /// needs no format knowledge at all.
     pub ps_log2: [u8; 4],
@@ -232,6 +242,10 @@ pub struct KfDev {
     pub hdr_flags: u32,
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub walk_trunc: u32,
+    /// ★ **The walk itself stopped** — budget or frontier cap. Added to the `.cu` by w726's
+    /// parallel walk; a second field this mirror did not have, caught by the same
+    /// differential that caught `KfFormat::kind`.
+    pub walk_abort: u32,
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub sparse_slots: u32,
 }
@@ -262,6 +276,7 @@ impl Default for KfDev {
             refuse_mask: 0,
             hdr_flags: 0,
             walk_trunc: 0,
+            walk_abort: 0,
             sparse_slots: 0,
         }
     }
@@ -393,41 +408,51 @@ pub struct KfScope {
 /// mean anything; increment 4 only has to prove the kernel runs and answers correctly.
 #[must_use]
 pub fn kf_format_ver2() -> KfFormat {
-    let mut f = KfFormat {
-        abi_version: KF_ABI_VERSION,
-        table_version: KF_TBL_VER2,
-        dir: [KfDir::default(); KF_DIRS],
-        big_va_lo: 16,
-        small_va_lo: 12,
-        big_entry_bytes: 8,
-        small_entry_bytes: 8,
-        big_entries: 32,
-        small_entries: 512,
-        big_ps: PS_64K,
-        small_ps: PS_4K,
-        root_align: 4096,
-        first_dir: 1,
-        pad0: [0; 3],
-        valid_bit: 0,
-        ap_lo: 1,
-        ap_bits: 2,
-        pde_ap_invalid: 0,
-        pte_ap_map: [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC],
-        pde_ap_map: [AP_INVALID, AP_VID, AP_SYS, AP_SYS_NC],
-        addr_sel: [0, 0, 1, 1],
-        addr_local: KfField { lo: 8, bits: 25, shift: 12, pad: 0 },
-        addr_sys: KfField { lo: 8, bits: 46, shift: 12, pad: 0 },
-        big_addr_local: KfField { lo: 4, bits: 29, shift: 8, pad: 0 },
-        big_addr_sys: KfField { lo: 4, bits: 50, shift: 8, pad: 0 },
-        bit_volatile: 3,
-        bit_privilege: 5,
-        bit_read_only: 6,
-        bit_atomic_disable: 7,
-        pcf: KfField::default(),
-        pcf_sparse: 0,
-        pad1: [0; 3],
-        ps_log2: [12, 16, 21, 29],
-    };
+    // ★★★ **ZEROED FIRST, AS THE `.cu` DOES** (`memset(&F, 0, sizeof(F))`). A Rust struct
+    // literal leaves interior PADDING undefined, and this value's bytes are handed to
+    // `cuLaunchKernel` verbatim — so the padding is part of the ABI whether we name it or not.
+    // ⊘ The descriptor differential caught this at byte 58, which is padding.
+    let mut f: KfFormat = crate::driver_unsafe::zeroed();
+    // ⊘ FIELD BY FIELD, not a struct literal: a literal produces a FRESH value whose
+    // padding is undefined again, which is what the first attempt at this fix did and
+    // why the differential still failed at byte 58. Assigning into the zeroed value
+    // leaves the padding alone.
+    f.abi_version = KF_ABI_VERSION;
+    f.table_version = KF_TBL_VER2;
+    f.dir = [KfDir::default(); KF_DIRS];
+    f.big_va_lo = 16;
+    f.small_va_lo = 12;
+    f.big_entry_bytes = 8;
+    f.small_entry_bytes = 8;
+    f.big_entries = 32;
+    f.small_entries = 512;
+    f.big_ps = PS_64K;
+    f.small_ps = PS_4K;
+    f.root_align = 4096;
+    f.first_dir = 1;
+    f.pad0 = [0; 3];
+    f.valid_bit = 0;
+    f.ap_lo = 1;
+    f.ap_bits = 2;
+    f.pde_ap_invalid = 0;
+    f.pte_ap_map = [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC];
+    f.pde_ap_map = [AP_INVALID, AP_VID, AP_SYS, AP_SYS_NC];
+    f.addr_sel = [0, 0, 1, 1];
+    f.addr_local = KfField { lo: 8, bits: 25, shift: 12, pad: 0 };
+    f.addr_sys = KfField { lo: 8, bits: 46, shift: 12, pad: 0 };
+    f.big_addr_local = KfField { lo: 4, bits: 29, shift: 8, pad: 0 };
+    f.big_addr_sys = KfField { lo: 4, bits: 50, shift: 8, pad: 0 };
+    f.bit_volatile = 3;
+    f.bit_privilege = 5;
+    f.bit_read_only = 6;
+    f.bit_atomic_disable = 7;
+    f.pcf = KfField::default();
+    f.pcf_sparse = 0;
+    f.pad1 = [0; 3];
+    // ★ VER2's KIND is 63:56, shift 0 — read from the `.cu`'s own `kf_format_ver2`, and
+    // pinned byte-for-byte by the descriptor differential.
+    f.kind = KfField { lo: 56, bits: 8, shift: 0, pad: 0 };
+    f.ps_log2 = [12, 16, 21, 29];
     // ⊘ PD4 is inactive on VER2 — the slot exists only so VER3 needs no new nesting.
     // ⚠ `entries: 2`, not 1, and it is not a typo: the `.cu` fills every slot through
     // `kf_set_dir(d, active, va_lo, va_hi, …)`, which computes `1 << (va_hi - va_lo + 1)`,

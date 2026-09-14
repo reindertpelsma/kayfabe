@@ -109,6 +109,43 @@ pub enum Request {
         /// Bytes requested.
         len: u64,
     },
+    /// ★★★★★ **RE-ISSUED 2026-09-14 — a CPU view of device memory, for the VMM.**
+    ///
+    /// ⊘⊘⊘ **TAG 30, NOT 25.** `ORPHANS_wire_or_discard.md` retired request tag **25** and
+    /// reply tag **12** for this verb with *"never re-issue"*. That note is still correct
+    /// about **those numbers** and is no longer correct about the verb:
+    /// `bar1_passthrough_device_local_host_visible.md` §4 item 1 records the owner's ruling of
+    /// 2026-09-14 granting decision (b), and **re-issuing this verb is exactly what it
+    /// authorises**. New numbers are minted so a peer built before the ruling cannot mistake a
+    /// new frame for an old one, and so a reader who finds only the orphan note does not
+    /// re-apply the retirement.
+    ///
+    /// ⚠ **The reply carries a `/dev/nvidia<N>` descriptor over `SCM_RIGHTS`** — condition 3
+    /// of the ruling. Conditions 1 and 2 (no escape, close on `mmap` return) are properties of
+    /// the **VMM's** use of it and are enforced at the call site, not here.
+    ///
+    /// ⚠ `write` had no field in the retired message: the real backend has taken a
+    /// `ViewAccess` since w596/w629. It is the **VMA's** protection — what the VMM process may
+    /// do — and is independent of what the guest's memslot tier permits.
+    ExportDeviceView {
+        /// The RM object to view, raw.
+        memory: u64,
+        /// Byte offset within it.
+        offset: u64,
+        /// Bytes to arm.
+        len: u64,
+        /// `1` for a writable mapping in the VMM, `0` for read-only.
+        write: u8,
+    },
+    /// ★★★ Give a device view's BAR1 aperture back — `NV_ESC_RM_UNMAP_MEMORY`.
+    ///
+    /// ⚠ `[measured w722]` `munmap` + `close` returns **nothing** to the host's BAR1 pool, and
+    /// the failure is silent (`status=0x51` inside the parameter struct, `ioctl()` returning
+    /// 0). Without this verb every crossing leaks its aperture until the pool refuses.
+    ReleaseDeviceView {
+        /// The token the isolate minted, as it appeared in the reply.
+        token: u64,
+    },
     /// ★★★★★ **What the VM-lifetime scratchpad isolate's CUDA bring-up found out** —
     /// `SINGLE_STORE_PLAN.md` increment 4.
     ///
@@ -491,6 +528,22 @@ pub enum Reply {
     Payload(Vec<u8>),
     /// A GPU virtual address.
     Va(u64),
+    /// ★★★★★ **The geometry of an armed device node** — the answer to
+    /// [`Request::ExportDeviceView`], **reply tag 15** (12 is retired, never reused).
+    ///
+    /// ⊘ The **token does not cross**: it is the child's index into its own export table. The
+    /// parent mints its own when it adopts the descriptor, exactly as every other
+    /// descriptor-carrying reply does.
+    DeviceViewNode {
+        /// The RM object viewed, raw — echoed so the value is self-describing at an installer
+        /// that never saw the request.
+        memory: u64,
+        /// The offset within it, as registered.
+        offset: u64,
+        /// ★ The length the driver will accept for the `mmap`: the registered length rounded
+        /// up to a host page. A VMM that `mmap`s the unrounded length is refused `ENXIO`.
+        mmap_len: u64,
+    },
     /// ★★★ A size in **MiB** — the answer to [`Request::LargestReservableMb`].
     ///
     /// ⊘ Its own variant rather than [`Reply::Va`] or [`Reply::Handle`] carrying a number:
@@ -856,6 +909,22 @@ impl Envelope {
                 out.extend_from_slice(&start_mb.to_le_bytes());
             }
             Request::CudaWalkReport => out.push(29),
+            Request::ExportDeviceView {
+                memory,
+                offset,
+                len,
+                write,
+            } => {
+                out.push(30);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.push(*write);
+            }
+            Request::ReleaseDeviceView { token } => {
+                out.push(31);
+                out.extend_from_slice(&token.to_le_bytes());
+            }
             Request::AllocChannel {
                 vas,
                 engine,
@@ -1124,6 +1193,15 @@ impl Envelope {
                 start_mb: c.u64("gpga probe start mb")?,
             },
             29 => Request::CudaWalkReport,
+            30 => Request::ExportDeviceView {
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                len: c.u64("device view len")?,
+                write: c.u8("device view write")?,
+            },
+            31 => Request::ReleaseDeviceView {
+                token: c.u64("device view token")?,
+            },
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
                 engine: c.u8("channel engine")?,
@@ -1365,6 +1443,16 @@ impl Reply {
                 out.push(14);
                 out.extend_from_slice(&mb.to_le_bytes());
             }
+            Reply::DeviceViewNode {
+                memory,
+                offset,
+                mmap_len,
+            } => {
+                out.push(15);
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&mmap_len.to_le_bytes());
+            }
             Reply::FbBytes { covered, bytes } => {
                 out.push(8);
                 out.push(u8::from(*covered));
@@ -1437,6 +1525,11 @@ impl Reply {
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
             14 => Reply::Megabytes(c.u64("reservable mb")?),
+            15 => Reply::DeviceViewNode {
+                memory: c.u64("device view memory")?,
+                offset: c.u64("device view offset")?,
+                mmap_len: c.u64("device view mmap len")?,
+            },
             // ⊘ **Reply tag 6 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
             // 2026-09-12). It carried `Reply::Surface`, the answer to the deleted
             // `Request::ExportSurface`. Never renumber, and never re-issue 6.
@@ -1622,6 +1715,13 @@ mod tests {
             },
             Request::LargestReservableMb { start_mb: 12_288 },
             Request::CudaWalkReport,
+            Request::ExportDeviceView {
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                len: 0x1_0000,
+                write: 1,
+            },
+            Request::ReleaseDeviceView { token: 7 },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -1835,6 +1935,8 @@ mod tests {
             Request::ReserveGpga { .. } => "ReserveGpga",
             Request::LargestReservableMb { .. } => "LargestReservableMb",
             Request::CudaWalkReport => "CudaWalkReport",
+            Request::ExportDeviceView { .. } => "ExportDeviceView",
+            Request::ReleaseDeviceView { .. } => "ReleaseDeviceView",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -1873,6 +1975,8 @@ mod tests {
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
+                "ExportDeviceView",
+                "ReleaseDeviceView",
                 "Control",
                 "DescribeGuestRam",
                 "ExportBacking",
@@ -1917,6 +2021,11 @@ mod tests {
             Reply::Payload(vec![7; 100]),
             Reply::Va(0x7f00_0000),
             Reply::Megabytes(11_808),
+            Reply::DeviceViewNode {
+                memory: 0xC1D0_0031,
+                offset: 0x20_0000,
+                mmap_len: 0x1_0000,
+            },
             Reply::Failed(WireError::InsufficientPermissions),
             Reply::Failed(WireError::BadHandle(0xBAD)),
             Reply::Failed(WireError::NoMemory),

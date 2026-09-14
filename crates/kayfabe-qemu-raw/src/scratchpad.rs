@@ -170,6 +170,58 @@ pub fn selected_scratchpad_cuda() -> Result<bool, (Status, &'static str)> {
     scratchpad_cuda_from(value)
 }
 
+/// ★★★★★ **THE DEVICE-VIEW CROSSING'S ARM** — `off` (the default) | `probe`.
+///
+/// `probe` exercises, in a real boot, the crossing the owner's ruling of 2026-09-14
+/// authorised (`bar1_passthrough_device_local_host_visible.md` §4 item 1): the scratchpad
+/// isolate arms a CPU view of **the reserved object**, hands the `/dev/nvidia<N>` node to the
+/// VMM over `SCM_RIGHTS`, the VMM `mmap`s it, **closes the descriptor immediately**, reads and
+/// writes a word through it, and releases the view.
+///
+/// ⊘ It does **not** install a guest memslot. Placing one inside BAR1 without the mirror that
+/// decides *which* guest page maps where would be inventing a layout, and a boot that failed
+/// would not distinguish "the crossing is broken" from "we put it in the wrong place". The
+/// mapping is made with `GuestWindow::place_device_view` — the exact verb
+/// `QemuMachine::install_device_window` uses — so what is proven is the whole chain up to the
+/// memslot call, and the memslot call itself is already exercised by the BAR0 counter page.
+///
+/// ⚠ **EXPIRY**: deleted when the BAR1 mirror drives `install_device_window` in production —
+/// at that point the crossing is exercised by the thing that uses it, and a probe that
+/// duplicates it is the *"unwired but still compiling"* cruft §w724g names.
+pub const DEVICE_VIEW_ENV: &str = "KAYFABE_DEVICE_VIEW";
+
+/// Whether `value` arms the device-view probe — the pure half, and the only statement of the
+/// default.
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `false`.
+pub fn device_view_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("probe") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_DEVICE_VIEW does not name a state: the only values are `off` (the \
+             default) and `probe`. It is not defaulted, because arming it makes this process \
+             hold a `/dev/nvidia<N>` descriptor — transiently, and only under the owner's \
+             conditional ruling — and that is not something a typo should decide.",
+        )),
+    }
+}
+
+/// Whether this process arms the device-view probe.
+///
+/// # Errors
+/// Whatever [`device_view_from`] refused with.
+pub fn selected_device_view() -> Result<bool, (Status, &'static str)> {
+    let raw = std::env::var_os(DEVICE_VIEW_ENV);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    device_view_from(value)
+}
+
 /// ★★ **Where the reservation probe starts halving from, in MiB.** Only read when
 /// [`SCRATCHPAD_ENV`] is armed.
 ///
@@ -354,6 +406,9 @@ pub struct Scratchpad {
     /// Whether the isolate offered a worker at all — kept beside [`Self::outcome`] because
     /// `pool_size` can be non-zero on an isolate whose every slot is already retired.
     pool: usize,
+    /// ★★★ What the device-view crossing did, for the census. Empty when
+    /// [`DEVICE_VIEW_ENV`] is off.
+    device_view: String,
     /// ★★★ What the isolate's CUDA bring-up reported, verbatim. Empty when
     /// [`SCRATCHPAD_CUDA_ENV`] is off.
     ///
@@ -379,6 +434,7 @@ impl Scratchpad {
         start_mb: u64,
         arm: ScratchpadArm,
         cuda: bool,
+        device_view: Option<&DupFn>,
     ) -> Scratchpad {
         // ⊘ The witness is claimed FIRST, before anything blocking happens, so the assertion
         // fires at the top of the operation rather than partway through one.
@@ -401,6 +457,7 @@ impl Scratchpad {
         let mut probe_us = 0;
         let mut reserve_us = 0;
         let mut cuda_report = String::new();
+        let mut device_view_report = String::new();
         let outcome = match iso.checkout() {
             None => Reservation::NoWorker {
                 why: refusal.unwrap_or_else(|| {
@@ -434,6 +491,13 @@ impl Scratchpad {
                         }
                     }
                 };
+                // ★★★★★ **THE DEVICE-VIEW CROSSING**, on the same worker, immediately
+                // after the reservation — because the object it views is the one just
+                // reserved, and a probe over a different object would prove a different
+                // thing.
+                if let (Some(dup), Reservation::Held { obj, .. }) = (device_view, &outcome) {
+                    device_view_report = probe_device_view(&mut worker, &off, id, *obj, dup);
+                }
                 // ★★★ THE CUDA REPORT, read off the same worker. ⊘ It is a READ: the
                 // bring-up and both probes already ran at the isolate's startup, before and
                 // after its sandbox. Nothing here can cause them, which is the point —
@@ -454,6 +518,7 @@ impl Scratchpad {
 
         Scratchpad {
             arm,
+            device_view: device_view_report,
             cuda: cuda_report,
             id,
             iso: Some(iso),
@@ -477,6 +542,12 @@ impl Scratchpad {
         &self.outcome
     }
 
+    /// What the device-view crossing did, verbatim. Empty when its gate is off.
+    #[must_use]
+    pub fn device_view_report(&self) -> &str {
+        &self.device_view
+    }
+
     /// What the isolate's CUDA bring-up reported, verbatim. Empty when the CUDA gate is off.
     #[must_use]
     pub fn cuda_report(&self) -> &str {
@@ -497,6 +568,18 @@ impl Scratchpad {
     /// never came up"* are the two diagnoses this whole increment has to be able to tell
     /// apart. A single "failed" would make them one silence.
     pub fn census(&self, at: &str) {
+        // ★★★★★ THE DEVICE-VIEW LINE, on its own and on both arms. ⊘ Separate from the
+        // reservation and the CUDA lines because the three gates are independent: a reader
+        // must be able to see "the object is held, CUDA is off, the crossing worked" without
+        // parsing one line for three facts.
+        eprintln!(
+            "kayfabe: SCRATCHPAD-DEVICE-VIEW AT {at}: {}",
+            if self.device_view.is_empty() {
+                "DEVICE_VIEW=DISARMED (set KAYFABE_DEVICE_VIEW=probe to arm)".to_string()
+            } else {
+                self.device_view.clone()
+            }
+        );
         // ★★★ THE CUDA LINE, on its own, and printed on BOTH arms. ⊘ Separate from the
         // reservation line because the two gates are independent: a reader must be able to
         // see "the object is held and CUDA is off" without parsing one line for two facts.
@@ -738,4 +821,126 @@ mod tests {
         let id = IsolateId::new(SCRATCHPAD_PROC, GpuId::ZERO);
         assert_ne!(id, IsolateId::new(0, GpuId::ZERO));
     }
+}
+
+/// How the shell turns an isolate-minted export token into a descriptor in **this** process.
+///
+/// ⊘ A function and not the `ExportDirectory` itself, so this module needs no dependency on
+/// the isolate-host crate's registry types and so a test can supply a double.
+pub type DupFn = dyn Fn(IsolateId, u64) -> Option<std::os::fd::OwnedFd>;
+
+/// ★★★★★ **THE CROSSING, EXERCISED IN A REAL BOOT** — the owner's ruling of 2026-09-14
+/// (`bar1_passthrough_device_local_host_visible.md` §4 item 1) turned into working code.
+///
+/// Arms a CPU view of the **reserved object**, receives the `/dev/nvidia<N>` node over
+/// `SCM_RIGHTS`, `mmap`s it through the same verb `QemuMachine::install_device_window` uses,
+/// writes and reads back a word, and releases the view.
+///
+/// # ⚠ THE RULING'S THREE CONDITIONS, AND WHERE EACH ONE LIVES
+///
+/// 1. **No escape on the descriptor — only `mmap`.** ⊘ Enforced by construction *here*: the
+///    only thing done with `fd` below is `place_device_view`, and the binding it came from
+///    exposes no way to issue an escape. This is the whole of the safety argument, and it is a
+///    property of this function's body.
+/// 2. **Closed the moment `mmap` returns.** `drop(fd)` is immediate and is the line after the
+///    mapping, not the end of a scope. The VMA keeps the `struct file`, so the mapping
+///    outlives it — which the read-back below then *proves*, because a mapping over a closed
+///    descriptor that did not survive would fault rather than answer.
+/// 3. **The crossing is `SCM_RIGHTS`** — inside `ProxyRmBackend::call_for_device_view`.
+///
+/// ⊘ And the release is not optional: `[measured w722]` `munmap` + `close` returns **nothing**
+/// to the host's BAR1 pool, silently.
+#[cfg(feature = "host-isolates")]
+fn probe_device_view(
+    worker: &mut kayfabe_isolate::Worker,
+    off: &OffTrap,
+    id: IsolateId,
+    obj: HostHandle,
+    dup: &DupFn,
+) -> String {
+    use kayfabe_linux_raw::{GuestWindow, HostOffset, HostPageSize};
+    use std::os::fd::AsFd;
+
+    // ⊘ One page, at offset 0. The probe's job is the CROSSING, not capacity: a large view
+    // would consume BAR1 aperture that the sizing constraint (§w727) has already shown is
+    // scarce, and would prove nothing the first page does not.
+    let page = HostPageSize::query().bytes();
+    let view = match worker.export_device_view(obj, 0, page, true) {
+        Ok(v) => v,
+        Err(e) => return format!("DEVICE_VIEW=EXPORT_REFUSED why={e:?}"),
+    };
+    let Some(fd) = dup(id, view.token) else {
+        // ⊘ Release first: the view exists in the isolate whether or not we can see it, and
+        // leaking it would consume aperture for the rest of the boot.
+        let _ = worker.release_device_view(view.token);
+        return format!(
+            "DEVICE_VIEW=NO_DESCRIPTOR token={} ⇒ the isolate minted a view this process \
+             could not dup; the export directory does not know that isolate",
+            view.token
+        );
+    };
+    let _ = off;
+
+    let win = match GuestWindow::create(view.mmap_len, HostPageSize::query()) {
+        Ok(w) => w,
+        Err(e) => {
+            drop(fd);
+            let _ = worker.release_device_view(view.token);
+            return format!("DEVICE_VIEW=NO_WINDOW why={e:?}");
+        }
+    };
+    // ★★ The same verb `install_device_window` uses. `writable = true` is the VMA's
+    // protection — what THIS process may do — and is independent of any guest slot tier.
+    let placed = win.place_device_view(HostOffset::ZERO, view.mmap_len, fd.as_fd(), true);
+    // ★★★ **CONDITION 2, and it is this line.** The descriptor is closed the instant the
+    // mapping exists — not at the end of the scope, not on the error path only.
+    drop(fd);
+    if let Err(e) = placed {
+        let _ = worker.release_device_view(view.token);
+        return format!("DEVICE_VIEW=MMAP_REFUSED why={e:?}");
+    }
+
+    // ★★★ The read-back is what makes condition 2 a MEASUREMENT rather than an assertion: if
+    // the VMA had not survived the `close`, this would fault instead of answering.
+    const SENTINEL: u32 = 0xD0DE_0001;
+    let wrote = win.store_u32(HostOffset::ZERO, SENTINEL);
+    let mut buf = [0u8; 4];
+    let read = win.read_into(HostOffset::ZERO, &mut buf).map(|()| u32::from_le_bytes(buf));
+    let released = worker.release_device_view(view.token);
+
+    match (wrote, read) {
+        (Ok(()), Ok(got)) if got == SENTINEL => format!(
+            "DEVICE_VIEW=OK mmap_len=0x{:x} sentinel_roundtrip=true released={} ⇒ the \
+             scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by \
+             SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping \
+             survived — the owner's conditional ruling, exercised end to end",
+            view.mmap_len,
+            released.is_ok(),
+        ),
+        (Ok(()), Ok(got)) => format!(
+            "DEVICE_VIEW=WRONG_VALUE wrote=0x{SENTINEL:x} read=0x{got:x} released={} ⇒ the \
+             mapping answered, and with the wrong bytes. ⚠ That is worse than a refusal: it \
+             means this is not the memory we think it is.",
+            released.is_ok()
+        ),
+        (Err(e), _) | (_, Err(e)) => format!(
+            "DEVICE_VIEW=IO_REFUSED why={e:?} released={}",
+            released.is_ok()
+        ),
+    }
+}
+
+/// ⊘ Without the isolate plane there is no isolate to arm a view in, and this arm says so by
+/// name rather than being absent — an unarmed boot and a boot built without the feature are
+/// different facts.
+#[cfg(not(feature = "host-isolates"))]
+fn probe_device_view(
+    _worker: &mut kayfabe_isolate::Worker,
+    _off: &OffTrap,
+    _id: IsolateId,
+    _obj: HostHandle,
+    _dup: &DupFn,
+) -> String {
+    "DEVICE_VIEW=NO_ISOLATE_PLANE reason=\"this binary was built without `host-isolates`\""
+        .to_string()
 }

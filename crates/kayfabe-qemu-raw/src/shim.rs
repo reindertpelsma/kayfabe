@@ -14715,6 +14715,22 @@ impl Regs {
         // decision. ⊘ A PEER of the reservation's arm, not a third value of it: the two are
         // orthogonal and a boot must be able to arm either alone.
         let scratchpad_cuda = crate::scratchpad::selected_scratchpad_cuda()?;
+        // ★★★★★ w727b — the device-view crossing, armed here and read exactly once.
+        let device_view_dup: Option<Box<crate::scratchpad::DupFn>> =
+            if crate::scratchpad::selected_device_view()? {
+                #[cfg(feature = "host-isolates")]
+                {
+                    exports.clone().map(|e| {
+                        Box::new(move |iso, token| e.dup(iso, token)) as Box<crate::scratchpad::DupFn>
+                    })
+                }
+                #[cfg(not(feature = "host-isolates"))]
+                {
+                    None
+                }
+            } else {
+                None
+            };
         let scratchpad = if scratchpad_arm.is_armed() {
             let sp = crate::scratchpad::Scratchpad::bring_up(
                 &device.isolate_factory(),
@@ -14722,6 +14738,11 @@ impl Regs {
                 crate::scratchpad::selected_start_mb(),
                 scratchpad_arm,
                 scratchpad_cuda,
+                // ★★★★★ The device-view crossing's arm. ⊘ The closure is the shell's route
+                // from an isolate-minted token to a descriptor in THIS process; passing it
+                // rather than the registry keeps `scratchpad` free of the isolate-host
+                // crate's types.
+                device_view_dup.as_deref(),
             );
             // ⊘ The census is printed BEFORE the refusal is consulted, and that ordering is
             // the whole reason `on` and `require` are two arms: a `require` boot that

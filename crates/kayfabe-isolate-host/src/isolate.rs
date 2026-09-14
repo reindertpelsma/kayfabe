@@ -595,6 +595,75 @@ impl ProxyRmBackend {
     ///
     /// # Errors
     /// [`RmError::Wedged`] for every refusal, as its two siblings do.
+    /// ★★★★★ **RE-ISSUED 2026-09-14 — the FOURTH call that reads with a descriptor
+    /// allowance**, and the second whose descriptor is a **character device by request**.
+    ///
+    /// ⊘ A sibling of [`ProxyRmBackend::call_for_usermode_view`], not a mode of it. The two
+    /// differ in the fact that matters: that one names **no object** (the isolate arms its
+    /// own usermode page, which is the security property), this one names an object the caller
+    /// chose — so the foreign-handle gate in `Worker::export_device_view` is load-bearing here
+    /// and is an absence there. Sharing a body would hide that difference behind a parameter.
+    ///
+    /// ★ Everything else is deliberately identical: `max_fds = 1`, the frame refused whole if
+    /// the count is wrong, a reply of any other shape leaving `fds` owned so `Drop` closes what
+    /// arrived, and the kind **established from the kernel** rather than claimed by the peer.
+    ///
+    /// ⚠ **Condition 3 of the ruling lives here** — `bar1_passthrough_device_local_host_visible.md`
+    /// §4 item 1: *"the crossing is `SCM_RIGHTS`"*. Conditions 1 and 2 (no escape on the
+    /// descriptor; close it the moment `mmap` returns) are properties of what the **VMM** does
+    /// with what this returns, and are enforced at the installer, not here.
+    ///
+    /// # Errors
+    /// [`RmError::Wedged`] for every refusal, as its three siblings do.
+    fn call_for_device_view(
+        &mut self,
+        request: Request,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope { txn, request }.encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 1) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let (memory, offset, mmap_len) = match self.lift(reply)? {
+            Reply::DeviceViewNode {
+                memory,
+                offset,
+                mmap_len,
+            } => (memory, offset, mmap_len),
+            // ⊘ Any other shape drops `fds`, which closes whatever arrived.
+            _ => return Err(RmError::Wedged),
+        };
+        // ★★ Exactly one, checked here rather than trusted from the allowance: a child that
+        // attaches NONE while answering with a node is claiming a view it did not hand over.
+        let Ok([fd]) = <[_; 1]>::try_from(fds) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(token) = self.exports.adopt(
+            fd,
+            self.isolate,
+            // ★ A `/dev/nvidia<N>`. The kind is established from the KERNEL inside `adopt`;
+            // a child answering with a `memfd` is refused by name rather than mapped.
+            kayfabe_linux_raw::DescriptorKind::CharDevice,
+        ) else {
+            return Err(RmError::Wedged);
+        };
+        Ok(kayfabe_isolate::DeviceView {
+            token,
+            // ★ Stamped with THIS connection's isolate, never taken from the wire.
+            memory: HostHandle::new(self.isolate, memory),
+            offset,
+            mmap_len,
+        })
+    }
+
     fn call_for_usermode_view(&mut self, write: bool) -> Result<(u64, u64), RmError> {
         let txn = self.cancel.current_txn().unwrap_or(0);
         let body = Envelope {
@@ -751,6 +820,25 @@ impl RmBackend for ProxyRmBackend {
 
     fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
         self.handle(Request::ReserveGpga { len })
+    }
+
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        self.call_for_device_view(Request::ExportDeviceView {
+            memory: memory.raw(),
+            offset,
+            len,
+            write: u8::from(write),
+        })
+    }
+
+    fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        self.unit(Request::ReleaseDeviceView { token })
     }
 
     fn cuda_walk_report(&mut self) -> Result<String, RmError> {

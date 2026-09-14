@@ -617,6 +617,20 @@ fn serve_one(
         // `execute` is a pure `Request -> Reply` function and a resource has no place in
         // nineteen of its arms.
         Request::ExportUsermodeView { write } => export_usermode_view(rm, exports, write != 0),
+        // ★★★★★ **RE-ISSUED 2026-09-14 — the FOURTH descriptor-carrying reply**, and the
+        // second whose descriptor is a character device. Intercepted here for the reason the
+        // other three are: `execute` is a pure `Request -> Reply` function and a resource has
+        // no place in twenty of its arms.
+        //
+        // ⊘ `bar1_passthrough_device_local_host_visible.md` §4 item 1 — the owner's ruling of
+        // 2026-09-14 granting decision (b) — is what authorises this verb's existence. The
+        // orphan note that retired tags 25/12 is still right about those numbers.
+        Request::ExportDeviceView {
+            memory,
+            offset,
+            len,
+            write,
+        } => export_device_view(rm, memory, offset, len, write != 0, exports),
         other => (execute(rm, other), None),
     }
 }
@@ -632,6 +646,49 @@ fn serve_one(
 /// `memfd`. ⇒ The VMM's caller for this verb must be its own, with the opposite kind check.
 /// Sharing one would trade that refusal for a shortcut. See
 /// `the_counter_page_and_the_device_view.md` §4c.
+/// ★★★★★ **RE-ISSUED 2026-09-14 — arm a CPU view of the reserved object and hand the node up.**
+///
+/// The VMM asks for `[offset, offset+len)` of one of this isolate's RM objects; the backend
+/// arms a fresh `/dev/nvidia<N>` with a one-shot `NV_ESC_RM_MAP_MEMORY` context for exactly
+/// that range, and the node crosses on this reply's `SCM_RIGHTS`.
+///
+/// ⚠ **Unlike `export_usermode_view`, the caller NAMES AN OBJECT** — so the foreign-handle
+/// gate matters here and does not there. It is applied one layer up, in
+/// `kayfabe_isolate::Worker::export_device_view`, which refuses a handle from a sibling
+/// isolate's namespace before this is ever reached.
+fn export_device_view(
+    rm: &mut dyn RmBackend,
+    memory: u64,
+    offset: u64,
+    len: u64,
+    write: bool,
+    exports: &ChildExports,
+) -> (Reply, Option<OwnedFd>) {
+    let view = match rm.export_device_view(raw(memory), offset, len, write) {
+        Ok(v) => v,
+        Err(e) => return (failed(e), None),
+    };
+    // ⊘ `view.token` is the CHILD's index into its own table and does not go on the wire; the
+    // parent mints its own when it adopts the descriptor.
+    match exports.lend(view.token) {
+        Ok(fd) => (
+            Reply::DeviceViewNode {
+                memory: view.memory.raw(),
+                offset: view.offset,
+                mmap_len: view.mmap_len,
+            },
+            Some(fd),
+        ),
+        // ⊘ The backend minted a token this table does not know — our bug, not the parent's.
+        // Refused rather than answered with a descriptor-less reply, which would have the
+        // parent adopt whatever descriptor arrived next.
+        Err(_) => (
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            None,
+        ),
+    }
+}
+
 fn export_usermode_view(
     rm: &mut dyn RmBackend,
     exports: &ChildExports,
@@ -832,6 +889,19 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // ★★★ A READ of what the pre-sandbox bring-up recorded. See
         // `Request::CudaWalkReport` — this verb cannot cause a bring-up, because by the time
         // a worker answers anything the isolate is already sandboxed.
+        // ⊘ No descriptor: a release is a command, not an export. It goes through the plain
+        // writer like every other verb.
+        Request::ReleaseDeviceView { token } => match rm.release_device_view(token) {
+            Ok(()) => Reply::Unit,
+            Err(e) => failed(e),
+        },
+        // ⊘ Listed explicitly rather than swept into a catch-all: this verb's reply carries a
+        // descriptor and is intercepted by `serve_one` BEFORE `execute` is reached. If it ever
+        // arrives here the interception was lost, and answering it with a descriptor-less
+        // reply would have the parent adopt whatever descriptor came next.
+        Request::ExportDeviceView { .. } => {
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
+        }
         Request::CudaWalkReport => {
             #[cfg(feature = "cuda-scratchpad")]
             {

@@ -158,6 +158,22 @@ const GATE_EXEMPTIONS: &[Exemption] = &[
     ("Hexagonal boundary gate", "kayfabe-vmm-kvm"),      // real KVM adapter
     ("Hexagonal boundary gate", "kayfabe-vmm-qemu"),     // ADAPTER_CRATES
     ("Hexagonal boundary gate", "kayfabe-qemu-raw"),     // ADAPTER_CRATES
+    // ★★★ `kayfabe-cuda` — ADDED 2026-09-14 (single-store increment 4), and it is exempt from
+    // ALL THREE for one reason each, stated rather than assumed:
+    //
+    // - Hexagonal boundary: it `dlopen`s `libcuda.so.1` and calls a foreign runtime's entry
+    //   points. Naming an OS primitive is the crate's job, exactly as it is `kayfabe-linux-raw`'s.
+    // - VMM vocabulary: it drives the CUDA **driver API**, whose entry points (`cuMemAlloc_v2`,
+    //   `cuLaunchKernel`) are a third vendor's vocabulary — neither KVM's nor QEMU's, which is
+    //   what that gate is about.
+    // - Generation names: the PTX targets `compute_75` and the format descriptor carries
+    //   `table_version`, so the crate names GPU generations ON PURPOSE. That is §21's whole
+    //   design — "the format is setup data" — and hiding it would defeat the seam it serves.
+    //
+    // ⊘ It is NOT exempt from the unsafe-containment gates: it is the third audited crate,
+    // with its count pinned beside the other two.
+    ("Hexagonal boundary gate", "kayfabe-cuda"),
+    ("VMM-vocabulary gate", "kayfabe-cuda"),
     ("Hexagonal boundary gate", "kayfabe-crec"), // Axis-B arch adapter + trace replay; test-facing
     ("Hexagonal boundary gate", "kayfabe-mocks"), // test-only doubles
     // ── VMM-vocabulary gate (`portable`): may this crate name one hypervisor's API?
@@ -213,6 +229,7 @@ const GATE_EXEMPTIONS: &[Exemption] = &[
     // Exempting it from all three would have been the quiet way to let a new
     // architecture escape the seam checks.
     ("Generation-name gate", "kayfabe-chips"),
+    ("Generation-name gate", "kayfabe-cuda"),
 ];
 
 /// ★★★ Every crate in the tree is either **scoped by** a vocabulary gate or **named in
@@ -332,12 +349,23 @@ fn the_audited_crate_list_matches_the_tree_and_is_used_by_all_three_sub_gates() 
 
     assert_eq!(
         listed.iter().map(|(c, _)| c.as_str()).collect::<Vec<_>>(),
-        vec!["kayfabe-linux-raw", "kayfabe-qemu-raw"],
-        "★ exactly two crates may omit the workspace lints, and they are these. A third \
-         is a design decision (l2_qemu_adapter.md §2.2), not a manifest edit — and \
-         `kayfabe-vmm-qemu` must never be one of them: it is the crate that holds ALL the \
-         logic, and the whole three-crate split exists so that it does not need the \
-         relaxation"
+        vec!["kayfabe-linux-raw", "kayfabe-qemu-raw", "kayfabe-cuda"],
+        "★ exactly THESE crates may omit the workspace lints. Adding one is a design \
+         decision (l2_qemu_adapter.md §2.2), not a manifest edit — and `kayfabe-vmm-qemu` \
+         must never be one of them: it is the crate that holds ALL the logic, and the whole \
+         split exists so that it does not need the relaxation.\n\
+         \n\
+         ⊘⊘ THIRD ENTRY ADDED 2026-09-14 (single-store increment 4), and the argument is in \
+         `ci.yml` beside the count: the gate licenses `kayfabe-linux-raw` for host-side OS \
+         specificity and `kayfabe-qemu-raw` for hypervisor specificity, and `libcuda` is \
+         NEITHER — a third foreign runtime, reached only by `dlopen` at RUN TIME, present on \
+         some hosts and absent on others. Its whole surface is one file (`driver_unsafe.rs`), \
+         and `abi.rs`/`walk.rs`/`synth.rs`/`selftest.rs` contain zero.\n\
+         \n\
+         ⚠ THIS TEST WAS RED FOR A DAY because the commit gate that landed that decision ran \
+         `-p kayfabe-device -p kayfabe-qemu-raw -p kayfabe-mmu -p kayfabe-tests` and not this \
+         crate. The list is pinned in TWO places on purpose; running a filter narrow enough to \
+         be fast is narrow enough to miss the one that fails."
     );
 
     let root = repo_root();
