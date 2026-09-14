@@ -405,6 +405,25 @@ static LEDGER: &[u32] = &[
     // and every CUDA error message stop being blank. Serving it belongs to whichever rung
     // owns fault reporting, and it must NOT be read as *"unserviced, therefore inert"* —
     // that reading is exactly what `0x20801702`'s row above was corrected for.
+    // ⊘⊘⊘ **THIS ROW FAILS `Direction 3` AND THE FAILURE IS REAL — provenance, not a bug in the
+    // test.** `[investigated 2026-09-15]` The comment above cites eleven boots by name; **none of
+    // their `run_*_qemu.log` files are in `traces/guest_boots/`**, so `ledger_ids()` cannot see the
+    // evidence and reports the row as a phantom. It is right to.
+    //
+    // ⚠ **And the obvious fix is a TRAP I nearly took.** `traces/w327_cliff/` *does* hold
+    // `run_w327*_qemu_excerpt.log.gz` for those tags, so widening the scan looks like the answer.
+    // It is not: `zcat | grep 83de030c` over every one of them returns **zero hits** — they are
+    // *excerpts*, and they do not carry the unserviced-id lines. ⇒ Pointing the gate at them would
+    // have made it **green while still unbacked**, which is worse than the red.
+    //
+    // ⇒ The decision is the owner's, and it is between two honest options — **not** a third that
+    // makes the check pass:
+    //   (a) **delete this row.** The position is unverifiable from committed artifacts, and
+    //       `Direction 1` puts it back automatically the moment a boot records it again. The
+    //       analysis above survives in git history.
+    //   (b) **commit the evidence** — full `run_w327*_qemu.log`, if it still exists anywhere.
+    // ⊘ Not an option: teaching the gate to accept a citation in place of an artifact. This tree
+    // already records that **no provenance looks cleaner than bad provenance**.
     0x83de_030c,
     0xa06f_0112,
 ];
