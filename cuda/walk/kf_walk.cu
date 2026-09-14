@@ -1657,18 +1657,20 @@ __global__ void kf_par_compact(KfArgs a, const KfEnt *stage, const uint32_t *sta
  * One warp per task. The warp bulk-loads the leaf tables into shared memory,
  * lane 0 forms the runs twice from that one snapshot — once to count, once to
  * write — and the runs are staged at an atomically reserved offset. */
-__device__ void kf_par_task_runs(const KfArgs &a, const KfEnt &t, const uint64_t *ssmall,
-                                 const uint64_t *sbig, KfRunAcc &c, uint32_t census)
+/* Form the runs for big-page chunks [b0,b1) of one task, into `c`. ⊘ A CHUNK is
+ * one big-page slot plus the small-page slots it spans, which is the unit the
+ * interleave is built from — so a contiguous range of chunks is a contiguous
+ * range of VA, which is what lets the warp split the task across lanes and join
+ * the pieces back. */
+__device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
+                                              const uint64_t *ssmall, const uint64_t *sbig,
+                                              KfRunAcc &c, uint32_t b0, uint32_t b1,
+                                              uint32_t census)
 {
     const KfFormat &F = a.fmt;
-    if (t.kind == KF_ENT_LEAF) {
-        kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
-        kf_acc_flush(c);
-        return;
-    }
     const uint32_t ns = F.small_entries, nb = F.big_entries;
     const uint32_t ratio = 1u << (F.big_va_lo - F.small_va_lo);
-    for (uint32_t b = 0u; b < KF_MAX_ENT && b < nb; b++) {
+    for (uint32_t b = b0; b < KF_MAX_ENT && b < b1; b++) {
 #ifdef KF_BREAK_ORDER
         const uint32_t bb = nb - 1u - b;
 #else
@@ -1696,52 +1698,130 @@ __device__ void kf_par_task_runs(const KfArgs &a, const KfEnt &t, const uint64_t
     kf_acc_flush(c);
 }
 
-__device__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *task, uint32_t gw, uint32_t lane,
-                                uint64_t *ssmall, uint64_t *sbig, KfMapRun *runstage,
-                                uint32_t stagecap, uint32_t *used, KfSum *sum)
+/* ── one task, across the whole warp ─────────────────────────────────────────
+ *
+ * ★★★ THE COALESCER IS THE PART THAT DOES NOT PARALLELISE, so it is split and
+ * re-joined rather than left on one lane. `[measured w726]` leaving it on lane 0
+ * cost 1 741 us for the working set — 31 idle lanes.
+ *
+ * Each lane takes a contiguous range of big-page chunks, which is a contiguous
+ * range of VA, and forms runs within it. The pieces are then joined at lane
+ * boundaries by exactly the rule the task boundary uses one level up: lane l's
+ * first run continues lane l-1's last when VA, GPGA and flags all line up, and
+ * then lane l contributes one run fewer and adds its first run's LENGTH to the
+ * run lane l-1 already wrote. A warp-wide exclusive scan of the contributions
+ * gives each lane its slot.
+ *
+ * ⊘ The writes and the length additions are separated by a `__syncwarp()`, for
+ * the same reason the task-level join is a separate KERNEL: a plain store of
+ * `len` and an atomic add to it would otherwise race, and the store would win.
+ *
+ * ⊘ An empty lane breaks a chain, and that is correct rather than convenient: a
+ * lane produces nothing only when its VA range holds no mapping, and a hole in
+ * VA breaks contiguity anyway.
+ */
+__device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *task, uint32_t gw,
+                                                uint32_t lane, uint64_t *ssmall, uint64_t *sbig,
+                                                KfMapRun *runstage, uint32_t stagecap,
+                                                uint32_t *used, KfSum *sum)
 {
     KfDev *d = a.dev;
+    const KfFormat &F = a.fmt;
+    const uint32_t full = 0xFFFFFFFFu;
     KfSum sm;
     memset(&sm, 0, sizeof(sm));
     sm.lflags = 0xFFFFFFFFu;     /* a sentinel no real run carries: nothing joins to it */
     if (kf_par_aborted(d)) { if (lane == 0u) sum[gw] = sm; return; }
 
-    const KfFormat &F = a.fmt;
     const KfEnt t = task[gw];
 
-    if (lane == 0u && t.kind == KF_ENT_DUAL) {
+    if (t.kind != KF_ENT_DUAL) {                 /* a leaf found at a directory level */
+        if (lane == 0u) {
+            KfRunAcc c;
+            kf_acc_init(c, &F, NULL, 0u, t.pdb);
+            kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
+            kf_acc_flush(c);
+            if (c.n) {
+                const uint32_t st = atomicAdd(used, c.n);
+                if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
+                runstage[st] = c.last;
+                sm.n = 1u; sm.start = st;
+                sm.fva = c.last.va; sm.fgpga = c.last.gpga; sm.flen = c.last.len; sm.fflags = c.last.flags;
+                sm.lva = c.last.va; sm.lgpga = c.last.gpga; sm.llen = c.last.len; sm.lflags = c.last.flags;
+            }
+            if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
+            sum[gw] = sm;
+        }
+        return;
+    }
+
+    if (lane == 0u) {
         uint32_t charge = 0u;
         if (t.has & 1u) charge += F.small_entries;
         if (t.has & 2u) charge += F.big_entries;
         const unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)charge);
         if (was + charge > (unsigned long long)d->entry_budget) kf_par_abort(d, KFWR_R_BUDGET);
     }
-    if (t.kind == KF_ENT_DUAL) {
-        if (t.has & 1u)
-            for (uint32_t i = lane; i < KF_MAX_ENT && i < F.small_entries; i += KF_WARP)
-                if (!kf_win_load(a.win, t.addr + (uint64_t)i * F.small_entry_bytes, &ssmall[i])) ssmall[i] = 0ull;
-        if (t.has & 2u)
-            for (uint32_t i = lane; i < KF_MAX_ENT && i < F.big_entries; i += KF_WARP)
-                if (!kf_win_load(a.win, t.addr2 + (uint64_t)i * F.big_entry_bytes, &sbig[i])) sbig[i] = 0ull;
-    }
+    if (t.has & 1u)
+        for (uint32_t i = lane; i < KF_MAX_ENT && i < F.small_entries; i += KF_WARP)
+            if (!kf_win_load(a.win, t.addr + (uint64_t)i * F.small_entry_bytes, &ssmall[i])) ssmall[i] = 0ull;
+    if (t.has & 2u)
+        for (uint32_t i = lane; i < KF_MAX_ENT && i < F.big_entries; i += KF_WARP)
+            if (!kf_win_load(a.win, t.addr2 + (uint64_t)i * F.big_entry_bytes, &sbig[i])) sbig[i] = 0ull;
     __syncwarp();
-    if (lane != 0u) return;
+
+    const uint32_t nb = F.big_entries;
+    const uint32_t cpl = (nb + KF_WARP - 1u) / KF_WARP;   /* chunks per lane */
+    const uint32_t b0 = lane * cpl;
+    const uint32_t b1 = (b0 + cpl < nb) ? (b0 + cpl) : nb;
 
     KfRunAcc c;
     kf_acc_init(c, &F, NULL, 0u, t.pdb);
-    kf_par_task_runs(a, t, ssmall, sbig, c, 1u);        /* count, and census */
-    sm.n = c.n;
-    if (c.n) {
-        sm.fva = c.first.va; sm.fgpga = c.first.gpga; sm.flen = c.first.len; sm.fflags = c.first.flags;
-        sm.lva = c.last.va;  sm.lgpga = c.last.gpga;  sm.llen = c.last.len;  sm.lflags = c.last.flags;
-        const uint32_t st = atomicAdd(used, c.n);
-        sm.start = st;
-        if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
-        KfRunAcc wacc;
-        kf_acc_init(wacc, &F, runstage + st, c.n, t.pdb);
-        kf_par_task_runs(a, t, ssmall, sbig, wacc, 0u);  /* write, same snapshot */
+    if (b0 < nb) kf_par_chunks(a, t, ssmall, sbig, c, b0, b1, 1u);
+
+    /* Does this lane's first run continue the previous lane's last? */
+    const uint32_t pk    = __shfl_up_sync(full, c.n, 1);
+    const uint64_t plva  = __shfl_up_sync(full, c.last.va, 1);
+    const uint64_t plgp  = __shfl_up_sync(full, c.last.gpga, 1);
+    const uint64_t pllen = __shfl_up_sync(full, c.last.len, 1);
+    const uint32_t plfl  = __shfl_up_sync(full, c.last.flags, 1);
+    uint32_t head = 1u;
+    if (lane && c.n && pk && plfl == c.first.flags &&
+        plva + pllen == c.first.va && plgp + pllen == c.first.gpga) head = 0u;
+    const uint32_t contrib = (c.n && !head) ? (c.n - 1u) : c.n;
+
+    uint32_t x = contrib;
+    for (uint32_t dd = 1u; dd < KF_WARP; dd <<= 1) {
+        const uint32_t y = __shfl_up_sync(full, x, dd);
+        if (lane >= dd) x += y;
     }
-    sum[gw] = sm;
+    const uint32_t excl = x - contrib;
+    const uint32_t total = __shfl_sync(full, x, KF_WARP - 1u);
+
+    uint32_t st = 0u;
+    if (lane == 0u && total) st = atomicAdd(used, total);
+    st = __shfl_sync(full, st, 0);
+    if (!total) { if (lane == 0u) sum[gw] = sm; return; }
+    if (st + total > stagecap) { if (lane == 0u) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; } return; }
+
+    KfRunAcc wacc;
+    kf_acc_init(wacc, &F, runstage + st + excl, contrib, t.pdb);
+    wacc.skip = head ? 0u : 1u;
+    if (b0 < nb) kf_par_chunks(a, t, ssmall, sbig, wacc, b0, b1, 0u);
+    __syncwarp();
+    /* ⊘ AFTER the stores, never interleaved with them. */
+    if (!head && c.n)
+        atomicAdd((unsigned long long *)&runstage[st + excl - 1u].len, (unsigned long long)c.first.len);
+    __syncwarp();
+
+    if (lane == 0u) {
+        sm.n = total;
+        sm.start = st;
+        const KfMapRun f = runstage[st], l = runstage[st + total - 1u];
+        sm.fva = f.va; sm.fgpga = f.gpga; sm.flen = f.len; sm.fflags = f.flags;
+        sm.lva = l.va; sm.lgpga = l.gpga; sm.llen = l.len; sm.lflags = l.flags;
+        sum[gw] = sm;
+    }
     if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
 }
 
