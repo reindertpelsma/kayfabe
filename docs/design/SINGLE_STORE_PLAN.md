@@ -107,3 +107,37 @@ Anything outside the constraints above. In particular the **50x bulk-placement d
 (`to_device`, 0.8 host cores for 28 s, GPU 1.8% busy) is a **separate** bug in the H2D
 copy-forwarding path that residence work will **not** fix — do not let it be absorbed into this
 branch's story either as a cause or as a success.
+
+## ★★★★★ w723b — BAR1/BAR2 BECOME PURELY GUEST-FACING
+
+**Owner, 2026-09-14:** *"so bar1 becomes unused for ourself, if the tables is in ptx cuda? So
+bar1/bar2 is then only for mmio cpu mappings for the guest right."* ★ Correct, and it retires a
+whole category of pressure.
+
+**Every CPU view of video memory we hold exists to READ THE GUEST'S PAGE TABLES.** That is what
+PRAMIN and the BAR2 window do on our behalf. ⇒ With the kernel reading them **GPU-side** at
+~360 GB/s, **we never need a CPU window onto video memory again.**
+
+⇒ BAR1, BAR2 and PRAMIN become **apertures the guest's CPU uses**, which we serve with device
+views. The budget stops being contended between us and the guest.
+
+| consumer of host BAR1 | measured |
+|---|---|
+| the guest's own BAR1 mappings | **3.6 MiB** (912 pages, LLM workload) |
+| our CUDA context | **~3 MiB** |
+| **total** | **~7 MiB of ~254** |
+
+★ This also **dissolves the self-starvation hazard** recorded in constraint 22: the guest's views
+and our CUDA context were only in competition because **both** were CPU views of video memory. Now
+only one of them is.
+
+### ⇒ Open choice: put the REPORT BUFFER in host memory
+
+The kernel could write the report straight into **host** memory over PCIe — 32 KB is nothing — so
+reading it costs **zero BAR1** and **no CE readback path at all**. That takes our own aperture
+consumption down to just the CUDA context.
+
+⚠ The trade: it would be the **only host memory mapped in the CUDA context**, so a wild kernel
+write could reach it. ⊘ Bounded, though — it is a buffer the kernel writes **by design**, the host
+**validates it regardless** (format doc §3), and the exposure is one mapping rather than an address
+space. ⇒ **Recommended**: strictly less machinery than a vidmem report plus a readback.
