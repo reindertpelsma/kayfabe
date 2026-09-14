@@ -414,3 +414,54 @@ If a page is reclassified after it already has bytes in the wrong world, somethi
 refusal-and-reclassify at a synchronisation point or a real migration path depends entirely on how
 often it happens. ⇒ `kayfabe_device::twoworlds` measures exactly that, and it is already wired to
 print at teardown. **Boot first, design second.**
+
+## ★★★★★ w720h — WHAT THE SINGLE STORE DELETES FROM THE THREAT MODEL
+
+> **Owner, 2026-09-14:** *"one vidmem rm object was simply best idea. with fake fb deleted later,
+> entire DoS bugs just disappear that were hard to patch. we only have to limit workers, isolates,
+> va tables, all simple bounds."*
+
+★ Recorded because it is the **security** argument for the design, and it is stronger than the
+code-deletion one.
+
+### The precise reason
+
+**The fake fb is the only place where a cheap guest action causes UNBOUNDED host allocation.**
+Everything else in the system is a countable thing with an obvious cap.
+
+⇒ That asymmetry is why the quota question had no good answer: you cannot bound *"framebuffer
+pages the guest touched"* without breaking legitimate use, because the guest **legitimately**
+expects the whole advertised VRAM to work.
+
+★★★ **The vulnerability is the GAP BETWEEN ADVERTISED AND BACKED.** We advertise 12 GiB and back
+it lazily; the exploit lives in the laziness. **One pre-allocated reservation closes the gap by
+construction** — the guest cannot consume more than was allocated before it booted. ⇒ The bound
+stops being *enforced* and becomes *structural*, which is the only kind that cannot have a bug.
+
+### The amplification shapes that stop existing
+
+| shape | today | after |
+|---|---|---|
+| `JoinFbLeaf` — one guest touch ⇒ an RM allocation + mapping | ✔ live, `n=286`–1156 a boot | **gone**, no per-leaf allocation |
+| arena page materialisation on demand | ✔ | **gone** |
+| mirror slot install/churn | ✔ | **gone**, one static mapping |
+| sparse-memfd residency growth | ✔ unbounded by design | **gone**, fixed reservation |
+
+⇒ What remains is **counters**: workers, isolates, VA spaces. *"At most N"* is testable and
+obviously correct.
+
+### ⚠ TWO THINGS THAT DO NOT DISAPPEAR — so the win is not remembered as bigger than it is
+
+1. ★★★ **The walk kernel is new attack surface, and the sharpest we have had**: guest-authored
+   pointers dereferenced **on the GPU**, where a hang is a DoS on our own scratchpad and debugging
+   is worst. The invariants (fixed trip count, bounds check, capped output) are **designed, not
+   proven**. ⇒ That is exactly why the hostile suite is being built before the kernel goes near
+   production.
+2. ⊘ **A guest can still make refreshes EXPENSIVE without exhausting anything.** Mapping
+   everything at 4 KiB makes the walk scale with table size (24 MB instead of ~7). Bounded and
+   never fatal, but not free. ⇒ It changes **category** — exhaustion becomes **rate** — rather
+   than disappearing.
+
+⊘ And unaffected: the **50x bulk-placement defect** (`to_device`, 0.8 host cores for 28 s,
+`the_llm_parity_ratio_is_0_20x`) is the same amplification shape — guest copies memory, we burn
+host CPU — and the single store does not touch it.
