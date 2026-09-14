@@ -1241,6 +1241,46 @@ static void t_scope_cannot_make_the_walk_wrong(void)
 }
 
 
+
+static void t_unaligned_is_inexpressible_below_the_root(void)
+{
+    /* ★★★ A FINDING, kept as a checked claim rather than a comment.
+     *
+     * The brief asks for "an unaligned pointer". Below the root, VER2 CANNOT
+     * SPELL ONE. Every table pointer is a bit-field shifted left by exactly the
+     * number of bits its target's size needs:
+     *
+     *   PDE      field << 12, target 4096 B  ⇒ always 4 KiB aligned
+     *   dual BIG field <<  8, target  256 B  ⇒ always  256 B aligned
+     *
+     * So the alignment half of the bounds check can only ever fire on the ROOT,
+     * which arrives from OUTSIDE the format (the host hands it in). This is
+     * checked over the whole 64-bit entry space by construction: the assertion
+     * holds for every possible entry value, so a loop over random ones is a
+     * demonstration, not a sample. It is here so that a future format change
+     * that breaks it -- VER3's unified PTE, say -- fails a test instead of
+     * silently making the check reachable. */
+    uint64_t s = 0x243F6A8885A308D3ull;
+    for (int i = 0; i < 200000; i++) {
+        s = s * 6364136223846793005ull + 1442695040888963407ull;
+        uint32_t ap = (uint32_t)((s >> 1) & 3u);
+        uint32_t bits = (ap == 1u) ? 25u : 46u;
+        uint64_t pde = ((s >> 8) & kfb_mask(bits)) << 12;
+        CHECK((pde & 4095ull) == 0ull);
+        uint32_t bbits = (ap == 1u) ? 29u : 50u;
+        uint64_t big = ((s >> 4) & kfb_mask(bbits)) << 8;
+        CHECK((big & 255ull) == 0ull);
+        if (g_fails_here) break;
+    }
+    /* and the root, which is NOT format-derived, is where it does fire */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root + 256ull}), 0);
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_UNALIGNED, "the root is the only unaligned pointer VER2 admits");
+}
+
 /* ══ DIFFERENTIAL — two independent decoders over one corpus ═════════════════
  * The corpus and the Rust walker's decode of it are both COMMITTED
  * (cuda/walk/corpus/, written by kf_corpus.cpp and by
@@ -1466,6 +1506,7 @@ static const Case CASES[] = {
     { "hostile/pdb_capacity",                   t_hostile_pdb_capacity },
     { "hostile/unsorted_pdb_list",              t_hostile_unsorted_pdbs },
     { "hostile/bounds_window_respected",        t_bounds_window_is_respected },
+    { "hostile/unaligned_inexpressible",        t_unaligned_is_inexpressible_below_the_root },
     { "legal/shared_page_table",                t_legal_shared_page_table },
     { "legal/pte_maps_own_page_table",          t_legal_pte_maps_own_page_table },
 
