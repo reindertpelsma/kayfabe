@@ -2553,6 +2553,16 @@ impl RegPlane {
             FbWindow::InstanceWindow => self.bar2_translate(page_off, &mut s)?,
         };
         let phys = phys & !(crate::fbwin::FB_PAGE - 1);
+        // ★★★★★ **w719 — the measurement constraint 15's aperture split rests on.** Records
+        // which world reached this GPGA; decides nothing. `twoworlds`' module docs carry why
+        // this cannot be settled from the design docs (they disagree) and what a zero is worth.
+        crate::twoworlds::note(
+            match w {
+                FbWindow::FbAperture => crate::twoworlds::World::Bar1,
+                FbWindow::Pramin | FbWindow::InstanceWindow => crate::twoworlds::World::Control,
+            },
+            phys,
+        );
         let backing = s.fb.page_backing(phys, materialise);
         Ok(WindowPageResolution {
             phys,

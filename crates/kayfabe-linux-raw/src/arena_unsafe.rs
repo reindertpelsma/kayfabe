@@ -325,6 +325,107 @@ impl SharedPageArena {
         Ok(())
     }
 
+    /// ★★★★★ **w719 — DROP THE BACKING FOR ONE RANGE, keeping the file's length.** The
+    /// aperture store is a sparse `memfd` **the size of video memory** (gigabytes) of which only
+    /// the guest's page tables and control structures are ever resident (megabytes). Without
+    /// this, a page table that the guest stops using keeps its backing pages for the life of
+    /// the VM.
+    ///
+    /// **Owner, 2026-09-14:** *"if some mapping is freed (like pt\*/pd\* table unused) then you
+    /// should put a new hole there so you don't leak memory (remember the sparse is equal to
+    /// vidmem size, gigabytes, while only the tables is used, megabytes)."*
+    ///
+    /// # ⊘⊘⊘ THE DANGEROUS HALF IS *WHEN*, NOT *HOW*
+    ///
+    /// This is [`PageArena::punch_all`]'s mechanism narrowed to a range, and it inherits that
+    /// function's most important property: **existing `MAP_SHARED` mappings stay valid and
+    /// begin reading ZERO**, including any memslot the VMM has installed over this range. There
+    /// is no fault, no status and no trap — the guest simply finds zeroes where it left data.
+    ///
+    /// ⇒ Punching a range the guest still uses is **silent corruption**, and it is corruption of
+    /// exactly the structures the MMU walks. ⚠ The safe trigger is therefore an **observable
+    /// event** that the range is dead — never an inference from disuse, which is a claim about
+    /// the future (`gpga_is_one_reserved_object.md`: *"Demotion may not be inferred from
+    /// disuse"*). And per the owner's standing rule the punch may happen **only at a
+    /// synchronisation point** — a refresh or an invalidate window — never mid-walk.
+    ///
+    /// ★ Getting the trigger wrong in the *conservative* direction merely leaks, which is the
+    /// bias this door should be used with.
+    ///
+    /// `offset` and `len` are rounded **inward** to whole arena pages: a partial page at either
+    /// end keeps its backing, because dropping a page the caller only partly named would
+    /// discard bytes it never asked about. ⇒ A sub-page request punches nothing and is `Ok`.
+    ///
+    /// # Errors
+    /// [`RawError::OutOfRange`] if the range leaves the arena; [`RawError`] from `fallocate`.
+    pub fn punch_range(&self, offset: u64, len: u64) -> Result<(), RawError> {
+        let bytes = self.inner.pages * ARENA_PAGE;
+        // ⊘ Overflow is kept DISTINCT from out-of-range, per `RawError::LengthOverflow`'s own
+        // doc: an overflow means the bounds check itself would have been wrong.
+        let end = offset
+            .checked_add(len)
+            .ok_or(RawError::LengthOverflow { offset, len })?;
+        if end > bytes {
+            return Err(RawError::OutOfRange {
+                offset,
+                len,
+                object_len: bytes,
+            });
+        }
+        // ⊘ INWARD, per the doc: round the start up and the end down, so only pages wholly
+        // inside the caller's range lose their backing.
+        let start = offset.div_ceil(ARENA_PAGE) * ARENA_PAGE;
+        let stop = (end / ARENA_PAGE) * ARENA_PAGE;
+        if stop <= start {
+            return Ok(());
+        }
+        // SAFETY: `fd` is this arena's own `memfd`, borrowed for the call; `[start, stop)` was
+        // just checked to lie inside the file's declared length; `fallocate` writes no memory
+        // of ours.
+        let rc = unsafe {
+            libc::fallocate(
+                self.inner.file.as_backing_fd().as_raw_fd(),
+                libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE,
+                start as libc::off_t,
+                (stop - start) as libc::off_t,
+            )
+        };
+        if rc != 0 {
+            return Err(crate::error::last_syscall_error(
+                "fallocate(PUNCH_HOLE) on one range of the page arena",
+            ));
+        }
+        Ok(())
+    }
+
+    /// ★★★★★ **w719 — HOW MUCH MEMORY THIS SPARSE FILE ACTUALLY HOLDS**, from `st_blocks`.
+    ///
+    /// The aperture store's whole design is that it is **declared** at video-memory size and
+    /// **resident** at page-table size. Those two numbers are not related by anything the type
+    /// system can see, so the difference has to be measurable or it cannot be believed — and it
+    /// is the number a quota would be enforced against.
+    ///
+    /// ⊘ `st_blocks` counts 512-byte units of **actually allocated** backing, so it is the
+    /// direct instrument for *"did the punch free anything"*. `st_size` is the declaration and
+    /// answers a different question; reading it here would make this function a tautology.
+    ///
+    /// ⚠ It is the kernel's accounting, not a byte count of what the guest wrote: `tmpfs` may
+    /// round to whole pages and a huge-page-backed file rounds much further. ⇒ Read it as a
+    /// **bound that moves in the right direction**, not as an exact footprint.
+    ///
+    /// # Errors
+    /// [`RawError`] from `fstat`.
+    pub fn resident_bytes(&self) -> Result<u64, RawError> {
+        // SAFETY: `stat` is written only by the kernel through this call, and the fd is this
+        // arena's own `memfd`, borrowed for the duration.
+        let mut st: libc::stat = unsafe { std::mem::zeroed() };
+        let rc = unsafe { libc::fstat(self.inner.file.as_backing_fd().as_raw_fd(), &mut st) };
+        if rc != 0 {
+            return Err(crate::error::last_syscall_error("fstat on the page arena"));
+        }
+        Ok(u64::try_from(st.st_blocks).unwrap_or(0) * 512)
+    }
+
     /// `(live, peak, allocations, distinct indices)` — the allocator's census.
     ///
     /// ⊘⊘ **w587 — TWO OF THESE FIELDS COULD ONLY EVER PRINT ZERO, and I read one of them as
@@ -459,6 +560,81 @@ mod tests {
         assert!(
             arena.alloc_at(SharedPageArena::LEN).is_err(),
             "an address past the arena's extent is refused"
+        );
+    }
+
+    /// ★★★★★ **w719 — the punch actually FREES MEMORY**, which is the only property that
+    /// matters for the leak the owner named. Asserting the bytes read back as zero would be a
+    /// weaker test that a no-op could also pass: a file that never allocated the page reads
+    /// zero too.
+    #[test]
+    fn punching_a_range_releases_its_backing_and_not_its_neighbours() {
+        let arena = SharedPageArena::create(HostPageSize::query()).expect("arena");
+        let base = arena.resident_bytes().expect("stat");
+        // Four pages written, so there is something real to release.
+        for i in 0..4u64 {
+            let mut p = arena.alloc_at(i * ARENA_PAGE).expect("page");
+            p.write_from(0, &[0xAB; 64]).unwrap();
+        }
+        let filled = arena.resident_bytes().expect("stat");
+        assert!(
+            filled >= base + 4 * ARENA_PAGE,
+            "four written pages should be resident: {base} -> {filled}"
+        );
+        // Punch the middle two.
+        arena
+            .punch_range(ARENA_PAGE, 2 * ARENA_PAGE)
+            .expect("punch the middle two pages");
+        let punched = arena.resident_bytes().expect("stat");
+        assert!(
+            punched <= filled - 2 * ARENA_PAGE,
+            "the punch must RELEASE backing, not merely zero it: {filled} -> {punched}"
+        );
+        // ⊘ The neighbours keep their bytes — a punch that took them too would be the silent
+        // corruption this door's doc warns about.
+        let mut buf = [0u8; 4];
+        arena.alloc_at(0).unwrap().read_into(0, &mut buf).unwrap();
+        assert_eq!(buf, [0xAB; 4], "the page below the punch lost its bytes");
+        arena
+            .alloc_at(3 * ARENA_PAGE)
+            .unwrap()
+            .read_into(0, &mut buf)
+            .unwrap();
+        assert_eq!(buf, [0xAB; 4], "the page above the punch lost its bytes");
+        // ★ And the punched range reads zero and is still addressable — the length is kept.
+        arena
+            .alloc_at(ARENA_PAGE)
+            .unwrap()
+            .read_into(0, &mut buf)
+            .unwrap();
+        assert_eq!(buf, [0, 0, 0, 0], "a punched page must read as zero");
+    }
+
+    /// ⊘ Rounding is INWARD: a range that only partly covers a page must leave that page alone,
+    /// because dropping it would discard bytes the caller never named.
+    #[test]
+    fn a_punch_rounds_inward_and_refuses_to_leave_the_arena() {
+        let arena = SharedPageArena::create(HostPageSize::query()).expect("arena");
+        let mut p = arena.alloc_at(0).expect("page");
+        p.write_from(0, &[0x5A; 64]).unwrap();
+        drop(p);
+        // Names bytes 8..64 of page 0 — no WHOLE page, so nothing may be punched.
+        arena.punch_range(8, 56).expect("a sub-page punch is a no-op, not an error");
+        let mut buf = [0u8; 4];
+        arena.alloc_at(0).unwrap().read_into(0, &mut buf).unwrap();
+        assert_eq!(buf, [0x5A; 4], "a sub-page range must not drop the page it lies in");
+        // ⊘ Past the end is refused, never clamped.
+        assert!(
+            arena.punch_range(SharedPageArena::LEN, ARENA_PAGE).is_err(),
+            "a range starting past the arena must be refused"
+        );
+        assert!(
+            arena.punch_range(0, SharedPageArena::LEN + ARENA_PAGE).is_err(),
+            "a range running past the end must be refused, not truncated"
+        );
+        assert!(
+            arena.punch_range(u64::MAX, 4096).is_err(),
+            "an overflowing range must be refused by the overflow arm"
         );
     }
 

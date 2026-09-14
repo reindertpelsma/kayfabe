@@ -76,6 +76,7 @@ pub mod setpagedir;
 pub mod staticinfo;
 pub mod sticky;
 pub mod sweep;
+pub mod twoworlds;
 pub mod unserviced;
 
 use kayfabe_abi::bifstatic::BifStaticRow;
