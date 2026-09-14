@@ -42,6 +42,28 @@ pub fn bring_up_before_sandbox() {
         eprintln!("kayfabe-isolate: ⊘ CUDA bring-up asked for twice; the first one stands");
         return;
     }
+    // ★★★★★ **`/proc` FIRST, AND IT IS NOT HOUSEKEEPING** —
+    // `[measured 2026-09-14, RTX 3060, 580.159.04]` `cuInit` refuses with
+    // `CUDA_ERROR_OPERATING_SYSTEM` (304) inside this isolate's PID namespace, because the
+    // isolate is `clone`d with `CLONE_NEWPID` and `/proc` is still its PARENT'S. Bisected one
+    // namespace at a time: user/mount/net/ipc/uts each pass alone; **pid** fails; **pid with a
+    // remounted `/proc` passes**. See `kayfabe_linux_raw::sandbox::remount_proc`.
+    //
+    // ⊘ §w724d did not anticipate this, and the ordering it prescribes does not address it:
+    // the isolate is **born namespaced** (the namespaces come from the `clone` that CREATES
+    // it, which is the only way `CLONE_NEWPID` can be had at all), so there is no moment in
+    // its life when CUDA could have initialised without this.
+    //
+    // ⚠ A failure here is RECORDED, not fatal: `cuInit` may still succeed on a host whose
+    // configuration differs, and refusing the bring-up over a mount would be this code
+    // deciding the experiment.
+    if let Err(e) = kayfabe_linux_raw::sandbox::remount_proc() {
+        eprintln!(
+            "kayfabe-isolate: ⚠ could not remount /proc before the CUDA bring-up ({e}); \
+             `cuInit` is expected to refuse with CUDA_ERROR_OPERATING_SYSTEM (304) in a PID \
+             namespace whose /proc belongs to the parent"
+        );
+    }
     let (outcome, kernel) = kayfabe_cuda::selftest::bring_up_and_prove();
     // ⊘ One line to the child's own stderr as well as the wire record, because a child that
     // dies between here and the parent's request would otherwise leave no trace at all — and
