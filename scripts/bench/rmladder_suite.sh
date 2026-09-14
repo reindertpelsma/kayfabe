@@ -46,31 +46,50 @@ mkdir -p "$OUT"
 # ⊘ The arm list is DERIVED from the source (flags whose handler sets a `want_* = true`), not
 # hand-maintained. A hand list silently rots the moment someone adds an arm — which is the exact
 # failure this file exists to end.
+# ⊘ Overridable so a single arm can be given a CLEAN run. `[measured w717]` an arm that wedges
+# the GPU makes every LATER arm fail at `openat(nvidia<gpu>)`, so a verdict taken from a full
+# sequential run can be collateral rather than the arm's own answer.
+if [ -n "${RMLADDER_ARMS:-}" ]; then ARMS="$RMLADDER_ARMS"; else
 ARMS="--concurrency --timer --engines --doorbell-census --gpu-info-sweep --bus-info-sweep
 --gpga-reserve-probe --atomics-probe --pce-mask-probe --dictated-ring --dictated-ring-negative
 --late-map-race --blockage-coverage --uvm-invalidate --uvm-mean --alias-two-vas
 --alias-unmap-observe --map-propagation --missing-page-fault --map-stress --rpc-mixed-allocs
 --cross-client-leak --concurrent-fuzz --defer-liveness --guest-ram-pin --guest-ring-channel
 --executor-vas --ce-client --ce-client-guest-ram --bar1-crossing"
+fi
 
 printf '=== RMLADDER SUITE — %s arms, gpu %s, %ss each ===\n' "$(echo $ARMS | wc -w)" "$GPU" "$ARM_TIMEOUT"
 printf '%-28s %-8s %s\n' "ARM" "VERDICT" "last line"
-n_pass=0; n_fail=0; n_to=0; failed=""
+n_pass=0; n_fail=0; n_to=0; n_skip=0; failed=""; cascaded=""
 for arm in $ARMS; do
   log="$OUT/${arm#--}.out"
   timeout "$ARM_TIMEOUT" "$BIN" --gpu "$GPU" "$arm" > "$log" 2>&1
   rc=$?
   last=$(grep -vE '^\s*$' "$log" 2>/dev/null | tail -1 | cut -c1-72)
+  # ★★★★★ **CASCADE DETECTION — w717b, and without it this ledger LIES.**
+  #
+  # `[measured w717]` one arm timed out and the 25 arms after it all failed with
+  # `RM bring-up failed at R1 openat(nvidia<gpu>)` — they never reached their own subject. The
+  # first ledger called that **27 failures**. It was ONE failure and 25 pieces of collateral.
+  #
+  # ⊘ Separate processes isolate a crash; they do NOT isolate a wedged DEVICE. An arm that cannot
+  # open the node has measured nothing, and reporting it as FAIL manufactures defects — the
+  # opposite of what a suite is for.
+  if [ $rc -ne 0 ] && grep -q "openat(nvidia" "$log" 2>/dev/null && [ $((n_fail + n_to)) -gt 0 ]; then
+    v=SKIP/cascade; n_skip=$((n_skip+1)); cascaded="$cascaded $arm"
+  else
   case $rc in
     0)   v=PASS;    n_pass=$((n_pass+1));;
     124) v=TIMEOUT; n_to=$((n_to+1));   failed="$failed $arm(timeout)";;
     *)   v="FAIL($rc)"; n_fail=$((n_fail+1)); failed="$failed $arm";;
   esac
+  fi
   printf '%-28s %-8s %s\n' "$arm" "$v" "$last"
 done
 
 echo ""
-echo "SUITE_ARMS=$(echo $ARMS | wc -w) SUITE_PASS=$n_pass SUITE_FAIL=$n_fail SUITE_TIMEOUT=$n_to"
+echo "SUITE_ARMS=$(echo $ARMS | wc -w) SUITE_PASS=$n_pass SUITE_FAIL=$n_fail SUITE_TIMEOUT=$n_to SUITE_SKIP_CASCADE=$n_skip"
+[ -n "$cascaded" ] && echo "SUITE_CASCADED (device unopenable — NOT their own verdict):$cascaded"
 [ -n "$failed" ] && echo "SUITE_NOT_PASSING:$failed"
 echo "SUITE_LOGDIR=$OUT"
 # ⊘ Non-zero if anything did not pass, so a caller cannot record a green by ignoring the body.
