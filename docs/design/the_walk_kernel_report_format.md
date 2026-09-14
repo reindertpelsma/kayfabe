@@ -180,3 +180,60 @@ that advertised vGPU to satisfy some unrelated check would break this silently.
 
 ⇒ **Guard it and say why**, before anything depends on it: a test asserting `PMC_BOOT_1 == 0`
 whose message names *the invalidate skip*, not just *"we look like real hardware"*.
+
+## ★★★★★ w720i — WHERE THE KERNEL RUNS, AND WHY IT MUST NOT BE THE VMM
+
+> **Owner, 2026-09-14:** *"a hang on the scratchpad is only harm for the guest itself. I am more
+> worried that we execute the CUDA from a trusted VMM process, and that if the kernel is
+> compromised that it can get host access, since cuda has no boundary specifically between a host
+> process and who launched the cuda kernel."*
+
+★ Correct, and it **outranks** the hang. It also decides the placement question left open in
+`dirty_tracking_without_uffd.md`.
+
+### Scoping it precisely — this is NOT code injection
+
+The PTX is **ours**, compiled at build time; nothing guest-controlled selects or modifies it. What
+is guest-authored is the **data** the kernel walks. ⇒ The bug class is **memory safety in ~200
+lines of CUDA we write and can audit**, not *"the guest runs code in our context"*.
+
+⊘ And note the guest **already** executes arbitrary GPU code — that is the product. GPU MMU
+context isolation is already load-bearing. What this adds is not that dependency; it is **a
+context worth attacking**.
+
+### The attack path
+
+hostile tables → our kernel computes a wild address → it writes wherever that lands **inside its
+own CUDA context**. ★ The owner's point is exactly right: the GPU MMU separates contexts from each
+other, but **within** a context a kernel reaches everything the context mapped — including any
+host memory pinned or mapped into it. If that context belongs to the VMM, a wild write reaches
+VMM state.
+
+### ⇒ The fix is to make the context WORTHLESS. Four layers, strongest first
+
+1. ★★★ **Never the VMM process.** A **dedicated isolate** whose entire address space is the GPGA
+   buffer, the shadow and the output. Full compromise yields **nothing**: no guest RAM, no
+   descriptors, no VMM state, no other guest's anything. ⇒ This answers *"worker or isolate"* with
+   a reason: **a dedicated walk isolate — not the worker, and never the VMM.**
+   ⊘ Note this is the isolate pattern used **for security**, where
+   `isolate_exists_for_VA_IDENTITY_not_security.md` records it normally is not.
+2. ★★ **Map the GPGA buffer READ-ONLY in that context.** The kernel only reads the tables; GPU
+   PTEs carry a read-only bit and we author the mapping. ⇒ A wild write into guest video memory
+   becomes **impossible rather than unlikely**, deleting the whole "kernel corrupts the guest"
+   branch for free.
+3. ★ **No host memory mapped into the context at all.** Output lands in device memory and is
+   copied out afterwards, so there is **no host page the kernel could name** even with a
+   completely wrong address.
+4. **Validate the report anyway** (already in this document's §3). Not because the kernel is
+   untrusted, but because *a kernel bug reachable only by a hostile table is exactly the bug that
+   will exist*.
+
+⇒ With all four, the worst outcome of a memory-safety bug is: corrupt the guest's own video memory
+(**impossible** under 2), corrupt the shadow (**forces a resync**, self-healing), or emit a
+malformed report (**rejected** by 4). **Nothing reaches the host.**
+
+### ⚠ The residual, stated honestly
+
+A hung kernel in a dedicated context **still occupies GPU resources**, and recovering it may need
+a channel or context teardown that briefly disturbs the guest sharing the card. ⇒ Contained, not
+free — but a **liveness** cost, never a confidentiality or integrity one.
