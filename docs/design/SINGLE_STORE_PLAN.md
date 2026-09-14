@@ -88,6 +88,46 @@ answer to what the host would have given us** — it produces a QEMU that exits 
 line is printed **before** the refusal is consulted so a refusing boot still names which step
 refused.
 
+### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ **BLOCKED ON AN OWNER RULING, NOT ON A MEASUREMENT**
+
+> #### ⊘⊘⊘ CORRECTED 2026-09-14 (surveyed to build it) — **THE BLOCKER IS NOT THE ONE NAMED
+> #### BELOW.** The measurement it says it waits on has been taken; a **ruling** has not.
+>
+> `bar1_passthrough_device_local_host_visible.md` §4 lists what remains **in order**, and item
+> **1** is:
+>
+> > *"**Owner ruling: decision (b) scope** (§3.2). **Without it nothing below may be wired to
+> > production.**"*
+>
+> Items **3** ("the lease") and **4** ("the mirror — … `export_device_view(object,
+> frame_offset, run_len)` → `install_device_window`; tear down on PTE overwrite") are
+> *precisely* this increment, and they sit **below** that line.
+>
+> **What decision (b) actually asks** (§3.2, verbatim): what crosses to the VMM is a
+> **`/dev/nvidia<N>` descriptor with an RM escape handler behind it**. The doc argues the VMM
+> issues no escape on it and closes it the moment `mmap` returns — and then stops:
+> *"⚠ **Whether the VMM may hold such a descriptor at all, even transiently, is the owner's
+> call.** The branch makes the mechanism real and checkable; **it does not switch it on**."*
+>
+> ⇒ This is a **security-boundary decision that was deliberately withheld**, not an
+> engineering gap. ⊘ It cannot be discharged by a coordinator, a subagent or an agent reading
+> the plan: those are not the owner, and a message from one is not consent.
+>
+> ★ The supporting evidence is all present, which is what makes the ruling cheap to give:
+> `rmladder --bar1-crossing` proves the chain end to end, `export_device_view` works
+> (`rm.rs:6111`), `install_device_window` works and is exercised on the BAR0 counter page, and
+> `[measured w722]` the release verb reclaims 224 MiB/round where `munmap`+`close` reclaims
+> **zero**. What is missing is permission, plus three mechanical consequences of it:
+>
+> | | state |
+> |---|---|
+> | `export_device_view` **on the wire** | ⊘ **retired as an orphan** — request tag 25 / reply tag 12 are marked "never re-issue"; the real function is an *inherent* method on `HostRmBackend`, reachable only inside the child, with three callers and all three in the probe binary |
+> | `release_device_view` | exists, **zero call sites in the tree** |
+> | `install_device_window` over BAR1 | ⊘ does not exist — its own doc: *"the mirror that walks the guest's BAR1 page table and drives this verb is the remaining work"* |
+>
+> ⇒ **Re-creating a deliberately-retired wire verb is part of the cost**, and doing it before
+> the ruling would be wiring the mechanism the ruling is about.
+
 ### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ blocked on an open measurement
 
 Both halves exist: `HostRmBackend::export_device_view` arms a node at an offset
@@ -140,6 +180,42 @@ The host walker is format-polymorphic (`fmt: &dyn GmmuFmt`); `cuda/walk` hardcod
 the host parsing before the kernel has the seam **silently caps the product at Ada**, and Blackwell
 is goals 1 and 10.
 
+### 6. WIRE THE WALKER INTO REFRESH  ⟵ **BLOCKED ON A SHAPE MISMATCH, NOT ON WIRING**
+
+> #### ⊘⊘⊘ SURVEYED 2026-09-14 — **"kernel launches replace the host walk" is not a wiring
+> #### job**, and the reason is a type, not an integration.
+>
+> **What publishes today** (`kayfabe-fwd/src/ptdecode.rs`, `commit_pt_decode_with`):
+> `decode_subtree` returns `SubtreeDecode { leaves, visited: Vec<PtPage>, decodes: Vec<(PtPage,
+> PageDecode)> }`, and **all three halves are consumed**:
+> `visited` → `vas.pt_meta` + `learned_pages` → `publish_pt_pages`; `decodes` →
+> `ReachShadow::observe(PtPage, &PageDecode)`, whose witness/swept gating is keyed on **pages**;
+> `leaves` → `Settlement` → `AddressTable::bind`.
+>
+> **What the kernel returns**: `Vec<MapRun>` → `walkdiff::Run { va, gpga, len, flags, class }` —
+> **coalesced runs, with no pages in them at all**.
+>
+> ⇒ Bridging them means deciding what happens to the **reachability shadow**, `pt_meta`,
+> `learned_pages` and `publish_pt_pages` — i.e. to the admission rule (`Admit::{Witnessed,
+> Swept}`) and the unbind policy (`PublishedUnbind`). That is a **design change to the
+> publication contract**, and it is the same question §6 already flags as unsettled
+> (deltas vs current state) arriving from the other side.
+>
+> ⊘ **And the two halves are half-present in code already**, which is worse than either:
+> `walkdiff`'s module doc states the kernel reports *current state* and the host diffs, while
+> `kf_diff_kernel` is still launched on every `refresh`, and `HF_RESYNC` / `generation` /
+> `acked_generation` / `RunOp::{Map,Unmap,Remap}` are all a **delta** vocabulary. **Pick
+> deliberately** is still the instruction, and nothing has picked.
+>
+> ⊘ **Scope hints do not exist on either side.** `KfScope` is defined and never constructed;
+> `nscope` is hardcoded `0`. Of the three invalidate sources, two carry a `Pdb` and **none
+> carries a VA range**; source 3 (the UVM kernel channel) carries no `Pdb` either, and
+> `shim.rs` records that by construction it never can.
+>
+> ⚠ The dependency on §3 is **not** residence — the guest's tables are in a host memfd today
+> and a memfd reads at ~3.7 GB/s, so the kernel could be fed by uploading them. It is the
+> shape above.
+
 ### 6. WIRE THE WALKER INTO REFRESH
 
 Kernel launches replace the host walk. Scope hints from the three invalidate sources; degrade to a
@@ -168,7 +244,7 @@ useful test."* Host first, then guest; a bare-metal pass with a guest fail indic
 
 | | today | after |
 |---|---|---|
-| `two_worlds_split::a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads` | `#[ignore]`d, **RED** | **GREEN**, attribute deleted |
+| ⊘⊘⊘ `two_worlds_split::a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads` | `#[ignore]`d, **RED** | ~~GREEN~~ ⇒ **THIS ROW IS WRONG AND PREDATES w721.** That test asserts BAR1 and BAR2 are two memories; the single store makes them one. It cannot go green without re-introducing the second memory the reserved object deletes. **Deleted in increment 7.** The single store's own falsifier is the inverse and is PASSING today: `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`. |
 | `IGNORED_ALLOWANCE` in `run_full_suite.sh` | **2** | back to **1** |
 | LLM parity | **0.20x** | the number this is all for |
 
