@@ -1821,7 +1821,7 @@ static void rt_stream(bool hostile, uint64_t seed, int steps, RtStats &sx)
         rt_full_state(O, dev, RT_BUF, roots, full, ho, po, ro, ok);
         if (!ok) continue;
         if (full.size() > sx.max_model) sx.max_model = full.size();
-        if (have_prev_full && !(full == prev_full)) sx.changed++;
+        { std::string wc; if (have_prev_full && !model_eq(full, prev_full, wc)) sx.changed++; }
         prev_full = full;
         have_prev_full = true;
 
