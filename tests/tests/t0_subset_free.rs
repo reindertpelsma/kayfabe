@@ -384,9 +384,22 @@ fn freeing_a_channel_frees_its_engine_objects_before_the_channel() {
             device.doorbell(None, GPU, MockArch::token_for(SCRATCH_VCHID), &[], None),
             Err(FwdFault::UnknownVchid {
                 gpu: GPU,
-                vchid: SCRATCH_VCHID
+                vchid: SCRATCH_VCHID,
+                // ⊘ `ExecPlane`: the free RETRACTS the `by_vchid` row, so the doorbell misses
+                // at routing and never reaches the proc's channel map. ⚠ Read the variant's
+                // wording carefully — it says *"forward-population never filed this channel"*,
+                // which is the diagnosis for a channel that was never filed, not for one that
+                // was filed and then freed. Both present as "no row".
+                //
+                // ★ What distinguishes them is the census printed beside this run:
+                // `PROJECT-VCHID-CENSUS seen=2 filed=2` says projection DID file it, so a
+                // reader sent to "look at the projection" finds it healthy and knows the row
+                // was retracted rather than missing. That census is why this assertion can be
+                // `ExecPlane` without being a signpost pointing the wrong way.
+                miss: kayfabe_fwd::VchidMiss::ExecPlane,
             }),
-            "({mode:?}) the freed channel no longer routes — MISS=FAULT, named"
+            "({mode:?}) the freed channel no longer routes — MISS=FAULT, named, and named for \
+             the stage that actually missed"
         );
 
         let m = mark(&rec);
