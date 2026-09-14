@@ -327,8 +327,30 @@ fn build_backends(
                      `cuda-scratchpad` feature; no CUDA was brought up and none will be."
                 );
             }
-            let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu))
-                .map_err(|e| format!("the isolate sandbox could not be built: {e}"))?;
+            let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu)).map_err(|e| {
+                // ⊘⊘ **NAME THE SUSPICION, because it is specific and it is new.** CUDA's
+                // bring-up SPAWNS DRIVER THREADS, and `unshare(CLONE_NEWUSER)` — the first
+                // thing `sandbox::enter` tries — is refused by the kernel to a multi-threaded
+                // process. The fallback arm (`unshare` of mount/net/ipc/uts using the
+                // CAP_SYS_ADMIN this child already has from the user namespace its PARENT
+                // created at `clone`) is what must carry it.
+                //
+                // ⚠ If that fallback ever stops working, the failure arrives here as a bare
+                // `EINVAL` on a call that has worked on every boot for months, and the last
+                // thing changed would be in a different file. Saying so costs one line.
+                if args.cuda_walk {
+                    format!(
+                        "the isolate sandbox could not be built: {e} — ⚠ this is the CUDA \
+                         scratchpad isolate, and CUDA's bring-up ran BEFORE this call and \
+                         spawns driver threads. `unshare(CLONE_NEWUSER)` is refused to a \
+                         multi-threaded process, so this path depends on the fallback arm \
+                         (mount/net/ipc/uts under the CAP_SYS_ADMIN inherited from the \
+                         parent's clone). Suspect that before suspecting the policy."
+                    )
+                } else {
+                    format!("the isolate sandbox could not be built: {e}")
+                }
+            })?;
             // ★★★ §w724d STEP 3 IS DONE (namespace + pivot_root + privilege drop). NOW the
             // two probes that the warm-up above cannot stand in for.
             #[cfg(feature = "cuda-scratchpad")]
