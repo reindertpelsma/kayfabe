@@ -77,39 +77,12 @@ esac
 # ⊘ LLM_TOKENS is the whole grade — a token count cannot be forged by a copy, a fill, or a
 #   completion we wrote ourselves. LLM_OK / LLM_TEXT are context, not the verdict.
 $GS "sudo mkdir -p /opt/llm && sudo chown ubuntu:ubuntu /opt/llm"
-$GS "cat > /opt/llm/run_llm.py <<'PY'
-import os, sys, time
-MODEL = os.environ.get('LLM_MODEL', '$MODEL')
-NTOK  = int(os.environ.get('LLM_NTOK', '16'))
-dev   = os.environ.get('LLM_DEVICE', 'cuda')
-print('LLM_DEVICE=' + dev, flush=True)
-rc, text, ntok, ms = 1, '', 0, -1.0
-try:
-    import torch
-    print('TORCH_CUDA_AVAILABLE=%s' % torch.cuda.is_available(), flush=True)
-    print('TORCH_DEV_COUNT=%d' % torch.cuda.device_count(), flush=True)
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    tok = AutoTokenizer.from_pretrained(MODEL)
-    model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float16)
-    model = model.to(dev).eval()
-    ids = tok('The capital of France is', return_tensors='pt').to(dev)
-    t0 = time.time()
-    with torch.no_grad():
-        out = model.generate(**ids, max_new_tokens=NTOK, do_sample=False)
-    ms = (time.time() - t0) * 1000.0
-    gen = out[0][ids['input_ids'].shape[1]:]
-    ntok = int(gen.shape[0])
-    text = tok.decode(gen, skip_special_tokens=True)
-    rc = 0
-except Exception as e:
-    print('LLM_EXC=%s: %s' % (type(e).__name__, e), flush=True)
-print('LLM_TEXT=' + text.replace(chr(10), ' '), flush=True)
-print('LLM_OK=%d' % (1 if rc == 0 else 0), flush=True)
-print('LLM_TOKENS=%d' % ntok, flush=True)
-print('LLM_MS=%.1f' % ms, flush=True)
-print('LLM_RC=%d' % rc, flush=True)
-sys.exit(rc)
-PY"
+# ⊘⊘ **ONE RUNNER, INSTALLED — not a heredoc (w713b).** This used to embed the runner inline, so
+# a host-side baseline would have needed a SECOND copy, and the two would have drifted in prompt,
+# token count or what the timer encloses. Parity is a RATIO; a ratio whose halves are not the same
+# measurement is not a ratio. `scripts/bench/run_llm.py` is now the single source, installed here
+# and on the host by `provision_host_llm.sh`.
+$GS "cat > /opt/llm/run_llm.py" < "$(dirname "$0")/run_llm.py"
 
 say "pre-downloading the model on the HOST side of the guest (so the graded run is not a network test)"
 $GS "HF_HOME=/opt/llm/hf /home/ubuntu/llmvenv/bin/python -c \"
