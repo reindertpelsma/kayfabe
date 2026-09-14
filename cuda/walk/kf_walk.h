@@ -64,6 +64,10 @@ extern "C" {
  * hold. ⚠ A Rust/PTX skew must fail LOUDLY at launch rather than decode garbage
  * field offsets and look like a page-table bug (THE_CONSTRAINTS.md §21). */
 #define KFWR_R_BAD_FORMAT      (1u << 11)
+/* The parallel walk's frontier or task array overflowed. A legitimate tree
+ * cannot reach it (the 12 GiB worst case needs 6 144 tasks); a cycle that makes
+ * many directory entries point at one table can. Loud, and it truncates. */
+#define KFWR_R_FRONTIER_CAP    (1u << 12)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)
@@ -88,6 +92,31 @@ extern "C" {
 #define KFWR_RF_PRIVILEGE      (1u << 6)
 #define KFWR_RF_PS_SHIFT   8u
 #define KFWR_RF_PS_MASK    0xFu
+/* ★★★★★ KIND IS PART OF RUN IDENTITY (the_walk_kernel_report_format.md §w725b).
+ *
+ * A run is the unit the host publishes as ONE mapping, and one mapping carries
+ * one kind: a PTE's KIND tells the GPU how to INTERPRET the memory — tiling,
+ * compression. A host mapping with the wrong kind makes an engine misread a
+ * surface the guest wrote correctly: no fault, no refusal, wrong data.
+ *
+ * ⊘ It holds even though the publish path may not propagate kind yet: NEVER
+ * COALESCE ACROSS A FIELD YOU DO NOT PROPAGATE. Merging destroys the boundary
+ * irreversibly; keeping it costs runs. You can always merge later; you cannot
+ * unmerge. `[measured w725]` on the real 12 GiB guest address space it costs
+ * 3 runs instead of 1, against a 64K cap.
+ *
+ * ⊘ COMPTAGLINE is deliberately NOT here: it is a per-surface compression-tag
+ * index, so two runs differing only in it are the same mapping shape — and the
+ * two dev_mmu.h copies in the reference tree disagree about its width (53:36 vs
+ * 55:36), which is its own reason not to key anything on it.
+ *
+ * ⊘ It lives in spare bits of the EXISTING flags word rather than in a new
+ * field, so the report's byte layout — pinned by crates/kayfabe-mmu's seam test
+ * against the C compiler's own offsetof — does not move. Run identity is
+ * `flags` equality, so kind joins it by construction rather than by a rule
+ * somebody has to remember at the coalescer. */
+#define KFWR_RF_KIND_SHIFT 16u
+#define KFWR_RF_KIND_MASK  0xFFu
 #define KFWR_PS_4K    0u
 #define KFWR_PS_64K   1u
 #define KFWR_PS_2M    2u

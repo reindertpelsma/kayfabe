@@ -114,6 +114,15 @@ pub const RF_PRIVILEGE: u32 = 1 << 6;
 pub const RF_PS_SHIFT: u32 = 8;
 /// Mask of the page-size code, once shifted down.
 pub const RF_PS_MASK: u32 = 0xF;
+/// Shift of the PTE `KIND` within [`MapRun::flags`].
+///
+/// ★ `KIND` is part of **run identity**: a run is one published mapping and one
+/// mapping carries one kind, so the walk never coalesces across a change of it
+/// (`the_walk_kernel_report_format.md` §w725b). It rides in spare bits of the
+/// existing flags word, so the report's byte layout is unchanged.
+pub const RF_KIND_SHIFT: u32 = 16;
+/// Mask of the `KIND` field, once shifted down.
+pub const RF_KIND_MASK: u32 = 0xFF;
 
 /// Which memory the run's target lives in — `KFWR_AP_*`, decoded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
