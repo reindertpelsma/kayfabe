@@ -541,7 +541,8 @@ separates *contexts*, not a kernel from its own context's mappings. ⇒ The kern
 **scratchpad isolate**, which is **root-in-the-guest, unprivileged-on-host**: exactly the privilege
 of the data it processes, so it **cannot escalate**. `libcuda` is initialised (through
 `cuModuleLoadData`, where the PTX JIT runs) **before** the isolate drops privilege; no other
-isolate loads CUDA. **One walk isolate per VM.**
+isolate loads CUDA. ⊘ **One walk isolate per `(vm, gpu)`** — see §w724f below; *"per VM"* was
+wrong and the implementation was already right.
 
 ⊘ It is **not code injection**: the PTX is ours, built at build time. The bug class is **memory
 safety over guest-authored data** in ~200 auditable lines.
@@ -582,7 +583,7 @@ already maintains and uploads it; the kernel holds the **algorithm**, not the la
 branch on `table_version` covers what field offsets cannot (VER3's PCF) — and it is **warp-uniform**,
 so it costs nothing.
 
-- **`KfSetup`** (once per VM, immutable): `abi_version`, `table_version`, `levels[]`,
+- **`KfSetup`** (once per **`(vm, gpu)`**, immutable): `abi_version`, `table_version`, `levels[]`,
   **`gpga_base` / `gpga_len`** (invariant 2's bound, as derived config), `page_sizes`,
   `max_entries`.
 - **`KfLaunch`** (per refresh): `root_pdb`, `scope[]`, `out`, `run_capacity`, `generation`.
@@ -876,3 +877,46 @@ both**, and both are reasons to treat CUDA re-initialisation as a refusal rather
 ⊘ §20's *"`libcuda` is initialised … before the isolate drops privilege"* stands; what changes is
 that this isolate is a **different build** from the others, and that is now stated rather than
 assumed.
+
+
+## ★★★★★ w724f — MULTI-GPU IS STILL AN AXIS: one scratchpad, and one PTX launch, PER GPU
+
+> **Owner, 2026-09-14:** *"multiple gpu still remains an axis, so multiple scratchpads if needed
+> each with a ptx for tables in that gpu."*
+
+⊘ **My docs said "one walk isolate per VM" — wrong.** The implementation was already right:
+`Spine::install_isolate(proc, gpu, iso)` is keyed by **`(ProcId, GpuId)`**, with
+`SCRATCHPAD_PROC = u32::MAX` standing for *"the VM"* (`scratchpad.rs:518-520`). ⇒ The scratchpad is
+**already per `(vm, gpu)`**, and the correction is to the prose only.
+
+### What is per-GPU, and none of it is optional
+
+| | why |
+|---|---|
+| **GPGA space** | GPGA `0x1000` on GPU 0 and on GPU 1 name **different memory** (`gpgaview.rs`) |
+| **the reserved object** | one per card, and the reservable size **differs per card** |
+| **the scratchpad channel + its CE** | a channel belongs to one GPU |
+| **the CUDA context** | bound to a device |
+| **the walk launch** | reads *that* GPU's tables, through *that* GPU's GPGA mapping |
+| **`KfSetup`, including the format descriptor** | ★ see below |
+| **the BAR1 budget** | an aperture is a property of a card |
+
+### ★★★ AND THE FORMAT DESCRIPTOR BEING PER-GPU VALIDATES §21 RATHER THAN MERELY OBEYING IT
+
+A mixed-generation box — say **Turing alongside Blackwell** — needs **VER2 and VER3 live
+simultaneously, in one kayfabe process**. ⊘ That is unserviceable by a kernel with bit positions
+compiled in, and it is *not* solved by shipping two CUDA programs either: the two GPUs are driven
+from the same process at the same time.
+
+⇒ **One PTX, two descriptors, launched per GPU** is the only shape that works — which is exactly
+what §21 requires for a reason that was about maintenance and turns out to be about **capability**.
+
+### ⚠ The open multi-GPU question: PEER apertures
+
+A VER2 PTE's aperture nibble is `0 vid, 1 peer, 2 sys-coh, 3 sys-noncoh` — so a guest PTE can name
+**another GPU's memory**. The kernel already *decodes* that nibble; what we **serve** for it is
+undecided, and it is the one place where a per-GPU walk meets a cross-GPU mapping.
+
+⊘ Related and unresolved: `the_viewspace_citation_nobody_audited` records peer memory being deferred
+while citing a type that did not model the GPU axis. ⇒ **Do not let the single-store work assume
+peer never appears**; decide it explicitly, even if the decision is a named refusal.
