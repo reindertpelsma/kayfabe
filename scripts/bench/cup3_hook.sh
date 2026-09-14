@@ -235,8 +235,11 @@ for i in $(seq 1 "$LIMIT"); do
           echo 1 | sudo tee /sys/module/nvidia_uvm/parameters/uvm_debug_prints >/dev/null 2>&1 \
             || echo "      could not enable uvm_debug_prints"
           sleep 35
-          sudo dmesg | grep -iE "stuck waiting|pending push|tracker entry|Writing .* bytes of PTEs" \
-            | tail -12 || echo "      (no UVM spin-loop print in dmesg)"
+          # ⊘ `grep | tail || echo` can NEVER fire the fallback: `tail` exits 0 even when grep
+          # matched nothing, so an absent dump printed as an EMPTY SECTION with no explanation -
+          # indistinguishable from "the probe did not run". Capture, then test the string.
+          UVMDUMP=$(sudo dmesg | grep -iE "stuck waiting|pending push|tracker entry|Writing .* bytes of PTEs" | tail -12)
+          if [ -n "$UVMDUMP" ]; then echo "$UVMDUMP"; else echo "      (NO UVM spin-loop print in dmesg - it is not stuck in uvm_tracker_wait)"; fi
           # ★★★★★ per-thread, because stime is PROCESS-WIDE and `perf -p` mixes threads.
           echo "      -- threads (stime is process-wide; the ioctl thread is the R one) --"
           ps -L -o tid,stat,time -p $P 2>/dev/null | head -6
