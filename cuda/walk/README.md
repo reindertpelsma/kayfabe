@@ -118,3 +118,40 @@ whole argument for making the check structural rather than probable.
   lists producing a dense, ordered report.
 - **`GONE` carries no runs.** The doc leaves the choice open; a whole-VAS teardown
   is one flag, not N unmaps.
+
+## ★★★★★ TURING+ IS A HARD REQUIREMENT — what is met, and the one thing that is not
+
+**Owner, 2026-09-14, stated three times:** *"our ptx must be Turing+ compatible."*
+
+### ✔ Met and verified on the PTX side
+
+| | status |
+|---|---|
+| compile target | `-gencode arch=compute_75,code=compute_75` — **Turing**, PTX embedded, **no cubin** |
+| "it JITs forward" is checked, not believed | `make check-ptx` fails if `cuobjdump -sass` finds any `code for sm_` |
+| arch-specific intrinsics | **none** — no `__shfl`/`__ballot`/`redux`/`cp.async`/`mbarrier`/cluster ops |
+| forward-JIT demonstrated | ran on **sm_86** from the `compute_75` target |
+
+⚠ **Never run on actual Turing silicon (sm_75).** sm_75 is the floor we claim; a container-hour
+closes it. Until then "Turing+" is *"compiled for Turing, proven forward to Ampere"*.
+
+### ⊘⊘⊘ THE REAL ARCHITECTURE LIMIT IS THE FORMAT, NOT THE PTX
+
+This kernel hardcodes **VER2**, which covers **Turing → Ada**. **Hopper and Blackwell use VER3**
+(PCF; `grep -c PCF` on the Pascal/Turing headers is 0). ⇒ **`grep -niE 'ver3|pcf' kf_walk.cu` →
+nothing.**
+
+★★★ **And that bears directly on deleting the host parsing code.** The host walker is
+**format-polymorphic** — it takes `fmt: &dyn GmmuFmt` (`kayfabe-fwd/src/ptdecode.rs`,
+`kayfabe-mmu/src/reach.rs:640`), so VER3 there is **a new impl, not a rewrite**. This kernel has no
+such seam.
+
+⇒ **Deleting the host walker today would delete the abstraction Blackwell needs**, and Blackwell is
+goals 1 and 10 of the standing directive.
+
+### ⇒ Sequencing
+
+**Add the format seam to the kernel FIRST, then delete the host parsing.** A template specialised
+per format, or a format enum switched at each decode site — cheap while only one format exists,
+and much worse to retrofit into a working walker later. Same destination; it just stops the
+deletion from quietly capping the product at Ada.
