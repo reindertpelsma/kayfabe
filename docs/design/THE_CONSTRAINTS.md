@@ -1058,3 +1058,51 @@ the framebuffer size from the reservation rather than asserting 12288.
 ⊘ **Not yet decided: what `our_headroom` must contain.** Known members: the CUDA context (~3 MiB
 measured) and our own channels. Unknown: whether a second GPU, a second VM, or the host driver's own
 growth share the pool — §22 item 3 measured **one global pool**, so they may.
+
+## ★★★★★ w729 — WHEN STUCK: ASK FABLE. AND NEVER PASS BY RELAXING A CONSTRAINT
+
+> **Owner, 2026-09-15:** *"stop when you are blocked/stuck. I would recommend at that point first
+> ask fable to fix it for you or find a fix, then use that, and if fable has the same conclusion
+> then also stop. Do not forget to tell fable the same constraint document. You and fable may both
+> come up with something better, then you may try it, but its very important to mention it when the
+> constraints are relaxed. What I would not recommend is to get something to pass just by relaxing
+> constraints."*
+
+### The escalation, in order
+
+1. **Stuck ⇒ ask Fable** (Agent tool, `model: "fable"`), and **give it this document**. A fix that
+   does not know the constraints is not a fix.
+2. **Fable finds a way ⇒ use it.**
+3. **Fable reaches the same conclusion ⇒ stop and discuss.** Two independent dead ends is
+   information, not a reason to improvise.
+
+### ⊘⊘⊘ THE RULE THAT MATTERS MOST — a pass bought by relaxing a constraint is not a pass
+
+★ **A green obtained by loosening a constraint is a green for a different product.** The constraints
+are not obstacles the work must survive; they **are** the product — an unprivileged host, a hostile
+guest contained, no lying about apertures, no blocking a vCPU. Relax one and the number that comes
+back is measuring something nobody asked for.
+
+⇒ **If a constraint is relaxed, even temporarily, it must be:**
+
+| | |
+|---|---|
+| **said in the report** | first line, not a footnote |
+| **said in the commit message** | so `git log` carries it |
+| **written into this file** | with the date, so the next reader inherits it |
+
+⇒ And **two questions answered explicitly**, because relaxing is sometimes right:
+
+1. **Why is this relaxation not needed to reach parity or good performance?** If the relaxation is
+   what produces the number, the number is not evidence for the design.
+2. **Why is it not needed for a multi-tenant VM product?** ⚠ The constraints exist *because* of that
+   goal. Relaxing one means either the goal changed or the constraint was wrong — **name which**.
+
+⊘ *"It passes with X turned off"* is a measurement of X, not a result. ⊘ *"Temporarily"* is a claim
+about the future; this file already records that gates become permanent unless born with an expiry
+condition (§w724g).
+
+★ **Something genuinely better is allowed and wanted** — several constraints in this file were
+*improved* by exactly that (15 and 19 superseded, 18 satisfied by construction, 22 widened to be
+symmetric). The rule is not "never change a constraint". It is **never change one silently, and
+never to make a test go green.**
