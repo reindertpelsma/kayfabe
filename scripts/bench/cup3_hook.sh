@@ -243,6 +243,21 @@ for i in $(seq 1 "$LIMIT"); do
           # ★★★★★ per-thread, because stime is PROCESS-WIDE and `perf -p` mixes threads.
           echo "      -- threads (stime is process-wide; the ioctl thread is the R one) --"
           ps -L -o tid,stat,time -p $P 2>/dev/null | head -6
+          # ★★★★★ THE KERNEL STACK OF THE BUSY THREAD - the most direct instrument available.
+          # [measured w706] `ps -L` shows ONE thread burning (Rl, 36s) and the others at 00:00:00,
+          # so the burn is single-threaded and /proc/<TID>/stack names the exact call chain.
+          # ⊘ Sampled THREE times: one stack is a point, three that agree are a LOOP, and three
+          # that differ say it is progressing through distinct work. That distinction is the
+          # whole question and a single sample cannot make it.
+          echo "      -- kernel stack of the BUSY thread, x3 (same stack thrice = a loop) --"
+          BUSYTID=$(ps -L -o tid,stat --no-headers -p $P 2>/dev/null | awk "\$2 ~ /R/ {print \$1; exit}")
+          echo "      busy_tid=$BUSYTID"
+          for i in 1 2 3; do
+            ST=$(sudo cat /proc/$BUSYTID/stack 2>/dev/null | head -8)
+            if [ -n "$ST" ]; then echo "$ST" | sed "s/^/        /"; else echo "        (stack unreadable - running in userspace or no permission)"; fi
+            echo "        ---- sample $i ----"
+            sleep 2
+          done
           echo "      -- which KERNEL function is burning the CPU (settles the fault reading) --"
           if command -v perf >/dev/null 2>&1; then
             sudo timeout 8 perf record -F 499 -g -p $P -o /tmp/cup3.perf >/dev/null 2>&1
