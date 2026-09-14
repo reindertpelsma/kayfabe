@@ -2050,6 +2050,7 @@ static void t_roundtrip_under_racer(void)
     std::vector<uint64_t> roots(1, v.root);
     int applied = 0, trunc = 0;
     unsigned long long deepest = 0;
+    size_t max_seen = 0;
     for (int step = 0; step < 150; step++) {
         CHECK_EQ(f.refresh(roots), 0);
         const char *why = NULL;
@@ -2069,12 +2070,27 @@ static void t_roundtrip_under_racer(void)
         CHECK_M(model_eq(model, rev, w), w.c_str());
         f.ack();
         applied++;
+        if (model.size() > max_seen) max_seen = model.size();
         if (g_fails_here > 4) break;
     }
     stop.store(true);
     racer.join();
 
-    /* ── the quiesced reconciliation ── */
+    /* ── quiesce, DETERMINISTICALLY ──
+     * ⊘ The structure is restored to its as-built encoding before the final walk.
+     * Without this the final mapping set is whatever the racer's LAST write to
+     * each parent PDE happened to be — and `full.size() > 50` was then a vacuity
+     * guard that was itself racy: it flaked (~1 run in 250) with every region's
+     * PDE cleared last, reporting "the test proves little" about a run that had
+     * been fine. A guard that fails at random is worse than none. The PTEs are
+     * deliberately NOT restored, so the racer's effect on the CONTENT survives
+     * into the reconciliation. */
+    for (int k = 0; k < 4; k++) {
+        uint64_t off = v.pd0 + (uint64_t)(v.i0 + k) * 16 + 8;
+        *(volatile uint64_t *)(f.host_ptr + off) = kfb_pde(v.pts[k]);
+    }
+    *(volatile uint64_t *)(f.host_ptr + v.pd1 + (uint64_t)v.i1 * 8) = v.pd1_word;
+
     CHECK_EQ(f.refresh(roots), 0);
     if (f.hdr.flags & KFWR_HF_TRUNCATED) { model.clear(); CHECK_EQ(f.refresh(roots), 0); }
     ApplyStat st = { 0u, 0u };
@@ -2096,10 +2112,13 @@ static void t_roundtrip_under_racer(void)
     kf_destroy(O);
 
     printf("      [race roundtrip] %d deltas applied, %d truncations, %llu racer writes, "
-           "deepest %llu, final model %zu\n",
-           applied, trunc, (unsigned long long)writes.load(), deepest, full.size());
+           "deepest %llu, largest model seen %zu, final model %zu\n",
+           applied, trunc, (unsigned long long)writes.load(), deepest, max_seen, full.size());
     CHECK_M(applied > 50, "too few deltas were applied under the racer");
-    CHECK_M(full.size() > 50, "the final mapping set is trivial: the test proves little");
+    /* Two guards, neither racy: the racer must have been carrying a real mapping
+     * set at some point, and the deterministic quiesced state must be non-trivial. */
+    CHECK_M(max_seen > 100, "the model was never large: the racer wrote nothing that mattered");
+    CHECK_M(full.size() > 20, "the quiesced mapping set is trivial");
     CHECK_M(deepest > 1500, "the walk never reached the leaves");
 }
 
