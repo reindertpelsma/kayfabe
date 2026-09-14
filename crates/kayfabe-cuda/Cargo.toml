@@ -1,0 +1,41 @@
+[package]
+name = "kayfabe-cuda"
+description = "The walk kernel, in-process: a dlopen'd CUDA DRIVER-API binding, the launch ABI of `cuda/walk/kf_walk.cu` mirrored in Rust, and the committed PTX. No CUDA toolkit, no libcudart, no build-time link against libcuda — `THE_CONSTRAINTS.md` §20/§21 and `SINGLE_STORE_PLAN.md` increment 4."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+
+# ★★★ DELIBERATELY NOT `[lints] workspace = true` — the THIRD crate to omit it, and the
+# first one added since the QEMU adapter. `l1_os_shell.md` §4.1's gate A says in as many
+# words that adding one "is a design decision, not a manifest edit". Here is the decision.
+#
+# The workspace is `unsafe_code = "forbid"`, which an `allow` inside a crate cannot relax —
+# that is the point of `forbid` — so a crate that needs the relaxation must restate its lints.
+#
+# ## Why this is a THIRD crate and not code in one of the two that exist
+#
+# Gate A's own text licenses `kayfabe-linux-raw` for host-side **OS** specificity and
+# `kayfabe-qemu-raw` for host-side **hypervisor** specificity. `libcuda` is neither. It is a
+# **third foreign runtime**, reached only by `dlopen` at run time, present on some hosts and
+# absent on others, and holding a GPU vendor's ABI. Folding it into the OS crate would make
+# that crate un-auditable in exactly the way the QEMU split already refused.
+#
+# ## What the surface actually is, and why it is small
+#
+# ⊘ One file, `driver_unsafe.rs`, and three shapes: the `dlopen`/`dlsym` binding, the
+# by-value launch marshalling (`view_bytes` / `read_struct`), and two `unsafe impl` for a
+# handle this crate never dereferences. Everything else in the crate — `abi.rs`, `walk.rs`,
+# `synth.rs`, `selftest.rs` — contains no `unsafe` at all, so gate B's acceptance criterion
+# ("read the audited surface in one sitting") is one file of this crate.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+# Every relaxation carries a `// SAFETY:` naming its invariant and who guarantees it, or the
+# build fails — the same bar the other two audited crates hold.
+undocumented_unsafe_blocks = "deny"

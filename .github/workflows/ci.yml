@@ -1565,7 +1565,47 @@ jobs:
           #     between. Bounds-checked AND alignment-checked, and the alignment is **refused,
           #     never rounded**: rounding would hide a wrong-offset bug behind a working ring.
           #   ⊘  123 → 124.
-          AUDITED="kayfabe-linux-raw:124 kayfabe-qemu-raw:58"
+          # ★★★ `kayfabe-cuda` 0 -> 28 AT SINGLE-STORE INCREMENT 4, 2026-09-14 — the THIRD
+          # audited crate, and gate A's own failure text says what that costs: "adding a third
+          # is a design decision, not a manifest edit". Here is the decision and its review.
+          #
+          # ⊘ WHY A THIRD CRATE AND NOT CODE IN ONE OF THE TWO. This gate already licenses
+          # `kayfabe-linux-raw` for host-side **OS** specificity and `kayfabe-qemu-raw` for
+          # host-side **hypervisor** specificity. `libcuda` is neither: it is a **third foreign
+          # runtime**, reached only by `dlopen` AT RUN TIME, present on some hosts and absent
+          # on others, holding a GPU vendor's ABI. Folding it into the OS crate would make that
+          # crate un-auditable in exactly the way the QEMU split already refused — and it would
+          # put a link-time-optional dependency inside the crate every build needs.
+          #
+          # ★ The acceptance criterion survives: the whole surface is ONE file,
+          # `driver_unsafe.rs`, and `abi.rs`, `walk.rs`, `synth.rs` and `selftest.rs` contain
+          # ZERO. Four groups:
+          #
+          #   [C1] 3 `unsafe extern "C"` + the `dlopen`/`dlsym`/`dlerror` calls that use them
+          #        (7 blocks): the library handle, the error string read, and the symbol
+          #        resolution. `RTLD_NOW` deliberately, so a missing symbol is a NAMED refusal
+          #        here rather than a null call at an arbitrary later moment.
+          #   [C2] 2 `unsafe impl` — Send and Sync for `Cuda`, a struct of code pointers into a
+          #        library loaded `RTLD_GLOBAL` for the life of the process. Nothing in it is
+          #        interior-mutable and nothing is freed; the claim is about the loader, not
+          #        about anything Rust can see. Kept as two explicit relaxations with a written
+          #        argument rather than laundered through a wrapper that would confer both for
+          #        free and record nothing.
+          #   [C3] 17 one-call driver entry points, each wrapped in a SAFE method on `Cuda` and
+          #        each carrying its own `// SAFETY:` naming its own obligation: an out-pointer
+          #        that is live for the call, or a buffer whose length is passed as the bound
+          #        the driver must honour. ★ SEVENTEEN IS THE SURFACE, NOT A STYLE — a macro
+          #        emitting them would collapse all seventeen into one textual relaxation,
+          #        which is gaming this instrument.
+          #   [C4] 2 layout transitions: `view_bytes` (`from_raw_parts` over one `#[repr(C)]`
+          #        value, for `cuLaunchKernel`'s BY-VALUE parameter) and `read_struct`
+          #        (`copy_nonoverlapping` out of a buffer the device wrote). ⚠ Both carry an
+          #        obligation they cannot discharge alone — that the Rust layout equals the
+          #        CUDA one — and it is discharged by a DIFFERENTIAL: `walk_abi_matches_the_cu`
+          #        extracts the struct definitions from `cuda/walk/kf_walk.cu` by name,
+          #        compiles a `g++` program that prints every `sizeof`/`offsetof`, and asserts
+          #        it against the Rust mirror. No GPU, no CUDA toolkit, runs in CI.
+          AUDITED="kayfabe-linux-raw:124 kayfabe-qemu-raw:58 kayfabe-cuda:28"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
