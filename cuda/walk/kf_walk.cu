@@ -1281,6 +1281,13 @@ static const char *kf_format_check(const KfFormat &F)
 #define KF_PAR_BLOCK    128u          /* 4 warps */
 #define KF_SCAN_BLOCK   1024u
 #define KF_SHWORDS      (KF_MAX_ENT + 64u)   /* u64 of shared memory per warp */
+/* ⊘ A FIXED grid, walked with a stride, rather than one warp per frontier entry.
+ * The frontier's size is a device value, so sizing the grid to it would need a
+ * device-to-host synchronisation per level; sizing it to the host's UPPER BOUND
+ * instead launched 32 768 blocks of which ~470 did anything, and the empty ones
+ * cost more than the walk. `[measured]` the fixed cost fell from ~700 us to the
+ * launch overhead of the launches themselves. */
+#define KF_PAR_GRID     512u
 
 #define KF_ENT_DEAD  0u   /* a root that was refused: contributes nothing      */
 #define KF_ENT_TABLE 1u   /* a page-directory page to expand                   */
@@ -1432,20 +1439,13 @@ __global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr, uint32_t *used)
  *
  * `level == KF_DIRS-1` is the dual level, whose children are TASKS.
  */
-__global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const uint32_t *nin,
-                              KfEnt *stage, uint32_t stagecap, uint32_t *used,
-                              uint32_t *start, uint32_t *cnt)
+__device__ void kf_par_expand_one(const KfArgs &a, uint32_t level, const KfEnt *in, uint32_t gw,
+                                  uint32_t lane, uint64_t *sh, KfEnt *stage, uint32_t stagecap,
+                                  uint32_t *used, uint32_t *start, uint32_t *cnt)
 {
-    extern __shared__ uint64_t shmem[];
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    const uint32_t wib = threadIdx.x / KF_WARP;
-    if (gw >= *nin) return;
     KfDev *d = a.dev;
     if (kf_par_aborted(d)) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
 
-    uint64_t *sh = shmem + (size_t)wib * KF_SHWORDS;
     const KfFormat &F = a.fmt;
     const bool dual = (level == KF_DIRS - 1u);
     const KfDir &L = F.dir[level];
@@ -1563,6 +1563,21 @@ __global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const u
     }
 }
 
+__global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const uint32_t *nin,
+                              KfEnt *stage, uint32_t stagecap, uint32_t *used,
+                              uint32_t *start, uint32_t *cnt)
+{
+    extern __shared__ uint64_t shmem[];
+    const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
+    const uint32_t wib = threadIdx.x / KF_WARP;
+    uint64_t *sh = shmem + (size_t)wib * KF_SHWORDS;
+    const uint32_t w0 = (blockIdx.x * blockDim.x + threadIdx.x) / KF_WARP;
+    const uint32_t stride = (gridDim.x * blockDim.x) / KF_WARP;
+    const uint32_t n = *nin;
+    for (uint32_t gw = w0; gw < KF_MAX_FRONTIER && gw < n; gw += stride)
+        kf_par_expand_one(a, level, in, gw, lane, sh, stage, stagecap, used, start, cnt);
+}
+
 /* ── the exclusive prefix sum ────────────────────────────────────────────────
  * One block. Each thread serially sums a contiguous chunk, one Hillis-Steele
  * scan over the KF_SCAN_BLOCK partials, then each thread writes its chunk's
@@ -1596,14 +1611,16 @@ __global__ void kf_par_compact(KfArgs a, const KfEnt *stage, const uint32_t *sta
                                const uint32_t *cnt, const uint32_t *off, const uint32_t *nin,
                                KfEnt *dst, uint32_t cap)
 {
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    if (gw >= *nin) return;
+    const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
+    const uint32_t w0 = (blockIdx.x * blockDim.x + threadIdx.x) / KF_WARP;
+    const uint32_t stride = (gridDim.x * blockDim.x) / KF_WARP;
     if (kf_par_aborted(a.dev)) return;
-    const uint32_t n = cnt[gw], st = start[gw], o = off[gw];
-    for (uint32_t j = lane; j < KF_MAX_ENT && j < n; j += KF_WARP)
-        if (o + j < cap) dst[o + j] = stage[st + j];
+    const uint32_t nn = *nin;
+    for (uint32_t gw = w0; gw < KF_MAX_FRONTIER && gw < nn; gw += stride) {
+        const uint32_t n = cnt[gw], st = start[gw], o = off[gw];
+        for (uint32_t j = lane; j < KF_MAX_ENT && j < n; j += KF_WARP)
+            if (o + j < cap) dst[o + j] = stage[st + j];
+    }
 }
 
 /* ── the leaf phase ──────────────────────────────────────────────────────────
@@ -1649,15 +1666,10 @@ __device__ void kf_par_task_runs(const KfArgs &a, const KfEnt &t, const uint64_t
     kf_acc_flush(c);
 }
 
-__global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
-                            KfMapRun *runstage, uint32_t stagecap, uint32_t *used, KfSum *sum)
+__device__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *task, uint32_t gw, uint32_t lane,
+                                uint64_t *ssmall, uint64_t *sbig, KfMapRun *runstage,
+                                uint32_t stagecap, uint32_t *used, KfSum *sum)
 {
-    extern __shared__ uint64_t shmem[];
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    const uint32_t wib = threadIdx.x / KF_WARP;
-    if (gw >= *nt) return;
     KfDev *d = a.dev;
     KfSum sm;
     memset(&sm, 0, sizeof(sm));
@@ -1665,8 +1677,6 @@ __global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
     if (kf_par_aborted(d)) { if (lane == 0u) sum[gw] = sm; return; }
 
     const KfFormat &F = a.fmt;
-    uint64_t *ssmall = shmem + (size_t)wib * KF_SHWORDS;
-    uint64_t *sbig = ssmall + KF_MAX_ENT;
     const KfEnt t = task[gw];
 
     if (lane == 0u && t.kind == KF_ENT_DUAL) {
@@ -1705,13 +1715,29 @@ __global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
     if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
 }
 
+__global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
+                            KfMapRun *runstage, uint32_t stagecap, uint32_t *used, KfSum *sum)
+{
+    extern __shared__ uint64_t shmem[];
+    const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
+    const uint32_t wib = threadIdx.x / KF_WARP;
+    uint64_t *ssmall = shmem + (size_t)wib * KF_SHWORDS;
+    uint64_t *sbig = ssmall + KF_MAX_ENT;
+    const uint32_t w0 = (blockIdx.x * blockDim.x + threadIdx.x) / KF_WARP;
+    const uint32_t stride = (gridDim.x * blockDim.x) / KF_WARP;
+    const uint32_t n = *nt;
+    for (uint32_t gw = w0; gw < KF_MAX_FRONTIER && gw < n; gw += stride)
+        kf_par_leaf_one(a, task, gw, lane, ssmall, sbig, runstage, stagecap, used, sum);
+}
+
 /* head[t] is false exactly when task t's first run continues task t-1's last.
  * The whole boundary-joining rule is these six comparisons. */
 __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, const uint32_t *nt,
                              uint32_t *contrib, unsigned char *head)
 {
-    const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= *nt) return;
+    const uint32_t nn = *nt;
+    const uint32_t stride0 = gridDim.x * blockDim.x;
+    for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < KF_MAX_FRONTIER && i < nn; i += stride0) {
     const uint32_t n = sum[i].n;
     unsigned char h = 1u;
     if (n && i) {
@@ -1724,6 +1750,7 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
     head[i] = h;
     contrib[i] = (n && !h) ? (n - 1u) : n;
     if (contrib[i]) atomicAdd(&a.dev->tbl_run_count[a.dev->cur_buf ^ 1u][task[i].pdb], contrib[i]);
+    }
 }
 
 __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
@@ -1753,14 +1780,15 @@ __global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const
                             const uint32_t *off, const unsigned char *head,
                             const uint32_t *pdbbase, const KfMapRun *runstage)
 {
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    if (gw >= *nt) return;
+    const uint32_t lane = threadIdx.x & (KF_WARP - 1u);
+    const uint32_t w0 = (blockIdx.x * blockDim.x + threadIdx.x) / KF_WARP;
+    const uint32_t stride = (gridDim.x * blockDim.x) / KF_WARP;
     KfDev *d = a.dev;
     if (kf_par_aborted(d)) return;
+    const uint32_t nn = *nt;
+    for (uint32_t gw = w0; gw < KF_MAX_FRONTIER && gw < nn; gw += stride) {
     const KfSum sm = sum[gw];
-    if (!sm.n) return;
+    if (!sm.n) continue;
     const uint16_t p = task[gw].pdb;
     const uint32_t skip = head[gw] ? 0u : 1u;
     const uint32_t cap = d->tbl_run_count[d->cur_buf ^ 1u][p];
@@ -1769,6 +1797,7 @@ __global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const
     for (uint32_t j = lane + skip; j < KF_MAX_ENT * 2u && j < sm.n; j += KF_WARP) {
         const uint32_t o = local + j - skip;
         if (o < cap) dst[o] = runstage[sm.start + j];
+    }
     }
 }
 
@@ -1781,17 +1810,19 @@ __global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const
 __global__ void kf_par_join(KfArgs a, const KfEnt *task, const KfSum *sum, const uint32_t *nt,
                             const uint32_t *off, const unsigned char *head, const uint32_t *pdbbase)
 {
-    const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= *nt) return;
-    if (head[i] || !sum[i].n) return;
     KfDev *d = a.dev;
     if (kf_par_aborted(d)) return;
+    const uint32_t nn = *nt;
+    const uint32_t stride0 = gridDim.x * blockDim.x;
+    for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < KF_MAX_FRONTIER && i < nn; i += stride0) {
+    if (head[i] || !sum[i].n) continue;
     const uint32_t cur = d->cur_buf ^ 1u;
     const uint16_t p = task[i].pdb;
     const uint32_t local = off[i] - pdbbase[p];
-    if (local == 0u || local - 1u >= d->tbl_run_count[cur][p]) return;
+    if (local == 0u || local - 1u >= d->tbl_run_count[cur][p]) continue;
     KfMapRun *dst = a.tbl[cur] + (size_t)p * d->runs_per_pdb;
     atomicAdd((unsigned long long *)&dst[local - 1u].len, (unsigned long long)sum[i].flen);
+    }
 }
 
 /* ── host side ───────────────────────────────────────────────────────────────── */
@@ -1923,9 +1954,9 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
 
     kf_par_seed<<<(npdb + 127u) / 128u, 128>>>(a, P.fr[0], P.nfr, P.used);
 
-    uint32_t src = 0u, bound = npdb;
+    uint32_t src = 0u;
     for (uint32_t k = F.first_dir; k < KF_DIRS; k++) {
-        const uint32_t blocks = (bound * KF_WARP + KF_PAR_BLOCK - 1u) / KF_PAR_BLOCK;
+        const uint32_t blocks = KF_PAR_GRID;
         uint32_t *nin = P.nfr + src, *nout = P.nfr + (src ^ 1u);
         KfEnt *dst = (k + 1u < KF_DIRS) ? P.fr[src ^ 1u] : P.task;
         kf_par_expand<<<blocks, KF_PAR_BLOCK, shm>>>(a, k, P.fr[src], nin, P.stage,
@@ -1933,15 +1964,13 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
         kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, nin, P.off, nout);
         kf_par_compact<<<blocks, KF_PAR_BLOCK>>>(a, P.stage, P.start, P.cnt, P.off, nin,
                                                  dst, KF_MAX_FRONTIER);
-        bound = kf_min_u32(KF_MAX_FRONTIER, bound * F.dir[k].entries);
         if (k + 1u < KF_DIRS) src ^= 1u; else cudaMemcpyAsync(P.ntask, nout, 4, cudaMemcpyDeviceToDevice);
         /* `used` is the staging cursor and is reset for the next level by the
          * compaction having already copied everything out of it. */
         cudaMemsetAsync(P.used, 0, 4);
     }
 
-    const uint32_t tblocks = (bound * KF_WARP + KF_PAR_BLOCK - 1u) / KF_PAR_BLOCK;
-    const uint32_t lblocks = (bound + 127u) / 128u;
+    const uint32_t tblocks = KF_PAR_GRID, lblocks = KF_PAR_GRID;
     kf_par_leaf<<<tblocks, KF_PAR_BLOCK, shm>>>(a, P.task, P.ntask, P.runstage,
                                                 KF_MAX_SCRATCH, P.used, P.sum);
     kf_par_heads<<<lblocks, 128>>>(a, P.task, P.sum, P.ntask, P.cnt, P.head);
