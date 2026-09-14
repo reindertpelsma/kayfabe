@@ -347,6 +347,18 @@ fn has_interp(bytes: &[u8]) -> bool {
 const DEPENDENCY_CRATES: &[&str] = &[
     "kayfabe-isolate-host",
     "kayfabe-isolate",
+    // ★★★★★ **ADDED 2026-09-14, AND IT COST A BOOT TO FIND.** `kayfabe-cuda` is linked into
+    // the CUDA scratchpad image, and it was not on this list — so editing it did NOT
+    // invalidate the embedded image, and cargo reused a stale one.
+    //
+    // ⊘⊘ **THE SHAPE IS WORSE THAN A STALE BUILD, AND IT IS WHY THIS COMMENT IS LONG.** The
+    // QEMU binary's own revision stamp said HEAD. The content checks the harness runs
+    // (`strings | grep 'SCRATCHPAD-CUDA AT'`) said HEAD. And the isolate image INSIDE it was
+    // from the previous commit, so a fixed constant was still wrong in the boot that was
+    // supposed to prove it fixed. ⇒ **a stamp on the outer artifact says nothing about an
+    // artifact embedded inside it**, and every instrument this tree has for "is the binary
+    // the tree" was looking at the outer one.
+    "kayfabe-cuda",
     "kayfabe-linux-raw",
     "kayfabe-util",
     "kayfabe-arch",
