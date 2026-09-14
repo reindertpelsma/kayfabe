@@ -139,6 +139,23 @@ grep -ao 'PRAMIN-SLOT AT [^⊘]*' "$Q" 2>/dev/null | tail -1
 grep -ao 'PRAMIN-WINDOW [^⊘]*' "$Q" 2>/dev/null | tail -2
 echo "--- Q3 BAR1/BAR2 + THE STORE CENSUS (fable's prediction: HEAP-PAGE was large, must be 0) ---"
 grep -a 'BAR-MIRROR' "$Q" 2>/dev/null | tail -3 | fold -w 150 | head -12
+# ★★★★★ w712 - REFUSED DOORBELLS, BESIDE THE GRADE THAT IGNORES THEM.
+#
+# ⊘⊘ The owner, 2026-09-14, on an LLM boot reported as a PASS:
+#   "`doorbells: 22671 arrived, 22517 served, 8 REFUSED` ... I think refused should be 0 in our
+#    test runs right"
+#
+# Yes. A refused doorbell is a submission that NEVER REACHED THE GPU. And this script - the one
+# that decides whether a boot graded - printed the arrived/served/refused line NOWHERE, so eight
+# dropped submissions rode along inside a green and the by-name breakdown was never read.
+#
+# ⚠ A grade that cannot see a dropped submission is not a grade of the data plane. Printed
+# UNCONDITIONALLY, including when refused=0, because "nothing was refused" and "nobody looked"
+# are the same silence - the rule this tree keeps relearning.
+echo "--- ★ REFUSED DOORBELLS — a refusal is a submission that never reached the GPU ---"
+grep -ao "doorbells: [0-9]* arrived, [0-9]* served, [0-9]* REFUSED[^;]*" "${BENCH}/run_${tag}_qemu.log" 2>/dev/null | tail -1
+grep -ao "DOORBELL-REFUSALS[^|]\{0,180\}" "${BENCH}/run_${tag}_qemu.log" 2>/dev/null | tail -1
+grep -ao "GPFIFO-STRANDED-CENSUS[^⊘✔]\{0,90\}" "${BENCH}/run_${tag}_qemu.log" 2>/dev/null | tail -1
 echo "--- trap latency, goal 6's standing number ---"
 grep -ao 'TRAPWITNESS[^|]*' "$Q" 2>/dev/null | tail -1
 grep -ao 'SLOW-SITES[^⊘]*' "$Q" 2>/dev/null | tail -1
