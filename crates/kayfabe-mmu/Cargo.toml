@@ -14,5 +14,11 @@ kayfabe-arch.workspace = true
 # does not (and must not) depend back on the mmu.
 kayfabe-isolate.workspace = true
 
+# ⊘ DEV-ONLY, and only for one thing: `cuda/walk`'s differential oracle needs a
+# real GA10x `GmmuFmt` to decode the committed corpus with. A dev-dependency
+# cannot reach the library, so this does not give the address plane a chip.
+[dev-dependencies]
+kayfabe-chips.workspace = true
+
 [lints]
 workspace = true

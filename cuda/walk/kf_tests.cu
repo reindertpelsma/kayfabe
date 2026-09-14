@@ -1240,6 +1240,190 @@ static void t_scope_cannot_make_the_walk_wrong(void)
     }
 }
 
+
+/* ══ DIFFERENTIAL — two independent decoders over one corpus ═════════════════
+ * The corpus and the Rust walker's decode of it are both COMMITTED
+ * (cuda/walk/corpus/, written by kf_corpus.cpp and by
+ * crates/kayfabe-mmu/tests/walk_kernel_differential.rs). This side reads both
+ * and compares; nothing executable travels back from the box.
+ *
+ * Benign images: the two decoders must agree EXACTLY, as multisets of
+ * (va, gpga, size, aperture, read_only).
+ * Hostile images: the kernel's answer must be a SUBSET of the Rust walker's.
+ * The kernel has refusals the Rust walker does not (KFWR_R_MISALIGNED_LEAF, the
+ * alignment check on a table pointer) and a depth bound of 5 against its 16, so
+ * it can only ever report FEWER leaves -- and reporting one the other decoder
+ * never saw would be a real divergence.
+ */
+struct DLeaf {
+    uint64_t va, gpga, size;
+    uint32_t ap, ro;
+    bool operator<(const DLeaf &o) const
+    {
+        if (va != o.va) return va < o.va;
+        if (size != o.size) return size < o.size;
+        if (gpga != o.gpga) return gpga < o.gpga;
+        if (ap != o.ap) return ap < o.ap;
+        return ro < o.ro;
+    }
+    bool operator==(const DLeaf &o) const
+    { return va == o.va && gpga == o.gpga && size == o.size && ap == o.ap && ro == o.ro; }
+};
+
+struct DImg {
+    std::string name;
+    bool benign;
+    uint64_t gpga_len, root;
+    std::vector<uint8_t> mem;
+    std::vector<DLeaf> rust;
+};
+
+static bool d_load(std::vector<DImg> &out, std::string &err)
+{
+    FILE *f = fopen("corpus/corpus.bin", "rb");
+    if (!f) { err = "corpus/corpus.bin missing"; return false; }
+    char magic[8];
+    if (fread(magic, 1, 8, f) != 8 || memcmp(magic, "KFCORPUS", 8)) { fclose(f); err = "bad magic"; return false; }
+    uint32_t n = 0;
+    if (fread(&n, 4, 1, f) != 1) { fclose(f); err = "short"; return false; }
+    for (uint32_t i = 0; i < n; i++) {
+        DImg im;
+        uint32_t nl = 0;
+        if (fread(&nl, 4, 1, f) != 1) { fclose(f); err = "short name"; return false; }
+        im.name.resize(nl);
+        if (fread(&im.name[0], 1, nl, f) != nl) { fclose(f); err = "short name"; return false; }
+        uint8_t b = 0;
+        if (fread(&b, 1, 1, f) != 1) { fclose(f); err = "short"; return false; }
+        im.benign = (b != 0);
+        if (fread(&im.gpga_len, 8, 1, f) != 1 || fread(&im.root, 8, 1, f) != 1) { fclose(f); err = "short"; return false; }
+        uint32_t np = 0;
+        if (fread(&np, 4, 1, f) != 1) { fclose(f); err = "short"; return false; }
+        im.mem.assign((size_t)im.gpga_len, 0);
+        for (uint32_t k = 0; k < np; k++) {
+            uint64_t off = 0;
+            if (fread(&off, 8, 1, f) != 1) { fclose(f); err = "short page"; return false; }
+            if (off + 4096 > im.gpga_len) { fclose(f); err = "page off"; return false; }
+            if (fread(im.mem.data() + off, 1, 4096, f) != 4096) { fclose(f); err = "short page"; return false; }
+        }
+        out.push_back(im);
+    }
+    fclose(f);
+
+    FILE *e = fopen("corpus/rust_leaves.txt", "r");
+    if (!e) { err = "corpus/rust_leaves.txt missing"; return false; }
+    char line[256];
+    int cur = -1;
+    while (fgets(line, sizeof(line), e)) {
+        if (line[0] == '#') continue;
+        if (!strncmp(line, "image ", 6)) {
+            char nm[128];
+            int bg = 0, cnt = 0;
+            if (sscanf(line + 6, "%127s %d %d", nm, &bg, &cnt) != 3) { fclose(e); err = "bad image line"; return false; }
+            cur = -1;
+            for (size_t i = 0; i < out.size(); i++) if (out[i].name == nm) cur = (int)i;
+            if (cur < 0) { fclose(e); err = std::string("unknown image ") + nm; return false; }
+        } else if (!strncmp(line, "leaf ", 5)) {
+            if (cur < 0) { fclose(e); err = "leaf before image"; return false; }
+            DLeaf l;
+            unsigned long long a, b2, c2;
+            unsigned d2, e2;
+            if (sscanf(line + 5, "%llx %llx %llx %u %u", &a, &b2, &c2, &d2, &e2) != 5) { fclose(e); err = "bad leaf line"; return false; }
+            l.va = a; l.gpga = b2; l.size = c2; l.ap = d2; l.ro = e2;
+            out[(size_t)cur].rust.push_back(l);
+        }
+    }
+    fclose(e);
+    for (size_t i = 0; i < out.size(); i++) std::sort(out[i].rust.begin(), out[i].rust.end());
+    return true;
+}
+
+static void t_differential_rust_walker(void)
+{
+    std::vector<DImg> imgs;
+    std::string err;
+    if (!d_load(imgs, err)) { failf(__LINE__, "loading the differential corpus", err.c_str()); return; }
+    CHECK(imgs.size() >= 10);
+
+    KfWalkCfg c = cfg_default();
+    c.runs_per_pdb = 8192;
+    c.run_capacity = 16384;
+    c.entry_budget = 4000000u;
+
+    unsigned long long agreed = 0, subset_ok = 0;
+    for (size_t i = 0; i < imgs.size(); i++) {
+        DImg &im = imgs[i];
+        void *dev = NULL;
+        CUDA_OK(cudaMalloc(&dev, (size_t)im.gpga_len));
+        CUDA_OK(cudaMemcpy(dev, im.mem.data(), (size_t)im.gpga_len, cudaMemcpyHostToDevice));
+        KfWalk *w = kf_create(&c);
+        KfReportHeader h;
+        std::vector<KfPdbEntry> pe(c.pdb_capacity + 4);
+        std::vector<KfMapRun> rn(c.run_capacity + 4);
+        int rc = kf_refresh(w, dev, im.gpga_len, &im.root, 1, NULL, 0, &h, pe.data(), rn.data());
+        CHECK_EQ(rc, 0);
+        const char *why = NULL;
+        CHECK_M(kf_validate_report(&h, pe.data(), rn.data(), &why) == 0, why);
+        CHECK_M(!(h.flags & KFWR_HF_TRUNCATED), "the corpus must fit: a truncated walk proves nothing here");
+
+        std::vector<DLeaf> mine;
+        static const uint64_t psb[4] = { 4ull << 10, 64ull << 10, 2ull << 20, 512ull << 20 };
+        for (uint32_t k = 0; k < h.run_count; k++) {
+            const KfMapRun &r = rn[k];
+            uint64_t ps = psb[(r.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK];
+            for (uint64_t o = 0; o < r.len; o += ps) {
+                DLeaf l;
+                l.va = r.va + o; l.gpga = r.gpga + o; l.size = ps;
+                l.ap = r.flags & KFWR_RF_AP_MASK;
+                l.ro = (r.flags & KFWR_RF_READ_ONLY) ? 1u : 0u;
+                mine.push_back(l);
+            }
+        }
+        std::sort(mine.begin(), mine.end());
+
+        if (im.benign) {
+            if (mine.size() != im.rust.size()) {
+                char b[192];
+                snprintf(b, sizeof(b), "%s: kernel %zu leaves, rust %zu", im.name.c_str(), mine.size(), im.rust.size());
+                failf(__LINE__, "benign image: leaf counts differ", b);
+            } else {
+                for (size_t k = 0; k < mine.size(); k++) {
+                    if (!(mine[k] == im.rust[k])) {
+                        char b[240];
+                        snprintf(b, sizeof(b),
+                                 "%s[%zu]: kernel va=%llx gpga=%llx sz=%llx ap=%u ro=%u | rust va=%llx gpga=%llx sz=%llx ap=%u ro=%u",
+                                 im.name.c_str(), k,
+                                 (unsigned long long)mine[k].va, (unsigned long long)mine[k].gpga,
+                                 (unsigned long long)mine[k].size, mine[k].ap, mine[k].ro,
+                                 (unsigned long long)im.rust[k].va, (unsigned long long)im.rust[k].gpga,
+                                 (unsigned long long)im.rust[k].size, im.rust[k].ap, im.rust[k].ro);
+                        failf(__LINE__, "benign image: leaf differs", b);
+                        break;
+                    }
+                }
+                agreed += mine.size();
+            }
+        } else {
+            for (size_t k = 0; k < mine.size(); k++) {
+                if (!std::binary_search(im.rust.begin(), im.rust.end(), mine[k])) {
+                    char b[192];
+                    snprintf(b, sizeof(b), "%s: kernel reported va=%llx gpga=%llx sz=%llx that the rust walker never saw",
+                             im.name.c_str(), (unsigned long long)mine[k].va,
+                             (unsigned long long)mine[k].gpga, (unsigned long long)mine[k].size);
+                    failf(__LINE__, "hostile image: kernel is not a subset", b);
+                    break;
+                }
+            }
+            subset_ok += mine.size();
+        }
+        kf_destroy(w);
+        cudaFree(dev);
+    }
+    printf("      [differential] %zu images, %llu benign leaves agreed exactly, "
+           "%llu hostile leaves within the rust walker's set\n", imgs.size(), agreed, subset_ok);
+    /* ⚠ two decoders that both produced nothing agree perfectly. */
+    CHECK_M(agreed > 1200, "the differential decoded almost nothing: it would be vacuous");
+}
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
@@ -1284,6 +1468,8 @@ static const Case CASES[] = {
     { "hostile/bounds_window_respected",        t_bounds_window_is_respected },
     { "legal/shared_page_table",                t_legal_shared_page_table },
     { "legal/pte_maps_own_page_table",          t_legal_pte_maps_own_page_table },
+
+    { "differential/rust_walker",               t_differential_rust_walker },
 
     { "race/cpu_live_edits",                    t_race_cpu_live_edits },
     { "race/gpu_live_edits",                    t_race_gpu_live_edits },
