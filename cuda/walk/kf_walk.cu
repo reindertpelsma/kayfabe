@@ -1948,13 +1948,51 @@ extern "C" void kf_ack(KfWalk *w, uint64_t g)
  */
 static uint32_t kf_min_u32(uint32_t x, uint32_t y) { return x < y ? x : y; }
 
+#ifdef KF_PHASES
+/* ⊘ A measurement, not a feature. `[w726]` the fixed cost of a parallel refresh
+ * was ~610 us on a 2 116-entry walk and two guesses at the cause (empty blocks,
+ * block dispatch) were both WRONG — changing the grid from 512 to 128 blocks
+ * moved it by nothing. This is what settled it. */
+static int kf_ph_n = 0;
+#define KF_PH_MAX 24
+static cudaEvent_t kf_ph_e[KF_PH_MAX];
+static const char *kf_ph_name[KF_PH_MAX];
+static int kf_ph_i = 0;
+static void kf_ph(const char *nm)
+{
+    if (kf_ph_i >= KF_PH_MAX) return;
+    if (!kf_ph_e[kf_ph_i]) cudaEventCreate(&kf_ph_e[kf_ph_i]);
+    cudaEventRecord(kf_ph_e[kf_ph_i]);
+    kf_ph_name[kf_ph_i] = nm;
+    kf_ph_i++;
+}
+static void kf_ph_dump(void)
+{
+    if (++kf_ph_n != 6) { kf_ph_i = 0; return; }
+    cudaEventSynchronize(kf_ph_e[kf_ph_i - 1]);
+    fprintf(stderr, "PHASES:");
+    for (int i = 1; i < kf_ph_i; i++) {
+        float ms = 0.f;
+        cudaEventElapsedTime(&ms, kf_ph_e[i - 1], kf_ph_e[i]);
+        fprintf(stderr, " %s=%.0fus", kf_ph_name[i], ms * 1000.f);
+    }
+    fprintf(stderr, "\n");
+    kf_ph_i = 0;
+}
+#else
+#define kf_ph(x) ((void)0)
+#define kf_ph_dump() ((void)0)
+#endif
+
 static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
 {
     KfPar &P = w->par;
     const KfFormat &F = w->fmt;
     const uint32_t shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8u;
 
+    kf_ph("start");
     kf_par_seed<<<(npdb + 127u) / 128u, 128>>>(a, P.fr[0], P.nfr, P.used);
+    kf_ph("seed");
 
     uint32_t src = 0u;
     for (uint32_t k = F.first_dir; k < KF_DIRS; k++) {
@@ -1964,23 +2002,29 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
         kf_par_expand<<<blocks, KF_PAR_BLOCK, shm>>>(a, k, P.fr[src], nin, P.stage,
                                                      KF_MAX_FRONTIER, P.used, P.start, P.cnt);
         kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, nin, P.off, nout);
+        kf_ph("expand+scan");
         kf_par_compact<<<blocks, KF_PAR_BLOCK>>>(a, P.stage, P.start, P.cnt, P.off, nin,
                                                  dst, KF_MAX_FRONTIER);
+        kf_ph("compact");
         if (k + 1u < KF_DIRS) src ^= 1u; else cudaMemcpyAsync(P.ntask, nout, 4, cudaMemcpyDeviceToDevice);
         /* `used` is the staging cursor and is reset for the next level by the
          * compaction having already copied everything out of it. */
         cudaMemsetAsync(P.used, 0, 4);
+        kf_ph("reset");
     }
 
     const uint32_t tblocks = KF_PAR_GRID, lblocks = KF_PAR_GRID;
     kf_par_leaf<<<tblocks, KF_PAR_BLOCK, shm>>>(a, P.task, P.ntask, P.runstage,
                                                 KF_MAX_SCRATCH, P.used, P.sum);
+    kf_ph("leaf");
     kf_par_heads<<<lblocks, 128>>>(a, P.task, P.sum, P.ntask, P.cnt, P.head);
     kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, P.ntask, P.off, P.nfr + 3);
     kf_par_bases<<<1, 1>>>(a, P.pdbbase);
     kf_par_emit<<<tblocks, KF_PAR_BLOCK>>>(a, P.task, P.sum, P.ntask, P.off, P.head,
                                            P.pdbbase, P.runstage);
     kf_par_join<<<lblocks, 128>>>(a, P.task, P.sum, P.ntask, P.off, P.head, P.pdbbase);
+    kf_ph("emit+join");
+    kf_ph_dump();
 }
 
 extern "C" int kf_refresh(KfWalk *w,
