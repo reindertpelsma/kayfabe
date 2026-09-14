@@ -322,3 +322,40 @@ fine.
 ⚠ **Do not grade this on data correctness.** A coherent shared-sysmem BAR1 returns the right
 bytes, so `--ce-client` is green before and after. The test must measure **residence** —
 bandwidth, or the aperture the engine actually reached — or it cannot go red today.
+
+## ⊘⊘⊘ w719b — THE JUSTIFICATION FOR §15 WAS HALF WRONG; THE RULE SURVIVES AND IS STRONGER
+
+Earlier the same day this file recorded, as settled, that *"ogkm does not use CE on PT\*/PD\*
+pages"* — offered as the finding that makes the aperture store safe to keep out of the engine's
+reach. ⊘ **That is true of RM's GMMU walker and FALSE of `nvidia-uvm`**, which has its own walker
+and its own allocator and, on Ampere, writes its page tables **with the copy engine**:
+`ce_hal->memcopy` (`uvm_mmu.c:432`), `ce_hal->memset_8` (`:462`), reachable because
+`uvm_ampere.c:58` sets `ce_phys_vidmem_write_supported = true`, which makes `uvm_mmu_use_cpu()`
+false (`uvm_mmu.c:269-276`).
+
+### ★★★ Why §15 survives — and why a USE-keyed rule would have corrupted
+
+| whose tables | written by | reached through | world |
+|---|---|---|---|
+| **RM**'s | the CPU | BAR2 | the **aperture store** ✓ |
+| **UVM**'s | the **copy engine** | a GPU VA — never a CPU aperture | the **reserved object** ✓ |
+
+⇒ A rule phrased as *"page tables live in the fake fb"* would put UVM's CE-written tables in a
+memory **no engine can reach**. The rule that survives is the owner's, keyed on the **aperture**:
+whatever is reached through BAR2/PRAMIN is the aperture store — because the aperture is
+**observable**, and *"is it a page table"* is not a sufficient classification.
+
+★ The fake fb still never needs engine visibility. That is now a **consequence of the aperture
+rule**, not of a general claim about page tables.
+
+⚠ Two corrections of record: `_gmmuWalkCBFillEntries` uses **`TRANSFER_FLAGS_SHADOW_ALLOC`**
+(`gmmu_walk.c:804`), not `TRANSFER_FLAGS_NONE` — right conclusion, wrong pointer, this tree's
+named recurring defect. And `research_clones/ogkm` is **`610.43.02`** (`version.mk:1`), not 580.
+
+⇒ **The lesson: a negative over a codebase needs its SUBSYSTEMS enumerated first.** `grep` found
+no CE in `gmmu_walk.c`, which was true; the question was never only about that file.
+
+★ Sizing, trigger and exhaustion behaviour for the aperture store:
+`the_aperture_store_lifetime.md`. ⊘ It **refutes the ~40 MiB bound**: BAR2's dynamic window is
+**16 MiB** on a GA106 and is an **evicting LRU cache**, so residency is not liveness, and 12 GiB
+mapped at 4 KiB needs **24 MiB of small page tables alone**.
