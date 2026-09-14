@@ -18,7 +18,7 @@
 //! thing: that arming nothing changes nothing. ⊘ That is the claim the sequencing rule
 //! ("deletions come last") rests on, and it is the one that would rot silently.
 
-use kayfabe_qemu_raw::scratchpad::{ScratchpadArm, scratchpad_from};
+use kayfabe_qemu_raw::scratchpad::{ScratchpadArm, scratchpad_cuda_from, scratchpad_from};
 use kayfabe_qemu_raw::shim::Regs;
 
 /// The device the shipped configuration realizes, with no environment set.
@@ -85,4 +85,70 @@ fn the_gates_three_way_contract() {
             "`{junk}` must be refused, never defaulted"
         );
     }
+}
+
+/// ★★★ **INCREMENT 4'S GATE IS A PEER, AND IT IS OFF.**
+///
+/// ⊘ Arming it makes ONE isolate dynamically linked and sandboxed **late** — a change to a
+/// security boundary. `THE_CONSTRAINTS.md` §w724d states the cost plainly, and a boundary that
+/// could move because of a typo would not be one.
+#[test]
+fn the_cuda_gate_is_off_and_refuses_anything_that_is_not_a_state() {
+    assert!(
+        std::env::var_os("KAYFABE_SCRATCHPAD_CUDA").is_none(),
+        "this test binary must not have the CUDA gate set; see the module docs"
+    );
+    assert_eq!(scratchpad_cuda_from(None), Ok(false), "absent is off");
+    assert_eq!(scratchpad_cuda_from(Some("off")), Ok(false));
+    assert_eq!(scratchpad_cuda_from(Some("on")), Ok(true));
+    for junk in ["1", "0", "true", "ON", "yes", "require", ""] {
+        assert!(
+            scratchpad_cuda_from(Some(junk)).is_err(),
+            "`{junk}` must be refused, never defaulted — arming this moves a sandbox"
+        );
+    }
+}
+
+/// ⊘ **The two gates are INDEPENDENT**, and this is what stops a later edit folding the CUDA
+/// arm into `KAYFABE_SCRATCHPAD` as a third value: the reservation is about video memory and
+/// the CUDA arm is about a process's build and its sandbox ordering. A boot must be able to
+/// arm either alone — and in particular the reservation, which the raw client depends on, must
+/// not start dragging a dynamically-linked isolate along with it.
+#[test]
+fn the_two_gates_do_not_read_each_other() {
+    assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
+    assert_eq!(scratchpad_cuda_from(None), Ok(false));
+    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
+    assert_eq!(scratchpad_cuda_from(Some("on")), Ok(true));
+}
+
+/// ⊘ With the scratchpad gate unset there is no isolate at all, so there is no CUDA report —
+/// and the accessor must say EMPTY rather than inventing a "not run" string that a grader
+/// could mistake for a measured absence.
+#[test]
+fn with_the_gate_unset_there_is_no_cuda_report_to_read() {
+    let regs = shipped();
+    assert!(regs.scratchpad().is_none());
+}
+
+/// ★★★ **THE TWO SIDES OF THE SEAM AGREE ABOUT WHICH ISOLATE IS THE SCRATCHPAD.**
+///
+/// `kayfabe-isolate-host` decides which image to spawn from `id.proc() == u32::MAX`, and it
+/// cannot import this crate (it sits below it), so the constant is stated twice.
+/// ⊘ Two statements of one fact is the defect this tree keeps paying for; this is the check
+/// that makes them one. If they ever differ, the scratchpad silently gets the STATIC image,
+/// `dlopen` returns "Dynamic loading not supported", and the census reports it as a host
+/// problem.
+/// ⊘ `host-isolates` only: without it there is no `kayfabe-isolate-host` to compare against,
+/// and a test that could not compile in the default configuration would break the ordinary
+/// `cargo test -p kayfabe-qemu-raw` for a check that has nothing to say there.
+#[cfg(feature = "host-isolates")]
+#[test]
+fn the_scratchpad_proc_id_agrees_across_the_seam() {
+    assert_eq!(
+        kayfabe_qemu_raw::scratchpad::SCRATCHPAD_PROC,
+        kayfabe_isolate_host::SCRATCHPAD_ISOLATE_PROC,
+        "the two sides of the isolate seam disagree about which IsolateId is the VM-lifetime \
+         scratchpad; the CUDA image would go to the wrong isolate, or to none"
+    );
 }

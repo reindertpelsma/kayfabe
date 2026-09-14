@@ -84,6 +84,51 @@ pub fn embedded_isolate_bytes() -> &'static [u8] {
     ISOLATE_IMAGE
 }
 
+/// ★★★★★ **THE SECOND IMAGE** — a **glibc-linked, dynamically-linked** build of the same
+/// `kayfabe-isolate` binary, for the ONE VM-lifetime scratchpad isolate.
+/// `THE_CONSTRAINTS.md` §w724d.
+///
+/// ⊘ **Empty unless the `cuda-scratchpad` feature is on**, and empty is refused by name at
+/// spawn rather than silently falling back to the static image — a fallback would produce an
+/// isolate that looks right and cannot `dlopen` anything, and the failure would surface as
+/// *"CUDA is not available on this host"*.
+static CUDA_IMAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kayfabe-isolate-cuda.image"));
+
+/// The embedded CUDA scratchpad image's bytes, for the test that asserts it is dynamic.
+#[must_use]
+pub fn embedded_cuda_isolate_bytes() -> &'static [u8] {
+    CUDA_IMAGE
+}
+
+/// ★ The CUDA scratchpad image, published once per process into its own sealed `memfd`.
+///
+/// ⊘ A **second** `OnceLock` and not a parameter on the first: the two images have different
+/// bytes and different lifetimes of usefulness, and one cell holding "whichever was asked for
+/// first" is a cache keyed on call order.
+fn embedded_cuda_image() -> Result<&'static Arc<ProgramImage>, String> {
+    static IMAGE: OnceLock<Result<Arc<ProgramImage>, String>> = OnceLock::new();
+    IMAGE
+        .get_or_init(|| {
+            if CUDA_IMAGE.is_empty() {
+                return Err(
+                    "this build has no CUDA scratchpad isolate image: the `cuda-scratchpad` \
+                     feature of `kayfabe-isolate-host` was not enabled, so `build.rs` never \
+                     built the glibc-linked second image. ⊘ Refused by name rather than \
+                     falling back to the static image, which could not `dlopen` libcuda and \
+                     would report the absence as a host problem."
+                        .to_string(),
+                );
+            }
+            ProgramImage::from_bytes(c"kayfabe-isolate-cuda", CUDA_IMAGE)
+                .map(Arc::new)
+                .map_err(|e| {
+                    format!("the embedded CUDA scratchpad image could not be published: {e}")
+                })
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+
 /// ★ The image, published **once per process** into a sealed `memfd`.
 ///
 /// Once, because the seal is what makes the bytes immutable and a per-spawn republication
@@ -100,6 +145,17 @@ fn embedded_image() -> Result<&'static Arc<ProgramImage>, String> {
         .as_ref()
         .map_err(Clone::clone)
 }
+
+/// ★★★ **The `IsolateId` proc value the VM-lifetime scratchpad isolate carries.**
+///
+/// ⊘ `u32::MAX`, the same value `IsolateId::NONE` uses, chosen where the scratchpad is
+/// spawned (`kayfabe_qemu_raw::scratchpad`) so it can never alias a live `ProcId` — `ProcId`
+/// is dense from zero. ⇒ *"is this the scratchpad?"* is answered by the id space rather than
+/// by a flag, and **no guest process can be handed the dynamically-linked image**.
+///
+/// ⚠ Restated here rather than imported: this crate sits BELOW `kayfabe-qemu-raw` and cannot
+/// name it. The two are pinned equal by `the_scratchpad_proc_id_agrees_across_the_seam`.
+pub const SCRATCHPAD_ISOLATE_PROC: u32 = u32::MAX;
 
 /// fd number of the control datagram socket in the child.
 pub const CONTROL_FD: i32 = 3;
@@ -695,6 +751,14 @@ impl RmBackend for ProxyRmBackend {
 
     fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
         self.handle(Request::ReserveGpga { len })
+    }
+
+    fn cuda_walk_report(&mut self) -> Result<String, RmError> {
+        let reply = self.call(Request::CudaWalkReport)?;
+        match self.lift(reply)? {
+            Reply::Payload(p) => Ok(String::from_utf8_lossy(&p).into_owned()),
+            _ => Err(RmError::Wedged),
+        }
     }
 
     fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
@@ -1416,6 +1480,14 @@ pub struct HostIsolateFactory {
     /// an isolate that re-derived it with an `lseek` would give the one number the whole
     /// authorization is bounded by a second source of truth.
     guest_ram: Option<(std::sync::Arc<OwnedFd>, u64)>,
+    /// ★★★★★ **Whether the VM-lifetime scratchpad isolate gets the CUDA build** —
+    /// `THE_CONSTRAINTS.md` §w724d, `SINGLE_STORE_PLAN.md` increment 4.
+    ///
+    /// ⊘ OFF unless the composition root says otherwise, and it is a property of the FACTORY
+    /// rather than of a spawn: *"this deployment runs a dynamically-linked, sandboxed-late
+    /// isolate"* is a configuration decision, and a per-spawn flag would make it one that
+    /// could differ between two isolates of one VM.
+    cuda_walk: bool,
     /// ★★★★★ Every isolate's [`ExportRegistry`], by id — the VMM's route to a descriptor an
     /// isolate handed up (`fb_cpu_view.md` §4).
     ///
@@ -1501,8 +1573,28 @@ impl HostIsolateFactory {
             // guest RAM would be granting it on every deployment that never asked, and the
             // grant is the whole boundary.
             guest_ram: None,
+            // ⊘ OFF unless the composition root arms it. See `HostIsolateFactory::cuda_walk`.
+            cuda_walk: false,
             exports: ExportDirectory::new(),
         }
+    }
+
+    /// ★★★ Arm the CUDA scratchpad image for this factory.
+    ///
+    /// ⚠ **This is the decision that makes ONE isolate dynamically linked and sandboxed
+    /// late.** `THE_CONSTRAINTS.md` §w724d states the cost plainly: sandboxing happens later,
+    /// so there is a window in which that one process has a full filesystem view. Bounded —
+    /// only our init and NVIDIA's init run in it, before any guest data is touched, at the
+    /// same trust level as VMM startup — but it is a real change from *"sandboxed before
+    /// anything runs"*, and constraint 20's argument must be read as *"the process ends with
+    /// the same reach"* rather than *"it never had more"*.
+    ///
+    /// ⊘ Every other isolate this factory spawns is unaffected: same static image, same
+    /// sandbox-first ordering.
+    #[must_use]
+    pub fn with_cuda_walk(mut self) -> Self {
+        self.cuda_walk = true;
+        self
     }
 
     /// ★★★ Grant every isolate this factory spawns a view of guest RAM.
@@ -1579,7 +1671,24 @@ impl HostIsolateFactory {
     /// that one line from `build_isolate` would turn nothing red.
     pub fn spawn_host(&self, id: IsolateId) -> HostIsolate {
         self.spawned.lock().expect("the spawn witness").push(id);
-        let built = self.image.clone().and_then(|image| {
+        // ★★★★★ **THE ONE PLACE A SECOND IMAGE IS CHOSEN** — `THE_CONSTRAINTS.md` §w724d.
+        //
+        // ⊘ The discriminator already exists and is not invented here: the VM-lifetime
+        // scratchpad isolate's `IsolateId` carries proc `u32::MAX`
+        // (`kayfabe_qemu_raw::scratchpad::SCRATCHPAD_PROC`), which can never alias a live
+        // `ProcId`. ⇒ **no guest process can ever be handed the dynamically-linked image**,
+        // and that is a property of the id space rather than of a flag somebody sets.
+        //
+        // ⚠ The CUDA arm is taken only when the factory was BUILT for it. A factory that was
+        // not gets the ordinary image for this id too, so the arm is a configuration of the
+        // composition root and not a per-spawn decision.
+        let want_cuda = self.cuda_walk && id.proc() == SCRATCHPAD_ISOLATE_PROC;
+        let image = if want_cuda {
+            embedded_cuda_image().map_err(|e| format!("CUDA scratchpad image: {e}"))
+        } else {
+            self.image.clone()
+        };
+        let built = image.and_then(|image| {
             build_isolate(
                 image,
                 self.rm,
@@ -1587,6 +1696,7 @@ impl HostIsolateFactory {
                 id,
                 self.pool,
                 self.guest_ram.as_ref(),
+                want_cuda,
             )
         });
         let isolate = built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why));
@@ -1614,6 +1724,7 @@ fn build_isolate(
     id: IsolateId,
     pool: usize,
     guest_ram: Option<&(std::sync::Arc<OwnedFd>, u64)>,
+    cuda_walk: bool,
 ) -> Result<HostIsolate, String> {
     let (control_ours, control_theirs) =
         UnixDatagram::pair().map_err(|e| format!("control socketpair: {e}"))?;
@@ -1630,6 +1741,12 @@ fn build_isolate(
         .arg(rm.as_arg())
         .arg("--park")
         .arg(park.as_arg())
+        // ★★★ §w724d step 2, as an ARGUMENT rather than an inference. The child brings CUDA
+        // all the way up BEFORE `sandbox::enter`, and then runs the two post-drop probes.
+        // ⊘ Passed on BOTH arms so the child's own view of its configuration is complete —
+        // an isolate that has to guess what it is cannot say so in a census.
+        .arg("--cuda-walk")
+        .arg(if cuda_walk { "on" } else { "off" })
         // ★★★ Born namespaced. The user, pid, network, IPC, UTS and mount namespaces are
         // taken by the `clone` that CREATES this process, not by anything it does afterwards
         // — which is the only way `CLONE_NEWPID` can be had at all, and which means the
@@ -1831,6 +1948,7 @@ mod tests {
             park: crate::loopback::ParkVerb::Nothing,
             spawned: std::sync::Mutex::new(Vec::new()),
             guest_ram: None,
+            cuda_walk: false,
             exports: ExportDirectory::new(),
         };
         assert_eq!(f.embedded(), Err("no image in this build".to_owned()));
@@ -1962,6 +2080,42 @@ mod tests {
         assert!(
             !has_interpreter(bytes),
             "the embedded isolate is dynamically linked (it has a PT_INTERP); it must be static"
+        );
+    }
+
+    /// ★★★★★ **THE MIRROR ASSERTION — the CUDA image must be DYNAMIC.**
+    ///
+    /// The test above asserts the ordinary image has no `PT_INTERP`; this one asserts the
+    /// second image HAS one. ⊘ Both directions, or "one is static and one is not" is a naming
+    /// convention rather than a checked fact — and a statically-linked second image would
+    /// `dlopen` nothing, with the failure surfacing as *"CUDA is not available on this host"*.
+    ///
+    /// ⚠ Skipped-by-emptiness is deliberate and is NOT a silent skip: without the
+    /// `cuda-scratchpad` feature there is nothing to assert about, and `embedded_cuda_image`
+    /// refuses that case **by name** at spawn. The assertion that matters when the feature is
+    /// off is the refusal, and it is tested below.
+    #[test]
+    fn the_embedded_cuda_image_is_a_dynamic_elf_when_it_exists() {
+        let bytes = embedded_cuda_isolate_bytes();
+        if bytes.is_empty() {
+            let why = embedded_cuda_image().expect_err(
+                "an empty CUDA image must be a NAMED refusal, never a fallback to the static \
+                 image: the fallback would produce an isolate that looks right and cannot \
+                 load libcuda",
+            );
+            assert!(
+                why.contains("cuda-scratchpad"),
+                "the refusal must name the feature that would fix it; it said: {why}"
+            );
+            return;
+        }
+        assert!(bytes.starts_with(b"\x7fELF"), "not an ELF image");
+        assert!(
+            has_interpreter(bytes),
+            "the CUDA scratchpad image has NO PT_INTERP — it is statically linked, so it \
+             cannot `dlopen` libcuda and the second image buys nothing. `[measured]` a musl \
+             static-pie binary's dlopen returns NULL with \"Dynamic loading not supported\" \
+             for EVERY library, so the ordering in §w724d does not rescue it."
         );
     }
 

@@ -58,6 +58,27 @@ use std::process::Command;
 /// Where the embedded bytes land. `src/isolate.rs` reads it with `include_bytes!`.
 const IMAGE_FILE: &str = "kayfabe-isolate.image";
 
+/// ★★★★★ **THE SECOND IMAGE** — `THE_CONSTRAINTS.md` §w724d, `SINGLE_STORE_PLAN.md`
+/// increment 4. Built for the **host (glibc) triple**, so it has a dynamic loader and can
+/// `dlopen` `libcuda.so.1`.
+///
+/// ⊘⊘⊘ **WHY A SECOND IMAGE AND NOT A FLAG ON THE FIRST.** `[measured 2026-09-14, locally]`
+/// a musl **static-pie** binary's `dlopen` returns `NULL` with `dlerror()` =
+/// *"Dynamic loading not supported"* — for `libcuda.so.1`, `libc.so.6` and `libm.so.6`
+/// **alike**. The refusal is **musl's**, not `libcuda`'s, and it arrives before any question
+/// about CUDA is asked. ⇒ no amount of privilege ordering rescues the static build; it has to
+/// be a different one.
+///
+/// ⚠ **It is NOT the image every other isolate uses, and that is the whole safety argument.**
+/// The static image keeps its sandbox-first guarantee unchanged. Only the ONE VM-lifetime
+/// scratchpad isolate runs this build, and only it is sandboxed late.
+const CUDA_IMAGE_FILE: &str = "kayfabe-isolate-cuda.image";
+
+/// The cargo feature that asks for the second image. ⊘ Off by default, so a build that does
+/// not want CUDA pays neither the build time nor a glibc-linked binary in its archive — and
+/// the runtime gate then refuses **by name** rather than finding an empty blob.
+const CUDA_FEATURE: &str = "CARGO_FEATURE_CUDA_SCRATCHPAD";
+
 /// The marker that tells a nested run of this script not to recurse.
 const NESTED: &str = "KAYFABE_ISOLATE_NESTED_BUILD";
 
@@ -146,9 +167,15 @@ fn main() {
         root.join("Cargo.toml").display()
     );
 
+    // ⊘ BOTH images are written on every early return. `isolate.rs` `include_bytes!`es each
+    // unconditionally, so a file that is merely absent is a COMPILE error in a crate that has
+    // nothing to do with the feature — and it was, once: the nested build wrote only the
+    // first and the inner cargo then failed on the second with `No such file or directory`.
+    let cuda_image_early = out_dir.join(CUDA_IMAGE_FILE);
     if std::env::var_os(NESTED).is_some() {
-        // The inner build. It is the isolate; it does not embed one.
+        // The inner build. It IS the isolate; it does not embed one.
         write(&image, &[]);
+        write(&cuda_image_early, &[]);
         return;
     }
     if std::env::var_os(STUB).is_some() {
@@ -157,6 +184,7 @@ fn main() {
              spawn one. Only the cross-check job may do this."
         );
         write(&image, &[]);
+        write(&cuda_image_early, &[]);
         return;
     }
 
@@ -165,8 +193,67 @@ fn main() {
     let stage = out_dir.join("isolate-stage");
     let cargo = std::env::var_os("CARGO").expect("cargo sets CARGO");
 
+    // ★★★ THE SECOND IMAGE, first because its absence must still write a file: every
+    // consumer `include_bytes!`es it unconditionally, and a missing file is a build error
+    // rather than a runtime refusal.
+    let cuda_image = out_dir.join(CUDA_IMAGE_FILE);
+    if std::env::var_os(CUDA_FEATURE).is_some() {
+        let cuda_triple = format!("{arch}-unknown-linux-gnu");
+        let cuda_stage = out_dir.join("isolate-cuda-stage");
+        let bytes = build_isolate_for(&root, &cargo, &cuda_triple, &cuda_stage, &["cuda-scratchpad"]);
+        // ⊘⊘ **THE MIRROR ASSERTION.** `the_embedded_image_is_a_static_elf` asserts the
+        // ordinary image has NO `PT_INTERP`. This one must HAVE one, and the check is here
+        // rather than only in a test because a statically-linked second image would `dlopen`
+        // nothing and the failure would surface as "CUDA is not available on this host".
+        assert!(
+            has_interp(&bytes),
+            "the CUDA scratchpad image was built for {cuda_triple} and has NO PT_INTERP — it \
+             is statically linked, so it cannot `dlopen` libcuda and the whole point of the \
+             second image is gone. §w724d's ordering does not rescue a static binary: the \
+             refusal is musl's (or the linker's), not CUDA's."
+        );
+        write(&cuda_image, &bytes);
+        println!(
+            "cargo::warning=embedded CUDA scratchpad image: {} bytes, {cuda_triple} (dynamic)",
+            bytes.len()
+        );
+    } else {
+        // ⊘ EMPTY, not absent. `isolate.rs` refuses an empty image by name, which is a
+        // different diagnosis from "the file is missing" (a build problem) and from "the
+        // library would not load" (a host problem).
+        write(&cuda_image, &[]);
+    }
+
+    // ⊘ The SAME helper the CUDA image uses, with no features: one statement of the
+    // environment scrub, the recursion guard and the strip setting, so the two images cannot
+    // drift into differing in something nobody chose.
+    let bytes = build_isolate_for(&root, &cargo, &triple, &stage, &[]);
+    assert!(
+        !has_interp(&bytes),
+        "the isolate image has a PT_INTERP: it is DYNAMICALLY linked, and it is `exec`'d from \
+         a memfd inside a mount namespace with no path to a loader. It would fail to start \
+         with ENOENT naming a file the child cannot see."
+    );
+    write(&image, &bytes);
+    println!(
+        "cargo::warning=embedded isolate image: {} bytes, {triple}",
+        bytes.len()
+    );
+}
+
+/// Run the nested cargo for one triple and return the bytes it produced.
+///
+/// ⊘ Factored out when the second image landed, so both images are built by **one**
+/// statement of the environment scrub, the recursion guard and the strip setting. Two copies
+/// would be two builds that could drift into differing in something nobody chose.
+fn build_isolate_for(
+    root: &Path,
+    cargo: &std::ffi::OsStr,
+    triple: &str,
+    stage: &Path,
+    features: &[&str],
+) -> Vec<u8> {
     let mut cmd = Command::new(cargo);
-    // ★ Scrub, do not extend. Anything cargo exported describes the OUTER build.
     for (k, _) in std::env::vars_os() {
         let name = k.to_string_lossy().into_owned();
         let inherited = name == "CARGO_HOME"
@@ -188,49 +275,70 @@ fn main() {
         }
     }
     cmd.env(NESTED, "1")
-        .current_dir(&root)
+        .current_dir(root)
         .arg("build")
         .arg("--release")
         .arg("--target")
-        .arg(&triple)
+        .arg(triple)
         .arg("--target-dir")
-        .arg(&stage)
+        .arg(stage)
         .arg("-p")
         .arg("kayfabe-isolate-host")
         .arg("--bin")
         .arg("kayfabe-isolate")
-        // The image is `include_bytes!`-ed into every consumer, so it is worth being small;
-        // and nothing debugs the isolate through its own symbols — it is debugged through the
-        // protocol, from the parent.
         .arg("--config")
         .arg("profile.release.strip=\"symbols\"");
-
-    let status = cmd.status().unwrap_or_else(|e| {
-        panic!("could not run the nested cargo that builds the isolate image: {e}")
-    });
+    if !features.is_empty() {
+        cmd.arg("--features").arg(features.join(","));
+    }
+    let status = cmd
+        .status()
+        .unwrap_or_else(|e| panic!("could not run the nested cargo for {triple}: {e}"));
     assert!(
         status.success(),
         "the nested build of the isolate image failed (target {triple}).\n\
          If the standard library for that triple is missing:\n\
-             rustup target add {triple}\n\
-         The isolate MUST be static: it is `exec`'d from a memfd, inside a mount namespace \
-         with no path to a dynamic loader."
+             rustup target add {triple}"
     );
-
-    let built = stage.join(&triple).join("release").join("kayfabe-isolate");
-    let bytes = std::fs::read(&built).unwrap_or_else(|e| {
-        panic!("the nested build reported success but {built:?} is unreadable: {e}")
-    });
+    let built = stage.join(triple).join("release").join("kayfabe-isolate");
+    let bytes = std::fs::read(&built)
+        .unwrap_or_else(|e| panic!("the nested build reported success but {built:?} is unreadable: {e}"));
     assert!(
         bytes.starts_with(b"\x7fELF"),
         "{built:?} is not an ELF image ({} bytes)",
         bytes.len()
     );
-    write(&image, &bytes);
-    println!(
-        "cargo::warning=embedded isolate image: {} bytes, {triple}",
-        bytes.len()
-    );
+    bytes
+}
+
+/// Whether an ELF64 image carries a `PT_INTERP` — i.e. whether it needs a dynamic loader.
+///
+/// ⊘ The SAME predicate `isolate.rs`'s `the_embedded_image_is_a_static_elf` uses, restated
+/// here because a build script cannot call into the crate it is building. ⚠ The two must
+/// agree, and they are asserted in OPPOSITE directions on the two images — which is what
+/// makes "one is static and one is not" a checked fact rather than a naming convention.
+fn has_interp(bytes: &[u8]) -> bool {
+    const PT_INTERP: u32 = 3;
+    if bytes.len() < 64 || !bytes.starts_with(b"\x7fELF") || bytes[4] != 2 {
+        return false;
+    }
+    let u16at = |o: usize| u16::from_le_bytes([bytes[o], bytes[o + 1]]);
+    let u64at = |o: usize| {
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&bytes[o..o + 8]);
+        u64::from_le_bytes(b)
+    };
+    let phoff = usize::try_from(u64at(0x20)).unwrap_or(0);
+    let phentsize = usize::from(u16at(0x36));
+    let phnum = usize::from(u16at(0x38));
+    if phoff == 0 || phentsize < 4 {
+        return false;
+    }
+    (0..phnum).any(|i| {
+        let o = phoff + i * phentsize;
+        o + 4 <= bytes.len()
+            && u32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]]) == PT_INTERP
+    })
 }
 
 /// Every path dependency the isolate binary is built from, so a change in any of them

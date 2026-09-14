@@ -58,6 +58,13 @@ use std::sync::{Arc, Mutex};
 pub struct ChildArgs {
     /// The owning proc's id.
     pub proc: u32,
+    /// ★★★ Whether this isolate is the VM-lifetime scratchpad and must bring CUDA up
+    /// **before** `sandbox::enter` — `THE_CONSTRAINTS.md` §w724d.
+    ///
+    /// ⊘ Carried explicitly rather than inferred from `proc == u32::MAX`, so the child's own
+    /// view of its configuration is complete and it can SAY which ordering it ran. An isolate
+    /// that has to guess what it is cannot report it.
+    pub cuda_walk: bool,
     /// The GPU this isolate is the sandbox for.
     pub gpu: u32,
     /// Pool width — one worker thread and one socket each.
@@ -86,6 +93,7 @@ impl ChildArgs {
     /// A message naming the offending argument.
     pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Self, String> {
         let mut proc = None;
+        let mut cuda_walk = false;
         let mut gpu = None;
         let mut workers = None;
         let mut rm = None;
@@ -96,6 +104,17 @@ impl ChildArgs {
             let value = it.next().ok_or_else(|| format!("{flag} needs a value"))?;
             match flag.as_str() {
                 "--proc" => proc = Some(value.parse().map_err(|_| format!("--proc {value}"))?),
+                // ★★★ §w724d: this isolate brings CUDA all the way up BEFORE it is
+                // sandboxed. ⊘ Refused rather than defaulted if it names neither state —
+                // a typo must not silently produce the ordinary ordering in a process that
+                // was spawned from the dynamically-linked image.
+                "--cuda-walk" => {
+                    cuda_walk = match value.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        other => return Err(format!("--cuda-walk {other}")),
+                    };
+                }
                 "--gpu" => gpu = Some(value.parse().map_err(|_| format!("--gpu {value}"))?),
                 "--workers" => {
                     workers = Some(value.parse().map_err(|_| format!("--workers {value}"))?);
@@ -116,6 +135,7 @@ impl ChildArgs {
         }
         Ok(ChildArgs {
             proc: proc.ok_or("--proc is required")?,
+            cuda_walk,
             gpu: gpu.ok_or("--gpu is required")?,
             workers,
             rm: rm.ok_or("--rm is required")?,
@@ -269,8 +289,52 @@ fn build_backends(
             // Fail CLOSED. A sandbox that could not be built is not a warning, it is the
             // end of this isolate: the error propagates to the hello frame and the parent
             // reports a startup failure.
+            // ★★★★★ **§w724d STEP 2 — CUDA COMES UP HERE, BEFORE THE SANDBOX.**
+            //
+            // > *"before entering mount namespace and chroot, it first opens libcuda and
+            // > inits and loads the entire channel and PTX ensure its running; then it drops
+            // > privileges as usual"* — owner, 2026-09-14.
+            //
+            // ★ Why it works at all: **open fds, existing mappings, the CUDA context and the
+            // loaded module all survive a namespace change.** Only PATH LOOKUPS do not. So
+            // everything lazy has to be walked while paths still exist — `cuInit`, device
+            // enumeration, `cuCtxCreate`, `cuModuleLoadData` (the PTX JIT), every allocation
+            // and a real launch that reads a report back.
+            //
+            // ⚠ **THE HONEST COST, stated at the site rather than only in the design doc:**
+            // this process has a FULL FILESYSTEM VIEW for the duration of this call. It is
+            // bounded — only our init and NVIDIA's init run in it, before any guest data is
+            // touched, at the same trust level as VMM startup — and it is a real change from
+            // "sandboxed before anything runs". Constraint 20's argument must be read as
+            // *"the process ends with the same reach"*, not *"it never had more"*.
+            //
+            // ⊘ **A failure here does NOT fail the isolate.** The reservation and the RM
+            // plane are what the VM needs to boot; the walk kernel is increment 4's gate and
+            // nothing depends on it yet. So the outcome is RECORDED and the isolate carries
+            // on — which is also what makes the census able to say *why* rather than leaving
+            // the parent with a dead isolate and no diagnosis.
+            #[cfg(feature = "cuda-scratchpad")]
+            if args.cuda_walk {
+                crate::cudawalk::bring_up_before_sandbox();
+            }
+            #[cfg(not(feature = "cuda-scratchpad"))]
+            if args.cuda_walk {
+                // ⊘ Named, not silent: a boot that ASKED for the CUDA scratchpad and got a
+                // binary built without it must say so, or the absent census line reads as
+                // "the gate was off".
+                eprintln!(
+                    "kayfabe-isolate: ⊘ --cuda-walk=on but this binary was built WITHOUT the \
+                     `cuda-scratchpad` feature; no CUDA was brought up and none will be."
+                );
+            }
             let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu))
                 .map_err(|e| format!("the isolate sandbox could not be built: {e}"))?;
+            // ★★★ §w724d STEP 3 IS DONE (namespace + pivot_root + privilege drop). NOW the
+            // two probes that the warm-up above cannot stand in for.
+            #[cfg(feature = "cuda-scratchpad")]
+            if args.cuda_walk {
+                crate::cudawalk::probe_after_sandbox();
+            }
             // ★ #156 — the host board's class profile, PINNED. See
             // `kayfabe_chips::host_classes::pinned_host_classes`: this process does not
             // ask the device what generation it is.
@@ -743,6 +807,26 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         Request::AllocSysmem { len } => handle(rm.alloc_sysmem(len)),
         Request::AllocVidmem { len } => handle(rm.alloc_vidmem(len)),
         Request::ReserveGpga { len } => handle(rm.reserve_gpga(len)),
+        // ★★★ A READ of what the pre-sandbox bring-up recorded. See
+        // `Request::CudaWalkReport` — this verb cannot cause a bring-up, because by the time
+        // a worker answers anything the isolate is already sandboxed.
+        Request::CudaWalkReport => {
+            #[cfg(feature = "cuda-scratchpad")]
+            {
+                Reply::Payload(crate::cudawalk::report_line().into_bytes())
+            }
+            // ⊘ A NAMED absence, not an error: an isolate built without the feature is not
+            // broken, it simply never ran CUDA — and the parent's census must be able to say
+            // which of the two it is looking at.
+            #[cfg(not(feature = "cuda-scratchpad"))]
+            {
+                Reply::Payload(
+                    b"CUDA_WALK=ABSENT reason=\"this binary was built without the \
+                      cuda-scratchpad feature\""
+                        .to_vec(),
+                )
+            }
+        }
         // ⊘ `Ok(0)` crosses as `Reply::Megabytes(0)`, NOT as a failure: *"nothing down to
         // the probe's floor could be reserved"* is an answer about this host, and the
         // parent must be able to tell it from *"the verb is not available"*.
@@ -1128,6 +1212,10 @@ mod tests {
                 workers: 4,
                 rm: RmMode::Loopback,
                 park: ParkVerb::Nothing,
+                // ⊘ Absent on the command line is `false`, and the sample says so rather than
+                // leaving the default untested — the flag decides whether a process brings
+                // CUDA up before it is sandboxed.
+                cuda_walk: false,
                 guest_ram_bytes: 0,
             }
         );

@@ -109,6 +109,18 @@ pub enum Request {
         /// Bytes requested.
         len: u64,
     },
+    /// ★★★★★ **What the VM-lifetime scratchpad isolate's CUDA bring-up found out** —
+    /// `SINGLE_STORE_PLAN.md` increment 4.
+    ///
+    /// ⊘ **A read, not a command.** The bring-up and both post-sandbox probes already ran, at
+    /// startup, in the order §w724d prescribes; this only fetches the record. A verb that
+    /// *caused* the bring-up could not exist: by the time any worker can answer a request the
+    /// isolate is already sandboxed, and the whole design is that CUDA comes up before that.
+    ///
+    /// ⊘ Answered by every isolate, including one built without the `cuda-scratchpad`
+    /// feature, which says `CUDA_WALK=ABSENT` by name. An unanswered verb and an isolate that
+    /// never ran CUDA are different facts.
+    CudaWalkReport,
     /// ★★★ [`kayfabe_isolate::RmBackend::largest_reservable_mb`] — the probe whose answer
     /// the advertised framebuffer size is derived from.
     ///
@@ -843,6 +855,7 @@ impl Envelope {
                 out.push(28);
                 out.extend_from_slice(&start_mb.to_le_bytes());
             }
+            Request::CudaWalkReport => out.push(29),
             Request::AllocChannel {
                 vas,
                 engine,
@@ -1110,6 +1123,7 @@ impl Envelope {
             28 => Request::LargestReservableMb {
                 start_mb: c.u64("gpga probe start mb")?,
             },
+            29 => Request::CudaWalkReport,
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
                 engine: c.u8("channel engine")?,
@@ -1607,6 +1621,7 @@ mod tests {
                 len: 11_808u64 << 20,
             },
             Request::LargestReservableMb { start_mb: 12_288 },
+            Request::CudaWalkReport,
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -1819,6 +1834,7 @@ mod tests {
             Request::AllocVidmem { .. } => "AllocVidmem",
             Request::ReserveGpga { .. } => "ReserveGpga",
             Request::LargestReservableMb { .. } => "LargestReservableMb",
+            Request::CudaWalkReport => "CudaWalkReport",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -1856,6 +1872,7 @@ mod tests {
                 "AllocVaSpace",
                 "AllocVidmem",
                 "CeCopy",
+                "CudaWalkReport",
                 "Control",
                 "DescribeGuestRam",
                 "ExportBacking",

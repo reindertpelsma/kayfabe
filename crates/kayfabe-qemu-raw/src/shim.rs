@@ -14711,12 +14711,17 @@ impl Regs {
         // `OffTrap` witness, which panics by name if a later edit moves this onto a trap
         // thread.
         let scratchpad_arm = crate::scratchpad::selected_scratchpad()?;
+        // ★★★★★ Increment 4's gate, read HERE and exactly once, beside every other plane
+        // decision. ⊘ A PEER of the reservation's arm, not a third value of it: the two are
+        // orthogonal and a boot must be able to arm either alone.
+        let scratchpad_cuda = crate::scratchpad::selected_scratchpad_cuda()?;
         let scratchpad = if scratchpad_arm.is_armed() {
             let sp = crate::scratchpad::Scratchpad::bring_up(
                 &device.isolate_factory(),
                 kayfabe_rt::GpuId::ZERO,
                 crate::scratchpad::selected_start_mb(),
                 scratchpad_arm,
+                scratchpad_cuda,
             );
             // ⊘ The census is printed BEFORE the refusal is consulted, and that ordering is
             // the whole reason `on` and `require` are two arms: a `require` boot that
@@ -14726,6 +14731,18 @@ impl Regs {
             Some(sp)
         } else {
             crate::scratchpad::Scratchpad::census_disarmed("REALIZE");
+            if scratchpad_cuda {
+                // ⊘ SAID, not silently ignored: a boot that armed the CUDA gate and left the
+                // scratchpad gate off has asked for a thing that cannot happen, because there
+                // is no VM-lifetime isolate to bring CUDA up in. An absent CUDA census line
+                // would otherwise read as "the gate was off".
+                eprintln!(
+                    "kayfabe: SCRATCHPAD-CUDA AT REALIZE: ⊘ {}=on but {}=off — there is no \
+                     VM-lifetime isolate to bring CUDA up in, so NOTHING was armed. Set both.",
+                    crate::scratchpad::SCRATCHPAD_CUDA_ENV,
+                    crate::scratchpad::SCRATCHPAD_ENV,
+                );
+            }
             None
         };
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
@@ -20603,7 +20620,18 @@ pub fn isolate_factory(
         #[cfg(feature = "host-isolates")]
         IsolatePlane::Real => {
             let (f, id) = with_guest_ram(
-                kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real),
+                // ★★★★★ Increment 4: the CUDA arm is a property of the FACTORY, decided
+                // here at the composition root. ⊘ `with_cuda_walk` makes ONE isolate — the
+                // VM-lifetime scratchpad, identified by its `IsolateId`'s `u32::MAX` proc,
+                // which can never alias a live `ProcId` — spawn from the glibc-linked image
+                // and be sandboxed LATE. Every other isolate this factory spawns is
+                // untouched: same static image, same sandbox-first ordering.
+                if crate::scratchpad::selected_scratchpad_cuda().unwrap_or(false) {
+                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                        .with_cuda_walk()
+                } else {
+                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                },
                 guest_ram,
             )?;
             let exports = f.export_directory();

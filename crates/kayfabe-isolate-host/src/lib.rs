@@ -75,6 +75,10 @@
 //!   [`fdcross`]**, and the answer to that module's standing bound *"no verb uses the
 //!   crossing yet"*.
 
+/// ★★★★★ The scratchpad isolate's CUDA half — `THE_CONSTRAINTS.md` §w724d. Present only in
+/// the glibc-linked second image; see the `cuda-scratchpad` feature.
+#[cfg(feature = "cuda-scratchpad")]
+pub mod cudawalk;
 pub mod child;
 pub mod export;
 pub mod fbjoin;
@@ -89,7 +93,10 @@ pub mod rm;
 pub use export::{ChildExports, ExportRegistry};
 pub use fbjoin::FbJoinTable;
 pub use fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
-pub use isolate::{HostIsolate, HostIsolateFactory, RmMode, embedded_isolate_bytes};
+pub use isolate::{
+    HostIsolate, HostIsolateFactory, RmMode, SCRATCHPAD_ISOLATE_PROC, embedded_cuda_isolate_bytes,
+    embedded_isolate_bytes,
+};
 pub use loopback::ParkVerb;
 pub use planreactor::{
     DEFAULT_LANE_CAP, LanePolicy, PlanDone, PlanReactor, PlanReactorStats, RejectReason, Rejected,
