@@ -1,5 +1,42 @@
+#!/usr/bin/env python3
+"""★★★★★ BUILD THE PTX KAYFABE SHIPS, LOCALLY, WITH NO GPU AND NO nvcc.
+
+`THE_CONSTRAINTS.md` §20: *"it is not code injection: the PTX is ours, built at build time"*.
+Making that literally true of the shipped artifact means generating it where the rest of the
+tree is generated -- not on a rented box, whose outputs this project does not copy back.
+
+NVRTC is the one CUDA front end that satisfies that: a library, no GPU, no toolkit, no `nvcc`
+driver. It is reached through `ctypes` so this script has no build dependency at all beyond a
+`libnvrtc.so.12` on disk (the `nvidia-cuda-nvrtc-cu12` wheel is enough; a CUDA install works
+too).
+
+  usage: python3 make_ptx.py kf_walk.cu kf_walk.ptx compute_75
+         NVRTC_SO=/path/to/libnvrtc.so.12 python3 make_ptx.py ...
+
+Two things it has to supply that NVRTC does not:
+
+  1. `-DKF_DEVICE_ONLY=1`, which skips the half of `kf_walk.cu` that drives the CUDA RUNTIME
+     API. NVRTC cannot compile that half, and kayfabe does not use it -- the isolate drives the
+     DRIVER API from Rust. The alternative was slicing the file by line number, which rots on
+     the first edit above the seam and would silently emit PTX for a different program.
+  2. `stdint.h` and `stddef.h`, as named in-memory headers. NVRTC ships no libc headers, and
+     `kf_walk.h` asks for the fixed-width integer types. Supplying them here rather than
+     editing the source keeps the source the file the 58/58 suite compiles.
+"""
 import ctypes, sys, os
-lib = ctypes.CDLL("/opt/nvcc/pkg/nvidia/cuda_nvrtc/lib/libnvrtc.so.12")
+# ⊘ Overridable, and the default is the plain soname so a machine with CUDA installed needs
+# no configuration. A hard-coded path would make this script work on exactly one box.
+_SO = os.environ.get("NVRTC_SO", "libnvrtc.so.12")
+try:
+    lib = ctypes.CDLL(_SO)
+except OSError as e:
+    sys.stderr.write(
+        f"could not load {_SO}: {e}\n"
+        "NVRTC is how this tree builds the walk kernel's PTX without a GPU or nvcc.\n"
+        "  pip download nvidia-cuda-nvrtc-cu12 --no-deps -d /tmp/w && unzip -o /tmp/w/*.whl -d /tmp/nvrtc\n"
+        "  NVRTC_SO=/tmp/nvrtc/nvidia/cuda_nvrtc/lib/libnvrtc.so.12 python3 make_ptx.py ...\n"
+    )
+    raise SystemExit(2)
 src_path, out_path, arch = sys.argv[1], sys.argv[2], sys.argv[3]
 src = open(src_path, "rb").read()
 # ⊘ NVRTC ships no libc headers. These are the ONLY declarations kf_walk.h asks for,
