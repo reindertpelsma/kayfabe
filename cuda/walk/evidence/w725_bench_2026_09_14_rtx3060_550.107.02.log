@@ -1,0 +1,39 @@
+BENCH_START 2026-09-14T19:15:44Z
+START kf_bench  gpu="NVIDIA GeForce RTX 3060" sm_86  SMs=28  clock=1.78GHz  driver=12040 runtime=12040
+  warmup=3 reps=11 (median reported)
+
+-- the design's two sizes (gpga_is_one_reserved_object.md:77) --
+  working_set_1872pt_dense               961540 entries        1 runs   1 vas   461931.9 us refresh   461937.4 us device   480.4 ns/entry  1872 PTs, 958464 4K mappings = 3.66 GiB mapped
+  worst_case_12GiB_at_4K                3152900 entries        1 runs   1 vas  1513286.3 us refresh  1513307.5 us device   480.0 ns/entry  6144 PTs, 3145728 4K mappings = 12 GiB mapped
+
+-- what dominates: same ENTRIES (1872 PTs), different RUNS --
+  frag_1872pt_every0                     961540 entries        1 runs   1 vas   463940.4 us refresh   463931.3 us device   482.5 ns/entry  dense: ONE run for the whole chain
+  frag_1872pt_every64                    961540 entries    29952 runs   1 vas   491242.7 us refresh   491237.7 us device   510.9 ns/entry  every 64th PTE breaks the run => ~14976 runs
+  frag_1872pt_every16                    961540 entries   119808 runs   1 vas   631863.2 us refresh   631827.8 us device   657.1 ns/entry  every 16th PTE breaks the run => ~59904 runs
+  frag_1872pt_every4                     961540 entries   479232 runs   1 vas  1135591.8 us refresh  1135745.6 us device  1181.0 ns/entry  every 4th PTE breaks the run => ~239616 runs
+  frag_1872pt_every2                     961540 entries   958464 runs   1 vas  1812557.3 us refresh  1813129.5 us device  1885.1 ns/entry  every 2th PTE breaks the run => ~479232 runs
+
+-- an ACKED refresh over unchanged tables (the common case at steady state) --
+  working_set_1872pt_acked_delta         961540 entries        0 runs   1 vas   465937.1 us refresh          -   484.6 ns/entry  same tables, ack honoured => empty delta
+
+-- the parallel axis: N address spaces in ONE refresh --
+  parallel_01vas_128pt_each               66820 entries        1 runs   1 vas    29946.9 us refresh    29954.0 us device   448.2 ns/entry  1 x 128 PTs = 128 PT pages total
+  parallel_04vas_128pt_each              267280 entries        4 runs   4 vas    33462.8 us refresh    33387.7 us device   125.2 ns/entry  4 x 128 PTs = 512 PT pages total
+  parallel_16vas_128pt_each             1069120 entries       16 runs  16 vas    35230.4 us refresh    35238.7 us device    33.0 ns/entry  16 x 128 PTs = 2048 PT pages total
+
+-- page size: the same VA coverage, 512x fewer entries --
+  same_12GiB_at_2M                        13316 entries     6144 runs   1 vas    26821.8 us refresh    26827.1 us device  2014.3 ns/entry  6144 2M mappings = 12 GiB mapped, NO leaf page tables
+
+-- real GA106 driver tables (corpus/real_ga106.bin) --
+  real_ga106_vas_2efa4c000                 2116 entries        8 runs   1 vas     2262.4 us refresh     2269.2 us device  1069.2 ns/entry  stock NVIDIA 580.159.04
+  real_ga106_vas_2efa6c000                 8228 entries        6 runs   1 vas     4505.8 us refresh     4514.8 us device   547.6 ns/entry  stock NVIDIA 580.159.04
+  real_ga106_vas_2efba5000                 2084 entries        2 runs   1 vas     2245.1 us refresh     2251.9 us device  1077.3 ns/entry  stock NVIDIA 580.159.04
+  real_ga106_vas_2efbc2000                 9476 entries       65 runs   1 vas     3835.4 us refresh     3842.6 us device   404.8 ns/entry  stock NVIDIA 580.159.04
+  real_ga106_vas_2f1cac000                 1828 entries        3 runs   1 vas     1438.6 us refresh     1444.9 us device   787.0 ns/entry  stock NVIDIA 580.159.04
+
+== the number ==
+  measured working set (1872 PT pages, 7.3 MiB): 461931.9 us   = 6894.5x the design's 67 us assumption
+  1178 refreshes a boot would cost 544.16 s of GPU time
+  worst case (12 GiB at 4 KiB, 24 MiB of tables): 1513286.3 us   = 22586.4x 67 us
+EXIT=0
+BENCH_EXIT=0

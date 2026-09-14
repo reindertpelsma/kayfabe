@@ -137,8 +137,8 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
 
     KfWalkCfg c;
     memset(&c, 0, sizeof c);
-    c.runs_per_pdb = 65536;
-    c.run_capacity = 262144;
+    c.runs_per_pdb = 1u << 20;
+    c.run_capacity = 1u << 21;
     c.pdb_capacity = 64;
     c.entry_budget = 64u * 1024u * 1024u;   /* generous: a budget stop would not be a walk */
     c.table_version = KF_TBL_VER2;
@@ -160,10 +160,16 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
         if (rc != 0) { fprintf(stderr, "%s: kf_refresh rc=%d\n", name, rc); printf("EXIT=4\n"); exit(4); }
         kf_ack(w, h.generation);
     }
+    /* ⚠ A truncated walk is NOT a measurement of a full walk, so it is reported by name and
+     * skipped rather than timed. ⊘ It must not abort the sweep either: one oversized case
+     * silently taking the rest of the run with it is how a measurement session produces
+     * nothing and reads as a crash. */
     if (h.flags & (KFWR_HF_TRUNCATED | KFWR_HF_PDB_TRUNCATED | KFWR_HF_BUDGET)) {
-        fprintf(stderr, "%s: TRUNCATED/BUDGET (flags=0x%x refuse=0x%x) -- this is not a full walk\n",
-                name, h.flags, h.refuse_mask);
-        printf("EXIT=5\n"); exit(5);
+        printf("  %-34s SKIPPED: TRUNCATED/BUDGET (flags=0x%x refuse=0x%x, %u runs) -- not a full walk\n",
+               name, h.flags, h.refuse_mask, h.run_count);
+        kf_destroy(w);
+        CU(cudaFree(dev));
+        return;
     }
 
     std::vector<double> whole, kern;
@@ -215,6 +221,51 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
            r.entries ? r.refresh_us * 1000.0 / (double)r.entries : 0.0, note);
     fflush(stdout);
 
+    kf_destroy(w);
+    CU(cudaFree(dev));
+}
+
+/* Like run_case, but ACKS each generation, so every timed refresh computes a DELTA against
+ * the previous walk instead of emitting a full resync. ⊘ Implemented by re-running the same
+ * measurement with the ack in the loop; the two differ in exactly one statement. */
+static void run_case_acked(const char *name, Gpga &g, const std::vector<uint64_t> &pdbs,
+                           size_t live_bytes, const char *note)
+{
+    if (g_filter && strncmp(name, g_filter, strlen(g_filter))) return;
+    void *dev = NULL;
+    CU(cudaMalloc(&dev, g.size()));
+    CU(cudaMemcpy(dev, g.mem.data(), g.size(), cudaMemcpyHostToDevice));
+    KfWalkCfg c;
+    memset(&c, 0, sizeof c);
+    c.runs_per_pdb = 1u << 20;
+    c.run_capacity = 1u << 21;
+    c.pdb_capacity = 64;
+    c.entry_budget = 64u * 1024u * 1024u;
+    c.table_version = KF_TBL_VER2;
+    c.max_pdbs = 64;
+    KfWalk *w = kf_create(&c);
+    if (!w) { fprintf(stderr, "%s: kf_create failed\n", name); printf("EXIT=3\n"); exit(3); }
+    KfReportHeader h;
+    std::vector<KfPdbEntry> pe(c.pdb_capacity + 4);
+    std::vector<KfMapRun> rn(c.run_capacity + 4);
+    for (int i = 0; i < WARMUP; i++) {
+        kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0, &h, pe.data(), rn.data());
+        kf_ack(w, h.generation);
+    }
+    std::vector<double> whole;
+    for (int i = 0; i < REPS; i++) {
+        CU(cudaDeviceSynchronize());
+        double t0 = now_us();
+        kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0, &h, pe.data(), rn.data());
+        CU(cudaDeviceSynchronize());
+        whole.push_back(now_us() - t0);
+        kf_ack(w, h.generation);
+    }
+    double med = median(whole);
+    printf("  %-34s %10llu entries %8u runs %3u vas  %9.1f us refresh  %9s  %6.1f ns/entry  %s\n",
+           name, (unsigned long long)h.entries_visited, h.run_count, h.pdb_count, med, "-",
+           h.entries_visited ? med * 1000.0 / (double)h.entries_visited : 0.0, note);
+    fflush(stdout);
     kf_destroy(w);
     CU(cudaFree(dev));
 }
@@ -290,15 +341,35 @@ int main(int argc, char **argv)
     /* ══ 2. WHAT DOMINATES — entries, or runs? ══════════════════════════════════════════
      * Same entry count, different run count. If the cost tracks entries the descent
      * dominates; if it tracks runs the coalescer and the diff do. */
-    printf("\n-- what dominates: same ENTRIES, different RUNS --\n");
-    for (uint32_t frag = 0; frag <= 8; frag = frag ? frag * 4 : 2) {
+    printf("\n-- what dominates: same ENTRIES (1872 PTs), different RUNS --\n");
+    {
+        const uint32_t frags[] = { 0, 64, 16, 4, 2 };
+        for (size_t k = 0; k < sizeof frags / sizeof frags[0]; k++) {
+            uint32_t frag = frags[k];
+            Gpga g(64u << 20); Tree t(g);
+            build_4k(g, t, 1872, 512, frag, VB);
+            std::vector<uint64_t> p(1, t.root);
+            char nm[64], note[96];
+            snprintf(nm, sizeof nm, "frag_1872pt_every%u", frag);
+            snprintf(note, sizeof note, frag ? "every %uth PTE breaks the run => ~%u runs"
+                                             : "dense: ONE run for the whole chain",
+                     frag, frag ? 958464u / frag : 1u);
+            run_case(nm, g, p, 1872u * 4096u, note);
+        }
+    }
+
+    /* ══ 2b. THE DELTA — what a refresh costs when NOTHING changed ══════════════════════
+     * ★ Increment 6 refreshes on a timer, and most refreshes find no change. If the cost is
+     * in the descent then an unchanged refresh costs the same as a full one, and the budget
+     * cannot be rescued by "usually nothing moved". That is worth measuring rather than
+     * assuming in either direction. */
+    printf("\n-- an ACKED refresh over unchanged tables (the common case at steady state) --\n");
+    {
         Gpga g(64u << 20); Tree t(g);
-        build_4k(g, t, 1872, 512, frag, VB);
+        build_4k(g, t, 1872, 512, 0, VB);
         std::vector<uint64_t> p(1, t.root);
-        char nm[64], note[96];
-        snprintf(nm, sizeof nm, "working_set_1872pt_frag%u", frag);
-        snprintf(note, sizeof note, frag ? "every %uth PTE breaks the run" : "dense: one run per PT chain", frag);
-        run_case(nm, g, p, 1872u * 4096u, note);
+        run_case_acked("working_set_1872pt_acked_delta", g, p, 1872u * 4096u,
+                       "same tables, ack honoured => empty delta");
     }
 
     /* ══ 3. THE PARALLEL AXIS — one thread per address space ════════════════════════════

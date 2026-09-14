@@ -1,0 +1,102 @@
+START 2026-09-14T19:11:10Z NVIDIA GeForce RTX 3060, 550.107.02
+I2 ok: exactly one dereference site
+I2 ok: exactly one raw pointer cast
+I1 ok: no while loop in kf_walk_one
+I1 ok: no goto, no recursion
+I1 ok: 6 nested loops, each bounded at compile time by KF_MAX_ENT
+I1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields
+seam ok: no VER2 geometry constants left in the kernel
+I3 ok: truncation raised from 5 sites
+INV=0
+jit ok: PTX-only binary
+.target sm_75
+PTX=0
+kf_create: format descriptor REFUSED: table_version
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=64 pdb=32 run=32
+pass format/refuses_unknown_table_version
+kf_create: format descriptor REFUSED: VER3 is a sketch that has never run; define KF_ALLOW_UNTESTED_VER3 to reach it
+pass format/refuses_untested_ver3
+pass format/report_is_self_describing
+pass format/sparse_is_counted
+pass correctness/single_4k
+pass correctness/large_pages_64k_2m_512m
+pass correctness/coalesce_one_run
+pass correctness/coalesce_split_gpga
+pass correctness/coalesce_split_flags
+pass correctness/no_coalesce_across_pagesize
+pass correctness/sparse_and_invalid_skipped
+pass correctness/flags_decoded
+pass correctness/dual_pde_both_halves
+pass correctness/multiple_pdbs
+pass delta/nothing_changed
+pass delta/add
+pass delta/delete
+pass delta/edit_gpga
+pass delta/edit_flags
+pass delta/extend_and_shrink
+pass delta/move_page_table
+pass delta/change_root_pdb
+pass delta/free_subtree
+pass delta/generation_handshake
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+pass legal/shared_page_table
+pass legal/pte_maps_own_page_table
+      [differential] 15 images, 1212 benign leaves agreed exactly, 2 hostile leaves within the rust walker's set
+pass differential/rust_walker
+      [real-driver] 5 images, 7005 benign leaves agreed exactly, 0 hostile leaves within the rust walker's set
+pass differential/real_driver_tables
+pass roundtrip/truncated_is_never_a_delta
+      [benign] 1000 steps over 4 seeds: 1000 closures checked, 554 non-empty deltas, 770 steps changed the mapping set, 239 with BOTH dual-PDE halves live, 0 truncations, max model 392, deepest walk 8748
+pass roundtrip/benign_stream
+      [hostile] 1000 steps over 4 seeds: 1000 closures checked, 551 non-empty deltas, 755 steps changed the mapping set, 177 with BOTH dual-PDE halves live, 0 truncations, max model 303, deepest walk 10380
+pass roundtrip/hostile_stream
+      [race roundtrip] 150 deltas applied, 0 truncations, 574457856 racer writes, deepest 3396, largest model seen 237, final model 221
+pass roundtrip/under_racer
+      [cpu live] 200 walks in 832 ms, 518420480 edits interleaved, deepest 1828 entries, 2318 runs total
+pass race/cpu_live_edits
+      [gpu live] 200 walks in 997 ms, deepest 1828 entries, 2657 runs total
+pass race/gpu_live_edits
+      [cpu racer] 200 walks in 187 ms, 33218560 host writes interleaved, deepest walk 1028 entries, 0 runs total
+pass race/cpu_garbage
+      [gpu racer] 120 walks in 589 ms, deepest walk 1028 entries
+pass race/gpu_garbage
+pass scope/covering_the_change
+pass scope/excluding_a_pdb_carries_it
+pass scope/sentinel_is_full_walk
+pass scope/overflow_degrades_to_full
+pass scope/cannot_make_the_walk_wrong
+
+==== 59 passed, 0 failed ====
+TESTS=0
+---BENCH---
+START kf_bench  gpu="NVIDIA GeForce RTX 3060" sm_86  SMs=28  clock=1.78GHz  driver=12040 runtime=12040
+  warmup=3 reps=11 (median reported)
+
+-- the design's two sizes (gpga_is_one_reserved_object.md:77) --
+  working_set_1872pt_dense               961540 entries        1 runs   1 vas   466080.6 us refresh   466093.2 us device   484.7 ns/entry  1872 PTs, 958464 4K mappings = 3.66 GiB mapped
+  worst_case_12GiB_at_4K                3152900 entries        1 runs   1 vas  1513440.3 us refresh  1513347.7 us device   480.0 ns/entry  6144 PTs, 3145728 4K mappings = 12 GiB mapped
+
+-- what dominates: same ENTRIES, different RUNS --
+  working_set_1872pt_frag0               961540 entries        1 runs   1 vas   462068.5 us refresh   462049.3 us device   480.6 ns/entry  dense: one run per PT chain
+working_set_1872pt_frag2: TRUNCATED/BUDGET (flags=0x7 refuse=0x10) -- this is not a full walk
+EXIT=5
+BENCHRC=5
+EXIT=0
