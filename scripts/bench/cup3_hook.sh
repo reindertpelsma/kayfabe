@@ -111,12 +111,31 @@ $G 'rm -f /tmp/cup3'   # no build ⇒ no file ⇒ no run
 $G 'gcc -O0 -o /tmp/cup3 /tmp/cup3.c -lcuda 2>&1; echo GCC_CUP3_RC=$?'
 $G 'test -x /tmp/cup3' || die "cup3 did not build in the guest"
 
+# ★★★★★ w704 - THE UVM PARAMETER SHIM, because strace CANNOT answer the question.
+# [measured w703] six MAP_EXTERNAL calls return and the SEVENTH never does. What distinguishes
+# it is in its parameters - and for an UNFINISHED call strace prints no argument pointer at all
+# (`ioctl(9, _IOC(_IOC_NONE, 0, 0x21, 0) <unfinished ...>`). Reading the neighbouring completed
+# call's buffer out of /proc/pid/mem gave `base=0 length=1 offset=0xc1d0...`, an RM client
+# handle - the wrong buffer, and the nonsense was the only tell.
+# => capture in the CALLER, before the kernel is entered. Prints >>> before and <<< after, so a
+# call that never returns shows as a >>> with no <<<. That asymmetry IS the measurement.
+UVMSHIM_SRC=${KAYFABE_UVMSHIM_SRC:-$SRC_DIR/uvmparams_shim.c}
+UVMSHIM_OK=no
+if [ -f "$UVMSHIM_SRC" ]; then
+  $G 'cat > /tmp/uvmparams_shim.c' < "$UVMSHIM_SRC"
+  $G 'gcc -shared -fPIC -O0 -o /tmp/uvmparams.so /tmp/uvmparams_shim.c -ldl 2>&1; echo GCC_SHIM_RC=$?'
+  if $G 'test -f /tmp/uvmparams.so'; then UVMSHIM_OK=yes; fi
+fi
+echo "    UVMSHIM_PRESENT=$UVMSHIM_OK"
+
+
 echo ""
 echo "=== launch cup3 DETACHED under its own ${CUP3_TIMEOUT}s timeout ==="
 echo "    ⊘ NOT comparable to the cup2 baseline of 180s — a different program, a longer bound."
 $G "cat > /tmp/run_cup3_detached.sh" <<GUESTEOF
 #!/bin/sh
 rm -f /tmp/cup3.out /tmp/cup3.rc /tmp/cup3.ioctl
+:
 echo "STARTED \$(date -Is)" > /tmp/cup3.started
 # ★★★★★ TRACED FROM THE START, not sampled.
 #   [measured w695g] sampling raced its own budget: `strace -c` took 5s of a 10s timeout and
@@ -125,7 +144,7 @@ echo "STARTED \$(date -Is)" > /tmp/cup3.started
 #   Tracing from exec captures EVERY ioctl with no race, which is what identifies a repeat.
 # ⊘ Falls back to an untraced run if strace is missing, so the rung still grades.
 if command -v strace >/dev/null 2>&1; then
-  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} strace -f -tt -e trace=ioctl -o /tmp/cup3.ioctl stdbuf -oL -eL ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
+  setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} env LD_PRELOAD=/tmp/uvmparams.so strace -f -tt -e trace=ioctl -o /tmp/cup3.ioctl stdbuf -oL -eL ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
        </dev/null >/dev/null 2>&1 &
 else
   setsid sh -c 'cd /tmp && timeout ${CUP3_TIMEOUT} ./cup3 >/tmp/cup3.out 2>&1; echo \$? >/tmp/cup3.rc' \\
@@ -271,6 +290,9 @@ $G 'tail -14 /tmp/cup3.ioctl 2>/dev/null' | cut -c1-170 | sed 's/^/    /'
 # that in the raw client (the owner directive: extend rmladder until IT fails the same way) the
 # PRECEDING calls have to be right, and guessing them means a failure-to-reproduce proves
 # nothing. ⊘ fd 9 is /dev/nvidia-uvm, whose ioctls are raw integers with no size encoding.
+# ★★★★★ THE SEVENTH MAP'S PARAMETERS - the whole question in three numbers.
+echo "=== UVM map parameters (a >>> with no <<< is the call that never returned) ==="
+$G 'grep "^UVMPARAM" /tmp/cup3.out 2>/dev/null | tail -24' | sed 's/^/    /'
 echo "=== the UVM call sequence in order (the port spec) ==="
 $G 'grep -o "ioctl(9, _IOC(_IOC_NONE, 0, 0x[0-9a-f]*" /tmp/cup3.ioctl 2>/dev/null | sed "s/.*0x/0x/" | awk "!seen[\$0]++ || \$0 != prev {print} {prev=\$0}" | head -30 | tr "\n" " "' | sed 's/^/    /'
 echo
