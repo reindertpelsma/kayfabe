@@ -4811,6 +4811,27 @@ impl RegPlane {
             FbWindow::FbAperture => self.bar1_phys(off, write, s),
             FbWindow::InstanceWindow => self.bar2_phys(off, write, s),
         }
+        // ★★★★★ **w719d — THE TRAP PATH IS THE OTHER HALF OF THE TWO-WORLDS CENSUS.**
+        //
+        // ⊘⊘ `[found w719d]` the census had exactly ONE call site, in `window_page_backing` —
+        // the MIRROR/PREMAP path — so every **trapped** guest access (`fb_read`/`fb_write`,
+        // which resolve through this function) was invisible to it. A census blind to a whole
+        // path prints the same `0` as a census over a disjoint workload, which is this
+        // module's own named failure shape, committed by the author who wrote the warning.
+        //
+        // ⚠ Under constraint 1 (zero BAR1/BAR2 traps) the mirror is the dominant path in
+        // production, so the earlier number was probably not WRONG — but "probably, because of
+        // a property of a different subsystem" is not what an instrument the split rests on
+        // should be resting on.
+        .inspect(|phys| {
+            crate::twoworlds::note(
+                match w {
+                    FbWindow::FbAperture => crate::twoworlds::World::Bar1,
+                    FbWindow::Pramin | FbWindow::InstanceWindow => crate::twoworlds::World::Control,
+                },
+                *phys & !(crate::fbwin::FB_PAGE - 1),
+            );
+        })
     }
 
     /// ★★★★ **THE FRAMEBUFFER APERTURE'S TRANSLATION** — one BAR1 offset, one page walk,

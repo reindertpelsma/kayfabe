@@ -34,6 +34,26 @@
 //! not colliding. A hostile guest is a separate question, answered by the fact that a collision
 //! corrupts only itself.
 //!
+//! # ⊘⊘⊘ WHAT THIS COVERS — say it, because the first version did not and was WRONG
+//!
+//! `[found w719d, by a subagent auditing the tests]` This census shipped with **one** call site,
+//! inside `RegPlane::window_page_backing` — the **mirror/premap** path. Every **trapped** guest
+//! access resolves through `RegPlane::window_phys` instead (`fb_read`/`fb_write`), and was
+//! therefore **invisible to it**.
+//!
+//! ⇒ A census blind to a whole path prints the same `0` as a census over a genuinely disjoint
+//! workload. That is this module's own named failure shape, committed in the same file as the
+//! warning against it.
+//!
+//! ★ **Both paths now record.** The two call sites are `window_page_backing` (premap) and
+//! `window_phys` (trap). ⚠ Noting is **idempotent** — it sets a bit — so a page reached through
+//! both paths is counted once, and adding a third call site cannot inflate a count.
+//!
+//! ⊘ Still NOT covered, and named so it is not rediscovered as a surprise: anything that reaches
+//! framebuffer memory without going through either translate — a direct `FbStore` call, or an
+//! engine's own DMA, which by construction we never see. ⇒ This measures **what the two APERTURES
+//! named**, which is exactly the question constraint 15 asks, and nothing wider.
+//!
 //! ⚠ And a zero is worthless without a known-positive: [`note_synthetic_collision`] exists so a
 //! test can prove this instrument CAN report a collision. A census that has never been shown to
 //! fire is not evidence of absence — this tree has paid for that lesson roughly twenty times.

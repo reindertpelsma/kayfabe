@@ -98,12 +98,23 @@ PHASE_FLOOR=17
 # to believe it. Same argument: an empty universe trivially satisfies "everything ran".
 TARGET_UNIVERSE_FLOOR=80
 # ★ The `#[ignore]` allowance. The repo's stated position is that NOTHING is `#[ignore]`d —
-# an ignored test is invisible in a summary and impossible to count — and the source honours
-# it: there is not one `#[ignore]` attribute in the tree. The single ignored entry a run
-# reports is a ```ignore fenced block in `tests/src/teardown.rs`'s module docs, which
-# rustdoc counts as an ignored doc-test. A literal, not an env knob: the whole point is that
-# a second one has to be a diff someone can see.
-IGNORED_ALLOWANCE=1
+# an ignored test is invisible in a summary and impossible to count. A literal, not an env
+# knob: the whole point is that a second one has to be a diff someone can see. The two the
+# allowance covers, both named, because an unnamed allowance is a budget rather than a rule:
+#
+#   1. a ```ignore fenced block in `tests/src/teardown.rs`'s module docs, which rustdoc
+#      counts as an ignored doc-test;
+#   2. ★★★★★ `two_worlds_split::a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads`
+#      (`crates/kayfabe-device/tests/`) — `THE_CONSTRAINTS.md` §18's FALSIFIER. It asserts the
+#      property the two-worlds split must deliver (a framebuffer address reached through BAR1
+#      and through BAR2 is two memories) and it is RED today by construction, because
+#      `plane.rs` serves all three windows out of the one `PlaneMem::fb`. ⊘ It is `#[ignore]`d
+#      rather than runtime-skipped for one reason the usual `skip_slow!` shape cannot give: a
+#      loud skip still reports `ok`, and this test must be able to FAIL on demand
+#      (`cargo test -p kayfabe-device -- --ignored`) so that the day BAR1 moves onto the
+#      reserved object is the day it goes green. ⚠ Delete the attribute — and this entry, and
+#      the bump below — the moment it passes.
+IGNORED_ALLOWANCE=2
 # ★ Every cargo WORKSPACE root in this repository, and therefore every one that a phase
 # above must cover. Discovered by `census_workspaces`; pinned here because "each discovered
 # workspace is handled" is only a real statement if an undiscovered-yet-added one turns the

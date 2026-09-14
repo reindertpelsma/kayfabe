@@ -218,10 +218,12 @@ fn the_three_censuses_are_wired_and_derive_rather_than_hand_list() {
     let ignored = pinned(&src, "IGNORED_ALLOWANCE");
     assert!(
         ignored <= 2,
-        "★ IGNORED_ALLOWANCE is {ignored}. Nothing in this tree carries an `#[ignore]` \
-         attribute — the one entry a run reports is a ```ignore fenced block in a module doc. \
-         Raising this hides a real one, and an ignored test is invisible in a summary and \
-         impossible to count, which is why this repo uses loud runtime skips instead."
+        "★ IGNORED_ALLOWANCE is {ignored}. The allowance covers exactly two entries, and the \
+         runner NAMES both beside the literal: a ```ignore fenced block in a module doc, and \
+         the constraint-18 two-worlds falsifier, which must be able to FAIL on demand and so \
+         cannot be a loud runtime skip. Raising this hides a third, and an ignored test is \
+         invisible in a summary and impossible to count, which is why this repo uses loud \
+         runtime skips for everything else."
     );
 }
 
