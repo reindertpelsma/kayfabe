@@ -73,6 +73,21 @@ pub use kayfabe_arch::MethodState;
 /// ring from turning one MMIO write into 4096 copies before anything can refuse.
 const MAX_ENTRIES_PER_DOORBELL: u32 = 8;
 
+/// ★ How many GPFIFO entries the cap has left behind, and how many doorbells did so. See the
+/// count site for why a non-zero value is a HANG in the guest rather than a deferral.
+static STRANDED_TOTAL: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static STRANDED_EVENTS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// `(events, entries)` the per-doorbell cap has stranded. ⊘ Reported at teardown so a boot can
+/// say whether the cap's stated assumption held for the guest actually under test.
+#[must_use]
+pub fn stranded_census() -> (u64, u64) {
+    (
+        STRANDED_EVENTS.load(core::sync::atomic::Ordering::Relaxed),
+        STRANDED_TOTAL.load(core::sync::atomic::Ordering::Relaxed),
+    )
+}
+
 /// The GPFIFO ring size a CeUtils channel declares, in entries — used only to wrap the
 /// cursor. `[src]` `ogkm-580: ce_utils_sizes.h:27` (`NUM_COPY_BLOCKS`).
 ///
@@ -752,6 +767,43 @@ fn run_submission_timed(
         ranges.push(r);
         run.cursor.next = run.cursor.next.wrapping_add(1) % entries;
         run.entries += 1;
+    }
+    // ★★★★★ **STRANDED ENTRIES — the cap's stated consequence, COUNTED (w705).**
+    //
+    // The comment above says it plainly: *"A guest that advanced `GP_PUT` by more than the cap
+    // leaves the remainder for its next doorbell."* ⊘ That is sound for **CeUtils**, which rings
+    // once per block — and it is an assumption about the GUEST, never checked against the guest
+    // actually under test.
+    //
+    // ⚠ **UVM does not ring again.** `uvm_map_external_allocation` submits every page-table
+    // init and `copy_ptes` push for the range back-to-back, rings ONCE, and then waits in
+    // `uvm_tracker_wait` for every push's semaphore. `[measured w704]` maps of 2 MiB (one or two
+    // entries) return; the first 48 MiB map — ~50 entries in one burst — never returns. If we
+    // take 8 and leave 42, UVM waits forever for releases that will never be written, which is
+    // exactly the observed shape: no fault, no Xid, no refusal, kernel CPU burning in a spin.
+    //
+    // ⊘ This counts; it does not change behaviour. A fix belongs where the cap's PURPOSE is
+    // preserved — bounded work per pass, with a CONTINUATION so the remainder is drained by us
+    // rather than waited on by the guest — and that is not a change to make before the number
+    // says stranding is real.
+    {
+        let stranded = (gp_put + entries - (run.cursor.next % entries)) % entries;
+        if stranded > 0 {
+            STRANDED_TOTAL.fetch_add(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
+            let n = STRANDED_EVENTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
+            if n <= 8 {
+                #[cfg(feature = "std")]
+                eprintln!(
+                    "kayfabe: GPFIFO-STRANDED #{n} chan_ring=0x{:x} gp_put={gp_put} \
+                     cursor={} took={} STRANDED={stranded} ⊘ the cap stopped the walk with \
+                     entries still ahead. CeUtils rings again; UVM does NOT — it waits in \
+                     uvm_tracker_wait for releases that will never be written.",
+                    chan.ring_va,
+                    run.cursor.next % entries,
+                    run.entries,
+                );
+            }
+        }
     }
     // ⊘ A doorbell that brought no readable entry is NOT served. The guest rang for work;
     // if we found none, saying "served" is exactly §14.8's silent no-op.

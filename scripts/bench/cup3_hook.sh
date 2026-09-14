@@ -225,6 +225,21 @@ for i in $(seq 1 "$LIMIT"); do
           # service loop (uvm_gpu_fault_buffer_* / uvm_service_block) or something else
           # entirely. (X) w700 asserted the fault reading from a device banner without ever
           # showing a fault occurs; HOST_DMESG_XID=0 on every cup3 boot argues it does not.
+          # ★★★★★ UVM OWN PENDING-PUSH DUMP - the guest naming what it waits for.
+          # `uvm_debug_prints` is S_IWUSR, so it can be flipped live. Within
+          # UVM_SPIN_LOOP_PRINT_TIMEOUT_SEC (30) a stuck `uvm_tracker_wait` prints
+          # "stuck waiting for Ns" plus every pending push and its GPFIFO index.
+          # ⊘ Presence = the guest IS waiting on pushes we never drained. Absence after 60s =
+          # it is not in a UVM spin at all and the whole reading is wrong.
+          echo "      -- UVM pending pushes (its own dump; needs ~30s of being stuck) --"
+          echo 1 | sudo tee /sys/module/nvidia_uvm/parameters/uvm_debug_prints >/dev/null 2>&1 \
+            || echo "      could not enable uvm_debug_prints"
+          sleep 35
+          sudo dmesg | grep -iE "stuck waiting|pending push|tracker entry|Writing .* bytes of PTEs" \
+            | tail -12 || echo "      (no UVM spin-loop print in dmesg)"
+          # ★★★★★ per-thread, because stime is PROCESS-WIDE and `perf -p` mixes threads.
+          echo "      -- threads (stime is process-wide; the ioctl thread is the R one) --"
+          ps -L -o tid,stat,time -p $P 2>/dev/null | head -6
           echo "      -- which KERNEL function is burning the CPU (settles the fault reading) --"
           if command -v perf >/dev/null 2>&1; then
             sudo timeout 8 perf record -F 499 -g -p $P -o /tmp/cup3.perf >/dev/null 2>&1

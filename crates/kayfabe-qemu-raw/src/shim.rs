@@ -17217,6 +17217,25 @@ impl Regs {
         //
         // ⊘ Printed unconditionally, including when it is zero, because "the books balance" and
         // "nobody checked" are the same silence otherwise.
+        // ★★★★★ **THE CAP'S STATED CONSEQUENCE, MEASURED (w705).** `MAX_ENTRIES_PER_DOORBELL`
+        // is documented as leaving the remainder *"for its next doorbell"* — an assumption about
+        // the GUEST that has never been checked against the guest under test. UVM rings once per
+        // burst and then waits; CeUtils rings again. ⊘ Printed unconditionally, including zero,
+        // because "the cap stranded nothing" and "nobody looked" are the same silence.
+        {
+            let (events, entries) = kayfabe_rt::ceutils::stranded_census();
+            eprintln!(
+                "kayfabe: GPFIFO-STRANDED-CENSUS events={events} entries={entries} \
+                 {}",
+                if events == 0 {
+                    "✔ the per-doorbell cap never stopped a walk with entries still ahead."
+                } else {
+                    "⊘⊘⊘ NOT ZERO — this many GPFIFO entries were left for a doorbell that may \
+                     never come. For UVM it never does: it waits in uvm_tracker_wait for \
+                     releases that will never be written."
+                }
+            );
+        }
         {
             let accounted = doorbells_served + doorbells_refused;
             let residue = doorbells.saturating_sub(accounted);
