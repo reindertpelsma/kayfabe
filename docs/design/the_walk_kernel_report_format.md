@@ -362,3 +362,43 @@ not, `MAP` where new covers and old does not, `REMAP` where both differ, with th
 host side must implement**. It moves languages, not designs. ★ And `cuda/walk`'s round-trip
 harness was deliberately built uncoupled from the shadow (*"a fresh full walk is a second walker
 that is never acked"*), so the same 2000-step closure property tests the **host** diff unchanged.
+
+## ★★★★★ w725b — RUN IDENTITY MUST INCLUDE `KIND`: do not coalesce across a field you do not propagate
+
+`[found w725, from real driver tables]` Replaying a stock 580.159.04 guest's own page tables shows
+**99.7% of leaf entries carry `KIND` and `COMPTAGLINE` values our synthetic builder can never
+produce** — `KIND=9` ×6017, `KIND=6` ×959, `KIND=0` on only **22**.
+
+⊘ Decode is unaffected (VER2's vidmem address is 32:8, below both fields) and that is now checked.
+**The coalescer is affected, and nothing had decided it.** Run identity is *(contiguous VA,
+contiguous GPGA, equal decoded flags)*, and the flags carry **no KIND** — so the real 12 GiB
+address space emits **1 run where KIND-aware identity emits 3**, at two boundaries where the guest
+changed memory kind across contiguous VA *and* contiguous physical address under identical
+permissions.
+
+### ⇒ The decision: KIND joins run identity
+
+★ **A run is the unit we publish as ONE mapping, and one mapping can carry only one kind.** On real
+hardware a PTE's `KIND` tells the GPU how to *interpret* the memory — tiling, compression. A host
+mapping built with the wrong kind makes an engine misread a surface the guest wrote correctly: no
+fault, no refusal, wrong pixels or wrong tensors.
+
+⊘ **Even though we may not propagate `KIND` yet.** The principle is the point:
+
+> **Never coalesce across a field you do not propagate.** Merging destroys the boundary
+> irreversibly; keeping it costs two extra runs. You can always merge later — you cannot unmerge.
+
+⇒ Cost on the real address space: **3 runs instead of 1.** Against a report cap of 64K runs, that
+is nothing, and the report's size tracks distinct mappings rather than memory mapped.
+
+### ⚠ What this does NOT settle
+
+Whether our publish path can *express* a kind on the host mapping. If it cannot, the boundary is
+preserved and unused — which is the correct order: **preserve first, propagate when the publish
+path can carry it.** ⊘ The opposite order silently loses the information before anyone notices it
+was needed.
+
+★ `COMPTAGLINE` is deliberately **not** added: it is a compression-tag *index*, allocated by RM
+per surface, and two runs differing only in comptagline are the same mapping shape. ⚠ Revisit if we
+ever propagate compression state — and note the two `dev_mmu.h` copies in the reference tree
+**disagree about its width** (53:36 vs 55:36), which is its own reason not to key anything on it.
