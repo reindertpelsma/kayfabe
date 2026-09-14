@@ -629,10 +629,21 @@ memory means what the hardware says it means, where on substituted system memory
    delete fake fb, join, arena, demand-fill mirror, host parsing. ⊘ If deletion rides along, the
    tree is broken across a long stretch with no working intermediate and no way to bisect which
    half broke the raw client.
-2. **"No populate on fault" must be proved, not assumed.** `TRAP_FILLS=0` is measured **with**
-   demand-fill still present as a backstop; removing it needs the premap complete **by
-   construction**. ⇒ Cheap test: make the trap path **refuse by name**, boot, and see whether the
-   refusal ever fires.
+2. ⊘ **CORRECTED — "no populate on fault" is FORCED BY THE MECHANISM, not a property to achieve.**
+   **Owner, 2026-09-14:** *"we already have it for vidmem in channels (we can't even handle a
+   fault/trap there at all), so I think bar1/bar2 follows from the same constraint."* ★ Correct.
+   When an engine reads video memory through a GPU VA there **is no trap**: the GPU finds a valid
+   host PTE or it faults with an Xid. ⇒ Every channel mapping must **already** be complete before
+   the engine runs — the C's *"fault-safe: a mapping is always backed before the engine that uses
+   it runs"*. A device-view memslot is the same shape: a guest CPU access goes **straight to
+   hardware with no VM exit**, so there is no trap to service.
+
+   ⇒ The open question is therefore **narrower than "is it possible"**: *is our BAR1/BAR2
+   publication actually **complete**?* Same mechanism as channels, different input — channel
+   mappings come from the guest's GPU VA spaces, BAR1/BAR2 from their own page tables. The
+   demand-fill mirror exists because publication historically was **not** complete; `TRAP_FILLS=0`
+   says it now is. ⇒ Cheap test, unchanged: make the trap path **refuse by name**, boot, and see
+   whether the refusal ever fires — it now proves **coverage**, not feasibility.
 3. ★★★ **HOST BAR1 IS THE BINDING LIMIT, AND IT IS SMALL.** `[measured]` a **256 MiB CPU view
    refused with `NoMemory` while a 6144 MiB reservation succeeded in the same process.** Host BAR1
    on a GA106 is **256 MiB total, shared with the host driver**; our advertised guest BAR1 is
