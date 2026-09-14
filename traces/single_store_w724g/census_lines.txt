@@ -1,0 +1,8 @@
+### e36ctl
+FB-TRAP KAYFABE_FB_TRAP=serve ⇒ a trapped BAR1/BAR2 access is TRANSLATED AND SERVED out of the framebuffer store (the shipped backstop)
+FB-TRAP AT END OF RUN: arm=serve FB_TRAP_REFUSALS=0 ⇒ the CONTROL arm — the trap path served normally and this number is 0 by construction, not by measurement
+BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=256 MiB headroom=16 MiB ⇒ ⊘⊘ DOES NOT FIT — 256 MiB advertised + 16 MiB headroom > 256 MiB host. ★ §22(b): we CHOOSE the left-hand side. Advertising 128 MiB leaves 128 MiB of headroom on this same board, and a 128-MiB-BAR1 GA106 is a real hardware configuration — a different truthful board, not a lie.
+### e36ref
+FB-TRAP KAYFABE_FB_TRAP=refuse ⇒ a trapped BAR1/BAR2 access is REFUSED BY NAME. ⚠ Any refusal below means publication is INCOMPLETE and increment 7's deletion of the demand-fill mirror is NOT licensed.
+FB-TRAP AT END OF RUN: arm=refuse FB_TRAP_REFUSALS=0 ⇒ ★★★ THE TRAP PATH WAS NEVER REACHED. Publication covered every BAR1/BAR2 access this boot made, so `zero in practice` becomes `unreachable` and increment 7's deletion is licensed.
+BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=256 MiB headroom=16 MiB ⇒ ⊘⊘ DOES NOT FIT — 256 MiB advertised + 16 MiB headroom > 256 MiB host. ★ §22(b): we CHOOSE the left-hand side. Advertising 128 MiB leaves 128 MiB of headroom on this same board, and a 128-MiB-BAR1 GA106 is a real hardware configuration — a different truthful board, not a lie.
