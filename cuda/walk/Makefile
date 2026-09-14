@@ -25,7 +25,7 @@ check-invariants:
 	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -q 'while'; then \
 	   echo "I1 FAIL: a while loop on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no while loop in kf_walk_one"
-	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -qE '\bgoto\b|kf_walk_one\('; then \
+	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | tail -n +2 | grep -qE '\bgoto\b|kf_walk_one\('; then \
 	   echo "I1 FAIL: a goto or a recursive call on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no goto, no recursion"
 	@for k in KF_PD3_N KF_PD2_N KF_PD1_N KF_PD0_N KF_PTB_N; do \

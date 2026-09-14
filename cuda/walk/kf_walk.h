@@ -50,6 +50,15 @@ extern "C" {
 #define KFWR_R_BAD_SCOPE     (1u << 7)  /* a hint we could not use                 */
 #define KFWR_R_PDB_UNSORTED  (1u << 8)  /* caller's pdb list was not ascending     */
 #define KFWR_R_DELTA_CAP     (1u << 9)  /* the delta itself overflowed its slice   */
+/* ★★★ A leaf whose TARGET is not aligned to its own page size. The VER2 encoding
+ * carries a 4 KiB-granular address field at EVERY leaf level, so a hostile guest
+ * can spell a 512 MiB page whose physical base is 4 KiB-aligned and nothing else.
+ * What the GMMU does with the low bits is not documented in ogkm, so the honest
+ * answer is a refusal by name rather than a mapping we cannot stand behind.
+ * ⊘ Found by the test suite, not by reading the format: the format doc's
+ * validation rule "every len non-zero and page-aligned" has no counterpart for
+ * gpga, and the encoding is why it cannot have one. */
+#define KFWR_R_MISALIGNED_LEAF (1u << 10)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)

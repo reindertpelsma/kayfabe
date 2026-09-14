@@ -146,6 +146,19 @@ __device__ __forceinline__ uint32_t kf_leaf_flags(uint64_t raw, uint32_t ps)
     return f | ((ps & KFWR_RF_PS_MASK) << KFWR_RF_PS_SHIFT);
 }
 
+/* The page size a run's flags name, in bytes. ⊘ Derived from the flags rather
+ * than from `len`, because a carried-forward run's length is a MULTIPLE of the
+ * page size and not itself a power of two. */
+__device__ __forceinline__ uint64_t kf_ps_bytes(uint32_t flags)
+{
+    switch ((flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK) {
+    case KFWR_PS_4K:  return 4096ull;
+    case KFWR_PS_64K: return 65536ull;
+    case KFWR_PS_2M:  return 1ull << 21;
+    default:          return 1ull << 29;
+    }
+}
+
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
 struct KfCtx {
     KfWin w;
@@ -204,10 +217,16 @@ __device__ __forceinline__ void kf_flush(KfCtx &c)
     c.have = 0;
 }
 
-/* THE coalescer: consecutive VA, consecutive GPGA, identical flags ⇒ one run. */
+/* THE coalescer: consecutive VA, consecutive GPGA, identical flags ⇒ one run.
+ *
+ * ★ It also holds the one semantic refusal in the walk: a leaf whose target is
+ * not aligned to its own page size. See KFWR_R_MISALIGNED_LEAF. A 4 KiB leaf can
+ * never trip it (the field's granularity IS 4 KiB), so this costs nothing on the
+ * ordinary path and closes the whole class at one site. */
 __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, uint64_t len, uint32_t flags)
 {
     if (c.stop) return;
+    if (gpga & (kf_ps_bytes(flags) - 1ull)) { c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return; }
     if (c.have && c.run.flags == flags &&
         c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
         c.run.len += len;
@@ -526,6 +545,16 @@ __global__ void kf_diff_kernel(KfArgs a)
         else if (d->tbl_pdb[prv][ip] > a.pdbs[ic]) take = 1;
         else take = 0;
 
+        /* ⊘ The PdbEntry capacity is checked BEFORE this address space's runs are
+         * written, never after. Emitting runs whose pdb_index has no PdbEntry
+         * produces a report that fails the format doc's own property 3 — which is
+         * exactly how this was found. */
+        if (np_out >= d->pdb_capacity) {
+            pdb_trunc = 1u;
+            d->refuse_mask |= KFWR_R_PDB_CAP;
+            d->refusals++;
+            break;
+        }
         uint64_t pdb = (take == -1) ? d->tbl_pdb[prv][ip] : a.pdbs[ic];
         uint32_t first = o.n;
         uint32_t vflags = 0u;
@@ -575,21 +604,15 @@ __global__ void kf_diff_kernel(KfArgs a)
             ip++; ic++;
         }
 
-        if (np_out < d->pdb_capacity) {
-            KfPdbEntry e;
-            e.pdb = pdb;
-            e.first_run = first;
-            e.run_count = o.n - first;
-            e.vas_flags = vflags;
-            e.reserved = 0u;
-            e.reserved2 = 0ull;
-            a.rpdb[np_out] = e;
-            np_out++;
-        } else if (!pdb_trunc) {
-            pdb_trunc = 1u;
-            d->refuse_mask |= KFWR_R_PDB_CAP;
-            d->refusals++;
-        }
+        KfPdbEntry e;
+        e.pdb = pdb;
+        e.first_run = first;
+        e.run_count = o.n - first;
+        e.vas_flags = vflags;
+        e.reserved = 0u;
+        e.reserved2 = 0ull;
+        a.rpdb[np_out] = e;
+        np_out++;
     }
 
     d->generation += 1ull;

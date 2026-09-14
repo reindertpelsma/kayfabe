@@ -190,10 +190,14 @@ static void t_large_pages(void)
     t.map512m(VBASE + (1ull << 29), 0x20000000ull);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
+    /* ⚠ A leaf is reported at ITS OWN LEVEL'S base VA, not at the VA the builder
+     * was handed: a 512 MiB page lives in a PD1 slot, so its VA is 512 MiB
+     * aligned however the caller spelled it. */
+    const uint64_t va512 = (VBASE + (1ull << 29)) & ~((1ull << 29) - 1ull);
     expect(f, {
         {VBASE,                    0x400000ull,   64ull << 10,  F64K,  KFWR_OP_MAP},
         {VBASE + (2ull << 21),     0x600000ull,   2ull << 20,   F2M,   KFWR_OP_MAP},
-        {VBASE + (1ull << 29),     0x20000000ull, 512ull << 20, F512M, KFWR_OP_MAP},
+        {va512,                    0x20000000ull, 512ull << 20, F512M, KFWR_OP_MAP},
     });
 }
 
@@ -642,9 +646,14 @@ static void t_hostile_all_ones(void)
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     hostile_invariants(f);
-    /* ~0 at PD1 has VALID set, so it decodes as a 512 MiB leaf pointing at a
-     * 25-bit-masked address. That is a MAPPING, not a refusal — the format says
-     * so and the kernel must say so too. */
+    /* ~0 at PD1 and PD0 has VALID set, so each decodes as a large LEAF whose
+     * address field is 4 KiB-granular and therefore NOT aligned to its own page
+     * size. That is the one case the encoding permits and the hardware does not
+     * define — refused by name, never reported as a mapping. */
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_MISALIGNED_LEAF,
+            "a large leaf with a 4 KiB-granular target must be refused by name");
+    /* the 4 KiB leaf at ~0 IS well formed and must survive, beside the real one */
+    CHECK_EQ(f.hdr.run_count, 2);
     if (g_fails_here) dump(f);
 }
 
@@ -678,6 +687,10 @@ static void t_hostile_type_confusion(void)
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     hostile_invariants(f);
+    /* a page of PTEs read as PD1 entries decodes as a row of 512 MiB leaves whose
+     * targets are 4 KiB-granular: every one refused, none reported. */
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_MISALIGNED_LEAF, "type confusion must refuse, not map");
+    CHECK_EQ(f.hdr.run_count, 0);
     if (g_fails_here) dump(f);
 }
 
@@ -808,6 +821,11 @@ static void t_hostile_pdb_capacity(void)
     CHECK(f.hdr.flags & KFWR_HF_TRUNCATED);
     CHECK(f.hdr.refuse_mask & KFWR_R_PDB_CAP);
     CHECK_EQ(f.hdr.pdb_count, 2);
+    /* ⊘ AND NO RUNS BEYOND THEM. A run whose pdb_index has no PdbEntry is a
+     * report that fails the format doc's own property 3 — which is how this bug
+     * was found, by the validator rather than by an expectation. */
+    CHECK_EQ(f.hdr.run_count, 2);
+    for (uint32_t i = 0; i < f.hdr.run_count; i++) CHECK(f.rn[i].pdb_index < f.hdr.pdb_count);
     if (g_fails_here) dump(f);
 }
 
@@ -864,7 +882,8 @@ __global__ void kf_mut_kernel(uint8_t *base, uint64_t lo, uint64_t span, uint64_
 }
 
 static const uint32_t RACE_ALLOWED =
-    KFWR_R_OOB | KFWR_R_UNALIGNED | KFWR_R_FOREIGN_AP | KFWR_R_RUN_CAP | KFWR_R_BUDGET;
+    KFWR_R_OOB | KFWR_R_UNALIGNED | KFWR_R_FOREIGN_AP | KFWR_R_RUN_CAP | KFWR_R_BUDGET |
+    KFWR_R_MISALIGNED_LEAF;
 
 static void race_check(Fix &f, int round)
 {
@@ -890,12 +909,20 @@ static void build_race_tree(Tree &t)
 static void t_race_cpu_mutator(void)
 {
     KfWalkCfg c = cfg_default();
-    c.entry_budget = 2000000u;
+    /* ⊘ Zero-copy host memory: every entry read crosses PCIe, so the budget here
+     * is a WALL-CLOCK bound, not a semantic one. Large enough that a clean tree
+     * (≈1800 entries) completes untruncated; small enough that a walk over
+     * random garbage cannot run for minutes. */
+    c.entry_budget = 20000u;
     Fix f(8u << 20, c, /*mapped=*/true);
     Tree t(f.g);
     build_race_tree(t);
     f.upload();
-    uint64_t lo = 4096ull, span = f.g.bump - 4096ull - 8ull;
+    /* ⊘ The ROOT page is deliberately left out of the mutated window. Scribbling
+     * it makes every walk bail at the first entry, and the test then measures
+     * nothing while still passing — the `deepest` assertion below is what makes
+     * that state detectable. */
+    uint64_t lo = 8192ull, span = f.g.bump - 8192ull - 8ull;
 
     std::atomic<bool> stop(false);
     std::atomic<unsigned long long> writes(0);
@@ -913,18 +940,23 @@ static void t_race_cpu_mutator(void)
     });
 
     auto t0 = std::chrono::steady_clock::now();
+    unsigned long long deepest = 0, total_runs = 0;
     for (int r = 0; r < 200; r++) {
         CHECK_EQ(f.refresh({t.root}), 0);
         race_check(f, r);
+        if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
+        total_runs += f.hdr.run_count;
         if (g_fails_here > 8) break;
     }
     auto t1 = std::chrono::steady_clock::now();
     stop.store(true);
     racer.join();
     double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    printf("      [cpu racer] 200 walks in %.0f ms, %llu host writes interleaved\n",
-           ms, (unsigned long long)writes.load());
+    printf("      [cpu racer] 200 walks in %.0f ms, %llu host writes interleaved, "
+           "deepest walk %llu entries, %llu runs total\n",
+           ms, (unsigned long long)writes.load(), deepest, total_runs);
     CHECK_M(ms < 120000.0, "the walk must terminate, not merely be bounded in theory");
+    CHECK_M(deepest > 500, "the racer never let a walk get anywhere: the test would be vacuous");
 }
 
 static void t_race_gpu_mutator(void)
@@ -935,11 +967,12 @@ static void t_race_gpu_mutator(void)
     Tree t(f.g);
     build_race_tree(t);
     f.upload();
-    uint64_t lo = 4096ull, span = f.g.bump - 4096ull - 8ull;
+    uint64_t lo = 8192ull, span = f.g.bump - 8192ull - 8ull;
 
     cudaStream_t s2;
     CUDA_OK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
     auto t0 = std::chrono::steady_clock::now();
+    unsigned long long deepest = 0;
     for (int r = 0; r < 120; r++) {
         /* varied timing: the mutator's length changes every round, so the walk
          * and the writes overlap differently each time. */
@@ -947,14 +980,16 @@ static void t_race_gpu_mutator(void)
         kf_mut_kernel<<<8, 64, 0, s2>>>((uint8_t *)f.dev, lo, span, 0xABCDEF00ull + r, iters);
         CHECK_EQ(f.refresh({t.root}), 0);
         race_check(f, r);
+        if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
         if (g_fails_here > 8) break;
     }
     auto t1 = std::chrono::steady_clock::now();
+    CHECK_M(deepest > 500, "the racer never let a walk get anywhere: the test would be vacuous");
     CUDA_OK(cudaStreamSynchronize(s2));
     CUDA_OK(cudaStreamDestroy(s2));
     CUDA_OK(cudaGetLastError());
-    printf("      [gpu racer] 120 walks in %.0f ms\n",
-           std::chrono::duration<double, std::milli>(t1 - t0).count());
+    printf("      [gpu racer] 120 walks in %.0f ms, deepest walk %llu entries\n",
+           std::chrono::duration<double, std::milli>(t1 - t0).count(), deepest);
 }
 
 /* ══ SCOPE HINTS ═════════════════════════════════════════════════════════════ */
