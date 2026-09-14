@@ -32,9 +32,17 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   make check-ptx;       rc_ptx=\$?
   if [ \$rc_build -ne 0 ]; then echo BUILD_FAILED; echo \"EXIT=\$rc_build\"; exit 0; fi
   timeout 900 ./kf_tests; rc=\$?
-  nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1 || echo GPU_UNRESPONSIVE
-  dmesg 2>/dev/null | grep -i xid | tail -5
-  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx\"
+  make check-negative; rc_neg=\$?
+  # The Xid instrument, NAMED rather than assumed: dmesg is not readable inside a
+  # vast CUDA container, so an empty grep over it is evidence of nothing.
+  if dmesg > /tmp/dm.txt 2>/dev/null; then
+    echo DMESG=readable; grep -i xid /tmp/dm.txt | tail -5
+  else
+    echo DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
+  fi
+  nvidia-smi -L >/dev/null 2>&1 && echo SMI=responsive || echo SMI=UNRESPONSIVE
+  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg\"
+  if [ \$rc -eq 0 ] && [ \$rc_neg -ne 0 ]; then rc=9; fi
   echo \"EXIT=\$rc\"
 ' > $REMOTE/out.log 2>&1 &" || exit 1
 

@@ -24,7 +24,11 @@
  *     inside kf_load64 immediately after the compare. Table-extent and alignment
  *     are additionally checked once per descent by kf_table_ok, so a table that
  *     merely STRADDLES the end of the buffer is refused before its first entry.
- *     `make check-invariants` greps for both facts.
+ *     `make check-invariants` greps for both facts, and `make check-negative`
+ *     is the KNOWN-POSITIVE: it rebuilds with -DKF_BREAK_BOUNDS, which deletes
+ *     the two checks and nothing else, and REQUIRES the bounds cases to fail.
+ *     A green suite over a check that has never been seen to fire is the
+ *     failure mode this repository has paid for most often.
  *
  * I3. OUTPUT IS CAPPED AND TRUNCATION IS LOUD.
  *     Three independent caps — runs per address space, entry budget per walk, runs
@@ -181,9 +185,11 @@ struct KfCtx {
 /* I2: the bounds check, and the single dereference it guards. */
 __device__ __forceinline__ bool kf_load64(KfCtx &c, uint64_t off, uint64_t *v)
 {
+#ifndef KF_BREAK_BOUNDS
     if (off > c.w.len || 8ull > c.w.len - off) {
         c.refuse |= KFWR_R_OOB; c.refusals++; return false;
     }
+#endif
     *v = KF_GPGA_DEREF(c.w, off);
     return true;
 }
@@ -192,8 +198,10 @@ __device__ __forceinline__ bool kf_load64(KfCtx &c, uint64_t off, uint64_t *v)
  * `bytes` and `align` are powers of two chosen by the FORMAT, never by the guest. */
 __device__ __forceinline__ bool kf_table_ok(KfCtx &c, uint64_t phys, uint64_t bytes, uint64_t align)
 {
+#ifndef KF_BREAK_BOUNDS
     if (phys & (align - 1ull)) { c.refuse |= KFWR_R_UNALIGNED; c.refusals++; return false; }
     if (phys > c.w.len || bytes > c.w.len - phys) { c.refuse |= KFWR_R_OOB; c.refusals++; return false; }
+#endif
     return true;
 }
 

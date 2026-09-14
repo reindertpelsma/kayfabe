@@ -37,6 +37,25 @@ check-invariants:
 	 if [ "$$n" -lt 3 ]; then echo "I3 FAIL: truncation set from fewer than 3 sites"; exit 1; fi; \
 	 echo "I3 ok: truncation raised from $$n sites"
 
+# ═══ THE KNOWN-POSITIVE ══════════════════════════════════════════════════════
+# -DKF_BREAK_BOUNDS deletes the two bounds checks and NOTHING else. The bounds
+# cases must then fail. A check nobody has ever seen fire is not a check.
+kf_tests_broken: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_BOUNDS -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-negative: kf_tests_broken kf_tests
+	@./kf_tests_broken bounds_window_respected > /tmp/kf_neg1.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: bounds_window_respected PASSED with the bounds check removed"; \
+	   cat /tmp/kf_neg1.txt; exit 1; fi; \
+	 echo "neg ok: bounds_window_respected fails without the check (rc=$$rc)"
+	@./kf_tests_broken pointer_past_end > /tmp/kf_neg2.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: pointer_past_end PASSED with the bounds check removed"; \
+	   cat /tmp/kf_neg2.txt; exit 1; fi; \
+	 echo "neg ok: pointer_past_end fails without the check (rc=$$rc)"
+	@./kf_tests correctness/single_4k > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL case does not pass on the unbroken binary"; exit 1; fi; \
+	 echo "neg ok: the control case still passes on the unbroken binary"
+
 # No SASS at all ⇒ the driver JITs from PTX at load time.
 check-ptx: kf_tests
 	@if cuobjdump -sass kf_tests 2>/dev/null | grep -q 'code for sm_'; then \
@@ -44,9 +63,9 @@ check-ptx: kf_tests
 	 echo "jit ok: PTX-only binary"
 	@cuobjdump -ptx kf_tests | grep -m1 '.target' || true
 
-check: check-invariants kf_tests check-ptx
+check: check-invariants kf_tests check-ptx check-negative
 
 clean:
-	rm -f kf_tests
+	rm -f kf_tests kf_tests_broken
 
-.PHONY: all check check-invariants check-ptx clean
+.PHONY: all check check-invariants check-ptx check-negative clean
