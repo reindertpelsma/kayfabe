@@ -276,3 +276,49 @@ count was **zero**, and it was reported as a goal-2 regression twice — the sec
 project decision. ⇒ **Before reporting any constraint as violated, open the line that CHANGES the
 counter.** A name and a docstring are not substitutes, and this class has now cost w607, w627,
 w695l and w696.
+
+## 18 — GUEST VIDMEM IS VIDMEM: no silent sysmem substitution
+
+> Owner, 2026-09-14: *"if the guest says this is in vidmem then it must be vidmem (our vidmem
+> reserved RM object)"* … *"no secret DMA mappings as vidmem for now"*.
+
+**The rule.** When the guest's own page tables place an allocation in video memory, the bytes live
+in the **reserved device-local RM object**. We never satisfy a guest vidmem allocation with host
+system memory that is DMA-mapped so the engine can reach it.
+
+★ **Why this is a constraint and not an optimisation.** A DMA-mapped sysmem page presented as
+vidmem is **correct in value and wrong in residence**. The guest computes the right answer, every
+data-correctness test passes, and every engine access is a **PCIe round trip** instead of a local
+vidmem access. ⇒ The defect is invisible to exactly the tests that would normally catch a backing
+bug, which is why it survived: `--ce-client` passes either way.
+
+⊘ **The one future exception, named so it is not confused with this.** **UVM managed memory** is
+the single legitimate case for sysmem behind a vidmem-looking address: there the driver itself
+migrates pages between host and device, and both residences are correct *by design, with the
+driver's knowledge*. **We do not support UVM managed memory.** ⇒ Today there is **no** sanctioned
+case, and nothing currently in the tree is one — what exists is not managed memory and was never
+intended as it.
+
+### ⚠ Measured state 2026-09-14 (w719): VIOLATED, and this is constraint 15's other half
+
+`FbPageBacking::Joined` leaves are `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over a **memfd** ⇒ host
+sysmem. `plane.rs:2543-2558` routes `FbWindow::FbAperture` (BAR1) through the same
+`s.fb.page_backing(phys, …)` as PRAMIN and BAR2, so **every guest vidmem page is host RAM**.
+
+★ The fix is the same fix as 15 and 16, and the code for it already exists on both sides:
+`HostRmBackend::export_device_view` arms a node over an `alloc_vidmem` object (proved by
+`rmladder --bar1-crossing`), and `QemuVmm::install_device_window` places it. What is missing is
+named in that function's own doc comment: *"the mirror that walks the guest's BAR1 page table and
+drives this verb is the remaining work."*
+
+⊘ **`export_backing`'s `NotExportableAsMemory` refusal is not evidence against this.** It refuses
+`ExportSource::HostDeviceMemory` because a memfd can be a KVM memslot and device memory cannot —
+a constraint that only binds under the memslot-per-page design **constraint 16 retires**. Under 16
+the runtime path is a translate + `mmap` into a pre-reserved VMM range, which device memory serves
+fine.
+
+### The falsifier this needs
+
+⚠ **Do not grade this on data correctness.** A coherent shared-sysmem BAR1 returns the right
+bytes, so `--ce-client` is green before and after. The test must measure **residence** —
+bandwidth, or the aperture the engine actually reached — or it cannot go red today.
