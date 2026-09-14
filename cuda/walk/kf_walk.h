@@ -59,6 +59,11 @@ extern "C" {
  * validation rule "every len non-zero and page-aligned" has no counterpart for
  * gpga, and the encoding is why it cannot have one. */
 #define KFWR_R_MISALIGNED_LEAF (1u << 10)
+/* The format descriptor the host built was refused: an unknown `abi_version`, an
+ * unknown `table_version`, or geometry the kernel's compile-time bounds cannot
+ * hold. ⚠ A Rust/PTX skew must fail LOUDLY at launch rather than decode garbage
+ * field offsets and look like a page-table bug (THE_CONSTRAINTS.md §21). */
+#define KFWR_R_BAD_FORMAT      (1u << 11)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)
@@ -101,7 +106,15 @@ typedef struct KfReportHeader {
     uint64_t entries_visited;
     uint32_t refusals;
     uint32_t refuse_mask;   /* the doc's `reserved`, given a job (deviation 1) */
-    uint64_t pad;           /* to the doc's stated 64 bytes                    */
+    /* Slots the guest DECLARED empty, as opposed to never having written them.
+     * Counted because the two are different facts and the encoding that
+     * distinguishes them is the one thing a field descriptor cannot carry. */
+    uint32_t sparse_slots;
+    /* ★ The report is SELF-DESCRIBING about page sizes: code -> log2(bytes).
+     * ⇒ The host's parser needs no format-version knowledge at all, which is what
+     * the format doc asks for ("the format-version knowledge stays in the kernel
+     * and does not leak into the host's parser"). */
+    uint8_t  ps_log2[4];
 } KfReportHeader;
 
 typedef struct KfPdbEntry {
@@ -130,6 +143,15 @@ typedef struct KfScope {
     uint64_t va_len;
 } KfScope;
 
+/* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
+ * fail LOUDLY at launch rather than decode garbage field offsets and look like a
+ * page-table bug (THE_CONSTRAINTS.md §21). */
+#define KF_ABI_VERSION 1u
+
+#define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
+#define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
+                          * unless KF_ALLOW_UNTESTED_VER3 is defined.           */
+
 #define KF_MAX_PDB   64u   /* address spaces the kernel's table can hold */
 #define KF_MAX_SCOPE 256u
 
@@ -138,6 +160,10 @@ typedef struct KfWalkCfg {
     uint32_t run_capacity;  /* report run array capacity                     */
     uint32_t pdb_capacity;  /* report PdbEntry capacity                      */
     uint32_t entry_budget;  /* entries one VAS's walk may examine            */
+    /* KF_TBL_VER2 (0 means VER2) or KF_TBL_VER3. ⚠ VER3 is a SKETCH that has
+     * never run and `kf_create` refuses it unless KF_ALLOW_UNTESTED_VER3 is
+     * defined. See kf_walk.cu's format-seam block. */
+    uint32_t table_version;
     /* Address spaces the kernel's OWN table can hold. Distinct from
      * pdb_capacity so that "the report ran out of PdbEntry slots" is testable
      * without also shrinking the table. <= KF_MAX_PDB; 0 means KF_MAX_PDB. */

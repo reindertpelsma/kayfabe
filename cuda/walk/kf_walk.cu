@@ -49,34 +49,94 @@
 
 #include "kf_walk.h"
 
-/* ── VER2 geometry (ga10x.rs, verbatim) ──────────────────────────────────────
- *  PD3      bits 48:47   4 entries × 8 B  =   32 B
- *  PD2      bits 46:38 512 entries × 8 B  = 4096 B
- *  PD1      bits 37:29 512 entries × 8 B  = 4096 B   — and a 512 MiB LEAF on GA10x
- *  PD0      bits 28:21 256 entries × 16 B = 4096 B   — and a 2 MiB LEAF
- *  PT_BIG   bits 20:16  32 entries × 8 B  =  256 B   — 64 KiB leaves
- *  PT_SMALL bits 20:12 512 entries × 8 B  = 4096 B   — 4 KiB leaves
+/* ═══ THE FORMAT SEAM — the layout is DATA, the algorithm is code ═════════════
+ *
+ * `THE_CONSTRAINTS.md` §21: *"our ptx must be Turing+ compatible … you need to
+ * support both the turing/ada page tables as blackwell table, in same kayfabe …
+ * I would avoid shipping two cuda program"*, and *"that kind of config you
+ * already derived from ABI on host … I would call this setup data alongside
+ * table version."*
+ *
+ * ⇒ **No bit position lives below this block.** Everything the decode needs —
+ * level geometry, entry widths, aperture nibbles, address fields and their
+ * shifts, the permission bits — is a field of [KfFormat], built on the host and
+ * handed to the kernel once. A new die is a new descriptor. A new FORMAT is a
+ * descriptor plus one arm in the two switches below.
+ *
+ * ★★★ AND I1 IS UNHARMED. The nesting is still literal and the trip counts are
+ * still compile-time: every loop reads `i < KF_MAX_ENT && i < <descriptor>`.
+ * A descriptor can only make a loop SHORTER. It cannot make one unbounded and it
+ * cannot add a level — the nesting depth is a property of the source text, not of
+ * the data. That is what makes "format as data" safe here at all.
  */
-#define KF_PD3_N 4u
-#define KF_PD2_N 512u
-#define KF_PD1_N 512u
-#define KF_PD0_N 256u
-#define KF_PTB_N 32u
-#define KF_PTS_N 512u
 
-#define KF_PD3_BYTES (KF_PD3_N * 8u)
-#define KF_PD2_BYTES (KF_PD2_N * 8u)
-#define KF_PD1_BYTES (KF_PD1_N * 8u)
-#define KF_PD0_BYTES (KF_PD0_N * 16u)
-#define KF_PTB_BYTES (KF_PTB_N * 8u)
-#define KF_PTS_BYTES (KF_PTS_N * 8u)
+/* Nesting slots for page DIRECTORIES. Five, because VER3 has one more directory
+ * level than VER2 (PD4[56] on top of PD3[55:47]); a format with fewer marks the
+ * leading slots inactive and they cost one pass-through iteration each. */
+#define KF_DIRS 5u
+/* The compile-time cap on any level's fan-out. This is the number that keeps I1
+ * structural: no descriptor can make a loop run longer than this. */
+#define KF_MAX_ENT 512u
+#define KF_PS_NONE 0xFFu
 
-#define KF_SH_PD3 47u
-#define KF_SH_PD2 38u
-#define KF_SH_PD1 29u
-#define KF_SH_PD0 21u
-#define KF_SH_PTB 16u
-#define KF_SH_PTS 12u
+/* value = ((raw >> lo) & ((1<<bits)-1)) << shift */
+struct KfField { uint8_t lo, bits, shift, pad; };
+
+struct KfDir {
+    uint8_t  active;        /* 0 ⇒ a pass-through: this format is shallower  */
+    uint8_t  va_lo;         /* first VA bit this level indexes               */
+    uint8_t  entry_bytes;   /* 8, or 16 for a dual entry                     */
+    uint8_t  leaf_ps;       /* page-size CODE a VALID entry here means, or KF_PS_NONE */
+    uint16_t entries;       /* 1 << (va_hi - va_lo + 1); <= KF_MAX_ENT       */
+    uint16_t pad;
+};
+
+struct KfFormat {
+    uint32_t abi_version;
+    uint32_t table_version;
+
+    /* ── geometry ── */
+    KfDir    dir[KF_DIRS];      /* dir[KF_DIRS-1] is the DUAL level in both formats */
+    uint8_t  big_va_lo, small_va_lo;
+    uint8_t  big_entry_bytes, small_entry_bytes;
+    uint16_t big_entries, small_entries;
+    uint8_t  big_ps, small_ps;
+    uint32_t root_align;        /* a page-directory base is a PAGE address */
+    uint8_t  first_dir;         /* the first active slot: where the root table sits */
+    uint8_t  pad0[3];
+
+    /* ── entry fields ── */
+    uint8_t  valid_bit;
+    uint8_t  ap_lo, ap_bits;    /* the aperture nibble, in whichever word holds it */
+    uint8_t  pde_ap_invalid;    /* the PDE aperture VALUE meaning "no sub-level"   */
+    uint8_t  pte_ap_map[4];     /* raw nibble -> KFWR_AP_*, for a LEAF             */
+    uint8_t  pde_ap_map[4];     /* raw nibble -> KFWR_AP_*, for a DIRECTORY        */
+    uint8_t  addr_sel[4];       /* raw nibble -> 0 = the local spec, 1 = the sys spec */
+    KfField  addr_local, addr_sys;          /* a normal PDE/PTE target, and the
+                                             * dual entry's SMALL half — the same
+                                             * spec in BOTH formats, checked */
+    KfField  big_addr_local, big_addr_sys;  /* the dual entry's BIG half (shift 8) */
+
+    /* ── permissions of a VALID leaf ──
+     * ⊘ Bit POSITIONS, in both formats. VER3's PCF is documented as an enum, but
+     * for these four the enumerants are a bit-field: PCF[0]=uncached,
+     * PCF[1]=privilege, PCF[2]=read-only, PCF[3]=no-atomic
+     * (`gh100/dev_mmu.h:498-530`, read off REGULAR_RW_ATOMIC_CACHED=0 →
+     * _UNCACHED=1 → PRIVILEGE_=2 → _RO_=4 → _NO_ATOMIC_=8). So these MOVED; they
+     * were not re-encoded, and they need no switch arm. */
+    uint8_t  bit_volatile, bit_privilege, bit_read_only, bit_atomic_disable;
+
+    /* ── the part that is NOT a moved field ──
+     * SPARSE. VER2 spells it "valid clear, VOLATILE set"; VER3 spells it as a
+     * VALUE of PCF. A bit test and an equality test against a multi-bit value are
+     * different operations, so this is the one thing the descriptor cannot carry
+     * and the switches below exist for. */
+    KfField  pcf;
+    uint8_t  pcf_sparse;        /* the PCF value meaning SPARSE (VER3)            */
+    uint8_t  pad1[3];
+
+    uint8_t  ps_log2[4];        /* page-size code -> log2(bytes) */
+};
 
 /* ═══ I2: the ONE expression in this file that dereferences the GPGA buffer ═══ */
 struct KfWin { const uint8_t *base; uint64_t len; };
@@ -102,10 +162,12 @@ struct KfDev {
     unsigned int refuse_mask;
     unsigned int hdr_flags;
     unsigned int walk_trunc;
+    unsigned int sparse_slots;
 };
 
 struct KfArgs {
     KfWin win;
+    KfFormat fmt;                /* SETUP DATA: immutable for the VM's lifetime */
     KfDev *dev;
     KfMapRun *tbl[2];
     const uint64_t *pdbs;
@@ -117,60 +179,107 @@ struct KfArgs {
     KfMapRun *rrun;
 };
 
-/* ── decode helpers ──────────────────────────────────────────────────────────── */
+/* ── decode, entirely off the descriptor ─────────────────────────────────────── */
 __device__ __forceinline__ uint64_t kf_field(uint64_t raw, uint32_t lo, uint32_t bits, uint32_t sh)
 {
     return ((raw >> lo) & ((1ull << bits) - 1ull)) << sh;
 }
-/* PTE aperture nibble: 0 vid, 1 peer, 2 sys-coh, 3 sys-noncoh. */
-__device__ __forceinline__ uint64_t kf_pte_addr(uint64_t raw)
+__device__ __forceinline__ uint64_t kf_fld(uint64_t raw, const KfField &f)
 {
-    uint32_t ap = (uint32_t)((raw >> 1) & 3u);
-    return kf_field(raw, 8, (ap <= 1u) ? 25u : 46u, 12u);
+    return kf_field(raw, f.lo, f.bits, f.shift);
 }
-/* PDE aperture nibble: 0 INVALID, 1 vid, 2 sys-coh, 3 sys-noncoh. */
-__device__ __forceinline__ uint64_t kf_pde_addr(uint64_t raw)
+/* The aperture nibble of `raw`. The dual entry's SMALL half lives in the HIGH
+ * word at the SAME offset in both formats, so the caller passes that word. */
+__device__ __forceinline__ uint32_t kf_ap_raw(const KfFormat &F, uint64_t raw)
 {
-    uint32_t ap = (uint32_t)((raw >> 1) & 3u);
-    return kf_field(raw, 8, (ap == 1u) ? 25u : 46u, 12u);
+    return (uint32_t)((raw >> F.ap_lo) & ((1ull << F.ap_bits) - 1ull));
 }
-/* The BIG half of a dual PDE: shift 8, not 12 (dev_mmu.h:104). */
-__device__ __forceinline__ uint64_t kf_big_pde_addr(uint64_t raw)
+__device__ __forceinline__ bool kf_valid(const KfFormat &F, uint64_t raw)
 {
-    uint32_t ap = (uint32_t)((raw >> 1) & 3u);
-    return kf_field(raw, 4, (ap == 1u) ? 29u : 50u, 8u);
+    return ((raw >> F.valid_bit) & 1ull) != 0ull;
 }
-__device__ __forceinline__ uint32_t kf_leaf_flags(uint64_t raw, uint32_t ps)
+__device__ __forceinline__ uint64_t kf_addr(const KfFormat &F, uint64_t raw, uint32_t apc)
 {
-    uint32_t f = (uint32_t)((raw >> 1) & 3u) & KFWR_RF_AP_MASK;
-    if (raw & (1ull << 3)) f |= KFWR_RF_VOLATILE;
-    if (raw & (1ull << 5)) f |= KFWR_RF_PRIVILEGE;
-    if (raw & (1ull << 6)) f |= KFWR_RF_READ_ONLY;
-    if (raw & (1ull << 7)) f |= KFWR_RF_ATOMIC_DISABLE;
+    return kf_fld(raw, F.addr_sel[apc] ? F.addr_sys : F.addr_local);
+}
+__device__ __forceinline__ uint64_t kf_big_addr(const KfFormat &F, uint64_t raw, uint32_t apc)
+{
+    return kf_fld(raw, F.addr_sel[apc] ? F.big_addr_sys : F.big_addr_local);
+}
+__device__ __forceinline__ uint32_t kf_leaf_flags(const KfFormat &F, uint64_t raw, uint32_t ps)
+{
+    uint32_t f = F.pte_ap_map[kf_ap_raw(F, raw)] & KFWR_RF_AP_MASK;
+    if ((raw >> F.bit_volatile) & 1ull)       f |= KFWR_RF_VOLATILE;
+    if ((raw >> F.bit_privilege) & 1ull)      f |= KFWR_RF_PRIVILEGE;
+    if ((raw >> F.bit_read_only) & 1ull)      f |= KFWR_RF_READ_ONLY;
+    if ((raw >> F.bit_atomic_disable) & 1ull) f |= KFWR_RF_ATOMIC_DISABLE;
     return f | ((ps & KFWR_RF_PS_MASK) << KFWR_RF_PS_SHIFT);
 }
-
-/* The page size a run's flags name, in bytes. ⊘ Derived from the flags rather
- * than from `len`, because a carried-forward run's length is a MULTIPLE of the
- * page size and not itself a power of two. */
-__device__ __forceinline__ uint64_t kf_ps_bytes(uint32_t flags)
+__device__ __forceinline__ uint64_t kf_ps_bytes_of(const KfFormat &F, uint32_t flags)
 {
-    switch ((flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK) {
-    case KFWR_PS_4K:  return 4096ull;
-    case KFWR_PS_64K: return 65536ull;
-    case KFWR_PS_2M:  return 1ull << 21;
-    default:          return 1ull << 29;
+    return 1ull << F.ps_log2[(flags >> KFWR_RF_PS_SHIFT) & 3u];
+}
+
+/* ═══ THE SWITCH — for what field offsets cannot express ══════════════════════
+ *
+ * ★★★ It is WARP-UNIFORM. Every thread of a launch walks the same guest's tables
+ * in the same format, so `F.table_version` is the same value in every lane and
+ * the branch costs a predicate, not a divergence. Divergence is the usual
+ * objection to branching in a CUDA kernel and **it does not apply here**. Do not
+ * "optimise" this into a template or a second kernel: §21 is explicit that we
+ * ship ONE program.
+ *
+ * ⚠⚠ THE VER3 ARMS HAVE NEVER RUN. There is no Hopper or Blackwell here, and
+ * nothing in this tree has ever decoded a VER3 table. They are written from
+ * `research_clones/ogkm` 610.43.02 `hopper/gh100/dev_mmu.h` and
+ * `kern_gmmu_fmt_gh10x.c`, they are cited line by line, and they are **not**
+ * reachable unless a caller passes `table_version = KF_TBL_VER3` — which
+ * `kf_create` refuses unless `KF_ALLOW_UNTESTED_VER3` is defined. Treat them as a
+ * SKETCH that proves the seam's shape, never as support.
+ */
+
+/* Is this directory entry a pointer to a sub-table at all? */
+__device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
+                                               uint32_t apc, bool leaf_capable)
+{
+    switch (F.table_version) {
+    case KF_TBL_VER2:
+        /* The aperture IS the validity. `kern_gmmu_fmt_gm10x.c:165-182`. */
+        return apc != F.pde_ap_invalid;
+    default:
+        /* ⚠ UNTESTED. VER3 gives a PDE its own VALID bit (`gh100/dev_mmu.h:417`),
+         * but at a level that can also hold a PTE that same bit is IS_PTE
+         * (`:414`) and is clear by the time we get here. */
+        return (leaf_capable || kf_valid(F, raw)) && apc != F.pde_ap_invalid;
+    }
+}
+
+/* Did the guest DECLARE this slot empty, as opposed to never having written it? */
+__device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
+{
+    switch (F.table_version) {
+    case KF_TBL_VER2:
+        /* "GM20X supports sparse directly in HW by setting the volatile bit when
+         * the valid bit is clear" — `kern_gmmu_gm200.c:46-70`. A BIT TEST. */
+        return ((raw >> F.bit_volatile) & 1ull) != 0ull;
+    default:
+        /* ⚠ UNTESTED. `NV_MMU_VER3_PTE_PCF_SPARSE = 1` (`gh100/dev_mmu.h:499`).
+         * An EQUALITY against a multi-bit value — which is exactly why a field
+         * descriptor cannot carry this and this switch exists. */
+        return kf_field(raw, F.pcf.lo, F.pcf.bits, 0) == (uint64_t)F.pcf_sparse;
     }
 }
 
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
 struct KfCtx {
     KfWin w;
+    const KfFormat *fmt;
     uint64_t visited;
     uint64_t budget;
     uint32_t refusals;
     uint32_t refuse;
     uint32_t stop;
+    uint32_t sparse;
     KfMapRun *out;
     uint32_t cap;
     uint32_t n;
@@ -195,7 +304,8 @@ __device__ __forceinline__ bool kf_load64(KfCtx &c, uint64_t off, uint64_t *v)
 }
 
 /* A whole table, checked once per descent: alignment first, then extent.
- * `bytes` and `align` are powers of two chosen by the FORMAT, never by the guest. */
+ * `bytes` and `align` are powers of two derived from the FORMAT DESCRIPTOR,
+ * never from the guest. */
 __device__ __forceinline__ bool kf_table_ok(KfCtx &c, uint64_t phys, uint64_t bytes, uint64_t align)
 {
 #ifndef KF_BREAK_BOUNDS
@@ -234,7 +344,7 @@ __device__ __forceinline__ void kf_flush(KfCtx &c)
 __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, uint64_t len, uint32_t flags)
 {
     if (c.stop) return;
-    if (gpga & (kf_ps_bytes(flags) - 1ull)) { c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return; }
+    if (gpga & (kf_ps_bytes_of(*c.fmt, flags) - 1ull)) { c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return; }
     if (c.have && c.run.flags == flags &&
         c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
         c.run.len += len;
@@ -282,130 +392,167 @@ __device__ void kf_carry(KfCtx &c, uint64_t lo, uint64_t hi)
     }
 }
 
-/* ═══ THE WALK — I1: five literally nested loops, all trip counts constant ════ */
+/* ═══ THE WALK ════════════════════════════════════════════════════════════════
+ * I1: KF_DIRS + 1 literally nested loops, every trip count bounded at COMPILE
+ * TIME by KF_MAX_ENT and only narrowed by the descriptor.
+ */
+#define KF_STEP_SKIP    0u
+#define KF_STEP_DESCEND 1u
+#define KF_STEP_STOP    2u
+
+/* One directory slot's body, minus the control flow. Returns where to go next
+ * and, on DESCEND, the child table's address. */
+__device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t tbl,
+                                                uint32_t idx, uint64_t va, uint64_t *child)
+{
+    const KfFormat &F = *c.fmt;
+    const KfDir &L = F.dir[k];
+    uint64_t raw;
+    if (!kf_charge(c, 1)) return KF_STEP_STOP;
+    if (!kf_load64(c, tbl + (uint64_t)idx * L.entry_bytes, &raw)) return KF_STEP_SKIP;
+    if (L.leaf_ps != KF_PS_NONE && kf_valid(F, raw)) {
+        kf_emit(c, va, kf_addr(F, raw, kf_ap_raw(F, raw)),
+                1ull << F.ps_log2[L.leaf_ps], kf_leaf_flags(F, raw, L.leaf_ps));
+        return KF_STEP_SKIP;
+    }
+    uint32_t apc = kf_ap_raw(F, raw);
+    if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
+        if (kf_slot_sparse(F, raw)) c.sparse++;
+        return KF_STEP_SKIP;
+    }
+    if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; return KF_STEP_SKIP; }
+    uint64_t next = kf_addr(F, raw, apc);
+    if (next == 0ull) return KF_STEP_SKIP;
+    uint64_t cb = (uint64_t)F.dir[k + 1].entries * F.dir[k + 1].entry_bytes;
+    if (!kf_table_ok(c, next, cb, cb)) return KF_STEP_SKIP;
+    *child = next;
+    return KF_STEP_DESCEND;
+}
+
 __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
 {
-    /* A page-directory base is a PAGE address: 4 KiB, not merely 32 B. */
-    if (!kf_table_ok(c, pdb, KF_PD3_BYTES, 4096ull)) return;
+    const KfFormat &F = *c.fmt;
+    const uint64_t root_bytes = (uint64_t)F.dir[F.first_dir].entries * F.dir[F.first_dir].entry_bytes;
+    if (!kf_table_ok(c, pdb, root_bytes, F.root_align)) return;
 
-    for (uint32_t i3 = 0; i3 < KF_PD3_N && !c.stop; i3++) {
-        const uint64_t va3 = (uint64_t)i3 << KF_SH_PD3;
-        const uint64_t end3 = va3 + (1ull << KF_SH_PD3);
-        if (!kf_in_scope(sc, va3, end3)) { kf_carry(c, va3, end3); continue; }
-        uint64_t e3;
-        if (!kf_charge(c, 1)) break;
-        if (!kf_load64(c, pdb + i3 * 8u, &e3)) continue;
-        uint32_t ap3 = (uint32_t)((e3 >> 1) & 3u);
-        if (ap3 == 0u) continue;                       /* INVALID or sparse */
-        if (ap3 != 1u) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; continue; }
-        const uint64_t pd2 = kf_pde_addr(e3);
-        if (pd2 == 0ull) continue;
-        if (!kf_table_ok(c, pd2, KF_PD2_BYTES, KF_PD2_BYTES)) continue;
+    const uint32_t n0 = F.dir[0].active ? F.dir[0].entries : 1u;
+    for (uint32_t i0 = 0; i0 < KF_MAX_ENT && i0 < n0 && !c.stop; i0++) {
+        uint64_t t1 = pdb, va0 = 0ull;
+        if (F.dir[0].active) {
+            va0 = (uint64_t)i0 << F.dir[0].va_lo;
+            uint64_t e0 = va0 + (1ull << F.dir[0].va_lo);
+            if (!kf_in_scope(sc, va0, e0)) { kf_carry(c, va0, e0); continue; }
+            uint32_t r = kf_dir_step(c, 0, pdb, i0, va0, &t1);
+            if (r == KF_STEP_STOP) break;
+            if (r != KF_STEP_DESCEND) continue;
+        }
 
-        for (uint32_t i2 = 0; i2 < KF_PD2_N && !c.stop; i2++) {
-            const uint64_t va2 = va3 | ((uint64_t)i2 << KF_SH_PD2);
-            const uint64_t end2 = va2 + (1ull << KF_SH_PD2);
-            if (!kf_in_scope(sc, va2, end2)) { kf_carry(c, va2, end2); continue; }
-            uint64_t e2;
-            if (!kf_charge(c, 1)) break;
-            if (!kf_load64(c, pd2 + i2 * 8u, &e2)) continue;
-            uint32_t ap2 = (uint32_t)((e2 >> 1) & 3u);
-            if (ap2 == 0u) continue;
-            if (ap2 != 1u) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; continue; }
-            const uint64_t pd1 = kf_pde_addr(e2);
-            if (pd1 == 0ull) continue;
-            if (!kf_table_ok(c, pd1, KF_PD1_BYTES, KF_PD1_BYTES)) continue;
+        const uint32_t n1 = F.dir[1].active ? F.dir[1].entries : 1u;
+        for (uint32_t i1 = 0; i1 < KF_MAX_ENT && i1 < n1 && !c.stop; i1++) {
+            uint64_t t2 = t1, va1 = va0;
+            if (F.dir[1].active) {
+                va1 = va0 | ((uint64_t)i1 << F.dir[1].va_lo);
+                uint64_t e1 = va1 + (1ull << F.dir[1].va_lo);
+                if (!kf_in_scope(sc, va1, e1)) { kf_carry(c, va1, e1); continue; }
+                uint32_t r = kf_dir_step(c, 1, t1, i1, va1, &t2);
+                if (r == KF_STEP_STOP) break;
+                if (r != KF_STEP_DESCEND) continue;
+            }
 
-            for (uint32_t i1 = 0; i1 < KF_PD1_N && !c.stop; i1++) {
-                const uint64_t va1 = va2 | ((uint64_t)i1 << KF_SH_PD1);
-                const uint64_t end1 = va1 + (1ull << KF_SH_PD1);
-                if (!kf_in_scope(sc, va1, end1)) { kf_carry(c, va1, end1); continue; }
-                uint64_t e1;
-                if (!kf_charge(c, 1)) break;
-                if (!kf_load64(c, pd1 + i1 * 8u, &e1)) continue;
-                /* ★ GA10x only: a PD1 slot with VALID set is a 512 MiB PAGE. */
-                if (e1 & 1ull) {
-                    kf_emit(c, va1, kf_pte_addr(e1), 1ull << 29, kf_leaf_flags(e1, KFWR_PS_512M));
-                    continue;
+            const uint32_t n2 = F.dir[2].active ? F.dir[2].entries : 1u;
+            for (uint32_t i2 = 0; i2 < KF_MAX_ENT && i2 < n2 && !c.stop; i2++) {
+                uint64_t t3 = t2, va2 = va1;
+                if (F.dir[2].active) {
+                    va2 = va1 | ((uint64_t)i2 << F.dir[2].va_lo);
+                    uint64_t e2 = va2 + (1ull << F.dir[2].va_lo);
+                    if (!kf_in_scope(sc, va2, e2)) { kf_carry(c, va2, e2); continue; }
+                    uint32_t r = kf_dir_step(c, 2, t2, i2, va2, &t3);
+                    if (r == KF_STEP_STOP) break;
+                    if (r != KF_STEP_DESCEND) continue;
                 }
-                uint32_t ap1 = (uint32_t)((e1 >> 1) & 3u);
-                if (ap1 == 0u) continue;
-                if (ap1 != 1u) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; continue; }
-                const uint64_t pd0 = kf_pde_addr(e1);
-                if (pd0 == 0ull) continue;
-                if (!kf_table_ok(c, pd0, KF_PD0_BYTES, KF_PD0_BYTES)) continue;
 
-                for (uint32_t i0 = 0; i0 < KF_PD0_N && !c.stop; i0++) {
-                    const uint64_t va0 = va1 | ((uint64_t)i0 << KF_SH_PD0);
-                    uint64_t lo16, hi16;
-                    if (!kf_charge(c, 1)) break;
-                    if (!kf_load64(c, pd0 + i0 * 16u, &lo16)) continue;
-                    if (!kf_load64(c, pd0 + i0 * 16u + 8u, &hi16)) continue;
-                    /* ★ A 2 MiB leaf is spelled in the LOW half's valid bit, and it is
-                     * asked FIRST — the order gmmuFmtEntryIsPte asks it in. */
-                    if (lo16 & 1ull) {
-                        kf_emit(c, va0, kf_pte_addr(lo16), 1ull << 21,
-                                kf_leaf_flags(lo16, KFWR_PS_2M));
-                        continue;
+                const uint32_t n3 = F.dir[3].active ? F.dir[3].entries : 1u;
+                for (uint32_t i3 = 0; i3 < KF_MAX_ENT && i3 < n3 && !c.stop; i3++) {
+                    uint64_t t4 = t3, va3 = va2;
+                    if (F.dir[3].active) {
+                        va3 = va2 | ((uint64_t)i3 << F.dir[3].va_lo);
+                        uint64_t e3 = va3 + (1ull << F.dir[3].va_lo);
+                        if (!kf_in_scope(sc, va3, e3)) { kf_carry(c, va3, e3); continue; }
+                        uint32_t r = kf_dir_step(c, 3, t3, i3, va3, &t4);
+                        if (r == KF_STEP_STOP) break;
+                        if (r != KF_STEP_DESCEND) continue;
                     }
-                    uint32_t aps = (uint32_t)((hi16 >> 1) & 3u);   /* SMALL half in hi */
-                    uint32_t apb = (uint32_t)((lo16 >> 1) & 3u);   /* BIG half in lo   */
-                    uint64_t pts = 0ull, ptb = 0ull;
-                    bool has_s = false, has_b = false;
-                    if (aps != 0u) {
-                        if (aps != 1u) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
-                        else {
-                            pts = kf_pde_addr(hi16);
-                            has_s = (pts != 0ull) && kf_table_ok(c, pts, KF_PTS_BYTES, KF_PTS_BYTES);
+
+                    /* ── the DUAL level: one entry, two sub-tables, one VA range ── */
+                    const KfDir &D = F.dir[KF_DIRS - 1u];
+                    for (uint32_t i4 = 0; i4 < KF_MAX_ENT && i4 < D.entries && !c.stop; i4++) {
+                        const uint64_t va4 = va3 | ((uint64_t)i4 << D.va_lo);
+                        uint64_t lo16, hi16;
+                        if (!kf_charge(c, 1)) break;
+                        if (!kf_load64(c, t4 + (uint64_t)i4 * D.entry_bytes, &lo16)) continue;
+                        if (!kf_load64(c, t4 + (uint64_t)i4 * D.entry_bytes + 8u, &hi16)) continue;
+                        /* A leaf at this level is spelled in the LOW half's valid
+                         * bit, and it is asked FIRST — the order gmmuFmtEntryIsPte
+                         * asks it in. */
+                        if (D.leaf_ps != KF_PS_NONE && kf_valid(F, lo16)) {
+                            kf_emit(c, va4, kf_addr(F, lo16, kf_ap_raw(F, lo16)),
+                                    1ull << F.ps_log2[D.leaf_ps], kf_leaf_flags(F, lo16, D.leaf_ps));
+                            continue;
                         }
-                    }
-                    if (apb != 0u) {
-                        if (apb != 1u) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
-                        else {
-                            ptb = kf_big_pde_addr(lo16);
-                            has_b = (ptb != 0ull) && kf_table_ok(c, ptb, KF_PTB_BYTES, KF_PTB_BYTES);
-                        }
-                    }
-                    /* Both sub-tables cover the SAME 2 MiB of VA at different page
-                     * sizes, so they are interleaved 64 KiB at a time to keep the
-                     * report produced already sorted by VA. A table with only one
-                     * half populated — which is every real one — degenerates to a
-                     * plain ascending scan. */
-                    for (uint32_t b = 0; b < KF_PTB_N && !c.stop; b++) {
-                        /* BIG before SMALL inside a 64 KiB chunk. The two leaves
-                         * can share a VA, and the report's order must be a TOTAL
-                         * order the diff can merge-join on: (va ascending, page
-                         * size DESCENDING). The diff does not rely on that
-                         * cross-class order any more -- it diffs each class
-                         * separately -- but it DOES rely on each class being
-                         * ascending in VA, which this ordering gives it. */
-                        if (has_b) {
-                            uint64_t e;
-                            /* ⊘ KF_BREAK_ORDER walks the big table DOWNWARDS, so the
-                             * 64 KiB class comes out descending in VA. Compiled in
-                             * only by `make check-negative`: the per-class diff needs
-                             * each class ascending, and this is the known-positive
-                             * that the round-trip test can see it when it is not. */
-#ifdef KF_BREAK_ORDER
-                            const uint32_t bb = KF_PTB_N - 1u - b;
-#else
-                            const uint32_t bb = b;
-#endif
-                            if (!kf_charge(c, 1)) break;
-                            if (kf_load64(c, ptb + bb * 8u, &e) && (e & 1ull))
-                                kf_emit(c, va0 | ((uint64_t)bb << KF_SH_PTB),
-                                        kf_pte_addr(e), 1ull << 16,
-                                        kf_leaf_flags(e, KFWR_PS_64K));
-                        }
-                        if (has_s) {
-                            for (uint32_t s = b * 16u; s < b * 16u + 16u && !c.stop; s++) {
+                        uint32_t aps = kf_ap_raw(F, hi16);   /* SMALL half, HIGH word */
+                        uint32_t apb = kf_ap_raw(F, lo16);   /* BIG half,   LOW word  */
+                        uint64_t pts = 0ull, ptb = 0ull;
+                        bool has_s = false, has_b = false;
+                        const uint64_t sb = (uint64_t)F.small_entries * F.small_entry_bytes;
+                        const uint64_t bb = (uint64_t)F.big_entries * F.big_entry_bytes;
+                        if (kf_dir_present(F, hi16, aps, false)) {
+                            if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
+                            else {
+                                pts = kf_addr(F, hi16, aps);
+                                has_s = (pts != 0ull) && kf_table_ok(c, pts, sb, sb);
+                            }
+                        } else if (kf_slot_sparse(F, hi16)) c.sparse++;
+                        if (kf_dir_present(F, lo16, apb, D.leaf_ps != KF_PS_NONE)) {
+                            if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { c.refuse |= KFWR_R_FOREIGN_AP; c.refusals++; }
+                            else {
+                                ptb = kf_big_addr(F, lo16, apb);
+                                has_b = (ptb != 0ull) && kf_table_ok(c, ptb, bb, bb);
+                            }
+                        } else if (kf_slot_sparse(F, lo16)) c.sparse++;
+
+                        /* Both sub-tables cover the SAME VA range at different page
+                         * sizes, so they are interleaved at the BIG page's
+                         * granularity to keep each page-size class ascending in VA
+                         * — which is what the per-class diff needs. `ratio` is
+                         * derived, not hardcoded. */
+                        const uint32_t ratio = 1u << (F.big_va_lo - F.small_va_lo);
+                        for (uint32_t b = 0; b < KF_MAX_ENT && b < F.big_entries && !c.stop; b++) {
+                            if (has_b) {
                                 uint64_t e;
                                 if (!kf_charge(c, 1)) break;
-                                if (!kf_load64(c, pts + s * 8u, &e)) continue;
-                                if (e & 1ull)
-                                    kf_emit(c, va0 | ((uint64_t)s << KF_SH_PTS),
-                                            kf_pte_addr(e), 1ull << 12,
-                                            kf_leaf_flags(e, KFWR_PS_4K));
+                                if (kf_load64(c, ptb + (uint64_t)b * F.big_entry_bytes, &e)) {
+                                    if (kf_valid(F, e))
+                                        kf_emit(c, va4 | ((uint64_t)b << F.big_va_lo),
+                                                kf_addr(F, e, kf_ap_raw(F, e)),
+                                                1ull << F.ps_log2[F.big_ps],
+                                                kf_leaf_flags(F, e, F.big_ps));
+                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                }
+                            }
+                            if (has_s) {
+                                for (uint32_t j = 0; j < 16u && j < ratio && !c.stop; j++) {
+                                    uint32_t s = b * ratio + j;
+                                    if (s >= F.small_entries) break;
+                                    uint64_t e;
+                                    if (!kf_charge(c, 1)) break;
+                                    if (!kf_load64(c, pts + (uint64_t)s * F.small_entry_bytes, &e)) continue;
+                                    if (kf_valid(F, e))
+                                        kf_emit(c, va4 | ((uint64_t)s << F.small_va_lo),
+                                                kf_addr(F, e, kf_ap_raw(F, e)),
+                                                1ull << F.ps_log2[F.small_ps],
+                                                kf_leaf_flags(F, e, F.small_ps));
+                                    else if (kf_slot_sparse(F, e)) c.sparse++;
+                                }
                             }
                         }
                     }
@@ -424,6 +571,7 @@ __global__ void kf_begin_kernel(KfDev *d)
     d->refuse_mask = 0u;
     d->hdr_flags = 0u;
     d->walk_trunc = 0u;
+    d->sparse_slots = 0u;
 }
 
 __global__ void kf_walk_kernel(KfArgs a)
@@ -437,7 +585,9 @@ __global__ void kf_walk_kernel(KfArgs a)
 
     KfCtx c;
     c.w = a.win;
+    c.fmt = &a.fmt;
     c.visited = 0ull;
+    c.sparse = 0u;
     c.budget = (uint64_t)d->entry_budget;
     c.refusals = 0u; c.refuse = 0u; c.stop = 0u;
     c.out = a.tbl[cur] + (size_t)t * d->runs_per_pdb;
@@ -481,8 +631,12 @@ __global__ void kf_walk_kernel(KfArgs a)
                     /* Widen to the 512 MiB granule the pruning works at, so every
                      * carry-forward boundary is aligned to a whole PD1 slot and no
                      * clip can ever cut a page in half. A superset is always safe. */
-                    sc.lo[sc.n] = lo & ~((1ull << KF_SH_PD1) - 1ull);
-                    sc.hi[sc.n] = (hi + ((1ull << KF_SH_PD1) - 1ull)) & ~((1ull << KF_SH_PD1) - 1ull);
+                    /* The granule is the LAST directory level's span — the
+                     * deepest level whose subtrees the walk prunes — taken from
+                     * the descriptor, not from a VER2 constant. */
+                    const uint64_t gsh = a.fmt.dir[KF_DIRS - 2u].va_lo;
+                    sc.lo[sc.n] = lo & ~((1ull << gsh) - 1ull);
+                    sc.hi[sc.n] = (hi + ((1ull << gsh) - 1ull)) & ~((1ull << gsh) - 1ull);
                     sc.n++;
                 }
             } else { sc.full = 1u; degraded = 1u; }          /* too many ⇒ full */
@@ -499,6 +653,7 @@ __global__ void kf_walk_kernel(KfArgs a)
     atomicAdd(&d->entries_visited, (unsigned long long)c.visited);
     if (c.refusals) atomicAdd(&d->refusals, c.refusals);
     if (c.refuse) atomicOr(&d->refuse_mask, c.refuse);
+    if (c.sparse) atomicAdd(&d->sparse_slots, c.sparse);
     if (c.stop) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u); }
     if (c.refuse & KFWR_R_BUDGET) atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
     if (a.nscope > 0u) atomicOr(&d->hdr_flags, KFWR_HF_SCOPED);
@@ -831,15 +986,189 @@ __global__ void kf_diff_kernel(KfArgs a)
     h.entries_visited = d->entries_visited;
     h.refusals = d->refusals;
     h.refuse_mask = d->refuse_mask;
-    h.pad = 0ull;
+    h.sparse_slots = d->sparse_slots;
+    for (uint32_t i = 0; i < 4u; i++) h.ps_log2[i] = a.fmt.ps_log2[i];
     *a.hdr = h;
 }
 
 __global__ void kf_ack_kernel(KfDev *d, uint64_t g) { d->acked = g; }
 
+/* ── the format descriptors, built on the HOST ───────────────────────────────
+ *
+ * ⊘ These are the ONLY places in this file where a bit position is written down,
+ * and they are host code that runs once. Everything below the seam reads them.
+ * In production they come from the Rust `GmmuFmt` impls the tree already
+ * maintains (`kayfabe-chips`), uploaded as setup data; here they are literals so
+ * the proving ground has no Rust dependency.
+ */
+static KfField kf_f(uint8_t lo, uint8_t bits, uint8_t shift)
+{
+    KfField f;
+    f.lo = lo; f.bits = bits; f.shift = shift; f.pad = 0;
+    return f;
+}
+static void kf_set_dir(KfDir *d, int active, uint8_t va_lo, uint8_t va_hi,
+                       uint8_t entry_bytes, uint8_t leaf_ps)
+{
+    d->active = (uint8_t)active;
+    d->va_lo = va_lo;
+    d->entry_bytes = entry_bytes;
+    d->leaf_ps = leaf_ps;
+    d->entries = (uint16_t)(1u << (va_hi - va_lo + 1u));
+    d->pad = 0;
+}
+
+/* GA10x / VER2 — `ogkm-580 pascal/gp100/dev_mmu.h` + `kern_gmmu_fmt_ga10x.c`.
+ * THE TESTED ONE. Agrees with `kayfabe-chips::ga10x::Ga10xGmmu`. */
+static KfFormat kf_format_ver2(void)
+{
+    KfFormat F;
+    memset(&F, 0, sizeof(F));
+    F.abi_version = KF_ABI_VERSION;
+    F.table_version = KF_TBL_VER2;
+    /* PD3 [48:47] → PD2 [46:38] → PD1 [37:29] (or a 512 MiB page)
+     *   → PD0 [28:21], a 16-byte DUAL entry (or a 2 MiB page)
+     *        ↙ PT_BIG [20:16]        ↘ PT_SMALL [20:12] */
+    kf_set_dir(&F.dir[0], 0, 0, 0, 8, KF_PS_NONE);          /* VER2 has no PD4 */
+    kf_set_dir(&F.dir[1], 1, 47, 48, 8, KF_PS_NONE);
+    kf_set_dir(&F.dir[2], 1, 38, 46, 8, KF_PS_NONE);
+    kf_set_dir(&F.dir[3], 1, 29, 37, 8, (uint8_t)KFWR_PS_512M);
+    kf_set_dir(&F.dir[4], 1, 21, 28, 16, (uint8_t)KFWR_PS_2M);
+    F.big_va_lo = 16;   F.big_entries = 32;    F.big_entry_bytes = 8;  F.big_ps = KFWR_PS_64K;
+    F.small_va_lo = 12; F.small_entries = 512; F.small_entry_bytes = 8; F.small_ps = KFWR_PS_4K;
+    F.root_align = 4096u;
+    F.first_dir = 1;
+    F.valid_bit = 0;                     /* NV_MMU_VER2_PTE_VALID 0:0   */
+    F.ap_lo = 1; F.ap_bits = 2;          /* _APERTURE 2:1               */
+    F.pde_ap_invalid = 0;                /* _PDE_APERTURE_INVALID       */
+    F.pte_ap_map[0] = KFWR_AP_VIDMEM;  F.pte_ap_map[1] = KFWR_AP_PEER;
+    F.pte_ap_map[2] = KFWR_AP_SYSCOH;  F.pte_ap_map[3] = KFWR_AP_SYSNONCOH;
+    F.pde_ap_map[0] = 0xFF;            F.pde_ap_map[1] = KFWR_AP_VIDMEM;
+    F.pde_ap_map[2] = KFWR_AP_SYSCOH;  F.pde_ap_map[3] = KFWR_AP_SYSNONCOH;
+    F.addr_sel[0] = 0; F.addr_sel[1] = 0; F.addr_sel[2] = 1; F.addr_sel[3] = 1;
+    F.addr_local     = kf_f(8, 25, 12);  /* _ADDRESS_VID  32:8,  SHIFT 12 */
+    F.addr_sys       = kf_f(8, 46, 12);  /* _ADDRESS_SYS  53:8,  SHIFT 12 */
+    F.big_addr_local = kf_f(4, 29, 8);   /* _DUAL_PDE_ADDRESS_BIG_VID 32:4, SHIFT 8 */
+    F.big_addr_sys   = kf_f(4, 50, 8);   /* _DUAL_PDE_ADDRESS_BIG_SYS 53:4, SHIFT 8 */
+    F.bit_volatile = 3; F.bit_privilege = 5; F.bit_read_only = 6; F.bit_atomic_disable = 7;
+    F.pcf = kf_f(0, 0, 0);               /* VER2 has none */
+    F.pcf_sparse = 0;
+    F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
+    F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
+#ifdef KF_BAD_DESCRIPTOR
+    F.addr_local.lo = (uint8_t)(F.addr_local.lo + 1u);   /* one bit wrong, on purpose */
+#endif
+#ifdef KF_BAD_GEOMETRY
+    F.dir[3].va_lo = (uint8_t)(F.dir[3].va_lo - 1u);     /* one level mis-strided */
+#endif
+#ifdef KF_BAD_ABI
+    F.abi_version = KF_ABI_VERSION + 1u;                 /* a host/PTX skew */
+#endif
+    return F;
+}
+
+/* ⚠⚠⚠ GH100 / VER3 — A SKETCH THAT HAS NEVER RUN.
+ *
+ * Read off `research_clones/ogkm` 610.43.02 `hopper/gh100/dev_mmu.h:413-536` and
+ * `kern_gmmu_fmt_gh10x.c:33-115`. There is no Hopper or Blackwell in this
+ * project; nothing here has ever decoded a VER3 table; no test exercises it. It
+ * exists to show that adding a format is **a descriptor plus two switch arms and
+ * nothing else**, and `kf_create` REFUSES it unless KF_ALLOW_UNTESTED_VER3 is
+ * defined, so it cannot be reached by accident and cannot make anything LOOK
+ * supported.
+ *
+ *  PD4[56] → PD3[55:47] → PD2[46:38] → PD1[37:29] (or 512 MiB)
+ *    → PD0[28:21] dual (or 2 MiB) ↙ PT_BIG[20:16]  ↘ PT_SMALL[20:12]
+ *
+ * ★ Note how little differs: one extra directory on top, ONE address field
+ * instead of the vid/sys pair, and the four permission bits MOVED (PCF's low
+ * four) rather than re-encoded. Only SPARSE is a different KIND of test.
+ */
+static KfFormat kf_format_ver3_untested(void)
+{
+    KfFormat F;
+    memset(&F, 0, sizeof(F));
+    F.abi_version = KF_ABI_VERSION;
+    F.table_version = KF_TBL_VER3;
+    kf_set_dir(&F.dir[0], 1, 56, 56, 8, KF_PS_NONE);        /* PD4, two entries */
+    kf_set_dir(&F.dir[1], 1, 47, 55, 8, KF_PS_NONE);
+    kf_set_dir(&F.dir[2], 1, 38, 46, 8, KF_PS_NONE);
+    kf_set_dir(&F.dir[3], 1, 29, 37, 8, (uint8_t)KFWR_PS_512M);
+    kf_set_dir(&F.dir[4], 1, 21, 28, 16, (uint8_t)KFWR_PS_2M);
+    F.big_va_lo = 16;   F.big_entries = 32;    F.big_entry_bytes = 8;  F.big_ps = KFWR_PS_64K;
+    F.small_va_lo = 12; F.small_entries = 512; F.small_entry_bytes = 8; F.small_ps = KFWR_PS_4K;
+    F.root_align = 4096u;
+    F.first_dir = 0;
+    F.valid_bit = 0;                     /* _PTE_VALID / _PDE_VALID / _IS_PTE 0:0 */
+    F.ap_lo = 1; F.ap_bits = 2;          /* _APERTURE 2:1, and _SMALL 66:65 = hi 2:1 */
+    F.pde_ap_invalid = 0;
+    F.pte_ap_map[0] = KFWR_AP_VIDMEM;  F.pte_ap_map[1] = KFWR_AP_PEER;
+    F.pte_ap_map[2] = KFWR_AP_SYSCOH;  F.pte_ap_map[3] = KFWR_AP_SYSNONCOH;
+    F.pde_ap_map[0] = 0xFF;            F.pde_ap_map[1] = KFWR_AP_VIDMEM;
+    F.pde_ap_map[2] = KFWR_AP_SYSCOH;  F.pde_ap_map[3] = KFWR_AP_SYSNONCOH;
+    /* ONE address field: no vid/sys split on this regime. */
+    F.addr_sel[0] = 0; F.addr_sel[1] = 0; F.addr_sel[2] = 0; F.addr_sel[3] = 0;
+    F.addr_local = F.addr_sys = kf_f(12, 40, 12);   /* _PTE_ADDRESS / _PDE_ADDRESS 51:12,
+                                                     * and _DUAL_PDE_ADDRESS_SMALL 115:76
+                                                     * = hi word 51:12 — the same spec */
+    F.big_addr_local = F.big_addr_sys = kf_f(8, 44, 8);  /* _DUAL_PDE_ADDRESS_BIG 51:8, SHIFT 8 */
+    /* PCF 7:3, and its low four enumerant bits are the four flags:
+     * REGULAR_RW_ATOMIC_CACHED=0, _UNCACHED=1, PRIVILEGE_=2, _RO_=4, _NO_ATOMIC_=8. */
+    F.bit_volatile = 3; F.bit_privilege = 4; F.bit_read_only = 5; F.bit_atomic_disable = 6;
+    F.pcf = kf_f(3, 5, 0);
+    F.pcf_sparse = 1;                    /* NV_MMU_VER3_PTE_PCF_SPARSE */
+    F.ps_log2[KFWR_PS_4K] = 12; F.ps_log2[KFWR_PS_64K] = 16;
+    F.ps_log2[KFWR_PS_2M] = 21; F.ps_log2[KFWR_PS_512M] = 29;
+    return F;
+}
+
+static bool kf_pow2(uint64_t x) { return x != 0ull && (x & (x - 1ull)) == 0ull; }
+
+/* ⚠ REFUSED, LOUDLY, AT LAUNCH. A descriptor the kernel's compile-time bounds
+ * cannot hold must stop the walker being created, not be discovered halfway down
+ * a tree as a page-table bug. */
+static const char *kf_format_check(const KfFormat &F)
+{
+    if (F.abi_version != KF_ABI_VERSION) return "abi_version";
+    if (F.table_version != KF_TBL_VER2 && F.table_version != KF_TBL_VER3) return "table_version";
+#ifndef KF_ALLOW_UNTESTED_VER3
+    if (F.table_version == KF_TBL_VER3) return "VER3 is a sketch that has never run; "
+                                               "define KF_ALLOW_UNTESTED_VER3 to reach it";
+#endif
+    if (F.first_dir >= KF_DIRS) return "first_dir";
+    if (!F.dir[KF_DIRS - 1].active) return "the deepest directory slot must be active";
+    for (uint32_t k = 0; k < KF_DIRS; k++) {
+        if (!F.dir[k].active) {
+            if (k >= F.first_dir) return "an inactive slot below first_dir";
+            continue;
+        }
+        if (k < F.first_dir) return "an active slot above first_dir";
+        if (F.dir[k].entries == 0 || F.dir[k].entries > KF_MAX_ENT) return "level fan-out exceeds KF_MAX_ENT";
+        if (!kf_pow2(F.dir[k].entries)) return "level fan-out is not a power of two";
+        if (F.dir[k].entry_bytes != 8 && F.dir[k].entry_bytes != 16) return "entry_bytes";
+        if (F.dir[k].va_lo >= 64) return "va_lo";
+        if (!kf_pow2((uint64_t)F.dir[k].entries * F.dir[k].entry_bytes)) return "table bytes not a power of two";
+        if (F.dir[k].leaf_ps != KF_PS_NONE && F.dir[k].leaf_ps > 3) return "leaf_ps";
+    }
+    if (F.dir[KF_DIRS - 1].entry_bytes != 16) return "the deepest directory must carry a dual entry";
+    if (F.small_entries == 0 || F.small_entries > KF_MAX_ENT) return "small_entries";
+    if (F.big_entries == 0 || F.big_entries > KF_MAX_ENT) return "big_entries";
+    if (F.big_va_lo <= F.small_va_lo || F.big_va_lo - F.small_va_lo > 4) return "big/small stride";
+    if ((uint32_t)F.big_entries << (F.big_va_lo - F.small_va_lo) != F.small_entries)
+        return "the big and small tables do not cover the same VA range";
+    if (!kf_pow2((uint64_t)F.small_entries * F.small_entry_bytes)) return "small table bytes";
+    if (!kf_pow2((uint64_t)F.big_entries * F.big_entry_bytes)) return "big table bytes";
+    if (!kf_pow2(F.root_align)) return "root_align";
+    if (F.ap_bits == 0 || F.ap_bits > 2) return "ap_bits";
+    for (uint32_t i = 0; i < 4; i++)
+        if (F.ps_log2[i] < 12 || F.ps_log2[i] > 40) return "ps_log2";
+    return NULL;
+}
+
 /* ── host side ───────────────────────────────────────────────────────────────── */
 struct KfWalk {
     KfDev *dev;
+    KfFormat fmt;
     KfMapRun *tbl[2];
     uint64_t *pdbs;
     KfScope *scopes;
@@ -861,6 +1190,15 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     KfWalk *w = (KfWalk *)calloc(1, sizeof(KfWalk));
     if (!w) return NULL;
     w->cfg = *cfg;
+    uint32_t tv = cfg->table_version ? cfg->table_version : KF_TBL_VER2;
+    w->fmt = (tv == KF_TBL_VER3) ? kf_format_ver3_untested() : kf_format_ver2();
+    if (tv != KF_TBL_VER2 && tv != KF_TBL_VER3) { w->fmt.table_version = tv; }
+    const char *bad = kf_format_check(w->fmt);
+    if (bad) {
+        fprintf(stderr, "kf_create: format descriptor REFUSED: %s\n", bad);
+        free(w);
+        return NULL;
+    }
     if (w->cfg.max_pdbs == 0u || w->cfg.max_pdbs > KF_MAX_PDB) w->cfg.max_pdbs = KF_MAX_PDB;
 
     size_t tbl_bytes = (size_t)w->cfg.max_pdbs * w->cfg.runs_per_pdb * sizeof(KfMapRun);
@@ -905,6 +1243,7 @@ extern "C" int kf_refresh(KfWalk *w,
                           const KfScope *scopes, uint32_t nscope,
                           KfReportHeader *hdr_out, KfPdbEntry *pdb_out, KfMapRun *run_out)
 {
+    if (!w) { fprintf(stderr, "kf_refresh: no walker (the format descriptor was refused)\n"); return -3; }
     if (npdb == 0u) { fprintf(stderr, "kf_refresh: npdb == 0\n"); return -2; }
     if (npdb > w->cfg.max_pdbs) { fprintf(stderr, "kf_refresh: npdb %u > max_pdbs %u\n", npdb, w->cfg.max_pdbs); return -2; }
     if (nscope > KF_MAX_SCOPE)  { fprintf(stderr, "kf_refresh: nscope too large\n"); return -2; }
@@ -915,6 +1254,7 @@ extern "C" int kf_refresh(KfWalk *w,
     KfArgs a;
     a.win.base = (const uint8_t *)gpga_dev;
     a.win.len = gpga_len;
+    a.fmt = w->fmt;
     a.dev = w->dev;
     a.tbl[0] = w->tbl[0]; a.tbl[1] = w->tbl[1];
     a.pdbs = w->pdbs; a.npdb = npdb;
@@ -942,7 +1282,13 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
 {
     const char *msg = NULL;
     int rc = 0;
-    static const uint64_t ps_bytes[4] = { 4ull << 10, 64ull << 10, 2ull << 20, 512ull << 20 };
+    /* ★ From the REPORT, not from a constant: the header carries ps_log2 so the
+     * host's parser needs no format-version knowledge. */
+    uint64_t ps_bytes[4];
+    for (uint32_t i = 0; i < 4u; i++) {
+        if (h->ps_log2[i] < 12 || h->ps_log2[i] > 40) { msg = "ps_log2"; rc = -15; goto out; }
+        ps_bytes[i] = 1ull << h->ps_log2[i];
+    }
     if (h->magic != KFWR_MAGIC)             { msg = "magic"; rc = -1; goto out; }
     if (h->version != KFWR_VERSION)         { msg = "version"; rc = -2; goto out; }
     if (h->run_count > h->run_capacity)     { msg = "run_count > run_capacity"; rc = -3; goto out; }

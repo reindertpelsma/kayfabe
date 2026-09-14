@@ -105,6 +105,7 @@ static KfWalkCfg cfg_default(void)
     c.pdb_capacity = 8;
     c.entry_budget = 4000000u;
     c.max_pdbs = 8;
+    c.table_version = KF_TBL_VER2;
     return c;
 }
 
@@ -289,6 +290,9 @@ static void t_sparse_and_invalid_skipped(void)
         {VBASE,            0x300000ull, 4096ull, F4K, KFWR_OP_MAP},
         {VBASE + 3 * 4096ull, 0x310000ull, 4096ull, F4K, KFWR_OP_MAP},
     });
+    /* ★ SPARSE and INVALID are different facts and the report now says which.
+     * One slot was DECLARED empty; the other was simply never written. */
+    CHECK_EQ(f.hdr.sparse_slots, 1);
 }
 
 static void t_flags_decoded(void)
@@ -2099,9 +2103,77 @@ static void t_roundtrip_under_racer(void)
     CHECK_M(deepest > 1500, "the walk never reached the leaves");
 }
 
+
+/* ══ THE FORMAT SEAM ═════════════════════════════════════════════════════════
+ * The layout is setup data (THE_CONSTRAINTS.md §21). These assert the gates on
+ * it; that the descriptor is actually CONSULTED is proved by
+ * `make check-seam-negative`, which perturbs it by one bit and requires the
+ * suite to fail.
+ */
+static void t_format_refuses_unknown_table_version(void)
+{
+    KfWalkCfg c = cfg_default();
+    c.table_version = 99u;
+    KfWalk *w = kf_create(&c);
+    CHECK_M(w == NULL, "an unknown table_version must be refused at create, loudly");
+    if (w) kf_destroy(w);
+}
+
+static void t_format_refuses_untested_ver3(void)
+{
+    /* ⚠ VER3 is a sketch. It must not be reachable by accident: a caller asking
+     * for it gets a refusal, not a walk that LOOKS like Hopper support. */
+    KfWalkCfg c = cfg_default();
+    c.table_version = KF_TBL_VER3;
+    KfWalk *w = kf_create(&c);
+    CHECK_M(w == NULL, "VER3 has never run and must be refused unless deliberately enabled");
+    if (w) kf_destroy(w);
+}
+
+static void t_format_report_is_self_describing(void)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    t.map64k(VBASE + (1ull << 21), 0x400000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    /* The page-size CODE is format-independent; the report carries the mapping
+     * from code to bytes, so the host parser needs no format knowledge. */
+    CHECK_EQ(f.hdr.ps_log2[KFWR_PS_4K], 12);
+    CHECK_EQ(f.hdr.ps_log2[KFWR_PS_64K], 16);
+    CHECK_EQ(f.hdr.ps_log2[KFWR_PS_2M], 21);
+    CHECK_EQ(f.hdr.ps_log2[KFWR_PS_512M], 29);
+}
+
+static void t_format_sparse_is_counted(void)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, 0x300000ull);
+    uint64_t pts = t.pts(VBASE);
+    for (uint32_t i = 1; i < 9; i++) f.g.u64(pts + (uint64_t)i * 8) = kfb_sparse_pte();
+    for (uint32_t i = 9; i < 20; i++) f.g.u64(pts + (uint64_t)i * 8) = 0ull;  /* never written */
+    /* a whole 2 MiB region declared sparse at the PD0 slot's small half */
+    uint64_t va2 = VBASE + (4ull << 21);
+    f.g.u64(t.pd0(va2) + (uint64_t)vi0(va2) * 16 + 8) = kfb_sparse_pde();
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.run_count, 1);
+    CHECK_M(f.hdr.sparse_slots == 9, "eight sparse PTEs and one sparse PDE, and no invalid slot");
+    if (g_fails_here) dump(f);
+}
+
 /* ══ registry ════════════════════════════════════════════════════════════════ */
 struct Case { const char *name; void (*fn)(void); };
 static const Case CASES[] = {
+    { "format/refuses_unknown_table_version",   t_format_refuses_unknown_table_version },
+    { "format/refuses_untested_ver3",           t_format_refuses_untested_ver3 },
+    { "format/report_is_self_describing",       t_format_report_is_self_describing },
+    { "format/sparse_is_counted",               t_format_sparse_is_counted },
+
     { "correctness/single_4k",                  t_single_4k },
     { "correctness/large_pages_64k_2m_512m",    t_large_pages },
     { "correctness/coalesce_one_run",           t_coalesce_one_run },

@@ -28,11 +28,15 @@ check-invariants:
 	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | tail -n +2 | grep -qE '\bgoto\b|kf_walk_one\('; then \
 	   echo "I1 FAIL: a goto or a recursive call on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no goto, no recursion"
-	@for k in KF_PD3_N KF_PD2_N KF_PD1_N KF_PD0_N KF_PTB_N; do \
-	   if ! awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -q "< $$k"; then \
-	     echo "I1 FAIL: no constant-bound loop over $$k"; exit 1; fi; \
-	 done; \
-	 echo "I1 ok: five nested loops, every trip count a format constant"
+	@n=`awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -c 'i < KF_MAX_ENT' || true`; \
+	 if [ "$$n" -lt 5 ]; then echo "I1 FAIL: only $$n loops bounded by the COMPILE-TIME cap, want >= 5"; exit 1; fi; \
+	 echo "I1 ok: $$n nested loops, each bounded at compile time by KF_MAX_ENT"
+	@n=`grep -cE '^#define (KF_DIRS|KF_MAX_ENT)' kf_walk.cu || true`; \
+	 if [ "$$n" != "2" ]; then echo "I1 FAIL: the nesting bounds are not compile-time constants"; exit 1; fi; \
+	 echo "I1 ok: the nesting depth and fan-out caps are #defines, not descriptor fields"
+	@if grep -nE '^\s*(#define )?(KF_PD3_N|KF_SH_PD3|VER2_ADDR_|0x3f)' kf_walk.cu | grep -v '^\s*\*'; then \
+	   echo "SEAM FAIL: a VER2 geometry constant is still in the kernel"; exit 1; fi; \
+	 echo "seam ok: no VER2 geometry constants left in the kernel"
 	@n=`grep -c 'KFWR_HF_TRUNCATED' kf_walk.cu || true`; \
 	 if [ "$$n" -lt 3 ]; then echo "I3 FAIL: truncation set from fewer than 3 sites"; exit 1; fi; \
 	 echo "I3 ok: truncation raised from $$n sites"
@@ -96,6 +100,42 @@ check-closure-negative: kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap
 	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL round-trip does not pass on the real binary"; exit 1; fi; \
 	 echo "neg ok: the control round-trip still passes on the unbroken binary"
 
+# ═══ THE SEAM'S OWN KNOWN-POSITIVE ═══════════════════════════════════════════
+# "The descriptor is used" is unproven until a WRONG descriptor breaks something.
+# Each flag perturbs the setup data by one bit and nothing else; a hardcoded
+# fallback anywhere in the decode would keep the suite green through these.
+kf_tests_baddesc: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BAD_DESCRIPTOR -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_badgeom: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BAD_GEOMETRY -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_badabi: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BAD_ABI -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_ver3: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_ALLOW_UNTESTED_VER3 -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-seam-negative: kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests
+	@./kf_tests_baddesc correctness/ > /tmp/kf_neg6.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "SEAM FAIL: a field spec one bit wrong PASSED -- the descriptor is not consulted"; exit 1; fi; \
+	 echo "seam ok: addr_local.lo off by one breaks the decode (rc=$$rc), on:"; \
+	 grep -m1 '^    !' /tmp/kf_neg6.txt
+	@./kf_tests_badgeom correctness/ > /tmp/kf_neg7.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "SEAM FAIL: a level stride one bit wrong PASSED -- the geometry is not consulted"; exit 1; fi; \
+	 echo "seam ok: dir[3].va_lo off by one breaks the walk (rc=$$rc), on:"; \
+	 grep -m1 '^    !' /tmp/kf_neg7.txt
+	@./kf_tests_badabi correctness/single_4k > /tmp/kf_neg8.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "SEAM FAIL: an abi_version skew PASSED -- the gate is not there"; exit 1; fi; \
+	 if ! grep -q 'format descriptor REFUSED: abi_version' /tmp/kf_neg8.txt; then \
+	   echo "SEAM FAIL: the abi skew failed, but NOT at the abi gate -- wrong reason:"; \
+	   head -3 /tmp/kf_neg8.txt; exit 1; fi; \
+	 echo "seam ok: an abi_version skew is refused AT LAUNCH (rc=$$rc), on:"; \
+	 grep -m1 'format descriptor REFUSED' /tmp/kf_neg8.txt
+	@./kf_tests correctness/ > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "SEAM FAIL: the CONTROL does not pass on the real descriptor"; exit 1; fi; \
+	 echo "seam ok: the control passes on the real descriptor"
+
 # No SASS at all ⇒ the driver JITs from PTX at load time.
 check-ptx: kf_tests
 	@if cuobjdump -sass kf_tests 2>/dev/null | grep -q 'code for sm_'; then \
@@ -103,9 +143,10 @@ check-ptx: kf_tests
 	 echo "jit ok: PTX-only binary"
 	@cuobjdump -ptx kf_tests | grep -m1 '.target' || true
 
-check: check-invariants kf_tests check-ptx check-negative check-closure-negative
+check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-seam-negative
 
 clean:
-	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap
+	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap \
+	      kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests_ver3
 
-.PHONY: all check check-invariants check-ptx check-negative check-closure-negative clean
+.PHONY: all check check-invariants check-ptx check-negative check-closure-negative check-seam-negative clean
