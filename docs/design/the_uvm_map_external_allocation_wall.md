@@ -287,6 +287,39 @@ what we advertise, built at a granularity that makes it unpayable either way.
 `base=0 length=1 offset=0xc1d0…` — an RM client handle, which is the tell that the offsets were
 not the struct I thought.
 
+## ★★★★★ 4g. THE THRESHOLD: every 2 MiB map returns, the first 48 MiB map does not
+
+`[measured w704]` An `LD_PRELOAD` shim (`scripts/bench/uvmparams_shim.c`) logged `{base, length}`
+**before** each call, because `strace` structurally cannot: for an UNFINISHED call it prints no
+argument pointer, so the one call under investigation is exactly the one whose buffer is missing.
+
+    #1  MAP_EXTERNAL  base=0x0000000200000000  length=0x200000  (2 MiB)   returned 0
+    #2  MAP_EXTERNAL  base=0x0000010000000000  length=0x200000  (2 MiB)   returned 0
+    #3  MAP_EXTERNAL  base=0x0000010002000000  length=0x200000  (2 MiB)   returned 0
+    #4  MAP_EXTERNAL  base=0x000073597e000000  length=0x200000  (2 MiB)   returned 0
+    #5  MAP_EXTERNAL  base=0x0000000200200000  length=0x200000  (2 MiB)   returned 0
+    #6  MAP_EXTERNAL  base=0x0000000200400000  length=0x3000000 (48 MiB)  >>> with NO <<<
+
+⇒ **Every 2 MiB map succeeds; the first map larger than 2 MiB hangs.** 2 MiB is exactly one large
+page / one page-directory entry, so the failure begins precisely when the range spans **more than
+one** and UVM must allocate the **next page-table level**.
+
+★ With `clear_page_rep` at 42 % of the hung thread, this reads as an **allocate → zero → fail →
+retry loop**, not a large-but-finite one: 48 MiB at 4 KiB granularity is 12 288 pages, which would
+zero in milliseconds, not ten minutes. Something the allocation needs is never satisfied, and the
+guest retries forever.
+
+⊘ The `>>>` / `<<<` asymmetry is what made this readable at all. A logger that printed only on
+return would have been silent for precisely the call under investigation — the failure mode this
+tree keeps paying for.
+
+### What to look at next
+
+The page-table level above 2 MiB: what the GMMU format advertises for the next level up, and what
+our device answers when UVM asks for backing for it. ⊘ Note the base addresses: `0x2_0000_0000`,
+`0x100_0000_0000`, `0x7359_7e00_0000` — three very different regions, all fine at 2 MiB, so the
+failure is about **extent**, not placement.
+
 ## 5. The open question, stated as a decision
 
 UVM's page-table work is **guest-kernel work** (so it lands in proc 0) that **must actually
