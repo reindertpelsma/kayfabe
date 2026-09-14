@@ -105,3 +105,36 @@ and is silent"*, never as *"this will happen"*.
 ★ **For us the actionable half is the mirror image:** if our aperture store ever refuses a page,
 the guest's driver may not report it. ⇒ **We must refuse loudly on our side** — a named refusal —
 because the guest's own error path cannot be relied on to carry it.
+
+## 5 — Is UVM's CE the same CE userspace copies use? **No** (w719e)
+
+> Owner, 2026-09-14: *"is the kernel uvm ce also used for userspace ce copies?"*
+
+**Separate, two independent ways.**
+
+1. **UVM's channels are kernel-allocated.** `nvUvmInterfaceChannelAllocate`
+   (`uvm_channel.c:2366`) is the RM↔UVM **kernel** interface. The only channel traffic crossing
+   the userspace ABI runs the **other way**: `uvm_api_register_channel` (`uvm_api.h:249`) is
+   userspace telling UVM about a channel *it* created so UVM can service faults on it. Nothing
+   hands a UVM channel to userspace, and `UVM_CHANNEL_TYPE` does not appear in `uvm_ioctl.h` at
+   all.
+2. **Page-tree writes have their own channel type inside UVM** — `UVM_CHANNEL_TYPE_MEMOPS`,
+   declared as *"Memops and small memsets/copies for writing PTEs"* (`uvm_channel.h:88-89`) and
+   selected explicitly for page-tree manipulation (`uvm_mmu.c:50-64`: *"…because it is used to
+   manipulate the page tree"*).
+
+⊘ **Do NOT build a page-table oracle on the channel type.** MEMOPS also carries fault servicing
+(`uvm_gpu_replayable_faults.c:363,372,449,502`, `uvm_gpu_non_replayable_faults.c:299`,
+`uvm_ats_faults.c:742`), migration (`uvm_migrate.c:722`), `uvm_va_block.c` (×6) and
+`uvm_map_external.c:231`. *"Arrived on MEMOPS"* is **necessary, not sufficient**.
+
+### ★★★ Why this SHRINKS the recycling hazard of constraint 19(b)
+
+UVM's page tables are **CE-written and never CPU-read through BAR2**. ⇒ Under 19(a)'s
+reserved-object default they never qualify for the aperture store **at all**: they are ordinary
+engine-visible video memory from birth. Nothing to classify, nothing to migrate, nothing to
+revoke.
+
+⇒ **The recycle-changes-role hazard is confined to RM's pool** — which is precisely where the
+observable event exists (the parent PDE going invalid, strictly before the free, §1). ★ The hard
+case and the available signal are the same case, and it is **one allocator, not two**.
