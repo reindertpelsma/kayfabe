@@ -166,6 +166,7 @@ struct KfDev {
     unsigned int refuse_mask;
     unsigned int hdr_flags;
     unsigned int walk_trunc;
+    unsigned int walk_abort;   /* the walk itself stopped: budget or frontier cap */
     unsigned int sparse_slots;
 };
 
@@ -613,6 +614,7 @@ __global__ void kf_begin_kernel(KfDev *d)
     d->refuse_mask = 0u;
     d->hdr_flags = 0u;
     d->walk_trunc = 0u;
+    d->walk_abort = 0u;
     d->sparse_slots = 0u;
 }
 
@@ -1274,9 +1276,11 @@ static const char *kf_format_check(const KfFormat &F)
  */
 
 #define KF_MAX_FRONTIER 131072u
+#define KF_MAX_SCRATCH  (4u << 20)    /* runs the leaf phase may stage */
 #define KF_WARP         32u
 #define KF_PAR_BLOCK    128u          /* 4 warps */
 #define KF_SCAN_BLOCK   1024u
+#define KF_SHWORDS      (KF_MAX_ENT + 64u)   /* u64 of shared memory per warp */
 
 #define KF_ENT_DEAD  0u   /* a root that was refused: contributes nothing      */
 #define KF_ENT_TABLE 1u   /* a page-directory page to expand                   */
@@ -1294,33 +1298,37 @@ struct KfEnt {
     uint8_t  has;     /* bit0 small table present, bit1 big     */
 };
 
-/* What one task contributed, so the join can be decided without re-walking. */
+/* What one task contributed, so the boundary join can be decided without
+ * re-walking, and where its runs were staged. */
 struct KfSum {
     uint64_t fva, fgpga, flen;
     uint64_t lva, lgpga, llen;
     uint32_t fflags, lflags;
     uint32_t n;
-    uint32_t pad;
+    uint32_t start;   /* where this task's runs sit in the staging buffer */
 };
 
 struct KfPar {
     KfEnt *fr[2];
+    KfEnt *stage;          /* children written at atomically reserved offsets */
     KfEnt *task;
-    uint32_t *cnt, *off, *nfr, *ntask, *pdbbase;
+    KfMapRun *runstage;
+    uint32_t *cnt, *off, *start, *nfr, *ntask, *pdbbase, *used;
     KfSum *sum;
     unsigned char *head;
 };
 
-/* ── the run accumulator, shared by the count and write passes ───────────────
- * ⊘ `out == NULL` means COUNT ONLY. The two passes must agree on `n` exactly,
- * so there is one function and a null pointer rather than two. */
+/* ── the run accumulator ─────────────────────────────────────────────────────
+ * ⊘ `out == NULL` means COUNT ONLY. The counting walk and the writing walk read
+ * the SAME shared-memory snapshot of the table, so they cannot disagree about
+ * how many runs there are — which is what makes the walk correct while the guest
+ * is mutating the tables underneath it. */
 struct KfRunAcc {
     const KfFormat *fmt;
     KfMapRun *out;
     uint32_t cap, n, have, overflow;
     KfMapRun run, first, last;
-    uint32_t got_first;
-    uint32_t skip;          /* suppress the first flush: the join owns that run */
+    uint32_t got_first, skip;
     uint16_t pdb_index;
     uint32_t refuse, refusals;
 };
@@ -1341,10 +1349,10 @@ __device__ __forceinline__ void kf_acc_flush(KfRunAcc &c)
     if (!c.got_first) { c.first = c.run; c.got_first = 1u; }
     c.last = c.run;
     c.have = 0u;
-    if (c.skip) { c.skip = 0u; return; }   /* kf_par_join adds this one instead */
+    if (c.skip) { c.skip = 0u; return; }
     if (c.out) {
         if (c.n < c.cap) c.out[c.n] = c.run;
-        else c.overflow = 1u;
+        else { c.overflow = 1u; return; }
     }
     c.n++;
 }
@@ -1365,26 +1373,27 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
     c.run.op = KFWR_OP_MAP; c.run.pdb_index = c.pdb_index; c.have = 1u;
 }
 
-/* ── refusal accounting, from any kernel ─────────────────────────────────────
- * ⊘ Straight to the device state: a refusal is rare on a healthy tree, so the
- * contention this would cause on a hostile one is the right place to pay it. */
 __device__ __forceinline__ void kf_par_refuse(KfDev *d, unsigned int bit)
 {
     atomicOr(&d->refuse_mask, bit);
     atomicAdd(&d->refusals, 1u);
 }
 
-__device__ __forceinline__ bool kf_par_stopped(const KfDev *d)
+/* ⊘ ABORT, not TRUNCATED. Running out of RUN slots truncates the report but the
+ * walk must still write what fits; running out of BUDGET or FRONTIER stops the
+ * walk itself. Conflating them is how a run-cap truncation silently produced a
+ * report of uninitialised runs. */
+__device__ __forceinline__ void kf_par_abort(KfDev *d, unsigned int bit)
 {
-    return (d->hdr_flags & KFWR_HF_TRUNCATED) != 0u;
+    atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
+    atomicOr(&d->walk_trunc, 1u);
+    atomicOr(&d->walk_abort, 1u);
+    kf_par_refuse(d, bit);
 }
+__device__ __forceinline__ bool kf_par_aborted(const KfDev *d) { return d->walk_abort != 0u; }
 
-/* ── seed: one frontier entry per address space, IN ORDER ────────────────────
- * ⊘ Written at index t rather than at an atomically reserved slot, and a refused
- * root becomes KF_ENT_DEAD rather than being skipped — because the frontier's
- * ORDER is the report's order, and a compaction here would scramble it for no
- * gain over the at most KF_MAX_PDB entries involved. */
-__global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr)
+/* ── seed: one frontier entry per address space, IN ORDER ──────────────────── */
+__global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr, uint32_t *used)
 {
     const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
     if (t >= a.npdb) return;
@@ -1395,242 +1404,162 @@ __global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr)
 
     d->tbl_pdb[cur][t] = pdb;
     d->tbl_run_count[cur][t] = 0u;
-    if (t == 0u) { d->tbl_pdb_count[cur] = a.npdb; *nfr = a.npdb; }
+    if (t == 0u) { d->tbl_pdb_count[cur] = a.npdb; *nfr = a.npdb; used[0] = 0u; used[1] = 0u; }
 
     KfEnt e;
     memset(&e, 0, sizeof(e));
     e.pdb = (uint16_t)t;
     e.kind = KF_ENT_DEAD;
     const uint64_t rb = (uint64_t)F.dir[F.first_dir].entries * F.dir[F.first_dir].entry_bytes;
-    if (pdb & (F.root_align - 1ull)) {
-        kf_par_refuse(d, KFWR_R_UNALIGNED);
-    } else if (pdb > a.win.len || rb > a.win.len - pdb) {
-        kf_par_refuse(d, KFWR_R_OOB);
-    } else {
-        e.kind = KF_ENT_TABLE;
-        e.addr = pdb;
-    }
+    if (pdb & (F.root_align - 1ull))                    kf_par_refuse(d, KFWR_R_UNALIGNED);
+    else if (pdb > a.win.len || rb > a.win.len - pdb)   kf_par_refuse(d, KFWR_R_OOB);
+    else { e.kind = KF_ENT_TABLE; e.addr = pdb; }
     fr[t] = e;
 }
 
-/* ── one directory level ─────────────────────────────────────────────────────
- * `pass == 0` counts; `pass == 1` writes. Identical control flow, so the two
- * cannot disagree about how many children a parent has. All refusal, sparse and
- * budget accounting happens in the COUNT pass only — the write pass re-reads the
- * same table and must not charge for it twice. */
-__device__ __forceinline__ void kf_par_level_body(const KfArgs &a, uint32_t level, uint32_t pass,
-                                                  const KfEnt &e, uint32_t lane,
-                                                  const uint32_t *off, uint32_t gw,
-                                                  KfEnt *out, uint32_t outcap,
-                                                  uint32_t *cnt)
+/* ── expand ONE level ────────────────────────────────────────────────────────
+ *
+ * One warp per frontier entry. The warp bulk-loads the whole table into shared
+ * memory — coalesced, 32 loads in flight, ONE pass over global memory — and then
+ * lane 0 decodes it. Counting and writing both read that one snapshot, so a
+ * guest mutating the table cannot make them disagree.
+ *
+ * Children are staged at an ATOMICALLY reserved offset and each parent records
+ * `(start, count)`; `kf_par_compact` then copies them into frontier order. ⊘ The
+ * reservation is unordered and the compaction is what restores order — the
+ * report's sortedness is not an accident of scheduling.
+ *
+ * `level == KF_DIRS-1` is the dual level, whose children are TASKS.
+ */
+__global__ void kf_par_expand(KfArgs a, uint32_t level, const KfEnt *in, const uint32_t *nin,
+                              KfEnt *stage, uint32_t stagecap, uint32_t *used,
+                              uint32_t *start, uint32_t *cnt)
 {
+    extern __shared__ uint64_t shmem[];
+    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t gw = gid / KF_WARP;
+    const uint32_t lane = gid & (KF_WARP - 1u);
+    const uint32_t wib = threadIdx.x / KF_WARP;
+    if (gw >= *nin) return;
     KfDev *d = a.dev;
-    const KfFormat &F = a.fmt;
-    const KfDir &L = F.dir[level];
-    const uint32_t full = 0xFFFFFFFFu;
+    if (kf_par_aborted(d)) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
 
-    if (e.kind == KF_ENT_DEAD) { if (pass == 0u && lane == 0u) cnt[gw] = 0u; return; }
-    if (e.kind == KF_ENT_LEAF) {
-        if (pass == 0u) { if (lane == 0u) cnt[gw] = 1u; }
-        else if (lane == 0u) {
-            uint32_t w = off[gw];
-            if (w < outcap) out[w] = e;
-            else { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u);
-                   kf_par_refuse(d, KFWR_R_FRONTIER_CAP); }
+    uint64_t *sh = shmem + (size_t)wib * KF_SHWORDS;
+    const KfFormat &F = a.fmt;
+    const bool dual = (level == KF_DIRS - 1u);
+    const KfDir &L = F.dir[level];
+    const KfEnt e = in[gw];
+
+    if (e.kind == KF_ENT_DEAD) { if (lane == 0u) { cnt[gw] = 0u; start[gw] = 0u; } return; }
+    if (e.kind == KF_ENT_LEAF) {          /* a leaf found higher up, passed through */
+        if (lane == 0u) {
+            uint32_t st = atomicAdd(used, 1u);
+            if (st < stagecap) stage[st] = e; else kf_par_abort(d, KFWR_R_FRONTIER_CAP);
+            start[gw] = st; cnt[gw] = 1u;
         }
         return;
     }
 
     const uint32_t nslots = L.entries;
-    if (pass == 0u && lane == 0u) {
-        unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)nslots);
-        if (was + nslots > (unsigned long long)d->entry_budget) {
-            atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED | KFWR_HF_BUDGET);
-            atomicOr(&d->walk_trunc, 1u);
-            kf_par_refuse(d, KFWR_R_BUDGET);
-        }
+    const uint32_t nwords = nslots * (L.entry_bytes / 8u);
+    if (lane == 0u) {
+        const unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)nslots);
+        if (was + nslots > (unsigned long long)d->entry_budget) kf_par_abort(d, KFWR_R_BUDGET);
     }
+    /* THE ONE PASS OVER GLOBAL MEMORY. */
+    for (uint32_t i = lane; i < KF_SHWORDS && i < nwords; i += KF_WARP)
+        if (!kf_win_load(a.win, e.addr + (uint64_t)i * 8u, &sh[i])) sh[i] = 0ull;
+    __syncwarp();
+    if (lane != 0u) return;
 
-    uint32_t mine = 0u;
-    uint32_t w = (pass == 1u) ? off[gw] : 0u;
-    const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
-
-    for (uint32_t base = 0u; base < KF_MAX_ENT && base < nslots; base += KF_WARP) {
-        const uint32_t i = base + lane;
-        uint32_t good = 0u;
-        KfEnt ch;
-        memset(&ch, 0, sizeof(ch));
-        if (i < nslots) {
-            uint64_t raw = 0ull;
-            if (!kf_win_load(a.win, e.addr + (uint64_t)i * L.entry_bytes, &raw)) {
-                if (pass == 0u) kf_par_refuse(d, KFWR_R_OOB);
-            } else if (L.leaf_ps != KF_PS_NONE && kf_valid(F, raw)) {
-                ch.va = e.va | ((uint64_t)i << L.va_lo);
-                ch.addr = kf_addr(F, raw, kf_ap_raw(F, raw));
-                ch.flags = kf_leaf_flags(F, raw, L.leaf_ps);
-                ch.len_log2 = F.ps_log2[L.leaf_ps];
-                ch.pdb = e.pdb;
-                ch.kind = KF_ENT_LEAF;
-                good = 1u;
-            } else {
-                const uint32_t apc = kf_ap_raw(F, raw);
-                if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
-                    if (pass == 0u && kf_slot_sparse(F, raw)) atomicAdd(&d->sparse_slots, 1u);
-                } else if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) {
-                    if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP);
-                } else {
-                    const uint64_t nx = kf_addr(F, raw, apc);
-                    if (nx == 0ull) {
-                        /* a null sub-table pointer is not a sub-table */
-                    } else if (!kf_win_table_ok(a.win, nx, cb, cb)) {
-                        if (pass == 0u) kf_par_refuse(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
-                    } else {
-                        ch.va = e.va | ((uint64_t)i << L.va_lo);
-                        ch.addr = nx;
-                        ch.pdb = e.pdb;
-                        ch.kind = KF_ENT_TABLE;
-                        good = 1u;
-                    }
-                }
-            }
-        }
-        const uint32_t bal = __ballot_sync(full, good);
-        if (pass == 0u) {
-            mine += (uint32_t)__popc(bal);
-        } else {
-            const uint32_t rank = (uint32_t)__popc(bal & ((1u << lane) - 1u));
-            if (good) {
-                if (w + rank < outcap) out[w + rank] = ch;
-                else if (lane == 0u) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
-                                       atomicOr(&d->walk_trunc, 1u);
-                                       kf_par_refuse(d, KFWR_R_FRONTIER_CAP); }
-            }
-            w += (uint32_t)__popc(bal);
-        }
-    }
-    if (pass == 0u && lane == 0u) cnt[gw] = mine;
-}
-
-__global__ void kf_par_level(KfArgs a, uint32_t level, uint32_t pass, const KfEnt *in,
-                             const uint32_t *nin, const uint32_t *off, KfEnt *out,
-                             uint32_t outcap, uint32_t *cnt)
-{
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    if (gw >= *nin) return;
-    if (kf_par_stopped(a.dev)) { if (pass == 0u && lane == 0u) cnt[gw] = 0u; return; }
-    kf_par_level_body(a, level, pass, in[gw], lane, off, gw, out, outcap, cnt);
-}
-
-/* ── the DUAL level: children are TASKS, one per PD0 slot ────────────────────── */
-__global__ void kf_par_dual(KfArgs a, uint32_t pass, const KfEnt *in, const uint32_t *nin,
-                            const uint32_t *off, KfEnt *out, uint32_t outcap, uint32_t *cnt)
-{
-    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t gw = gid / KF_WARP;
-    const uint32_t lane = gid & (KF_WARP - 1u);
-    if (gw >= *nin) return;
-    if (kf_par_stopped(a.dev)) { if (pass == 0u && lane == 0u) cnt[gw] = 0u; return; }
-
-    KfDev *d = a.dev;
-    const KfFormat &F = a.fmt;
-    const KfDir &D = F.dir[KF_DIRS - 1u];
-    const uint32_t full = 0xFFFFFFFFu;
-    const KfEnt e = in[gw];
-
-    if (e.kind == KF_ENT_DEAD) { if (pass == 0u && lane == 0u) cnt[gw] = 0u; return; }
-    if (e.kind == KF_ENT_LEAF) {
-        if (pass == 0u) { if (lane == 0u) cnt[gw] = 1u; }
-        else if (lane == 0u) {
-            uint32_t w = off[gw];
-            if (w < outcap) out[w] = e;
-            else { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u);
-                   kf_par_refuse(d, KFWR_R_FRONTIER_CAP); }
-        }
-        return;
-    }
-
-    const uint32_t nslots = D.entries;
-    if (pass == 0u && lane == 0u) {
-        unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)nslots);
-        if (was + nslots > (unsigned long long)d->entry_budget) {
-            atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED | KFWR_HF_BUDGET);
-            atomicOr(&d->walk_trunc, 1u);
-            kf_par_refuse(d, KFWR_R_BUDGET);
-        }
-    }
-
+    const uint64_t cb = dual ? 0ull
+                             : (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
     const uint64_t sb = (uint64_t)F.small_entries * F.small_entry_bytes;
     const uint64_t bb = (uint64_t)F.big_entries * F.big_entry_bytes;
-    uint32_t mine = 0u;
-    uint32_t w = (pass == 1u) ? off[gw] : 0u;
 
-    for (uint32_t base = 0u; base < KF_MAX_ENT && base < nslots; base += KF_WARP) {
-        const uint32_t i = base + lane;
-        uint32_t good = 0u;
-        KfEnt t;
-        memset(&t, 0, sizeof(t));
-        if (i < nslots) {
-            uint64_t lo16 = 0ull, hi16 = 0ull;
-            const uint64_t at = e.addr + (uint64_t)i * D.entry_bytes;
-            if (!kf_win_load(a.win, at, &lo16) || !kf_win_load(a.win, at + 8ull, &hi16)) {
-                if (pass == 0u) kf_par_refuse(d, KFWR_R_OOB);
-            } else if (D.leaf_ps != KF_PS_NONE && kf_valid(F, lo16)) {
-                t.va = e.va | ((uint64_t)i << D.va_lo);
-                t.addr = kf_addr(F, lo16, kf_ap_raw(F, lo16));
-                t.flags = kf_leaf_flags(F, lo16, D.leaf_ps);
-                t.len_log2 = F.ps_log2[D.leaf_ps];
-                t.pdb = e.pdb;
-                t.kind = KF_ENT_LEAF;
-                good = 1u;
+    /* Pass A: how many children? Pass B: write them. Both from `sh`. */
+    uint32_t n = 0u, st = 0u;
+    for (uint32_t pass = 0u; pass < 2u; pass++) {
+        if (pass == 1u) {
+            st = atomicAdd(used, n);
+            start[gw] = st;
+            cnt[gw] = n;
+            if (st + n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); return; }
+            n = 0u;
+        }
+        for (uint32_t i = 0u; i < KF_MAX_ENT && i < nslots; i++) {
+            KfEnt ch;
+            memset(&ch, 0, sizeof(ch));
+            uint32_t good = 0u;
+            if (!dual) {
+                const uint64_t raw = sh[i];
+                if (L.leaf_ps != KF_PS_NONE && kf_valid(F, raw)) {
+                    ch.va = e.va | ((uint64_t)i << L.va_lo);
+                    ch.addr = kf_addr(F, raw, kf_ap_raw(F, raw));
+                    ch.flags = kf_leaf_flags(F, raw, L.leaf_ps);
+                    ch.len_log2 = F.ps_log2[L.leaf_ps];
+                    ch.pdb = e.pdb; ch.kind = KF_ENT_LEAF; good = 1u;
+                } else {
+                    const uint32_t apc = kf_ap_raw(F, raw);
+                    if (!kf_dir_present(F, raw, apc, L.leaf_ps != KF_PS_NONE)) {
+                        if (pass == 0u && kf_slot_sparse(F, raw)) atomicAdd(&d->sparse_slots, 1u);
+                    } else if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) {
+                        if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP);
+                    } else {
+                        const uint64_t nx = kf_addr(F, raw, apc);
+                        if (nx == 0ull) { /* a null sub-table pointer is not a sub-table */ }
+                        else if (!kf_win_table_ok(a.win, nx, cb, cb)) {
+                            if (pass == 0u) kf_par_refuse(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                        } else {
+                            ch.va = e.va | ((uint64_t)i << L.va_lo);
+                            ch.addr = nx; ch.pdb = e.pdb; ch.kind = KF_ENT_TABLE; good = 1u;
+                        }
+                    }
+                }
             } else {
-                const uint32_t aps = kf_ap_raw(F, hi16);
-                const uint32_t apb = kf_ap_raw(F, lo16);
-                uint8_t has = 0u;
-                uint64_t pts = 0ull, ptb = 0ull;
-                if (kf_dir_present(F, hi16, aps, false)) {
-                    if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
-                    else {
-                        pts = kf_addr(F, hi16, aps);
-                        if (pts != 0ull) {
-                            if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
-                            else if (pass == 0u) kf_par_refuse(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                const uint64_t lo16 = sh[2u * i], hi16 = sh[2u * i + 1u];
+                if (L.leaf_ps != KF_PS_NONE && kf_valid(F, lo16)) {
+                    ch.va = e.va | ((uint64_t)i << L.va_lo);
+                    ch.addr = kf_addr(F, lo16, kf_ap_raw(F, lo16));
+                    ch.flags = kf_leaf_flags(F, lo16, L.leaf_ps);
+                    ch.len_log2 = F.ps_log2[L.leaf_ps];
+                    ch.pdb = e.pdb; ch.kind = KF_ENT_LEAF; good = 1u;
+                } else {
+                    const uint32_t aps = kf_ap_raw(F, hi16), apb = kf_ap_raw(F, lo16);
+                    uint8_t has = 0u;
+                    uint64_t pts = 0ull, ptb = 0ull;
+                    if (kf_dir_present(F, hi16, aps, false)) {
+                        if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
+                        else {
+                            pts = kf_addr(F, hi16, aps);
+                            if (pts != 0ull) {
+                                if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
+                                else if (pass == 0u) kf_par_refuse(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                            }
                         }
-                    }
-                } else if (pass == 0u && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
-                if (kf_dir_present(F, lo16, apb, D.leaf_ps != KF_PS_NONE)) {
-                    if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
-                    else {
-                        ptb = kf_big_addr(F, lo16, apb);
-                        if (ptb != 0ull) {
-                            if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
-                            else if (pass == 0u) kf_par_refuse(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                    } else if (pass == 0u && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
+                    if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
+                        if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (pass == 0u) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
+                        else {
+                            ptb = kf_big_addr(F, lo16, apb);
+                            if (ptb != 0ull) {
+                                if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
+                                else if (pass == 0u) kf_par_refuse(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                            }
                         }
+                    } else if (pass == 0u && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+                    if (has) {
+                        ch.va = e.va | ((uint64_t)i << L.va_lo);
+                        ch.addr = pts; ch.addr2 = ptb; ch.has = has;
+                        ch.pdb = e.pdb; ch.kind = KF_ENT_DUAL; good = 1u;
                     }
-                } else if (pass == 0u && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
-                if (has) {
-                    t.va = e.va | ((uint64_t)i << D.va_lo);
-                    t.addr = pts; t.addr2 = ptb; t.has = has;
-                    t.pdb = e.pdb; t.kind = KF_ENT_DUAL;
-                    good = 1u;
                 }
             }
-        }
-        const uint32_t bal = __ballot_sync(full, good);
-        if (pass == 0u) mine += (uint32_t)__popc(bal);
-        else {
-            const uint32_t rank = (uint32_t)__popc(bal & ((1u << lane) - 1u));
-            if (good) {
-                if (w + rank < outcap) out[w + rank] = t;
-                else if (lane == 0u) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
-                                       atomicOr(&d->walk_trunc, 1u);
-                                       kf_par_refuse(d, KFWR_R_FRONTIER_CAP); }
-            }
-            w += (uint32_t)__popc(bal);
+            if (!good) continue;
+            if (pass == 1u) stage[st + n] = ch;
+            n++;
         }
     }
-    if (pass == 0u && lane == 0u) cnt[gw] = mine;
 }
 
 /* ── the exclusive prefix sum ────────────────────────────────────────────────
@@ -1659,30 +1588,37 @@ __global__ void kf_par_scan(const uint32_t *in, const uint32_t *nin, uint32_t *o
     if (threadIdx.x == KF_SCAN_BLOCK - 1u) *total = s[threadIdx.x];
 }
 
+/* ★★★ ORDER IS RESTORED HERE. Children were staged wherever an atomic put them;
+ * this copies them to `scan[parent] + j`, which is exactly where a depth-first
+ * walk would have produced them. */
+__global__ void kf_par_compact(KfArgs a, const KfEnt *stage, const uint32_t *start,
+                               const uint32_t *cnt, const uint32_t *off, const uint32_t *nin,
+                               KfEnt *dst, uint32_t cap)
+{
+    const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t gw = gid / KF_WARP;
+    const uint32_t lane = gid & (KF_WARP - 1u);
+    if (gw >= *nin) return;
+    if (kf_par_aborted(a.dev)) return;
+    const uint32_t n = cnt[gw], st = start[gw], o = off[gw];
+    for (uint32_t j = lane; j < KF_MAX_ENT && j < n; j += KF_WARP)
+        if (o + j < cap) dst[o + j] = stage[st + j];
+}
+
 /* ── the leaf phase ──────────────────────────────────────────────────────────
- * One warp per task. The warp bulk-loads the leaf table into shared memory —
- * fully coalesced, 32 loads in flight — and then lane 0 forms runs from shared
- * memory, where there is no latency left to hide. `pass == 0` fills the summary;
- * `pass == 1` writes the runs. */
-__device__ void kf_par_task_body(const KfArgs &a, uint32_t pass, const KfEnt &t,
-                                 uint32_t lane, uint64_t *ssmall, uint64_t *sbig,
-                                 KfRunAcc &c)
+ * One warp per task. The warp bulk-loads the leaf tables into shared memory,
+ * lane 0 forms the runs twice from that one snapshot — once to count, once to
+ * write — and the runs are staged at an atomically reserved offset. */
+__device__ void kf_par_task_runs(const KfArgs &a, const KfEnt &t, const uint64_t *ssmall,
+                                 const uint64_t *sbig, KfRunAcc &c, uint32_t census)
 {
     const KfFormat &F = a.fmt;
     if (t.kind == KF_ENT_LEAF) {
-        if (lane == 0u) kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
+        kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
+        kf_acc_flush(c);
         return;
     }
     const uint32_t ns = F.small_entries, nb = F.big_entries;
-    if (t.has & 1u)
-        for (uint32_t i = lane; i < KF_MAX_ENT && i < ns; i += KF_WARP)
-            if (!kf_win_load(a.win, t.addr + (uint64_t)i * F.small_entry_bytes, &ssmall[i])) ssmall[i] = 0ull;
-    if (t.has & 2u)
-        for (uint32_t i = lane; i < KF_MAX_ENT && i < nb; i += KF_WARP)
-            if (!kf_win_load(a.win, t.addr2 + (uint64_t)i * F.big_entry_bytes, &sbig[i])) sbig[i] = 0ull;
-    __syncwarp();
-    if (lane != 0u) return;
-
     const uint32_t ratio = 1u << (F.big_va_lo - F.small_va_lo);
     for (uint32_t b = 0u; b < KF_MAX_ENT && b < nb; b++) {
 #ifdef KF_BREAK_ORDER
@@ -1695,24 +1631,25 @@ __device__ void kf_par_task_body(const KfArgs &a, uint32_t pass, const KfEnt &t,
             if (kf_valid(F, e))
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps));
-            else if (pass == 0u && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+            else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
         }
         if (t.has & 1u) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
-                const uint32_t sIdx = bb * ratio + j;
-                if (sIdx >= ns) break;
-                const uint64_t e = ssmall[sIdx];
+                const uint32_t si = bb * ratio + j;
+                if (si >= ns) break;
+                const uint64_t e = ssmall[si];
                 if (kf_valid(F, e))
-                    kf_acc_emit(c, t.va | ((uint64_t)sIdx << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
+                    kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                                 1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps));
-                else if (pass == 0u && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
+                else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
             }
         }
     }
     kf_acc_flush(c);
 }
 
-__global__ void kf_par_leaf_sum(KfArgs a, const KfEnt *task, const uint32_t *nt, KfSum *sum)
+__global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
+                            KfMapRun *runstage, uint32_t stagecap, uint32_t *used, KfSum *sum)
 {
     extern __shared__ uint64_t shmem[];
     const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1721,42 +1658,47 @@ __global__ void kf_par_leaf_sum(KfArgs a, const KfEnt *task, const uint32_t *nt,
     const uint32_t wib = threadIdx.x / KF_WARP;
     if (gw >= *nt) return;
     KfDev *d = a.dev;
-    if (kf_par_stopped(d)) { if (lane == 0u) { KfSum z; memset(&z,0,sizeof z); z.lflags = 0xFFFFFFFFu; sum[gw] = z; } return; }
+    KfSum sm;
+    memset(&sm, 0, sizeof(sm));
+    sm.lflags = 0xFFFFFFFFu;     /* a sentinel no real run carries: nothing joins to it */
+    if (kf_par_aborted(d)) { if (lane == 0u) sum[gw] = sm; return; }
 
-    uint64_t *ssmall = shmem + (size_t)wib * (KF_MAX_ENT + 64u);
+    const KfFormat &F = a.fmt;
+    uint64_t *ssmall = shmem + (size_t)wib * KF_SHWORDS;
     uint64_t *sbig = ssmall + KF_MAX_ENT;
     const KfEnt t = task[gw];
 
-    if (lane == 0u) {
-        const KfFormat &F = a.fmt;
+    if (lane == 0u && t.kind == KF_ENT_DUAL) {
         uint32_t charge = 0u;
-        if (t.kind == KF_ENT_DUAL) {
-            if (t.has & 1u) charge += F.small_entries;
-            if (t.has & 2u) charge += F.big_entries;
-        }
-        if (charge) {
-            unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)charge);
-            if (was + charge > (unsigned long long)d->entry_budget) {
-                atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED | KFWR_HF_BUDGET);
-                atomicOr(&d->walk_trunc, 1u);
-                kf_par_refuse(d, KFWR_R_BUDGET);
-            }
-        }
+        if (t.has & 1u) charge += F.small_entries;
+        if (t.has & 2u) charge += F.big_entries;
+        const unsigned long long was = atomicAdd(&d->entries_visited, (unsigned long long)charge);
+        if (was + charge > (unsigned long long)d->entry_budget) kf_par_abort(d, KFWR_R_BUDGET);
     }
-
-    KfRunAcc c;
-    kf_acc_init(c, &a.fmt, NULL, 0u, t.pdb);
-    kf_par_task_body(a, 0u, t, lane, ssmall, sbig, c);
+    if (t.kind == KF_ENT_DUAL) {
+        if (t.has & 1u)
+            for (uint32_t i = lane; i < KF_MAX_ENT && i < F.small_entries; i += KF_WARP)
+                if (!kf_win_load(a.win, t.addr + (uint64_t)i * F.small_entry_bytes, &ssmall[i])) ssmall[i] = 0ull;
+        if (t.has & 2u)
+            for (uint32_t i = lane; i < KF_MAX_ENT && i < F.big_entries; i += KF_WARP)
+                if (!kf_win_load(a.win, t.addr2 + (uint64_t)i * F.big_entry_bytes, &sbig[i])) sbig[i] = 0ull;
+    }
+    __syncwarp();
     if (lane != 0u) return;
 
-    KfSum sm;
-    memset(&sm, 0, sizeof(sm));
+    KfRunAcc c;
+    kf_acc_init(c, &F, NULL, 0u, t.pdb);
+    kf_par_task_runs(a, t, ssmall, sbig, c, 1u);        /* count, and census */
     sm.n = c.n;
     if (c.n) {
         sm.fva = c.first.va; sm.fgpga = c.first.gpga; sm.flen = c.first.len; sm.fflags = c.first.flags;
         sm.lva = c.last.va;  sm.lgpga = c.last.gpga;  sm.llen = c.last.len;  sm.lflags = c.last.flags;
-    } else {
-        sm.lflags = 0xFFFFFFFFu;   /* a sentinel no real run carries: nothing joins to it */
+        const uint32_t st = atomicAdd(used, c.n);
+        sm.start = st;
+        if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
+        KfRunAcc wacc;
+        kf_acc_init(wacc, &F, runstage + st, c.n, t.pdb);
+        kf_par_task_runs(a, t, ssmall, sbig, wacc, 0u);  /* write, same snapshot */
     }
     sum[gw] = sm;
     if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
@@ -1779,13 +1721,10 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
             p.lgpga + p.llen == sum[i].fgpga) h = 0u;
     }
     head[i] = h;
-    contrib[i] = n - ((h || !n) ? 0u : 1u);
+    contrib[i] = (n && !h) ? (n - 1u) : n;
     if (contrib[i]) atomicAdd(&a.dev->tbl_run_count[a.dev->cur_buf ^ 1u][task[i].pdb], contrib[i]);
 }
 
-/* Per-address-space bases, from the run counts the heads pass accumulated.
- * ⊘ One thread over at most KF_MAX_PDB address spaces: a scan not worth a kernel
- * shape of its own, and the clamp to runs_per_pdb is loud. */
 __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
 {
     if (threadIdx.x || blockIdx.x) return;
@@ -1806,39 +1745,29 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
     }
 }
 
-__global__ void kf_par_leaf_write(KfArgs a, const KfEnt *task, const uint32_t *nt,
-                                  const uint32_t *off, const unsigned char *head,
-                                  const uint32_t *pdbbase)
+/* Copy each task's staged runs into the table, in task order — which is DFS
+ * order — and drop the first one when the boundary join has given it to the
+ * previous task. */
+__global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const uint32_t *nt,
+                            const uint32_t *off, const unsigned char *head,
+                            const uint32_t *pdbbase, const KfMapRun *runstage)
 {
-    extern __shared__ uint64_t shmem[];
     const uint32_t gid = blockIdx.x * blockDim.x + threadIdx.x;
     const uint32_t gw = gid / KF_WARP;
     const uint32_t lane = gid & (KF_WARP - 1u);
-    const uint32_t wib = threadIdx.x / KF_WARP;
     if (gw >= *nt) return;
     KfDev *d = a.dev;
-    if (kf_par_stopped(d)) return;
-
-    uint64_t *ssmall = shmem + (size_t)wib * (KF_MAX_ENT + 64u);
-    uint64_t *sbig = ssmall + KF_MAX_ENT;
-    const KfEnt t = task[gw];
-    const uint32_t cur = d->cur_buf ^ 1u;
-    const uint32_t nrun = d->tbl_run_count[cur][t.pdb];
-    KfMapRun *dst = a.tbl[cur] + (size_t)t.pdb * d->runs_per_pdb;
-
-    KfRunAcc w;
-    kf_acc_init(w, &a.fmt, dst, nrun, t.pdb);
-    w.n = off[gw] - pdbbase[t.pdb];
-    /* When this task's first run continues the previous task's, that run is
-     * already in the table: suppress it here and let kf_par_join add its length. */
-    w.skip = head[gw] ? 0u : 1u;
-
-    kf_par_task_body(a, 1u, t, lane, ssmall, sbig, w);
-    if (lane != 0u) return;
-    if (w.overflow) {
-        atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
-        atomicOr(&d->walk_trunc, 1u);
-        kf_par_refuse(d, KFWR_R_RUN_CAP);
+    if (kf_par_aborted(d)) return;
+    const KfSum sm = sum[gw];
+    if (!sm.n) return;
+    const uint16_t p = task[gw].pdb;
+    const uint32_t skip = head[gw] ? 0u : 1u;
+    const uint32_t cap = d->tbl_run_count[d->cur_buf ^ 1u][p];
+    const uint32_t local = off[gw] - pdbbase[p];
+    KfMapRun *dst = a.tbl[d->cur_buf ^ 1u] + (size_t)p * d->runs_per_pdb;
+    for (uint32_t j = lane + skip; j < KF_MAX_ENT * 2u && j < sm.n; j += KF_WARP) {
+        const uint32_t o = local + j - skip;
+        if (o < cap) dst[o] = runstage[sm.start + j];
     }
 }
 
@@ -1855,11 +1784,12 @@ __global__ void kf_par_join(KfArgs a, const KfEnt *task, const KfSum *sum, const
     if (i >= *nt) return;
     if (head[i] || !sum[i].n) return;
     KfDev *d = a.dev;
+    if (kf_par_aborted(d)) return;
     const uint32_t cur = d->cur_buf ^ 1u;
-    const uint32_t local = off[i] - pdbbase[task[i].pdb];
-    if (local == 0u) return;                       /* cannot happen: !head implies a predecessor */
-    if (local - 1u >= d->tbl_run_count[cur][task[i].pdb]) return;
-    KfMapRun *dst = a.tbl[cur] + (size_t)task[i].pdb * d->runs_per_pdb;
+    const uint16_t p = task[i].pdb;
+    const uint32_t local = off[i] - pdbbase[p];
+    if (local == 0u || local - 1u >= d->tbl_run_count[cur][p]) return;
+    KfMapRun *dst = a.tbl[cur] + (size_t)p * d->runs_per_pdb;
     atomicAdd((unsigned long long *)&dst[local - 1u].len, (unsigned long long)sum[i].flen);
 }
 
@@ -1927,6 +1857,10 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     KF_CU(cudaMalloc(&w->par.fr[0], (size_t)KF_MAX_FRONTIER * sizeof(KfEnt)));
     KF_CU(cudaMalloc(&w->par.fr[1], (size_t)KF_MAX_FRONTIER * sizeof(KfEnt)));
     KF_CU(cudaMalloc(&w->par.task, (size_t)KF_MAX_FRONTIER * sizeof(KfEnt)));
+    KF_CU(cudaMalloc(&w->par.stage, (size_t)KF_MAX_FRONTIER * sizeof(KfEnt)));
+    KF_CU(cudaMalloc(&w->par.start, (size_t)KF_MAX_FRONTIER * sizeof(uint32_t)));
+    KF_CU(cudaMalloc(&w->par.runstage, (size_t)KF_MAX_SCRATCH * sizeof(KfMapRun)));
+    KF_CU(cudaMalloc(&w->par.used, 4u * sizeof(uint32_t)));
     KF_CU(cudaMalloc(&w->par.cnt, (size_t)KF_MAX_FRONTIER * sizeof(uint32_t)));
     KF_CU(cudaMalloc(&w->par.off, (size_t)KF_MAX_FRONTIER * sizeof(uint32_t)));
     KF_CU(cudaMalloc(&w->par.sum, (size_t)KF_MAX_FRONTIER * sizeof(KfSum)));
@@ -1941,6 +1875,8 @@ extern "C" void kf_destroy(KfWalk *w)
 {
     if (!w) return;
     cudaFree(w->par.fr[0]); cudaFree(w->par.fr[1]); cudaFree(w->par.task);
+    cudaFree(w->par.stage); cudaFree(w->par.start); cudaFree(w->par.runstage);
+    cudaFree(w->par.used);
     cudaFree(w->par.cnt); cudaFree(w->par.off); cudaFree(w->par.sum);
     cudaFree(w->par.head); cudaFree(w->par.nfr); cudaFree(w->par.pdbbase);
     cudaFree(w->dev); cudaFree(w->tbl[0]); cudaFree(w->tbl[1]);
@@ -1958,17 +1894,23 @@ extern "C" void kf_ack(KfWalk *w, uint64_t g)
 
 /* ── the parallel walk's launch sequence ─────────────────────────────────────
  *
+ * `[w725]` the serial walk cost 450 ms for the measured working set: one thread
+ * per address space, 961 540 entries, 468 ns each — one dependent memory
+ * round-trip per 8-byte entry, because a single thread cannot have two loads in
+ * flight. Only the DEPTH of a page-table walk is serial; the breadth at every
+ * level is large, and the leaf level, where essentially all the entries live, is
+ * embarrassingly parallel once the leaf-table addresses are known.
+ *
  * ★★★ THE DEPTH OF THE WALK IS THIS LOOP, and it is bounded by KF_DIRS, a
- * compile-time constant. That is I1, stated more strongly than the serial walk
+ * compile-time constant. That is I1 stated more strongly than the serial walk
  * could state it: there is no recursion to bound, because a level is a KERNEL
  * LAUNCH. A cycle in the guest's tables produces frontier entries at the next
- * level and there is no level after the last one.
+ * level, and there is no level after the last one.
  *
  * ⊘ Grid sizes come from a HOST-side upper bound on the frontier
  * (`bound * entries`, clamped to the cap) rather than from the device's actual
  * count, so no phase needs a device-to-host synchronisation. Warps past the real
- * frontier read one word and retire. Synchronising instead would cost more than
- * the empty warps do.
+ * frontier read one word and retire; synchronising would cost more than they do.
  */
 static uint32_t kf_min_u32(uint32_t x, uint32_t y) { return x < y ? x : y; }
 
@@ -1976,39 +1918,36 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
 {
     KfPar &P = w->par;
     const KfFormat &F = w->fmt;
-    const uint32_t shm = (KF_PAR_BLOCK / KF_WARP) * (KF_MAX_ENT + 64u) * 8u;
+    const uint32_t shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8u;
 
-    kf_par_seed<<<(npdb + 127u) / 128u, 128>>>(a, P.fr[0], P.nfr);
+    kf_par_seed<<<(npdb + 127u) / 128u, 128>>>(a, P.fr[0], P.nfr, P.used);
 
     uint32_t src = 0u, bound = npdb;
-    for (uint32_t k = F.first_dir; k + 1u < KF_DIRS; k++) {
+    for (uint32_t k = F.first_dir; k < KF_DIRS; k++) {
         const uint32_t blocks = (bound * KF_WARP + KF_PAR_BLOCK - 1u) / KF_PAR_BLOCK;
         uint32_t *nin = P.nfr + src, *nout = P.nfr + (src ^ 1u);
-        kf_par_level<<<blocks, KF_PAR_BLOCK>>>(a, k, 0u, P.fr[src], nin, NULL, NULL, 0u, P.cnt);
+        KfEnt *dst = (k + 1u < KF_DIRS) ? P.fr[src ^ 1u] : P.task;
+        kf_par_expand<<<blocks, KF_PAR_BLOCK, shm>>>(a, k, P.fr[src], nin, P.stage,
+                                                     KF_MAX_FRONTIER, P.used, P.start, P.cnt);
         kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, nin, P.off, nout);
-        kf_par_level<<<blocks, KF_PAR_BLOCK>>>(a, k, 1u, P.fr[src], nin, P.off,
-                                               P.fr[src ^ 1u], KF_MAX_FRONTIER, P.cnt);
+        kf_par_compact<<<blocks, KF_PAR_BLOCK>>>(a, P.stage, P.start, P.cnt, P.off, nin,
+                                                 dst, KF_MAX_FRONTIER);
         bound = kf_min_u32(KF_MAX_FRONTIER, bound * F.dir[k].entries);
-        src ^= 1u;
-    }
-
-    {
-        const uint32_t blocks = (bound * KF_WARP + KF_PAR_BLOCK - 1u) / KF_PAR_BLOCK;
-        uint32_t *nin = P.nfr + src;
-        kf_par_dual<<<blocks, KF_PAR_BLOCK>>>(a, 0u, P.fr[src], nin, NULL, NULL, 0u, P.cnt);
-        kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, nin, P.off, P.ntask);
-        kf_par_dual<<<blocks, KF_PAR_BLOCK>>>(a, 1u, P.fr[src], nin, P.off, P.task,
-                                              KF_MAX_FRONTIER, P.cnt);
-        bound = kf_min_u32(KF_MAX_FRONTIER, bound * F.dir[KF_DIRS - 1u].entries);
+        if (k + 1u < KF_DIRS) src ^= 1u; else cudaMemcpyAsync(P.ntask, nout, 4, cudaMemcpyDeviceToDevice);
+        /* `used` is the staging cursor and is reset for the next level by the
+         * compaction having already copied everything out of it. */
+        cudaMemsetAsync(P.used, 0, 4);
     }
 
     const uint32_t tblocks = (bound * KF_WARP + KF_PAR_BLOCK - 1u) / KF_PAR_BLOCK;
     const uint32_t lblocks = (bound + 127u) / 128u;
-    kf_par_leaf_sum<<<tblocks, KF_PAR_BLOCK, shm>>>(a, P.task, P.ntask, P.sum);
+    kf_par_leaf<<<tblocks, KF_PAR_BLOCK, shm>>>(a, P.task, P.ntask, P.runstage,
+                                                KF_MAX_SCRATCH, P.used, P.sum);
     kf_par_heads<<<lblocks, 128>>>(a, P.task, P.sum, P.ntask, P.cnt, P.head);
     kf_par_scan<<<1, KF_SCAN_BLOCK>>>(P.cnt, P.ntask, P.off, P.nfr + 3);
     kf_par_bases<<<1, 1>>>(a, P.pdbbase);
-    kf_par_leaf_write<<<tblocks, KF_PAR_BLOCK, shm>>>(a, P.task, P.ntask, P.off, P.head, P.pdbbase);
+    kf_par_emit<<<tblocks, KF_PAR_BLOCK>>>(a, P.task, P.sum, P.ntask, P.off, P.head,
+                                           P.pdbbase, P.runstage);
     kf_par_join<<<lblocks, 128>>>(a, P.task, P.sum, P.ntask, P.off, P.head, P.pdbbase);
 }
 
