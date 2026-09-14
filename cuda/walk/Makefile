@@ -154,10 +154,26 @@ check-ptx: kf_tests
 	 echo "jit ok: PTX-only binary"
 	@cuobjdump -ptx kf_tests | grep -m1 '.target' || true
 
+# ★★★★★ THE ARTIFACT KAYFABE SHIPS — `crates/kayfabe-cuda` embeds this file.
+#
+# ⊘ NVRTC, not nvcc: it is the one CUDA front end that runs with **no GPU and no toolkit**, so
+# the PTX is generated where the rest of the tree is generated rather than on a rented box.
+# `make_ptx.py` drives `libnvrtc.so.12` through ctypes and supplies the two libc headers NVRTC
+# does not ship. `KF_DEVICE_ONLY` selects the half it can compile — see kf_walk.cu's own note.
+#
+# ⚠ REGENERATE AFTER ANY EDIT TO kf_walk.cu OR kf_walk.h. The Rust side has three independent
+# checks that catch a stale PTX — the `.param` size, the entry names and the `.target` — but
+# only if somebody runs them; regenerating is cheaper than diagnosing.
+kf_walk.ptx: kf_walk.cu kf_walk.h
+	python3 make_ptx.py kf_walk.cu kf_walk.ptx compute_75
+
+.PHONY: ptx
+ptx: kf_walk.ptx
+
 check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-seam-negative check-ver3-sketch
 
 clean:
 	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap \
 	      kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests_ver3
 
-.PHONY: all check check-invariants check-ptx check-negative check-closure-negative check-seam-negative clean
+.PHONY: all ptx check check-invariants check-ptx check-negative check-closure-negative check-seam-negative clean

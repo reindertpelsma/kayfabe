@@ -10,6 +10,7 @@ members = [
     "crates/kayfabe-vmm-kvm",
     "crates/kayfabe-vmm-qemu",
     "crates/kayfabe-qemu-raw",
+    "crates/kayfabe-cuda",
     "crates/kayfabe-isolate",
     "crates/kayfabe-isolate-host",
     "crates/kayfabe-completion",
@@ -35,6 +36,7 @@ authors = ["kayfabe"]
 
 [workspace.dependencies]
 kayfabe-util = { path = "crates/kayfabe-util" }
+kayfabe-cuda = { path = "crates/kayfabe-cuda" }
 kayfabe-arch = { path = "crates/kayfabe-arch" }
 kayfabe-chips = { path = "crates/kayfabe-chips" }
 kayfabe-abi = { path = "crates/kayfabe-abi" }

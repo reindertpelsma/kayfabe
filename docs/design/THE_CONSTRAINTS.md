@@ -810,7 +810,56 @@ backing switches → the fake fb goes. `SINGLE_STORE_PLAN.md`'s increments 4 and
 > running; (2) then it drops privileges as usual; (3) during this time it actually links to libc on
 > the host; (4) isolates NOT for scratchpad are unaffected."*
 
+> #### ⊘⊘⊘ CORRECTED 2026-09-14 (increment 4, BUILT AND BOOTED) — **THE ORDERING BELOW IS
+> #### NECESSARY AND NOT SUFFICIENT.** Two things it does not say, both about this process's
+> #### NAMESPACES rather than about its link mode.
+>
+> **1. `cuInit` refuses inside the isolate's PID namespace, at ANY ordering.**
+> `[measured, RTX 3060, 580.159.04, in a real boot]` the glibc image exec'd, `dlopen` of
+> `libcuda.so.1` **succeeded**, every symbol resolved — and `cuInit` returned
+> **`CUDA_ERROR_OPERATING_SYSTEM` (304)**. Bisected one namespace at a time:
+>
+> | namespace | `cuInit` |
+> |---|---|
+> | user / mount / net / ipc / uts, each alone | **0** |
+> | **pid** | **304** |
+> | pid + a REMOUNTED `/proc` | **0** |
+> | user + pid + mount + a remounted `/proc` | **0** |
+>
+> ⇒ **It is not the PID namespace; it is a PID namespace whose `/proc` is still the
+> PARENT'S**, so `/proc/self` resolves through host PIDs while the process sees its own.
+> ⚠ The ordering below cannot address this: an isolate is **born namespaced** — the
+> namespaces come from the `clone` that CREATES it, which is the only way `CLONE_NEWPID` can
+> be had at all — so there is no moment in its life at which CUDA could have initialised.
+> ★ The fix is a **mount, not a weakened boundary**
+> (`kayfabe_linux_raw::sandbox::remount_proc`): dropping `CLONE_NEWPID` would hand one
+> isolate visibility of every process on the host, permanently, to fix what four syscalls fix
+> completely — and the mount is transient, because `sandbox::enter` puts a tmpfs over `/proc`
+> a moment later.
+>
+> **2. ⚠ THE PRIVILEGE DROP IS PER-THREAD ON LINUX, AND CUDA'S THREADS EXIST BY THEN.**
+> `capset()` with `pid == 0` changes the capabilities of the **calling thread**;
+> `PR_SET_NO_NEW_PRIVS` and `PR_CAPBSET_DROP` are per-process, but the effective and
+> permitted sets are not. Step 2 spawns NVIDIA driver threads and step 3 then drops privilege
+> on the thread that calls it. ⊘ `surrender_privilege`'s read-back reads `/proc/self/status`,
+> which reports the **calling thread**, so it would pass while other threads still held
+> capabilities — *"we dropped them"* stays a checked outcome for one thread and becomes an
+> assumption for the rest.
+> ⊘ **NOT MEASURED, and said so rather than assumed either way** — a per-thread census needs
+> `/proc/self/task/*/status` *after* the drop, and `/proc` is a tmpfs by then. It is reachable
+> through a dirfd opened before the sandbox; that is the instrument this needs and does not
+> have. ⇒ constraint 20's security argument needs a third qualification beyond *"the process
+> ends with the same reach"*: **the thread that dropped does; its siblings are unverified.**
+
 ### The blocker this answers
+
+★★ **CONFIRMED, MORE GENERALLY, AND WITHOUT A GPU** `[measured 2026-09-14, locally]`: a musl
+**static-pie** binary's `dlopen` returns `NULL` with `dlerror()` = *"Dynamic loading not
+supported"* for `libcuda.so.1`, `libc.so.6` and `libm.so.6` **alike**. The refusal is
+**musl's**, and it arrives before any question about CUDA is asked — so the blocker is not
+*"libcuda is the wrong kind of shared object"* but *"there is no dynamic linker in this
+process"*. ⊘ It was expected to need a CUDA container; it did not, because the mechanism is
+one layer below the thing the claim names.
 
 ⊘ Every other isolate is built `<arch>-unknown-linux-musl`, **static**, and `exec`'d from a memfd
 inside a mount namespace with **no path to a dynamic loader** (`kayfabe-isolate-host/build.rs:1-51`;

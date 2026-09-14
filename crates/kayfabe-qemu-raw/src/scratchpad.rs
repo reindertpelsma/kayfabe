@@ -119,6 +119,57 @@ impl ScratchpadArm {
     }
 }
 
+/// ★★★★★ **THE CUDA GATE** — `SINGLE_STORE_PLAN.md` increment 4, `THE_CONSTRAINTS.md`
+/// §w724d. `off` (the default) | `on`.
+///
+/// When `on`, the VM-lifetime scratchpad isolate is spawned from a **glibc-linked** second
+/// image, brings CUDA all the way up **before** entering its sandbox — `cuInit` →
+/// `cuDeviceGet` → `cuCtxCreate` → `cuModuleLoadData` (the PTX JIT) → a real launch against a
+/// synthetic page-table image it builds itself — and then runs two probes **after** the
+/// namespace and the privilege drop.
+///
+/// # ⊘ A PEER of [`SCRATCHPAD_ENV`] and not a third arm of it
+///
+/// The two are orthogonal and a boot must be able to arm either alone: the reservation is
+/// about **video memory**, this is about **a process's build and its sandbox ordering**. ⊘ A
+/// third arm would also have made `require` mean two things at once.
+///
+/// ⚠ It is a strict extension: with it off, the scratchpad isolate is the same static-musl
+/// image every other isolate is, sandboxed before it touches anything.
+pub const SCRATCHPAD_CUDA_ENV: &str = "KAYFABE_SCRATCHPAD_CUDA";
+
+/// Whether `value` arms the CUDA scratchpad — the pure half, and the only statement of the
+/// default.
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
+/// `false`.
+pub fn scratchpad_cuda_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_SCRATCHPAD_CUDA does not name a state: the only values are `off` (the \
+             default) and `on`. It is not defaulted, because arming it makes ONE isolate \
+             dynamically linked and sandboxed LATE — a change to a security boundary must be \
+             asked for, never fallen into by a typo.",
+        )),
+    }
+}
+
+/// Whether this process arms the CUDA scratchpad.
+///
+/// # Errors
+/// Whatever [`scratchpad_cuda_from`] refused with.
+pub fn selected_scratchpad_cuda() -> Result<bool, (Status, &'static str)> {
+    let raw = std::env::var_os(SCRATCHPAD_CUDA_ENV);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    scratchpad_cuda_from(value)
+}
+
 /// ★★ **Where the reservation probe starts halving from, in MiB.** Only read when
 /// [`SCRATCHPAD_ENV`] is armed.
 ///
@@ -303,6 +354,13 @@ pub struct Scratchpad {
     /// Whether the isolate offered a worker at all — kept beside [`Self::outcome`] because
     /// `pool_size` can be non-zero on an isolate whose every slot is already retired.
     pool: usize,
+    /// ★★★ What the isolate's CUDA bring-up reported, verbatim. Empty when
+    /// [`SCRATCHPAD_CUDA_ENV`] is off.
+    ///
+    /// ⊘ A string and not a parsed struct: every field in it is for a human reading a boot
+    /// log, nothing branches on it, and a new field in the isolate must not be a change to
+    /// this crate.
+    cuda: String,
 }
 
 impl Scratchpad {
@@ -320,6 +378,7 @@ impl Scratchpad {
         gpu: GpuId,
         start_mb: u64,
         arm: ScratchpadArm,
+        cuda: bool,
     ) -> Scratchpad {
         // ⊘ The witness is claimed FIRST, before anything blocking happens, so the assertion
         // fires at the top of the operation rather than partway through one.
@@ -341,6 +400,7 @@ impl Scratchpad {
 
         let mut probe_us = 0;
         let mut reserve_us = 0;
+        let mut cuda_report = String::new();
         let outcome = match iso.checkout() {
             None => Reservation::NoWorker {
                 why: refusal.unwrap_or_else(|| {
@@ -374,6 +434,16 @@ impl Scratchpad {
                         }
                     }
                 };
+                // ★★★ THE CUDA REPORT, read off the same worker. ⊘ It is a READ: the
+                // bring-up and both probes already ran at the isolate's startup, before and
+                // after its sandbox. Nothing here can cause them, which is the point —
+                // by the time a worker answers anything, the isolate is already sandboxed.
+                if cuda {
+                    cuda_report = match worker.with_rm(&off, |rm| rm.cuda_walk_report()) {
+                        Ok(line) => line,
+                        Err(e) => format!("CUDA_WALK=UNREPORTED why={e:?}"),
+                    };
+                }
                 // ⊘ The worker goes back whatever happened. A slot left checked out is a
                 // pool that never quiesces, which turns a failed reservation into a hang at
                 // teardown — a second, unrelated failure attributed to the first.
@@ -384,6 +454,7 @@ impl Scratchpad {
 
         Scratchpad {
             arm,
+            cuda: cuda_report,
             id,
             iso: Some(iso),
             outcome,
@@ -406,6 +477,12 @@ impl Scratchpad {
         &self.outcome
     }
 
+    /// What the isolate's CUDA bring-up reported, verbatim. Empty when the CUDA gate is off.
+    #[must_use]
+    pub fn cuda_report(&self) -> &str {
+        &self.cuda
+    }
+
     /// This isolate's id.
     #[must_use]
     pub fn id(&self) -> IsolateId {
@@ -420,6 +497,17 @@ impl Scratchpad {
     /// never came up"* are the two diagnoses this whole increment has to be able to tell
     /// apart. A single "failed" would make them one silence.
     pub fn census(&self, at: &str) {
+        // ★★★ THE CUDA LINE, on its own, and printed on BOTH arms. ⊘ Separate from the
+        // reservation line because the two gates are independent: a reader must be able to
+        // see "the object is held and CUDA is off" without parsing one line for two facts.
+        eprintln!(
+            "kayfabe: SCRATCHPAD-CUDA AT {at}: {}",
+            if self.cuda.is_empty() {
+                "CUDA_WALK=DISARMED (set KAYFABE_SCRATCHPAD_CUDA=on to arm)".to_string()
+            } else {
+                self.cuda.clone()
+            }
+        );
         let mb = self.reserved_mb().unwrap_or(0);
         eprintln!(
             "kayfabe: SCRATCHPAD AT {at}: arm={arm} up={up} proc={proc} gpu={gpu} pool={pool} \
@@ -517,7 +605,12 @@ pub fn enforce_arm(
 
 /// ⊘ **Not a `ProcId`.** See [`Scratchpad::bring_up`] — `u32::MAX` is the value
 /// `IsolateId::NONE` uses, chosen so this id can never alias a live proc's.
-const SCRATCHPAD_PROC: u32 = u32::MAX;
+///
+/// ★★★ **It is also the discriminator `kayfabe-isolate-host` uses to decide which isolate
+/// gets the glibc-linked CUDA image.** That crate sits BELOW this one and cannot import the
+/// constant, so it restates it as `SCRATCHPAD_ISOLATE_PROC`; the two are pinned equal by
+/// `the_scratchpad_proc_id_agrees_across_the_seam`.
+pub const SCRATCHPAD_PROC: u32 = u32::MAX;
 
 fn micros(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_micros()).unwrap_or(u64::MAX)

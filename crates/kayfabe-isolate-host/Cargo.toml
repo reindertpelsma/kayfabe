@@ -24,6 +24,10 @@ kayfabe-linux-raw.workspace = true
 # ★ The child process. It is a binary in THIS crate rather than a separate one so the
 # parent's factory and the child's serve loop cannot drift out of protocol agreement
 # without failing to compile: they share `crate::proto` by construction, not by review.
+# ★ OPTIONAL, and only the CUDA scratchpad image links it: the walk kernel's PTX, its ABI
+# mirror and the `dlopen`ed driver binding. See the `cuda-scratchpad` feature.
+kayfabe-cuda = { workspace = true, optional = true }
+
 [[bin]]
 name = "kayfabe-isolate"
 path = "src/bin/isolate.rs"
@@ -43,6 +47,7 @@ path = "src/bin/rmladder.rs"
 name = "kayfabe-sandbox-probe"
 path = "src/bin/sandbox_probe.rs"
 
+
 [dev-dependencies]
 # The R1 lock witness, so the real backend can be driven WITH a ranked lock held and the
 # assert watched to fire — a gate never seen to fail is not evidence.
@@ -54,3 +59,18 @@ trybuild = "1.0"
 
 [lints]
 workspace = true
+
+[features]
+# ★★★★★ THE SECOND ISOLATE IMAGE — `THE_CONSTRAINTS.md` §w724d, `SINGLE_STORE_PLAN.md`
+# increment 4. OFF BY DEFAULT.
+#
+# When on, `build.rs` additionally builds `kayfabe-isolate` for the HOST (glibc) triple and
+# embeds it as a SECOND image, and the child gains the `--cuda-walk` arm that brings CUDA all
+# the way up BEFORE entering the sandbox.
+#
+# ⊘ The ordinary musl-static image and its sandbox-first guarantee are **untouched**. Only the
+# one VM-lifetime scratchpad isolate runs the second build, and only it is sandboxed late.
+#
+# ⚠ It costs a second nested cargo build of the whole isolate dependency tree, which is why it
+# is a feature rather than unconditional.
+cuda-scratchpad = ["dep:kayfabe-cuda"]

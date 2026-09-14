@@ -950,6 +950,22 @@ pub trait RmBackend: Send + Sync {
         Err(RmError::Other(0x56))
     }
 
+    /// ★★★★★ **What the VM-lifetime scratchpad isolate's CUDA bring-up found out**, as one
+    /// line for a census — `SINGLE_STORE_PLAN.md` increment 4.
+    ///
+    /// ⊘ **A read.** The bring-up and both post-sandbox probes ran at the isolate's startup,
+    /// in the order `THE_CONSTRAINTS.md` §w724d prescribes; nothing here causes them. A verb
+    /// that *caused* a bring-up could not exist — by the time a worker answers a request the
+    /// isolate is already sandboxed, which is precisely what the design puts CUDA in front of.
+    ///
+    /// # Errors
+    /// [`RmError`]. The default answers a **named absence** rather than refusing, because
+    /// *"this backend never ran CUDA"* is an answer a census can print and a refusal is not.
+    fn cuda_walk_report(&mut self) -> Result<String, RmError> {
+        Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\""
+            .to_string())
+    }
+
     /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the
     /// runlist/engine named by `engine` — the channel's graph-derived [`EngineKind`],
     /// which the adapter lowers to the host `NV_CHANNEL_ALLOC_PARAMS` engine type.

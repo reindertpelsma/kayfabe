@@ -103,7 +103,32 @@ which is a different design. *Measurement in flight.*
 (`fb_read`/`fb_write`, the trap path). Fixing only the first leaves trapped accesses reading the
 fake fb and **looks like a partial success**.
 
-### 4. CUDA IN THE SCRATCHPAD ISOLATE
+### 4. CUDA IN THE SCRATCHPAD ISOLATE  ⟵ **BUILT 2026-09-14, behind `KAYFABE_SCRATCHPAD_CUDA`**
+
+> ★★★ `crates/kayfabe-cuda` (the committed PTX, the launch ABI mirrored, a `dlopen`ed DRIVER
+> API) + a **second, glibc-linked isolate image** chosen by `IsolateId.proc == u32::MAX`, with
+> CUDA brought all the way up in `build_backends` **before** `sandbox::enter` and the two
+> §w724d probes run **after** it. Gate: `KAYFABE_SCRATCHPAD_CUDA=on`, a **peer** of
+> `KAYFABE_SCRATCHPAD` rather than a third arm of it — the two are orthogonal and a boot must
+> be able to arm either alone.
+>
+> ⊘⊘⊘ **THE BLOCKER IS MEASURED AND IT IS MORE GENERAL THAN §w724d STATES.**
+> `[measured 2026-09-14, locally, no GPU]` a **musl static-pie** binary's `dlopen` returns
+> `NULL` with `dlerror()` = *"Dynamic loading not supported"* — for `libcuda.so.1`,
+> `libc.so.6` and `libm.so.6` **alike**. It is not *"libcuda is the wrong kind of shared
+> object"*; it is *"there is no dynamic linker in that process"*, and the refusal arrives
+> before any question about CUDA is asked. ⇒ a different **build** is the only fix, exactly
+> as §w724d prescribes — and no GPU was needed to establish it.
+>
+> ★★★★★ **AND THE SETUP-DATA TRANSCRIPTION WAS WRONG FOUR TIMES.** The descriptor the host
+> hands the kernel (§21's *"the format is setup data"*) is ~120 numbers, and a differential
+> against the `.cu`'s own builder caught four errors on its first run — two of which
+> (`dir[3].leaf_ps`, `dir[4].leaf_ps`) would have made the host and the kernel disagree about
+> whether 512 MiB and 2 MiB pages exist at all, and one of which (`pde_ap_map[0]`) would have
+> behaved identically and differed **silently, forever**. ⇒ **§21's "derive the descriptor
+> from `GmmuFmt`" is not a tidiness item.** Until increment 6 does that, the differential is
+> what makes the transcription safe to rely on.
+
 
 `libcuda` + `cuModuleLoadData` (where the PTX JIT runs) **before** the isolate drops privilege —
 CUDA is lazy, and every lazy path is one that fails after the drop. No other isolate loads CUDA

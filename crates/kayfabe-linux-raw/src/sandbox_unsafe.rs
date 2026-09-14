@@ -592,6 +592,56 @@ const ISOLATING_NAMESPACES: libc::c_int =
 /// namespace to reach the parent at all, and [`surrender_privilege`] has just made sure it
 /// holds no capability in any namespace.
 ///
+/// ★★★★★ **MOUNT A FRESH `proc` OVER `/proc`, FOR A PROCESS THAT IS IN ITS OWN PID
+/// NAMESPACE** — `SINGLE_STORE_PLAN.md` increment 4.
+///
+/// # ⊘⊘⊘ THE MEASUREMENT THIS EXISTS FOR
+///
+/// `[measured 2026-09-14, RTX 3060, driver 580.159.04]` an isolate is `clone`d with
+/// `CLONE_NEWPID` among its namespaces, and **`cuInit` refuses inside one with
+/// `CUDA_ERROR_OPERATING_SYSTEM` (304)**. Bisected one namespace at a time:
+///
+/// | namespace | `cuInit` |
+/// |---|---|
+/// | user, mount, net, ipc, uts | **0** (each, alone) |
+/// | **pid** | **304** |
+/// | pid + a REMOUNTED `/proc` | **0** |
+/// | user + pid + mount + a remounted `/proc` | **0** |
+///
+/// ⇒ **It is not the PID namespace. It is a PID namespace whose `/proc` still belongs to the
+/// parent's**, so `/proc/self` resolves through host PIDs while the process sees its own. The
+/// driver reads process state there and gets an inconsistent view.
+///
+/// ★★★ **So the fix is a mount, not a weakened boundary.** Dropping `CLONE_NEWPID` from the
+/// scratchpad isolate was the obvious alternative and it is strictly worse: it would hand one
+/// isolate visibility of every process on the host, permanently, to fix a problem that a
+/// four-syscall remount fixes completely.
+///
+/// ⊘ And it is **transient**: [`enter`] mounts a tmpfs over `/proc` as its scratch root a
+/// moment later, so the real `proc` this creates does not survive into the sandbox. The end
+/// state is exactly what it was before.
+///
+/// # Errors
+/// [`RawError::Syscall`] naming `mount`. ⚠ The caller must already be in its own mount
+/// namespace — every isolate is, from the `clone` that created it — or this would mount over
+/// the **host's** `/proc`.
+///
+/// # Panics
+/// Through the R1 lock witness, if called with a ranked lock held.
+pub fn remount_proc() -> Result<(), RawError> {
+    lockwitness::assert_lock_free("kayfabe_linux_raw::sandbox::remount_proc");
+    mount_(
+        c"proc",
+        c"/proc",
+        Some(c"proc"),
+        // ⊘ `NOSUID | NODEV | NOEXEC` — the hardening every distro mounts `/proc` with, and
+        // there is no reason for this one to be looser than the host's.
+        libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC,
+        None,
+        "mount(proc for the CUDA scratchpad isolate's PID namespace)",
+    )
+}
+
 /// `setgroups` must be denied before `gid_map` is writable, which is the kernel's rule and
 /// not ours. The single-line map names this process's *outer* ids, which is why
 /// [`outer_ids`] is read before the `unshare` — afterwards `getuid` answers the overflow id

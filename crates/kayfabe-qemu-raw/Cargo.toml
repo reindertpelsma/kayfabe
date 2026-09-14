@@ -111,6 +111,15 @@ kayfabe-shell = { workspace = true, optional = true }
 # differ in anything but the variable.
 [features]
 host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw", "dep:kayfabe-shell"]
+# ★★★★★ SINGLE-STORE INCREMENT 4 — forwards to `kayfabe-isolate-host`'s own feature, which
+# is what makes `build.rs` build the glibc-linked SECOND isolate image.
+#
+# ⊘ A FORWARDING feature and not a duplicate: cargo features are per-package, so
+# `build_qom_shim.sh --features cuda-scratchpad` (which builds THIS package) could not reach
+# the other crate's without one. ⚠ It implies `host-isolates`, because a CUDA scratchpad
+# isolate with no isolate plane is a configuration that cannot do anything — and a boot that
+# armed only this would get a stillborn isolate and a census that blamed CUDA.
+cuda-scratchpad = ["host-isolates", "kayfabe-isolate-host/cuda-scratchpad"]
 
 # ★ `kayfabe-arch` is not a dependency of this crate and must not become one — the shim
 # names no architecture. `tests/shim_logic.rs` needs `GpuId` only to build the

@@ -42,10 +42,27 @@
  * with is kayfabe-chips/src/ga10x.rs (Ga10xGmmu) + kayfabe-mmu/src/walker.rs.
  */
 
+/* ★★★ `KF_DEVICE_ONLY` — COMPILE JUST THE HALF NVRTC CAN SEE, so the PTX kayfabe
+ * ships is built from THIS file rather than from a copy of it.
+ *
+ * `THE_CONSTRAINTS.md` §20: *"it is not code injection: the PTX is ours, built at
+ * build time"*. Building it needs a CUDA front end for the device half and nothing
+ * for the host half, and NVRTC is the one front end that runs with **no GPU and no
+ * nvcc** — which is what lets the PTX be generated where the rest of the code is
+ * generated instead of on a rented box.
+ *
+ * ⊘ The guard is the ONLY change, and it is a compile-time seam rather than a
+ * refactor: with the macro undefined this file is byte-for-byte the program the
+ * 58/58 suite grades. ⚠ Slicing the file by LINE NUMBER was the alternative and it
+ * would have rotted on the first edit above the seam, silently producing PTX for a
+ * different program than the one under test.
+ */
+#ifndef KF_DEVICE_ONLY
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#endif
 
 #include "kf_walk.h"
 
@@ -1182,6 +1199,10 @@ static const char *kf_format_check(const KfFormat &F)
 }
 
 /* ── host side ───────────────────────────────────────────────────────────────── */
+/* ⊘ Everything below drives the CUDA **runtime** API. It is the half kayfabe does
+ * NOT use — the isolate drives the **driver** API from Rust — and the half NVRTC
+ * cannot compile. See the `KF_DEVICE_ONLY` note at the top of this file. */
+#ifndef KF_DEVICE_ONLY
 struct KfWalk {
     KfDev *dev;
     KfFormat fmt;
@@ -1332,3 +1353,4 @@ out:
     if (why) *why = msg ? msg : "ok";
     return rc;
 }
+#endif /* KF_DEVICE_ONLY */

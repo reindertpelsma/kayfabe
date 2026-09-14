@@ -304,8 +304,8 @@ mod window_unsafe;
 /// [`sandbox::privileges`] is the instrument the last of them fails closed on.
 pub mod sandbox {
     pub use crate::sandbox_unsafe::{
-        Privileges, SandboxPolicy, enter, namespaces_available, privileges, report, report_gate,
-        user_namespaces_available,
+        Privileges, SandboxPolicy, enter, namespaces_available, privileges, remount_proc, report,
+        report_gate, user_namespaces_available,
     };
 }
 
