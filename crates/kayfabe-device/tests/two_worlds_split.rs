@@ -1,3 +1,45 @@
+//! # ⊘⊘⊘ SUPERSEDED 2026-09-14 (w721) — **THIS FILE ASSERTS A DESIGN THE OWNER RETIRED.**
+//! ### Read this before the module docs below, and before treating the `#[ignore]`d test as a
+//! ### falsifier that is merely waiting to go green.
+//!
+//! `THE_CONSTRAINTS.md`, *"⊘⊘⊘ SUPERSEDED w721 — THERE IS ONE WORLD, NOT TWO"*, quoting the
+//! owner: *"One GPGA store, one RM object, no more fake fb, no more bar1/bar2 traps"* …
+//! *"**BAR1, BAR2, PRAMIN, channels and engines are all views of IT**."*
+//!
+//! ⇒ Under the single store, a framebuffer page written through BAR1 **IS** the page BAR2
+//! reads. They are one memory, at one GPGA, by construction.
+//!
+//! ★★★ **So `a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads` is not a
+//! test that is red and waiting.** It asserts the **opposite** of the design being built, and
+//! making it green would require re-introducing the second memory the single store exists to
+//! delete. `SINGLE_STORE_PLAN.md`'s falsifier table still lists it as *"today RED → after
+//! GREEN"*; that row predates w721 and is **wrong**.
+//!
+//! ⊘ And §18 — the constraint this file cites as its reason — now reads *"**SATISFIED BY
+//! CONSTRUCTION** under the single store … there is no other memory to substitute"*. A
+//! falsifier for §18 that works by proving there **are** two memories cannot survive §18
+//! being satisfied by there being one.
+//!
+//! ## What should happen to this file
+//!
+//! ⚠ **Not "flip the assertion and move on".** Three of the four tests here pin sub-properties
+//! of the two-world split (*"the page tables must stay in the aperture world"*, *"the window →
+//! world map must be the one §15 wrote down"*), and those are retired with it. The fourth —
+//! *"PRAMIN and BAR2 must stay ONE world"* — survives, trivially, because everything is one
+//! world now.
+//!
+//! ⇒ The **single store's own falsifier** is the inverse property —
+//! [`a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`], added below — and it is
+//! a real falsifier rather than a tautology: it fails today, because this plane serves BAR1
+//! and BAR2 out of one `PlaneMem::fb` **only by accident of not having split them**, and it
+//! would fail again the moment anyone re-introduced a second store for BAR1.
+//!
+//! ⊘ Deleting the retired tests is **increment 7's** work (`SINGLE_STORE_PLAN.md`: deletions
+//! come last, and *"unwire and delete in the same change"*). They are left compiling, and
+//! marked, so nobody reads them as current on the way.
+//!
+//! ---
+//!
 //! ★★★★★ **THE TWO WORLDS — `THE_CONSTRAINTS.md` §15/§18, pinned where the bytes live.**
 //!
 //! §15 splits framebuffer backing by **aperture**, into two stores that are not the same
@@ -493,5 +535,82 @@ fn the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it() {
         after.out_of_range, before.out_of_range,
         "⊘ every address this test used must be inside the census's coverage: an \
          out-of-range access is UNMEASURED, and a delta of zero above would then be vacuous"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ THE SINGLE STORE'S OWN FALSIFIER — the inverse of the retired one above.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **ONE GPGA, ONE MEMORY** — `THE_CONSTRAINTS.md`'s *"SUPERSEDED w721 — there is one
+/// world, not two"*: *"BAR1, BAR2, PRAMIN, channels and engines are all views of **it**."*
+///
+/// A framebuffer page written through BAR1 **is** the page BAR2 reads, at the same GPGA. That
+/// is the property the single store delivers and the one the reserved object exists for.
+///
+/// # ⊘ Why this is a falsifier and not a tautology
+///
+/// It would be a tautology if it merely restated *"this plane happens to have one `PlaneMem::fb`
+/// today"*. It is not, for two reasons:
+///
+/// 1. ⚠ **It is the exact property the `#[ignore]`d test above asserts the negation of**, and
+///    that test is still in the tree and still named in `SINGLE_STORE_PLAN.md`'s falsifier
+///    table as something to make green. The two cannot both pass. Having both, with one of
+///    them marked superseded, is what stops the retired one from being "fixed" back into life.
+/// 2. ★ It **fails the moment anyone gives BAR1 a second store** — which is exactly the edit
+///    the retired design calls for, and exactly the accident that a `page_backing` switch
+///    touching only one of the two translate paths would produce.
+///
+/// ⊘ **What it cannot say**: whether the bytes are really device-local. That is §18's
+/// residence property, it is not a question `cargo test` can ask, and the module docs above
+/// already say so. This pins **identity** — one address, one memory — not residence.
+#[test]
+fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads() {
+    let p = plane();
+    build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
+    build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
+
+    // ── setup, asserted before the property: both apertures really do name one GPGA ──
+    let (b1_phys, _) = fb_read(&p, BAR_FB, BAR1_VA);
+    let (b2_phys, _) = fb_read(&p, BAR_INST, BAR2_VA);
+    assert_eq!(
+        b1_phys, SHARED_PHYS,
+        "BAR1 must resolve its VA to the shared framebuffer address, or this test is not \
+         about one memory"
+    );
+    assert_eq!(
+        b2_phys, SHARED_PHYS,
+        "BAR2 must resolve ITS VA to the same framebuffer address, or the agreement below \
+         would be about two unrelated addresses and would mean nothing"
+    );
+
+    // ── write through BAR1 ──
+    let w = p.write(BAR_FB, BAR1_VA, 4, u64::from(DEVICE_SENTINEL));
+    assert_eq!(
+        w.fb_landed,
+        Some(SHARED_PHYS),
+        "the BAR1 write must land at the shared address; a DROPPED write would make the \
+         assertion below fail for a reason that has nothing to do with the store"
+    );
+
+    // ── THE PROPERTY: BAR2 reads what BAR1 wrote ──
+    let (_, through_bar2) = fb_read(&p, BAR_INST, BAR2_VA);
+    assert_eq!(
+        through_bar2, DEVICE_SENTINEL,
+        "★★★★★ THE SINGLE STORE: BAR1 and BAR2 are views of ONE reserved object, so a write \
+         through BAR1 at {SHARED_PHYS:#x} must be visible through BAR2 at the same address. \
+         BAR2 read {through_bar2:#x}. If this fails, something gave BAR1 a store of its own — \
+         which is the two-world design w721 retired, and it makes the reserved object \
+         impossible: there would be two memories for one GPGA and nothing could say which the \
+         engine reads."
+    );
+
+    // ── and PRAMIN, the third view, sees it too ──
+    assert_eq!(
+        pramin_rd32(&p, SHARED_PHYS),
+        DEVICE_SENTINEL,
+        "★ PRAMIN is a view of the same object. A split that left PRAMIN behind would be the \
+         same defect one aperture over, and it is the one RM's own `kbusVerifyBar2_GM107` \
+         catches hundreds of operations after the write that was lost."
     );
 }
