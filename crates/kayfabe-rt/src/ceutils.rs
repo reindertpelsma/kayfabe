@@ -249,6 +249,19 @@ pub struct CeUtilsChannel {
 /// built from it cannot say more than the work did.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CeUtilsRun {
+    /// ★★★★★ **GPFIFO entries this pass could NOT take, because the per-doorbell cap stopped
+    /// the walk with `GP_PUT` still ahead (w707).**
+    ///
+    /// ⊘ Non-zero means **the guest is owed another pass**. The cap's own comment says the
+    /// remainder is left *"for its next doorbell"* — true for CeUtils, which rings per block, and
+    /// **false for UVM**, which rings ONCE for a whole burst and then waits.
+    ///
+    /// `[measured w707]` the stack of the hung thread:
+    /// `uvm_spin_loop <- uvm_tracker_wait`, with `GPFIFO-STRANDED events=1 entries=12
+    /// ring=0x121010000 gp_put=35 took=8`. UVM was waiting for semaphore releases that the
+    /// stranded pushes would have written. ⇒ a caller that ignores this field reproduces that
+    /// hang exactly.
+    pub stranded: u32,
     /// GPFIFO entries consumed.
     pub entries: usize,
     /// Method `(header, args)` pairs decoded across those entries.
@@ -806,6 +819,7 @@ fn run_submission_timed(
     // says stranding is real.
     {
         let stranded = (gp_put + entries - (run.cursor.next % entries)) % entries;
+        run.stranded = stranded;
         if stranded > 0 {
             STRANDED_TOTAL.fetch_add(u64::from(stranded), core::sync::atomic::Ordering::Relaxed);
             let n = STRANDED_EVENTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;

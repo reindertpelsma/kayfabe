@@ -8884,6 +8884,39 @@ impl SharedDoorbell {
         };
         Some(match outcome {
             Ok(mut run) => {
+                // ★★★★★ **THE CONTINUATION — w707. The cap bounds a PASS, never the work.**
+                //
+                // `[measured w707]` the hung guest's kernel stack was
+                // `uvm_spin_loop <- uvm_tracker_wait`, with
+                // `GPFIFO-STRANDED events=1 entries=12 ring=0x121010000 gp_put=35 took=8`.
+                //
+                // `MAX_ENTRIES_PER_DOORBELL` documents itself as leaving the remainder *"for its
+                // next doorbell"*. ⊘ That is an assumption about the GUEST, true only of CeUtils,
+                // which rings once per block. **UVM rings ONCE for a whole burst** — every
+                // page-table init and `copy_ptes` push for the range — then waits in
+                // `uvm_tracker_wait` for every push's semaphore. Entries we decline to walk are
+                // pushes that never execute, so their releases are never written and the guest
+                // spins forever: no fault, no Xid, no refusal.
+                //
+                // ⇒ **Wake ourselves instead of waiting to be woken.** The cap keeps doing its
+                // real job — bounding one pass against a hostile ring — and the remainder is
+                // drained by US on the worker, which is the owner's queue/defer model rather than
+                // an exception to it.
+                //
+                // ⚠ It RE-OFFERS rather than looping here: looping inside this pass would restore
+                // the unbounded walk the cap exists to prevent, and would do it while holding the
+                // locks this pass holds.
+                if run.stranded > 0 {
+                    let again = self
+                        .pubqueue
+                        .offer(kayfabe_device::pubqueue::MapPublication::for_doorbell(token));
+                    eprintln!(
+                        "kayfabe: GPFIFO-CONTINUE token={token:#010x} stranded={} \
+                         re_offered={again:?} ⊘ the cap stopped this pass with entries still \
+                         ahead; UVM will not ring again, so the remainder is ours to drain.",
+                        run.stranded
+                    );
+                }
                 // ★★★★★ **w386 — WHAT THE WALK ACTUALLY CONSUMED, in the boot log.**
                 //
                 // `[measured w384, boot `run_w384c_guest_probe`, rev 5756322d]` the whole
