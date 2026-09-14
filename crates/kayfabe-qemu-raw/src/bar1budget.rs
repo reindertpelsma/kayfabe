@@ -2,7 +2,9 @@
 //!
 //! > **(b) The real relation is a SIZING constraint, not an impossibility:**
 //! >
-//! >     all-resident works  ⟺  advertised_guest_BAR1 + our_headroom  ≤  host_BAR1
+//! > ```text
+//! > all-resident works  <=>  advertised_guest_BAR1 + our_headroom  <=  host_BAR1
+//! > ```
 //! >
 //! > ⊘ **But we choose the left-hand side.** The guest's BAR1 aperture is **advertised by
 //! > us**, not inherited: advertise 128 MiB and the same board leaves ~125 MiB of headroom.
