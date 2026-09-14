@@ -529,10 +529,26 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                         for (uint32_t b = 0; b < KF_MAX_ENT && b < F.big_entries && !c.stop; b++) {
                             if (has_b) {
                                 uint64_t e;
+                                /* ⊘ KF_BREAK_ORDER walks the big table DOWNWARDS, so the
+                                 * 64 KiB class comes out descending in VA. Compiled in
+                                 * only by `make check-closure-negative`: the per-class
+                                 * diff needs each class ascending, and this is the
+                                 * known-positive that the round-trip can see it when
+                                 * it is not.
+                                 * ⚠ This injection site lived in the code the format
+                                 * seam replaced, and the control went VACUOUS for one
+                                 * run — caught only because check-closure-negative
+                                 * REQUIRES it to fail. A control that merely reports
+                                 * would have gone on passing. */
+#ifdef KF_BREAK_ORDER
+                                const uint32_t bb = (uint32_t)F.big_entries - 1u - b;
+#else
+                                const uint32_t bb = b;
+#endif
                                 if (!kf_charge(c, 1)) break;
-                                if (kf_load64(c, ptb + (uint64_t)b * F.big_entry_bytes, &e)) {
+                                if (kf_load64(c, ptb + (uint64_t)bb * F.big_entry_bytes, &e)) {
                                     if (kf_valid(F, e))
-                                        kf_emit(c, va4 | ((uint64_t)b << F.big_va_lo),
+                                        kf_emit(c, va4 | ((uint64_t)bb << F.big_va_lo),
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.big_ps],
                                                 kf_leaf_flags(F, e, F.big_ps));

@@ -28,7 +28,7 @@ check-invariants:
 	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | tail -n +2 | grep -qE '\bgoto\b|kf_walk_one\('; then \
 	   echo "I1 FAIL: a goto or a recursive call on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no goto, no recursion"
-	@n=`awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -c 'i < KF_MAX_ENT' || true`; \
+	@n=`awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -cE '< KF_MAX_ENT &&' || true`; \
 	 if [ "$$n" -lt 5 ]; then echo "I1 FAIL: only $$n loops bounded by the COMPILE-TIME cap, want >= 5"; exit 1; fi; \
 	 echo "I1 ok: $$n nested loops, each bounded at compile time by KF_MAX_ENT"
 	@n=`grep -cE '^#define (KF_DIRS|KF_MAX_ENT)' kf_walk.cu || true`; \
