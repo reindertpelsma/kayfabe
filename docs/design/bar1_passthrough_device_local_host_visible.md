@@ -235,7 +235,38 @@ the acceptance test's criterion 1 is *this counter reading zero* once it does.
 
 ## 4. What remains — in order, with the ruling each needs
 
-1. **Owner ruling: decision (b) scope** (§3.2). Without it nothing below may be wired to production.
+1. ✔ **RULED 2026-09-14 — decision (b) is GRANTED, conditionally.** ~~Owner ruling: decision (b)
+   scope (§3.2). Without it nothing below may be wired to production.~~
+
+   **Owner, 2026-09-14**, with the blocker named in front of him: *"nvkvm-pv also got MMIO
+   mappings work across the isolate, so it is not impossible (use SCM rights maybe)"* → *"ok so
+   can you get the raw client to pass this time"*.
+
+   ⇒ **The VMM may hold a `/dev/nvidia<N>` descriptor with an RM escape handler behind it,
+   transiently**, for the sole purpose of `mmap`ing it into a memslot.
+
+   ### ⚠ The ruling is CONDITIONAL, and these are the conditions — not background
+
+   The grant rests on §3.2's structural argument. If an implementation stops satisfying any of
+   these, **it is outside the ruling** and needs a fresh one:
+
+   1. **The VMM issues NO escape on the descriptor — only `mmap`.** `secInfo.privLevel` is
+      recomputed **per escape** from the caller (`ogkm-580: escape.c:304`), so a process that never
+      escapes gains nothing. ⇒ This is the whole of the safety argument; it is a property of what
+      the VMM *does*, not of what it *is*.
+   2. **The VMM closes it the moment `mmap` returns.** The VMA keeps the `struct file`, so the
+      mapping outlives the descriptor. ⊘ `install_device_window`'s own doc already says the caller
+      *should* close it "to shorten the interval in which this process holds a descriptor with an
+      RM escape handler behind it" — that SHOULD is now a MUST.
+   3. **The crossing is `SCM_RIGHTS`**, as `nvkvm-pv` ships it (`nvkvm_isolate_handlers.c:3618` →
+      `nvkvm_mmap_host.c:1269`, memslot at `:1203`).
+
+   ★ **Precedent, not theory**: the owner's own shipped Mode-1 tree has carried this shape in
+   production. That is what moved the question from "is it safe" to "is it permitted".
+
+   ⊘ `export_device_view` was retired from the wire as an orphan (tags 25/12, *"never re-issue"*).
+   **Re-issuing it is exactly what this ruling authorises** — mint new tag numbers, and cite this
+   ruling at the site so the retirement is not re-applied by someone reading only the orphan note.
 2. **Bare-metal measurement** (§6) — turns the two readings into facts; also measures the host BAR1
    budget (§2.5) and the memslot memory type (§2.6).
 3. **The lease** — a GPGA frame → host vidmem object table ("memory is owned globally, procs lease
