@@ -30,6 +30,46 @@ The kernel's own table is its business and its format; nothing here constrains i
 runs per PDB*, which makes each refresh's diff a **merge join** against the freshly walked set —
 linear, no hashing, no allocation.
 
+## ⊘⊘⊘ CORRECTED BY THE IMPLEMENTATION, w720k — read this before the structures below
+
+`cuda/walk/` implements this contract and **50/50 tests pass**. Six things in this document were
+wrong or underspecified; the implementation's README §*"What the format doc got wrong"* is
+authoritative where they differ.
+
+1. ⊘ **`ReportHeader` is declared 64 B and its fields sum to 56.** The implementation adds
+   `refuse_mask` (this doc's dead `reserved`, given a job — it is what lets a hostile test assert
+   **which** refusal fired) plus 8 bytes of pad.
+2. ⊘ **Typo:** *"every `first_run + run_count <= run_count`"* should read **`<= header.run_count`**.
+3. ★★★ **Validation CANNOT be extended to `gpga` page-alignment, and assuming it is a
+   VULNERABILITY.** VER2 carries a **4 KiB-granular address field at every leaf level**, so a
+   hostile guest can spell a **512 MiB page whose base is only 4 KiB-aligned**. ⇒ It must be a
+   **named refusal** (`KFWR_R_MISALIGNED_LEAF`), never an assumption. `len` page-alignment *is*
+   enforceable; `gpga` is not.
+4. ⊘ *"An unaligned pointer"* is **inexpressible below the root**: every VER2 table pointer is a
+   bit-field shifted by exactly the bits its target's size needs, so the check can only fire on
+   the root, which arrives from outside the format. Kept as a checked claim
+   (`hostile/unaligned_inexpressible`).
+5. ★★ **This doc never ordered a dual PDE's two halves**, yet *"produced already sorted"* requires
+   a total order — both sub-tables cover the **same 2 MiB**. The implementation chooses **big
+   before small within each 64 KiB chunk**, i.e. **(VA ascending, page size descending)**, and the
+   diff's comparator must be the same one.
+6. ★ **`TOO_DEEP` is unreachable by construction** and every hostile case asserts its *absence* —
+   confirming the design intent that **a cycle is harmless, not detected**.
+
+### ★★★★★ And the finding that makes the bounds check non-negotiable — MEASURED
+
+A negative control rebuilt the kernel with `-DKF_BREAK_BOUNDS`, deleting **only** the two bounds
+checks:
+
+| hostile case | with the check deleted |
+|---|---|
+| `pointer_past_end` | *"an illegal memory access was encountered"* — loud; container recovered |
+| the other | ⊘⊘⊘ **silently returned data from beyond the declared window**, reporting a mapping at `gpga=0xdead000` |
+
+⇒ **AN OUT-OF-BOUNDS READ DOES NOT RELIABLY FAULT.** The hardware cannot be relied on to catch
+what the check catches. This is the measured argument for the structural invariant, and it is why
+the check may never be treated as belt-and-braces.
+
 ## The report
 
 Three fixed-size arrays, no nesting, no pointers, no variable-length records — so the Rust side
