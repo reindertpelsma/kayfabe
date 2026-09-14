@@ -801,3 +801,52 @@ Every other ordering produces a tree that does not boot.
 ⇒ **Order is forced:** the walk kernel works and passes its tests → it runs inside kayfabe → the
 backing switches → the fake fb goes. `SINGLE_STORE_PLAN.md`'s increments 4 and 6 are therefore
 **gates**, not steps.
+
+## ★★★★★ w724d — THE SCRATCHPAD ISOLATE IS SPECIAL: dynamically linked, sandboxed LATER
+
+> **Owner, 2026-09-14:** *"the scratchpad isolate is special: (1) before entering mount namespace
+> and chroot, it first opens libcuda and inits and loads the entire channel and PTX ensure its
+> running; (2) then it drops privileges as usual; (3) during this time it actually links to libc on
+> the host; (4) isolates NOT for scratchpad are unaffected."*
+
+### The blocker this answers
+
+⊘ Every other isolate is built `<arch>-unknown-linux-musl`, **static**, and `exec`'d from a memfd
+inside a mount namespace with **no path to a dynamic loader** (`kayfabe-isolate-host/build.rs:1-51`;
+the sandbox is documented as *"gated on a static binary"*). **`libcuda` is a glibc shared object,
+and musl static binaries do not support `dlopen` at all.** ⇒ The scratchpad isolate as built could
+not have loaded CUDA, and *"init before dropping privilege"* would not rescue it — there would be
+nothing to init with.
+
+### ★★★ The ordering is the whole design
+
+1. `exec` **while the loader is still reachable** — the binary is glibc-linked, not musl-static.
+2. **Full CUDA bring-up**: `cuInit` → `cuDeviceGet` → `cuCtxCreate` → `cuModuleLoadData` (**the PTX
+   JIT runs here**) → channel up → **a real warm-up launch**.
+3. **Then** enter the mount namespace, chroot, and drop privilege as every other isolate does.
+4. ⊘ **No other isolate is affected** — they keep the static-musl, memfd-exec shape and its
+   sandbox-first guarantee.
+
+★ Why it holds: **open fds, existing mappings, the CUDA context and the loaded module all survive a
+namespace change.** Only **path lookups** do not. ⇒ Step 2 exists to walk every lazy path *before*
+there are no paths — CUDA is aggressively lazy, and each lazy path is one that would otherwise fail
+after the drop, looking like a GPU fault rather than a sandbox effect.
+
+### ⚠ The empirical risk, and it is cheaply testable
+
+**CUDA must touch nothing by path after the drop.** A warm-up launch covers the normal path; it
+does **not** exercise **error and recovery** paths, which may reopen a device node or read `/proc`.
+⇒ Probe specifically: after namespace + drop, (a) can it launch again, (b) can it survive and
+report a deliberately failed launch without reopening anything.
+
+### ⚠ The honest cost
+
+Sandboxing now happens **later**, so there is a window in which this process has a **full
+filesystem view**. Bounded — only our init and NVIDIA's init run in it, **before any guest data is
+touched**, at the same trust level as VMM startup — but it is a real change from *"sandboxed before
+anything runs"*, and constraint 20's security argument must be read as *"the process ends with the
+same reach"* rather than *"it never had more"*.
+
+⊘ §20's *"`libcuda` is initialised … before the isolate drops privilege"* stands; what changes is
+that this isolate is a **different build** from the others, and that is now stated rather than
+assumed.
