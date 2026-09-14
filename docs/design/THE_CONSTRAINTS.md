@@ -749,3 +749,55 @@ memory means what the hardware says it means, where on substituted system memory
    Those are different numbers by a factor of ~24, and the design currently assumes only the
    first. This may force BAR1 views to be **recycled** rather than all-resident — which is what
    PRAMIN does, and why the hardware has one. **Settle before the reserved object lands.**
+
+## ★★★★★ w724c — 22 IS SYMMETRIC: sysmem must be sysmem too
+
+> **Owner, 2026-09-14:** *"vidmem is vidmem when guest asks it, DMA must still work when the guest
+> asks it explicitly, no lying."*
+
+§22 as written names only one direction. The rule is **symmetric**:
+
+| the guest asks for | it must be |
+|---|---|
+| video memory | the **reserved device-local object** |
+| **system memory, DMA-mapped** | **real host memory, reached by DMA** |
+
+⊘ Having a large reservation to hand makes the second lie **easy and tempting** — "it's faster in
+vidmem" — and it is the direction **nobody is watching**, which is exactly why it must be written
+down. A guest that explicitly asks for a DMA-mapped sysmem buffer and silently gets device memory
+has been lied to just as much as one whose vidmem is sysmem, and the consequences are the same
+class: every property it derives from the aperture (coherence, host visibility, bandwidth,
+lifetime) is wrong.
+
+★ **No lying, either way.** The aperture the guest names is the aperture it gets.
+
+## ★★★★★ w724c — WHY THE SWITCH CANNOT BE INCREMENTAL: THERE IS NO WORKING INTERMEDIATE
+
+> **Owner, 2026-09-14:** *"at 47MB/s it might not even boot in the timeout without dirty bit during
+> refresh. So thats also why its basically not worth trying."*
+
+⊘⊘⊘ The intermediate — **backing on real video memory, host walker still reading the tables** —
+does not merely cost machinery we would delete. **It does not boot.**
+
+| | per refresh | × 1178 refreshes |
+|---|---|---|
+| 7.3 MiB resident tables @ **48 MiB/s** | 152 ms | **~3 minutes** |
+| 24 MiB worst case @ 48 MiB/s | 500 ms | **~10 minutes** |
+
+⇒ Every refresh, because **the dirty tracking lived in the fake fb** — a memslot over host memory.
+Removing it takes away the dirty signal **and** puts a 77x slower bus in the same step. The guest's
+own boot timeouts fire long before that finishes.
+
+### ★★★ AND THIS REFRAMES WHAT THE FAKE FB IS FOR
+
+Not *"an optimisation for slow CPU reads"*. Its real function is to make page-table reads **cheap
+enough that no dirty tracking is needed at all**: 7.3 MiB at **3674 MiB/s** is ~2 ms, so ~2.3 s a
+boot — you can afford to re-read **everything, every time, forever**.
+
+⇒ **The fake fb can only be removed once something else makes refresh affordable.** The PTX walker
+is not an accelerator bolted on afterwards; it is the **precondition** for deleting the fake fb.
+Every other ordering produces a tree that does not boot.
+
+⇒ **Order is forced:** the walk kernel works and passes its tests → it runs inside kayfabe → the
+backing switches → the fake fb goes. `SINGLE_STORE_PLAN.md`'s increments 4 and 6 are therefore
+**gates**, not steps.
