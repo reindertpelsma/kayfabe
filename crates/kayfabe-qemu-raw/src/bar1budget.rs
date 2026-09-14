@@ -200,6 +200,188 @@ pub fn census(advertised_guest_bar1: u64) {
     );
 }
 
+/// ★★★★★ **§w727 — BAR1 IS AN OPERATOR-SELECTABLE SIZE, LIKE VRAM.**
+///
+/// > **Owner, 2026-09-14:** *"just like VRAM size, where you can select how much vram to give
+/// > to the guest, so can you select how much bar1/bar2 to give as option with also minimums
+/// > set to function."*
+///
+/// `[measured w726/e36]` on the bench GA106 the shipped 256 MiB advertisement **does not fit**:
+/// `256 + 16 > 256`. §22(b) already established that **we choose the guest's side**, so this is
+/// the knob that makes the relation satisfiable rather than a refusal.
+///
+/// # ⚠ The three things §w727 says the knob must respect
+///
+/// 1. **PCI BAR sizes are POWERS OF TWO.** 64 / 128 / 256 MiB, never an arbitrary number — *"a
+///    'select any size' knob that accepts 100 MiB is a bug the guest's enumeration finds, not
+///    us."* [`Bar1Choice::parse`] refuses a non-power-of-two by name.
+/// 2. **The minimum is a measurement, and it is PROVISIONAL.** `[measured]` the LLM workload's
+///    BAR1 working set is **912 pages ≈ 3.6 MiB**, so 64 MiB has ~18x margin — *"but that is
+///    ONE workload"*. [`BAR1_MIN_BYTES`] is set conservatively and says so.
+/// 3. **Refuse at startup, loudly, never silently clamp.** ⊘ And *"do not gate on it before
+///    anything consumes BAR1 views — a refusal that fires every boot for a design not yet
+///    switched on is noise that teaches people to ignore the check."* ⇒ [`Bar1Choice::check`]
+///    returns the verdict; the **caller** decides whether it refuses, and today only the armed
+///    device-view path does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bar1Choice {
+    /// The guest BAR1 aperture this boot advertises, in bytes.
+    pub bytes: u64,
+}
+
+/// ★★ **The provisional minimum.** 64 MiB — the smallest power of two that clears the measured
+/// 3.6 MiB working set by ~18x.
+///
+/// ⚠ **Provisional, and §w727 says so in as many words**: the measurement is *one workload*.
+/// The justified minimum is whatever the census across the **guest suite** says, and until that
+/// exists this number is conservative on purpose. ⊘ Do not lower it on the strength of another
+/// single workload.
+pub const BAR1_MIN_BYTES: u64 = 64 * 1024 * 1024;
+
+/// Why a requested BAR1 size was refused. ⊘ Each arm names **which** rule it broke: "bad size"
+/// is not actionable, and the operator's fix differs per arm.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Bar1Refusal {
+    /// Not a power of two. The guest's own PCI enumeration would find this before we did.
+    NotPowerOfTwo(u64),
+    /// Below [`BAR1_MIN_BYTES`] — too small for the driver to function.
+    BelowMinimum {
+        /// What was asked for.
+        asked: u64,
+        /// The floor.
+        min: u64,
+    },
+    /// ★ It does not fit beside our own headroom in the host's aperture. Carries every term, so
+    /// the operator can see which one to change.
+    DoesNotFit {
+        /// The guest aperture asked for.
+        asked: u64,
+        /// What this boot reserves for its own CUDA context and channels.
+        headroom: u64,
+        /// What the board actually has.
+        host: u64,
+        /// ★ The largest power of two that WOULD fit, or 0 if none does.
+        largest_that_fits: u64,
+    },
+}
+
+impl core::fmt::Display for Bar1Refusal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mib = |b: u64| b / (1024 * 1024);
+        match self {
+            Bar1Refusal::NotPowerOfTwo(b) => write!(
+                f,
+                "a guest BAR1 of {} bytes is not a power of two. PCI BAR sizes are powers of \
+                 two; a device that advertises anything else is one the guest's own \
+                 enumeration rejects, and it would fail somewhere that looks nothing like \
+                 this option. Choose 64, 128 or 256 MiB.",
+                b
+            ),
+            Bar1Refusal::BelowMinimum { asked, min } => write!(
+                f,
+                "a guest BAR1 of {} MiB is below the {} MiB minimum. ⚠ That minimum is \
+                 PROVISIONAL — it clears the one measured working set (912 pages ≈ 3.6 MiB) by \
+                 ~18x, and the justified figure is whatever the guest suite's census says. \
+                 Refused rather than clamped: a guest whose BAR is too small for its driver \
+                 fails somewhere unrecognisable.",
+                mib(*asked),
+                mib(*min)
+            ),
+            Bar1Refusal::DoesNotFit {
+                asked,
+                headroom,
+                host,
+                largest_that_fits,
+            } => write!(
+                f,
+                "a guest BAR1 of {} MiB does not fit: {} MiB + {} MiB headroom > {} MiB host \
+                 aperture. ★ §22(b): we CHOOSE the guest's side, so this is an option to \
+                 change, not a wall. {}",
+                mib(*asked),
+                mib(*asked),
+                mib(*headroom),
+                mib(*host),
+                if *largest_that_fits == 0 {
+                    "⊘ No power of two fits on this board at all — the headroom itself exceeds \
+                     the aperture, which is a different problem."
+                        .to_string()
+                } else {
+                    format!(
+                        "The largest that fits here is {} MiB, and a {}-MiB-BAR1 GA106 is a \
+                         real hardware configuration — a different truthful board, not a lie.",
+                        mib(*largest_that_fits),
+                        mib(*largest_that_fits)
+                    )
+                }
+            ),
+        }
+    }
+}
+
+impl Bar1Choice {
+    /// Parse an operator's choice, in **MiB**.
+    ///
+    /// # Errors
+    /// [`Bar1Refusal::NotPowerOfTwo`] or [`Bar1Refusal::BelowMinimum`]. ⊘ Fit is **not**
+    /// checked here: it depends on the board, and a parse that consulted the board could not
+    /// be tested without one.
+    pub fn parse(mib: u64) -> Result<Bar1Choice, Bar1Refusal> {
+        let bytes = mib.saturating_mul(1024 * 1024);
+        if bytes == 0 || !bytes.is_power_of_two() {
+            return Err(Bar1Refusal::NotPowerOfTwo(bytes));
+        }
+        if bytes < BAR1_MIN_BYTES {
+            return Err(Bar1Refusal::BelowMinimum {
+                asked: bytes,
+                min: BAR1_MIN_BYTES,
+            });
+        }
+        Ok(Bar1Choice { bytes })
+    }
+
+    /// ★ Does this choice fit beside our headroom on this board?
+    ///
+    /// # Errors
+    /// [`Bar1Refusal::DoesNotFit`], carrying every term **and** the largest power of two that
+    /// would fit — so the message is a fix and not a complaint.
+    ///
+    /// ⊘ `Ok(())` when the host aperture is **unknown**: refusing a boot because we could not
+    /// read sysfs would be the instrument deciding the experiment, and the census already says
+    /// the verdict could not be computed.
+    pub fn check(self, host: HostBar1) -> Result<(), Bar1Refusal> {
+        let HostBar1::Bytes(h) = host else {
+            return Ok(());
+        };
+        if self.bytes.saturating_add(OUR_HEADROOM_BYTES) <= h {
+            return Ok(());
+        }
+        Err(Bar1Refusal::DoesNotFit {
+            asked: self.bytes,
+            headroom: OUR_HEADROOM_BYTES,
+            host: h,
+            largest_that_fits: largest_power_of_two_that_fits(h),
+        })
+    }
+}
+
+/// The largest power-of-two guest BAR1 that leaves [`OUR_HEADROOM_BYTES`] free in a `host`-byte
+/// aperture, or `0` if none does.
+///
+/// ⊘ Walks **down** from the host's own size rather than computing it, because the answer must
+/// also respect [`BAR1_MIN_BYTES`] — a "largest that fits" below the functional minimum is not
+/// a suggestion anyone can take.
+#[must_use]
+pub fn largest_power_of_two_that_fits(host: u64) -> u64 {
+    let mut c = host;
+    while c >= BAR1_MIN_BYTES {
+        if c.saturating_add(OUR_HEADROOM_BYTES) <= host {
+            return c;
+        }
+        c /= 2;
+    }
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,7 +432,85 @@ mod tests {
         assert_eq!(verdict(host, 128 * 1024 * 1024), Some(true));
     }
 
-    /// ⊘ "We could not tell" is not "it does not fit". Collapsing them would license the
+    // ── §w727: the sized option ──────────────────────────────────────────────────────
+
+    /// ⚠ **PCI BAR sizes are POWERS OF TWO.** §w727: *"a 'select any size' knob that accepts
+    /// 100 MiB is a bug the guest's enumeration finds, not us."*
+    #[test]
+    fn a_bar1_size_that_is_not_a_power_of_two_is_refused() {
+        for mib in [100, 96, 3, 200, 0] {
+            assert!(
+                matches!(Bar1Choice::parse(mib), Err(Bar1Refusal::NotPowerOfTwo(_))),
+                "{mib} MiB is not a power of two and must be refused"
+            );
+        }
+        for mib in [64, 128, 256] {
+            assert!(Bar1Choice::parse(mib).is_ok(), "{mib} MiB is a legal BAR size");
+        }
+    }
+
+    /// ⊘ **Refused, never clamped.** A guest whose BAR is too small for its driver fails
+    /// somewhere unrecognisable; silently growing it would hide which number was wrong.
+    #[test]
+    fn below_the_minimum_is_refused_rather_than_clamped() {
+        let r = Bar1Choice::parse(32).expect_err("32 MiB is below the floor");
+        assert!(matches!(r, Bar1Refusal::BelowMinimum { .. }));
+        // ★ And the message says the floor is PROVISIONAL — one workload, not the suite.
+        assert!(
+            r.to_string().contains("PROVISIONAL"),
+            "the refusal must say the minimum is provisional; it said: {r}"
+        );
+    }
+
+    /// ★★★ **THE MEASURED SITUATION ON THE BENCH BOARD**: 256 MiB does not fit in a 256 MiB
+    /// host aperture, and the refusal names 128 MiB as the fix rather than merely complaining.
+    #[test]
+    fn the_bench_board_refuses_256_and_names_128_as_the_fix() {
+        let host = HostBar1::Bytes(256 * 1024 * 1024);
+        let r = Bar1Choice::parse(256)
+            .expect("256 MiB is a legal BAR size")
+            .check(host)
+            .expect_err("256 + 16 > 256, so it cannot fit");
+        match r {
+            Bar1Refusal::DoesNotFit {
+                largest_that_fits, ..
+            } => assert_eq!(
+                largest_that_fits,
+                128 * 1024 * 1024,
+                "the refusal must carry the largest power of two that WOULD fit, so the \
+                 message is a fix and not a complaint"
+            ),
+            other => panic!("wrong refusal: {other:?}"),
+        }
+        assert!(r.to_string().contains("128 MiB"));
+        // ★ and 128 fits, which is the whole point of the knob existing
+        assert!(Bar1Choice::parse(128).expect("legal").check(host).is_ok());
+    }
+
+    /// ⊘ An unknown host aperture does **not** refuse the boot. Refusing because we could not
+    /// read sysfs would be the instrument deciding the experiment.
+    #[test]
+    fn an_unknown_host_aperture_does_not_refuse_a_choice() {
+        assert!(
+            Bar1Choice::parse(256)
+                .expect("legal")
+                .check(HostBar1::Unknown("no device"))
+                .is_ok()
+        );
+    }
+
+    /// ⊘ A board whose headroom exceeds its whole aperture has **no** answer, and
+    /// `largest_that_fits` says `0` rather than suggesting something below the functional
+    /// minimum — a suggestion nobody could take is worse than none.
+    #[test]
+    fn a_board_with_no_fitting_size_says_zero_rather_than_something_unusable() {
+        assert_eq!(largest_power_of_two_that_fits(32 * 1024 * 1024), 0);
+        assert_eq!(largest_power_of_two_that_fits(256 * 1024 * 1024), 128 * 1024 * 1024);
+        // ⊘ A 1 GiB aperture fits 512 MiB, not 1 GiB: headroom is not optional.
+        assert_eq!(largest_power_of_two_that_fits(1024 * 1024 * 1024), 512 * 1024 * 1024);
+    }
+
+    /// ⊘ "We could not tell" is not "it does not fit".    /// ⊘ "We could not tell" is not "it does not fit". Collapsing them would license the
     /// wrong decision in whichever direction the collapse chose.
     #[test]
     fn an_unknown_host_aperture_yields_no_verdict_rather_than_false() {
