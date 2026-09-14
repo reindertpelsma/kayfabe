@@ -657,5 +657,5 @@ Two smaller ones:
 
 - Whether GSP firmware would refuse a direct `NV2080_CTRL_CMD_FIFO_OBJSCHED_SET_STATE`
   (`0x20801121`) on a bare-metal GA106. Only OGKM's own selection path can be shown dead (§9).
-- Whether vGPU scheduling is licence-gated. No licence check exists in *this* tree (§9); it is
-  enforced somewhere we cannot read. The build-time gate makes the question moot for us.
+- How vGPU scheduling is gated. Not determinable from this tree (§9), and **moot for us**: we do
+  not use the vGPU scheduling path at all — the build-time gate keeps us off it.

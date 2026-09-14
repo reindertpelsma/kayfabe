@@ -39,7 +39,7 @@ guest to host memory.
 
 ## Why not vGPU
 
-No SR-IOV, no MIG, no licence, no datacenter SKU, no vendor-supplied guest
+No SR-IOV, no MIG, no vGPU stack, no datacenter SKU, no vendor-supplied guest
 driver. Sharing here is cooperative and happens at the driver interface, so it
 works on consumer GeForce hardware with a stock guest driver.
 

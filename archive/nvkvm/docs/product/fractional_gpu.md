@@ -4,11 +4,11 @@ Two distinct offerings fall out of nvkvm's design. Both exploit that nvkvm
 **brokers every allocation** through QEMU — a policy insertion point NVIDIA's
 stack doesn't expose.
 
-## 1. License-free vGPU on MIG hardware
+## 1. VM-isolated GPU slices on MIG hardware
 - MIG (A100/H100) gives a hardware-isolated GPU slice. Pin QEMU to a MIG
   instance, run a KVM guest on it, forward via nvkvm.
-- Result: vGPU-grade isolation (own VM + own kernel) **without NVIDIA's vGPU
-  license** — which is the expensive gate today.
+- Result: VM-level isolation (own VM + own kernel) on a hardware-partitioned
+  slice, without using NVIDIA's vGPU stack at all.
 - Audience: datacenter operators with MIG-capable GPUs.
 - Isolation: hardware (MIG) → safe for adversarial multi-tenant.
 
@@ -31,7 +31,7 @@ stack doesn't expose.
   containers / cheap inference"; use MIG+nvkvm when tenants are adversarial.
 
 ## Framing
-MIG+nvkvm = isolation-grade vGPU without the license.
+MIG+nvkvm = VM-grade isolation from MIG partitioning plus KVM, not from the vGPU stack.
 nvkvm-quota on consumer = density/cost play NVIDIA structurally won't offer.
 The brokering layer as a policy point (quota / accounting / QoS) is itself moat,
 beyond raw isolation.
