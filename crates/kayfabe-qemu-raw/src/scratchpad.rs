@@ -464,23 +464,7 @@ impl Scratchpad {
     /// refusal never costs the reader the diagnosis of *why* — which is the whole reason
     /// `on` and `require` are separate arms.
     pub fn enforce(&self) -> Result<(), (Status, &'static str)> {
-        match (self.arm, &self.outcome) {
-            (ScratchpadArm::Require, Reservation::Held { .. }) | (ScratchpadArm::Measure, _) => {
-                Ok(())
-            }
-            (ScratchpadArm::Require, _) => Err((
-                Status::Unsupported,
-                "KAYFABE_SCRATCHPAD=require and the one reserved video-memory object was NOT \
-                 held. `gpga_is_one_reserved_object.md`: the guest's framebuffer is one host \
-                 RM object or the VM does not start — an allocation that can fail later, on \
-                 a refresh path where nothing can recover, is what reserving up front \
-                 exists to make impossible. The SCRATCHPAD census line printed immediately \
-                 above names which step refused.",
-            )),
-            // ⊘ Unreachable: `Off` never builds a `Scratchpad` at all. Stated rather than
-            // silently folded into an `Ok`, so a future arm cannot inherit permissiveness.
-            (ScratchpadArm::Off, _) => Ok(()),
-        }
+        enforce_arm(self.arm, &self.outcome)
     }
 
     /// Retire and drop the isolate deliberately, before the rest of the shell goes.
@@ -491,6 +475,36 @@ impl Scratchpad {
         if let Some(mut iso) = self.iso.take() {
             iso.retire();
         }
+    }
+}
+
+/// ★★★ **The `require` rule, as a pure function — and the ONLY statement of it.**
+///
+/// ⊘ Separated from [`Scratchpad::enforce`] so it can be tested over all five outcomes
+/// without a GPU, a factory or a child process. A rule that can only be exercised by booting
+/// is a rule whose every arm but one is unmeasured, and the arms that matter here are the
+/// four failing ones.
+///
+/// # Errors
+/// [`Status::Unsupported`] when `require` is armed and nothing is held.
+pub fn enforce_arm(
+    arm: ScratchpadArm,
+    outcome: &Reservation,
+) -> Result<(), (Status, &'static str)> {
+    match (arm, outcome) {
+        (ScratchpadArm::Require, Reservation::Held { .. }) | (ScratchpadArm::Measure, _) => Ok(()),
+        (ScratchpadArm::Require, _) => Err((
+            Status::Unsupported,
+            "KAYFABE_SCRATCHPAD=require and the one reserved video-memory object was NOT \
+             held. `gpga_is_one_reserved_object.md`: the guest's framebuffer is one host RM \
+             object or the VM does not start — an allocation that can fail later, on a \
+             refresh path where nothing can recover, is what reserving up front exists to \
+             make impossible. The SCRATCHPAD census line printed immediately above names \
+             which step refused.",
+        )),
+        // ⊘ Unreachable: `Off` never builds a `Scratchpad` at all. Stated rather than
+        // silently folded into an `Ok`, so a future arm cannot inherit permissiveness.
+        (ScratchpadArm::Off, _) => Ok(()),
     }
 }
 
@@ -579,6 +593,41 @@ mod tests {
             .held_mb(),
             Some(11_808)
         );
+    }
+
+    /// ★★★ **The `require` rule over ALL FIVE outcomes.** The four failing ones are what
+    /// this rule is for, and they are the ones a boot would never exercise on a healthy box.
+    #[test]
+    fn require_refuses_every_outcome_but_held_and_measure_refuses_none() {
+        let failing = [
+            Reservation::NoWorker { why: String::new() },
+            Reservation::ProbeRefused { why: String::new() },
+            Reservation::NothingReservable,
+            Reservation::Refused {
+                probed_mb: 6144,
+                why: String::new(),
+            },
+        ];
+        for o in &failing {
+            assert!(
+                enforce_arm(ScratchpadArm::Require, o).is_err(),
+                "`require` must refuse {}",
+                o.token()
+            );
+            // ⊘ The measuring arm refuses NOTHING — that is the whole reason it is a
+            // separate arm: a device that refuses to realize leaves no census behind.
+            assert!(
+                enforce_arm(ScratchpadArm::Measure, o).is_ok(),
+                "`on` must not refuse {}",
+                o.token()
+            );
+        }
+        let held = Reservation::Held {
+            mb: 11_808,
+            obj: HostHandle::NULL,
+        };
+        assert!(enforce_arm(ScratchpadArm::Require, &held).is_ok());
+        assert!(enforce_arm(ScratchpadArm::Measure, &held).is_ok());
     }
 
     /// ⊘ The scratchpad's isolate id must not alias any proc's. `ProcId` is dense from 0, so
