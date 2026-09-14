@@ -1,0 +1,37 @@
+BOOT_WRAPPER_START 2026-09-14T17:53:35+00:00 tag=e1ctl arm=off start_mb=default
+=== SINGLE-STORE E1 BOOT 2026-09-14T17:53:35+00:00 tag=e1ctl ===
+KAYFABE_SCRATCHPAD=off KAYFABE_SCRATCHPAD_START_MB=<unset, default 12288>
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=3053761b34c80ef301de0ad3d589e25a9a12deb1 TREE_REV=3053761b34c80ef301de0ad3d589e25a9a12deb1
+E1-CONTENT: scratchpad_census=2 (0 ⇒ this binary predates increment 1 — STOP)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- Q2/Q3/Q5 THE SCRATCHPAD CENSUS (both instants; a missing line is UNMEASURED) ---
+E1-CENSUS-LINES=2  (expected 2: REALIZE and END OF RUN)
+SCRATCHPAD AT REALIZE: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+SCRATCHPAD AT END OF RUN: arm=off up=false pool=0 reservation=DISARMED RESERVED_MB=0 ⇒ no VM-lifetime isolate; the advertised framebuffer is the compile-time one (set KAYFABE_SCRATCHPAD=on to arm)
+--- Q4 THE ADVERTISED SIZE ---
+--- the reservation, as one greppable row ---
+E1-RESERVATION=DISARMED
+E1-RESERVED_MB=0
+--- Q5 WHAT THE GUEST PAID: the worst trap, beside the spawn we moved off its path ---
+TRAPWITNESS off_trap_claims=563 inline_exceptions=0 worst_trap=16867us at=bar0+0x110c00 slow_traps(>1000us)=2 by_decade[1-10ms=1 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+--- the standing constraint rows, so an armed boot can be compared to the control ---
+BAR-MIRROR MECHANISM AT END OF RUN: slots live=0 peak=922 revalidate[runs=1185 kept=709558 removed=2921] quiesce[calls=804 removed=3212] retire_all[calls=0 removed=0] arena[pages live=2431 peak=2431 allocations=4103 span_pages=3087533
+doorbells: 360 arrived, 345 served, 3 REFUSED by name
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   18.291961] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   20.363410] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   20.363588] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.147126] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.152035] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.152154] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   22.152163] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.368565] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E1 END 2026-09-14T17:54:49+00:00 tag=e1ctl ===
+BOOT_WRAPPER_EXIT=0 2026-09-14T17:54:49+00:00
