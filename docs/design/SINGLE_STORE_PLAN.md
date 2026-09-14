@@ -223,6 +223,49 @@ The host walker is format-polymorphic (`fmt: &dyn GmmuFmt`); `cuda/walk` hardcod
 the host parsing before the kernel has the seam **silently caps the product at Ada**, and Blackwell
 is goals 1 and 10.
 
+> ## ⊘⊘ §6 STEP 1 — the COMPARISON is built; the LIVE half turns on one measurement
+>
+> `[2026-09-15]` `kayfabe_mmu::walkshadow` lands the half that makes the swap safe: the host
+> walk's leaves as `walkdiff::Run`s, the comparison against the kernel's report, a census by
+> kind, and the known-positives its zero depends on — every kind made to fire by name, both
+> **vacuity** arms pinned (a shadow that never ran and two empty sets render as VACUOUS, never
+> as agreement), and the three canonicalisation properties checked over `[w725]`'s **real
+> GA106 capture** rather than over a fixture: idempotence, self-agreement, and
+> **order-independence** (the host emits depth-first, the kernel per-thread).
+>
+> ⊘ **What is compared is narrower than "everything", and the census line says so.** The host
+> walker does not decode volatile, privilege, atomic-disable or `KIND`; the kernel does.
+> `COMPARED_FLAGS` is the intersection, and the clean verdict names what it did not cover.
+>
+> ### ✔ One feared blocker checked and FALSE
+>
+> I expected the sweep to run under the device lock, making a synchronous isolate round trip an
+> R1 violation. It does not: `SharedDevice`'s sweep is plan/execute/commit and the site is
+> marked **"EXECUTE — no lock"** (`device.rs:4449`). ⇒ an isolate call there is legal, and no
+> deferred queue is needed.
+>
+> ### ⊘⊘⊘ The real blocker: THE FAKE FB IS PARTLY A MEMFD AND PARTLY THE HEAP
+>
+> To run the kernel at refresh time the guest's page tables must be reachable by the **GPU**.
+> They live in `SparseFb`, whose `pages: HashMap<u64, FbPage>` holds each page *"on the heap
+> **or** in the arena"* — and `arena_refusals` counts every time the arena refused and a heap
+> page was made instead.
+>
+> ⇒ Granting the isolate the arena's memfd (the `with_guest_ram` shape, and within its
+> precedent) would hand it **some** of the framebuffer and **silently miss the rest**. A walk
+> over that follows a zero PDE and reports *nothing* — so the shadow would report
+> `missing_in_kernel` for mappings that are not missing, and the census's whole value is that
+> it can be believed.
+>
+> ⚠ This is the same class `arena_read_refusals` was added for in w585: *"the store and the
+> file disagree about a frame"*.
+>
+> ★ **It turns on one number, and the boot already prints it**: `fb_arena_census`'s
+> `arena_refusals`, reported at teardown by `barmirror`. **Zero on a real boot** ⇒ the memfd
+> route is viable with a checked assertion beside it. **Non-zero** ⇒ the route is dead and the
+> tables must move to the reserved object first, which is step 2 — i.e. the ordering correction
+> one level further down.
+
 ### 6. WIRE THE WALKER INTO REFRESH  ⟵ **BLOCKED ON A SHAPE MISMATCH, NOT ON WIRING**
 
 > #### ⊘⊘⊘ SURVEYED 2026-09-14 — **"kernel launches replace the host walk" is not a wiring
