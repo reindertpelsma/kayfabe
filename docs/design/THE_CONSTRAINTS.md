@@ -1011,3 +1011,50 @@ without reaching the siblings, which needs a dirfd opened **before** the sandbox
 instrument was not built and the sibling threads are unverified.** Recorded as an open gap rather
 than assumed away — this is exactly the shape where a check that covers one thread reads as a check
 that covers the process.
+
+## ★★★★★ w727 — BAR1/BAR2 ARE SIZED OPTIONS, like VRAM, with enforced minimums
+
+> **Owner, 2026-09-14:** *"just like VRAM size, where you can select how much vram to give to the
+> guest, so can you select how much bar1/bar2 to give as option with also minimums set to
+> function."*
+
+### Why it is needed, measured
+
+`[measured w726/e36]` on the bench GA106:
+
+    BAR1-BUDGET host_bar1=256 MiB  advertised_guest_bar1=256 MiB  headroom=16 MiB
+      ⇒ ⊘⊘ DOES NOT FIT — 256 + 16 > 256
+
+⇒ **All-resident BAR1 cannot work while we advertise the host's entire aperture**, because our own
+CUDA context and channels come out of the same pool. §22(b) already established that **we choose
+the guest's side**, so this is the knob that makes the relation satisfiable rather than a refusal.
+
+### The rule
+
+BAR1 and BAR2 join the framebuffer as **operator-selectable sizes**, derived and checked at
+startup, **never a literal**:
+
+    guest_bar1 + our_headroom ≤ host_bar1        (queried, §22 item 3)
+    guest_bar1 ≥ BAR1_MIN                        (enough to function)
+    guest_bar2 ≥ BAR2_MIN
+
+★ A 128 MiB-BAR1 GA106 is **a real hardware configuration**, so advertising one is a *different
+truthful board*, not a lie — **§22 stays intact**. That is the same argument that licensed deriving
+the framebuffer size from the reservation rather than asserting 12288.
+
+### ⚠ Three things the knob must respect
+
+1. **PCI BAR sizes are powers of two.** The choice is 64 / 128 / 256 MiB, not an arbitrary number —
+   a "select any size" knob that accepts 100 MiB is a bug the guest's enumeration finds, not us.
+2. **The minimum is a measurement, not a guess.** `[measured]` the LLM workload's BAR1 working set
+   is **912 pages ≈ 3.6 MiB**, so 64 MiB has ~18x margin — but that is **one workload**. ⇒ `BAR1_MIN`
+   must be justified by the census across the **guest suite**, and until then set conservatively and
+   say it is provisional.
+3. **Refuse at startup, loudly, never silently clamp.** A guest booted with a BAR too small for its
+   driver fails somewhere unrecognisable. ⊘ And do not gate on it before anything consumes BAR1
+   views — a refusal that fires every boot for a design not yet switched on is noise that teaches
+   people to ignore the check.
+
+⊘ **Not yet decided: what `our_headroom` must contain.** Known members: the CUDA context (~3 MiB
+measured) and our own channels. Unknown: whether a second GPU, a second VM, or the host driver's own
+growth share the pool — §22 item 3 measured **one global pool**, so they may.
