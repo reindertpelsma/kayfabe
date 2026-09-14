@@ -14356,6 +14356,19 @@ fn join_one_fb_leaf(
 /// none — see [`SharedObjectModel`].
 pub struct Regs {
     plane: Arc<RegPlane>,
+    /// ★★★★★ **The VM-lifetime scratchpad isolate** (`SINGLE_STORE_PLAN.md` increment 1),
+    /// or `None` when `KAYFABE_SCRATCHPAD` is off — which is the default and is the shipped
+    /// behaviour, unchanged.
+    ///
+    /// ⊘ **Owned here and not by the device**, because it is not a guest process's isolate:
+    /// `Spine::install_isolate` is keyed by `(ProcId, GpuId)` and there is no `ProcId` that
+    /// means *"the VM"*. Holding it here also makes its lifetime exactly the device's,
+    /// which is what the reservation needs — the reserved object hangs off this isolate's
+    /// RM client, so it is released when and only when this field is dropped.
+    ///
+    /// ⚠ Dropping it kills and reaps a child process, so it must not be dropped under a
+    /// ranked lock; `IsolateBox::drop` asserts that.
+    scratchpad: Option<crate::scratchpad::Scratchpad>,
     /// The [`kayfabe_mmu::any_table_change_epoch`] value this port last offered a
     /// publication job for. ⊘ An atomic and not a cell: `Regs::write` takes `&self` and runs
     /// on eight vCPU threads. A racing swap costs at most one spare job — see the call site
@@ -14676,6 +14689,74 @@ impl Regs {
             guest_ram_backing,
             exports,
         ) = object_policy(abi.driver, chip.engines)?;
+        // ★★★★★ **`SINGLE_STORE_PLAN.md` INCREMENT 1 — THE VM-LIFETIME SCRATCHPAD
+        // ISOLATE, SPAWNED HERE AND NOWHERE ELSE.**
+        //
+        // This is the composition root and this runs exactly once per device, at PCI
+        // realize — **before the guest's first instruction**, which is the whole
+        // requirement: the reserved object (and later the CUDA context and the walk
+        // kernel) must already exist when the guest starts.
+        //
+        // ⊘ **Placed AFTER `object_policy` and BEFORE `RegPlane::with_objects`, and both
+        // halves of that are forced.** After, because the isolate factory is the one
+        // `Gpu::new` was realized with and `SharedDevice::isolate_factory` is where a
+        // second handle on it comes from — building a second factory would be a second
+        // program image and a second export registry for one device. Before, because the
+        // reservation's size is what the register plane must advertise, and the plane is
+        // built from `chip`.
+        //
+        // ⚠ **No lock is held here and none may be.** The spawn is a `clone` into six
+        // namespaces plus a blocking handshake read, and the reservation is a
+        // multi-gigabyte RM ioctl behind an IPC bracket. `Scratchpad::bring_up` claims an
+        // `OffTrap` witness, which panics by name if a later edit moves this onto a trap
+        // thread.
+        let scratchpad = if crate::scratchpad::selected_scratchpad()? {
+            let sp = crate::scratchpad::Scratchpad::bring_up(
+                &device.isolate_factory(),
+                kayfabe_rt::GpuId::ZERO,
+                crate::scratchpad::selected_start_mb(),
+            );
+            sp.census("REALIZE");
+            Some(sp)
+        } else {
+            crate::scratchpad::Scratchpad::census_disarmed("REALIZE");
+            None
+        };
+        // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
+        // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
+        // derived from the reservation that succeeded"*).
+        //
+        // ⊘ The rebinding happens ONLY when a reservation is actually held. With the gate
+        // off — and with the gate on but the reservation refused — `chip` is the row
+        // `chip_for` returned, byte for byte, and `ga106_profile` is not called at all
+        // (its own `fb_size_mb == FB_SIZE_MB` fast path returns `&GA106` untouched, so even
+        // a reservation that happens to equal the compiled size cannot drift).
+        //
+        // ⚠ Guarded on the device id rather than assumed: `ga106_profile` patches GA106's
+        // own boot-register and FB-region tables, so handing it another part's row would
+        // advertise one chip's size through another chip's tables. Today `CHIPS` has one
+        // entry and the guard cannot fail; the day it has two, this refuses instead of
+        // mis-patching.
+        let chip = match scratchpad.as_ref().and_then(crate::scratchpad::Scratchpad::reserved_mb) {
+            Some(mb) if chip.pci_device_id == kayfabe_device::ga10x::GA106.pci_device_id => {
+                let derived = kayfabe_device::ga10x::ga106_profile(mb);
+                eprintln!(
+                    "kayfabe: SCRATCHPAD FB-SIZE derived_from_reservation={mb} MiB                      compiled={compiled} MiB fb_length=0x{len:x} ⇒ the guest is told what                      the host actually gave us",
+                    compiled = kayfabe_device::ga10x::FB_SIZE_MB,
+                    len = derived.fb_length,
+                );
+                derived
+            }
+            Some(mb) => {
+                eprintln!(
+                    "kayfabe: SCRATCHPAD FB-SIZE ⊘ REFUSED to derive: {mb} MiB was reserved                      but this device is `{name}` (0x{id:04x}), and the only size-deriving                      profile builder patches GA106's own tables. The compiled size stands.",
+                    name = chip.name,
+                    id = chip.pci_device_id,
+                );
+                chip
+            }
+            None => chip,
+        };
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -15118,6 +15199,7 @@ impl Regs {
             plane.mmu_inval().is_armed(),
         );
         Ok(Regs {
+            scratchpad,
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
             #[cfg(feature = "host-isolates")]
             last_wake_epoch: std::sync::atomic::AtomicU64::new(0),
@@ -15322,6 +15404,16 @@ impl Regs {
     #[must_use]
     pub fn plane_mirror_drains_for_test(&self) -> u64 {
         kayfabe_device::plane::mirror_drains()
+    }
+
+    /// ★ The VM-lifetime scratchpad isolate, or `None` when `KAYFABE_SCRATCHPAD` is off.
+    ///
+    /// ⊘ Exposed so a test can assert the **absence**: the increment's whole method is that
+    /// the disarmed arm is byte-for-byte what shipped, and an absence nobody can ask about
+    /// is an absence nobody can assert.
+    #[must_use]
+    pub fn scratchpad(&self) -> Option<&crate::scratchpad::Scratchpad> {
+        self.scratchpad.as_ref()
     }
 
     pub fn plane(&self) -> &RegPlane {
@@ -17302,6 +17394,20 @@ impl Regs {
                  ⇒ unexplained={} {verdict}",
                 residue.saturating_sub(coalesced)
             );
+        }
+        // ★★★★★ **`SINGLE_STORE_PLAN.md` INCREMENT 1 — THE TEARDOWN CENSUS.**
+        //
+        // Printed on BOTH arms. An armed boot says whether the isolate came up, what it
+        // reserved and how long each step took; a disarmed boot says it was disarmed, so
+        // the control arm's log is distinguishable from a binary that predates the arm.
+        //
+        // ⊘ It is emitted from `audit`, which `nvkvm_report_registers` drives from the QEMU
+        // **exit notifier** as well as from device unrealize (and which is idempotent via
+        // `s->audit_printed`). A plain machine shutdown never unplugs the device, so an
+        // unrealize-only hook would lose the line on exactly the runs that end normally.
+        match &self.scratchpad {
+            Some(sp) => sp.census("END OF RUN"),
+            None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
         }
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
         // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and

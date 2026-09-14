@@ -84,6 +84,9 @@
 pub mod barmirror;
 pub mod kftime;
 pub mod reclaimtick;
+/// ★★★★★ `SINGLE_STORE_PLAN.md` increment 1 — the VM-lifetime scratchpad isolate and the
+/// one reserved video-memory object it owns. Gated by `KAYFABE_SCRATCHPAD`, off by default.
+pub mod scratchpad;
 pub mod shim;
 pub mod shim_unsafe;
 

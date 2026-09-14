@@ -5063,6 +5063,35 @@ impl RmBackend for HostRmBackend {
         Ok(self.stamp(h))
     }
 
+    /// ★★★★★ **THE VM'S ONE RESERVED OBJECT** — see
+    /// [`kayfabe_isolate::RmBackend::reserve_gpga`] for why this is not
+    /// [`Self::alloc_vidmem`] at a larger size.
+    ///
+    /// The whole body is [`RmConnection::reserve_gpga`], which has existed since
+    /// `gpga_is_one_reserved_object.md` was written and — until this verb — had exactly one
+    /// caller, the bring-up ladder binary. This is the seam that puts it on the wire.
+    fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            // ⊘ A zero-byte reservation is not "the smallest reservation"; it is a caller
+            // that derived no size. Refused by name rather than handed an object that maps
+            // nothing.
+            return Err(RmError::NoMemory);
+        }
+        let h = self.conn.reserve_gpga(len)?;
+        Ok(self.stamp(h))
+    }
+
+    /// ★★★ The probe, on the wire. See [`Self::largest_reservable_mb`] — the inherent
+    /// method this forwards to, which is where the bisection and its post-mortem live.
+    ///
+    /// ⊘ It cannot fail today: the inherent method answers `0` for *"nothing down to the
+    /// floor"* rather than erroring, and `0` is a real answer about this host. The
+    /// `Result` is here because the trait's other backends have no RM connection at all and
+    /// must be able to say so.
+    fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
+        Ok(HostRmBackend::largest_reservable_mb(self, start_mb))
+    }
+
     /// ★★★ R13 — a real host channel. Six RM objects, one GPU mapping and two controls,
     /// in an order where every step's failure has a different status.
     ///

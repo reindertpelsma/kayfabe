@@ -98,6 +98,26 @@ pub enum Request {
         /// Bytes requested.
         len: u64,
     },
+    /// ★★★★★ [`kayfabe_isolate::RmBackend::reserve_gpga`] — the VM's ONE reserved
+    /// video-memory object (`gpga_is_one_reserved_object.md`).
+    ///
+    /// ⊘ **A different tag from [`Request::AllocVidmem`] because it is a different
+    /// allocation**, not the same one at a larger size: non-contiguous and page-aligned,
+    /// where `AllocVidmem` is contiguous and `len`-aligned. Sharing tag 19 would make the
+    /// contiguity of the guest's whole framebuffer depend on which side decoded it.
+    ReserveGpga {
+        /// Bytes requested.
+        len: u64,
+    },
+    /// ★★★ [`kayfabe_isolate::RmBackend::largest_reservable_mb`] — the probe whose answer
+    /// the advertised framebuffer size is derived from.
+    ///
+    /// ⚠ The bisection runs in the CHILD. This request carries only its starting point, so
+    /// a dozen multi-gigabyte alloc/free pairs cost **one** IPC bracket rather than a dozen.
+    LargestReservableMb {
+        /// Where the halving search starts, in MiB.
+        start_mb: u64,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_channel`].
     AllocChannel {
         /// Host VAS handle, raw.
@@ -459,6 +479,14 @@ pub enum Reply {
     Payload(Vec<u8>),
     /// A GPU virtual address.
     Va(u64),
+    /// ★★★ A size in **MiB** — the answer to [`Request::LargestReservableMb`].
+    ///
+    /// ⊘ Its own variant rather than [`Reply::Va`] or [`Reply::Handle`] carrying a number:
+    /// those name an address and a handle, and a reply whose field means something other
+    /// than its name is the shape this file already refuses for request tags. ⊘ `0` is a
+    /// real answer — *"nothing down to the probe's floor could be reserved"* — and is not
+    /// an error.
+    Megabytes(u64),
     /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
     ///
     /// Two fields, not one, and the second is not a length: `covered == false` means the
@@ -807,6 +835,14 @@ impl Envelope {
                 out.push(19);
                 out.extend_from_slice(&len.to_le_bytes());
             }
+            Request::ReserveGpga { len } => {
+                out.push(27);
+                out.extend_from_slice(&len.to_le_bytes());
+            }
+            Request::LargestReservableMb { start_mb } => {
+                out.push(28);
+                out.extend_from_slice(&start_mb.to_le_bytes());
+            }
             Request::AllocChannel {
                 vas,
                 engine,
@@ -1068,6 +1104,12 @@ impl Envelope {
             19 => Request::AllocVidmem {
                 len: c.u64("vidmem len")?,
             },
+            27 => Request::ReserveGpga {
+                len: c.u64("gpga reservation len")?,
+            },
+            28 => Request::LargestReservableMb {
+                start_mb: c.u64("gpga probe start mb")?,
+            },
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
                 engine: c.u8("channel engine")?,
@@ -1305,6 +1347,10 @@ impl Reply {
                 out.push(5);
                 out.extend_from_slice(&va.to_le_bytes());
             }
+            Reply::Megabytes(mb) => {
+                out.push(14);
+                out.extend_from_slice(&mb.to_le_bytes());
+            }
             Reply::FbBytes { covered, bytes } => {
                 out.push(8);
                 out.push(u8::from(*covered));
@@ -1376,6 +1422,7 @@ impl Reply {
             3 => Reply::Unit,
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
+            14 => Reply::Megabytes(c.u64("reservable mb")?),
             // ⊘ **Reply tag 6 is RETIRED, not free** (`ORPHANS_wire_or_discard.md`,
             // 2026-09-12). It carried `Reply::Surface`, the answer to the deleted
             // `Request::ExportSurface`. Never renumber, and never re-issue 6.
@@ -1556,6 +1603,10 @@ mod tests {
             },
             Request::AllocSysmem { len: 0x4000 },
             Request::AllocVidmem { len: 0x20_0000 },
+            Request::ReserveGpga {
+                len: 11_808u64 << 20,
+            },
+            Request::LargestReservableMb { start_mb: 12_288 },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -1766,6 +1817,8 @@ mod tests {
             Request::SubdeviceControl { .. } => "SubdeviceControl",
             Request::AllocSysmem { .. } => "AllocSysmem",
             Request::AllocVidmem { .. } => "AllocVidmem",
+            Request::ReserveGpga { .. } => "ReserveGpga",
+            Request::LargestReservableMb { .. } => "LargestReservableMb",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -1811,8 +1864,10 @@ mod tests {
                 "FbRead",
                 "Free",
                 "JoinFbLeaf",
+                "LargestReservableMb",
                 "MapGpuVa",
                 "MapGuestRam",
+                "ReserveGpga",
                 "RingDoorbell",
                 "Schedule",
                 "SubdeviceControl",
@@ -1844,6 +1899,7 @@ mod tests {
             Reply::Unit,
             Reply::Payload(vec![7; 100]),
             Reply::Va(0x7f00_0000),
+            Reply::Megabytes(11_808),
             Reply::Failed(WireError::InsufficientPermissions),
             Reply::Failed(WireError::BadHandle(0xBAD)),
             Reply::Failed(WireError::NoMemory),

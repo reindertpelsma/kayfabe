@@ -887,6 +887,69 @@ pub trait RmBackend: Send + Sync {
     /// pretends otherwise.
     fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError>;
 
+    /// ★★★★★ **THE VM'S ONE RESERVED VIDEO-MEMORY OBJECT** —
+    /// `docs/design/gpga_is_one_reserved_object.md`, increment 1 of the `single-store`
+    /// branch.
+    ///
+    /// # ⊘⊘⊘ Why this is NOT [`RmBackend::alloc_vidmem`], measured from the two bodies
+    ///
+    /// `SINGLE_STORE_PLAN.md` §2 says *"the verb already exists (`Request::AllocVidmem`,
+    /// wire tag 19)"*. **It does not.** `alloc_vidmem` lands on
+    /// `RmConnection::alloc_device_local`, which passes `ATTR_CONTIGUOUS_VIDMEM` and
+    /// `alignment: len` — correct for the 64 KiB leaf it was written for and **wrong in
+    /// both halves for a multi-gigabyte reservation**:
+    ///
+    /// 1. **Contiguity.** A contiguous 11.8 GiB request fails on merely *fragmented* free
+    ///    memory, so the boot would be refused for a reason that is not capacity — and the
+    ///    design's whole promise is that the refusal means *"there is not enough video
+    ///    memory"*. Contiguity buys nothing here: GPGA is addressed by **offset**, so
+    ///    slicing is arithmetic and the physical layout is RM's business.
+    /// 2. **`alignment: len`.** An 11.8 GiB request would demand an 11.8 GiB-aligned base.
+    ///    Nothing needs that, and nothing can supply it.
+    ///
+    /// `RmConnection::reserve_gpga` — written for this design doc and, until now,
+    /// reachable only from the bring-up ladder inside the child — is the shape that is
+    /// right: `ATTR_NONCONTIGUOUS_VIDMEM`, `alignment: 4096`. This verb is the seam that
+    /// carries it across the socket.
+    ///
+    /// # Errors
+    /// Whatever RM refused with. ⊘ A refusal is **not** recoverable by asking for less on
+    /// this verb: the caller derives its size from
+    /// [`RmBackend::largest_reservable_mb`] first, and a refusal after that means the host
+    /// changed underneath us. The default is a named refusal, so a backend with no RM
+    /// connection says so rather than inventing a handle.
+    fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        let _ = len;
+        // 0x56 = NV_ERR_NOT_SUPPORTED — the same capability-shaped refusal this trait's
+        // other defaults use.
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★ **How large a reservation this host will actually accept, in MiB** — the
+    /// number the guest's advertised framebuffer size is *derived from*, never asserted
+    /// ahead of.
+    ///
+    /// ⊘ **It probes by really allocating**, halving down from `start_mb` to find a floor
+    /// and then bisecting to a 64 MiB grain, freeing every success. So it is ~8-13 real RM
+    /// alloc/free round trips against multi-gigabyte requests — cheap in wall time, but
+    /// emphatically not free, and it must never run on a vCPU thread.
+    ///
+    /// ★ **It runs in the CHILD, in one round trip**, rather than as a bisection driven
+    /// from the parent over [`RmBackend::reserve_gpga`]. Two reasons, both structural: the
+    /// bisection already exists there with a post-mortem attached (an earlier version
+    /// halved only, and reported the first success as *"the largest"* — an artefact of the
+    /// step size printed as a property of the card), and driving it from the parent would
+    /// put a dozen IPC brackets where one belongs.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ **`Ok(0)` is a real answer and is NOT an error**: it means nothing
+    /// down to the probe's floor could be reserved. The caller must distinguish it from a
+    /// refusal, because the two mean different things about the host.
+    fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
+        let _ = start_mb;
+        Err(RmError::Other(0x56))
+    }
+
     /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the
     /// runlist/engine named by `engine` — the channel's graph-derived [`EngineKind`],
     /// which the adapter lowers to the host `NV_CHANNEL_ALLOC_PARAMS` engine type.

@@ -1641,6 +1641,24 @@ impl SharedDevice {
     /// Idempotent and cheap when there is nothing latched: one rank-1 acquisition that moves a
     /// `Vec` and returns. ⚠ **Call with every ranked lock down.** `materialize` asserts it, so
     /// a caller that is wrong is refused by name rather than spawning under a lock.
+    /// ★★★ **The isolate factory, for a spawn that is NOT a guest process's** —
+    /// `SINGLE_STORE_PLAN.md` increment 1.
+    ///
+    /// Every spawn the device itself performs goes through
+    /// [`SharedDevice::materialize_one`], which installs the isolate into a `Proc`. The
+    /// VM-lifetime scratchpad isolate belongs to the `(vm, gpu)` pair and to **no proc**, so
+    /// it cannot be installed there and its owner is the shell. This hands the shell the
+    /// same `Arc` — one factory, a second handle on it, never a second factory.
+    ///
+    /// ⊘ **Reachable with no lock held, and that is the point** (R1): a spawn is the most
+    /// blocking thing this port does. Taking the device lock to learn how to do something
+    /// that must not be done under it would be one acquisition in service of nothing — the
+    /// argument [`SharedDevice::spawner`]'s own docs already make.
+    #[must_use]
+    pub fn isolate_factory(&self) -> Arc<dyn IsolateFactory> {
+        Arc::clone(&self.spawner)
+    }
+
     pub fn materialize_pending(&self) {
         let spawns = {
             let mut g = self.state.write();

@@ -742,6 +742,14 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         }
         Request::AllocSysmem { len } => handle(rm.alloc_sysmem(len)),
         Request::AllocVidmem { len } => handle(rm.alloc_vidmem(len)),
+        Request::ReserveGpga { len } => handle(rm.reserve_gpga(len)),
+        // ⊘ `Ok(0)` crosses as `Reply::Megabytes(0)`, NOT as a failure: *"nothing down to
+        // the probe's floor could be reserved"* is an answer about this host, and the
+        // parent must be able to tell it from *"the verb is not available"*.
+        Request::LargestReservableMb { start_mb } => match rm.largest_reservable_mb(start_mb) {
+            Ok(mb) => Reply::Megabytes(mb),
+            Err(e) => failed(e),
+        },
         Request::AllocChannel {
             vas,
             engine,

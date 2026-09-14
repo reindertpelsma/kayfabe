@@ -693,6 +693,21 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::AllocVidmem { len })
     }
 
+    fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        self.handle(Request::ReserveGpga { len })
+    }
+
+    fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
+        let reply = self.call(Request::LargestReservableMb { start_mb })?;
+        match self.lift(reply)? {
+            Reply::Megabytes(mb) => Ok(mb),
+            // ⊘ Same rule as every other shape mismatch on this proxy: a reply we cannot
+            // read means the two sides disagree about the frame, which is `Wedged` and
+            // never a zero.
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn alloc_channel(
         &mut self,
         vas: HostHandle,
