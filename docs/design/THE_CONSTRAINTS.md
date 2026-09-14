@@ -644,6 +644,45 @@ memory means what the hardware says it means, where on substituted system memory
    demand-fill mirror exists because publication historically was **not** complete; `TRAP_FILLS=0`
    says it now is. ⇒ Cheap test, unchanged: make the trap path **refuse by name**, boot, and see
    whether the refusal ever fires — it now proves **coverage**, not feasibility.
+3. ✔ **ANSWERED w722, and it is WORSE than stated below.** `[measured, GA106/RTX 3060, 580.159.03]`
+   Full write-up: `bar1_simultaneous_view_ceiling.md`.
+
+   - ⊘ **No Resizable BAR.** BAR0 16 MiB, **BAR1 256 MiB**, BAR3 32 MiB. The problem does not vanish.
+   - **Ceiling ≈ 253 MiB**, reproducing exactly, always `status=0x51 NV_ERR_NO_MEMORY` — **with
+     `ioctl()` returning 0 and `errno==0`**, i.e. `failed_zero_is_not_nothing_refused` live on this
+     path. ⊘ Reservation is **not** the constraint: **8192 MiB reserved fine** in the same process
+     that could not map 254 MiB.
+   - ★★★★★ **THE APERTURE IS ONLY RELEASED BY `NV_ESC_RM_UNMAP_MEMORY` (0x4F), AND WE NEVER CALL
+     IT.** `grep -rn NV_ESC_RM_UNMAP_MEMORY crates/ | grep -v _DMA` → **the constant and three doc
+     comments, ZERO call sites**, while the `_DMA` variant is wired in 8 files. Clean A/B with
+     **fresh** offsets each round: *with* the ioctl, 224 MiB every round, 5/5; *without* —
+     `munmap` + `close`, **which is what this tree does today** — round 0 gets 224 MiB and rounds
+     1–4 get **zero**. ⇒ **Dropping a `DeviceView` is not a release.** Recycling on today's
+     `export_device_view` would leak the aperture and then refuse everything.
+   - ⊘⊘⊘ **ONE GLOBAL POOL, AND IT STARVES US TOO.** With 253 MiB held, host **`cudaMalloc` fails
+     with `initialization error` — CUDA context creation itself needs BAR1** (~3 MiB). ⇒ An
+     all-resident BAR1 makes the GPU unusable for everything else **including our own walk
+     kernel's context and our own channels**. That is a deadlock shape: the guest's views would
+     starve the mechanism that publishes them.
+
+   ### ⇒ Three consequences for increment 3, none optional
+
+   1. **BAR1 views MUST be recycled, not all-resident.** This is what PRAMIN does and why the
+      hardware has one. The all-resident design is not merely wasteful — it is **impossible**.
+   2. **Build the release verb FIRST.** `NV_ESC_RM_UNMAP_MEMORY` has no caller; recycling is
+      unimplementable until it does, and the failure mode without it is a silent leak followed by
+      total refusal.
+   3. **Reserve headroom for ourselves** — our CUDA context and channels come out of the same
+      254 MiB. A budget the guest cannot consume, enforced, not hoped for.
+
+   ⚠ Two instrument failures were caught en route, both of which would have shipped wrong numbers:
+   a bisect reporting *"largest single map = 128 MiB"* was an artefact of the leak in the previous
+   probe; and the first reclamation test printed **"APERTURE IS FULLY RECLAIMED"** as a **false
+   positive**, because it remapped the **same** offsets it released — which succeeds even when
+   nothing was returned. ⇒ **Only fresh offsets test reclamation.**
+
+## ⊘ SUPERSEDED — the original statement of item 3, kept for its reasoning
+
 3. ★★★ **HOST BAR1 IS THE BINDING LIMIT, AND IT IS SMALL.** `[measured]` a **256 MiB CPU view
    refused with `NoMemory` while a 6144 MiB reservation succeeded in the same process.** Host BAR1
    on a GA106 is **256 MiB total, shared with the host driver**; our advertised guest BAR1 is
