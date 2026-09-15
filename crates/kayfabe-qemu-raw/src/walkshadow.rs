@@ -58,6 +58,9 @@ use kayfabe_isolate::IsolateBox;
 use crate::shim::Status;
 use kayfabe_mmu::walkshadow::{self, ShadowCensus};
 
+/// Whether the one-shot first-disagreement dump has already fired this boot.
+static DUMPED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// The gate. ⊘ Unset means **off**, and off is the shipped behaviour.
 pub const WALK_SHADOW_ENV: &str = "KAYFABE_WALK_SHADOW";
 
@@ -510,6 +513,55 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 .collect();
             let kernel = kayfabe_mmu::walkdiff::canonical(&mine);
             let d = walkshadow::compare(&host, &kernel);
+            // ★★★ **THE FIRST DISAGREEING COMPARISON PRINTS ITS WHOLE INPUT, ONCE.**
+            //
+            // ⊘ `[measured w731]` a by-kind census said `extra_in_kernel=35 len_differs=35`
+            // whose leading pair was arithmetically ONE mapping split in two — which
+            // canonicalisation absorbs when both halves are in one set. A count cannot say
+            // which set they were in; only the sets can. Once per boot, so it is a diagnostic
+            // and not a hot path.
+            if !d.is_empty() && !DUMPED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!(
+                    "kayfabe: WALK-SHADOW FIRST-DISAGREEMENT pdb_index={i} relocated_root={:#x} \
+                     real_root={real:#x} report_pdbs={} report_runs={} host_leaves={} \
+                     host_runs={} kernel_rows_for_this_index={} kernel_runs={}",
+                    entry.pdb,
+                    report.pdbs.len(),
+                    report.runs.len(),
+                    leaves.len(),
+                    host.len(),
+                    mine.len(),
+                    kernel.len(),
+                );
+                for (n, e) in report.pdbs.iter().enumerate() {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW   PDB[{n}] pdb={:#x} first_run={} run_count={} \
+                         vas_flags={:#x}",
+                        e.pdb, e.first_run, e.run_count, e.vas_flags
+                    );
+                }
+                for (n, r) in host.iter().take(6).enumerate() {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW   HOST[{n}] va={:#x} gpga={:#x} len={:#x} \
+                         flags={:#x} class={:?}",
+                        r.va, r.gpga, r.len, r.flags, r.class
+                    );
+                }
+                for (n, r) in kernel.iter().take(6).enumerate() {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW   KERN[{n}] va={:#x} gpga={:#x} len={:#x} \
+                         flags={:#x} class={:?}",
+                        r.va, r.gpga, r.len, r.flags, r.class
+                    );
+                }
+                for (n, raw) in kept.iter().take(8).enumerate() {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW   ROW[{n}] pdb_index={} va={:#x} gpga={:#x} \
+                         len={:#x} flags={:#x} op={}",
+                        raw.pdb_index, raw.va, raw.gpga, raw.len, raw.flags, raw.op
+                    );
+                }
+            }
             port.note(&host, &kernel, unclassed, &d);
             compared_any = true;
         }
