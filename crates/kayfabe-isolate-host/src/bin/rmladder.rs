@@ -7231,8 +7231,29 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     /// Inside P's and S's default `FERMI_VASPACE_A` range, and clear of every other arm's
     /// address map (`--w379` `BASE` is `0x80_0000_0000`, `--concurrent-fuzz` is `0x20 +`).
     const VA_SHARED: u64 = 0x0000_0044_0000_0000;
+    /// Route B's map, deliberately a DIFFERENT VA from route A's: mapping both routes at
+    /// one address would make the second a `0x51` *because of the first*, and that reads as
+    /// a route-B refusal when it is route A's success.
+    const VA_ROUTE_B: u64 = VA_SHARED + 0x2_0000_0000;
     /// Never mapped by S — the sharing falsifier's control.
-    const VA_UNTOUCHED: u64 = 0x0000_0046_0000_0000;
+    ///
+    /// ⊘⊘ **CAUGHT BY WRITING THE CONST DOWN, BEFORE THE FIRST RUN.** The first draft made
+    /// this `VA_SHARED + 0x2_0000_0000`, which is *exactly* [`VA_ROUTE_B`] — so S would have
+    /// mapped the control's "untouched" address itself, the control would have been refused,
+    /// and `B1D_SHARING` would have read `INDETERMINATE` with the falsifier void. Identical
+    /// in shape to w743's fixture, which put its vidmem region at an address that was already
+    /// `UNMAPPED_DST` and was caught only by its own control.
+    /// ⇒ The [`ADDRESSES_ARE_DISJOINT`] assertion below makes the recurrence a BUILD failure.
+    const VA_UNTOUCHED: u64 = 0x0000_004A_0000_0000;
+    /// ★ Every VA this rung names is ≥ 1 GiB from every other, so no mapping can be covered
+    /// by a large PTE a neighbour installed and no "untouched" address can quietly be one S
+    /// already claimed. ⊘ A `const` block, so a future edit that re-introduces the overlap
+    /// **does not compile** rather than producing an `INDETERMINATE` nobody reads.
+    const ADDRESSES_ARE_DISJOINT: () = {
+        assert!(VA_ROUTE_B > VA_SHARED && VA_ROUTE_B - VA_SHARED >= (1 << 30));
+        assert!(VA_UNTOUCHED > VA_ROUTE_B && VA_UNTOUCHED - VA_ROUTE_B >= (1 << 30));
+    };
+    let () = ADDRESSES_ARE_DISJOINT;
     /// RM's default `FERMI_VASPACE_A` limit on this part, as `--w379` names it. A VA at or
     /// past it must be REFUSED, and that is this rung's known-positive for the FIXED sweep:
     /// if every address "succeeds", the instrument is not measuring placement at all.
@@ -7396,10 +7417,7 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     }
 
     if let Some(h_dma) = h_local_range_over_duped {
-        // ⊘ A DIFFERENT VA from route A on purpose. Mapping both routes at one address
-        // would make the second a `0x51` *because of the first*, and that reads as a route-B
-        // refusal when it is route A's success.
-        let at = VA_SHARED + 0x2_0000_0000;
+        let at = VA_ROUTE_B;
         match rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, at) {
             Ok(o) => {
                 println!(
@@ -7445,19 +7463,34 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // ★ The last is PAST RM's default VAS limit and is the KNOWN-POSITIVE: it must be
     //   REFUSED. A sweep in which everything succeeds is not measuring placement.
     // ════════════════════════════════════════════════════════════════════════════════════
-    let sweep: [(u64, &str, bool); 6] = [
-        (0x0000_0080_0000_1000, "raw client ring, thread 0", true),
-        (0x0000_0082_0000_1000, "raw client ring, thread 1", true),
-        (0x0000_0086_0000_1000, "raw client ring, thread 3", true),
-        (0x0000_0000_0001_0000, "a LOW VA, far from any default heap", true),
-        (0x0000_00F0_0000_0000, "high, still under the VAS limit", true),
-        (VAS_LIMIT + 0x1_0000, "★ PAST the VAS limit — MUST be refused", false),
+    /// What a row's outcome is allowed to mean.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Row {
+        /// ★ A VA **production must place**, so a refusal here refutes (d)'s data plane.
+        Required,
+        /// Informational: it answers *"is FIXED constrained to a reserved range?"* and a
+        /// refusal is a FINDING about RM's VA layout, not about (d). ⊘ It is deliberately
+        /// NOT in the verdict — an unrelated address-range fact must not decide the design
+        /// question, in either direction.
+        Informational,
+        /// ★ The KNOWN-POSITIVE: it MUST be refused.
+        MustRefuse,
+    }
+    let sweep: [(u64, &str, Row); 6] = [
+        (0x0000_0080_0000_1000, "raw client ring, thread 0", Row::Required),
+        (0x0000_0082_0000_1000, "raw client ring, thread 1", Row::Required),
+        (0x0000_0086_0000_1000, "raw client ring, thread 3", Row::Required),
+        (0x0000_0000_0001_0000, "a LOW VA, near RM's own reservations", Row::Informational),
+        (0x0000_00F0_0000_0000, "high, still under the VAS limit", Row::Informational),
+        (VAS_LIMIT + 0x1_0000, "★ PAST the VAS limit — MUST be refused", Row::MustRefuse),
     ];
-    let mut fixed_honoured = 0usize;
-    let mut fixed_expected = 0usize;
+    let mut req_honoured = 0usize;
+    let mut req_total = 0usize;
+    let mut info_honoured = 0usize;
+    let mut info_total = 0usize;
     let mut known_positive_fired = false;
     let mut placed: Vec<u64> = Vec::new();
-    for (at, what, should_work) in sweep {
+    for (at, what, row) in sweep {
         let r = rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, at);
         match r {
             Ok(o) => {
@@ -7467,25 +7500,38 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                      — {what}",
                     o.status, o.dma_offset
                 );
-                if should_work {
-                    fixed_expected += 1;
-                    if honoured {
-                        fixed_honoured += 1;
-                        placed.push(at);
+                match row {
+                    Row::Required => {
+                        req_total += 1;
+                        if honoured {
+                            req_honoured += 1;
+                            placed.push(at);
+                        }
                     }
-                } else if o.status != 0 {
-                    known_positive_fired = true;
-                } else {
-                    // It "succeeded" past the limit — then either the limit is not what
-                    // `--w379` says, or the status is not being read. Either way the sweep
-                    // above cannot be cited.
-                    placed.push(at);
+                    Row::Informational => {
+                        info_total += 1;
+                        if honoured {
+                            info_honoured += 1;
+                            placed.push(at);
+                        }
+                    }
+                    Row::MustRefuse => {
+                        if o.status != 0 {
+                            known_positive_fired = true;
+                        } else {
+                            // It "succeeded" past the limit — then either the limit is not
+                            // what `--w379` says, or this code is not reading the status.
+                            // Either way the sweep above cannot be cited.
+                            placed.push(at);
+                        }
+                    }
                 }
             }
             Err(e) => println!("B1D_Q3_FIXED at={at:#018x} ioctl-level failure: {e:?} — {what}"),
         }
     }
-    println!("B1D_Q3_HONOURED={fixed_honoured}/{fixed_expected}");
+    println!("B1D_Q3_REQUIRED_HONOURED={req_honoured}/{req_total}   (raw-client ring VAs — IN the verdict)");
+    println!("B1D_Q3_INFORMATIONAL_HONOURED={info_honoured}/{info_total}   (⊘ a finding about RM's VA layout, NOT in the verdict)");
     println!(
         "B1D_Q3_KNOWN_POSITIVE={}  (a VA past the VAS limit was refused)",
         if known_positive_fired { "FIRED" } else { "⊘ DID NOT FIRE — the sweep is not measuring placement" }
@@ -7556,9 +7602,12 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         }
     );
 
-    let verdict = h_dma != 0
-        && fixed_expected > 0
-        && fixed_honoured == fixed_expected
+    // ⊘ The verdict names exactly the five things (d) needs, and nothing else. In
+    // particular the two INFORMATIONAL sweep rows are excluded on purpose: whether RM
+    // hands out a VA near its own reservations is a fact about RM's address layout, and
+    // letting it swing this line would let an unrelated fact decide the design question.
+    let verdict = req_total > 0
+        && req_honoured == req_total
         && known_positive_fired
         && control_ok
         && shared;
