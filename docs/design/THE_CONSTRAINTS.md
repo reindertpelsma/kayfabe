@@ -804,6 +804,33 @@ lifetime) is wrong.
 
 ★ **No lying, either way.** The aperture the guest names is the aperture it gets.
 
+## ⊘⊘⊘ CORRECTED w734 — THE SECTION BELOW CITES A DERIVATION AS A MEASUREMENT
+
+`[surveyed w734]` Both *"§6 must precede §3"* and the section below's *"there is no working
+intermediate — it does not boot"* turn on **one quantity**: how many bytes the host reads out of
+the framebuffer store per boot. Both state it as **7.3 MiB × 1178 refreshes @ 48 MiB/s ⇒ ~3 min**.
+
+⊘ **No byte counter for store I/O exists anywhere in this tree.** The only instrument is
+`pages_swept` — a **page** count, at six page sizes of which three are **not** 4 KiB
+(`ga10x.rs:842`: PD3 = **32 B**, PT_BIG = **256 B**). ⇒ Both documents turned pages into MiB **by
+assumption**, and the ordering rule of this whole branch is therefore **a derivation cited as a
+measurement** — this tree's own most expensive recurring failure, committed by me, in the file that
+exists to prevent it.
+
+⚠ **What this does and does not overturn:**
+
+- ⊘ The **number** is unmeasured. 7.3 MiB assumed 1872 × 4 KiB; with 32 B and 256 B levels in the
+  mix the true figure could be **materially lower**, and the intermediate correspondingly cheaper.
+- ★ The **ordering may still hold on a second, structural ground that does not depend on bytes**:
+  after the switch, `window_leaves` reads the guest's tables out of **video memory through a CPU
+  aperture**, and host BAR1 is a **single global pool** — so the cost is bounded by a scarce
+  *resource*, not merely by a rate. ⊘ That argument was never the one written down.
+
+⇒ **w734 is measuring it properly**, by role (`trap` · `walk-bar` · `walk-guest-pt` · `out-of-band`
+· `cpu-ce`), at the six entry points that reach `FbStore`. **Do not treat the section below as
+settled until that census lands** — and if the number comes back small, the forced ordering is an
+open question again rather than a rule.
+
 ## ★★★★★ w724c — WHY THE SWITCH CANNOT BE INCREMENTAL: THERE IS NO WORKING INTERMEDIATE
 
 > **Owner, 2026-09-14:** *"at 47MB/s it might not even boot in the timeout without dirty bit during
