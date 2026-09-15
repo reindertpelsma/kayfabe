@@ -97,6 +97,30 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ⇒ WHAT CUT B NEEDS, IN ORDER — so the next session does not re-derive it
+
+1. **A byte port for the store.** `DeviceFb` lives in `kayfabe-device`, which holds no
+   descriptors; it needs an injected `trait DeviceFbPort { read_armed / write_armed / want /
+   drain }`, implemented in the shell over `DeviceViewPort` plus a table of mapped runs. ⊘ The
+   store still cannot arm — `drain` is called only from lock-free entry points.
+2. **`PlanePtBytes::read_in` arms-then-retries, synchronously.** It is lock-free at entry (it
+   takes the plane locks *inside*, per read), so this one costs no transient at all.
+3. **A demand set for `FbStoreReader`'s callers.** `bar1_translate` / `bar2_translate` /
+   `window_leaves` run under the lock; the frame they missed survives only in the store's
+   `want` set, because `WalkFault::Unbacked { phys, level }` is flattened to a `&'static str`
+   at `plane.rs:~5406`. The retry belongs at `fill_now`'s and `premap`'s **entry**, both
+   lock-free, in a bounded loop.
+4. **The premap refusal must stop being terminal.** `window_leaves` refuses the whole subtree
+   at the first unbacked page and the caller prints once and returns — *"that aperture stays
+   on demand-fill"*, which under `device` means the trap fires and there is nothing to serve it.
+5. **The vCPU path declines by name**, as `WalkShadowDecider` already does.
+6. ⚠ **Consider carrying `why` through `FbRead::read_in`** (it returns a `bool` today). Cut B
+   is the increment that gives every consumer a reason to want one — see the flattening above.
+
+⊘ **Cut B still does not reach a guest.** Its predicted end is the kernel CeUtils scrubber
+(cut C / constraint 9), which is a **prediction and not a measurement** — the boot that tests
+it is the one worth renting a box for.
+
 ⊘ **A boot on `KAYFABE_FB_STORE=device` does not reach a guest and is not supposed to.** The
 first BAR1/BAR2 translation reads a page-table page out of the store and is refused by name.
 The alternative — a host-memory fallback for host reads — is two memories for one address,
