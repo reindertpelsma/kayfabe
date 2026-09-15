@@ -772,6 +772,35 @@ pub fn decode_subtree_from_entry(
                 left = left.saturating_sub(sub.visited.len() as u32);
                 out.leaves.extend(sub.leaves);
                 out.visited.extend(sub.visited);
+                // ★★★★★ **CUT C — THE FAULTS COME BACK, AND UNTIL NOW THEY DID NOT.**
+                //
+                // ⊘⊘⊘ `[established from the source, w739]` this function extended `leaves`
+                // and `visited` and **dropped `sub.faults` on the floor**. It is the ONLY
+                // root shape BAR2 has, so `window_leaves(InstanceWindow)` could never report
+                // a fault — `faults` was structurally pinned at 0 on the one window that
+                // matters for `kbusVerifyBar2`.
+                //
+                // ★★★ That is what made cut B item 4 **inert on BAR2**: `premap_window`'s
+                // `arm_then_retry` treats `Ok && faults == 0` as *good* and stops, so an
+                // enumeration whose page-table pages could not be read out of the single
+                // store came back `Ok` with an **EMPTY** leaf list on the first attempt and
+                // **never armed anything**. `[measured w738]` `premap[... bar2_visited=0
+                // pt_faults=0]` with `named=0` — the census that cut B added to close the
+                // empty-artefact class, reporting a zero its own plumbing guaranteed.
+                //
+                // ⚠ Same class this tree has now paid for five times, one layer below where
+                // it was looked for: cut B fixed `window_leaves` to RETURN faults and nothing
+                // ever PUT one in for the entry-rooted walk.
+                out.faults.extend(sub.faults);
+                // ⊘ `invalid` for the same reason, in the same statement: a count summed from
+                // one of two sibling subtrees is a number that is wrong without being empty,
+                // which is worse than absent.
+                out.invalid += sub.invalid;
+                // ⊘ And `decodes`, which was dropped beside them. It costs nothing — the
+                // vector is already allocated inside `sub` and is moved, not cloned — and
+                // leaving one of four fields behind is exactly the inconsistency that made
+                // `faults` invisible for a whole increment.
+                out.decodes.extend(sub.decodes);
             }
         }
         // ⊘ A leaf AT THE ROOT is a legal one-mapping tree, not a malformed one.

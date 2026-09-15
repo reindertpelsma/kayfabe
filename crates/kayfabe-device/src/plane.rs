@@ -3540,6 +3540,30 @@ impl RegPlane {
         s.fb.demand_port()
     }
 
+    /// ★★★★★ **CUT C — IS THERE A BYTE PORT?**, answered from the cached flag and **without
+    /// taking the memory lock**.
+    ///
+    /// # ⊘⊘⊘ Why a lock-free predicate and not just `fb_demand_port().is_some()`
+    ///
+    /// The one caller is the shell's MMIO path deciding whether a **refused** BAR1/BAR2
+    /// access is worth queueing a repair for. That decision is made on a **vCPU inside an
+    /// MMIO exit**, on the hottest path in the device, and `fb_demand_port` takes
+    /// `PlaneMem` — the lock the vCPU is already contending for and the one w516/w522 were
+    /// both about. ⇒ asking the store would put a second acquisition of the most expensive
+    /// lock in the device on a path that is already refusing.
+    ///
+    /// ★ Safe for the same reason [`RegPlane::arm_fb_demand`]'s use of it is: `set_fb` is the
+    /// only door that changes the store and the composition root calls it once, at realize.
+    ///
+    /// ⊘ **It is a question about the MECHANISM, never about an address.** `true` means *"the
+    /// single store is installed with a byte port"*; it says nothing about whether any
+    /// particular page can be armed, and a caller that read it as *"this will work"* would be
+    /// making cut A's mistake one level up.
+    #[must_use]
+    pub fn fb_has_demand_port(&self) -> bool {
+        self.fb_has_demand_port.load(Ordering::Relaxed)
+    }
+
     /// ★★★★★ **CUT B — ARM WHAT THE STORE COULD NOT SERVE.** Call only from a lock-free,
     /// off-vCPU caller; it declines by name otherwise.
     ///

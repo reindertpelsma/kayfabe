@@ -16599,16 +16599,48 @@ impl Regs {
         // mirror, a MISS: fill the page so the next access to it takes no exit. Runs with
         // the plane lock released (R1); a cheap `None` on the control.
         #[cfg(feature = "host-isolates")]
-        if let kayfabe_device::ReadOutcome::Fb {
-            window: w @ (kayfabe_device::FbWindow::FbAperture | kayfabe_device::FbWindow::InstanceWindow),
-            ..
-        } = &out
-        {
-            if let Some(m) = self.bar_mirror.get() {
-                // ⊘ Wake ONLY if something was queued — see `BarMirror::fill` (w674).
-                if m.fill(*w, off) {
-                    self.wake_for_mirror_fill();
+        if let Some(m) = self.bar_mirror.get() {
+            match &out {
+                kayfabe_device::ReadOutcome::Fb {
+                    window:
+                        w @ (kayfabe_device::FbWindow::FbAperture
+                        | kayfabe_device::FbWindow::InstanceWindow),
+                    ..
+                } => {
+                    // ⊘ Wake ONLY if something was queued — see `BarMirror::fill` (w674).
+                    if m.fill(*w, off) {
+                        self.wake_for_mirror_fill();
+                    }
                 }
+                // ★★★★★ **CUT C — A REFUSED READ ASKS FOR ITS OWN REPAIR.**
+                //
+                // ⊘⊘⊘ The arm above is *"the archive served it"*. Under the single store the
+                // first read of any BAR1/BAR2 page is **refused** — nothing is armed and no
+                // memslot covers it — so before cut C the one path that could fix the page
+                // was reachable only from the state in which the page was already fine.
+                // See `BarMirror::fill_after_refusal` for the whole argument and for the
+                // w738 numbers.
+                //
+                // ⚠ `fb_has_demand_port` is asked FIRST and is a lock-free load of a flag
+                // set once at realize: on the arena arm it is `false`, this arm is
+                // unreachable, and the control is byte-identical by construction.
+                kayfabe_device::ReadOutcome::TranslationRefused {
+                    window:
+                        w @ (kayfabe_device::FbWindow::FbAperture
+                        | kayfabe_device::FbWindow::InstanceWindow),
+                    ..
+                }
+                | kayfabe_device::ReadOutcome::FbRefused {
+                    window:
+                        w @ (kayfabe_device::FbWindow::FbAperture
+                        | kayfabe_device::FbWindow::InstanceWindow),
+                    ..
+                } if self.plane.fb_has_demand_port() => {
+                    if m.fill_after_refusal(*w, off) {
+                        self.wake_for_mirror_fill();
+                    }
+                }
+                _ => {}
             }
         }
         let v = out.value();
@@ -17018,17 +17050,42 @@ impl Regs {
 
         #[cfg(feature = "host-isolates")]
         if let Some(m) = self.bar_mirror.get() {
-            if out.fb_landed.is_some() {
-                let w = match usize::from(clamp_bar(bar)) {
-                    kayfabe_abi::pcibars::bus_bar::FB => Some(kayfabe_device::FbWindow::FbAperture),
-                    kayfabe_abi::pcibars::bus_bar::INST => {
-                        Some(kayfabe_device::FbWindow::InstanceWindow)
-                    }
-                    _ => None,
-                };
-                if let Some(w) = w {
+            let w = match usize::from(clamp_bar(bar)) {
+                kayfabe_abi::pcibars::bus_bar::FB => Some(kayfabe_device::FbWindow::FbAperture),
+                kayfabe_abi::pcibars::bus_bar::INST => {
+                    Some(kayfabe_device::FbWindow::InstanceWindow)
+                }
+                _ => None,
+            };
+            if let Some(w) = w {
+                if out.fb_landed.is_some() {
                     // ⊘ Wake ONLY if something was queued — see `BarMirror::fill` (w674).
                     if m.fill(w, off) {
+                        self.wake_for_mirror_fill();
+                    }
+                // ★★★★★ **CUT C — AND A REFUSED WRITE ASKS TOO.**
+                //
+                // ⊘⊘⊘ `[measured w738]` `kbusVerifyBar2`'s four MMUTest dwords at BAR2
+                // `+0x0..0xc` were refused at TRANSLATION — `BAR2 (translated): 0 reads / 0
+                // writes resolved through the GMMU, 14 REFUSED by name`, each printing *"the
+                // bytes did NOT land anywhere"* — and `fb_landed` was therefore `None`, so
+                // the gate above queued nothing. `DEVICE-FB wanted_by_write=0` on the same
+                // boot is the store saying it was never even asked: the write never got
+                // past `window_phys`.
+                //
+                // ⚠ **This does NOT recover those four dwords.** They are lost and the guest
+                // is not told. What it does is stop the page from being unrepairable, so the
+                // NEXT write to it can land — and, with the premap half, so that there is a
+                // next write at all.
+                //
+                // ⊘ `bar2_refusal` is the translated-window refusal for BOTH BAR1 and BAR2
+                // (`RegPlane::fb_write` sets it on either), and `fb_refusal` is the store's
+                // own. Both are *"this page has no working path today"*, which is exactly
+                // the condition a repair is for.
+                } else if (out.bar2_refusal.is_some() || out.fb_refusal.is_some())
+                    && self.plane.fb_has_demand_port()
+                {
+                    if m.fill_after_refusal(w, off) {
                         self.wake_for_mirror_fill();
                     }
                 }
