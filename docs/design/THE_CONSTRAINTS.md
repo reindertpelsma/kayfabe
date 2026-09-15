@@ -175,6 +175,32 @@ and the per-client host MMU fault above.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
     tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
 
+> ### ✔✔✔ **MEASURED 2026-09-15 (w746) — THE HAND-OVER WORKS; RM REFUSES THE DUP `NV_ERR_INSUFFICIENT_PERMISSIONS`, AND THAT IS CONSTRAINT 30 ANSWERING FROM HARDWARE.**
+> `[vast 51155860, GA106, 580.159.04 OPEN, TREE_REV 0c0dd2ce, three arms, one binary;
+> `traces/w746_handover/`]` Control **`(P)` 8/8**; arm 2 reproduces 17/11/19/0; arm 3 **`(R)` 0/8**.
+> ★★★ `HANDOVER-ASSERTS asked=4637 leaf_untabled=0 space_not_held=0 ⇒ ASKED AND PASSED`. The
+> hand-over **ran 4637 times**, minting and committing a bare space each time, and every
+> constraint-29/30 assert was exercised without firing (`ROUTE-DISAGREES=0`, `C30-REFUSED=0`,
+> `C30-BIRTH-REFUSED=0`, `RING-HANDLE-REACHED-RM=0`). ⊘ These are *asserted-and-passed*; the
+> `asked=` term is printed beside them precisely so they cannot be read as w745's vacuous zeros.
+> ⇒ **THE NEW WALL IS `adopt_vaspace`**: `adopts=0 adopt_refused=4637
+> first_refusal=[Rm("InsufficientPermissions")]` — `NV_ESC_RM_DUP_OBJECT` issued for the first
+> time in this campaign and refused by RM.
+> ★★★★★ **ogkm names the gate** `[ogkm-580.159.04 rs_client.c:537-551, clientCopyResource_IMPL]`:
+> a **cross-client** dup by a client below `RS_PRIV_LEVEL_KERNEL` needs `RS_ACCESS_DUP_OBJECT`
+> **granted on the source object**; `rsAccessCheckRights` ends `NV_ERR_INSUFFICIENT_PERMISSIONS`
+> (`rs_access_map.c:540`). We grant nothing. ⇒ the missing piece is an **explicit share** by the
+> per-proc isolate on its own VA space — `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`0xd06`).
+> ⊘⊘ **AND THIS ANSWERS CONSTRAINT 30 FOR THIS RESOURCE, FAVOURABLY.** 30 worried that euid 0
+> makes `rmclientIsAdmin` hold for the scratchpad ⇒ effectively privileged. **Measured false**:
+> `rmclientIsAdmin` yields `RS_PRIV_LEVEL_ADMIN`, the gate demands `>= RS_PRIV_LEVEL_KERNEL`,
+> and **ADMIN < KERNEL** — RM treated our scratchpad as an ordinary user client. ⚠ It also
+> SCOPES `[w744]`'s `NV_OK` on the same dup: that probe ran both clients in ONE process; this
+> crosses two isolate processes. **A dup that succeeded once says nothing about a dup between
+> different parties.**
+> ⊘ Still unmeasured after two boots: `map_store_slice`, constraint 28 on hardware, leg B, and
+> constraint 30 part 2's mapping question. `maps=0` for a second boot, now for a new reason.
+>
 > ### ⊘⊘⊘ **CORRECTED 2026-09-15 (w746) — THE CAUSE NAMED BELOW IS WRONG.** Read this first.
 > The block below says the 4619 refusals were *"a routing key re-derived from a placeholder"*.
 > **They were not, and `Pdb(0)` is not a placeholder.** `project.rs`'s `pdb_claims` makes two

@@ -72,3 +72,137 @@ times" to something downstream of it, and is the new wall NAMED?
   `maps ≥ 1` succeeding — constraint 30 part 2 says so in as many words.
 - **Nothing about throughput.** No workload here is a perf measurement.
 - It is **one driver on one chip**: `580.159.04` on a GA106.
+
+---
+
+# ✔✔✔ MEASURED 2026-09-15 (w746), ON HARDWARE, THREE ARMS, ONE BINARY
+
+`[vast **51155860**, RTX 3060 **GA106**, Quebec CA, host driver **580.159.04 OPEN**,
+`TREE_REV = 0c0dd2ce` on all three arms, control first; evidence `w746_run.log` +
+`w746_evidence.tgz`]` ⊘ No constraint was relaxed. No completion was forged.
+
+## ⇒ THE CLIENT, FIRST
+
+| arm | store / VAS owner | client |
+|---|---|---|
+| 1 | `arena` / `isolate` | **`(P)` — `THREADS 8 of 8 ✔`, `MEAN_FALSIFIER=PASS`** |
+| 2 | `device` / `isolate` | `(R)` — 0/8, four frozen numbers **reproduced byte-identically** |
+| 3 | `device` / **`scratchpad`** | ⊘ **`(R)` — 0/8** |
+
+⊘ **THE GATE IS NOT MET.** Row 13 predicted exactly this, and the reason predicted (leg B) is
+**not** the reason it happened — the wall moved one step and stopped somewhere new.
+
+★ **Arm 2 reproduces `(6)=17`, `BIRTH REFUSED=11`, `DoorbellBirth=19`, `ADOPTING=0`** — the same
+four numbers as w740/w742/w743/w745, on **this** binary. ⇒ arm 3 is attributable to the split.
+
+## ⇒ ★★★★★ THE WALL MOVED, AND THE NEW ONE IS RM'S OWN
+
+`HANDOVER-ASSERTS asked=4637 leaf_untabled=0 space_not_held=0 ⇒ ★★★ ASKED AND PASSED`
+
+**The hand-over now runs.** It minted a bare space, committed it, and returned it — **4637
+times** — and every one of constraint 29's and 30's asserts was **exercised and did not fire**:
+
+    W746-ROUTE-DISAGREES=0          (assert 1 — and see below: this also refutes w745's diagnosis ON HARDWARE)
+    leaf_untabled=0                 (assert 2 — every leaf offered WAS a row of the routed Vas)
+    space_not_held=0                (assert 3)
+    W746-C30-REFUSED=0              (constraint 30 — the space was always the asking proc's own isolate's)
+    W746-C30-BIRTH-REFUSED=0        (constraint 30 — the scratchpad birthed in no adopted space)
+    W746-RING-HANDLE-REACHED-RM=0   (constraint 29 — the deleted field's premise still holds)
+
+⊘ **These are `asserted-and-passed`, not `never-asked`** — `asked=4637` is printed beside them
+for exactly that reason, and it is the row w745's `RING-NOT-A-SLICE=0` did not have.
+
+### THE NEW WALL: `NV_ERR_INSUFFICIENT_PERMISSIONS` ON THE DUP
+
+    STORE-MAP … adopts=0 adopt_refused=4637 … first_refusal=[Rm("InsufficientPermissions")]
+    VAS-PUBLISH(proc=2 pdb=0x0) → ⊘⊘ CONSTRAINT 26: the scratchpad REFUSED the hand-over:
+                                    Rm("InsufficientPermissions")
+
+`adopt_vaspace` — `NV_ESC_RM_DUP_OBJECT` of the isolate's `FERMI_VASPACE_A` into the
+scratchpad's client — **was issued for the first time in this campaign** and RM refused it.
+⊘ w745 measured `adopts=0 adopt_refused=0`: the verb was never reached.
+
+★★★ **ogkm names the gate exactly** `[ogkm-580.159.04,
+src/nvidia/src/libraries/resserv/src/rs_client.c:537-551, `clientCopyResource_IMPL`]`:
+
+```c
+if (((pParams->pSecInfo->privLevel < RS_PRIV_LEVEL_KERNEL) ||
+     (pParams->flags & NV04_DUP_HANDLE_FLAGS_REJECT_KERNEL_DUP_PRIVILEGE)) &&
+    (pServer->bRsAccessEnabled || (pParams->pSrcClient->hClient != pClientDst->hClient)))
+{
+    RS_ACCESS_MASK_ADD(&rightsRequired, RS_ACCESS_DUP_OBJECT);
+    status = rsAccessCheckRights(pParams->pSrcRef, pClientDst, &rightsRequired);
+}
+```
+
+⇒ a **cross-client** dup by a client that is **not** `RS_PRIV_LEVEL_KERNEL` needs
+`RS_ACCESS_DUP_OBJECT` **granted on the source object**, and `rsAccessCheckRights` ends
+`return NV_ERR_INSUFFICIENT_PERMISSIONS` (`rs_access_map.c:540`) when every grant path fails.
+We grant nothing. ⇒ **the refusal is correct and the missing piece is an explicit share**:
+`NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`0xd06`, `ctrl0000client.h:146-162`) applied **by the
+per-proc isolate, on its own VA space, naming `RS_ACCESS_DUP_OBJECT`**.
+
+### ★★★★★ AND THIS ANSWERS CONSTRAINT 30 FOR THIS RESOURCE, FROM HARDWARE, FAVOURABLY
+
+Constraint 30's stated worry is that *"F11 records our isolates' kernel-visible euid is 0 on a
+root VMM, so `rmclientIsAdmin(...)` plausibly holds for the scratchpad"* ⇒ effectively
+privileged. **Measured false for this operation.** `rmclientIsAdmin` yields
+`RS_PRIV_LEVEL_ADMIN`; the gate above demands `>= RS_PRIV_LEVEL_KERNEL`; **`ADMIN < KERNEL`**,
+so RM treated our scratchpad as an ordinary user client and refused. ⊘ Our isolates are *not*
+kernel-privileged to RM, and this is the first evidence of it rather than an assumption.
+
+⚠ **It also SCOPES `[w744]`'s `NV_OK` on the same dup.** That probe ran both clients from one
+process on a bare box; this one crosses two isolate **processes**. The ogkm gate names two
+conditions and the campaign has now measured the answer on both sides of one of them. ⇒ *"a dup
+that succeeds can still be the wrong thing"* has a companion: **a dup that succeeded once says
+nothing about a dup between different parties.**
+
+### ⊘⊘⊘ AND w745's AMENDMENT IS CONFIRMED — BY A ROW THIS FILE'S OWN GREP COULD NOT SEE
+
+    ENGINE-OBJECT … → REFUSED host_chan=NONE Rm { err: Other(19266) }  [seen=10 forwarded=0 refused=10]
+    VERBCOST total=49095us over 9 plan(s) [EngineObject n=8 … 94.0%] [Release n=1 …]
+
+`19266 = 0x4B42 = MAP_THROUGH_A_BARE_SPACE`. **The restated guard fired ten times** — every
+emulated channel birth *does* map its own ring through the bare space, which is precisely what
+w745's amendment predicted and what its vacuous `BARE-SPACE-REFUSED=0` retired.
+
+⊘ **And `W745-BARE-SPACE-REFUSED` printed `0` again, for a THIRD reason:** the harness grepped
+`0x4b42` and the constant's name, while `RmError::Other`'s `Debug` prints **decimal**. A counter
+blind to the thing it counts, inside the increment whose subject is that exact class. It was
+caught only because the `ENGINE-OBJECT` tally is an **independent second row** for the same
+event. ✔ Fixed in `w736_fbstore_run.sh`; every private status is now grepped in decimal first.
+
+## ⇒ THE ROWS, GRADED
+
+| # | predicted | measured | |
+|---|---|---|---|
+| 1 | arm 1 `(P)` 8/8 | **`(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`** | ✔ |
+| 2 | 17 / 11 / 19 / 0 | **17 / 11 / 19 / 0** | ✔ |
+| 3 | `W746-CONTENT ≥1` | gate passed (the run reached the arms) | ✔ |
+| 4 | `W746-ASSERTS-LINE=1` | **1** on every arm | ✔ |
+| 5 | `W746-HANDOVER-MINTED ≥ 1` | **0** — ⊘ but the row is MIS-NAMED: it greps the success line that prints only after `adopt` succeeds. `HANDOVER-ASSERTS asked=4637` is the row that says the hand-over RAN | ◐ |
+| 6 | `adopts ≥ 1` / `maps ≥ 1` | **`adopts=0 adopt_refused=4637`, `maps=0`** — ⊘ REFUTED, and the refusal is RM's, named | ⊘ |
+| 7 | `BARE-SPACE-REFUSED ≥ 1` | **10**, read off `ENGINE-OBJECT … Other(19266)`; the named row said `0` because its grep was blind | ✔ (via a second row) |
+| 8 | `ADOPTWHY-6 < 17` | **17** — the chain is still inert downstream | ⊘ |
+| 9 | `RING-NOT-A-SLICE` read WITH `asserted` | `0` with `asserted=0` ⇒ **VACUOUS, and said so** | ✔ (as an instrument) |
+| 10 | `ROUTE-DISAGREES=0` | **0** over 4637 asks | ✔ |
+| 11 | `C30-REFUSED / C30-BIRTH-REFUSED = 0 / 0` | **0 / 0** | ✔ |
+| 12 | `RING-HANDLE-REACHED-RM=0` | **0** | ✔ |
+| 13 | arm 3 `(R)` 0/8 | **`(R)` 0/8** | ✔ (predicted) |
+| 14 | `RmInitAdapter failed!=0`, `SMI_RC=0` | **0 / 0 on all three arms** | ✔ |
+| 15 | bar1/bar2 `TRAP_FILLS=0`, `misses=0` | **0 / 0 on all three arms** | ✔ |
+| 16 | failing-name set = baseline | **byte-identical**, `diff` empty both ways (31 names) | ✔ |
+| 17 | `VCPU-BLOCKING` reported | **`total=197 doors=9`** on arms 2 and 3 — **identical to w742 and w745** | ⊘ no change |
+| 18 | `withheld_unmaps` / `pending` | `withheld_unmaps=0 worst_unmaps_outstanding=0 pending=false` | ✔ |
+
+★ `HOST_DMESG_XID`: **arena 1**, device 0, split 0. The one is the pre-existing
+`Xid 31 … MMU Fault: ENGINE CE0 … FAULT_PDE @ 0xa0_00000000` (w555/w711), on the arm that
+passes, and is neither caused nor fixed here.
+
+## ⊘ WHAT THIS BOOT STILL CANNOT SAY
+
+- **Nothing about leg B / the USERD.** Never reached: the dup is upstream of it.
+- **Nothing about `map_store_slice` or constraint 28 on hardware.** `maps=0` — still unmeasured,
+  for the second boot running, and now for a *different* reason than at w745.
+- **Nothing about whether a scratchpad-placed MAPPING conveys the scratchpad's privilege.**
+  Constraint 30 part 2's open question is untouched; the dup never landed.

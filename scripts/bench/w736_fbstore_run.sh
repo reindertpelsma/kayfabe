@@ -337,7 +337,17 @@ report() {
   echo "W745-BIRTH-ADOPTING=$(grep -ac 'BIRTH-AT-ALLOC.*ADOPTING at creation' "$Q" 2>/dev/null)   ★★★ 0 on all three prior boots"
   echo "W745-DOORBELL-BIRTH=$(grep -ao 'FwdFault::PassthroughDoorbellBirth=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ w740/w742/w743: 19, 19, 19"
   echo "W745-FOREIGN-HANDLE=$(grep -ac 'ForeignHandle' "$Q" 2>/dev/null)"
-  echo "W745-BARE-SPACE-REFUSED=$(grep -ac '0x4b42\|MAP_THROUGH_A_BARE_SPACE' "$Q" 2>/dev/null)"
+  # ⊘⊘⊘ **w746 — THIS GREP WAS BLIND TO ITS OWN REFUSAL, AND THE BOOT PROVED IT.**
+  # `[measured w746, split arm]` the refusal fired **10 times** and this row reported **0**,
+  # because `RmError::Other` is printed through `Debug` in DECIMAL — `Other(19266)` — and the
+  # pattern asked for `0x4b42` and the constant's NAME, neither of which ever appears in the
+  # log. ⇒ a counter that cannot see the thing it counts, inside the increment whose subject
+  # is exactly that. The decimal spelling is now first.
+  echo "W745-BARE-SPACE-REFUSED=$(grep -ac 'Other(19266)\|0x4b42\|MAP_THROUGH_A_BARE_SPACE' "$Q" 2>/dev/null)   ⊘ 19266 = 0x4B42; the Debug print is DECIMAL"
+  echo "W746-SCRATCHPAD-BIRTH-REFUSED=$(grep -ac 'Other(19270)\|SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE' "$Q" 2>/dev/null)   ⊘ 19270 = 0x4B46 (constraint 30)"
+  echo "W746-RING-HANDLE-RM-DEC=$(grep -ac 'Other(19269)\|RING_HANDLE_REACHED_RM' "$Q" 2>/dev/null)   ⊘ 19269 = 0x4B45 (constraint 29)"
+  echo "W746-HANDOVER-NON-BARE=$(grep -ac 'Other(19267)\|HANDOVER_OF_A_NON_BARE_SPACE' "$Q" 2>/dev/null)   ⊘ 19267 = 0x4B43"
+  echo "W746-ADOPT-NOT-SCRATCHPAD=$(grep -ac 'Other(19265)\|ADOPT_NOT_THE_SCRATCHPAD' "$Q" 2>/dev/null)   ⊘ 19265 = 0x4B41"
   echo "--- ★★★★★ w746 ROWS: THE HAND-OVER'S ENSURE PATH AND ITS THREE ASSERTS ---"
   # ⊘ `asked` beside every fire. w745 read `RING-NOT-A-SLICE=0` and `FOREIGN-HANDLE=0` as
   # passes on a boot where `asserted=0`; a gate's zero is a pass only if the gate RAN.
