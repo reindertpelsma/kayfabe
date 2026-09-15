@@ -152,9 +152,17 @@ echo "E6-DECIDED=$(field 'decided=[0-9]*' | cut -d= -f2)"
 echo "E6-FELL-BACK=$(field 'fell_back\[[^]]*\]')"
 echo "E6-SWAP-VERDICT=$(printf '%s' "$WS" | grep -ao 'SWAP [A-Z]*' | tail -1)"
 echo "--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---"
-n_fb=$(grep -ac 'WALK-SWAP FALLBACK' "$Q" 2>/dev/null)
-echo "E6-FALLBACK-LINES=${n_fb:-0}"
-grep -a 'WALK-SWAP FALLBACK' "$Q" 2>/dev/null | head -8 | cut -c1-260
+# ⊘⊘⊘ **ANCHORED ON THE RECORD'S OWN SHAPE (`pdb=`), NOT ON ITS NAME.** `[measured w732]` a bare
+# `grep -c 'WALK-SWAP FALLBACK'` returned **1** on a boot with **zero** fall-backs: the REALIZE
+# banner's own prose says *"prints a WALK-SWAP FALLBACK line of its own"*, and the counter read
+# a sentence ABOUT the record as an instance of it. It printed `E6-FALLBACK-LINES=1` beside
+# `fell_back[none]` — a flat contradiction that a reader could resolve either way.
+# ⚠ Third instance of this class in two sessions (w731's `by_kind[` matching another
+# subsystem's census; w732's `AGREEMENT` substring inside a VACUOUS line). **A log string is an
+# interface the moment something greps it, and prose that quotes the interface joins it.**
+n_fb=$(grep -ac 'WALK-SWAP FALLBACK pdb=' "$Q" 2>/dev/null)
+echo "E6-FALLBACK-LINES=${n_fb:-0}  (records only; the REALIZE banner names the string too)"
+grep -a 'WALK-SWAP FALLBACK pdb=' "$Q" 2>/dev/null | head -8 | cut -c1-260
 echo "--- ★ the decider's shape check, if a replacement was ever refused whole ---"
 grep -a 'PT-SWEEP DECIDER REFUSED' "$Q" 2>/dev/null | head -3 | cut -c1-260
 echo "E6-VERDICT=$(printf '%s' "$WS" | grep -aoc 'VACUOUS')  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)"

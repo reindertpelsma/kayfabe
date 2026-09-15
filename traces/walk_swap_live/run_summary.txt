@@ -1,0 +1,125 @@
+Warning: Permanently added '[184.144.255.144]:30486' (ED25519) to the list of known hosts.
+=== SINGLE-STORE E6 BOOT 2026-09-15T03:30:46+00:00 tag=w732on ===
+KAYFABE_WALK_SHADOW=on KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=93f6dc75b847d7c5c69097d57c575ef4542548e4 TREE_REV=93f6dc75b847d7c5c69097d57c575ef4542548e4
+E6-CONTENT: walk_shadow_strings=36 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=2  (0 ⇒ UNMEASURED)
+WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity window retires the relocated image that is built from the host walk's `visited` set (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean
+WALK-SHADOW compared=65 kernel_unavailable=2070 skipped[budget_spent=2070] host_runs=171 kernel_runs=171 host_unclassed=0 compared_flags=0xf image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0] disagreements=0 by_kind[none] first[] swap_armed=false decided=0 fell_back[none] ⇒ ★★★ AGREEMENT over every compared refresh, on the fields both walkers decode. ⚠ Necessary and not sufficient for the swap: see `compared_flags` — volatile, privilege, atomic-disable and KIND are decoded by the KERNEL ONLY and are not in this number. ⇒ ⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and was never on the publish path. This census is about the comparison only. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=65
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[budget_spent=2070]
+E6-IMAGE-STATS=image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0]
+E6-SWAP-ARMED=false
+E6-DECIDED=0
+E6-FELL-BACK=fell_back[none]
+E6-SWAP-VERDICT=SWAP DISARMED
+--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---
+E6-FALLBACK-LINES=0
+--- ★ the decider's shape check, if a replacement was ever refused whole ---
+E6-VERDICT=0  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity windo
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+E3-SPAN-PAGES=990381 E3-RESERVED_MB=4096 E3-ADVERTISED_MB=4096
+E3-IDENTITY-WINDOW=FITS top=4056600576 (3868.7 MiB) reserved=4294967296 (4096 MiB) headroom=227.3 MiB
+  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved object ⇒ §3's identity window is arithmetically possible for THIS workload. It is NOT a proof for every workload, and it says nothing about the promote/demote FAKE RANGE, which is specified and built by nobody.
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=607 inline_exceptions=0 worst_trap=16754us at=bar0+0x110c00 slow_traps(>1000us)=3 by_decade[1-10ms=2 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   19.729917] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   21.633486] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.633626] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.688226] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.691972] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.692109] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.692119] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.194152] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T03:32:04+00:00 tag=w732on ===
+
+=== SINGLE-STORE E6 BOOT 2026-09-15T03:32:07+00:00 tag=w732swap ===
+KAYFABE_WALK_SHADOW=swap KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=93f6dc75b847d7c5c69097d57c575ef4542548e4 TREE_REV=93f6dc75b847d7c5c69097d57c575ef4542548e4
+E6-CONTENT: walk_shadow_strings=36 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=2  (0 ⇒ UNMEASURED)
+WALK-SHADOW AT REALIZE: ★★★ SWAP ARMED. The walk kernel is run at every off-vCPU page-table sweep and, where it AGREES with the host walk, its answer is what gets PUBLISHED — target, aperture and writability. Every refusal falls back to the host walk and prints a WALK-SWAP FALLBACK line of its own. ⊘ The page structure is still the host walk's. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity window retires the relocated image that is built from the host walk's `visited` set (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean
+WALK-SHADOW compared=65 kernel_unavailable=2074 skipped[budget_spent=2074] host_runs=2930 kernel_runs=2930 host_unclassed=0 compared_flags=0xf image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0] disagreements=0 by_kind[none] first[] swap_armed=true decided=65 fell_back[none] ⇒ ★★★ AGREEMENT over every compared refresh, on the fields both walkers decode. ⚠ Necessary and not sufficient for the swap: see `compared_flags` — volatile, privilege, atomic-disable and KIND are decoded by the KERNEL ONLY and are not in this number. ⇒ ★★★ SWAP LIVE — 65 address spaces had their published leaves' target, aperture and writability taken from the KERNEL's report; 0 fell back to the host walk. ⊘ SCOPE: the page structure (`visited`, `children`, `sparse`, `invalid`) is still the HOST walk's and cannot move until the kernel reports pages — so this does NOT license §7's deletion. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=65
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[budget_spent=2074]
+E6-IMAGE-STATS=image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0]
+E6-SWAP-ARMED=true
+E6-DECIDED=65
+E6-FELL-BACK=fell_back[none]
+E6-SWAP-VERDICT=SWAP LIVE
+--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---
+E6-FALLBACK-LINES=1
+kayfabe: WALK-SHADOW AT REALIZE: ★★★ SWAP ARMED. The walk kernel is run at every off-vCPU page-table sweep and, where it AGREES with the host walk, its answer is what gets PUBLISHED — target, aperture and writability. Every refusal falls back to the ho
+--- ★ the decider's shape check, if a replacement was ever refused whole ---
+E6-VERDICT=0  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: ★★★ SWAP ARMED. The walk kernel is run at every off-vCPU page-table sweep and, where it AGREES with the host walk, its answer is what gets PUBLISHED — target, aperture and writability. Every refusal falls back to the host walk and prints a WALK-SWAP FALLBACK 
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4087 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+E3-SPAN-PAGES=990381 E3-RESERVED_MB=4096 E3-ADVERTISED_MB=4096
+E3-IDENTITY-WINDOW=FITS top=4056600576 (3868.7 MiB) reserved=4294967296 (4096 MiB) headroom=227.3 MiB
+  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved object ⇒ §3's identity window is arithmetically possible for THIS workload. It is NOT a proof for every workload, and it says nothing about the promote/demote FAKE RANGE, which is specified and built by nobody.
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=609 inline_exceptions=0 worst_trap=16536us at=bar0+0x110c00 slow_traps(>1000us)=3 by_decade[1-10ms=2 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   19.772869] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   21.732803] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.732905] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.782309] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.784960] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.785073] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.785080] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.287691] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T03:33:25+00:00 tag=w732swap ===
