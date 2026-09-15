@@ -63,6 +63,37 @@ echo "TREE_REV=$(git rev-parse HEAD)"
 pkill -f '[q]emu-system-x86'
 sleep 3
 
+# ★★★ BUILD, HERE, because `single_store_e6_boot.sh` REFUSES a binary whose embedded
+# `kayfabe-rev:` differs from the tree's HEAD — and rightly: `[measured]` the bench silently
+# served a binary built from `862c7c2` for weeks and results attributed to HEAD were not HEAD's.
+# ⊘ `cuda-scratchpad` is on because e6 exports `KAYFABE_SCRATCHPAD_CUDA=on` unconditionally and
+# `[measured w734t]` — the run this one is compared against — had it. The feature costs nothing
+# to build: `kayfabe-cuda` `dlopen`s libcuda at RUN time and links nothing.
+export KAYFABE_SHIM_FEATURES="${KAYFABE_SHIM_FEATURES:-host-isolates cuda-scratchpad}"
+QEMU_SRC=${KAYFABE_QEMU_SRC:-$BENCH/qemu-10.2.4}
+QEMU_BUILD=${KAYFABE_QEMU_BUILD:-$BENCH/qemu-build}
+echo "== building the shim: features=$KAYFABE_SHIM_FEATURES src=$QEMU_SRC"
+bash scripts/build_qom_shim.sh "$QEMU_SRC" "$QEMU_BUILD" > "$BENCH/w735_build.log" 2>&1
+rc=$?
+echo "SHIM_RC=$rc"
+# ⊘ The status is captured on its own line and BRANCHED ON, never piped: `a pipe eats the exit
+# status` and the boot would then proceed on the PREVIOUS binary.
+if [ "$rc" -ne 0 ]; then echo "⊘ BUILD FAILED:"; tail -40 "$BENCH/w735_build.log"; exit 3; fi
+
+# ★ And the GUEST-side ladder, which is a separate musl binary and is what the suite actually
+# runs. ⊘ A stale one here is invisible: the hook finds *a* binary, pushes it, and every arm
+# reports on a tree nobody is testing.
+( . "$HOME/.cargo/env" 2>/dev/null; cd "$REPO"   && cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder )   > "$BENCH/w735_ladder_build.log" 2>&1
+lrc=$?
+echo "LADDER_RC=$lrc"
+if [ "$lrc" -ne 0 ]; then echo "⊘ LADDER BUILD FAILED:"; tail -30 "$BENCH/w735_ladder_build.log"; exit 3; fi
+L="$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
+# ⊘ CONTENT, not a stamp: this run's whole R10 change is a string, so grep for it. A binary
+# without it would report the OLD sentence and the reader would attribute the guess to RM again.
+n_r10=$(strings "$L" 2>/dev/null | grep -c 'it did not start: kind=')
+echo "LADDER-CONTENT: r10_refusal_strings=$n_r10 (0 ⇒ the ladder predates w735 — STOP)"
+if [ "$n_r10" -eq 0 ]; then echo "⊘ stale guest ladder"; exit 4; fi
+
 export POST_CAPTURE_HOOK="$SRC_DIR/rmladder_suite_hook.sh"
 # ⊘ 90 s is `[measured w734t]`'s value, kept UNCHANGED on purpose. Shortening it would make a
 # legitimately slow arm (`--concurrent-fuzz`, `--map-stress`) time out for a reason that is not
