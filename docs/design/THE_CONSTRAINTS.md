@@ -306,6 +306,41 @@ and the per-client host MMU fault above.
     otherwise.** ⊘ A `Result<u64, RmError>` returns `Ok` here and tells you nothing — this was
     caught only because `MapOutcome` carries `dmaOffset` **beside** the status.
 
+29. **★★★★★ AN ASSERT IS RETIRED ONLY BY RE-ASKING ITS QUESTION IN THE NEW SHAPE — never by
+    deletion, and never on the strength of an argument alone** (owner, 2026-09-15).
+    *"I would edit the asserts, since we know our design holds the constraints… but it's
+    important to add new asserts, so that we still protect ourselves against dumb changes and
+    especially the one where the reasoning is not entirely sound."*
+
+    A gate encodes a failure someone actually met. When the design moves, the **mechanism** may
+    be wrong while the **failure** is untouched. ⇒ Deleting the gate deletes the protection and
+    leaves the failure; and a codebase where gates get deleted whenever they are inconvenient
+    teaches the next reader that red means *"the design moved"* rather than *"stop"*.
+
+    ## The rule, in three parts
+
+    1. **Restate, do not remove.** Keep the question, change the shape, and make the replacement
+       **fail-closed**. ★ Worked example, w745: `RING_NOT_A_JOINED_WINDOW` asked *"is this ring
+       the guest's memory, not a blank twin?"* Under one reserved object the join **mechanism**
+       is meaningless, so it became `StoreMapPort::is_slice_of_the_store` — a live query of the
+       mapper's own ledger. **Mechanism deleted, question kept, still fail-closed.**
+    2. ★★★ **THE REPLACEMENT MUST TEST THE ARGUMENT THAT RETIRED THE OLD ONE.** When a gate is
+       removed because *"X never happens"*, **X is the thing most likely to be wrong**, and
+       nothing else is now watching it. ⇒ the new assert fires **if X happens**.
+       ★ Worked example, w745: `AdoptedGuestRing::memory` was deleted because *"the ring handle
+       never reaches RM — it was an authorization token."* The replacement is therefore a test
+       that goes **red if the ring handle ever does reach RM**, not a comment saying it doesn't.
+    3. ⊘ **Never go green by shrinking the universe the gate quantifies over.** Moving the
+       offending code out of the scanned file is the `gates_quantified_over_a_list` failure the
+       F11 test's own docs name. ⇒ F11 was scoped by growing its approved set **by a TYPE**
+       (`HandedVaSpace`), with `APPROVED_RHS` unchanged and no verb relocated — and three
+       mutations prove it: forging the handle, adding a `From<u32>`, and neutering
+       `ScratchpadRole::of` all go red.
+
+    ⚠ **A retired assert is a commit-message obligation**: say which failure it guarded, why the
+    mechanism no longer expresses it, and **name the assert that now does**. An assert deleted
+    without a successor named is a regression, however green the suite is.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
