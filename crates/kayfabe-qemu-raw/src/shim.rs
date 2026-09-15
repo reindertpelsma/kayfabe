@@ -15130,7 +15130,62 @@ impl Regs {
                  the reserved object exists to delete. Expiry: {}",
                 "the GUEST SUITE (30 arms) green on this arm — not one workload"
             );
-            plane.set_fb(Box::new(kayfabe_device::DeviceFb::new(chip.fb_length)));
+            // ★★★★★ **CUT B — THE BYTE PORT, INSTALLED HERE AND NOWHERE ELSE.**
+            //
+            // ⊘ The store decides and the port is only the ability to act on that decision
+            // (`deviceview::backing_is_device`'s own rule, w735). This is the same shape one
+            // level down: the STORE is chosen by `KAYFABE_FB_STORE` above, and the byte port
+            // is attached to it if and only if this boot has a device-view port to attach.
+            //
+            // ⚠ `enforce_device_store` already refused the no-port configuration, so the
+            // `None` arm below is unreachable on this branch. It is spelled out rather than
+            // `unwrap`ped because a second route onto this path is a change somebody will
+            // make, and cut A's store is the correct thing to install when there is no port:
+            // it refuses by name instead of pretending to serve.
+            let mut store: Box<dyn kayfabe_device::FbStore> = {
+                #[cfg(feature = "host-isolates")]
+                {
+                    let reserved = scratchpad
+                        .as_ref()
+                        .and_then(crate::scratchpad::Scratchpad::reserved_mb)
+                        .map_or(0u64, |mb| mb << 20);
+                    match scratchpad
+                        .as_ref()
+                        .and_then(crate::scratchpad::Scratchpad::device_port)
+                    {
+                        Some(port) if reserved > 0 => {
+                            eprintln!(
+                                "kayfabe: FB-STORE ★★★ CUT B — a byte port is attached over                                  {:.1} MiB of reserved object, grain {} KiB, budget {} runs.                                  A host-side read of an ARMED run is served out of the object;                                  one that is not records its demand and a LOCK-FREE caller                                  arms it. ⊘ The store still cannot arm: read `FB-DEMAND` and                                  `DEVICE-FB-PORT` at teardown for whether anything ever did.",
+                                reserved as f64 / (1024.0 * 1024.0),
+                                crate::deviceview::ARM_GRAIN / 1024,
+                                crate::deviceview::ARMED_RUNS_CAP,
+                            );
+                            Box::new(kayfabe_device::DeviceFb::with_port(
+                                chip.fb_length,
+                                std::sync::Arc::new(crate::deviceview::DeviceFbBytePort::new(
+                                    port, reserved,
+                                ))
+                                    as std::sync::Arc<dyn kayfabe_device::DeviceFbPort>,
+                            ))
+                        }
+                        _ => {
+                            eprintln!(
+                                "kayfabe: FB-STORE ⊘⊘ CUT A SHAPE — no byte port (no                                  device-view port, or nothing reserved), so every host-side                                  access is refused by name. This should be unreachable:                                  `enforce_device_store` refuses the no-port configuration at                                  realize."
+                            );
+                            Box::new(kayfabe_device::DeviceFb::new(chip.fb_length))
+                        }
+                    }
+                }
+                #[cfg(not(feature = "host-isolates"))]
+                {
+                    // ⊘ No `kayfabe-linux-raw` in this build, so there is no mapping verb and
+                    // no byte port to build. Cut A's store, by linkage rather than by an `if`.
+                    Box::new(kayfabe_device::DeviceFb::new(chip.fb_length))
+                }
+            };
+            // ⊘ `mut` only so the `cfg` arms above can both type-check as one binding.
+            let _ = &mut store;
+            plane.set_fb(store);
         } else {
             eprintln!(
                 "kayfabe: FB-STORE AT REALIZE: arena (the control, and the default) — the \
@@ -17927,6 +17982,24 @@ impl Regs {
         // read cut A as working. `⊘⊘ VACUOUS` is what tells an unmeasured store apart from one
         // nothing needed.
         eprintln!("kayfabe: {}", kayfabe_device::device_fb_report());
+        // ★★★★★ **CUT B — THE ARMING PATH, AND THE BYTE PORT IT ARMS THROUGH.**
+        //
+        // ⊘ TWO lines and not one, because they answer different questions and either can be
+        // the interesting one: `FB-DEMAND` is about the CALLERS (did any lock-free caller ever
+        // drain? was it declined on a vCPU? did a retry ever serve a read?) and
+        // `DEVICE-FB-PORT` is about the MECHANISM (were runs armed, was an arm refused by the
+        // host BAR1 aperture, were any evicted by the budget).
+        //
+        // ⊘ Both printed unconditionally, disarmed line and all, for the walk shadow's reason
+        // above: a boot that printed nothing when the port was never built is indistinguishable
+        // from one whose port was built and never used.
+        eprintln!("kayfabe: {}", kayfabe_device::plane::fb_demand_census());
+        match self.plane.fb_demand_port() {
+            Some(p) => eprintln!("kayfabe: {}", p.census_line()),
+            None => eprintln!(
+                "kayfabe: DEVICE-FB-PORT ⊘ NO BYTE PORT ON THIS BOOT — the store has none, so                  no host-side framebuffer access could ever be served. That is the ARENA arm                  (the default, where nothing needs one) or cut A's shape on the `device` arm.                  The FB-STORE lines at realize say which."
+            ),
+        }
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
         // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and
         // `gpga_is_one_reserved_object.md` disagree about it, and neither carries a

@@ -509,6 +509,556 @@ impl core::fmt::Debug for DeviceViewPort {
     }
 }
 
+#[cfg(feature = "host-isolates")]
+mod byteport {
+    use super::{DeviceViewPort, ViewId};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════
+    // ★★★★★ §3 CUT B — THE STORE'S BYTE PORT, OVER THE DEVICE-VIEW PORT.
+    // ═══════════════════════════════════════════════════════════════════════════════════════
+
+    /// ★★★ **How much of the reserved object one arm covers.** 64 KiB.
+    ///
+    /// # ⊘ Why not one page
+    ///
+    /// An arm is an **IPC round trip** — `[measured w736]` mean **382 µs**, across nine live arms
+    /// — and a page-table walk reads its pages 4 KiB at a time. Arming per page would pay that
+    /// round trip once per page; arming a 64 KiB run pays it once per sixteen, and page-table
+    /// pages are exactly the thing a guest's own allocator clusters.
+    ///
+    /// ⚠ **And it is not free in the direction that matters.** Host BAR1 is the scarce resource
+    /// (`THE_CONSTRAINTS.md` §22 item 3: ~254 MiB usable, ONE global pool shared with our own CUDA
+    /// context), so a 16× coarser grain is a 16× larger aperture bill for the same working set.
+    /// `[measured w734]` the walk touches **128 distinct frames** ⇒ 0.5 MiB at page grain, at most
+    /// 8 MiB at this one — **3.1 % of the pool** against a measured 1.4 % for BAR1 itself. That is
+    /// the whole of the argument, and it is a measurement rather than a feeling.
+    ///
+    /// ⊘ It is **not** a per-die fact and nothing may derive a chip property from it
+    /// (constraint 12): it is a cost trade between two measured numbers on this host.
+    pub const ARM_GRAIN: u64 = 64 * 1024;
+
+    /// ★★★ **The BUDGET — how many runs may be armed at once.** 256 × 64 KiB = **16 MiB**.
+    ///
+    /// `THE_CONSTRAINTS.md` §22, *"what is actually left"* item 1: *"**Enforce a budget.** A guest
+    /// *may* legally fill its aperture, and nothing stops it. Left unbounded it can starve our
+    /// CUDA context and with it the walker. ⇒ A **checked** bound, not an assumed one."*
+    ///
+    /// ⊘ At the cap the oldest run is **released and re-used**, never refused: a refusal here
+    /// would wedge a boot on a guest that is behaving legally, and the release verb
+    /// (`NV_ESC_RM_UNMAP_MEMORY`) is exactly what makes recycling possible at all. `[measured
+    /// w722]` `munmap` + `close` returns **nothing** to the pool, which is why eviction goes
+    /// through [`DeviceViewPort::release`] and not through dropping the window.
+    pub const ARMED_RUNS_CAP: usize = 256;
+
+    /// How many wanted-but-unarmed runs the demand set may hold. ⊘ A bound and not a hope: the
+    /// set is written **under the plane lock** by whatever the guest's own page tables made us
+    /// read, so an unbounded one is a guest-driven host allocation — the exact amplification
+    /// shape `THE_CONSTRAINTS.md` §w720h says the single store deletes.
+    pub const WANT_SET_CAP: usize = 4096;
+
+    /// How many runs one [`DeviceFbPort::drain`] may arm. ⊘ A **fixed trip count**: a drain runs
+    /// on a worker the rest of the device is waiting on, and 64 × 382 µs ≈ 24 ms is already the
+    /// most a single pass should hold that thread for. What it cannot finish stays wanted and is
+    /// reported as `deferred`, which is a number rather than a silent truncation.
+    pub const DRAIN_ARMS_MAX: u32 = 64;
+
+    /// The largest host-side access this port will try to serve across armed runs, in runs.
+    /// ⊘ `decode_page` reads a whole page-table page — 512 × 16 B = **8 KiB** at the widest
+    /// format — so two runs is already generous; the bound exists so the loop below has a fixed
+    /// trip count regardless of what a caller asks for.
+    const MAX_SPAN_RUNS: u64 = 4;
+
+    /// One armed, mapped run of the reserved object.
+    #[derive(Debug)]
+    struct ArmedRun {
+        /// The mapping. ⊘ Dropping it `munmap`s and returns **nothing** to the BAR1 pool; the
+        /// aperture comes back only through [`DeviceViewPort::release`], which is why the
+        /// [`ViewId`] travels beside it and never apart from it.
+        win: kayfabe_linux_raw::GuestWindow,
+        /// The port's name for the armed view.
+        view: ViewId,
+        /// How long the run is, as the driver accepted it — never as we asked for it.
+        len: u64,
+    }
+
+    /// ★★★★★ **CUT B item 1 — BYTES OF THE RESERVED OBJECT, FOR A STORE THAT HOLDS NO DESCRIPTOR.**
+    ///
+    /// [`kayfabe_device::DeviceFb`] names a framebuffer page as an **address** in the one reserved
+    /// object and can go no further: `read`/`write`/`page_backing` all run under the plane lock
+    /// and arming is an IPC round trip that asserts lock-free. This is the other half — a table of
+    /// armed runs that a locked caller may `memcpy` through, and a demand set that a **lock-free**
+    /// caller drains.
+    ///
+    /// # ⊘⊘⊘ THE LOCK DISCIPLINE, WHICH IS THE WHOLE OF THE SAFETY ARGUMENT
+    ///
+    /// | this type's mutex | held across | why |
+    /// |---|---|---|
+    /// | `runs` | a `memcpy` | ⊘ never an IPC round trip. An arm or a release performed under it would block a vCPU that is reading under the plane lock — the same stall through a lock instead of through a socket |
+    /// | `want` | an insert | nothing |
+    ///
+    /// ⇒ every arm and every release below happens with **both** mutexes released, and the map is
+    /// re-entered only to publish or to take a victim. That is why eviction removes the victim
+    /// from the map **first** and releases it afterwards.
+    pub struct DeviceFbBytePort {
+        port: std::sync::Arc<DeviceViewPort>,
+        /// How long the reserved object is. ⊘ Carried rather than asked of the port, because an
+        /// arm past the end of the object is refused by RM with a status that reads like every
+        /// other refusal — and *"the guest named framebuffer that was never reserved"* is the
+        /// IDENTITY-WINDOW finding, not an aperture one.
+        obj_len: u64,
+        /// Armed runs, keyed by their base in the object. Non-overlapping by construction: every
+        /// key is [`ARM_GRAIN`]-aligned and every run is one grain long.
+        runs: std::sync::Mutex<std::collections::BTreeMap<u64, ArmedRun>>,
+        /// Arm order, for the cap's eviction. ⊘ FIFO and not LRU: an LRU needs a write on every
+        /// **read**, i.e. under the plane lock on a vCPU, to buy an eviction policy nothing has
+        /// measured a need for.
+        order: std::sync::Mutex<std::collections::VecDeque<u64>>,
+        /// The demand set — runs wanted and not armed.
+        want: std::sync::Mutex<std::collections::BTreeSet<u64>>,
+        served_read: AtomicU64,
+        served_write: AtomicU64,
+        wanted_read: AtomicU64,
+        wanted_write: AtomicU64,
+        want_dropped: AtomicU64,
+        drains: AtomicU64,
+        declined: AtomicU64,
+        armed: AtomicU64,
+        arm_refused: AtomicU64,
+        evicted: AtomicU64,
+        outside_object: AtomicU64,
+        span_too_wide: AtomicU64,
+        /// Arms refused because the budget was full and no run could be evicted. ⊘ Counted
+        /// apart from an RM refusal: one is OUR bound and the other is the host's aperture,
+        /// and reading them as one would send somebody to measure the wrong pool.
+        budget_refused: AtomicU64,
+        first_arm_refusal: std::sync::Mutex<Option<String>>,
+    }
+
+    impl core::fmt::Debug for DeviceFbBytePort {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("DeviceFbBytePort")
+                .field("obj_len", &self.obj_len)
+                .field("armed", &self.armed.load(Ordering::Relaxed))
+                .field("evicted", &self.evicted.load(Ordering::Relaxed))
+                .field("served_read", &self.served_read.load(Ordering::Relaxed))
+                .finish_non_exhaustive()
+        }
+    }
+
+    impl DeviceFbBytePort {
+        /// Build the byte port over an armed device-view port and a reservation of `obj_len`
+        /// bytes.
+        #[must_use]
+        pub fn new(port: std::sync::Arc<DeviceViewPort>, obj_len: u64) -> DeviceFbBytePort {
+            DeviceFbBytePort {
+                port,
+                obj_len,
+                runs: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+                order: std::sync::Mutex::new(std::collections::VecDeque::new()),
+                want: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+                served_read: AtomicU64::new(0),
+                served_write: AtomicU64::new(0),
+                wanted_read: AtomicU64::new(0),
+                wanted_write: AtomicU64::new(0),
+                want_dropped: AtomicU64::new(0),
+                drains: AtomicU64::new(0),
+                declined: AtomicU64::new(0),
+                armed: AtomicU64::new(0),
+                arm_refused: AtomicU64::new(0),
+                evicted: AtomicU64::new(0),
+                outside_object: AtomicU64::new(0),
+                span_too_wide: AtomicU64::new(0),
+                budget_refused: AtomicU64::new(0),
+                first_arm_refusal: std::sync::Mutex::new(None),
+            }
+        }
+
+        /// The `[first, last]` run bases an access of `len` bytes at `at` touches, or `None` when
+        /// it is out of the object or spans more runs than [`MAX_SPAN_RUNS`].
+        fn span(&self, at: u64, len: u64) -> Option<(u64, u64)> {
+            if len == 0 {
+                return None;
+            }
+            let end = at.checked_add(len)?;
+            if end > self.obj_len {
+                self.outside_object.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
+            let first = at & !(ARM_GRAIN - 1);
+            let last = (end - 1) & !(ARM_GRAIN - 1);
+            if (last - first) / ARM_GRAIN >= MAX_SPAN_RUNS {
+                self.span_too_wide.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
+            Some((first, last))
+        }
+
+        /// Release one run's aperture. ⊘ Called with **no** mutex of this type held: it is an IPC
+        /// round trip.
+        fn release_run(&self, run: ArmedRun) {
+            let ArmedRun { win, view, .. } = run;
+            // ★★★ ORDER: the port's release returns the host BAR1 aperture, and the `munmap` is
+            // the `Drop` of `win` on the line after. ⊘ `osUnmapPciMemoryUser` is an EMPTY function
+            // in RM (`ogkm os.c:1275-1282`), so `NV_ESC_RM_UNMAP_MEMORY` does not touch the VMA —
+            // which is exactly why this process must keep the mapping alive until it has finished
+            // with it and drop it itself. Nothing else may use these bytes in between: the run is
+            // already out of `runs`, so no reader can find it.
+            self.port.release(view);
+            drop(win);
+            self.evicted.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    impl kayfabe_device::DeviceFbPort for DeviceFbBytePort {
+        fn read_armed(&self, at: u64, buf: &mut [u8]) -> bool {
+            let Some((first, last)) = self.span(at, buf.len() as u64) else {
+                return false;
+            };
+            let runs = self
+                .runs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // ⊘⊘ **CHECKED WHOLE BEFORE ANY BYTE MOVES.** A partial fill would leave the caller a
+            // buffer that is half this page and half whatever it held — and `FbRead::read_in`
+            // answers a `bool`, so nothing downstream could tell. ⇒ all-or-nothing, decided before
+            // the first copy.
+            let mut base = first;
+            // ★ A fixed trip count: `span` refused anything wider than `MAX_SPAN_RUNS`.
+            while base <= last {
+                let Some(run) = runs.get(&base) else {
+                    return false;
+                };
+                // ⊘ The run's length is the DRIVER's, page-rounded, and may differ from what we
+                // asked for. Checked here rather than assumed, because a short run would make the
+                // copy below read past the mapping.
+                let want_end = (at + buf.len() as u64).min(base + ARM_GRAIN);
+                if want_end > base + run.len {
+                    return false;
+                }
+                base += ARM_GRAIN;
+            }
+            let mut done = 0usize;
+            let mut base = first;
+            while base <= last {
+                let run = match runs.get(&base) {
+                    Some(r) => r,
+                    // Unreachable: the loop above proved every key present under this same guard.
+                    None => return false,
+                };
+                let start = at.max(base);
+                let stop = (at + buf.len() as u64).min(base + ARM_GRAIN);
+                let n = (stop - start) as usize;
+                if run
+                    .win
+                    .read_into(
+                        kayfabe_linux_raw::HostOffset::new(start - base),
+                        &mut buf[done..done + n],
+                    )
+                    .is_err()
+                {
+                    return false;
+                }
+                done += n;
+                base += ARM_GRAIN;
+            }
+            let ok = done == buf.len();
+            if ok {
+                self.served_read.fetch_add(1, Ordering::Relaxed);
+            }
+            ok
+        }
+
+        fn write_armed(&self, at: u64, bytes: &[u8]) -> bool {
+            let Some((first, last)) = self.span(at, bytes.len() as u64) else {
+                return false;
+            };
+            let runs = self
+                .runs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut base = first;
+            while base <= last {
+                let Some(run) = runs.get(&base) else {
+                    return false;
+                };
+                let want_end = (at + bytes.len() as u64).min(base + ARM_GRAIN);
+                if want_end > base + run.len {
+                    return false;
+                }
+                base += ARM_GRAIN;
+            }
+            let mut done = 0usize;
+            let mut base = first;
+            while base <= last {
+                let Some(run) = runs.get(&base) else {
+                    return false;
+                };
+                let start = at.max(base);
+                let stop = (at + bytes.len() as u64).min(base + ARM_GRAIN);
+                let n = (stop - start) as usize;
+                if run
+                    .win
+                    .write_from(
+                        kayfabe_linux_raw::HostOffset::new(start - base),
+                        &bytes[done..done + n],
+                    )
+                    .is_err()
+                {
+                    // ⚠ A partial write is possible here and is NOT silently forgiven: `false`
+                    // makes the store refuse by name, which is the only honest answer — the run
+                    // is real memory and some of it may already have changed.
+                    return false;
+                }
+                done += n;
+                base += ARM_GRAIN;
+            }
+            let ok = done == bytes.len();
+            if ok {
+                self.served_write.fetch_add(1, Ordering::Relaxed);
+            }
+            ok
+        }
+
+        fn want(&self, at: u64, len: u64, by: kayfabe_device::DeviceFbWant) {
+            match by {
+                kayfabe_device::DeviceFbWant::Read => &self.wanted_read,
+                kayfabe_device::DeviceFbWant::Write => &self.wanted_write,
+            }
+            .fetch_add(1, Ordering::Relaxed);
+            // ⊘ The span refusal is NOT a want: an access outside the reserved object cannot be
+            // armed however many times it is asked for, and putting it in the set would make every
+            // later drain spend an IPC round trip discovering that again.
+            let Some((first, last)) = self.span(at, len.max(1)) else {
+                return;
+            };
+            let mut w = self
+                .want
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut base = first;
+            while base <= last {
+                if w.len() >= WANT_SET_CAP {
+                    // ⊘ DROPPED, and counted. A dropped want is a page that keeps missing, never a
+                    // wrong value — the same contract `BarMirror::fill`'s full queue has.
+                    self.want_dropped.fetch_add(1, Ordering::Relaxed);
+                    return;
+                }
+                w.insert(base);
+                base += ARM_GRAIN;
+            }
+        }
+
+        fn drain(&self) -> kayfabe_device::DeviceFbDrained {
+            use kayfabe_device::DeviceFbDrained;
+            // ★★★ **CUT B item 5 — DECLINE BY NAME**, exactly as `WalkShadowDecider::decide` does,
+            // and asked FIRST so nothing is locked on the way to finding out.
+            if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+                self.declined.fetch_add(1, Ordering::Relaxed);
+                return DeviceFbDrained::declined();
+            }
+            self.drains.fetch_add(1, Ordering::Relaxed);
+            // ⊘ Taken out of the set under the lock and armed OUTSIDE it: arming is an IPC round
+            // trip, and a `want` call from a vCPU under the plane lock must never wait on it.
+            let batch: Vec<u64> = {
+                let mut w = self
+                    .want
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let take: Vec<u64> = w.iter().take(DRAIN_ARMS_MAX as usize).copied().collect();
+                for k in &take {
+                    w.remove(k);
+                }
+                take
+            };
+            let mut out = DeviceFbDrained::default();
+            for base in batch {
+                // Already armed by another drain between the want and here — free, and not a
+                // refusal.
+                if self
+                    .runs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_key(&base)
+                {
+                    continue;
+                }
+                // ★★★ THE BUDGET, ENFORCED — §22's *"a checked bound, not an assumed one"*. The
+                // victim leaves the map under the lock and is released with the lock DROPPED.
+                let at_cap;
+                let victim = {
+                    let mut runs = self
+                        .runs
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    at_cap = runs.len() >= ARMED_RUNS_CAP;
+                    if at_cap {
+                        let mut order = self
+                            .order
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        // ★ A fixed trip count: the queue is at most `ARMED_RUNS_CAP` long and
+                        // every iteration pops one entry.
+                        let mut found = None;
+                        for _ in 0..=ARMED_RUNS_CAP {
+                            match order.pop_front() {
+                                Some(k) => {
+                                    if let Some(r) = runs.remove(&k) {
+                                        found = Some(r);
+                                        break;
+                                    }
+                                }
+                                None => break,
+                            }
+                        }
+                        found
+                    } else {
+                        None
+                    }
+                };
+                match victim {
+                    Some(v) => self.release_run(v),
+                    None if at_cap => {
+                        // ⊘⊘ **THE BUDGET IS CHECKED, NOT HOPED FOR** (§22, *"a checked bound,
+                        // not an assumed one"*). Reaching here means the cap is full and the
+                        // arm-order queue could not name a victim — the two structures having
+                        // drifted apart, which nothing should be able to do. ⇒ REFUSED rather
+                        // than armed anyway: an arm past the cap is host BAR1 aperture this
+                        // port would then never release, and `[measured w722]` that failure is
+                        // silent until every later arm returns zero.
+                        self.budget_refused.fetch_add(1, Ordering::Relaxed);
+                        out.refused += 1;
+                        continue;
+                    }
+                    None => {}
+                }
+                let len = ARM_GRAIN.min(self.obj_len.saturating_sub(base));
+                if len == 0 {
+                    self.outside_object.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                // ⚠ `writable: true` — the VMA's protection, i.e. what THIS process may do. The
+                // store serves host writes through the same run (`write_armed`), and a read-only
+                // mapping would refuse them with an `EACCES` that reads as a plumbing fault.
+                match self.port.arm_mapped(base, len, true) {
+                    Ok((win, view)) => {
+                        let run_len = win.len_bytes();
+                        let mut runs = self
+                            .runs
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        runs.insert(
+                            base,
+                            ArmedRun {
+                                win,
+                                view,
+                                len: run_len,
+                            },
+                        );
+                        self.order
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .push_back(base);
+                        self.armed.fetch_add(1, Ordering::Relaxed);
+                        out.armed += 1;
+                    }
+                    Err(why) => {
+                        self.arm_refused.fetch_add(1, Ordering::Relaxed);
+                        let mut first = self
+                            .first_arm_refusal
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if first.is_none() {
+                            *first = Some(format!("{}: {why:?} at 0x{base:x}", why.name()));
+                        }
+                        out.refused += 1;
+                    }
+                }
+            }
+            out.deferred = u32::try_from(
+                self.want
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .len(),
+            )
+            .unwrap_or(u32::MAX);
+            out
+        }
+
+        fn census_line(&self) -> String {
+            let armed = self.armed.load(Ordering::Relaxed);
+            let refused = self.arm_refused.load(Ordering::Relaxed);
+            let declined = self.declined.load(Ordering::Relaxed);
+            let drains = self.drains.load(Ordering::Relaxed);
+            let sr = self.served_read.load(Ordering::Relaxed);
+            let sw = self.served_write.load(Ordering::Relaxed);
+            let first = self
+                .first_arm_refusal
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            let verdict = if drains == 0 && declined == 0 {
+                "⊘⊘ VACUOUS — the byte port was installed and NOTHING ever drained it. That is not \
+                 `no bytes were wanted`; it is an unmeasured port, and the first place to look is \
+                 whether any lock-free caller calls `RegPlane::arm_fb_demand` at all."
+            } else if armed == 0 && declined > 0 {
+                "⊘⊘⊘ EVERY DRAIN WAS DECLINED — the demand is arriving on vCPU threads and nothing \
+                 off-vCPU ever drains. The retry is at the wrong caller."
+            } else if refused > 0 {
+                "⚠ AT LEAST ONE ARM WAS REFUSED — read first_arm_refusal: NV_ERR_NO_MEMORY here is \
+                 the HOST BAR1 APERTURE being full, not video memory, and it is shared with our \
+                 own CUDA context."
+            } else if sr + sw == 0 {
+                "⊘ RUNS WERE ARMED AND NOTHING WAS EVER SERVED THROUGH THEM — the arming and the \
+                 serving disagree about an address, which is a defect here and not in the store."
+            } else {
+                "★ every arm succeeded and armed runs served host-side accesses"
+            };
+            format!(
+                "DEVICE-FB-PORT drains={drains} armed={armed} arm_refused={refused} \
+                 declined_on_vcpu={declined} evicted={ev} outstanding={out} served_read={sr} \
+                 served_write={sw} wanted_read={wr} wanted_write={ww} want_dropped={wd} \
+                 still_wanted={sw2} outside_object={oo} span_too_wide={stw} \
+                 budget_refused={br} first_arm_refusal=[{first}] ⇒ {verdict}",
+                br = self.budget_refused.load(Ordering::Relaxed),
+                ev = self.evicted.load(Ordering::Relaxed),
+                out = self
+                    .runs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .len(),
+                wr = self.wanted_read.load(Ordering::Relaxed),
+                ww = self.wanted_write.load(Ordering::Relaxed),
+                wd = self.want_dropped.load(Ordering::Relaxed),
+                sw2 = self
+                    .want
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .len(),
+                oo = self.outside_object.load(Ordering::Relaxed),
+                stw = self.span_too_wide.load(Ordering::Relaxed),
+                first = first.unwrap_or_else(|| "none".to_string()),
+            )
+        }
+    }
+
+    /// ⊘⊘⊘ **THERE IS DELIBERATELY NO `Drop` HERE, AND THE REASON IS A PANIC.**
+    ///
+    /// The obvious teardown — release every run in `Drop` — is an **IPC round trip performed
+    /// wherever the value happens to go out of scope**, and this value lives inside
+    /// `kayfabe_device::DeviceFb`, inside `PlaneMem`, **behind the plane's mutex**. A
+    /// `RegPlane::set_fb` that replaced the store would drop the last `Arc` *under that lock*, and
+    /// `Worker::release_device_view`'s `assert_lock_free` would abort the VMM.
+    ///
+    /// ⇒ the aperture comes back through [`DeviceViewPort::release_all`], which the composition
+    /// root owns and can call from a lock-free teardown — the same argument [`ArmedView`]'s own
+    /// `Drop` makes one type over, for the same reason.
+    const _: () = ();
+}
+
+#[cfg(feature = "host-isolates")]
+pub use byteport::{ARMED_RUNS_CAP, ARM_GRAIN, DRAIN_ARMS_MAX, DeviceFbBytePort, WANT_SET_CAP};
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ★★★★★ §3's GATE — which store backs the guest's video memory.
 // ═══════════════════════════════════════════════════════════════════════════════════════

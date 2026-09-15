@@ -147,6 +147,45 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
          argument fails when there is NO worker — every fill is dropped and the passthrough \
          plane never engages. See `no_worker_still_drains.rs`.",
     ),
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // ★★★★★ §3 CUT B (w737) — THE BYTE PORT'S THREE LOCKS. All reached ON A vCPU, because
+    // `DeviceFb::read`/`write` run under the plane lock inside an MMIO exit.
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    (
+        "crates/kayfabe-qemu-raw/src/deviceview.rs",
+        "Mutex<std::collections::BTreeMap<u64, ArmedRun>>",
+        "The byte port's ARMED RUNS — the CPU views of the reserved object this process can \
+         `memcpy` through. ⊘ NOTHING MAY BLOCK BENEATH IT, and the thing that would is \
+         obvious and was deliberately kept out: **arming and releasing a view are IPC round \
+         trips to the scratchpad isolate**, and both happen in `drain` with this guard \
+         DROPPED. A vCPU reaching `read_armed` under the plane lock would otherwise wait on \
+         a worker's socket — the same multi-second stall as a blocking call, arriving through \
+         a lock instead, with `assert_lock_free` blind to it because this lock is unranked. \
+         ⚠ That is why EVICTION removes the victim from this map first and releases it after: \
+         a release under this guard is the defect, not the eviction itself.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/deviceview.rs",
+        "Mutex<std::collections::VecDeque<u64>>",
+        "The byte port's ARM ORDER, for the budget's FIFO eviction. ⊘ NOTHING MAY BLOCK \
+         BENEATH IT: push-back and pop-front only, and it is taken only from `drain`, which \
+         is off-vCPU by construction. ⚠ It is nested INSIDE the armed-runs guard above (the \
+         eviction takes both), so the order between the two is fixed by that one site — a \
+         second site taking them the other way round is the inversion neither lock's rank can \
+         refuse, because neither has one.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/deviceview.rs",
+        "Mutex<std::collections::BTreeSet<u64>>",
+        "The byte port's DEMAND SET — the runs a host-side access wanted and could not be \
+         served. ★ This is the one a vCPU writes: `DeviceFb::read` calls `want` under the \
+         plane lock. ⊘ NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES: the critical section \
+         is a bounded run of `BTreeSet::insert` capped at `WANT_SET_CAP`, and `drain` takes \
+         the whole batch out under the guard and arms it OUTSIDE. \
+         ⚠ Its loss policy is the thing to know: at the cap a want is DROPPED and counted \
+         (`want_dropped=`), on the fill queue's argument — a dropped want is a page that \
+         keeps missing, never a wrong value.",
+    ),
     (
         "crates/kayfabe-qemu-raw/src/barmirror.rs",
         "Mutex<HashMap<u64, Arc<OwnedFd>>>",

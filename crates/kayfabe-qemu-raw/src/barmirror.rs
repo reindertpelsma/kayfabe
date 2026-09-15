@@ -146,6 +146,12 @@ const PREMAP_BUDGET_BAR2: u32 = 1 << 20;
 
 // ---- refusal names -----------------------------------------------------------------------
 
+/// ★★★ **CUT B — the `premap_why` key for a SHORT enumeration**, so the once-per-reason rule
+/// keeps it apart from the refusal reasons beside it. ⊘ A short list and a refused enumeration
+/// are different findings with different fixes, and one key for both would print whichever
+/// happened first and swallow the other for the rest of the boot.
+const PREMAP_SHORT: &str = "ENUMERATION-SHORT";
+
 const R_OUT_OF_BAR: &str = "OUT-OF-BAR";
 const R_TRANSLATION: &str = "TRANSLATION-REFUSED";
 const R_NO_ADDRESS_MODEL: &str = "NO-ADDRESS-MODEL";
@@ -575,6 +581,20 @@ pub struct BarMirror {
     /// ★ w626 — the largest BAR2 page-table tree any enumeration walked, so the budget above
     /// can be set from this rather than from a guess. ⊘ `0` means BAR2 never enumerated at all.
     premap_bar2_visited: AtomicU64,
+    /// ★★★★★ **CUT B — enumerations that came back SHORT** (`WindowEnumeration::faults > 0`)
+    /// after every allowed arming retry. ⊘ A number that did not exist before cut B: the
+    /// faults were dropped inside `window_leaves` and a short list was indistinguishable from
+    /// a guest that had mapped less.
+    premap_pt_faults: AtomicU64,
+    /// ★★★★★ **CUT B — how many times a lock-free caller armed and tried again.** ⊘ The
+    /// known-positive for the whole arming path: `0` here with `DEVICE-FB host_read_refused>0`
+    /// means the retry never RAN, which is a different defect from a retry that ran and did
+    /// not help.
+    arm_retries: AtomicU64,
+    /// Resolutions that succeeded only because of a retry — cut B working, at this caller.
+    arm_retried_ok: AtomicU64,
+    /// Resolutions still refused after the last allowed retry.
+    arm_gave_up: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -657,6 +677,48 @@ fn key_of(r: &WindowPageResolution) -> Option<Key> {
         offset: e.offset,
         readonly: r.read_only,
     })
+}
+
+/// ★★★★★ **CUT B — THE BOUNDED ARM-THEN-RETRY, AS A PURE FUNCTION.**
+///
+/// `attempt` produces a value and says whether it is **good**; `arm` says whether it changed
+/// anything. The loop runs `attempt` once, then at most `retries` more times, and only while
+/// `arm` returns `true`. Returns the last value and how many retries were spent.
+///
+/// # ⊘⊘⊘ Why this is a free function and not two loops at the two call sites
+///
+/// The two callers — `resolve_arming` and `premap_window` — need the same three properties and
+/// **cannot be built in a `cargo test`**: a `BarMirror` needs a `QemuMachine`. A loop that can
+/// only be checked by booting is a loop nobody checks. ⇒ the part that can be wrong on its own
+/// lives here, where the inline tests below fire each property:
+///
+/// 1. **A FIXED TRIP COUNT** (`THE_CONSTRAINTS.md` §20 invariant 1). `attempt`'s input is a
+///    guest-authored page-table pointer; a loop that ended when the walk succeeded would let
+///    the guest's own tables choose how long this thread runs.
+/// 2. **`arm` returning false ENDS IT.** *"Nothing was armed"* covers *"the drain declined"*
+///    (a vCPU), *"the aperture refused"* and *"there was no port"*, and retrying helps in none
+///    of them — ⚠ and the first is a **vCPU inside an MMIO exit**, which is the thread that
+///    must not spin.
+/// 3. **The value comes back either way.** A caller that got only `Err` on give-up could not
+///    report what it last saw, and `window_leaves`' failing shape is an `Ok` that is SHORT.
+fn arm_then_retry<T>(
+    retries: u32,
+    mut attempt: impl FnMut() -> (T, bool),
+    mut arm: impl FnMut() -> bool,
+) -> (T, u32) {
+    let (mut value, mut good) = attempt();
+    let mut used = 0u32;
+    // ⊘ `for`, never `while !good`: the bound is the loop's own, not the data's.
+    for _ in 0..retries {
+        if good || !arm() {
+            break;
+        }
+        used += 1;
+        let (v, g) = attempt();
+        value = v;
+        good = g;
+    }
+    (value, used)
 }
 
 fn refusal_name(e: &VmmError) -> &'static str {
@@ -804,6 +866,10 @@ impl BarMirror {
             premap_biggest_leaf: AtomicU64::new(0),
             premap_skipped: AtomicU64::new(0),
             premap_why: Mutex::new(std::collections::BTreeSet::new()),
+            premap_pt_faults: AtomicU64::new(0),
+            arm_retries: AtomicU64::new(0),
+            arm_retried_ok: AtomicU64::new(0),
+            arm_gave_up: AtomicU64::new(0),
             premap_bar2_visited: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
@@ -941,6 +1007,57 @@ impl BarMirror {
         )
     }
 
+    /// ★★★★★ **CUT B item 3 — THE RETRY BOUND, AND IT IS THE TREE'S DEPTH.**
+    ///
+    /// A point walk (`bar1_translate`) reads **one page-table page per level**, and each
+    /// attempt faults at the shallowest page it cannot read. So one attempt per level is all
+    /// that can ever be needed, and `kayfabe_mmu::walker::MAX_WALK_DEPTH` is the format-bounded
+    /// cap on levels — the same bound §20's first invariant uses, and for the same reason: a
+    /// **fixed trip count**, never a loop that ends when the walk succeeds.
+    ///
+    /// ⊘ It is deliberately not *"retry until nothing is armed"*: that phrasing makes the
+    /// guest's own tables choose how long this thread runs.
+    const ARM_RETRIES: u32 = kayfabe_mmu::walker::MAX_WALK_DEPTH as u32;
+
+    /// ★★★★★ **CUT B item 3 — RESOLVE, ARMING WHAT THE STORE COULD NOT READ.**
+    ///
+    /// `SINGLE_STORE_PLAN.md` cut B item 3: *"`bar1_translate` / `bar2_translate` /
+    /// `window_leaves` run under the lock; the frame they missed survives only in the store's
+    /// `want` set … The retry belongs at `fill_now`'s and `premap`'s **entry**, both
+    /// lock-free, in a bounded loop."*
+    ///
+    /// ⚠ **This is the lock-free half and it must stay that way.** `window_page_backing` takes
+    /// and releases the plane's locks inside itself; `arm_fb_demand` is called with nothing
+    /// held, and declines by name if this thread is a vCPU.
+    fn resolve_arming(
+        &self,
+        w: FbWindow,
+        page_off: u64,
+    ) -> Result<kayfabe_device::WindowPageResolution, kayfabe_device::WindowRefusal> {
+        let (out, used) = arm_then_retry(
+            Self::ARM_RETRIES,
+            || {
+                // ⊘ `window_page_backing` takes and releases BOTH plane guards inside itself,
+                // so nothing is held when `arm` runs below.
+                let r = self.plane.window_page_backing(w, page_off, true);
+                let ok = r.is_ok();
+                (r, ok)
+            },
+            // ★ LOCK-FREE HERE, and it has to be: this is an IPC round trip to the scratchpad
+            // isolate, and it declines by name if this thread is a vCPU.
+            || self.plane.arm_fb_demand().progressed(),
+        );
+        self.arm_retries.fetch_add(u64::from(used), Ordering::Relaxed);
+        if used > 0 {
+            if out.is_ok() {
+                self.arm_retried_ok.fetch_add(1, Ordering::Relaxed);
+            } else {
+                self.arm_gave_up.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        out
+    }
+
     fn fill_now(&self, w: FbWindow, off: u64, origin: FillOrigin) {
         let Some(arm) = self.arm_for(w) else {
             return;
@@ -991,7 +1108,11 @@ impl BarMirror {
         }
 
         // ---- 1. RESOLVE (plane lock, released on return) --------------------------------
-        let res = match self.plane.window_page_backing(w, page_off, true) {
+        // ★★★★★ **CUT B item 3 — and it is `resolve_arming`, not `window_page_backing`.** Under
+        // the single store the walk this performs reads the guest's BAR page tables out of the
+        // reserved object, where a page with no armed CPU view refuses **by name**. Arming is
+        // lock-free and this is a lock-free caller; see `resolve_arming`.
+        let res = match self.resolve_arming(w, page_off) {
             Ok(r) => r,
             Err(kayfabe_device::WindowRefusal::NoAddressModel) => {
                 self.refuse(w, off, R_NO_ADDRESS_MODEL, "the window has no address model");
@@ -1811,7 +1932,45 @@ impl BarMirror {
         } else {
             PREMAP_BUDGET_BAR1
         };
-        let (leaves, visited) = match self.plane.window_leaves(win, budget) {
+        // ★★★★★ **CUT B item 4 — THE PREMAP REFUSAL STOPS BEING TERMINAL, AND SO DOES THE
+        // SILENT-EMPTY ONE BESIDE IT.**
+        //
+        // `SINGLE_STORE_PLAN.md` cut B item 4: *"`window_leaves` refuses the whole subtree at
+        // the first unbacked page and the caller prints once and returns — `that aperture
+        // stays on demand-fill`, which under `device` means the trap fires and there is
+        // nothing to serve it."*
+        //
+        // ⊘⊘⊘ **AND THE MECHANISM IS WORSE THAN THAT SENTENCE, measured from the source
+        // (w737).** `decode_subtree` returns `Err` for **budget exhaustion and nothing else**:
+        // an unreadable page-table page is a per-branch `WalkFault` and the walk continues. So
+        // the failing shape is not a refusal at all — it is `Ok` with a **SHORT leaf list**,
+        // and an unreadable ROOT gives `Ok` with an **EMPTY** one. That reads as *"the guest
+        // has mapped nothing"*, publishes nothing, and counts nothing. ⇒ `WindowEnumeration`
+        // now carries `faults`, and this loop retries on **either** shape.
+        //
+        // ⚠ A fixed trip count, for `resolve_arming`'s reason: each pass arms the frontier it
+        // could not read, so a tree converges in at most its own depth — and the depth is
+        // format-bounded, never guest-bounded.
+        let (enumerated, attempt) = arm_then_retry(
+            Self::ARM_RETRIES,
+            || {
+                let got = self.plane.window_leaves(win, budget);
+                // ⊘ "Good" is `Ok` AND no fault: a short list is the failing shape here, and
+                // an `is_ok()` test would call it success.
+                let good = got.as_ref().is_ok_and(|e| e.faults == 0);
+                (got, good)
+            },
+            || self.plane.arm_fb_demand().progressed(),
+        );
+        self.arm_retries.fetch_add(u64::from(attempt), Ordering::Relaxed);
+        if enumerated.as_ref().is_ok_and(|e| e.faults > 0) {
+            self.premap_pt_faults.fetch_add(1, Ordering::Relaxed);
+        }
+        let kayfabe_device::WindowEnumeration {
+            leaves,
+            visited,
+            faults,
+        } = match enumerated {
             Ok(l) => l,
             Err(e) => {
                 self.premap_refused.fetch_add(1, Ordering::Relaxed);
@@ -1890,6 +2049,25 @@ impl BarMirror {
                 }
                 asked += 1;
                 self.fill_now(win, page, FillOrigin::Premap);
+            }
+        }
+        // ⊘⊘ **A SHORT ENUMERATION IS SAID, ONCE, BY NAME.** Before cut B this number did not
+        // exist and the list came back short in silence — the empty-artefact class this tree
+        // has now paid for four times. ⚠ On the arena arm it should be ZERO: `SparseFb::read`
+        // answers every in-range address, so a fault there is a real page-table finding and
+        // not an unarmed page.
+        if faults > 0 {
+            let mut seen = self.premap_why.lock().unwrap_or_else(|x| x.into_inner());
+            if seen.insert((win == FbWindow::InstanceWindow, PREMAP_SHORT)) {
+                eprintln!(
+                    "kayfabe: PREMAP ⊘⊘ {} enumeration came back SHORT — {faults} branch(es) \
+                     could not be decoded after {attempt} arming retr(ies), so the leaf list \
+                     below is a SUBSET of what the guest mapped and those pages stay on \
+                     demand-fill. ⊘ This is not `the guest mapped nothing`. First occurrence \
+                     only; the total is `premap[pt_faults=]`, and `FB-DEMAND` says whether \
+                     arming was declined, refused or never drained.",
+                    if win == FbWindow::InstanceWindow { "bar2" } else { "bar1" }
+                );
             }
         }
         self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);
@@ -2204,13 +2382,18 @@ impl BarMirror {
             }
         };
         let premap = format!(
-            " premap[runs={} filled={} skipped={} refused={} biggest_leaf={} bar2_visited={}]",
+            " premap[runs={} filled={} skipped={} refused={} biggest_leaf={} bar2_visited={} \
+             pt_faults={}] arm[retries={} retried_ok={} gave_up={}]",
             self.premap_runs.load(Ordering::Relaxed),
             self.premap_pages.load(Ordering::Relaxed),
             self.premap_skipped.load(Ordering::Relaxed),
             self.premap_refused.load(Ordering::Relaxed),
             self.premap_biggest_leaf.load(Ordering::Relaxed),
             self.premap_bar2_visited.load(Ordering::Relaxed),
+            self.premap_pt_faults.load(Ordering::Relaxed),
+            self.arm_retries.load(Ordering::Relaxed),
+            self.arm_retried_ok.load(Ordering::Relaxed),
+            self.arm_gave_up.load(Ordering::Relaxed),
         );
         let (a_live, a_peak, a_recycled, a_issued) = self.arena.census();
         // ⊘ w585 — the STORE's census, not the allocator's. They answer different questions:
@@ -2464,5 +2647,126 @@ mod arena_unit_tests {
             "the previous device life's framebuffer bytes are still in the file, readable by \
              the next guest through the same memory slot"
         );
+    }
+}
+
+#[cfg(test)]
+mod arm_then_retry_tests {
+    //! ★★★★★ **CUT B's RETRY LOOP, and each of its three properties fired.**
+    //!
+    //! ⊘ These exist because the two production call sites cannot be built in a `cargo test` —
+    //! a [`BarMirror`] needs a `QemuMachine` — so the part that can be wrong on its own was
+    //! made a free function. ⚠ Every assertion here is a **known-positive**: each one fails if
+    //! the loop stops doing the thing, rather than merely not crashing.
+
+    use super::arm_then_retry;
+    use std::cell::Cell;
+
+    /// ★ **THE HAPPY PATH: it retries exactly as far as it has to, and no further.**
+    #[test]
+    fn it_stops_the_moment_the_attempt_is_good() {
+        let n = Cell::new(0u32);
+        let (v, used) = arm_then_retry(
+            8,
+            || {
+                n.set(n.get() + 1);
+                (n.get(), n.get() == 3)
+            },
+            || true,
+        );
+        assert_eq!(v, 3);
+        assert_eq!(used, 2, "one initial attempt plus TWO retries, then it stops");
+        assert_eq!(n.get(), 3, "and the attempt ran three times, not eight");
+    }
+
+    /// ⊘⊘⊘ **THE FIXED TRIP COUNT — §20's first structural invariant, fired.**
+    ///
+    /// The attempt never succeeds and the arm always claims progress: a loop that ended on the
+    /// data would run forever, and a guest's own page tables are what feed the data.
+    #[test]
+    fn an_attempt_that_never_succeeds_costs_exactly_the_bound() {
+        let n = Cell::new(0u32);
+        let (_, used) = arm_then_retry(
+            5,
+            || {
+                n.set(n.get() + 1);
+                ((), false)
+            },
+            || true,
+        );
+        assert_eq!(used, 5, "★ the bound, exactly — not one more");
+        assert_eq!(
+            n.get(),
+            6,
+            "one initial attempt plus five retries. ⚠ If this ever becomes unbounded the \
+             symptom is a WEDGED BOOT with no error, because every iteration looks like work."
+        );
+    }
+
+    /// ★★★★★ **CUT B ITEM 5 — AN ARM THAT DID NOTHING ENDS THE LOOP, AND IT ENDS IT AT ONCE.**
+    ///
+    /// ⊘ *"Nothing was armed"* covers three states — the drain **declined** (a vCPU inside an
+    /// MMIO exit), the aperture **refused**, and there is **no port**. Retrying helps in none
+    /// of them, and the first is on the one thread that must never spin.
+    #[test]
+    fn an_arm_that_changes_nothing_ends_the_loop_immediately() {
+        let attempts = Cell::new(0u32);
+        let arms = Cell::new(0u32);
+        let (_, used) = arm_then_retry(
+            16,
+            || {
+                attempts.set(attempts.get() + 1);
+                ((), false)
+            },
+            || {
+                arms.set(arms.get() + 1);
+                false
+            },
+        );
+        assert_eq!(used, 0);
+        assert_eq!(attempts.get(), 1, "the initial attempt, and nothing after it");
+        assert_eq!(
+            arms.get(),
+            1,
+            "★★★ THE KNOWN-POSITIVE: the arm is asked ONCE. A loop that could not tell \
+             `armed nothing` from `try again` would have asked sixteen times — on a vCPU, \
+             sixteen IPC round trips inside one MMIO exit."
+        );
+    }
+
+    /// ⊘ **THE LAST VALUE COMES BACK ON GIVE-UP.** `window_leaves`' failing shape is an `Ok`
+    /// that is SHORT, so a caller that got only a refusal could not report what it saw — and
+    /// premap would print nothing and publish nothing.
+    #[test]
+    fn the_value_survives_a_give_up() {
+        let n = Cell::new(0u32);
+        let (v, used) = arm_then_retry(
+            2,
+            || {
+                n.set(n.get() + 1);
+                (format!("attempt {}", n.get()), false)
+            },
+            || true,
+        );
+        assert_eq!(used, 2);
+        assert_eq!(v, "attempt 3", "the LAST value, not the first and not a default");
+    }
+
+    /// ⊘ A bound of zero is a caller that does not want a retry, and it must still attempt
+    /// once. ⚠ Stated because `0` is the value a future gate would use to turn cut B off, and
+    /// an off switch that skipped the attempt would break the arena arm.
+    #[test]
+    fn a_bound_of_zero_still_attempts_once() {
+        let n = Cell::new(0u32);
+        let (_, used) = arm_then_retry(
+            0,
+            || {
+                n.set(n.get() + 1);
+                ((), false)
+            },
+            || panic!("the arm must not be asked when no retry is allowed"),
+        );
+        assert_eq!(used, 0);
+        assert_eq!(n.get(), 1);
     }
 }

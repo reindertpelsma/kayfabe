@@ -138,3 +138,221 @@ fn a_join_has_no_premise_under_one_store_and_is_refused() {
     // is asserted above. The premise is named in this test's doc so the deliberateness is on
     // the record rather than inferred from an absent `impl`.
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ CUT B — THE BYTE PORT. Every one of these is a KNOWN-POSITIVE for a new counter
+// or a new refusal: `SINGLE_STORE_PLAN.md`'s most expensive recurring defect is a census
+// that prints `0` both when nothing happened and when the arm never ran.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+mod fakeport;
+use fakeport::{FAKE_GRAIN, FakePort};
+use kayfabe_device::{DEVICE_HOST_READ_NOT_ARMED, DEVICE_HOST_WRITE_NOT_ARMED};
+use std::sync::Arc;
+
+/// ★★★★★ **THE HALF CUT B ADDS — a host read of an ARMED run is SERVED out of the object.**
+///
+/// ⊘ And it is served with the **bytes that were already there**, written into the object by
+/// something that never went through this store. That is the shape of the real thing: the
+/// guest's engines write video memory, and a CPU view arrives afterwards.
+#[test]
+fn a_host_read_of_an_armed_run_is_served_out_of_the_reserved_object() {
+    let port = Arc::new(FakePort::new(FB));
+    port.poke(0x4000, &[1, 2, 3, 4, 5, 6, 7, 8]);
+    port.arm(0x4000);
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let mut buf = [0u8; 8];
+    fb.read(0x4000, &mut buf)
+        .expect("an armed run must serve a host read — that is the whole of cut B item 1");
+    assert_eq!(buf, [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert_eq!(port.counts().3, 1, "and the PORT must be what served it");
+}
+
+/// ★★★★★ **THE DEMAND SET — a miss RECORDS, and the sentence says so.**
+///
+/// ⊘⊘ This is cut B item 3's mechanism in one assertion. `FbRead::read_in` answers a `bool`,
+/// so the address that missed cannot travel to the lock-free caller inside the refusal; it
+/// survives in the port's want set instead. A store that refused **without** recording would
+/// leave the retry with nothing to arm, and the boot would look exactly like cut A.
+#[test]
+fn a_host_read_of_an_unarmed_run_records_a_want_and_refuses_by_the_cut_b_name() {
+    let port = Arc::new(FakePort::new(FB));
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let mut buf = [0xAAu8; 8];
+    let e = fb.read(0x9000, &mut buf).expect_err("nothing is armed");
+    assert_eq!(
+        e.why, DEVICE_HOST_READ_NOT_ARMED,
+        "⊘ refused, but by cut A's `the mechanism does not exist` sentence rather than cut \
+         B's `it exists and nothing armed this page yet`. The two have opposite fixes."
+    );
+    assert_eq!(
+        buf, [0xAAu8; 8],
+        "and the buffer is UNTOUCHED — a zero-fill would be indistinguishable from a \
+         successful read of an unwritten page"
+    );
+    assert_eq!(
+        port.wanted_now(),
+        1,
+        "★ THE KNOWN-POSITIVE: the want set must have exactly the run that missed. A refusal \
+         that recorded nothing is cut A wearing cut B's sentence."
+    );
+    assert_eq!(port.counts().5, 1, "and it was recorded as a READ's demand");
+    assert_eq!(port.counts().6, 0, "not as a write's");
+}
+
+/// ★★★★★ **DRAIN-THEN-RETRY IS WHAT TURNS THE REFUSAL INTO A READ** — the whole of cut B,
+/// at the store's own seam, with the caller's two halves spelled out.
+#[test]
+fn a_drain_arms_what_was_wanted_and_the_second_attempt_succeeds() {
+    let port = Arc::new(FakePort::new(FB));
+    port.poke(0x9000, &[9; 8]);
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let mut buf = [0u8; 8];
+    assert!(fb.read(0x9000, &mut buf).is_err(), "first attempt, unarmed");
+
+    // ★ The lock-free half. In production this is `RegPlane::arm_fb_demand`, called with the
+    // plane's locks released.
+    let d = kayfabe_device::FbStore::demand_port(&fb)
+        .expect("the store must hand its port out, or no lock-free caller can drain it")
+        .drain();
+    assert_eq!(d.armed, 1, "the drain must arm exactly the run that was wanted");
+    assert!(d.progressed(), "and say so, because that is what a retry branches on");
+    assert!(!d.declined);
+
+    fb.read(0x9000, &mut buf)
+        .expect("second attempt, after the arm — this is cut B working");
+    assert_eq!(buf, [9u8; 8]);
+}
+
+/// ⊘⊘⊘ **A DECLINED DRAIN IS NOT AN EMPTY ONE** — cut B item 5's distinction, pinned.
+///
+/// The shell declines when the calling thread is a vCPU or inside an MMIO trap. A caller that
+/// read *"declined"* as *"nothing was wanted"* would retry forever on the one arm where
+/// retrying cannot ever help, **on a vCPU**, which is the thread it must not spin on.
+#[test]
+fn a_declined_drain_is_distinguishable_from_one_that_had_nothing_to_do() {
+    let port = Arc::new(FakePort::new(FB));
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let _ = fb.read(0x9000, &mut [0u8; 8]);
+
+    port.set_declining(true);
+    let d = kayfabe_device::FbStore::demand_port(&fb).unwrap().drain();
+    assert!(d.declined, "★ the known-positive for the decline itself");
+    assert_eq!(d.armed, 0);
+    assert!(!d.progressed());
+    assert_eq!(
+        port.wanted_now(),
+        1,
+        "⊘ and the demand SURVIVES a declined drain — a decline that consumed the want set \
+         would lose the very page an off-vCPU caller is about to arm"
+    );
+
+    // ── and the empty drain, for contrast: it ran, and there was nothing to do ──
+    port.set_declining(false);
+    assert_eq!(kayfabe_device::FbStore::demand_port(&fb).unwrap().drain().armed, 1);
+    let empty = kayfabe_device::FbStore::demand_port(&fb).unwrap().drain();
+    assert!(!empty.declined, "★ THE CONTRAST: this one RAN");
+    assert_eq!(empty.armed, 0);
+}
+
+/// ⚠ **A REFUSED ARM IS A THIRD THING** — the host BAR1 aperture being full, which no amount
+/// of retrying fixes. `[measured w722]` it arrives as `NV_ERR_NO_MEMORY` with `ioctl()`
+/// returning 0 and `errno == 0`, so nothing else in the system will mention it.
+#[test]
+fn a_refused_arm_is_reported_as_refused_and_not_as_nothing_to_do() {
+    let port = Arc::new(FakePort::new(FB));
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let _ = fb.read(0x9000, &mut [0u8; 8]);
+    port.set_refusing(true);
+    let d = kayfabe_device::FbStore::demand_port(&fb).unwrap().drain();
+    assert_eq!(d.refused, 1, "★ the known-positive for the refusal count");
+    assert_eq!(d.armed, 0);
+    assert!(
+        !d.progressed(),
+        "and a refusal must NOT read as progress, or the retry loop spins against a full \
+         aperture"
+    );
+}
+
+/// ⊘ **CUT A's SENTENCE AND CUT B's ARE DIFFERENT, AND BOTH ARE REACHABLE.**
+///
+/// A store with no port says *"this mechanism does not exist"*; one with a port says *"it
+/// exists and nothing armed this page yet"*. ⚠ One sentence for both would make a boot unable
+/// to tell a missing byte port from a retry that never ran — and those have opposite fixes.
+#[test]
+fn the_no_port_refusal_and_the_not_armed_refusal_are_different_sentences() {
+    let mut cut_a = DeviceFb::new(FB);
+    let port = Arc::new(FakePort::new(FB));
+    let mut cut_b = DeviceFb::with_port(FB, port as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let a = cut_a.read(0x9000, &mut [0u8; 8]).unwrap_err().why;
+    let b = cut_b.read(0x9000, &mut [0u8; 8]).unwrap_err().why;
+    assert_eq!(a, DEVICE_HOST_READ_UNBUILT);
+    assert_eq!(b, DEVICE_HOST_READ_NOT_ARMED);
+    assert_ne!(a, b);
+    assert!(
+        kayfabe_device::FbStore::demand_port(&cut_a).is_none(),
+        "⊘ and cut A's store hands out no port, so `arm_fb_demand` cannot mistake it for one \
+         whose drain merely armed nothing"
+    );
+}
+
+/// ★★★ **THE WRITE HALF — served through an armed run, and landing NOWHERE otherwise.**
+///
+/// ⚠ `[measured w736]` `host_write_refused=0` against `host_read_refused=20`: nothing on the
+/// `RmInitAdapter` path has ever wanted a host-side write. ⇒ this pins that a write which
+/// misses changes **no byte anywhere**, which is the property that makes "no write-side retry
+/// was built" a safe scoping rather than a hole.
+#[test]
+fn a_write_that_misses_lands_nowhere_at_all() {
+    let port = Arc::new(FakePort::new(FB));
+    port.poke(0x9000, &[7; 8]);
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let e = fb.write(0x9000, &[0xFF; 8]).expect_err("nothing is armed");
+    assert_eq!(e.why, DEVICE_HOST_WRITE_NOT_ARMED);
+    assert_eq!(
+        port.peek(0x9000, 8),
+        vec![7u8; 8],
+        "⊘⊘ THE BYTES MUST BE UNCHANGED. A partial or fallback write is a byte the engines \
+         never see, which is the failure a single store exists to make impossible."
+    );
+    assert_eq!(port.counts().6, 1, "and the write's demand was recorded");
+
+    port.arm(0x9000);
+    fb.write(0x9000, &[0xFF; 8])
+        .expect("an armed run serves the write");
+    assert_eq!(port.peek(0x9000, 8), vec![0xFFu8; 8]);
+}
+
+/// ⊘ **A run that spans the grain boundary is all-or-nothing.** A half-filled buffer would be
+/// invisible at `FbRead::read_in`, which answers a `bool`.
+#[test]
+fn a_read_spanning_two_runs_needs_both_and_fills_neither_until_it_has_them() {
+    let port = Arc::new(FakePort::new(FB));
+    let at = FAKE_GRAIN - 4;
+    port.poke(at, &[1, 2, 3, 4]);
+    port.poke(FAKE_GRAIN, &[5, 6, 7, 8]);
+    port.arm(0);
+    let mut fb = DeviceFb::with_port(FB, port.clone() as Arc<dyn kayfabe_device::DeviceFbPort>);
+    let mut buf = [0xEEu8; 8];
+    assert!(
+        fb.read(at, &mut buf).is_err(),
+        "one of the two runs is unarmed, so the read cannot be served"
+    );
+    assert_eq!(buf, [0xEEu8; 8], "and NOTHING was copied");
+    assert_eq!(
+        port.wanted_now(),
+        2,
+        "⊘ BOTH runs are wanted, including the one already armed — and that is correct rather \
+         than sloppy: `want` runs UNDER THE PLANE LOCK, so asking `is this one already armed?` \
+         there would take the port's own map on a vCPU inside an MMIO exit to save an arm the \
+         drain already skips for free."
+    );
+    assert_eq!(
+        kayfabe_device::FbStore::demand_port(&fb).unwrap().drain().armed,
+        1,
+        "★ THE KNOWN-POSITIVE FOR THAT BEING FREE: the drain arms exactly the ONE run that \
+         was missing. A drain that re-armed the other would leak an aperture per miss."
+    );
+    fb.read(at, &mut buf).expect("both runs armed");
+    assert_eq!(buf, [1, 2, 3, 4, 5, 6, 7, 8]);
+}

@@ -62,7 +62,7 @@ before it takes the lock**, and there are four of them in three different shapes
 | cut | content | state |
 |---|---|---|
 | **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
-| **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ○ not started |
+| **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737**, offline only — see the w737 block below, including the correction to item 4's mechanism. ⊘ It has not booted, and item 6 was answered rather than built |
 | **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
 
 ### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
@@ -203,6 +203,125 @@ not a ratio.**
 completion never arrives in 600 s, while its sibling `--ce-client` — same round trip, **vidmem
 source** — passes with `HOST_DMESG_XID=0`. That is specific to the **guest-RAM source path**
 with no host fault to explain it, and it is a defect in its own right, not a §3 gate.
+
+### ★★★★★ 2026-09-15 (w737) — **CUT B IS BUILT, AND ITEM 4's MECHANISM WAS WRONG IN THE DIRECTION THAT HIDES.**
+
+⚠ **Read this before the six-item list below; it is what building that list found.**
+`[established from the source, w737, branch `w737-cutb`]` No constraint was relaxed. The
+default arm (`KAYFABE_FB_STORE` unset) is byte-identical and is asserted, not asserted about:
+the arena store hands out **no** byte port, `RegPlane::arm_fb_demand` returns on a cached flag
+**before taking any lock**, and `the_arena_arm_enumerates_with_no_faults_and_has_no_byte_port_at_all`
+pins both halves.
+
+| item | built | where |
+|---|---|---|
+| 1 — a byte port for the store | ✔ | `DeviceFbPort` (`fbwin.rs`), `DeviceFbBytePort` over `DeviceViewPort` (`deviceview.rs`, `host-isolates` only) |
+| 2 — `PlanePtBytes::read_in` arms-then-retries | ✔ | `plane.rs`, fixed trip count `FB_DEMAND_READ_RETRIES = 2` |
+| 3 — a demand set for `FbStoreReader`'s callers | ✔ | the **store** records the want; the retry is at `fill_now`'s and `premap_window`'s entry |
+| 4 — the premap refusal stops being terminal | ✔ **and see below** | `WindowEnumeration::faults`, `arm_then_retry` |
+| 5 — the vCPU path declines by name | ✔ | `arm_fb_demand` asks `on_vcpu_thread() \|\| in_trap()` **before any lock**, as `WalkShadowDecider` does |
+| 6 — carry `why` through `FbRead::read_in` | ⊘ **declined, with a reason** | see below |
+
+### ⊘⊘⊘ ITEM 4's MECHANISM — `window_leaves` DOES NOT REFUSE. IT RETURNS `Ok` WITH A SHORT LIST.
+
+Item 4 below says *"`window_leaves` refuses the whole subtree at the first unbacked page and
+the caller prints once and returns"*. ⊘ **Measured from the source: it does not refuse at
+all.** `decode_subtree` returns `Err` for **budget exhaustion and nothing else**; a page it
+could not read becomes a per-branch `WalkFault` in `SubtreeDecode::faults` and the walk
+continues. And `window_leaves` **dropped that vector on the floor**.
+
+⇒ the failing shape is `Ok` with a **SHORT** leaf list — and with an unreadable **root**, `Ok`
+with an **EMPTY** one. That is not a refusal anybody can count; it is *"the guest has mapped
+nothing"*, published as fact, with `premap[refused=]` sitting at **0**.
+
+★★★ **And it is the same class as the four this tree has already paid for**: an empty artefact
+reads as benign, `premap_refused` cannot distinguish *"nothing was mapped"* from *"we could not
+read the tables"*, and the file's own budget rule five paragraphs up refuses exactly this
+reasoning for the budget (*"a truncated enumeration would read as `the guest mapped fewer
+pages`"*) while the hole stayed open beside it for faults.
+
+⚠ **It could never fire under the arena store**, whose `read` answers every in-range address.
+The one arm that can produce it is the arm that did not exist — which is why a correct rule and
+a live hole sat three lines apart for months.
+
+⇒ `WindowEnumeration { leaves, visited, faults }`; premap retries while `faults > 0`, says
+**SHORT** once by name, and reports `premap[pt_faults=]`. ⊘ Returned as a **count**, not turned
+into an `Err`: a fault is a real per-branch fact on both arms, and making it terminal would
+change the control arm's behaviour for a condition that is not new.
+
+### ⊘ ITEM 6 — **`why` THROUGH `FbRead::read_in` WAS NOT BUILT, AND THE REASON IS CUT B ITSELF**
+
+The item asks whether the refusal's sentence should travel, *"because cut B is the increment
+that gives every consumer a reason to want one"*. ⇒ **Cut B gave them something better and the
+item is answered rather than deferred:** the demand set makes the reason travel **as DATA** —
+the address that missed — where `why` would have carried **prose**. A sentence cannot be armed.
+
+- Every cut-B caller branches on `DeviceFbDrained::progressed()`, never on a reason.
+- The enumeration path branches on `WindowEnumeration::faults`, a count, for the same reason.
+- The diagnosis defect item 6 was aimed at is closed by the store saying its own name **once**
+  and by three censuses that join the counts: `DEVICE-FB`, `FB-DEMAND`, `DEVICE-FB-PORT`.
+- The cost was never the point but it is not nothing: ~8 `FbRead` impls across five crates
+  would grow a field none of them reads.
+
+⚠ **What would reopen it:** a consumer that must choose between *"the store has no view"* and
+*"the guest's own tables are malformed"* **at the point of the read**, rather than at a
+lock-free caller. None exists today; the walker's `WalkFault` already separates those two for
+every caller that re-asks.
+
+### ⚠ WHAT CUT B IS **NOT**, RESTATED BECAUSE THE TEMPTATION IS AT ITS STRONGEST HERE
+
+⊘ **Cut B has not booted.** Everything above is offline: 28 tests, 18 of them new
+known-positives. The plan's own ruling stands — *"do not grade anything on a `device` boot
+until cut B lands"*, and cut B's predicted end is the **kernel CeUtils scrubber** (cut C /
+constraint 9), which is a **prediction and not a measurement**.
+
+⊘ **And the one-boot falsifier above is §3's, not cut B's.** `--gpga-reserve-probe`'s
+`< 0.43 MiB/s` is the trapped-MMIO cost of the path §3 replaces; it is graded **after the
+switch**, against the thresholds pre-registered above, and nothing in cut B moves it.
+
+★ **Two numbers cut B adds that a boot should be read for**, both new and both currently
+**unmeasured**: `FB-DEMAND read_retried_ok` (did a retry ever serve a read? `0` with
+`DEVICE-FB host_read_refused > 0` means the retry never RAN — a different defect from one that
+ran and did not help) and `DEVICE-FB-PORT arm_refused` (non-zero is the **host BAR1 aperture**,
+which arming cannot fix by trying again).
+
+### ⊘⊘⊘ AND THE WORKSPACE SUITE IS RED AT THE BASELINE — MEASURED, w737, BOTH ARMS
+
+⚠ **`cargo test --workspace` does not pass on `single-store` and has not for a while.**
+`[measured w737, `--no-fail-fast`, both with and without `kayfabe-qemu-raw/host-isolates`]`
+
+| | at `9e444fd4` (the baseline) | with cut B |
+|---|---|---|
+| failing test **targets** | **11** | **11** |
+| failing **tests** | **30** | **30** |
+| the set of failing test NAMES | — | ⊘ **byte-identical** (`comm`, both directions, empty) |
+
+All eleven are in `kayfabe-tests`: `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
+`guest_os_axis_gate`, `host_class_role_wiring`, `l1_mean`, `reachability`,
+`ring_out_of_our_own_framebuffer`, `rmrpc_bridge`, `sticky_answer`, `trace_replay`,
+`unranked_locks`. `kayfabe-device` itself is **green** (50 targets, 0 failures).
+
+★★★ **And the reason this is written down rather than mentioned: a red baseline makes the
+commit gate unable to answer the only question it is for.** *"The suite fails"* and *"my
+change broke something"* arrive as the same red, so the gate silently degrades into a
+tradition. ⇒ the only usable form is a **differential against the baseline commit**, which is
+what the table above is, and it costs a second full run every time.
+
+⊘ Two traps met on the way, both this tree's named classes:
+- **`cargo test | head -N` returns 101 on a green suite.** `head` closes the pipe, cargo takes
+  SIGPIPE. The first gate run reported `TEST_FEAT_RC=101` with **zero** failing tests in its
+  own output — *"a nonzero exit from the thing that started the work tells you nothing"*, one
+  layer in.
+- **`cargo test` is fail-FAST.** Without `--no-fail-fast` the first run reported **one**
+  failing target; there are eleven. A gate that stops at the first red cannot produce a
+  differential at all.
+
+★ **One obligation this did surface and it is discharged:**
+`unranked_locks::every_unranked_lock_a_vcpu_thread_can_hold_is_classified` is one of the
+eleven, with **14** unclassified rows at the baseline — **two of them cut A's own**, from
+w735. Cut B's three are now classified, and the unclassified set is diffed back to
+byte-identical with the baseline's. ⚠ A gate that is already red is exactly where a new row
+hides.
 
 ### ⇒ WHAT CUT B NEEDS, IN ORDER — so the next session does not re-derive it
 
@@ -421,7 +540,7 @@ is stale.
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
 | **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
-| **3** | BAR1/BAR2 as device views, the switch | ◐ **CUT A BUILT (w735), behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. Cuts B and C not started, and ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
+| **3** | BAR1/BAR2 as device views, the switch | ◐ **CUTS A (w735) AND B (w737) BUILT, behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. **Cut C not started; cut B has NOT BOOTED.** ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ⊘ **NOT LICENSED — measured w735, 28 PASS / 2 TIMEOUT / 0 FAIL.** The suite now reports all 30 verdicts, but two are REAL defects (`--gpga-reserve-probe`, `--ce-client-guest-ram`) and the device survives only 5 `RmInitAdapter` cycles per QEMU lifetime. A contained cascade is not a green suite |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 
