@@ -7676,12 +7676,23 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // the addresses the plain arm relocated, the cause is named and the production fix is
     // one flag. If it does not, the cause is something else and the flag is not it.
     // ════════════════════════════════════════════════════════════════════════════════════
+    // ⊘⊘⊘ **ITS OWN VA WINDOW, and the first cut did not have one.** Re-using the plain
+    // sweep's addresses measured `0x51 NV_ERR_NO_MEMORY` on all three — because the PLAIN
+    // arm had just mapped a BIG page at `0x80_0000_0000`, which COVERS `0x80_0000_1000`.
+    // The 4 KiB arm was colliding with the relocation it exists to diagnose, and the
+    // refusal read as "the flag does not help" when nothing had been tested. Same class as
+    // run 1's `0x19`: the probe measuring its own setup.
+    // ⇒ `Q3B_BASE` is 16 GiB clear of the plain sweep and of every other VA this rung names.
+    const Q3B_BASE: u64 = 0x0000_0090_0000_0000;
     let mut req4k_honoured = 0usize;
     let mut req4k_total = 0usize;
-    for (at, what, row) in sweep {
+    for (i, (_plain, what, row)) in sweep.into_iter().enumerate() {
         if row != Row::Required {
             continue;
         }
+        // Same SHAPE as the plain arm's addresses — a `…_1000` tail, 8 GiB apart — at
+        // addresses nothing has touched.
+        let at = Q3B_BASE + (i as u64) * 0x2_0000_0000 + 0x1000;
         req4k_total += 1;
         match rm.host_map_dma_fixed_4k(h_dma, mem_s, OBJ_LEN, at) {
             Ok(o) => {
@@ -7739,10 +7750,7 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             "⊘ DID NOT FIRE — every row above is unmeasured"
         }
     );
-    println!(
-        "B1D_Q3_KNOWN_POSITIVE={}  (a VA past the VAS limit was refused)",
-        if known_positive_fired { "FIRED" } else { "⊘ DID NOT FIRE — the sweep is not measuring placement" }
-    );
+
 
     // ════════════════════════════════════════════════════════════════════════════════════
     // Q4 — THE SHARING FALSIFIER, with its control.
