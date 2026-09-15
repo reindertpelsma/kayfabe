@@ -117,6 +117,7 @@ n_w743=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W743-PREFLIGHT passes=')
 # ran and had nothing to map".
 n_w745=$(strings "$Q_BIN" 2>/dev/null | grep -c 'STORE-MAP ')
 n_w745b=$(strings "$Q_BIN" 2>/dev/null | grep -c 'RING-NOT-A-SLICE')
+n_w745c=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-LEAF-SPLIT')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
 echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 echo "W740-CONTENT: userd_arm=$n_w740 (0 ⇒ the binary predates w740 — its rows cannot be graded)"
@@ -128,8 +129,8 @@ if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates C
 if [ "$n_w740" -eq 0 ]; then echo "⊘ the binary predates w740 — its rows cannot be graded. STOP."; exit 7; fi
 if [ "$n_w742" -eq 0 ]; then echo "⊘ the binary predates w742 — its rows cannot be graded. STOP."; exit 8; fi
 if [ "$n_w743" -eq 0 ]; then echo "⊘ the binary predates w743 — its rows cannot be graded. STOP."; exit 9; fi
-echo "W745-CONTENT: store_map=$n_w745 ring_not_a_slice=$n_w745b (either 0 ⇒ the binary predates w745)"
-if [ "$n_w745" -eq 0 ] || [ "$n_w745b" -eq 0 ]; then echo "⊘ the binary predates w745 — its rows cannot be graded. STOP."; exit 10; fi
+echo "W745-CONTENT: store_map=$n_w745 ring_not_a_slice=$n_w745b split_census=$n_w745c (any 0 ⇒ the binary predates w745)"
+if [ "$n_w745" -eq 0 ] || [ "$n_w745b" -eq 0 ] || [ "$n_w745c" -eq 0 ]; then echo "⊘ the binary predates w745 — its rows cannot be graded. STOP."; exit 10; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -309,6 +310,11 @@ report() {
   echo "W745-SM-FIRST=$(printf '%s' "$SM" | grep -ao 'first_refusal=\[[^]]*\]' | tail -1)"
   echo "--- w745: the realize-time arm line (absent ⇒ the gate never ran) ---"
   grep -a 'STORE-MAP AT REALIZE' "$Q" 2>/dev/null | head -2 | cut -c1-320
+  echo "--- ★★★★★ w745 ROWS 3/4: the PUBLISH-side census, VERBATIM, on both arms ---"
+  n_dls=$(grep -ac 'DEVICE-LEAF-SPLIT' "$Q" 2>/dev/null)
+  echo "W745-SPLITCENSUS-LINES=${n_dls:-0}  (0 ⇒ UNMEASURED, not 'the arm did nothing')"
+  grep -ao 'DEVICE-LEAF-SPLIT .\{0,400\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  echo "W745-DECLINED-ON-VCPU=$(grep -ao 'declined_on_vcpu=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ read BEFORE any refusal count"
   echo "--- ★★★★★ w745 ROW 3: THE HAND-OVER, and the per-proc isolate's own refusal if any ---"
   echo "W745-HANDOVERS=$(grep -ac 'CONSTRAINT-26 HAND-OVER' "$Q" 2>/dev/null)"
   grep -a 'CONSTRAINT-26 HAND-OVER' "$Q" 2>/dev/null | head -3 | cut -c1-300

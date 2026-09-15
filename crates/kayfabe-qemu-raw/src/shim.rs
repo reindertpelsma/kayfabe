@@ -13950,6 +13950,12 @@ static STORE_HANDOVERS: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomic
 /// got off the ground; a zero with both others zero says nothing ever asked.
 #[cfg(feature = "host-isolates")]
 static STORE_HANDOVER_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Leaves the split declined because the caller was on a vCPU or inside a guest trap.
+/// ⊘ Its own counter and **not** folded into `STORE_SLICE_REFUSED`: *"we did not ask"* and
+/// *"the driver said no"* are different facts with different fixes.
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_DECLINED_ON_VCPU: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// ★★★★★ **CONSTRAINT 26 — is the scratchpad the party that maps into guest VA spaces?**
 ///
@@ -13996,6 +14002,31 @@ fn map_store_slice_for_leaf(
     at: u64,
 ) -> Option<JoinedLeaf> {
     use std::sync::atomic::Ordering;
+    // ★★★★★ **DECLINE BEFORE ANYTHING CAN PANIC.** `SharedDevice::vaspace_handover` claims an
+    // `OffTrap` of its own, and `OffTrap::claim` **asserts** on a trap thread — so a caller
+    // that reached here from a vCPU would abort the VMM, which is a guest-visible crash
+    // produced by the rule that exists to prevent a guest-visible stall.
+    //
+    // ⊘ `StoreMapPort` guards its own three verbs, and that is not enough: the hand-over is
+    // reached FIRST and is not one of them. A guard on the callee only would have been the
+    // shape where the check exists, looks complete, and the one path around it is the one
+    // taken. ⚠ The leaf is re-offered by the next publish, which is the route's own
+    // iteration and not ours.
+    if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+        let n = STORE_SLICE_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⊘ CONSTRAINT 26 DECLINED: this thread is a \
+                 vCPU or inside a guest trap, and every verb the split needs is an IPC round \
+                 trip. Nothing was asked and nothing refused; the next publish re-offers this \
+                 leaf. (printed {} of {DEVICE_LEAF_LINES_MAX}; the total is `STORE-MAP \
+                 declined_on_vcpu=`, plus this counter)",
+                leaf.va,
+                n + 1,
+            );
+        }
+        return None;
+    }
     let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
         let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
         if n < DEVICE_LEAF_LINES_MAX {
@@ -18679,6 +18710,31 @@ impl Regs {
                  census line above says which step refused.",
                 crate::scratchpad::VAS_OWNER_ENV
             ),
+        }
+        // ★★★★★ **CONSTRAINT 26's PUBLISH-SIDE CENSUS.** ⊘ The four counters above are bumped
+        // inside `map_store_slice_for_leaf` and would otherwise be counted and never
+        // reported, which is this tree's own *a check that reports is not a check that
+        // gates* with the reporting half missing too. Printed unconditionally on BOTH arms:
+        // four zeros on the `isolate` arm is the correct answer and is what says the chain
+        // was ABSENT rather than present and silent.
+        #[cfg(feature = "host-isolates")]
+        {
+            use std::sync::atomic::Ordering;
+            let mapped = STORE_SLICE_MAPPED.load(Ordering::Relaxed);
+            let handovers = STORE_HANDOVERS.load(Ordering::Relaxed);
+            let refused = STORE_SLICE_REFUSED.load(Ordering::Relaxed);
+            let declined = STORE_SLICE_DECLINED_ON_VCPU.load(Ordering::Relaxed);
+            let verdict = if handovers == 0 && mapped == 0 && refused == 0 && declined == 0 {
+                "⊘ THE SPLIT'S PUBLISH ARM NEVER RAN — correct on KAYFABE_VAS_OWNER=isolate,                  and on `scratchpad` it means the publish route never offered a DeviceBacked                  leaf at all"
+            } else if mapped == 0 {
+                "⊘⊘ ASKED AND MAPPED NOTHING — read `declined_on_vcpu` FIRST: it is the one                  arm where nothing was asked, so it cannot be read as a refusal"
+            } else {
+                "★★★ the scratchpad placed slices of the ONE object at guest VAs"
+            };
+            eprintln!(
+                "kayfabe: DEVICE-LEAF-SPLIT handovers={handovers} handover_refused={}                  slices_bound={mapped} refused={refused} declined_on_vcpu={declined} ⇒                  {verdict}",
+                STORE_HANDOVER_REFUSED.load(Ordering::Relaxed),
+            );
         }
         // ★★★★★ **§3's SINGLE STORE — what it was asked and what it refused.**
         //
