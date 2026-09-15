@@ -92,7 +92,29 @@ ignoring the body."*
 ⚠ Nobody bought that pass; the arithmetic did. `SUITE_UNMEASURED` is now in the gate, which is
 why renaming `SKIP/cascade` was not cosmetic.
 
-## 6. What the containment does, and what it does not
+## 6. ★★★ WITH THE CASCADE CONTAINED, THE SUITE REPORTS 30 VERDICTS — `w735b_rows.txt`
+
+`[measured 2026-09-15, rev a21fbe41, `w735_suite_batched_run.sh w735b 3` — 10 boots, 3 arms each]`
+
+    W735B_ARMS=30 W735B_PASS=26 W735B_FAIL=4 W735B_TIMEOUT=0 W735B_UNMEASURED=0
+    W735B_ACCOUNTED=30   W735B_BOOTS=10
+
+★ **26 of 30 arms pass inside the guest** — including `--ce-client` (*"ALL ARMS MET"*), the
+CPU-writes-vidmem → CE-DMA → CPU-reads-back round trip that had never been run in a guest,
+`--uvm-mean`, `--concurrent-fuzz`, `--cross-client-leak`, `--missing-page-fault` and
+`--bar1-crossing`.
+
+⊘ **`--gpu-info-sweep` PASSES.** The arm this campaign recorded as a device-wedging timeout does
+nothing of the kind; it passes in ~seconds when it can open the device.
+
+⊘⊘ **And the four non-passing rows above are NOT FAILures** — that ledger was wrong and is fixed
+(w735m). `137` is `timeout -k`'s escalation-to-SIGKILL exit, i.e. a **TIMEOUT**; and two of the
+four (`--atomics-probe`, `--pce-mask-probe`) followed a *killed* `--gpga-reserve-probe`, hung
+**inside the device open**, printed nothing but their own `RMLADDER ARGV` line, and never reached
+their subject at all. ⇒ the wall's first signature is a **hang**, not a refusal, and the
+containment now classifies on the ladder's own `R2 version` marker rather than on an exit code.
+
+## 7. What the containment does, and what it does not
 
 `rmladder_suite.sh` now recovers-and-retries and reports **30 rows either way**, with
 `UNMEASURED` (never reached its subject) kept distinct from `FAIL` (ran and judged itself
