@@ -65,6 +65,15 @@ pub struct ChildArgs {
     /// view of its configuration is complete and it can SAY which ordering it ran. An isolate
     /// that has to guess what it is cannot report it.
     pub cuda_walk: bool,
+    /// ★★★★★ **CONSTRAINT 26** — whether this isolate allocates **bare** address spaces: a
+    /// `FERMI_VASPACE_A` with no `NV01_MEMORY_VIRTUAL` range over it, so it can bind
+    /// channels to the space and map nothing into it.
+    ///
+    /// ⊘ Carried explicitly rather than inferred from `proc != u32::MAX`, for
+    /// [`ChildArgs::cuda_walk`]'s reason and one more: the scratchpad's exemption is the
+    /// composition root's decision, and an isolate that re-derived it would be a second
+    /// place that decision lives.
+    pub bare_vaspaces: bool,
     /// The GPU this isolate is the sandbox for.
     pub gpu: u32,
     /// Pool width — one worker thread and one socket each.
@@ -94,6 +103,7 @@ impl ChildArgs {
     pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Self, String> {
         let mut proc = None;
         let mut cuda_walk = false;
+        let mut bare_vaspaces = false;
         let mut gpu = None;
         let mut workers = None;
         let mut rm = None;
@@ -113,6 +123,18 @@ impl ChildArgs {
                         "on" => true,
                         "off" => false,
                         other => return Err(format!("--cuda-walk {other}")),
+                    };
+                }
+                // ★★★★★ **CONSTRAINT 26** — does this isolate allocate BARE `FERMI_VASPACE_A`s,
+                // i.e. spaces with no `NV01_MEMORY_VIRTUAL` range it could map through?
+                // ⊘ Refused rather than defaulted if it names neither state, exactly as
+                // `--cuda-walk` is: a typo here silently produces the PRE-§26 ownership, in
+                // which the isolate holds an `hMemory` for guest video memory.
+                "--bare-vaspaces" => {
+                    bare_vaspaces = match value.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        other => return Err(format!("--bare-vaspaces {other}")),
                     };
                 }
                 "--gpu" => gpu = Some(value.parse().map_err(|_| format!("--gpu {value}"))?),
@@ -136,6 +158,7 @@ impl ChildArgs {
         Ok(ChildArgs {
             proc: proc.ok_or("--proc is required")?,
             cuda_walk,
+            bare_vaspaces,
             gpu: gpu.ok_or("--gpu is required")?,
             workers,
             rm: rm.ok_or("--rm is required")?,
@@ -377,7 +400,9 @@ fn build_backends(
                     Box::new(
                         HostRmBackend::new(id, Arc::clone(&conn), Arc::clone(exports))
                             .with_guest_ram(guest_ram.map(Arc::clone))
-                            .with_fb_joins(Arc::clone(fb_joins)),
+                            .with_fb_joins(Arc::clone(fb_joins))
+                            // ★★★★★ **CONSTRAINT 26** — see `ChildArgs::bare_vaspaces`.
+                            .with_bare_vaspaces(args.bare_vaspaces),
                     ) as Box<dyn RmBackend>
                 })
                 .collect())
@@ -883,6 +908,39 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             params,
         } => handle(rm.alloc(raw(parent), ClassId(class), &params)),
         Request::AllocVaSpace => handle(rm.alloc_vaspace()),
+        // ★★★★★ **CONSTRAINT 26 — the bare space, and the three verbs that go with it.**
+        //
+        // ⊘ `AdoptVaSpace` is the only frame in this protocol that carries a client handle
+        // this process did not mint, and it is **not** gated here: the gate is a type in
+        // `crate::rm` (`handed_vaspace`), which answers `ADOPT_NOT_THE_SCRATCHPAD` before
+        // any ioctl is built. Gating it here as well would be a second place the rule lives,
+        // and the two would come apart the first time one of them was edited.
+        Request::AllocVaSpaceBare => match rm.alloc_vaspace_bare() {
+            Ok(b) => Reply::BareVaSpace {
+                space: b.space.raw(),
+                client: b.client,
+            },
+            Err(e) => failed(e),
+        },
+        Request::AdoptVaSpace { client, space } => handle(rm.adopt_vaspace(client, space)),
+        Request::MapStoreSlice {
+            vas,
+            memory,
+            offset,
+            len,
+            at,
+        } => match rm.map_store_slice(raw(vas), raw(memory), offset, len, GpuVa(at)) {
+            Ok(va) => Reply::Va(va),
+            Err(e) => failed(e),
+        },
+        Request::UnmapStoreSlice { vas, at } => unit(rm.unmap_store_slice(raw(vas), GpuVa(at))),
+        Request::VaSpaceHandover { space } => match rm.vaspace_handover(raw(space)) {
+            Ok(b) => Reply::BareVaSpace {
+                space: b.space.raw(),
+                client: b.client,
+            },
+            Err(e) => failed(e),
+        },
         Request::SubdeviceControl { cmd, mut payload } => {
             match rm.subdevice_control(ControlCmd(cmd), &mut payload) {
                 Ok(()) => Reply::Payload(payload),
@@ -988,9 +1046,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
                 // lowers it runs. ⊘ The handle is re-validated by the adapter as one
                 // `join_fb_leaf` minted; nothing here trusts the four integers.
-                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
+                adopt.map(|(kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
                     kayfabe_isolate::AdoptedGuestRing {
-                        memory: raw(memory),
+                        ring: ring_provenance(kind, a, b),
                         ring_va,
                         gp_fifo_va,
                         gp_fifo_entries,
@@ -1023,7 +1081,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             vas,
             engine,
             declared_engine_type,
-            adopt: (memory, ring_va, gp_fifo_va, gp_fifo_entries, userd),
+            adopt: (kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd),
             err_notifier,
         } => match engine_from_code(engine) {
             None => Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
@@ -1032,7 +1090,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 engine,
                 declared_engine_type,
                 kayfabe_isolate::AdoptedGuestRing {
-                    memory: raw(memory),
+                    ring: ring_provenance(kind, a, b),
                     ring_va,
                     gp_fifo_va,
                     gp_fifo_entries,
@@ -1223,6 +1281,21 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
 /// has no business asserting a namespace**: the parent stamps every handle it receives with
 /// the connection it asked on, so a provenance claim from this side would be a claim the
 /// parent overrides anyway — and one that a compromised child could make.
+/// ★★★★★ **CONSTRAINT 26 — rebuild the ring's provenance from its wire tag.**
+///
+/// ⊘ The tag was already validated by `Request::decode` (`ring_provenance_tag` refuses an
+/// unknown one), so this match is total by construction and the `_` arm cannot be reached by
+/// a frame. It answers `StoreSlice` there rather than `OwnObject` because the two arms are
+/// asymmetric: `StoreSlice` names no handle and the adapter refuses it unless it was expected,
+/// while `OwnObject` would fabricate a `HostHandle` out of whatever `a` happened to be.
+fn ring_provenance(kind: u8, a: u64, b: u64) -> kayfabe_isolate::RingProvenance {
+    if kind == crate::proto::RING_PROVENANCE_OWN_OBJECT {
+        kayfabe_isolate::RingProvenance::OwnObject(raw(a))
+    } else {
+        kayfabe_isolate::RingProvenance::StoreSlice { offset: a, len: b }
+    }
+}
+
 fn raw(value: u64) -> HostHandle {
     if value == 0 {
         HostHandle::NULL
@@ -1343,6 +1416,7 @@ mod tests {
         assert_eq!(
             args,
             ChildArgs {
+                bare_vaspaces: false,
                 proc: 3,
                 gpu: 1,
                 workers: 4,

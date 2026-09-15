@@ -2082,11 +2082,21 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
 /// drain *did* would have read as healthy on an arm where it never ran at all. See
 /// `no_worker_still_drains.rs`.
 static MIRROR_DRAINS: AtomicU64 = AtomicU64::new(0);
+/// ★ **CONSTRAINT 27** — how many times [`RegPlane::revalidate_mirror_first`] ran. ⊘ A
+/// zero beside a non-zero `MIRROR_DRAINS` says the unmap-first pass is not wired, which is
+/// the failure that would be invisible: the fills still happen and the boot looks normal.
+static MIRROR_UNMAP_FIRST_DRAINS: AtomicU64 = AtomicU64::new(0);
 
 /// See [`MIRROR_DRAINS`].
 #[must_use]
 pub fn mirror_drains() -> u64 {
     MIRROR_DRAINS.load(Ordering::Relaxed)
+}
+
+/// See [`MIRROR_UNMAP_FIRST_DRAINS`] — **constraint 27's own non-vacuity number.**
+#[must_use]
+pub fn mirror_unmap_first_drains() -> u64 {
+    MIRROR_UNMAP_FIRST_DRAINS.load(Ordering::Relaxed)
 }
 
 /// Times [`PlanePtBytes::breathe`] actually yielded to an in-flight MMIO trap. ★ This is the
@@ -3123,6 +3133,27 @@ impl RegPlane {
             // revalidation decides which installed slots are still true, so running them the
             // other way round would revalidate a table the very next call adds to.
             m.drain_fills();
+            m.revalidate_pending();
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 27 — THE UNMAP HALF OF THE MIRROR FLUSH, AND NOTHING ELSE.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27 requires *"unmaps ordered before maps within one
+    /// refresh"*. [`RegPlane::drain_mirror_revalidation`] cannot serve that: it runs the
+    /// fills **first**, deliberately and for a stated reason, so calling it early would
+    /// install slots before the stale ones are gone — maps before unmaps, which is the
+    /// order the constraint forbids.
+    ///
+    /// ⇒ The refresh calls **this** before it publishes anything, and the full drain after.
+    /// ⊘ Not a replacement for it: the fills still have to run, and the second
+    /// revalidation is then cheap because this one already retired everything stale.
+    ///
+    /// ⚠ Worker only, exactly as its sibling — the walk is O(live slots) page walks plus a
+    /// memslot ioctl per drop.
+    pub fn revalidate_mirror_first(&self) {
+        MIRROR_UNMAP_FIRST_DRAINS.fetch_add(1, Ordering::Relaxed);
+        if let Some(m) = self.fb_mirror() {
             m.revalidate_pending();
         }
     }

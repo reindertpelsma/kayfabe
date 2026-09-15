@@ -5338,6 +5338,20 @@ static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomi
 /// completion their guest is waiting on.** `CE-LOCAL-REFRESH #n` per firing.
 static CE_LOCAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// ★★★★★ **CONSTRAINT 27's FIXED TRIP COUNT.** How many extra `drain_pending_releases`
+/// passes one refresh may spend trying to retire its staged disposals.
+///
+/// ⊘ A constant and not a deadline: the queue's length is a function of guest activity, so
+/// `while staged > 0` is a loop that terminates on guest data — the shape
+/// `THE_CONSTRAINTS.md` §20 invariant 1 forbids, and the reason every drain in this file is
+/// bounded. What is left after these trips is **reported**, and the guest's completion is
+/// withheld on it rather than the loop being extended.
+///
+/// ⚠ Four, because `drain_pending_releases` iterates every proc and every target on each
+/// call, and the thing it is racing is a pool slot coming free — which it either does in
+/// microseconds or is not going to within one refresh.
+const PT_DRAIN_TRIPS_MAX: usize = 4;
+
 /// What one page-table refresh did — the three settlement passes' own lines, and how long
 /// they took together. See [`SharedDoorbell::refresh_page_tables`].
 struct PtRefresh {
@@ -5346,6 +5360,20 @@ struct PtRefresh {
     line: String,
     /// Wall time of the three passes, on the worker.
     took: std::time::Duration,
+    /// ★★★★★ **CONSTRAINT 27 — how much disposal is STILL OWED when the passes returned.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27: a refresh may not report the TLB invalidate complete until
+    /// its unmaps have landed and been acknowledged. This is the acknowledgement, read off
+    /// [`kayfabe_rt::device::SharedDevice::staged_release_len`] — the queue itself — and
+    /// **not** off `drain_pending_releases`' return value, which is `0` both for *"nothing
+    /// was owed"* and for *"the pool was full so nothing could be issued"*.
+    ///
+    /// ⚠ Non-zero is the barrier's business, not a diagnostic: the completion is withheld
+    /// and the caller owes a retry.
+    unmaps_outstanding: usize,
+    /// How many bounded re-drains the refresh spent trying to get [`Self::unmaps_outstanding`]
+    /// to zero. ⊘ A fixed trip count, never a loop that ends when the guest's tables say so.
+    drain_trips: usize,
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -5707,6 +5735,27 @@ fn doorbell_publish_loop(
                 );
             }
             let refresh = port.refresh_page_tables(off_vcpu);
+            // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
+            //
+            // > Owner, 2026-09-15: *"Before a refresh finishes, this kernel channel has
+            // > unmapped slices the guest userspace no longer has access to. So the guest
+            // > kernel knows: okay, invalidate done, I can reuse this phys for another
+            // > userspace process safely after a scrub."*
+            //
+            // ⊘⊘ **This call is here because `drain_mirror_revalidation` CANNOT be.** That
+            // one runs `drain_fills()` **first** — deliberately, with a stated reason — so
+            // moving it up would install new memslots before the stale ones are retired,
+            // which is maps-before-unmaps, the order §27 forbids. `revalidate_mirror_first`
+            // is the unmap half alone; the full drain still runs below for the fills.
+            //
+            // ⚠ The GPU-side half is already in the right order and is NOT re-done here:
+            // `apply_settlement_as` unbinds before it populates, and the host unmaps those
+            // revocations stage are drained synchronously *inside* `refresh_page_tables`,
+            // which is above this line — while the host MAPS happen in `publish_vas_rows`,
+            // which is below it. The memslot plane was the one that ran the other way.
+            if let Some(plane) = plane_ref.as_ref() {
+                plane.revalidate_mirror_first();
+            }
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
             let mut ctx = port.publish_ctx();
@@ -5732,8 +5781,11 @@ fn doorbell_publish_loop(
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
             // compare what the invalidate found against what the next doorbell finds.
             eprintln!(
-                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2}{}",
+                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2} \
+                 unmaps_outstanding={} drain_trips={}{}",
                 refresh.took.as_secs_f64() * 1e3,
+                refresh.unmaps_outstanding,
+                refresh.drain_trips,
                 refresh.line
             );
             if let Some(line) = published {
@@ -5785,18 +5837,57 @@ fn doorbell_publish_loop(
             // read arm would answer at this instant. Publishing only on success would leave
             // the shadow holding whatever it had before, which is the one thing that is not
             // an answer.
-            if let Some(plane) = plane_ref.as_ref()
-                && !plane
-                    .mmu_inval()
-                    .complete_through(seq, plane.clock_now_us())
-            {
-                eprintln!(
-                    "kayfabe: MMUINVAL-COMPLETE ⊘ WITHHELD seq={seq} issued={} — a newer \
-                     trigger arrived during this refresh; the guest keeps spinning until \
-                     that trigger's own job has refreshed and published (it is queued \
-                     behind this one)",
-                    plane.mmu_inval().issued()
+            // ★★★★★ **CONSTRAINT 27 — THE COMPLETION IS GATED ON THE UNMAPS, NOT ON THE
+            // PUBLICATION ALONE.**
+            //
+            // ⊘ `complete_through_unmaps`, not `complete_through`. The three verdicts are
+            // three different obligations and the previous `bool` made two of them one word:
+            // a newer trigger means *"somebody else completes this"*, an outstanding unmap
+            // means *"nobody will, come back"*, and reading the second as the first is a
+            // guest hang. See `CompletionVerdict`.
+            //
+            // ⚠ **THE RETRY IS OWED BY THIS ARM**, so it is issued here: the dropped-signal
+            // full-rescan latch is armed, which makes the next publication job — whatever
+            // triggers it — redo this refresh from a clean slate. ⊘ It does NOT synthesize a
+            // new trigger: a trigger is the guest's word, not ours, and the guest is already
+            // spinning on this one, so it will poll again and the queue's next wake serves
+            // it. What must never happen is the completion going out over a mapping that is
+            // still live, which is what this branch exists to prevent.
+            if let Some(plane) = plane_ref.as_ref() {
+                let verdict = plane.mmu_inval().complete_through_unmaps(
+                    seq,
+                    plane.clock_now_us(),
+                    refresh.unmaps_outstanding,
                 );
+                match verdict {
+                    kayfabe_device::mmuinval::CompletionVerdict::Completed => {}
+                    kayfabe_device::mmuinval::CompletionVerdict::WithheldNewerTrigger {
+                        issued,
+                    } => {
+                        eprintln!(
+                            "kayfabe: MMUINVAL-COMPLETE ⊘ WITHHELD seq={seq} issued={issued} \
+                             — a newer trigger arrived during this refresh; the guest keeps \
+                             spinning until that trigger's own job has refreshed and \
+                             published (it is queued behind this one)"
+                        );
+                    }
+                    kayfabe_device::mmuinval::CompletionVerdict::WithheldUnmapsOutstanding {
+                        n: owed,
+                    } => {
+                        DROPPED.arm_full_rescan();
+                        eprintln!(
+                            "kayfabe: MMUINVAL-COMPLETE ⊘⊘⊘ WITHHELD-UNMAPS seq={seq} \
+                             outstanding={owed} drain_trips={} — CONSTRAINT 27: {owed} \
+                             staged disposal(s) did not land, so the guest is NOT told the \
+                             invalidate is done. Completing here would let the guest kernel \
+                             reuse a physical page a guest USERSPACE process can still reach \
+                             through a slice we have not taken down — a cross-process leak \
+                             inside the guest, caused by us, invisible to it. ⚠ A full \
+                             rescan is armed so the next publication redoes this refresh.",
+                            refresh.drain_trips
+                        );
+                    }
+                }
             }
             if let Some(plane) = plane_ref.as_ref() {
                 plane.publish_invalidate_trigger();
@@ -7698,9 +7789,29 @@ impl SharedDoorbell {
         let w = self.witness_executor_fb_pages();
         let d = self.decode_cpu_pt_writes();
         let sw = self.sweep_cpu_pt_tables();
+        // ★★★★★ **CONSTRAINT 27 — GET THE STAGED UNMAPS OUT, WITH A FIXED TRIP COUNT.**
+        //
+        // The three passes above each end in a synchronous `drain_pending_releases`, which
+        // **skips** rather than waits when the pool is full or an isolate still has a verb
+        // in flight (its own docs say so). So a queue can survive them with nothing having
+        // gone wrong. Re-drain here, bounded — `PT_DRAIN_TRIPS_MAX` and not `while
+        // staged > 0`, because the queue's length is a function of guest activity and a
+        // loop that ends when the guest says so is the shape this tree forbids.
+        //
+        // ⊘ Whatever is left is REPORTED, not swallowed: the caller withholds the guest's
+        // completion on it.
+        let mut drain_trips = 0usize;
+        let mut outstanding = self.device.staged_release_len();
+        while outstanding != 0 && drain_trips < PT_DRAIN_TRIPS_MAX {
+            let _ = self.device.drain_pending_releases();
+            drain_trips += 1;
+            outstanding = self.device.staged_release_len();
+        }
         PtRefresh {
             line: format!("{w}{d}{sw}"),
             took: t0.elapsed(),
+            unmaps_outstanding: outstanding,
+            drain_trips,
         }
     }
 
@@ -13824,6 +13935,236 @@ static DEVICE_LEAF_SLICE_ARMED: std::sync::atomic::AtomicU64 =
 /// device arm fires thousands of times a boot and an uncapped line would be the log.
 const DEVICE_LEAF_LINES_MAX: u64 = 6;
 
+/// ★★★ **CONSTRAINT 26 — store-slice mappings the scratchpad placed for a leaf.**
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_MAPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Leaves the split could not place. ⊘ Counted separately from `DEVICE_LEAF_PLAN_REFUSED`
+/// because they are opposite findings: that one is the store saying *"not my range"*, this one
+/// is the store saying *"my range and I could not map it"*.
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Hand-overs performed — one per `Vas` that ever needed a store mapping.
+#[cfg(feature = "host-isolates")]
+static STORE_HANDOVERS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Hand-overs refused. ⊘ A non-zero here with `STORE_SLICE_MAPPED=0` says the split never
+/// got off the ground; a zero with both others zero says nothing ever asked.
+#[cfg(feature = "host-isolates")]
+static STORE_HANDOVER_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Leaves the split declined because the caller was on a vCPU or inside a guest trap.
+/// ⊘ Its own counter and **not** folded into `STORE_SLICE_REFUSED`: *"we did not ask"* and
+/// *"the driver said no"* are different facts with different fixes.
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_DECLINED_ON_VCPU: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ **CONSTRAINT 26 — is the scratchpad the party that maps into guest VA spaces?**
+///
+/// ⊘ Read per call rather than latched, and it is cheap (`getenv` + a match). Latching it in
+/// a `static` would be a second statement of a default whose only statement is
+/// `scratchpad::vas_owner_from`, which is this tree's most expensive recurring class.
+/// ⊘ `unwrap_or` the SAFE arm: the realize-time gate has already reported a malformed value,
+/// and defaulting one to `scratchpad` here would arm the split on a boot nobody asked it on.
+#[cfg(feature = "host-isolates")]
+fn store_owns_vas() -> bool {
+    crate::scratchpad::selected_vas_owner()
+        .map(crate::scratchpad::VasOwner::bare_vaspaces)
+        .unwrap_or(false)
+}
+
+/// ★★★★★ **CONSTRAINT 26 — HAND THE `Vas` OVER IF NEEDED, MAP THE SLICE, BIND IT.**
+///
+/// Returns the [`JoinedLeaf`] the caller reports, or `None` with a named line in the log.
+///
+/// ## The three steps, and why they are in this order
+///
+/// 1. **Hand-over** (once per `Vas`). The per-proc isolate is asked what it would hand over
+///    for its own `host_vas`; it refuses a space that is not bare, which is the ownership
+///    check. The scratchpad then dups it and builds its own range.
+/// 2. **Map.** `[at, at+len)` of the one reserved object at the guest's own VA. Constraint 28
+///    asserts the placement inside the isolate, so a relocated mapping arrives here as a
+///    refusal rather than as an `Ok` naming the wrong address.
+/// 3. **Bind** — and only now. ⊘ Binding before the map would declare a row over a mapping
+///    that does not exist, which is the `w260` ordering rule this file already follows for
+///    the join chain: *nothing is bound until the host work returns `Ok`*.
+///
+/// ⚠ **Nothing is unwound on a bind failure**, and that is deliberate rather than an
+/// omission: the mapping belongs to the scratchpad and is keyed by `(vas, va)` in its own
+/// ledger, so the next publish re-offers the same leaf and `map` answers `0x51` for the VA it
+/// already holds — the idempotent replay, not a leak. ⊘ The alternative, unmapping here,
+/// would take a live mapping away from a channel that may already be born over it.
+#[cfg(feature = "host-isolates")]
+fn map_store_slice_for_leaf(
+    head: &str,
+    what: &str,
+    device: &kayfabe_rt::device::SharedDevice,
+    pdb: kayfabe_rt::Pdb,
+    leaf: kayfabe_rt::completion_watch::FbLeaf,
+    at: u64,
+) -> Option<JoinedLeaf> {
+    use std::sync::atomic::Ordering;
+    // ★★★★★ **DECLINE BEFORE ANYTHING CAN PANIC.** `SharedDevice::vaspace_handover` claims an
+    // `OffTrap` of its own, and `OffTrap::claim` **asserts** on a trap thread — so a caller
+    // that reached here from a vCPU would abort the VMM, which is a guest-visible crash
+    // produced by the rule that exists to prevent a guest-visible stall.
+    //
+    // ⊘ `StoreMapPort` guards its own three verbs, and that is not enough: the hand-over is
+    // reached FIRST and is not one of them. A guard on the callee only would have been the
+    // shape where the check exists, looks complete, and the one path around it is the one
+    // taken. ⚠ The leaf is re-offered by the next publish, which is the route's own
+    // iteration and not ours.
+    if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+        let n = STORE_SLICE_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⊘ CONSTRAINT 26 DECLINED: this thread is a \
+                 vCPU or inside a guest trap, and every verb the split needs is an IPC round \
+                 trip. Nothing was asked and nothing refused; the next publish re-offers this \
+                 leaf. (printed {} of {DEVICE_LEAF_LINES_MAX}; the total is `STORE-MAP \
+                 declined_on_vcpu=`, plus this counter)",
+                leaf.va,
+                n + 1,
+            );
+        }
+        return None;
+    }
+    let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
+        let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⊘⊘ CONSTRAINT 26: {}=scratchpad is armed and \
+                 there is NO STORE-MAP PORT. The scratchpad isolate is not held or nothing is \
+                 reserved; the SCRATCHPAD and STORE-MAP lines say which. Nothing was mapped \
+                 and nothing is bound.",
+                leaf.va,
+                crate::scratchpad::VAS_OWNER_ENV,
+            );
+        }
+        return None;
+    };
+    // ---- 1. THE HAND-OVER, once per `Vas`.
+    let store_vas = match device.store_vas(DOORBELL_TARGET_GPU, pdb) {
+        Some(h) => h,
+        None => {
+            let bare = match device.vaspace_handover(DOORBELL_TARGET_GPU, pdb) {
+                Ok(b) => b,
+                Err(e) => {
+                    STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    if n < DEVICE_LEAF_LINES_MAX {
+                        eprintln!(
+                            "{head} {what} leaf va=0x{:x} pdb={pdb:?} → ⊘⊘ CONSTRAINT 26: the \
+                             per-proc isolate would not hand its address space over: {e:?}. \
+                             ⚠ `HANDOVER_OF_A_NON_BARE_SPACE` here means this isolate was \
+                             spawned WITHOUT `--bare-vaspaces on`, i.e. the arm reached the \
+                             VMM and not the factory.",
+                            leaf.va
+                        );
+                    }
+                    return None;
+                }
+            };
+            match sp.adopt(bare) {
+                Ok(range) => {
+                    STORE_HANDOVERS.fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "{head} CONSTRAINT-26 HAND-OVER pdb={pdb:?} space={:?} client={:#010x} \
+                         → the scratchpad duped it and built its own range {:?}. ★ One space, \
+                         two clients: `[measured w744]` a map by the per-proc client at a VA \
+                         this range already holds is refused 0x51.",
+                        bare.space, bare.client, range
+                    );
+                    if !device.set_store_vas(DOORBELL_TARGET_GPU, pdb, range) {
+                        eprintln!(
+                            "{head} CONSTRAINT-26 ⚠ the hand-over succeeded and the `Vas` \
+                             could not be routed to record it — the range is live and this \
+                             boot will re-dup on the next leaf, which RM answers from its own \
+                             table rather than by minting a second space."
+                        );
+                    }
+                    range
+                }
+                Err(e) => {
+                    STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    if n < DEVICE_LEAF_LINES_MAX {
+                        eprintln!(
+                            "{head} {what} leaf va=0x{:x} pdb={pdb:?} → ⊘⊘ CONSTRAINT 26: the \
+                             scratchpad REFUSED the hand-over: {e:?}",
+                            leaf.va
+                        );
+                    }
+                    return None;
+                }
+            }
+        }
+    };
+    // ---- 2. THE MAP.
+    let host_va = match sp.map(store_vas, at, leaf.len, kayfabe_rt::GpuVa(leaf.va)) {
+        Ok(va) => va,
+        Err(e) => {
+            let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+            if n < DEVICE_LEAF_LINES_MAX {
+                eprintln!(
+                    "{head} {what} leaf va=0x{:x} len=0x{:x} store_off=0x{at:x} → ⊘⊘ \
+                     CONSTRAINT 26: the scratchpad could not map this slice: {e:?}. ⊘ Nothing \
+                     is bound, so `ADOPT-WHY (6)` will refuse a channel born over it — which \
+                     is correct and is not a second bug.",
+                    leaf.va, leaf.len
+                );
+            }
+            return None;
+        }
+    };
+    // ---- 3. THE BIND, and only now.
+    if let Err(e) = device.adopt_store_slice_fb_leaf(
+        DOORBELL_TARGET_GPU,
+        pdb,
+        kayfabe_fwd::FbLeafRange {
+            va: kayfabe_rt::GpuVa(leaf.va),
+            len: leaf.len,
+            phys: leaf.phys,
+        },
+        host_va,
+        sp.object(),
+        at,
+    ) {
+        let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} host_va=0x{host_va:x} → ⊘⊘ CONSTRAINT 26: the \
+                 slice IS mapped and the BINDING was refused: {e:?}. ⚠ The mapping is kept — \
+                 it is the scratchpad's, keyed by (vas, va), and taking it down here would \
+                 pull it from under a channel that may already be born over it.",
+                leaf.va
+            );
+        }
+        return None;
+    }
+    let n = STORE_SLICE_MAPPED.fetch_add(1, Ordering::Relaxed);
+    if n < DEVICE_LEAF_LINES_MAX {
+        eprintln!(
+            "{head} {what} leaf va=0x{:x} len=0x{:x} store_off=0x{at:x} host_va=0x{host_va:x} \
+             placed_as_asked={} → ★★★★★ CONSTRAINT 26: the SCRATCHPAD mapped a slice of the \
+             ONE reserved object at the guest's own VA and this row is BOUND to it. ⊘ No \
+             object was minted, nothing was copied, and the per-proc isolate names neither \
+             the object nor the mapping. (printed {} of {DEVICE_LEAF_LINES_MAX}; totals are \
+             `STORE-MAP`)",
+            leaf.va,
+            leaf.len,
+            host_va == leaf.va,
+            n + 1,
+        );
+    }
+    Some(JoinedLeaf {
+        host_va,
+        memory: sp.object().raw(),
+        // ★ `Some(len)`: the guest's framebuffer window for this range IS this object at this
+        // offset. ⊘ `None` would say the view is not live, which would make a reader conclude
+        // the leaf is two memories — and under the single store there is no second one.
+        installed: Some(leaf.len),
+    })
+}
+
 /// ★★★ The w742 publish-route census, printed at teardown on both arms.
 ///
 /// ⊘ Printed unconditionally and stating its own verdict, for `device_fb_report`'s reason: on
@@ -13982,6 +14323,34 @@ fn join_one_fb_leaf(
                     d.declined,
                     n + 1,
                 );
+            }
+            // ★★★★★★ **CONSTRAINT 26 — AND THIS IS WHERE THE OWNERSHIP SPLIT ACTUALLY RUNS.**
+            //
+            // > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace
+            // > isolates only borrow from it."*
+            //
+            // ⊘⊘⊘ **THE DEFECT THIS CLOSES, MEASURED THREE TIMES.** `[w740, w742, w743]` the
+            // raw client's every channel was refused `BIRTH-AT-ALLOC REFUSED=11`, naming
+            // `ADOPT-WHY ⊘ (6) the binding EXISTS but carries NO HOST OBJECT`, **17 times, on
+            // all three boots, byte-identical**. Conjunct (6) is `binding.host() == None`, and
+            // it was `None` for every vidmem range because this arm returned before anything
+            // was bound: the range is the reserved object, the per-proc isolate may not name
+            // that object, and so nobody mapped it and nobody bound it.
+            //
+            // Under §26 the party that CAN do both does: the scratchpad dups this `Vas`'s
+            // bare address space, maps `[at, at+len)` of the one object at the guest's own
+            // VA, and the binding that results is a **slice** — `frees_object() == false`, so
+            // one leaf's release cannot free eleven gibibytes.
+            //
+            // ⚠ **Gated, and the gate's off position is byte-identical to w743.** On
+            // `KAYFABE_VAS_OWNER=isolate` (the default, and the `arena` control arm) this
+            // whole block is skipped and the arm returns `None` exactly as before — which is
+            // what keeps the control a control.
+            if store_owns_vas() {
+                if let Some(joined) = map_store_slice_for_leaf(head, what, device, pdb, leaf, at)
+                {
+                    return Some(joined);
+                }
             }
             // ⊘ `None`, and it is NOT a refusal dressed up: nothing was joined, so nothing may
             // be reported as joined. The callers all treat `None` as *"this leaf was not
@@ -15178,6 +15547,77 @@ impl Regs {
         // REALIZE line above is written once. The data plane reaches it through
         // `Scratchpad::device_port` at `attach_ram`, which is where the BAR mirror is built.
         drop(device_port);
+
+        // ★★★★★ **CONSTRAINT 26's STORE-MAP PORT, WIRED HERE AND ONLY WHEN THE ARM ASKS.**
+        //
+        // ⊘ **Built on the `scratchpad` arm only.** On the default `isolate` arm nothing is
+        // built and the publish path's `store_owns_vas()` is false, so the whole chain is
+        // absent rather than present-and-unused — which is what keeps the control arm a
+        // control and what `§w724g` means by not carrying the system you pivoted from.
+        //
+        // ⚠ Registered by `GpuId`, not in a bare `static`: `join_one_fb_leaf` is reached from
+        // three different types and one process hosts two emulated GPUs. See
+        // `storemap::register_store_map_port`.
+        #[cfg(feature = "host-isolates")]
+        {
+            let owner = crate::scratchpad::selected_vas_owner();
+            match (owner, scratchpad.as_mut()) {
+                (Ok(crate::scratchpad::VasOwner::Scratchpad), Some(sp)) => {
+                    match sp.share_for_store_maps() {
+                        Some(port) => {
+                            crate::storemap::register_store_map_port(DOORBELL_TARGET_GPU, &port);
+                            // ★★★★★ **CONSTRAINT 26 — AND THE RESTATED RING QUESTION GETS ITS
+                            // ANSWERER.** ⊘ Installed only on this arm: with no oracle
+                            // `adopted_guest_ring` refuses a store-slice ring by name, which
+                            // is the fail-closed direction and is exactly right on the
+                            // `isolate` arm where a store slice cannot occur at all.
+                            if device
+                                .set_ring_slice_oracle(std::sync::Arc::clone(&port)
+                                    as std::sync::Arc<dyn kayfabe_fwd::RingSliceOracle>)
+                                .is_err()
+                            {
+                                eprintln!(
+                                    "kayfabe: STORE-MAP AT REALIZE: ⚠ a ring-slice oracle was \
+                                     ALREADY installed — two answerers for one question. The \
+                                     first one stands; this port's ledger is NOT what births \
+                                     will be checked against."
+                                );
+                            }
+                            eprintln!(
+                                "kayfabe: STORE-MAP AT REALIZE: ★★★★★ ARMED — {}=scratchpad. \
+                                 Per-proc isolates get BARE address spaces and map nothing; \
+                                 this port dups each one and places slices of the ONE reserved \
+                                 object at the guest's own VAs. ⊘ Nothing is mapped yet — the \
+                                 publish path is what asks.",
+                                crate::scratchpad::VAS_OWNER_ENV
+                            );
+                        }
+                        None => eprintln!(
+                            "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND NO PORT COULD \
+                             BE BUILT. The STORE-MAP lines above name which of the two causes \
+                             fired. ⚠ Every per-proc isolate was still spawned with BARE \
+                             address spaces, so this boot will refuse every vidmem mapping by \
+                             name — it is NOT the control arm.",
+                            crate::scratchpad::VAS_OWNER_ENV
+                        ),
+                    }
+                }
+                (Ok(crate::scratchpad::VasOwner::Scratchpad), None) => eprintln!(
+                    "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND THERE IS NO \
+                     SCRATCHPAD. Set {} as well, or the split has nobody to hand the address \
+                     spaces to.",
+                    crate::scratchpad::VAS_OWNER_ENV,
+                    crate::scratchpad::SCRATCHPAD_ENV
+                ),
+                (Ok(crate::scratchpad::VasOwner::Isolate), _) => eprintln!(
+                    "kayfabe: STORE-MAP AT REALIZE: ⊘ {}=isolate (the default) — the \
+                     pre-constraint-26 ownership. Per-proc isolates own their own ranges and \
+                     map into them; no port is built and none is wanted.",
+                    crate::scratchpad::VAS_OWNER_ENV
+                ),
+                (Err((_, why)), _) => eprintln!("kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {why}"),
+            }
+        }
 
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
         // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
@@ -18251,6 +18691,50 @@ impl Regs {
                  DEVICE-VIEW-PORT AT REALIZE lines above say which.",
                 crate::scratchpad::DEVICE_VIEW_ENV
             ),
+        }
+        // ★★★★★ **CONSTRAINT 26's STORE-MAP CENSUS.** Printed unconditionally on BOTH arms,
+        // for the two reasons directly above and one of its own: `adopts=0 maps=0` is the
+        // verdict `⊘⊘ VACUOUS`, which is the difference between *"the scratchpad mapped
+        // nothing because nothing asked"* and *"the ownership split is not wired"* — and on
+        // the `isolate` arm the FIRST is correct and expected.
+        match self
+            .scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::store_port_census)
+        {
+            Some(line) => eprintln!("kayfabe: {line}"),
+            None => eprintln!(
+                "kayfabe: STORE-MAP ⊘ NOT BUILT — no port existed on this boot. On \
+                 {}=isolate (the default) that is CORRECT and is what the control arm must \
+                 print; on `scratchpad` it means the split could not arm, and the SCRATCHPAD \
+                 census line above says which step refused.",
+                crate::scratchpad::VAS_OWNER_ENV
+            ),
+        }
+        // ★★★★★ **CONSTRAINT 26's PUBLISH-SIDE CENSUS.** ⊘ The four counters above are bumped
+        // inside `map_store_slice_for_leaf` and would otherwise be counted and never
+        // reported, which is this tree's own *a check that reports is not a check that
+        // gates* with the reporting half missing too. Printed unconditionally on BOTH arms:
+        // four zeros on the `isolate` arm is the correct answer and is what says the chain
+        // was ABSENT rather than present and silent.
+        #[cfg(feature = "host-isolates")]
+        {
+            use std::sync::atomic::Ordering;
+            let mapped = STORE_SLICE_MAPPED.load(Ordering::Relaxed);
+            let handovers = STORE_HANDOVERS.load(Ordering::Relaxed);
+            let refused = STORE_SLICE_REFUSED.load(Ordering::Relaxed);
+            let declined = STORE_SLICE_DECLINED_ON_VCPU.load(Ordering::Relaxed);
+            let verdict = if handovers == 0 && mapped == 0 && refused == 0 && declined == 0 {
+                "⊘ THE SPLIT'S PUBLISH ARM NEVER RAN — correct on KAYFABE_VAS_OWNER=isolate,                  and on `scratchpad` it means the publish route never offered a DeviceBacked                  leaf at all"
+            } else if mapped == 0 {
+                "⊘⊘ ASKED AND MAPPED NOTHING — read `declined_on_vcpu` FIRST: it is the one                  arm where nothing was asked, so it cannot be read as a refusal"
+            } else {
+                "★★★ the scratchpad placed slices of the ONE object at guest VAs"
+            };
+            eprintln!(
+                "kayfabe: DEVICE-LEAF-SPLIT handovers={handovers} handover_refused={}                  slices_bound={mapped} refused={refused} declined_on_vcpu={declined} ⇒                  {verdict}",
+                STORE_HANDOVER_REFUSED.load(Ordering::Relaxed),
+            );
         }
         // ★★★★★ **§3's SINGLE STORE — what it was asked and what it refused.**
         //
@@ -21540,11 +22024,28 @@ pub fn isolate_factory(
                 // which can never alias a live `ProcId` — spawn from the glibc-linked image
                 // and be sandboxed LATE. Every other isolate this factory spawns is
                 // untouched: same static image, same sandbox-first ordering.
-                if crate::scratchpad::selected_scratchpad_cuda().unwrap_or(false) {
-                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                {
+                    // ★★★★★ **CONSTRAINT 26** — the ownership split is a property of the
+                    // FACTORY too, decided here beside the CUDA arm and for the same reason:
+                    // it is a configuration of the composition root, not a per-spawn choice.
+                    // ⊘ `unwrap_or` the SAFE arm: a refusal here is already reported by the
+                    // realize-time gate, and defaulting a malformed value to `scratchpad`
+                    // would arm the split on a boot nobody asked it on.
+                    let bare = crate::scratchpad::selected_vas_owner()
+                        .map(crate::scratchpad::VasOwner::bare_vaspaces)
+                        .unwrap_or(false);
+                    if crate::scratchpad::selected_scratchpad_cuda().unwrap_or(false) {
+                        kayfabe_isolate_host::HostIsolateFactory::new(
+                            kayfabe_isolate_host::RmMode::Real,
+                        )
                         .with_cuda_walk()
-                } else {
-                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                        .with_bare_vaspaces(bare)
+                    } else {
+                        kayfabe_isolate_host::HostIsolateFactory::new(
+                            kayfabe_isolate_host::RmMode::Real,
+                        )
+                        .with_bare_vaspaces(bare)
+                    }
                 },
                 guest_ram,
             )?;

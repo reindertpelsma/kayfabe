@@ -1616,11 +1616,31 @@ fn the_two_publish_chains_declare_opposite_backing_kinds_and_that_split_is_the_g
     // `bind_backed_fb_leaf`'s `Joined | Aliased` arm (the one DECLARATION, `:3332`) and
     // `adopted_guest_ring`'s gate PREDICATE (w392j, `:4708`). A third is the relabel, or a new
     // chain, or a new reader — and, as with `sole`, the difference must be written down here.
+    // ★★★★★ **2 → 3 AT w745 (constraint 26), ADMITTED 2026-09-15 — AND THE THIRD IS NAMED
+    // HERE, WHICH IS WHAT THE SENTENCE BELOW ASKS FOR.**
+    //
+    // The third is `bind_backed_fb_leaf`'s `FbLeafBacking::StoreSlice` arm. ⊘ **It is NOT the
+    // relabel this row guards against**, and the difference is not a matter of intent:
+    //
+    // | | w228 / the `Vidmem` arm | `StoreSlice` |
+    // |---|---|---|
+    // | how many memories | **two** — a fresh host object beside the emulated framebuffer | **one** — the range IS the reserved object at that offset |
+    // | what the guest reaches | the emulator's fabricated page | the same bytes, through its own BAR1 memslot over the same object |
+    // | who wrote them | nobody; a blank twin | whoever last wrote that offset |
+    //
+    // ⇒ `JoinsGuestWindow` is true of a store slice in the strongest sense the word has, and
+    // the `Vidmem` arm **is still refused** at the same site (`FakeFbAtRealGpuVa`, ruling 3),
+    // two arms above this one. The relabelling escape is shut exactly as it was.
+    //
+    // ⚠ What a FOURTH would be: a second chain calling itself a join. The three are one
+    // DECLARATION per ownership regime (`Joined | Aliased`, `StoreSlice`) plus the one
+    // PREDICATE that reads the word (`adopted_guest_ring`'s conjunct (7)).
     assert_eq!(
-        joined, 2,
-        "exactly one production chain declares `JoinsGuestWindow` (the framebuffer join / \
-         alias commit) and exactly one predicate reads it (the ring adoption gate). A third \
-         mention is the `Vidmem` arm relabelled as the join — the w228 chain admitted under \
-         ruling 4's word — unless it is named here as something else"
+        joined, 3,
+        "the mentions of `JoinsGuestWindow` moved. Today: TWO declarations — the framebuffer \
+         join/alias commit, and constraint 26's store slice — and ONE predicate that reads it \
+         (the ring adoption gate). A fourth mention is the `Vidmem` arm relabelled as the \
+         join — the w228 chain admitted under ruling 4's word — unless it is named here as \
+         something else"
     );
 }

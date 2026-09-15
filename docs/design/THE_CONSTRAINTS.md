@@ -175,6 +175,34 @@ and the per-client host MMU fault above.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
     tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
 
+> ### ◐ **BUILT AND BOOTED — 2026-09-15 (w745). IT ARMS AND REFUSES AT THE HAND-OVER.**
+> `[vast 51149807, GA106, 580.159.04 OPEN, three arms, one binary]` The control holds at
+> **`(P)` 8 of 8**; the split arm is **`(R)` 0/8** with `handovers=0 handover_refused=4619`,
+> every one `NoVas(ChanId(0))` under a placeholder **`pdb=Pdb(0)`**. ⇒ the hand-over
+> **re-derives a routing key its caller already holds**, and the publish route's pdb is `None`
+> until a `SetPageDir` arrives. ⊘ `adopts=0` — the dup was never issued, so `adopt_vaspace`,
+> `map_store_slice`, the slice binding, the ring oracle and **constraint 28 on hardware** are
+> all unmeasured. `RING-NOT-A-SLICE=0` is VACUOUS, not a pass.
+> ★ What did hold on every arm: `TRAP_FILLS=0`, `misses=0`, `RmInitAdapter failed!=0`,
+> `SMI_RC=0`, `HOST_DMESG_XID=0`, and the vCPU guard declined by name **14 times without
+> panicking**. ⊘ **Constraint 25 gained nothing**: `VCPU-BLOCKING total=197 doors=9` on both
+> the `isolate` and `scratchpad` arms, identical to w742.
+> ⊘ Previously: **BUILT, NOT BOOTED — 2026-09-15 (w745), branch `w745-ownership-split`.** Bare per-proc
+> `FERMI_VASPACE_A`s (`--bare-vaspaces`), the hand-over (`vaspace_handover`, tag 38), the dup
+> (`adopt_vaspace`, tag 35), `map_store_slice` (tag 36) over `NVOS46::offset`,
+> `FbLeafBacking::StoreSlice` binding a `HostBacking::slice`, and `StoreMapPort` as the VMM's
+> one door. Behind `KAYFABE_VAS_OWNER`, whose off position is byte-identical to w743.
+> ★ **F11 IS SCOPED BY A TYPE and the gate is green on its merits** — `mod handed_vaspace`
+> (`ScratchpadRole` + `HandedVaSpace`, private fields, one constructor each), `APPROVED_RHS`
+> **unchanged**, no verb moved out of `rm.rs`; what grew is the *universe* (a `*_src` client
+> field is a different question from a destination one) with its own derived approved set and
+> its own floor.
+> ⊘⊘ **AND A SECOND RULING IS OPEN AND WAS NOT MADE: THE USERD.** `h_userd_memory_0` **is** a
+> real RM operand, unlike the ring handle, so a per-proc client cannot name the scratchpad's
+> object for it. This branch declines leg B for a store slice **by name**, which is the
+> pre-leg-B channel — the guest advances `GP_PUT` in its own page and RM reads ours. ⇒ the raw
+> client is **predicted not to pass** on this arm. The three ways out are tabled in
+> `SINGLE_STORE_PLAN.md`'s w745 block; picking one is B1-shaped and is the owner's.
 26. **★★★ THE OWNERSHIP SPLIT — the isolate borrows, the scratchpad holds** (owner,
     2026-09-15). *"All memory is held by the scratchpad, the userspace isolates only borrow
     from it."*
@@ -209,6 +237,24 @@ and the per-client host MMU fault above.
     Enforce as a **newtype**, the way `OwnClient` already does, so the approved set grows by a
     TYPE and not by a string on an allowlist.
 
+> ### ✔ **BUILT AND BOOTED 2026-09-15 (w745)** — live on all three arms, and it never had to
+> fire: `withheld_unmaps=0 worst_unmaps_outstanding=0 pending=false`, with every
+> `MMUINVAL-REFRESH` carrying `unmaps_outstanding=0 drain_trips=0`. ⊘ `pending=false` at
+> teardown is the half that matters: the barrier caused **no hang**. ⚠ A never-fired barrier is
+> not a tested one — the test that fires it is offline, and it is the known-positive below.
+> ### ✔ **BUILT 2026-09-15 (w745)**, with the known-positive this constraint demands by name.
+> `MmuInvalidateLog::complete_through_unmaps` returns a **three-armed** `CompletionVerdict` —
+> not a `bool`, because *"a newer trigger completes this"* and *"nobody will, come back"* are
+> different obligations and the old `bool` made them one word. The outstanding count is asked of
+> **the queue** (`SharedDevice::staged_release_len`) and never derived from
+> `drain_pending_releases`, whose `0` means *"nothing owed"* and *"nothing could be issued"*
+> alike — its own docs say it SKIPS. `RegPlane::revalidate_mirror_first` runs the memslot
+> plane's unmaps **before** the publication, because `drain_mirror_revalidation` runs its fills
+> first and could not be hoisted.
+> ★ The known-positive **stalls a real unmap** rather than simulating one:
+> `drain_pending_releases` walks live procs only, so a retired proc's queue is a stall the
+> production control flow itself produces — asserted as such before anything is concluded from
+> it, with the drained control proving the barrier is not simply a hang.
 27. **★★★★★ A REFRESH MAY NOT COMPLETE UNTIL ITS UNMAPS HAVE LANDED** (owner, 2026-09-15).
     *"Before a refresh finishes, this kernel channel has unmapped slices the guest userspace no
     longer has access to. So the guest kernel knows: okay, invalidate done, I can reuse this
@@ -225,6 +271,21 @@ and the per-client host MMU fault above.
     ⚠ **Needs a known-positive**: stall an unmap and assert the invalidate does **not** complete.
     A test that only checks unmaps happen cannot tell "before" from "eventually".
 
+> ### ⚠ **BUILT 2026-09-15 (w745) AND NOT EXERCISED ON HARDWARE.** The w745 boot never issued
+> a store map (`maps=0`), so the placement assertion and the page-size selection were reached
+> only by the offline tests. The w744 trace remains the only hardware evidence for the RULE;
+> there is none yet for this implementation of it.
+> ### ✔ **BUILT 2026-09-15 (w745).** `RmConnection::raw_map_dma_flags` now refuses
+> `RmError::PlacementRefused` when `dmaOffset != at`, **after tearing the mis-placed mapping
+> down**, and selects the page-size flag from `kayfabe_abi::bringup::nvos46_page_size_flag`.
+> ⊘ **The flag is keyed on `(at, len)`, not on `Run::class`, and that is a measurement not a
+> shortcut:** `walkdiff::MapOp` has **zero production consumers**, so the class is not at the
+> map site while `(at, len)` is at every one — and the two agree by construction, since the
+> coalescer never emits a 64 KiB-class run at an unaligned VA. `NVOS46_BIG_PAGE_BYTES` is
+> stated as an ARCHITECTURE-FAMILY fact (constraint 12's maintainable form) with the condition
+> that would retire it.
+> ★ There is exactly **one** `NVOS46` encode site in the crate and a test pins it at one, so
+> the assertion is unavoidable rather than present at the sites that remembered.
 28. **★★★ EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT, AND THE PAGE-SIZE FLAG MATCHES THE RUN'S
     CLASS** (2026-09-15, from `[w744]`). `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` honours an
     arbitrary VA **only** with `NVOS46_FLAGS_PAGE_SIZE_4KB` — **0/3 without, 3/3 with** — and

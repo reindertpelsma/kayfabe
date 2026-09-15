@@ -264,6 +264,66 @@ pub enum TriggerAction {
     Publish,
 }
 
+/// ★★★★★ **CONSTRAINT 27 — WHY A COMPLETION WAS OR WAS NOT SENT.**
+///
+/// > Owner, 2026-09-15: *"Before a refresh finishes, this kernel channel has unmapped
+/// > slices the guest userspace no longer has access to. So the guest kernel knows: okay,
+/// > invalidate done, I can reuse this phys for another userspace process safely after a
+/// > scrub."*
+///
+/// ⊘ **This is a GUEST-INTERNAL isolation invariant and we are the only thing that can
+/// break it.** If the refresh reports the TLB invalidate complete before its unmaps have
+/// landed, the guest kernel reuses a physical page a guest **userspace** process can still
+/// reach through a stale slice — a cross-process leak *inside* the guest, caused by us, and
+/// invisible to the guest.
+///
+/// ⚠ **Three arms and not a `bool`**, because the two withholdings need different things
+/// from the caller and a `bool` made them one word. A newer trigger means *"somebody else
+/// completes this, do nothing"*; an outstanding unmap means *"nobody else will, come back"*
+/// — and reading the second as the first is a hang.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompletionVerdict {
+    /// The guest was released: `TRIGGER` is clear.
+    Completed,
+    /// ⊘ A newer trigger has been issued since `seq` was read. Its own job is queued behind
+    /// this one and completes it after its own publication. **Nothing further is owed by
+    /// this caller.**
+    WithheldNewerTrigger {
+        /// What `issued` says now, for the log line.
+        issued: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 27's withholding.** `n` unmaps this refresh staged have not been
+    /// acknowledged. `TRIGGER` stays set.
+    ///
+    /// ⚠ **The caller OWES a retry.** Unlike [`Self::WithheldNewerTrigger`] there is no
+    /// other job that will complete this one, so a caller that treats the two alike turns a
+    /// correctness barrier into a guest hang. See `MMUINVAL-COMPLETE ⊘ WITHHELD` in
+    /// `shim.rs`.
+    WithheldUnmapsOutstanding {
+        /// How many staged unmaps had not landed.
+        n: usize,
+    },
+}
+
+impl CompletionVerdict {
+    /// Was the guest released?
+    #[must_use]
+    pub fn completed(self) -> bool {
+        matches!(self, CompletionVerdict::Completed)
+    }
+
+    /// The short name a census line prints. ⊘ Three distinct strings, never a shared
+    /// prefix a grader would have to disambiguate by position.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            CompletionVerdict::Completed => "COMPLETED",
+            CompletionVerdict::WithheldNewerTrigger { .. } => "WITHHELD_NEWER_TRIGGER",
+            CompletionVerdict::WithheldUnmapsOutstanding { .. } => "WITHHELD_UNMAPS_OUTSTANDING",
+        }
+    }
+}
+
 /// Everything this register has told us, as one value.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MmuInvalidateSnapshot {
@@ -303,6 +363,15 @@ pub struct MmuInvalidateSnapshot {
     /// under its own lock, so a non-zero here is either a second RM client or our own
     /// completion having gone missing.
     pub reentrant: u64,
+    /// ★★★★★ **CONSTRAINT 27 — completions WITHHELD because a staged unmap had not been
+    /// acknowledged.** ⊘ Not a failure count: each one is the barrier doing its job. A
+    /// non-zero here beside `pending=false` at teardown is the mechanism firing and
+    /// recovering; a non-zero beside `pending=true` is the hang it can cause if a caller
+    /// does not retry.
+    pub withheld_unmaps: u64,
+    /// ★ The worst `n` any single [`CompletionVerdict::WithheldUnmapsOutstanding`] carried
+    /// — how deep the backlog got, which is what says whether a fixed-trip retry is enough.
+    pub worst_unmaps_outstanding: usize,
     /// Whether a publication is outstanding right now.
     pub pending: bool,
 }
@@ -479,6 +548,43 @@ impl MmuInvalidateLog {
         true
     }
 
+    /// ★★★★★ **CONSTRAINT 27 — COMPLETE THE TRIGGER TAKEN AT `seq`, BUT ONLY ONCE ITS
+    /// UNMAPS HAVE LANDED.**
+    ///
+    /// `unmaps_outstanding` is what the refresh staged and could **not** get acknowledged.
+    /// Zero is the only value that may release the guest.
+    ///
+    /// ⊘ **Order of the two tests is not arbitrary.** The newer-trigger test runs FIRST,
+    /// because when it fires nothing is owed — the newer job is the completer — whereas an
+    /// outstanding unmap obliges the caller to come back. Testing them the other way round
+    /// would report a debt that somebody else is already paying.
+    ///
+    /// ⚠ **This is a barrier, not a diagnostic.** `complete_through` remains for the one
+    /// caller that has no unmaps to speak of; every path that ran a refresh must come
+    /// through here, and `tests/tests/unmap_before_completion.rs` is what says so.
+    pub fn complete_through_unmaps(
+        &self,
+        seq: u64,
+        now_us: u64,
+        unmaps_outstanding: usize,
+    ) -> CompletionVerdict {
+        let issued = self.issued.load(Ordering::Acquire);
+        if issued != seq {
+            return CompletionVerdict::WithheldNewerTrigger { issued };
+        }
+        if unmaps_outstanding != 0 {
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            g.snap.withheld_unmaps += 1;
+            g.snap.worst_unmaps_outstanding =
+                g.snap.worst_unmaps_outstanding.max(unmaps_outstanding);
+            return CompletionVerdict::WithheldUnmapsOutstanding {
+                n: unmaps_outstanding,
+            };
+        }
+        self.complete(now_us);
+        CompletionVerdict::Completed
+    }
+
     /// ★★★★★ **The completion.** Clears `TRIGGER` so the guest's poll returns.
     ///
     /// Idempotent on purpose: the `Drop` guard and an explicit success path may both call
@@ -566,7 +672,8 @@ impl MmuInvalidateLog {
             "MMUINVAL armed={} writes={} triggers={} all_pdb={} all_pdb_frac={} all_va={} \
              hubtlb_only={} gpu_vas={} polls={} pdb_writes={} distinct_pdbs={} \
              doorbells={} triggers_per_doorbell={} triggers_at_first_doorbell={} \
-             worst_hold_us={} over_budget={} reentrant={} pending={}{}",
+             worst_hold_us={} over_budget={} reentrant={} withheld_unmaps={} \
+             worst_unmaps_outstanding={} pending={}{}",
             self.is_armed(),
             s.writes,
             s.triggers,
@@ -584,6 +691,8 @@ impl MmuInvalidateLog {
             s.worst_hold_us,
             s.over_budget,
             s.reentrant,
+            s.withheld_unmaps,
+            s.worst_unmaps_outstanding,
             s.pending,
             if s.pending {
                 " ⚠⚠ TRIGGER STILL SET AT TEARDOWN — the guest is spinning on a completion \

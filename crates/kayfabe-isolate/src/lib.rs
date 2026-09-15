@@ -772,6 +772,79 @@ pub struct HostedObject<'a> {
     pub params: &'a [u8],
 }
 
+/// ★★★★★ **CONSTRAINT 26 — WHOSE MEMORY THE GUEST'S RING IS, AS A TYPE.**
+///
+/// > `THE_CONSTRAINTS.md` §26: *"A per-proc isolate never holds an `hMemory` for vidmem."*
+///
+/// # ⊘ Why this replaces a bare `HostHandle`, and what it does NOT give up
+///
+/// Before §26 the ring was always an object the **birth isolate itself** minted by joining a
+/// framebuffer leaf, so a handle was the whole answer and `alloc_channel_declared` re-checked
+/// it against that isolate's own joined-object set (`RING_NOT_A_JOINED_WINDOW`). Under the
+/// ownership split the bytes are a **slice of the one reserved object**, which the per-proc
+/// isolate may not name — so a handle here is a `ForeignHandle` refusal before RM is reached,
+/// and the far-side re-check has nothing to check against.
+///
+/// ★★★ **The measurement that makes this safe to do:** the ring handle **never reaches RM**.
+/// `alloc_channel_in`'s `RingSource::Guest` arm maps nothing, and what RM is told is
+/// `gp_fifo_offset: layout.gp_fifo_va` — an absolute VA. The handle was an **authorization
+/// token**, not an operand. ⇒ dropping it costs no capability; it only moves the question of
+/// *who authorizes the birth*.
+///
+/// # ★★★ AND THE QUESTION IS KEPT — `RING_NOT_A_JOINED_WINDOW`'s, restated
+///
+/// The failure that check prevents is exact and **silent**: a channel over a blank twin
+/// fetches zeros, never advances `GP_GET`, and reports no error at all. Under §26 it is asked
+/// as *"is this ring a slice of the one object, placed by the party that holds it?"* — of
+/// `kayfabe_qemu_raw::storemap::StoreMapPort`, the mapper's own ledger, which is the only
+/// party that can answer. ⊘ The mechanism is deleted. The question is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingProvenance {
+    /// **The birth isolate's own object** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` it minted
+    /// by joining a framebuffer leaf, or the guest's own RAM it pinned. The far side
+    /// re-checks membership in its joined-object set and refuses by name otherwise.
+    ///
+    /// ⊘ This is the pre-§26 shape, unchanged, and it is what the `isolate` arm still uses.
+    OwnObject(HostHandle),
+    /// ★★★★★ **A SLICE OF THE ONE RESERVED OBJECT**, already mapped at the guest's own VA by
+    /// the scratchpad. **No handle**, because the birth isolate holds none and must not.
+    ///
+    /// ⚠ **What the far side can and cannot check, stated rather than implied.** It can check
+    /// that the ring is declared as a store slice at all — i.e. that nothing is being handed
+    /// a foreign handle — and it does. It **cannot** check that the slice exists, because it
+    /// holds neither the object nor the mapping. That check is made VMM-side, before the plan
+    /// is built, by the party that placed it. ⊘ This is a real move of the checker and it is
+    /// not a strengthening; it is the only place the knowledge lives once the object stops
+    /// crossing.
+    StoreSlice {
+        /// Byte offset of these bytes inside the one reserved object.
+        offset: u64,
+        /// How many bytes the scratchpad placed at [`AdoptedGuestRing::ring_va`].
+        len: u64,
+    },
+}
+
+impl RingProvenance {
+    /// The handle, when there is one. `None` for a store slice — which is what keeps
+    /// `VerbPlan::handles()` from offering the foreign-handle gate something it must refuse.
+    #[must_use]
+    pub const fn handle(self) -> Option<HostHandle> {
+        match self {
+            RingProvenance::OwnObject(h) => Some(h),
+            RingProvenance::StoreSlice { .. } => None,
+        }
+    }
+
+    /// The name a census prints. ⊘ Two words, never a `bool`.
+    #[must_use]
+    pub const fn kind(self) -> &'static str {
+        match self {
+            RingProvenance::OwnObject(_) => "OwnObject",
+            RingProvenance::StoreSlice { .. } => "StoreSlice",
+        }
+    }
+}
+
 /// ★★★★★ **LEG A2 — THE GUEST'S OWN RING, as the birth path names it.**
 ///
 /// Handed to [`RmBackend::alloc_channel`] so a host channel can be born over the GPFIFO the
@@ -808,9 +881,9 @@ pub struct HostedObject<'a> {
 /// adopting the cursor are two legs, and this is the first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AdoptedGuestRing {
-    /// The joined host object carrying the guest's GPFIFO. Neither allocated nor freed by
-    /// the channel.
-    pub memory: HostHandle,
+    /// ★★★★★ **WHERE THE GUEST'S GPFIFO BYTES LIVE — and, under constraint 26, WHOSE they
+    /// are.** See [`RingProvenance`].
+    pub ring: RingProvenance,
     /// Where that object is placed in the channel's address space.
     pub ring_va: u64,
     /// The guest's `gpFifoOffset` — an **absolute VA**, not an offset into anything.
@@ -914,6 +987,26 @@ pub struct AdoptedGuestUserd {
 /// `Send + Sync` — see the crate docs: only ever reached via `&mut`, so shared
 /// cross-thread references are unrepresentable, but the pool *stores* boxed
 /// backends inside a `Sync` `Proc`, which makes the bound structural.
+/// ★★★★★ **CONSTRAINT 26 — A BARE ADDRESS SPACE AND THE CLIENT IT LIVES IN, AS ONE VALUE.**
+///
+/// [`RmBackend::alloc_vaspace_bare`]'s answer. ⊘ **Not two returns and not a bare
+/// `HostHandle`**: an RM handle is meaningless without the client whose namespace it is in,
+/// and the whole of [`RmBackend::adopt_vaspace`] is *"name a handle in somebody else's
+/// namespace"*. Carrying them apart would let a caller pair a space with the wrong client —
+/// which RM would answer for with `0x33 INVALID_OBJECT_HANDLE` if we were lucky, and with a
+/// **different live object** if we were not.
+///
+/// ⚠ `client` is the per-proc isolate's own RM client. It leaves that isolate deliberately,
+/// and it is the only handle in the system that does. See `kayfabe_isolate_host::rm`'s
+/// `handed_vaspace` module for what receives it and what that does and does not prove.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BareVaSpace {
+    /// The `FERMI_VASPACE_A`, with **no** `NV01_MEMORY_VIRTUAL` range over it.
+    pub space: HostHandle,
+    /// The RM client that space lives in — `NVOS55_PARAMETERS::hClientSrc`, eventually.
+    pub client: u32,
+}
+
 pub trait RmBackend: Send + Sync {
     /// Allocate an RM object of `class` under `parent`. `params` is an opaque,
     /// already-encoded parameter blob (encoding is the ABI adapter's job).
@@ -993,6 +1086,120 @@ pub trait RmBackend: Send + Sync {
         let _ = len;
         // 0x56 = NV_ERR_NOT_SUPPORTED — the same capability-shaped refusal this trait's
         // other defaults use.
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — ALLOCATE A *BARE* `FERMI_VASPACE_A`: the address space, and
+    /// no `NV01_MEMORY_VIRTUAL` range over it.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// [`RmBackend::alloc_vaspace`] mints **two** RM objects — the space and the range the
+    /// map verb actually names — and returns the range. That is right for an isolate that
+    /// does its own mapping and is exactly wrong under §26, for a reason hardware supplied:
+    /// `[measured w744]` a space that already carries a whole-space range refuses the
+    /// scratchpad's own range with **`0x19 INSERT_DUPLICATE_NAME`**. ⇒ the per-proc isolate
+    /// must create the space and **stop**.
+    ///
+    /// The handle returned is therefore the **space**, and everything that asks *"which
+    /// address space is this?"* (a channel group's `hVASpace`, `UVM_REGISTER_GPU_VASPACE`)
+    /// keeps working. Everything that asks *"which range may I map through?"* now has no
+    /// answer, and refuses by name — which is the ownership split, expressed as a missing
+    /// object rather than as a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the space with. The default is a named refusal: a backend with no
+    /// RM connection must say so rather than hand back a handle it did not mint.
+    fn alloc_vaspace_bare(&mut self) -> Result<BareVaSpace, RmError> {
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — TAKE A PER-PROC ISOLATE'S BARE ADDRESS SPACE AND BUILD THIS
+    /// ISOLATE'S OWN RANGE INSIDE IT.**
+    ///
+    /// The scratchpad half of the hand-over: dup `space` out of `client`
+    /// (`NV_ESC_RM_DUP_OBJECT`, `[measured w744]` `NV_OK`), then allocate **our own**
+    /// `NV01_MEMORY_VIRTUAL` over the dup. The returned handle is that range — the `hDma`
+    /// every later [`RmBackend::map_store_slice`] names.
+    ///
+    /// ⊘ **It is ONE space, not a copy**, and that was measured rather than assumed: a map
+    /// by the source client at a VA this one had already taken is refused `0x51`, with the
+    /// control passing at an unclaimed VA. ⇒ a per-proc isolate **cannot** map over a slice
+    /// the scratchpad placed, which is the half of the ownership split hardware enforces for
+    /// us.
+    ///
+    /// ⚠ **`client` is a client this process did not mint**, and it is the only such value
+    /// anywhere in the system. The host implementation will not accept it unless the backend
+    /// is the scratchpad — see `kayfabe_isolate_host::rm`'s `handed_vaspace` module, which
+    /// makes that a type rather than a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup or the range with; a named refusal on any backend that is
+    /// not the scratchpad.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        let _ = (client, space);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — WHAT THIS ISOLATE WOULD HAND OVER FOR `space`.**
+    ///
+    /// A [`RmBackend::alloc_vaspace_bare`] result carries the client beside the handle, and
+    /// the seven `VerbPlan` arms that mint a host VAS lazily keep only the handle — so the
+    /// VMM, which is the party that performs the hand-over, has a space and no namespace to
+    /// name it in. This verb is how it asks.
+    ///
+    /// ⊘ **It is not an accessor for "this isolate's client".** It answers *for a space*,
+    /// and it **refuses a space that is not bare**: a space with its own
+    /// `NV01_MEMORY_VIRTUAL` range is one this isolate maps through itself, and handing it
+    /// to the scratchpad would produce the `0x19 INSERT_DUPLICATE_NAME` w744 measured — at
+    /// the far end, as an unexplained refusal, rather than here as the ownership error it
+    /// is.
+    ///
+    /// # Errors
+    /// A named refusal if `space` is not a bare address space this isolate allocated.
+    fn vaspace_handover(&mut self, space: HostHandle) -> Result<BareVaSpace, RmError> {
+        let _ = space;
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — MAP A SLICE OF THE ONE RESERVED OBJECT AT THE GUEST'S OWN
+    /// VA, IN A VA SPACE THE VMM HANDED OVER.**
+    ///
+    /// `vas` is an [`RmBackend::adopt_vaspace`] result; `memory` is the reservation
+    /// [`RmBackend::reserve_gpga`] returned; `offset` is where in it the guest's framebuffer
+    /// range lives; `at` is the guest's own VA and is **binding**, not a hint.
+    ///
+    /// ⊘ **Not a mode of [`RmBackend::map_gpu_va`].** That verb maps a whole object into the
+    /// isolate's own space *and* its executor shadow; this one maps a **slice** of an object
+    /// the caller does not own into a space the caller did not create, and builds no shadow
+    /// because the scratchpad runs no guest-derived work that would resolve these VAs. The
+    /// two differ in who owns what, which is the distinction a flag erases.
+    ///
+    /// # Errors
+    /// [`RmError::PlacementRefused`] when RM placed the mapping anywhere but `at` —
+    /// constraint 28, asserted inside the one `NVOS46` site — or whatever RM refused with.
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let _ = (vas, memory, offset, len, at);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half of constraint 26 — take one such slice back down.**
+    ///
+    /// ⚠ Its acknowledgement is what a refresh withholds the guest's TLB-invalidate
+    /// completion on. A caller that drops the `Result` has turned the barrier into a report.
+    ///
+    /// # Errors
+    /// Whatever RM refused the unmap with.
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        let _ = (vas, at);
         Err(RmError::Other(0x56))
     }
 
@@ -2881,12 +3088,16 @@ impl VerbPlan {
             // `alloc_channel_declared` would be a channel born over ANOTHER isolate's
             // joined leaf — the far side re-checks `fb_joins` membership too, and both is
             // correct: this is the central gate, that is the direct-call entrance.
+            // ★★★★★ **CONSTRAINT 26 — the ring contributes a handle ONLY when it is this
+            // isolate's own.** A `RingProvenance::StoreSlice` names nothing, which is the
+            // whole point: the foreign-handle gate below cannot refuse what is not offered,
+            // and nothing was smuggled past it — there is no handle to smuggle.
             VerbPlan::ChannelBirth {
                 host_vas, adopt, ..
             } => host_vas
                 .iter()
                 .copied()
-                .chain(core::iter::once(adopt.memory))
+                .chain(adopt.ring.handle())
                 .chain(adopt.userd.map(|u| u.memory))
                 .collect(),
             VerbPlan::Doorbell {

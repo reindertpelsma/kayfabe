@@ -50,7 +50,24 @@ use std::io::{self, Read, Write};
 /// disagrees with the hand-written codec. ⊘ And not left as a bare five-tuple either — four
 /// consecutive integers with no names is exactly where an encoder and a decoder swap two of
 /// them and every in-process test still passes.
-pub type AdoptedRingWire = (u64, u64, u64, u32, Option<(u64, u64)>);
+pub type AdoptedRingWire = (u8, u64, u64, u64, u64, u32, Option<(u64, u64)>);
+
+/// ★★★★★ **CONSTRAINT 26 — the ring's PROVENANCE byte, the first field of
+/// [`AdoptedRingWire`].**
+///
+/// | value | meaning | the two numbers after it |
+/// |---|---|---|
+/// | `0` | `RingProvenance::OwnObject` | `(handle, 0)` |
+/// | `1` | `RingProvenance::StoreSlice` | `(offset, len)` — **no handle** |
+///
+/// ⊘ **An explicit byte, never an in-band sentinel.** `handle == 0` would be the obvious
+/// encoding of *"no handle"* and it is wrong for the reason this file already gives about
+/// `offset = 0`: the decoder must not have to decide what a legal value means. A tag that
+/// names neither arm is a refusal, so a peer that speaks a different vocabulary fails at the
+/// frame rather than three fields later.
+pub const RING_PROVENANCE_OWN_OBJECT: u8 = 0;
+/// See [`RING_PROVENANCE_OWN_OBJECT`].
+pub const RING_PROVENANCE_STORE_SLICE: u8 = 1;
 
 /// The largest frame either side will send or accept.
 ///
@@ -541,6 +558,52 @@ pub enum Request {
         /// The pattern base, when `poke == 1`; ignored otherwise.
         pattern: u32,
     },
+    /// ★★★★★ **CONSTRAINT 26, tag 34** — [`kayfabe_isolate::RmBackend::alloc_vaspace_bare`].
+    ///
+    /// ⊘ **A new tag and not a flag on [`Request::AllocVaSpace`] (tag 2).** The two differ
+    /// in *what the reply handle IS* — a range there, a space here — and a peer that read a
+    /// flag it did not understand would hand back an object of the wrong class under a name
+    /// that looks right. That is the failure this file's whole tag discipline exists for.
+    AllocVaSpaceBare,
+    /// ★★★★★ **CONSTRAINT 26, tag 35** — [`kayfabe_isolate::RmBackend::adopt_vaspace`].
+    ///
+    /// ⚠ **The only frame in the protocol that carries a client handle the receiving process
+    /// did not mint.** The child refuses it unless it is the scratchpad, by a type
+    /// (`kayfabe_isolate_host::rm`'s `handed_vaspace`), before any ioctl is built.
+    AdoptVaSpace {
+        /// The per-proc isolate's RM client, as **that** isolate reported it.
+        client: u32,
+        /// The bare `FERMI_VASPACE_A` inside it.
+        space: u32,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 36** — [`kayfabe_isolate::RmBackend::map_store_slice`].
+    MapStoreSlice {
+        /// The adopted VA space's range handle, raw — an [`Request::AdoptVaSpace`] result.
+        vas: u64,
+        /// The reserved object, raw — a [`Request::ReserveGpga`] result.
+        memory: u64,
+        /// Offset **inside** that object.
+        offset: u64,
+        /// Bytes.
+        len: u64,
+        /// The guest's own VA. Binding, not a hint.
+        at: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 38** — [`kayfabe_isolate::RmBackend::vaspace_handover`].
+    ///
+    /// ⊘ Asked **for a space**, not for "this isolate's client": the far side refuses a
+    /// space that is not bare, which is the ownership check and not a lookup.
+    VaSpaceHandover {
+        /// The bare `FERMI_VASPACE_A` this isolate handed out, raw.
+        space: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 26/27, tag 37** — [`kayfabe_isolate::RmBackend::unmap_store_slice`].
+    UnmapStoreSlice {
+        /// The adopted VA space's range handle, raw.
+        vas: u64,
+        /// The VA to take down.
+        at: u64,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -605,6 +668,20 @@ pub enum Reply {
     /// real answer — *"nothing down to the probe's floor could be reserved"* — and is not
     /// an error.
     Megabytes(u64),
+    /// ★★★★★ **CONSTRAINT 26, reply tag 16** — [`Request::AllocVaSpaceBare`]'s answer: the
+    /// bare `FERMI_VASPACE_A` **and the client it lives in**.
+    ///
+    /// ⊘ A shape of its own rather than [`Reply::Handle`] plus a second round trip, and
+    /// rather than [`Reply::HandleAndToken`] with the client smuggled through the token
+    /// field. A handle without its namespace is not an answer, and re-using a shape whose
+    /// second field means *"work-submit token"* everywhere else is how a reader — and a
+    /// grader — comes to believe a boot did something it did not.
+    BareVaSpace {
+        /// The space handle, raw.
+        space: u64,
+        /// The RM client it lives in.
+        client: u32,
+    },
     /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
     ///
     /// Two fields, not one, and the second is not a length: `covered == false` means the
@@ -917,6 +994,22 @@ impl<'a> Cursor<'a> {
     }
 }
 
+/// ★★★ **CONSTRAINT 26** — validate the ring's provenance byte, refusing by name.
+///
+/// ⊘ Refused rather than defaulted to `OwnObject`: a byte we do not understand means the two
+/// sides disagree about the frame, and *"it is the isolate's own object"* is the arm that
+/// makes the far side name a handle — so guessing it would turn a vocabulary mismatch into a
+/// `BadHandle` three fields later.
+fn ring_provenance_tag(tag: u8) -> Result<u8, ProtoError> {
+    match tag {
+        RING_PROVENANCE_OWN_OBJECT | RING_PROVENANCE_STORE_SLICE => Ok(tag),
+        tag => Err(ProtoError::UnknownTag {
+            what: "ring provenance",
+            tag,
+        }),
+    }
+}
+
 fn put_blob(out: &mut Vec<u8>, blob: &[u8]) {
     out.extend_from_slice(&(blob.len() as u32).to_le_bytes());
     out.extend_from_slice(blob);
@@ -978,6 +1071,35 @@ impl Envelope {
                 out.push(31);
                 out.extend_from_slice(&token.to_le_bytes());
             }
+            Request::AllocVaSpaceBare => out.push(34),
+            Request::AdoptVaSpace { client, space } => {
+                out.push(35);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&space.to_le_bytes());
+            }
+            Request::MapStoreSlice {
+                vas,
+                memory,
+                offset,
+                len,
+                at,
+            } => {
+                out.push(36);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
+            Request::VaSpaceHandover { space } => {
+                out.push(38);
+                out.extend_from_slice(&space.to_le_bytes());
+            }
+            Request::UnmapStoreSlice { vas, at } => {
+                out.push(37);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
             Request::WalkShadowStage { span, off, bytes } => {
                 out.push(32);
                 out.extend_from_slice(&span.to_le_bytes());
@@ -1011,9 +1133,11 @@ impl Envelope {
                 }
                 match adopt {
                     None => out.push(0),
-                    Some((memory, ring_va, gp_fifo_va, entries, userd)) => {
+                    Some((kind, a, b, ring_va, gp_fifo_va, entries, userd)) => {
                         out.push(1);
-                        out.extend_from_slice(&memory.to_le_bytes());
+                        out.push(*kind);
+                        out.extend_from_slice(&a.to_le_bytes());
+                        out.extend_from_slice(&b.to_le_bytes());
                         out.extend_from_slice(&ring_va.to_le_bytes());
                         out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                         out.extend_from_slice(&entries.to_le_bytes());
@@ -1047,7 +1171,7 @@ impl Envelope {
                 vas,
                 engine,
                 declared_engine_type,
-                adopt: (memory, ring_va, gp_fifo_va, entries, userd),
+                adopt: (kind, a, b, ring_va, gp_fifo_va, entries, userd),
                 err_notifier,
             } => {
                 out.push(24);
@@ -1060,7 +1184,9 @@ impl Envelope {
                         out.extend_from_slice(&t.to_le_bytes());
                     }
                 }
-                out.extend_from_slice(&memory.to_le_bytes());
+                out.push(*kind);
+                out.extend_from_slice(&a.to_le_bytes());
+                out.extend_from_slice(&b.to_le_bytes());
                 out.extend_from_slice(&ring_va.to_le_bytes());
                 out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                 out.extend_from_slice(&entries.to_le_bytes());
@@ -1281,6 +1407,25 @@ impl Envelope {
             31 => Request::ReleaseDeviceView {
                 token: c.u64("device view token")?,
             },
+            34 => Request::AllocVaSpaceBare,
+            35 => Request::AdoptVaSpace {
+                client: c.u32("adopt vaspace client")?,
+                space: c.u32("adopt vaspace space")?,
+            },
+            36 => Request::MapStoreSlice {
+                vas: c.u64("store slice vas")?,
+                memory: c.u64("store slice memory")?,
+                offset: c.u64("store slice offset")?,
+                len: c.u64("store slice len")?,
+                at: c.u64("store slice at")?,
+            },
+            38 => Request::VaSpaceHandover {
+                space: c.u64("vaspace handover space")?,
+            },
+            37 => Request::UnmapStoreSlice {
+                vas: c.u64("store unmap vas")?,
+                at: c.u64("store unmap at")?,
+            },
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
                 engine: c.u8("channel engine")?,
@@ -1303,7 +1448,9 @@ impl Envelope {
                 adopt: match c.u8("channel adopt presence")? {
                     0 => None,
                     1 => Some((
-                        c.u64("adopt memory")?,
+                        ring_provenance_tag(c.u8("adopt provenance")?)?,
+                        c.u64("adopt ring a")?,
+                        c.u64("adopt ring b")?,
                         c.u64("adopt ring_va")?,
                         c.u64("adopt gp_fifo_va")?,
                         c.u32("adopt gp_fifo_entries")?,
@@ -1358,7 +1505,9 @@ impl Envelope {
                     }
                 },
                 adopt: (
-                    c.u64("declared adopt memory")?,
+                    ring_provenance_tag(c.u8("declared adopt provenance")?)?,
+                    c.u64("declared adopt ring a")?,
+                    c.u64("declared adopt ring b")?,
                     c.u64("declared adopt ring_va")?,
                     c.u64("declared adopt gp_fifo_va")?,
                     c.u32("declared adopt gp_fifo_entries")?,
@@ -1522,6 +1671,11 @@ impl Reply {
                 out.push(14);
                 out.extend_from_slice(&mb.to_le_bytes());
             }
+            Reply::BareVaSpace { space, client } => {
+                out.push(16);
+                out.extend_from_slice(&space.to_le_bytes());
+                out.extend_from_slice(&client.to_le_bytes());
+            }
             Reply::DeviceViewNode {
                 release_token,
                 memory,
@@ -1606,6 +1760,10 @@ impl Reply {
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
             14 => Reply::Megabytes(c.u64("reservable mb")?),
+            16 => Reply::BareVaSpace {
+                space: c.u64("bare vaspace space")?,
+                client: c.u32("bare vaspace client")?,
+            },
             15 => Reply::DeviceViewNode {
                 release_token: c.u64("device view release token")?,
                 memory: c.u64("device view memory")?,
@@ -1812,6 +1970,23 @@ mod tests {
                 write: 1,
             },
             Request::ReleaseDeviceView { token: 7 },
+            Request::AllocVaSpaceBare,
+            Request::AdoptVaSpace {
+                client: 0xC1DD_3C6F,
+                space: 0xCAFE_0004,
+            },
+            Request::MapStoreSlice {
+                vas: 0xCAFE_000A,
+                memory: 0xCAFE_000B,
+                offset: 0x2_0000,
+                len: 0x1_0000,
+                at: 0x0000_0090_0000_1000,
+            },
+            Request::UnmapStoreSlice {
+                vas: 0xCAFE_000A,
+                at: 0x0000_0090_0000_1000,
+            },
+            Request::VaSpaceHandover { space: 0xCAFE_0006 },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -1845,7 +2020,9 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
                 adopt: Some((
+                    RING_PROVENANCE_OWN_OBJECT,
                     0x5c00_0019,
+                    0,
                     0x2_0020_0000,
                     0,
                     1024,
@@ -1861,7 +2038,35 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 declared_engine_type: Some(0),
-                adopt: (0x5c00_0019, 0x2_0020_0000, 0, 1024, None),
+                adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
+                    0x5c00_0019,
+                    0,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    None,
+                ),
+                err_notifier: None,
+            },
+            // ★★★★★ **CONSTRAINT 26 — the STORE-SLICE arm of the provenance byte.** ⊘ Its own
+            // sample, not a variation of the one above: the two arms put DIFFERENT NUMBERS in
+            // the same two fields (`(handle, 0)` vs `(offset, len)`), which is precisely where
+            // an encoder and a decoder swap two integers and every in-process test still
+            // passes. `offset = 0` is deliberate — a slice at the object's own base is legal.
+            Request::AllocChannelDeclared {
+                vas: 9,
+                engine: engine_code(EngineKind::GrCompute),
+                declared_engine_type: Some(1),
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0,
+                    0x1_0000,
+                    0x2_0020_0000,
+                    0x2_0020_1000,
+                    1024,
+                    None,
+                ),
                 err_notifier: None,
             },
             Request::AllocChannelDeclared {
@@ -1869,7 +2074,9 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 declared_engine_type: None,
                 adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
                     0x5c00_0019,
+                    0,
                     0x2_0020_0000,
                     0x2_0020_0000,
                     4096,
@@ -2029,6 +2236,11 @@ mod tests {
             Request::WalkShadowRun { .. } => "WalkShadowRun",
             Request::ExportDeviceView { .. } => "ExportDeviceView",
             Request::ReleaseDeviceView { .. } => "ReleaseDeviceView",
+            Request::AllocVaSpaceBare => "AllocVaSpaceBare",
+            Request::AdoptVaSpace { .. } => "AdoptVaSpace",
+            Request::MapStoreSlice { .. } => "MapStoreSlice",
+            Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
+            Request::VaSpaceHandover { .. } => "VaSpaceHandover",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -2064,6 +2276,11 @@ mod tests {
                 "AllocEngineObject",
                 "AllocSysmem",
                 "AllocVaSpace",
+                "AllocVaSpaceBare",
+                "AdoptVaSpace",
+                "MapStoreSlice",
+                "UnmapStoreSlice",
+                "VaSpaceHandover",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
@@ -2115,6 +2332,10 @@ mod tests {
             Reply::Payload(vec![7; 100]),
             Reply::Va(0x7f00_0000),
             Reply::Megabytes(11_808),
+            Reply::BareVaSpace {
+                space: 0xCAFE_0006,
+                client: 0xC1DD_3C70,
+            },
             Reply::DeviceViewNode {
                 // ⊘ w734: a value that is NOT any of the other three, so a codec that
                 // transposed two fields fails rather than round-tripping.

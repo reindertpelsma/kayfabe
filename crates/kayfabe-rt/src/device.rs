@@ -975,6 +975,12 @@ pub struct SharedDevice {
     /// than silently forwarding unbacked work — an absent seam is a different fact from a
     /// refresh that found nothing.
     invalidate_refresh: std::sync::OnceLock<Arc<dyn kayfabe_fwd::InvalidateRefresh>>,
+    /// ★★★★★ **CONSTRAINT 26 — the party that can answer *"is this ring a slice of the one
+    /// object?"***, installed by the composition root exactly as `invalidate_refresh` is.
+    ///
+    /// ⊘ `None` is **fail-closed**, not permissive: `adopted_guest_ring` refuses a
+    /// store-slice ring when nobody can vouch for it. See [`kayfabe_fwd::RingSliceOracle`].
+    ring_slice: std::sync::OnceLock<Arc<dyn kayfabe_fwd::RingSliceOracle>>,
     /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
     /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
     pb_vidmem: std::sync::atomic::AtomicBool,
@@ -1331,6 +1337,7 @@ impl SharedDevice {
             vas_refresh_q: std::sync::Mutex::new(Vec::new()),
             fb: std::sync::OnceLock::new(),
             invalidate_refresh: std::sync::OnceLock::new(),
+            ring_slice: std::sync::OnceLock::new(),
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
@@ -1939,6 +1946,11 @@ impl SharedDevice {
                             proc,
                             &route,
                             err_notifier_grant,
+                            // ★★★★★ **CONSTRAINT 26.** `None` when nothing installed one,
+                            // and `adopted_guest_ring` treats that as FAIL-CLOSED: a
+                            // store-slice ring nobody can vouch for is refused, never
+                            // adopted. See `kayfabe_fwd::RingSliceOracle`.
+                            self.ring_slice.get().map(std::sync::Arc::as_ref),
                         )?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
@@ -2539,6 +2551,57 @@ impl SharedDevice {
     pub fn with_retired<R>(&self, f: impl FnOnce(&[Proc]) -> R) -> R {
         let st = self.state.read();
         f(st.spine.retired_procs())
+    }
+
+    /// ★★★★★ **CONSTRAINT 27 — HOW MUCH DISPOSAL IS STILL OWED, ACROSS EVERY PROC.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27: *"unmaps applied AND acknowledged before the invalidate
+    /// completes"*. This is the **acknowledged** half, asked of the thing that holds the
+    /// debt rather than inferred from a drain's return value.
+    ///
+    /// ⊘ **Why not plumb a count out of the refresh.** `drain_pending_releases` returns how
+    /// many it disposed of and **skips** on a full pool or an isolate with a verb in flight
+    /// (its own docs say so), so `drained == 0` means *"nothing was owed"* and *"nothing
+    /// could be issued"* alike. A number derived from the drain therefore cannot answer the
+    /// question the barrier asks. The queue itself can, and it is the only thing that can.
+    ///
+    /// ★ `Orphans::len()` and not a sum of `unmap` alone — `[w310]`: a kind added to
+    /// `Orphans` must not go uncounted, and a staged **free** of an `OS_DESCRIPTOR` over
+    /// guest pages is exactly as much *"the guest may not reuse this yet"* as the GPU unmap
+    /// that precedes it in the same `VerbPlan::Release`. The three are issued together and
+    /// all-or-nothing, so an empty queue is the one statement worth making.
+    ///
+    /// ⚠ Retired-but-unreaped procs are counted too. A corpse's queue is a mapping that
+    /// still exists.
+    #[must_use]
+    pub fn staged_release_len(&self) -> usize {
+        // ⊘ The pid list is taken under the spine read guard and the per-proc reads happen
+        // AFTER it is dropped, through `route_act` — the same shape `drain_pending_releases`
+        // uses, and for the same reason: a proc lock taken while holding the spine guard is
+        // the rank inversion R1 forbids.
+        let pids: Vec<ProcId> = {
+            let st = self.state.read();
+            core::iter::once(Gpu::SYSTEM_PROC)
+                .chain(st.procs.keys().copied())
+                .collect()
+        };
+        let live: usize = pids
+            .into_iter()
+            .map(|pid| {
+                self.route_act(
+                    |_| Ok((pid, ())),
+                    |_, p, ()| kayfabe_core::gpu::Proc::pending_release_len(p),
+                )
+                .unwrap_or(0)
+            })
+            .sum();
+        let dead: usize = self.with_retired(|procs| {
+            procs
+                .iter()
+                .map(kayfabe_core::gpu::Proc::pending_release_len)
+                .sum()
+        });
+        live + dead
     }
 
     /// ★★ **T0's backstop drain** (`l1_os_shell.md` §7.6 T0, gap G2) — release every
@@ -3584,6 +3647,19 @@ impl SharedDevice {
         src: Arc<dyn kayfabe_fwd::InvalidateRefresh>,
     ) -> Result<(), Arc<dyn kayfabe_fwd::InvalidateRefresh>> {
         self.invalidate_refresh.set(src)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — install the ring-slice oracle.** Once, at realize, and only
+    /// on the arm where a store slice can occur at all.
+    ///
+    /// # Errors
+    /// The oracle back, if one was already installed — a second would be a second answer to
+    /// a question whose whole value is that one party owns it.
+    pub fn set_ring_slice_oracle(
+        &self,
+        src: Arc<dyn kayfabe_fwd::RingSliceOracle>,
+    ) -> Result<(), Arc<dyn kayfabe_fwd::RingSliceOracle>> {
+        self.ring_slice.set(src)
     }
 
     /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**
@@ -6270,6 +6346,97 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **CONSTRAINT 26 — ASK THIS `Vas`'s PER-PROC ISOLATE WHAT IT WOULD HAND OVER.**
+    ///
+    /// Under `KAYFABE_VAS_OWNER=scratchpad` a `Vas`'s `host_vas` is a **bare**
+    /// `FERMI_VASPACE_A`, and the scratchpad needs `(client, space)` to dup it. The seven
+    /// `VerbPlan` arms that mint a host VAS lazily keep only the handle, so this is how the
+    /// VMM recovers the namespace it belongs to.
+    ///
+    /// ⊘ **Not a `VerbPlan`**, and that is deliberate: a plan exists to be *gated* on the
+    /// handles it names and to be *committed* into core state. This names no handle it did
+    /// not already hold and changes nothing — it is a read, and dressing a read as a plan
+    /// would put it through a commit phase with nothing to commit.
+    ///
+    /// ⚠ **Blocking, and never on a vCPU**: it is an IPC round trip to a per-proc isolate.
+    /// `Worker::with_rm` asserts lock-free, so a caller holding a ranked lock panics rather
+    /// than deadlocking behind whatever that isolate is doing.
+    ///
+    /// # Errors
+    /// [`FwdFault`] when the `Vas` cannot be routed, has no host VAS yet, or offers no
+    /// worker; the isolate's own refusal (`HANDOVER_OF_A_NON_BARE_SPACE`) when the space is
+    /// not bare — i.e. when this was called on the `isolate` arm, which is a configuration
+    /// error and not a transient.
+    pub fn vaspace_handover(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+    ) -> Result<kayfabe_isolate::BareVaSpace, FwdFault> {
+        // ---- PLAN: route, read `host_vas`, and take a worker — all inside one locked phase.
+        let mut taken: Option<(ProcId, kayfabe_isolate::HostHandle, Worker)> = None;
+        self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| {
+                let Some(vas) = proc.vas_by_pdb(gpu, pdb) else {
+                    return;
+                };
+                let Some(host_vas) = vas.host_vas else {
+                    return;
+                };
+                // ⊘ `checkout_with_pending_release` and not a bare checkout: it is the only
+                // door, and its `Orphans` obligation travels with the worker. We owe the
+                // disposal exactly as every other op does.
+                let (worker, orphans) = proc.checkout_with_pending_release(gpu);
+                if let Some(w) = worker {
+                    taken = Some((proc.id, host_vas, w));
+                    // The queue rides out with this checkout, as it does for every op.
+                    proc.stage_release(gpu, orphans);
+                } else {
+                    // ⊘ Put it straight back: taking a queue we cannot issue would strand it.
+                    proc.stage_release(gpu, orphans);
+                }
+            },
+        )?;
+        let Some((pid, host_vas, mut worker)) = taken else {
+            return Err(FwdFault::NoVas(kayfabe_core::ChanId(0)));
+        };
+        // ---- EXECUTE: zero locks held.
+        let off = kayfabe_util::trapwitness::OffTrap::claim("asking for a VA-space hand-over");
+        let out = worker.with_rm(&off, |rm| rm.vaspace_handover(host_vas));
+        self.return_worker(pid, gpu, worker);
+        out.map_err(|err| FwdFault::Rm { err, on: None })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — record the scratchpad's range over this `Vas`'s space.**
+    ///
+    /// Returns `false` when the `Vas` could not be routed, so a caller cannot read *"stored"*
+    /// off a call that reached nothing.
+    pub fn set_store_vas(&self, gpu: GpuId, pdb: Pdb, range: kayfabe_isolate::HostHandle) -> bool {
+        let mut ok = false;
+        let _ = self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| {
+                if let Some(vas) = proc.vas_by_pdb_mut(gpu, pdb) {
+                    vas.store_vas = Some(range);
+                    ok = true;
+                }
+            },
+        );
+        ok
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the scratchpad's range over this `Vas`, if the hand-over has
+    /// happened.** `None` on the `isolate` arm, always.
+    #[must_use]
+    pub fn store_vas(&self, gpu: GpuId, pdb: Pdb) -> Option<kayfabe_isolate::HostHandle> {
+        self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| proc.vas_by_pdb(gpu, pdb).and_then(|v| v.store_vas),
+        )
+        .ok()
+        .flatten()
+    }
+
     /// ★★★★★ **THE SECOND CROSSING — back one framebuffer leaf with real host vidmem.**
     /// Same three phases as [`SharedDevice::publish_backing`], and a sibling of it for the
     /// reason [`kayfabe_isolate::VerbPlan::PublishVidmem`] gives.
@@ -6366,6 +6533,65 @@ impl SharedDevice {
             } else {
                 kayfabe_fwd::FbLeafBacking::Joined
             },
+        };
+        let adopted = self.route_act(
+            |_| Ok((pid, ())),
+            |_spine, proc, ()| kayfabe_fwd::adopt_joined_fb_leaf(proc, &plan, host_va, memory),
+        )?;
+        match adopted {
+            Ok(()) => Ok(()),
+            Err(r) => {
+                self.stage_orphans(pid, gpu, r.orphans);
+                Err(r.fault)
+            }
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — BIND A LEAF THE SCRATCHPAD ALREADY MAPPED.**
+    ///
+    /// The sibling of [`SharedDevice::adopt_joined_fb_leaf`] for the one chain where **this
+    /// process minted nothing**: the range IS the one reserved object at `offset`, the
+    /// scratchpad has already placed it at the guest's own VA, and all that is left is to
+    /// say so in core state.
+    ///
+    /// ⊘ The binding it produces is a [`kayfabe_mmu::HostBacking::slice`], so
+    /// `frees_object()` is **false** — releasing one leaf must not free the whole
+    /// reservation out from under every sibling slice and every channel bound over it.
+    ///
+    /// ⚠ `memory` is the **reservation**, not a per-leaf object. A caller that passed
+    /// anything else would bind a guest VA to bytes that are not the guest's framebuffer,
+    /// which is the two-memories state the single store exists to abolish;
+    /// `crate::device::SharedDevice` cannot check that and the store-map port's
+    /// `object()` accessor is the only sanctioned source.
+    ///
+    /// # Errors
+    /// Whatever the bind refuses with — `HostVaMismatch` when the scratchpad's placement
+    /// did not land at the guest's VA (which constraint 28 should already have refused at
+    /// the map), `SliceLenMismatch` when the slice's length and the leaf's disagree.
+    pub fn adopt_store_slice_fb_leaf(
+        &self,
+        gpu: GpuId,
+        pdb: Pdb,
+        leaf: kayfabe_fwd::FbLeafRange,
+        host_va: u64,
+        memory: kayfabe_isolate::HostHandle,
+        offset: u64,
+    ) -> Result<(), FwdFault> {
+        let kayfabe_fwd::FbLeafRange { va, len, phys } = leaf;
+        let pid = self.route_act(
+            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |_spine, proc, ()| proc.id,
+        )?;
+        let plan = kayfabe_fwd::BackFbLeafPlan {
+            proc: pid,
+            gpu,
+            pdb,
+            va,
+            len,
+            phys,
+            host_vas: None,
+            existing: None,
+            how: kayfabe_fwd::FbLeafBacking::StoreSlice { offset },
         };
         let adopted = self.route_act(
             |_| Ok((pid, ())),

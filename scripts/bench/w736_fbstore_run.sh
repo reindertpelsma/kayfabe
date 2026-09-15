@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# ★★★★★ w745 — REUSED, AND THE ONLY STRUCTURAL CHANGE SINCE w736: a THIRD ARM.
+#   Constraint 26's ownership split is a second variable (`KAYFABE_VAS_OWNER`), so the
+#   two-arm shape can no longer separate "the store" from "who maps into the VA space".
+#   The arms are now:
+#     1  arena    + isolate     — THE CONTROL. Must stay `(P)` 8/8. Byte-identical to w743.
+#     2  device   + isolate     — w743's device arm, REPRODUCED on this binary. It is what
+#                                 says a change in arm 3 is the SPLIT and not the rebuild.
+#     3  device   + scratchpad  — THE TEST.
+#   ⊘ Arm 2 is not optional and is not padding: without it, arm 3's numbers are being
+#   compared against another day's boot on another revision, which is the comparison
+#   `a_rulings_date_is_part_of_the_citation` exists to refuse.
+#   ⚠ `env -u` clears BOTH variables on the arms that must not see them — a variable left
+#   set from a previous arm is how a "control" comes to run the thing it controls for.
 # ★★★★★ w742 — REUSED VERBATIM AGAIN. Only `report()` greps and the binary content gate
 #   changed (marked `w742 ADDITION, REPORTING ONLY`). No arm, threshold or boot step.
 #   ⊘ Edited IN PLACE rather than copied, for the reason this file already states three
@@ -97,6 +110,14 @@ n_w742=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-LEAF no_join_needed=')
 # most dangerous of those rows is `passes=0`, which on a stale binary is indistinguishable
 # from "the pre-flight ran and never had to refuse".
 n_w743=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W743-PREFLIGHT passes=')
+# ★★★ w745 — THE SAME GATE, FOR THIS CHANGE. `STORE-MAP` prints UNCONDITIONALLY on BOTH
+# arms at teardown (`⊘ NOT BUILT` on the control), so a boot without the string is an OLDER
+# BINARY and every w745 row would be graded against absence. ⚠ The most dangerous of those
+# rows is `adopts=0 maps=0`, which on a stale binary is indistinguishable from "the split
+# ran and had nothing to map".
+n_w745=$(strings "$Q_BIN" 2>/dev/null | grep -c 'STORE-MAP ')
+n_w745b=$(strings "$Q_BIN" 2>/dev/null | grep -c 'RING-NOT-A-SLICE')
+n_w745c=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-LEAF-SPLIT')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
 echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 echo "W740-CONTENT: userd_arm=$n_w740 (0 ⇒ the binary predates w740 — its rows cannot be graded)"
@@ -108,6 +129,8 @@ if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates C
 if [ "$n_w740" -eq 0 ]; then echo "⊘ the binary predates w740 — its rows cannot be graded. STOP."; exit 7; fi
 if [ "$n_w742" -eq 0 ]; then echo "⊘ the binary predates w742 — its rows cannot be graded. STOP."; exit 8; fi
 if [ "$n_w743" -eq 0 ]; then echo "⊘ the binary predates w743 — its rows cannot be graded. STOP."; exit 9; fi
+echo "W745-CONTENT: store_map=$n_w745 ring_not_a_slice=$n_w745b split_census=$n_w745c (any 0 ⇒ the binary predates w745)"
+if [ "$n_w745" -eq 0 ] || [ "$n_w745b" -eq 0 ] || [ "$n_w745c" -eq 0 ]; then echo "⊘ the binary predates w745 — its rows cannot be graded. STOP."; exit 10; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -268,6 +291,51 @@ report() {
   echo "W742-NAMED=$(printf '%s' "$DFB" | grep -ao 'named=[0-9]*' | tail -1)   ★ row 7: ≥300000 (w740: 426221)"
   echo "--- ⊘ w742: the arena census line — on the device arm it must SAY unmeasured, not print four zeros ---"
   grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1 | cut -c1-320
+  # ★★★★★ w745 ADDITION, REPORTING ONLY — constraint 26's own census, cut from the SAME
+  # logs, on ALL THREE arms. ⊘ The control's `⊘ NOT BUILT` is as much a result as the test
+  # arm's numbers: it is what says the split was absent rather than present-and-silent.
+  echo "--- ★★★★★ w745 ROWS 1/2: the STORE-MAP census, VERBATIM ---"
+  n_sm=$(grep -ac 'STORE-MAP ' "$Q" 2>/dev/null)
+  echo "W745-STOREMAP-LINES=${n_sm:-0}  (0 ⇒ UNMEASURED, not 'the split did nothing')"
+  SM=$(grep -ao 'STORE-MAP iso=.\{0,700\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$SM" | fold -w 160
+  w745f() { printf '%s' "$SM" | grep -ao "$1" | tail -1; }
+  echo "W745-ADOPTS=$(w745f 'adopts=[0-9]*')        ★ row 1: ≥1 on the scratchpad arm"
+  echo "W745-ADOPT-REFUSED=$(w745f 'adopt_refused=[0-9]*')"
+  echo "W745-MAPS=$(w745f ' maps=[0-9]*')           ★★★ row 2: ≥1 is the whole increment"
+  echo "W745-MAP-REFUSED=$(w745f 'map_refused=[0-9]*')"
+  echo "W745-OUTSTANDING=$(w745f 'outstanding=[0-9]*')"
+  echo "W745-ASSERTED=$(w745f 'asserted=[0-9]*')    ⊘ 0 with maps>0 means births never reached the oracle"
+  echo "W745-ASSERT-REFUSED=$(w745f 'assert_refused=[0-9]*')"
+  echo "W745-SM-FIRST=$(printf '%s' "$SM" | grep -ao 'first_refusal=\[[^]]*\]' | tail -1)"
+  echo "--- w745: the realize-time arm line (absent ⇒ the gate never ran) ---"
+  grep -a 'STORE-MAP AT REALIZE' "$Q" 2>/dev/null | head -2 | cut -c1-320
+  echo "--- ★★★★★ w745 ROWS 3/4: the PUBLISH-side census, VERBATIM, on both arms ---"
+  n_dls=$(grep -ac 'DEVICE-LEAF-SPLIT' "$Q" 2>/dev/null)
+  echo "W745-SPLITCENSUS-LINES=${n_dls:-0}  (0 ⇒ UNMEASURED, not 'the arm did nothing')"
+  grep -ao 'DEVICE-LEAF-SPLIT .\{0,400\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  echo "W745-DECLINED-ON-VCPU=$(grep -ao 'declined_on_vcpu=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ read BEFORE any refusal count"
+  echo "--- ★★★★★ w745 ROW 3: THE HAND-OVER, and the per-proc isolate's own refusal if any ---"
+  echo "W745-HANDOVERS=$(grep -ac 'CONSTRAINT-26 HAND-OVER' "$Q" 2>/dev/null)"
+  grep -a 'CONSTRAINT-26 HAND-OVER' "$Q" 2>/dev/null | head -3 | cut -c1-300
+  grep -a 'CONSTRAINT 26: the per-proc isolate would not hand' "$Q" 2>/dev/null | head -2 | cut -c1-300
+  echo "--- ★★★★★ w745 ROW 4: THE SLICE BINDINGS — the line conjunct (6) needs ---"
+  echo "W745-SLICE-BOUND=$(grep -ac 'CONSTRAINT 26: the SCRATCHPAD mapped a slice' "$Q" 2>/dev/null)"
+  grep -a 'CONSTRAINT 26: the SCRATCHPAD mapped a slice' "$Q" 2>/dev/null | head -2 | cut -c1-320
+  echo "--- ★★★★★ w745 ROW 5: THE FOUR FROZEN NUMBERS. Any movement is the finding ---"
+  echo "W745-ADOPTWHY-6=$(grep -ac 'ADOPT-WHY.*(6) the binding EXISTS but carries NO HOST OBJECT' "$Q" 2>/dev/null)   ⊘ w740/w742/w743: 17, 17, 17"
+  echo "W745-RING-NOT-A-SLICE=$(grep -ac 'RING-NOT-A-SLICE' "$Q" 2>/dev/null)   ★ NEW refusal; non-zero here with ADOPTWHY-6=0 is the wall having MOVED"
+  echo "W745-BIRTH-REFUSED=$(grep -ac 'BIRTH-AT-ALLOC.*REFUSED' "$Q" 2>/dev/null)   ⊘ w740/w742/w743: 11, 11, 11"
+  echo "W745-BIRTH-ADOPTING=$(grep -ac 'BIRTH-AT-ALLOC.*ADOPTING at creation' "$Q" 2>/dev/null)   ★★★ 0 on all three prior boots"
+  echo "W745-DOORBELL-BIRTH=$(grep -ao 'FwdFault::PassthroughDoorbellBirth=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ w740/w742/w743: 19, 19, 19"
+  echo "W745-FOREIGN-HANDLE=$(grep -ac 'ForeignHandle' "$Q" 2>/dev/null)"
+  echo "W745-BARE-SPACE-REFUSED=$(grep -ac '0x4b42\|MAP_THROUGH_A_BARE_SPACE' "$Q" 2>/dev/null)"
+  echo "--- ★★★★★ w745 ROW 6: CONSTRAINT 27's barrier, on every arm ---"
+  echo "W745-WITHHELD-UNMAPS=$(grep -ac 'WITHHELD-UNMAPS' "$Q" 2>/dev/null)"
+  echo "W745-MMUINVAL=$(grep -ao 'MMUINVAL armed=.\{0,400\}' "$Q" 2>/dev/null | tail -1)"
+  echo "W745-REFRESH-LINE=$(grep -ao 'MMUINVAL-REFRESH #[0-9]* seq=[0-9]* armed=[0-9]* refresh_ms=[0-9.]* unmaps_outstanding=[0-9]* drain_trips=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "--- ★★★★★ w745 ROW 7: CONSTRAINT 25's open violation — the number the brief asks for ---"
+  echo "W745-VCPU-BLOCKING=$(grep -ao 'VCPU-BLOCKING total=[0-9]* doors=[0-9]* worst_trap=[0-9]*us' "$Q" 2>/dev/null | tail -1)"
   echo "--- host Xid ---"
   echo "HOST_DMESG_XID=$(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190
@@ -282,19 +350,34 @@ sleep 3
 echo
 echo "############ ARM=arena (CONTROL) ############"
 unset KAYFABE_FB_STORE
-env -u KAYFABE_FB_STORE KAYFABE_DEVICE_VIEW=probe PREFIX="${TAG}arena" SHADOW=on \
+unset KAYFABE_VAS_OWNER
+env -u KAYFABE_FB_STORE -u KAYFABE_VAS_OWNER KAYFABE_DEVICE_VIEW=probe PREFIX="${TAG}arena" SHADOW=on \
     bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w736_arena.log"
 echo "ARENA_BOOT_RC=$?"
 report "${TAG}arena" arena
 
-# ===================== ARM 2: THE DEVICE STORE =====================
+# ===================== ARM 2: THE DEVICE STORE, OLD OWNERSHIP =====================
+# ⊘ w745: this arm is w743's device arm REPRODUCED ON THIS BINARY. It is what makes arm 3's
+# numbers attributable to the ownership split rather than to everything else that changed.
 pkill -f '[q]emu-system-x86'
 sleep 3
 echo
-echo "############ ARM=device (THE TEST) ############"
-KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe PREFIX="${TAG}dev" SHADOW=on \
+echo "############ ARM=device (w743 REPRODUCTION) ############"
+env -u KAYFABE_VAS_OWNER KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
+    PREFIX="${TAG}dev" SHADOW=on \
     bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w736_dev.log"
 echo "DEVICE_BOOT_RC=$?"
 report "${TAG}dev" device
+
+# ===================== ARM 3: w745 — THE OWNERSHIP SPLIT =====================
+pkill -f '[q]emu-system-x86'
+sleep 3
+echo
+echo "############ ARM=split (THE TEST — constraint 26) ############"
+KAYFABE_VAS_OWNER=scratchpad KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
+    PREFIX="${TAG}split" SHADOW=on \
+    bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w745_split.log"
+echo "SPLIT_BOOT_RC=$?"
+report "${TAG}split" split
 
 echo "=== W736 END $(date -Is) ==="

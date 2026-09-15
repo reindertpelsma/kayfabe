@@ -4763,7 +4763,7 @@ fn guest_ring_channel_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         vas,
         kayfabe_abi::submit::ENGINE_TYPE_COPY0,
         kayfabe_isolate_host::rm::GuestRing {
-            memory: kayfabe_isolate::HostHandle::NULL,
+            ring: kayfabe_isolate::RingProvenance::OwnObject(kayfabe_isolate::HostHandle::NULL),
             ring_va: 0,
             gp_fifo_va: 0,
             gp_fifo_entries: 0,

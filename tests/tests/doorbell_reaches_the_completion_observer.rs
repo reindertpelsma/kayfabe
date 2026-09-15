@@ -565,7 +565,7 @@ fn a_served_doorbell_that_forwarded_nothing_names_the_reason() {
 
     // ★ w393 — the birth, at the alloc, names the SAME absence at the SAME VA: nothing to
     // adopt, so no host channel and no fallback to a ring of ours.
-    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC0B_001A), None);
+    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC0B_001A), None, None);
     assert_eq!(
         birth.map(|o| format!("{o:?}")),
         Err(FwdFault::PassthroughRingNotAdoptable {

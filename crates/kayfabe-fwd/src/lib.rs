@@ -2643,6 +2643,23 @@ pub enum FbLeafBacking {
     /// is deliberate: the mistake that cannot be seen is made unrepresentable, and the
     /// mistake that is loud is left loud.
     Aliased,
+    /// ★★★★★ **CONSTRAINT 26 — THE LEAF *IS* THE ONE RESERVED OBJECT, AT THIS OFFSET, AND
+    /// THE SCRATCHPAD HAS ALREADY MAPPED IT AT THE GUEST'S VA.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// ⊘ **Nothing is minted on this arm and nothing is copied.** The other three chains end
+    /// in a host object this isolate allocated; this one ends in a *slice* of an object
+    /// nobody but the scratchpad names, already placed. So the binding it produces is a
+    /// [`kayfabe_mmu::HostBacking::slice`] whose `frees_object()` is **false** — releasing
+    /// one leaf must not free eleven gibibytes out from under every sibling.
+    ///
+    /// ⚠ The offset is the store's, not the guest's: `FbJoinPlan::DeviceBacked { at }`.
+    StoreSlice {
+        /// Where in the one reserved object this leaf lives.
+        offset: u64,
+    },
 }
 
 /// ★★★★★ **WHAT THE GUEST DECLARED FOR A LEAF**, as the backing decision needs it.
@@ -2846,7 +2863,14 @@ impl FbLeafBacking {
     pub const fn granule(self) -> u64 {
         match self {
             Self::Vidmem => FB_LEAF_GRANULE,
-            Self::Joined | Self::Aliased => FB_LEAF_PAGE,
+            // ★★★★★ **CONSTRAINT 26.** A store slice is placed by
+            // `RmConnection::raw_map_dma_slice`, which pins the small-page table whenever
+            // the VA or the length is not big-page aligned — so it reserves exactly `len` at
+            // exactly `va`, which is the `FB_LEAF_PAGE` granule's own statement.
+            // ⊘ Not `FB_LEAF_GRANULE`: this object is device-local, but the MAPPING's
+            // granularity is decided by the page-size flag constraint 28 selects, not by
+            // where the bytes live.
+            Self::Joined | Self::Aliased | Self::StoreSlice { .. } => FB_LEAF_PAGE,
         }
     }
 
@@ -3005,6 +3029,29 @@ pub fn plan_back_fb_leaf(
             // vidmem publish, because a leaf that could not be joined is a leaf whose two
             // memories would then be re-created deliberately.
             Some(match how {
+                // ★★★★★ **CONSTRAINT 26 — THERE IS NO VERB.** A store slice is placed by the
+                // SCRATCHPAD, before this plan is built, and the plan exists only to carry
+                // the binding into core state. ⊘ `None` here is not "nothing to do": it is
+                // *"the host work already happened, and it was not this isolate's"* — which
+                // is the whole of the ownership split at the one line where the old design
+                // would have issued an IPC.
+                // ★★★★★ **CONSTRAINT 26 — REFUSED HERE BY NAME, AND THAT IS NOT A GAP.**
+                //
+                // A store slice is placed by the SCRATCHPAD before any plan exists, and it is
+                // bound by `SharedDevice::adopt_store_slice_fb_leaf`, which builds its plan
+                // directly. Nothing reaches this function with `how == StoreSlice`.
+                //
+                // ⊘ **A `verbs: None` arm here would compile, read as working, and never
+                // run** — the *unwired but still compiling* shape `§w724g` names as the cruft
+                // trap. A refusal cannot be mistaken for a mechanism: if this fires, somebody
+                // has routed a store slice through the chain that mints objects, and the boot
+                // says so instead of silently planning nothing.
+                FbLeafBacking::StoreSlice { .. } => {
+                    return Err(FwdFault::Rm {
+                        err: kayfabe_isolate::RmError::Other(STORE_SLICE_IS_NOT_PLANNED_HERE),
+                        on: None,
+                    });
+                }
                 FbLeafBacking::Vidmem => VerbPlan::PublishVidmem {
                     host_vas,
                     len,
@@ -3478,12 +3525,41 @@ fn bind_backed_fb_leaf(
         FbLeafBacking::Joined | FbLeafBacking::Aliased => {
             kayfabe_mmu::BackingBytes::JoinsGuestWindow
         }
+        // ★★★★★ **CONSTRAINT 26.** `JoinsGuestWindow` is TRUE of a store slice in the
+        // strongest sense the word has: the guest's framebuffer window over this range IS
+        // this object at this offset — not a copy of it, not a re-pointing of it. There is
+        // one memory and the guest reaches it independently, which is exactly the predicate
+        // `adopted_guest_ring`'s conjunct (7) tests for.
+        FbLeafBacking::StoreSlice { .. } => kayfabe_mmu::BackingBytes::JoinsGuestWindow,
     };
-    let binding = match kayfabe_mmu::Binding::real_gpu_memory(
-        plan.phys,
-        Aperture::Vidmem,
-        kayfabe_mmu::HostBacking::whole(memory, host_va, bytes),
-    ) {
+    // ★★★★★ **CONSTRAINT 26 — `slice`, NOT `whole`, AND THE DIFFERENCE IS A USE-AFTER-FREE.**
+    //
+    // `HostBacking::frees_object()` is `true` only for `Whole`, and every reclaim site asks
+    // it before freeing. A store slice bound as `whole` would make the FIRST leaf's release
+    // free the entire reservation out from under every sibling slice and every channel —
+    // silently, because RM frees the object happily and says nothing about who was reading
+    // through it.
+    let host = match plan.how {
+        FbLeafBacking::StoreSlice { offset } => {
+            // ⊘ A zero-length or wrapping slice is refused HERE rather than bound: the
+            // walker's `len` is guest-derived, and `AddressTable::bind` would compare it
+            // against a slice that does not exist.
+            let Ok(slice) = kayfabe_mmu::HostSlice::new(offset, plan.len) else {
+                return Err(Refusal {
+                    fault: FwdFault::FbLeafGranularity {
+                        va: plan.va,
+                        len: plan.len,
+                        granule: FB_LEAF_PAGE,
+                    },
+                    orphans: orphans(),
+                    retry: false,
+                });
+            };
+            kayfabe_mmu::HostBacking::slice(memory, host_va, slice, bytes)
+        }
+        _ => kayfabe_mmu::HostBacking::whole(memory, host_va, bytes),
+    };
+    let binding = match kayfabe_mmu::Binding::real_gpu_memory(plan.phys, Aperture::Vidmem, host) {
         Ok(b) => b,
         Err(fault) => {
             return Err(Refusal {
@@ -4738,8 +4814,15 @@ pub fn plan_engine_object(
             // the host channel. ⊘ A channel that already exists was born over whatever it
             // was born over; re-stating its ring here would be a second opinion about a fact
             // RM already holds and cannot be told.
+            // ⊘ **No oracle on this arm, and that is FAIL-CLOSED rather than an omission.**
+            // `plan_engine_object` is the LATCH path, not the birth path: it has no route to
+            // the composition root's store-map port, so a store-slice ring is refused here
+            // by name (`(8) RING-NOT-A-SLICE`) and the channel is born at its own alloc,
+            // which is where the oracle is in hand. ⚠ Passing `None` to mean "skip the
+            // check" would be the opposite reading and is exactly what the trait's docs
+            // forbid.
             adopt: if channel.is_none() {
-                adopted_guest_ring(spine, proc, chan, cgpu)
+                adopted_guest_ring(spine, proc, chan, cgpu, None)
             } else {
                 None
             },
@@ -4793,6 +4876,7 @@ fn adopted_guest_ring(
     proc: &Proc,
     chan: &kayfabe_core::gpu::Channel,
     cgpu: GpuId,
+    oracle: Option<&dyn RingSliceOracle>,
 ) -> Option<kayfabe_isolate::AdoptedGuestRing> {
     // ⊘ Off the channel's OWN graph node — the same node `CeChannelFacts::ring_va` reads, so
     // the two projections of "what ring did this channel declare" cannot disagree.
@@ -4908,8 +4992,52 @@ fn adopted_guest_ring(
         binding.kind(),
         host.bytes()
     );
+    // ★★★★★ **CONSTRAINT 26 — WHOSE MEMORY THIS IS, DECIDED FROM THE BINDING ITSELF.**
+    //
+    // `HostBacking::as_slice()` is `Some` for exactly one shape: a range bound over an arena
+    // that OUTLIVES it, which under the single store is a slice of the one reserved object
+    // placed by the scratchpad (`adopt_store_slice_fb_leaf` is its only production minter).
+    // ⊘ Derived rather than carried on the side: a second flag saying "this is a store slice"
+    // beside a binding that already says so is `a_second_source_of_truth_beside_a_complete_value`.
+    let provenance = match host.as_slice() {
+        None => kayfabe_isolate::RingProvenance::OwnObject(host.memory()),
+        Some(slice) => {
+            // ★★★ **THE RESTATED ASSERTION, ASKED OF THE PARTY THAT PLACED IT.** ⚠ FAIL
+            // CLOSED: no oracle means nobody can answer, and a missing checker must never
+            // read as a passed check — that is the whole class of defect this tree names
+            // `a check that reports is not a check that gates`, in its worst direction.
+            let placed = vas
+                .store_vas
+                .zip(oracle)
+                .is_some_and(|(store_vas, o)| {
+                    o.is_slice_of_the_store(
+                        store_vas,
+                        kayfabe_arch::ids::GpuVa(start),
+                        len,
+                    )
+                });
+            if !placed {
+                kayfabe_util::lock_safe_eprintln!(
+                    "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (8) \
+                     RING-NOT-A-SLICE — the binding is a slice of an arena and the party that \
+                     owns the one reserved object does NOT say it placed one here. ⚠ This is \
+                     `RING_NOT_A_JOINED_WINDOW` restated: a channel born over a range nobody \
+                     mapped fetches zeros, never advances GP_GET, and reports NO ERROR AT \
+                     ALL. ⊘ oracle_installed={} store_vas={:?}",
+                    ring.va,
+                    oracle.is_some(),
+                    vas.store_vas,
+                );
+                return None;
+            }
+            kayfabe_isolate::RingProvenance::StoreSlice {
+                offset: slice.offset(),
+                len: slice.len(),
+            }
+        }
+    };
     Some(kayfabe_isolate::AdoptedGuestRing {
-        memory: host.memory(),
+        ring: provenance,
         // Where the joined object is placed — the leaf's own base, which is what
         // `adopt_joined_fb_leaf` bound.
         ring_va: start,
@@ -4920,7 +5048,39 @@ fn adopted_guest_ring(
         gp_fifo_entries: ring.entries,
         // ★★★★★ **LEG B**, offered from inside leg A2's own answer so that *"the guest's
         // USERD on a ring of ours"* is unspellable. See `AdoptedGuestRing::userd`.
-        userd: adopted_guest_userd(&binding, len, host.memory(), userd),
+        // ★★★★★ **CONSTRAINT 26 — LEG B IS `None` FOR A STORE SLICE, AND IT SAYS SO.**
+        //
+        // ⊘⊘ **The USERD handle IS an operand**, unlike the ring's: it lands in
+        // `ChannelAllocParams::h_userd_memory_0` and RM reads it. The ring handle never
+        // reaches RM (`alloc_channel_in`'s `Guest` arm maps nothing and passes an absolute
+        // VA), which is why dropping THAT one costs nothing — and why dropping this one
+        // cannot be done the same way. A per-proc client simply has no handle for the
+        // scratchpad's object to put in that field.
+        //
+        // ⇒ On this arm the channel is born with the isolate's OWN USERD
+        // (`UserdOwner::Ours`), which is the pre-leg-B channel. ⚠ **That is a named,
+        // open limitation and not a silent fallback**: the guest advances `GP_PUT` in its
+        // own framebuffer page and RM reads ours, so something must carry the cursor across
+        // — w740's `fb_userd_gp_put_arming` is the mechanism that already does this for the
+        // CeUtils channel, and pointing it at user channels is the open work.
+        userd: match provenance {
+            kayfabe_isolate::RingProvenance::OwnObject(h) => {
+                adopted_guest_userd(&binding, len, h, userd)
+            }
+            kayfabe_isolate::RingProvenance::StoreSlice { .. } => {
+                if userd.is_some() {
+                    kayfabe_util::lock_safe_eprintln!(
+                        "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ LEG B DECLINED — the guest declared \
+                         a USERD and this ring is a STORE SLICE, whose object the birth \
+                         isolate may not name. `hUserdMemory` is a real RM operand, so the \
+                         channel is born with OUR USERD and the guest's cursor must be \
+                         carried across by the arming path, not by adoption.",
+                        ring.va
+                    );
+                }
+                None
+            }
+        },
     })
 }
 
@@ -5260,6 +5420,7 @@ pub fn plan_channel_birth(
     proc: &Proc,
     route: &ChannelBirthRoute,
     err_notifier_grant: Option<GuestRamGrant>,
+    ring_slice: Option<&dyn RingSliceOracle>,
 ) -> Result<Planned<ChannelBirthPlan>, FwdFault> {
     let pid = route.proc;
     let cid = route.chan;
@@ -5314,7 +5475,7 @@ pub fn plan_channel_birth(
     let ring_va = node.and_then(|n| n.facts.gp_fifo_ring).map(|r| r.va);
     let declared_engine_type = node.and_then(|n| n.facts.channel_engine_type);
     // ★★★★★ THE RULE. `adopted_guest_ring` prints `ADOPT-WHY` naming which conjunct failed.
-    let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu) else {
+    let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu, ring_slice) else {
         kayfabe_util::lock_safe_eprintln!(
             "kayfabe: BIRTH-AT-ALLOC proc={:?} chan={:?} vchid={:?} engine={:?} \
              kind=Passthrough ring_va={} ⊘⊘ REFUSED PassthroughRingNotAdoptable — the ADOPT-WHY \
@@ -5452,8 +5613,9 @@ pub fn exec_channel_birth(
     proc: &mut Proc,
     route: &ChannelBirthRoute,
     err_notifier_grant: Option<GuestRamGrant>,
+    ring_slice: Option<&dyn RingSliceOracle>,
 ) -> Result<ChannelBirthOutcome, FwdFault> {
-    let planned = plan_channel_birth(spine, proc, route, err_notifier_grant)?;
+    let planned = plan_channel_birth(spine, proc, route, err_notifier_grant, ring_slice)?;
     let gpu = planned.plan.cgpu;
     round_trip(proc, gpu, planned.verbs, |proc, reply| {
         commit_channel_birth(spine, proc, &planned.plan, reply)
@@ -5478,6 +5640,7 @@ pub fn birth_channel(
     client: HClient,
     channel: HObject,
     err_notifier_grant: Option<GuestRamGrant>,
+    ring_slice: Option<&dyn RingSliceOracle>,
 ) -> Result<ChannelBirthOutcome, FwdFault> {
     let Gpu {
         spine,
@@ -5496,7 +5659,7 @@ pub fn birth_channel(
             .get_mut(&route.proc)
             .ok_or(FwdFault::RetiredProc(route.proc))?
     };
-    exec_channel_birth(spine, proc, &route, err_notifier_grant)
+    exec_channel_birth(spine, proc, &route, err_notifier_grant, ring_slice)
 }
 
 /// **Case 1**: forward an engine-object alloc (compute / graphics / CE / NVENC) on the
@@ -6667,6 +6830,37 @@ pub trait FbBytes {
     /// tracking must be able to say *"I cannot tell you"* instead of being forced into a
     /// `false` that reads as a positive claim about the guest.
     fn page_written(&self, phys: u64) -> Option<bool>;
+}
+
+/// ★★★★★ **CONSTRAINT 26** — a store slice was routed through `plan_back_fb_leaf`, which
+/// mints host objects. It is bound by `SharedDevice::adopt_store_slice_fb_leaf` instead,
+/// because the scratchpad already placed it and there is nothing to mint. `0x4B44` (`"KD"`),
+/// in the same private range as the isolate's own refusals.
+pub const STORE_SLICE_IS_NOT_PLANNED_HERE: u32 = 0x4B44;
+
+/// ★★★★★ **CONSTRAINT 26 — THE RESTATED `RING_NOT_A_JOINED_WINDOW` QUESTION, AS A SEAM.**
+///
+/// > *"Delete the mechanism, keep the question."*
+///
+/// `alloc_channel_declared` refuses a birth over an object the birth isolate did not mint by
+/// joining a framebuffer leaf, and the failure it prevents is **silent**: a channel over a
+/// blank twin fetches zeros, never advances `GP_GET`, and reports no error at all. Under the
+/// ownership split the birth isolate holds neither the object nor the mapping, so it cannot
+/// make that check — and the only party that can is the one that placed the slice.
+///
+/// ⇒ This is that party, reached the way `InvalidateRefresh` already reaches the VMM: a trait
+/// the composition root installs, consulted where the decision is made.
+///
+/// ⚠ **Fail closed.** With no oracle installed, a ring whose binding is a store slice is
+/// **refused**, not adopted — `[the whole point]` a missing checker must not read as a passed
+/// check. `adopted_guest_ring` says so by name.
+pub trait RingSliceOracle: Send + Sync {
+    /// Did the party that owns the one reserved object place a slice of it at `at`, in the
+    /// address space named by `vas`, covering at least `len` bytes?
+    ///
+    /// ⊘ `vas` is the **scratchpad's** range over the guest's space, not the per-proc
+    /// handle: the ledger is keyed by what the mapper used.
+    fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool;
 }
 
 /// ★★★★ **A SHARED, long-lived source of our own framebuffer's bytes** — what a device

@@ -589,6 +589,59 @@ pub const NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1 << 31;
 /// same page table and the second cannot be the one that instantiates it.
 pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
 
+/// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
+///
+/// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written
+/// down rather than assumed.** Fermi through Blackwell all present 64 KiB as
+/// `NV_VASPACE_BIG_PAGE_SIZE_64K`, and [`NvVaspaceAllocationParameters::big_page_size`] is
+/// `0` on every space this crate allocates, which means *"the family default"*. So this is
+/// a **family** fact, which is the maintainable form constraint 12 names — not a GA106
+/// measurement. ⚠ If a space is ever allocated asking for 128 KiB, this number stops being
+/// the right one and [`nvos46_page_size_flag`] must take the space's own value instead.
+pub const NVOS46_BIG_PAGE_BYTES: u64 = 64 * 1024;
+
+/// ★★★★★ **WHICH `NVOS46_FLAGS_PAGE_SIZE` A *FIXED* MAP AT `at` FOR `len` BYTES MUST
+/// CARRY — constraint 28, and it is a measurement, not a preference.**
+///
+/// `[measured w744, GA106, driver 580.126.20, `traces/w744_b1d_probe/`]`
+/// `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` makes `dmaOffset` an `[IN]` — and RM **still**
+/// runs `_dmaGetPageSize`, which is free to choose a big page. A big-page mapping cannot
+/// begin on a 4 KiB boundary, so RM **aligns the request down and answers `NV_OK`**:
+///
+/// ```text
+/// at=0x0000008000001000 status=0x0000 dmaOffset=0x0000008000000000 honoured=false
+/// at=0x0000009000001000 status=0x0000 dmaOffset=0x0000009000001000 honoured=true  (4K flag)
+/// ```
+///
+/// ⇒ **0/3 of the raw client's own ring VAs were honoured without the flag and 3/3 with
+/// it**, through a *success* in both cases. The mapping then exists somewhere the guest
+/// never names, which is the `Xid 31 FAULT_PDE`
+/// [`NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`]'s own docs describe.
+///
+/// # ★ The rule, and why it is stated on the REQUEST rather than on the guest's page class
+///
+/// A large leaf is necessarily at a large-aligned VA, so it can be served by a big page at
+/// its own address and needs no flag; a request whose VA or length is **not** big-aligned
+/// cannot be served by a big page at all, so pinning it to the small-page table is the only
+/// way `FIXED` can be honoured. ⇒ the predicate is a property of `(at, len)`, which is
+/// available at **every** map site, rather than of a `Run::class` that only the (as yet
+/// unbuilt) run publisher holds. ⊘ The two agree by construction — the coalescer never
+/// emits a 64 KiB-class run at a VA that is not 64 KiB-aligned — so this is the same rule
+/// read off the numbers that are actually in hand.
+///
+/// ⊘ `PAGE_SIZE_DEFAULT` is `0`, i.e. *"RM chooses"*, and is returned deliberately rather
+/// than a transcribed `_BIG`: the only member of this field this crate has read the header
+/// for is `_4KB`, and naming a value we have not transcribed would be a guess wearing a
+/// constant's clothes.
+#[must_use]
+pub const fn nvos46_page_size_flag(at: u64, len: u64) -> u32 {
+    if at % NVOS46_BIG_PAGE_BYTES == 0 && len % NVOS46_BIG_PAGE_BYTES == 0 {
+        0
+    } else {
+        NVOS46_FLAGS_PAGE_SIZE_4KB
+    }
+}
+
 /// Bounds-checked field write, shared by every `encode_into` above.
 fn put(
     bytes: &mut [u8],

@@ -1434,7 +1434,7 @@ pub fn birth_passthrough_channels(gpu: &mut kayfabe_core::gpu::Gpu) -> BornChann
             ring_va,
         );
         expect_born(
-            kayfabe_fwd::birth_channel(gpu, u.key.origin.client, u.key.origin.handle, None),
+            kayfabe_fwd::birth_channel(gpu, u.key.origin.client, u.key.origin.handle, None, None),
             u.pid,
             u.cid,
         );

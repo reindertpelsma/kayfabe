@@ -114,10 +114,14 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "RingOwner::HandedIn",
-        5,
-        "The five places provenance decides something: the `Guest` arm's tag, the empty \
-         unwind set, the absent CPU map, `submit_entry`'s refusal, and the teardown that \
-         must not unmap or free the guest's ring.",
+        6,
+        "★★ **5 → 6 at w745 (constraint 26), ADMITTED 2026-09-15.** The `Guest` arm's TAG is \
+         now written twice, once per `RingProvenance` arm — `OwnObject` narrows a handle, \
+         `StoreSlice` contributes `0` because the birth isolate holds none — and both are \
+         `HandedIn`, which is the ruling unchanged: **provenance, not ownership, moved.** ⊘ \
+         The other five are untouched: the empty unwind set, the absent CPU map, \
+         `submit_entry`'s refusal, and the teardown that must not unmap or free the guest's \
+         ring. ⚠ A SEVENTH would mean a third provenance, and there are two.",
     ),
     (
         "src/rm.rs",
@@ -352,7 +356,16 @@ fn the_birth_witness_can_tell_declined_from_never_asked() {
     // its return is what the `None, None` literal above now pins.
     let fwd = sibling_body("kayfabe-fwd", "src/lib.rs");
     assert_eq!(
-        fwd.matches("adopted_guest_ring(spine, proc, chan, cgpu)")
+        // ⊘⊘ **CORRECTED 2026-09-15 (w745) — THE PATTERN, NOT THE RULING.** Constraint 26
+        // gave `adopted_guest_ring` a fifth argument (the `RingSliceOracle`), so the
+        // four-argument literal matched **zero** times and this gate reported "somewhere
+        // other than the two birth sites" about a tree with exactly two. That is w288's
+        // failure mode on this very test, recorded in its own doc comment — *"If it merely
+        // got REFORMATTED, fix the pattern — and say so, as w288 did."* ⇒ said.
+        // ★ Truncated at the fourth comma rather than widened to a regex: the discriminator
+        // is still WHICH arguments are passed and in what order, and matching "some call to
+        // `adopted_guest_ring`" would keep passing on the day a third site appears.
+        fwd.matches("adopted_guest_ring(spine, proc, chan, cgpu,")
             .count(),
         2,
         "`adopted_guest_ring` is called from somewhere other than the TWO birth sites — \
@@ -370,7 +383,10 @@ fn the_birth_witness_can_tell_declined_from_never_asked() {
     // is a refusal, and the plan variant it builds has NO `Option` around the adoption. Both
     // are what make *"a passthrough channel born over our ring"* unspellable on this path.
     assert_eq!(
-        fwd.matches("let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu) else {")
+        // ⊘ Truncated at the fourth comma for the reason given above — w745 added a fifth
+        // argument. The SHAPE this pins (`let … else` with a refusing else-arm, and a plan
+        // variant with no `Option` around the adoption) is unchanged.
+        fwd.matches("let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu,")
             .count(),
         1,
         "`plan_channel_birth`'s consult is no longer a refuse-by-name `let … else`. ⊘ If it \
@@ -530,9 +546,25 @@ fn the_birth_witness_is_read_by_no_decision() {
          write to the wrong place look identical in a log."
     );
     // ⊘ The refusal must not be reachable from the witness: it is `fb_joins` membership.
+    // ⊘⊘ **CORRECTED 2026-09-15 (w745), AND THE RULING IS NOW SCOPED RATHER THAN MOVED.**
+    // Constraint 26 split the adoption into two provenances. `RingProvenance::OwnObject` —
+    // the only arm that names a handle, and the whole of the `isolate` arm — is still gated
+    // on `FbJoinTable` membership, and this line is still that gate; the local it narrows
+    // into was renamed when the `match` arrived.
+    // ★ `RingProvenance::StoreSlice` names NO handle, so there is nothing for this side to
+    // look up: its question is answered VMM-side by `kayfabe_fwd::RingSliceOracle`, of the
+    // party that placed the slice. ⚠ That is a real move of the checker and it is asserted
+    // where it now lives (`tests/tests/the_birth_names_the_guests_ring.rs`), **not** implied
+    // by this one passing.
     assert!(
-        body.contains("t.is_joined_object(raw_memory)"),
-        "the adoption arm's membership check moved; the refusal is now gated on something \
-         other than `FbJoinTable` membership."
+        body.contains("t.is_joined_object(raw)"),
+        "the adoption arm's membership check moved; the OwnObject refusal is now gated on \
+         something other than `FbJoinTable` membership."
+    );
+    assert!(
+        body.contains("kayfabe_isolate::RingProvenance::StoreSlice { .. } => (0, true)"),
+        "★★★ CONSTRAINT 26 — the `StoreSlice` arm no longer opts out of the membership \
+         lookup by construction. If it grew one, the birth isolate is looking a handle up in \
+         a table it cannot own an entry in, and the answer would be `false` forever."
     );
 }
