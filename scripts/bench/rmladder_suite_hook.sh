@@ -53,6 +53,23 @@ $G 'chmod +x /tmp/rmladder_suite.sh'
 BENCH=${BENCH_DIR:-/workspace/bench}
 $G "${SUDO}dmesg | grep -a NVRM | tail -40" > "$BENCH/run_${TAG}_suite_dmesg_before.log" 2>&1
 
+# ★★★★★ THE DIRECT INSTRUMENT FOR THE R10 HYPOTHESIS, taken BEFORE the suite and
+# independently of the ladder. `[established from the source, w735]` `--concurrency` and
+# `--engines` are the ONLY two of the thirty arms that reach R10 — every other arm returns
+# before it — and R10 spawns a child with `ChildSpec::in_new_namespaces()`, i.e.
+# `clone(CLONE_NEWUSER|CLONE_NEWPID|…)`. The guest is **Ubuntu 24.04 Noble**
+# (`provision_bench_tree.sh:36`), which ships `kernel.apparmor_restrict_unprivileged_userns=1`
+# and denies `CLONE_NEWUSER` to an unprivileged process.
+# ⇒ Two arms, one cause, and it is testable in one line without the ladder in the path.
+# ⊘ `a_false_negative_from_a_missing_debug_print`: ask the kernel directly rather than infer
+# the answer from a red arm three layers up.
+echo "=== ★ CAN THE GUEST MAKE A USER NAMESPACE AT ALL? (R10's precondition, asked directly) ==="
+$G 'echo "GUEST_WHOAMI=$(id -un) uid=$(id -u)";
+    echo "GUEST_APPARMOR_USERNS=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)";
+    echo "GUEST_USERNS_CLONE=$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || echo unset)";
+    if unshare -Ur true 2>/dev/null; then echo "GUEST_USERNS_AS_USER=ok"; else echo "GUEST_USERNS_AS_USER=DENIED"; fi;
+    if sudo -n unshare -Ur true 2>/dev/null; then echo "GUEST_USERNS_AS_ROOT=ok"; else echo "GUEST_USERNS_AS_ROOT=DENIED"; fi' 2>&1 | sed 's/^/    /'
+
 echo ""
 echo "=== ★★★ THE SUITE IN THE GUEST (host reference: 30/30 PASS) ==="
 # ⊘ `RMLADDER_ARMS` must be FORWARDED explicitly: `gssh_nv` is an ssh invocation, so the host's
