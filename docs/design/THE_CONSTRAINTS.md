@@ -810,7 +810,36 @@ lifetime) is wrong.
 
 ★ **No lying, either way.** The aperture the guest names is the aperture it gets.
 
-## ⊘⊘⊘ REFUTED w734i — THE SECTION BELOW IS WRONG, AND BOTH TERMS ARE NOW MEASURED
+## ⊘⊘ REINSTATED w735 — THE RULE HOLDS AFTER ALL; ONLY ITS REASON WAS WRONG. Read this before the refutation below.
+
+The sequence, because the middle state is the misleading one:
+
+| | |
+|---|---|
+| **w724c (mine)** | *"§6 must precede §3 — the intermediate does not boot"*, on a **derived** byte cost |
+| **w734i** | ⊘ the byte cost is **refuted by measurement** — the intermediate costs **5–10 s**, it boots |
+| **w735** | ✔ **the rule is REINSTATED on a different, structural ground: a LOCK RANK** |
+
+★★★ **Arming a device view is an IPC round trip that asserts lock-free — and every host-side reader
+of the store holds `LockRank::PlaneMem`, two of them on a vCPU inside an MMIO exit.** So the store
+**cannot arm**, and every host-side consumer must arm *before* the lock. Of the four, only
+`PlanePtBytes` can; `FbStoreReader`'s callers need a demand set; and the **CPU CE executor runs
+inside `ce_session_with_root` and DROPS a refused submission** — the CeUtils-wedge class.
+
+⇒ **§6 step 3 and constraint 9 are prerequisites of a clean §3.** Full argument: §w735 below.
+
+### ⊘⊘⊘ AND THE LESSON IS ABOUT THE REFUTATION, NOT THE RULE
+
+w734's census was **pre-registered honestly and measured the wrong dimension**: it measured
+**seconds**, and **no number of seconds can reach a lock rank.** ⇒ **A measurement can refute a
+stated reason while leaving the rule standing** — and a refutation is only as wide as the dimension
+it measured.
+
+⚠ I recorded *"the order is no longer forced"* on the strength of w734i. That was wrong, and it was
+wrong in the most expensive direction: had anyone acted on it, they would have reordered the branch
+around a bandwidth number and hit a lock-rank wall that no timing could have predicted.
+
+## ⊘⊘⊘ REFUTED w734i — the byte cost below is wrong, and both terms are now measured
 
 `[measured, vast 51082161, RTX 3060 GA106, 580.159.04, traces/w734_fbio_census/]` — raw client
 `(P)`, 8/8 threads.
