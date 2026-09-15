@@ -287,6 +287,69 @@ to grow a reason it currently discards, and cut B is the increment that gives th
 > | 12 | `FwdFault::CpuCeFb=` on the device arm | **< 63**, direction only | ≥63 ⇒ the pre-arm reaches none of them, and the raw client's wall is not this |
 > | 13 | `W392D_GUEST_OUTCOME=` on the device arm | **`(R)`** — ★ a pass here would be a **surprise**, reported as one and not as the plan working | — |
 
+> ### ✔✔✔ MEASURED 2026-09-15 (w742), ON HARDWARE, BOTH ARMS, ONE BINARY — **EVERY ROW MET**
+> `[vast 51120460, RTX 3070, host 580.159.04 OPEN, binary rev = tree rev = `d0a4b10b`, both arms;
+> evidence `traces/w742_publish_install/`]`
+>
+> | # | predicted | **measured (device arm)** | w740 |
+> |---|---|---|---|
+> | 1 | `THE INSTALL REFUSED` = 0 | **0** | 4431 |
+> | 2 | `no_join_needed` ≈ 4431 | **4653** | — (the arm did not exist) |
+> | 3 | `quiesce[calls=` ≤ ~150 | **0** `removed=0` | **4431** / `removed=58175` |
+> | 4 | ★★★ `bar1 TRAP_FILLS=` **0** | **0** | 44 |
+> | 5 | ★★★ `BAR1-PASSTHROUGH misses=` **0** | **0** | **2183** |
+> | 6 | `bar2 TRAP_FILLS=` 0 | **0**, `misses=0` | 0 |
+> | 7 | `named` ≥ 300000 | **311287** | 426221 |
+> | 8 | `RmInitAdapter failed!` = 0 | **0**, `SMI_RC=0`, `MODPROBE_RC=0` | 0 |
+> | 9 | control `(P)` 8/8 | **`(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`** | `(P)` 8/8 |
+> | 10 | `JoinFbLeaf n=` ≤ 100 | **the entry is ABSENT — n=0**; whole `VERBCOST total=85 549 µs over 10 plans` | `n=2149` + `Release n=2150`, **3 970 ms** |
+> | 11 | `slices_armed` ≥ 20 | **26** | — |
+> | 12 | `FwdFault::CpuCeFb` < 63 | **4** | 63 |
+> | 13 | device-arm client `(R)` | **`(R)`, `THREADS 0 of 8`** | `(R)` 0/8 |
+>
+> ★★★★★ **ROW 5 IS THE ONE THAT MATTERS AND IT IS THE STRONGEST: `misses=0`.** `TRAP_FILLS`
+> counts fills a trap *caused*; `misses` counts the **exits**, and w740's 2183 exits produced
+> only 44 fills, so a boot with `TRAP_FILLS=0` and `misses>0` would **not** have been a pass.
+> ⇒ **the guest-side BAR1 trap census on the device arm is EMPTY**, matching BAR2, and
+> `quiesce[calls=0]` says why: the join that removed the slots is not attempted at all.
+>
+> ★★ **THE CAUSAL CHAIN IS CONFIRMED IN THE DIRECTION IT PREDICTS.** The diff contains nothing
+> that makes a trapped access answer better — it removes the `join_fb` call. `quiesce calls`
+> 4431 → **0** and `misses` 2183 → **0** move together, and `removed=58175` → `0` is the
+> mechanism in between.
+>
+> ★★ **AND THE ARMING HALF WORKED, WITH NO CHURN.** `DEVICE-FB-PORT drains=4691 armed=80
+> arm_refused=0 evicted=0 outstanding=80 budget_refused=0 served_read=1 662 086` — 80 runs
+> ≈ 5 MiB against a 256-run / 16 MiB cap, exactly the *"37 distinct frames × 1 `ARM_GRAIN`"*
+> prediction, so the FIFO never evicted. `FB-DEMAND … read_gave_up=0` and
+> `host_read_refused` **841 → 19**, `host_write_refused` 75 → 41.
+>
+> ### ⊘ WHAT IT DID **NOT** BUY — the raw client, stated as predicted
+> `W392D_GUEST_OUTCOME=(R)`, `THREADS 0 of 8`, **unchanged**. `FwdFault::CpuCeFb` fell 63 → **4**,
+> so the pre-arm reaches most of what was refusing — but *most* is not *all*, and four refusals
+> that have already moved bytes are as fatal as sixty-three. ⚠ **Do not read row 12 as progress
+> on the client**; it is progress on the *mechanism* row 11 installs, and the client's wall is
+> still w740's `blocked_by_progress=68` vs `trips=10`: a refusal that already released a payload
+> cannot be repaired by arming afterwards, and arming *before the session* is the untried fix.
+>
+> ### ⚠ TWO DEVIATIONS, NAMED RATHER THAN BURIED
+> 1. ⊘ **THE HOST GPU IS A GA104 (RTX 3070), NOT THE CAMPAIGN'S GA106.** No `vms_enabled`
+>    GA106 offer existed on vast at the time (checked repeatedly; the whole VM-capable pool was
+>    26–33 offers across all GPUs and contained **zero** RTX 3060 / A2000). `host_preflight.sh`
+>    passes it by name — *"GA10x family — matches kayfabe-arch"* — both are `sm_86`, and the
+>    **control arm reproduces w740's `(P)` 8/8 exactly**, which is the discriminator. ⇒ rows
+>    1/3/4/5/6/8/9 are **absolute** targets and chip-independent; rows 2/7/10/12 are compared
+>    against a w740 number measured on other hardware and carry that caveat.
+> 2. ⊘ **`HOST_DMESG_XID=1` on the CONTROL arm** — `Xid 31 … ENGINE CE0 HUBCLIENT_CE1 faulted @
+>    0xa0_00000000 … FAULT_PDE`. ★ **Byte-identical to w740's control arm** (same engine, same
+>    address, same channel `0x19`): the known `Pdb(0)` shared-key defect
+>    (`va_spaces_are_keyed_by_their_page_directory_base`), pre-existing and not this diff's.
+>    The **device** arm's `HOST_DMESG_XID=0`, as in w740.
+>
+> ⊘ **A print cap, corrected in passing:** the w740 claim *"only two distinct offsets miss"* came
+> from a log that prints `8 of 8` misses and stops. The total was 2183. Two offsets is what the
+> first eight prints showed, never a census.
+
 
 ⊘ **Owner's question: "does the driver use the refresh (three entrypoints) before using a BAR
 address? can you confirm?" — CONFIRMED, from the w740 device-arm log.** The line immediately

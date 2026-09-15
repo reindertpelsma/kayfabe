@@ -1,0 +1,446 @@
+W742_RUN_START 2026-09-15T13:30:46+00:00
+TREE_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2 cargo=/root/.cargo/bin/cargo
+=== W736 FB-STORE CUT-A RUN 2026-09-15T13:30:46+00:00 tag=w742 ===
+TREE_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2  BRANCH=w742-publish-install
+== KAYFABE_SHIM_FEATURES=host-isolates cuda-scratchpad
+SHIM_RC=0
+W736-CONTENT: walk_shadow=36 cuda_image=1 fb_store=2 device_fb=1
+W738-CONTENT: fb_demand=1 device_fb_port=1 (either 0 ⇒ the binary predates CUT B)
+W740-CONTENT: userd_arm=1 (0 ⇒ the binary predates w740 — its rows cannot be graded)
+W742-CONTENT: device_leaf=1 (0 ⇒ the binary predates w742 — its rows cannot be graded)
+
+############ ARM=arena (CONTROL) ############
+=== SINGLE-STORE E6 BOOT 2026-09-15T13:31:49+00:00 tag=w742arena ===
+KAYFABE_WALK_SHADOW=on KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2 TREE_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2
+E6-CONTENT: walk_shadow_strings=36 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+[client] THREADS           8 of 8 verified ✔
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=2  (0 ⇒ UNMEASURED)
+WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity window retires the relocated image that is built from the host walk's `visited` set (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean
+WALK-SHADOW compared=65 kernel_unavailable=2074 skipped[budget_spent=2074] host_runs=171 kernel_runs=171 host_unclassed=0 compared_flags=0xf image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0] disagreements=0 by_kind[none] first[] swap_armed=false decided=0 fell_back[none] ⇒ ★★★ AGREEMENT over every compared refresh, on the fields both walkers decode. ⚠ Necessary and not sufficient for the swap: see `compared_flags` — volatile, privilege, atomic-disable and KIND are decoded by the KERNEL ONLY and are not in this number. ⇒ ⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and was never on the publish path. This census is about the comparison only. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=65
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[budget_spent=2074]
+E6-IMAGE-STATS=image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0]
+E6-SWAP-ARMED=false
+E6-DECIDED=0
+E6-FELL-BACK=fell_back[none]
+E6-SWAP-VERDICT=SWAP DISARMED
+--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---
+E6-FALLBACK-LINES=0  (records only; the REALIZE banner names the string too)
+--- ★ the decider's shape check, if a replacement was ever refused whole ---
+E6-VERDICT=0  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity windo
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+E3-SPAN-PAGES=990381 E3-RESERVED_MB=4096 E3-ADVERTISED_MB=4096
+E3-IDENTITY-WINDOW=FITS top=4056600576 (3868.7 MiB) reserved=4294967296 (4096 MiB) headroom=227.3 MiB
+  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved object ⇒ §3's identity window is arithmetically possible for THIS workload. It is NOT a proof for every workload, and it says nothing about the promote/demote FAKE RANGE, which is specified and built by nobody.
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=609 inline_exceptions=0 worst_trap=22311us at=bar0+0x110c00 slow_traps(>1000us)=2 by_decade[1-10ms=1 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   27.754704] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   31.142815] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.142966] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.183332] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.188035] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.188202] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.188209] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   31.722485] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T13:33:37+00:00 tag=w742arena ===
+ARENA_BOOT_RC=0
+
+######## W736 REPORT arm=arena tag=w742arena ########
+--- the switch's own line at realize ---
+kayfabe: FB-STORE AT REALIZE: arena (the control, and the default) — the guest's framebuffer is a sparse host memfd, byte for byte as it shipped. Set KAYFABE_FB_STORE=device to arm §3's single store.
+--- ★★★ PREDICTION 1a: the DEVICE-FB census, VERBATIM ---
+W736-DEVICEFB-LINES=1  (0 ⇒ UNMEASURED, not 'nothing happened')
+DEVICE-FB named=0 host_read_refused=0 host_write_refused=0 read_served=0 write_served=0 wanted_by_read=0 wanted_by_write=0 out_of_range=0 no_join_needed=0 join_
+plan_refused=0 ⇒ ⊘⊘ VACUOUS — the single store was installed and NOTHING asked it anything. That is not `no accesses were needed`; it is an unmeasured s
+tore.
+W736-NAMED=named=0
+W736-RD-REFUSED=host_read_refused=0
+W736-WR-REFUSED=host_write_refused=0
+W736-OOR=out_of_range=0
+W738-RD-SERVED=read_served=0
+W738-WR-SERVED=write_served=0
+W738-WANTED-RD=wanted_by_read=0
+W738-WANTED-WR=wanted_by_write=0
+--- ★★★ w738 ROW 3: the FB-DEMAND census (cut B's callers), VERBATIM ---
+W738-FBDEMAND-LINES=1  (0 ⇒ UNMEASURED — the line is printed on BOTH arms, so
+                                 a missing one is an older binary, not a quiet boot)
+FB-DEMAND drains=0 armed=0 refused=0 declined_on_vcpu=0 no_port=3 read_retried_ok=0 read_gave_up=0 ⇒ ⊘ NO BYTE PORT — the arena arm, or the single store w
+ithout one. Cut B's arming path          was reached and had nothing to arm through; this is not a refusal.
+W738-FD-DRAINS=drains=0
+W738-FD-ARMED=armed=0
+W738-FD-REFUSED=refused=0
+W738-FD-DECLINED=declined_on_vcpu=0
+W738-FD-NOPORT=no_port=3
+W738-FD-RETRIED-OK=read_retried_ok=0
+W738-FD-GAVE-UP=read_gave_up=0
+--- ★★★ w738 ROWS 4/5: the DEVICE-FB-PORT census (cut B's mechanism), VERBATIM ---
+W738-DEVFBPORT-LINES=1
+DEVICE-FB-PORT ⊘ NO BYTE PORT ON THIS BOOT — the store has none, so                  no host-side framebuffer access could ever be served. That is the ARENA
+ arm                  (the default, where nothing needs one) or cut A's shape on the `device` arm.                  The FB-STORE lines at realize say which.
+--- ★★★ w738 ROW 6: premap's fault count and the arm-then-retry trip counts ---
+premap[runs=2298 filled=6084 skipped=681599 refused=0 biggest_leaf=65536 bar2_visited=19 pt_faults=0] arm[retries=0 retried_ok=0 gave_up=0]
+--- w738: the store's first MISSED-AN-ARMED-VIEW line (cut B's transient, not cut A's wall) ---
+--- w738: PREMAP's SHORT-enumeration line, if item 4's shape fired at all ---
+--- w738: the cut-B banner at realize (absent ⇒ no byte port was attached at all) ---
+--- ★★★ w739 CUT C 1/3: the fill queue, and whether a REFUSED access ever asked ---
+W739-FILLS-LINES=1  (0 ⇒ UNMEASURED, not 'no fills')
+BAR-MIRROR FILLS queued=0 run=0 dropped=0 from_refusal=0 refusal_declined=0 (a dropped fill is a page that keeps trapping, never a wrong value) ⊘ from_refusal
+=0 — cut C's repair path was NEVER ASKED. On the arena arm that is correct and expected (no byte port, the gate is false by construction); on the `device` arm
+ it means a refused BAR1/BAR2 access never reached the gate, which is a DIFFERENT defect from one tha
+W739-FILLS-QUEUED=queued=0
+W739-FILLS-RUN=run=0
+W739-FILLS-FROM-REFUSAL=from_refusal=0   ⊘ arena MUST be 0 (no byte port)
+--- ★★★ w740 1/3: the CeUtils arming census, VERBATIM, both arms ---
+W740-ARM-LINES=1  (0 ⇒ UNMEASURED, not 'no arming')
+W740-USERD-ARM trips=0 recovered=0 gave_up=0 refused_no_arm=0 not_lock_free=0  W740-CE-SUBMIT-ARM trips=0 recovered=0 blocked_by_progress=0 gave_up=0 ⇒ ⊘ NE
+ITHER LOOP EVER TRIPPED — on the `arena` control this is correct and expected          (no byte port, `arm` is false by construction); on a `device` arm it me
+ans no          framebuffer read on the CeUtils doorbell path was ever refused, which is a          DIFFERENT fact from the fix working
+W740-USERD-TRIPS=W740-USERD-ARM trips=0
+W740-USERD-RECOVERED=recovered=0
+W740-USERD-GAVEUP=gave_up=0
+W740-USERD-REFUSED-NO-ARM=refused_no_arm=0
+W740-CE-SUBMIT=W740-CE-SUBMIT-ARM trips=0 recovered=0 blocked_by_progress=0 gave_up=0 ⇒ ⊘ NEITHER LOOP EVER TRIPPED — on the `arena` control this is corre
+--- ★★★ w740 2/3: did a submission ever recover after a drain? ---
+--- ★★★ w740 3/3: the doorbell census and its FIRST refusal (row 4) ---
+2026-09-15T13:33:32.877751Z qemu-system-x86_64: info: nvkvm: doorbells: 361 arrived, 347 served, 3 REFUSED by name; last token 0x00010001 (16 logged)
+first doorbell refusal [FwdFault::RingBroughtNoEntry]
+W740-CEUTILS-ASSERT=0  ⊘ row 5: 0 is the prediction
+W740-RMINIT-FAILED=0  ★★★ row 6: 0 is the WIN CONDITION
+--- ★★★ w739 CUT C 2/3: the BAR1/BAR2 translate tallies (resolved vs REFUSED) ---
+BAR2 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name; roots published 4 (0 bodies refused), BAR2 root entry 0x0
+BAR1 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name; bar1PdeBase = 0xf1cac000 (the framebuffer address WE published and the walk starts from), root entry published by the guest: no, as og
+--- ★★★ w739 CUT C 3/3: FB-IO by role, ON BOTH ARMS (the item-2 pricing) ---
+W739-FBIO-LINES=1
+FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0] walk-bar[r=3456235/135.0MiB w=0/0.0MiB frames=58] walk-guest-pt[r=53984/141.5MiB w=0/0.0MiB frames=71] out-of-band[r=
+557/0.3MiB w=0/0.0MiB frames=60] cpu-ce[r=2/0.0MiB w=352/15.7MiB frames=2049] ★ TOTAL=292.5MiB WALK=276.5MiB WALK_FRAMES=129 ⇒ PROJECTION: at an ASSUME
+--- the store's FIRST refusal, on its own line (it says its own name once) ---
+--- ★★★ PREDICTION 1b: the DEVICE-VIEW-PORT census, VERBATIM ---
+W736-DEVVIEW-LINES=14
+DEVICE-VIEW-PORT armed=0 released=0 outstanding=0 refused=0 double_released=0 bytes_armed=0.0MiB arm_us_total=0 rel_us_total=0 first_refusal=[none] ⇒ ⊘⊘ V
+ACUOUS — the port exists and NOTHING ever asked it for a view. That is not `no views were needed`; it is an unmeasured port.
+DEVICE-VIEW-PORT armed=0 released=0 outstanding=0 refused=0 double_released=0 bytes_armed=0.0MiB arm_us_total=0 rel_us_total=0 first_refusal=[none] ⇒ ⊘⊘ V
+ACUOUS — the port exists and NOTHING ever asked it for a view. That is not `no views were needed`; it is an unmeasured port. parked_releases=0 ⇒ ★ no view
+ is waiting on a mapping that has not been collected
+--- ★★★ PREDICTION 2: WHERE IT DIED ---
+[guest NVRM, FIRST lines — not the last: a re-boot attempt masks the first failure]
+[   27.754704] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   31.142815] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.142966] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.183332] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.188035] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.188202] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.188209] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TY
+[   31.722485] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; stat
+[   31.755295] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; stat
+[   31.865407] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphic
+[   31.874481] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   31.876010] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   31.884899] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   31.884904] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[the adapter verdict]
+[nvidia-smi's own exit]
+MODPROBE_RC=0
+SMI_RC=0
+--- the client grade (the control's gate; the device arm is expected to have none) ---
+    W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+        THREADS           8 of 8 verified ✔
+    MEAN_FALSIFIER=PASS
+--- what the device path was asked for, if anything (trap/fill census) ---
+TRAPWITNESS off_trap_claims=609 inline_exceptions=0 worst_trap=22311us at=bar0+0x110c00 slow_traps(>1000us)=2 by_decade[1-10ms=1 10-100ms=1 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- ★★★★★ w742 ROWS 1/2/11: the publish route's device arm, VERBATIM ---
+W742-DEVICELEAF-LINES=1  (0 ⇒ UNMEASURED, not 'the arm did nothing')
+DEVICE-LEAF no_join_needed=0 plan_refused=0 slices_armed=0 ⇒ ⊘ THE DEVICE ARM NEVER RAN — every leaf this boot offered was answered `NeedsRegion`. That is
+ the ARENA arm's correct answer and the control's; on a `device` boot it means the store was not the single store and nothing below is about it.
+W742-NO-JOIN-NEEDED=no_join_needed=0   ★ row 2: ≈4431 predicted
+W742-PLAN-REFUSED=plan_refused=0
+W742-SLICES-ARMED=slices_armed=0   ★ row 11: ≥20 predicted
+W742-INSTALL-REFUSED=0   ★★★ row 1: 0 predicted (w740: 4431)
+W742-NO-JOIN-LINES=0   (capped at 6 by design)
+--- ★★★★★ w742 ROW 3: the QUIESCE count — the number the guest actually paid ---
+W742-QUIESCE=quiesce[calls=806 removed=3212]   ★ row 3: calls ≤ ~150 (w740: 4431)
+--- ★★★★★ w742 ROWS 4/5/6: THE GRADE. Both BAR1 numbers and BAR2's control ---
+W742-BAR1-CENSUS=BAR-MIRROR bar1 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=5841 distinct_pages=816 distinct_frames=928
+W742-BAR2-CENSUS=BAR-MIRROR bar2 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=243 distinct_pages=138 distinct_frames=126
+W742-BAR1-MISSES=BAR1-PASSTHROUGH arm=on misses=0   ★★★ row 5: misses=0, and THIS is the honest one
+W742-BAR2-MISSES=BAR2-PASSTHROUGH arm=on misses=0
+--- ★★★★★ w742 ROW 10: the verb budget the skipped mint returns ---
+W742-VERBCOST=VERBCOST total=866653us over 565 plan(s) [JoinFbLeaf n=403 total=366281us mean=0.91ms worst=12.81ms 42.3%]   ★ row 10: JoinFbLeaf n ≤ 100 (w740: 2149)
+--- ★★★★★ w742 ROW 12: the raw client's named fault, direction only ---
+W742-CPUCEFB=   ⊘ w740: 63 on the device arm; <63 is the DIRECTION, not a pass
+W742-CPUCEFB-LINES=0
+scripts/bench/w736_fbstore_run.sh: line 246: named: command not found
+--- ★★★★★ w742 ROW 7:  must not regress ---
+W742-NAMED=named=0   ★ row 7: ≥300000 (w740: 426221)
+--- ⊘ w742: the arena census line — on the device arm it must SAY unmeasured, not print four zeros ---
+arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0 (store numbers at END only)]
+--- host Xid ---
+HOST_DMESG_XID=1
+[ 1146.506877] NVRM: Xid (PCI:0000:00:08): 31, pid=88665, name=68, channel 0x00000019, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa0_00000000. Fault is of type FAULT_PDE 
+--- QEMU's own last words (if it refused at realize, the sentence is here) ---
+2026-09-15T13:33:32.877751Z qemu-system-x86_64: info: nvkvm: doorbells: 361 arrived, 347 served, 3 REFUSED by name; last token 0x00010001 (16 logged)
+2026-09-15T13:33:32.877838Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::RingBroughtNoEntry] RingBroughtNoEntry { ring_va: GpuVa(4848680960), index: 44, entries: 1024 } | c=0xc1d0000a vas=0xcaf00005 dec=NONE userd=h0xcaf00010/off0x0/phy
+2026-09-15T13:33:32.877902Z qemu-system-x86_64: info: nvkvm:   ⊘ fault DELIVERY is UNBUILT: this port raises no replayable fault and never advances MMU_FAULT_BUFFER_PUT(1), so a fault the guest should have been told about becomes a HANG inside UVM's replayab
+2026-09-15T13:33:32.877960Z qemu-system-x86_64: info: nvkvm:   ⊘ shadow-queue PUSH is UNBUILT: on a GSP client the GSP is the WRITER of this queue and this port never enqueues a fault packet, so a non-replayable fault surfaces as an RC on the channel plus an
+2026-09-15T13:33:32.878011Z qemu-system-x86_64: info: nvkvm:   ⊘ access-counter NOTIFICATION is UNBUILT: this port advertised the buffer's size as a deliberate fiction (BAR0 0xB83110, which read zero and killed cuInit) and writes no entry into it and raises 
+kayfabe: FB-STORE-DEVICE AT END OF RUN: DEVICE-VIEW-PORT armed=0 released=0 outstanding=0 refused=0 double_released=0 bytes_armed=0.0MiB arm_us_total=0 rel_us_total=0 first_refusal=[none] ⇒ ⊘⊘ VACUOUS — the port exists and NOTHING ever asked it for a v
+kayfabe: PRAMIN-SLOT AT 4218421248: moves=22 skipped=18311 showing=0xfff00000 window_accesses=0 before_slot=0 after_slot=0 => ★ every exit was the PREFIX before the first latch write - installing earlier is the whole remaining fix gpa=0xfb700000 (BAR0 ends w
+kayfabe: BAR-MIRROR bar1 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=5841 distinct_pages=816 distinct_frames=928 — ⇒ **TRAP_FILLS is the goal-2 number**: one guest MMIO exit each. ⊘ `premap_fills` are installed AHEAD of any access and cost the guest 
+kayfabe: BAR-MIRROR bar2 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=243 distinct_pages=138 distinct_frames=126 — ⇒ **TRAP_FILLS is the goal-2 number**: one guest MMIO exit each. ⊘ `premap_fills` are installed AHEAD of any access and cost the guest N
+kayfabe: BAR-MIRROR MECHANISM AT END OF RUN: slots live=0 peak=954 revalidate[runs=1153 kept=684784 removed=2872] quiesce[calls=806 removed=3212] retire_all[calls=0 removed=0] arena[pages live=2415 peak=2415 allocations=4103 span_pages=990381 store_refused=0 s
+kayfabe: BAR-MIRROR FILLS queued=0 run=0 dropped=0 from_refusal=0 refusal_declined=0 (a dropped fill is a page that keeps trapping, never a wrong value) ⊘ from_refusal=0 — cut C's repair path was NEVER ASKED. On the arena arm that is correct and expected (
+kayfabe: ★★★ GUEST-RAM LAYOUT AT END OF RUN, AS THE HYPERVISOR STATED IT — dev=1 ino=6: 5 contiguous run(s) totalling 17179521024 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 78 reported 
+######## END arm=arena ########
+
+############ ARM=device (THE TEST) ############
+=== SINGLE-STORE E6 BOOT 2026-09-15T13:34:06+00:00 tag=w742dev ===
+KAYFABE_WALK_SHADOW=on KAYFABE_SCRATCHPAD=on KAYFABE_SCRATCHPAD_CUDA=on KAYFABE_SCRATCHPAD_START_MB=4096
+POST_CAPTURE_HOOK=/root/kayfabe/scripts/bench/w392d_mean_hook.sh
+BINARY_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2 TREE_REV=d0a4b10b77fa0592f4d7821d645c5ffb2ddad7b2
+E6-CONTENT: walk_shadow_strings=36 cuda_census=2 (either 0 ⇒ an OLDER binary — STOP)
+E6-IMAGE: cuda_image_symbols=1 (0 ⇒ built WITHOUT --features cuda-scratchpad ⇒ the shadow CANNOT run)
+boot_capture rc=5
+--- Q1 THE CLIENT (graded first; everything below is uninterpretable without it) ---
+[client] W392D_GUEST_OUTCOME=(R) ★★★★★ A NAMED GAP — and this is the most valuable
+[client] THREADS           0 of 8 verified ⊘ A WORKER CAME BACK DIRTY — see the fault
+[client] MEAN_FALSIFIER=PASS
+--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEASURED, not clean) ---
+E6-SHADOW-LINES=2  (0 ⇒ UNMEASURED)
+WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity window retires the relocated image that is built from the host walk's `visited` set (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean
+WALK-SHADOW compared=65 kernel_unavailable=920 skipped[budget_spent=920] host_runs=171 kernel_runs=171 host_unclassed=0 compared_flags=0xf image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0] disagreements=0 by_kind[none] first[] swap_armed=false decided=0 fell_back[none] ⇒ ★★★ AGREEMENT over every compared refresh, on the fields both walkers decode. ⚠ Necessary and not sufficient for the swap: see `compared_flags` — volatile, privilege, atomic-disable and KIND are decoded by the KERNEL ONLY and are not in this number. ⇒ ⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and was never on the publish path. This census is about the comparison only. ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device buffer can span that), so `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN those pages.
+E6-COMPARED=65
+E6-DISAGREEMENTS=0
+E6-BY-KIND=by_kind[none]
+E6-SKIPPED=skipped[budget_spent=920]
+E6-IMAGE-STATS=image[pages_max=22 staged_bytes=3129344 absent_edges=0 sysmem_edges=0]
+E6-SWAP-ARMED=false
+E6-DECIDED=0
+E6-FELL-BACK=fell_back[none]
+E6-SWAP-VERDICT=SWAP DISARMED
+--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---
+E6-FALLBACK-LINES=0  (records only; the REALIZE banner names the string too)
+--- ★ the decider's shape check, if a replacement was ever refused whole ---
+E6-VERDICT=0  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)
+--- ★ the per-refresh refusals, verbatim, if any fired ---
+--- ★ the isolate's OWN stderr for the shadow verbs ---
+--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---
+⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup
+  thread and every request is served on a WORKER. Probes (a) and (b) run where the
+  context already is, so they cannot see this; it must begin PASS.
+probe_other_thread="PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc + cuMemFree)"
+--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---
+E4-CUDA_WALK=OK
+E1-RESERVATION=HELD
+E1-RESERVED_MB=4096
+--- ★ the SAID refusal, if the shadow was armed with no isolate to run in ---
+kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run ALONGSIDE the host walk at every off-vCPU page-table sweep and the two answers compared by kind. ⊘ Nothing is published from it. Expiry: deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity windo
+--- the arena counter the previous session's plan turned on (reported, not depended on) ---
+arena[pages live=0 peak=0 allocations=0 span_pages=0 ⊘ the four store numbers are UNMEASURED, NOT zero — `DeviceFb` has no arena and inherits `arena_census_all`'s (0,0,0,0) default]
+E3-SPAN-PAGES=0 E3-RESERVED_MB=4096 E3-ADVERTISED_MB=4096
+E3-IDENTITY-WINDOW=FITS top=0 (0.0 MiB) reserved=4294967296 (4096 MiB) headroom=4096.0 MiB
+  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved object ⇒ §3's identity window is arithmetically possible for THIS workload. It is NOT a proof for every workload, and it says nothing about the promote/demote FAKE RANGE, which is specified and built by nobody.
+--- Q5 WHAT THE GUEST PAID ---
+TRAPWITNESS off_trap_claims=54 inline_exceptions=0 worst_trap=44440us at=bar0+0x1700 slow_traps(>1000us)=21 by_decade[1-10ms=18 10-100ms=3 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+SLOW-SITES only proves it is under 1ms. 
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=0
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   27.850460] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   31.340448] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.340621] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.661264] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.676910] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.677796] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   31.677999] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   32.881281] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T13:36:01+00:00 tag=w742dev ===
+DEVICE_BOOT_RC=0
+
+######## W736 REPORT arm=device tag=w742dev ########
+--- the switch's own line at realize ---
+kayfabe: FB-STORE AT REALIZE: ★★★ DEVICE — the guest's framebuffer is the one reserved device-local RM object. Every page names an address in it and the BAR mirror arms a CPU view per guest memslot. ⊘⊘ CUT A: the store's own host-side `read`/`write` REFUSE BY NAME, so the first page-table read out of the framebuffer ends this boot — deliberately. Falling back to host memory for host 
+--- ★★★ PREDICTION 1a: the DEVICE-FB census, VERBATIM ---
+W736-DEVICEFB-LINES=1  (0 ⇒ UNMEASURED, not 'nothing happened')
+DEVICE-FB named=311287 host_read_refused=19 host_write_refused=41 read_served=1662086 write_served=638 wanted_by_read=19 wanted_by_write=41 out_of_range=0 no_jo
+in_needed=4653 join_plan_refused=0 ⇒ ◐ CUT B IS PARTLY SERVING — some host-side accesses were answered from armed views and some were refused. ⊘ A refus
+al here is NOT the same finding as cut A's: read `DEVICE-FB-PORT` for whether the arm was declined (a vCPU), refused (the host BAR1 aperture is full) or simply 
+never drained (no lock-free caller retried).
+W736-NAMED=named=311287
+W736-RD-REFUSED=host_read_refused=19
+W736-WR-REFUSED=host_write_refused=41
+W736-OOR=out_of_range=0
+W738-RD-SERVED=read_served=1662086
+W738-WR-SERVED=write_served=638
+W738-WANTED-RD=wanted_by_read=19
+W738-WANTED-WR=wanted_by_write=41
+--- ★★★ w738 ROW 3: the FB-DEMAND census (cut B's callers), VERBATIM ---
+W738-FBDEMAND-LINES=1  (0 ⇒ UNMEASURED — the line is printed on BOTH arms, so
+                                 a missing one is an older binary, not a quiet boot)
+FB-DEMAND drains=4691 armed=80 refused=0 declined_on_vcpu=14 no_port=0 read_retried_ok=4 read_gave_up=0 ⇒ ★★★★★ CUT B IS WORKING — every host read
+ that missed was armed and served on retry.
+W738-FD-DRAINS=drains=4691
+W738-FD-ARMED=armed=80
+W738-FD-REFUSED=refused=0
+W738-FD-DECLINED=declined_on_vcpu=14
+W738-FD-NOPORT=no_port=0
+W738-FD-RETRIED-OK=read_retried_ok=4
+W738-FD-GAVE-UP=read_gave_up=0
+--- ★★★ w738 ROWS 4/5: the DEVICE-FB-PORT census (cut B's mechanism), VERBATIM ---
+W738-DEVFBPORT-LINES=1
+DEVICE-FB-PORT drains=4691 armed=80 arm_refused=0 declined_on_vcpu=0 evicted=0 outstanding=80 served_read=1662086 served_write=638 wanted_read=4672 wanted_write
+=41 want_dropped=0 still_wanted=0 outside_object=0 span_too_wide=0 budget_refused=0 first_arm_refusal=[none] ⇒ ★ every arm succeeded and armed runs served h
+ost-side accesses
+--- ★★★ w738 ROW 6: premap's fault count and the arm-then-retry trip counts ---
+premap[runs=1288 filled=1747 skipped=307768 refused=0 biggest_leaf=65536 bar2_visited=19 pt_faults=0] arm[retries=5 retried_ok=0 gave_up=0]
+--- w738: the store's first MISSED-AN-ARMED-VIEW line (cut B's transient, not cut A's wall) ---
+kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ MISSED AN ARMED VIEW at fb 0xf1cac000 — no CPU view of this page of the reserved object is armed yet. The demand has been recorded in the store's want set; a LOCK-FREE caller must call `DeviceFbPort::drain` and retry, because arming is an IPC round
+kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE WRITE MISSED AN ARMED VIEW at fb 0x60000 — no CPU view of this page of the reserved object is armed yet, so this write has NOT landed anywhere. The demand is recorded; a lock-free caller must drain and retry. There is deliberately no success-shaped answ
+--- w738: PREMAP's SHORT-enumeration line, if item 4's shape fired at all ---
+--- w738: the cut-B banner at realize (absent ⇒ no byte port was attached at all) ---
+kayfabe: FB-STORE ★★★ CUT B — a byte port is attached over                                  4096.0 MiB of reserved object, grain 64 KiB, budget 256 runs.                                  A host-side read of an ARMED run is served out of the object;                                  one that i
+--- ★★★ w739 CUT C 1/3: the fill queue, and whether a REFUSED access ever asked ---
+W739-FILLS-LINES=1  (0 ⇒ UNMEASURED, not 'no fills')
+BAR-MIRROR FILLS queued=0 run=0 dropped=0 from_refusal=0 refusal_declined=0 (a dropped fill is a page that keeps trapping, never a wrong value) ⊘ from_refusal
+=0 — cut C's repair path was NEVER ASKED. On the arena arm that is correct and expected (no byte port, the gate is false by construction); on the `device` arm
+ it means a refused BAR1/BAR2 access never reached the gate, which is a DIFFERENT defect from one tha
+W739-FILLS-QUEUED=queued=0
+W739-FILLS-RUN=run=0
+W739-FILLS-FROM-REFUSAL=from_refusal=0   ⊘ arena MUST be 0 (no byte port)
+--- ★★★ w740 1/3: the CeUtils arming census, VERBATIM, both arms ---
+W740-ARM-LINES=1  (0 ⇒ UNMEASURED, not 'no arming')
+W740-USERD-ARM trips=5 recovered=5 gave_up=0 refused_no_arm=0 not_lock_free=0  W740-CE-SUBMIT-ARM trips=37 recovered=6 blocked_by_progress=3 gave_up=1 ⇒ ★�
+�★★★ THE ARMING LOOP RECOVERED A SUBMISSION — a framebuffer read that refused          under the plane lock was armed by a lock-free drain and served on
+ retry.          Constraint 9: the bytes moved; nothing was forged
+W740-USERD-TRIPS=W740-USERD-ARM trips=5
+W740-USERD-RECOVERED=recovered=6
+W740-USERD-GAVEUP=gave_up=1
+W740-USERD-REFUSED-NO-ARM=refused_no_arm=0
+W740-CE-SUBMIT=W740-CE-SUBMIT-ARM trips=37 recovered=6 blocked_by_progress=3 gave_up=1 ⇒ ★★★★★ THE ARMING LOOP RECOVERED A SUBMISSION — a framebuffer read
+--- ★★★ w740 2/3: did a submission ever recover after a drain? ---
+kayfabe: CE-SUBMIT-ARMED token=0x00010001 trips=1 userd_trips=0 ★★★★★ a framebuffer read on this submission refused under the plane lock, a LOCK-FREE drain armed the page, and the re-run was SERVED. ⊘ The bytes moved; no completion was forged.
+kayfabe: CE-SUBMIT-ARMED token=0x00010004 trips=1 userd_trips=0 ★★★★★ a framebuffer read on this submission refused under the plane lock, a LOCK-FREE drain armed the page, and the re-run was SERVED. ⊘ The bytes moved; no completion was forged.
+kayfabe: CE-SUBMIT-ARMED token=0x00010001 trips=1 userd_trips=0 ★★★★★ a framebuffer read on this submission refused under the plane lock, a LOCK-FREE drain armed the page, and the re-run was SERVED. ⊘ The bytes moved; no completion was forged.
+kayfabe: CE-SUBMIT-ARMED token=0x00010001 trips=14 userd_trips=0 ★★★★★ a framebuffer read on this submission refused under the plane lock, a LOCK-FREE drain armed the page, and the re-run was SERVED. ⊘ The bytes moved; no completion was forged.
+--- ★★★ w740 3/3: the doorbell census and its FIRST refusal (row 4) ---
+2026-09-15T13:35:57.199946Z qemu-system-x86_64: info: nvkvm: doorbells: 124 arrived, 97 served, 25 REFUSED by name; last token 0x00010001 (16 logged)
+first doorbell refusal [FwdFault::PassthroughDoorbellBirth]
+W740-CEUTILS-ASSERT=0  ⊘ row 5: 0 is the prediction
+W740-RMINIT-FAILED=0  ★★★ row 6: 0 is the WIN CONDITION
+--- ★★★ w739 CUT C 2/3: the BAR1/BAR2 translate tallies (resolved vs REFUSED) ---
+BAR2 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name; roots published 4 (0 bodies refused), BAR2 root entry 0x0
+BAR1 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name; bar1PdeBase = 0xf1cac000 (the framebuffer address WE published and the walk starts from), root entry published by the guest: no, as og
+--- ★★★ w739 CUT C 3/3: FB-IO by role, ON BOTH ARMS (the item-2 pricing) ---
+W739-FBIO-LINES=1
+FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0] walk-bar[r=1637362/73.2MiB w=0/0.0MiB frames=80] walk-guest-pt[r=21342/58.6MiB w=0/0.0MiB frames=66] out-of-band[r=67
+6/1.0MiB w=0/0.0MiB frames=52] cpu-ce[r=2/0.0MiB w=679/40.6MiB frames=1153] ★ TOTAL=173.5MiB WALK=131.9MiB WALK_FRAMES=146 ⇒ PROJECTION: at an ASSUMED 
+--- the store's FIRST refusal, on its own line (it says its own name once) ---
+kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ MISSED AN ARMED VIEW at fb 0xf1cac000 — no CPU view of this page of the reserved object is armed yet. The demand has been recorded in the store's want set; a LOCK-FREE caller must call `DeviceFbPort::drain` and retry, because arming is an IPC round
+kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE WRITE MISSED AN ARMED VIEW at fb 0x60000 — no CPU view of this page of the reserved object is armed yet, so this write has NOT landed anywhere. The demand is recorded; a lock-free caller must drain and retry. There is deliberately no success-shaped answ
+--- ★★★ PREDICTION 1b: the DEVICE-VIEW-PORT census, VERBATIM ---
+W736-DEVVIEW-LINES=5
+DEVICE-VIEW-PORT armed=1849 released=112 outstanding=1737 refused=0 double_released=0 bytes_armed=33.8MiB arm_us_total=544095 rel_us_total=85766 first_refusal=[
+none] ⇒ ★ every arm and every release succeeded
+DEVICE-VIEW-PORT armed=1849 released=112 outstanding=1737 refused=0 double_released=0 bytes_armed=33.8MiB arm_us_total=544095 rel_us_total=85766 first_refusal=[
+none] ⇒ ★ every arm and every release succeeded parked_releases=1656 ⇒ ⚠ views whose SLOT is gone and whose MAPPING may not be. They are                
+          held deliberately: releasing early leaves PTEs pointing at BAR1                          space RM has re-handed out, which is silent and cross-tenant.
+ A                          number that never falls is a leak and refuses later arms loudly.
+--- ★★★ PREDICTION 2: WHERE IT DIED ---
+[guest NVRM, FIRST lines — not the last: a re-boot attempt masks the first failure]
+[   27.850460] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   31.340448] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.340621] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.661264] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.676910] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.677796] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInter
+[   31.677999] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TY
+[   32.881281] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsStatus=0x00000000; stat
+[   32.960939] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000000; stat
+[   33.107895] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphic
+[   33.121502] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   33.123360] NVRM: rpcRmApiFree_GSP: GspRmFree failed: hClient=0xc1d00008; hObject=0x31415900; paramsStatus=0x00000000; status=0x00000056
+[   33.153424] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   33.153429] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[the adapter verdict]
+[nvidia-smi's own exit]
+MODPROBE_RC=0
+SMI_RC=0
+--- the client grade (the control's gate; the device arm is expected to have none) ---
+    W392D_GUEST_OUTCOME=(R) ★★★★★ A NAMED GAP — and this is the most valuable
+        THREADS           0 of 8 verified ⊘ A WORKER CAME BACK DIRTY — see the faults 
+    MEAN_FALSIFIER=PASS
+--- what the device path was asked for, if anything (trap/fill census) ---
+TRAPWITNESS off_trap_claims=54 inline_exceptions=0 worst_trap=44440us at=bar0+0x1700 slow_traps(>1000us)=21 by_decade[1-10ms=18 10-100ms=3 100ms-1s=0 >1s=0] (target: inline_exceptions=0) 
+arena[pages live=0 peak=0 allocations=0 span_pages=0 ⊘ the four store numbers are UNMEASURED, NOT zero — `DeviceFb` has no arena and inherits `arena_census_all`'s (0,0,0,0) default]
+--- ★★★★★ w742 ROWS 1/2/11: the publish route's device arm, VERBATIM ---
+W742-DEVICELEAF-LINES=1  (0 ⇒ UNMEASURED, not 'the arm did nothing')
+DEVICE-LEAF no_join_needed=4653 plan_refused=0 slices_armed=26 ⇒ ★★★ THE DEVICE ARM RAN AND INSTALLED — joins skipped (so no mirror quiesce for any of
+ them) and slices of the reserved object armed. ⚠ `armed` is runs, not leaves: a re-offered leaf whose run is already armed costs nothing and is counted in ne
+ither.
+W742-NO-JOIN-NEEDED=no_join_needed=4653   ★ row 2: ≈4431 predicted
+W742-PLAN-REFUSED=plan_refused=0
+W742-SLICES-ARMED=slices_armed=26   ★ row 11: ≥20 predicted
+W742-INSTALL-REFUSED=0   ★★★ row 1: 0 predicted (w740: 4431)
+W742-NO-JOIN-LINES=6   (capped at 6 by design)
+--- ★★★★★ w742 ROW 3: the QUIESCE count — the number the guest actually paid ---
+W742-QUIESCE=quiesce[calls=0 removed=0]   ★ row 3: calls ≤ ~150 (w740: 4431)
+--- ★★★★★ w742 ROWS 4/5/6: THE GRADE. Both BAR1 numbers and BAR2's control ---
+W742-BAR1-CENSUS=BAR-MIRROR bar1 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=1504 distinct_pages=816 distinct_frames=1040
+W742-BAR2-CENSUS=BAR-MIRROR bar2 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=243 distinct_pages=138 distinct_frames=126
+W742-BAR1-MISSES=BAR1-PASSTHROUGH arm=on misses=0   ★★★ row 5: misses=0, and THIS is the honest one
+W742-BAR2-MISSES=BAR2-PASSTHROUGH arm=on misses=0
+--- ★★★★★ w742 ROW 10: the verb budget the skipped mint returns ---
+W742-VERBCOST=   ★ row 10: JoinFbLeaf n ≤ 100 (w740: 2149)
+--- ★★★★★ w742 ROW 12: the raw client's named fault, direction only ---
+W742-CPUCEFB=FwdFault::CpuCeFb=4   ⊘ w740: 63 on the device arm; <63 is the DIRECTION, not a pass
+W742-CPUCEFB-LINES=0
+scripts/bench/w736_fbstore_run.sh: line 246: named: command not found
+--- ★★★★★ w742 ROW 7:  must not regress ---
+W742-NAMED=named=311287   ★ row 7: ≥300000 (w740: 426221)
+--- ⊘ w742: the arena census line — on the device arm it must SAY unmeasured, not print four zeros ---
+arena[pages live=0 peak=0 allocations=0 span_pages=0 ⊘ the four store numbers are UNMEASURED, NOT zero — `DeviceFb` has no arena and inherits `arena_census_all`'s (0,0,0,0) default]
+--- host Xid ---
+HOST_DMESG_XID=0
+--- QEMU's own last words (if it refused at realize, the sentence is here) ---
+2026-09-15T13:35:57.199946Z qemu-system-x86_64: info: nvkvm: doorbells: 124 arrived, 97 served, 25 REFUSED by name; last token 0x00010001 (16 logged)
+2026-09-15T13:35:57.200046Z qemu-system-x86_64: info: nvkvm:   first doorbell refusal [FwdFault::PassthroughDoorbellBirth] PassthroughDoorbellBirth { proc: ProcId(2), chan: ChanId(0), vchid: VChid(3) } | c=0xc1d00013 vas=0xcafe0004 dec=NONE userd=h0xcafe0006/o
+2026-09-15T13:35:57.200113Z qemu-system-x86_64: info: nvkvm:   ⊘ fault DELIVERY is UNBUILT: this port raises no replayable fault and never advances MMU_FAULT_BUFFER_PUT(1), so a fault the guest should have been told about becomes a HANG inside UVM's replayab
+2026-09-15T13:35:57.200156Z qemu-system-x86_64: info: nvkvm:   ⊘ shadow-queue PUSH is UNBUILT: on a GSP client the GSP is the WRITER of this queue and this port never enqueues a fault packet, so a non-replayable fault surfaces as an RC on the channel plus an
+2026-09-15T13:35:57.200199Z qemu-system-x86_64: info: nvkvm:   ⊘ access-counter NOTIFICATION is UNBUILT: this port advertised the buffer's size as a deliberate fiction (BAR0 0xB83110, which read zero and killed cuInit) and writes no entry into it and raises 
+kayfabe: FB-STORE-DEVICE AT END OF RUN: DEVICE-VIEW-PORT armed=1849 released=112 outstanding=1737 refused=0 double_released=0 bytes_armed=33.8MiB arm_us_total=544095 rel_us_total=85766 first_refusal=[none] ⇒ ★ every arm and every release succeeded parked_r
+kayfabe: PRAMIN-SLOT AT 4218421248: moves=22 skipped=9481 showing=0xfff00000 window_accesses=0 before_slot=0 after_slot=0 => ★ every exit was the PREFIX before the first latch write - installing earlier is the whole remaining fix gpa=0xfb700000 (BAR0 ends wh
+kayfabe: BAR-MIRROR bar1 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=1504 distinct_pages=816 distinct_frames=1040 — ⇒ **TRAP_FILLS is the goal-2 number**: one guest MMIO exit each. ⊘ `premap_fills` are installed AHEAD of any access and cost the guest
+kayfabe: BAR-MIRROR bar2 AT END OF RUN: arm=on TRAP_FILLS=0 premap_fills=243 distinct_pages=138 distinct_frames=126 — ⇒ **TRAP_FILLS is the goal-2 number**: one guest MMIO exit each. ⊘ `premap_fills` are installed AHEAD of any access and cost the guest N
+kayfabe: BAR-MIRROR MECHANISM AT END OF RUN: slots live=0 peak=954 revalidate[runs=648 kept=307768 removed=1747] quiesce[calls=0 removed=0] retire_all[calls=0 removed=0] arena[pages live=0 peak=0 allocations=0 span_pages=0 ⊘ the four store numbers are UNMEAS
+kayfabe: BAR-MIRROR FILLS queued=0 run=0 dropped=0 from_refusal=0 refusal_declined=0 (a dropped fill is a page that keeps trapping, never a wrong value) ⊘ from_refusal=0 — cut C's repair path was NEVER ASKED. On the arena arm that is correct and expected (
+kayfabe: ★★★ GUEST-RAM LAYOUT AT END OF RUN, AS THE HYPERVISOR STATED IT — dev=1 ino=6159: 5 contiguous run(s) totalling 17179521024 bytes, out of 0 stated section(s) LIVE over all backing files (0 live run(s) for this block). Section funnel: 78 report
+######## END arm=device ########
+=== W736 END 2026-09-15T13:36:27+00:00 ===
+W742_RUN_EXIT=0
