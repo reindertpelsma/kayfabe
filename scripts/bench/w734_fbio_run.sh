@@ -78,7 +78,10 @@ sleep 3
 # crossing probe — and therefore the RATE probe beside it — run at all. Everything else is
 # `single_store_e6_boot.sh`'s `on` arm verbatim, so the byte census is taken on a boot whose
 # behaviour is already characterised.
-export KAYFABE_DEVICE_VIEW=on
+# ⊘ The value is `probe`, NOT `on`. `[measured w734, first boot]` `=on` refused the device by
+# name — *"the only values are `off` (the default) and `probe`"* — which is the gate working:
+# arming it makes this process hold a `/dev/nvidia<N>`, and a typo must not decide that.
+export KAYFABE_DEVICE_VIEW=probe
 PREFIX="$TAG" SHADOW=on bash "$SRC_DIR/single_store_e6_boot.sh" 2>&1 | tee "$BENCH/w734_run.log"
 
 Q="$BENCH/run_${TAG}_qemu.log"
