@@ -1611,6 +1611,16 @@ jobs:
           #   reading uninitialised memory. Nothing misbehaved (the kernel reads named fields),
           #   which is precisely why it survived until the byte-level differential failed at
           #   byte 58 against a `.cu` that starts with `memset(&F, 0, sizeof(F))`.
+          # ★ 29 -> 30, 2026-09-15 (w731): `cuCtxSetCurrent`, one more [C3] one-call entry
+          #   point — an opaque context handle this library itself minted with
+          #   `cuCtxCreate_v2`, handed back to it, affecting the CALLING THREAD only. Its own
+          #   `// SAFETY:` says so, and `ctx_set_current` is the safe wrapper.
+          #   ⊘ And the reason it exists is worth the line: a CUDA context is **current per
+          #   thread**. The scratchpad isolate brings CUDA up on its startup thread (before
+          #   the sandbox, as §w724d requires) and serves requests on a WORKER, so without
+          #   this every call from a worker returned `CUDA_ERROR_INVALID_CONTEXT` (201) —
+          #   2 115 times in one boot, while the selftest, which runs on the bring-up thread,
+          #   reported `CUDA_WALK=OK`.
           # ⊘⊘ **124 -> 127, CORRECTED 2026-09-14, and the drift is the finding.** The tree
           # counted 127 while this constant said 124, so the ratchet had "quietly become a
           # comment" — which is exactly what `gate_scope.rs`'s own failure text calls it, and
@@ -1624,7 +1634,7 @@ jobs:
           #     the arena's resident size, which is how the census knows what it holds.
           # Each carries its own `// SAFETY:` (the crate's `undocumented_unsafe_blocks = deny`
           # makes that unskippable), and none of the three takes a pointer from outside.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:29"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:30"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
