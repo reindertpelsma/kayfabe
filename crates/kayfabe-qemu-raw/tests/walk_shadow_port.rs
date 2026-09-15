@@ -19,8 +19,8 @@ use kayfabe_chips::ga10x::Ga10xGmmu;
 use kayfabe_fwd::{PtDecodeResult, PtDecodeTask};
 use kayfabe_isolate::{IsolateBox, IsolateFactory, IsolateId};
 use kayfabe_mmu::walker::{DecodedLeaf, FbRead, PtPage, SubtreeDecode};
-use kayfabe_qemu_raw::walkshadow::{WalkShadowObserver, WalkShadowPort};
-use kayfabe_rt::device::PtSweepObserver;
+use kayfabe_qemu_raw::walkshadow::{Arm, WalkShadowDecider, WalkShadowPort};
+use kayfabe_rt::device::PtSweepDecider;
 use kayfabe_rt::GpuId;
 
 /// A framebuffer that serves one page of zeros at any vidmem address. ⊘ Zeros decode as a
@@ -71,21 +71,21 @@ fn a_port() -> WalkShadowPort {
     WalkShadowPort::new(iso)
 }
 
-/// ⊘ **The disarmed observer moves nothing.** The unobserved sweep is the observed sweep with
+/// ⊘ **The disarmed decider moves nothing.** The unobserved sweep is the observed sweep with
 /// a `None` port, so this is the control every other assertion is read against.
 #[test]
-fn a_disarmed_observer_leaves_the_census_untouched() {
+fn a_disarmed_decider_leaves_the_census_untouched() {
     let port = a_port();
     let before = port.census_line();
-    let mut obs = WalkShadowObserver { port: None };
+    let mut obs = WalkShadowDecider { port: None, arm: Arm::Off };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    obs.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
     assert_eq!(port.census_line(), before);
     assert!(before.contains("VACUOUS"), "{before}");
 }
 
-/// ★★★★★ **THE OBSERVER REACHES THE WIRE, AND THE REFUSAL LANDS BY NAME.**
+/// ★★★★★ **THE DECIDER REACHES THE WIRE, AND THE REFUSAL LANDS BY NAME.**
 ///
 /// A mock isolate has no walk kernel and answers the defaulted refusal. ⇒ the census must
 /// show `isolate_refused`, must NOT show a comparison, and must render VACUOUS — because a
@@ -93,10 +93,10 @@ fn a_disarmed_observer_leaves_the_census_untouched() {
 #[test]
 fn an_isolate_with_no_kernel_is_refused_by_name_and_not_read_as_agreement() {
     let port = a_port();
-    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    obs.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
 
     let line = port.census_line();
     assert!(
@@ -125,10 +125,10 @@ fn an_isolate_with_no_kernel_is_refused_by_name_and_not_read_as_agreement() {
 #[test]
 fn an_empty_sweep_is_named_rather_than_ignored() {
     let port = a_port();
-    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[]);
+    obs.decide(&fmt, &mut fb, &[]);
     let line = port.census_line();
     assert!(line.contains("no_tasks=1"), "{line}");
     assert!(!line.contains("isolate_refused"), "{line}");
@@ -139,7 +139,7 @@ fn an_empty_sweep_is_named_rather_than_ignored() {
 #[test]
 fn a_faulted_walk_is_not_compared() {
     let port = a_port();
-    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     let faulted = PtDecodeResult {
@@ -155,7 +155,7 @@ fn a_faulted_walk_is_not_compared() {
         },
         decode: Err(kayfabe_mmu::walker::WalkFault::BudgetExhausted),
     };
-    obs.executed(&fmt, &mut fb, &[faulted]);
+    obs.decide(&fmt, &mut fb, &[faulted]);
     let line = port.census_line();
     assert!(line.contains("no_decoded_vas=1"), "{line}");
 }
@@ -167,14 +167,14 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
     // ⊘ Reached through the census rather than by 64 round trips: what is under test is that
     // `budget_spent` is consulted and named, and `ShadowCensus` is where the count lives.
     let port = Arc::new(a_port());
-    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     // Every one of these refuses at the wire, so `compared` never rises and the budget is
     // never reached — which is itself the assertion: the budget must not be charged for
     // sweeps that produced no comparison.
     for _ in 0..3 {
-        obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+        obs.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
     }
     let line = port.census_line();
     assert!(line.contains("isolate_refused=3"), "{line}");
@@ -182,4 +182,47 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
         !line.contains("budget_spent"),
         "a refused round trip must not consume the comparison budget: {line}"
     );
+}
+
+/// ★★★★★ **THE SWAP ARM CANNOT DECIDE WITHOUT AN ANSWER — and the census says which it was.**
+///
+/// ⊘⊘ The failure this forecloses: a boot on the swap arm whose isolate refuses every round
+/// trip prints `decided=0 fell_back[none]`, and a reader who stops at *"no fall backs"* reads
+/// it as *"the kernel decided everything cleanly"*. ⇒ `fell_back` must stay EMPTY (nothing was
+/// ever refused — nothing was ever offered), the swap verdict must read VACUOUS, and
+/// `skipped[isolate_refused]` must be what carries the fact.
+#[test]
+fn a_swap_arm_with_no_kernel_answer_decides_nothing_and_says_which_it_was() {
+    let port = a_port();
+    let mut dec = WalkShadowDecider { port: Some(&port), arm: Arm::Swap };
+    port.arm_swap();
+    let fmt = Ga10xGmmu::new();
+    let mut fb = ZeroFb;
+    let out = dec.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    assert!(out.is_none(), "nothing was decided, so the sweep's own results must commit");
+
+    let line = port.census_line();
+    assert!(line.contains("swap_armed=true"), "{line}");
+    assert!(line.contains("decided=0"), "{line}");
+    assert!(line.contains("fell_back[none]"), "{line}");
+    assert!(line.contains("isolate_refused=1"), "the refusal is what carries it: {line}");
+    assert!(
+        line.contains("SWAP VACUOUS"),
+        "an armed swap that decided nothing must not read as a clean swap: {line}"
+    );
+}
+
+/// ⊘ **THE SHADOW ARM NEVER RETURNS A REPLACEMENT**, whatever the comparison said. It is the
+/// control the swap arm is read against, and a shadow that could publish would make every
+/// w731 boot uninterpretable after the fact.
+#[test]
+fn the_shadow_arm_never_returns_a_replacement() {
+    let port = a_port();
+    let mut dec = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let fmt = Ga10xGmmu::new();
+    let mut fb = ZeroFb;
+    assert!(dec.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]).is_none());
+    let line = port.census_line();
+    assert!(line.contains("swap_armed=false"), "{line}");
+    assert!(line.contains("SWAP DISARMED"), "{line}");
 }

@@ -32,7 +32,7 @@ is stale.
 | 4 | CUDA in the scratchpad isolate | ✔ **BUILT** — `KAYFABE_SCRATCHPAD_CUDA`, `CUDA_WALK=OK` |
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
-| **6** | **walker → publish path** | ◐ **IN PROGRESS** — comparison merged (`walkshadow`), live half in flight |
+| **6** | **walker → publish path** | ◐ **STEP 1 ✔ / STEP 2 ✔ BUILT, ONE MEASUREMENT OUTSTANDING** — shadow clean (`compared=65 disagreements=0`); the **swap** is `KAYFABE_WALK_SHADOW=swap`, w732. ⊘ See the correction under §6: it does **not** retire the host walk |
 | **3** | BAR1/BAR2 as device views, the switch | ○ **UNBLOCKED, NOT STARTED — and it comes AFTER 6** |
 | 7 | the deletions | ○ not started; licence is the **guest suite**, not one workload |
 | 8 | the raw client's full suite, in the guest | ○ not started |
@@ -359,6 +359,47 @@ is goals 1 and 10.
 > route is viable with a checked assertion beside it. **Non-zero** ⇒ the route is dead and the
 > tables must move to the reserved object first, which is step 2 — i.e. the ordering correction
 > one level further down.
+
+> ## ⊘⊘⊘ CORRECTED 2026-09-15 (w732, BUILDING the swap) — **THE CONSUMER NAMED BELOW IS NOT
+> ## THE CONSUMER, AND THE SWAP DOES NOT RETIRE THE HOST WALK.**
+>
+> Both §6 blocks below say the leaf path is *"`leaves` → `Settlement` → `AddressTable::bind`"*.
+> `[read from the bodies, w732]` **`kayfabe_fwd::commit_pt_decode_with` — the only thing the
+> sweep commits through — touches `SubtreeDecode::leaves` NOWHERE.** What reaches the address
+> table is `SubtreeDecode::decodes[*].1.leaves`, the **per-page** leaves, by way of
+> `ReachShadow::observe` → `settle` → `apply_settlement_as`. The flattened `leaves` field has
+> exactly **three** readers in the tree and all three are elsewhere: `ceresolve`, the BAR
+> mirror's `window_leaves`, and the shadow's own comparison.
+> ⇒ ⚠ **A swap that replaced only `leaves` would have changed NOTHING and would still have
+> read as done** — a green boot, a clean census, and the host walk still deciding every bind.
+> The substitution therefore rewrites the leaves **inside each page's decode**.
+>
+> ### ★★★★★ AND THE HOST WALK CANNOT LEAVE THE PATH — THE DEPENDENCY RUNS THE OTHER WAY
+>
+> `walkshadow::build_image` takes `(pdb, &[PtPage])` — **the host walk's own `visited` set** —
+> and needs each page's **level** to know its entry size and geometry. ⇒ **the host walk is a
+> PREREQUISITE of the kernel, not an alternative to it.** There is no boot, today, in which
+> the kernel runs and the host walk does not.
+> ⊘ This inverts how the swap reads: `on` → `swap` moves *where a published leaf's target,
+> aperture and writability come from*. It does **not** produce one walker, and it does **not**
+> license §7's deletion. ★ It expires with **§3**: an identity window needs no page list.
+>
+> ### ⊘⊘ AND WHAT REMAINS FOR THE KERNEL TO OWN IS NOW EXACTLY NAMEABLE
+>
+> `visited`, `children`, `sparse`, `invalid` — the **reachability vocabulary**
+> (`Admit::{Witnessed, Swept}`, `PublishedUnbind`). The kernel's report is `MapRun`s, *with no
+> pages in them at all*. That is the whole of §6's residual shape mismatch, and the deltas-vs-
+> state question below is **still unpicked** — the swap did not need to pick it, because it
+> substitutes into a structure the host walk already produced.
+>
+> ### ⚠ AND THE SWAP IS OBSERVATIONALLY NEUTRAL BY CONSTRUCTION — SO GRADE IT ACCORDINGLY
+>
+> It substitutes **only where the two walkers agree**, and under agreement the two leaf sets
+> are the same set. ⇒ **no boot can distinguish a live swap from a decider nobody consulted**,
+> and a parity number or a green client says nothing about it. The known-positive is
+> deliberately offline: `tests/tests/walk_swap_decides.rs` drives a decider that disagrees on
+> purpose and requires the changed binding to land in `AddressTable`. A boot's job is the
+> other two facts — `decided>0`, and the client unharmed.
 
 ### 6. WIRE THE WALKER INTO REFRESH  ⟵ **BLOCKED ON A SHAPE MISMATCH, NOT ON WIRING**
 

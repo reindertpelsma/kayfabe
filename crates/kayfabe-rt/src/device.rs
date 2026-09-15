@@ -4430,13 +4430,13 @@ impl SharedDevice {
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         revoke: kayfabe_mmu::reach::PublishedUnbind,
     ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
-        self.sweep_pt_tables_observing(pid, fmt, fb, revoke, &mut ())
+        self.sweep_pt_tables_deciding(pid, fmt, fb, revoke, &mut ())
     }
 
-    /// ★★★★★ **[`SharedDevice::sweep_pt_tables_revoking`] with an observer of the EXECUTE
-    /// phase** — `SINGLE_STORE_PLAN.md` §6 step 1's hook.
+    /// ★★★★★ **[`SharedDevice::sweep_pt_tables_revoking`] with a DECIDER over the EXECUTE
+    /// phase** — `SINGLE_STORE_PLAN.md` §6, both steps.
     ///
-    /// `observer` is handed the walk's results, the format and the byte source at the one
+    /// `decider` is handed the walk's results, the format and the byte source at the one
     /// moment all three exist and **no lock is held**. That is the whole reason the hook is
     /// here rather than at the caller: the results are consumed by COMMIT under rank 1, and a
     /// consumer that wanted them afterwards would either take a lock or get a copy of a
@@ -4444,19 +4444,28 @@ impl SharedDevice {
     ///
     /// ⊘ **It may block, and that is checked rather than hoped for.** This site is marked
     /// *"EXECUTE — no lock"* and `with_proc_mut` released both ranks above it, so a
-    /// synchronous isolate round trip here is legal. ⚠ An observer that acquires a ranked
+    /// synchronous isolate round trip here is legal. ⚠ A decider that acquires a ranked
     /// lock re-introduces exactly the hazard the three-phase shape exists to remove.
     ///
-    /// ⊘ The observer sees results **before** the commit, so what it is looking at is what
+    /// ⊘ The decider sees results **before** the commit, so what it is looking at is what
     /// the walk found — not what the settlement decided to publish. Those are different
-    /// questions and the shadow asks the first one.
-    pub fn sweep_pt_tables_observing(
+    /// questions and §6 asks the first one.
+    ///
+    /// # ★★★ THE REPLACEMENT IS CHECKED, NOT TRUSTED
+    ///
+    /// A replacement must name the **same tasks in the same order**. ⊘ Checked here rather
+    /// than documented as a contract: the results are keyed by `(gpu, pdb)` and COMMIT
+    /// re-resolves each one, so a replacement that dropped, reordered or re-homed an address
+    /// space would publish one address space's leaves into another's table and **every
+    /// downstream counter would still add up**. A mismatched replacement is refused whole and
+    /// the host walk's results are committed, with one line saying so.
+    pub fn sweep_pt_tables_deciding(
         &self,
         pid: ProcId,
         fmt: &dyn kayfabe_arch::GmmuFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         revoke: kayfabe_mmu::reach::PublishedUnbind,
-        observer: &mut dyn PtSweepObserver,
+        decider: &mut dyn PtSweepDecider,
     ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
         // PLAN — rank 1.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
@@ -4476,8 +4485,31 @@ impl SharedDevice {
         // reusing the decode pass's run-wide budget would divide the C's number by a
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
-        // ★★★ The shadow's hook, still with no lock held. See `sweep_pt_tables_observing`.
-        observer.executed(fmt, fb, &results);
+        // ★★★ The decider's hook, still with no lock held. See `sweep_pt_tables_deciding`.
+        let results = match decider.decide(fmt, fb, &results) {
+            None => results,
+            Some(replacement) => {
+                let same = replacement.len() == results.len()
+                    && replacement
+                        .iter()
+                        .zip(results.iter())
+                        .all(|(a, b)| a.task == b.task);
+                if same {
+                    replacement
+                } else {
+                    eprintln!(
+                        "kayfabe: ⊘⊘ PT-SWEEP DECIDER REFUSED: the replacement names {} tasks \
+                         against the walk's {}, or names them in a different order. Committing \
+                         the HOST walk's results. A replacement that re-homed an address space \
+                         would publish one VAS's leaves into another's table and every \
+                         downstream counter would still add up, so this is refused whole.",
+                        replacement.len(),
+                        results.len()
+                    );
+                    results
+                }
+            }
+        };
         // COMMIT — rank 1, re-resolving every target (R5), ★ ONE ADDRESS SPACE AT A TIME.
         //
         // Owner ruling, 2026-09-12: *"sweep commit may chunk."* `[measured w517-w524]` this
@@ -7859,44 +7891,59 @@ impl CeChannelFacts {
 }
 
 
-/// ★★★★★ **AN OBSERVER OF THE WHOLE-VAS SWEEP'S EXECUTE PHASE** —
-/// `SINGLE_STORE_PLAN.md` §6 step 1.
+/// ★★★★★ **THE DECIDER FOR THE WHOLE-VAS SWEEP'S EXECUTE PHASE** —
+/// `SINGLE_STORE_PLAN.md` §6, both steps.
 ///
 /// One method, called once per sweep, with no lock held. Implemented by the shell so the
-/// walk kernel can be run over the same tables the host walk just read, and its answer
-/// compared — the *shadow mode* idiom this tree already used for the doorbell table:
-/// consulted every time, deciding nothing, printing an agreement census.
+/// walk kernel can be run over the same tables the host walk just read — the *shadow mode*
+/// idiom this tree already used for the doorbell table: consulted every time, deciding
+/// nothing, printing an agreement census — and then, in step 2, so the kernel's answer can
+/// **replace** the host walk's on the way to COMMIT.
 ///
-/// ⊘ **A trait and not a closure**, because the shadow is stateful: it accumulates a census
-/// across a boot and holds the handle it talks to the isolate through.
+/// # ⊘⊘⊘ IT WAS CALLED `PtSweepObserver` AND THAT NAME STOPPED BEING TRUE
+///
+/// Step 2 gives it a return value. An implementor may now change what is published, which is
+/// the opposite of observing, and this tree's rule is that a **name is a claim**
+/// (`refuse_by_name_means_the_name_is_true`). ⚠ Renamed rather than kept with a comment: a
+/// reader who trusts the old name would conclude, correctly for the name and wrongly for the
+/// code, that nothing downstream of here can be affected by what the shell does.
+///
+/// ⊘ **A trait and not a closure**, because it is stateful: it accumulates a census across a
+/// boot and holds the handle it talks to the isolate through.
 /// ★ **The format seam, re-exported.** `kayfabe-qemu-raw` deliberately does not depend on
 /// `kayfabe-arch` — its own manifest says so: *"the shim names no architecture"* — and an
-/// implementor of [`PtSweepObserver`] has to name the trait to write the signature. Naming it
+/// implementor of [`PtSweepDecider`] has to name the trait to write the signature. Naming it
 /// through this crate keeps that rule intact rather than adding the edge the manifest forbids.
 pub use kayfabe_arch::GmmuFmt as SweepFmt;
 
-pub trait PtSweepObserver {
+pub trait PtSweepDecider {
     /// The sweep has run and nothing has been committed yet.
+    ///
+    /// Return `None` to leave the host walk's results alone — which is what the shadow arm
+    /// and the disarmed implementation both do. Return `Some(replacement)` to **decide**: the
+    /// replacement is what COMMIT sees, and it must be the same address spaces in the same
+    /// order, which [`SharedDevice::sweep_pt_tables_deciding`] checks rather than trusts.
     ///
     /// ⚠ **No ranked lock may be taken here.** This is the phase the three-phase shape
     /// exists to keep lock-free, and the byte source itself asserts it.
-    fn executed(
+    fn decide(
         &mut self,
         fmt: &dyn SweepFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         results: &[kayfabe_fwd::PtDecodeResult],
-    );
+    ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>>;
 }
 
-/// ⊘ The disarmed observer. `sweep_pt_tables_revoking` passes this, so the unobserved path
-/// is the observed path with a body that does nothing — rather than a second copy of the
+/// ⊘ The disarmed decider. `sweep_pt_tables_revoking` passes this, so the undecided path
+/// is the decided path with a body that decides nothing — rather than a second copy of the
 /// three phases that could drift from it.
-impl PtSweepObserver for () {
-    fn executed(
+impl PtSweepDecider for () {
+    fn decide(
         &mut self,
         _fmt: &dyn SweepFmt,
         _fb: &mut dyn kayfabe_mmu::walker::FbRead,
         _results: &[kayfabe_fwd::PtDecodeResult],
-    ) {
+    ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>> {
+        None
     }
 }

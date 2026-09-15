@@ -3577,6 +3577,10 @@ struct SharedDoorbell {
     /// the shadow's census must survive every clone as ONE census. Two censuses summing to
     /// the same total would still be two vacuity verdicts.
     walk_shadow: Option<Arc<crate::walkshadow::WalkShadowPort>>,
+    /// ★★★ Which arm of [`crate::walkshadow::Arm`] this boot is on. ⊘ Carried beside the
+    /// port because the port exists for both the shadow and the swap, and *"the kernel ran"*
+    /// is not *"the kernel decided"*.
+    walk_shadow_arm: crate::walkshadow::Arm,
     /// ★★★ The register plane this port is installed in — **weak**, because the plane owns
     /// this port and a strong handle would be a cycle that never frees.
     ///
@@ -11271,10 +11275,11 @@ impl SharedDoorbell {
             // is the disarmed one unless `KAYFABE_WALK_SHADOW` is on. ⊘ It declines by name
             // when this thread is a vCPU — see `crate::walkshadow`'s header for why the
             // "EXECUTE holds no lock" finding does NOT settle that question.
-            let mut shadow = crate::walkshadow::WalkShadowObserver {
+            let mut shadow = crate::walkshadow::WalkShadowDecider {
                 port: self.walk_shadow.as_deref(),
+                arm: self.walk_shadow_arm,
             };
-            let Some((plan, out)) = self.device.sweep_pt_tables_observing(
+            let Some((plan, out)) = self.device.sweep_pt_tables_deciding(
                 pid,
                 &fmt,
                 &mut fb,
@@ -14791,15 +14796,35 @@ impl Regs {
         // refusal rather than a silent nothing — the same shape `KAYFABE_SCRATCHPAD_CUDA`
         // already has, and for the same reason: an absent census line reads as "off".
         let mut scratchpad = scratchpad;
-        let walk_shadow = if crate::walkshadow::selected_walk_shadow()? {
+        let walk_shadow_arm = crate::walkshadow::selected_walk_shadow()?;
+        let walk_shadow = if walk_shadow_arm.runs_kernel() {
             match scratchpad.as_mut().and_then(
                 crate::scratchpad::Scratchpad::share_for_walk_shadow,
             ) {
                 Some(p) => {
-                    eprintln!(
-                        "kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run                          ALONGSIDE the host walk at every off-vCPU page-table sweep and the                          two answers compared by kind. ⊘ Nothing is published from it.                          Expiry: {}",
-                        crate::walkshadow::WALK_SHADOW_EXPIRY
-                    );
+                    // ★★★★★ **THE TWO ARMS SAY DIFFERENT SENTENCES AT REALIZE**, because a
+                    // boot log that says "nothing is published from it" while the kernel is
+                    // on the publish path is the worst artefact this increment could leave.
+                    if walk_shadow_arm.decides() {
+                        p.arm_swap();
+                        eprintln!(
+                            "kayfabe: WALK-SHADOW AT REALIZE: ★★★ SWAP ARMED. The walk kernel \
+                             is run at every off-vCPU page-table sweep and, where it AGREES \
+                             with the host walk, its answer is what gets PUBLISHED — target, \
+                             aperture and writability. Every refusal falls back to the host \
+                             walk and prints a WALK-SWAP FALLBACK line of its own. ⊘ The page \
+                             structure is still the host walk's. Expiry: {}",
+                            crate::walkshadow::WALK_SHADOW_EXPIRY
+                        );
+                    } else {
+                        eprintln!(
+                            "kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run \
+                             ALONGSIDE the host walk at every off-vCPU page-table sweep and the \
+                             two answers compared by kind. ⊘ Nothing is published from it. \
+                             Expiry: {}",
+                            crate::walkshadow::WALK_SHADOW_EXPIRY
+                        );
+                    }
                     Some(p)
                 }
                 None => {
@@ -15227,6 +15252,7 @@ impl Regs {
         let doorbell_port = SharedDoorbell {
             device: Arc::clone(&device),
             walk_shadow: walk_shadow.clone(),
+            walk_shadow_arm,
             plane: Arc::downgrade(&plane),
             ce: Arc::clone(&ce),
             // ★★★ §14.24 / ★★★★★ §16.80 — from the composition root's OWN selector

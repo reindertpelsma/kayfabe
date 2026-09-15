@@ -298,6 +298,20 @@ pub struct ShadowCensus {
     /// Directory edges naming a sysmem sub-table, summed. The kernel refuses those by name;
     /// the host walk follows them. ⚠ Predicts `missing_in_kernel` that is a scope difference.
     pub sysmem_edges: u64,
+    /// ★★★★★ **§6 STEP 2 — address spaces whose published leaves came from the KERNEL.**
+    ///
+    /// ⊘ Zero on a shadow-arm boot by construction, and zero on a swap-arm boot means the
+    /// swap **never decided anything**: read [`Self::fell_back`] before reading
+    /// [`Self::by_kind`], because a census with no disagreements and no decisions is a
+    /// census of the old path.
+    pub decided: u64,
+    /// ★★★ Address spaces the swap arm **refused to decide**, by name — every one of them a
+    /// fall back to the host walk. See [`SwapRefusal`].
+    pub fell_back: std::collections::BTreeMap<&'static str, u64>,
+    /// Whether the swap arm was selected at all. ⊘ Carried in the census rather than inferred
+    /// from [`Self::decided`] being zero: *"the arm was off"* and *"the arm was on and refused
+    /// every time"* are different boots and a reader must not have to guess which.
+    pub swap_armed: bool,
 }
 
 /// How many disagreements the census keeps verbatim.
@@ -329,6 +343,23 @@ impl ShadowCensus {
     pub fn note_skipped(&mut self, why: &'static str) {
         *self.skipped.entry(why).or_insert(0) += 1;
         self.kernel_unavailable += 1;
+    }
+
+    /// ★★★ One address space whose leaves the kernel decided.
+    pub fn note_decided(&mut self) {
+        self.decided += 1;
+    }
+
+    /// ★★★ One address space the swap refused to decide, named. ⊘ Named and not counted in
+    /// one number: *"they disagreed"*, *"two address spaces share a root"* and *"the host
+    /// walk produced an unclassed leaf"* send a reader to three different places.
+    pub fn note_fell_back(&mut self, why: &'static str) {
+        *self.fell_back.entry(why).or_insert(0) += 1;
+    }
+
+    /// Arm the swap column, so a zero can be told from an absence.
+    pub fn note_swap_armed(&mut self) {
+        self.swap_armed = true;
     }
 
     /// What one image cost and what it clipped.
@@ -408,14 +439,52 @@ impl ShadowCensus {
                 .collect::<Vec<_>>()
                 .join(" ")
         };
+        let fell = if self.fell_back.is_empty() {
+            "none".to_string()
+        } else {
+            self.fell_back
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        // ★★★★★ **THE SWAP'S OWN VERDICT, AND IT IS SEPARATE FROM THE AGREEMENT VERDICT.**
+        //
+        // ⊘ An agreeing census does not say the swap ran. `[the shape this tree keeps
+        // paying for]` a boot whose shadow agreed 65 times and whose swap decided **zero**
+        // times would print `★★★ AGREEMENT` and be read as the swap being proven — while
+        // every published leaf came from the host walk exactly as before. The two sentences
+        // are therefore printed side by side, and the swap's says `⊘⊘ VACUOUS` when the arm
+        // was on and nothing was decided.
+        let swap = if !self.swap_armed {
+            "⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and \
+             was never on the publish path. This census is about AGREEMENT only."
+                .to_string()
+        } else if self.decided == 0 {
+            "⊘⊘ SWAP VACUOUS — the arm was `swap` and the kernel decided NOTHING. Every \
+             published leaf came from the host walk. Read `fell_back[…]`: it names why, and \
+             an empty one means the shadow never even ran (read `skipped[…]`)."
+                .to_string()
+        } else {
+            format!(
+                "★★★ SWAP LIVE — {} address spaces had their published leaves' target, \
+                 aperture and writability taken from the KERNEL's report; {} fell back to \
+                 the host walk. ⊘ SCOPE: the page structure (`visited`, `children`, \
+                 `sparse`, `invalid`) is still the HOST walk's and cannot move until the \
+                 kernel reports pages — so this does NOT license §7's deletion.",
+                self.decided,
+                self.fell_back.values().sum::<u64>()
+            )
+        };
         format!(
             "WALK-SHADOW compared={} kernel_unavailable={} skipped[{}] host_runs={} \
              kernel_runs={} host_unclassed={} compared_flags={:#x} image[pages_max={} \
              staged_bytes={} absent_edges={} sysmem_edges={}] disagreements={} by_kind[{}] \
-             first[{}] ⇒ {} ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the \
-             pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device \
-             buffer can span that), so `missing_in_kernel` is fully live and \
-             `extra_in_kernel` is live only WITHIN those pages.",
+             first[{}] swap_armed={} decided={} fell_back[{}] ⇒ {} ⇒ {} ⊘ SCOPE: the kernel \
+             walks a RELOCATED COPY holding exactly the pages the host walk visited (the \
+             guest's tables sit ~11.8 GiB up and no device buffer can span that), so \
+             `missing_in_kernel` is fully live and `extra_in_kernel` is live only WITHIN \
+             those pages.",
             self.compared,
             self.kernel_unavailable,
             skipped,
@@ -430,7 +499,11 @@ impl ShadowCensus {
             total,
             by,
             first,
-            verdict
+            self.swap_armed,
+            self.decided,
+            fell,
+            verdict,
+            swap
         )
     }
 }
@@ -718,5 +791,249 @@ pub fn build_image(
         pages: pages.len(),
         absent_edges: absent.get(),
         sysmem_edges,
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ★★★★★ THE SWAP — `SINGLE_STORE_PLAN.md` §6 step 2. The kernel DECIDES; the host FALLS BACK.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// ⊘⊘⊘ **WHAT THE SWAP CAN AND CANNOT MOVE, MEASURED FROM THE CONSUMERS — read this before
+/// reading the census.**
+///
+/// §6's survey says the three halves of a [`crate::walker::SubtreeDecode`] are all consumed
+/// and names the leaf path as *"`leaves` → `Settlement` → `AddressTable::bind`"*. ⊘ **That is
+/// not the consumer.** `[read 2026-09-15, w732, from the bodies]`
+/// `kayfabe_fwd::commit_pt_decode_with` — the only thing the sweep commits through — touches
+/// `SubtreeDecode::leaves` **nowhere**. What reaches the address table is
+/// `SubtreeDecode::decodes[*].1.leaves`, the **per-page** leaves, by way of
+/// `ReachShadow::observe` → `settle` → `apply_settlement_as`. The flattened `leaves` field has
+/// exactly three readers in the tree, and all three are elsewhere: `ceresolve`, the BAR
+/// mirror's `window_leaves`, and this module's own comparison.
+///
+/// ⇒ **A swap that replaced only the flattened `leaves` would change nothing and would still
+/// have read as done.** The substitution below therefore rewrites the leaves **inside each
+/// page's decode**, which is where a bind comes from.
+///
+/// # ★★★ AND THE HOST WALK CANNOT LEAVE THE PATH YET — three reasons, all structural
+///
+/// 1. **The image is built from the host walk's `visited` set.** [`build_image`] takes
+///    `(pdb, &[PtPage])` and needs each page's **level** to know its entry size and geometry.
+///    The kernel cannot be pointed at anything until the host walk has said which pages exist
+///    and what level each is. ⊘ This is a property of **relocation**, so it expires with §3 —
+///    an identity window needs no page list.
+/// 2. **The publish path is keyed on pages.** `children`, `sparse` and `invalid` are the
+///    reachability vocabulary (`Admit::{Witnessed, Swept}`, `PublishedUnbind`), and the
+///    kernel's report is `MapRun`s — *coalesced runs, with no pages in them at all*.
+/// 3. **`DecodedLeaf::level` has no kernel counterpart.** It is kept from the host leaf the
+///    kernel's value is written onto, which is exact because the match is on `(va, size)`.
+///
+/// ⇒ What this increment moves is the **provenance of every published leaf's target,
+/// aperture and writability**. What it does not move is the page structure. Saying that
+/// plainly is the point: a swap reported as "the kernel now walks" would be read as licensing
+/// §7's deletion of the host walker, and it does not.
+///
+/// # ⊘⊘ AND THE SUBSTITUTION IS OBSERVATIONALLY NEUTRAL BY CONSTRUCTION, DELIBERATELY
+///
+/// It is applied **only when [`compare`] is empty**, and under agreement the two leaf sets are
+/// the same set — so the bytes written are the bytes that were there. ⚠ That is not a reason
+/// to skip it: the *dependency* moves, the fallback is what makes a future disagreement loud
+/// at the moment it happens rather than at the next census, and
+/// [`SwapRefusal::TargetChanged`] is the assertion that the neutrality held.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SwapRefusal {
+    /// The two walkers disagreed. ⚠ **The loud one.** Under the swap this is the kernel
+    /// deciding something the host walk decided differently, and the host wins.
+    Disagreed(usize),
+    /// The host walk produced leaves with no page-size class, so the set that was compared
+    /// **lost members** and agreement over it does not cover the whole decode.
+    HostUnclassed(usize),
+    /// Several address spaces in this sweep share one root page, so the kernel's single
+    /// answer for that root is the **union** of their leaves and cannot be split back.
+    /// ⊘ `[w555]` *"11 of 12 VA spaces never declare a root, so they SHARE the key `Pdb(0)`"*.
+    SharedRoot {
+        /// How many tasks contributed to the root.
+        tasks: usize,
+    },
+    /// A host leaf is at a virtual address no kernel run of its class covers. ⊘ Cannot
+    /// happen after an empty [`compare`]; checked anyway, because the substitution's totality
+    /// is the property that makes it safe and an unchecked invariant is not one.
+    LeafUncovered {
+        /// Where.
+        va: u64,
+    },
+    /// The kernel covers a different number of bytes than the host's leaves place. ⊘ The
+    /// other half of totality: *"every host leaf got a kernel value"* does not say *"every
+    /// kernel byte was used"*.
+    BytesUnplaced {
+        /// What the kernel's runs cover.
+        kernel: u64,
+        /// What the host's distinct leaves cover.
+        host: u64,
+    },
+    /// A kernel run carries an aperture code no [`Aperture`] decodes.
+    BadAperture {
+        /// The code.
+        code: u32,
+    },
+    /// ★★★ The substitution would have **changed a published target** even though the two
+    /// walkers agreed. ⊘ That is arithmetically impossible and therefore worth asserting:
+    /// it can only mean the comparison and the substitution are keyed differently, which is
+    /// the exact defect class (`a probe that shares the allocator is not an observer`) this
+    /// tree keeps paying for.
+    TargetChanged {
+        /// Where.
+        va: u64,
+    },
+}
+
+impl SwapRefusal {
+    /// A short name for a census column.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SwapRefusal::Disagreed(_) => "disagreed",
+            SwapRefusal::HostUnclassed(_) => "host_unclassed",
+            SwapRefusal::SharedRoot { .. } => "shared_root",
+            SwapRefusal::LeafUncovered { .. } => "leaf_uncovered",
+            SwapRefusal::BytesUnplaced { .. } => "bytes_unplaced",
+            SwapRefusal::BadAperture { .. } => "bad_aperture",
+            SwapRefusal::TargetChanged { .. } => "target_changed",
+        }
+    }
+}
+
+/// One of ours for the kernel's aperture code. ⊘ `None` rather than a default: an
+/// unrecognised code is a fact about the report, and filing it under vidmem would bind a
+/// system-memory target into the framebuffer's aperture.
+fn ap_of(code: u32) -> Option<Aperture> {
+    match code {
+        0 => Some(Aperture::Vidmem),
+        1 => Some(Aperture::Peer),
+        2 => Some(Aperture::SysmemCoherent),
+        3 => Some(Aperture::SysmemNonCoherent),
+        _ => None,
+    }
+}
+
+/// What one kernel run says about a leaf inside it.
+fn covering(kernel: &[Run], va: u64, class: PageClass) -> Option<&Run> {
+    kernel
+        .iter()
+        .find(|r| r.class == class && r.va <= va && va - r.va < r.len)
+}
+
+/// ★★★★★ **REWRITE ONE ADDRESS SPACE'S DECODE SO ITS LEAVES CARRY THE KERNEL'S ANSWER.**
+///
+/// `host` is the comparison's host side and `kernel` its kernel side — both already
+/// [`walkdiff::canonical`], both already passed through the same masking, and
+/// [`compare`] must already have returned empty. `d` is the decode those leaves came from.
+///
+/// Returns a decode whose per-page leaves (and flattened `leaves`, kept consistent with them)
+/// carry `phys`, `aperture` and `read_only` **derived from the kernel's runs**, with `va`,
+/// `size` and `level` kept from the host leaf they were matched to.
+///
+/// # Errors
+/// [`SwapRefusal`], naming what refused. ⊘ Every arm is a **fall back to the host walk**, and
+/// the caller must say so out loud: a swap that quietly declined would be a boot that measured
+/// the old path while its census said otherwise.
+pub fn substitute(
+    d: &crate::walker::SubtreeDecode,
+    host: &[Run],
+    kernel: &[Run],
+    host_unclassed: usize,
+) -> Result<crate::walker::SubtreeDecode, SwapRefusal> {
+    if host_unclassed != 0 {
+        return Err(SwapRefusal::HostUnclassed(host_unclassed));
+    }
+    // ⊘⊘ **BEFORE THE COMPARISON, NOT AFTER IT.** An aperture code no [`Aperture`] decodes is
+    // a fact about the REPORT, and the comparison would file it under `flags_differ` — a
+    // disagreement between two decoders — which sends a reader to the walkers when the
+    // answer is that the report is malformed. ⚠ Checking it downstream also made the arm
+    // **unreachable**, because `compare` fires first on the same bits; an arm that cannot be
+    // reached is not a refusal, it is dead code that reads as one.
+    for r in kernel {
+        let code = (r.flags >> RF_AP_SHIFT) & RF_AP_MASK;
+        if ap_of(code).is_none() {
+            return Err(SwapRefusal::BadAperture { code });
+        }
+    }
+    let disagreements = compare(host, kernel);
+    if !disagreements.is_empty() {
+        return Err(SwapRefusal::Disagreed(disagreements.len()));
+    }
+
+    // ⊘ **TOTALITY, BOTH WAYS.** `placed` is keyed by `(class, va)` so a leaf the host found
+    // in two pages — a shape collision — counts its bytes once, which is what the kernel's
+    // coalesced runs count.
+    let mut placed: std::collections::BTreeSet<(PageClass, u64)> = std::collections::BTreeSet::new();
+    let rewrite = |l: &DecodedLeaf| -> Result<DecodedLeaf, SwapRefusal> {
+        let Some(class) = class_of(l.size.0) else {
+            // Unreachable after the `host_unclassed` guard, and refused rather than passed
+            // through: a leaf with no class was never in the comparison.
+            return Err(SwapRefusal::LeafUncovered { va: l.va.0 });
+        };
+        let Some(r) = covering(kernel, l.va.0, class) else {
+            return Err(SwapRefusal::LeafUncovered { va: l.va.0 });
+        };
+        let code = (r.flags >> RF_AP_SHIFT) & RF_AP_MASK;
+        let Some(aperture) = ap_of(code) else {
+            return Err(SwapRefusal::BadAperture { code });
+        };
+        let out = DecodedLeaf {
+            va: l.va,
+            phys: r.gpga + (l.va.0 - r.va),
+            aperture,
+            size: l.size,
+            read_only: r.flags & RF_READ_ONLY != 0,
+            level: l.level,
+        };
+        // ★★★ The neutrality assertion. See [`SwapRefusal::TargetChanged`].
+        if out.phys != l.phys || out.aperture != l.aperture || out.read_only != l.read_only {
+            return Err(SwapRefusal::TargetChanged { va: l.va.0 });
+        }
+        Ok(out)
+    };
+
+    let mut decodes = Vec::with_capacity(d.decodes.len());
+    for (page, decode) in &d.decodes {
+        let mut leaves = Vec::with_capacity(decode.leaves.len());
+        for l in &decode.leaves {
+            let out = rewrite(l)?;
+            if let Some(class) = class_of(l.size.0) {
+                placed.insert((class, l.va.0));
+            }
+            leaves.push(out);
+        }
+        decodes.push((
+            *page,
+            crate::walker::PageDecode {
+                children: decode.children.clone(),
+                leaves,
+                sparse: decode.sparse.clone(),
+                invalid: decode.invalid,
+            },
+        ));
+    }
+    let mut flat = Vec::with_capacity(d.leaves.len());
+    for l in &d.leaves {
+        flat.push(rewrite(l)?);
+    }
+
+    let kernel_bytes: u64 = kernel.iter().map(|r| r.len).sum();
+    let host_bytes: u64 = placed.iter().map(|(c, _)| c.bytes()).sum();
+    if kernel_bytes != host_bytes {
+        return Err(SwapRefusal::BytesUnplaced {
+            kernel: kernel_bytes,
+            host: host_bytes,
+        });
+    }
+
+    Ok(crate::walker::SubtreeDecode {
+        leaves: flat,
+        visited: d.visited.clone(),
+        decodes,
+        faults: d.faults.clone(),
+        invalid: d.invalid,
     })
 }
