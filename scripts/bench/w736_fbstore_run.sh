@@ -68,9 +68,18 @@ n_ws=$(strings "$Q_BIN" 2>/dev/null | grep -c 'WALK-SHADOW')
 n_img=$(strings "$Q_BIN" 2>/dev/null | grep -c 'kayfabe-isolate-cuda')
 n_fs=$(strings "$Q_BIN" 2>/dev/null | grep -c 'FB-STORE AT REALIZE')
 n_dfb=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB named=')
+# ★★★ w738 — CHECK THE BINARY FOR **CUT B**, BY CONTENT, AND REFUSE.
+# ⊘ `FB-DEMAND` and `DEVICE-FB-PORT` print UNCONDITIONALLY on both arms, so a boot that does
+# not carry them is an OLDER binary, not a quiet boot — and every row of w738's prediction
+# would then be graded against absence. This is the same gate `E6-CONTENT` already applies to
+# the walk shadow, for the reason that gate exists.
+n_fd=$(strings "$Q_BIN" 2>/dev/null | grep -c 'FB-DEMAND drains=')
+n_fbp=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB-PORT drains=')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
+echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 if [ "$n_img" -eq 0 ]; then echo "⊘ no cuda-scratchpad in the binary — the port cannot arm. STOP."; exit 5; fi
 if [ "$n_fs" -eq 0 ] || [ "$n_dfb" -eq 0 ]; then echo "⊘ the binary predates cut A. STOP."; exit 4; fi
+if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates CUT B — w738's rows cannot be graded. STOP."; exit 6; fi
 
 report() {
   local tag="$1" arm="$2"
