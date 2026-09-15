@@ -458,6 +458,64 @@ returned data from beyond the declared window** (it reported a mapping at
 memory access"*. **An out-of-bounds read does not reliably fault.** That is the
 whole argument for making the check structural rather than probable.
 
+## ★★★★★ MINIMALITY — the fewest mmaps, not merely the right ones `[w741]`
+
+> *"If two BAR PTEs are adjacent, in GPGA and in BAR VA, then it is ONE consolidated mmap and
+> not several … the goal is to minimise the amount of mmaps or VA-space maps of an RM object
+> to its minimum while remaining correct."*
+
+⊘ **Correctness was the only thing this suite ever asserted, and it is half the bar.** A report
+that is right and twice as long costs twice the host mappings, and every oracle here — closure,
+order-independence, the model comparison — is blind to that by construction.
+
+**The minimality oracle** (`check_minimal`, `kf_tests.cu`) reads the OUTPUT: no two adjacent runs
+in one address space may have the same `op`, the same `flags` (which is run identity, so class and
+kind ride along), contiguous VA **and** contiguous GPGA. It does not care which of the four
+coalescing sites lost the join.
+
+**The op budget** (`st_ref_ops`) is the other half: a reference delta built page by page and
+re-coalesced under the same rule, giving the fewest runs the report could have been. The kernel
+may not exceed it. `[measured 2026-09-15, GTX 1650 sm_75]` over 120 randomised steps the kernel hit
+that minimum **exactly** every time — `worst_slack=0`.
+
+### The known-positive matrix — and what it measured that reading the code did not
+
+Three flags each disable EXACTLY ONE coalescing site and nothing else. **The mapping set is
+identical under all three**, which is the point: these are failures no correctness oracle can see.
+
+| case | `KF_BREAK_COALESCE`<br>(leaf accumulators) | `KF_BREAK_SEG_COALESCE`<br>(the delta's `kf_seg_emit`) | `KF_BREAK_JOIN`<br>(task-boundary join) |
+|---|---|---|---|
+| `enlarge_at_end` / `_start` | **red** | green | green |
+| `shrink_at_end` / `_start` | **red** | green | green |
+| `drop_whole_run`, `add_between_runs` | **red** | green | green |
+| `add_adjacent_forcing_merge` | **red** | green | green |
+| `split_run_in_middle` | **red** | green | green |
+| `one_run_replacing_two` | **red** | **red** | green |
+| `enlarge_across_pt_boundary` | **red** | green | **red** |
+| `coalesce_stress` | **red** | **red** | **red** |
+
+⚠ **Read the second column.** Eight named cases stayed GREEN with the delta's own coalescer
+deleted — because each of them produces ONE segment, and a coalescer that never sees a second
+neighbour cannot be caught losing one. `one_run_replacing_two` (a `cur` run covering several
+`prev` runs — the w722 shape) is the only named case that reaches it. ⊘ **That was found by
+building the matrix, not by reading the code**, and it is the reason the matrix exists rather than
+a single "the tests go red" claim.
+
+⚠ And the third column is why `enlarge_across_pt_boundary` exists at all: a run that grows across a
+page-table boundary is re-joined by a *different* mechanism from one growing inside a table
+(`kf_par_heads` / `kf_par_join`), and every other delta case lives inside one `PT_SMALL` and
+cannot reach it.
+
+`make check-coalesce-negative` runs the whole matrix; it is part of `make check`.
+
+### The host-side twin — and a real defect it found
+
+`crates/kayfabe-mmu/src/walkdiff.rs` is this kernel's host-side alternate. It **cut at every
+boundary either side introduced and never re-joined**, so one `cur` run replacing two `prev` runs
+produced **two** `Remap`s describing one contiguous re-point. Closure held; every test in that
+module passed; the two implementations disagreed about how many `mmap`s a given guest change
+costs. Fixed by `coalesce_ops` there, under this same rule.
+
 ## What the format doc got wrong or left unbuildable
 
 1. **`struct ReportHeader { // 64 B }` lists fields summing to 56.** Nothing can

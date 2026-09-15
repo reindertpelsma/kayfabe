@@ -536,6 +536,301 @@ static void t_generation_handshake(void)
     if (g_fails_here) dump(f);
 }
 
+
+/* ══ COALESCING — THE OWNER'S CRITERION ══════════════════════════════════════
+ *
+ * ★★★★★ *"If two BAR PTEs are adjacent, in GPGA and in BAR VA, then it is ONE
+ * consolidated mmap and not several … the goal is to minimise the amount of
+ * mmaps or VA-space maps of an RM object to its minimum while remaining
+ * correct."*
+ *
+ * ⊘ CORRECTNESS ALONE IS NOT THE BAR, and nothing in this suite noticed until
+ * now: a report that is RIGHT and twice as long costs twice the host mappings.
+ * The four `correctness/coalesce_*` cases pin the FULL WALK's coalescer. The
+ * cases below pin the DELTA's, and the boundary shapes that
+ * `delta/extend_and_shrink` conflated into one: grow and shrink at EACH end, a
+ * fill that makes two runs exactly adjacent, a hole that splits one, a run that
+ * disappears whole, a run that appears between two others.
+ *
+ * ⚠ Enlarge and shrink are separated because they FAIL DIFFERENTLY. An enlarge
+ * can run into a neighbour and must merge; a shrink can cut a run in two and
+ * strand the tail. One combined case can pass while either half is broken.
+ */
+
+/* ★★★ THE MINIMALITY ORACLE — "no two emitted runs could have been one".
+ *
+ * It reads the OUTPUT, so it does not care WHICH of the four coalescing sites
+ * lost the join: the serial `kf_emit`, the parallel lane's `kf_acc_emit`, the
+ * task-boundary join in `kf_par_heads`/`kf_par_join`, or the delta's
+ * `kf_seg_emit`. The owner's criterion verbatim: adjacent in VA **and** adjacent
+ * in GPGA with identical flags — and flags equality IS run identity here, so the
+ * page-size class and the KIND are carried along for free (kf_walk.h §w725b).
+ *
+ * ⊘ Comparing only ADJACENT pairs is sufficient rather than lazy: runs leave the
+ * walk per address space, per class, ascending in VA, so two mergeable runs can
+ * never have a third between them. `validate()` already asserts that ordering.
+ */
+static void check_minimal(Fix &f)
+{
+    for (uint32_t p = 0; p < f.hdr.pdb_count; p++) {
+        for (uint32_t i = 1; i < f.pe[p].run_count; i++) {
+            const KfMapRun &a = f.rn[f.pe[p].first_run + i - 1];
+            const KfMapRun &b = f.rn[f.pe[p].first_run + i];
+            if (a.op == b.op && a.flags == b.flags &&
+                a.va + a.len == b.va && a.gpga + a.len == b.gpga) {
+                char m[224];
+                snprintf(m, sizeof(m),
+                         "pdb[%u] runs %u and %u are ONE mapping spelled as TWO: "
+                         "op=%u va=0x%llx len=0x%llx gpga=0x%llx then va=0x%llx len=0x%llx gpga=0x%llx",
+                         p, i - 1, i, a.op,
+                         (unsigned long long)a.va, (unsigned long long)a.len, (unsigned long long)a.gpga,
+                         (unsigned long long)b.va, (unsigned long long)b.len, (unsigned long long)b.gpga);
+                CHECK_M(0, m);
+            }
+        }
+    }
+}
+
+/* The walker's own idea of the CURRENT FULL STATE. Two refreshes with no ack in
+ * between force a RESYNC — a lost ack is a resync, which `delta/generation_
+ * handshake` pins — and a RESYNC report IS the whole mapping set.
+ * ⊘ Needed because "the delta was one MAP" does not say whether the walker now
+ * believes it holds one run or two: a fill that makes two runs exactly adjacent
+ * must leave ONE behind, and only the full state shows that. */
+static void resync_state(Fix &f, Tree &t)
+{
+    CHECK_EQ(f.refresh({t.root}), 0);            /* gen N+1, still unacked */
+    CHECK_EQ(f.refresh({t.root}), 0);            /* acked != generation ⇒ RESYNC */
+    validate(f);
+    CHECK_M(f.hdr.flags & KFWR_HF_RESYNC, "expected a RESYNC full-state report");
+    check_minimal(f);
+    f.ack();
+}
+
+static const uint64_t PG = 4096ull;
+static const uint64_t GB0 = 0x800000ull;
+#define VP(i) (VBASE + (uint64_t)(i) * PG)
+#define GP(i) (GB0 + (uint64_t)(i) * PG)
+
+/* Grow at the HIGH end by two pages: ONE map of the two new pages, and the
+ * unchanged prefix is not re-pointed. */
+static void t_delta_enlarge_at_end(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 4; i++) t.map4k(VP(i), GP(i));
+    baseline(f, t, 1);
+    t.map4k(VP(5), GP(5));
+    t.map4k(VP(6), GP(6));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(5), GP(5), 2 * PG, F4K, KFWR_OP_MAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "the enlarged mapping must be ONE run, not two");
+}
+
+/* ★ The mirror, and it is NOT symmetric in the code: growing downwards makes the
+ * NEW pages the head of the run, so the target must extend downwards too or the
+ * run splits. A coalescer that only ever looks forward passes the case above and
+ * fails this one. */
+static void t_delta_enlarge_at_start(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 3; i <= 6; i++) t.map4k(VP(i), GP(i));
+    baseline(f, t, 1);
+    t.map4k(VP(1), GP(1));
+    t.map4k(VP(2), GP(2));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(1), GP(1), 2 * PG, F4K, KFWR_OP_MAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "the enlarged mapping must be ONE run, not two");
+}
+
+/* Shrink at the HIGH end: ONE unmap of the two lost pages — never a REMAP of the
+ * survivor, which would re-point a mapping the guest did not touch. */
+static void t_delta_shrink_at_end(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 6; i++) t.map4k(VP(i), GP(i));
+    baseline(f, t, 1);
+    t.unmap4k(VP(5));
+    t.unmap4k(VP(6));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(5), GP(5), 2 * PG, F4K, KFWR_OP_UNMAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "the survivor must still be ONE run");
+}
+
+static void t_delta_shrink_at_start(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 6; i++) t.map4k(VP(i), GP(i));
+    baseline(f, t, 1);
+    t.unmap4k(VP(1));
+    t.unmap4k(VP(2));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(1), GP(1), 2 * PG, F4K, KFWR_OP_UNMAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "the survivor must still be ONE run");
+}
+
+/* A whole run disappears. ONE unmap covering it, and the run that did NOT change
+ * contributes nothing at all. */
+static void t_delta_drop_whole_run(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 3; i++) t.map4k(VP(i), GP(i));
+    for (uint32_t i = 8; i <= 10; i++) t.map4k(VP(i), 0xA00000ull + (uint64_t)i * PG);
+    baseline(f, t, 2);
+    for (uint32_t i = 8; i <= 10; i++) t.unmap4k(VP(i));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(8), 0xA00000ull + 8 * PG, 3 * PG, F4K, KFWR_OP_UNMAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "one of two runs went away; one must remain");
+}
+
+/* A run appears in the gap between two others, touching neither. ONE map, and
+ * the neighbours are not re-pointed. */
+static void t_delta_add_between_runs(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 2; i++) t.map4k(VP(i), GP(i));
+    for (uint32_t i = 8; i <= 9; i++) t.map4k(VP(i), 0xA00000ull + (uint64_t)i * PG);
+    baseline(f, t, 2);
+    for (uint32_t i = 4; i <= 5; i++) t.map4k(VP(i), 0xC00000ull + (uint64_t)i * PG);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(4), 0xC00000ull + 4 * PG, 2 * PG, F4K, KFWR_OP_MAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 3, "three disjoint runs, none of them merged");
+}
+
+/* ★★★★★ THE CASE THE OWNER NAMED. Two runs separated by a one-page hole whose
+ * TARGETS already line up across it. Filling the hole must leave ONE mapping —
+ * five pages, one run — not three runs that happen to add up to the same pages.
+ * ⊘ The delta is still just the new page: the host re-points nothing, it extends
+ * what it has. That is the difference between one mmap and three. */
+static void t_delta_add_adjacent_forcing_merge(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VP(1), GP(1));
+    t.map4k(VP(2), GP(2));
+    t.map4k(VP(4), GP(4));
+    t.map4k(VP(5), GP(5));
+    baseline(f, t, 2);                    /* the VA hole at page 3 makes it two */
+    t.map4k(VP(3), GP(3));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(3), GP(3), PG, F4K, KFWR_OP_MAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "filling the hole must leave ONE run, not three");
+    if (f.hdr.run_count == 1) {
+        CHECK_EQ(f.rn[0].va, VP(1));
+        CHECK_EQ(f.rn[0].len, 5 * PG);
+        CHECK_EQ(f.rn[0].gpga, GP(1));
+    }
+    if (g_fails_here) dump(f);
+}
+
+/* ★★★★★ THE ONE SHAPE THAT REACHES THE DELTA'S OWN COALESCER — and the exact
+ * shape of the w722 bug.
+ *
+ * ⊘ Found by building the known-positive matrix, not by reading the code: with
+ * `-DKF_BREAK_SEG_COALESCE` every other delta case in this file stayed GREEN,
+ * because each of them produces ONE segment and a coalescer that never sees a
+ * second neighbour cannot be caught losing one. A cur run covering SEVERAL prev
+ * runs is what makes the merge join emit consecutive same-op segments.
+ *
+ * Two prev runs (the target jumps between them), one cur run re-pointing all
+ * four pages. That is ONE contiguous re-point and must cost ONE mmap.
+ * ⚠ Its host-side twin is `walkdiff::one_run_replacing_two_is_one_remap_not_two`
+ * — where this shape WAS emitting two ops until w741. */
+static void t_delta_one_run_replacing_two(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VP(1), GP(1));
+    t.map4k(VP(2), GP(2));
+    t.map4k(VP(3), 0xA00000ull + 3 * PG);      /* the target jumps ⇒ a second run */
+    t.map4k(VP(4), 0xA00000ull + 4 * PG);
+    baseline(f, t, 2);
+    for (uint32_t i = 1; i <= 4; i++) t.map4k(VP(i), 0xC00000ull + (uint64_t)i * PG);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(1), 0xC00000ull + PG, 4 * PG, F4K, KFWR_OP_REMAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "the re-pointed pages are ONE run");
+}
+
+/* ★★★ THE PARALLEL WALK'S OWN SEAM. A run that grows ACROSS a page-table
+ * boundary is coalesced by a different mechanism from one that grows inside a
+ * table: the two halves are found by different tasks, and only the task-boundary
+ * join in kf_par_heads/kf_par_join can put them back together. Every other case
+ * in this file lives inside one PT_SMALL and cannot reach it.
+ * ⊘ `correctness/coalesce_one_run` covers the join for a FULL walk; this covers
+ * it for an INCREMENTAL one, which is the shape the publisher actually sees. */
+static void t_delta_enlarge_across_page_table_boundary(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 508; i <= 511; i++) t.map4k(VP(i), GP(i));   /* last pages of PT #0 */
+    baseline(f, t, 1);
+    t.map4k(VP(512), GP(512));                                     /* first pages of PT #1 */
+    t.map4k(VP(513), GP(513));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(512), GP(512), 2 * PG, F4K, KFWR_OP_MAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 1, "a run crossing a PAGE TABLE boundary is still ONE run");
+}
+
+/* The inverse: a hole punched in the middle. ONE unmap of the hole, and the
+ * walker must now hold TWO runs — a coalescer that kept the old single run would
+ * leave the host mapping a page the guest dropped. */
+static void t_delta_split_run_in_middle(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 1; i <= 5; i++) t.map4k(VP(i), GP(i));
+    baseline(f, t, 1);
+    t.unmap4k(VP(3));
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VP(3), GP(3), PG, F4K, KFWR_OP_UNMAP}});
+    check_minimal(f);
+    f.ack();
+    resync_state(f, t);
+    CHECK_M(f.hdr.run_count == 2, "a hole in the middle must split the run in two");
+}
+
 /* ══ HOSTILE ═════════════════════════════════════════════════════════════════ */
 
 /* What must hold for EVERY hostile input, however malformed. */
@@ -2164,6 +2459,379 @@ static void t_roundtrip_under_racer(void)
 }
 
 
+/* ══ THE COMBINATORIAL COALESCING STRESS ═════════════════════════════════════
+ *
+ * ★★★★★ SHRINK + ENLARGE + DROP + ADD + SPLIT + MERGE, ALL IN THE SAME REFRESH.
+ *
+ * ⊘ Every delta case in this file changes ONE thing, and that is precisely the
+ * blind spot the w722 bug lived in: a merge join over whole runs passed all nine
+ * single-step cases and still emitted a REMAP followed by UNMAPs of the runs it
+ * had just replaced. It was found ONCE, by hand, and pinned as a fixture —
+ * nothing in the suite generated new instances of that shape. This does.
+ *
+ * THREE ORACLES, independent of one another:
+ *
+ *  1. ★ EQUIVALENCE, NOT OP-FOR-OP EQUALITY. Both states are exploded to pages,
+ *     the report is applied to a running model, and the page sets are compared.
+ *     A SHORTER report that lands the same mapping set is a BETTER answer, so
+ *     demanding a particular op sequence would punish the thing we want.
+ *  2. ★★★ THE OP BUDGET. A reference delta is built page by page and re-coalesced
+ *     under the owner's rule, giving the fewest runs this report could have been.
+ *     The kernel may not exceed it. ⊘ Without this the suite stays green while
+ *     the thing the owner actually asked for — the fewest mmaps — regresses all
+ *     the way to one run per page.
+ *  3. THE MINIMALITY ORACLE, on every report: delta and forced resync alike.
+ *
+ * ⚠ The generator is SEEDED and the seed is printed on failure, so a failure is a
+ * command line and not a story: `KF_STRESS_SEED=0x... ./kf_tests delta/coalesce_stress`.
+ */
+#define ST_N 768u                      /* two PT_SMALL tables' worth of 4 KiB pages */
+#define ST_GBASE 0x1000000ull
+#define ST_GSPAN (8ull << 20)
+
+struct StState {
+    unsigned char present[ST_N];
+    uint64_t gp[ST_N];
+    uint64_t bits[ST_N];
+};
+
+/* The flags the report MUST carry for these PTE bits. ⊘ Derived from the field
+ * definitions, never from the kernel's decoder — a predictor that called
+ * kf_leaf_flags would agree by construction and prove nothing. */
+static uint32_t st_flags(uint64_t bits)
+{
+    uint32_t f = F4K;
+    if (bits & PTE_READ_ONLY)      f |= KFWR_RF_READ_ONLY;
+    if (bits & PTE_ATOMIC_DISABLE) f |= KFWR_RF_ATOMIC_DISABLE;
+    return f;
+}
+static uint64_t st_clamp(uint64_t g) { return ST_GBASE + ((g - ST_GBASE) & (ST_GSPAN - 1ull)); }
+
+/* THE REFERENCE COALESCER: maximal runs of the state under the owner's rule —
+ * consecutive VA, consecutive GPGA, identical bits. */
+struct StRun { uint32_t lo, hi; };
+static void st_runs(const StState &s, std::vector<StRun> &out)
+{
+    out.clear();
+    for (uint32_t i = 0; i < ST_N; i++) {
+        if (!s.present[i]) continue;
+        if (!out.empty() && out.back().hi == i && s.present[i - 1] &&
+            s.gp[i] == s.gp[i - 1] + PG && s.bits[i] == s.bits[i - 1]) {
+            out.back().hi = i + 1;
+            continue;
+        }
+        StRun r; r.lo = i; r.hi = i + 1;
+        out.push_back(r);
+    }
+}
+
+/* ★★★ THE OP BUDGET: the fewest runs a delta from `a` to `b` can be spelled in.
+ * Classify every page, then join neighbours by the same rule the report must. */
+static uint32_t st_ref_ops(const StState &a, const StState &b)
+{
+    uint32_t n = 0, prev_op = 0;
+    uint64_t prev_g = 0, prev_bits = 0;
+    for (uint32_t i = 0; i < ST_N; i++) {
+        uint32_t op = 0;
+        uint64_t g = 0, bits = 0;
+        if (a.present[i] && !b.present[i])      { op = KFWR_OP_UNMAP; g = a.gp[i]; bits = a.bits[i]; }
+        else if (!a.present[i] && b.present[i]) { op = KFWR_OP_MAP;   g = b.gp[i]; bits = b.bits[i]; }
+        else if (a.present[i] && b.present[i] &&
+                 (a.gp[i] != b.gp[i] || a.bits[i] != b.bits[i]))
+                                                { op = KFWR_OP_REMAP; g = b.gp[i]; bits = b.bits[i]; }
+        if (!op) { prev_op = 0; continue; }
+        if (prev_op == op && bits == prev_bits && g == prev_g + PG) { prev_g = g; continue; }
+        n++; prev_op = op; prev_g = g; prev_bits = bits;
+    }
+    return n;
+}
+
+static void st_model(const StState &s, uint64_t pdb, Model &m)
+{
+    m.clear();
+    for (uint32_t i = 0; i < ST_N; i++) {
+        if (!s.present[i]) continue;
+        MKey k; k.pdb = pdb; k.va = VP(i); k.ps = 0u;   /* ps 0 = the 4 KiB class */
+        MVal v; v.gpga = s.gp[i]; v.flags = st_flags(s.bits[i]);
+        m[k] = v;
+    }
+}
+
+static void st_write(Fix &f, Tree &t, const StState &s)
+{
+    for (uint32_t i = 0; i < ST_N; i++) {
+        uint64_t va = VP(i);
+        f.g.u64(t.pts(va) + (uint64_t)vis(va) * 8) =
+            s.present[i] ? kfb_pte(s.gp[i], AP_PTE_VID, s.bits[i]) : 0ull;
+    }
+    f.upload();
+}
+
+struct StRng {
+    uint64_t s;
+    uint64_t next() { s ^= s << 13; s ^= s >> 7; s ^= s << 17; return s; }
+    uint32_t below(uint32_t n) { return (uint32_t)(next() % (uint64_t)n); }
+};
+
+enum { M_ADD, M_DROP, M_REPOINT, M_REFLAG, M_GROW_END, M_GROW_START,
+       M_SHRINK_END, M_SHRINK_START, M_SPLIT, M_MERGE, M_KINDS };
+static const char *M_NAME[M_KINDS] = {
+    "add", "drop", "repoint", "reflag", "grow_end", "grow_start",
+    "shrink_end", "shrink_start", "split", "merge"
+};
+static const uint64_t ST_BITS[4] = { 0ull, PTE_READ_ONLY, PTE_ATOMIC_DISABLE,
+                                     PTE_READ_ONLY | PTE_ATOMIC_DISABLE };
+
+/* Apply one mutation. Returns the kind, or -1 when the state offered no instance
+ * of it — which the vacuity guard at the end turns into a named failure rather
+ * than a quiet gap in coverage. */
+static int st_mutate(StState &s, StRng &r, int kind)
+{
+    std::vector<StRun> rs;
+    st_runs(s, rs);
+    const uint32_t nr = (uint32_t)rs.size();
+    switch (kind) {
+    case M_ADD: {
+        uint32_t lo = r.below(ST_N - 1u);
+        uint32_t len = 1u + r.below(24u);
+        if (lo + len > ST_N) len = ST_N - lo;
+        uint64_t base = ST_GBASE + (uint64_t)r.below(1024u) * PG;
+        uint64_t b = ST_BITS[r.below(4u)];
+        for (uint32_t i = lo; i < lo + len; i++) {
+            s.present[i] = 1u; s.gp[i] = base + (uint64_t)(i - lo) * PG; s.bits[i] = b;
+        }
+        return kind;
+    }
+    case M_DROP: {
+        if (!nr) return -1;
+        StRun a = rs[r.below(nr)];
+        for (uint32_t i = a.lo; i < a.hi; i++) s.present[i] = 0u;
+        return kind;
+    }
+    case M_REPOINT: {
+        if (!nr) return -1;
+        StRun a = rs[r.below(nr)];
+        uint32_t len = a.hi - a.lo, off = r.below(len), n = 1u + r.below(len - off);
+        uint64_t d = (1ull + (uint64_t)r.below(64u)) * PG;
+        for (uint32_t i = a.lo + off; i < a.lo + off + n; i++) s.gp[i] = st_clamp(s.gp[i] + d);
+        return kind;
+    }
+    case M_REFLAG: {
+        if (!nr) return -1;
+        StRun a = rs[r.below(nr)];
+        uint32_t len = a.hi - a.lo, off = r.below(len), n = 1u + r.below(len - off);
+        uint64_t flip = ST_BITS[1u + r.below(3u)];      /* never a no-op */
+        for (uint32_t i = a.lo + off; i < a.lo + off + n; i++) s.bits[i] ^= flip;
+        return kind;
+    }
+    case M_GROW_END: case M_GROW_START: {
+        if (!nr) return -1;
+        uint32_t start = r.below(nr);
+        for (uint32_t d = 0; d < nr; d++) {
+            const StRun a = rs[(start + d) % nr];
+            uint32_t n = 1u + r.below(3u);
+            if (kind == M_GROW_END) {
+                if (a.hi + n > ST_N) continue;
+                bool free_ = true;
+                for (uint32_t i = a.hi; i < a.hi + n; i++) if (s.present[i]) free_ = false;
+                if (!free_) continue;
+                for (uint32_t i = a.hi; i < a.hi + n; i++) {
+                    s.present[i] = 1u;
+                    s.gp[i] = st_clamp(s.gp[a.hi - 1u] + (uint64_t)(i - a.hi + 1u) * PG);
+                    s.bits[i] = s.bits[a.hi - 1u];
+                }
+            } else {
+                if (a.lo < n) continue;
+                bool free_ = true;
+                for (uint32_t i = a.lo - n; i < a.lo; i++) if (s.present[i]) free_ = false;
+                if (!free_) continue;
+                for (uint32_t i = a.lo - n; i < a.lo; i++) {
+                    s.present[i] = 1u;
+                    s.gp[i] = st_clamp(s.gp[a.lo] - (uint64_t)(a.lo - i) * PG);
+                    s.bits[i] = s.bits[a.lo];
+                }
+            }
+            return kind;
+        }
+        return -1;
+    }
+    case M_SHRINK_END: case M_SHRINK_START: {
+        if (!nr) return -1;
+        uint32_t start = r.below(nr);
+        for (uint32_t d = 0; d < nr; d++) {
+            const StRun a = rs[(start + d) % nr];
+            uint32_t len = a.hi - a.lo;
+            if (len < 2u) continue;
+            uint32_t n = 1u + r.below(len - 1u);
+            if (kind == M_SHRINK_END) for (uint32_t i = a.hi - n; i < a.hi; i++) s.present[i] = 0u;
+            else                      for (uint32_t i = a.lo; i < a.lo + n; i++) s.present[i] = 0u;
+            return kind;
+        }
+        return -1;
+    }
+    case M_SPLIT: {
+        if (!nr) return -1;
+        uint32_t start = r.below(nr);
+        for (uint32_t d = 0; d < nr; d++) {
+            const StRun a = rs[(start + d) % nr];
+            if (a.hi - a.lo < 3u) continue;
+            s.present[a.lo + 1u + r.below(a.hi - a.lo - 2u)] = 0u;
+            return kind;
+        }
+        return -1;
+    }
+    /* ★★★ THE OWNER'S CASE: growth that makes two runs become EXACTLY adjacent.
+     * The gap is filled from the left run's tail and the right run is re-pointed
+     * to continue it, so the three become ONE run — and the report had better
+     * say so in one op, not three. */
+    case M_MERGE: {
+        if (nr < 2u) return -1;
+        uint32_t start = r.below(nr - 1u);
+        for (uint32_t d = 0; d + 1u < nr; d++) {
+            const uint32_t k = (start + d) % (nr - 1u);
+            const StRun a = rs[k], b = rs[k + 1u];
+            if (b.lo <= a.hi || b.lo - a.hi > 32u) continue;
+            const uint64_t g = s.gp[a.hi - 1u], bits = s.bits[a.hi - 1u];
+            for (uint32_t i = a.hi; i < b.hi; i++) {
+                s.present[i] = 1u;
+                s.gp[i] = st_clamp(g + (uint64_t)(i - (a.hi - 1u)) * PG);
+                s.bits[i] = bits;
+            }
+            return kind;
+        }
+        return -1;
+    }
+    default: return -1;
+    }
+}
+
+static void t_delta_coalesce_stress(void)
+{
+    const char *env = getenv("KF_STRESS_SEED");
+    const uint64_t seed = env ? strtoull(env, NULL, 0) : 0x9e3779b97f4a7c15ull;
+    StRng rng; rng.s = seed;
+
+    Fix f(32u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < ST_N; i += 512u) t.pts(VP(i));   /* both PT_SMALLs up front */
+
+    StState cur;
+    memset(&cur, 0, sizeof(cur));
+    for (int i = 0; i < 4; i++) st_mutate(cur, rng, M_ADD);
+    st_write(f, t, cur);
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    check_minimal(f);
+
+    Model mdl, ref;
+    ApplyStat as; as.map_over_existing = 0u; as.unmap_of_missing = 0u;
+    std::string why;
+    model_apply(mdl, f.hdr, f.pe.data(), f.rn.data(), as);
+    st_model(cur, t.root, ref);
+    CHECK_M(model_eq(mdl, ref, why), why.c_str());
+    f.ack();
+
+    const int STEPS = 120;
+    uint32_t fired[M_KINDS];
+    memset(fired, 0, sizeof(fired));
+    uint32_t nonempty = 0u, merges = 0u, splits = 0u, worst_slack = 0u;
+    uint32_t saw_op[4] = { 0u, 0u, 0u, 0u };
+    int step = 0;
+
+    for (; step < STEPS; step++) {
+        const StState prev = cur;
+        std::vector<StRun> before, after;
+        st_runs(cur, before);
+        const uint32_t nmut = 3u + rng.below(6u);
+        for (uint32_t k = 0; k < nmut; k++) {
+            const int kind = (int)rng.below((uint32_t)M_KINDS);
+            if (st_mutate(cur, rng, kind) >= 0) fired[kind]++;
+        }
+        st_runs(cur, after);
+        uint32_t pb = 0u, pa = 0u;
+        for (uint32_t i = 0; i < ST_N; i++) { pb += prev.present[i]; pa += cur.present[i]; }
+        if (after.size() < before.size() && pa > pb) merges++;
+        if (after.size() > before.size() && pa < pb) splits++;
+
+        st_write(f, t, cur);
+        CHECK_EQ(f.refresh({t.root}), 0);
+        validate(f);
+        check_minimal(f);
+        CHECK_M(!(f.hdr.flags & KFWR_HF_TRUNCATED), "the stress must never truncate");
+        CHECK_M(!(f.hdr.flags & KFWR_HF_RESYNC), "the stress must stay on the delta path");
+        CHECK_EQ(f.hdr.refusals, 0);
+        for (uint32_t i = 0; i < f.hdr.run_count; i++)
+            if (f.rn[i].op < 4u) saw_op[f.rn[i].op]++;
+        if (f.hdr.run_count) nonempty++;
+
+        const uint32_t want = st_ref_ops(prev, cur);
+        if (f.hdr.run_count > want) {
+            char m[192];
+            snprintf(m, sizeof(m), "seed=0x%llx step=%d: %u runs where %u suffice",
+                     (unsigned long long)seed, step, f.hdr.run_count, want);
+            CHECK_M(0, m);
+        } else if (want - f.hdr.run_count > worst_slack) {
+            worst_slack = want - f.hdr.run_count;
+        }
+
+        model_apply(mdl, f.hdr, f.pe.data(), f.rn.data(), as);
+        st_model(cur, t.root, ref);
+        if (!model_eq(mdl, ref, why)) {
+            char m[288];
+            snprintf(m, sizeof(m), "seed=0x%llx step=%d: %s",
+                     (unsigned long long)seed, step, why.c_str());
+            CHECK_M(0, m);
+        }
+        f.ack();
+
+        /* ★ Every fourth step, the STEADY STATE the walker believes in — and that
+         * IT is minimal too. A delta can be minimal while the table behind it has
+         * been left in fragments that never re-join, and only the full state
+         * shows that. */
+        if ((step & 3) == 3) {
+            CHECK_EQ(f.refresh({t.root}), 0);
+            CHECK_EQ(f.refresh({t.root}), 0);
+            validate(f);
+            CHECK_M(f.hdr.flags & KFWR_HF_RESYNC, "expected the forced RESYNC");
+            check_minimal(f);
+            if (f.hdr.run_count != after.size()) {
+                char m[192];
+                snprintf(m, sizeof(m), "seed=0x%llx step=%d: full state is %u runs, %u are minimal",
+                         (unsigned long long)seed, step, f.hdr.run_count, (unsigned)after.size());
+                CHECK_M(0, m);
+            }
+            model_apply(mdl, f.hdr, f.pe.data(), f.rn.data(), as);
+            if (!model_eq(mdl, ref, why)) {
+                char m[288];
+                snprintf(m, sizeof(m), "seed=0x%llx step=%d RESYNC: %s",
+                         (unsigned long long)seed, step, why.c_str());
+                CHECK_M(0, m);
+            }
+            f.ack();
+        }
+        if (g_fails_here) break;
+    }
+
+    /* ⊘ THE VACUITY GUARDS. A stress that never generated a merge proves nothing
+     * about merging, and would look exactly as green as one that did. */
+    for (int k = 0; k < M_KINDS; k++) {
+        if (fired[k]) continue;
+        char m[128];
+        snprintf(m, sizeof(m), "mutation '%s' NEVER fired: the stress does not cover it", M_NAME[k]);
+        CHECK_M(0, m);
+    }
+    CHECK_M(nonempty > (uint32_t)STEPS / 2u, "vacuous: most steps produced no delta at all");
+    CHECK_M(saw_op[KFWR_OP_MAP] > 0u, "vacuous: the stream never produced a MAP");
+    CHECK_M(saw_op[KFWR_OP_UNMAP] > 0u, "vacuous: the stream never produced an UNMAP");
+    CHECK_M(saw_op[KFWR_OP_REMAP] > 0u, "vacuous: the stream never produced a REMAP");
+    CHECK_M(merges > 0u, "vacuous: no step ever made two runs become one");
+    CHECK_M(splits > 0u, "vacuous: no step ever split a run");
+    printf("      seed=0x%llx steps=%d nonempty=%u merges=%u splits=%u "
+           "map=%u unmap=%u remap=%u worst_slack=%u\n",
+           (unsigned long long)seed, step, nonempty, merges, splits,
+           saw_op[KFWR_OP_MAP], saw_op[KFWR_OP_UNMAP], saw_op[KFWR_OP_REMAP], worst_slack);
+}
+
 /* ══ THE FORMAT SEAM ═════════════════════════════════════════════════════════
  * The layout is setup data (THE_CONSTRAINTS.md §21). These assert the gates on
  * it; that the descriptor is actually CONSULTED is proved by
@@ -2315,6 +2983,18 @@ static const Case CASES[] = {
     { "delta/change_root_pdb",                  t_delta_change_root },
     { "delta/free_subtree",                     t_delta_free_subtree },
     { "delta/generation_handshake",             t_generation_handshake },
+
+    { "delta/enlarge_at_end",                   t_delta_enlarge_at_end },
+    { "delta/enlarge_at_start",                 t_delta_enlarge_at_start },
+    { "delta/shrink_at_end",                    t_delta_shrink_at_end },
+    { "delta/shrink_at_start",                  t_delta_shrink_at_start },
+    { "delta/drop_whole_run",                   t_delta_drop_whole_run },
+    { "delta/add_between_runs",                 t_delta_add_between_runs },
+    { "delta/add_adjacent_forcing_merge",       t_delta_add_adjacent_forcing_merge },
+    { "delta/split_run_in_middle",              t_delta_split_run_in_middle },
+    { "delta/one_run_replacing_two",            t_delta_one_run_replacing_two },
+    { "delta/enlarge_across_pt_boundary",       t_delta_enlarge_across_page_table_boundary },
+    { "delta/coalesce_stress",                  t_delta_coalesce_stress },
 
     { "hostile/self_cycle",                     t_hostile_self_cycle },
     { "hostile/two_cycle",                      t_hostile_two_cycle },
