@@ -1,0 +1,30 @@
+    --concurrency                PASS         done
+    --timer                      PASS         done — timer probe only
+    --engines                    PASS         done
+    --doorbell-census            PASS         done — doorbell census only
+    --gpu-info-sweep             PASS         done — gpu-info sweep only
+    --bus-info-sweep             PASS         done — bus-info sweep only
+    --gpga-reserve-probe         FAIL(137)    --- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy p
+    --atomics-probe              FAIL(137)    info  RMLADDER ARGV     = [--gpu 0 --atomics-probe]
+    --pce-mask-probe             FAIL(137)    info  RMLADDER ARGV     = [--gpu 0 --pce-mask-probe]
+    --dictated-ring              PASS         done — dictated-ring probe only
+    --dictated-ring-negative     PASS         done — dictated-ring negative control only
+    --late-map-race              PASS         done — late-map race only
+    --blockage-coverage          PASS         done — blockage-coverage probe only
+    --uvm-invalidate             PASS         done — uvm-invalidate probe only
+    --uvm-mean                   PASS         done — w392d mean client only
+    --alias-two-vas              PASS         done — w379/w381 mapping-plane rungs only
+    --alias-unmap-observe        PASS         done — w379/w381 mapping-plane rungs only
+    --map-propagation            PASS         done — w379/w381 mapping-plane rungs only
+    --missing-page-fault         PASS         done — w379/w381 mapping-plane rungs only
+    --map-stress                 PASS         done — w379/w381 mapping-plane rungs only
+    --rpc-mixed-allocs           PASS         done — w379/w381 mapping-plane rungs only
+    --cross-client-leak          PASS         done — w379/w381 mapping-plane rungs only
+    --concurrent-fuzz            PASS         done — w385 concurrent fuzz only
+    --defer-liveness             PASS         done — w289 defer-liveness rung only
+    --guest-ram-pin              PASS         done — guest-RAM pin probe only
+    --guest-ring-channel         PASS         done — guest-ring channel probe only
+    --executor-vas               PASS         done — executor-VAS probe only
+    --ce-client                  PASS         done — raw CE client only (ALL ARMS MET)
+    --ce-client-guest-ram        FAIL(137)    info  R34 guest-RAM CE   = GPU 0 — a CE copy whose SOURCE is N
+    --bar1-crossing              PASS         done — bar1-crossing probe only

@@ -92,7 +92,58 @@ ignoring the body."*
 ⚠ Nobody bought that pass; the arithmetic did. `SUITE_UNMEASURED` is now in the gate, which is
 why renaming `SKIP/cascade` was not cosmetic.
 
-## 6. What the containment does, and what it does not
+## 6. ★★★ WITH THE CASCADE CONTAINED, THE SUITE REPORTS 30 VERDICTS — `w735b_rows.txt`
+
+`[measured 2026-09-15, rev a21fbe41, `w735_suite_batched_run.sh w735b 3` — 10 boots, 3 arms each]`
+
+    W735B_ARMS=30 W735B_PASS=26 W735B_FAIL=4 W735B_TIMEOUT=0 W735B_UNMEASURED=0
+    W735B_ACCOUNTED=30   W735B_BOOTS=10
+
+★ **26 of 30 arms pass inside the guest** — including `--ce-client` (*"ALL ARMS MET"*), the
+CPU-writes-vidmem → CE-DMA → CPU-reads-back round trip that had never been run in a guest,
+`--uvm-mean`, `--concurrent-fuzz`, `--cross-client-leak`, `--missing-page-fault` and
+`--bar1-crossing`.
+
+⊘ **`--gpu-info-sweep` PASSES.** The arm this campaign recorded as a device-wedging timeout does
+nothing of the kind; it passes in ~seconds when it can open the device.
+
+⊘⊘ **And the four non-passing rows above are NOT FAILures** — that ledger was wrong and is fixed
+(w735m). `137` is `timeout -k`'s escalation-to-SIGKILL exit, i.e. a **TIMEOUT**; and two of the
+four (`--atomics-probe`, `--pce-mask-probe`) followed a *killed* `--gpga-reserve-probe`, hung
+**inside the device open**, printed nothing but their own `RMLADDER ARGV` line, and never reached
+their subject at all. ⇒ the wall's first signature is a **hang**, not a refusal, and the
+containment now classifies on the ladder's own `R2 version` marker rather than on an exit code.
+
+## 7. ★★★ THE FOUR NOT-PASSING ARMS, EACH ALONE ON ITS OWN BOOT — `run_w735d_isolated_arms.out`
+
+⊘ **A DIAGNOSTIC, NOT A RE-GRADE.** One arm per fresh QEMU, `RMLADDER_ARM_TIMEOUT=600` instead
+of the graded 90 s, asking one question: *slow, or stuck?* The graded default is unchanged, and a
+pass here is a statement about **speed**, not a suite result.
+
+| arm | alone, 600 s | reading |
+|---|---|---|
+| `--atomics-probe` | **PASS** | ⇒ its batch row was **collateral** of the arm before it |
+| `--pce-mask-probe` | **PASS** | ⇒ same |
+| `--gpga-reserve-probe` | **TIMEOUT(137)**, still mid-sweep | a real defect — see below |
+| `--ce-client-guest-ram` | **TIMEOUT(137)**, last line `DOORBELL-STORE #1 … ★★★ WROTE` | a real defect — see below |
+
+⇒ **With the collateral removed the guest verdict is 28 PASS / 2 TIMEOUT / 0 FAIL**, and the two
+that remain are *named*:
+
+**(a) `--gpga-reserve-probe` — the bulk framebuffer read is at least 120× too slow.** It
+memcpy-sweeps a **256 MiB** object and had not finished after **600 s** ⇒ **< 0.43 MiB/s**. The
+same shape measured on the host through a device view of the reserved object is **52.5 MiB/s**
+(`SINGLE_STORE_PLAN.md`, w734). ⚠ This is the arm that most directly exercises what §3 is
+about, and it is the one the guest cannot complete.
+
+**(b) `--ce-client-guest-ram` — a CE copy whose SOURCE is guest RAM rings its doorbell and the
+completion never arrives.** Its last line is the isolate's own
+`DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed`. ⇒ the
+submission happened and nothing came back, for **600 s**. ⊘ Its sibling `--ce-client` — the same
+round trip with a **vidmem** source — **PASSES** (*"ALL ARMS MET"*), so this is specific to the
+guest-RAM source path, and `HOST_DMESG_XID=0` on that boot: **no host fault explains it.**
+
+## 8. What the containment does, and what it does not
 
 `rmladder_suite.sh` now recovers-and-retries and reports **30 rows either way**, with
 `UNMEASURED` (never reached its subject) kept distinct from `FAIL` (ran and judged itself
