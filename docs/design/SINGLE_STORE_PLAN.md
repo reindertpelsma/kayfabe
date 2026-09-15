@@ -63,7 +63,7 @@ before it takes the lock**, and there are four of them in three different shapes
 |---|---|---|
 | **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
 | **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737 and BOOTED w738** — `read_served=3` out of the reserved object, the first host-side framebuffer read this campaign has ever served. ⊘ Item 2 (`PlanePtBytes`) measured **INERT** (`walk-guest-pt r=0`), item 4 fired **once**, and two of cut B's censuses report the opposite of what the boot did. Read the w738 block. ~~offline only … ⊘ It has not booted~~ (superseded 2026-09-15) |
-| **D** | ★ **w740 — the ARMING half of the CeUtils doorbell.** `fb_userd_gp_put_arming` (the producer cursor, which is the only framebuffer read on this channel's control path) and the submission's own bounded re-run after a drain, gated on `CeUtilsRefusal::progress::may_re_run()` | ✔ **BUILT w740**, offline tests green. ⊘ The scrub it unblocks is **8 bytes in 2 submissions** — measured three ways — so `device_reset` is **not** on this path |
+| **D** | ✔✔✔ **BUILT AND BOOTED w740 — `RmInitAdapter` COMPLETES.** The ARMING half of the CeUtils doorbell. `fb_userd_gp_put_arming` (the producer cursor, which is the only framebuffer read on this channel's control path) and the submission's own bounded re-run after a drain, gated on `CeUtilsRefusal::progress::may_re_run()` | ✔ **BOOTED w740** — `RmInitAdapter failed` **0×**, `ce_utils.c:349` **gone**, `SMI_RC=0`, `nvidia_uvm` loaded, `named=426221`, `doorbells 123 arrived / 34 served`. ⊘ The scrub it unblocks is **8 bytes in 2 submissions** — measured three ways — so `device_reset` is **not** on this path. ⊘ New wall: the **user** channels' `CpuCeFb` (63), which a retry structurally cannot fix |
 | **C** | ★ **REDEFINED BY MEASUREMENT, w739.** The write half: `decode_subtree_from_entry`'s dropped faults (BAR2's premap could never retry its arming) and the repair path gated on the success it repairs | ✔ **BUILT AND BOOTED w739** — `kbusVerifyBar2` is GONE, `named=32772`, `read_served=204683`, `BAR1/BAR2 (translated) … 0 REFUSED`. Read the w739 block. ⊘ The **CeUtils scrub** (`ce_utils.c:349`, `NV_ERR_TIMEOUT`) is the NEW wall and is constraint 9's, not cut C's; `device_reset` (zeroing gibibytes of real video memory) is still unbuilt and still said by name |
 
 ### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
@@ -401,6 +401,111 @@ write half lands.
 on it**: `FB-IO walk-bar[r=21 frames=2] walk-guest-pt[r=0]` measures that `PlanePtBytes` read
 the framebuffer **zero times**, so item 2 — the one the plan called *"costs no transient at
 all"* — never ran. What served was item 4's premap retry.
+
+### ★★★★★ 2026-09-15 (w740) — **`RmInitAdapter` COMPLETES ON THE `device` ARM. THE GUEST DRIVER LOADS, `nvidia-smi` RETURNS 0, AND THE WALL MOVED INTO THE RAW CLIENT.**
+
+`[measured w740, vast **51114139**, machine **33261** — the same machine w739 ran on — host
+driver **580.159.04 open module**. `BINARY_REV = TREE_REV = e9d7f2a3`, stamped on **both**
+arms. Two boots at one binary, `KAYFABE_DEVICE_VIEW=probe SHADOW=on` on both, **control
+first**: exactly one variable. Harness `scripts/bench/w736_fbstore_run.sh` with two
+reporting-only greps added. Evidence in `traces/w740_scrub_arming/`.]`
+⊘ **No constraint was relaxed. No completion was forged.**
+
+**THE CONTROL FIRST:** `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified ✔`,
+`MEAN_FALSIFIER=PASS`, `ARENA_BOOT_RC=0`, and w740 **provably inert on it**:
+`W740-USERD-ARM trips=0 recovered=0 gave_up=0 refused_no_arm=0 not_lock_free=0`,
+`W740-CE-SUBMIT-ARM trips=0 recovered=0 blocked_by_progress=0 gave_up=0`.
+
+#### THE TEN PRE-REGISTERED ROWS, graded verbatim
+
+| # | predicted | measured (device arm) | verdict |
+|---|---|---|---|
+| 1 | `W740-USERD-ARM trips ≥ 1` | **`trips=5`** | ✔ **HELD** |
+| 2 | `recovered ≥ 1` | **`recovered=5 gave_up=0`** — every trip recovered | ✔ **HELD** |
+| 3 | control provably inert | all five USERD fields `0`, CE-SUBMIT `trips=0` | ✔ **HELD** |
+| 4 | first doorbell refusal is **not** `RingProducerCursorUnknown` | **`[FwdFault::PassthroughDoorbellBirth]`**; the whole census is `CpuCeFb=63 PassthroughDoorbellBirth=19` — `RingProducerCursorUnknown` appears **zero times** | ✔ **HELD** |
+| 5 | `lastCompletedPayload == lastSubmittedPayload` appears **0** times | **`0`** | ✔ **HELD** |
+| 6 | ★★★ `RmInitAdapter failed!` appears **0** times — **THE WIN CONDITION** | **`0`**, and `MODPROBE_RC=0`, **`SMI_RC=0`** (w739: `124`), `nvidia_uvm` loaded, `/dev/nvidia-uvm` present | ✔ **HELD** |
+| 7 | ★★★ no-regression: `named ≥ 32772`, BAR1/BAR2 `misses=0`, `0 REFUSED by name`, `TRAP_FILLS=0` | `named=`**`426221`** (13× w739) ✔ · BAR2 `misses=0`, `TRAP_FILLS=0`, `0 REFUSED` ✔ · **BAR1 `misses=2183`, `TRAP_FILLS=44`** ⊘ | ◐ **BAR2 HELD, BAR1 REFUTED — see below** |
+| 8 | `wanted_by_write ≥ 1` | **`wanted_by_write=75`**, `write_served=401` — the **first host-side framebuffer WRITES this campaign has ever served** | ✔ **HELD** |
+| 9 | control `(P)`, 8/8, PASS | all three | ✔ **HELD** |
+| 10 | `blocked_by_progress=0` and `not_lock_free=0` | `not_lock_free=`**`0`** ✔ · **`blocked_by_progress=68`** ⊘ | ◐ **the safety valve FIRED, 68 times** |
+
+Full lines, verbatim (device arm):
+```
+DEVICE-FB named=426221 host_read_refused=841 host_write_refused=75 read_served=3547998
+          write_served=401 wanted_by_read=841 wanted_by_write=75 out_of_range=0
+W740-USERD-ARM trips=5 recovered=5 gave_up=0 refused_no_arm=0 not_lock_free=0
+W740-CE-SUBMIT-ARM trips=10 recovered=9 blocked_by_progress=68 gave_up=0
+doorbells: 123 arrived, 34 served, 88 REFUSED by name
+DOORBELL-REFUSALS FwdFault::CpuCeFb=63 FwdFault::PassthroughDoorbellBirth=19
+BAR1-PASSTHROUGH arm=on misses=2183     BAR2-PASSTHROUGH arm=on misses=0
+BAR1 (translated): 2055 reads / 0 writes ... 0 REFUSED by name
+BAR2 (translated): 0 reads / 0 writes ... 0 REFUSED by name
+BAR-MIRROR bar1 TRAP_FILLS=44 premap_fills=59623 distinct_pages=816
+BAR-MIRROR bar2 TRAP_FILLS=0  premap_fills=264   distinct_pages=138
+premap[runs=1288 filled=59887 skipped=248642 refused=0 biggest_leaf=65536 pt_faults=0]
+HOST_DMESG_XID=0   W392D_GUEST_OUTCOME=(R)
+```
+
+#### ★★★★★ WHAT IT BOUGHT — **the driver initialises against the single store**
+
+- **The CeUtils scrub completes.** `ce_utils.c:349` is gone, `memmgrInitCeUtils` returns,
+  `RmInitNvDevice` loads state, `RmInitAdapter` returns, `nvidia_uvm` loads, `nvidia-smi`
+  exits **0**. ⊘ Nothing was forged to get there: the completion is still written only by
+  `cpu_ce::write_resolved_completion`, and only after `execute_ours_spans` returned `Ok`.
+- **`doorbells: 123 arrived, 34 SERVED`** against w739's `2 arrived, 0 served`.
+- **`named` 32 772 → 426 221** and **`read_served` 204 683 → 3 547 998**, because the boot now
+  reaches a workload instead of dying at 38 s.
+- ★ **The chain is exactly the one §4 predicted**: 5 producer-cursor arms → the submission
+  decodes → 9 submissions recovered by the drain-and-retry → the scrub's 4 bytes land in real
+  video memory → the semaphore is released → RM proceeds.
+
+#### ⊘⊘⊘ ROW 10 IS THE MOST INFORMATIVE, AND IT IS A REFUTATION THAT VALIDATES THE GATE
+
+**`blocked_by_progress=68`.** Sixty-eight refused submissions had **already moved bytes or
+released a payload**, so `may_re_run()` withheld the re-run — exactly as designed, and
+**sixty-eight times more often than the retry actually fired** (`trips=10`). ⇒ on the *user*
+channels the dominant shape is not *"refused before doing anything"* but *"refused
+mid-submission"*, and **more retries cannot help those**: re-running would re-release a
+payload. ★ If `may_re_run` had been my first draft (`progress == NONE`, which reads the
+DECODE counter `launches`), all 78 would have been blocked and **nothing would have
+recovered at all**.
+
+#### ⊘⊘ THE NEW WALL, NAMED — and it is the SAME mechanism one layer in
+
+```
+W392D_GUEST_OUTCOME=(R)   THREADS 0 of 8 verified
+⊘ REFUSED at engine read @P1 VA: round 0: ⊘ the copy from 0x0000008080000000 NEVER RETIRED
+  — the completion semaphore never reached its payload
+DOORBELL-REFUSALS FwdFault::CpuCeFb=63
+CpuCeFb { phys: 1118208, why: "no CPU view of this page of the reserved object is armed yet…" }
+```
+⇒ **The guest's USER copy-engine copies now fail for the reason the CeUtils producer cursor
+used to**: a framebuffer page the CPU CE executor cannot reach because no CPU view is armed,
+**refused from inside the plane lock, after the submission has already started**.
+★★★ **This is constraint 9's other half, and it is the case a retry structurally cannot fix.**
+The fix is to arm **before** the session — or, per constraint 9 read strictly, to stop running
+the copy on the CPU at all and give it to the scratchpad's own engine
+(`CeExecutor::HostCe`; `ce_copy` refuses a `CeSource::Constant` today, `rm.rs:8472`).
+
+#### ⊘ ROW 7's BAR1 HALF — refuted, and **not** comparable to w739 as stated
+
+`BAR1-PASSTHROUGH misses=2183`, `TRAP_FILLS=44`. ⚠ **w739's `misses=0` was measured on a boot
+that died at 38 s with no channel ever born** — it is *"never reached"*, not *"never needed"*,
+which is the class this file names four times. This is the **first** boot on which BAR1 is
+exercised by a real workload at all, so the honest statement is: **BAR1's passthrough census
+is non-empty for the first time and the gate as literally written is not met**; whether that
+is a regression or the first measurement of a previously-unreached path is **not settled by
+this boot**. ⊘ BAR2, which w739 *did* exercise, held at `misses=0 TRAP_FILLS=0`.
+
+#### ⚠ THE META-CALL — right for the first time in four
+
+The pre-registration named **row 6** as most likely to fail, *"recorded as a bet and not
+presented as insight"*. Row 6 **held** and rows 7 and 10 broke. ⊘ So the campaign's record on
+naming the likely-wrong row is now 0-for-4 on getting it right and the practice should stay
+retired; the value was in pre-registering row 7's threshold at all, which is what makes
+`misses=2183` a result rather than a number nobody had a prior for.
 
 ### ★★★★★ 2026-09-15 (w740) — **THE CeUtils SCRUB IS 4 BYTES, AND THE WALL IS THE PRODUCER CURSOR, NOT THE SCRUB.**
 
@@ -1399,7 +1504,7 @@ is stale.
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
 | **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
-| **3** | BAR1/BAR2 as device views, the switch | ◐ **CUTS A (w735) AND B (w737) BUILT, behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. **Cut C not started; cut B has NOT BOOTED.** ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
+| **3** | BAR1/BAR2 as device views, the switch | ◐ **CUTS A–D BUILT; w740 BOOTS PAST `RmInitAdapter` ON THE `device` ARM** (`SMI_RC=0`, `nvidia_uvm` loaded, raw client reaches `(R)` not a hang). Next wall = `FwdFault::CpuCeFb` on USER channels. ⊘ Previously: **CUTS A (w735) AND B (w737) BUILT, behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. **Cut C not started; cut B has NOT BOOTED.** ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ⊘ **NOT LICENSED — measured w735, 28 PASS / 2 TIMEOUT / 0 FAIL.** The suite now reports all 30 verdicts, but two are REAL defects (`--gpga-reserve-probe`, `--ce-client-guest-ram`) and the device survives only 5 `RmInitAdapter` cycles per QEMU lifetime. A contained cascade is not a green suite |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 
