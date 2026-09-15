@@ -14945,6 +14945,54 @@ impl Regs {
             }
             None => chip,
         };
+        // ★★★★★ **w734 — RE-APPLY THE BAR1 KNOB, AND THEN CHECK THE TWO ROWS AGREE.**
+        //
+        // ⊘⊘⊘ **`[measured w734, boot `w734bar1`]` THE FB-SIZE DERIVATION SILENTLY UNDID THE
+        // BAR1 PATCH, AND A GREEN CLIENT DID NOT CATCH IT.** `ga106_profile` rebuilds from
+        // `let mut p = GA106;` — the **static** row — so it restores
+        // `pci_bars = GA106_PCI_BARS`, whose framebuffer window is the hardcoded 256 MiB.
+        // ⇒ on that boot `chip_identity` (which QEMU checks its own `bar1-size` against, and
+        // which does NOT go through this derivation) answered **128 MiB**, the hypervisor
+        // registered 128 MiB, and the plane — hence the emulated GSP's
+        // `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO` — told the guest **256 MiB**.
+        //
+        // ⚠ That is EXACTLY what `nvkvm.c:3552-3559` exists to refuse — *"the guest maps past
+        // the end of a region the hypervisor decodes and reads whatever is next, with nothing
+        // logged on either side"* — reached through a door that check cannot see, because the
+        // two numbers it compares were both 128. The boot printed `GUEST-BAR1 … row_moved=true`
+        // and `BAR1-BUDGET … advertised_guest_bar1=256 MiB` in the same log, and the raw client
+        // still graded `(P)`.
+        //
+        // ⇒ Re-applied here, **after** every other patch, and then the two rows are compared.
+        // ⊘ The comparison is the part that matters: re-applying fixes today's ordering, and
+        // the gate makes the whole CLASS a named refusal — any future patch that rebuilds the
+        // profile from a static row is caught at realize instead of by a guest reading past
+        // the end of an aperture.
+        let chip = apply_guest_bar1_knob(chip)?;
+        {
+            let ours = chip.pci_bar_len(kayfabe_abi::pcibars::bus_bar::FB);
+            let registered = chip_identity(chip.pci_device_id)?.fb_window_len;
+            eprintln!(
+                "kayfabe: BAR1-AGREE plane=0x{ours:x} identity=0x{registered:x} \u{21d2} {}",
+                if ours == registered {
+                    "\u{2714} the aperture this device REGISTERS and the one its emulated GSP \
+                     TELLS THE GUEST are the same number"
+                } else {
+                    "\u{2298}\u{2298}\u{2298} THEY DISAGREE"
+                }
+            );
+            if ours != registered {
+                return Err((
+                    Status::Unsupported,
+                    "the framebuffer aperture this device registers and the one its emulated \
+                     GSP reports to the guest are DIFFERENT SIZES (see the BAR1-AGREE line). \
+                     The guest's resource manager sizes its own mappings against the reported \
+                     number, so it would map past the end of a region the hypervisor decodes \
+                     and read whatever is next \u{2014} with nothing logged on either side. \
+                     \u{2298} Refused at realize, which is the only moment an operator can act",
+                ));
+            }
+        }
         // ★★★★★ **w734 — THE IDENTITY-WINDOW INVARIANT, AT THE ONLY MOMENT AN OPERATOR CAN
         // ACT.** `SINGLE_STORE_PLAN.md` §5's expiry note makes relocation, the staged image
         // and `MAX_REFRESHES` retirable *because* the window becomes identity — and identity

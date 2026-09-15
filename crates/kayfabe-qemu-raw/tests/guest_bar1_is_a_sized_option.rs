@@ -151,3 +151,49 @@ fn an_absent_bar_is_not_sized_into_existence() {
 fn the_headroom_is_a_stated_number_not_a_derived_one() {
     assert_eq!(OUR_HEADROOM_BYTES, 16 * 1024 * 1024);
 }
+
+/// ★★★★★ **w734 — THE FB-SIZE DERIVATION SILENTLY UNDOES THE BAR1 PATCH.**
+///
+/// `[measured w734, boot `w734bar1`]` This is the defect the first knob boot found, and a
+/// green raw client (`(P)`, `THREADS 8 of 8`) did **not** catch it.
+///
+/// `ga106_profile` rebuilds from `let mut p = GA106;` — the **static** row — so it restores
+/// `pci_bars = GA106_PCI_BARS`, whose framebuffer window is the hardcoded `256 << 20`. On that
+/// boot `chip_identity` (which QEMU checks its own `bar1-size` against, and which does NOT go
+/// through the derivation) answered 128 MiB, the hypervisor registered 128 MiB, and the plane
+/// — hence the emulated GSP's `BUS_GET_PCI_BAR_INFO` — told the guest **256 MiB**.
+///
+/// ⚠ That is exactly what `nvkvm.c:3552-3559` exists to refuse, reached through a door that
+/// check cannot see: the two numbers **it** compares were both 128.
+///
+/// ⊘ Pinned here rather than only fixed at the call site, because the property under test is
+/// a fact about `ga106_profile` that the next reader will not expect.
+#[test]
+fn deriving_the_framebuffer_size_restores_the_static_bar_table() {
+    use kayfabe_abi::pcibars::bus_bar;
+    let base = kayfabe_device::ga10x::ga106_profile(kayfabe_device::ga10x::FB_SIZE_MB);
+    let (patched, moved) = kayfabe_device::with_bar_len(base, bus_bar::FB, 128 * 1024 * 1024);
+    assert!(moved);
+    assert_eq!(patched.pci_bar_len(bus_bar::FB), 128 * 1024 * 1024);
+
+    // The size derivation takes MiB, not a profile — so it cannot carry the patch forward.
+    let derived = kayfabe_device::ga10x::ga106_profile(4096);
+    assert_eq!(
+        derived.pci_bar_len(bus_bar::FB),
+        256 * 1024 * 1024,
+        "★★★ the derivation rebuilds from the STATIC row and the BAR1 patch is GONE. The fix \
+         is ordering — re-apply the knob AFTER every other patch — plus the agreement gate \
+         that makes the class a named refusal instead of a one-time fix."
+    );
+    assert_eq!(
+        derived.fb_length,
+        4096 << 20,
+        "and it did do its own job, which is why this was invisible"
+    );
+
+    // ⇒ The order that is correct: derive the size first, then size the BAR.
+    let (both, moved) = kayfabe_device::with_bar_len(derived, bus_bar::FB, 128 * 1024 * 1024);
+    assert!(moved);
+    assert_eq!(both.pci_bar_len(bus_bar::FB), 128 * 1024 * 1024);
+    assert_eq!(both.fb_length, 4096 << 20, "and the size survives the BAR patch");
+}
