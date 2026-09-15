@@ -1668,6 +1668,21 @@ static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
 // process-global, exactly as [`SWEEP_DEFER_GIVEUPS`] and [`MIRROR_DRAINS`] already are.
 // ⚠ Process-global therefore means **per process, not per device**. One QEMU serves one
 // device today; a second would sum into these. Said here rather than discovered later.
+// ⚠⚠ **THIS INSTRUMENT IS ON A HOT PATH AND IT IS NOT GATED — said here, because this tree's
+// own rule is that an instrument is on a hot path unless somebody checked.**
+//
+// `[measured w734]` `walk-bar` takes **3 454 311** reads a boot, so this costs three relaxed
+// atomics and one bitmap `fetch_or` on each of them — ~70 ms a boot by arithmetic, on a boot
+// whose walk already costs seconds. ⊘ **That figure is REASONED, not measured**: no control
+// boot was taken without the census, and the only bound that IS measured is that the raw
+// client graded `(P)` with `THREADS 8 of 8` on all four boots that carried it.
+//
+// ⊘ Left ungated deliberately, and the trade is stated rather than assumed: a gate would
+// double the arm matrix (§w724g: *"keep the count small"*), and a census that is off on the
+// boot somebody wants to read is the failure mode this whole module exists against. ⚠ If a
+// latency campaign ever attributes milliseconds to this, take the control boot first — w586
+// added a census that re-ran a 4.2 M-dword sweep fifteen times a boot and broke it, and the
+// author of that fix was the author of the warning.
 /// One role a framebuffer-store access can arrive in. See the module-level table above.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FbIoRole {

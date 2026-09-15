@@ -119,6 +119,20 @@ slack, and it is now checked by a boot (`identity_window_verdict` at realize, re
    `/dev/nvidia<N>` for the isolate's life. Both are on §3's critical path — recycling views is
    the only way a 256 MiB aperture serves a GiB reservation.
 
+### ⚠ WHAT THIS RUN CHANGED ABOUT THE DEVICE, AND WHAT IT DID NOT
+
+⊘ **Nothing on the data plane.** The census is counters; the rate probe is bounded, runs at
+realize and writes back exactly what it read; the identity checks are two `eprintln!`s and one
+comparison. ⇒ **parity is unchanged by construction and was NOT re-measured** — the box was
+destroyed after the last boot, and re-measuring a number nothing on its path moved would have
+been a fact about the box.
+
+⚠ **But the census IS on a hot path and it is not gated.** `walk-bar` takes 3 454 311 reads a
+boot and each now costs three relaxed atomics and a bitmap `fetch_or` — **~70 ms a boot by
+arithmetic, not by measurement**. No control boot was taken without it. The only measured bound
+is that the raw client graded `(P)` with `THREADS 8 of 8` on all four boots carrying it. ⊘ Said
+here rather than discovered by a latency campaign later (w586's class, by w554's author).
+
 ### ⇒ WHAT §3 STILL NEEDS, in order
 
 1. A **device-view port** reachable after bring-up (the `WalkShadowPort` shape; ⚠ it and the
