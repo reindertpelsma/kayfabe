@@ -5338,6 +5338,20 @@ static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomi
 /// completion their guest is waiting on.** `CE-LOCAL-REFRESH #n` per firing.
 static CE_LOCAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// ★★★★★ **CONSTRAINT 27's FIXED TRIP COUNT.** How many extra `drain_pending_releases`
+/// passes one refresh may spend trying to retire its staged disposals.
+///
+/// ⊘ A constant and not a deadline: the queue's length is a function of guest activity, so
+/// `while staged > 0` is a loop that terminates on guest data — the shape
+/// `THE_CONSTRAINTS.md` §20 invariant 1 forbids, and the reason every drain in this file is
+/// bounded. What is left after these trips is **reported**, and the guest's completion is
+/// withheld on it rather than the loop being extended.
+///
+/// ⚠ Four, because `drain_pending_releases` iterates every proc and every target on each
+/// call, and the thing it is racing is a pool slot coming free — which it either does in
+/// microseconds or is not going to within one refresh.
+const PT_DRAIN_TRIPS_MAX: usize = 4;
+
 /// What one page-table refresh did — the three settlement passes' own lines, and how long
 /// they took together. See [`SharedDoorbell::refresh_page_tables`].
 struct PtRefresh {
@@ -5346,6 +5360,20 @@ struct PtRefresh {
     line: String,
     /// Wall time of the three passes, on the worker.
     took: std::time::Duration,
+    /// ★★★★★ **CONSTRAINT 27 — how much disposal is STILL OWED when the passes returned.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27: a refresh may not report the TLB invalidate complete until
+    /// its unmaps have landed and been acknowledged. This is the acknowledgement, read off
+    /// [`kayfabe_rt::device::SharedDevice::staged_release_len`] — the queue itself — and
+    /// **not** off `drain_pending_releases`' return value, which is `0` both for *"nothing
+    /// was owed"* and for *"the pool was full so nothing could be issued"*.
+    ///
+    /// ⚠ Non-zero is the barrier's business, not a diagnostic: the completion is withheld
+    /// and the caller owes a retry.
+    unmaps_outstanding: usize,
+    /// How many bounded re-drains the refresh spent trying to get [`Self::unmaps_outstanding`]
+    /// to zero. ⊘ A fixed trip count, never a loop that ends when the guest's tables say so.
+    drain_trips: usize,
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -5707,6 +5735,27 @@ fn doorbell_publish_loop(
                 );
             }
             let refresh = port.refresh_page_tables(off_vcpu);
+            // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
+            //
+            // > Owner, 2026-09-15: *"Before a refresh finishes, this kernel channel has
+            // > unmapped slices the guest userspace no longer has access to. So the guest
+            // > kernel knows: okay, invalidate done, I can reuse this phys for another
+            // > userspace process safely after a scrub."*
+            //
+            // ⊘⊘ **This call is here because `drain_mirror_revalidation` CANNOT be.** That
+            // one runs `drain_fills()` **first** — deliberately, with a stated reason — so
+            // moving it up would install new memslots before the stale ones are retired,
+            // which is maps-before-unmaps, the order §27 forbids. `revalidate_mirror_first`
+            // is the unmap half alone; the full drain still runs below for the fills.
+            //
+            // ⚠ The GPU-side half is already in the right order and is NOT re-done here:
+            // `apply_settlement_as` unbinds before it populates, and the host unmaps those
+            // revocations stage are drained synchronously *inside* `refresh_page_tables`,
+            // which is above this line — while the host MAPS happen in `publish_vas_rows`,
+            // which is below it. The memslot plane was the one that ran the other way.
+            if let Some(plane) = plane_ref.as_ref() {
+                plane.revalidate_mirror_first();
+            }
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 + 1;
             let mut ctx = port.publish_ctx();
@@ -5732,8 +5781,11 @@ fn doorbell_publish_loop(
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
             // compare what the invalidate found against what the next doorbell finds.
             eprintln!(
-                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2}{}",
+                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2} \
+                 unmaps_outstanding={} drain_trips={}{}",
                 refresh.took.as_secs_f64() * 1e3,
+                refresh.unmaps_outstanding,
+                refresh.drain_trips,
                 refresh.line
             );
             if let Some(line) = published {
@@ -5785,18 +5837,57 @@ fn doorbell_publish_loop(
             // read arm would answer at this instant. Publishing only on success would leave
             // the shadow holding whatever it had before, which is the one thing that is not
             // an answer.
-            if let Some(plane) = plane_ref.as_ref()
-                && !plane
-                    .mmu_inval()
-                    .complete_through(seq, plane.clock_now_us())
-            {
-                eprintln!(
-                    "kayfabe: MMUINVAL-COMPLETE ⊘ WITHHELD seq={seq} issued={} — a newer \
-                     trigger arrived during this refresh; the guest keeps spinning until \
-                     that trigger's own job has refreshed and published (it is queued \
-                     behind this one)",
-                    plane.mmu_inval().issued()
+            // ★★★★★ **CONSTRAINT 27 — THE COMPLETION IS GATED ON THE UNMAPS, NOT ON THE
+            // PUBLICATION ALONE.**
+            //
+            // ⊘ `complete_through_unmaps`, not `complete_through`. The three verdicts are
+            // three different obligations and the previous `bool` made two of them one word:
+            // a newer trigger means *"somebody else completes this"*, an outstanding unmap
+            // means *"nobody will, come back"*, and reading the second as the first is a
+            // guest hang. See `CompletionVerdict`.
+            //
+            // ⚠ **THE RETRY IS OWED BY THIS ARM**, so it is issued here: the dropped-signal
+            // full-rescan latch is armed, which makes the next publication job — whatever
+            // triggers it — redo this refresh from a clean slate. ⊘ It does NOT synthesize a
+            // new trigger: a trigger is the guest's word, not ours, and the guest is already
+            // spinning on this one, so it will poll again and the queue's next wake serves
+            // it. What must never happen is the completion going out over a mapping that is
+            // still live, which is what this branch exists to prevent.
+            if let Some(plane) = plane_ref.as_ref() {
+                let verdict = plane.mmu_inval().complete_through_unmaps(
+                    seq,
+                    plane.clock_now_us(),
+                    refresh.unmaps_outstanding,
                 );
+                match verdict {
+                    kayfabe_device::mmuinval::CompletionVerdict::Completed => {}
+                    kayfabe_device::mmuinval::CompletionVerdict::WithheldNewerTrigger {
+                        issued,
+                    } => {
+                        eprintln!(
+                            "kayfabe: MMUINVAL-COMPLETE ⊘ WITHHELD seq={seq} issued={issued} \
+                             — a newer trigger arrived during this refresh; the guest keeps \
+                             spinning until that trigger's own job has refreshed and \
+                             published (it is queued behind this one)"
+                        );
+                    }
+                    kayfabe_device::mmuinval::CompletionVerdict::WithheldUnmapsOutstanding {
+                        n: owed,
+                    } => {
+                        DROPPED.arm_full_rescan();
+                        eprintln!(
+                            "kayfabe: MMUINVAL-COMPLETE ⊘⊘⊘ WITHHELD-UNMAPS seq={seq} \
+                             outstanding={owed} drain_trips={} — CONSTRAINT 27: {owed} \
+                             staged disposal(s) did not land, so the guest is NOT told the \
+                             invalidate is done. Completing here would let the guest kernel \
+                             reuse a physical page a guest USERSPACE process can still reach \
+                             through a slice we have not taken down — a cross-process leak \
+                             inside the guest, caused by us, invisible to it. ⚠ A full \
+                             rescan is armed so the next publication redoes this refresh.",
+                            refresh.drain_trips
+                        );
+                    }
+                }
             }
             if let Some(plane) = plane_ref.as_ref() {
                 plane.publish_invalidate_trigger();
@@ -7698,9 +7789,29 @@ impl SharedDoorbell {
         let w = self.witness_executor_fb_pages();
         let d = self.decode_cpu_pt_writes();
         let sw = self.sweep_cpu_pt_tables();
+        // ★★★★★ **CONSTRAINT 27 — GET THE STAGED UNMAPS OUT, WITH A FIXED TRIP COUNT.**
+        //
+        // The three passes above each end in a synchronous `drain_pending_releases`, which
+        // **skips** rather than waits when the pool is full or an isolate still has a verb
+        // in flight (its own docs say so). So a queue can survive them with nothing having
+        // gone wrong. Re-drain here, bounded — `PT_DRAIN_TRIPS_MAX` and not `while
+        // staged > 0`, because the queue's length is a function of guest activity and a
+        // loop that ends when the guest says so is the shape this tree forbids.
+        //
+        // ⊘ Whatever is left is REPORTED, not swallowed: the caller withholds the guest's
+        // completion on it.
+        let mut drain_trips = 0usize;
+        let mut outstanding = self.device.staged_release_len();
+        while outstanding != 0 && drain_trips < PT_DRAIN_TRIPS_MAX {
+            let _ = self.device.drain_pending_releases();
+            drain_trips += 1;
+            outstanding = self.device.staged_release_len();
+        }
         PtRefresh {
             line: format!("{w}{d}{sw}"),
             took: t0.elapsed(),
+            unmaps_outstanding: outstanding,
+            drain_trips,
         }
     }
 

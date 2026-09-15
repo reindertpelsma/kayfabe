@@ -2541,6 +2541,57 @@ impl SharedDevice {
         f(st.spine.retired_procs())
     }
 
+    /// ★★★★★ **CONSTRAINT 27 — HOW MUCH DISPOSAL IS STILL OWED, ACROSS EVERY PROC.**
+    ///
+    /// `THE_CONSTRAINTS.md` §27: *"unmaps applied AND acknowledged before the invalidate
+    /// completes"*. This is the **acknowledged** half, asked of the thing that holds the
+    /// debt rather than inferred from a drain's return value.
+    ///
+    /// ⊘ **Why not plumb a count out of the refresh.** `drain_pending_releases` returns how
+    /// many it disposed of and **skips** on a full pool or an isolate with a verb in flight
+    /// (its own docs say so), so `drained == 0` means *"nothing was owed"* and *"nothing
+    /// could be issued"* alike. A number derived from the drain therefore cannot answer the
+    /// question the barrier asks. The queue itself can, and it is the only thing that can.
+    ///
+    /// ★ `Orphans::len()` and not a sum of `unmap` alone — `[w310]`: a kind added to
+    /// `Orphans` must not go uncounted, and a staged **free** of an `OS_DESCRIPTOR` over
+    /// guest pages is exactly as much *"the guest may not reuse this yet"* as the GPU unmap
+    /// that precedes it in the same `VerbPlan::Release`. The three are issued together and
+    /// all-or-nothing, so an empty queue is the one statement worth making.
+    ///
+    /// ⚠ Retired-but-unreaped procs are counted too. A corpse's queue is a mapping that
+    /// still exists.
+    #[must_use]
+    pub fn staged_release_len(&self) -> usize {
+        // ⊘ The pid list is taken under the spine read guard and the per-proc reads happen
+        // AFTER it is dropped, through `route_act` — the same shape `drain_pending_releases`
+        // uses, and for the same reason: a proc lock taken while holding the spine guard is
+        // the rank inversion R1 forbids.
+        let pids: Vec<ProcId> = {
+            let st = self.state.read();
+            core::iter::once(Gpu::SYSTEM_PROC)
+                .chain(st.procs.keys().copied())
+                .collect()
+        };
+        let live: usize = pids
+            .into_iter()
+            .map(|pid| {
+                self.route_act(
+                    |_| Ok((pid, ())),
+                    |_, p, ()| kayfabe_core::gpu::Proc::pending_release_len(p),
+                )
+                .unwrap_or(0)
+            })
+            .sum();
+        let dead: usize = self.with_retired(|procs| {
+            procs
+                .iter()
+                .map(kayfabe_core::gpu::Proc::pending_release_len)
+                .sum()
+        });
+        live + dead
+    }
+
     /// ★★ **T0's backstop drain** (`l1_os_shell.md` §7.6 T0, gap G2) — release every
     /// host object a `refresh` queued for a **live** proc, for procs that have gone
     /// quiet. Returns how many objects + mappings it disposed of.
