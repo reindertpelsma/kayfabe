@@ -69,7 +69,13 @@ sleep 3
 # ⊘ `cuda-scratchpad` is on because e6 exports `KAYFABE_SCRATCHPAD_CUDA=on` unconditionally and
 # `[measured w734t]` — the run this one is compared against — had it. The feature costs nothing
 # to build: `kayfabe-cuda` `dlopen`s libcuda at RUN time and links nothing.
+# ⊘ `W735_SKIP_BUILD=1` for the 2nd..Nth boot of a BATCHED run: the tree has not changed between
+# them, and `single_store_e6_boot.sh` still refuses a binary whose rev is not HEAD's, so the
+# guard that matters is not skipped — only the ~1 min relink is.
 export KAYFABE_SHIM_FEATURES="${KAYFABE_SHIM_FEATURES:-host-isolates cuda-scratchpad}"
+if [ "${W735_SKIP_BUILD:-0}" = "1" ]; then
+  echo "== W735_SKIP_BUILD=1 — reusing the binaries from the previous boot of this run"
+else
 QEMU_SRC=${KAYFABE_QEMU_SRC:-$BENCH/qemu-10.2.4}
 QEMU_BUILD=${KAYFABE_QEMU_BUILD:-$BENCH/qemu-build}
 echo "== building the shim: features=$KAYFABE_SHIM_FEATURES src=$QEMU_SRC"
@@ -93,6 +99,7 @@ L="$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
 n_r10=$(strings "$L" 2>/dev/null | grep -c 'it did not start: kind=')
 echo "LADDER-CONTENT: r10_refusal_strings=$n_r10 (0 ⇒ the ladder predates w735 — STOP)"
 if [ "$n_r10" -eq 0 ]; then echo "⊘ stale guest ladder"; exit 4; fi
+fi
 
 export POST_CAPTURE_HOOK="$SRC_DIR/rmladder_suite_hook.sh"
 # ⊘ 90 s is `[measured w734t]`'s value, kept UNCHANGED on purpose. Shortening it would make a

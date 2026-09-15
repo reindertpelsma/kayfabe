@@ -30,7 +30,12 @@ SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO=${KAYFABE_REPO:-/root/kayfabe}
 BENCH=${BENCH_DIR:-/workspace/bench}
 TAG=${1:-w735b}
-PER=${2:-4}
+# ⊘ THREE, not four, and the number is MEASURED rather than chosen: `[measured w735, boot
+# w735a]` five `RmInitAdapter` cycles succeed in one QEMU lifetime and the sixth fails, and
+# `boot_capture.sh` spends one of them on its own `nvidia-smi` before the hook runs. Four would
+# sit exactly on the wall with no margin. ⚠ Confirm with `RMLADDER_OPEN_PROBE` on this build
+# before trusting it — the wall is a property of the tree, not a constant.
+PER=${2:-3}
 cd "$REPO" || { echo "⊘ no repo at $REPO"; exit 2; }
 
 ARMS="--concurrency --timer --engines --doorbell-census --gpu-info-sweep --bus-info-sweep
@@ -54,6 +59,11 @@ while [ $# -gt 0 ]; do
   echo "=== BATCH $batch — fresh QEMU, arms:$sub ==="
   pkill -f '[q]emu-system-x86'
   sleep 3
+  # ⊘ The FIRST boot builds; the rest reuse. The tree does not change between batches and
+  # `single_store_e6_boot.sh` still refuses a stale rev, so the guard is intact and only the
+  # relink is skipped. ⚠ A batched run that rebuilt 10 times would spend a third of itself
+  # relinking QEMU.
+  [ $batch -gt 1 ] && export W735_SKIP_BUILD=1
   RMLADDER_ARMS="$sub" PREFIX="${TAG}$batch" bash "$SRC_DIR/w735_suite_run.sh" "${TAG}$batch" \
     > "$BENCH/${TAG}_batch${batch}.log" 2>&1
   S="$BENCH/run_${TAG}${batch}_suite.out"
