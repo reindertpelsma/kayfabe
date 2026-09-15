@@ -93,6 +93,30 @@ and the per-client host MMU fault above.
     (to GPA where that is not skippable) into a **VMM VA**, and use that VA in `mmap` or in
     ioctls. ⊘ Never one memslot per published page. Same model as `nvkvm-pv` and the Mode-2 C.
 17. **Host userspace stays UNPRIVILEGED.** Standing, absolute, and it constrains every item above.
+18. **Guest vidmem is vidmem** — no silent sysmem substitution. ✔ **Satisfied by construction**
+    under the single store: there is no other memory to substitute (§18).
+19. ⊘ ~~Classify per address, lease the classification.~~ **SUPERSEDED** — nothing is classified,
+    because a from-root walk **recomputes** reachability rather than remembering it (§19).
+20. **The GPU walker**: one kernel, **three structural invariants** (no loop terminates on guest
+    data · every dereference bounds-checked · output capped with loud truncation), and a fallback
+    at every layer. Runs in the **scratchpad isolate**, never the VMM (§20).
+21. **ONE CUDA program, Turing through Blackwell, with the format as SETUP DATA** — no bit
+    position in the kernel; a new die is a descriptor, a new format a descriptor plus one arm
+    (§21).
+22. **We do not lie about the aperture**, and it is **SYMMETRIC**: vidmem is vidmem **and sysmem
+    is sysmem**. If the guest explicitly asks for DMA-mapped system memory it gets real host
+    memory (§22, §w724c).
+
+★ **Later additions that are not numbered constraints but bind the same way:**
+**§w724g** gates expire — carry an expiry condition in the gate's own doc comment, and unwire and
+delete in the **same** change · **§w727** BAR1/BAR2 are **sized options** with enforced minimums
+(powers of two; refuse, never clamp) · **§w729** when stuck **ask Fable and give it this file**,
+and **never buy a pass by relaxing a constraint** · **§w729b** a measured dead end **is a
+deliverable**.
+
+⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
+list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
+the same change**, or the index becomes the most confidently wrong thing in the file.
 
 ## ⊘⊘⊘ SUPERSEDED w721 — THERE IS ONE WORLD, NOT TWO. Read this before §15 below.
 
