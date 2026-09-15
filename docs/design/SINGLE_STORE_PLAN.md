@@ -432,6 +432,57 @@ half that still assumes a whole object.
 the address table's `HostBacking`, the device publish route's bind, and the channel-birth verb's
 assumption about what `AdoptedGuestRing::memory` names.
 
+##### ⇒ 3a. SCOPED, 2026-09-15 — what it would take, and the two things to decide FIRST
+
+★ **Three pieces of good news, all found in the existing types:**
+1. **The offset is already first-class and is DEAD CODE in production.** `HostExtent::Slice` +
+   `HostSlice { offset, len }` + `HostBacking::slice(arena, host_va, slice, bytes)`
+   (`crates/kayfabe-mmu/src/lib.rs:82, 162-168, 365-379`) exist, and `frees_object()` (`:419-422`)
+   is already `false` for a `Slice` — i.e. *"a slice of a long-lived arena"* is the modelled
+   regime. **Every production `Binding` uses `HostBacking::whole`; `::slice` has zero callers.**
+2. **The ring handle never reaches RM.** `alloc_channel_in`'s `RingSource::Guest` arm
+   (`crates/kayfabe-isolate-host/src/rm.rs:7173-7178`) narrows the handle and then maps
+   **nothing** (`:7326-7334`); what RM receives is `gp_fifo_offset: layout.gp_fifo_va`
+   (`:7418-7420`), an absolute VA. ⇒ `AdoptedGuestRing` needs **no new field**, and conjunct (6)
+   / conjunct (7) pass unchanged once `binding.host()` is `Some` with
+   `BackingBytes::JoinsGuestWindow`.
+3. **The USERD is the precedent and it already goes to RM as handle + offset**
+   (`rm.rs:7222-7228`, `:7429`, `:7451`), and `NVOS46_PARAMETERS::offset` — *"the offset within
+   the object"* — exists and is hard-coded `0` today (`rm.rs:2414`,
+   `crates/kayfabe-abi/src/submit.rs:206`).
+
+⊘⊘⊘ **AND TWO STRUCTURAL BLOCKERS. Neither is a one-liner and the first is an OWNER RULING.**
+
+- **B1 — the reserved object belongs to the SCRATCHPAD isolate, not the guest proc's.**
+  `Scratchpad::bring_up` reserves it on `IsolateId::new(SCRATCHPAD_PROC /* u32::MAX */, gpu)`
+  (`crates/kayfabe-qemu-raw/src/scratchpad.rs:722, 758`), while channel birth runs on
+  `IsolateId::new(pid.0, gpu)`. `Worker::execute`'s central gate refuses any plan naming a
+  foreign handle — `crates/kayfabe-isolate/src/lib.rs:3651-3656`, `RmError::ForeignHandle` — and
+  `VerbPlan::ChannelBirth` chains `adopt.memory` into `handles()` (`:2876-2887`). An
+  `NV01_MEMORY_LOCAL_USER` handle is client-scoped and cannot simply be re-stamped.
+  ⇒ **Three mutually exclusive answers, and choosing is an architecture decision:** (a) reserve
+  per guest proc rather than once on the scratchpad — which gives up "ONE reserved object";
+  (b) build a cross-isolate export/adopt for the reservation; (c) move passthrough channel birth
+  onto the scratchpad isolate. ⚠ **Do not pick one by implementation convenience.**
+- **B2 — nothing maps the reserved object into any host GPU VAS.** `reserve_gpga`
+  (`crates/kayfabe-isolate-host/src/rm.rs:2716-2731`) **allocates only**: no `map_dma`, no
+  `map_cpu`. Its only mapping ever is the CPU `mmap` the byte port arms. And
+  `AddressTable::bind` demands `host_va == va` (`kayfabe-mmu/src/lib.rs:1159-1167`,
+  `AddressFault::HostVaMismatch`), so the map must be `DMA_OFFSET_FIXED_TRUE` at the leaf's own
+  VA. ⚠ **Doing that per leaf reintroduces a per-leaf IPC round trip — i.e. it gives back part of
+  the 97.8 % verb-budget win w742 bought.** Mapping the whole reservation once and cutting VAs
+  arithmetically works only if the guest's framebuffer VAs are contiguous with a constant bias,
+  which they are not in general.
+- **B3 — minor:** the reserved object must also be registered in the birth isolate's joined-object
+  table or `alloc_channel_declared` refuses `RING_NOT_A_JOINED_WINDOW`
+  (`rm.rs:6330-6334`, `:1310`); and `Scratchpad`'s `Reservation::Held { obj }`
+  (`scratchpad.rs:678, 812`) and `DeviceViewPort::obj` (`deviceview.rs:188-196`) have **no public
+  accessor** — both trivial additions.
+
+⇒ **The next session's first act is not code: it is B1.** Everything else is mechanical once the
+owner says which isolate owns the reservation.
+
+
 #### ⇒ 4. WHERE THAT LEAVES THE PRE-FLIGHT BELOW
 
 ★ It is a **real fix for a real defect** and it is kept: `blocked_by_progress` refusals are
