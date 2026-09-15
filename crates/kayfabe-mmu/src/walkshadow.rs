@@ -115,6 +115,47 @@ pub fn leaves_as_runs(leaves: &[DecodedLeaf]) -> (Vec<Run>, usize) {
     (walkdiff::canonical(&out), dropped)
 }
 
+/// ★★★★★ **THE KERNEL'S RUNS, REDUCED TO THE FIELDS BOTH WALKERS DECODE, THEN CANONICALISED
+/// — and the order of those two steps is the whole function.**
+///
+/// ⊘⊘⊘ `[measured w731, live boot, vast 51067717]` this is what its absence looked like:
+///
+/// ```text
+/// HOST[0] va=0x120000000 gpga=0x0        len=0x100000000 flags=0x0
+/// KERN[0] va=0x120000000 gpga=0x0        len=0xefc00000  flags=0x90200
+/// KERN[1] va=0x20fc00000 gpga=0xefc00000 len=0x10400000  flags=0x60200
+/// ```
+///
+/// One 4 GiB mapping on the host; **two** on the kernel, contiguous in VA and in GPGA, and
+/// **identical in every flag either side is allowed to compare** (`0x90200 & 0xf == 0` and
+/// `0x60200 & 0xf == 0`). The bits that differ are ones the host walker **does not decode at
+/// all** — this is w725's finding arriving from the other side: *"runs if KIND/COMPTAGLINE
+/// were part of the identity: 3"*.
+///
+/// ⚠ [`walkdiff::canonical`] coalesces on **equal flags**, so canonicalising the raw runs
+/// preserves a boundary that exists only in fields outside [`COMPARED_FLAGS`]. The census
+/// then reported `len_differs` + `extra_in_kernel` for a mapping the two sides **agree**
+/// about: **100 disagreements over 65 comparisons, none of them real.**
+///
+/// ⇒ **Mask first, then coalesce.** Masking afterwards cannot help: the boundary is already
+/// baked into the run list by then.
+///
+/// ★ And this is not a narrowing bought to make a number green — it is [`COMPARED_FLAGS`]'s
+/// existing rule applied one step earlier. Comparing runs cut by fields only one walker reads
+/// measures a difference between what two decoders *looked at*, which the module header
+/// already refuses in the comparison and had failed to refuse in the canonicalisation.
+#[must_use]
+pub fn kernel_runs_as_compared(runs: &[Run]) -> Vec<Run> {
+    let masked: Vec<Run> = runs
+        .iter()
+        .map(|r| Run {
+            flags: r.flags & COMPARED_FLAGS,
+            ..*r
+        })
+        .collect();
+    walkdiff::canonical(&masked)
+}
+
 /// What kind of disagreement. ⊘ Five kinds and not a boolean: *"the kernel missed a mapping"*,
 /// *"the kernel invented one"* and *"the two disagree about where it points"* send a reader to
 /// three different places, and a single count sends them nowhere.

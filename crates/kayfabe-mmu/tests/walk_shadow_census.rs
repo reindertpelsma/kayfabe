@@ -496,3 +496,48 @@ fn the_w731_split_is_absorbed_when_both_halves_are_in_one_set() {
         "a split whose second half points somewhere else MUST disagree"
     );
 }
+
+/// ★★★★★ **MASK BEFORE COALESCING — the w731 live defect, with the measured flag values.**
+///
+/// `[measured w731]` the kernel emitted two runs whose only difference was in bits outside
+/// [`COMPARED_FLAGS`], and canonicalising them raw preserved that boundary — producing
+/// `len_differs` + `extra_in_kernel` for a mapping both sides agree about.
+#[test]
+fn flags_outside_the_compared_mask_must_not_split_a_run() {
+    let host = vec![run(0x1_2000_0000, 0x0, 0x1_0000_0000, PageClass::P2M)];
+    // The kernel's own numbers, verbatim from the boot log.
+    let raw = vec![
+        Run { va: 0x1_2000_0000, gpga: 0x0, len: 0xefc0_0000, flags: 0x9_0200, class: PageClass::P2M },
+        Run { va: 0x2_0fc0_0000, gpga: 0xefc0_0000, len: 0x1040_0000, flags: 0x6_0200, class: PageClass::P2M },
+    ];
+    assert_eq!(
+        raw[0].flags & COMPARED_FLAGS,
+        raw[1].flags & COMPARED_FLAGS,
+        "the fixture must differ ONLY outside the mask, or it tests something else"
+    );
+
+    // ⊘ The control: canonicalising the raw runs does NOT merge them — which is the defect.
+    let raw_canon = kayfabe_mmu::walkdiff::canonical(&raw);
+    assert_eq!(raw_canon.len(), 2, "the boundary survives an unmasked canonicalisation");
+
+    // ★ And masking first does.
+    let masked = kayfabe_mmu::walkshadow::kernel_runs_as_compared(&raw);
+    assert_eq!(masked.len(), 1, "masking first must coalesce: {masked:?}");
+    let (h, _) = leaves_as_runs(&[leaf(0x1_2000_0000, 0x0, 4096)]);
+    let _ = h;
+    let host_canon = kayfabe_mmu::walkdiff::canonical(&host);
+    assert!(
+        compare(&host_canon, &masked).is_empty(),
+        "after masking, the two sides agree: {:?}",
+        compare(&host_canon, &masked)
+    );
+
+    // ⊘ The known-positive: a difference INSIDE the mask must still split and still fire.
+    let real = vec![
+        Run { va: 0x1_2000_0000, gpga: 0x0, len: 0xefc0_0000, flags: 0x9_0200, class: PageClass::P2M },
+        Run { va: 0x2_0fc0_0000, gpga: 0xefc0_0000, len: 0x1040_0000, flags: 0x6_0208, class: PageClass::P2M },
+    ];
+    let m = kayfabe_mmu::walkshadow::kernel_runs_as_compared(&real);
+    assert_eq!(m.len(), 2, "a READ-ONLY difference is inside the mask and MUST split");
+    assert!(!compare(&host_canon, &m).is_empty(), "and must be reported");
+}

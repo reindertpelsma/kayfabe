@@ -511,7 +511,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 .filter(|(_, raw)| usize::from(raw.pdb_index) == i)
                 .map(|(r, _)| *r)
                 .collect();
-            let kernel = kayfabe_mmu::walkdiff::canonical(&mine);
+            // ⊘⊘ **MASK BEFORE COALESCING** — see `walkshadow::kernel_runs_as_compared`.
+            // `[measured w731]` canonicalising the RAW kernel runs preserved a run boundary
+            // that exists only in flag bits the host walker does not decode, and the census
+            // reported 100 disagreements for mappings the two sides agree about.
+            let kernel = walkshadow::kernel_runs_as_compared(&mine);
             let d = walkshadow::compare(&host, &kernel);
             // ★★★ **THE FIRST DISAGREEING COMPARISON PRINTS ITS WHOLE INPUT, ONCE.**
             //
