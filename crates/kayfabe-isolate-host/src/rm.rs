@@ -93,7 +93,8 @@ use kayfabe_abi::bringup::{
     NV01_MEMORY_SYSTEM, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
     NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
-    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
+    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, NVOS46_FLAGS_PAGE_SIZE_4KB, Nv2080AllocParameters,
+    NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 // ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
@@ -2940,6 +2941,21 @@ impl RmConnection {
         len: u64,
         at: u64,
     ) -> Result<MapOutcome, RmError> {
+        self.raw_map_dma_fixed_status_flags(h_dma, h_memory, len, at, 0)
+    }
+
+    /// [`RmConnection::raw_map_dma_fixed_status`] with extra `NVOS46_PARAMETERS::flags` bits.
+    ///
+    /// # Errors
+    /// Ioctl-level only.
+    fn raw_map_dma_fixed_status_flags(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        len: u64,
+        at: u64,
+        extra: u32,
+    ) -> Result<MapOutcome, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         Nvos46Parameters {
             h_client: self.client.raw(),
@@ -2948,7 +2964,7 @@ impl RmConnection {
             h_memory,
             offset: 0,
             length: len,
-            flags: NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+            flags: NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE | extra,
             flags2: 0,
             kind_override: 0,
             dma_offset: at,
@@ -4918,6 +4934,38 @@ impl HostRmBackend {
         at: u64,
     ) -> Result<MapOutcome, RmError> {
         self.conn.raw_map_dma_fixed_status(h_dma, h_memory, len, at)
+    }
+
+    /// ★★★★★ **B1(d) PROBE — the same FIXED map with `NVOS46_FLAGS_PAGE_SIZE_4KB` set.**
+    ///
+    /// ⊘⊘⊘ **MEASURED 2026-09-15 (w744), and it is a data-plane finding, not a detail.**
+    /// Without this flag RM answers `NV_OK` and then places the mapping at a **different
+    /// address than the one asked for**, rounding a `…_1000` VA down to `…_0000`:
+    ///
+    /// ```text
+    /// at=0x0000008000001000 status=0x0000 dmaOffset=0x0000008000000000 honoured=false
+    /// ```
+    ///
+    /// `DMA_OFFSET_FIXED_TRUE` makes `dmaOffset` an `[IN]`, but `_dmaGetPageSize` is still
+    /// free to choose a **big** page, and a big-page mapping cannot start at a 4 KiB
+    /// boundary — so RM aligns the request down instead of refusing it. The status is
+    /// `NV_OK` throughout. ★ This is exactly the failure
+    /// [`NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`]'s own doc warns about — *"the mapping exists
+    /// somewhere the guest never names: the submission looks published and faults the
+    /// instant hardware resolves it (`Xid 31 FAULT_PDE`)"* — reached through a **success**
+    /// rather than through a missing flag.
+    ///
+    /// # Errors
+    /// Ioctl-level only — RM's refusal is [`MapOutcome::status`].
+    pub fn host_map_dma_fixed_4k(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        len: u64,
+        at: u64,
+    ) -> Result<MapOutcome, RmError> {
+        self.conn
+            .raw_map_dma_fixed_status_flags(h_dma, h_memory, len, at, NVOS46_FLAGS_PAGE_SIZE_4KB)
     }
 
     /// Undo a [`HostRmBackend::host_map_dma_fixed`].

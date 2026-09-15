@@ -7618,7 +7618,6 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     let mut req_total = 0usize;
     let mut info_honoured = 0usize;
     let mut info_total = 0usize;
-    let mut known_positive_fired = false;
     let mut placed: Vec<u64> = Vec::new();
     for (at, what, row) in sweep {
         let r = rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, at);
@@ -7647,7 +7646,7 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                     }
                     Row::MustRefuse => {
                         if o.status != 0 {
-                            known_positive_fired = true;
+                            // ⊘ Recorded but NO LONGER the known-positive — see Q3's block.
                         } else {
                             // It "succeeded" past the limit — then either the limit is not
                             // what `--w379` says, or this code is not reading the status.
@@ -7660,8 +7659,86 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             Err(e) => println!("B1D_Q3_FIXED at={at:#018x} ioctl-level failure: {e:?} — {what}"),
         }
     }
-    println!("B1D_Q3_REQUIRED_HONOURED={req_honoured}/{req_total}   (raw-client ring VAs — IN the verdict)");
+    println!("B1D_Q3_REQUIRED_HONOURED={req_honoured}/{req_total}   (raw-client ring VAs, NO page-size flag)");
     println!("B1D_Q3_INFORMATIONAL_HONOURED={info_honoured}/{info_total}   (⊘ a finding about RM's VA layout, NOT in the verdict)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q3b — ★★★★★ THE SAME THREE VAs WITH `NVOS46_FLAGS_PAGE_SIZE_4KB`.
+    //
+    // ⊘⊘⊘ Q3 above measured `status=0x0000` with `dmaOffset` **4 KiB BELOW what was asked**
+    // — `…_1000` came back `…_0000`. RM did not refuse; it RELOCATED, because
+    // `DMA_OFFSET_FIXED_TRUE` makes the offset an [IN] and `_dmaGetPageSize` is still free
+    // to pick a BIG page, and a big-page mapping cannot begin at a 4 KiB boundary.
+    // ★ That is the `Xid 31 FAULT_PDE` failure `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`'s own
+    // doc describes, reached through a SUCCESS instead of through a missing flag — and it
+    // is invisible to any caller that reads only `status`.
+    // ⇒ This arm is the falsifiable half: if pinning the small-page table honours exactly
+    // the addresses the plain arm relocated, the cause is named and the production fix is
+    // one flag. If it does not, the cause is something else and the flag is not it.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let mut req4k_honoured = 0usize;
+    let mut req4k_total = 0usize;
+    for (at, what, row) in sweep {
+        if row != Row::Required {
+            continue;
+        }
+        req4k_total += 1;
+        match rm.host_map_dma_fixed_4k(h_dma, mem_s, OBJ_LEN, at) {
+            Ok(o) => {
+                let honoured = o.status == 0 && o.dma_offset == at;
+                println!(
+                    "B1D_Q3B_FIXED_4K at={at:#018x} status={:#06x} dmaOffset={:#018x} honoured={honoured}  \
+                     — {what}",
+                    o.status, o.dma_offset
+                );
+                if honoured {
+                    req4k_honoured += 1;
+                    placed.push(at);
+                }
+            }
+            Err(e) => println!("B1D_Q3B_FIXED_4K at={at:#018x} ioctl-level failure: {e:?} — {what}"),
+        }
+    }
+    println!("B1D_Q3B_REQUIRED_HONOURED_4K={req4k_honoured}/{req4k_total}   (★ IN the verdict)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // ★★ THE KNOWN-POSITIVE, redesigned. The first version asked for a VA past what
+    // `--w379` calls RM's default VAS limit and expected a refusal; RM **accepted** it
+    // (`0x100_0001_0000`, `honoured=true`), so that row proved nothing and the gate read
+    // `DID NOT FIRE`. ⊘ A known-positive that depends on the driver's VA layout is not a
+    // known-positive — it is a second hypothesis.
+    // ⇒ Re-map an address THIS RUNG HAS ALREADY MAPPED. That must be refused whatever the
+    // layout is, because the VA is occupied by our own mapping, and it is the same `0x51`
+    // the sharing falsifier below reads as its positive.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let known_positive_fired = match placed.first() {
+        None => {
+            println!("B1D_Q3_KNOWN_POSITIVE=⊘ NOTRUN — nothing was placed, so nothing can be re-placed");
+            false
+        }
+        Some(&again) => match rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, again) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q3_KNOWN_POSITIVE_REMAP at={again:#018x} status={:#06x}  \
+                     — the SAME VA this rung already mapped; a refusal is REQUIRED",
+                    o.status
+                );
+                o.status != 0
+            }
+            Err(e) => {
+                println!("B1D_Q3_KNOWN_POSITIVE_REMAP ioctl-level failure: {e:?}");
+                false
+            }
+        },
+    };
+    println!(
+        "B1D_Q3_KNOWN_POSITIVE={}",
+        if known_positive_fired {
+            "FIRED — the sweep can distinguish a refusal from a placement"
+        } else {
+            "⊘ DID NOT FIRE — every row above is unmeasured"
+        }
+    );
     println!(
         "B1D_Q3_KNOWN_POSITIVE={}  (a VA past the VAS limit was refused)",
         if known_positive_fired { "FIRED" } else { "⊘ DID NOT FIRE — the sweep is not measuring placement" }
@@ -7776,8 +7853,11 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // particular the two INFORMATIONAL sweep rows are excluded on purpose: whether RM
     // hands out a VA near its own reservations is a fact about RM's address layout, and
     // letting it swing this line would let an unrelated fact decide the design question.
-    let verdict = req_total > 0
-        && req_honoured == req_total
+    // ⊘ The verdict names the five things (d) needs. `req_honoured` (no page-size flag) is
+    // DELIBERATELY NOT one of them: it measured a RELOCATION, which is the finding, and
+    // `req4k_honoured` is the clause that says the data plane can place what it must.
+    let verdict = req4k_total > 0
+        && req4k_honoured == req4k_total
         && known_positive_fired
         && control_ok
         && shared;
