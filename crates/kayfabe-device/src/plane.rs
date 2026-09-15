@@ -1161,6 +1161,32 @@ pub trait FbMirrorPort: Send + Sync + core::fmt::Debug {
     fn drain_fills(&self);
 }
 
+/// ★★★★★ **CUT B — what [`RegPlane::window_leaves`] found**, including what it could NOT read.
+///
+/// # ⊘⊘⊘ Why this is a struct and not the `(leaves, visited)` pair it replaces
+///
+/// `decode_subtree` errors on budget exhaustion **and on nothing else**; a page-table page it
+/// could not read becomes a per-branch `WalkFault` and the walk carries on. The pair dropped
+/// those faults, so an enumeration whose root page was unreadable returned an **empty leaf
+/// list and `Ok`** — *"the guest has mapped nothing"*, which is a statement about the guest
+/// made out of a failure of ours.
+///
+/// ⚠ It never fired under the arena store, whose `read` answers every in-range address. Under
+/// the single store an unarmed page-table page faults on every walk, and the caller's correct
+/// response is to arm and try again — which it cannot decide without this number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowEnumeration {
+    /// Every vidmem leaf the window's own page tables declare.
+    pub leaves: Vec<kayfabe_mmu::walker::DecodedLeaf>,
+    /// How many page-table pages were visited — the measurement that turns the next budget
+    /// into a number rather than a second guess (w626).
+    pub visited: usize,
+    /// ★★★ **How many branches could not be decoded.** Non-zero means [`WindowEnumeration::leaves`]
+    /// is a SUBSET of what the guest mapped, and a caller that treats it as the whole set is
+    /// publishing fewer pages than the guest asked for.
+    pub faults: usize,
+}
+
 /// ★★★★★ **w393 — one translated-window page, resolved for the mirror**: where it lands in
 /// the framebuffer, whether the guest's own PTE forbids writes, and what memory backs it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1316,6 +1342,9 @@ pub struct RegPlane {
     fb_trap_policy: std::sync::atomic::AtomicU8,
     /// How many trapped accesses [`FbTrapPolicy::RefuseByName`] has refused.
     fb_trap_refused: std::sync::atomic::AtomicU64,
+    /// ★★★★★ **CUT B — whether the installed store has a byte port**, cached from
+    /// [`RegPlane::set_fb`]. See that method for why this is not asked of the store.
+    fb_has_demand_port: std::sync::atomic::AtomicBool,
     /// ★★★ **The VA-space page-directory publications** (`crate::gvaspub`) — the guest
     /// telling us where its page directories live, with the `hObject` that names which VA
     /// space they root. Held here for the two reasons `bar_pdes` is: reading it must not
@@ -1630,6 +1659,89 @@ struct MmioInFlight<'a>(&'a AtomicU32);
 /// guest traps faster than the sweep can complete, which is a different problem from
 /// starvation and wants a different fix.
 static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ CUT B — THE ARM-THEN-RETRY CENSUS. `SINGLE_STORE_PLAN.md` cut B, items 2, 3 and 5.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★ **How many retries one host-side read may buy.** A **fixed trip count**, never a
+/// convergence argument — `THE_CONSTRAINTS.md` §20's first structural invariant.
+///
+/// # Why two
+///
+/// A single [`FbRead::read_in`] asks for **one** page-table page, so one successful drain is
+/// all it can possibly need. The second attempt exists for one race and one only: a drain on
+/// another thread evicting the run this one just armed. ⊘ A larger number would not fix
+/// anything a smaller one cannot — a read that misses twice after two drains is missing for a
+/// reason arming does not address — and it would turn a wedged port into a spin on a thread
+/// that may be a worker the rest of the device is waiting on.
+pub const FB_DEMAND_READ_RETRIES: u32 = 2;
+
+/// Drains that actually ran (a port existed and the caller was allowed to arm).
+static FB_DEMAND_DRAINS: AtomicU64 = AtomicU64::new(0);
+/// Pages armed across every drain.
+static FB_DEMAND_ARMED: AtomicU64 = AtomicU64::new(0);
+/// Arms the port refused. ⚠ Non-zero here is the **host BAR1 aperture**, not video memory.
+static FB_DEMAND_REFUSED: AtomicU64 = AtomicU64::new(0);
+/// ★★★ Drains DECLINED BY NAME because the caller was a vCPU or inside an MMIO trap —
+/// cut B item 5's counter, and the one that says the guard is reached rather than merely
+/// written.
+static FB_DEMAND_DECLINED_ON_VCPU: AtomicU64 = AtomicU64::new(0);
+/// Calls that found no byte port at all: the arena arm, and cut A's shape. ⊘ Counted
+/// separately so *"the mechanism is absent"* can never be read as *"the mechanism refused"*.
+static FB_DEMAND_NO_PORT: AtomicU64 = AtomicU64::new(0);
+/// Host reads that succeeded only because a retry armed their page — cut B WORKING.
+static FB_DEMAND_READ_RETRIED_OK: AtomicU64 = AtomicU64::new(0);
+/// Host reads that still missed after the last allowed retry.
+static FB_DEMAND_READ_GAVE_UP: AtomicU64 = AtomicU64::new(0);
+
+/// ★★★ **CUT B's CENSUS LINE.** Printed on both arms, and it states its own verdict.
+///
+/// ⊘ The four zero-states are kept apart on purpose, because they have nothing in common:
+/// *no port* is the control arm, *declined* is a vCPU reaching the arming path, *refused* is
+/// the host BAR1 aperture, and *gave up* is a page that arming does not fix.
+#[must_use]
+pub fn fb_demand_census() -> String {
+    let drains = FB_DEMAND_DRAINS.load(Ordering::Relaxed);
+    let armed = FB_DEMAND_ARMED.load(Ordering::Relaxed);
+    let refused = FB_DEMAND_REFUSED.load(Ordering::Relaxed);
+    let declined = FB_DEMAND_DECLINED_ON_VCPU.load(Ordering::Relaxed);
+    let noport = FB_DEMAND_NO_PORT.load(Ordering::Relaxed);
+    let retried = FB_DEMAND_READ_RETRIED_OK.load(Ordering::Relaxed);
+    let gaveup = FB_DEMAND_READ_GAVE_UP.load(Ordering::Relaxed);
+    let verdict = if drains == 0 && noport > 0 && declined == 0 {
+        "⊘ NO BYTE PORT — the arena arm, or the single store without one. Cut B's arming path          was reached and had nothing to arm through; this is not a refusal."
+    } else if drains == 0 && declined == 0 && noport == 0 {
+        "⊘⊘ VACUOUS — nothing ever asked the store for bytes it could not serve. That is not          `no host-side access was needed`; it is an unmeasured arming path."
+    } else if armed == 0 && declined > 0 {
+        "⊘⊘⊘ EVERY ARMING ATTEMPT WAS DECLINED ON A vCPU — the demand is arriving on a thread          that may not arm, so nothing can ever arm it. Cut B's retry is at the wrong caller:          it belongs at a LOCK-FREE entry point, not at the access that missed."
+    } else if retried > 0 && gaveup == 0 {
+        "★★★★★ CUT B IS WORKING — every host read that missed was armed and served on retry."
+    } else if retried > 0 {
+        "◐ CUT B IS PARTLY WORKING — some reads were armed and served on retry, some gave up          after the fixed retry bound. Read `refused` first: a non-zero there is the host BAR1          aperture, which arming cannot fix by trying again."
+    } else {
+        "⊘ THE ARMING PATH RAN AND NO READ WAS EVER SERVED BY A RETRY — either the drain armed          nothing (read `armed`), or what missed was not a page the port can arm."
+    };
+    format!(
+        "FB-DEMAND drains={drains} armed={armed} refused={refused} declined_on_vcpu={declined} \
+         no_port={noport} read_retried_ok={retried} read_gave_up={gaveup} ⇒ {verdict}"
+    )
+}
+
+/// `(drains, armed, refused, declined_on_vcpu, no_port, read_retried_ok, read_gave_up)` —
+/// the same numbers [`fb_demand_census`] renders, for a test to assert on.
+#[must_use]
+pub fn fb_demand_counts() -> (u64, u64, u64, u64, u64, u64, u64) {
+    (
+        FB_DEMAND_DRAINS.load(Ordering::Relaxed),
+        FB_DEMAND_ARMED.load(Ordering::Relaxed),
+        FB_DEMAND_REFUSED.load(Ordering::Relaxed),
+        FB_DEMAND_DECLINED_ON_VCPU.load(Ordering::Relaxed),
+        FB_DEMAND_NO_PORT.load(Ordering::Relaxed),
+        FB_DEMAND_READ_RETRIED_OK.load(Ordering::Relaxed),
+        FB_DEMAND_READ_GAVE_UP.load(Ordering::Relaxed),
+    )
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ★★★★★ **w734 — THE STORE'S I/O VOLUME, IN BYTES, BY ROLE.**
@@ -2050,38 +2162,94 @@ impl FbRead for PlanePtBytes<'_> {
     /// framebuffer regardless of the aperture it had just decoded — so a VAS whose tables live
     /// in sysmem took 37 sweep tasks and yielded nothing, and `P3 rpc-bind` stayed red through
     /// four correct upstream fixes.
+    /// ★★★★★ **CUT B item 2 — AND IT IS THE ONE CONSUMER THAT COSTS NO TRANSIENT AT ALL.**
+    ///
+    /// `SINGLE_STORE_PLAN.md`'s w735 consumer table, first row: *"`PlanePtBytes::read_in` —
+    /// ★ **YES.** It takes the plane locks *inside*, per read, so it is lock-free at entry"*.
+    /// ⇒ this reader can arm **synchronously**: the attempt below drops both guards before it
+    /// asks the port for anything, and the retry is a second attempt of the same read rather
+    /// than a deferral of it. Nothing upstream learns that a page had to be armed.
+    ///
+    /// ⚠ **A fixed trip count** ([`FB_DEMAND_READ_RETRIES`]), never a loop that ends when the
+    /// read succeeds: the input is a guest-authored page-table pointer and §20's first
+    /// structural invariant is that no loop terminates on guest data.
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         use kayfabe_arch::Aperture;
         self.breathe();
-        // ⊘ BOTH locks, in rank order: `ram` is guest RAM and stays with the FSM, `fb` moved
-        // to [`PlaneMem`] at w522. This is the one reader that needs each.
-        let mut s = self.plane.state.lock();
-        let mut m = self.plane.mem.lock();
-        match aperture {
-            // Device-local: the (fake) framebuffer.
-            Aperture::Vidmem => {
-                note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
-                m.fb.read(phys, buf).is_ok()
+        for attempt in 0..=FB_DEMAND_READ_RETRIES {
+            // ⊘ BOTH locks, in rank order: `ram` is guest RAM and stays with the FSM, `fb`
+            // moved to [`PlaneMem`] at w522. This is the one reader that needs each. ★ Both
+            // guards are dropped at the end of THIS block, before anything below may arm.
+            let served = {
+                let mut s = self.plane.state.lock();
+                let mut m = self.plane.mem.lock();
+                match aperture {
+                    // Device-local: the (fake) framebuffer.
+                    Aperture::Vidmem => {
+                        note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                        m.fb.read(phys, buf).is_ok()
+                    }
+                    // ★ System memory. A GMMU PDE may point at a next-level table in sysmem,
+                    // and the guest's own address for it is a GPA — so this is a guest-RAM
+                    // read, not an FB one. Reading it out of the framebuffer is what produced
+                    // a page of "invalid" entries.
+                    Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
+                        s.ram.read(phys, buf).is_ok()
+                    }
+                    // ⊘ Peer memory has no plane here, and INVALID is the absence of an
+                    // aperture. Both are `false` = "this source cannot serve the range", which
+                    // the walker turns into `WalkFault::Unbacked`. ⚠ NEVER zeros: a zero page
+                    // decodes as a full page of invalid entries — "the tables map nothing" —
+                    // and that is the opposite fact.
+                    _ => false,
+                }
+            };
+            if served {
+                if attempt > 0 {
+                    FB_DEMAND_READ_RETRIED_OK.fetch_add(1, Ordering::Relaxed);
+                }
+                return true;
             }
-            // ★ System memory. A GMMU PDE may point at a next-level table in sysmem, and the
-            // guest's own address for it is a GPA — so this is a guest-RAM read, not an FB one.
-            // Reading it out of the framebuffer is what produced a page of "invalid" entries.
-            Aperture::SysmemCoherent | Aperture::SysmemNonCoherent => {
-                s.ram.read(phys, buf).is_ok()
+            // ⊘ Only the framebuffer store has a demand port; a guest-RAM miss and a peer
+            // aperture are facts about a different memory and arming cannot touch them.
+            if aperture != Aperture::Vidmem || attempt == FB_DEMAND_READ_RETRIES {
+                break;
             }
-            // ⊘ Peer memory has no plane here, and INVALID is the absence of an aperture. Both
-            // are `false` = "this source cannot serve the range", which the walker turns into
-            // `WalkFault::Unbacked`. ⚠ NEVER zeros: a zero page decodes as a full page of
-            // invalid entries — "the tables map nothing" — and that is the opposite fact.
-            _ => false,
+            // ★★★ LOCK-FREE HERE — both guards above went out of scope with the block.
+            if !self.plane.arm_fb_demand().progressed() {
+                // ⊘ `progressed()` is false for *"nothing was wanted"*, *"the drain declined"*
+                // and *"there is no port"* alike, and all three mean the same thing to this
+                // loop: retrying is a spin. The three are told apart in the census, not here.
+                break;
+            }
         }
+        if aperture == Aperture::Vidmem {
+            FB_DEMAND_READ_GAVE_UP.fetch_add(1, Ordering::Relaxed);
+        }
+        false
     }
 
+    /// As [`PlanePtBytes::read_in`] with a vidmem aperture, including the arm-then-retry.
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.breathe();
-        note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
-        let mut m = self.plane.mem.lock();
-        m.fb.read(phys, buf).is_ok()
+        for attempt in 0..=FB_DEMAND_READ_RETRIES {
+            let served = {
+                note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                let mut m = self.plane.mem.lock();
+                m.fb.read(phys, buf).is_ok()
+            };
+            if served {
+                if attempt > 0 {
+                    FB_DEMAND_READ_RETRIED_OK.fetch_add(1, Ordering::Relaxed);
+                }
+                return true;
+            }
+            if attempt == FB_DEMAND_READ_RETRIES || !self.plane.arm_fb_demand().progressed() {
+                break;
+            }
+        }
+        FB_DEMAND_READ_GAVE_UP.fetch_add(1, Ordering::Relaxed);
+        false
     }
 
     /// The same per-address first-writer answer [`FbStoreReader`] gives, so a decode and a
@@ -2747,6 +2915,9 @@ impl RegPlane {
             fb_mirror: RwLock::new(None),
             fb_trap_policy: std::sync::atomic::AtomicU8::new(0),
             fb_trap_refused: std::sync::atomic::AtomicU64::new(0),
+            // ⊘ `false` until a store is installed, which is the truth: `RegPlane::new` builds
+            // with `RefusingFb`, which has none.
+            fb_has_demand_port: std::sync::atomic::AtomicBool::new(false),
             gvas_pub,
             set_page_dir,
             os_events,
@@ -2857,6 +3028,19 @@ impl RegPlane {
     }
 
     pub fn set_fb(&self, fb: Box<dyn FbStore>) {
+        // ★★★★★ **CUT B — THE ONE PLACE THAT ANSWERS "IS THERE A BYTE PORT?", CACHED.**
+        //
+        // ⊘⊘ Not a convenience. [`RegPlane::arm_fb_demand`] is called on **every** host-side
+        // read that missed, and asking the store would take the memory lock a second time —
+        // on the arena arm, where the answer is always `None` and the miss is a guest-authored
+        // page-table entry pointing outside the framebuffer. ⇒ a guest could double this
+        // plane's lock traffic on a path that is already refusing, which is the amplification
+        // shape §w720h says the single store deletes rather than adds.
+        //
+        // ★ Safe to cache because this is the ONLY door that changes the store, and it is the
+        // composition root's, called once at realize.
+        self.fb_has_demand_port
+            .store(fb.demand_port().is_some(), Ordering::Relaxed);
         let mut s = self.mem.lock();
         s.fb = fb;
     }
@@ -3329,6 +3513,68 @@ impl RegPlane {
             plane: self,
             reads: std::cell::Cell::new(0),
         }
+    }
+
+    /// ★★★★★ **CUT B — THE STORE'S BYTE PORT, HANDED OUT SO A LOCK-FREE CALLER CAN DRAIN IT.**
+    ///
+    /// Takes the memory lock for exactly one `Arc` clone and releases it. [`None`] from every
+    /// store but the single store with a byte port installed.
+    ///
+    /// ⚠ **The returned port must be drained with NO plane lock held.** That is the whole
+    /// reason this is a getter rather than a `drain` method: `DeviceFbPort::drain` is an IPC
+    /// round trip that asserts lock-free, and every other door into the store is under the
+    /// lock.
+    #[must_use]
+    pub fn fb_demand_port(&self) -> Option<std::sync::Arc<dyn crate::fbwin::DeviceFbPort>> {
+        let s = self.mem.lock();
+        s.fb.demand_port()
+    }
+
+    /// ★★★★★ **CUT B — ARM WHAT THE STORE COULD NOT SERVE.** Call only from a lock-free,
+    /// off-vCPU caller; it declines by name otherwise.
+    ///
+    /// # ⊘⊘ Why the vCPU check is HERE and not only inside the port
+    ///
+    /// Two callers reach this — the page-table reader and the BAR mirror — and only one of
+    /// them is guarded elsewhere. `WalkShadowDecider::decide` already establishes the shape
+    /// (*"FIRST, AND BEFORE ANY LOCK IS TAKEN … a synchronous isolate round trip there blocks
+    /// a vCPU"*), and the reason it is asked twice is that `assert_lock_free`'s
+    /// `assert_not_on_vcpu` half only **reports** unless `KAYFABE_VCPU_BLOCK_FATAL` is set.
+    /// ⇒ an unguarded route would not panic; it would silently block a vCPU inside an MMIO
+    /// exit and be discovered later as latency with nothing pointing at the cause.
+    ///
+    /// ⊘ A decline is **counted and named**, never silent: see [`fb_demand_census`].
+    pub fn arm_fb_demand(&self) -> crate::fbwin::DeviceFbDrained {
+        use crate::fbwin::DeviceFbDrained;
+        // ⚠ ASKED BEFORE THE LOCK IS TAKEN, for `WalkShadowDecider`'s reason: taking the
+        // memory mutex first and asking afterwards would make a vCPU wait on a lock another
+        // thread may hold across an IPC round trip — the same cost through a lock instead of
+        // through a socket, with none of the instruments pointed at it.
+        if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+            FB_DEMAND_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::declined();
+        }
+        // ⊘ Asked of the cached flag, NOT of the store: see `set_fb`. On the arena arm this
+        // returns before any lock is taken at all.
+        if !self.fb_has_demand_port.load(Ordering::Relaxed) {
+            // ⊘ NOT counted as a decline: *"this store has no byte port"* is the arena arm and
+            // cut A's shape, and folding it into the vCPU refusal would make the control arm
+            // print a number about a mechanism it does not have.
+            FB_DEMAND_NO_PORT.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::default();
+        }
+        let Some(port) = self.fb_demand_port() else {
+            FB_DEMAND_NO_PORT.fetch_add(1, Ordering::Relaxed);
+            return DeviceFbDrained::default();
+        };
+        FB_DEMAND_DRAINS.fetch_add(1, Ordering::Relaxed);
+        let d = port.drain();
+        FB_DEMAND_ARMED.fetch_add(u64::from(d.armed), Ordering::Relaxed);
+        FB_DEMAND_REFUSED.fetch_add(u64::from(d.refused), Ordering::Relaxed);
+        if d.declined {
+            FB_DEMAND_DECLINED_ON_VCPU.fetch_add(1, Ordering::Relaxed);
+        }
+        d
     }
 
     /// ★ **Hold the plane's FSM lock explicitly** — for the rank falsifier only.
@@ -4402,6 +4648,11 @@ impl RegPlane {
             // reset would silently shorten the window the measurement covers.
             fb_trap_policy: _,
             fb_trap_refused: _,
+            // ⊘ NOT residue either, and for the policy's reason: the byte port is a property
+            // of the STORE the composition root installed, and a device reset does not replace
+            // the store. Clearing it would leave a live port unreachable for the rest of the
+            // boot, which reads exactly like a port that was never built.
+            fb_has_demand_port: _,
             doorbell_refusals_by_kind: _,
             read_shadow: _,
             gsp_regs: _,
@@ -5370,7 +5621,7 @@ impl RegPlane {
         &self,
         w: FbWindow,
         budget: u32,
-    ) -> Result<(Vec<kayfabe_mmu::walker::DecodedLeaf>, usize), WindowRefusal> {
+    ) -> Result<WindowEnumeration, WindowRefusal> {
         let mut s = self.mem.lock();
         let PlaneMem { mmu, fb } = &mut *s;
         let Some(fmt) = mmu.as_deref() else {
@@ -5469,14 +5720,34 @@ impl RegPlane {
         // VISITED, and `decode_subtree` errors on exhaustion and on nothing else, so a caller
         // that guessed a budget has no way to learn the right one from a refusal. Returning
         // `visited` turns the next budget into a measurement instead of a second guess.
-        Ok((
-            decoded
+        // ★★★★★ **CUT B item 4 — THE FAULTS COME BACK, AND UNTIL NOW THEY DID NOT.**
+        //
+        // ⊘⊘⊘ `decode_subtree` returns `Err` for **budget exhaustion and nothing else**; every
+        // other per-branch failure — a page it could not read among them — lands in
+        // `decoded.faults` and the walk continues. This function used to drop that vector on
+        // the floor, so an enumeration whose ROOT page could not be read returned
+        // `Ok((vec![], 0))`: **an empty list that reads as "the guest has mapped nothing"**.
+        //
+        // ⚠ That is the one wrong answer that looks right, and it is the same shape this
+        // tree's own budget rule five paragraphs up refuses (*"a truncated enumeration would
+        // read as `the guest mapped fewer pages`"*) — the rule was written for the budget and
+        // the same hole was open beside it for faults. Under the arena store it never fired,
+        // because `SparseFb::read` answers every in-range address; under the single store an
+        // unarmed page-table page faults on **every** walk, which is exactly when the caller
+        // needs to know to arm and try again.
+        //
+        // ⊘ Returned as a COUNT rather than turned into an `Err`: a fault is a real
+        // per-branch fact on both arms, and making it terminal would change the control arm's
+        // behaviour for a condition that is not new.
+        Ok(WindowEnumeration {
+            leaves: decoded
                 .leaves
                 .into_iter()
                 .filter(|l| l.aperture == Aperture::Vidmem)
                 .collect(),
-            decoded.visited.len(),
-        ))
+            visited: decoded.visited.len(),
+            faults: decoded.faults.len(),
+        })
     }
 
     fn bar1_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {

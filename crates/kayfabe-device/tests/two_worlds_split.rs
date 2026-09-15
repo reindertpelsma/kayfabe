@@ -793,3 +793,234 @@ fn the_single_store_still_names_every_page_for_the_memslot_path() {
          while every host-side read is still refused"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3 CUT B — ARM-THEN-RETRY, AT THE PLANE. `SINGLE_STORE_PLAN.md` cut B items 2–5.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+mod fakeport;
+
+/// Build BAR1's tree **inside the reserved object**, the way the guest really does it: through
+/// a path the host has no CPU view of.
+///
+/// ⊘ Deliberately not [`build_bar1_tree`], which writes through PRAMIN and therefore through
+/// the store. Under the single store the guest writes its BAR1 tables through a device-view
+/// memslot and **nothing host-side sees them** — which is the whole reason cut B exists, and
+/// a fixture that wrote them through the store would be testing the arena's path.
+fn build_bar1_tree_in_the_object(port: &fakeport::FakePort, va: u64, leaf_entry: u64) {
+    let root = GA106.bar1_pde_base;
+    assert_ne!(root, 0, "this chip row must publish a bar1PdeBase");
+    port.poke(root + ((va >> 30) & 511) * 8, &pde(B1_L1).to_le_bytes());
+    port.poke(B1_L1 + ((va >> 21) & 511) * 8, &leaf_entry.to_le_bytes());
+}
+
+fn device_plane_with_port(port: &std::sync::Arc<fakeport::FakePort>) -> RegPlane {
+    let p = plane();
+    p.set_fb(Box::new(kayfabe_device::DeviceFb::with_port(
+        GA106.fb_length,
+        port.clone() as std::sync::Arc<dyn kayfabe_device::DeviceFbPort>,
+    )));
+    p
+}
+
+/// ★★★★★ **CUT B ITEM 2 — `PlanePtBytes::read_in` ARMS AND RETRIES, SYNCHRONOUSLY.**
+///
+/// `SINGLE_STORE_PLAN.md`'s w735 consumer table, first row: this reader takes the plane locks
+/// *inside*, per read, so it is **lock-free at entry** and can arm without deferring anything.
+/// ⇒ the caller above it never learns a page had to be armed.
+///
+/// ★ The known-positive is the **counter**, not just the `true`: a read that succeeded on the
+/// first attempt would also return `true`, and this must fail if the retry stops running.
+#[test]
+fn a_page_table_read_arms_its_own_page_and_retries_without_deferring_anything() {
+    use kayfabe_mmu::walker::FbRead;
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    port.poke(SHARED_PHYS, &[0xAB; 8]);
+    let p = device_plane_with_port(&port);
+
+    let before = kayfabe_device::plane::fb_demand_counts();
+    let mut buf = [0u8; 8];
+    assert!(
+        p.pt_bytes()
+            .read_in(SHARED_PHYS, kayfabe_arch::Aperture::Vidmem, &mut buf),
+        "★★★ THE READ MUST SUCCEED — nothing was armed when it started, so the only way it \
+         can is by arming and trying again. A `false` here means cut B item 2 is not wired."
+    );
+    assert_eq!(buf, [0xAB; 8], "and it must be the object's own bytes");
+    let after = kayfabe_device::plane::fb_demand_counts();
+    assert!(
+        after.5 > before.5,
+        "★ THE KNOWN-POSITIVE: `read_retried_ok` must move. Without it this test passes for \
+         any read that happens to succeed, including one from a store that never refused."
+    );
+    assert!(after.1 > before.1, "and a page must actually have been armed");
+}
+
+/// ⊘⊘⊘ **CUT B ITEM 5 — A DECLINED DRAIN ENDS THE RETRY, IT DOES NOT SPIN IT.**
+///
+/// The shell declines when the caller is a vCPU or inside an MMIO trap. ⚠ The dangerous shape
+/// is not the failure; it is a **bounded loop that keeps going** because it cannot tell
+/// *"declined"* from *"armed nothing this time"* — on a vCPU, inside an MMIO exit.
+#[test]
+fn a_declined_drain_ends_the_retry_rather_than_spinning_it() {
+    use kayfabe_mmu::walker::FbRead;
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    port.poke(ALT_PHYS, &[0xCD; 8]);
+    port.set_declining(true);
+    let p = device_plane_with_port(&port);
+
+    let mut buf = [0u8; 8];
+    assert!(
+        !p.pt_bytes()
+            .read_in(ALT_PHYS, kayfabe_arch::Aperture::Vidmem, &mut buf),
+        "a declined drain arms nothing, so the read must fail"
+    );
+    let (drains, declined, armed, ..) = port.counts();
+    assert_eq!(armed, 0);
+    assert_eq!(drains, 0, "no drain ever ran");
+    assert_eq!(
+        declined, 1,
+        "★★★ THE KNOWN-POSITIVE AND THE BOUND IN ONE NUMBER: exactly ONE decline. A retry \
+         that could not tell a decline from an empty drain would have produced one per \
+         allowed attempt, which on a vCPU is the spin this design exists to avoid."
+    );
+}
+
+/// ★★★★★ **CUT B ITEM 3 — A BAR1 TRANSLATE RESOLVES ONCE A LOCK-FREE CALLER ARMS.**
+///
+/// This is `BarMirror::fill_now`'s phase 1 and `resolve_arming`'s loop, written out at the
+/// seam a test can reach: `window_page_backing` walks **under the plane lock** and cannot arm,
+/// so it refuses; the caller is lock-free and arms; the next attempt resolves.
+///
+/// ⊘ The walk is one page-table level deeper on each pass, which is why the retry bound is the
+/// format's depth and not a number somebody picked.
+#[test]
+fn a_bar1_translate_resolves_after_a_lock_free_caller_arms_the_pages_it_missed() {
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let p = device_plane_with_port(&port);
+    build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
+
+    // ── the first attempt must REFUSE, or this test proves nothing about arming ──
+    assert!(
+        p.window_page_backing(FbWindow::FbAperture, BAR1_VA, true)
+            .is_err(),
+        "★ the control half: with nothing armed, the walk cannot read the guest's tables"
+    );
+
+    // ── `BarMirror::resolve_arming`'s loop, lock-free, bounded ──
+    let mut res = Err(kayfabe_device::WindowRefusal::NoAddressModel);
+    let mut used = 0u32;
+    for _ in 0..kayfabe_mmu::walker::MAX_WALK_DEPTH {
+        if !p.arm_fb_demand().progressed() {
+            break;
+        }
+        used += 1;
+        res = p.window_page_backing(FbWindow::FbAperture, BAR1_VA, true);
+        if res.is_ok() {
+            break;
+        }
+    }
+    let r = res.expect(
+        "★★★ the translate must resolve once its page-table pages are armed. If it does not, \
+         cut B item 3's demand set is not recording what the walk missed.",
+    );
+    assert_eq!(r.phys, SHARED_PHYS, "and it must land where the tree says");
+    assert_eq!(
+        r.backing,
+        kayfabe_device::FbPageBacking::Device { at: SHARED_PHYS },
+        "and still name the page to the memslot path — cut B does not change cut A's half"
+    );
+    assert!(
+        used >= 2,
+        "★ THE KNOWN-POSITIVE FOR THE RETRY BOUND BEING A DEPTH: a two-level tree needs TWO \
+         arming passes, because the second level's address is only known once the first is \
+         readable. `used={used}` of a bound of {}",
+        kayfabe_mmu::walker::MAX_WALK_DEPTH
+    );
+}
+
+/// ⊘⊘⊘ **CUT B ITEM 4 — AND THE DEFECT IT UNCOVERED: AN ENUMERATION THAT CAME BACK EMPTY AND
+/// CALLED IT `Ok`.**
+///
+/// `SINGLE_STORE_PLAN.md` cut B item 4 says *"`window_leaves` refuses the whole subtree at the
+/// first unbacked page"*. ⊘ **It does not refuse.** `decode_subtree` returns `Err` for budget
+/// exhaustion **and nothing else**; an unreadable page is a per-branch `WalkFault` and the walk
+/// continues. So the failing shape is `Ok` with a **short** list — and with an unreadable
+/// ROOT, `Ok` with an **empty** one, which reads as *"the guest has mapped nothing"*.
+///
+/// ⚠ It could never fire under the arena store, whose `read` answers every in-range address.
+/// That is why it survived: the one arm that can produce it is the one that did not exist.
+#[test]
+fn an_unarmed_enumeration_comes_back_short_and_says_so_instead_of_reading_as_empty() {
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let p = device_plane_with_port(&port);
+    build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
+
+    let e = p
+        .window_leaves(FbWindow::FbAperture, 4096)
+        .expect("⊘ NOT a refusal — that is the finding: an unreadable root is `Ok`");
+    assert!(
+        e.leaves.is_empty(),
+        "with nothing armed, the root page cannot be read and no leaf can be found"
+    );
+    assert!(
+        e.faults > 0,
+        "★★★★★ THE KNOWN-POSITIVE, AND THE WHOLE POINT OF THE FIELD: without `faults` this \
+         empty list is indistinguishable from a guest that mapped nothing, and premap would \
+         publish zero pages and count zero refusals."
+    );
+
+    // ── now the caller's half: arm, retry, and the leaves arrive ──
+    let mut got = e;
+    for _ in 0..kayfabe_mmu::walker::MAX_WALK_DEPTH {
+        if got.faults == 0 {
+            break;
+        }
+        if !p.arm_fb_demand().progressed() {
+            break;
+        }
+        got = p.window_leaves(FbWindow::FbAperture, 4096).expect("still Ok");
+    }
+    assert_eq!(got.faults, 0, "every branch must be readable once armed");
+    assert_eq!(
+        got.leaves.len(),
+        1,
+        "★ and the leaf the tree declares must be there — the premap path's whole input"
+    );
+    assert_eq!(got.leaves[0].phys, SHARED_PHYS);
+}
+
+/// ⊘ **THE ARENA ARM IS UNTOUCHED, AND THIS IS WHAT SAYS SO.**
+///
+/// Every assertion above is about the `device` arm. `KAYFABE_FB_STORE` unset means a
+/// `SparseFb`, which answers every in-range address — so the fault count must be **zero** and
+/// the arming path must never even find a port. ⚠ Asserted rather than assumed: *"the default
+/// arm is byte-identical"* is a claim with a known way of being wrong, and `faults` is a new
+/// field on a struct the default arm also returns.
+#[test]
+fn the_arena_arm_enumerates_with_no_faults_and_has_no_byte_port_at_all() {
+    let p = plane();
+    build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
+    let e = p
+        .window_leaves(FbWindow::FbAperture, 4096)
+        .expect("the arena arm enumerates");
+    assert_eq!(
+        e.faults, 0,
+        "★ a fault on the arena arm would be a real page-table finding, and there is none here"
+    );
+    assert_eq!(e.leaves.len(), 1);
+    assert!(
+        p.fb_demand_port().is_none(),
+        "⊘ and the default store hands out NO byte port, so `arm_fb_demand` can never arm \
+         anything on this arm — which is what `no_port` in the FB-DEMAND census counts"
+    );
+    let before = kayfabe_device::plane::fb_demand_counts();
+    assert!(!p.arm_fb_demand().progressed());
+    let after = kayfabe_device::plane::fb_demand_counts();
+    assert!(
+        after.4 > before.4,
+        "★ and it is counted as `no_port`, never as a refusal or a decline — three states, \
+         three numbers"
+    );
+    assert_eq!(after.0, before.0, "and no drain ran");
+}

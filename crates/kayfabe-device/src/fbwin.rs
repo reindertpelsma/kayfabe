@@ -546,6 +546,27 @@ pub trait FbStore: Send + core::fmt::Debug {
         FbPageBacking::Refused(NO_PAGE_EXPORT)
     }
 
+    /// ★★★★★ **CUT B — THE STORE'S BYTE PORT, FOR A LOCK-FREE CALLER TO DRAIN.**
+    ///
+    /// [`None`] from every store that has no device backing, which is every store but
+    /// [`DeviceFb`] with a port installed.
+    ///
+    /// # ⊘⊘ Why the port is handed OUT rather than drained through the store
+    ///
+    /// `DeviceFbPort::drain` is an IPC round trip that asserts lock-free, and every caller of
+    /// this trait holds [`crate::plane::RegPlane`]'s memory lock. A `drain` method on the
+    /// store would therefore be a method that **cannot legally be called** — the exact shape
+    /// `SINGLE_STORE_PLAN.md` §3's structural fact 2 names for `read`/`write`/`page_backing`.
+    ///
+    /// ⇒ this returns a **clone of the handle**, which costs one atomic and blocks on
+    /// nothing; the caller releases the plane lock and drains outside it. ★ And it comes from
+    /// the store rather than from a second field on the shell, which is w735's own gate
+    /// defect (`deviceview::backing_is_device`): **the store decides**, and a second route to
+    /// the same port is a second chance for two memories.
+    fn demand_port(&self) -> Option<std::sync::Arc<dyn DeviceFbPort>> {
+        None
+    }
+
     /// Power-on: forget every byte.
     ///
     /// ★★ **Not optional, and the reason is not tidiness.** Framebuffer content that
@@ -1920,6 +1941,120 @@ kayfabe_util::assert_send_sync!(Bar0Window, FbRefused, RefusingFb);
 // ★★★★★ §3 — THE SINGLE STORE. `SINGLE_STORE_PLAN.md`'s switch, cut A.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3 CUT B — THE STORE'S BYTE PORT. `SINGLE_STORE_PLAN.md`'s cut B, item 1.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Who wanted a page of the reserved object — the demand set's provenance.
+///
+/// ⊘ Two arms and not a `bool`, because `[measured w736]` the first host-side access of a
+/// `device` boot is a **READ** (`host_read_refused=20 host_write_refused=0`) and the write
+/// side has **no measured demand at all** on that path. A census that summed them could not
+/// say whether the write half was ever exercised, and *"unmeasured"* would read as *"zero"* —
+/// this tree's most expensive recurring instrument failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DeviceFbWant {
+    /// A host-side read missed.
+    Read,
+    /// A host-side write missed.
+    Write,
+}
+
+/// What one [`DeviceFbPort::drain`] did.
+///
+/// ⊘ `declined` is a distinct field and **not** `armed == 0`: *"the drain ran and there was
+/// nothing to arm"* and *"the drain refused to run at all because this is a vCPU inside an
+/// MMIO exit"* are opposite facts about the mechanism, and a caller that read them as one
+/// would retry forever on the arm where retrying cannot help.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeviceFbDrained {
+    /// How many pages were newly armed by this drain.
+    pub armed: u32,
+    /// How many arms the port refused. Non-zero here is the host BAR1 aperture talking.
+    pub refused: u32,
+    /// How many wanted pages this drain left for the next one — the fixed per-drain cap
+    /// biting, never an error.
+    pub deferred: u32,
+    /// ★★★ The drain **did not run**, by name: a vCPU thread or an in-flight MMIO trap.
+    pub declined: bool,
+}
+
+impl DeviceFbDrained {
+    /// A drain that never ran, because the caller was not allowed to arm.
+    #[must_use]
+    pub fn declined() -> DeviceFbDrained {
+        DeviceFbDrained {
+            declined: true,
+            ..DeviceFbDrained::default()
+        }
+    }
+
+    /// Whether a retry of whatever missed could now succeed — i.e. this drain changed
+    /// something. ⊘ The **only** thing a bounded retry loop may branch on: it is false both
+    /// for *"nothing was wanted"* and for *"the drain declined"*, which are the two states in
+    /// which retrying is a spin.
+    #[must_use]
+    pub fn progressed(&self) -> bool {
+        self.armed > 0
+    }
+}
+
+/// ★★★★★ **CUT B — THE BYTES OF THE RESERVED OBJECT, AS A PORT.**
+///
+/// [`DeviceFb`] lives in this crate, which holds no descriptor, performs no `mmap` and names
+/// no OS; a CPU view of device memory is an isolate round trip, an RM object and a mapping,
+/// all three of which are facts of the shell. ⇒ the store names the address and **this** is
+/// how bytes reach it.
+///
+/// # ⊘⊘⊘ THE ONE INVARIANT, AND IT IS A LOCK RANK RATHER THAN A COST
+///
+/// `SINGLE_STORE_PLAN.md`'s w735 block: *"Arming a CPU view of the reserved object is an IPC
+/// round trip that asserts lock-free, and every host-side reader of the framebuffer store
+/// holds `LockRank::PlaneMem` when it reads."* ⇒ **no number of seconds can reach a lock
+/// rank**, and the split below is the whole design:
+///
+/// | verb | called from | may block? |
+/// |---|---|---|
+/// | [`DeviceFbPort::read_armed`] / [`DeviceFbPort::write_armed`] | **under the plane lock**, on a vCPU | ⊘ **NO.** A `memcpy` through a mapping that already exists. |
+/// | [`DeviceFbPort::want`] | **under the plane lock**, on a vCPU | ⊘ **NO.** Records demand in an unranked mutex. |
+/// | [`DeviceFbPort::drain`] | **lock-free entry points only** | ★ yes — this is the IPC round trip |
+///
+/// ⇒ a missing page is **not** a failure the store can fix; it is a demand it records, and a
+/// lock-free caller (`PlanePtBytes::read_in`, `BarMirror::fill_now`, `BarMirror::premap_*`)
+/// drains and retries. That is why `read`/`write` still refuse by name when nothing is armed:
+/// the refusal is the mechanism telling the truth, not a stub.
+///
+/// ★ `Send + Sync` because the port is shared: the store holds it behind the plane's mutex
+/// and every lock-free caller holds its own clone.
+pub trait DeviceFbPort: Send + Sync + core::fmt::Debug {
+    /// Fill `buf` from byte `at` of the reserved object, **if a CPU view of that range is
+    /// already armed**. `false` = not armed, and nothing was written to `buf`.
+    ///
+    /// ⊘ `false` must never be spelled as zeros: a zero-filled page of video memory is a
+    /// well-formed *"the guest wrote nothing"* and is the one answer that must never be
+    /// manufactured here.
+    fn read_armed(&self, at: u64, buf: &mut [u8]) -> bool;
+
+    /// Write `bytes` at byte `at` of the reserved object, if a view is armed. `false` = not
+    /// armed, and **nothing was written anywhere** — there is deliberately no success-shaped
+    /// answer for a write that did not land in the one object.
+    fn write_armed(&self, at: u64, bytes: &[u8]) -> bool;
+
+    /// Record that `[at, at+len)` was wanted and could not be served. Called **under the
+    /// plane lock**: it must not block, make a syscall, or take a ranked lock.
+    fn want(&self, at: u64, len: u64, by: DeviceFbWant);
+
+    /// ★★★ Arm what was wanted. **Lock-free callers only** — this is an IPC round trip to
+    /// the isolate that owns the object.
+    ///
+    /// ⊘ Implementations must **decline by name** ([`DeviceFbDrained::declined`]) rather than
+    /// block when the calling thread is a vCPU or is inside an MMIO trap.
+    fn drain(&self) -> DeviceFbDrained;
+
+    /// One line, for the boot census.
+    fn census_line(&self) -> String;
+}
+
 /// Why a host-side read of the single store is refused, in cut A.
 pub const DEVICE_HOST_READ_UNBUILT: &str =
     "this framebuffer page IS device-local video memory and the host has no CPU view of it. \
@@ -1937,6 +2072,31 @@ pub const DEVICE_HOST_WRITE_UNBUILT: &str =
      write through. ⊘ There is deliberately no success-shaped answer: a write that landed \
      somewhere else would be a byte the engines never see, which is the exact failure a \
      single store exists to make impossible. See `DEVICE_HOST_READ_UNBUILT`.";
+
+/// ★★★★★ **CUT B — why a host-side read missed**: the page IS the reserved object and a CPU
+/// view of it is **not armed yet**. ⊘ A different sentence from [`DEVICE_HOST_READ_UNBUILT`]
+/// on purpose: that one says *"this mechanism does not exist"* and this one says *"it exists,
+/// the demand is recorded, and a lock-free caller must drain and retry"*. They have opposite
+/// fixes, and a boot that could not tell them apart would read cut B's transient as cut A's
+/// wall.
+pub const DEVICE_HOST_READ_NOT_ARMED: &str =
+    "no CPU view of this page of the reserved object is armed yet. The demand has been \
+     recorded in the store's want set; a LOCK-FREE caller must call `DeviceFbPort::drain` \
+     and retry, because arming is an IPC round trip that asserts lock-free and this read ran \
+     under the plane lock. No fallback: a value that read back correctly out of host memory \
+     would be the two-memories defect the reserved object exists to delete.";
+
+/// As [`DEVICE_HOST_READ_NOT_ARMED`], for writes.
+///
+/// ⚠ `[measured w736]` the write side has **no measured demand** on the `RmInitAdapter` path
+/// (`host_write_refused=0` against `host_read_refused=20`), so nothing retries a write today.
+/// The demand is still recorded, which is what turns *"writes were never wanted"* from an
+/// assumption into a number (`wanted_by_write=` in the census).
+pub const DEVICE_HOST_WRITE_NOT_ARMED: &str =
+    "no CPU view of this page of the reserved object is armed yet, so this write has NOT \
+     landed anywhere. The demand is recorded; a lock-free caller must drain and retry. There \
+     is deliberately no success-shaped answer: a write that landed in host memory would be a \
+     byte the engines never see.";
 
 /// Why [`FbStore::device_reset`] cannot be honoured by the single store.
 pub const DEVICE_RESET_UNBUILT: &str =
@@ -1987,9 +2147,16 @@ pub const DEVICE_RESET_UNBUILT: &str =
 /// the aperture holds — without the fallback that would make the measurement meaningless.
 #[derive(Debug)]
 pub struct DeviceFb {
-    /// The advertised framebuffer length. ⊘ The **only** thing this store knows: there is no
-    /// page map, because there are no pages of ours.
+    /// The advertised framebuffer length. ⊘ The **only** thing this store knows about
+    /// addresses: there is no page map, because there are no pages of ours.
     fb_len: u64,
+    /// ★★★★★ **CUT B — the byte port**, or [`None`] in cut A's shape.
+    ///
+    /// ⊘ [`Option`] and not a required argument, deliberately: a shell that has no
+    /// device-view port (no scratchpad, no reservation) must still be able to install this
+    /// store and get cut A's **refuse by name**, rather than a different store or a panic.
+    /// The two shapes are then one type with one census, and a boot log says which it ran.
+    port: Option<std::sync::Arc<dyn DeviceFbPort>>,
 }
 
 /// ★★★ **How often the single store refused a host-side access, by reason.**
@@ -2010,6 +2177,23 @@ pub static DEVICE_FB_NAMED: core::sync::atomic::AtomicU64 =
 /// Accesses refused because they were outside the advertised framebuffer entirely.
 pub static DEVICE_FB_OUT_OF_RANGE: core::sync::atomic::AtomicU64 =
     core::sync::atomic::AtomicU64::new(0);
+/// ★★★★★ **CUT B — host reads SERVED out of the reserved object through an armed view.**
+///
+/// ⊘ The number that makes cut B falsifiable. Cut A's census could only count refusals, so
+/// *"the port is wired and never served anything"* and *"there is no port"* printed the same
+/// `host_read_refused=N`.
+pub static DEVICE_FB_READ_SERVED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// As [`DEVICE_FB_READ_SERVED`], for writes.
+pub static DEVICE_FB_WRITE_SERVED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// Host reads that missed an armed view and recorded a demand instead — cut B's transient.
+pub static DEVICE_FB_WANTED_BY_READ: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// As [`DEVICE_FB_WANTED_BY_READ`], for writes. ⚠ `[measured w736]` this is the half with **no
+/// measured demand**; a non-zero here on a later boot is new information, not a confirmation.
+pub static DEVICE_FB_WANTED_BY_WRITE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
 
 /// ★★★ The single store's census line. Printed unconditionally at teardown, on both arms.
 ///
@@ -2023,29 +2207,64 @@ pub fn device_fb_report() -> String {
     let rd = DEVICE_FB_READ_REFUSED.load(Relaxed);
     let wr = DEVICE_FB_WRITE_REFUSED.load(Relaxed);
     let oob = DEVICE_FB_OUT_OF_RANGE.load(Relaxed);
-    let verdict = if named == 0 && rd == 0 && wr == 0 {
+    let rserved = DEVICE_FB_READ_SERVED.load(Relaxed);
+    let wserved = DEVICE_FB_WRITE_SERVED.load(Relaxed);
+    let wantr = DEVICE_FB_WANTED_BY_READ.load(Relaxed);
+    let wantw = DEVICE_FB_WANTED_BY_WRITE.load(Relaxed);
+    let verdict = if named == 0 && rd == 0 && wr == 0 && rserved == 0 && wserved == 0 {
         "⊘⊘ VACUOUS — the single store was installed and NOTHING asked it anything. That is \
          not `no accesses were needed`; it is an unmeasured store."
-    } else if rd + wr == 0 {
+    } else if rd + wr == 0 && rserved + wserved == 0 {
         "★★★ NO HOST-SIDE ACCESS WAS EVER NEEDED — every framebuffer touch on this boot went \
          through a guest memslot. ⚠ Read this against the workload: it is the property cut B \
          exists to make unnecessary, and one boot reaching it is not the guest suite."
+    } else if rd + wr == 0 {
+        "★★★★★ CUT B IS SERVING — every host-side access that was needed was answered out of \
+         an armed CPU view of the reserved object, and none was refused. ⚠ Still one \
+         workload, never the guest suite."
+    } else if rserved + wserved > 0 {
+        "◐ CUT B IS PARTLY SERVING — some host-side accesses were answered from armed views \
+         and some were refused. ⊘ A refusal here is NOT the same finding as cut A's: read \
+         `DEVICE-FB-PORT` for whether the arm was declined (a vCPU), refused (the host BAR1 \
+         aperture is full) or simply never drained (no lock-free caller retried)."
     } else {
-        "⊘ HOST-SIDE ACCESSES WERE REFUSED — expected in cut A and fatal to the boot. Each \
-         one is a walker, the CPU copy-engine executor or PRAMIN needing bytes it cannot \
-         reach under the plane lock; cut B is what teaches them to arm first."
+        "⊘ HOST-SIDE ACCESSES WERE REFUSED AND NONE WAS EVER SERVED — cut A's shape. Each one \
+         is a walker, the CPU copy-engine executor or PRAMIN needing bytes it cannot reach \
+         under the plane lock. If a byte port was installed, the arming half never ran: read \
+         `DEVICE-FB-PORT` before anything else."
     };
     format!(
         "DEVICE-FB named={named} host_read_refused={rd} host_write_refused={wr} \
-         out_of_range={oob} ⇒ {verdict}"
+         read_served={rserved} write_served={wserved} wanted_by_read={wantr} \
+         wanted_by_write={wantw} out_of_range={oob} ⇒ {verdict}"
     )
 }
 
 impl DeviceFb {
-    /// A store over a framebuffer of `fb_len` bytes.
+    /// A store over a framebuffer of `fb_len` bytes, with **no byte port** — cut A's shape:
+    /// every page is named to the memslot path and every host-side access is refused by name.
     #[must_use]
     pub fn new(fb_len: u64) -> DeviceFb {
-        DeviceFb { fb_len }
+        DeviceFb {
+            fb_len,
+            port: None,
+        }
+    }
+
+    /// ★★★★★ **CUT B — the same store with a byte port**: a host-side access of a page whose
+    /// CPU view is already armed is **served out of the reserved object**, and one that is not
+    /// records its demand for a lock-free caller to drain.
+    ///
+    /// ⊘ This is not a fallback and does not create a second memory: the armed view IS the
+    /// one reserved object, reached through a mapping instead of through a guest memslot. The
+    /// defect `two_worlds_split::a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`
+    /// exists for — two memories for one address — is still unrepresentable here.
+    #[must_use]
+    pub fn with_port(fb_len: u64, port: std::sync::Arc<dyn DeviceFbPort>) -> DeviceFb {
+        DeviceFb {
+            fb_len,
+            port: Some(port),
+        }
     }
 
     fn inside(&self, phys: u64, len: usize) -> bool {
@@ -2062,6 +2281,39 @@ impl FbStore for DeviceFb {
                 phys,
                 len: buf.len(),
                 why: OUTSIDE_FRAMEBUFFER,
+            });
+        }
+        // ★★★★★ **CUT B — THE ARMED VIEW, TRIED FIRST AND SERVED WITHOUT A LOCK.**
+        //
+        // ⊘ Not a fallback and not a second memory: an armed view IS this page of the one
+        // reserved object, reached by `mmap` instead of by a guest memslot. The byte a host
+        // read gets here is the byte an engine reads, by construction.
+        if let Some(port) = self.port.as_ref() {
+            if port.read_armed(phys, buf) {
+                DEVICE_FB_READ_SERVED.fetch_add(1, Relaxed);
+                return Ok(());
+            }
+            // ⊘⊘ **THE DEMAND IS THE POINT.** `FbRead::read_in` answers a `bool`, so the
+            // address that missed cannot travel up to the lock-free caller in the refusal —
+            // `WalkFault::Unbacked { phys, level }` is flattened to a `&'static str` at
+            // `plane.rs`. ⇒ the frame survives HERE, in the port's want set, and the
+            // lock-free caller drains a set rather than parsing a sentence.
+            port.want(phys, buf.len() as u64, DeviceFbWant::Read);
+            DEVICE_FB_WANTED_BY_READ.fetch_add(1, Relaxed);
+            let n = DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
+            if n == 0 {
+                eprintln!(
+                    "kayfabe: DEVICE-FB ⊘⊘ FIRST HOST-SIDE READ MISSED AN ARMED VIEW at fb \
+                     0x{phys:x} — {DEVICE_HOST_READ_NOT_ARMED} ⚠ This is cut B's TRANSIENT, \
+                     not cut A's wall: if the drain-and-retry is wired at the lock-free \
+                     caller this read succeeds on its second attempt and `DEVICE-FB \
+                     read_served=` moves. Printed once."
+                );
+            }
+            return Err(FbRefused {
+                phys,
+                len: buf.len(),
+                why: DEVICE_HOST_READ_NOT_ARMED,
             });
         }
         let n = DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
@@ -2097,6 +2349,36 @@ impl FbStore for DeviceFb {
                 phys,
                 len: bytes.len(),
                 why: OUTSIDE_FRAMEBUFFER,
+            });
+        }
+        // ★★★★★ **CUT B, the write half — SERVED when a view is armed, and NOTHING BUILT ON
+        // SPECULATION BEYOND THAT.**
+        //
+        // ⚠ `[measured w736]` `host_write_refused=0` against `host_read_refused=20`: the
+        // write side has no measured demand at all on the `RmInitAdapter` path. ⇒ this serves
+        // a view that some read already armed and records the demand so the question becomes
+        // a number; **no write-side drain-and-retry loop exists**, because there is no
+        // measured caller to put one at.
+        if let Some(port) = self.port.as_ref() {
+            if port.write_armed(phys, bytes) {
+                DEVICE_FB_WRITE_SERVED.fetch_add(1, Relaxed);
+                return Ok(());
+            }
+            port.want(phys, bytes.len() as u64, DeviceFbWant::Write);
+            DEVICE_FB_WANTED_BY_WRITE.fetch_add(1, Relaxed);
+            let n = DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
+            if n == 0 {
+                eprintln!(
+                    "kayfabe: DEVICE-FB ⊘⊘ FIRST HOST-SIDE WRITE MISSED AN ARMED VIEW at fb \
+                     0x{phys:x} — {DEVICE_HOST_WRITE_NOT_ARMED} ★ This is NEW INFORMATION: \
+                     w736 measured zero host-side writes on this path. Printed once; the \
+                     total is `DEVICE-FB wanted_by_write=`."
+                );
+            }
+            return Err(FbRefused {
+                phys,
+                len: bytes.len(),
+                why: DEVICE_HOST_WRITE_NOT_ARMED,
             });
         }
         let n = DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
@@ -2156,6 +2438,11 @@ impl FbStore for DeviceFb {
     fn is_resident(&self, phys: u64) -> Option<bool> {
         let _ = phys;
         None
+    }
+
+    /// The byte port, cloned — see [`FbStore::demand_port`]. [`None`] in cut A's shape.
+    fn demand_port(&self) -> Option<std::sync::Arc<dyn DeviceFbPort>> {
+        self.port.clone()
     }
 
     /// ⊘⊘⊘ **REFUSED BY NAME, LOUDLY, AND IT IS NOT DONE.**

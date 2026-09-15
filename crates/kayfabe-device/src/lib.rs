@@ -98,7 +98,8 @@ use kayfabe_arch::gsp::GspModel;
 
 pub use plane::{
     CePlane, Counters, DoorbellLog, FbMirrorPort, NanoClock, PlaneResidue, ReadOutcome,
-    RefusingRam, RegPlane, SteppingClock, WindowPageResolution, WindowRefusal, WriteOutcome,
+    RefusingRam, RegPlane, SteppingClock, WindowEnumeration, WindowPageResolution, WindowRefusal,
+    WriteOutcome,
 };
 
 /// ★ The fault vocabulary a [`DoorbellReport`] speaks, re-exported.
@@ -116,7 +117,9 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{
     ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED, ESTABLISH_FAILED,
-    DEVICE_HOST_READ_UNBUILT, DEVICE_HOST_WRITE_UNBUILT, DEVICE_RESET_UNBUILT, DeviceFb,
+    DEVICE_HOST_READ_NOT_ARMED, DEVICE_HOST_READ_UNBUILT, DEVICE_HOST_WRITE_NOT_ARMED,
+    DEVICE_HOST_WRITE_UNBUILT, DEVICE_RESET_UNBUILT, DeviceFb, DeviceFbDrained, DeviceFbPort,
+    DeviceFbWant,
     FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoined, FbPageArena,
     FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter,
     JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, PAGE_NOT_RESIDENT,
