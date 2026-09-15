@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ★★★★★ SINGLE-STORE §6 STEP 1 — THE LIVE WALK SHADOW.
 #
-#   usage: PREFIX=<tag> SHADOW=<off|on> [START_MB=<n>] bash single_store_e6_boot.sh
+#   usage: PREFIX=<tag> SHADOW=<off|on|decide> [START_MB=<n>] bash single_store_e6_boot.sh
 #
 # The walk kernel is run ALONGSIDE the host walk at every off-vCPU page-table sweep and the
 # two answers are compared by kind. **Nothing is published from the kernel** — this boot is
@@ -18,6 +18,21 @@
 #      ⊘⊘ A MISSING LINE IS AN UNMEASURED BOOT. `WALK-SHADOW ⊘ DISARMED` is what tells the
 #      control arm apart from a binary that predates this increment — which is why the binary
 #      is checked BY CONTENT below and REFUSES.
+#
+#   ★★★ THE ARMS ARE TWO DIFFERENT CLAIMS, and the census says which one ran:
+#      `on`     the kernel runs beside the host walk and the two are compared. NOTHING it
+#               produces reaches the commit. `decided=0` by construction.
+#      `decide` the kernel's report is RE-ATTRIBUTED TO THE HOST'S PAGES AND COMMITTED, with
+#               the host walk kept as the gate. Read `decided=` and `fell_back[...]`:
+#                 decided=N            N sweeps were committed from the kernel's report
+#                 fb_disagreed         the two walkers differ — LOUD, host's answer stands
+#                 fb_not_identical     re-attribution was not exactly the host's leaves
+#                 fb_unattributable    a kernel leaf fell in no host page at its own size
+#                 fb_unexpressible     a run this format spells at no level
+#                 fb_no_kernel_vas     the kernel did not describe an address space at all
+#      ⊘ On EVERY one of those the host's answer stands and the sweep is byte-for-byte the
+#        one that runs with the arm off. A fallback is a measurement, not a failure — but
+#        `fb_disagreed` is the one to read first.
 #
 #   Q3 THE GATE: a census that is **not vacuous** and has **no disagreements**.
 #      Read the verdict token, and read it in this order:
@@ -124,7 +139,12 @@ echo "E6-DISAGREEMENTS=$(field 'disagreements=[0-9]*' | cut -d= -f2)"
 echo "E6-BY-KIND=$(field 'by_kind\[[^]]*\]')"
 echo "E6-SKIPPED=$(field 'skipped\[[^]]*\]')"
 echo "E6-IMAGE-STATS=$(field 'image\[[^]]*\]')"
+echo "E6-DECIDED=$(field 'decided=[0-9]*' | cut -d= -f2)"
+echo "E6-FELL-BACK=$(field 'fell_back\[[^]]*\]')"
 echo "E6-VERDICT=$(printf '%s' "$WS" | grep -aoc 'VACUOUS')  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)"
+echo "--- ★★★ THE LOUD FALLBACK, if the two walkers ever differed on the decide arm ---"
+grep -a 'WALK-SHADOW DECIDE' "$Q" 2>/dev/null | head -4 | cut -c1-300
+
 echo "--- ★ the per-refresh refusals, verbatim, if any fired ---"
 grep -a 'WALK-SHADOW image refused\|WALK-SHADOW refresh refused\|WALK-SHADOW report' "$Q" 2>/dev/null | head -6 | cut -c1-300
 echo "--- ★ the isolate's OWN stderr for the shadow verbs ---"

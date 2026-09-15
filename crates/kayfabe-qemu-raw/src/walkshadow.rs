@@ -67,14 +67,23 @@ pub const WALK_SHADOW_ENV: &str = "KAYFABE_WALK_SHADOW";
 /// ★★★ **THIS GATE'S EXPIRY CONDITION**, stated where §w724g requires it — in the gate's own
 /// doc comment, so it cannot quietly become permanent.
 ///
-/// > **Deleted when the walk kernel REPLACES the host walk** (`SINGLE_STORE_PLAN.md` §6's
-/// > swap). At that point there is one walker, there is nothing to shadow, and the comparison
-/// > becomes the host walker's test-only oracle role described in §7 — not a gate.
+/// > **Deleted when the host walk is deleted** (`SINGLE_STORE_PLAN.md` §7), in the same
+/// > change, unwired and removed together. At that point there is one walker, there is
+/// > nothing to gate, and the comparison becomes the host walker's **test-only oracle** role
+/// > that §7 describes — not a runtime arm.
 ///
-/// ⊘ It is **not** deleted merely because a boot came back clean: a clean census on one
-/// workload is the evidence the swap needs, not the swap itself.
+/// ⊘ **Not deleted because the swap landed**, and the distinction is the whole of §w724g's
+/// pushback. `decide` is the pivot's *both-halves-working* state: the kernel decides and the
+/// host walk gates it. Deleting the gate then would remove the only thing that turns a
+/// disagreement into a loud fallback rather than a wrong binding.
+///
+/// ⊘ And **not deleted because one boot came back clean**. §7 is explicit that the licence is
+/// the **guest suite**, not one workload — `[measured]` the host suite was 30/30 while the
+/// guest had genuine failures, and a host-green suite is the easy way to declare victory
+/// early.
 pub const WALK_SHADOW_EXPIRY: &str =
-    "deleted when the walk kernel replaces the host walk (SINGLE_STORE_PLAN.md §6)";
+    "deleted WITH the host walk in SINGLE_STORE_PLAN.md §7, licensed by the GUEST suite \
+     (not by one workload) — never merely because `decide` went green";
 
 /// How much of one image goes in a single frame. The wire's `FRAME_MAX` is 1 MiB and a frame
 /// carries a header beside the blob, so 256 KiB leaves room without needing to know the
@@ -130,25 +139,52 @@ const MAX_REFRESHES: u64 = 64;
 ///
 /// # Errors
 /// One sentence naming the bad value.
-pub fn selected(v: Option<&str>) -> Result<bool, (Status, &'static str)> {
+pub fn selected(v: Option<&str>) -> Result<Option<ShadowArm>, (Status, &'static str)> {
     match v {
-        None | Some("off") => Ok(false),
-        Some("on") => Ok(true),
+        None | Some("off") => Ok(None),
+        Some("on") => Ok(Some(ShadowArm::Compare)),
+        Some("decide") => Ok(Some(ShadowArm::Decide)),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_WALK_SHADOW does not name a state: the only values are `off` (the \
-             default) and `on`. ⊘ Not defaulted, because a boot that silently ran the shipped \
-             path while its log says the shadow was armed measures nothing and says so \
-             nowhere — which is this tree's most-repeated instrument failure.",
+            "KAYFABE_WALK_SHADOW does not name a state: the values are `off` (the default), \
+             `on` (the kernel runs beside the host walk and the two are compared) and \
+             `decide` (the kernel's report is what gets committed, with the host walk kept as \
+             the gate that licenses it and fallen back to, loudly, on any disagreement). \
+             ⊘ Not defaulted, because a boot that silently ran the shipped path while its log \
+             says the shadow was armed measures nothing and says so nowhere — which is this \
+             tree's most-repeated instrument failure.",
         )),
     }
+}
+
+/// ★★★★★ **WHAT THE ARM DOES**, and the difference between the two is the whole of
+/// `SINGLE_STORE_PLAN.md` §6's swap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShadowArm {
+    /// `on` — the kernel runs beside the host walk and the two answers are compared.
+    /// **Nothing it produces reaches the commit.**
+    Compare,
+    /// ★★★ `decide` — the kernel's report is **re-attributed to the host's pages and
+    /// committed**, and the host walk is kept as the gate that licenses it.
+    ///
+    /// ⊘ On **any** refusal, fault or difference the host's answer stands, the reason is
+    /// printed, and the sweep is byte-for-byte the one that runs with the arm off. There is
+    /// no partial substitution: a replacement is taken whole or not at all.
+    ///
+    /// ⚠ **This is observationally a no-op by construction, and that is the requirement.**
+    /// §6 is explicit that the backing has not moved, so nothing observable may change; the
+    /// arm is judged on the census and the raw client, **never on parity**. What it measures
+    /// — and nothing else does — is how often the kernel's report is **exactly
+    /// re-expressible** in the shape the commit needs, on live guest tables. That is the
+    /// number §7's deletion licence turns on.
+    Decide,
 }
 
 /// Read it from the environment.
 ///
 /// # Errors
 /// As [`selected`].
-pub fn selected_walk_shadow() -> Result<bool, (Status, &'static str)> {
+pub fn selected_walk_shadow() -> Result<Option<ShadowArm>, (Status, &'static str)> {
     let raw = std::env::var_os(WALK_SHADOW_ENV);
     let value = raw
         .as_ref()
@@ -167,16 +203,26 @@ pub fn selected_walk_shadow() -> Result<bool, (Status, &'static str)> {
 pub struct WalkShadowPort {
     iso: Mutex<IsolateBox>,
     census: Mutex<ShadowCensus>,
+    /// Which arm this boot is running. ⊘ Carried on the port rather than re-read from the
+    /// environment at every sweep, so the census cannot name an arm the boot did not run.
+    arm: ShadowArm,
 }
 
 impl WalkShadowPort {
     /// Take the scratchpad's isolate.
     #[must_use]
-    pub fn new(iso: IsolateBox) -> WalkShadowPort {
+    pub fn new(iso: IsolateBox, arm: ShadowArm) -> WalkShadowPort {
         WalkShadowPort {
             iso: Mutex::new(iso),
             census: Mutex::new(ShadowCensus::default()),
+            arm,
         }
+    }
+
+    /// Which arm this port is running.
+    #[must_use]
+    pub fn arm(&self) -> ShadowArm {
+        self.arm
     }
 
     /// The census line, for the teardown report.
@@ -218,6 +264,20 @@ impl WalkShadowPort {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .note_skipped(why);
+    }
+
+    fn note_decided(&self) {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .note_decided();
+    }
+
+    fn note_fell_back(&self, why: &'static str) {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .note_fell_back(why);
     }
 
     fn note_image(&self, pages: u64, staged: u64, absent: u64, sysmem: u64) {
@@ -290,10 +350,8 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         fmt: &dyn kayfabe_rt::device::SweepFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         results: &[kayfabe_fwd::PtDecodeResult],
-    ) {
-        let Some(port) = self.port else {
-            return;
-        };
+    ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>> {
+        let port = self.port?;
 
         // ⚠⚠ **FIRST, AND BEFORE ANY LOCK IS TAKEN.** This sweep may be running on a vCPU
         // thread (see the module header), and a synchronous isolate round trip there blocks a
@@ -306,16 +364,16 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         // instruments pointed at it.
         if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
             port.note_skipped("on_vcpu");
-            return;
+            return None;
         }
         if results.is_empty() {
             port.note_skipped("no_tasks");
-            return;
+            return None;
         }
         // ⊘ Checked BEFORE the image is built, because building one is the expensive half.
         if port.budget_spent() {
             port.note_skipped("budget_spent");
-            return;
+            return None;
         }
 
         // ⊘ Only address spaces whose walk SUCCEEDED. A faulted decode has no leaves to
@@ -363,7 +421,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         }
         if vases.is_empty() {
             port.note_skipped("no_decoded_vas");
-            return;
+            return None;
         }
 
         let image = match walkshadow::build_image(fmt, fb, &vases, walkshadow::PAGE_CAP) {
@@ -374,7 +432,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 let name = e.as_str();
                 eprintln!("kayfabe: WALK-SHADOW image refused: {e:?}");
                 port.note_skipped(name);
-                return;
+                return None;
             }
         };
         port.note_image(
@@ -389,7 +447,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             Err(why) => {
                 eprintln!("kayfabe: WALK-SHADOW refresh refused: {why}");
                 port.note_skipped("isolate_refused");
-                return;
+                return None;
             }
         };
         // ⊘⊘ **THE HEADER IS READ FIRST, AND TRUNCATION IS ASKED BEFORE PARSING.**
@@ -404,7 +462,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             Err(e) => {
                 eprintln!("kayfabe: WALK-SHADOW report header unreadable: {e:?}");
                 port.note_skipped("report_unparseable");
-                return;
+                return None;
             }
         };
         // ⊘ A truncated report describes less than it found and is not a comparable answer.
@@ -422,14 +480,14 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 header.pdb_capacity
             );
             port.note_skipped("report_truncated");
-            return;
+            return None;
         }
         let report = match kayfabe_mmu::walkreport::Report::parse(&bytes) {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("kayfabe: WALK-SHADOW report unparseable: {e:?}");
                 port.note_skipped("report_unparseable");
-                return;
+                return None;
             }
         };
         // ⊘ `parse` already validates; this is the second, explicit statement of the rule so a
@@ -437,7 +495,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         if let Err(e) = report.validate() {
             eprintln!("kayfabe: WALK-SHADOW report invalid: {e:?}");
             port.note_skipped("report_invalid");
-            return;
+            return None;
         }
         // ★★ **A REFUSAL THE KERNEL RAISED IS NOT AGREEMENT.** `refuse_mask` names which one
         // fired (`R_OOB`, `R_FOREIGN_AP`, `R_MISALIGNED_LEAF`, …). A walk that refused a
@@ -449,11 +507,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 header.refusals, header.refuse_mask
             );
             port.note_skipped("kernel_refused_a_subtree");
-            return;
+            return None;
         }
         let Ok(runs) = report.present_runs() else {
             port.note_skipped("report_runs_undecodable");
-            return;
+            return None;
         };
         // ⊘⊘ **`present_runs` SKIPS `UNMAP`, so it is NOT index-aligned with `report.runs`.**
         // The per-address-space split below needs each decoded run's `pdb_index`, which only
@@ -482,7 +540,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 runs.len()
             );
             port.note_skipped("report_rows_misaligned");
-            return;
+            return None;
         }
 
         // The report is keyed by the RELOCATED root; the comparison is per real address
@@ -495,6 +553,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             .collect();
 
         let mut compared_any = false;
+        let mut disagreed = false;
+        // The kernel's runs, per **root page** — the unit the report is keyed by and the one
+        // the replacement below is assembled in.
+        let mut by_root: std::collections::BTreeMap<u64, Vec<kayfabe_mmu::walkdiff::Run>> =
+            std::collections::BTreeMap::new();
         for (i, entry) in report.pdbs.iter().enumerate() {
             let Some(&real) = real_of.get(&entry.pdb) else {
                 continue;
@@ -567,11 +630,83 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 }
             }
             port.note(&host, &kernel, unclassed, &d);
+            if !d.is_empty() {
+                disagreed = true;
+            }
+            by_root.insert(real, kernel);
             compared_any = true;
         }
         if !compared_any {
             port.note_skipped("no_vas_matched");
+            return None;
         }
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // ★★★★★ §6's SWAP — commit the KERNEL's report, with the host walk as the gate.
+        // ─────────────────────────────────────────────────────────────────────────────
+        if port.arm() != ShadowArm::Decide {
+            return None;
+        }
+        // ⚠ **LOUD, and the host's answer stands.** A disagreement is the one thing this arm
+        // exists to be safe about: it must never be discovered later, from a guest that
+        // misbehaved, instead of here.
+        if disagreed {
+            eprintln!(
+                "kayfabe: ⊘⊘⊘ WALK-SHADOW DECIDE — FALLING BACK TO THE HOST WALK: the two \
+                 walkers disagree on this sweep. The commit is the host's, unchanged. See the \
+                 WALK-SHADOW census for the kinds."
+            );
+            port.note_fell_back("fb_disagreed");
+            return None;
+        }
+
+        // ⊘ Built whole, then taken whole. A replacement assembled in place would leave a
+        // half-substituted result set behind on the first refusal — a state neither walker
+        // ever described, and the one thing `SINGLE_STORE_PLAN`'s own sequencing rule is
+        // about.
+        let mut replacement = Vec::with_capacity(results.len());
+        for r in results {
+            let Ok(d) = &r.decode else {
+                port.note_fell_back("fb_host_faulted");
+                return None;
+            };
+            let Some(runs) = by_root.get(&(r.task.pdb.0 & !0xfff)) else {
+                // The kernel did not describe this address space at all.
+                port.note_fell_back("fb_no_kernel_vas");
+                return None;
+            };
+            let pages: Vec<(kayfabe_mmu::walker::PtPage, &[kayfabe_mmu::walker::DecodedLeaf])> =
+                d.decodes.iter().map(|(p, pd)| (*p, pd.leaves.as_slice())).collect();
+            let per_page = match walkshadow::substitute_leaves(fmt, &pages, runs) {
+                Ok(v) => v,
+                Err(why) => {
+                    eprintln!(
+                        "kayfabe: ⊘ WALK-SHADOW DECIDE — falling back for pdb={:#x}: {why:?}",
+                        r.task.pdb.0
+                    );
+                    port.note_fell_back(why.as_str());
+                    return None;
+                }
+            };
+            let mut nr = r.clone();
+            let Ok(nd) = &mut nr.decode else {
+                port.note_fell_back("fb_host_faulted");
+                return None;
+            };
+            // ★ BOTH views, and they cannot be allowed to come apart: the settlement reads
+            // the per-page `decodes` and other consumers read the flattened `leaves`. A
+            // substitution that updated one of them would make the two disagree about the
+            // same guest, silently.
+            let mut flat = Vec::new();
+            for (i, (_, pd)) in nd.decodes.iter_mut().enumerate() {
+                pd.leaves.clone_from(&per_page[i]);
+                flat.extend(per_page[i].iter().copied());
+            }
+            nd.leaves = flat;
+            replacement.push(nr);
+        }
+        port.note_decided();
+        Some(replacement)
     }
 }
 
@@ -589,9 +724,13 @@ mod tests {
     /// failure this tree keeps cataloguing.
     #[test]
     fn the_gate_refuses_an_unknown_arm() {
-        assert_eq!(selected(None).ok(), Some(false));
-        assert_eq!(selected(Some("off")).ok(), Some(false));
-        assert_eq!(selected(Some("on")).ok(), Some(true));
+        assert_eq!(selected(None).ok(), Some(None));
+        assert_eq!(selected(Some("off")).ok(), Some(None));
+        assert_eq!(selected(Some("on")).ok(), Some(Some(ShadowArm::Compare)));
+        assert_eq!(selected(Some("decide")).ok(), Some(Some(ShadowArm::Decide)));
+        // The two armed values are DIFFERENT arms, not two spellings of one: `on` compares
+        // and publishes nothing; `decide` commits the kernel's report.
+        assert_ne!(ShadowArm::Compare, ShadowArm::Decide);
         assert!(selected(Some("yes")).is_err());
         assert!(selected(Some("ON")).is_err(), "case matters, and is refused by name");
         assert!(selected(Some("1")).is_err());
@@ -617,6 +756,13 @@ mod tests {
     /// ★★ **The gate's expiry condition exists**, which is §w724g's whole mechanism.
     #[test]
     fn the_gate_names_its_own_expiry() {
-        assert!(WALK_SHADOW_EXPIRY.contains("deleted when"));
+        assert!(
+            WALK_SHADOW_EXPIRY.starts_with("deleted"),
+            "a gate must name the condition under which it is DELETED: {WALK_SHADOW_EXPIRY}"
+        );
+        // ⊘ And the licence is the GUEST suite, not a green arm — §7's own rule, pinned so a
+        // later edit cannot quietly weaken it to "when decide goes green".
+        assert!(WALK_SHADOW_EXPIRY.contains("GUEST suite"), "{WALK_SHADOW_EXPIRY}");
+        assert!(WALK_SHADOW_EXPIRY.contains("§7"), "{WALK_SHADOW_EXPIRY}");
     }
 }

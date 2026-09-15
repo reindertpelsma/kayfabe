@@ -19,7 +19,7 @@ use kayfabe_chips::ga10x::Ga10xGmmu;
 use kayfabe_fwd::{PtDecodeResult, PtDecodeTask};
 use kayfabe_isolate::{IsolateBox, IsolateFactory, IsolateId};
 use kayfabe_mmu::walker::{DecodedLeaf, FbRead, PtPage, SubtreeDecode};
-use kayfabe_qemu_raw::walkshadow::{WalkShadowObserver, WalkShadowPort};
+use kayfabe_qemu_raw::walkshadow::{ShadowArm, WalkShadowObserver, WalkShadowPort};
 use kayfabe_rt::device::PtSweepObserver;
 use kayfabe_rt::GpuId;
 
@@ -66,9 +66,13 @@ fn a_sweep_result(pdb: u64) -> PtDecodeResult {
 }
 
 fn a_port() -> WalkShadowPort {
+    port_on(ShadowArm::Compare)
+}
+
+fn port_on(arm: ShadowArm) -> WalkShadowPort {
     let (factory, _rec) = kayfabe_mocks::MockIsolateFactory::new();
     let iso = IsolateBox::new(factory.spawn(IsolateId::new(u32::MAX, GpuId::ZERO)));
-    WalkShadowPort::new(iso)
+    WalkShadowPort::new(iso, arm)
 }
 
 /// ⊘ **The disarmed observer moves nothing.** The unobserved sweep is the observed sweep with
@@ -80,7 +84,7 @@ fn a_disarmed_observer_leaves_the_census_untouched() {
     let mut obs = WalkShadowObserver { port: None };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    let _ = obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
     assert_eq!(port.census_line(), before);
     assert!(before.contains("VACUOUS"), "{before}");
 }
@@ -96,7 +100,7 @@ fn an_isolate_with_no_kernel_is_refused_by_name_and_not_read_as_agreement() {
     let mut obs = WalkShadowObserver { port: Some(&port) };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    let _ = obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
 
     let line = port.census_line();
     assert!(
@@ -128,7 +132,7 @@ fn an_empty_sweep_is_named_rather_than_ignored() {
     let mut obs = WalkShadowObserver { port: Some(&port) };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    obs.executed(&fmt, &mut fb, &[]);
+    let _ = obs.executed(&fmt, &mut fb, &[]);
     let line = port.census_line();
     assert!(line.contains("no_tasks=1"), "{line}");
     assert!(!line.contains("isolate_refused"), "{line}");
@@ -155,7 +159,7 @@ fn a_faulted_walk_is_not_compared() {
         },
         decode: Err(kayfabe_mmu::walker::WalkFault::BudgetExhausted),
     };
-    obs.executed(&fmt, &mut fb, &[faulted]);
+    let _ = obs.executed(&fmt, &mut fb, &[faulted]);
     let line = port.census_line();
     assert!(line.contains("no_decoded_vas=1"), "{line}");
 }
@@ -174,7 +178,7 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
     // never reached — which is itself the assertion: the budget must not be charged for
     // sweeps that produced no comparison.
     for _ in 0..3 {
-        obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+        let _ = obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
     }
     let line = port.census_line();
     assert!(line.contains("isolate_refused=3"), "{line}");
@@ -182,4 +186,39 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
         !line.contains("budget_spent"),
         "a refused round trip must not consume the comparison budget: {line}"
     );
+}
+
+/// ★★★★★ **THE `decide` ARM FALLS BACK, AND SAYS SO.** A mock isolate has no walk kernel, so
+/// the round trip refuses — and the sweep must then get `None`, which is the host's answer
+/// standing unchanged.
+///
+/// ⊘ This is the property the whole arm rests on: **every** failure path returns `None`, and
+/// `None` is byte-for-byte the sweep that runs with the arm off.
+#[test]
+fn the_decide_arm_returns_none_when_the_kernel_cannot_answer() {
+    let port = port_on(ShadowArm::Decide);
+    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let fmt = Ga10xGmmu::new();
+    let mut fb = ZeroFb;
+    let out = obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
+    assert!(
+        out.is_none(),
+        "a refused round trip MUST leave the host's answer standing"
+    );
+    let line = port.census_line();
+    assert!(line.contains("isolate_refused=1"), "{line}");
+    assert!(line.contains("decided=0"), "nothing was committed from the kernel: {line}");
+}
+
+/// ⊘ **The `on` arm never substitutes**, whatever happens. The two arms are different
+/// decisions and the census has to be able to say which one ran.
+#[test]
+fn the_compare_arm_never_substitutes() {
+    let port = port_on(ShadowArm::Compare);
+    assert_eq!(port.arm(), ShadowArm::Compare);
+    let mut obs = WalkShadowObserver { port: Some(&port) };
+    let fmt = Ga10xGmmu::new();
+    let mut fb = ZeroFb;
+    assert!(obs.executed(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]).is_none());
+    assert!(port.census_line().contains("decided=0"));
 }

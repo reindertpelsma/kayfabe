@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ★★★★★ w731 — BUILD AND BOOT THE LIVE WALK SHADOW. Run ON the bench box.
 #
-#   usage: bash scripts/bench/w731_live_shadow_run.sh [tag]
+#   usage: [ARMS="off on decide"] bash scripts/bench/w731_live_shadow_run.sh [tag]
 #
 # ⊘ Lives in the repo and not on the box: `vast is compute, never storage` — a harness that
 # exists only on a rented machine is gone the moment it is destroyed.
@@ -13,7 +13,8 @@
 #   2. boot the CONTROL arm (`SHADOW=off`) — the shipped path, so the armed arm has something
 #      to be compared against. ⊘ A single armed boot cannot tell "the shadow cost the guest
 #      nothing" from "this box was having a bad day".
-#   3. boot the ARMED arm (`SHADOW=on`).
+#   3. boot the ARMED arms: `on` (compare only) and `decide` (the kernel's report is
+#      committed, host walk kept as the gate). ⊘ `ARMS=` overrides the set.
 #
 # ⚠ Traps encoded inline:
 #   - the kill goes on a line of ITS OWN, in its own command: `pkill -f '[q]emu-system-x86_64'`
@@ -60,7 +61,7 @@ if [ "$n_img" -eq 0 ]; then
 fi
 
 # ── 2/3. the two boots, control first ───────────────────────────────────────────────────
-for arm in off on; do
+for arm in ${ARMS:-off on decide}; do
   pkill -f '[q]emu-system-x86'
   sleep 3
   echo
@@ -71,7 +72,7 @@ done
 
 echo
 echo "=== W731 SUMMARY ==="
-for arm in off on; do
+for arm in ${ARMS:-off on decide}; do
   f="$BENCH/w731_${arm}.log"
   echo "-- arm=$arm"
   grep -aE '^\[client\]|^E6-|^HOST_DMESG_XID' "$f" 2>/dev/null | cut -c1-200

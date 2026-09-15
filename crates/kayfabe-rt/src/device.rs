@@ -4476,8 +4476,14 @@ impl SharedDevice {
         // reusing the decode pass's run-wide budget would divide the C's number by a
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
-        // ★★★ The shadow's hook, still with no lock held. See `sweep_pt_tables_observing`.
-        observer.executed(fmt, fb, &results);
+        // ★★★★★ The shadow's hook, still with no lock held. See `sweep_pt_tables_observing`.
+        //
+        // ⊘ **`None` keeps the host's answer**, and that is the fallback the whole design
+        // rests on: an observer that refuses, faults, or disagrees changes nothing, and the
+        // sweep proceeds exactly as it does with the arm off. There is no partial
+        // substitution — a replacement is taken whole or not at all, so the guest can never
+        // see a commit that is half one walker's and half the other's.
+        let results = observer.executed(fmt, fb, &results).unwrap_or(results);
         // COMMIT — rank 1, re-resolving every target (R5), ★ ONE ADDRESS SPACE AT A TIME.
         //
         // Owner ruling, 2026-09-12: *"sweep commit may chunk."* `[measured w517-w524]` this
@@ -7880,12 +7886,20 @@ pub trait PtSweepObserver {
     ///
     /// ⚠ **No ranked lock may be taken here.** This is the phase the three-phase shape
     /// exists to keep lock-free, and the byte source itself asserts it.
+    /// Returns `Some(replacement)` to have the sweep **commit that instead**, or `None` to
+    /// keep what the host walk produced.
+    ///
+    /// ⚠ **`None` is the fallback and it must stay cheap and always available.** Every
+    /// refusal, fault and disagreement returns it, and the sweep is then byte-for-byte the
+    /// one that runs with the arm off. ⊘ A replacement is taken **whole**: there is no
+    /// per-address-space substitution, because a commit that is half one walker's and half
+    /// the other's is a state neither of them ever described.
     fn executed(
         &mut self,
         fmt: &dyn SweepFmt,
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         results: &[kayfabe_fwd::PtDecodeResult],
-    );
+    ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>>;
 }
 
 /// ⊘ The disarmed observer. `sweep_pt_tables_revoking` passes this, so the unobserved path
@@ -7897,6 +7911,7 @@ impl PtSweepObserver for () {
         _fmt: &dyn SweepFmt,
         _fb: &mut dyn kayfabe_mmu::walker::FbRead,
         _results: &[kayfabe_fwd::PtDecodeResult],
-    ) {
+    ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>> {
+        None
     }
 }

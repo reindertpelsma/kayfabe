@@ -577,3 +577,168 @@ fn a_table_at_a_sub_page_offset_survives_the_image() {
         "a root at +0x800 must be addressed at +0x800 in its slot, not at the page base"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ THE SWAP — re-attributing the kernel's runs to the host's pages
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **THE BRIDGE IS EXACT ON A REAL DRIVER'S TABLES.**
+///
+/// The publication contract is per **page**; the kernel's report is coalesced **runs** with no
+/// pages in them. This walks w725's real GA106 capture, turns its leaves into the runs a
+/// coalescing kernel would emit, and asserts that re-attributing those runs to the host's own
+/// pages reproduces the host's per-page leaves **exactly** — `level` and all.
+///
+/// ⊘ Not a fixture of eight contiguous pages: the real capture has 4 KiB, 64 KiB and 2 MiB
+/// leaves, and `PT_SMALL`/`PT_BIG` cover the **same** virtual window — which is the case a
+/// window test alone gets wrong.
+#[test]
+fn the_kernel_runs_re_attribute_to_the_hosts_pages_exactly() {
+    use kayfabe_mmu::walkshadow::substitute_leaves;
+    let fmt = Ga10xGmmu::new();
+    let imgs = load("real_ga106.bin");
+    let mut checked = 0usize;
+    let mut leaves_seen = 0usize;
+    for img in &imgs {
+        let mut fb = ImgFb { img: &img.mem };
+        let page = PtPage { phys: img.root & !0xfff, aperture: Aperture::Vidmem, level: 0, vabase: 0 };
+        let d = decode_subtree(&fmt, &mut fb, page, BUDGET).expect("decodes");
+        if d.leaves.is_empty() {
+            continue;
+        }
+        // The runs a coalescing kernel would emit for exactly these leaves.
+        let (runs, dropped) = leaves_as_runs(&d.leaves);
+        assert_eq!(dropped, 0, "{}: a real leaf had no class", img.name);
+
+        let pages: Vec<(PtPage, &[DecodedLeaf])> =
+            d.decodes.iter().map(|(p, pd)| (*p, pd.leaves.as_slice())).collect();
+        let got = substitute_leaves(&fmt, &pages, &runs)
+            .unwrap_or_else(|e| panic!("{}: the bridge refused: {e:?}", img.name));
+        assert_eq!(got.len(), pages.len());
+        for (i, (p, host)) in pages.iter().enumerate() {
+            assert_eq!(
+                got[i].len(),
+                host.len(),
+                "★ {}: page {:#x} (level {}) got {} leaves, host decoded {}",
+                img.name,
+                p.phys,
+                p.level,
+                got[i].len(),
+                host.len()
+            );
+        }
+        leaves_seen += d.leaves.len();
+        checked += 1;
+    }
+    assert!(checked >= 3, "only {checked} images exercised the bridge");
+    assert!(leaves_seen >= 6000, "only {leaves_seen} leaves — the assertions are near-vacuous");
+}
+
+/// ★★★★★ **THE KNOWN-POSITIVE: every fallback arm fires, by name.**
+///
+/// ⊘ A gate that has never been seen to refuse is a gate nobody knows works — and this one is
+/// the only thing standing between the kernel's report and the address table.
+#[test]
+fn every_fallback_reason_fires_by_name() {
+    use kayfabe_mmu::walkshadow::{substitute_leaves, FallbackReason};
+    use kayfabe_mmu::walkdiff::{PageClass, Run};
+    let fmt = Ga10xGmmu::new();
+
+    // One page of 4 KiB leaves: PT_SMALL, window 2 MiB at VA 0.
+    let page = PtPage { phys: 0x1000, aperture: Aperture::Vidmem, level: 5, vabase: 0 };
+    let host: Vec<DecodedLeaf> = (0..4)
+        .map(|i| DecodedLeaf {
+            va: kayfabe_arch::ids::GpuVa(i * 4096),
+            phys: 0x20_0000 + i * 4096,
+            aperture: Aperture::Vidmem,
+            size: kayfabe_arch::PageSize(4096),
+            read_only: false,
+            level: 5,
+        })
+        .collect();
+    let pages = [(page, host.as_slice())];
+    let good = vec![Run { va: 0, gpga: 0x20_0000, len: 4 * 4096, flags: 0, class: PageClass::P4K }];
+
+    // ⊘ The control FIRST: the good input must be accepted, or every refusal below is about
+    // a bridge that refuses everything.
+    let ok = substitute_leaves(&fmt, &pages, &good).expect("the control must pass");
+    assert_eq!(ok[0].len(), 4);
+
+    // ── Unexpressible: a run whose length is not a whole number of pages ──
+    let bad = vec![Run { va: 0, gpga: 0x20_0000, len: 4096 + 1, flags: 0, class: PageClass::P4K }];
+    assert_eq!(
+        substitute_leaves(&fmt, &pages, &bad).unwrap_err(),
+        FallbackReason::Unexpressible
+    );
+
+    // ── Unattributable: a leaf outside every page's window ──
+    let away = vec![Run { va: 0x8000_0000, gpga: 0x20_0000, len: 4096, flags: 0, class: PageClass::P4K }];
+    assert_eq!(
+        substitute_leaves(&fmt, &pages, &away).unwrap_err(),
+        FallbackReason::Unattributable
+    );
+
+    // ── NotIdentical: the right shape, one wrong target ──
+    let moved = vec![Run { va: 0, gpga: 0x30_0000, len: 4 * 4096, flags: 0, class: PageClass::P4K }];
+    assert_eq!(
+        substitute_leaves(&fmt, &pages, &moved).unwrap_err(),
+        FallbackReason::NotIdentical
+    );
+
+    // ── NotIdentical again, from a COUNT difference — the arm that catches a kernel that
+    //    found fewer mappings than the host, which is the serious direction.
+    let short = vec![Run { va: 0, gpga: 0x20_0000, len: 2 * 4096, flags: 0, class: PageClass::P4K }];
+    assert_eq!(
+        substitute_leaves(&fmt, &pages, &short).unwrap_err(),
+        FallbackReason::NotIdentical
+    );
+
+    // ── BadGeometry: a page at a level this format does not have ──
+    let nowhere = PtPage { phys: 0x1000, aperture: Aperture::Vidmem, level: 9, vabase: 0 };
+    assert_eq!(
+        substitute_leaves(&fmt, &[(nowhere, host.as_slice())], &good).unwrap_err(),
+        FallbackReason::BadGeometry
+    );
+}
+
+/// ★★ **`PT_SMALL` AND `PT_BIG` COVER THE SAME WINDOW — the size is what separates them.**
+///
+/// ⊘ A window test alone files every 4 KiB leaf under both pages. This pins that it does not.
+#[test]
+fn a_small_page_table_and_a_big_page_table_are_not_confused() {
+    use kayfabe_mmu::walkshadow::substitute_leaves;
+    use kayfabe_mmu::walkdiff::{PageClass, Run};
+    let fmt = Ga10xGmmu::new();
+
+    // Both cover VA [0, 2 MiB): 512 × 4 KiB and 32 × 64 KiB.
+    let small = PtPage { phys: 0x1000, aperture: Aperture::Vidmem, level: 5, vabase: 0 };
+    let big = PtPage { phys: 0x2000, aperture: Aperture::Vidmem, level: 4, vabase: 0 };
+    let l4k = DecodedLeaf {
+        va: kayfabe_arch::ids::GpuVa(0),
+        phys: 0x20_0000,
+        aperture: Aperture::Vidmem,
+        size: kayfabe_arch::PageSize(4096),
+        read_only: false,
+        level: 5,
+    };
+    let l64k = DecodedLeaf {
+        va: kayfabe_arch::ids::GpuVa(0x1_0000),
+        phys: 0x40_0000,
+        aperture: Aperture::Vidmem,
+        size: kayfabe_arch::PageSize(65536),
+        read_only: false,
+        level: 4,
+    };
+    let host_small = [l4k];
+    let host_big = [l64k];
+    let pages = [(small, host_small.as_slice()), (big, host_big.as_slice())];
+    let runs = vec![
+        Run { va: 0, gpga: 0x20_0000, len: 4096, flags: 0, class: PageClass::P4K },
+        Run { va: 0x1_0000, gpga: 0x40_0000, len: 0x1_0000, flags: 0, class: PageClass::P64K },
+    ];
+    let got = substitute_leaves(&fmt, &pages, &runs).expect("both file correctly");
+    assert_eq!(got[0].len(), 1, "the 4 KiB leaf belongs to PT_SMALL");
+    assert_eq!(got[1].len(), 1, "the 64 KiB leaf belongs to PT_BIG");
+    assert_eq!(got[0][0].size.0, 4096);
+    assert_eq!(got[1][0].size.0, 65536);
+}

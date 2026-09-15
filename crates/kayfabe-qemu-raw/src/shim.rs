@@ -14791,13 +14791,27 @@ impl Regs {
         // refusal rather than a silent nothing — the same shape `KAYFABE_SCRATCHPAD_CUDA`
         // already has, and for the same reason: an absent census line reads as "off".
         let mut scratchpad = scratchpad;
-        let walk_shadow = if crate::walkshadow::selected_walk_shadow()? {
-            match scratchpad.as_mut().and_then(
-                crate::scratchpad::Scratchpad::share_for_walk_shadow,
-            ) {
+        let walk_shadow = if let Some(arm) = crate::walkshadow::selected_walk_shadow()? {
+            match scratchpad
+                .as_mut()
+                .and_then(|sp| sp.share_for_walk_shadow(arm))
+            {
                 Some(p) => {
                     eprintln!(
-                        "kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run                          ALONGSIDE the host walk at every off-vCPU page-table sweep and the                          two answers compared by kind. ⊘ Nothing is published from it.                          Expiry: {}",
+                        "kayfabe: WALK-SHADOW AT REALIZE: armed arm={arm:?}. {} ⊘ On ANY \
+                         refusal, fault or difference the HOST walk's answer stands, the \
+                         reason is printed, and the sweep is byte-for-byte the one that runs \
+                         with the arm off. Expiry: {}",
+                        match arm {
+                            crate::walkshadow::ShadowArm::Compare =>
+                                "the walk kernel runs ALONGSIDE the host walk at every \
+                                 off-vCPU page-table sweep and the two answers are compared \
+                                 by kind; nothing it produces reaches the commit.",
+                            crate::walkshadow::ShadowArm::Decide =>
+                                "the walk kernel's report is RE-ATTRIBUTED TO THE HOST'S \
+                                 PAGES AND COMMITTED, with the host walk kept as the gate \
+                                 that licenses it.",
+                        },
                         crate::walkshadow::WALK_SHADOW_EXPIRY
                     );
                     Some(p)

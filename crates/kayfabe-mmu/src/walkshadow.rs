@@ -298,6 +298,13 @@ pub struct ShadowCensus {
     /// Directory edges naming a sysmem sub-table, summed. The kernel refuses those by name;
     /// the host walk follows them. ⚠ Predicts `missing_in_kernel` that is a scope difference.
     pub sysmem_edges: u64,
+    /// ★★★★★ **Sweeps COMMITTED FROM THE KERNEL'S REPORT** — `SINGLE_STORE_PLAN.md` §6's
+    /// swap. Zero in shadow mode by construction; the arm has to be `decide`.
+    pub decided: u64,
+    /// Sweeps on which the kernel's answer was **not** committed and the host's stood, by
+    /// name. ⊘ A count on its own cannot tell *"the report was not expressible in the shape
+    /// the commit needs"* from *"the two walkers differ"*, and those go to different places.
+    pub fell_back: std::collections::BTreeMap<&'static str, u64>,
 }
 
 /// How many disagreements the census keeps verbatim.
@@ -329,6 +336,16 @@ impl ShadowCensus {
     pub fn note_skipped(&mut self, why: &'static str) {
         *self.skipped.entry(why).or_insert(0) += 1;
         self.kernel_unavailable += 1;
+    }
+
+    /// A sweep whose commit came from the kernel's report.
+    pub fn note_decided(&mut self) {
+        self.decided += 1;
+    }
+
+    /// A sweep on which the host's answer stood, named.
+    pub fn note_fell_back(&mut self, why: &'static str) {
+        *self.fell_back.entry(why).or_insert(0) += 1;
     }
 
     /// What one image cost and what it clipped.
@@ -399,6 +416,15 @@ impl ShadowCensus {
             })
             .collect::<Vec<_>>()
             .join(" ");
+        let fell_back = if self.fell_back.is_empty() {
+            "none".to_string()
+        } else {
+            self.fell_back
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
         let skipped = if self.skipped.is_empty() {
             "none".to_string()
         } else {
@@ -410,7 +436,8 @@ impl ShadowCensus {
         };
         format!(
             "WALK-SHADOW compared={} kernel_unavailable={} skipped[{}] host_runs={} \
-             kernel_runs={} host_unclassed={} compared_flags={:#x} image[pages_max={} \
+             kernel_runs={} host_unclassed={} compared_flags={:#x} decided={} \
+             fell_back[{}] image[pages_max={} \
              staged_bytes={} absent_edges={} sysmem_edges={}] disagreements={} by_kind[{}] \
              first[{}] ⇒ {} ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the \
              pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device \
@@ -423,6 +450,8 @@ impl ShadowCensus {
             self.kernel_runs,
             self.host_unclassed,
             COMPARED_FLAGS,
+            self.decided,
+            fell_back,
             self.image_pages_max,
             self.staged_bytes,
             self.absent_edges,
@@ -719,4 +748,199 @@ pub fn build_image(
         absent_edges: absent.get(),
         sysmem_edges,
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ★★★★★ THE SWAP — letting the KERNEL's report be what is committed.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// ⊘⊘⊘ **THE SHAPE MISMATCH §6 RECORDED, AND WHAT BRIDGING IT ACTUALLY COSTS.**
+///
+/// The publication contract is **per page**: `ReachShadow::observe(PtPage, &PageDecode)`
+/// takes a page and the slots in it, and every downstream decision — witnessed vs swept,
+/// reachable vs orphaned, the unbind policy — is keyed on **pages**. The kernel's report is
+/// `MapRun`s: coalesced, and with **no pages in them at all**.
+///
+/// ⇒ A report cannot be committed as it stands. It has to be **re-attributed** to the pages
+/// the host walk found, and that is what this function does: each run is exploded into its
+/// pages and each resulting leaf is filed under the page whose virtual-address window
+/// contains it **at that page's own leaf size**.
+///
+/// ★ The size test is not belt-and-braces. VER2's `PT_SMALL` and `PT_BIG` cover the **same**
+/// 2 MiB of virtual address space — 512 × 4 KiB and 32 × 64 KiB — so a window test alone
+/// files every 4 KiB leaf under both. The leaf size is the only thing that separates them.
+///
+/// # ⚠ WHAT THIS FUNCTION DELIBERATELY IS NOT
+///
+/// It is **not** a claim that the kernel found the right mappings. It re-expresses the
+/// kernel's answer in the shape the commit needs, and returns `None` the moment that
+/// re-expression is not exact. The **gate** is [`substitute_leaves`]: the host walk stays,
+/// and the kernel's answer is committed only where the two are identical. `SINGLE_STORE_PLAN`
+/// §7 — deleting the host walk — is a separate and later decision, licensed by the guest
+/// suite and not by one workload.
+#[must_use]
+pub fn runs_as_leaves(fmt: &dyn kayfabe_arch::GmmuFmt, runs: &[Run]) -> Option<Vec<DecodedLeaf>> {
+    let mut out = Vec::new();
+    for r in runs {
+        let ps = r.class.bytes();
+        if ps == 0 || r.len == 0 || r.len % ps != 0 {
+            return None;
+        }
+        let level = leaf_level_for(fmt, ps)?;
+        let aperture = aperture_of(r.flags)?;
+        let read_only = r.flags & RF_READ_ONLY != 0;
+        let mut off = 0u64;
+        while off < r.len {
+            out.push(DecodedLeaf {
+                va: kayfabe_arch::ids::GpuVa(r.va.checked_add(off)?),
+                phys: r.gpga.checked_add(off)?,
+                aperture,
+                size: kayfabe_arch::PageSize(ps),
+                read_only,
+                level,
+            });
+            off += ps;
+        }
+    }
+    Some(out)
+}
+
+/// The **deepest** level of this regime whose stride is exactly `page_size` — i.e. the level a
+/// leaf of that size is spelled at.
+///
+/// ⊘ Derived from the format's own geometry rather than from a table here: a second table
+/// would be a second copy of `#13`'s knowledge, and it would be the copy nobody diffs.
+/// ⊘ **Deepest**, because a regime can express one size at two levels (VER2's `PD1` 512 MiB
+/// leaf sits at the same stride as its directory), and the leaf level is the deeper one.
+fn leaf_level_for(fmt: &dyn kayfabe_arch::GmmuFmt, page_size: u64) -> Option<u8> {
+    let mut found = None;
+    for level in 0..16u8 {
+        if let Some(g) = fmt.level_shift(level) {
+            if g.shift < 64 && (1u64 << g.shift) == page_size {
+                found = Some(level);
+            }
+        }
+    }
+    found
+}
+
+/// The aperture a run's flags name, or `None` for a code this build has no aperture for.
+fn aperture_of(flags: u32) -> Option<Aperture> {
+    match (flags >> RF_AP_SHIFT) & RF_AP_MASK {
+        0 => Some(Aperture::Vidmem),
+        1 => Some(Aperture::Peer),
+        2 => Some(Aperture::SysmemCoherent),
+        3 => Some(Aperture::SysmemNonCoherent),
+        _ => None,
+    }
+}
+
+/// Why the kernel's answer was not committed. ⊘ Every arm names the step that refused it,
+/// because *"we fell back"* is not something a reader can act on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FallbackReason {
+    /// A run carried a page-size class this format spells at no level, or a length that is
+    /// not a whole number of pages.
+    Unexpressible,
+    /// A page the host decoded has geometry this format cannot size.
+    BadGeometry,
+    /// A kernel leaf fell in no host page's window at its own page size.
+    Unattributable,
+    /// The re-attributed leaves are not **exactly** the host's, page for page.
+    ///
+    /// ⚠ This is the arm that makes the swap safe: it fires whenever the two differ at all,
+    /// including in fields the comparison itself does not compare.
+    NotIdentical,
+}
+
+impl FallbackReason {
+    /// A short name for a census column.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FallbackReason::Unexpressible => "fb_unexpressible",
+            FallbackReason::BadGeometry => "fb_bad_geometry",
+            FallbackReason::Unattributable => "fb_unattributable",
+            FallbackReason::NotIdentical => "fb_not_identical",
+        }
+    }
+}
+
+/// ★★★★★ **RE-ATTRIBUTE THE KERNEL'S LEAVES TO THE HOST'S PAGES, AND REFUSE UNLESS THE
+/// RESULT IS EXACTLY WHAT THE HOST DECODED.**
+///
+/// `pages` is `(page, that page's leaves as the host decoded them)`. On success the return is
+/// the same pages with the **kernel's** leaves in them — which, by the check this function
+/// performs, are the same leaves. On failure it names the step that refused.
+///
+/// # ⊘⊘ THE CHECK IS THE POINT, AND IT MAKES THIS OBSERVATIONALLY A NO-OP ON PURPOSE
+///
+/// A swap that could change what is published would have to be judged on what it published,
+/// and `SINGLE_STORE_PLAN` §6 is explicit that **the backing has not moved, so nothing
+/// observable may change**. ⇒ the kernel's bytes go on the production path, and the host walk
+/// stays as the gate that licenses them. What this measures — and nothing else does — is
+/// **how often the kernel's report is exactly re-expressible in the shape the commit
+/// needs**, on live guest tables. That number is what §7's deletion licence turns on.
+///
+/// # Errors
+/// [`FallbackReason`], naming the step.
+pub fn substitute_leaves(
+    fmt: &dyn kayfabe_arch::GmmuFmt,
+    pages: &[(crate::walker::PtPage, &[DecodedLeaf])],
+    kernel: &[Run],
+) -> Result<Vec<Vec<DecodedLeaf>>, FallbackReason> {
+    use std::collections::BTreeMap;
+
+    let leaves = runs_as_leaves(fmt, kernel).ok_or(FallbackReason::Unexpressible)?;
+
+    // Each page's virtual-address window, and the leaf size it spells. ⊘ Both, because
+    // `PT_SMALL` and `PT_BIG` cover the same window.
+    let mut windows = Vec::with_capacity(pages.len());
+    for (p, _) in pages {
+        let Some(g) = fmt.level_shift(p.level) else {
+            return Err(FallbackReason::BadGeometry);
+        };
+        if g.shift >= 64 {
+            return Err(FallbackReason::BadGeometry);
+        }
+        let stride = 1u64 << g.shift;
+        let span = u64::from(g.entries)
+            .checked_mul(stride)
+            .ok_or(FallbackReason::BadGeometry)?;
+        windows.push((p.vabase, span, stride));
+    }
+
+    let mut out: Vec<Vec<DecodedLeaf>> = vec![Vec::new(); pages.len()];
+    for l in &leaves {
+        let mut filed = false;
+        for (i, &(base, span, stride)) in windows.iter().enumerate() {
+            if l.size.0 == stride && l.va.0 >= base && l.va.0 - base < span {
+                out[i].push(*l);
+                filed = true;
+                break;
+            }
+        }
+        if !filed {
+            return Err(FallbackReason::Unattributable);
+        }
+    }
+
+    // ★★★ **EXACTLY the host's, page for page** — as multisets, because the host emits in
+    // slot order and the kernel emits per thread, and emission order is not a fact about the
+    // guest.
+    let key = |l: &DecodedLeaf| (l.va.0, l.phys, l.size.0, l.aperture, l.read_only, l.level);
+    for (i, (_, host)) in pages.iter().enumerate() {
+        let mut a: BTreeMap<_, usize> = BTreeMap::new();
+        for l in *host {
+            *a.entry(key(l)).or_insert(0) += 1;
+        }
+        let mut b: BTreeMap<_, usize> = BTreeMap::new();
+        for l in &out[i] {
+            *b.entry(key(l)).or_insert(0) += 1;
+        }
+        if a != b {
+            return Err(FallbackReason::NotIdentical);
+        }
+    }
+    Ok(out)
 }

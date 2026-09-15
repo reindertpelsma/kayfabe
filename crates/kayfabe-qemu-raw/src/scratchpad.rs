@@ -688,11 +688,12 @@ impl Scratchpad {
     /// second reservation-holding client.
     pub fn share_for_walk_shadow(
         &mut self,
+        arm: crate::walkshadow::ShadowArm,
     ) -> Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>> {
         if self.walk_shadow.is_none() {
             let iso = self.iso.take()?;
             self.walk_shadow = Some(std::sync::Arc::new(
-                crate::walkshadow::WalkShadowPort::new(iso),
+                crate::walkshadow::WalkShadowPort::new(iso, arm),
             ));
         }
         self.walk_shadow.clone()
