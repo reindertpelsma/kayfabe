@@ -169,6 +169,125 @@ to grow a reason it currently discards, and cut B is the increment that gives th
 
 ### ★★★★★ THE 44 BAR1 TRAPS ARE A **JOIN** REFUSAL ON THE PUBLISH ROUTE — the sync point is fine
 
+> ### ⊘⊘⊘ CORRECTED 2026-09-15 (w742) — **TWO THINGS BELOW ARE WRONG, AND THE SECOND IS THE
+> ### WHOLE CAUSAL CHAIN. Read this before the section it corrects.**
+>
+> **1. ⊘ `DeviceFb` does not refuse "correctly and by name". IT NEVER OVERRODE THE METHOD.**
+> There are exactly **two** `fn install_join` in the tree — the `FbStore` trait **default**
+> (`crates/kayfabe-device/src/fbwin.rs:411`) and `SparseFb`'s override (`:1566`). `DeviceFb`
+> inherits the default, which refuses `NO_JOIN_SUPPORT`. It refused because **nobody wrote the
+> method**, not because it structurally could not.
+> ★★★ **And note what hid it, because that is the transferable half:** the default's refusal
+> *text* asserts a design fact — *"it has no pages of its own to establish from"* — which
+> happens to be **true of `DeviceFb`**. So an unwritten method read as a principled
+> architectural ruling and survived two reviews on the strength of its own prose.
+> ⇒ **A trait default that REFUSES is the `_ => {}` catch-all one level up, and worse, because
+> the refusal justifies itself.** ⚠ The section below calls the same thing *"a cut-C-shaped
+> gap"* and it is not: a silent no-op is findable by asking *"did anything happen?"*; a
+> self-justifying refusal answers that question with a sentence that reads like a decision.
+>
+> **2. ★★★★★ THE TRAPS ARE NOT CAUSED BY THE REFUSAL. THEY ARE CAUSED BY THE QUIESCE THAT
+> PRECEDES IT — and the identity is exact.** The section below reasons *"nothing is premapped,
+> and the next guest read traps"*, which the boot's own numbers refute: **`premap_fills=59623`
+> over `distinct_pages=816`** — premap installed plenty. What actually happens is that
+> `RegPlane::join_fb`'s **first** act is `m.quiesce(phys, len)` — it takes the mirror's memory
+> slots off the range **before** asking the store, because an establishment copy must not race
+> a guest store through a memslot. A refused install then puts **nothing back**:
+>
+> | number, from `run_w740dev_qemu.log` | |
+> |---|---|
+> | `THE INSTALL REFUSED …` | **4431** (over **37 distinct frames**, re-offered) |
+> | `quiesce[calls=4431 removed=58175]` | ★ **the same 4431** — one quiesce per refused install |
+> | `BAR1-PASSTHROUGH arm=on misses=2183` | guest VM exits |
+> | `BAR-MIRROR bar1 TRAP_FILLS=44 … refused=[ALREADY-COVERED-EARLY=2139]` | **44 + 2139 = 2183** |
+>
+> ⇒ **every BAR1 exit on that boot landed in a window a refused join had opened by removing the
+> slot**, and 2139 of them found the slot back again by the time the fill ran — which is what
+> `ALREADY-COVERED-EARLY` *beside a trap* means, and the section below does not read it that way.
+> ⊘ `join_fb`'s quiesce-before-ask is **correct** and stays; the defect is asking a store that
+> was always going to refuse.
+>
+> **⊘ And a third, smaller one: *"only two distinct offsets miss"* is an artefact of a PRINT
+> CAP.** The log prints `8 of 8` misses and stops; 2183 is the total. Two offsets is what the
+> first eight prints show, not a census.
+>
+> ### ⇒ THE FIX AS BUILT (w742), and the design choice it rests on
+> The publish route asks **`FbStore::join_plan(phys, len)` first**, before `back_fb_leaf` mints
+> anything and before `join_fb` quiesces anything. `DeviceFb` answers
+> `FbJoinPlan::DeviceBacked { at }`; every other store takes the trait default `NeedsRegion` and
+> the shipped route is entered on exactly the inputs it always was. On `DeviceBacked` the route
+> **does not join** — it *installs the slice*: `want` the range on the byte port, `drain` it at
+> the lock-free entry point (`DRAIN_ARMS_MAX` = a fixed trip count, declines by name on a vCPU).
+>
+> ★ **Why a device-specific install and NOT an `install_join` for `DeviceFb` over an
+> offset-shaped region** — the choice was forced, not preferred. A join's region is a memory the
+> **caller minted**; under one reserved object that is a second memory for one address, i.e.
+> §18/§22's defect created by the route that exists to end it. Accepting it is wrong, and
+> accepting-then-discarding it is the success-shaped answer for a join that did not take that
+> `install_join`'s own contract forbids. ⇒ the caller must not mint a region **at all**, and only
+> a question asked *before* the mint can say so. `install_join` is too late by construction:
+> `back_fb_leaf` (the IPC mint) and `join_fb`'s quiesce both happen before it.
+> ⊘ `DeviceFb::install_join` is now written out anyway — as an explicit **refusal in its own
+> words** (`DEVICE_JOIN_IS_A_SECOND_MEMORY`), carrying the region's real length instead of the
+> default's `len: 0`, so the ruling is a ruling and not an absence.
+>
+> ★ **It also deletes 97.8 % of the boot's verb budget**: `[JoinFbLeaf n=2149 mean=1.07ms 57.8%]`
+> + `[Release n=2150 mean=0.74ms 40.0%]` ≈ **3.9 s** of IPC minting host objects that were then
+> released unused.
+>
+> ### ⚠ THE AUDIT THIS FORCED — every `FbStore` method `DeviceFb` inherits a default for
+> `install_join` was found by noticing that a refusal justified itself, so the whole class was
+> enumerated. **Ten** inherited defaults; verdicts:
+>
+> | inherited default | verdict |
+> |---|---|
+> | `install_join` | ★★★ **THE DEFECT.** Now an explicit ruling + the route asks earlier |
+> | `arena_census_all` → `(0,0,0,0)` | ⊘ **A FALSE ZERO IN THE GRADED CENSUS.** `BAR-MIRROR MECHANISM` printed `store_refused=0 store_migrated=0 …` on the arm where those cannot exist — `failed=0 IS NOT "NOTHING REFUSED"`. ✔ fixed: the device arm now **says** `⊘ NO ARENA … UNMEASURED and NOT zero` |
+> | `joined_ranges` → `[]` | ✔ true, and load-bearing in the good direction: it is what makes `quiesce_mirror_over_join` return `None`, so neither release verb quiesces |
+> | `release_join` → `None` | ✔ consistent; its consumers iterate `JoinsGuestWindow` **rows**, of which the device arm has none (`JOIN-RELEASE revoked=0 released=0 joined_ranges=0`) |
+> | `release_join_carrying_bytes` | ✔ same; and its caller quiesces only via `joined_ranges`, so it cannot quiesce either |
+> | `install_page_arena` → refuse | ✔ already has an explicit, loud device arm in `BarMirror::arm` |
+> | `resident_frames` → `None` | ⚠ **a real gap, but honest and LOUD** — `"the store cannot enumerate frames"`, 718×. Disables the EXEC-WITNESS and `fb_ring_sweep`. ⊘ Left: under one object every page exists, so *"which frames were written"* has no answer, exactly as `residency`/`is_resident` already argue. Not a trap cause — it quiesces nothing |
+> | `page_origin` → `None` | ✔ same family: no first-writer exists under one object |
+> | `writes_by` → `None` | ✔ same |
+> | `write_tagged` → forwards to `write` | ✔ drops the `by` tag, which only `writes_by`/`page_origin` consume, and both are `None` here |
+>
+> ⇒ **`install_join` was the only inherited default with a DESTRUCTIVE consumer, and
+> `arena_census_all` the only one that printed a false zero.** The other eight are true.
+
+> ### ★★★★★ w742 — THE PRE-REGISTERED PREDICTION, COMMITTED BEFORE THE BOX EXISTED
+> ⊘ Written and committed **in this same commit as the code**, before any instance was rented, per
+> the standing rule. Each row carries the value that **refutes** it, so a flattering sentence
+> cannot be written afterwards. Both arms, same binary, **control (`arena`) first**.
+>
+> | # | line, on the `device` arm | predicted | ⊘ REFUTED BY |
+> |---|---|---|---|
+> | 1 | `THE INSTALL REFUSED` | **0 occurrences** | ≥1. The route now returns before `join_fb`; any occurrence means a leaf reached it, i.e. `join_plan` answered `NeedsRegion` for a device store |
+> | 2 | `DEVICE-LEAF no_join_needed=` | **≈4431** (w740's refusal count, ±the run's own variance) | `0` ⇒ the arm never ran; and `0` beside a non-zero row 1 is the two halves disagreeing |
+> | 3 | `quiesce[calls=` | **≤ ~150** (w740: **4431**; what is left is `retire_all`/reset traffic, not joins) | ≥1000 ⇒ the quiesces did not come from the joins and the whole causal chain above is wrong |
+> | 4 | ★★★ `BAR-MIRROR bar1 … TRAP_FILLS=` | **0** | ≥1. **THE GRADE.** Per constraints 1 and 23 a trap *is* the error; "fewer" is not a pass |
+> | 5 | `BAR1-PASSTHROUGH arm=on misses=` | **0** | ≥1. ⚠ The honest one: `TRAP_FILLS` counts fills a trap caused, `misses` counts the **exits**, and w740's 2183 exits produced only 44 fills. A boot with `TRAP_FILLS=0` and `misses>0` is **not** a pass |
+> | 6 | `BAR-MIRROR bar2 … TRAP_FILLS=` | **0** (w740: 0) | ≥1 ⇒ a regression |
+> | 7 | `DEVICE-FB named=` | **≥ 300000** (w740: `426221`) | <300000 ⇒ the memslot half regressed |
+> | 8 | `RmInitAdapter failed!` | **0 occurrences** (w740: 0) | ≥1 ⇒ a regression |
+> | 9 | control arm `W392D_GUEST_OUTCOME=` | **`(P)`**, `THREADS 8 of 8` (w740: `(P)`, 8/8) | anything else ⇒ the default arm moved and the whole boot is uninterpretable |
+> | 10 | `VERBCOST … [JoinFbLeaf n=` | **≤ 100** (w740: 2149) | ≥1000 ⇒ the mint still runs |
+> | 11 | `DEVICE-LEAF slices_armed=` | **≥ 20** (37 distinct frames, 64 KiB each = 1 `ARM_GRAIN` apiece, under a 256-run cap ⇒ no eviction churn) | `0` ⇒ the install half did nothing; read `FB-DEMAND` for *declined* vs *already armed* |
+>
+> ### ⊘ THE RAW CLIENT — predicted SEPARATELY, and deliberately not claimed
+> `[measured w740]` the device arm's client is `(R)`, `THREADS 0 of 8`, with
+> `FwdFault::CpuCeFb=63` on the user channels — *"no CPU view of this page of the reserved
+> object is armed yet"*. ★ **Its two named addresses are inside leaves this route already
+> offers**: `phys: 69632` = `0x11000` (grain `0x10000`, w740's **most**-refused frame, 376×) and
+> `phys: 1118208` = `0x111000` (grain `0x110000`, the **third**, 245×). ⇒ row 11's install arms
+> exactly those grains, so the mechanism is present.
+> ⊘ **But it is not predicted to pass.** w740 measured `blocked_by_progress=68` vs `trips=10` —
+> those refusals had already moved bytes or released a payload, so arming *later* cannot repair
+> them; arming *earlier* can only help if the publish precedes the session, which is unmeasured.
+> | 12 | `FwdFault::CpuCeFb=` on the device arm | **< 63**, direction only | ≥63 ⇒ the pre-arm reaches none of them, and the raw client's wall is not this |
+> | 13 | `W392D_GUEST_OUTCOME=` on the device arm | **`(R)`** — ★ a pass here would be a **surprise**, reported as one and not as the plan working | — |
+
+
 ⊘ **Owner's question: "does the driver use the refresh (three entrypoints) before using a BAR
 address? can you confirm?" — CONFIRMED, from the w740 device-arm log.** The line immediately
 before the first miss is the refresh itself:

@@ -2453,18 +2453,41 @@ impl BarMirror {
         // path unless someone checked" mistake w586 made one crate over, and the same shape as
         // w516's *"the vCPU read a counter by locking every proc"*. The numbers are cumulative,
         // so the only emission that carries information is the last one.
-        let (s_ref, s_mig, s_rref, s_rst) = if at.contains("END") {
-            self.plane.fb_arena_census()
+        //
+        // ★★★★★ **w742 — AND ON THE DEVICE ARM THESE FOUR ARE UNMEASURED, NOT ZERO.**
+        //
+        // ⊘⊘ `FbStore::arena_census_all`'s trait DEFAULT is `(0, 0, 0, 0)`, and `DeviceFb`
+        // inherits it — it has no arena because it has no pages of its own. So the line used
+        // to print `store_refused=0 store_migrated=0 store_read_refused=0 store_resets=0` on
+        // the one arm where those numbers cannot exist, which reads exactly like *"the store
+        // refused nothing"*. That is `failed=0 IS NOT "NOTHING REFUSED"` — a counter whose own
+        // plumbing guarantees the zero — printed in the census a boot is graded from.
+        //
+        // ★ Found by the w742 audit of every `FbStore` method `DeviceFb` inherits a default
+        // for, which is the same audit that found `install_join`. ⇒ SAID, not printed as a
+        // number.
+        let arena_line = if self.device_store {
+            " arena[⊘ NO ARENA — the single store holds no pages of ours, so every arena \
+             number here is UNMEASURED and NOT zero; `DeviceFb` inherits \
+             `arena_census_all`'s (0,0,0,0) default]"
+                .to_string()
         } else {
-            (0, 0, 0, 0)
+            let (s_ref, s_mig, s_rref, s_rst) = if at.contains("END") {
+                self.plane.fb_arena_census()
+            } else {
+                (0, 0, 0, 0)
+            };
+            format!(
+                " arena[pages live={a_live} peak={a_peak} allocations={a_recycled} \
+                 span_pages={a_issued} store_refused={s_ref} store_migrated={s_mig} \
+                 store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]"
+            )
         };
         let refused_s: Vec<String> = refused.iter().map(|(k, v)| format!("{k}={v}")).collect();
         eprintln!(
             "kayfabe: BAR-MIRROR MECHANISM AT {at}: slots live={live} peak={peak} \
              revalidate[runs={} kept={} removed={}] quiesce[calls={} removed={}] \
-             retire_all[calls={} removed={}] arena[pages live={a_live} peak={a_peak} \
-             allocations={a_recycled} span_pages={a_issued} store_refused={s_ref} \
-             store_migrated={s_mig} store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]{birth}{premap} refused=[{}]{}",
+             retire_all[calls={} removed={}]{arena_line}{birth}{premap} refused=[{}]{}",
             self.census.reval_runs.load(Ordering::Relaxed),
             self.census.reval_kept.load(Ordering::Relaxed),
             self.census.reval_removed.load(Ordering::Relaxed),

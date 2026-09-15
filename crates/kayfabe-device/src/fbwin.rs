@@ -423,6 +423,36 @@ pub trait FbStore: Send + core::fmt::Debug {
         ))
     }
 
+    /// ★★★★★ **w742 — CAN THIS RANGE BE JOINED AT ALL, AND DOES IT NEED TO BE?**
+    ///
+    /// Asked by the publish route **before** it allocates anything, maps anything or quiesces
+    /// anything. A pure question: one short hold of the caller's lock, no syscall, no IPC.
+    ///
+    /// # ⊘⊘⊘ WHY THIS EXISTS, MEASURED
+    ///
+    /// `[measured w740, run_w740dev_qemu.log]` the publish route asked [`FbStore::install_join`]
+    /// **4431 times** against [`DeviceFb`], which refuses correctly and by name
+    /// ([`NO_JOIN_SUPPORT`]) because it has no pages of its own. The refusal itself was harmless.
+    /// What was not harmless is that `RegPlane::join_fb` **quiesces the BAR mirror over the
+    /// range before it asks** — and a refused install puts nothing back. The identity is exact:
+    /// `THE INSTALL REFUSED` = **4431**, `quiesce[calls=` **4431**, `removed=58175` memory slots,
+    /// and `BAR1-PASSTHROUGH arm=on misses=2183` guest VM exits into the window those removals
+    /// opened. ⇒ **the store's correct refusal was being paid for in guest traps.**
+    ///
+    /// ★ So the question has to be asked where nothing has yet been destroyed. A store with
+    /// pages of its own answers [`FbJoinPlan::NeedsRegion`] and the whole route is unchanged; a
+    /// store that **is** device memory answers [`FbJoinPlan::DeviceBacked`] and names the offset,
+    /// because that range needs no join — it is already the one reserved object.
+    ///
+    /// ⊘ The default is [`FbJoinPlan::NeedsRegion`] and **not** a guess about whether
+    /// `install_join` would succeed. A store that cannot join still answers `NeedsRegion`: the
+    /// route then runs exactly as it did, refusal and all. Anything else would make this method
+    /// a second, quieter statement of `install_join`'s own contract.
+    fn join_plan(&self, phys: u64, len: u64) -> FbJoinPlan {
+        let _ = (phys, len);
+        FbJoinPlan::NeedsRegion
+    }
+
     /// Every joined range, ascending by address — `(phys, len)`.
     ///
     /// ⊘ Empty is a real answer and means *"this store holds no joined range"*; it is not the
@@ -680,6 +710,26 @@ pub const CARRY_BACK_READ_FAILED: &str = "the joined backing refused a read of i
 pub const NO_JOIN_SUPPORT: &str = "this framebuffer store cannot hold a joined range; it has no pages of its own to \
      establish from and nothing to install into";
 
+/// ★★★★★ **w742 — [`DeviceFb::install_join`]'s refusal, and it is a RULING rather than a gap.**
+///
+/// ⊘⊘⊘ It exists because the one it replaces did not say which it was. `DeviceFb` used to
+/// inherit [`FbStore::install_join`]'s trait DEFAULT, whose sentence — [`NO_JOIN_SUPPORT`],
+/// *"it has no pages of its own to establish from"* — is **true of this store**, so a reader
+/// (and two reviews) took an unwritten method for a design decision. ⚠ **A trait default that
+/// refuses is the `_ => {}` catch-all one level up, and worse: its refusal justifies itself.**
+///
+/// ★ So the decision is written down here, where the method would be. A join's region is a
+/// memory the CALLER minted — under one reserved object that is a **second memory for one
+/// address**, which is §18/§22's defect created by the route that exists to end it. Accepting
+/// it would be wrong; accepting and discarding it would be the success-shaped answer for a
+/// join that did not take that [`FbStore::install_join`]'s own contract forbids. ⇒ the caller
+/// must not mint a region at all, which only [`FbStore::join_plan`] — asked **before** the
+/// mint and before the mirror quiesce — can tell it.
+pub const DEVICE_JOIN_IS_A_SECOND_MEMORY: &str = "this store IS the one reserved object, so a framebuffer range needs no join and \
+     cannot be given one: the region offered is a DIFFERENT memory, and installing it would \
+     put two memories behind one framebuffer address. ⊘ Ask `join_plan` BEFORE minting a \
+     region — it answers `DeviceBacked` with the offset, and the range is already backed there";
+
 /// [`SparseFb::install_join`]'s refusal for a range that already carries a join.
 pub const ALREADY_JOINED: &str = "that framebuffer range is already joined; installing a second backing over it \
      would give one leaf two memories again, which is the defect the join exists to end";
@@ -703,6 +753,35 @@ pub struct FbPageExport {
     pub token: u64,
     /// Byte offset of this page **within the backing** — host-page aligned.
     pub offset: u64,
+}
+
+/// ★★★★★ **w742 — WHAT THE PUBLISH ROUTE MUST DO WITH ONE FRAMEBUFFER RANGE**, as
+/// [`FbStore::join_plan`] answers it, asked before anything is allocated or quiesced.
+///
+/// ⊘ Three distinct facts and none of them is *"it failed"*: bring a region, bring nothing
+/// because the range already **is** device memory, or a named refusal. See
+/// [`FbStore::join_plan`] for the measurement that made the question necessary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbJoinPlan {
+    /// The store has pages of its own for this range. The caller must mint a host object, map
+    /// it, and offer it to [`FbStore::install_join`] — the route exactly as it has always been.
+    NeedsRegion,
+    /// ★★★ **§3 — the range IS the one reserved object**, `at` bytes into it. There is nothing
+    /// to establish from and nothing to install into, and a host object minted for it would be
+    /// a **second memory for one address** — §18/§22's defect, created by the very route that
+    /// exists to give the guest one memory.
+    ///
+    /// ⇒ The caller must **not** join. What it may do instead is install a CPU view of this
+    /// slice, which is the only thing about the range that is not already true.
+    DeviceBacked {
+        /// Byte offset of the range within the reserved object. ⚠ Under the arena's own
+        /// *"framebuffer address = file offset"* contract this is the framebuffer address
+        /// itself; the two coincide deliberately, as they do for [`FbPageBacking::Device`].
+        at: u64,
+    },
+    /// The store will not serve this range at all, and says why. ⊘ A plan, not an attempt:
+    /// nothing has been changed and nothing needs undoing.
+    Refused(&'static str),
 }
 
 /// ★★★★★ **w393 — what backs one framebuffer page, as [`FbStore::page_backing`] answers it.**
@@ -2195,6 +2274,19 @@ pub static DEVICE_FB_WANTED_BY_READ: core::sync::atomic::AtomicU64 =
 pub static DEVICE_FB_WANTED_BY_WRITE: core::sync::atomic::AtomicU64 =
     core::sync::atomic::AtomicU64::new(0);
 
+/// ★★★★★ **w742 — ranges the publish route was told need NO join because they already ARE the
+/// reserved object** ([`FbJoinPlan::DeviceBacked`]).
+///
+/// ⊘ This is the counter that must be read beside `quiesce[calls=` in the BAR-mirror census: on
+/// the `device` arm every one of these is a `RegPlane::join_fb` — and therefore a mirror quiesce
+/// and a slot removal — that **did not happen**. `[measured w740]` there were 4431 of them.
+pub static DEVICE_FB_JOIN_PLANNED_DEVICE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// As [`DEVICE_FB_JOIN_PLANNED_DEVICE`], for a range that is not inside the advertised
+/// framebuffer at all — refused by name, before anything is allocated.
+pub static DEVICE_FB_JOIN_PLAN_REFUSED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
 /// ★★★ The single store's census line. Printed unconditionally at teardown, on both arms.
 ///
 /// ⊘ It states its own verdict rather than four numbers, because the interesting reading is
@@ -2211,6 +2303,8 @@ pub fn device_fb_report() -> String {
     let wserved = DEVICE_FB_WRITE_SERVED.load(Relaxed);
     let wantr = DEVICE_FB_WANTED_BY_READ.load(Relaxed);
     let wantw = DEVICE_FB_WANTED_BY_WRITE.load(Relaxed);
+    let nojoin = DEVICE_FB_JOIN_PLANNED_DEVICE.load(Relaxed);
+    let planref = DEVICE_FB_JOIN_PLAN_REFUSED.load(Relaxed);
     let verdict = if named == 0 && rd == 0 && wr == 0 && rserved == 0 && wserved == 0 {
         "⊘⊘ VACUOUS — the single store was installed and NOTHING asked it anything. That is \
          not `no accesses were needed`; it is an unmeasured store."
@@ -2236,7 +2330,8 @@ pub fn device_fb_report() -> String {
     format!(
         "DEVICE-FB named={named} host_read_refused={rd} host_write_refused={wr} \
          read_served={rserved} write_served={wserved} wanted_by_read={wantr} \
-         wanted_by_write={wantw} out_of_range={oob} ⇒ {verdict}"
+         wanted_by_write={wantw} out_of_range={oob} no_join_needed={nojoin} \
+         join_plan_refused={planref} ⇒ {verdict}"
     )
 }
 
@@ -2268,7 +2363,16 @@ impl DeviceFb {
     }
 
     fn inside(&self, phys: u64, len: usize) -> bool {
-        phys.checked_add(len as u64).is_some_and(|e| e <= self.fb_len)
+        self.inside_bytes(phys, len as u64)
+    }
+
+    /// [`DeviceFb::inside`] for a length that is already a `u64` — the publish route deals in
+    /// leaf extents, which are not `usize`-shaped on their way here.
+    ///
+    /// ⊘ `checked_add` and not `phys + len`: `phys` and `len` are both guest-authored on this
+    /// path, and a wrap would answer `true` for a range that is entirely outside the object.
+    fn inside_bytes(&self, phys: u64, len: u64) -> bool {
+        phys.checked_add(len).is_some_and(|e| e <= self.fb_len)
     }
 }
 
@@ -2392,6 +2496,66 @@ impl FbStore for DeviceFb {
             len: bytes.len(),
             why: DEVICE_HOST_WRITE_UNBUILT,
         })
+    }
+
+    /// ⊘⊘⊘ **REFUSED BY NAME, DELIBERATELY, AND SPELLED OUT RATHER THAN INHERITED.**
+    ///
+    /// See [`DEVICE_JOIN_IS_A_SECOND_MEMORY`]. This method is byte-for-byte equivalent to the
+    /// trait default it replaces **except for the sentence**, and that is the entire point: the
+    /// default's sentence is a true statement about this store, so an unwritten method and a
+    /// ruling were indistinguishable. ★ The alternative — implementing a join over an
+    /// offset-shaped region — was considered and rejected; the reason is in the constant.
+    ///
+    /// # Errors
+    /// Always, with the region handed back so the caller can drop it lock-free.
+    fn install_join(
+        &mut self,
+        phys: u64,
+        region: Box<dyn FbJoined>,
+    ) -> Result<FbJoinInstalled, (FbRefused, Box<dyn FbJoined>)> {
+        let len = region.len();
+        Err((
+            FbRefused {
+                phys,
+                // ⊘ The REGION's length, not `0`. The default answers `len: 0`, and
+                // `[measured w740]` that is why every one of the 4431 refusals in the boot log
+                // reads `THE INSTALL REFUSED phys=0x150000 len=0` — a refusal that cannot say
+                // how much was refused, which made the volume of the defect invisible.
+                len: usize::try_from(len).unwrap_or(usize::MAX),
+                why: DEVICE_JOIN_IS_A_SECOND_MEMORY,
+            },
+            region,
+        ))
+    }
+
+    /// ★★★★★ **w742 — THE PUBLISH ROUTE'S ARM FOR A STORE THAT *IS* DEVICE MEMORY.**
+    ///
+    /// Every range inside the advertised framebuffer is already the one reserved object at its
+    /// own offset, so there is **nothing to join**: no host object to mint, no establishment
+    /// copy to perform, and nothing for [`FbStore::install_join`] to install into. That is the
+    /// same fact [`DeviceFb::page_backing`] states one page at a time, asked here for a whole
+    /// leaf and asked **early**, where nothing has been destroyed yet.
+    ///
+    /// ⚠ Answering [`FbJoinPlan::NeedsRegion`] here — the default — is what cost w740 its BAR1
+    /// traps: see [`FbStore::join_plan`] for the identity between the 4431 refusals, the 4431
+    /// mirror quiesces and the 2183 guest exits.
+    ///
+    /// ⊘ A range that is not wholly inside the framebuffer is [`FbJoinPlan::Refused`] and **not**
+    /// `NeedsRegion`: this store would refuse to read or write it too ([`OUTSIDE_FRAMEBUFFER`]),
+    /// and sending the caller off to mint a host object for it would be a second memory for an
+    /// address this device does not have.
+    fn join_plan(&self, phys: u64, len: u64) -> FbJoinPlan {
+        use core::sync::atomic::Ordering::Relaxed;
+        // ⊘ `len.max(1)`: a zero-length leaf is inside any object by arithmetic, and answering
+        // `DeviceBacked` for it would name an offset nothing can be installed at. One byte is
+        // the smallest honest question.
+        if !self.inside_bytes(phys, len.max(1)) {
+            DEVICE_FB_JOIN_PLAN_REFUSED.fetch_add(1, Relaxed);
+            DEVICE_FB_OUT_OF_RANGE.fetch_add(1, Relaxed);
+            return FbJoinPlan::Refused(OUTSIDE_FRAMEBUFFER);
+        }
+        DEVICE_FB_JOIN_PLANNED_DEVICE.fetch_add(1, Relaxed);
+        FbJoinPlan::DeviceBacked { at: phys }
     }
 
     /// ★★★★★ **THE HALF THAT WORKS.** Every page of the advertised framebuffer IS at its own

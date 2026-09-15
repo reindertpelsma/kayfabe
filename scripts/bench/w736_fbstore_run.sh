@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# ★★★★★ w742 — REUSED VERBATIM AGAIN. Only `report()` greps and the binary content gate
+#   changed (marked `w742 ADDITION, REPORTING ONLY`). No arm, threshold or boot step.
+#   ⊘ Edited IN PLACE rather than copied, for the reason this file already states three
+#   comments down: a second harness for the same two-arm job is the thing these notes exist
+#   to prevent. The w742 prediction table lives in `SINGLE_STORE_PLAN.md`, committed before
+#   the box existed; these greps only cut its rows out of the logs.
 # ★★★★★ w740 — REUSED VERBATIM AGAIN. Only `report()` greps and the binary content gate
 #   changed (marked `w740 ADDITION, REPORTING ONLY`). No arm, threshold or boot step.
 # ★★★★★ w736 — THE CUT-A BOOT. Tests `SINGLE_STORE_PLAN.md`'s w735 pre-registered prediction.
@@ -81,13 +87,19 @@ n_fbp=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB-PORT drains=')
 # arms, so a boot that does not carry the string is an OLDER BINARY, not a quiet boot, and
 # every w740 row would then be graded against absence. Same reason `E6-CONTENT` exists.
 n_w740=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W740-USERD-ARM trips=')
+# ★★★ w742 — THE SAME GATE, FOR THIS CHANGE. `DEVICE-LEAF no_join_needed=` prints
+# UNCONDITIONALLY on BOTH arms at teardown, so a boot without the string is an OLDER BINARY
+# and every w742 row would be graded against absence.
+n_w742=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-LEAF no_join_needed=')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
 echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 echo "W740-CONTENT: userd_arm=$n_w740 (0 ⇒ the binary predates w740 — its rows cannot be graded)"
+echo "W742-CONTENT: device_leaf=$n_w742 (0 ⇒ the binary predates w742 — its rows cannot be graded)"
 if [ "$n_img" -eq 0 ]; then echo "⊘ no cuda-scratchpad in the binary — the port cannot arm. STOP."; exit 5; fi
 if [ "$n_fs" -eq 0 ] || [ "$n_dfb" -eq 0 ]; then echo "⊘ the binary predates cut A. STOP."; exit 4; fi
 if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates CUT B — w738's rows cannot be graded. STOP."; exit 6; fi
 if [ "$n_w740" -eq 0 ]; then echo "⊘ the binary predates w740 — its rows cannot be graded. STOP."; exit 7; fi
+if [ "$n_w742" -eq 0 ]; then echo "⊘ the binary predates w742 — its rows cannot be graded. STOP."; exit 8; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -204,6 +216,37 @@ report() {
   echo "--- what the device path was asked for, if anything (trap/fill census) ---"
   grep -ao 'TRAPWITNESS[^|]\{0,300\}' "$Q" 2>/dev/null | tail -1
   grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1
+  # ★★★★★ w742 ADDITION, REPORTING ONLY — the publish route's device arm. Cut from the SAME
+  # logs, on BOTH arms; the control's zeros are as much a result as the device arm's numbers,
+  # because `DEVICE-LEAF` prints unconditionally and `⊘ THE DEVICE ARM NEVER RAN` is the
+  # arena arm's CORRECT verdict. ⊘ Every field is cut out of ITS OWN census line.
+  echo "--- ★★★★★ w742 ROWS 1/2/11: the publish route's device arm, VERBATIM ---"
+  n_dlf=$(grep -ac 'DEVICE-LEAF no_join_needed=' "$Q" 2>/dev/null)
+  echo "W742-DEVICELEAF-LINES=${n_dlf:-0}  (0 ⇒ UNMEASURED, not 'the arm did nothing')"
+  DL=$(grep -ao 'DEVICE-LEAF no_join_needed=.\{0,600\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$DL" | fold -w 160
+  w742f() { printf '%s' "$DL" | grep -ao "$1" | tail -1; }
+  echo "W742-NO-JOIN-NEEDED=$(w742f 'no_join_needed=[0-9]*')   ★ row 2: ≈4431 predicted"
+  echo "W742-PLAN-REFUSED=$(w742f 'plan_refused=[0-9]*')"
+  echo "W742-SLICES-ARMED=$(w742f 'slices_armed=[0-9]*')   ★ row 11: ≥20 predicted"
+  echo "W742-INSTALL-REFUSED=$(grep -ac 'THE INSTALL REFUSED' "$Q" 2>/dev/null)   ★★★ row 1: 0 predicted (w740: 4431)"
+  echo "W742-NO-JOIN-LINES=$(grep -ac 'NO JOIN IS NEEDED' "$Q" 2>/dev/null)   (capped at 6 by design)"
+  echo "--- ★★★★★ w742 ROW 3: the QUIESCE count — the number the guest actually paid ---"
+  echo "W742-QUIESCE=$(grep -ao 'quiesce\[calls=[0-9]* removed=[0-9]*\]' "$Q" 2>/dev/null | tail -1)   ★ row 3: calls ≤ ~150 (w740: 4431)"
+  echo "--- ★★★★★ w742 ROWS 4/5/6: THE GRADE. Both BAR1 numbers and BAR2's control ---"
+  echo "W742-BAR1-CENSUS=$(grep -ao 'BAR-MIRROR bar1 AT END OF RUN: arm=[a-z]* TRAP_FILLS=[0-9]* premap_fills=[0-9]* distinct_pages=[0-9]* distinct_frames=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "W742-BAR2-CENSUS=$(grep -ao 'BAR-MIRROR bar2 AT END OF RUN: arm=[a-z]* TRAP_FILLS=[0-9]* premap_fills=[0-9]* distinct_pages=[0-9]* distinct_frames=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "W742-BAR1-MISSES=$(grep -ao 'BAR1-PASSTHROUGH arm=[a-z]* misses=[0-9]*' "$Q" 2>/dev/null | tail -1)   ★★★ row 5: misses=0, and THIS is the honest one"
+  echo "W742-BAR2-MISSES=$(grep -ao 'BAR2-PASSTHROUGH arm=[a-z]* misses=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "--- ★★★★★ w742 ROW 10: the verb budget the skipped mint returns ---"
+  echo "W742-VERBCOST=$(grep -ao 'VERBCOST total=[0-9]*us over [0-9]* plan(s) \[JoinFbLeaf n=[0-9]*[^]]*\]' "$Q" 2>/dev/null | tail -1)   ★ row 10: JoinFbLeaf n ≤ 100 (w740: 2149)"
+  echo "--- ★★★★★ w742 ROW 12: the raw client's named fault, direction only ---"
+  echo "W742-CPUCEFB=$(grep -ao 'FwdFault::CpuCeFb=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ w740: 63 on the device arm; <63 is the DIRECTION, not a pass"
+  echo "W742-CPUCEFB-LINES=$(grep -ac 'CpuCeFb {' "$Q" 2>/dev/null)"
+  echo "--- ★★★★★ w742 ROW 7: `named` must not regress ---"
+  echo "W742-NAMED=$(printf '%s' "$DFB" | grep -ao 'named=[0-9]*' | tail -1)   ★ row 7: ≥300000 (w740: 426221)"
+  echo "--- ⊘ w742: the arena census line — on the device arm it must SAY unmeasured, not print four zeros ---"
+  grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1 | cut -c1-320
   echo "--- host Xid ---"
   echo "HOST_DMESG_XID=$(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190
