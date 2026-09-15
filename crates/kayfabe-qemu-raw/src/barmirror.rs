@@ -439,6 +439,12 @@ pub struct BarMirror {
     /// ⊘ Held here rather than reached through the plane: arming is lock-free by
     /// requirement, and the plane is the thing whose lock the requirement is about.
     device_port: Option<Arc<crate::deviceview::DeviceViewPort>>,
+    /// ★★★★★ **Whether the STORE is the reserved object** (`KAYFABE_FB_STORE=device`).
+    ///
+    /// ⊘⊘ A **separate** fact from `device_port.is_some()`, and conflating them is a
+    /// two-memories defect: the port's gate is `KAYFABE_DEVICE_VIEW`, and a boot may arm the
+    /// port while the store is the arena. See [`BarMirror::install_pramin_window`].
+    device_store: bool,
     /// ★★★★★ **§3 — views whose slot is gone and whose MAPPING may not be.**
     ///
     /// `(region, view id)`. See [`BarMirror::retire`] for why the two events are not the
@@ -772,6 +778,7 @@ impl BarMirror {
             reval_why: AtomicU64::new(0),
             defer_reval,
             device_port,
+            device_store: store_arm.is_device(),
             parked: Mutex::new(Vec::new()),
             fills: Mutex::new(std::collections::VecDeque::new()),
             fills_queued: AtomicU64::new(0),
@@ -1641,7 +1648,22 @@ impl BarMirror {
         span_len: u64,
         base: u64,
     ) -> Result<(RamRegionId, Option<u64>), String> {
-        match self.device_port.as_ref() {
+        // ⊘⊘⊘ **KEYED ON THE STORE ARM, NOT ON THE PORT'S PRESENCE — and the difference is a
+        // TWO-MEMORIES DEFECT.** The device-view port is armed by `KAYFABE_DEVICE_VIEW`, which
+        // is a **different gate** from `KAYFABE_FB_STORE`: a boot may legitimately run
+        // `KAYFABE_DEVICE_VIEW=probe` with the default `arena` store — that is exactly what
+        // w734's census boot did. Asking *"is there a port?"* would put PRAMIN on the reserved
+        // object while every other framebuffer path served the arena memfd, i.e. two memories
+        // for one address, silently, on the control arm.
+        let device = crate::deviceview::backing_is_device(
+            if self.device_store {
+                crate::deviceview::FbStoreArm::Device
+            } else {
+                crate::deviceview::FbStoreArm::Arena
+            },
+            self.device_port.is_some(),
+        );
+        match device.then(|| self.device_port.as_ref()).flatten() {
             Some(port) => {
                 match port.with_node(base, span_len, true, |fd, mmap_len| {
                     self.machine.install_device_page(gpa, mmap_len, fd, false)

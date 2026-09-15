@@ -635,3 +635,24 @@ pub fn enforce_device_store(
     }
     Ok(())
 }
+
+/// ★★★★★ **WHICH BACKING A FRAMEBUFFER APERTURE GETS — the rule, as a pure function.**
+///
+/// # ⊘⊘⊘ THE DEFECT THIS EXISTS TO MAKE UNREPRESENTABLE — found in review, w735
+///
+/// The device-view **port** and the single **store** are two different gates:
+/// [`crate::scratchpad::DEVICE_VIEW_ENV`] arms the first, [`FB_STORE_ENV`] the second. A boot
+/// may legitimately run the port armed with the default `arena` store — that is exactly what
+/// w734's census boot did.
+///
+/// ⇒ any site that chooses a backing by asking *"is there a port?"* puts **that** aperture on
+/// the reserved object while every other framebuffer path serves the arena memfd: **two
+/// memories for one address**, silently, on the *control* arm. `BarMirror::install_pramin_window`
+/// was written that way and caught in review before it booted.
+///
+/// ⇒ the rule is written once, here, and the `&&` is the whole of it: **the store decides, and
+/// the port is only the ability to act on that decision.**
+#[must_use]
+pub fn backing_is_device(store: FbStoreArm, have_port: bool) -> bool {
+    store.is_device() && have_port
+}

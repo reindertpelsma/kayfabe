@@ -104,6 +104,25 @@ which is the defect the reserved object exists to delete and which
 `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` is the falsifier for. ⇒ **do
 not grade anything on a `device` boot until cut B lands.**
 
+### ⊘⊘⊘ AND A SECOND DEFECT, CAUGHT IN REVIEW OF MY OWN DIFF — the two gates read each other
+
+`KAYFABE_DEVICE_VIEW` arms the **port**; `KAYFABE_FB_STORE` chooses the **store**. They are
+independent, and **w734's own census boot ran the first with the second at its default.**
+
+⇒ `BarMirror::install_pramin_window` was written to choose its backing by asking *"is there a
+port?"*. On that exact configuration it would have put **PRAMIN alone** on the reserved object
+while every other framebuffer path served the arena memfd — **two memories for one address, on
+the CONTROL arm**, where no test of the device arm would ever look and where the falsifier
+`a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` does not reach.
+
+✔ The rule is now one pure function, `deviceview::backing_is_device(store, have_port)`, with
+the `&&` as its whole content — **the store decides; the port is only the ability to act on
+that decision** — and a test that pins the `(Arena, port)` cell by name.
+
+⚠ Worth keeping as a shape, not just a fix: **a new gate beside an old one is a new pair, and
+the dangerous cell is the one where the NEW gate is on and the OLD one is at its default.**
+That is the cell every "did the arm change anything?" control boot runs.
+
 ### ⊘⊘⊘ AND A RELEASE-ORDERING DEFECT THAT WOULD HAVE SHIPPED — silent and cross-tenant
 
 *"Slot eviction calls `release_device_view`"* — which this file's §3 item 3 implies and which
