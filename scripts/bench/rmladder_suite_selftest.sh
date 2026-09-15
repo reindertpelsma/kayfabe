@@ -24,27 +24,36 @@ arm=""; for a in "$@"; do case "$a" in --*) arm="$a";; esac; done
 case "$arm" in
   --gpu) ;;
 esac
-arm=$(printf '%s\n' "$@" | grep -E '^--(passnoisy|pass|wedge|hang|fail)$' | head -1)
+arm=$(printf '%s\n' "$@" | grep -E '^--(passnoisy|pass|wedge|hangopen|hanglate|hardhang|hang|fail)$' | head -1)
 # ★ Every arm is a "device open": once the wedge marker exists, NOTHING opens, exactly as the
 # real wall behaves (`[measured w424]` opens #1-#3 pass, #4 fails, and it is permanent).
 if [ -e "$KF_WEDGE" ]; then
   echo "RM bring-up failed at R1 openat(nvidia0): Input/output error (os error 5)"
   exit 1
 fi
+# ★ Every arm that gets past bring-up prints `R2 version`, exactly as the real ladder does in
+# `bring_up` before any arm dispatch. The classifier keys on it, so the fixture must carry it.
 case "$arm" in
-  --pass)      echo "done"; exit 0;;
+  # ⊘ NO `R2 version`: this arm hangs INSIDE the device open, which is the wall's OTHER
+  # signature (`rc=124`, nothing printed but ARGV). It must be UNMEASURED, never FAIL.
+  --hangopen)  echo "info  RMLADDER ARGV     = [--gpu 0 --hangopen]"; sleep 600;;
+  # ⊘ Reached its subject and then hung: a real TIMEOUT with a verdict pending.
+  --hanglate)  echo "ok    R2 version         = \"580.159.04\""; sleep 600;;
+  # ⊘ Ignores SIGTERM, so `timeout -k` escalates and the exit code is 137, not 124.
+  --hardhang)  trap "" TERM; echo "ok    R2 version         = \"580.159.04\""; sleep 600;;
+  --pass)      echo "ok    R2 version         = \"580.159.04\""; echo "done"; exit 0;;
   # ⊘ THE WEDGING ARM PASSES. That is what makes this fixture faithful and what makes the
   # cascade hard: `[measured w424]` the arm that leaves the device unusable opens it FINE —
   # the Nth `RmInitAdapter` after it is the one that dies. An arm that failed at its own
   # `openat` would be trivially attributable and is not the case anyone got wrong.
-  --wedge)     touch "$KF_WEDGE"; echo "done"; exit 0;;
+  --wedge)     touch "$KF_WEDGE"; echo "ok    R2 version         = \"580.159.04\""; echo "done"; exit 0;;
   --hang)      sleep 600;;
-  --fail)      echo "FAIL R17 CE COPY = dst did not move"; exit 1;;
+  --fail)      echo "ok    R2 version         = \"580.159.04\""; echo "FAIL R17 CE COPY = dst did not move"; exit 1;;
   # ★ An arm that PASSES while printing the rung name. `--cross-client-leak` opens a second
   # client and a rung that reports an EXPECTED refusal quotes the same string. If the
   # unopenable predicate drops its exit-code conjunct, this arm is misreported as UNMEASURED —
   # i.e. the containment would manufacture the very "reported nothing" it exists to remove.
-  --passnoisy) echo "ok    R1 openat(nvidia<gpu>) refused for the second client, as expected"; echo done; exit 0;;
+  --passnoisy) echo "ok    R2 version         = \"580.159.04\""; echo "ok    R1 openat(nvidia<gpu>) refused for the second client, as expected"; echo done; exit 0;;
 esac
 echo unreachable; exit 9
 STUB
@@ -89,9 +98,11 @@ printf '%s\n' "$out" | sed 's/^/    /'
 chk "attempts > recovered is visible" "SUITE_RECOVERIES=2 SUITE_RECOVERED=0" \
     "$(printf '%s\n' "$out" | grep -o 'SUITE_RECOVERIES=[0-9]* SUITE_RECOVERED=[0-9]*')"
 
-echo "=== CASE 4 — a HANG is TIMEOUT, is not UNMEASURED, and does not stop the suite ==="
+echo "=== CASE 4 — a hang PAST bring-up is TIMEOUT, is not UNMEASURED, and does not stop the suite ==="
+# ⊘ `--hanglate`, not `--hang`: the arm must have REACHED its subject for TIMEOUT to be the
+# right word. A hang inside the open is case 6's subject and is UNMEASURED.
 rm -f "$WEDGE"
-out=$(RMLADDER_SUITE_LOGDIR="$T/l4" RMLADDER_ARMS="--pass --hang --pass" RMLADDER_RECOVER_CMD="true" \
+out=$(RMLADDER_SUITE_LOGDIR="$T/l4" RMLADDER_ARMS="--pass --hanglate --pass" RMLADDER_RECOVER_CMD="true" \
       bash "$SUITE" "$T/stub" 0 3 2>&1)
 printf '%s\n' "$out" | sed 's/^/    /'
 chk "timeout is its own outcome"   "SUITE_PASS=2 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=0" \
@@ -106,6 +117,29 @@ printf '%s\n' "$out" | sed 's/^/    /'
 chk "the string alone does not condemn an arm" "SUITE_PASS=3 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=0" \
     "$(printf '%s\n' "$out" | grep -o 'SUITE_PASS=[0-9]* SUITE_FAIL=[0-9]* SUITE_TIMEOUT=[0-9]* SUITE_UNMEASURED=[0-9]*')"
 chk "and the suite reports GREEN when it is" "SUITE_RC=0" "$(printf '%s\n' "$out" | grep -o 'SUITE_RC=[0-9]*')"
+
+echo "=== CASE 6 — a HANG INSIDE THE OPEN is UNMEASURED, and a hang AFTER bring-up is TIMEOUT ==="
+rm -f "$WEDGE"
+out=$(RMLADDER_SUITE_LOGDIR="$T/l6" RMLADDER_ARMS="--pass --hangopen --hanglate --pass" RMLADDER_RECOVER_CMD="true" \
+      bash "$SUITE" "$T/stub" 0 3 2>&1)
+printf '%s\n' "$out" | sed 's/^/    /'
+# ⊘ THE POINT: both arms time out, and they are NOT the same outcome. The one that never
+# printed `R2 version` never reached its subject — reporting it as a FAIL, or even as a
+# TIMEOUT, would be a verdict about an arm that did not run. `[measured w735]` this exact
+# confusion made two arms read as FAIL in the first batched run.
+chk "hang-in-open ⇒ UNMEASURED, hang-after ⇒ TIMEOUT" "SUITE_PASS=2 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=1" \
+    "$(printf '%s\n' "$out" | grep -o 'SUITE_PASS=[0-9]* SUITE_FAIL=[0-9]* SUITE_TIMEOUT=[0-9]* SUITE_UNMEASURED=[0-9]*')"
+
+echo "=== CASE 7 — an arm that IGNORES SIGTERM exits 137 and is still a TIMEOUT, not a FAIL ==="
+rm -f "$WEDGE"
+out=$(RMLADDER_SUITE_LOGDIR="$T/l7" RMLADDER_ARMS="--pass --hardhang --pass" RMLADDER_RECOVER_CMD="true" \
+      bash "$SUITE" "$T/stub" 0 3 2>&1)
+printf '%s\n' "$out" | sed 's/^/    /'
+chk "137 is a TIMEOUT"             "SUITE_PASS=2 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=0" \
+    "$(printf '%s\n' "$out" | grep -o 'SUITE_PASS=[0-9]* SUITE_FAIL=[0-9]* SUITE_TIMEOUT=[0-9]* SUITE_UNMEASURED=[0-9]*')"
+# ★ …and the 137 is KEPT in the row, because it says the arm ignored SIGTERM.
+chk "and the row keeps the 137"    "1" \
+    "$(printf '%s\n' "$out" | grep -c 'TIMEOUT(137)')"
 
 echo ""
 if [ $fails -eq 0 ]; then echo "SELFTEST_RC=0 — the containment has a known-positive"; exit 0; fi
