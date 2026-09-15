@@ -1308,3 +1308,559 @@ fn a_refusal_after_a_launch_executed_reports_progress_and_must_never_be_re_run()
          re-execute entry [0]"
     );
 }
+
+// =====================================================================================
+// ★★★★★ w743 — THE PRE-FLIGHT: **NOTHING MOVES UNTIL EVERY VIEW IS ARMED**
+//
+// `[measured w740]` `blocked_by_progress=68` against `trips=10`; `[measured w742]` `3`
+// against `37`, with `gave_up=1`. Those are submissions refused **after** they had already
+// moved bytes and released a payload, which `CeProgress::may_re_run` correctly — and
+// permanently — refuses to re-run. The arms below are the two halves of the fix:
+//
+//   * the refusal now arrives with `progress == NONE`, so the shim's drain-and-retry opens;
+//   * and it arrives with the demand for **every** page the submission needs already in the
+//     want set, so **one** drain arms the whole submission instead of one page per trip.
+//
+// ⊘ The store here is `DeviceFb` over a byte port, because the pre-flight is inert without
+// one — `FbStore::demand_port` is `None` on `SparseFb` and on the `arena` arm, and
+// `the_preflight_is_inert_without_a_byte_port` is the control that pins that.
+// =====================================================================================
+
+/// A second 512 MiB region of the same VA space, mapped to **video memory** — PD1 index 34
+/// where `PB_GPU_VA`'s is 33. ⊘ The fixture above maps everything to guest RAM, where the
+/// pre-flight has nothing to ask about; a CE destination in the framebuffer is the shape the
+/// raw client actually has (`kayfabe-isolate-host`'s mean path allocates every buffer with
+/// `NV01_MEMORY_LOCAL_USER` + `ATTR_CONTIGUOUS_VIDMEM`).
+/// ⊘ `PB_GPU_VA + 1 GiB`, and **not** `+ 512 MiB`: that slot is [`UNMAPPED_DST`], and the
+/// first draft of this fixture mapped it — which made
+/// `the_preflight_leaves_a_walk_refusal_to_the_loop_that_names_it` fail by turning its
+/// deliberately unmapped address into a perfectly good framebuffer one. ★ The test caught
+/// the fixture, which is the only reason that control is worth having.
+const FBDST_VA: u64 = PB_GPU_VA + 0x4000_0000;
+/// Where that region lands in the reserved object. ⊘ Far from the page-table pages at
+/// `0x10_0000`–`0x12_0000`, so arming a destination cannot accidentally arm a directory.
+const FBDST_PHYS: u64 = 0x0400_0000;
+
+/// Physical of a `FBDST_VA`-region VA, in the framebuffer.
+const fn fb_phys_of(va: u64) -> u64 {
+    FBDST_PHYS + (va - FBDST_VA)
+}
+
+/// A PD1 slot that is a 512 MiB page in **video** memory. ⊘ Aperture `0` in the PTE table is
+/// video (`kern_gmmu_fmt_gm10x.c:184-201`) — not the `1` a PDE uses, which is the confusion
+/// [`leaf_512m_sysmem`]'s own comment names.
+fn leaf_512m_vidmem(phys: u64) -> u64 {
+    ((phys >> 12) << 8) | 1
+}
+
+/// The grain this test port arms at.
+const TP_GRAIN: u64 = 0x1000;
+
+/// A byte port over a sparse map of grains — the offline stand-in for
+/// `kayfabe_qemu_raw::deviceview::DeviceFbBytePort`.
+///
+/// ⊘ It keeps the three counters apart that the real port keeps apart, for the real port's
+/// reason: a demand raised by an **attempted access** and one raised by a **question** have
+/// opposite consequences for a retry, and w743's whole claim is about which came first.
+#[derive(Debug, Default)]
+struct TestPort {
+    bytes: std::sync::Mutex<std::collections::BTreeMap<u64, Vec<u8>>>,
+    armed: std::sync::Mutex<std::collections::BTreeSet<u64>>,
+    want: std::sync::Mutex<std::collections::BTreeSet<u64>>,
+    probes: std::sync::atomic::AtomicU64,
+    probe_missed: std::sync::atomic::AtomicU64,
+    accesses_refused: std::sync::atomic::AtomicU64,
+}
+
+impl TestPort {
+    fn arm(&self, at: u64) {
+        self.armed.lock().unwrap().insert(at & !(TP_GRAIN - 1));
+    }
+    /// Read the object past every armed-run check — the oracle a test compares against.
+    fn peek(&self, at: u64, len: usize) -> Vec<u8> {
+        let base = at & !(TP_GRAIN - 1);
+        let off = (at - base) as usize;
+        match self.bytes.lock().unwrap().get(&base) {
+            Some(p) => p[off..off + len].to_vec(),
+            None => vec![0u8; len],
+        }
+    }
+    fn wanted(&self) -> std::collections::BTreeSet<u64> {
+        self.want.lock().unwrap().clone()
+    }
+    /// One drain: arm everything wanted, exactly as `DeviceFbBytePort::drain` does.
+    fn drain_all(&self) -> usize {
+        let batch: Vec<u64> = self.want.lock().unwrap().iter().copied().collect();
+        self.want.lock().unwrap().clear();
+        let mut a = self.armed.lock().unwrap();
+        for b in &batch {
+            a.insert(*b);
+        }
+        batch.len()
+    }
+    fn span(&self, at: u64, len: u64) -> Option<(u64, u64)> {
+        let end = at.checked_add(len)?;
+        if len == 0 {
+            return None;
+        }
+        Some((at & !(TP_GRAIN - 1), (end - 1) & !(TP_GRAIN - 1)))
+    }
+    fn all_armed(&self, first: u64, last: u64) -> bool {
+        let a = self.armed.lock().unwrap();
+        let mut b = first;
+        while b <= last {
+            if !a.contains(&b) {
+                return false;
+            }
+            b += TP_GRAIN;
+        }
+        true
+    }
+    fn note_want(&self, first: u64, last: u64) {
+        let mut w = self.want.lock().unwrap();
+        let mut b = first;
+        while b <= last {
+            w.insert(b);
+            b += TP_GRAIN;
+        }
+    }
+}
+
+impl kayfabe_device::DeviceFbPort for TestPort {
+    fn read_armed(&self, at: u64, buf: &mut [u8]) -> bool {
+        let Some((first, last)) = self.span(at, buf.len() as u64) else {
+            return false;
+        };
+        if !self.all_armed(first, last) {
+            self.accesses_refused
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return false;
+        }
+        let mut done = 0usize;
+        let mut base = first;
+        while base <= last {
+            let start = at.max(base);
+            let stop = (at + buf.len() as u64).min(base + TP_GRAIN);
+            let n = (stop - start) as usize;
+            buf[done..done + n].copy_from_slice(&self.peek(start, n));
+            done += n;
+            base += TP_GRAIN;
+        }
+        true
+    }
+
+    fn write_armed(&self, at: u64, bytes: &[u8]) -> bool {
+        let Some((first, last)) = self.span(at, bytes.len() as u64) else {
+            return false;
+        };
+        if !self.all_armed(first, last) {
+            self.accesses_refused
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return false;
+        }
+        let mut done = 0usize;
+        let mut base = first;
+        let mut map = self.bytes.lock().unwrap();
+        while base <= last {
+            let start = at.max(base);
+            let stop = (at + bytes.len() as u64).min(base + TP_GRAIN);
+            let n = (stop - start) as usize;
+            let page = map
+                .entry(base)
+                .or_insert_with(|| vec![0u8; TP_GRAIN as usize]);
+            let off = (start - base) as usize;
+            page[off..off + n].copy_from_slice(&bytes[done..done + n]);
+            done += n;
+            base += TP_GRAIN;
+        }
+        true
+    }
+
+    fn want(&self, at: u64, len: u64, _by: kayfabe_device::DeviceFbWant) {
+        if let Some((first, last)) = self.span(at, len.max(1)) {
+            self.note_want(first, last);
+        }
+    }
+
+    fn probe_or_want(&self, at: u64, len: u64, by: kayfabe_device::DeviceFbWant) -> bool {
+        self.probes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let Some((first, last)) = self.span(at, len.max(1)) else {
+            return false;
+        };
+        if self.all_armed(first, last) {
+            return true;
+        }
+        self.probe_missed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        kayfabe_device::DeviceFbPort::want(self, at, len, by);
+        false
+    }
+
+    fn drain(&self) -> kayfabe_device::DeviceFbDrained {
+        // ⊘ The offline port never drains itself: `drain_all` is the test's own explicit
+        // step, so "a drain happened" is never something the fixture did behind the arm.
+        kayfabe_device::DeviceFbDrained::default()
+    }
+
+    fn census_line(&self) -> String {
+        format!("TESTPORT armed={}", self.armed.lock().unwrap().len())
+    }
+}
+
+/// The same publication and page tables as [`plane_with_tree`], over a **`DeviceFb` with a
+/// byte port**, plus the extra vidmem region [`FBDST_VA`] maps.
+///
+/// ⊘ The three directory pages are armed by the fixture before it writes them: a guest's
+/// page tables are already in video memory before the first doorbell, and *"the fixture
+/// could not write the tree"* is not the thing under test.
+fn device_plane_with_tree(port: &std::sync::Arc<TestPort>) -> RegPlane {
+    let plane = RegPlane::new(
+        &kayfabe_device::ga10x::GA106,
+        kayfabe_device::abi::gsp_abi_for(kayfabe_abi::versions::BENCH_DRIVER).expect("bench table"),
+        Box::new(SteppingClock::new(1)) as Box<dyn NanoClock>,
+    )
+    .expect("GA106 is servable");
+    for p in [ROOT_FB, PD2_FB, PD1_FB] {
+        port.arm(p);
+    }
+    plane.set_fb(Box::new(kayfabe_device::DeviceFb::with_port(
+        kayfabe_device::ga10x::GA106.fb_length,
+        port.clone() as std::sync::Arc<dyn kayfabe_device::DeviceFbPort>,
+    )));
+    plane.set_mmu(Box::new(kayfabe_chips::Ga10xGmmu::new()));
+
+    let mut levels = [PdeLevel {
+        phys_address: 0,
+        size: 0,
+        aperture: 0,
+        page_shift: 0,
+    }; GMMU_FMT_MAX_LEVELS];
+    levels[0] = PdeLevel {
+        phys_address: ROOT_FB,
+        size: 0x20,
+        aperture: AP_VIDEO,
+        page_shift: 47,
+    };
+    plane.gvas_pub_log().note(GvasPublication {
+        cmd: kayfabe_abi::gvaspacepdes::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        client: CLIENT,
+        object: VASPACE,
+        pdes: ServerReservedPdes {
+            h_subdevice: 0,
+            subdevice_id: 0,
+            page_size: 0x20_0000,
+            virt_addr_lo: 0x1_0000_0000,
+            virt_addr_hi: 0x1_1fff_ffff,
+            num_levels: 4,
+            levels,
+        },
+        count: 1,
+    });
+
+    let pd3 = (PB_GPU_VA >> 47) as usize;
+    let pd2 = ((PB_GPU_VA >> 38) & 511) as usize;
+    let pd1 = ((PB_GPU_VA >> 29) & 511) as usize;
+    let pd1_fb = ((FBDST_VA >> 29) & 511) as usize;
+    assert_ne!(pd1, pd1_fb, "the two regions must be different PD1 slots");
+    plane
+        .ce_session(
+            CLIENT,
+            VASPACE,
+            kayfabe_device::ceresolve::Demand::from_doorbell(),
+            |ce| {
+                let put = |fb: &mut dyn FbStore, at: u64, e: u64| {
+                    fb.write(at, &e.to_le_bytes())
+                        .expect("the fixture armed this directory page");
+                };
+                put(ce.fb(), ROOT_FB + 8 * pd3 as u64, pde_vid(PD2_FB));
+                put(ce.fb(), PD2_FB + 8 * pd2 as u64, pde_vid(PD1_FB));
+                put(
+                    ce.fb(),
+                    PD1_FB + 8 * pd1 as u64,
+                    leaf_512m_sysmem(LEAF_PHYS),
+                );
+                put(
+                    ce.fb(),
+                    PD1_FB + 8 * pd1_fb as u64,
+                    leaf_512m_vidmem(FBDST_PHYS),
+                );
+            },
+        )
+        .expect("the publication is present, so a session opens");
+    plane
+}
+
+/// Doorbell `d`'s destination, in the **framebuffer** region.
+fn fb_dst_va(d: u32) -> u64 {
+    FBDST_VA + u64::from(d) * 0x1000
+}
+
+/// Publish doorbell `d` with a framebuffer destination. ⊘ The ring, the method block and the
+/// semaphore stay in guest RAM — exactly one variable changes from [`publish_doorbell`].
+fn publish_fb_doorbell(vmm: &mut MockVmm, d: u32) {
+    let block = memset_block(
+        fb_dst_va(d),
+        0x40,
+        doorbell_fill(d),
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        doorbell_payload(d),
+    );
+    let va = slot_push_va(d);
+    vmm.gpa_write(phys_of(va), &block)
+        .expect("this doorbell's method block");
+    let e = submit::gp_entry(va, block.len() as u64).expect("representable");
+    vmm.gpa_write(
+        phys_of(RING_VA + 8 * u64::from(d % SMALL_RING)),
+        &e.to_le_bytes(),
+    )
+    .expect("this doorbell's ring entry");
+}
+
+/// ★★★ **THE CONTROL — the pre-flight is INERT where there is no byte port.**
+///
+/// ⊘ This is the `arena` arm's property, and it is what makes that arm a control at all: the
+/// store answers `FbStore::demand_port() == None`, `want_ours_spans` returns without
+/// resolving anything, and the submission runs byte-identically to pre-w743. A test that
+/// only checked the device arm could not tell "the pre-flight is correct" from "the
+/// pre-flight is running everywhere and happens not to refuse".
+#[test]
+fn the_preflight_is_inert_without_a_byte_port() {
+    const LEN: u32 = 0x400;
+    let plane = plane_with_tree();
+    let block = memset_block(
+        DST_VA,
+        LEN,
+        0xAB,
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        0x1234,
+    );
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+    let run = ring_once(&plane, &mut vmm, &mut cursor, 1).expect("the fill is servable");
+    assert_eq!(
+        run.preflight,
+        kayfabe_rt::cpu_ce::CePreflight::default(),
+        "⊘ NOT ONE PROBE on a store with no byte port — `probed=0` here is *not asked*, \
+         never *nothing was missing*: {:?}",
+        run.preflight
+    );
+    assert_eq!(run.bytes, u64::from(LEN), "and the copy still ran");
+    let (passes, ..) = kayfabe_rt::ceutils::preflight_census();
+    let _ = passes; // ⊘ process-wide and shared with every other test in this binary.
+}
+
+/// ★★★★★ **THE FIX, HALF ONE — a refusal that moved NOTHING, so the retry gate is OPEN.**
+///
+/// The destination is a framebuffer page with no armed CPU view. `[measured w740/w742]` this
+/// is what `FwdFault::CpuCeFb` on the user channels is.
+#[test]
+fn a_preflight_refusal_moves_nothing_and_is_therefore_re_runnable() {
+    let port = std::sync::Arc::new(TestPort::default());
+    let plane = device_plane_with_tree(&port);
+    let block = memset_block(
+        fb_dst_va(0),
+        0x40,
+        0x5A,
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        7,
+    );
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1)
+        .expect_err("no CPU view of the destination is armed");
+
+    assert!(
+        matches!(err.fault, FwdFault::CpuCeFb { .. }),
+        "the refusal keeps the name the boot census counts: {err:?}"
+    );
+    // ★★★★★ **ZERO LAUNCHES — and that is the whole difference.** The walk-refusal case one
+    // screen up reports `launches: 1`, because the launch had already DECODED when its walk
+    // failed. Here the refusal is raised before the execute loop is entered at all.
+    assert_eq!(
+        err.progress,
+        kayfabe_rt::ceutils::CeProgress::NONE,
+        "⊘ nothing decoded-and-executed, no byte moved, no payload released: {err:?}"
+    );
+    assert!(
+        err.progress.may_re_run(),
+        "★★★ ⇒ the shim's re-run gate is OPEN. `[measured w742]` this shape arrived at that \
+         gate CLOSED (`blocked_by_progress=3`), which no number of retries can repair"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        0u32.to_le_bytes(),
+        "⊘ corroborated from the guest's side: no payload was released"
+    );
+    assert_eq!(
+        port.peek(fb_phys_of(fb_dst_va(0)), 4),
+        vec![0u8; 4],
+        "⊘ and from the object's side: not one byte of the destination changed"
+    );
+    assert_eq!(
+        cursor.next, 0,
+        "⊘ and the cursor did not advance, so the re-run sees the same entry"
+    );
+}
+
+/// ★★★★★ **THE FIX, HALF TWO, AND IT IS THE ONE w742 COULD NOT BUY.**
+///
+/// Entry `[0]`'s destination is armed and entry `[1]`'s is not. `[measured w742]`
+/// `blocked_by_progress=3` **is this shape**: pre-w743 entry `[0]` fills its page and
+/// releases payload 1, entry `[1]` then refuses, and `CeProgress::may_re_run` closes for
+/// ever — correctly, because a re-run would release payload 1 a second time.
+///
+/// ⊘ **This is the known-positive for the whole increment.** Delete the `3b` pre-flight block
+/// in `kayfabe_rt::ceutils::run_submission_body` and this test fails with
+/// `completions: 1, bytes: 64` — which is exactly the boot number it was built from.
+#[test]
+fn a_later_entrys_unarmed_destination_no_longer_costs_the_earlier_entrys_payload() {
+    let port = std::sync::Arc::new(TestPort::default());
+    let plane = device_plane_with_tree(&port);
+    let mut vmm = guest_ram_zero_ring();
+    publish_fb_doorbell(&mut vmm, 0);
+    publish_fb_doorbell(&mut vmm, 1);
+    // Entry [0]'s destination IS armed; entry [1]'s is not. One variable.
+    port.arm(fb_phys_of(fb_dst_va(0)));
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    let err = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel(2))
+        .expect_err("entry [1]'s destination has no armed view");
+
+    assert_eq!(
+        err.progress.bytes, 0,
+        "★★★★★ entry [0]'s 64 bytes did NOT move. Pre-w743 this was `0x40`: {err:?}"
+    );
+    assert_eq!(
+        err.progress.completions, 0,
+        "★★★★★ AND NO PAYLOAD WAS RELEASED. Pre-w743 this was `1` — the number that \
+         forbids the re-run for ever: {err:?}"
+    );
+    assert!(
+        err.progress.may_re_run(),
+        "⇒ the gate is open where `[measured w740]` `blocked_by_progress=68` had it shut"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        0u32.to_le_bytes(),
+        "⊘ corroborated from the guest's own memory, not from our counters alone"
+    );
+    assert_eq!(
+        port.peek(fb_phys_of(fb_dst_va(0)), 8),
+        vec![0u8; 8],
+        "⊘ and entry [0]'s destination is untouched, which is what makes the re-run sound"
+    );
+
+    // ★★★ THE SECOND PROPERTY: **one drain, not one page per trip.** The want set already
+    // holds entry [1]'s grain, put there by the question and not by an attempted access.
+    let wanted = port.wanted();
+    assert!(
+        wanted.contains(&(fb_phys_of(fb_dst_va(1)) & !(TP_GRAIN - 1))),
+        "entry [1]'s destination grain must be wanted: {wanted:x?}"
+    );
+    assert_eq!(
+        port.accesses_refused
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "⊘⊘ AND NOT ONE ACTUAL ACCESS WAS REFUSED — every miss came from a QUESTION. \
+         `[measured w742]` the accesses are what put `bytes` and `completions` on the \
+         refusal in the first place"
+    );
+
+    // One drain arms everything that was wanted, and the re-run is served whole.
+    let armed = port.drain_all();
+    assert!(armed >= 1, "the drain armed {armed} runs");
+    let run = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel(2))
+        .expect("★★★★★ the re-run is served, both entries, after ONE drain");
+    assert_eq!(run.launches, 2, "both entries ran: {run:?}");
+    assert_eq!(run.bytes, 0x80, "both 64-byte fills moved: {run:?}");
+    for d in 0..2u32 {
+        assert_eq!(
+            port.peek(fb_phys_of(fb_dst_va(d)), 4),
+            vec![doorbell_fill(d); 4],
+            "doorbell {d}'s fill byte is in the reserved object"
+        );
+    }
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        doorbell_payload(1).to_le_bytes(),
+        "★ and the LAST payload is the one the guest is polling for"
+    );
+}
+
+/// ★★ **THE PRE-FLIGHT ASKS ABOUT THE COMPLETION WORD TOO**, not only the copy operands.
+///
+/// ⊘ A release is the one write whose refusal mid-record is unrecoverable: the guest may
+/// already have read half a payload. Here the copy's destination is armed and the semaphore
+/// page is not, so a pre-flight that only looked at `CeSpan`s would let the copy run and then
+/// refuse on the release — `bytes > 0`, gate shut, exactly the w740 shape one field over.
+#[test]
+fn the_preflight_asks_about_the_completion_word_and_not_only_the_copy() {
+    let port = std::sync::Arc::new(TestPort::default());
+    let plane = device_plane_with_tree(&port);
+    // ★ The semaphore is in the FRAMEBUFFER region this time; the destination is armed.
+    let sema_va = FBDST_VA + 0x8_0000;
+    let block = memset_block(fb_dst_va(0), 0x40, 0x5A, sema_va, 7);
+    let mut vmm = guest_ram(&block);
+    port.arm(fb_phys_of(fb_dst_va(0)));
+    let mut cursor = GpCursor::default();
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1)
+        .expect_err("the completion word has no armed view");
+    assert_eq!(
+        err.progress,
+        kayfabe_rt::ceutils::CeProgress::NONE,
+        "⊘ refused before the copy ran, not after it: {err:?}"
+    );
+    assert_eq!(
+        port.peek(fb_phys_of(fb_dst_va(0)), 4),
+        vec![0u8; 4],
+        "⊘ and the ARMED destination is still untouched — the pre-flight refused the whole \
+         submission, not just its release"
+    );
+    assert!(
+        port.wanted()
+            .contains(&(fb_phys_of(sema_va) & !(TP_GRAIN - 1))),
+        "the completion word's grain is in the want set"
+    );
+
+    port.drain_all();
+    let run = ring_once(&plane, &mut vmm, &mut cursor, 1).expect("served after one drain");
+    assert_eq!(run.completions, 1, "one payload released: {run:?}");
+    assert_eq!(
+        port.peek(fb_phys_of(sema_va), 4),
+        7u32.to_le_bytes().to_vec(),
+        "★ and it is in the reserved object, at the word the guest polls"
+    );
+}
+
+/// ⊘ **A WALK refusal is deliberately NOT the pre-flight's business** — it is refused by the
+/// execute loop, by name, and the pre-flight must not widen into diagnosing it. This is the
+/// no-op control for the skip in the `3b` block: an unmapped destination on a device store
+/// still reports the walk's own fault, not `CpuCeFb`.
+#[test]
+fn the_preflight_leaves_a_walk_refusal_to_the_loop_that_names_it() {
+    let port = std::sync::Arc::new(TestPort::default());
+    let plane = device_plane_with_tree(&port);
+    let block = memset_block(
+        UNMAPPED_DST,
+        0x40,
+        0x11,
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        1,
+    );
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("the destination is unmapped");
+    assert!(
+        !matches!(err.fault, FwdFault::CpuCeFb { .. }),
+        "⊘ the pre-flight must not rename a walk fault: {err:?}"
+    );
+    assert_eq!(
+        err.progress.launches, 1,
+        "★ and the loop was entered — `launches` is bumped at DECODE: {err:?}"
+    );
+    assert!(err.progress.may_re_run(), "still re-runnable: {err:?}");
+}

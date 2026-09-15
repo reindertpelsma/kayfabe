@@ -400,6 +400,321 @@ by **the fault the client's own copy hits**, never by totals and never by what m
 > first eight prints showed, never a census.
 
 
+### ★★★★★ 2026-09-15 (w743) — ⊘⊘⊘ **THE RAW CLIENT'S WALL IS NOT `CpuCeFb`. IT IS CHANNEL-BIRTH CONJUNCT (6), AND THE NUMBER THAT NAMES IT DID NOT MOVE BETWEEN w740 AND w742.**
+
+**STATUS: LIVE, 2026-09-15.** ⊘ Measured from the committed evidence of w740 and w742
+(`traces/w740_scrub_arming/`, `traces/w742_publish_install/`), offline, no new boot required.
+★ **This corrects the brief w743 was given, and it corrects this file.**
+
+#### ⇒ 1. THE DISCRIMINATOR — same boot, same ring VAs, ONE variable
+
+`w742`, `run_w742arena_qemu.log` vs `run_w742dev_qemu.log`, `KAYFABE_FB_STORE` the only
+difference. These ring VAs are the raw client's **own per-thread windows**
+(`rmladder.rs:14669-14685`: `BASE = 0x80_0000_0000`, `THREAD_STRIDE = 0x2_0000_0000`):
+
+| ring VA | **`arena`** — client `(P)` 8/8 | **`device`** — client `(R)` 0/8 |
+|---|---|---|
+| `0x8000001000` | ✔ **ADOPTABLE** — `kind=RealGpuMemory bytes=JoinsGuestWindow` | ⊘ **(6) the binding EXISTS but carries NO HOST OBJECT** |
+| `0x8200001000` | ✔ ADOPTABLE | ⊘ (6) |
+| `0x8400001000` | ✔ ADOPTABLE | ⊘ (6) |
+| `0x8600001000` | ✔ ADOPTABLE | ⊘ (6) |
+| … (11 channels in all) | ✔ | ⊘ (6) |
+
+| census | `arena` | `device` |
+|---|---|---|
+| `BIRTH-AT-ALLOC … REFUSED` | **0** | **11** — *every one of the client's channels* |
+| conjunct histogram | — | **17 × (6)**, 2 × (5) |
+| `doorbells:` | **361 arrived, 347 served, 3 REFUSED** | **124 arrived, 97 served, 25 REFUSED** |
+| `DOORBELL-REFUSALS` | `RingBroughtNoEntry=3` | `PassthroughDoorbellBirth=19  CpuCeFb=4` |
+
+⇒ **On the `device` arm the raw client's channels are never born, so its doorbells are refused
+before a pushbuffer is ever read.** `FwdFault::PassthroughDoorbellBirth`'s own docs and
+`BIRTH-AT-ALLOC`'s own sentence say the chain: birth-at-alloc refused
+(`PassthroughRingNotAdoptable`) ⇒ a later doorbell finds no host channel ⇒ refused by name ⇒
+*"every refused doorbell is a submission that never reached the GPU"* ⇒ the CE copy the client
+waits on never runs ⇒ *"the copy from `0x0000008080000000` NEVER RETIRED"*. ⊘ **UNMEASURED, not
+wrong**: the semaphore was never written.
+
+#### ⇒ 2. ★★★★★ THE NUMBER THAT DID NOT MOVE IS THE ONE THAT MATTERED
+
+| | w740 device | w742 device |
+|---|---|---|
+| `FwdFault::CpuCeFb` | 63 | **4** |
+| `FwdFault::PassthroughDoorbellBirth` | **19** | **19** |
+| `BIRTH-AT-ALLOC … REFUSED` | **11** | **11** |
+| conjunct (6) | **17** | **17** |
+| `W392D_GUEST_OUTCOME` | `(R)` 0/8 | `(R)` 0/8 |
+
+★★★ **Four numbers are byte-identical across the two boots, and the client did not move. One
+number fell 16×, and the campaign — and the w743 brief — ranked by that one.** ⊘ w740's own
+report *did* record that its first doorbell refusal was `PassthroughDoorbellBirth` (row 4 of its
+pre-registration, graded ✔ HELD) and the reading moved on.
+
+⚠ **AND A CAUSAL STORY I HAD TO KILL BEFORE WRITING IT DOWN.** The obvious hypothesis is that
+**w742 caused this** — it deleted the `JoinFbLeaf` mint (`n=2149` → absent), and the arena's
+success string is literally `bytes=JoinsGuestWindow`, i.e. a join. ⊘ **Refuted by w740's own
+log**, which pre-dates that deletion and shows `BIRTH-AT-ALLOC REFUSED=11`, `17 × (6)` and
+`PassthroughDoorbellBirth=19` — *identical*. The birth wall is a property of the **device store
+itself**, present since the `device` arm first reached a workload. ★ *Checking the earlier
+trace cost four minutes and would otherwise have put a wrong cause in this file.*
+
+#### ⇒ 3. WHAT THE FIX IS — named, and NOT built here
+
+`crates/kayfabe-fwd/src/lib.rs`, `adopted_guest_ring`, conjunct (6):
+
+```rust
+let Some(host) = binding.host() else { /* ADOPT-WHY ⊘ (6) */ return None; };
+```
+
+Under the arena, a framebuffer leaf carried a **per-leaf minted host object**, so
+`binding.host()` was `Some`. Under one reserved object there is no per-range object and nothing
+binds one, so it is `None` for **every** vidmem range.
+
+⇒ The binding for a framebuffer range under the single store must carry the **reserved object
+at an offset** as its host backing — the same answer `FbJoinPlan::DeviceBacked { at }` already
+gives the publish route (w742), asked one route over. ★ The shape is already precedented in the
+consumer: `AdoptedGuestUserd` is documented as *"an OFFSET INTO AN OBJECT WE HOLD"*, so
+"object + offset" is a thing this stack already expresses for the USERD; the **ring** is the
+half that still assumes a whole object.
+
+⊘ **This is a separate increment from w743's pre-flight and is not attempted here.** It touches
+the address table's `HostBacking`, the device publish route's bind, and the channel-birth verb's
+assumption about what `AdoptedGuestRing::memory` names.
+
+##### ⇒ 3a. SCOPED, 2026-09-15 — what it would take, and the two things to decide FIRST
+
+★ **Three pieces of good news, all found in the existing types:**
+1. **The offset is already first-class and is DEAD CODE in production.** `HostExtent::Slice` +
+   `HostSlice { offset, len }` + `HostBacking::slice(arena, host_va, slice, bytes)`
+   (`crates/kayfabe-mmu/src/lib.rs:82, 162-168, 365-379`) exist, and `frees_object()` (`:419-422`)
+   is already `false` for a `Slice` — i.e. *"a slice of a long-lived arena"* is the modelled
+   regime. **Every production `Binding` uses `HostBacking::whole`; `::slice` has zero callers.**
+2. **The ring handle never reaches RM.** `alloc_channel_in`'s `RingSource::Guest` arm
+   (`crates/kayfabe-isolate-host/src/rm.rs:7173-7178`) narrows the handle and then maps
+   **nothing** (`:7326-7334`); what RM receives is `gp_fifo_offset: layout.gp_fifo_va`
+   (`:7418-7420`), an absolute VA. ⇒ `AdoptedGuestRing` needs **no new field**, and conjunct (6)
+   / conjunct (7) pass unchanged once `binding.host()` is `Some` with
+   `BackingBytes::JoinsGuestWindow`.
+3. **The USERD is the precedent and it already goes to RM as handle + offset**
+   (`rm.rs:7222-7228`, `:7429`, `:7451`), and `NVOS46_PARAMETERS::offset` — *"the offset within
+   the object"* — exists and is hard-coded `0` today (`rm.rs:2414`,
+   `crates/kayfabe-abi/src/submit.rs:206`).
+
+⊘⊘⊘ **AND TWO STRUCTURAL BLOCKERS. Neither is a one-liner and the first is an OWNER RULING.**
+
+- **B1 — the reserved object belongs to the SCRATCHPAD isolate, not the guest proc's.**
+  `Scratchpad::bring_up` reserves it on `IsolateId::new(SCRATCHPAD_PROC /* u32::MAX */, gpu)`
+  (`crates/kayfabe-qemu-raw/src/scratchpad.rs:722, 758`), while channel birth runs on
+  `IsolateId::new(pid.0, gpu)`. `Worker::execute`'s central gate refuses any plan naming a
+  foreign handle — `crates/kayfabe-isolate/src/lib.rs:3651-3656`, `RmError::ForeignHandle` — and
+  `VerbPlan::ChannelBirth` chains `adopt.memory` into `handles()` (`:2876-2887`). An
+  `NV01_MEMORY_LOCAL_USER` handle is client-scoped and cannot simply be re-stamped.
+  ⇒ **Three mutually exclusive answers, and choosing is an architecture decision:** (a) reserve
+  per guest proc rather than once on the scratchpad — which gives up "ONE reserved object";
+  (b) build a cross-isolate export/adopt for the reservation; (c) move passthrough channel birth
+  onto the scratchpad isolate. ⚠ **Do not pick one by implementation convenience.**
+- **B2 — nothing maps the reserved object into any host GPU VAS.** `reserve_gpga`
+  (`crates/kayfabe-isolate-host/src/rm.rs:2716-2731`) **allocates only**: no `map_dma`, no
+  `map_cpu`. Its only mapping ever is the CPU `mmap` the byte port arms. And
+  `AddressTable::bind` demands `host_va == va` (`kayfabe-mmu/src/lib.rs:1159-1167`,
+  `AddressFault::HostVaMismatch`), so the map must be `DMA_OFFSET_FIXED_TRUE` at the leaf's own
+  VA. ⚠ **Doing that per leaf reintroduces a per-leaf IPC round trip — i.e. it gives back part of
+  the 97.8 % verb-budget win w742 bought.** Mapping the whole reservation once and cutting VAs
+  arithmetically works only if the guest's framebuffer VAs are contiguous with a constant bias,
+  which they are not in general.
+- **B3 — minor:** the reserved object must also be registered in the birth isolate's joined-object
+  table or `alloc_channel_declared` refuses `RING_NOT_A_JOINED_WINDOW`
+  (`rm.rs:6330-6334`, `:1310`); and `Scratchpad`'s `Reservation::Held { obj }`
+  (`scratchpad.rs:678, 812`) and `DeviceViewPort::obj` (`deviceview.rs:188-196`) have **no public
+  accessor** — both trivial additions.
+
+⇒ **The next session's first act is not code: it is B1.** Everything else is mechanical once the
+owner says which isolate owns the reservation.
+
+
+#### ⇒ 4. WHERE THAT LEAVES THE PRE-FLIGHT BELOW
+
+★ It is a **real fix for a real defect** and it is kept: `blocked_by_progress` refusals are
+unrepairable by construction and the pre-flight removes them, with an offline known-positive
+that reproduces the boot's own `{ launches: 2, bytes: 64, completions: 1 }`.
+⊘ **But it cannot be the raw client's fix, and it is not claimed as one.** The client's copies
+are refused at the doorbell, before any CE session opens; the `CpuCeFb=4` are the few channels
+that *did* get born. ⇒ the pre-flight is **downstream** of the birth wall — necessary later,
+insufficient now.
+
+### ★★★★★ 2026-09-15 (w743) — **THE PRE-FLIGHT: NOTHING MOVES UNTIL EVERY VIEW IS ARMED**
+
+**STATUS: LIVE.** ⊘ **No constraint was relaxed. No completion was forged.** The completion is
+still written only by `cpu_ce::write_resolved_completion`, and only after `execute_ours_spans`
+returned `Ok`.
+
+#### ⇒ 1. THE SHAPE CHOSEN, AND THE EVIDENCE THAT FORCED IT
+
+The brief named two candidate shapes. **Shape 2 — hand the copy to the scratchpad's engine
+(`CeExecutor::HostCe`) — was rejected on measurement, not on cost:**
+
+- `kayfabe_isolate_host::rm::ce_copy` refuses a `CeSource::Constant` by name today
+  (`NOT_ON_THIS_RUNG`, `rm.rs:8472`), and RM's CeUtils scrub **is** a constant fill.
+- The isolate *"deliberately holds neither the emulated framebuffer nor guest RAM"*
+  (`cpu_ce.rs` module docs) — that is the security posture, not a gap. Every span whose other
+  end is guest RAM is structurally unavailable to it, and the CeUtils ring, method block and
+  finishPayload semaphore of the walling channel are **in guest RAM**
+  (`[measured 2026-08-08]`, `0x2f2c_b004`).
+- It is a new host channel + host VAS + submission path, i.e. a rung, against a gate that is
+  the raw client passing.
+
+**Shape 1 — arm before the session — is right in its INTENT and wrong in its stated LOCATION,
+and that is a measurement:**
+
+> ⊘⊘⊘ **THE OPERANDS ARE NOT KNOWABLE BEFORE THE LOCK.** The brief says *"the session is built
+> from a plan"*. It is not. Every address the session touches comes out of a **walk of the
+> guest's own page tables**, which live in the framebuffer and are read through `CePlane` —
+> i.e. under the same rank-0 `RegPlane` mutex `ce_session_with_root` holds for its whole
+> closure (`plane.rs:4340`). A pre-session arm would have to walk first, and **walking is the
+> thing that needs the lock.** The chain is: `run_submission_body` reads the GPFIFO ring by VA
+> (`read_va` → walk → `fb.read`), reads the method block by VA, decodes, and only then can
+> `partition_ce` say where the operands are. There is no earlier point at which the operand
+> set exists.
+>
+> ★ **But the property that actually matters is a property of the ORDER, not of the lock:**
+> *no byte moves until every view the submission needs is armed.* That is achievable at the
+> earliest point the operand set exists, which is **inside** the session, and it satisfies the
+> arming shape unchanged: `want` records under the plane lock, `drain` is the IPC round trip at
+> the lock-free entry point the shim already has, fixed trip counts. No number of seconds
+> reaches a lock rank and none is asked for.
+
+#### ⇒ 2. WHAT WAS BUILT
+
+A **pre-flight phase** in `run_submission_body`, between decode (step 3) and the execute loop
+(step 4). It re-resolves the same operands the loop will, asks the store's byte port whether
+each range is servable **without touching one**, and records the demand for every range that is
+not. If anything was missing the whole submission is refused with `progress = NONE`.
+
+Three pieces:
+
+1. `DeviceFbPort::probe_or_want(at, len, by) -> bool` — a **required** trait method (no
+   default: `[w742]` a trait default that refuses ships its own justification, and here a
+   default would be a ruling in either direction). `DeviceFbBytePort`'s impl uses
+   **byte-for-byte `read_armed`'s own coverage test**, so a `true` and a served access cannot
+   disagree; a `false` records the want and returns, with the `runs` mutex dropped first.
+2. `cpu_ce::want_ours_spans` / `want_releases` — probe every `Ours` span's `Fb`-plane source
+   and destination, and **every word of every release**, in exactly `execute_ours`' own
+   `CHUNK` (64 KiB) steps. ⊘ **It does not stop at the first miss.** Stopping would hand the
+   drain one run per trip, which is what `[measured w742]` `trips=37 … gave_up=1` is.
+3. The refusal, carrying the first missing plane address and `cpu_ce::PREFLIGHT_NOT_ARMED`.
+
+**⊘ Inert on the `arena` control by construction**: `FbStore::demand_port()` is `None` there,
+so the block costs one `Option` test and resolves nothing.
+**⊘ A WALK refusal is deliberately not the pre-flight's business** — it is skipped, so the
+remaining launches still get their demand recorded, and the execute loop names it as before.
+
+#### ⇒ 3. THE KNOWN-POSITIVE, AND IT REPRODUCES THE BOOT NUMBER OFFLINE
+
+`tests/tests/e10e_ceutils_doorbell.rs`, five new arms over a `DeviceFb` + byte-port fixture
+(`device_plane_with_tree`), with a second 512 MiB region mapped to **video** memory so the CE
+destination is where the raw client's actually is (`NV01_MEMORY_LOCAL_USER` +
+`ATTR_CONTIGUOUS_VIDMEM`).
+
+★ **Disable the `3b` block (`if false && …`) and three arms go red with the exact shape this
+increment is about:**
+
+| arm | with the pre-flight | with it disabled |
+|---|---|---|
+| `a_later_entrys_unarmed_destination_no_longer_costs_the_earlier_entrys_payload` | green | **`progress: { launches: 2, bytes: 64, completions: 1 }`** — ★ the `blocked_by_progress` shape, reproduced offline for the first time |
+| `the_preflight_asks_about_the_completion_word_and_not_only_the_copy` | green | `{ launches: 1, bytes: 64, completions: 0 }` — the copy ran, the **release** then refused |
+| `a_preflight_refusal_moves_nothing_and_is_therefore_re_runnable` | green | `launches: 1` — the loop was entered |
+| `the_preflight_is_inert_without_a_byte_port` | green | **green** ⊘ the control, correctly not measuring the pre-flight's presence |
+| `the_preflight_leaves_a_walk_refusal_to_the_loop_that_names_it` | green | **green** ⊘ same |
+
+⚠ **And the fixture was caught by its own control:** the first draft put the vidmem region at
+`PB_GPU_VA + 512 MiB`, which is `UNMAPPED_DST` — turning a deliberately unmapped address into a
+perfectly good framebuffer one. `the_preflight_leaves_a_walk_refusal…` failed and named it.
+
+**Suite gate:** `cargo test --workspace --no-fail-fast` ⇒ **11 failing targets / 30 failing
+tests**, name set byte-identical to the baseline in this file.
+
+#### ⇒ 4. ★★★★★ THE PRE-REGISTERED PREDICTION, COMMITTED BEFORE THE BOX EXISTS
+
+⊘ Written and committed **in this same commit as the code**, before any instance was rented.
+Each row carries the value that **refutes** it. Both arms, same binary, **control (`arena`)
+first**.
+
+| # | line, on the `device` arm | predicted | ⊘ REFUTED BY |
+|---|---|---|---|
+| 1 | `W743-PREFLIGHT passes=` | **≥ 50** (w742: 124 doorbells arrived, 97 served) | **`0`** ⇒ the arm never executed and **no other row below is interpretable**. Read this one first |
+| 2 | `W743-PREFLIGHT unarmed=` | **≥ 1** | `0` **beside `blocked≥1`** is the two halves disagreeing. `0` with `blocked=0` would mean every view was already armed at ask time — possible, and then rows 3/4 must still hold |
+| 3 | ★★★ `W740-CE-SUBMIT-ARM blocked_by_progress=` | **0** (w742: **3**) | ≥1 ⇒ a refusal still reached the gate having moved bytes. **THE MECHANISM ROW** — it is the number the whole increment is aimed at |
+| 4 | ★★★ `W740-CE-SUBMIT-ARM gave_up=` | **0** (w742: **1**) | ≥1 ⇒ a submission still needed >16 arming rounds ⇒ *"one drain arms the whole submission"* is false |
+| 5 | `W743-PREFLIGHT truncated=` | **0** | ≥1 ⇒ an operand exceeded `PREFLIGHT_CHUNKS_MAX` (256 chunks ≈ 16 MiB) and that submission's atomicity is **not proved** |
+| 6 | `DOORBELL-REFUSALS FwdFault::CpuCeFb=` | ⊘ **NOT PREDICTED, AND NOT A GRADE.** The pre-flight refuses under the *same name*, so this can **rise** while the client improves | — ⚠ w742's lesson, restated: *do not read a refusal count as progress on the client* |
+| 7 | ★★★★★ `W392D_GUEST_OUTCOME=` | **`(P)`, `THREADS 8 of 8`** — **THE GATE. Nothing else counts** | anything else |
+| 8 | `BAR-MIRROR bar1 … TRAP_FILLS=` / `BAR1-PASSTHROUGH … misses=` | **0 / 0** (w742: 0 / 0) | ≥1 either ⇒ regression |
+| 9 | `BAR-MIRROR bar2 … TRAP_FILLS=` / `BAR2-PASSTHROUGH … misses=` | **0 / 0** (w742: 0 / 0) | ≥1 either ⇒ regression |
+| 10 | `quiesce[calls=` | **0** (w742: 0) | ≥1000 ⇒ regression |
+| 11 | `RmInitAdapter failed!` / `SMI_RC=` | **0 occurrences / `0`** | ≥1 / non-zero ⇒ regression |
+| 12 | control arm `W392D_GUEST_OUTCOME=` | **`(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`** | anything else ⇒ the boot is uninterpretable |
+| 13 | ★★ control arm `W743-PREFLIGHT passes=` | **0** — provably inert | ≥1 ⇒ the pre-flight ran where there is no byte port, and **the control is not a control** |
+
+
+> ### ✔✔✔ MEASURED 2026-09-15 (w743), ON HARDWARE, BOTH ARMS, ONE BINARY
+> `[vast **51126197**, RTX 3070 (GA104), machine 56506, host driver **580.159.04 OPEN**,
+> `BINARY_REV = TREE_REV = 225f3e81` stamped on both arms, control first; evidence
+> `traces/w743_preflight/`]`
+> ⊘ **No constraint was relaxed. No completion was forged.**
+>
+> | # | predicted | **measured (device arm)** | w742 | verdict |
+> |---|---|---|---|---|
+> | 1 | `passes` ≥ 50 | **109** | — | ✔ **HELD** |
+> | 2 | `unarmed` ≥ 1 | **39** (`probed=181`) | — | ✔ **HELD** |
+> | 3 | ★★★ `blocked_by_progress` = **0** | **0** | **3** | ✔ **HELD** |
+> | 4 | ★★★ `gave_up` = **0** | **0** | **1** | ✔ **HELD** |
+> | 5 | `truncated` = 0 | **0** | — | ✔ **HELD** |
+> | 6 | `CpuCeFb` — not predicted | **0** — *the whole family is gone* (w740: 63, w742: 4) | 4 | — |
+> | 7 | ★★★★★ client `(P)` 8/8 | **`(R)`, `THREADS 0 of 8`** | `(R)` 0/8 | ⊘ **REFUTED** |
+> | 8 | bar1 `TRAP_FILLS`/`misses` = 0/0 | **0 / 0** | 0 / 0 | ✔ **HELD** |
+> | 9 | bar2 `TRAP_FILLS`/`misses` = 0/0 | **0 / 0** | 0 / 0 | ✔ **HELD** |
+> | 10 | `quiesce[calls=` 0 | **0** `removed=0` | 0 | ✔ **HELD** |
+> | 11 | `RmInitAdapter failed!` 0 / `SMI_RC=0` | **0 occurrences**, `SMI_RC=0`, `MODPROBE_RC=0`, `named=311748`, `HOST_DMESG_XID=0` | same | ✔ **HELD** |
+> | 12 | control `(P)` 8/8 | **`(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`**, `ARENA_BOOT_RC=0` | same | ✔ **HELD** |
+> | 13 | ★★ control `passes` = 0 | **`passes=0 probed=0 unarmed=0 blocked=0 truncated=0`**, and `W740-CE-SUBMIT-ARM trips=0 … blocked_by_progress=0` | — | ✔ **HELD — provably inert** |
+>
+> ★★★ **THE MECHANISM ROW IS THE STRONGEST ONE.** `W740-CE-SUBMIT-ARM`:
+>
+> | | w742 | **w743** |
+> |---|---|---|
+> | `trips` | 37 | **8** |
+> | `recovered` | 6 | **8** — ★ *every trip recovered* |
+> | `blocked_by_progress` | 3 | **0** |
+> | `gave_up` | 1 | **0** |
+>
+> ⇒ both halves of the claim are measured: **one drain per submission instead of one page per
+> trip** (37 → 8 trips, 100 % recovery), and **no refusal that had already moved bytes**
+> (3 → 0, 1 → 0).
+>
+> ### ⊘⊘⊘ AND THE GATE IS STILL `(R)` — WHICH IS THE POINT, AND IT IS NOW MEASURED RATHER THAN ARGUED
+>
+> Three boots at three revisions, one variable each:
+>
+> | | w740 | w742 | **w743** |
+> |---|---|---|---|
+> | `FwdFault::CpuCeFb` | 63 | 4 | **0** |
+> | `FwdFault::PassthroughDoorbellBirth` | **19** | **19** | **19** |
+> | `BIRTH-AT-ALLOC … REFUSED` | **11** | **11** | **11** |
+> | conjunct **(6)** | **17** | **17** | **17** |
+> | `W392D_GUEST_OUTCOME` | `(R)` 0/8 | `(R)` 0/8 | **`(R)` 0/8** |
+>
+> ★★★★★ **w743 drove its target to ZERO — the entire `CpuCeFb` family is gone from the boot —
+> and the client did not move by a single thread.** The four numbers that name the channel-birth
+> wall are byte-identical across all three boots. ⇒ *`CpuCeFb` was never the raw client's wall*,
+> and this is now a three-point measurement rather than an inference from one.
+> ⊘ The control arm's fault census on the same binary is `RingBroughtNoEntry=2` with
+> **`BIRTH-AT-ALLOC REFUSED=0`** and the client `(P)` 8/8 — the discriminator, reproduced.
+>
+> ⚠ **The device arm's remaining refusals are 19 `PassthroughDoorbellBirth` + 1
+> `RingBroughtNoEntry`** (`doorbells: 124 arrived, 101 served, 22 REFUSED`; w742: 124/97/25).
+> The four doorbells w743 recovered are exactly the four `CpuCeFb` it removed.
+
+
 ⊘ **Owner's question: "does the driver use the refresh (three entrypoints) before using a BAR
 address? can you confirm?" — CONFIRMED, from the w740 device-arm log.** The line immediately
 before the first miss is the refresh itself:

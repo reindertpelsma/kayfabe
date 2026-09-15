@@ -84,6 +84,41 @@ static FIRST_GP_PUT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU
 static FIRST_TOOK: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static FIRST_STRANDED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
+/// ★★★★★ **w743 — THE PRE-FLIGHT'S CENSUS.** ⊘ Five numbers and not one flag: *"the
+/// pre-flight never ran"*, *"it ran and everything was already armed"* and *"it ran and
+/// refused"* are three findings with three different fixes, and a boolean spells them the
+/// same way. `PREFLIGHT_PASSES == 0` on the `device` arm means the arm never executed and no
+/// other number below is interpretable.
+static PREFLIGHT_PASSES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_PROBED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_UNARMED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_BLOCKED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_TRUNCATED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
+/// `(passes, probed, unarmed, blocked, truncated)` — the pre-flight's lifetime census.
+///
+/// - `passes` — submissions that reached the pre-flight at all (i.e. the store has a byte
+///   port). **Zero on the `arena` control arm, by construction.**
+/// - `probed` — ranges asked about.
+/// - `unarmed` — ranges that were not servable; each recorded its demand.
+/// - `blocked` — submissions refused by the pre-flight. ★ Every one of these is a refusal
+///   that **moved nothing**, so `blocked` should be matched by an equal rise in
+///   `CE-SUBMIT-ARM trips=` and NOT in `blocked_by_progress=`.
+/// - `truncated` — operands whose probe hit [`crate::cpu_ce::PREFLIGHT_CHUNKS_MAX`]. ⊘ A
+///   non-zero value means at least one submission's atomicity was **not** proved.
+#[must_use]
+pub fn preflight_census() -> (u64, u64, u64, u64, u64) {
+    use core::sync::atomic::Ordering::Relaxed;
+    (
+        PREFLIGHT_PASSES.load(Relaxed),
+        PREFLIGHT_PROBED.load(Relaxed),
+        PREFLIGHT_UNARMED.load(Relaxed),
+        PREFLIGHT_BLOCKED.load(Relaxed),
+        PREFLIGHT_TRUNCATED.load(Relaxed),
+    )
+}
+
 /// `(ring_va, gp_put, took, stranded)` of the FIRST stranding, or all zeros if none.
 #[must_use]
 pub fn first_stranded() -> (u64, u64, u64, u64) {
@@ -302,6 +337,10 @@ pub struct CeUtilsRun {
     pub dst_bytes_guest_ram: u64,
     /// finishPayload semaphores written, after the bytes.
     pub completions: usize,
+    /// ★ w743 — what this submission's pre-flight found. [`CePreflight::probed`] is `0` when
+    /// the store has no byte port (the `arena` arm), which is *"not asked"* and not
+    /// *"nothing was missing"*.
+    pub preflight: crate::cpu_ce::CePreflight,
     /// ★★★★★ **Completions RESOLVED but NOT YET WRITTEN** — populated only under
     /// [`ReleaseTiming::Deferred`], and the caller owes every one of them.
     ///
@@ -1047,6 +1086,122 @@ fn run_submission_body(
             detail: last,
             progress: CeProgress::NONE,
         });
+    }
+
+    // ---- 3b. ★★★★★ w743 — THE PRE-FLIGHT. **NOTHING MOVES UNTIL EVERY VIEW IS ARMED.** --
+    //
+    // # ⊘⊘⊘ THE CASE A RETRY STRUCTURALLY CANNOT FIX, and why this is the shape of the fix
+    //
+    // `[measured w740]` `blocked_by_progress=68` against `trips=10`; `[measured w742]` `3`
+    // against `37`, with `gave_up=1`. Those refusals had **already moved bytes or released a
+    // payload**, so [`CeProgress::may_re_run`] closes — correctly — and the guest's copy never
+    // retires. The loop below is where that happens: it walks the decoded methods in order and
+    // each iteration executes its launch and then defers its release, so a later launch that
+    // misses a framebuffer view refuses a submission that is already half-done.
+    //
+    // ⇒ Ask FIRST, touch SECOND. This pass resolves the same operands the loop will, asks the
+    // store's byte port whether each range is servable **without touching one**, and records the
+    // demand for every range that is not. If anything was missing the whole submission is
+    // refused with `progress = NONE` — nothing decoded-and-executed, nothing released — so the
+    // shim's bounded arm-then-retry (`CE_SUBMIT_ARM_RETRIES`) drains **once** and re-runs into a
+    // fully armed store.
+    //
+    // # ⊘ Why the arming is not done BEFORE the session, which was the other candidate shape
+    //
+    // Because these operands are not knowable there. Every address in this pass comes out of a
+    // walk of the **guest's own page tables**, which live in the framebuffer and are read
+    // through `ce` — i.e. under the plane lock `RegPlane::ce_session_with_root` holds for its
+    // whole closure. A pre-session arm would have to walk first, and walking is the thing that
+    // needs the lock. ⇒ the earliest point at which the operand set exists is **here**, and the
+    // property that actually matters — *no byte moves until every view is armed* — is a property
+    // of the ORDER, not of the lock.
+    //
+    // # ⊘ What it deliberately does NOT do
+    //
+    // A launch whose **walk** refuses is not this pass's business: it is refused by the loop
+    // below, by name, and it already reports `progress = NONE` when it is the first one. A walk
+    // refusal here is *skipped* so the remaining launches still get their demand recorded — one
+    // drain for the submission instead of one per launch.
+    //
+    // ⊘ **Inert on the `arena` control arm by construction**: `FbStore::demand_port` answers
+    // `None` there, `want_ours_spans` returns `probed == 0` without resolving anything, and this
+    // whole block costs one `Option` test.
+    if ce.fb().demand_port().is_some() {
+        let mut pre = crate::cpu_ce::CePreflight::default();
+        for m in &decoded {
+            match *m {
+                PushMethod::CeRelease { completion, .. } => {
+                    let resolved = {
+                        let mut ops = WalkOperands::new(ce, &mut last);
+                        crate::cpu_ce::resolve_releases(&mut ops, &[completion])
+                    };
+                    if let Ok(rs) = resolved {
+                        pre.merge(crate::cpu_ce::want_releases(ce.fb(), &rs));
+                    }
+                }
+                PushMethod::CeLaunchDma {
+                    dst,
+                    src,
+                    len,
+                    dst_is_virtual,
+                    src_is_virtual,
+                    dst_target,
+                    src_target,
+                    work,
+                    completion,
+                } => {
+                    let spans = {
+                        let mut ops = WalkOperands::new(ce, &mut last);
+                        partition_ce(
+                            &mut ops,
+                            dst,
+                            dst_is_virtual,
+                            dst_target,
+                            src,
+                            src_is_virtual,
+                            src_target,
+                            len,
+                            work,
+                        )
+                    };
+                    if let Ok(spans) = spans {
+                        pre.merge(crate::cpu_ce::want_ours_spans(ce.fb(), &spans));
+                    }
+                    if let Some(c) = completion {
+                        let resolved = {
+                            let mut ops = WalkOperands::new(ce, &mut last);
+                            crate::cpu_ce::resolve_releases(&mut ops, &[c])
+                        };
+                        if let Ok(rs) = resolved {
+                            pre.merge(crate::cpu_ce::want_releases(ce.fb(), &rs));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        run.preflight = pre;
+        PREFLIGHT_PASSES.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_PROBED.fetch_add(pre.probed as u64, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_UNARMED.fetch_add(pre.unarmed as u64, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_TRUNCATED
+            .fetch_add(pre.truncated as u64, core::sync::atomic::Ordering::Relaxed);
+        if let Some(at) = pre.first_missing {
+            PREFLIGHT_BLOCKED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            // ⊘ `progress` is left at `NONE` by `run_submission_timed`'s own accumulator
+            // BECAUSE NOTHING HAS RUN: `run.launches`, `run.bytes`, `run.completions` and
+            // `run.deferred_releases` are all still at their entry values, and the loop below
+            // has not been entered. That is the claim this whole block exists to make true,
+            // and `a_preflight_refusal_moves_nothing_and_is_therefore_re_runnable` asserts it.
+            return Err(CeUtilsRefusal {
+                fault: FwdFault::CpuCeFb {
+                    phys: at,
+                    why: crate::cpu_ce::PREFLIGHT_NOT_ARMED,
+                },
+                detail: last,
+                progress: CeProgress::NONE,
+            });
+        }
     }
 
     // ---- 4. EXECUTE each launch, then release its completion. ---------------------------

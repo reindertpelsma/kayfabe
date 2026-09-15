@@ -54,6 +54,8 @@ pub struct FakePort {
     served_write: AtomicU64,
     wanted_read: AtomicU64,
     wanted_write: AtomicU64,
+    /// ★ w743 — how many times [`DeviceFbPort::probe_or_want`] was asked.
+    probes: AtomicU64,
 }
 
 impl FakePort {
@@ -74,7 +76,14 @@ impl FakePort {
             served_write: AtomicU64::new(0),
             wanted_read: AtomicU64::new(0),
             wanted_write: AtomicU64::new(0),
+            probes: AtomicU64::new(0),
         }
+    }
+
+    /// How many times the pre-flight asked this port a question.
+    #[must_use]
+    pub fn probes(&self) -> u64 {
+        self.probes.load(Ordering::Relaxed)
     }
 
     /// Put bytes into the object **without** arming anything — the guest's engines writing
@@ -211,6 +220,18 @@ impl DeviceFbPort for FakePort {
         }
         self.served_write.fetch_add(1, Ordering::Relaxed);
         true
+    }
+
+    fn probe_or_want(&self, at: u64, len: u64, by: DeviceFbWant) -> bool {
+        self.probes.fetch_add(1, Ordering::Relaxed);
+        let Some((first, last)) = self.span(at, len.max(1)) else {
+            return false;
+        };
+        if self.all_armed(first, last) {
+            return true;
+        }
+        DeviceFbPort::want(self, at, len, by);
+        false
     }
 
     fn want(&self, at: u64, len: u64, by: DeviceFbWant) {

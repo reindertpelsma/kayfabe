@@ -2123,6 +2123,38 @@ pub trait DeviceFbPort: Send + Sync + core::fmt::Debug {
     /// plane lock**: it must not block, make a syscall, or take a ranked lock.
     fn want(&self, at: u64, len: u64, by: DeviceFbWant);
 
+    /// ★★★★★ **w743 — IS `[at, at+len)` SERVABLE RIGHT NOW, WITHOUT MOVING A BYTE?**
+    ///
+    /// `true` = every byte of the range is behind an armed view, so a following
+    /// [`DeviceFbPort::read_armed`] / [`DeviceFbPort::write_armed`] of the same range will
+    /// be served. `false` = it is not, **and the demand has been recorded** exactly as
+    /// [`DeviceFbPort::want`] records it.
+    ///
+    /// # ⊘⊘⊘ Why this exists at all, and it is not a convenience over `read_armed`
+    ///
+    /// `[measured w740/w742]` the CPU copy-engine executor discovers a missing view by
+    /// *attempting the access*, which for a destination is a **write**. It walks its spans in
+    /// order and returns on the first refusal — so a submission whose second launch misses a
+    /// view has already moved the first launch's bytes and released its payload, and
+    /// `CeProgress::may_re_run` then **closes the retry for ever**
+    /// (`blocked_by_progress=68` against `trips=10` at w740; `3` against `37` at w742).
+    /// ⇒ the executor needs a question it can ask about a range **before** it touches one,
+    /// and `read_armed` is not that question: it copies, and a *destination* cannot be
+    /// probed with a write at all.
+    ///
+    /// ⚠ Called **under the plane lock**, on a vCPU: like [`DeviceFbPort::want`] it must not
+    /// block, make a syscall or take a ranked lock. It is a map lookup and a set insert.
+    ///
+    /// # ⊘ Deliberately NOT a default method
+    ///
+    /// `[w742]` `DeviceFb` inherited `FbStore::install_join`'s *refusing* default for two
+    /// reviews because the default's own prose asserted a true fact about the store — *"a
+    /// trait default that refuses is the `_ => {}` catch-all one level up, and worse,
+    /// because the refusal justifies itself"*. A default here would be worse still in the
+    /// other direction: `true` would claim a view exists, and `false` would make every
+    /// pre-flight refuse for ever. Both are rulings. ⇒ every port writes it.
+    fn probe_or_want(&self, at: u64, len: u64, by: DeviceFbWant) -> bool;
+
     /// ★★★ Arm what was wanted. **Lock-free callers only** — this is an IPC round trip to
     /// the isolate that owns the object.
     ///
