@@ -114,7 +114,36 @@ four (`--atomics-probe`, `--pce-mask-probe`) followed a *killed* `--gpga-reserve
 their subject at all. ⇒ the wall's first signature is a **hang**, not a refusal, and the
 containment now classifies on the ladder's own `R2 version` marker rather than on an exit code.
 
-## 7. What the containment does, and what it does not
+## 7. ★★★ THE FOUR NOT-PASSING ARMS, EACH ALONE ON ITS OWN BOOT — `run_w735d_isolated_arms.out`
+
+⊘ **A DIAGNOSTIC, NOT A RE-GRADE.** One arm per fresh QEMU, `RMLADDER_ARM_TIMEOUT=600` instead
+of the graded 90 s, asking one question: *slow, or stuck?* The graded default is unchanged, and a
+pass here is a statement about **speed**, not a suite result.
+
+| arm | alone, 600 s | reading |
+|---|---|---|
+| `--atomics-probe` | **PASS** | ⇒ its batch row was **collateral** of the arm before it |
+| `--pce-mask-probe` | **PASS** | ⇒ same |
+| `--gpga-reserve-probe` | **TIMEOUT(137)**, still mid-sweep | a real defect — see below |
+| `--ce-client-guest-ram` | **TIMEOUT(137)**, last line `DOORBELL-STORE #1 … ★★★ WROTE` | a real defect — see below |
+
+⇒ **With the collateral removed the guest verdict is 28 PASS / 2 TIMEOUT / 0 FAIL**, and the two
+that remain are *named*:
+
+**(a) `--gpga-reserve-probe` — the bulk framebuffer read is at least 120× too slow.** It
+memcpy-sweeps a **256 MiB** object and had not finished after **600 s** ⇒ **< 0.43 MiB/s**. The
+same shape measured on the host through a device view of the reserved object is **52.5 MiB/s**
+(`SINGLE_STORE_PLAN.md`, w734). ⚠ This is the arm that most directly exercises what §3 is
+about, and it is the one the guest cannot complete.
+
+**(b) `--ce-client-guest-ram` — a CE copy whose SOURCE is guest RAM rings its doorbell and the
+completion never arrives.** Its last line is the isolate's own
+`DOORBELL-STORE #1 host_token=0x00000003 ★★★ WROTE — the store instruction executed`. ⇒ the
+submission happened and nothing came back, for **600 s**. ⊘ Its sibling `--ce-client` — the same
+round trip with a **vidmem** source — **PASSES** (*"ALL ARMS MET"*), so this is specific to the
+guest-RAM source path, and `HOST_DMESG_XID=0` on that boot: **no host fault explains it.**
+
+## 8. What the containment does, and what it does not
 
 `rmladder_suite.sh` now recovers-and-retries and reports **30 rows either way**, with
 `UNMEASURED` (never reached its subject) kept distinct from `FAIL` (ran and judged itself

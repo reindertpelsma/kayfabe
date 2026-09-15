@@ -1,0 +1,40 @@
+    SUITE_STARTED=2026-09-15T07:22:58Z bin=/tmp/rmladder gpu=0 arm_timeout=600 uid=0
+    === RMLADDER SUITE — 1 arms, gpu 0, 600s each, recover=modprobe ===
+    ARM                          VERDICT      last line
+    /tmp/rmladder_suite.sh: line 208:  1663 Killed                  timeout -k 5 "$ARM_TIMEOUT" "$BIN" --gpu "$GPU" "$1" > "$2" 2>&1
+    --gpga-reserve-probe         TIMEOUT(137) --- GPGA read sweep: 256 MiB object, splitmix64-filled, memcpy p (recovered for the next arm)
+    
+    SUITE_ARMS=1 SUITE_PASS=0 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=0
+    SUITE_RECOVERIES=1 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+    SUITE_NOT_PASSING: --gpga-reserve-probe(timeout,137)
+    SUITE_LOGDIR=/tmp/suitelogs
+    SUITE_RC=1
+    SUITE_STARTED=2026-09-15T07:35:17Z bin=/tmp/rmladder gpu=0 arm_timeout=600 uid=0
+    === RMLADDER SUITE — 1 arms, gpu 0, 600s each, recover=modprobe ===
+    ARM                          VERDICT      last line
+    --atomics-probe              PASS         done — atomics probe only
+    
+    SUITE_ARMS=1 SUITE_PASS=1 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=0
+    SUITE_RECOVERIES=0 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+    SUITE_LOGDIR=/tmp/suitelogs
+    SUITE_RC=0
+    SUITE_STARTED=2026-09-15T07:36:37Z bin=/tmp/rmladder gpu=0 arm_timeout=600 uid=0
+    === RMLADDER SUITE — 1 arms, gpu 0, 600s each, recover=modprobe ===
+    ARM                          VERDICT      last line
+    --pce-mask-probe             PASS         done — pce-mask probe only
+    
+    SUITE_ARMS=1 SUITE_PASS=1 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=0
+    SUITE_RECOVERIES=0 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+    SUITE_LOGDIR=/tmp/suitelogs
+    SUITE_RC=0
+    SUITE_STARTED=2026-09-15T07:37:57Z bin=/tmp/rmladder gpu=0 arm_timeout=600 uid=0
+    === RMLADDER SUITE — 1 arms, gpu 0, 600s each, recover=modprobe ===
+    ARM                          VERDICT      last line
+    /tmp/rmladder_suite.sh: line 208:  1664 Killed                  timeout -k 5 "$ARM_TIMEOUT" "$BIN" --gpu "$GPU" "$1" > "$2" 2>&1
+    --ce-client-guest-ram        TIMEOUT(137) kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000003 ★★� (recovered for the next arm)
+    
+    SUITE_ARMS=1 SUITE_PASS=0 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=0
+    SUITE_RECOVERIES=1 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+    SUITE_NOT_PASSING: --ce-client-guest-ram(timeout,137)
+    SUITE_LOGDIR=/tmp/suitelogs
+    SUITE_RC=1
