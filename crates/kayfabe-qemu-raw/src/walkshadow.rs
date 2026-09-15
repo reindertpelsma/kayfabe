@@ -153,6 +153,37 @@ impl WalkShadowPort {
         g.retire();
     }
 
+    /// ⊘ **Every census write is a short, self-contained acquisition.** The census mutex is
+    /// never held across the isolate round trip, because a thread waiting on it would be
+    /// blocked for the length of a walk — and if that thread is a vCPU, the cost is identical
+    /// to the IPC we refused to do there, with none of the instruments pointed at it.
+    fn note_skipped(&self, why: &'static str) {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .note_skipped(why);
+    }
+
+    fn note_image(&self, pages: u64, staged: u64, absent: u64, sysmem: u64) {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .note_image(pages, staged, absent, sysmem);
+    }
+
+    fn note(
+        &self,
+        host: &[kayfabe_mmu::walkdiff::Run],
+        kernel: &[kayfabe_mmu::walkdiff::Run],
+        unclassed: usize,
+        d: &[walkshadow::Disagreement],
+    ) {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .note(host, kernel, unclassed, d);
+    }
+
     /// Stage an image and run the kernel over it, returning the report bytes.
     fn refresh(&self, image: &walkshadow::ShadowImage) -> Result<Vec<u8>, String> {
         let off_trap = kayfabe_util::trapwitness::OffTrap::claim("running the walk shadow");
@@ -207,19 +238,22 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         let Some(port) = self.port else {
             return;
         };
-        let mut census = port
-            .census
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        // ⚠ FIRST, and before any work: this sweep may be running on a vCPU thread (see the
-        // module header). A synchronous isolate round trip there blocks a vCPU.
+        // ⚠⚠ **FIRST, AND BEFORE ANY LOCK IS TAKEN.** This sweep may be running on a vCPU
+        // thread (see the module header), and a synchronous isolate round trip there blocks a
+        // vCPU.
+        //
+        // ⊘ The order matters more than it looks. Taking the census mutex first and asking
+        // afterwards would make a vCPU-thread sweep **wait on a lock another thread is holding
+        // across an IPC round trip** — blocking the vCPU for the length of a walk, through a
+        // lock rather than through a socket, which is the same cost with none of the
+        // instruments pointed at it.
         if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
-            census.note_skipped("on_vcpu");
+            port.note_skipped("on_vcpu");
             return;
         }
         if results.is_empty() {
-            census.note_skipped("no_tasks");
+            port.note_skipped("no_tasks");
             return;
         }
 
@@ -249,11 +283,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 // it hit — `too_many_pages` and `unreadable_page` are different problems.
                 let name = e.as_str();
                 eprintln!("kayfabe: WALK-SHADOW image refused: {e:?}");
-                census.note_skipped(name);
+                port.note_skipped(name);
                 return;
             }
         };
-        census.note_image(
+        port.note_image(
             image.pages as u64,
             image.bytes.len() as u64,
             image.absent_edges,
@@ -264,7 +298,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             Ok(b) => b,
             Err(why) => {
                 eprintln!("kayfabe: WALK-SHADOW refresh refused: {why}");
-                census.note_skipped("isolate_refused");
+                port.note_skipped("isolate_refused");
                 return;
             }
         };
@@ -279,7 +313,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             Ok(h) => h,
             Err(e) => {
                 eprintln!("kayfabe: WALK-SHADOW report header unreadable: {e:?}");
-                census.note_skipped("report_unparseable");
+                port.note_skipped("report_unparseable");
                 return;
             }
         };
@@ -297,14 +331,14 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 header.pdb_count,
                 header.pdb_capacity
             );
-            census.note_skipped("report_truncated");
+            port.note_skipped("report_truncated");
             return;
         }
         let report = match kayfabe_mmu::walkreport::Report::parse(&bytes) {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("kayfabe: WALK-SHADOW report unparseable: {e:?}");
-                census.note_skipped("report_unparseable");
+                port.note_skipped("report_unparseable");
                 return;
             }
         };
@@ -312,7 +346,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         // future `parse` that stopped validating cannot quietly let an invalid report through.
         if let Err(e) = report.validate() {
             eprintln!("kayfabe: WALK-SHADOW report invalid: {e:?}");
-            census.note_skipped("report_invalid");
+            port.note_skipped("report_invalid");
             return;
         }
         // ★★ **A REFUSAL THE KERNEL RAISED IS NOT AGREEMENT.** `refuse_mask` names which one
@@ -324,11 +358,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 "kayfabe: WALK-SHADOW kernel refused during the walk: refusals={} mask={:#x}",
                 header.refusals, header.refuse_mask
             );
-            census.note_skipped("kernel_refused_a_subtree");
+            port.note_skipped("kernel_refused_a_subtree");
             return;
         }
         let Ok(runs) = report.present_runs() else {
-            census.note_skipped("report_runs_undecodable");
+            port.note_skipped("report_runs_undecodable");
             return;
         };
 
@@ -357,11 +391,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 .collect();
             let kernel = kayfabe_mmu::walkdiff::canonical(&mine);
             let d = walkshadow::compare(&host, &kernel);
-            census.note(&host, &kernel, unclassed, &d);
+            port.note(&host, &kernel, unclassed, &d);
             compared_any = true;
         }
         if !compared_any {
-            census.note_skipped("no_vas_matched");
+            port.note_skipped("no_vas_matched");
         }
     }
 }
