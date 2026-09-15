@@ -1,0 +1,12 @@
+    SUITE_STARTED=2026-09-15T06:47:43Z bin=/tmp/rmladder gpu=0 arm_timeout=90 uid=0
+    === OPEN-ORDINAL PROBE — 8 consecutive device opens, nothing else ===
+    OPEN 1   rc=0    unopenable=0
+    OPEN 2   rc=0    unopenable=0
+    OPEN 3   rc=0    unopenable=0
+    OPEN 4   rc=0    unopenable=0
+    OPEN 5   rc=124  unopenable=0
+    OPEN 6   rc=1    unopenable=1
+    OPEN 7   rc=1    unopenable=1
+    OPEN 8   rc=1    unopenable=1
+    OPEN_ORDINAL_WALL=6  (0 ⇒ no wall within 8 opens)
+    SUITE_RC=0 (probe only — no arms were run)

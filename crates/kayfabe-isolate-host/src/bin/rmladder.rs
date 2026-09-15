@@ -11668,7 +11668,7 @@ fn main() -> std::process::ExitCode {
     let mut want_binapi: Option<Vec<(u32, usize)>> = None;
     let mut want_gpu_info = false;
     let mut want_bus_info = false;
-    let mut want_gpga_probe = false;
+    // ⊘ w735: this was declared TWICE in a row; the first was dead and warned. One only.
     let mut want_gpga_probe = false;
     let mut want_atomics = false;
     let mut want_pce_mask = false;
@@ -13221,9 +13221,34 @@ fn main() -> std::process::ExitCode {
                 kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real);
             let mut isolate = kayfabe_isolate::IsolateFactory::spawn(&factory, id);
             if isolate.is_retired() {
-                println!(
-                    "FAIL  R10 isolate         = it did not start (its own RM bring-up failed)"
-                );
+                // ⊘⊘⊘ **w735 — THIS LINE USED TO ASSERT A CAUSE IT DOES NOT KNOW.** It read
+                // *"it did not start (its own RM bring-up failed)"*, and RM bring-up is only
+                // ONE of the ways a spawn dies: the image may not publish, `clone` may be
+                // refused (no user/pid namespaces on this kernel), a socketpair may fail, or
+                // the child's handshake may come back `Failed`. `[measured w734t]` two guest
+                // arms failed here and the sentence sent the reader at RM — the one half the
+                // guest had no trouble with.
+                //
+                // ★ The reason has existed since the type did (`HostIsolate::spawn_error`)
+                // and E1 already routed it to THIS seam as [`kayfabe_isolate::Isolate::refusal`],
+                // whose own doc says a caller *"must be able to branch on that difference
+                // without parsing prose"*. Nothing here was branching on it — so the kind is
+                // now printed beside the sentence, and `no-plane` (a build with no embedded
+                // image) is reported as the different thing it is.
+                match kayfabe_isolate::Isolate::refusal(isolate.as_ref()) {
+                    Some(r) => println!(
+                        "FAIL  R10 isolate         = it did not start: kind={} — {}",
+                        r.kind.as_str(),
+                        r.why
+                    ),
+                    // ⊘ Retired with NO refusal is a THIRD state and it is a defect in the
+                    // seam, not in the spawn: something retired the isolate without saying
+                    // why. Naming it keeps it from being read as either of the other two.
+                    None => println!(
+                        "FAIL  R10 isolate         = it did not start and reported NO refusal \
+                         — the seam lost the reason (kind=<none>)"
+                    ),
+                }
                 return std::process::ExitCode::from(1);
             }
             println!(

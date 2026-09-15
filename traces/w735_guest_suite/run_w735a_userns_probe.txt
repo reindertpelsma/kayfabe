@@ -1,0 +1,9 @@
+=== ★ CAN THE GUEST MAKE A USER NAMESPACE AT ALL? (R10's precondition, asked directly) ===
+    GUEST_WHOAMI=ubuntu uid=1000
+    GUEST_APPARMOR_USERNS=1
+    GUEST_USERNS_CLONE=1
+    GUEST_USERNS_AS_USER=DENIED
+    GUEST_USERNS_AS_ROOT=ok
+
+=== ★★★ THE SUITE IN THE GUEST (host reference: 30/30 PASS) ===
+    SUITE_STARTED=2026-09-15T06:39:21Z bin=/tmp/rmladder gpu=0 arm_timeout=90 uid=0

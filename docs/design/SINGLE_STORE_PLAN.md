@@ -874,6 +874,63 @@ becomes a hard one without anyone deciding to make it so.
 
 ### ⚠ And "the full suite" means the GUEST suite
 
+> ## ⊘⊘⊘ CORRECTED 2026-09-15 (w735) — **THE THREE "GENUINE FAILURES" BELOW WERE NOT THREE, AND
+> ## TWO OF THEM WERE THE HARNESS. THE ONE THAT IS REAL IS BIGGER THAN THE SENTENCE IT HID IN.**
+>
+> `[measured 2026-09-15, vast 51090077, RTX 3060 GA106, open 580.159.04, rev d6201633, boot
+> `w735a`]` the guest suite, run as **root** with the cascade contained:
+>
+>     SUITE_ARMS=30 SUITE_PASS=4 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=26
+>     SUITE_RECOVERIES=26 SUITE_RECOVERED=0
+>     --concurrency PASS · --timer PASS · --engines PASS · --doorbell-census PASS
+>
+> **1. `--concurrency` and `--engines` PASS.** They were never a kayfabe defect. They are the
+> **only two of the thirty arms that reach R10** (every other arm returns from its own
+> `if want_*` block first — checked at all 30 dispatch sites), R10 spawns a child with
+> `ChildSpec::in_new_namespaces()`, and the guest is **Ubuntu 24.04 Noble**, which ships
+> `kernel.apparmor_restrict_unprivileged_userns=1`. The hook ran the ladder as `ubuntu` while
+> the host 30/30 reference and the graded `--uvm-mean` boot both ran under `sudo`. Measured in
+> the guest: `USERNS_AS_USER=DENIED`, `USERNS_AS_ROOT=ok`. ⇒ **the "delta" was root-vs-`ubuntu`,
+> not host-vs-guest.** ⚠ Two arms, one cause, and the cause was in the harness.
+> ★ With the uid corrected, `R10 isolate = 4 workers`, `R11 through-isolate = ok` and the
+> `R16 sandboxed doorbell` all pass **in the guest** — a stronger result than the one the old
+> sentence was hiding.
+>
+> **2. `--gpu-info-sweep` is not the wedging arm and never was.** It is simply the **fifth** arm.
+> It did not time out for a reason of its own: the device was already unopenable when it started,
+> and it is `UNMEASURED`, not `TIMEOUT`.
+>
+> **3. ★★★★★ THE REAL DEFECT, NAMED BY THE GUEST'S OWN DRIVER — `RmInitAdapter` IS NOT
+> REPEATABLE, AND THE FAILURE LATCHES WPR2.**
+>
+>     NVRM: _memdescSetSubAllocatorFlag … NV_ERR_INVALID_STATE @ mem_desc.c:404
+>     NVRM: … @ kern_bus_gm107.c:1798 / :1413
+>     NVRM: kbusInitBar2_HAL … NV_ERR_INVALID_STATE @ kern_bus_gm107.c:332
+>     NVRM: RmInitNvDevice: *** Cannot initialize the device
+>     NVRM: RmInitAdapter failed! (0x24:0x40:1220)
+>     ⇒ and every open after it, for the life of the QEMU:
+>     NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+>     NVRM: RmInitAdapter failed! (0x62:0x40:2028)
+>
+> ⇒ **Five `RmInitAdapter` cycles succeed per QEMU lifetime; the sixth fails in BAR2 init, and
+> the failed attempt leaves WPR2 up — which our emulated GSP never clears.** The guest then
+> cannot recover: `modprobe -r nvidia && modprobe` was run **26 times** and reopened the device
+> **zero** times (`SUITE_RECOVERIES=26 SUITE_RECOVERED=0`), each reload landing on
+> *"WPR2 already up"*. ⇒ **the leaked state is OURS, not the guest RM's.**
+> ⊘ And it is **not** w424's `ce_utils.c:304` CeUtils-scrubber chain, which this tree has
+> carried as the explanation since. Same symptom, different cause; the old note should be read
+> as superseded for this build.
+>
+> ★★ **WHY THIS IS A PRODUCT DEFECT AND NOT A TEST PROBLEM.** A guest that can open
+> `/dev/nvidia0` five times and then never again is broken for anything real — a CUDA app, a
+> container runtime, or a user who restarts a process. The 30-arm suite is not stressing the
+> device; it is the first workload that **counted**.
+>
+> ⇒ **The suite is contained but the licence is NOT granted.** The gate is
+> `SUITE_UNMEASURED == 0`, and it is 26. `rmladder_suite.sh` now reports 30 rows either way, and
+> `w735_suite_batched_run.sh` gets 30 real verdicts across several boots — ⊘ **that is
+> containment, not a fix, and §7's deletions stay unlicensed until the wall is gone.**
+
 `[measured]` host **30/30**; the guest had genuine failures (`--concurrency`, `--engines`, and a
 `--gpu-info-sweep` timeout that wedged the device and cascaded 25 arms). ⇒ A host-green suite is
 the easy way to declare victory early. **The gate for unwiring is the guest suite.**
