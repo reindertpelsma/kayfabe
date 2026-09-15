@@ -996,6 +996,99 @@ pub trait RmBackend: Send + Sync {
         Err(RmError::Other(0x56))
     }
 
+    /// ★★★★★ **CONSTRAINT 26 — ALLOCATE A *BARE* `FERMI_VASPACE_A`: the address space, and
+    /// no `NV01_MEMORY_VIRTUAL` range over it.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// [`RmBackend::alloc_vaspace`] mints **two** RM objects — the space and the range the
+    /// map verb actually names — and returns the range. That is right for an isolate that
+    /// does its own mapping and is exactly wrong under §26, for a reason hardware supplied:
+    /// `[measured w744]` a space that already carries a whole-space range refuses the
+    /// scratchpad's own range with **`0x19 INSERT_DUPLICATE_NAME`**. ⇒ the per-proc isolate
+    /// must create the space and **stop**.
+    ///
+    /// The handle returned is therefore the **space**, and everything that asks *"which
+    /// address space is this?"* (a channel group's `hVASpace`, `UVM_REGISTER_GPU_VASPACE`)
+    /// keeps working. Everything that asks *"which range may I map through?"* now has no
+    /// answer, and refuses by name — which is the ownership split, expressed as a missing
+    /// object rather than as a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the space with. The default is a named refusal: a backend with no
+    /// RM connection must say so rather than hand back a handle it did not mint.
+    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — TAKE A PER-PROC ISOLATE'S BARE ADDRESS SPACE AND BUILD THIS
+    /// ISOLATE'S OWN RANGE INSIDE IT.**
+    ///
+    /// The scratchpad half of the hand-over: dup `space` out of `client`
+    /// (`NV_ESC_RM_DUP_OBJECT`, `[measured w744]` `NV_OK`), then allocate **our own**
+    /// `NV01_MEMORY_VIRTUAL` over the dup. The returned handle is that range — the `hDma`
+    /// every later [`RmBackend::map_store_slice`] names.
+    ///
+    /// ⊘ **It is ONE space, not a copy**, and that was measured rather than assumed: a map
+    /// by the source client at a VA this one had already taken is refused `0x51`, with the
+    /// control passing at an unclaimed VA. ⇒ a per-proc isolate **cannot** map over a slice
+    /// the scratchpad placed, which is the half of the ownership split hardware enforces for
+    /// us.
+    ///
+    /// ⚠ **`client` is a client this process did not mint**, and it is the only such value
+    /// anywhere in the system. The host implementation will not accept it unless the backend
+    /// is the scratchpad — see `kayfabe_isolate_host::rm`'s `handed_vaspace` module, which
+    /// makes that a type rather than a rule.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup or the range with; a named refusal on any backend that is
+    /// not the scratchpad.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        let _ = (client, space);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — MAP A SLICE OF THE ONE RESERVED OBJECT AT THE GUEST'S OWN
+    /// VA, IN A VA SPACE THE VMM HANDED OVER.**
+    ///
+    /// `vas` is an [`RmBackend::adopt_vaspace`] result; `memory` is the reservation
+    /// [`RmBackend::reserve_gpga`] returned; `offset` is where in it the guest's framebuffer
+    /// range lives; `at` is the guest's own VA and is **binding**, not a hint.
+    ///
+    /// ⊘ **Not a mode of [`RmBackend::map_gpu_va`].** That verb maps a whole object into the
+    /// isolate's own space *and* its executor shadow; this one maps a **slice** of an object
+    /// the caller does not own into a space the caller did not create, and builds no shadow
+    /// because the scratchpad runs no guest-derived work that would resolve these VAs. The
+    /// two differ in who owns what, which is the distinction a flag erases.
+    ///
+    /// # Errors
+    /// [`RmError::PlacementRefused`] when RM placed the mapping anywhere but `at` —
+    /// constraint 28, asserted inside the one `NVOS46` site — or whatever RM refused with.
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let _ = (vas, memory, offset, len, at);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half of constraint 26 — take one such slice back down.**
+    ///
+    /// ⚠ Its acknowledgement is what a refresh withholds the guest's TLB-invalidate
+    /// completion on. A caller that drops the `Result` has turned the barrier into a report.
+    ///
+    /// # Errors
+    /// Whatever RM refused the unmap with.
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        let _ = (vas, at);
+        Err(RmError::Other(0x56))
+    }
+
     /// ★★★ **How large a reservation this host will actually accept, in MiB** — the
     /// number the guest's advertised framebuffer size is *derived from*, never asserted
     /// ahead of.

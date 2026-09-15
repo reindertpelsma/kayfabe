@@ -117,9 +117,9 @@ use kayfabe_abi::generated::classes::{
 // excused from it — a name scan cannot distinguish `KEPLER_CHANNEL_GROUP_A`, whose
 // generation word is vestigial, from `AMPERE_DMA_COPY_B`, whose is not.
 use kayfabe_abi::generated::nvos::{
-    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
-    NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
-    Nvos47Parameters, Nvos54Parameters,
+    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE,
+    NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters,
+    Nvos46Parameters, Nvos47Parameters, Nvos54Parameters, Nvos55Parameters,
 };
 use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
@@ -333,6 +333,126 @@ mod own_client {
 
 use own_client::OwnClient;
 
+/// ★★★★★ **CONSTRAINT 26's F11 SCOPING, AS A TYPE — *"a per-proc isolate may never name a
+/// foreign client; the scratchpad may, and only for a VA space the VMM handed it."***
+///
+/// # Why F11 does not simply dissolve under the ownership split
+///
+/// `THE_CONSTRAINTS.md` §26 moves every GPU-side mapping onto the **scratchpad**, and the
+/// scratchpad reaches a per-proc isolate's address space by **duping it**
+/// (`NV_ESC_RM_DUP_OBJECT`, `[measured w744]` `status=0x0000` on two driver builds). An
+/// `NVOS55` names `hClientSrc` — a client this process did **not** mint — so the one-line
+/// property [`mod@own_client`] exists to make structural is deliberately broken, **once**,
+/// by one verb.
+///
+/// ⊘ **That is a scoping, not an exemption.** The residual widening is exactly F11's:
+/// `surrender_privilege` drops capabilities and not uid, so on a root VMM RM's cross-user
+/// client check passes for us. What keeps it latent is still *"we cannot name a client we
+/// did not mint"* — now with a named, typed exception whose two halves are one statement.
+///
+/// # The construction
+///
+/// Two private types, both with private fields and one constructor each:
+///
+/// * [`ScratchpadRole`] — obtainable **only** by presenting an [`IsolateId`] whose proc is
+///   [`crate::SCRATCHPAD_ISOLATE_PROC`]. A per-proc backend cannot build one, so it cannot
+///   reach the next type at all.
+/// * [`HandedVaSpace`] — constructed **only** from a `ScratchpadRole` plus the two numbers.
+///
+/// ⇒ *"a `HandedVaSpace` value exists"* and *"this is the scratchpad, naming a VA space
+/// somebody handed it"* are one statement, in the same sense
+/// [`OwnClient::allocate_root`] makes one of *"an `OwnClient` exists"* and *"we minted that
+/// client"*.
+///
+/// # ⚠ WHAT IS STRUCTURAL AND WHAT IS NOT — say it rather than let the shape imply it
+///
+/// **Structural:** a per-proc backend cannot express a foreign client. `ScratchpadRole::of`
+/// is the only door and it answers `None` for every proc id but one.
+///
+/// **Not structural, and this is the honest half:** *"the VMM handed it over"* is carried by
+/// the **wire**, not by the type. The numbers reach this crate as
+/// `Request::AdoptVaSpace { client, space }`, and anything that can write that frame can
+/// name any client. What bounds that is the socket's own topology — the scratchpad's socket
+/// has exactly one peer, the VMM — and **not** this module. ⊘ Stated here because a type
+/// that looks like a proof and is one only halfway is worse than a comment.
+///
+/// ⊘ **No run stands behind the security reasoning**, exactly as [`mod@own_client`] records:
+/// whether F11's widening is exploitable at all remains `[unknown]`.
+mod handed_vaspace {
+    use kayfabe_isolate::IsolateId;
+
+    /// **Proof that the backend holding this value is the VM-lifetime scratchpad isolate.**
+    ///
+    /// No `Clone`, no `Copy`, no `Default`, no public field — and deliberately not `Debug`,
+    /// because a value whose entire content is *"I am the scratchpad"* has nothing to print
+    /// that its type does not already say.
+    pub(super) struct ScratchpadRole(());
+
+    impl ScratchpadRole {
+        /// The one door. `None` for every isolate that is not the scratchpad.
+        ///
+        /// ⊘ Takes the [`IsolateId`] rather than reading a global: one process can host two
+        /// emulated GPUs, and a `static` here would bind to whichever realized first — the
+        /// w637 defect, in the one place it would be least visible.
+        pub(super) fn of(id: IsolateId) -> Option<ScratchpadRole> {
+            (id.proc() == crate::SCRATCHPAD_ISOLATE_PROC).then_some(ScratchpadRole(()))
+        }
+    }
+
+    /// **A per-proc isolate's `FERMI_VASPACE_A`, named by the client that owns it.**
+    ///
+    /// The only value any `hClientSrc` in this crate will accept. `Copy`, because it is two
+    /// 32-bit handles; **no** `From`, `new`, `Default` or `Deserialize` — each of those
+    /// would re-open precisely what this closes.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct HandedVaSpace {
+        client: u32,
+        space: u32,
+    }
+
+    impl core::fmt::Debug for HandedVaSpace {
+        /// Named rather than bare hex: a handle is only interesting relative to *whose*
+        /// namespace it came from, and this type's whole content is the answer.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(
+                f,
+                "HandedVaSpace(client={:#010x}, space={:#010x})",
+                self.client, self.space
+            )
+        }
+    }
+
+    impl HandedVaSpace {
+        /// **Take the hand-over.** Consuming the [`ScratchpadRole`] is not a ceremony: it
+        /// is what makes the role's single meaning travel into this value rather than being
+        /// re-checked at the use site.
+        pub(super) fn handed_over(
+            _role: ScratchpadRole,
+            client: u32,
+            space: u32,
+        ) -> HandedVaSpace {
+            HandedVaSpace { client, space }
+        }
+
+        /// The foreign client, for the one field it is for: `NVOS55_PARAMETERS::hClientSrc`.
+        ///
+        /// ⚠ An *exit*, not a hole. It hands out a client somebody handed us; it cannot
+        /// manufacture one. The direction that would matter — `u32 -> HandedVaSpace` — does
+        /// not exist.
+        pub(super) fn src_client(self) -> u32 {
+            self.client
+        }
+
+        /// The address-space handle inside that client. `NVOS55_PARAMETERS::hObjectSrc`.
+        pub(super) fn src_object(self) -> u32 {
+            self.space
+        }
+    }
+}
+
+use handed_vaspace::{HandedVaSpace, ScratchpadRole};
+
+
 /// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
 /// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
 /// this workload nothing is suppressed — the cap exists so that a *spinning* workload can
@@ -517,6 +637,20 @@ struct Objects {
     /// freed, and it would leak *silently*, because RM frees the range happily and says
     /// nothing about the space it referenced.
     companions: BTreeMap<u32, u32>,
+    /// ★★★★★ **CONSTRAINT 26 — the `FERMI_VASPACE_A` handles this connection allocated
+    /// WITHOUT a companion `NV01_MEMORY_VIRTUAL` range.**
+    ///
+    /// Under the ownership split a per-proc isolate allocates a **bare** address space and
+    /// maps nothing into it; the scratchpad dups it and builds the range. `[measured w744]`
+    /// the space must be bare — a pre-built whole-space range makes the scratchpad's own
+    /// `NV01_MEMORY_VIRTUAL` refuse `0x19 INSERT_DUPLICATE_NAME`.
+    ///
+    /// ⊘ **A set and not `companions[space] = space`.** `companion_of` REMOVES, and a
+    /// self-companion would make `free` name one handle twice — a double free produced by
+    /// a bookkeeping shortcut. [`RmConnection::space_of`] reads this as its fallback so
+    /// that `alloc_channel_in`, which asks *"what space is this range in?"*, keeps working
+    /// unchanged when the handle it is given IS the space.
+    bare_spaces: std::collections::BTreeSet<u32>,
     /// ★ `channel handle -> the four objects and one address that make it work`.
     ///
     /// Same shape of problem as [`Objects::companions`] and a different answer, because a
@@ -1118,6 +1252,22 @@ fn status_check(status: u32) -> Result<(), RmError> {
     }
 }
 
+/// ★★★★★ **CONSTRAINT 26** — a backend that is **not** the scratchpad was asked to name a
+/// foreign client. `0x4B41` (`"KA"`), in the same private range as
+/// [`RING_NOT_A_JOINED_WINDOW`].
+///
+/// ⊘ Refused **before** any ioctl is built, so the widening F11 describes is not merely
+/// unused on this path — it is unreachable. See [`mod@handed_vaspace`].
+pub const ADOPT_NOT_THE_SCRATCHPAD: u32 = 0x4B41;
+
+/// ★★★★★ **CONSTRAINT 26** — something tried to map through a **bare** `FERMI_VASPACE_A`.
+///
+/// Under the ownership split a per-proc isolate holds the space and no range, so this is
+/// what *"the isolate borrows, the scratchpad holds"* looks like at the one moment it could
+/// be violated. ⊘ Distinct from RM's own `0x33 INVALID_OBJECT_HANDLE`, which says *"that is
+/// not a range"* and not *"you are the wrong party to be mapping"*.
+pub const MAP_THROUGH_A_BARE_SPACE: u32 = 0x4B42;
+
 /// The opaque status a **bounds** refusal made by this crate reports.
 ///
 /// ★ Distinct from [`NOT_ON_THIS_RUNG`], and the distinction is not cosmetic. An access
@@ -1669,6 +1819,7 @@ impl RmConnection {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
                 companions: BTreeMap::new(),
+                bare_spaces: std::collections::BTreeSet::new(),
                 channels: BTreeMap::new(),
                 exec_vases: BTreeMap::new(),
             }),
@@ -2190,12 +2341,38 @@ impl RmConnection {
     /// anyone can name.
     fn space_of(&self, range: u32) -> Option<u32> {
         let _leaf = leafwitness::Held::enter();
+        let o = self.objects.lock().expect("objects");
+        // ★★★★★ **CONSTRAINT 26 — a BARE space is its own space.** Under the ownership
+        // split the handle a per-proc `Vas` carries IS the `FERMI_VASPACE_A`, because the
+        // isolate builds no range over it. Every caller that asks *"which address space is
+        // this?"* — `alloc_channel_in`'s TSG, `UVM_REGISTER_GPU_VASPACE` — then keeps
+        // working unchanged, and every caller that asks *"which range may I map through?"*
+        // is the one that must now refuse, which it does by name.
+        o.companions
+            .get(&range)
+            .copied()
+            .or_else(|| o.bare_spaces.contains(&range).then_some(range))
+    }
+
+    /// Is `h` a bare `FERMI_VASPACE_A` — one this connection allocated with no companion
+    /// range, i.e. one it may **not** map through?
+    fn is_bare_space(&self, h: u32) -> bool {
+        let _leaf = leafwitness::Held::enter();
         self.objects
             .lock()
             .expect("objects")
-            .companions
-            .get(&range)
-            .copied()
+            .bare_spaces
+            .contains(&h)
+    }
+
+    /// Record `space` as bare. Called only by [`HostRmBackend::alloc_vaspace_bare`].
+    fn remember_bare_space(&self, space: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .bare_spaces
+            .insert(space);
     }
 
     /// The isolate's own address space over `guest_range`, if one has been built.
@@ -2405,6 +2582,33 @@ impl RmConnection {
         at: Option<u64>,
         extra: u32,
     ) -> Result<u64, RmError> {
+        self.raw_map_dma_slice(h_dma, h_memory, 0, len, at, extra)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the same map, over a SLICE of the object.**
+    ///
+    /// `NVOS46_PARAMETERS::offset` is the offset **inside `hMemory`**, and it is the field
+    /// that makes *"one reserved object, many guest ranges"* expressible at all: the
+    /// scratchpad maps `[offset, offset+len)` of the one `NV01_MEMORY_LOCAL_USER` at the
+    /// guest's own VA, and does it once per coalesced run rather than once per object.
+    ///
+    /// ⊘ **This is where the `NVOS46` is built, and it is the ONLY place in the crate.**
+    /// [`RmConnection::raw_map_dma_flags`] delegates here with `offset = 0`, so constraint
+    /// 28's placement assertion below covers every fixed map in the tree — including this
+    /// one — rather than covering whichever sites remembered to compare.
+    ///
+    /// # Errors
+    /// As [`RmConnection::raw_map_dma`], plus [`RmError::PlacementRefused`] when RM placed
+    /// the mapping somewhere other than `at`.
+    fn raw_map_dma_slice(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+        at: Option<u64>,
+        extra: u32,
+    ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
         // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
@@ -2423,7 +2627,7 @@ impl RmConnection {
             h_device: self.device,
             h_dma,
             h_memory,
-            offset: 0,
+            offset,
             length: len,
             flags: extra
                 | page_size
@@ -2468,6 +2672,82 @@ impl RmConnection {
             });
         }
         Ok(out.dma_offset)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — DUP A PER-PROC ISOLATE'S ADDRESS SPACE INTO THIS CLIENT.**
+    ///
+    /// `[measured w744, GA106, on two driver builds]` `NV_ESC_RM_DUP_OBJECT` of a
+    /// `FERMI_VASPACE_A` answers `status=0x0000`, and the two clients then share **one**
+    /// address space rather than getting a copy — proved by the falsifier, not assumed: a
+    /// map by the source client at a VA the destination had already taken was refused
+    /// `0x51`, with the control passing at an unclaimed VA
+    /// (`traces/w744_b1d_probe/run3_FINAL_ga106_580.126.20.log`, `B1D_SHARING=ONE SPACE`).
+    ///
+    /// ⊘ `NV01_MEMORY_VIRTUAL` is **not** dupable — `0x26 NV_ERR_INVALID_DEVICE` at the
+    /// device, `0x36` at the root — which is why the scratchpad builds its **own** range
+    /// inside the duped space (route B) instead of duping the source's.
+    ///
+    /// ## ⚠ THE ONE `hClientSrc` IN THE CRATE
+    ///
+    /// `handed` is a [`HandedVaSpace`], which cannot be built by a per-proc backend. See
+    /// [`mod@handed_vaspace`] for what that does and does not prove; the short form is that
+    /// F11's *"we cannot name a client we did not mint"* is **scoped to this call**, by a
+    /// type, rather than weakened by an allowlist entry.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup with.
+    fn raw_dup_object(&self, parent: u32, want: u32, handed: HandedVaSpace) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos55Parameters::SIZE];
+        Nvos55Parameters {
+            h_client: self.client.raw(),
+            h_parent: parent,
+            h_object: want,
+            h_client_src: handed.src_client(),
+            h_object_src: handed.src_object(),
+            flags: 0,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.remember(out.h_object, parent);
+        Ok(out.h_object)
+    }
+
+    /// ★★★ **CONSTRAINT 26 — an `NV01_MEMORY_VIRTUAL` range over an address space this
+    /// client did not create.**
+    ///
+    /// [`HostRmBackend::alloc_vaspace_raw`] mints space and range together, which is right
+    /// for a client that owns both and useless here: the scratchpad's range has to be built
+    /// over a **duped-in** handle. `[measured w744]` `B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE
+    /// status=0x0000` — and it works **only** if the space is bare, because a second
+    /// whole-space range collides `0x19 INSERT_DUPLICATE_NAME`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the range with.
+    fn raw_alloc_range_over(&self, h_va_space: u32) -> Result<u32, RmError> {
+        let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        NvMemoryVirtualAllocationParams {
+            offset: 0,
+            limit: 0,
+            h_va_space,
+        }
+        .encode_into(&mut range)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)?;
+        self.remember(h, self.device);
+        // ⊘ Paired with the DUPED space, not with the source's: freeing this range must
+        // free the dup (this client's reference), and must NOT reach into the per-proc
+        // client's namespace, which is not ours to free.
+        self.pair(h, h_va_space);
+        Ok(h)
     }
 
     /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`RmConnection::raw_map_dma`].
@@ -5202,6 +5482,88 @@ impl RmBackend for HostRmBackend {
         Ok(self.stamp(h))
     }
 
+    /// ★★★★★ **CONSTRAINT 26 — the bare space.** See the trait method for why the range is
+    /// absent rather than optional.
+    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters::default()
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        // ⊘ Recorded as BARE before it is handed out. `space_of` reads this set as its
+        // fallback, and `map_gpu_va` reads it as its refusal — so the two views of
+        // "this handle is a space, not a range" cannot come apart.
+        self.conn.remember_bare_space(space);
+        Ok(self.stamp(space))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the scratchpad takes the hand-over.**
+    ///
+    /// ⚠ **THE ONE PLACE A FOREIGN CLIENT IS NAMED**, and the gate is a type:
+    /// [`ScratchpadRole::of`] answers `None` for every isolate but the scratchpad, and
+    /// [`HandedVaSpace`] has no other constructor. A per-proc backend reaching this line
+    /// gets [`ADOPT_NOT_THE_SCRATCHPAD`] and issues no ioctl at all.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        let Some(role) = ScratchpadRole::of(self.id) else {
+            return Err(RmError::Other(ADOPT_NOT_THE_SCRATCHPAD));
+        };
+        let handed = HandedVaSpace::handed_over(role, client, space);
+        let want = self.conn.mint();
+        // Parented at the DEVICE: `[measured w744]` a dup parented at the client root is
+        // refused `0x36`, and the device is the legal parent for this class.
+        let duped = self.conn.raw_dup_object(self.conn.device, want, handed)?;
+        match self.conn.raw_alloc_range_over(duped) {
+            Ok(range) => Ok(self.stamp(range)),
+            Err(e) => {
+                // The dup exists and the caller will never learn its handle, so it is
+                // disposed of HERE rather than becoming an orphan nobody can name — the
+                // same argument `alloc_vaspace_raw`'s error arm makes.
+                let h = self.stamp(duped);
+                let _ = self.free(h);
+                Err(e)
+            }
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — one slice of the one object, at the guest's own VA.**
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let h_dma = self.narrow(vas)?;
+        let h_memory = self.narrow(memory)?;
+        // ⊘ A bare space is not an `hDma`. Refused by name here rather than by RM's
+        // `0x33 INVALID_OBJECT_HANDLE`, because the two mean different things: RM's says
+        // "that handle is not a range", ours says "you were handed a space and asked to
+        // map through it, which is the ownership split being violated".
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        // ⊘ `raw_map_dma_slice` and NOT `map_dma_both`: the scratchpad builds no executor
+        // shadow, because it executes no guest-derived work that would resolve these VAs.
+        // A shadow here would be a second mapping of guest video memory in a space nothing
+        // reads — the reach `§9.3` names.
+        self.conn
+            .raw_map_dma_slice(h_dma, h_memory, offset, len, Some(at.0), 0)
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half — take one slice back down, and REPORT it.**
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        let h_dma = self.narrow(vas)?;
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        self.conn.raw_unmap_dma(h_dma, at.0)
+    }
+
     /// ★★★ The probe, on the wire. See [`Self::largest_reservable_mb`] — the inherent
     /// method this forwards to, which is where the bisection and its post-mortem live.
     ///
@@ -5494,11 +5856,26 @@ impl RmBackend for HostRmBackend {
         // [`HostRmBackend::map_dma_both`].
         let h_dma = self.narrow(vas)?;
         let h_memory = self.narrow(memory)?;
+        // ★★★★★ **CONSTRAINT 26 — THE OWNERSHIP SPLIT, AT THE ONE LINE THAT COULD VIOLATE
+        // IT.** A `Vas` allocated by `alloc_vaspace_bare` carries the SPACE, not a range,
+        // so this isolate has nothing to map through — by construction, not by policy. ⊘
+        // Refused by name so a boot says *which* rule fired; RM's own `0x33` would say
+        // "that handle is not a range", which is true and is not the finding.
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
         self.map_dma_both(h_dma, h_memory, len, Some(at.0))
     }
 
     fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
         let h_dma = self.narrow(vas)?;
+        if self.conn.is_bare_space(h_dma) {
+            // ⊘ Not silently `Ok`. A caller that staged an unmap against a space this
+            // isolate never mapped into is a bookkeeping error, and under constraint 27 an
+            // unmap that quietly succeeds without having unmapped anything is the exact
+            // shape the barrier exists to refuse.
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
         self.unmap_dma_both(h_dma, gpu_va)
     }
     /// ★★★ **Rung 3.** Not an ioctl at all: a store into the mapped usermode BAR window

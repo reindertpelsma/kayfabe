@@ -541,6 +541,44 @@ pub enum Request {
         /// The pattern base, when `poke == 1`; ignored otherwise.
         pattern: u32,
     },
+    /// ★★★★★ **CONSTRAINT 26, tag 34** — [`kayfabe_isolate::RmBackend::alloc_vaspace_bare`].
+    ///
+    /// ⊘ **A new tag and not a flag on [`Request::AllocVaSpace`] (tag 2).** The two differ
+    /// in *what the reply handle IS* — a range there, a space here — and a peer that read a
+    /// flag it did not understand would hand back an object of the wrong class under a name
+    /// that looks right. That is the failure this file's whole tag discipline exists for.
+    AllocVaSpaceBare,
+    /// ★★★★★ **CONSTRAINT 26, tag 35** — [`kayfabe_isolate::RmBackend::adopt_vaspace`].
+    ///
+    /// ⚠ **The only frame in the protocol that carries a client handle the receiving process
+    /// did not mint.** The child refuses it unless it is the scratchpad, by a type
+    /// (`kayfabe_isolate_host::rm`'s `handed_vaspace`), before any ioctl is built.
+    AdoptVaSpace {
+        /// The per-proc isolate's RM client, as **that** isolate reported it.
+        client: u32,
+        /// The bare `FERMI_VASPACE_A` inside it.
+        space: u32,
+    },
+    /// ★★★★★ **CONSTRAINT 26, tag 36** — [`kayfabe_isolate::RmBackend::map_store_slice`].
+    MapStoreSlice {
+        /// The adopted VA space's range handle, raw — an [`Request::AdoptVaSpace`] result.
+        vas: u64,
+        /// The reserved object, raw — a [`Request::ReserveGpga`] result.
+        memory: u64,
+        /// Offset **inside** that object.
+        offset: u64,
+        /// Bytes.
+        len: u64,
+        /// The guest's own VA. Binding, not a hint.
+        at: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 26/27, tag 37** — [`kayfabe_isolate::RmBackend::unmap_store_slice`].
+    UnmapStoreSlice {
+        /// The adopted VA space's range handle, raw.
+        vas: u64,
+        /// The VA to take down.
+        at: u64,
+    },
 }
 
 /// A request plus the checkout transaction it belongs to.
@@ -978,6 +1016,31 @@ impl Envelope {
                 out.push(31);
                 out.extend_from_slice(&token.to_le_bytes());
             }
+            Request::AllocVaSpaceBare => out.push(34),
+            Request::AdoptVaSpace { client, space } => {
+                out.push(35);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&space.to_le_bytes());
+            }
+            Request::MapStoreSlice {
+                vas,
+                memory,
+                offset,
+                len,
+                at,
+            } => {
+                out.push(36);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&memory.to_le_bytes());
+                out.extend_from_slice(&offset.to_le_bytes());
+                out.extend_from_slice(&len.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
+            Request::UnmapStoreSlice { vas, at } => {
+                out.push(37);
+                out.extend_from_slice(&vas.to_le_bytes());
+                out.extend_from_slice(&at.to_le_bytes());
+            }
             Request::WalkShadowStage { span, off, bytes } => {
                 out.push(32);
                 out.extend_from_slice(&span.to_le_bytes());
@@ -1280,6 +1343,22 @@ impl Envelope {
             },
             31 => Request::ReleaseDeviceView {
                 token: c.u64("device view token")?,
+            },
+            34 => Request::AllocVaSpaceBare,
+            35 => Request::AdoptVaSpace {
+                client: c.u32("adopt vaspace client")?,
+                space: c.u32("adopt vaspace space")?,
+            },
+            36 => Request::MapStoreSlice {
+                vas: c.u64("store slice vas")?,
+                memory: c.u64("store slice memory")?,
+                offset: c.u64("store slice offset")?,
+                len: c.u64("store slice len")?,
+                at: c.u64("store slice at")?,
+            },
+            37 => Request::UnmapStoreSlice {
+                vas: c.u64("store unmap vas")?,
+                at: c.u64("store unmap at")?,
             },
             4 => Request::AllocChannel {
                 vas: c.u64("channel vas")?,
@@ -1812,6 +1891,22 @@ mod tests {
                 write: 1,
             },
             Request::ReleaseDeviceView { token: 7 },
+            Request::AllocVaSpaceBare,
+            Request::AdoptVaSpace {
+                client: 0xC1DD_3C6F,
+                space: 0xCAFE_0004,
+            },
+            Request::MapStoreSlice {
+                vas: 0xCAFE_000A,
+                memory: 0xCAFE_000B,
+                offset: 0x2_0000,
+                len: 0x1_0000,
+                at: 0x0000_0090_0000_1000,
+            },
+            Request::UnmapStoreSlice {
+                vas: 0xCAFE_000A,
+                at: 0x0000_0090_0000_1000,
+            },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -2029,6 +2124,10 @@ mod tests {
             Request::WalkShadowRun { .. } => "WalkShadowRun",
             Request::ExportDeviceView { .. } => "ExportDeviceView",
             Request::ReleaseDeviceView { .. } => "ReleaseDeviceView",
+            Request::AllocVaSpaceBare => "AllocVaSpaceBare",
+            Request::AdoptVaSpace { .. } => "AdoptVaSpace",
+            Request::MapStoreSlice { .. } => "MapStoreSlice",
+            Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -2064,6 +2163,10 @@ mod tests {
                 "AllocEngineObject",
                 "AllocSysmem",
                 "AllocVaSpace",
+                "AllocVaSpaceBare",
+                "AdoptVaSpace",
+                "MapStoreSlice",
+                "UnmapStoreSlice",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",

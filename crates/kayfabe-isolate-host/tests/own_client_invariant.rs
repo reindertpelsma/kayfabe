@@ -167,6 +167,68 @@ fn struct_decl_spans(code: &str) -> Vec<(usize, usize)> {
     spans
 }
 
+/// The byte spans of every **function signature's parameter list** in `rm.rs`.
+///
+/// ★ Needed for exactly the reason [`struct_decl_spans`] is, and the argument is the same
+/// one: a line scanner cannot tell `client: u32` (a **parameter**, i.e. a type) from
+/// `h_client: self.client.raw()` (a field's **value**, i.e. an ioctl argument). Rust's
+/// grammar can — inside a signature's parens the right-hand side of every `:` is a *type*,
+/// and a type is never written into an ioctl.
+///
+/// ⊘ **Only `fn name(` DECLARATIONS**, never call sites, so a struct literal passed as an
+/// argument (`foo(Nvos46Parameters { h_client: … })`) is not inside one of these spans and
+/// is still gated.
+///
+/// ⚠ **A runaway span is refused rather than trusted.** Paren matching over raw text can go
+/// wrong (a `'('` char literal, a parenthesis inside a string), and a span that swallowed
+/// half the file would silently exempt real call sites. So a span is kept only if what
+/// follows its closing paren is `->`, `{` or `;` — the three things that can legally follow
+/// a signature's parameter list. Anything else means the match went astray, and the span is
+/// dropped: the gate then over-reports rather than under-reports, which is the direction a
+/// security gate must fail in.
+fn fn_signature_spans(code: &str) -> Vec<(usize, usize)> {
+    let bytes = code.as_bytes();
+    let mut spans = Vec::new();
+    let mut search = 0usize;
+    while let Some(rel) = code[search..].find("fn ") {
+        let at = search + rel;
+        search = at + 3;
+        let Some(open_rel) = code[at..].find('(') else {
+            break;
+        };
+        let open = at + open_rel;
+        // Between `fn ` and `(` there must be nothing but an identifier and (for a generic)
+        // angle brackets — otherwise this is not a signature at all.
+        let head = &code[at + 3..open];
+        if !head
+            .chars()
+            .all(|c| c.is_alphanumeric() || "_<>, ':&".contains(c))
+        {
+            continue;
+        }
+        let mut depth = 0usize;
+        for (i, b) in bytes.iter().enumerate().skip(open) {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let tail = code[i + 1..].trim_start();
+                        if tail.starts_with("->") || tail.starts_with('{') || tail.starts_with(';')
+                        {
+                            spans.push((open, i));
+                        }
+                        search = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    spans
+}
+
 /// The byte span of `mod own_client { … }` in `rm.rs`, by brace matching.
 ///
 /// The one legitimate `hRoot = 0` in the crate lives inside it — a root-client allocation
@@ -201,6 +263,87 @@ fn own_client_module_span(code: &str) -> (usize, usize) {
 /// minted, and either way it is the thing F11 says must not become possible.
 const APPROVED_RHS: &[&str] = &["self.client.raw()", "self.conn.client.raw()"];
 
+/// ★★★★★ **CONSTRAINT 26 — THE ONE SCOPED EXCEPTION, AND IT IS A TYPE RATHER THAN A STRING.**
+///
+/// > `THE_CONSTRAINTS.md` §26: *"F11 is SCOPED, not eliminated. Someone still names a client
+/// > they did not mint — the **scratchpad**, dup'ing the isolate's VA space. The rule is: a
+/// > per-proc isolate may never name a foreign client; the scratchpad may, and only for a VA
+/// > space the VMM handed it. Enforce as a **newtype**, the way `OwnClient` already does, so
+/// > the approved set grows by a TYPE and not by a string on an allowlist."*
+///
+/// ⊘ **[`APPROVED_RHS`] is NOT widened**, and that is the whole point of this being a
+/// separate function. The fields it governs — every client field that is not a `*_src` —
+/// keep exactly the two approved forms they had. What grows is the **universe**: `NVOS55`
+/// introduced a field whose meaning is *"the OTHER client"*, which the destination rule
+/// cannot express at all, and it gets its own rule with its own floor.
+///
+/// ## ★★ And its approved set is DERIVED from `mod handed_vaspace`, not written here
+///
+/// `gates_quantified_over_a_list` is a standing lesson in this project. The accessors
+/// `HandedVaSpace` exposes are read out of `rm.rs` at test time, so renaming one does not
+/// silently un-gate the field, and **adding** one is a deliberate widening of a type whose
+/// unforgeability `handed_vaspace_is_unforgeable` checks separately.
+fn approved_src_rhs(code: &str) -> BTreeSet<String> {
+    let (start, end) = handed_vaspace_module_span(code);
+    let module = &code[start..end];
+    let mut out = BTreeSet::new();
+    let mut search = 0usize;
+    while let Some(rel) = module[search..].find("pub(super) fn ") {
+        let at = search + rel + "pub(super) fn ".len();
+        search = at;
+        let Some(paren) = module[at..].find('(') else {
+            break;
+        };
+        let name = module[at..at + paren].trim();
+        // Only the accessors — `self`-taking, `-> u32`. A constructor is not an RHS.
+        let sig_end = module[at..].find("->").map(|o| at + o).unwrap_or(at);
+        if !module[at..sig_end].contains("self") {
+            continue;
+        }
+        if !module[sig_end..].starts_with("-> u32") {
+            continue;
+        }
+        out.insert(name.to_string());
+    }
+    out
+}
+
+/// Does `value` read a [`HandedVaSpace`] accessor — `<something>.<accessor>()`?
+fn is_handed_accessor(value: &str, accessors: &BTreeSet<String>) -> bool {
+    accessors
+        .iter()
+        .any(|a| value.ends_with(&format!(".{a}()")) && !value.contains(' '))
+}
+
+/// The byte span of `mod handed_vaspace { … }` in `rm.rs`, by brace matching.
+fn handed_vaspace_module_span(code: &str) -> (usize, usize) {
+    let start = code.find("mod handed_vaspace {").expect(
+        "★ NON-VACUITY: `mod handed_vaspace` is gone from rm.rs — constraint 26's scoped \
+         exception has no home, and any `*_src` client field is therefore ungated",
+    );
+    let open = start + code[start..].find('{').expect("an opening brace");
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    for (i, b) in bytes.iter().enumerate().skip(open) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (start, i);
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unbalanced braces scanning `mod handed_vaspace`");
+}
+
+/// ★ The number of **source**-client initialisers `rm.rs` had when this rule was written.
+/// A floor, for [`CLIENT_FIELD_SITES_FLOOR`]'s reason: a scanner that stops matching must
+/// turn its zero findings into a red test rather than a vacuous green.
+const SRC_CLIENT_SITES_FLOOR: usize = 1;
+
 /// ★ The number of client-field initialisers `rm.rs` had when this gate was written.
 ///
 /// A **floor**, and a literal on purpose — for the reason `scripts/run_full_suite.sh`
@@ -222,7 +365,17 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
          — the scan of kayfabe-abi is broken, not the tree. Got: {fields:?}"
     );
 
+    let params = fn_signature_spans(&code);
+    let accessors = approved_src_rhs(&code);
+    assert!(
+        !accessors.is_empty(),
+        "★ NON-VACUITY: `mod handed_vaspace` exposes no `-> u32` accessor, so the scoped \
+         source-client rule below has an EMPTY approved set and would refuse the one call \
+         site constraint 26 sanctions — or, worse, would be read as having nothing to gate."
+    );
+
     let mut sites = 0usize;
+    let mut src_sites = 0usize;
     let mut bad = Vec::new();
     for (idx, line) in code.lines().enumerate() {
         let t = line.trim();
@@ -240,7 +393,28 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
         if decls.iter().any(|(a, b)| offset > *a && offset < *b) {
             continue;
         }
+        // ★ Nor is a function PARAMETER, for the identical reason — see `fn_signature_spans`.
+        if params.iter().any(|(a, b)| offset > *a && offset < *b) {
+            continue;
+        }
         let inside_own_client = offset > mod_start && offset < mod_end;
+
+        // ★★★★★ **CONSTRAINT 26's SCOPED EXCEPTION.** A `*_src` client field names the
+        // OTHER client by definition — `NVOS55_PARAMETERS::hClientSrc` is the whole point of
+        // the dup — so the destination rule cannot express it and must not be stretched to.
+        // ⊘ The universe is still DERIVED (the suffix is read off the ABI's own names), and
+        // the approved set is derived from the newtype, so neither half is a list here.
+        if name.ends_with("_src") {
+            src_sites += 1;
+            if !is_handed_accessor(value, &accessors) {
+                bad.push(format!(
+                    "  rm.rs (code line {}): `{name}: {value}` ⇒ a SOURCE client that is not \
+                     a `HandedVaSpace` accessor",
+                    idx + 1
+                ));
+            }
+            continue;
+        }
 
         sites += 1;
         let ok = if inside_own_client {
@@ -257,6 +431,14 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
         }
     }
 
+    assert!(
+        src_sites >= SRC_CLIENT_SITES_FLOOR,
+        "★ NON-VACUITY: found {src_sites} SOURCE-client initialiser(s) in rm.rs, floor is \
+         {SRC_CLIENT_SITES_FLOOR}. Constraint 26's dup is the one sanctioned place a foreign \
+         client may be named; if the scanner stops seeing it, the rule that scopes it is \
+         gating nothing. Treat this as RED and fix the scanner — do NOT lower the floor. \
+         (If the dup verb was deliberately deleted, delete this rule in the SAME change.)"
+    );
     assert!(
         sites >= CLIENT_FIELD_SITES_FLOOR,
         "★ NON-VACUITY: found only {sites} RM client-field initialiser(s) in rm.rs, floor is \
@@ -335,4 +517,105 @@ fn own_client_is_unforgeable() {
              `u32 -> OwnClient` direction the type exists to make impossible."
         );
     }
+}
+
+/// ★★★★★ **CONSTRAINT 26 — `HandedVaSpace` is as unforgeable as `OwnClient`.**
+///
+/// The scoped rule above accepts `<x>.src_client()` as an `hClientSrc`. That is only worth
+/// anything while the **type** on the left cannot be manufactured: a `From<u32>` here would
+/// turn the exception into *"any u32, spelled through one extra call"*, which is F11 with a
+/// method on it.
+///
+/// ⊘ Mirrors `own_client_is_unforgeable` deliberately, including the forbidden-name list. If
+/// one of them grows a case the other should too, and the duplication is what makes that
+/// visible.
+#[test]
+fn handed_vaspace_is_unforgeable() {
+    let code = rm_rs_code_only();
+    let (start, end) = handed_vaspace_module_span(&code);
+    let module = &code[start..end];
+
+    // Private fields on both types.
+    assert!(
+        module.contains("pub(super) struct HandedVaSpace {")
+            && module.contains("        client: u32,")
+            && module.contains("        space: u32,"),
+        "★★★ CONSTRAINT 26 REGRESSED — `HandedVaSpace`'s handles are no longer private \
+         fields. A public field is a `u32 -> HandedVaSpace` conversion with extra steps, and \
+         the one sanctioned foreign client becomes any foreign client."
+    );
+    assert!(
+        module.contains("pub(super) struct ScratchpadRole(());"),
+        "★★★ CONSTRAINT 26 REGRESSED — `ScratchpadRole` is no longer an unforgeable unit. It \
+         is the half that says *which isolate* may name a foreign client at all; a \
+         constructible one lets a per-proc backend build a `HandedVaSpace`."
+    );
+
+    // Exactly one door into the role, and it is the isolate-id test.
+    assert_eq!(
+        module.matches("fn of(").count(),
+        1,
+        "★★★ CONSTRAINT 26 REGRESSED — `ScratchpadRole` has more than one constructor."
+    );
+    assert!(
+        module.contains("crate::SCRATCHPAD_ISOLATE_PROC"),
+        "★★★ CONSTRAINT 26 REGRESSED — `ScratchpadRole::of` no longer checks the isolate id \
+         against the scratchpad's proc. Without that test the type proves nothing at all."
+    );
+    assert!(
+        !module.contains("static ") && !module.contains("thread_local"),
+        "★★★ CONSTRAINT 26 REGRESSED — the role is being read off process-global state. One \
+         process hosts TWO emulated GPUs; a `static` binds to whichever realized first, \
+         which is the w637 defect in the one place it would be least visible."
+    );
+
+    // Exactly one door into the handed-over value, and it consumes the role.
+    assert_eq!(
+        module.matches("fn handed_over(").count(),
+        1,
+        "★★★ CONSTRAINT 26 REGRESSED — `HandedVaSpace` has more than one constructor. The \
+         invariant is that *having* one and *being the scratchpad, handed these numbers* are \
+         one fact; a second constructor splits them apart."
+    );
+    assert!(
+        module.contains("_role: ScratchpadRole,"),
+        "★★★ CONSTRAINT 26 REGRESSED — `handed_over` no longer takes the `ScratchpadRole` BY \
+         VALUE. Taking it by reference, or not at all, is what lets the role be re-used or \
+         skipped."
+    );
+
+    for forbidden in [
+        "impl From<u32> for HandedVaSpace",
+        "fn new(",
+        "derive(Default)",
+        "impl Default for HandedVaSpace",
+        "fn from_raw(",
+        "impl From<u32> for ScratchpadRole",
+    ] {
+        assert!(
+            !module.contains(forbidden),
+            "★★★ CONSTRAINT 26 REGRESSED — `mod handed_vaspace` now contains `{forbidden}`, \
+             which manufactures the type from a value nobody was handed. That is precisely \
+             the direction it exists to make impossible."
+        );
+    }
+}
+
+/// ⊘ **The exception is ONE verb wide.** A second `NV_ESC_RM_DUP_OBJECT` would be a second
+/// place a foreign client is named, and the whole argument for scoping F11 rather than
+/// eliminating it is that the place is countable.
+#[test]
+fn there_is_exactly_one_dup_object_escape_in_rm_rs() {
+    let code = rm_rs_code_only();
+    // ⊘ The ESCAPE, not the import: `use` names it once and that is not a call site.
+    let n = code
+        .matches("ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT")
+        .count();
+    assert_eq!(
+        n, 1,
+        "★★★ CONSTRAINT 26 — `rm.rs` now issues {n} `NV_ESC_RM_DUP_OBJECT` escape(s), \
+         expected exactly 1 (`raw_dup_object`). Every one of them names `hClientSrc`; a \
+         second is a second scope for an exception whose whole defence is that it is \
+         countable."
+    );
 }

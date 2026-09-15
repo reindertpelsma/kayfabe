@@ -829,6 +829,51 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::ReserveGpga { len })
     }
 
+    /// ★★★★★ **CONSTRAINT 26 — the bare space.** See the trait method: the handle that
+    /// comes back is the `FERMI_VASPACE_A`, not a range.
+    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
+        self.handle(Request::AllocVaSpaceBare)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the hand-over.** ⚠ This is the one request in the protocol
+    /// carrying a client handle the receiving process did not mint. It is refused by a type
+    /// on the far side unless that process is the scratchpad.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        self.handle(Request::AdoptVaSpace { client, space })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — one slice of the one reserved object, at the guest's VA.**
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let reply = self.call(Request::MapStoreSlice {
+            vas: vas.raw(),
+            memory: memory.raw(),
+            offset,
+            len,
+            at: at.0,
+        })?;
+        match self.lift(reply)? {
+            Reply::Va(va) => Ok(va),
+            // ⊘ `Wedged` and never a zero: a reply shape we cannot read means the two sides
+            // disagree about the frame, and `Ok(0)` would be a VA.
+            _ => Err(RmError::Wedged),
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half — and its `Result` is what the refresh barrier reads.**
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        self.unit(Request::UnmapStoreSlice {
+            vas: vas.raw(),
+            at: at.0,
+        })
+    }
+
     fn export_device_view(
         &mut self,
         memory: HostHandle,

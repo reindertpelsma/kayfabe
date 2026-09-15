@@ -883,6 +883,26 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             params,
         } => handle(rm.alloc(raw(parent), ClassId(class), &params)),
         Request::AllocVaSpace => handle(rm.alloc_vaspace()),
+        // ★★★★★ **CONSTRAINT 26 — the bare space, and the three verbs that go with it.**
+        //
+        // ⊘ `AdoptVaSpace` is the only frame in this protocol that carries a client handle
+        // this process did not mint, and it is **not** gated here: the gate is a type in
+        // `crate::rm` (`handed_vaspace`), which answers `ADOPT_NOT_THE_SCRATCHPAD` before
+        // any ioctl is built. Gating it here as well would be a second place the rule lives,
+        // and the two would come apart the first time one of them was edited.
+        Request::AllocVaSpaceBare => handle(rm.alloc_vaspace_bare()),
+        Request::AdoptVaSpace { client, space } => handle(rm.adopt_vaspace(client, space)),
+        Request::MapStoreSlice {
+            vas,
+            memory,
+            offset,
+            len,
+            at,
+        } => match rm.map_store_slice(raw(vas), raw(memory), offset, len, GpuVa(at)) {
+            Ok(va) => Reply::Va(va),
+            Err(e) => failed(e),
+        },
+        Request::UnmapStoreSlice { vas, at } => unit(rm.unmap_store_slice(raw(vas), GpuVa(at))),
         Request::SubdeviceControl { cmd, mut payload } => {
             match rm.subdevice_control(ControlCmd(cmd), &mut payload) {
                 Ok(()) => Reply::Payload(payload),
