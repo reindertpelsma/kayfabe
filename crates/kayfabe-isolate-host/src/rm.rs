@@ -2406,6 +2406,18 @@ impl RmConnection {
         extra: u32,
     ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
+        // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
+        // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
+        // still picks a page size, and a big page cannot start at a 4 KiB boundary, so RM
+        // aligns the request DOWN and answers `NV_OK`. See
+        // [`kayfabe_abi::bringup::nvos46_page_size_flag`] for the measurement and for why
+        // the predicate is read off `(at, len)`. ⊘ OR-ed rather than assigned: a caller that
+        // named the bit itself (`map_local_at_with_flags`) keeps naming it, and the two can
+        // only agree.
+        let page_size = match at {
+            Some(a) => kayfabe_abi::bringup::nvos46_page_size_flag(a, len),
+            None => 0,
+        };
         Nvos46Parameters {
             h_client: self.client.raw(),
             h_device: self.device,
@@ -2414,6 +2426,7 @@ impl RmConnection {
             offset: 0,
             length: len,
             flags: extra
+                | page_size
                 | if at.is_some() {
                     NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
                 } else {
@@ -2433,6 +2446,27 @@ impl RmConnection {
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         status_check(out.status)?;
+        // ★★★★★ **CONSTRAINT 28, HALF TWO — EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT.**
+        //
+        // ⊘ *"A `Result<u64, RmError>` returns `Ok` here and tells you nothing"* — the
+        // constraint's own words. It is true of the **caller's** reading, not of this
+        // function, which has `dmaOffset` beside the status and is the one place every
+        // fixed map in the crate passes through. Asserting here makes *"RM relocated it"*
+        // impossible to observe as a success at ANY call site, including ones written
+        // later, rather than at the three that happen to compare today.
+        //
+        // ⚠ The mis-placed mapping is TORN DOWN before the refusal returns. Leaving it
+        // would be a live mapping at a VA nobody will ever name again — the same leak the
+        // relocation itself is, with a refusal on top of it.
+        if let Some(want) = at
+            && out.dma_offset != want
+        {
+            let _ = self.raw_unmap_dma(h_dma, out.dma_offset);
+            return Err(RmError::PlacementRefused {
+                want,
+                got: out.dma_offset,
+            });
+        }
         Ok(out.dma_offset)
     }
 
