@@ -272,7 +272,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             leaves_of.insert(r.task.pdb.0, d.leaves.as_slice());
         }
         if vases.is_empty() {
-            census.note_skipped("no_decoded_vas");
+            port.note_skipped("no_decoded_vas");
             return;
         }
 
