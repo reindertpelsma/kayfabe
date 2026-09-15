@@ -389,11 +389,13 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
 {
     if (c.stop) return;
     if (gpga & (kf_ps_bytes_of(*c.fmt, flags) - 1ull)) { c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return; }
+#ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
         c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
         c.run.len += len;
         return;
     }
+#endif
     kf_flush(c);
     if (c.stop) return;
     c.run.va = va; c.run.gpga = gpga; c.run.len = len;
@@ -778,11 +780,13 @@ __device__ __forceinline__ void kf_seg_emit(KfOut &o, KfDev *d, KfSeg &s, uint16
                                             uint32_t op, uint64_t va, uint64_t gpga,
                                             uint64_t len, uint32_t flags)
 {
+#ifndef KF_BREAK_SEG_COALESCE
     if (s.have && s.op == op && s.flags == flags &&
         s.va + s.len == va && s.gpga + s.len == gpga) {
         s.len += len;
         return;
     }
+#endif
     kf_seg_flush(o, d, s, pi);
     s.have = 1u; s.op = op; s.va = va; s.gpga = gpga; s.len = len; s.flags = flags;
 }
@@ -1389,11 +1393,13 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
     if (gpga & (kf_ps_bytes_of(*c.fmt, flags) - 1ull)) {
         c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return;
     }
+#ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
         c.run.va + c.run.len == va && c.run.gpga + c.run.len == gpga) {
         c.run.len += len;
         return;
     }
+#endif
     kf_acc_flush(c);
     c.run.va = va; c.run.gpga = gpga; c.run.len = len; c.run.flags = flags;
     c.run.op = KFWR_OP_MAP; c.run.pdb_index = c.pdb_index; c.have = 1u;
@@ -1867,6 +1873,7 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
     for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < KF_MAX_FRONTIER && i < nn; i += stride0) {
     const uint32_t n = sum[i].n;
     unsigned char h = 1u;
+#ifndef KF_BREAK_JOIN
     if (n && i) {
         const KfSum p = sum[i - 1u];
         if (p.n && task[i - 1u].pdb == task[i].pdb &&
@@ -1874,6 +1881,7 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
             p.lva + p.llen == sum[i].fva &&
             p.lgpga + p.llen == sum[i].fgpga) h = 0u;
     }
+#endif
     head[i] = h;
     contrib[i] = (n && !h) ? (n - 1u) : n;
     if (contrib[i]) atomicAdd(&a.dev->tbl_run_count[a.dev->cur_buf ^ 1u][task[i].pdb], contrib[i]);

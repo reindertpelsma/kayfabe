@@ -117,6 +117,63 @@ check-closure-negative: kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap
 	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL round-trip does not pass on the real binary"; exit 1; fi; \
 	 echo "neg ok: the control round-trip still passes on the unbroken binary"
 
+# ═══ THE COALESCER'S OWN KNOWN-POSITIVES ═════════════════════════════════════
+#
+# ★★★★★ The owner's criterion is MINIMALITY, not just correctness: "if two BAR
+# PTEs are adjacent, in GPGA and in BAR VA, then it is ONE consolidated mmap and
+# not several". A suite that only checks the mapping SET stays green while the
+# report quietly doubles in length, so the minimality assertions need their own
+# known-positives or they are decoration.
+#
+# Each flag disables EXACTLY ONE of the four places a join can happen and nothing
+# else. The mapping set is unchanged by all three — which is the point: these are
+# failures no correctness oracle can see.
+#
+#   KF_BREAK_COALESCE     the leaf accumulators (kf_emit / kf_acc_emit)
+#   KF_BREAK_SEG_COALESCE the DELTA's segment coalescer (kf_seg_emit)
+#   KF_BREAK_JOIN         the TASK-BOUNDARY join (kf_par_heads / kf_par_join)
+kf_tests_nocoalesce: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_COALESCE -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_nosegco: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_SEG_COALESCE -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+kf_tests_nojoin: kf_tests.cu kf_walk.cu kf_walk.h kf_tables.h
+	$(NVCC) $(ARCH) $(CFLAGS) -DKF_BREAK_JOIN -o $@ kf_tests.cu kf_walk.cu -lpthread
+
+check-coalesce-negative: kf_tests_nocoalesce kf_tests_nosegco kf_tests_nojoin kf_tests
+	@./kf_tests_nocoalesce delta/coalesce_stress > /tmp/kf_neg9.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "COAL FAIL: the stress PASSED with the leaf coalescer removed"; exit 1; fi; \
+	 if ! grep -qE 'ONE mapping spelled as TWO|runs where .* suffice|are minimal' /tmp/kf_neg9.txt; then \
+	   echo "COAL FAIL: the stress failed, but NOT on a minimality assertion -- wrong reason:"; \
+	   grep '^    !' /tmp/kf_neg9.txt | head -3; exit 1; fi; \
+	 echo "coal ok: no leaf coalescer breaks the stress (rc=$$rc), on:"; \
+	 grep -m1 -E 'ONE mapping spelled as TWO|runs where .* suffice|are minimal' /tmp/kf_neg9.txt
+	@./kf_tests_nocoalesce correctness/coalesce_one_run > /tmp/kf_neg9b.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "COAL FAIL: coalesce_one_run PASSED with the leaf coalescer removed"; exit 1; fi; \
+	 echo "coal ok: no leaf coalescer breaks correctness/coalesce_one_run (rc=$$rc)"
+	@./kf_tests_nosegco delta/one_run_replacing_two > /tmp/kf_neg10.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "COAL FAIL: the delta cases PASSED with the DELTA coalescer removed"; exit 1; fi; \
+	 if ! grep -qE 'ONE mapping spelled as TWO|runs where .* suffice|run_count' /tmp/kf_neg10.txt; then \
+	   echo "COAL FAIL: the delta cases failed, but NOT on a minimality assertion -- wrong reason:"; \
+	   grep '^    !' /tmp/kf_neg10.txt | head -3; exit 1; fi; \
+	 echo "coal ok: no delta coalescer breaks delta/one_run_replacing_two (rc=$$rc), on:"; \
+	 grep -m1 '^    !' /tmp/kf_neg10.txt
+	@./kf_tests_nosegco delta/coalesce_stress > /tmp/kf_neg10b.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "COAL FAIL: the stress PASSED with the DELTA coalescer removed"; exit 1; fi; \
+	 echo "coal ok: no delta coalescer breaks the stress too (rc=$$rc)"
+	@./kf_tests_nosegco correctness/ > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then \
+	   echo "COAL FAIL: KF_BREAK_SEG_COALESCE must touch the DELTA only, but correctness/ broke too"; exit 1; fi; \
+	 echo "coal ok: the delta break is SCOPED -- correctness/ is untouched by it"
+	@./kf_tests_nojoin delta/enlarge_across_pt_boundary > /tmp/kf_neg11.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "COAL FAIL: a run spanning two page tables PASSED with the task join removed"; exit 1; fi; \
+	 echo "coal ok: no task-boundary join breaks delta/enlarge_across_pt_boundary (rc=$$rc), on:"; \
+	 grep -m1 '^    !' /tmp/kf_neg11.txt
+	@./kf_tests delta/ > /dev/null 2>&1; rc=$$?; \
+	 if [ $$rc -ne 0 ]; then echo "COAL FAIL: the CONTROL delta cases do not pass on the unbroken binary"; exit 1; fi; \
+	 echo "coal ok: the control delta cases still pass on the unbroken binary"
+
 # ═══ THE SEAM'S OWN KNOWN-POSITIVE ═══════════════════════════════════════════
 # "The descriptor is used" is unproven until a WRONG descriptor breaks something.
 # Each flag perturbs the setup data by one bit and nothing else; a hardcoded
@@ -184,10 +241,11 @@ kf_walk.ptx: kf_walk.cu kf_walk.h
 .PHONY: ptx
 ptx: kf_walk.ptx
 
-check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-seam-negative check-ver3-sketch
+check: check-invariants kf_tests check-ptx check-negative check-closure-negative check-coalesce-negative check-seam-negative check-ver3-sketch
 
 clean:
 	rm -f kf_tests kf_tests_broken kf_tests_oldmerge kf_tests_badorder kf_tests_nounmap \
+	      kf_tests_nocoalesce kf_tests_nosegco kf_tests_nojoin \
 	      kf_tests_baddesc kf_tests_badgeom kf_tests_badabi kf_tests_ver3
 
-.PHONY: all ptx check check-invariants check-ptx check-negative check-closure-negative check-seam-negative clean
+.PHONY: all ptx check check-invariants check-ptx check-negative check-closure-negative check-coalesce-negative check-seam-negative clean
