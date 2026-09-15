@@ -1,0 +1,18 @@
+kayfabe: WALK-SHADOW FIRST-DISAGREEMENT pdb_index=0 relocated_root=0xc000 real_root=0xefa9c000 report_pdbs=1 report_runs=2 host_leaves=2048 host_runs=1 kernel_rows_for_this_index=2 kernel_runs=2
+kayfabe: WALK-SHADOW   PDB[0] pdb=0xc000 first_run=0 run_count=2 vas_flags=0x5
+kayfabe: WALK-SHADOW   HOST[0] va=0x120000000 gpga=0x0 len=0x100000000 flags=0x0 class=P2M
+kayfabe: WALK-SHADOW   KERN[0] va=0x120000000 gpga=0x0 len=0xefc00000 flags=0x90200 class=P2M
+kayfabe: WALK-SHADOW   KERN[1] va=0x20fc00000 gpga=0xefc00000 len=0x10400000 flags=0x60200 class=P2M
+kayfabe: WALK-SHADOW   ROW[0] pdb_index=0 va=0x120000000 gpga=0x0 len=0xefc00000 flags=0x90200 op=1
+kayfabe: WALK-SHADOW   ROW[1] pdb_index=0 va=0x20fc00000 gpga=0xefc00000 len=0x10400000 flags=0x60200 op=1
+--- v5 (missing_in_kernel=30) ---
+kayfabe: WALK-SHADOW FIRST-DISAGREEMENT pdb_index=0 relocated_root=0x7000 real_root=0xefa8c000 report_pdbs=2 report_runs=6 host_leaves=1 host_runs=1 kernel_rows_for_this_index=0 kernel_runs=0
+kayfabe: WALK-SHADOW   PDB[0] pdb=0x7000 first_run=0 run_count=0 vas_flags=0x5
+kayfabe: WALK-SHADOW   PDB[1] pdb=0x16000 first_run=0 run_count=6 vas_flags=0x5
+kayfabe: WALK-SHADOW   HOST[0] va=0x120010000 gpga=0x129a90000 len=0x10000 flags=0x2 class=P64K
+kayfabe: WALK-SHADOW   ROW[0] pdb_index=1 va=0x220000000 gpga=0x11fd32000 len=0x5c000 flags=0x60022 op=1
+kayfabe: WALK-SHADOW   ROW[1] pdb_index=1 va=0x22005c000 gpga=0x12504a000 len=0x6000 flags=0x60022 op=1
+kayfabe: WALK-SHADOW   ROW[2] pdb_index=1 va=0x220062000 gpga=0x129ac0000 len=0xb000 flags=0x60022 op=1
+kayfabe: WALK-SHADOW   ROW[3] pdb_index=1 va=0x220070000 gpga=0x129acc000 len=0x1000 flags=0x60022 op=1
+kayfabe: WALK-SHADOW   ROW[4] pdb_index=1 va=0x120000000 gpga=0x0 len=0xefc00000 flags=0x90200 op=1
+kayfabe: WALK-SHADOW   ROW[5] pdb_index=1 va=0x20fc00000 gpga=0xefc00000 len=0x10400000 flags=0x60200 op=1
