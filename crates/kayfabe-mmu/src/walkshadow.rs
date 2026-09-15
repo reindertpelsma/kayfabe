@@ -342,3 +342,287 @@ impl ShadowCensus {
         )
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ★★★★★ THE LIVE HALF — building an image the walk kernel can actually be pointed at.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// ⊘⊘⊘ **WHY THE GUEST'S FRAMEBUFFER CANNOT BE HANDED TO THE KERNEL AS IT STANDS.**
+///
+/// The kernel addresses page-table pages as **offsets into one flat window** —
+/// `KfArgs::win = { base, len }`, and every dereference is `win.base + gpga` bounds-checked
+/// against `win.len` (`cuda/walk/kf_walk.cu:346,357`). So a window that answers for the
+/// guest's tables at their own GPGA must be **as long as the highest table page's address**.
+///
+/// `[measured, w730]` the page arena's high-water on a full raw-client boot is
+/// `span_pages=3087533` — the guest's own RM puts its tables at the **top** of a 12 GiB
+/// framebuffer, ~11.78 GiB up. `[corroborated]` `cuda/walk/corpus/real_leaves.txt`, w725's
+/// capture of a real driver's tables, has its five address-space roots at
+/// `0x2efa4c000 .. 0x2f1cac000` — the same place.
+///
+/// ⇒ An identity window is an **11.8 GiB device allocation on a 12 GiB board**, competing
+/// with the guest's own forwarded video memory. It is not affordable, and w725 hit exactly
+/// this wall from the other side: *"the tables live across ~12 GiB of framebuffer, which no
+/// test buffer can hold"*.
+///
+/// ★ Its answer is this one. **Relocate**: copy the table pages into a compact image and
+/// rewrite the **address field of directory entries** to point at the new homes, leaving every
+/// leaf PTE byte for byte untouched — because a leaf's target is *reported* and never
+/// followed. The reported `va` and `gpga` are therefore the guest's own numbers and compare
+/// directly against the host walk's.
+///
+/// # ⊘⊘ WHAT RELOCATION COSTS THE DIFFERENTIAL, stated where the number is read
+///
+/// The image holds exactly the pages the **host walk visited**. ⇒ the kernel's *reach* is
+/// clipped to the host's reach, and it cannot find a subtree the host never entered.
+///
+/// - [`DisagreementKind::MissingInKernel`] — **fully live.** The kernel is given every byte
+///   the host had, so *"the host found this mapping and the kernel did not"* is still a
+///   statement about the two decoders. This is the serious kind, and it is not weakened.
+/// - [`DisagreementKind::ExtraInKernel`] — **live within the visited pages** (a slot the
+///   kernel reads as a leaf and the host did not), **foreclosed beyond them**.
+/// - `gpga` / `len` / flags — fully live.
+///
+/// ⚠ Stated in the census line itself, beside [`COMPARED_FLAGS`], for the same reason: a
+/// zero read without its scope is read as more than it is.
+#[derive(Debug, Clone)]
+pub struct ShadowImage {
+    /// The compact image. Slot 0 is reserved and zero; table pages start at slot 1.
+    pub bytes: Vec<u8>,
+    /// `(the address space's real pdb, the root's address in this image)`, ascending by the
+    /// second. ⊘ Both halves are kept because the report comes back keyed by the *relocated*
+    /// root and the comparison is per real address space.
+    pub roots: Vec<(u64, u64)>,
+    /// Table pages the image holds (excluding the reserved zero slot).
+    pub pages: usize,
+    /// ★★ Directory edges pointed at the reserved zero slot because the host walk never
+    /// visited the page they name — the **measured** size of the reach clipping above.
+    /// ⊘ Counted rather than refused: a budgeted or faulted host walk legitimately leaves
+    /// subtrees unentered, and refusing the whole image for that would make the shadow
+    /// unreachable on exactly the boots it is most wanted.
+    pub absent_edges: u64,
+    /// Directory edges naming a sub-table in **system memory**, left encoded as the guest
+    /// wrote them. The kernel refuses a non-vidmem table page by name
+    /// (`KFWR_R_FOREIGN_AP`) and never follows it; the host walk does follow it. ⚠ A
+    /// non-zero count here predicts `missing_in_kernel` that is a property of the two
+    /// walkers' *scope*, not of their decoding.
+    pub sysmem_edges: u64,
+}
+
+/// The reserved slot every unvisited directory edge is pointed at: 4 KiB of zeros, which
+/// decodes as a table with nothing in it.
+///
+/// ⊘ Zero rather than out-of-range. Out-of-range would fire `KFWR_R_OOB` and mark the whole
+/// report refused, so a single unentered subtree would make every refresh unreadable; zero
+/// makes the kernel see exactly what the host saw there — nothing — and
+/// [`ShadowImage::absent_edges`] is what says so out loud.
+pub const ABSENT_SLOT: u64 = 0;
+
+/// Why an image could not be built. ⊘ Every arm names the thing that refused, because the
+/// census prints these and *"the shadow did not run"* is not an actionable sentence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShadowRefusal {
+    /// The host walk visited no vidmem table page, so there is nothing to compare.
+    NoPages,
+    /// More table pages than the image budget allows.
+    TooManyPages {
+        /// What the walk visited.
+        pages: usize,
+        /// What the budget allows.
+        cap: usize,
+    },
+    /// The framebuffer would not serve a page the host walk had just read.
+    Unreadable {
+        /// Its address.
+        phys: u64,
+    },
+    /// One physical page was visited at two different levels, so it has no single decode.
+    AmbiguousLevel {
+        /// Its address.
+        phys: u64,
+    },
+    /// The format has no geometry for a level the walk visited.
+    BadGeometry {
+        /// The level.
+        level: u8,
+    },
+    /// [`kayfabe_arch::Relocated::Refused`], verbatim.
+    Relocate(&'static str),
+    /// An address space's root page is not in the image.
+    RootMissing {
+        /// The page-directory base.
+        pdb: u64,
+    },
+}
+
+impl ShadowRefusal {
+    /// A short, stable name for a census column.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ShadowRefusal::NoPages => "no_pages",
+            ShadowRefusal::TooManyPages { .. } => "too_many_pages",
+            ShadowRefusal::Unreadable { .. } => "unreadable_page",
+            ShadowRefusal::AmbiguousLevel { .. } => "ambiguous_level",
+            ShadowRefusal::BadGeometry { .. } => "bad_geometry",
+            ShadowRefusal::Relocate(_) => "relocate_refused",
+            ShadowRefusal::RootMissing { .. } => "root_missing",
+        }
+    }
+}
+
+/// How many table pages one image may hold. 4096 pages is 16 MiB — comfortably above the
+/// `[w724c]` measurement of **7.3 MiB** of resident tables, and far below anything that
+/// would make the device allocation interesting.
+pub const PAGE_CAP: usize = 4096;
+
+/// Bytes in one table page. ⊘ The whole design rests on the walk kernel and this crate
+/// agreeing that a table page is 4 KiB, which every VER2 level does.
+pub const IMAGE_PAGE: usize = 4096;
+
+/// ★★★★★ **BUILD THE COMPACT IMAGE** the walk kernel is pointed at.
+///
+/// `vases` is one entry per address space: its page-directory base and the pages the host
+/// walk actually visited under it ([`crate::walker::SubtreeDecode::visited`]).
+///
+/// # Errors
+/// [`ShadowRefusal`], naming what refused.
+pub fn build_image(
+    fmt: &dyn kayfabe_arch::GmmuFmt,
+    fb: &mut dyn crate::walker::FbRead,
+    vases: &[(u64, &[crate::walker::PtPage])],
+    page_cap: usize,
+) -> Result<ShadowImage, ShadowRefusal> {
+    use std::collections::BTreeMap;
+
+    // ⊘ Keyed by address, because one page may be reached from two address spaces and must
+    // get ONE home — two copies would let the kernel and the host disagree about a page that
+    // is the same page.
+    let mut level_of: BTreeMap<u64, u8> = BTreeMap::new();
+    for (_, visited) in vases {
+        for p in *visited {
+            if p.aperture != Aperture::Vidmem {
+                // A table page in guest system memory is not in the framebuffer and the
+                // kernel refuses it by name; it is deliberately not in the image, and the
+                // directory entry naming it keeps its own encoding so that refusal fires.
+                continue;
+            }
+            let base = p.phys & !0xfff;
+            match level_of.get(&base) {
+                Some(l) if *l != p.level => {
+                    return Err(ShadowRefusal::AmbiguousLevel { phys: base })
+                }
+                _ => {
+                    level_of.insert(base, p.level);
+                }
+            }
+        }
+    }
+    if level_of.is_empty() {
+        return Err(ShadowRefusal::NoPages);
+    }
+    if level_of.len() > page_cap {
+        return Err(ShadowRefusal::TooManyPages {
+            pages: level_of.len(),
+            cap: page_cap,
+        });
+    }
+
+    // Slot 1 upwards; slot 0 stays zero and is where every unvisited edge is sent.
+    let home_of: BTreeMap<u64, u64> = level_of
+        .keys()
+        .enumerate()
+        .map(|(i, &phys)| (phys, ((i + 1) * IMAGE_PAGE) as u64))
+        .collect();
+
+    let mut bytes = vec![0u8; (level_of.len() + 1) * IMAGE_PAGE];
+    let absent = std::cell::Cell::new(0u64);
+    let home = |old: u64| -> Option<u64> {
+        if old & 0xfff != 0 {
+            // An unaligned sub-table pointer is not a page we could have visited. It goes to
+            // the absent slot like any other edge we cannot follow — and the kernel's own
+            // `KFWR_R_UNALIGNED` is not the right instrument here, because it would fire on
+            // OUR rewrite rather than on the guest's encoding.
+            absent.set(absent.get() + 1);
+            return Some(ABSENT_SLOT);
+        }
+        match home_of.get(&old) {
+            Some(&h) => Some(h),
+            None => {
+                absent.set(absent.get() + 1);
+                Some(ABSENT_SLOT)
+            }
+        }
+    };
+
+    let mut sysmem_edges = 0u64;
+    for (&phys, &level) in &level_of {
+        let slot = home_of[&phys] as usize;
+        let es = usize::from(fmt.entry_size(level));
+        let Some(geom) = fmt.level_shift(level) else {
+            return Err(ShadowRefusal::BadGeometry { level });
+        };
+        if es == 0 || es > 16 {
+            return Err(ShadowRefusal::BadGeometry { level });
+        }
+        // ★★ **Exactly the bytes the table HAS**, not a whole page. `LevelShift::entries` is a
+        // count read off the level's own virtual-address bits — VER2's big-page table holds
+        // **32** entries in a page that could hold 512 — and a 4 KiB read of it would demand
+        // 3 840 bytes nobody has to be able to serve. ⊘ The walk kernel sizes its loads the
+        // same way, so the image holds neither more nor less than either walker reads.
+        let need = (geom.entries as usize).saturating_mul(es).min(IMAGE_PAGE);
+        let page = &mut bytes[slot..slot + IMAGE_PAGE];
+        if need == 0 || !fb.read_in(phys, Aperture::Vidmem, &mut page[..need]) {
+            return Err(ShadowRefusal::Unreadable { phys });
+        }
+        for i in 0..geom.entries as usize {
+            let off = i * es;
+            if off + es > need {
+                break;
+            }
+            let mut w = [0u8; 16];
+            w[..es].copy_from_slice(&page[off..off + es]);
+            let raw = u128::from_le_bytes(w);
+            // ⊘ The sysmem census is taken from the DECODE, not from the relocator, because
+            // the relocator's answer for a sysmem edge is `Unchanged` — the same answer it
+            // gives a leaf — and the two are different facts.
+            if let kayfabe_arch::PteDecode::Pde { edge, also } = fmt.decode_entry(level, raw) {
+                for e in [Some(edge), also].into_iter().flatten() {
+                    if e.aperture != Aperture::Vidmem {
+                        sysmem_edges += 1;
+                    }
+                }
+            }
+            match fmt.relocate_entry(level, raw, &home) {
+                kayfabe_arch::Relocated::Unchanged => {}
+                kayfabe_arch::Relocated::Moved(v) => {
+                    page[off..off + es].copy_from_slice(&v.to_le_bytes()[..es]);
+                }
+                kayfabe_arch::Relocated::Refused(why) => {
+                    return Err(ShadowRefusal::Relocate(why))
+                }
+            }
+        }
+    }
+
+    let mut roots = Vec::with_capacity(vases.len());
+    for (pdb, _) in vases {
+        let base = pdb & !0xfff;
+        let Some(&h) = home_of.get(&base) else {
+            return Err(ShadowRefusal::RootMissing { pdb: *pdb });
+        };
+        roots.push((*pdb, h));
+    }
+    // ★ The kernel refuses an unsorted pdb list by name (`KFWR_R_PDB_UNSORTED`), and two
+    // address spaces may legitimately share a root page.
+    roots.sort_by_key(|(_, h)| *h);
+    roots.dedup_by_key(|(_, h)| *h);
+
+    Ok(ShadowImage {
+        bytes,
+        roots,
+        pages: level_of.len(),
+        absent_edges: absent.get(),
+        sysmem_edges,
+    })
+}

@@ -98,7 +98,7 @@ use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, 
 use kayfabe_arch::{
     Aperture, Arch, CeWork, DoorbellTarget, GmmuFmt, GmmuVersion, HostClasses, LevelShift,
     MethodState, ObjectKind, PageSize, PdeEdge, PteDecode, PushMethod, PushRange, PushbufferAbi,
-    UserdModel,
+    Relocated, UserdModel,
 };
 
 /// The GA10x architecture, as the port ships it: a **real** class table and a **real**
@@ -603,6 +603,55 @@ const fn field_addr(raw: u64, lo: u32, bits: u32, shift: u32) -> u64 {
     ((raw >> lo) & ((1u64 << bits) - 1)) << shift
 }
 
+/// ★★★ The inverse of [`field_addr`]: put `addr` back into the field of `bits` bits at bit
+/// `lo`, encoded with `shift`.
+///
+/// `None` when `addr` cannot be spelled there — either it is not a multiple of the field's
+/// granularity or it does not fit in the field's width. ⊘ **A refusal and not a truncation**:
+/// silently dropping the low bits or the high bits would produce a directory entry pointing
+/// somewhere plausible and wrong, which is the single worst outcome available here.
+const fn field_set(raw: u64, lo: u32, bits: u32, shift: u32, addr: u64) -> Option<u64> {
+    if addr & ((1u64 << shift) - 1) != 0 {
+        return None;
+    }
+    let v = addr >> shift;
+    if v >= (1u64 << bits) {
+        return None;
+    }
+    let mask = ((1u64 << bits) - 1) << lo;
+    Some((raw & !mask) | ((v << lo) & mask))
+}
+
+/// ★★ **Move ONE half of a VER2 directory entry** to the address `home` gives its sub-table.
+///
+/// `Ok(None)` = this half names nothing that gets dereferenced out of the framebuffer, so it
+/// is left exactly as the guest wrote it. That covers both an absent sub-level (aperture
+/// `INVALID`) and — deliberately — a sub-table in **system memory**: the walk kernel refuses a
+/// non-vidmem table page by name (`KFWR_R_FOREIGN_AP`) and never follows it, so rewriting the
+/// encoding would hide a refusal that is supposed to fire.
+fn ver2_move_half(
+    raw: u64,
+    lo_bit: u32,
+    vid_bits: u32,
+    shift: u32,
+    home: &dyn Fn(u64) -> Option<u64>,
+) -> Result<Option<u64>, &'static str> {
+    match pde_aperture(raw) {
+        None | Some(Aperture::SysmemCoherent) | Some(Aperture::SysmemNonCoherent) => Ok(None),
+        Some(Aperture::Peer) => Err("a directory entry names a PEER sub-table"),
+        Some(Aperture::Vidmem) => {
+            let old = field_addr(raw, lo_bit, vid_bits, shift);
+            let Some(new) = home(old) else {
+                return Err("a directory entry names a table page the new image does not hold");
+            };
+            match field_set(raw, lo_bit, vid_bits, shift, new) {
+                Some(v) => Ok(Some(v)),
+                None => Err("a sub-table's new address is not spellable in this entry's field"),
+            }
+        }
+    }
+}
+
 /// The aperture nibble of a **PDE** — `GMMU_APERTURE_INVALID`, `_VIDEO`, `_SYS_COH`,
 /// `_SYS_NONCOH` in that order (`ogkm-580:
 /// src/nvidia/src/kernel/gpu/mmu/arch/maxwell/kern_gmmu_fmt_gm10x.c:165-182`, which binds
@@ -867,6 +916,74 @@ impl GmmuFmt for Ga10xGmmu {
             // plausible entry. `Invalid` rather than `Sparse`: sparse is a declaration
             // the guest made, and a level that does not exist carries none.
             _ => PteDecode::Invalid,
+        }
+    }
+
+    /// ★★★★★ **The VER2 relocator**, and it is the exact mirror of [`Self::decode_entry`]:
+    /// every place that function *reads* a sub-table address, this one *writes* it.
+    ///
+    /// ⊘ The three leaf spellings this generation has are all `Unchanged`, and each is
+    /// recognised the same way `decode_entry` recognises it, in the same order:
+    ///
+    /// | level | the leaf it can be | how it is told apart |
+    /// |---|---|---|
+    /// | `PD1` | a 512 MiB page (GA10x only) | its low half's **valid** bit |
+    /// | `PD0` | a 2 MiB page | its low half's **valid** bit, asked BEFORE the dual halves |
+    /// | `PT_BIG` / `PT_SMALL` | 64 KiB / 4 KiB pages | the level itself |
+    ///
+    /// ⚠ A leaf's target is deliberately never passed to `home`. It is reported, not
+    /// followed, so relocating it would change what the walk **answers** rather than where it
+    /// reads — which would make the compact image describe a different guest.
+    fn relocate_entry(
+        &self,
+        level: u8,
+        raw: u128,
+        home: &dyn Fn(u64) -> Option<u64>,
+    ) -> Relocated {
+        let lo = raw as u64;
+        let single = |raw: u64| -> Relocated {
+            match ver2_move_half(raw, 8, VER2_ADDR_VID_BITS, VER2_ADDR_SHIFT, home) {
+                Err(why) => Relocated::Refused(why),
+                Ok(None) => Relocated::Unchanged,
+                Ok(Some(v)) => Relocated::Moved(u128::from(v)),
+            }
+        };
+        match level {
+            L_PD3 | L_PD2 => single(lo),
+            // ★ A PD1 slot with the valid bit set is a 512 MiB PAGE on this generation, not a
+            // pointer — `decode_entry` asks exactly this question first, and so does this.
+            L_PD1 => {
+                if lo & VER2_VALID != 0 {
+                    Relocated::Unchanged
+                } else {
+                    single(lo)
+                }
+            }
+            L_PD0 => {
+                if lo & VER2_VALID != 0 {
+                    // A 2 MiB leaf, spelled in the low half's valid bit.
+                    return Relocated::Unchanged;
+                }
+                let hi = (raw >> 64) as u64;
+                // The SMALL half lives in the HIGH word at bit 8 with shift 12; the BIG half
+                // lives in the LOW word at bit 4 with shift **8**. Using one shift for both
+                // puts every big-page table at a sixteenth of its address — `decode_entry`
+                // carries the same warning.
+                let small = ver2_move_half(hi, 8, VER2_ADDR_VID_BITS, VER2_ADDR_SHIFT, home);
+                let big = ver2_move_half(lo, 4, VER2_BIG_ADDR_VID_BITS, VER2_BIG_ADDR_SHIFT, home);
+                let (small, big) = match (small, big) {
+                    (Err(why), _) | (_, Err(why)) => return Relocated::Refused(why),
+                    (Ok(s), Ok(b)) => (s, b),
+                };
+                if small.is_none() && big.is_none() {
+                    return Relocated::Unchanged;
+                }
+                let new_lo = big.unwrap_or(lo);
+                let new_hi = small.unwrap_or(hi);
+                Relocated::Moved(u128::from(new_lo) | (u128::from(new_hi) << 64))
+            }
+            // Leaf levels, and levels this format does not have: nothing is dereferenced.
+            _ => Relocated::Unchanged,
         }
     }
 }
