@@ -559,6 +559,26 @@ pub trait GmmuFmt: Send + Sync {
     /// that offset of the new image. That is a wrong answer with no diagnostic, which is
     /// precisely the class this tree keeps paying for. ⇒ [`Relocated::Refused`], and the
     /// caller abandons the relocation.
+    ///
+    /// # ★★★ THIS SEAM IS EXPECTED TO OUTLIVE ITS FIRST CALLER — and its caller is not
+    ///
+    /// `[expiry, §w724g]` The **only** thing that needs relocation today is the live walk
+    /// shadow, and only because it reads the guest's tables out of a **sparse framebuffer
+    /// arena** spread across ~11.8 GiB, which no flat window can span
+    /// (`kayfabe_mmu::walkshadow::build_image`). `SINGLE_STORE_PLAN.md` §3 replaces that store
+    /// with **one reserved device-local object**, and `gpga_is_one_reserved_object.md`
+    /// specifies that the scratchpad maps the whole of it at a fixed base — *"an address is
+    /// `X + gpga_offset`"*. ⇒ the kernel's window becomes that mapping, **identity, with
+    /// nothing rewritten**, and the shadow's relocation is retired.
+    ///
+    /// ⚠ **Expected end state, not a promise.** Nothing has yet built the scratchpad-side
+    /// whole-object mapping; the design doc specifies it. Until something does, this is the
+    /// mechanism the shadow runs on.
+    ///
+    /// ⊘ **The METHOD stays even then.** It belongs on the format because only the format
+    /// knows which bits of an entry are a sub-table address — and a regime that genuinely
+    /// needs a moved tree (a captured corpus, a migration) would otherwise grow a private
+    /// second copy of that knowledge. What expires is the shadow's *use* of it.
     fn relocate_entry(&self, level: u8, raw: u128, home: &dyn Fn(u64) -> Option<u64>) -> Relocated {
         let _ = (level, raw, home);
         Relocated::Refused("this GMMU format has no relocator")

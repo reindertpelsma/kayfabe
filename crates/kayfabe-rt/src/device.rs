@@ -4430,6 +4430,34 @@ impl SharedDevice {
         fb: &mut dyn kayfabe_mmu::walker::FbRead,
         revoke: kayfabe_mmu::reach::PublishedUnbind,
     ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
+        self.sweep_pt_tables_observing(pid, fmt, fb, revoke, &mut ())
+    }
+
+    /// ★★★★★ **[`SharedDevice::sweep_pt_tables_revoking`] with an observer of the EXECUTE
+    /// phase** — `SINGLE_STORE_PLAN.md` §6 step 1's hook.
+    ///
+    /// `observer` is handed the walk's results, the format and the byte source at the one
+    /// moment all three exist and **no lock is held**. That is the whole reason the hook is
+    /// here rather than at the caller: the results are consumed by COMMIT under rank 1, and a
+    /// consumer that wanted them afterwards would either take a lock or get a copy of a
+    /// structure that had already been folded away.
+    ///
+    /// ⊘ **It may block, and that is checked rather than hoped for.** This site is marked
+    /// *"EXECUTE — no lock"* and `with_proc_mut` released both ranks above it, so a
+    /// synchronous isolate round trip here is legal. ⚠ An observer that acquires a ranked
+    /// lock re-introduces exactly the hazard the three-phase shape exists to remove.
+    ///
+    /// ⊘ The observer sees results **before** the commit, so what it is looking at is what
+    /// the walk found — not what the settlement decided to publish. Those are different
+    /// questions and the shadow asks the first one.
+    pub fn sweep_pt_tables_observing(
+        &self,
+        pid: ProcId,
+        fmt: &dyn kayfabe_arch::GmmuFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+        revoke: kayfabe_mmu::reach::PublishedUnbind,
+        observer: &mut dyn PtSweepObserver,
+    ) -> Option<(kayfabe_fwd::PtSweepPlan, kayfabe_fwd::PtDecodeOutcome)> {
         // PLAN — rank 1.
         let plan = self.with_proc_mut(pid, kayfabe_fwd::plan_pt_sweep)?;
         // ⊘ **PRINTED HERE, WITH BOTH LOCKS RELEASED.** `[measured w510]` this line, when it
@@ -4448,6 +4476,8 @@ impl SharedDevice {
         // reusing the decode pass's run-wide budget would divide the C's number by a
         // guest-chosen quantity.
         let results = kayfabe_fwd::run_pt_sweep(fmt, fb, &plan.tasks, kayfabe_fwd::PT_SWEEP_BUDGET);
+        // ★★★ The shadow's hook, still with no lock held. See `sweep_pt_tables_observing`.
+        observer.executed(fmt, fb, &results);
         // COMMIT — rank 1, re-resolving every target (R5), ★ ONE ADDRESS SPACE AT A TIME.
         //
         // Owner ruling, 2026-09-12: *"sweep commit may chunk."* `[measured w517-w524]` this
@@ -7828,3 +7858,45 @@ impl CeChannelFacts {
     }
 }
 
+
+/// ★★★★★ **AN OBSERVER OF THE WHOLE-VAS SWEEP'S EXECUTE PHASE** —
+/// `SINGLE_STORE_PLAN.md` §6 step 1.
+///
+/// One method, called once per sweep, with no lock held. Implemented by the shell so the
+/// walk kernel can be run over the same tables the host walk just read, and its answer
+/// compared — the *shadow mode* idiom this tree already used for the doorbell table:
+/// consulted every time, deciding nothing, printing an agreement census.
+///
+/// ⊘ **A trait and not a closure**, because the shadow is stateful: it accumulates a census
+/// across a boot and holds the handle it talks to the isolate through.
+/// ★ **The format seam, re-exported.** `kayfabe-qemu-raw` deliberately does not depend on
+/// `kayfabe-arch` — its own manifest says so: *"the shim names no architecture"* — and an
+/// implementor of [`PtSweepObserver`] has to name the trait to write the signature. Naming it
+/// through this crate keeps that rule intact rather than adding the edge the manifest forbids.
+pub use kayfabe_arch::GmmuFmt as SweepFmt;
+
+pub trait PtSweepObserver {
+    /// The sweep has run and nothing has been committed yet.
+    ///
+    /// ⚠ **No ranked lock may be taken here.** This is the phase the three-phase shape
+    /// exists to keep lock-free, and the byte source itself asserts it.
+    fn executed(
+        &mut self,
+        fmt: &dyn SweepFmt,
+        fb: &mut dyn kayfabe_mmu::walker::FbRead,
+        results: &[kayfabe_fwd::PtDecodeResult],
+    );
+}
+
+/// ⊘ The disarmed observer. `sweep_pt_tables_revoking` passes this, so the unobserved path
+/// is the observed path with a body that does nothing — rather than a second copy of the
+/// three phases that could drift from it.
+impl PtSweepObserver for () {
+    fn executed(
+        &mut self,
+        _fmt: &dyn SweepFmt,
+        _fb: &mut dyn kayfabe_mmu::walker::FbRead,
+        _results: &[kayfabe_fwd::PtDecodeResult],
+    ) {
+    }
+}

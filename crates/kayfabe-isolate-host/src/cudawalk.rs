@@ -138,3 +138,152 @@ pub fn report_line() -> String {
         o.why,
     )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ★★★★★ THE LIVE SHADOW — `SINGLE_STORE_PLAN.md` §6 step 1's live half.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/// The staged image: the guest's page-table pages, **relocated into a compact arena** by
+/// `kayfabe_mmu::walkshadow::build_image` and shipped here a frame at a time.
+///
+/// ⊘ Its own lock, not `STATE`'s. Staging is a stream of chunks and a run is one launch; a
+/// single lock would make every chunk contend with nothing, and would make a poisoned
+/// bring-up take the staging buffer with it.
+static IMAGE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+/// A chunk that would leave the declared image.
+const WS_CHUNK_OUT_OF_RANGE: u32 = 0x5748_0010;
+/// A chunk arrived for an image no one declared, or with a different `span` than the one
+/// that was. ⊘ Refused rather than re-declared: a `span` that changes mid-image means the
+/// parent and the child disagree about what is being assembled.
+const WS_SPAN_MISMATCH: u32 = 0x5748_0011;
+/// The image is empty — no `off == 0` chunk ever arrived.
+const WS_NO_IMAGE: u32 = 0x5748_0012;
+/// CUDA never came up in this isolate, so there is no kernel to run.
+const WS_NO_KERNEL: u32 = 0x5748_0013;
+/// The declared image is larger than [`IMAGE_MAX`].
+const WS_IMAGE_TOO_LARGE: u32 = 0x5748_0014;
+/// `cuMemAlloc` / `cuMemcpyHtoD` / `cuLaunchKernel` refused. ⚠ One code for the whole
+/// launch: the *reason* is printed to this child's stderr in full, and collapsing three
+/// CUDA errors into three wire codes would put the parsing of CUDA's vocabulary on the
+/// protocol.
+const WS_LAUNCH_FAILED: u32 = 0x5748_0015;
+/// More address spaces than the kernel's table holds.
+const WS_TOO_MANY_PDBS: u32 = 0x5748_0016;
+
+/// The largest image this isolate will hold. 64 MiB — comfortably above `[measured w724c]`
+/// **7.3 MiB** of resident page tables, and small enough that a hostile `span` cannot make
+/// the isolate the thing that runs the host out of memory.
+const IMAGE_MAX: u64 = 64 << 20;
+
+/// ★★★ **Stage one chunk.** `off == 0` declares a fresh image of `span` bytes.
+///
+/// # Errors
+/// A named status. ⚠ Every refusal also prints its reason to this child's stderr, because a
+/// `u32` on the wire is what the parent's census can count and the sentence is what tells
+/// somebody what to do about it.
+pub fn stage(span: u64, off: u64, bytes: &[u8]) -> Result<(), u32> {
+    if span == 0 || span > IMAGE_MAX {
+        eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW stage refused: span={span} (max {IMAGE_MAX})");
+        return Err(WS_IMAGE_TOO_LARGE);
+    }
+    let mut g = IMAGE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if off == 0 {
+        // ⊘ `resize` then `fill`, not `clear` + `resize`: an image re-declared at the same
+        // span must not inherit the previous refresh's bytes in the region this refresh does
+        // not write. A stale page decodes perfectly well and would be a mapping from the
+        // last refresh reported as if it were this one's.
+        g.clear();
+        g.resize(span as usize, 0);
+    } else if g.len() as u64 != span {
+        eprintln!(
+            "kayfabe-isolate: ⊘ WALK-SHADOW stage refused: chunk at {off:#x} declares \
+             span={span} but the image in hand is {} bytes",
+            g.len()
+        );
+        return Err(WS_SPAN_MISMATCH);
+    }
+    let Some(end) = off.checked_add(bytes.len() as u64) else {
+        return Err(WS_CHUNK_OUT_OF_RANGE);
+    };
+    if end > span {
+        eprintln!(
+            "kayfabe-isolate: ⊘ WALK-SHADOW stage refused: chunk [{off:#x},{end:#x}) leaves \
+             an image of {span} bytes"
+        );
+        return Err(WS_CHUNK_OUT_OF_RANGE);
+    }
+    g[off as usize..end as usize].copy_from_slice(bytes);
+    Ok(())
+}
+
+/// ★★★★★ **RUN THE WALK KERNEL** over the staged image and return the report **as bytes**.
+///
+/// The layout is `kf_walk.h`'s own: `KfReportHeader`, then `pdb_count` `KfPdbEntry`s, then
+/// `run_count` `KfMapRun`s, each `#[repr(C)]` and copied verbatim.
+///
+/// ⊘ **The child does not interpret the report.** `kayfabe_mmu::walkreport` is a *second,
+/// independent* parser of this format, written against `kf_walk.h` rather than against the
+/// Rust mirror — and the whole value of having two is lost the moment one of them is used to
+/// pre-digest the bytes for the other.
+///
+/// # Errors
+/// A named status; the reason is printed to this child's stderr.
+pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
+    if pdbs.is_empty() || pdbs.len() > kayfabe_cuda::abi::KF_MAX_PDB {
+        eprintln!(
+            "kayfabe-isolate: ⊘ WALK-SHADOW run refused: {} address spaces (the kernel's \
+             table holds {})",
+            pdbs.len(),
+            kayfabe_cuda::abi::KF_MAX_PDB
+        );
+        return Err(WS_TOO_MANY_PDBS);
+    }
+    let image = {
+        let g = IMAGE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if g.is_empty() {
+            eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW run refused: no image was staged");
+            return Err(WS_NO_IMAGE);
+        }
+        g.clone()
+    };
+    let mut st = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some((_, Some(k))) = st.as_mut() else {
+        eprintln!(
+            "kayfabe-isolate: ⊘ WALK-SHADOW run refused: CUDA never came up in this isolate"
+        );
+        return Err(WS_NO_KERNEL);
+    };
+    let img = match k.upload(&image) {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW upload refused: {e}");
+            return Err(WS_LAUNCH_FAILED);
+        }
+    };
+    let report = k.refresh(img.ptr(), img.len(), pdbs);
+    // ⊘ Released on BOTH paths and before the `?`: a refused launch that leaked its image
+    // would run the device out of memory over a boot's worth of refreshes, and the symptom
+    // would arrive as a CUDA failure hundreds of refreshes after the one that caused it.
+    k.release(img);
+    let report = match report {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW launch refused: {e}");
+            return Err(WS_LAUNCH_FAILED);
+        }
+    };
+    let mut out = Vec::with_capacity(
+        core::mem::size_of::<kayfabe_cuda::abi::KfReportHeader>()
+            + report.pdbs.len() * core::mem::size_of::<kayfabe_cuda::abi::KfPdbEntry>()
+            + report.runs.len() * core::mem::size_of::<kayfabe_cuda::abi::KfMapRun>(),
+    );
+    out.extend_from_slice(kayfabe_cuda::driver_unsafe::view_bytes(&report.header));
+    for p in &report.pdbs {
+        out.extend_from_slice(kayfabe_cuda::driver_unsafe::view_bytes(p));
+    }
+    for r in &report.runs {
+        out.extend_from_slice(kayfabe_cuda::driver_unsafe::view_bytes(r));
+    }
+    Ok(out)
+}

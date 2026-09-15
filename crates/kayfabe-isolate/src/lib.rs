@@ -203,6 +203,14 @@ impl core::fmt::Debug for HostHandle {
     }
 }
 
+/// ★★ **This backend is not a CUDA scratchpad isolate**, so it has no walk kernel to stage
+/// an image for or to run. [`RmBackend::walk_shadow_stage`] / [`RmBackend::walk_shadow_run`].
+///
+/// ⊘ A named refusal and not `Ok(())`: an ordinary isolate answering *"staged"* would let the
+/// shadow believe an image it never received is about to be walked, and the disagreements
+/// that followed would be attributed to the two walkers rather than to the missing image.
+pub const NOT_A_WALK_SHADOW: u32 = 0x5748_0001;
+
 /// Errors an RM verb can return, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RmError {
@@ -984,6 +992,35 @@ pub trait RmBackend: Send + Sync {
     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
         Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\""
             .to_string())
+    }
+
+    /// ★★★★★ **STAGE ONE CHUNK OF THE WALK KERNEL'S IMAGE** — `SINGLE_STORE_PLAN.md` §6
+    /// step 1, the live half.
+    ///
+    /// The image is the guest's page-table pages relocated into a compact arena
+    /// (`kayfabe_mmu::walkshadow::build_image`). `off == 0` declares a fresh image of `span`
+    /// bytes; every later chunk appends into it.
+    ///
+    /// # Errors
+    /// [`RmError`]. ⊘ The default is a **named refusal**: a backend that is not a CUDA
+    /// scratchpad has no kernel to stage for, and answering `Ok` would let a caller believe
+    /// an image was accepted.
+    fn walk_shadow_stage(&mut self, span: u64, off: u64, bytes: &[u8]) -> Result<(), RmError> {
+        let _ = (span, off, bytes);
+        Err(RmError::Other(NOT_A_WALK_SHADOW))
+    }
+
+    /// ★★★★★ **RUN THE WALK KERNEL OVER THE STAGED IMAGE**, returning the report bytes —
+    /// header, `PdbEntry`s, `MapRun`s — exactly as `kayfabe_mmu::walkreport::Report::parse`
+    /// expects them.
+    ///
+    /// `pdbs` are the **relocated** roots, ascending.
+    ///
+    /// # Errors
+    /// [`RmError`], as above.
+    fn walk_shadow_run(&mut self, pdbs: &[u64]) -> Result<Vec<u8>, RmError> {
+        let _ = pdbs;
+        Err(RmError::Other(NOT_A_WALK_SHADOW))
     }
 
     /// Intent verb: allocate a host GPU channel bound to host VAS `vas`, on the

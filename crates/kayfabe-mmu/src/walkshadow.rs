@@ -241,6 +241,22 @@ pub struct ShadowCensus {
     pub by_kind: std::collections::BTreeMap<&'static str, u64>,
     /// The first few, kept verbatim so the census is actionable and not just a tally.
     pub first: Vec<Disagreement>,
+    /// ★★★ **Sweeps the shadow declined to run, by name.** ⊘ Not folded into
+    /// [`Self::kernel_unavailable`]: *"this sweep is on a vCPU thread"*, *"the image was too
+    /// big"* and *"the isolate refused"* send a reader to three different places, and a
+    /// single number sends them nowhere. A boot whose census is empty has to be able to say
+    /// **why** it is empty.
+    pub skipped: std::collections::BTreeMap<&'static str, u64>,
+    /// Table pages in the largest image built this boot.
+    pub image_pages_max: u64,
+    /// Bytes staged across the whole boot — what the shadow cost the wire.
+    pub staged_bytes: u64,
+    /// Directory edges sent to the reserved absent slot, summed. ★ The measured size of the
+    /// **reach clipping**: the kernel is given the pages the host visited and no others.
+    pub absent_edges: u64,
+    /// Directory edges naming a sysmem sub-table, summed. The kernel refuses those by name;
+    /// the host walk follows them. ⚠ Predicts `missing_in_kernel` that is a scope difference.
+    pub sysmem_edges: u64,
 }
 
 /// How many disagreements the census keeps verbatim.
@@ -264,6 +280,22 @@ impl ShadowCensus {
     /// A refresh on which the kernel could not run.
     pub fn note_unavailable(&mut self) {
         self.kernel_unavailable += 1;
+    }
+
+    /// A sweep the shadow declined, named. ⊘ Counted **and** counted as unavailable, because
+    /// a declined sweep is one on which the two walkers were not compared and the vacuity
+    /// arms must see it as such.
+    pub fn note_skipped(&mut self, why: &'static str) {
+        *self.skipped.entry(why).or_insert(0) += 1;
+        self.kernel_unavailable += 1;
+    }
+
+    /// What one image cost and what it clipped.
+    pub fn note_image(&mut self, pages: u64, staged: u64, absent: u64, sysmem: u64) {
+        self.image_pages_max = self.image_pages_max.max(pages);
+        self.staged_bytes += staged;
+        self.absent_edges += absent;
+        self.sysmem_edges += sysmem;
     }
 
     /// Total disagreements.
@@ -326,15 +358,34 @@ impl ShadowCensus {
             })
             .collect::<Vec<_>>()
             .join(" ");
+        let skipped = if self.skipped.is_empty() {
+            "none".to_string()
+        } else {
+            self.skipped
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
         format!(
-            "WALK-SHADOW compared={} kernel_unavailable={} host_runs={} kernel_runs={} \
-             host_unclassed={} compared_flags={:#x} disagreements={} by_kind[{}] first[{}] ⇒ {}",
+            "WALK-SHADOW compared={} kernel_unavailable={} skipped[{}] host_runs={} \
+             kernel_runs={} host_unclassed={} compared_flags={:#x} image[pages_max={} \
+             staged_bytes={} absent_edges={} sysmem_edges={}] disagreements={} by_kind[{}] \
+             first[{}] ⇒ {} ⊘ SCOPE: the kernel walks a RELOCATED COPY holding exactly the \
+             pages the host walk visited (the guest's tables sit ~11.8 GiB up and no device \
+             buffer can span that), so `missing_in_kernel` is fully live and \
+             `extra_in_kernel` is live only WITHIN those pages.",
             self.compared,
             self.kernel_unavailable,
+            skipped,
             self.host_runs,
             self.kernel_runs,
             self.host_unclassed,
             COMPARED_FLAGS,
+            self.image_pages_max,
+            self.staged_bytes,
+            self.absent_edges,
+            self.sysmem_edges,
             total,
             by,
             first,
