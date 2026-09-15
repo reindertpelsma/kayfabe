@@ -88,6 +88,17 @@ use crate::shim::Status;
 /// silent default are bad here and they are bad in opposite ways: defaulting a typo to `off`
 /// makes a boot the operator believes is armed run the control arm, and defaulting it to
 /// `on` reserves the host's entire framebuffer on a boot nobody asked for it on.
+
+/// ★★★★★ **w734 — THE MEASURED READ RATE THROUGH A DEVICE VIEW OF THE RESERVED OBJECT**, in
+/// bytes per second, or **0 for "never measured on this boot"**.
+///
+/// ⊘⊘ Zero is not a slow rate and must never be read as one. It means the probe did not run
+/// (its gate is off) or refused — and the FB-IO census says which of `MEASURED` and `ASSUMED`
+/// it used, rather than silently multiplying by somebody else's number. That distinction is
+/// the entire point of w734: the switch's cost has been quoted for two documents as a
+/// measured fact when only one of its two terms was ever measured.
+pub static DEVICE_VIEW_READ_BPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub const SCRATCHPAD_ENV: &str = "KAYFABE_SCRATCHPAD";
 
 /// Which arm of [`SCRATCHPAD_ENV`] this boot runs.
@@ -957,9 +968,24 @@ fn probe_device_view(
     let read = win.read_into(HostOffset::ZERO, &mut buf).map(|()| u32::from_le_bytes(buf));
     let released = worker.release_device_view(view.token);
 
+    // ★★★★★ **w734 — THE RATE, MEASURED ON THE PATH THAT WILL CARRY IT.**
+    //
+    // ⊘⊘⊘ `SINGLE_STORE_PLAN.md` and `THE_CONSTRAINTS.md` §w724c both cost the switch as
+    // `bytes ÷ 48 MiB/s`. `[surveyed w734]` that 48 MiB/s is quoted in both with no citation
+    // to a measurement of THIS path — a CPU `memcpy` out of a device view of the **reserved
+    // object** — and the whole "there is no working intermediate, it does not boot" ruling is
+    // that rate times an unmeasured byte volume. w734b measured the volume. This measures the
+    // rate, on the same boot, through the same verb, over the same object.
+    //
+    // ⚠ It costs BAR1 aperture for its duration and gives it straight back through the
+    // release verb (`[measured w722]` `munmap` + `close` returns **nothing**), and it costs
+    // wall time at realize, where the guest does not exist yet. ⊘ Both are why it is a
+    // bounded probe and not a sweep.
+    let rate = probe_device_view_rate(worker, off, id, obj, dup);
+
     match (wrote, read) {
         (Ok(()), Ok(got)) if got == SENTINEL => format!(
-            "DEVICE_VIEW=OK mmap_len=0x{:x} sentinel_roundtrip=true released={} ⇒ the \
+            "DEVICE_VIEW=OK {rate} mmap_len=0x{:x} sentinel_roundtrip=true released={} ⇒ the \
              scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by \
              SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping \
              survived — the owner's conditional ruling, exercised end to end",
@@ -977,6 +1003,152 @@ fn probe_device_view(
             released.is_ok()
         ),
     }
+}
+
+/// ★★★★★ **w734 — HOW FAST IS A CPU `memcpy` THROUGH A DEVICE VIEW OF THE RESERVED OBJECT?**
+///
+/// # ⊘⊘⊘ Why this number, and not the one already written down
+///
+/// `SINGLE_STORE_PLAN.md`'s ordering rule (*"§6 MUST PRECEDE §3"*) and `THE_CONSTRAINTS.md`
+/// §w724c's *"it does not boot"* are the same arithmetic: **store bytes ÷ 48 MiB/s**. w734b
+/// measured the numerator for the first time. ⊘ The denominator is quoted in both documents
+/// with no citation to a measurement of **this** path, and a rate measured on some other
+/// aperture is exactly the input this tree keeps being burned by — *a ruling's date and its
+/// architecture are both part of the citation*.
+///
+/// ⇒ This measures it where it will be paid: [`kayfabe_isolate::Worker::export_device_view`]
+/// over the reserved object → `SCM_RIGHTS` → `place_device_view` → `copy_nonoverlapping`,
+/// which is byte for byte what a `read`/`write` on a device-backed `FbStore` would do.
+///
+/// # ★★★ Four numbers, and the last two are the ones nobody has costed
+///
+/// | | what it decides |
+/// |---|---|
+/// | `rd` MiB/s | the walk's cost after the switch — the plan's whole ordering argument |
+/// | `wr` MiB/s | `kbusVerifyBar2`, the CPU CE executor, every boot-time store write |
+/// | `arm_us` | ⚠ **per view.** A device view is mapped from file offset **0 only**, so a non-contiguous working set needs ONE ARMED NODE PER RUN — this is the per-run tax, and nothing had costed it |
+/// | `rel_us` | the same on the way out; and `[measured w722]` skipping it returns **zero** aperture |
+///
+/// ⊘ `PROBE_BYTES` is deliberately small. §22 item 3 measured host BAR1 at 256 MiB **shared
+/// with the host driver**, so a probe sized to impress would compete with the thing it is
+/// measuring for. 2 MiB is ~0.8 % of the aperture and is released immediately.
+///
+/// ⚠ **EXPIRY (§w724g):** deleted when a device-backed `FbStore` exists and reports its own
+/// throughput from production traffic. At that point this measures a path the device already
+/// measures, and two sources for one fact is the defect this tree names most often.
+#[cfg(feature = "host-isolates")]
+fn probe_device_view_rate(
+    worker: &mut kayfabe_isolate::Worker,
+    off: &OffTrap,
+    id: IsolateId,
+    obj: HostHandle,
+    dup: &DupFn,
+) -> String {
+    use kayfabe_linux_raw::{GuestWindow, HostOffset, HostPageSize};
+    use std::os::fd::AsFd;
+
+    /// 2 MiB — see the doc comment. ⊘ Not a tunable: a knob here would make two boots'
+    /// numbers incomparable without anyone noticing which arm they were read from.
+    const PROBE_BYTES: u64 = 2 * 1024 * 1024;
+    /// ⊘ Three passes, and the **minimum** is reported rather than the mean. A `memcpy` out
+    /// of an uncached device mapping has a floor and a long tail (scheduler, host-driver
+    /// contention); the floor is a property of the bus and the tail a property of the box. A
+    /// mean blends them and moves run to run.
+    const PASSES: u32 = 3;
+
+    let t_arm = std::time::Instant::now();
+    let view = match worker.export_device_view(obj, 0, PROBE_BYTES, true) {
+        Ok(v) => v,
+        Err(e) => return format!("rate=UNMEASURED why=EXPORT_REFUSED:{e:?}"),
+    };
+    let Some(fd) = dup(id, view.token) else {
+        let _ = worker.release_device_view(view.token);
+        return "rate=UNMEASURED why=NO_DESCRIPTOR".to_string();
+    };
+    let win = match GuestWindow::create(view.mmap_len, HostPageSize::query()) {
+        Ok(w) => w,
+        Err(e) => {
+            drop(fd);
+            let _ = worker.release_device_view(view.token);
+            return format!("rate=UNMEASURED why=NO_WINDOW:{e:?}");
+        }
+    };
+    let placed = win.place_device_view(HostOffset::ZERO, view.mmap_len, fd.as_fd(), true);
+    // ★ Condition 2 of the ruling, here too: the descriptor goes the instant the mapping
+    // exists — not at the end of the scope, not on the error path only.
+    drop(fd);
+    let arm_us = micros(t_arm);
+    if let Err(e) = placed {
+        let _ = worker.release_device_view(view.token);
+        return format!("rate=UNMEASURED why=MMAP_REFUSED:{e:?} arm_us={arm_us}");
+    }
+    let _ = off;
+
+    let n = view.mmap_len.min(PROBE_BYTES);
+    let Ok(len) = usize::try_from(n) else {
+        let _ = worker.release_device_view(view.token);
+        return "rate=UNMEASURED why=LENGTH_NOT_HOST_SIZED".to_string();
+    };
+    let mut buf = vec![0u8; len];
+    let mut rd_us = u64::MAX;
+    let mut wr_us = u64::MAX;
+    let mut failed: Option<String> = None;
+    for _ in 0..PASSES {
+        let t = std::time::Instant::now();
+        if let Err(e) = win.read_into(HostOffset::ZERO, &mut buf) {
+            failed = Some(format!("READ:{e:?}"));
+            break;
+        }
+        // ⊘ `.max(1)` guards the division below, and it is a FLOOR on the reported time, so
+        // it can only make the rate look SLOWER than it was. A guard that flattered the
+        // number would be the one direction that matters here.
+        rd_us = rd_us.min(micros(t).max(1));
+        let t = std::time::Instant::now();
+        // ★ Writing back exactly what was read leaves the object's bytes unchanged, which
+        // matters: this runs over the reserved object the guest's framebuffer will live in.
+        if let Err(e) = win.write_from(HostOffset::ZERO, &buf) {
+            failed = Some(format!("WRITE:{e:?}"));
+            break;
+        }
+        wr_us = wr_us.min(micros(t).max(1));
+    }
+
+    let t_rel = std::time::Instant::now();
+    let released = worker.release_device_view(view.token).is_ok();
+    let rel_us = micros(t_rel);
+    drop(win);
+
+    if let Some(why) = failed {
+        return format!("rate=UNMEASURED why={why} arm_us={arm_us} rel_us={rel_us}");
+    }
+    let mibps = |us: u64| (n as f64) * 1e6 / (us as f64) / (1024.0 * 1024.0);
+    // ★ Published so the FB-IO census can multiply the volume it MEASURED by a rate that was
+    // also measured, on this boot, on this board — instead of by the 48 MiB/s the plan
+    // inherited. ⊘ Reads only; the write rate is reported but not published, because the
+    // census's dominant term is the walk and the walk reads.
+    DEVICE_VIEW_READ_BPS.store(
+        ((n as f64) * 1e6 / (rd_us as f64)) as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    format!(
+        "rate[rd={rd:.1}MiB/s wr={wr:.1}MiB/s over={kib}KiB arm_us={arm_us} rel_us={rel_us} released={released}]",
+        rd = mibps(rd_us),
+        wr = mibps(wr_us),
+        kib = n / 1024,
+    )
+}
+
+/// ⊘ No isolate plane, no view, no rate — said by name, because *an unmeasured rate* and *a
+/// slow one* are the two facts this probe exists to keep apart.
+#[cfg(not(feature = "host-isolates"))]
+fn probe_device_view_rate(
+    _worker: &mut kayfabe_isolate::Worker,
+    _off: &OffTrap,
+    _id: IsolateId,
+    _obj: HostHandle,
+    _dup: &DupFn,
+) -> String {
+    "rate=UNMEASURED why=NO_ISOLATE_PLANE".to_string()
 }
 
 /// ⊘ Without the isolate plane there is no isolate to arm a view in, and this arm says so by

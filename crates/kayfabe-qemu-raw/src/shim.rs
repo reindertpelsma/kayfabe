@@ -17601,10 +17601,24 @@ impl Regs {
         // existed anywhere in this tree — only `pages_swept`, a page count at six different
         // page sizes. ⇒ The volume is measured here, split by the role that decides whether
         // the switch can afford it, and the projection is labelled as a projection.
-        eprintln!(
-            "{}",
-            kayfabe_device::plane::fb_io_census_line(FB_IO_ASSUMED_BYTES_PER_SEC)
-        );
+        {
+            // ★★★ Prefer the rate MEASURED on this boot through a device view of the reserved
+            // object (w734's probe) over the 48 MiB/s the plan inherited. ⊘ Zero means the
+            // probe never ran, which is not a slow rate — the line says which one it used.
+            let measured = crate::scratchpad::DEVICE_VIEW_READ_BPS
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let (rate, provenance) = if measured > 0 {
+                (measured, "MEASURED on this boot through a device view of the reserved object")
+            } else {
+                (
+                    FB_IO_ASSUMED_BYTES_PER_SEC,
+                    "ASSUMED — the plan's inherited figure; no device-view rate was measured \
+                     on this boot, which is NOT the same as a slow one",
+                )
+            };
+            eprintln!("{}", kayfabe_device::plane::fb_io_census_line(rate));
+            eprintln!("kayfabe: FB-IO-RATE {} bytes/s \u{21d0} {provenance}", rate);
+        }
         match &self.scratchpad {
             Some(sp) => sp.census("END OF RUN"),
             None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
