@@ -397,6 +397,150 @@ impl Reservation {
 /// isolate's client. ⇒ **the reservation's lifetime IS this struct's lifetime**, with no
 /// separate release step to forget. `IsolateBox::drop` asserts lock-free, so this must not
 /// be dropped under a ranked lock.
+
+/// ★★★★★ **w734 — THE IDENTITY-WINDOW INVARIANT, MADE CATCHABLE BY A BOOT.**
+///
+/// > **`SINGLE_STORE_PLAN.md` §5's expiry note:** *"§3 makes GPGA one reserved device-local
+/// > object which `gpga_is_one_reserved_object.md` has the scratchpad map **whole, at a fixed
+/// > base** — an address is `X + gpga_offset`. ⇒ **after §3 the window is identity and
+/// > `build_image` is retired.**"*
+///
+/// An identity window means the walk kernel can dereference a guest page-table address
+/// **directly**, with one bounds check against the window's length, and no relocation, no
+/// staged image, no H2D copy and no `MAX_REFRESHES` ceiling. Everything that retires with §3
+/// retires *because of this one property*.
+///
+/// # ⊘⊘⊘ AND IT IS DESTROYED BY ADVERTISING MORE THAN WAS RESERVED
+///
+/// The kernel addresses table pages as offsets into one flat window
+/// (`KfArgs::win = {base, len}`, every dereference bounds-checked against `win.len`). A window
+/// that answers for the guest's tables **at their own GPGA** must be as long as the highest
+/// table page's address. ⇒ if the guest is told it has `N` bytes of framebuffer and we hold
+/// fewer than `N`, its RM will place tables at addresses **outside the object** — the guest's
+/// own RM puts them at the **top** — and the kernel's bounds check refuses every one of them.
+///
+/// ⚠ **The margin is thin by design and it is measured, not assumed.** `[measured]`
+/// `span_pages → 3868.7 MiB` inside `RESERVED_MB=4096`: **94.5 % of what the guest was told**,
+/// 227.3 MiB of headroom. ⇒ this is not a comfortable inequality with a safety factor; it is
+/// an invariant that holds because `derived_from_reservation` moves the guest's tables **down
+/// with the reservation**, and it fails the moment anything advertises independently of it.
+///
+/// ⊘ w730's *"the tables live ~11.8 GiB up a 12 GiB board, so an identity window is
+/// unaffordable"* is a fact about the **advertised** size, not about the design. Advertise
+/// what was reserved and the same 94.5 % lands inside it.
+///
+/// # ★ Two checks, at two moments, and they answer different questions
+///
+/// | | asks | when |
+/// |---|---|---|
+/// | [`identity_window_verdict`] | *"could the guest even place a table outside the object?"* | **at realize**, before the guest's first instruction — the only moment an operator can act |
+/// | [`identity_window_reached`] | *"did it?"* | at teardown, from the arena's own high-water |
+///
+/// ⊘ The first is the invariant; the second is the **known-positive for the first**. A verdict
+/// that says *"identity is possible"* on every boot and is never confronted with what the
+/// guest actually did is a check that reports rather than one that gates — the failure this
+/// tree names most often. ⚠ And the second alone would be useless: by teardown the boot is
+/// over, and a table outside the window is a kernel that refused every dereference, not a
+/// number somebody reads afterwards.
+///
+/// Returns `(identity_is_possible, the sentence)`.
+#[must_use]
+pub fn identity_window_verdict(advertised_fb_bytes: u64, reserved_bytes: u64) -> (bool, String) {
+    let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+    if reserved_bytes == 0 {
+        return (
+            false,
+            "IDENTITY-WINDOW ⊘ NO RESERVATION — nothing is held, so there is no object for a \
+             window to be the identity of. ⊘ This is not `identity is impossible`; it is the \
+             question not arising, and the fake framebuffer is still what backs the guest."
+                .to_string(),
+        );
+    }
+    if advertised_fb_bytes <= reserved_bytes {
+        (
+            true,
+            format!(
+                "IDENTITY-WINDOW ✔ POSSIBLE — advertised={:.1} MiB ≤ reserved={:.1} MiB, \
+                 headroom={:.1} MiB. ⇒ every framebuffer address the guest can name is an \
+                 offset into the reserved object, so the walk kernel's window can be IDENTITY \
+                 and relocation, the staged image and its H2D copy, and MAX_REFRESHES all \
+                 become retirable. ⚠ Possible, not achieved: `identity_window_reached` at \
+                 teardown is what says the guest's own tables landed inside.",
+                mib(advertised_fb_bytes),
+                mib(reserved_bytes),
+                mib(reserved_bytes - advertised_fb_bytes),
+            ),
+        )
+    } else {
+        (
+            false,
+            format!(
+                "IDENTITY-WINDOW ⊘⊘⊘ IMPOSSIBLE — advertised={:.1} MiB > reserved={:.1} MiB, \
+                 over by {:.1} MiB. ⚠ The guest's own RM places its page tables at the TOP of \
+                 what it is told it has, so this is not a rounding worry: the tables will land \
+                 OUTSIDE the object and the walk kernel's bounds check will refuse every one \
+                 of them. ⇒ Advertise what was reserved (`derived_from_reservation`), or hold \
+                 more.",
+                mib(advertised_fb_bytes),
+                mib(reserved_bytes),
+                mib(advertised_fb_bytes - reserved_bytes),
+            ),
+        )
+    }
+}
+
+/// ★★★ **DID THE GUEST ACTUALLY STAY INSIDE?** — [`identity_window_verdict`]'s known-positive,
+/// taken from the page arena's own high-water rather than from anything this check controls.
+///
+/// `span_bytes` is the highest framebuffer address the guest caused a page to exist at, which
+/// is the arena's `span_pages × 4 KiB`. ⊘ It is a **forward** measurement: the arena indexes
+/// by framebuffer address (*"framebuffer address = file offset"*), so its high-water is the
+/// guest's own answer to *"how high did you go"* and consults nothing this verdict computed.
+///
+/// ⚠ `span_bytes == 0` is **VACUOUS**, not a pass. It means no page was ever arena-backed on
+/// this boot — the mirror was off, or the arena refused everything — and a run that read it as
+/// *"the guest stayed well inside"* would be reading the absence of a measurement as its
+/// best possible result.
+#[must_use]
+pub fn identity_window_reached(span_bytes: u64, reserved_bytes: u64) -> String {
+    let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+    if span_bytes == 0 {
+        return "IDENTITY-REACHED ⊘⊘ VACUOUS — the page arena's high-water is zero, so no \
+                framebuffer page was ever arena-backed on this boot. That is the absence of a \
+                measurement, NOT the guest staying inside the reservation."
+            .to_string();
+    }
+    if reserved_bytes == 0 {
+        return format!(
+            "IDENTITY-REACHED ⊘ NO RESERVATION — the guest reached {:.1} MiB of framebuffer \
+             and nothing is held to compare it against.",
+            mib(span_bytes)
+        );
+    }
+    let pct = span_bytes as f64 * 100.0 / reserved_bytes as f64;
+    if span_bytes <= reserved_bytes {
+        format!(
+            "IDENTITY-REACHED ✔ INSIDE — the guest's highest framebuffer address was \
+             {:.1} MiB, {pct:.1} % of the {:.1} MiB reserved, leaving {:.1} MiB. ★ This is \
+             the known-positive for the identity window: the guest's own tables fit in the \
+             object, so an identity window would have answered for all of them.",
+            mib(span_bytes),
+            mib(reserved_bytes),
+            mib(reserved_bytes - span_bytes),
+        )
+    } else {
+        format!(
+            "IDENTITY-REACHED ⊘⊘⊘ OUTSIDE — the guest reached {:.1} MiB, which is \
+             {:.1} MiB ABOVE the {:.1} MiB reserved ({pct:.1} %). ⇒ an identity window CANNOT \
+             answer for this boot's tables, whatever the realize-time verdict said, and \
+             anything that retires on the strength of identity must NOT be retired.",
+            mib(span_bytes),
+            mib(span_bytes - reserved_bytes),
+            mib(reserved_bytes),
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct Scratchpad {
     /// Which arm of [`SCRATCHPAD_ENV`] this one was brought up under. ⊘ Carried on the

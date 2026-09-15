@@ -1657,6 +1657,23 @@ impl BarMirror {
         self.reval_done.store(req, Ordering::Release);
     }
 
+    /// ★★★ **w734 — THE HIGHEST FRAMEBUFFER ADDRESS THE GUEST CAUSED A PAGE TO EXIST AT**,
+    /// in bytes: the identity-window invariant's known-positive
+    /// (`crate::scratchpad::identity_window_reached`).
+    ///
+    /// ⊘ It is the arena's index high-water × the page size, and it means what it says only
+    /// because of [`kayfabe_device::FbPageArena::alloc_at`]'s contract — *"framebuffer address
+    /// `frame` is placed at fd offset `frame`"*. ⇒ the arena's own span IS the guest's answer
+    /// to *"how high did you go"*, and it consults nothing the verdict it checks computed.
+    ///
+    /// ⚠ `0` is **vacuous**, not *"the guest stayed low"*: it means no page was ever
+    /// arena-backed. The consumer says so by name.
+    #[must_use]
+    pub fn arena_span_bytes(&self) -> u64 {
+        let (_, _, _, issued) = self.arena.census();
+        issued.saturating_mul(PAGE)
+    }
+
     /// The census, one line per armed window plus one for the mechanism.
     pub fn report(&self, at: &str) {
         self.census.census_lines.fetch_add(1, Ordering::Relaxed);
