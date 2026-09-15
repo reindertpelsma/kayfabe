@@ -341,6 +341,41 @@ and the per-client host MMU fault above.
     mechanism no longer expresses it, and **name the assert that now does**. An assert deleted
     without a successor named is a regression, however green the suite is.
 
+30. **★★★★★ ANY RESOURCE THE SCRATCHPAD CREATES AND SHARES MUST BE PROVEN NOT TO CARRY THE
+    SCRATCHPAD'S PRIVILEGE** (owner, 2026-09-15). *"The reason we also do isolates is to ensure
+    the channel is created in an unprivileged process. If ogkm links the process that created
+    the channel to the privileges of it… the cross guest process isolation is broken. So this
+    has to be asserted."*
+
+    ⊘⊘⊘ **CONFIRMED IN ogkm-580.159.04**, `src/kernel/gpu/fifo/kernel_channel.c:277-295`:
+
+        RS_PRIV_LEVEL privLevel = pCallContext->secInfo.privLevel;
+        if (privLevel >= RS_PRIV_LEVEL_KERNEL)            → _PRIVILEGE_KERNEL, _PRIVILEGED_CHANNEL_TRUE
+        else if (rmclientIsAdmin(...) || hypervisorCheckForObjectAccess(hClient))
+                                                          → _PRIVILEGE_ADMIN,  _PRIVILEGED_CHANNEL_TRUE
+        else                                              → _PRIVILEGE_USER
+        pKernelChannel->ProcessID    = pRmClient->ProcID;
+        pKernelChannel->SubProcessID = pRmClient->SubProcessID;
+
+    ⇒ **Privilege is stamped AT CREATION from the creating call context**, and **the channel
+    records the creating process**. A `DupObject` does **not** re-run this, so **the stamp
+    survives the hand-over.** ⚠ And F11 records that our isolates' kernel-visible euid is **0**
+    on a root VMM, so `rmclientIsAdmin(...)` plausibly holds for the scratchpad — which would
+    make every channel it births `_PRIVILEGED_CHANNEL_TRUE`.
+
+    ⇒ **"The scratchpad births the channel and dups it to the isolate" is WITHDRAWN as a
+    default.** It is admissible only if measured: **scratchpad-born channels come out
+    `_PRIVILEGE_USER`**, asserted at birth and refusing otherwise.
+
+    ★ **And it generalises past channels.** For **every** resource the scratchpad creates and
+    shares — VA spaces, ranges, mappings, channels — the question is the same: *does sharing it
+    convey the creator's privilege, its process identity, or a route to its CPU address space?*
+    ⊘ **Do not answer from the API's shape.** `DupObject` succeeding says nothing about what the
+    duped object carries; `[w744]` measured that a dup that succeeds can still be the wrong
+    thing (the "one space vs two spaces" falsifier). ⇒ **each shared resource needs its own
+    measured answer and its own fail-closed assert**, and until it has one the sharing is
+    refused, not assumed.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
