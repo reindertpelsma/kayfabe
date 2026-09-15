@@ -149,16 +149,31 @@ impl ArmedView {
     }
 }
 
+/// How many leak lines [`ArmedView::drop`] has printed. ⊘ Capped — see the `Drop` impl.
+static LEAK_LINES: AtomicU64 = AtomicU64::new(0);
+
+/// How many leak lines are worth printing before the count is the only useful part.
+const LEAK_LINES_MAX: u64 = 3;
+
 impl Drop for ArmedView {
     fn drop(&mut self) {
-        if !self.released && !std::thread::panicking() {
+        // ⊘⊘ **CAPPED, and the cap is not tidiness.** Every view the port still holds at
+        // process teardown arrives here at once — an ordinary shutdown with a hundred live
+        // memslots would print a hundred alarming lines, which is a log telling the truth and
+        // nobody reading it, and worse, it trains a reader to skip the line that matters. The
+        // port's `outstanding=` is the number; this is the first few instances of it.
+        if !self.released
+            && !std::thread::panicking()
+            && LEAK_LINES.fetch_add(1, Ordering::Relaxed) < LEAK_LINES_MAX
+        {
             eprintln!(
                 "kayfabe: DEVICE-VIEW ⊘⊘⊘ LEAKED a view at offset {:#x} len {:#x} — it was \
                  dropped without DeviceViewPort::release. `[measured w722]` munmap+close \
                  returns ZERO host BAR1 aperture; only NV_ESC_RM_UNMAP_MEMORY does. This \
                  aperture is gone for the life of the isolate and every later arm is that \
                  much closer to NV_ERR_NO_MEMORY — which is reported with ioctl(2) returning \
-                 0 and errno 0, i.e. silently.",
+                 0 and errno 0, i.e. silently. ⚠ At most {LEAK_LINES_MAX} of these are \
+                 printed; DEVICE-VIEW-PORT's `outstanding=` is the total.",
                 self.view.offset, self.view.mmap_len,
             );
         }
