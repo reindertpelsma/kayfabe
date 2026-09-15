@@ -55,3 +55,34 @@ deliverable.
 - **Nothing about throughput.** No workload here is a perf measurement.
 - It is **one driver on one chip**. `580.159.04` on a GA106; w744's RM answers were taken on
   `580.159.03` and `580.126.20`.
+
+---
+
+## ⊘⊘⊘ AMENDMENT, written 2026-09-15 BEFORE the boot, from reading my own diff
+
+**I expect row 13 (`RmInitAdapter failed! = 0`) to be the one that breaks, and I am recording
+why here rather than discovering it in the log.**
+
+On the `scratchpad` arm **every** per-proc isolate gets a bare address space — including the
+**system proc**, whose channels are `Emulated`. An emulated channel is born over
+`RingSource::Ours`: `alloc_channel_in` **allocates its own ring object and maps it** into the
+guest VAS. That map is `map_gpu_va`, which now refuses `MAP_THROUGH_A_BARE_SPACE` by name.
+
+⇒ **The split as built refuses a class of mapping that is not the one it was aimed at.** §26's
+own flow — *"the scratchpad … maps slices of the one object into it"* — covers guest vidmem;
+it does not cover an object the isolate allocated **for itself** to serve an emulated channel,
+and `map_store_slice` cannot serve one (it maps the reservation, at an offset).
+
+### What each outcome would mean
+
+| measured | reading |
+|---|---|
+| `RmInitAdapter failed!` ≥ 1 **and** `W745-BARE-SPACE-REFUSED` ≥ 1 | ✔ this amendment, confirmed. The split needs a **second** answer for isolate-owned objects, and w744's Q4 already measured one candidate: P *can* build a **bounded subrange** in a space where S holds the whole-space range — **in that order**, which is an ordering constraint this build does not enforce |
+| `RmInitAdapter failed!` ≥ 1 **and** `W745-BARE-SPACE-REFUSED` = 0 | ⊘ something else broke; this amendment is wrong and must not be used to explain it |
+| `RmInitAdapter failed!` = 0 | ★ better than predicted — the emulated path did not need a map on this boot, and rows 5–10 are then the real subject |
+
+⚠ **I am NOT changing the code to pre-empt this.** w744 measured the subrange ordering **once**,
+on a bare box with no guest, and the working order there was *space → S's whole range → P's
+subrange*; on the boot path the hand-over is lazy and may land after the first emulated birth.
+Building an ordering on one measurement of a different sequence is exactly the improvisation
+`B1`'s *"do not pick one by implementation convenience"* refuses. ⇒ **measure first.**
