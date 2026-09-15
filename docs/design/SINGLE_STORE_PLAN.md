@@ -167,6 +167,56 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ★★★★★ THE 44 BAR1 TRAPS ARE A **JOIN** REFUSAL ON THE PUBLISH ROUTE — the sync point is fine
+
+⊘ **Owner's question: "does the driver use the refresh (three entrypoints) before using a BAR
+address? can you confirm?" — CONFIRMED, from the w740 device-arm log.** The line immediately
+before the first miss is the refresh itself:
+
+    kayfabe: MMUINVAL-REFRESH #467 seq=467 armed=3 refresh_ms=9.88
+      | EXEC-WITNESS ARMED but the store cannot enumerate frames | PT-DECODE drained=0
+    kayfabe: MMUINVAL-PUBLISH (off-vCPU) VAS-PUBLISH token=0x80010005 arm=drain
+    ⊘ BAR1-PASSTHROUGH MISS #1: a 4-byte read at aperture +0x102000 … no memslot covers this
+
+⇒ **The guest DOES pass through the TLB-invalidate sync point before touching the address.**
+Premapping every changed range before it is accessed is therefore **achievable** — the
+entrypoint exists and is already taken. Nothing about "never serve a trap" is aspirational.
+
+## ⇒ WHAT ACTUALLY FAILS, and it is a named refusal, 4431 times
+
+    ⚠ THE INSTALL REFUSED phys=0x150000 len=0
+      why=`this framebuffer store cannot hold a joined range; it has no pages of its own
+           to establish from and nothing to install into`
+
+and the refresh says it in its own words **718 times**: *"EXEC-WITNESS ARMED but the store
+cannot enumerate frames."*
+
+★★★ **The publish route asks the store for a JOINED RANGE.** That is a `SparseFb` concept —
+`FbPageBacking::Joined` names a **file this process already holds**. `DeviceFb` has no pages of
+its own, so it refuses **correctly and by name**, the install lands with `len=0`, nothing is
+premapped, and the guest's next read of that address takes a trap.
+
+⇒ **Chain:** guest edits BAR1 PTs → sync point ✔ → refresh fires off-vCPU ✔ → publish attempts
+a **join** → `DeviceFb` refuses (structurally cannot) → nothing installed → **trap**.
+
+⊘ **This is not a hole in the design. It is a cut-C-shaped gap one layer up** — a path that was
+correct under `SparseFb` and is a silent no-op under `DeviceFb`, exactly like
+`decode_subtree_from_entry` dropping its faults. ★ And it explains why only **two** distinct
+offsets miss (`+0x102000`, `+0xe2000`) out of 44 fills: only a couple of ranges are read before
+some other path happens to cover them.
+
+## ⇒ THE FIX
+
+The device store needs **its own install path on the publish route** — install a **slice of the
+one reserved object at the aperture offset** — instead of being asked for a join it cannot
+perform. `FbPageBacking::Device { at }` already carries the offset; the publish route simply has
+no arm that consumes it.
+⚠ Arming shape unchanged and non-negotiable: `want` records under the plane lock, `drain` is the
+IPC round trip at lock-free entry points only, fixed trip counts. **No number of seconds reaches
+a lock rank.**
+★ **The grade is `BAR1 TRAP_FILLS=0`, matching BAR2**, which is already at `0` on the device arm
+(`premap_fills=264 distinct_pages=138`). ⊘ Not "fewer traps" — **zero**, per constraints 1 and 23.
+
 ### ★★★★★ OWNER, 2026-09-15 — **YOU CANNOT OBSERVE A PASSTHROUGH ACCESS, SO EVERY TRAP IS ALREADY THE ERROR**
 
 > *"how can you observe a read or a write anyways if its passthrough mapped. If you receive a
