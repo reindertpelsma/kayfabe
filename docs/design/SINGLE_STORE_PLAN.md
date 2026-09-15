@@ -502,6 +502,60 @@ assumption about what `AdoptedGuestRing::memory` names.
 
 ⊘⊘⊘ **AND TWO STRUCTURAL BLOCKERS. Neither is a one-liner and the first is an OWNER RULING.**
 
+### ★★★★★ B1 RULED, 2026-09-15 — **(d) NOBODY BUT THE SCRATCHPAD EVER NAMES THE OBJECT**
+
+⊘ **The owner rejected all three of (a)/(b)/(c) by reframing the question.** B1 asked *"who gets
+a copy of the reserved object?"* The answer is **nobody**. The object never crosses an isolate
+boundary at all.
+
+| | holds today | **holds under (d)** |
+|---|---|---|
+| **scratchpad** (runs **no** guest-derived work) | the reserved object | + the **guest GPA memfd** + **duped-in guest VA spaces** |
+| **per-proc stubs** (run guest-derived work) | neither fb nor guest RAM | **neither, and not the vidmem object either** |
+| **VMM** | everything else | **only BAR mmaps** — because a KVM memslot needs a VA *in that process* |
+
+★★★ **Per-proc blast radius goes to ZERO.** A stub that only executes work needs to name
+neither the reservation nor the GPA. That is **better than today** and far better than (b),
+which would have handed **every** stub a handle to all **11904 MiB** of guest vidmem.
+★ And it *strengthens* the posture `cpu_ce.rs:7` already states — *"a separate sandboxed
+process that deliberately holds neither the emulated framebuffer nor guest RAM. That is the
+security posture working, not a gap."* — by moving the property to where guest-derived work
+actually runs.
+
+## ⇒ IT DISSOLVES THE w743 WALL RATHER THAN DEFEATING IT
+
+The failure is `⊘ (6) the binding EXISTS but carries NO HOST OBJECT`, `BIRTH-AT-ALLOC
+REFUSED=11` — every one of the client's channels. Under (d) **the stub never needs to name the
+object**: the **scratchpad** makes the binding, because it holds the object *and* (duped in)
+the VA space, and the stub executes against a VA space that is **already mapped**.
+⇒ `Worker::execute`'s `ForeignHandle` gate stops being an obstacle to defeat, because **no
+foreign handle is ever named.**
+
+## ⇒ THE MARSHALLING BOUNDARY, and why it lands there
+
+- **DMA maps for PT\*/PD\* stay in the scratchpad** — the PTX walker already produces the runs
+  there, so runs → maps is local. ★ This also softens **B2**: its per-leaf IPC cost was a
+  *VMM→isolate* round trip; from the scratchpad these are **local RM ioctls**, issued
+  **per coalesced run** (`premap[runs=1744]`, peak ~936 live), not per page.
+- **BAR maps marshal back to the VMM** — and only those — because a KVM memslot requires a VA
+  in the VMM's own address space. Nothing else crosses.
+
+## ⇒ EVERY PIECE EXISTS; ONE LINK IS UNVERIFIED
+
+✔ `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` (`kayfabe-abi/src/bringup.rs:549`) — the FIXED-offset map
+`AddressTable::bind` requires (`host_va == va`).
+✔ `Nvos46Parameters` / `MapMemoryDma` transcribed, pre-580 shape handled.
+✔ `FERMI_VASPACE_A` is already rung **R7**, *"a per-`Vas` host address space"*.
+✔ The fd crossing is **proven** — w727b: reserved object → SCM_RIGHTS → mmap → fd closed →
+sentinel round-trip → released.
+⚠ **THE HINGE, unverified: can a `FERMI_VASPACE_A` handle be DUPED into the scratchpad's
+client?** `NV_ESC_RM_DUP_OBJECT` / `NVOS55` supports many classes, not all. Two riders:
+does `MapMemoryDma` accept a **duped `hDma`** with a **local `hMemory`**, and does
+`DMA_OFFSET_FIXED_TRUE` accept an arbitrary guest-chosen VA? ⊘ All three answerable on a CUDA
+box **with no guest**, and the first decides the design.
+
+⊘ **(a)/(b)/(c) below are kept as the refuted alternatives**, not as live options.
+
 - **B1 — the reserved object belongs to the SCRATCHPAD isolate, not the guest proc's.**
   `Scratchpad::bring_up` reserves it on `IsolateId::new(SCRATCHPAD_PROC /* u32::MAX */, gpu)`
   (`crates/kayfabe-qemu-raw/src/scratchpad.rs:722, 758`), while channel birth runs on
