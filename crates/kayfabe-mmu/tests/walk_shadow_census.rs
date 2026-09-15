@@ -378,3 +378,74 @@ fn the_canonical_form_is_stable_on_the_hostile_corpus_too() {
     }
     assert!(nonempty >= 5, "only {nonempty} hostile images produced runs");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ THE LIVE HALF'S ARMS — a census that only ever DECLINED must say so
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★ **A boot that never compared renders VACUOUS AND NAMES THE REASON.**
+///
+/// ⊘ This is the arm the live half is most likely to land on, and the one most likely to be
+/// misread. The shadow declines on a vCPU thread by design (a synchronous isolate round trip
+/// there blocks a vCPU), so a boot whose every sweep ran on a vCPU has **zero disagreements**
+/// — and that zero is not agreement. The reason has to be in the line.
+#[test]
+fn a_census_that_only_declined_is_vacuous_and_says_why() {
+    let mut c = ShadowCensus::default();
+    for _ in 0..7 {
+        c.note_skipped("on_vcpu");
+    }
+    c.note_skipped("too_many_pages");
+    let line = c.render();
+    assert!(
+        line.contains("VACUOUS"),
+        "a census with no comparison must be VACUOUS: {line}"
+    );
+    assert!(
+        line.contains("on_vcpu=7"),
+        "the reason must be named and counted: {line}"
+    );
+    assert!(
+        line.contains("too_many_pages=1"),
+        "every reason gets its own column: {line}"
+    );
+    assert!(
+        line.contains("kernel_unavailable=8"),
+        "a declined sweep is also a sweep on which the two walkers were not compared: {line}"
+    );
+    assert_eq!(c.total(), 0);
+}
+
+/// ⊘ **And the scope caveat is in the line whatever the verdict**, because a reader who only
+/// sees `disagreements=0` must still be told what was compared and over what.
+#[test]
+fn the_line_always_states_its_scope() {
+    let empty = ShadowCensus::default().render();
+    assert!(empty.contains("compared_flags=0xf"), "{empty}");
+    assert!(empty.contains("RELOCATED COPY"), "{empty}");
+
+    let mut c = ShadowCensus::default();
+    let leaves: Vec<_> = (0..4)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
+    let (host, _) = leaves_as_runs(&leaves);
+    c.note(&host, &host, 0, &[]);
+    let clean = c.render();
+    assert!(clean.contains("★★★ AGREEMENT"), "{clean}");
+    assert!(clean.contains("compared_flags=0xf"), "{clean}");
+    assert!(clean.contains("RELOCATED COPY"), "{clean}");
+}
+
+/// ★★ **The image statistics are accumulated and reported**, so the reach clipping and the
+/// wire cost are facts a reader can act on rather than numbers nobody kept.
+#[test]
+fn the_image_statistics_reach_the_line() {
+    let mut c = ShadowCensus::default();
+    c.note_image(12, 4096 * 13, 5, 2);
+    c.note_image(30, 4096 * 31, 1, 0);
+    let line = c.render();
+    assert!(line.contains("pages_max=30"), "{line}");
+    assert!(line.contains(&format!("staged_bytes={}", 4096 * 13 + 4096 * 31)), "{line}");
+    assert!(line.contains("absent_edges=6"), "{line}");
+    assert!(line.contains("sysmem_edges=2"), "{line}");
+}
