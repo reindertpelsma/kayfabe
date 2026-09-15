@@ -13997,6 +13997,7 @@ fn map_store_slice_for_leaf(
     head: &str,
     what: &str,
     device: &kayfabe_rt::device::SharedDevice,
+    pid: kayfabe_core::ProcId,
     pdb: kayfabe_rt::Pdb,
     leaf: kayfabe_rt::completion_watch::FbLeaf,
     at: u64,
@@ -14045,19 +14046,29 @@ fn map_store_slice_for_leaf(
     let store_vas = match device.store_vas(DOORBELL_TARGET_GPU, pdb) {
         Some(h) => h,
         None => {
-            let bare = match device.vaspace_handover(DOORBELL_TARGET_GPU, pdb) {
+            let bare = match device.vaspace_handover(pid, DOORBELL_TARGET_GPU, pdb, leaf) {
                 Ok(b) => b,
                 Err(e) => {
                     STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
                     let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
                     if n < DEVICE_LEAF_LINES_MAX {
+                        // ⊘⊘ **w746 — THE PROSE NAMES WHAT THE PAYLOAD SAYS, AND NOTHING
+                        // ELSE.** w745's version of this line suggested
+                        // `HANDOVER_OF_A_NON_BARE_SPACE` while printing `NoVas`, which is a
+                        // diagnosis its own payload rules out — and it sent the next reader
+                        // to the factory when the answer was in the `Vas`. The refusal
+                        // vocabulary is now exact enough to print itself: read `{e:?}`.
                         eprintln!(
-                            "{head} {what} leaf va=0x{:x} pdb={pdb:?} → ⊘⊘ CONSTRAINT 26: the \
-                             per-proc isolate would not hand its address space over: {e:?}. \
-                             ⚠ `HANDOVER_OF_A_NON_BARE_SPACE` here means this isolate was \
-                             spawned WITHOUT `--bare-vaspaces on`, i.e. the arm reached the \
-                             VMM and not the factory.",
-                            leaf.va
+                            "{head} {what} leaf va=0x{:x} proc={} pdb={pdb:?} → ⊘⊘ CONSTRAINT \
+                             26: THE HAND-OVER WAS REFUSED: {e:?}. ⊘ Read the variant and \
+                             nothing else: `HandoverRouteDisagrees` = this caller's route is \
+                             not the spine's (constraint 29 assert 1); `FbLeafExtent` / \
+                             `FbLeafDisagrees` = this `Vas` describes that VA as something \
+                             else (assert 2); `PoolSaturated` = no worker was free and \
+                             NOTHING was asked; `UnknownPdb` = the `Vas` is gone; \
+                             `Rm(0x4B43)` = `HANDOVER_OF_A_NON_BARE_SPACE`, and ONLY that one \
+                             means the isolate was spawned without `--bare-vaspaces on`.",
+                            leaf.va, pid.0
                         );
                     }
                     return None;
@@ -14347,8 +14358,18 @@ fn join_one_fb_leaf(
             // whole block is skipped and the arm returns `None` exactly as before — which is
             // what keeps the control a control.
             if store_owns_vas() {
-                if let Some(joined) = map_store_slice_for_leaf(head, what, device, pdb, leaf, at)
-                {
+                // ⊘ `isolate.proc()` and NOT a second derivation: this is the very
+                // `ProcId` `join_one_fb_leaf`'s callers built the isolate id from, carried
+                // through rather than re-routed (w746, constraint 29).
+                if let Some(joined) = map_store_slice_for_leaf(
+                    head,
+                    what,
+                    device,
+                    kayfabe_core::ProcId(isolate.proc()),
+                    pdb,
+                    leaf,
+                    at,
+                ) {
                     return Some(joined);
                 }
             }
@@ -18733,6 +18754,27 @@ impl Regs {
             };
             eprintln!(
                 "kayfabe: DEVICE-LEAF-SPLIT handovers={handovers} handover_refused={}                  slices_bound={mapped} refused={refused} declined_on_vcpu={declined} ⇒                  {verdict}",
+                STORE_HANDOVER_REFUSED.load(Ordering::Relaxed),
+            );
+            // ★★★★★ **w746, CONSTRAINT 29 — THE REPLACEMENT ASSERTS' OWN CENSUS, AND IT
+            // SAYS `ASKED` SEPARATELY FROM `FIRED`.**
+            //
+            // ⊘⊘ w745's `RING-NOT-A-SLICE=0` and `FOREIGN-HANDLE=0` were read as passes on a
+            // boot where `asserted=0` — nobody was ever asked. A gate's zero is only a pass
+            // if the gate RAN, so each of these prints the ask beside the fire and states
+            // which of the two a zero is.
+            let asked = handovers + STORE_HANDOVER_REFUSED.load(Ordering::Relaxed);
+            let untabled = kayfabe_rt::device::SharedDevice::handover_leaf_untabled();
+            let not_held = kayfabe_rt::device::SharedDevice::handover_space_not_held();
+            let a_verdict = if asked == 0 {
+                "⊘⊘ UNMEASURED — the hand-over was never called, so every number on this                  line is `never asked`, NOT `asked and passed`"
+            } else if not_held > 0 {
+                "⊘⊘⊘ DEFECT — assert 3 FIRED: a hand-over returned a space the `Vas` does                  not hold. Nothing downstream of it may be trusted"
+            } else {
+                "★★★ ASKED AND PASSED — assert 1 (route) and assert 3 (the space is the one                  the `Vas` holds) both ran and neither fired"
+            };
+            eprintln!(
+                "kayfabe: HANDOVER-ASSERTS asked={asked} route_disagrees+leaf_disagrees={}                  leaf_untabled={untabled} space_not_held={not_held} ⇒ {a_verdict}                  ⊘ `route_disagrees+leaf_disagrees` is the SAME counter as                  `handover_refused` above minus the RM-side refusals; read the first refusal                  line for the variant.",
                 STORE_HANDOVER_REFUSED.load(Ordering::Relaxed),
             );
         }

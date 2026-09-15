@@ -184,6 +184,53 @@ Applying the standing question — *if this is wrong, what goes unnoticed?* — 
 
 ---
 
+## 5.4 ★★★★★ CONSTRAINT 30 — WHAT THE SCRATCHPAD SHARES, AND THE ONE QUESTION STILL UNMEASURED
+
+**STATUS: LIVE, 2026-09-15 (w746).** Added because constraint 30 obliges every sharing path to
+arrive with its assert attached, and this document is the one that describes the paths.
+
+> Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is created in an
+> unprivileged process. If ogkm links the process that created the channel to the privileges of
+> it… the cross guest process isolation is broken. So this has to be asserted."*
+
+`[ogkm-580.159.04, src/kernel/gpu/fifo/kernel_channel.c:277-295]` — `privLevel` is read from
+`pCallContext->secInfo.privLevel` **at creation**; `rmclientIsAdmin(...)` alone sets
+`_PRIVILEGED_CHANNEL_TRUE`; `ProcessID`/`SubProcessID` are copied from the creating client.
+`NV_ESC_RM_DUP_OBJECT` re-runs none of it. ⇒ **the stamp survives the hand-over.**
+
+### What crosses, in which direction, and what answers for it
+
+| resource | created by | shared with | answer |
+|---|---|---|---|
+| the guest `Vas`'s `FERMI_VASPACE_A` | **the per-proc isolate** | the scratchpad (dup) | ✔ the direction is UP. Nothing the scratchpad created is lent down. Asserted at the point of use: `SharedDevice::vaspace_handover` refuses a space that does not `belongs_to` the asking proc's own isolate |
+| a channel in a handed-over space | — | — | ⊘ **REFUSED.** `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`: the scratchpad may not birth into a space it adopted. Its own channels (`ce_copy`, the CUDA walk kernel) are in spaces it created and are untouched |
+| the scratchpad's `NV01_MEMORY_VIRTUAL` range over the dup | the scratchpad | **nobody** — the per-proc isolate cannot name it | ✔ not shared |
+| **the mappings** the scratchpad places, and through them the reserved object's pages | **the scratchpad** | the guest's engines | ⊘⊘ **`[UNMEASURED]`** — see below |
+
+### ⊘⊘ THE UNMEASURED ONE, WITH ITS FALSIFIER, SO IT IS NOT ANSWERED BY SHAPE
+
+*Does a mapping created by the scratchpad, placed in a per-proc `Vas`, convey the scratchpad's
+privilege, its process identity, or a route to its CPU address space?*
+
+- **Route to its CPU address space** — the mapping is a GPU VA → pages of the reserved object.
+  The scratchpad also holds CPU views of that same object (`export_device_view`), so guest GPU
+  writes and scratchpad CPU reads name the same bytes. That is the design (it is the guest's
+  framebuffer); what bounds it is the mapping's own `[offset, len)`, which constraint 28 asserts
+  the **placement** of and not the **extent**. ⚠ Extent is therefore the sharp edge here.
+- **Privilege / process identity** — ogkm stamps nothing on a `MapMemoryDma` the way it stamps a
+  channel. ⊘ **That reading is from the API's shape, which constraint 30 part 2 forbids as an
+  answer.** It stands as a hypothesis.
+
+**The falsifier, stated so it can be run:** place a slice through the scratchpad into a per-proc
+`Vas`, then have the **per-proc** client attempt something the scratchpad could do and it could
+not — a privileged control on that range, or a map at a VA the scratchpad holds. `[measured
+w744]` the second of those is already known to be refused `0x51`, which is evidence the two
+clients are not equivalent over the shared space; it is **not** evidence about privilege.
+
+⇒ Until that is measured, constraint 30 part 3 governs: **the sharing is refused, not assumed,**
+wherever a shape has no answer. The two shapes ogkm has answered are refused by name above; the
+mapping shape is in use and is recorded here as an open, named debt rather than as a silence.
+
 ## 6. ◐ DEFERRED, RECORDED SO IT IS NOT RE-DERIVED
 
 **Full vGPU-style reservation** — requiring that all GPU memory the guest can reach is reserved

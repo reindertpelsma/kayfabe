@@ -240,10 +240,18 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     // far side of the `RING_NOT_A_JOINED_WINDOW` membership check asserted directly above.
     // ⊘ The number moved because a **verb** was added, never because an arm became reachable
     // from somewhere new: the decision count in `alloc_channel_in` is unchanged at four.
+    // ⊘⊘ **CORRECTED 2026-09-15 (w746, constraint 29) — SEVEN → EIGHT, AND THE EIGHTH IS A
+    // GATE, NOT A DECISION.** `alloc_channel_in`'s `store_slice_ring` predicate matches
+    // `RingSource::Guest(GuestRing { ring: RingProvenance::StoreSlice { .. }, .. })` to decide
+    // whether [`RING_HANDLE_REACHED_RM`] applies. ⚠ It is admitted for the same reason the
+    // sixth was: it adds no path on which a channel can be born over guest memory — it is a
+    // read of the value the four decisions already produced, taken immediately before the
+    // struct RM reads is built, and its only outcome is a REFUSAL. ⊘ The decision count in
+    // `alloc_channel_in` is still four; a NINTH would mean a fifth decision.
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        7,
-        "`RingSource::Guest` is constructed or matched somewhere new. **SEVEN is the ruling \
+        8,
+        "`RingSource::Guest` is constructed or matched somewhere new. **EIGHT is the ruling \
          (three before leg B, five before w288, six before w393), ADMITTED 2026-09-10 \
          (w407)**, and each is a different job: TWO constructions — \
          `alloc_channel_over_guest_ring` and its `_with_error_notifier` twin — TWO arms in \
@@ -566,5 +574,103 @@ fn the_birth_witness_is_read_by_no_decision() {
         "★★★ CONSTRAINT 26 — the `StoreSlice` arm no longer opts out of the membership \
          lookup by construction. If it grew one, the birth isolate is looking a handle up in \
          a table it cannot own an entry in, and the answer would be `false` forever."
+    );
+}
+
+// =========================================================================================
+// ★★★★★ w746, CONSTRAINT 29 PART 2 — THE SUCCESSOR TO `AdoptedGuestRing::memory`.
+// =========================================================================================
+//
+// `AdoptedGuestRing::memory` was deleted at constraint 26c on the argument *"the ring handle
+// never reaches RM — it was an authorization token, not an operand"*. The argument is TRUE of
+// `alloc_channel_in` as written; what was missing is anything that would notice if it stopped
+// being true. Constraint 29 part 2: **when a gate goes because "X never happens", X is the
+// thing most likely to be wrong, and the replacement must go RED IF X HAPPENS.**
+//
+// ⊘ These are source-shape assertions rather than a live birth, and the reason is not
+// convenience: `alloc_channel_in` is a method on `HostRmBackend`, whose every path opens
+// `/dev/nvidia*`. There is no mock that reaches it, so the honest instrument is the one that
+// reads the code that runs. ⚠ Both tests below were broken deliberately and watched go red;
+// see the commit message for exactly how.
+
+/// The one place this crate builds the struct RM reads for a channel alloc, and the one
+/// place a ring handle could be smuggled into it.
+const CHANNEL_ALLOC_SITE: &str = "ChannelAllocParams {";
+
+#[test]
+fn a_store_slice_birth_refuses_before_rm_if_it_holds_a_ring_handle() {
+    let body = body_of("src/rm.rs");
+    // ★ THE GATE EXISTS, and it is the runtime one — not a comment asserting the property.
+    assert!(
+        body.contains("RmError::Other(RING_HANDLE_REACHED_RM)"),
+        "★★★★★ CONSTRAINT 29 — the replacement for `AdoptedGuestRing::memory` is GONE. \
+         That field was deleted because \"the ring handle never reaches RM\"; with this gate \
+         removed, nothing in the tree notices when it does, and a channel born naming a \
+         handle this isolate does not hold is refused by RM with a status that reads as \
+         exhaustion."
+    );
+    // ★ …and it is FAIL-CLOSED on all three conjuncts. A gate that checked only `ring_obj`
+    // would pass a birth that named USERD handle `0` to RM, which resolves to nothing and is
+    // the same silent `GP_PUT == GP_GET`.
+    for conjunct in [
+        "ring_obj != 0",
+        "matches!(userd_owner, UserdOwner::InRing)",
+        "userd == 0",
+    ] {
+        assert!(
+            body.contains(conjunct),
+            "★★★★★ CONSTRAINT 29 — the store-slice birth gate lost its `{conjunct}` \
+             conjunct. Each one is a distinct way the handle-free claim can stop holding."
+        );
+    }
+    // ★★★ NON-VACUITY: the gate must sit ABOVE the struct RM reads. A check after the
+    // `NV_ESC_RM_ALLOC` is built is a check of a fact that has already crossed.
+    let gate = body
+        .find("RmError::Other(RING_HANDLE_REACHED_RM)")
+        .expect("asserted above");
+    let site = body
+        .find(CHANNEL_ALLOC_SITE)
+        .expect("this crate builds ChannelAllocParams");
+    assert!(
+        gate < site,
+        "★★★★★ CONSTRAINT 29 — the store-slice ring gate is BELOW the site that builds \
+         `ChannelAllocParams`. It would then refuse a birth whose parameters RM had already \
+         been handed, which is not a gate."
+    );
+}
+
+#[test]
+fn the_channel_alloc_struct_is_fed_by_no_store_slice_handle() {
+    let body = body_of("src/rm.rs");
+    let site = body
+        .find(CHANNEL_ALLOC_SITE)
+        .expect("this crate builds ChannelAllocParams");
+    let end = body[site..]
+        .find("engine_type,")
+        .map(|o| site + o)
+        .expect("the struct's last field");
+    let struct_body = &body[site..end];
+    // ⊘ `ring_obj` IS legitimately named through `userd` on the `InRing` arm, so the
+    // assertion is about the STRUCT's own fields: none of them may be spelled `ring_obj`.
+    assert!(
+        !struct_body.contains("ring_obj"),
+        "★★★★★ CONSTRAINT 29 — a field of `ChannelAllocParams` is now fed directly from \
+         `ring_obj`. On the `StoreSlice` arm that value is `0` by construction, so this \
+         would hand RM handle zero; on every other arm it hands RM an object whose \
+         authorization `AdoptedGuestRing::memory` used to carry and no longer does. \
+         THIS IS THE ASSERT THAT THE DELETED FIELD'S ARGUMENT IS STILL TRUE."
+    );
+    // ★ And the two fields that DO carry handles are named, so a third appearing is a diff
+    // somebody has to look at rather than a silent widening.
+    assert_eq!(
+        struct_body.matches("h_object_error:").count()
+            + struct_body.matches("h_userd_memory_0:").count()
+            + struct_body.matches("h_context_share:").count()
+            + struct_body.matches("h_va_space:").count(),
+        4,
+        "★★ the handle-bearing fields of `ChannelAllocParams` changed. Two of them are \
+         pinned at zero by ruling (`h_context_share`, `h_va_space` — a channel inherits its \
+         group's); if a new one appeared, it is a new thing crossing to RM and this test is \
+         the place that says so."
     );
 }

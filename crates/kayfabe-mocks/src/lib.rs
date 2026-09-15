@@ -3071,6 +3071,56 @@ impl RmBackend for MockRmBackend {
         Ok(handle)
     }
 
+    /// ★★★★★ **CONSTRAINT 26 — the bare space, on the mock.**
+    ///
+    /// ⊘⊘ **ADDED w746 BECAUSE ITS ABSENCE WAS A REFUSING TRAIT DEFAULT.** Until now this
+    /// mock inherited `RmBackend::alloc_vaspace_bare`'s default, which returns
+    /// `Err(Other(0x56))` — so every offline test of the ownership split's hand-over would
+    /// have measured *"the port refuses"* and read it as a property of the design rather
+    /// than as *"nobody implemented it for this backend"*. That is
+    /// `a_refusing_trait_default_ships_its_own_justification` exactly, and this tree has
+    /// paid for it once already (`DeviceFb::install_join`).
+    ///
+    /// ⚠ It mints the SAME shape as [`Self::alloc_vaspace`] and records the same verb: the
+    /// difference between a bare space and a ranged one is a property of the **host**
+    /// backend's two-object lowering, which a mock has no business simulating. What a mock
+    /// CAN carry faithfully is the handle's **isolate**, which is the only thing constraint
+    /// 30's assert reads.
+    fn alloc_vaspace_bare(&mut self) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let _client = self.gate(VerbKind::AllocVaSpace)?;
+        let handle = self.mint();
+        self.record(RmVerb::AllocVaSpace { handle });
+        Ok(kayfabe_isolate::BareVaSpace {
+            space: handle,
+            // ⊘ Derived from the isolate id rather than a constant: two mock isolates must
+            // not report the same client, or a test of "whose space is this?" would pass
+            // vacuously.
+            client: 0xC1D0_0000 | self.id.proc(),
+        })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — what this mock isolate would hand over for `space`.**
+    ///
+    /// ⚠ **It refuses a handle it did not mint**, which is the half a test needs: the host
+    /// backend refuses a space that is not bare, and the property both share — and the only
+    /// one a mock can state honestly — is *"this is a space of MINE"*.
+    fn vaspace_handover(
+        &mut self,
+        space: HostHandle,
+    ) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let _client = self.gate(VerbKind::AllocVaSpace)?;
+        if !space.belongs_to(self.id) {
+            return Err(RmError::ForeignHandle {
+                handle: space,
+                worker_isolate: self.id,
+            });
+        }
+        Ok(kayfabe_isolate::BareVaSpace {
+            space,
+            client: 0xC1D0_0000 | self.id.proc(),
+        })
+    }
+
     fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
         let _client = self.gate(VerbKind::AllocSysmem)?;
         let handle = self.mint();

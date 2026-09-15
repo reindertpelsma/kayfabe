@@ -56,6 +56,9 @@ impl Faulted for FwdFault {
             FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),
             FwdFault::IsolatePending { .. } => FaultTag("FwdFault::IsolatePending"),
             FwdFault::NoHostVas { .. } => FaultTag("FwdFault::NoHostVas"),
+            FwdFault::HandoverRouteDisagrees { .. } => {
+                FaultTag("FwdFault::HandoverRouteDisagrees")
+            }
             FwdFault::GuestRamNotSysmem { .. } => FaultTag("FwdFault::GuestRamNotSysmem"),
             FwdFault::GuestRamAddressTaken { .. } => FaultTag("FwdFault::GuestRamAddressTaken"),
             FwdFault::GuestRamPinTooShort { .. } => FaultTag("FwdFault::GuestRamPinTooShort"),
