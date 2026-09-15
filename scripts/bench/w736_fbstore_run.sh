@@ -127,6 +127,8 @@ report() {
   grep -ao 'premap\[[^]]*\] arm\[[^]]*\]' "$Q" 2>/dev/null | tail -1
   echo "--- w738: the store's first MISSED-AN-ARMED-VIEW line (cut B's transient, not cut A's wall) ---"
   grep -a 'MISSED AN ARMED VIEW' "$Q" 2>/dev/null | head -2 | cut -c1-300
+  echo "--- w738: PREMAP's SHORT-enumeration line, if item 4's shape fired at all ---"
+  grep -a 'PREMAP ⊘⊘' "$Q" 2>/dev/null | head -2 | cut -c1-300
   echo "--- w738: the cut-B banner at realize (absent ⇒ no byte port was attached at all) ---"
   grep -a 'CUT B — a byte port is attached\|CUT A SHAPE — no byte port' "$Q" 2>/dev/null | head -2 | cut -c1-300
   echo "--- the store's FIRST refusal, on its own line (it says its own name once) ---"
