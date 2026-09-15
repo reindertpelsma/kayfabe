@@ -21761,9 +21761,26 @@ fn fb_userd_gp_put_arming(
     userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
 ) -> (Option<u32>, u32) {
     use std::sync::atomic::Ordering::Relaxed;
+    // ⊘⊘ **WHICH of `userd_attempt`'s three rows fired last, latched inside the loop.**
+    // Without it, `out.is_none()` after the loop conflates *"the store refused these bytes"*
+    // with *"this channel has no framebuffer USERD at all"* — and the second is the ordinary
+    // case for **every sysmem-USERD channel in the machine**. A census that counted those as
+    // *"nothing to arm was refused"* would report a large number about a mechanism that was
+    // never asked to do anything, which is this tree's named "an absence wearing a number's
+    // clothes". ⚠ Latched rather than recomputed after the loop: a second `fb_userd_slot`
+    // would take the plane's state mutex again for a label.
+    let last_row = std::cell::Cell::new(UserdRow::NoFramebufferUserd);
     let (out, trips) = crate::armretry::arm_then_retry(
         USERD_ARM_RETRIES,
-        || userd_attempt(fb_userd_slot(plane, userd).map(|s| s.cursors)),
+        || {
+            let slot = fb_userd_slot(plane, userd).map(|s| s.cursors);
+            last_row.set(match &slot {
+                None => UserdRow::NoFramebufferUserd,
+                Some(Ok(_)) => UserdRow::Read,
+                Some(Err(_)) => UserdRow::StoreRefused,
+            });
+            userd_attempt(slot)
+        },
         || drain_if_lock_free(plane, "the CeUtils producer cursor"),
     );
     if trips > 0 {
@@ -21773,13 +21790,26 @@ fn fb_userd_gp_put_arming(
         } else {
             USERD_ARM_GAVE_UP.fetch_add(1, Relaxed);
         }
-    } else if out.is_none() {
-        // ⊘ Refused with NO trip spent: the drain armed nothing on the very first ask. A
-        // different fact from "we retried and still could not read it", and the two have
-        // different fixes — one is the port, one is the page.
-        USERD_ARM_NO_ARM.fetch_add(1, Relaxed);
+    } else if last_row.get() == UserdRow::StoreRefused {
+        // ⊘ The store refused and **no trip was spent**: the drain armed nothing on the very
+        // first ask. A different fact from "we retried and still could not read it", and the
+        // two have different fixes — one is the port, one is the page.
+        USERD_ARM_REFUSED_NO_ARM.fetch_add(1, Relaxed);
     }
     (out, trips)
+}
+
+/// ★ Which row of [`userd_attempt`]'s table the last attempt took — see
+/// [`fb_userd_gp_put_arming`] for why the census cannot be built from `Option::is_none`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UserdRow {
+    /// No framebuffer USERD is declared at all. ⊘ The **ordinary** case for a sysmem-USERD
+    /// channel, and therefore the one that must never be counted as a refusal.
+    NoFramebufferUserd,
+    /// The cursor was read.
+    Read,
+    /// The store refused these bytes — the only row the arming loop is for.
+    StoreRefused,
 }
 
 /// ★★★★★ **w740 — DRAIN THE STORE'S WANT SET, BUT ONLY IF THIS THREAD MAY BLOCK.**
@@ -21844,12 +21874,16 @@ fn userd_attempt(slot: Option<Result<(u32, u32), String>>) -> (Option<u32>, bool
 
 /// `[w740]` Trips spent arming the CeUtils producer cursor, submissions that recovered
 /// because of them, submissions that spent the whole budget and still had no cursor, and
-/// reads refused with nothing to arm at all. ⊘ All four print unconditionally on both arms:
-/// a census only present when it is non-zero cannot tell "zero" from "the code never ran".
+/// **store refusals on which no trip was spent at all** (the drain armed nothing on the very
+/// first ask). ⊘ All four print unconditionally on both arms: a census only present when it
+/// is non-zero cannot tell "zero" from "the code never ran".
+/// ⚠ `refused_no_arm` counts [`UserdRow::StoreRefused`] ONLY. A channel with no framebuffer
+/// USERD — every sysmem-USERD channel in the machine — is counted **nowhere**, because it is
+/// not a refusal and a number that included it would be a census of the ordinary case.
 static USERD_ARM_TRIPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static USERD_ARM_RECOVERED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static USERD_ARM_GAVE_UP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static USERD_ARM_NO_ARM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static USERD_ARM_REFUSED_NO_ARM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// `[w740]` Submissions re-run after a drain armed a page, and how many of those went on to
 /// be served. `blocked_by_progress` is the safety valve firing: a refusal that had ALREADY
@@ -21867,7 +21901,7 @@ pub(crate) fn ceutils_arming_census() -> String {
         USERD_ARM_TRIPS.load(Relaxed),
         USERD_ARM_RECOVERED.load(Relaxed),
         USERD_ARM_GAVE_UP.load(Relaxed),
-        USERD_ARM_NO_ARM.load(Relaxed),
+        USERD_ARM_REFUSED_NO_ARM.load(Relaxed),
     );
     let (st, sr, sb, sg) = (
         CE_SUBMIT_ARM_TRIPS.load(Relaxed),
@@ -21889,7 +21923,7 @@ pub(crate) fn ceutils_arming_census() -> String {
         verdict
     };
     format!(
-        "W740-USERD-ARM trips={t} recovered={r} gave_up={g} nothing_to_arm={n} not_lock_free={nlf}  W740-CE-SUBMIT-ARM trips={st} recovered={sr} blocked_by_progress={sb} gave_up={sg} ⇒ {verdict}"
+        "W740-USERD-ARM trips={t} recovered={r} gave_up={g} refused_no_arm={n} not_lock_free={nlf}  W740-CE-SUBMIT-ARM trips={st} recovered={sr} blocked_by_progress={sb} gave_up={sg} ⇒ {verdict}"
     )
 }
 

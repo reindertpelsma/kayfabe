@@ -506,6 +506,18 @@ retry never fired"* with nothing pointing at why.
 tree names repeatedly: **a counter whose name says "executed" and whose increment site says
 "decoded"**, and no boot could have distinguished the two.
 
+#### ⊘⊘ AND A SECOND ONE, IN THE CENSUS RATHER THAN THE CODE — caught in review of my own diff
+
+`W740-USERD-ARM`'s fourth field was first computed as *"the loop spent no trip and came back
+with no cursor"*, i.e. `out.is_none()`. ⊘ `None` means **two different things** —
+*"the store refused these bytes"* and *"this channel has no framebuffer USERD at all"* — and
+the second is the **ordinary** case for every sysmem-USERD channel in the machine. The field
+would have printed a large number about a mechanism that was never asked to do anything.
+⇒ the attempt now latches **which of `userd_attempt`'s three rows** it took, and
+`refused_no_arm` counts `StoreRefused` only; the no-USERD row is counted **nowhere**, because
+it is not a refusal. ⚠ `[this file's own name for the shape: "an absence wearing a number's
+clothes"]` — twice in one change, once in a gate and once in a counter.
+
 ### ★★★★★ 2026-09-15 (w740) — **PRE-REGISTERED PREDICTIONS. WRITTEN AND COMMITTED BEFORE THE BOX EXISTS.**
 
 ⚠ **Nothing below has been measured.** Frozen at commit time, graded verbatim afterwards; a
@@ -533,14 +545,14 @@ a green row 5 bought that way is a failed deliverable, not a passing one.
 |---|---|---|
 | 1 | device: `W740-USERD-ARM trips= ≥ 1` | `trips=0` ⇒ the USERD read was never refused ⇒ §4's root-cause is **wrong**, and the wall is elsewhere |
 | 2 | device: `W740-USERD-ARM recovered= ≥ 1` | `recovered=0` with `trips>0` ⇒ the drain arms pages but not *this* page; read `DEVICE-FB wanted_by_read` beside it |
-| 3 | ★ **control: `W740-USERD-ARM trips=0 recovered=0 gave_up=0` and `W740-CE-SUBMIT-ARM trips=0`** — provably inert | any non-zero ⇒ the change is **not** inert on the control and the one-variable claim fails |
+| 3 | ★ **control: `W740-USERD-ARM trips=0 recovered=0 gave_up=0 not_lock_free=0` and `W740-CE-SUBMIT-ARM trips=0`** — provably inert. ⊘ `refused_no_arm` is **not** in this row: the control's store can refuse a page for its own reasons and that is not this change | any non-zero ⇒ the change is **not** inert on the control and the one-variable claim fails |
 | 4 | device: the first doorbell refusal is **not** `RingProducerCursorUnknown` (ideally `0 REFUSED by name`) | still `RingProducerCursorUnknown` ⇒ C1 did not work at all |
 | 5 | device: the string `lastCompletedPayload == lastSubmittedPayload` appears **0** times in the guest dmesg | present ⇒ the scrub still never completes; the wall has not moved |
 | 6 | ★★★ **device: `RmInitAdapter failed!` appears 0 times** — THE WIN CONDITION | present ⇒ a wall remains; the deliverable is then **where**, named |
 | 7 | ★★★ **device NO-REGRESSION GATE: `DEVICE-FB named= ≥ 32772`, `BAR1-PASSTHROUGH misses=0`, `BAR2-PASSTHROUGH misses=0`, `BAR1/BAR2 (translated): … 0 REFUSED by name`, bar1/bar2 `TRAP_FILLS=0`** | any non-zero miss/refusal ⇒ **regression**, and the change is rejected *regardless of row 6* |
 | 8 | device: `DEVICE-FB wanted_by_write= ≥ 1` — the first host-side framebuffer WRITE demand this campaign records | `wanted_by_write=0` **and** row 5 held ⇒ the destination page was already armed by a read; a finding, not a failure |
 | 9 | control: `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0` | anything else ⇒ the binary is broken and **nothing on the device arm may be graded** |
-| 10 | both: `W740-CE-SUBMIT-ARM blocked_by_progress=0` | `> 0` ⇒ the safety valve fired — a refusal that had already released a payload reached the gate — and that must be reported as its own finding |
+| 10 | both: `W740-CE-SUBMIT-ARM blocked_by_progress=0` **and `not_lock_free=0`** | `blocked_by_progress > 0` ⇒ the safety valve fired — a refusal that had already released a payload reached the gate. `not_lock_free > 0` ⇒ **a call site is in the wrong place**: it held a ranked lock, the drain was refused rather than panicking, and the arming loop never ran. Both are findings in their own right |
 
 #### ⚠ THE ROW MOST LIKELY TO BE WRONG — named, and named as a bet
 

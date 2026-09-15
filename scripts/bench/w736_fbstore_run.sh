@@ -167,7 +167,7 @@ report() {
   echo "W740-USERD-TRIPS=$(k 'W740-USERD-ARM trips=[0-9]*')"
   echo "W740-USERD-RECOVERED=$(k 'recovered=[0-9]*')"
   echo "W740-USERD-GAVEUP=$(k 'gave_up=[0-9]*')"
-  echo "W740-USERD-NOTHING-TO-ARM=$(k 'nothing_to_arm=[0-9]*')"
+  echo "W740-USERD-REFUSED-NO-ARM=$(k 'refused_no_arm=[0-9]*')"
   echo "W740-CE-SUBMIT=$(printf '%s' "$ARM" | grep -ao 'W740-CE-SUBMIT-ARM .\{0,120\}' | tail -1)"
   echo "--- ★★★ w740 2/3: did a submission ever recover after a drain? ---"
   grep -a 'CE-SUBMIT-ARMED token=' "$Q" 2>/dev/null | head -4 | cut -c1-300
