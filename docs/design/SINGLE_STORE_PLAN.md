@@ -32,8 +32,8 @@ is stale.
 | 4 | CUDA in the scratchpad isolate | ✔ **BUILT** — `KAYFABE_SCRATCHPAD_CUDA`, `CUDA_WALK=OK` |
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
-| **6** | **walker → publish path** | ◐ **IN PROGRESS** — comparison merged (`walkshadow`), live half in flight |
-| **3** | BAR1/BAR2 as device views, the switch | ○ **UNBLOCKED, NOT STARTED — and it comes AFTER 6** |
+| **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
+| **3** | BAR1/BAR2 as device views, the switch | ○ **UNBLOCKED; SURVEYED w732, NOT STARTED.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ○ not started; licence is the **guest suite**, not one workload |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 
@@ -148,6 +148,47 @@ refused.
 > the flip, and §6's own shape mismatch.
 >
 > ⇒ **§6 (route (a): the report also carries the visited page list) first, then §3.**
+
+> ## ⊘⊘⊘ SURVEYED 2026-09-15 (w732) — **FOUR CLAIMS IN THE §3 SECTIONS BELOW ARE REFUTED BY
+> ## THE CODE, AND TWO OF THEM MAKE THE WORK LOOK BIGGER THAN IT IS.**
+>
+> Read from the bodies at `93f6dc75`. Every row is `path:line`-checkable.
+>
+> | claim below | verdict |
+> |---|---|
+> | *"`release_device_view` — exists, **zero call sites in the tree**"* | ⊘ **REFUTED — four**, all in `crates/kayfabe-qemu-raw/src/scratchpad.rs` (`:924 :937 :948 :958`), inside `probe_device_view`, and load-bearing: *"`munmap` + `close` returns nothing to the host's BAR1 pool, silently."* |
+> | *"`export_device_view` on the wire — **retired as an orphan**, request tag 25 / reply tag 12"* | ⊘ **STALE.** Live on request **30**, `ReleaseDeviceView` **31**, reply **15**; 25/12 stay retired. Reachable from production today via `scratchpad.rs:917`. |
+> | `install_device_window`'s own doc: *"⚠ No production caller on this branch"* (`kayfabe-vmm-qemu/src/lib.rs:1236`) | ⊘ **STALE IN THE SOURCE** — two callers (`shim.rs:5322`, `barmirror.rs:1542`), and `lib.rs:1201` corrects it **35 lines above** without reaching it. Exactly the sibling-correction shape DOC HYGIENE forbids, inside a doc comment. |
+> | `bar1budget.rs:223`: *"the caller decides whether it refuses, **and today only the armed device-view path does**"* | ⊘ **FALSE AS WRITTEN** — `Bar1Choice::check` has **no caller at all** outside tests. §w727's *"refuse never clamp"* is implemented and **unreachable**; GA106's BAR1 is the hardcoded `const FB_WINDOW_LEN = 256 << 20` (`ga10x.rs:1345`). There is **no `Bar2Choice`** and no `BAR2_MIN`, though §w727 specifies one. |
+>
+> ### ★ AND ONE CLAIM IS CONFIRMED BUT MIS-AIMED — which changes what the switch costs
+>
+> *"Two translate paths must change, not one"* is **right**, and the doubling is not where it
+> reads. The **translation** is already shared (`bar1_phys`/`bar2_phys` are thin wrappers over
+> `bar1_translate`/`bar2_translate`). What is doubled is the **byte source**:
+> `window_page_backing` → `FbStore::page_backing` (the premap path; answers a *memslot
+> placement*) and the private `window_phys` → `FbStore::read`/`write`/`write_tagged` (the trap
+> path; answers *bytes*, on the vCPU inside the MMIO exit). ⇒ a new `FbPageBacking` arm fixes
+> the first only, and a trapped access would still read the old store — the plan's *"looks like
+> a partial success"*, with the mechanism named.
+>
+> ⚠ **And only ONE of the two `match`es on `FbPageBacking` would tell you.** `key_of`
+> (`barmirror.rs:556`) is exhaustive, so a new arm is a compile error there; `fill_now`'s
+> refusal-naming (`barmirror.rs:889`) ends in `_ => {}`, so a new arm **compiles and silently
+> becomes a no-op refusal**. Add the arm to both in the same change.
+>
+> ⊘ Three more facts the sections below do not carry. `FbStore` has **17 methods, 5 of them
+> required** (`fbwin.rs:232`), **two** implementors (`SparseFb`, `RefusingFb`), and **one**
+> production installation site (`shim.rs:14906`) whose own comment already names this switch:
+> *"convergence is an `FbStore` implementation that delegates, installed through this same
+> call."* `FbPageBacking`'s *"`Arena` ⇒ arena memfd / `Joined` ⇒ join registry"* mapping does
+> **not** live in the enum — it is `ARENA_TOKEN` vs the `JoinRegistry` at
+> `barmirror.rs:927-945`, so a third arm must mint a third token space **there**, not merely
+> add a variant. And the *"framebuffer address = file offset"* contract is stated on the trait
+> method itself (`fbwin.rs:751`); the single line that breaks if it goes is
+> `repoint_file_window(region, self.arena.as_backing_fd(), base)` (`barmirror.rs:1266`), whose
+> failure mode is already recorded as *"the one failure on this path that cannot be
+> contained"*.
 
 ### 3. BAR1/BAR2 AS DEVICE VIEWS  ⟵ **UNBLOCKED 2026-09-14; the CROSSING is built and proven**
 
@@ -359,6 +400,47 @@ is goals 1 and 10.
 > route is viable with a checked assertion beside it. **Non-zero** ⇒ the route is dead and the
 > tables must move to the reserved object first, which is step 2 — i.e. the ordering correction
 > one level further down.
+
+> ## ⊘⊘⊘ CORRECTED 2026-09-15 (w732, BUILDING the swap) — **THE CONSUMER NAMED BELOW IS NOT
+> ## THE CONSUMER, AND THE SWAP DOES NOT RETIRE THE HOST WALK.**
+>
+> Both §6 blocks below say the leaf path is *"`leaves` → `Settlement` → `AddressTable::bind`"*.
+> `[read from the bodies, w732]` **`kayfabe_fwd::commit_pt_decode_with` — the only thing the
+> sweep commits through — touches `SubtreeDecode::leaves` NOWHERE.** What reaches the address
+> table is `SubtreeDecode::decodes[*].1.leaves`, the **per-page** leaves, by way of
+> `ReachShadow::observe` → `settle` → `apply_settlement_as`. The flattened `leaves` field has
+> exactly **three** readers in the tree and all three are elsewhere: `ceresolve`, the BAR
+> mirror's `window_leaves`, and the shadow's own comparison.
+> ⇒ ⚠ **A swap that replaced only `leaves` would have changed NOTHING and would still have
+> read as done** — a green boot, a clean census, and the host walk still deciding every bind.
+> The substitution therefore rewrites the leaves **inside each page's decode**.
+>
+> ### ★★★★★ AND THE HOST WALK CANNOT LEAVE THE PATH — THE DEPENDENCY RUNS THE OTHER WAY
+>
+> `walkshadow::build_image` takes `(pdb, &[PtPage])` — **the host walk's own `visited` set** —
+> and needs each page's **level** to know its entry size and geometry. ⇒ **the host walk is a
+> PREREQUISITE of the kernel, not an alternative to it.** There is no boot, today, in which
+> the kernel runs and the host walk does not.
+> ⊘ This inverts how the swap reads: `on` → `swap` moves *where a published leaf's target,
+> aperture and writability come from*. It does **not** produce one walker, and it does **not**
+> license §7's deletion. ★ It expires with **§3**: an identity window needs no page list.
+>
+> ### ⊘⊘ AND WHAT REMAINS FOR THE KERNEL TO OWN IS NOW EXACTLY NAMEABLE
+>
+> `visited`, `children`, `sparse`, `invalid` — the **reachability vocabulary**
+> (`Admit::{Witnessed, Swept}`, `PublishedUnbind`). The kernel's report is `MapRun`s, *with no
+> pages in them at all*. That is the whole of §6's residual shape mismatch, and the deltas-vs-
+> state question below is **still unpicked** — the swap did not need to pick it, because it
+> substitutes into a structure the host walk already produced.
+>
+> ### ⚠ AND THE SWAP IS OBSERVATIONALLY NEUTRAL BY CONSTRUCTION — SO GRADE IT ACCORDINGLY
+>
+> It substitutes **only where the two walkers agree**, and under agreement the two leaf sets
+> are the same set. ⇒ **no boot can distinguish a live swap from a decider nobody consulted**,
+> and a parity number or a green client says nothing about it. The known-positive is
+> deliberately offline: `tests/tests/walk_swap_decides.rs` drives a decider that disagrees on
+> purpose and requires the changed binding to land in `AddressTable`. A boot's job is the
+> other two facts — `decided>0`, and the client unharmed.
 
 ### 6. WIRE THE WALKER INTO REFRESH  ⟵ **BLOCKED ON A SHAPE MISMATCH, NOT ON WIRING**
 

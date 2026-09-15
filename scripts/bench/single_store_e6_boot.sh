@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 # ★★★★★ SINGLE-STORE §6 STEP 1 — THE LIVE WALK SHADOW.
 #
-#   usage: PREFIX=<tag> SHADOW=<off|on> [START_MB=<n>] bash single_store_e6_boot.sh
+#   usage: PREFIX=<tag> SHADOW=<off|on|swap> [START_MB=<n>] bash single_store_e6_boot.sh
 #
-# The walk kernel is run ALONGSIDE the host walk at every off-vCPU page-table sweep and the
-# two answers are compared by kind. **Nothing is published from the kernel** — this boot is
-# supposed to change nothing observable, and is graded on the CENSUS, never on parity.
+# `on`   (§6 step 1) — the walk kernel is run ALONGSIDE the host walk at every off-vCPU
+#        page-table sweep and the two answers are compared by kind. Nothing is published
+#        from the kernel.
+# `swap` (§6 step 2) — the same, and where the two AGREE the kernel's answer is what gets
+#        PUBLISHED. Every refusal falls back to the host walk and prints its own line.
+#
+# ⊘⊘ **BOTH ARMS ARE GRADED ON THE CENSUS AND THE CLIENT, NEVER ON PARITY.** The swap is
+# observationally neutral BY CONSTRUCTION — it substitutes only where the two walkers agree,
+# and under agreement the two leaf sets are the same set. ⇒ a parity number cannot tell a
+# working swap from a decider nobody consulted, and reading one as evidence would be this
+# tree's `a_green_test_can_hold_a_wall_in_place` with a new subject. The known-positive that
+# the substitution reaches `AddressTable` at all lives offline, in
+# `tests/tests/walk_swap_decides.rs`.
 #
 # ## ★★ PRE-REGISTERED OUTCOMES — written before any boot, so none reads as the good one
 #
@@ -18,6 +28,17 @@
 #      ⊘⊘ A MISSING LINE IS AN UNMEASURED BOOT. `WALK-SHADOW ⊘ DISARMED` is what tells the
 #      control arm apart from a binary that predates this increment — which is why the binary
 #      is checked BY CONTENT below and REFUSES.
+#
+#   Q3b ⊘⊘ **THE SWAP'S OWN VERDICT, WHICH IS SEPARATE FROM Q3's.** On `SHADOW=swap` read
+#       `swap_armed=` / `decided=` / `fell_back[…]` and the `⇒ … SWAP …` sentence:
+#         `★★★ SWAP LIVE`      ⇐ THE GATE for step 2: decided>0
+#         `⊘⊘ SWAP VACUOUS`    the arm was on and the kernel decided NOTHING — every
+#                              published leaf came from the host walk, exactly as before.
+#                              ⚠ This prints BESIDE `★★★ AGREEMENT`, and a reader who stops
+#                              at the agreement verdict reads an unproven swap as proven.
+#         `⊘ SWAP DISARMED`    the arm was `on`, not `swap`.
+#       ⊘ `fell_back[none]` does NOT mean nothing was refused: it means nothing was ever
+#       OFFERED. Read `skipped[…]` before believing it.
 #
 #   Q3 THE GATE: a census that is **not vacuous** and has **no disagreements**.
 #      Read the verdict token, and read it in this order:
@@ -124,6 +145,26 @@ echo "E6-DISAGREEMENTS=$(field 'disagreements=[0-9]*' | cut -d= -f2)"
 echo "E6-BY-KIND=$(field 'by_kind\[[^]]*\]')"
 echo "E6-SKIPPED=$(field 'skipped\[[^]]*\]')"
 echo "E6-IMAGE-STATS=$(field 'image\[[^]]*\]')"
+# ★★★ §6 step 2. ⊘ Cut out of the WALK-SHADOW line itself, never grepped from the log —
+# `decided=` and `fell_back[` are common enough words to match another subsystem's census.
+echo "E6-SWAP-ARMED=$(field 'swap_armed=[a-z]*' | cut -d= -f2)"
+echo "E6-DECIDED=$(field 'decided=[0-9]*' | cut -d= -f2)"
+echo "E6-FELL-BACK=$(field 'fell_back\[[^]]*\]')"
+echo "E6-SWAP-VERDICT=$(printf '%s' "$WS" | grep -ao 'SWAP [A-Z]*' | tail -1)"
+echo "--- ★★★★★ every WALK-SWAP FALLBACK, verbatim (a disagreement must be LOUD, not a census row) ---"
+# ⊘⊘⊘ **ANCHORED ON THE RECORD'S OWN SHAPE (`pdb=`), NOT ON ITS NAME.** `[measured w732]` a bare
+# `grep -c 'WALK-SWAP FALLBACK'` returned **1** on a boot with **zero** fall-backs: the REALIZE
+# banner's own prose says *"prints a WALK-SWAP FALLBACK line of its own"*, and the counter read
+# a sentence ABOUT the record as an instance of it. It printed `E6-FALLBACK-LINES=1` beside
+# `fell_back[none]` — a flat contradiction that a reader could resolve either way.
+# ⚠ Third instance of this class in two sessions (w731's `by_kind[` matching another
+# subsystem's census; w732's `AGREEMENT` substring inside a VACUOUS line). **A log string is an
+# interface the moment something greps it, and prose that quotes the interface joins it.**
+n_fb=$(grep -ac 'WALK-SWAP FALLBACK pdb=' "$Q" 2>/dev/null)
+echo "E6-FALLBACK-LINES=${n_fb:-0}  (records only; the REALIZE banner names the string too)"
+grep -a 'WALK-SWAP FALLBACK pdb=' "$Q" 2>/dev/null | head -8 | cut -c1-260
+echo "--- ★ the decider's shape check, if a replacement was ever refused whole ---"
+grep -a 'PT-SWEEP DECIDER REFUSED' "$Q" 2>/dev/null | head -3 | cut -c1-260
 echo "E6-VERDICT=$(printf '%s' "$WS" | grep -aoc 'VACUOUS')  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)"
 echo "--- ★ the per-refresh refusals, verbatim, if any fired ---"
 grep -a 'WALK-SHADOW image refused\|WALK-SHADOW refresh refused\|WALK-SHADOW report' "$Q" 2>/dev/null | head -6 | cut -c1-300
@@ -145,6 +186,38 @@ grep -a 'WALK-SHADOW AT REALIZE' "$Q" 2>/dev/null | head -2 | cut -c1-300
 
 echo "--- the arena counter the previous session's plan turned on (reported, not depended on) ---"
 grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1
+
+# ★★★★★ **§3's FIRST PRECONDITION, MEASURED RATHER THAN ASSUMED** — does the reserved object
+# contain every framebuffer address the guest ever names?
+#
+# The post-§3 window is specified as identity (`gpga_is_one_reserved_object.md`: *"an address
+# is `X + gpga_offset`"*), which is only sound if `span_pages * 4096 <= RESERVED_MB << 20`.
+# ⊘ `[w730]` `span_pages=3087533` = **12062 MiB** was read as *"the guest's RM puts its tables
+# ~11.78 GiB up a 12 GiB board"* — true, and it is a number about the **ADVERTISED** size, not
+# about the reservation. The advertised size is rebound to the reservation whenever one is held
+# (`SCRATCHPAD FB-SIZE derived_from_reservation=`), so the tables move DOWN with it.
+# ⇒ The invariant §3 must never break: **advertise more than was reserved and the identity
+# window is impossible**, and relocation cannot be retired. This line is what would catch it.
+SPAN=$(grep -ao 'span_pages=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+RMB=$(grep -ao 'RESERVED_MB=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+DERIVED=$(grep -ao 'derived_from_reservation=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+echo "E3-SPAN-PAGES=${SPAN:-UNSET} E3-RESERVED_MB=${RMB:-UNSET} E3-ADVERTISED_MB=${DERIVED:-UNSET}"
+if [ -n "${SPAN:-}" ] && [ -n "${RMB:-}" ]; then
+  python3 - "$SPAN" "$RMB" <<'PYEOF'
+import sys
+span, rmb = int(sys.argv[1]), int(sys.argv[2])
+top, cap = span * 4096, rmb << 20
+print(f"E3-IDENTITY-WINDOW={'FITS' if top <= cap else 'DOES_NOT_FIT'} "
+      f"top={top} ({top/2**20:.1f} MiB) reserved={cap} ({rmb} MiB) "
+      f"headroom={(cap-top)/2**20:.1f} MiB")
+print("  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved "
+      "object ⇒ §3's identity window is arithmetically possible for THIS workload. It is "
+      "NOT a proof for every workload, and it says nothing about the promote/demote FAKE "
+      "RANGE, which is specified and built by nobody.")
+PYEOF
+else
+  echo "E3-IDENTITY-WINDOW=UNMEASURED ⊘ one of the two numbers is missing — this is not a pass"
+fi
 
 echo "--- Q5 WHAT THE GUEST PAID ---"
 grep -ao 'TRAPWITNESS[^|]*' "$Q" 2>/dev/null | tail -1
