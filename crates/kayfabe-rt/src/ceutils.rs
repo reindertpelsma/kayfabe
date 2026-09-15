@@ -407,6 +407,89 @@ pub struct CeUtilsRefusal {
     /// The walk's finding and the address it was asked about, when the refusal came from a
     /// resolution.
     pub detail: Option<(GpuVa, CeResolve)>,
+    /// ★★★★★ **w740 — WHAT THIS SUBMISSION HAD ALREADY DONE WHEN IT REFUSED.**
+    ///
+    /// The single question a caller must answer before it may run the same doorbell again:
+    /// **re-running a submission that already executed a launch re-executes that launch and
+    /// re-releases its payload.** ⊘ A `bool` would not do — the three counters are what make
+    /// a zero readable as *"nothing happened"* rather than as *"nobody looked"*, which is
+    /// this tree's most expensive recurring shape.
+    ///
+    /// ⚠ Filled by [`run_submission_timed`] from the run's own accumulator on every error
+    /// path, so it cannot disagree with what the driver did. A refusal minted by
+    /// [`CeUtilsRefusal::plain`] outside that function carries [`CeProgress::NONE`], which is
+    /// the conservative value only because such refusals are raised before any execution.
+    pub progress: CeProgress,
+}
+
+/// ★★★ **w740 — how far one refused submission got.** See [`CeUtilsRefusal::progress`].
+///
+/// ⊘ Not `Option<…>`: *"it refused with no progress"* and *"nobody recorded progress"* have
+/// opposite consequences for a retry, and an `Option` spells them the same way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CeProgress {
+    /// `LAUNCH_DMA`s this submission **DECODED**.
+    ///
+    /// ⊘⊘⊘ **NOT "executed", and the difference is the whole reason this field is not the
+    /// gate.** `run.launches` is incremented the moment a launch decodes — *before* its
+    /// operands are walked and long before a byte moves — so `launches == 1, bytes == 0` is
+    /// the commonest refusal shape there is: a walk that failed on the first launch's own
+    /// destination. That is **exactly** the shape w740's retry exists to re-run.
+    ///
+    /// ⚠ `[caught by a test, before any boot]` my first draft of [`Self::may_re_run`] was
+    /// `*self == NONE`, which uses this field — and
+    /// `a_refusal_before_any_launch_reports_no_progress_and_is_therefore_re_runnable`
+    /// failed with `launches: 1`. Shipped, the gate would have been **closed on every real
+    /// case**, the boot would have failed identically, and the honest report would have
+    /// read *"the retry never fired"* with nothing pointing at why.
+    pub launches: usize,
+    /// Bytes this submission moved before refusing, as the driver counted them.
+    ///
+    /// ⚠ It can UNDER-report: `execute_ours_spans` walks its spans in order and returns on
+    /// the first failure, having possibly written earlier ones, and `run.bytes` is bumped
+    /// only after the whole call returns `Ok`. ⇒ `bytes == 0` does not prove no byte moved.
+    /// It is still in the gate, as the conservative half — see [`Self::may_re_run`].
+    pub bytes: u64,
+    /// ★★★ **THE COUNTER THE GATE IS REALLY ABOUT.** Completion payloads written, plus any
+    /// deferred to the caller — **both count**, because a deferred release is one the caller
+    /// has been handed and owes the guest.
+    pub completions: usize,
+}
+
+impl CeProgress {
+    /// Nothing decoded, nothing moved, nothing released.
+    pub const NONE: CeProgress = CeProgress {
+        launches: 0,
+        bytes: 0,
+        completions: 0,
+    };
+
+    /// ★★★★★ **Is re-running this submission from the same cursor safe?**
+    ///
+    /// `bytes == 0 && completions == 0`. ⊘ [`Self::launches`] is deliberately **not** in the
+    /// test — see its docs for the defect that taught that, which a test caught before this
+    /// ever reached hardware.
+    ///
+    /// # Why `completions` is the real question
+    ///
+    /// A re-run replays the whole submission from the unadvanced cursor. Replaying the
+    /// *data movement* of a CE sub-copy is idempotent — same source, same destination, same
+    /// length, and the guest is blocked in `channelWaitForFinishPayload` on a payload we
+    /// have not written. Replaying a *release* is not: the guest would see submission `n`
+    /// complete twice and, past a wrap, a **stale** payload land over a newer one. That is
+    /// `[measured w386]`'s defect, and it is the one thing this must never reproduce.
+    ///
+    /// # Why `bytes` is in the test anyway
+    ///
+    /// Conservatism, not necessity. The idempotence argument above is sound for every shape
+    /// this driver decodes today, but it is an argument, and `bytes > 0` costs us only the
+    /// multi-launch case — which RM's CeUtils channel does not produce (`[src] ogkm-580:
+    /// channel_utils.c:403-443`, one block per `channelFillGpFifo`). ⇒ pay the argument
+    /// nothing and keep the retry scoped to submissions that provably did nothing.
+    #[must_use]
+    pub fn may_re_run(&self) -> bool {
+        self.bytes == 0 && self.completions == 0
+    }
 }
 
 impl CeUtilsRefusal {
@@ -415,6 +498,7 @@ impl CeUtilsRefusal {
         CeUtilsRefusal {
             fault,
             detail: None,
+            progress: CeProgress::NONE,
         }
     }
 
@@ -702,6 +786,18 @@ pub fn run_submission_deferring_releases(
     run_submission_timed(ce, pb, vmm, chan, cursor, state, ReleaseTiming::Deferred)
 }
 
+/// ★★★★★ **w740 — the one seam that fills [`CeUtilsRefusal::progress`].**
+///
+/// The body below refuses in eleven places and every one of them is a `?` or an early
+/// `return`; threading the accumulator into each would be eleven chances for one of them to
+/// say *"nothing happened"* over a launch that did. ⇒ the accumulator is the body's `&mut`
+/// parameter, and **this** function is the only writer of `progress`, from the very object
+/// the driver was updating as it went.
+///
+/// ⊘ It is not a convenience wrapper: without it a caller has no sound basis to re-run a
+/// refused doorbell, and `SINGLE_STORE_PLAN.md`'s w735 table names exactly that gap —
+/// *"a store refusal comes back as `refused(..)` — the submission is **dropped, not
+/// requeued**"*.
 fn run_submission_timed(
     ce: &mut CePlane<'_>,
     pb: &dyn PushbufferAbi,
@@ -711,12 +807,38 @@ fn run_submission_timed(
     state: MethodState,
     timing: ReleaseTiming,
 ) -> Result<CeUtilsRun, CeUtilsRefusal> {
-    let mut last: Option<(GpuVa, CeResolve)> = None;
     let mut run = CeUtilsRun {
         cursor,
         state,
         ..CeUtilsRun::default()
     };
+    match run_submission_body(ce, pb, vmm, chan, cursor, state, timing, &mut run) {
+        Ok(()) => Ok(run),
+        Err(mut refusal) => {
+            refusal.progress = CeProgress {
+                launches: run.launches,
+                bytes: run.bytes,
+                // ⚠ A DEFERRED release counts as a completion: the caller has been handed it
+                // and owes it to the guest, so re-running would resolve it a second time.
+                completions: run.completions + run.deferred_releases.len(),
+            };
+            Err(refusal)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_submission_body(
+    ce: &mut CePlane<'_>,
+    pb: &dyn PushbufferAbi,
+    vmm: &mut dyn Vmm,
+    chan: CeUtilsChannel,
+    cursor: GpCursor,
+    state: MethodState,
+    timing: ReleaseTiming,
+    run: &mut CeUtilsRun,
+) -> Result<(), CeUtilsRefusal> {
+    let mut last: Option<(GpuVa, CeResolve)> = None;
     let entries = if chan.ring_entries == 0 {
         RING_ENTRIES_FALLBACK
     } else {
@@ -778,6 +900,7 @@ fn run_submission_timed(
         read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
             fault: f,
             detail: last,
+            progress: CeProgress::NONE,
         })?;
         // ⊘ The ENTRY IS DECODED BY THE ARCH, not here: `PushbufferAbi::gpfifo_entries` is
         // the same codec `kayfabe_fwd::pushbuffer_ranges` uses for every other channel, and
@@ -869,6 +992,7 @@ fn run_submission_timed(
         read_va(ce, vmm, &mut last, r.va.0, &mut buf).map_err(|f| CeUtilsRefusal {
             fault: f,
             detail: last,
+            progress: CeProgress::NONE,
         })?;
         methods.extend(decode_methods(pb, &buf));
         total += len;
@@ -921,6 +1045,7 @@ fn run_submission_timed(
         return Err(CeUtilsRefusal {
             fault: FwdFault::UvmFaultMethodWithoutFaultDelivery { method },
             detail: last,
+            progress: CeProgress::NONE,
         });
     }
 
@@ -954,6 +1079,7 @@ fn run_submission_timed(
                     CeUtilsRefusal {
                         fault: f,
                         detail: last,
+                        progress: CeProgress::NONE,
                     }
                 })?
             };
@@ -1011,6 +1137,7 @@ fn run_submission_timed(
             .map_err(|f| CeUtilsRefusal {
                 fault: f,
                 detail: last,
+                progress: CeProgress::NONE,
             })?
         };
         // ⊘ THE §14.8 GUARD. `execute_ours_spans` SKIPS a `HostCe` sub-copy — it is the
@@ -1057,6 +1184,7 @@ fn run_submission_timed(
             crate::cpu_ce::resolve_releases(&mut ops, &[c]).map_err(|f| CeUtilsRefusal {
                 fault: f,
                 detail: last,
+                progress: CeProgress::NONE,
             })?
         };
         if let Some(r) = resolved.first() {
@@ -1092,7 +1220,7 @@ fn run_submission_timed(
             set_object,
         }));
     }
-    Ok(run)
+    Ok(())
 }
 
 /// Decode a byte range of method words into `(header, args)` pairs against `pb`. Total on
@@ -1185,6 +1313,7 @@ fn read_submission_methods(
         read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
             fault: f,
             detail: last,
+            progress: CeProgress::NONE,
         })?;
         let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
             break;
@@ -1214,6 +1343,7 @@ fn read_submission_methods(
         read_va(ce, vmm, &mut last, r.va.0, &mut buf).map_err(|f| CeUtilsRefusal {
             fault: f,
             detail: last,
+            progress: CeProgress::NONE,
         })?;
         methods.extend(decode_methods(pb, &buf));
         total += len;

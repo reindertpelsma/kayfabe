@@ -73,6 +73,19 @@ and the per-client host MMU fault above.
    vCPU threads.
 9. **Emulated channels actually use the scratchpad** to do work when work is needed.
    ⊘ Not forged: *"a scrub must be executed, on scratchpad, if its from an emulated channel."*
+   ★ `[w740]` **The scrub in question is 8 bytes in two GPFIFO submissions**, measured three
+   independent ways (the guest's own `memmgrMemSet(… sizeof vidmemData …)`, `ogkm-580`'s
+   `NvU32 vidmemData`, and our own decode of the captured pushbuffer's
+   `LINE_LENGTH_IN = 0x4`). ⊘ So *"a scrub"* here is **not** framebuffer-sized and does not
+   need `device_reset`; the `scrubberConstruct` path that could have been scrubs **zero**
+   bytes at init and registers for scrub-on-free instead. ⚠ And the **scope of "on
+   scratchpad" is still open**: w740 executes the bytes with a CPU store **through a view
+   the scratchpad isolate exported, into the scratchpad's own reserved object**, which meets
+   *"not forged"* and the positive clause's *"uses the scratchpad"*, and does **not** meet
+   w735's gloss of this constraint as *"the copy engine off the CPU"*. `CeExecutor::HostCe`
+   is the arm that would, and `ce_copy` refuses a `CeSource::Constant` today
+   (`kayfabe-isolate-host/src/rm.rs:8472`, `NOT_ON_THIS_RUNG`) — named here so the gap is a
+   known one rather than a silent reading.
 10. **Scratchpad work can go from polling to waiting on an eventfd** to cut CPU load (sets the
     eventfd IRQ).
 11. **Interrupt forwarding actually works** — passthrough when libcuda falls back from semaphore
