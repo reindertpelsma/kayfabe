@@ -457,8 +457,15 @@ impl ShadowCensus {
         // are therefore printed side by side, and the swap's says `⊘⊘ VACUOUS` when the arm
         // was on and nothing was decided.
         let swap = if !self.swap_armed {
+            // ⊘⊘ **THE WORD `AGREEMENT` MUST NOT APPEAR HERE.**
+            // `a_shadow_that_never_ran_is_vacuous_and_says_so` asserts the whole line does
+            // not contain it, which is how it stops a vacuous census reading as a clean one.
+            // ⚠ `[caught by that test, w732]` a swap sentence saying *"this census is about
+            // AGREEMENT only"* put the word back into a VACUOUS line — a substring collision
+            // that weakens a falsifier without touching it. Same class as w731's `by_kind[`
+            // grep matching another subsystem's census.
             "⊘ SWAP DISARMED — the arm was `on` (shadow), so the kernel decided nothing and \
-             was never on the publish path. This census is about AGREEMENT only."
+             was never on the publish path. This census is about the comparison only."
                 .to_string()
         } else if self.decided == 0 {
             "⊘⊘ SWAP VACUOUS — the arm was `swap` and the kernel decided NOTHING. Every \
