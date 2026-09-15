@@ -17982,6 +17982,24 @@ impl Regs {
         // read cut A as working. `⊘⊘ VACUOUS` is what tells an unmeasured store apart from one
         // nothing needed.
         eprintln!("kayfabe: {}", kayfabe_device::device_fb_report());
+        // ★★★★★ **CUT B — THE ARMING PATH, AND THE BYTE PORT IT ARMS THROUGH.**
+        //
+        // ⊘ TWO lines and not one, because they answer different questions and either can be
+        // the interesting one: `FB-DEMAND` is about the CALLERS (did any lock-free caller ever
+        // drain? was it declined on a vCPU? did a retry ever serve a read?) and
+        // `DEVICE-FB-PORT` is about the MECHANISM (were runs armed, was an arm refused by the
+        // host BAR1 aperture, were any evicted by the budget).
+        //
+        // ⊘ Both printed unconditionally, disarmed line and all, for the walk shadow's reason
+        // above: a boot that printed nothing when the port was never built is indistinguishable
+        // from one whose port was built and never used.
+        eprintln!("kayfabe: {}", kayfabe_device::plane::fb_demand_census());
+        match self.plane.fb_demand_port() {
+            Some(p) => eprintln!("kayfabe: {}", p.census_line()),
+            None => eprintln!(
+                "kayfabe: DEVICE-FB-PORT ⊘ NO BYTE PORT ON THIS BOOT — the store has none, so                  no host-side framebuffer access could ever be served. That is the ARENA arm                  (the default, where nothing needs one) or cut A's shape on the `device` arm.                  The FB-STORE lines at realize say which."
+            ),
+        }
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
         // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and
         // `gpga_is_one_reserved_object.md` disagree about it, and neither carries a

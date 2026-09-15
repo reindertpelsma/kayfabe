@@ -2303,7 +2303,7 @@ impl FbStore for DeviceFb {
             let n = DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
             if n == 0 {
                 eprintln!(
-                    "kayfabe: DEVICE-FB ⊘⊘ FIRST HOST-SIDE READ MISSED AN ARMED VIEW at fb \
+                    "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ MISSED AN ARMED VIEW at fb \
                      0x{phys:x} — {DEVICE_HOST_READ_NOT_ARMED} ⚠ This is cut B's TRANSIENT, \
                      not cut A's wall: if the drain-and-retry is wired at the lock-free \
                      caller this read succeeds on its second attempt and `DEVICE-FB \
@@ -2369,7 +2369,7 @@ impl FbStore for DeviceFb {
             let n = DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
             if n == 0 {
                 eprintln!(
-                    "kayfabe: DEVICE-FB ⊘⊘ FIRST HOST-SIDE WRITE MISSED AN ARMED VIEW at fb \
+                    "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE WRITE MISSED AN ARMED VIEW at fb \
                      0x{phys:x} — {DEVICE_HOST_WRITE_NOT_ARMED} ★ This is NEW INFORMATION: \
                      w736 measured zero host-side writes on this path. Printed once; the \
                      total is `DEVICE-FB wanted_by_write=`."

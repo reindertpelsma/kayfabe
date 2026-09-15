@@ -2186,7 +2186,14 @@ impl FbRead for PlanePtBytes<'_> {
                 match aperture {
                     // Device-local: the (fake) framebuffer.
                     Aperture::Vidmem => {
-                        note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                        // ⊘ Counted on the FIRST attempt only. A refused read moves **zero
+                        // bytes**, and w734's census is a statement about I/O VOLUME that a
+                        // rate model is multiplied against — three attempts of one 8-byte
+                        // entry read is 8 bytes of traffic, not 24. ⚠ Said here because the
+                        // retry loop is new and the census it feeds is already published.
+                        if attempt == 0 {
+                            note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                        }
                         m.fb.read(phys, buf).is_ok()
                     }
                     // ★ System memory. A GMMU PDE may point at a next-level table in sysmem,
@@ -2234,7 +2241,10 @@ impl FbRead for PlanePtBytes<'_> {
         self.breathe();
         for attempt in 0..=FB_DEMAND_READ_RETRIES {
             let served = {
-                note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                // ⊘ First attempt only — see `read_in`.
+                if attempt == 0 {
+                    note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
+                }
                 let mut m = self.plane.mem.lock();
                 m.fb.read(phys, buf).is_ok()
             };

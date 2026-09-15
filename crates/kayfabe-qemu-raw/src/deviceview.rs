@@ -628,6 +628,10 @@ mod byteport {
         evicted: AtomicU64,
         outside_object: AtomicU64,
         span_too_wide: AtomicU64,
+        /// Arms refused because the budget was full and no run could be evicted. ⊘ Counted
+        /// apart from an RM refusal: one is OUR bound and the other is the host's aperture,
+        /// and reading them as one would send somebody to measure the wrong pool.
+        budget_refused: AtomicU64,
         first_arm_refusal: std::sync::Mutex<Option<String>>,
     }
 
@@ -665,6 +669,7 @@ mod byteport {
                 evicted: AtomicU64::new(0),
                 outside_object: AtomicU64::new(0),
                 span_too_wide: AtomicU64::new(0),
+                budget_refused: AtomicU64::new(0),
                 first_arm_refusal: std::sync::Mutex::new(None),
             }
         }
@@ -880,12 +885,14 @@ mod byteport {
                 }
                 // ★★★ THE BUDGET, ENFORCED — §22's *"a checked bound, not an assumed one"*. The
                 // victim leaves the map under the lock and is released with the lock DROPPED.
+                let at_cap;
                 let victim = {
                     let mut runs = self
                         .runs
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if runs.len() >= ARMED_RUNS_CAP {
+                    at_cap = runs.len() >= ARMED_RUNS_CAP;
+                    if at_cap {
                         let mut order = self
                             .order
                             .lock()
@@ -909,8 +916,21 @@ mod byteport {
                         None
                     }
                 };
-                if let Some(v) = victim {
-                    self.release_run(v);
+                match victim {
+                    Some(v) => self.release_run(v),
+                    None if at_cap => {
+                        // ⊘⊘ **THE BUDGET IS CHECKED, NOT HOPED FOR** (§22, *"a checked bound,
+                        // not an assumed one"*). Reaching here means the cap is full and the
+                        // arm-order queue could not name a victim — the two structures having
+                        // drifted apart, which nothing should be able to do. ⇒ REFUSED rather
+                        // than armed anyway: an arm past the cap is host BAR1 aperture this
+                        // port would then never release, and `[measured w722]` that failure is
+                        // silent until every later arm returns zero.
+                        self.budget_refused.fetch_add(1, Ordering::Relaxed);
+                        out.refused += 1;
+                        continue;
+                    }
+                    None => {}
                 }
                 let len = ARM_GRAIN.min(self.obj_len.saturating_sub(base));
                 if len == 0 {
@@ -999,7 +1019,8 @@ mod byteport {
                  declined_on_vcpu={declined} evicted={ev} outstanding={out} served_read={sr} \
                  served_write={sw} wanted_read={wr} wanted_write={ww} want_dropped={wd} \
                  still_wanted={sw2} outside_object={oo} span_too_wide={stw} \
-                 first_arm_refusal=[{first}] ⇒ {verdict}",
+                 budget_refused={br} first_arm_refusal=[{first}] ⇒ {verdict}",
+                br = self.budget_refused.load(Ordering::Relaxed),
                 ev = self.evicted.load(Ordering::Relaxed),
                 out = self
                     .runs
